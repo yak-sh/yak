@@ -14,7 +14,9 @@
 // sun slower still, and the hills rise over the sun; the night sky hardly
 // moves at all. --dusk, set on the air, goes from 0 at the top of the page to
 // 1 once the line he sits on reaches the top of the window, and the dusk
-// turns from blue to orange with it.
+// turns from blue to orange with it. A sun or moon set in the page's words
+// (<data-sun-at>, <data-moon-at>) goes down the one way across the sky
+// (`arcOf`) as the page scrolls, and is under the line by then.
 //
 // At dusk, birds fly by now and then (<.Sky data-birds="most lo hi low
 // high">: how many in a flock at most, the seconds between flocks, and how
@@ -25,7 +27,8 @@
 // lowers it as he gets up (`rise`), before he walks.
 //
 // A touch on the sky: a touch on the sun or the moon turns the sky once
-// around, through the other scene and back to where it was (`spin`), stars
+// around, through the other scene and back to where it was (`spin`), the
+// sun and the moon both going the one way across it, stars
 // brighten as a pointer passes them, and a tap on the night sky sends a
 // shooting star through it from beyond the window's edge. A touch on words
 // or a control is the page's, not the sky's. For anyone who asks for less
@@ -73,13 +76,80 @@
     calm.matches
       ? 0
       : Number(el.closest('[data-depth]')?.dataset.depth ?? 0) * scrollY / u
+  // The one way the sun and the moon go across the sky, on the page: the
+  // circle about a point on the line he sits on through the moon's spot and
+  // the sun's, from where it comes into the sky, through the moon's spot and
+  // then the sun's, to where it has gone under the line, `under` below it.
+  // On a wheel the two ride round, half a turn apart, a point is `point(s)`
+  // (and whether it is in the sky) `s` of a turn on from the sun's spot: the
+  // moon's is at `m`, and the way comes into the sky at -`e` and goes out at
+  // `d`. Each light is in the sky for under half a turn, so the two are
+  // never in it at once.
+  let arcOf = (moon, sun, line, under) => {
+    let h = ([, y]) => line - y
+    let c = (moon[0] ** 2 + h(moon) ** 2 - sun[0] ** 2 - h(sun) ** 2) /
+      (2 * (moon[0] - sun[0] || .01))
+    let r = Math.hypot(sun[0] - c, h(sun))
+    let angle = (p) => Math.atan2(h(p), p[0] - c)
+    let am = angle(moon), as = angle(sun), dir = as < am ? -1 : 1
+    let below = Math.asin(Math.min(1, under / r))
+    // the top of the sky, as far round as it reaches
+    let reach = (line + under) / r, top = reach < 1 && Math.asin(reach)
+    let rise = dir < 0
+      ? top && am < top ? top : Math.PI + below
+      : top && am > Math.PI - top
+      ? Math.PI - top
+      : -below
+    let set = dir < 0 ? -below : Math.PI + below
+    let span = Math.abs(set - rise), between = Math.abs(as - am) / span
+    let seen = .45 / (1 + between)
+    let e = seen * Math.abs(as - rise) / span,
+      d = seen * Math.abs(set - as) / span
+    let point = (s) => {
+      let on = ((s + e) % 1 + 1) % 1 - e, shown = on <= d
+      let a = shown
+        ? as + dir * on / seen * span
+        : on < (d + 1 - e) / 2
+        ? set
+        : rise
+      return [c + r * Math.cos(a), line - r * Math.sin(a), shown]
+    }
+    return { e, d, m: -seen * between, point }
+  }
+  // where a light stands on the page: its spot in the page's words, or its
+  // circle in the sky
+  let spot = (slot, el) => {
+    let [x, y] = slot ? center(slot) : circle(el)
+    return [x + scrollX, y + scrollY]
+  }
+  // As the page scrolls, the light that is up goes down the way across the
+  // sky, and is under the line once the line reaches the top of the window
+  // (`hour` of the way there). Only the lights in the page's words go: the
+  // others are in the sky's layers, which the hills rise over.
+  let arc, hour = 0, drift = { sun: [0, 0], moon: [0, 0] }
+  let risen = ({ m, d }) => arc ? [hour * d, m + hour * (d - m)] : [0, m]
   let scroll = () => {
     // Reading the position after a layer changes can force layout again.
     let y = scrollY, down = calm.matches ? 0 : y / u
     for (let { el, depth } of layers) {
       el.style.setProperty('--sink', n1(depth * down))
     }
-    air?.style.setProperty('--dusk', Math.min(1, y / feet).toFixed(3))
+    let dusk = Math.min(1, y / feet)
+    air?.style.setProperty('--dusk', dusk.toFixed(3))
+    hour = calm.matches ? 0 : dusk
+    if (ready && ready.hour !== hour) later()
+    if (!arc) return
+    let [sunQ, moonQ] = risen(arc)
+    for (
+      let [name, q, rest, group] of [
+        ['sun', sunQ, 0, lights[0][1]],
+        ['moon', moonQ, arc.m, lights[1][1]],
+      ]
+    ) {
+      let [x, y] = arc.point(q), [x0, y0] = arc.point(rest)
+      drift[name] = [x - x0, y - y0]
+      group.style.translate = `${n1((x - x0) / u)}px ${n1((y - y0) / u)}px`
+    }
   }
   let place = () => {
     let r = slot.getBoundingClientRect(), n = after.getBoundingClientRect()
@@ -104,14 +174,13 @@
     }
     set('--rule', n.top + scrollY + 1)
     set('--rule2', n.bottom + scrollY - .5)
+    let [sunSlot, sunGroup] = lights[0], [moonSlot, moonGroup] = lights[1]
+    arc = sunSlot && moonSlot && sunGroup && moonGroup
+      ? arcOf(spot(moonSlot), spot(sunSlot), feet, 90 * u)
+      : null
     scroll()
-  }
-  if (slot && after && sky) {
-    place()
-    new ResizeObserver(place).observe(document.body)
-    document.fonts?.ready.then(place)
-    addEventListener('load', place)
-    addEventListener('scroll', scroll, { passive: true })
+    ready = null
+    later()
   }
 
   // The sky's things where they are in the window: `at(x, y)` is a point in
@@ -314,8 +383,9 @@
   // touch within a finger's width of either counts
   let moon = sky?.querySelector('.Sky_Moon')
   let near = (el, r, px, py) => {
-    let slot = el === halo ? moonAt : sunAt
+    let [slot, name] = el === halo ? [moonAt, 'moon'] : [sunAt, 'sun']
     let [x, y, k] = slot ? [...center(slot), u] : circle(el)
+    if (slot) x += drift[name][0], y += drift[name][1]
     return Math.hypot(px - x, py - y) <= Math.max(r * k * 1.4, 22)
   }
   let over = (px, py) =>
@@ -327,9 +397,9 @@
   // and no words of an element's own
   let CONTROLS = 'a, button, input, textarea, select, label, summary, ' +
     '[tabindex], [contenteditable], .Card, .Demo, .Wander, [data-wander]'
-  let page = (el) =>
-    !el || el.closest?.(CONTROLS) ||
+  let worded = (el) =>
     [...el.childNodes].some((n) => n.nodeType == 3 && n.data.trim())
+  let page = (el) => !el || el.closest?.(CONTROLS) || worded(el)
 
   // A shooting star from one point to another, in his units: its head runs
   // the way, its tail growing behind it and drawn back in as it burns out.
@@ -404,39 +474,56 @@
   }
 
   // One turn of the sky, from the scene it shows through the other and back.
-  // The sun and the moon ride one wheel turning about a point under the
-  // middle of the window, the moon across it from the sun, so half a turn
-  // from the day is the night and the other way round: the sun sets behind
-  // the hills on the right, the stars come out and shooting stars cross
-  // them, the moon rises from the left, crosses and sets, and the sun comes
-  // up again where it was. The light follows the sun's height: the day's
-  // things show as it is up and the night's as it is down, the twilight is
-  // clearest as it crosses the line, and the hills, the grass and he take
+  // The sun and the moon go the one way across the sky (`arcOf`) and ride one
+  // wheel round, half a turn apart: from the day the sun sets, the moon comes
+  // down into its spot as the night is deepest, goes on and sets, and the sun
+  // comes back down to its own; from the night it is the same way round, the
+  // moon first. The light follows the sun: the day's things show as it is up
+  // and the night's as it is down, the twilight is clearest as it sets and as
+  // it comes back, and the hills, the grass, he and the words over them take
   // the other scheme's colors as the night comes (or the day, from the
-  // night). Every move is drawn ahead, from where things are when it starts,
-  // as `STEPS` frames the browser plays. The stars stay where they are:
-  // turning all of them redraws them every frame, which a phone cannot keep
-  // up with. For anyone who asks for less motion nothing moves: the scene
-  // fades to the other and back.
+  // night). Every move is drawn ahead as `STEPS` frames the browser plays,
+  // and all but the lights' once the page is idle (`prepare`), so a touch
+  // turns the sky at once. The stars stay where they are: turning all of
+  // them redraws them every frame, which a phone cannot keep up with. For
+  // anyone who asks for less motion nothing moves: the scene fades to the
+  // other and back.
   const TURN = 3800, FADE = 1600, STEPS = 72, RAMP = .2
-  // what the light falls on: the paint of each that differs in the other
-  // scheme, as [element, property, now, then]
+  // what the light falls on, and what of it is painted otherwise in the other
+  // scheme
   const LIT = '.Sky_Hills > path, [id^="Sky-hill-"] stop, .Sky_Turf0, .Sky_Line'
   const PAINT = ['fill', 'stroke', 'stopColor']
-  let relit = (toNight) => {
-    let els = [...sky.querySelectorAll(LIT)]
+  // the words over the sky, the page's head and its hero, but not a
+  // control's, which keeps its own ground
+  const OWN = 'input, textarea, select, button, .Button, .Hello_Yak'
+  let inked = [...document.querySelectorAll('.Top, .Hello')]
+  let words = () =>
+    inked.flatMap((top) =>
+      [top, ...top.querySelectorAll('*')].filter((el) =>
+        !el.closest(OWN) && (el === top || worded(el))
+      )
+    )
+  // each of `sets` ([elements, properties]) painted otherwise in the other
+  // scheme, as [element, property, now, then]
+  let other = (sets) => {
+    let roots = [sky, ...inked]
     let read = () =>
-      els.map((el) => {
-        let css = getComputedStyle(el)
-        return PAINT.map((p) => css[p])
-      })
+      sets.map(([els, props]) =>
+        els.map((el) => {
+          let css = getComputedStyle(el)
+          return props.map((p) => css[p])
+        })
+      )
     let now = read()
-    sky.style.colorScheme = toNight ? 'dark' : 'light'
+    for (let r of roots) r.style.colorScheme = dark.matches ? 'light' : 'dark'
     let then = read()
-    sky.style.colorScheme = ''
-    return els.flatMap((el, i) =>
-      PAINT.flatMap((p, j) =>
-        now[i][j] == then[i][j] ? [] : [[el, p, now[i][j], then[i][j]]]
+    for (let r of roots) r.style.colorScheme = ''
+    return sets.flatMap(([els, props], k) =>
+      els.flatMap((el, i) =>
+        props.flatMap((p, j) => {
+          let a = now[k][i][j], b = then[k][i][j]
+          return a == b ? [] : [[el, p, a, b]]
+        })
       )
     )
   }
@@ -444,69 +531,63 @@
     let t = Math.min(1, Math.max(0, (v - lo) / (hi - lo)))
     return t * t * (3 - 2 * t)
   }
-  let glow = sky?.querySelector('.Sky_Glow')
-  let turning
-  let spin = () => {
-    if (turning) return
-    let day = !dark.matches, still = calm.matches
-    let k = at(0, 0)[2], w = innerWidth, line = feet - scrollY
-    let below = w / 8, hub = [w / 2, line + below], edge = .55 * w
-    // each of the two on its circle about the hub, from where it stands, the
-    // one not out half a turn round; the circle is drawn out or in sideways
-    // so it rises and sets at the window's edges
-    let ride = (rest, out) => {
-      let dx = rest[0] - hub[0], dy = rest[1] - hub[1]
-      let wide = (edge ** 2 - dx ** 2) / (dy ** 2 - below ** 2)
-      wide = wide > 0 && isFinite(wide) ? Math.sqrt(wide) : 1
-      let r = Math.hypot(dx / wide, dy)
-      let a = Math.atan2(dy, dx / wide) + (out ? Math.PI : 0)
-      return (turn) => [
-        hub[0] + wide * r * Math.cos(a + turn),
-        hub[1] + r * Math.sin(a + turn),
-        r,
-      ]
-    }
-    let sunRest = sunAt ? center(sunAt) : circle(sun)
-    let moonRest = moonAt ? center(moonAt) : circle(halo)
-    let sunGo = ride(sunRest, !day), moonGo = ride(moonRest, day)
-    let high = line - sunRest[1], r = sunGo(0)[2]
-    // how light the sky is, 1 by day and 0 by night, at `turn`: the sun's
-    // height over the line, from the night's depth to the day's
-    let night = -Math.min(.6 * r, high + 2 * below),
-      noon = Math.min(.3 * r, high)
-    let light = (turn, s) =>
-      still
-        ? (1 + (day ? 1 : -1) * Math.cos(2 * Math.PI * s)) / 2
-        : smooth(night, noon, line - sunGo(turn)[1])
-    // the turn gathers speed over its first fifth and loses it over its last
+  // through each of `keys` ([at, value]) in turn, eased between them
+  let curve = (keys) => (at) => {
+    let i = keys.findIndex(([t]) => t >= at)
+    if (i <= 0) return keys[i < 0 ? keys.length - 1 : 0][1]
+    let [t0, v0] = keys[i - 1], [t1, v1] = keys[i]
+    return v0 + (v1 - v0) * smooth(t0, t1, at)
+  }
+  // the turn gathers speed over its first fifth and loses it over its last
+  let ease = (s) => {
     let v = 1 / (1 - RAMP)
-    let ease = (s) =>
-      s < RAMP
-        ? v * s * s / (2 * RAMP)
-        : s > 1 - RAMP
-        ? 1 - v * (1 - s) ** 2 / (2 * RAMP)
-        : v * (s - RAMP / 2)
+    return s < RAMP
+      ? v * s * s / (2 * RAMP)
+      : s > 1 - RAMP
+      ? 1 - v * (1 - s) ** 2 / (2 * RAMP)
+      : v * (s - RAMP / 2)
+  }
+  // the way across the sky where the sun and the moon stand now
+  let across = () => {
+    let [, line, k] = at(0, 0)
+    return arc ??
+      arcOf(spot(null, halo), spot(null, sun), line + scrollY, 90 * k)
+  }
+  let glow = sky?.querySelector('.Sky_Glow')
+
+  // A turn, drawn for the scene the sky shows and staged to play: the light
+  // and its colors (`scene`), the lights from where they stand (`rides`,
+  // drawn again once the page has scrolled), and when the shooting stars go.
+  // Staging an animation reads its frames, which a phone takes a tenth of a
+  // second over, so it is done once the page is idle and not on a touch.
+  let stage = (el, frames, duration) =>
+    new Animation(
+      new KeyframeEffect(el, frames, {
+        duration,
+        easing: 'linear',
+        fill: 'forwards',
+      }),
+    )
+  let scene = (day, still) => {
+    // how light the sky is, 1 by day and 0 by night, as far round as the
+    // wheel has come: half the twilight as the sun goes under the line and
+    // as it comes back into the sky
+    let { d, e } = across()
+    let light = still
+      ? (f) => (1 + (day ? 1 : -1) * Math.cos(2 * Math.PI * f)) / 2
+      : curve(
+        day
+          ? [[0, 1], [d, .5], [.5, 0], [1 - e, .5], [1, 1]]
+          : [[0, 0], [.5 - e, .5], [.5, 1], [.5 + d, .5], [1, 0]],
+      )
     let frames = Array.from({ length: STEPS + 1 }, (_, i) => {
-      let s = i / STEPS, turn = 2 * Math.PI * ease(s), l = light(turn, s)
-      return { s, turn, l, dusk: 4 * l * (1 - l) }
+      let s = i / STEPS, f = still ? s : ease(s), l = light(f)
+      return { s, f, l, dusk: 4 * l * (1 - l) }
     })
-    let by = (f) => frames.map(f)
-    // as far as it has come from where it stands, in his units
-    let off = (v) => (Math.round(v / k * 10) / 10 + 0).toFixed(1)
-    let move = (go, rest) => (f) => {
-      let [x, y] = go(f.turn)
-      return { translate: `${off(x - rest[0])}px ${off(y - rest[1])}px` }
-    }
     let runs = []
     let play = (els, keys) => {
-      for (let el of els) {
-        if (!el) continue
-        runs.push(el.animate(by(keys), {
-          duration: still ? FADE : TURN,
-          easing: 'linear',
-          fill: 'forwards',
-        }))
-      }
+      let all = frames.map(keys)
+      for (let el of els) if (el) runs.push(stage(el, all, still ? FADE : TURN))
     }
     let lights = '.Sky_Sol, .Sky_Luna'
     let what = (name) =>
@@ -520,12 +601,18 @@
       [sky.querySelector('.Sky_Twilight')],
       (f) => ({ opacity: .9 * f.dusk }),
     )
-    // the other scheme's paint comes as its hour does
-    for (let [el, p, now, then] of relit(day)) {
+    // the other scheme's paint comes as its hour does, and the words' as
+    // the sky behind them goes from light to dark, the twilight darkening
+    // it too, so they stay clear of it
+    let from = day ? 1 : 0
+    let lit = [[[...sky.querySelectorAll(LIT)], PAINT], [words(), ['color']]]
+    for (let [el, p, now, then] of other(lit)) {
+      let part = (f) =>
+        p == 'color'
+          ? Math.abs(1 - from - smooth(.35, .55, 1 - f.l + .5 * f.dusk))
+          : Math.abs(f.l - from)
       play([el], (f) => ({
-        [p]: `color-mix(in srgb, ${now}, ${then} ${
-          n1(100 * (day ? 1 - f.l : f.l))
-        }%)`,
+        [p]: `color-mix(in srgb, ${now}, ${then} ${n1(100 * part(f))}%)`,
       }))
     }
     // and he is in shadow while it is darker than the page
@@ -534,17 +621,64 @@
         filter: `brightness(${(.7 + .3 * f.l).toFixed(3)})`,
       }))
     }
-    if (!still) {
-      let sunlit = glow?.getAttribute('cy') == sun.getAttribute('cy')
-      play([sun, sunlit && glow], move(sunGo, sunRest))
-      play([moon.parentNode, halo], move(moonGo, moonRest))
-      // and a few shooting stars cross the deepest of the night
-      let starry = frames.filter((f) => f.l < .15)
-      for (let q of [1, 3, 5, 7]) {
-        let f = starry[Math.floor(starry.length * q / 8)]
-        if (f) setTimeout(star, f.s * TURN)
-      }
+    // a few shooting stars cross the deepest of the night
+    let starry = frames.filter((f) => f.l < .15)
+    let shots = still ? [] : [1, 3, 5, 7]
+      .map((q) => starry[Math.floor(starry.length * q / 8)])
+      .filter(Boolean)
+    return { day, still, runs, shots }
+  }
+  // each light from where it stands, the one not in the sky half a turn
+  // round, and the wheel turned once
+  let rides = (day) => {
+    let path = across(), k = at(0, 0)[2], [sunQ, moonQ] = risen(path)
+    let off = (v) => (Math.round(v / k * 10) / 10 + 0).toFixed(1)
+    let ride = (els, q, start) => {
+      let [x0, y0] = path.point(q)
+      let frames = Array.from({ length: STEPS + 1 }, (_, i) => {
+        let [x, y, shown] = path.point(start + ease(i / STEPS))
+        return {
+          translate: `${off(x - x0)}px ${off(y - y0)}px`,
+          opacity: shown ? 1 : 0,
+        }
+      })
+      return els.filter(Boolean).map((el) => stage(el, frames, TURN))
     }
+    let sunlit = glow?.getAttribute('cy') == sun.getAttribute('cy')
+    return [
+      ...ride([sun, sunlit && glow], sunQ, sunQ + (day ? 0 : .5)),
+      ...ride([moon.parentNode, halo], moonQ, moonQ + (day ? .5 : 0)),
+    ]
+  }
+  let ready, soon
+  let prepare = () => {
+    soon = null
+    let day = !dark.matches, still = calm.matches
+    if (ready?.day !== day || ready.still !== still) ready = scene(day, still)
+    if (ready.hour !== hour) {
+      ready.hour = hour
+      ready.rides = still ? [] : rides(day)
+    }
+    return ready
+  }
+  // staged again once the page is idle, and not while the sky turns, when
+  // what it reads is the turn's
+  let later = () => {
+    if (soon || turning) return
+    soon = self.requestIdleCallback
+      ? requestIdleCallback(prepare, { timeout: 3000 })
+      : setTimeout(prepare, 500)
+  }
+  dark.addEventListener?.('change', later)
+  calm.addEventListener?.('change', later)
+
+  let turning
+  let spin = () => {
+    if (turning) return
+    let { runs, rides, shots } = prepare()
+    runs = [...runs, ...rides]
+    for (let run of runs) run.play()
+    for (let f of shots) setTimeout(star, f.s * TURN)
     delete sky.dataset.over
     sky.dataset.turn = ''
     turning = true
@@ -552,6 +686,7 @@
       for (let run of runs) run.cancel()
       delete sky.dataset.turn
       turning = null
+      if (ready?.hour !== hour) later()
     }
   }
 
@@ -577,6 +712,13 @@
     dim = setTimeout(() => pass(-1e4, -1e4), 700)
   }
 
+  if (slot && after && sky) {
+    place()
+    new ResizeObserver(place).observe(document.body)
+    document.fonts?.ready.then(place)
+    addEventListener('load', place)
+    addEventListener('scroll', scroll, { passive: true })
+  }
   if (sky && sun && moon && halo && far) {
     let frame = 0
     addEventListener('pointermove', (e) => {

@@ -29,6 +29,10 @@ test('the homepage foreground hill fades into the page color in both themes', ()
   assert(rule.test(style), 'the gradient ends at the theme’s page background')
 })
 
+// where the moon and the sun stand in the page's words, in the window: the
+// moon high in the middle, the sun low and a little to the right
+let MOON_AT = [720, 20], SUN_AT = [800, 180]
+
 let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   let { document, window } = parseHTML(home(file(path)))
   let on: Record<string, (e: unknown) => void> = {}
@@ -49,22 +53,21 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     top: 0,
     width: 6000,
   })
-  let moonX = 1260, sunX = 720, lightY = 105
-  let anchor = (name: string, x: number) => {
+  let anchor = (name: string, [x, y]: number[]) => {
     let marker = document.querySelector(`[data-${name}-at]`)
     if (marker) {
       marker.getBoundingClientRect = () =>
         ({
           left: x,
           width: 0,
-          top: lightY - 30 - scope.scrollY,
+          top: y - 30 - scope.scrollY,
           height: 60,
         }) as DOMRect
     }
     return marker
   }
-  let moonAt = anchor('moon', moonX)
-  let sunAt = anchor('sun', sunX)
+  let moonAt = anchor('moon', MOON_AT)
+  let sunAt = anchor('sun', SUN_AT)
   // the Start Free button is 97px across, and 46px with its words stacked
   Object.defineProperty(window.HTMLElement.prototype, 'offsetWidth', {
     get(this: HTMLElement) {
@@ -84,8 +87,28 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     })
     return run as unknown as Animation
   }
+  let reads = 0
+  // a turn's animations are staged ahead and played on a touch
+  class Effect {
+    constructor(public target: Element, public frames: Keyframe[]) {}
+  }
+  class Staged {
+    onfinish: null | (() => void) = null
+    constructor(public effect: Effect) {}
+    play() {
+      let { target, frames } = this.effect
+      played.push({
+        of: target.getAttribute('class') ?? target.tagName,
+        frames,
+        done: () => this.onfinish?.(),
+      })
+    }
+    cancel() {}
+  }
   let scope = {
     document,
+    KeyframeEffect: Effect,
+    Animation: Staged,
     matchMedia: (q: string) => ({
       matches: q.includes('dark') ? dark : q.includes('reduce') ? calm : false,
     }),
@@ -99,10 +122,17 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     performance,
     getSelection: () => ({ toString: () => '' }),
     // what each paints with is the scheme it is drawn in
-    getComputedStyle: () => {
-      let scheme = (document.querySelector('.Sky') as HTMLElement).style
-        .colorScheme || (dark ? 'dark' : 'light')
-      return { fill: scheme, stroke: 'none', stopColor: 'black' }
+    getComputedStyle: (of: Element) => {
+      reads++
+      let drawn = (root: string) =>
+        (document.querySelector(root) as HTMLElement).style.colorScheme ||
+        (dark ? 'dark' : 'light')
+      return {
+        fill: drawn('.Sky'),
+        stroke: 'none',
+        stopColor: 'black',
+        color: of.closest('.Hello') ? drawn('.Hello') : 'black',
+      }
     },
     innerWidth: 1440,
     innerHeight: 860,
@@ -121,14 +151,27 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   // a touch at a point in his units, landing on `on` (the hero, by default)
   let touch = (x: number, y: number, target = el('.Hello')) =>
     on.click({ target, clientX: x + 3000, clientY: y + 800 })
-  let touchMoon = (target?: Element) =>
-    moonAt
-      ? touch(moonX - 3000, lightY - 800 - scope.scrollY, target)
+  // how far a light in the page's words has gone down the way across the
+  // sky, in his units
+  let gone = (group: string) =>
+    ((el(group) as HTMLElement).style.translate || '0px 0px').split(' ')
+      .map(parseFloat)
+  let touchMoon = (target?: Element) => {
+    let [x, y] = moonAt ? gone('.Sky_Luna') : [0, 0]
+    return moonAt
+      ? touch(
+        MOON_AT[0] - 3000 + x,
+        MOON_AT[1] - 800 - scope.scrollY + y,
+        target,
+      )
       : touch(MOON.x, MOON.y + (calm ? 0 : scope.scrollY * DEPTH.night), target)
-  let touchSun = () =>
-    sunAt
-      ? touch(sunX - 3000, lightY - 800 - scope.scrollY)
+  }
+  let touchSun = () => {
+    let [x, y] = sunAt ? gone('.Sky_Sol') : [0, 0]
+    return sunAt
+      ? touch(SUN_AT[0] - 3000 + x, SUN_AT[1] - 800 - scope.scrollY + y)
       : touch(SUN.x, SUN.y + (calm ? 0 : scope.scrollY * DEPTH.dusk))
+  }
   // the wandering yak, sat down out in the margin at `left`, 72px across,
   // with the words beginning at `words`
   let sat = (left: number, words = 1440) => {
@@ -140,6 +183,8 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   return {
     el,
     all,
+    gone,
+    reads: () => reads,
     touch,
     touchMoon,
     touchSun,
@@ -193,15 +238,25 @@ test('a touch on the sun or the moon turns the sky round, through the other scen
       // and half way round it is the other scene, the other light where it
       // stands in that one
       assertEquals(dark ? sun[half] : moon[half], '0.0px 0.0px')
-      assertEquals(night[half], dark ? 0 : 1)
+      assertEquals(night[half], dark ? 0 : 1, `${path} ${dark} ${night}`)
       assertEquals(track(played, 'Sky_Night')![half], dark ? 0 : 1)
-      // where the sun stands in the window, it goes down to the right first
-      // and comes up from the left
-      let x = (at: unknown) => Number(String(at).split('px')[0])
-      if (path == '/') {
-        let up = dark ? half : 0, risen = dark ? half : sun.length - 1
-        assert(x(sun[up + 4]) > 0 && x(sun[risen - 4]) < 0, `${sun}`)
-      }
+      // the two go the one way across the sky, never in it at once: the
+      // one that is up goes down it and sets, and the other comes down it
+      // into its spot half way round, goes on and sets, and the first comes
+      // back down into its own
+      let shown = (of: string) =>
+        track(played, of)!.map((o, i) => o ? i : -1).filter((i) => i >= 0)
+      let [suns, moons] = [shown('Sky_Sun'), shown('Sky_Halo')]
+      assertEquals(suns.filter((i) => moons.includes(i)), [])
+      let [up, down] = dark ? [moon, sun] : [sun, moon]
+      let y = (at: unknown) => Number(String(at).split(' ')[1].slice(0, -2))
+      let last = sun.length - 1
+      assert(y(up[3]) > 0 && y(up[last - 3]) < 0, `${up}`)
+      assert(y(down[half - 3]) < 0 && y(down[half + 3]) > 0, `${down}`)
+      assertEquals(
+        [suns, moons].map((i) => i.length && i.at(-1)! - i[0] + 1 == i.length),
+        dark ? [true, false] : [false, true],
+      )
     }
   }
 })
@@ -214,6 +269,32 @@ test('the hills and the grass take the other scheme’s colors as its hour comes
   assertEquals(fill[0], 'color-mix(in srgb, light, dark 0.0%)')
   assertEquals(fill[half], 'color-mix(in srgb, light, dark 100.0%)')
   assertEquals(fill.at(-1), fill[0])
+})
+
+test('the words over the sky take the other scheme’s colors with it', () => {
+  for (let dark of [false, true]) {
+    let { touchSun, touchMoon, played } = sky({ dark })
+    dark ? touchMoon() : touchSun()
+    let ink = track(played, 'Hello_Kicker', 'color')!
+    let [now, then] = dark ? ['dark', 'light'] : ['light', 'dark']
+    assertEquals(ink[0], `color-mix(in srgb, ${now}, ${then} 0.0%)`)
+    assertEquals(
+      ink[(ink.length - 1) / 2],
+      `color-mix(in srgb, ${now}, ${then} 100.0%)`,
+    )
+    assertEquals(ink.at(-1), ink[0])
+    // but not a control's, which keeps its own ground
+    assertEquals(track(played, 'Button', 'color'), undefined)
+  }
+})
+
+test('once the page is idle a touch turns the sky without reading its styles', () => {
+  let { touchSun, wait, reads, played } = sky()
+  wait()
+  let before = reads()
+  touchSun()
+  assert(played.length)
+  assertEquals(reads(), before)
 })
 
 test('a touch while the sky turns is ignored, and once round it can turn again', () => {
@@ -339,6 +420,32 @@ test('the dusk turns from blue to orange until the line reaches the top', () => 
     return Number(air.style.getPropertyValue('--dusk'))
   }
   assertEquals([0, feet / 2, feet, 2 * feet].map(dusk), [0, .5, 1, 1])
+})
+
+test('as the page scrolls, the light that is up goes down the way across the sky and sets', () => {
+  let feet = 150 + 128 * .89 - SINK
+  for (
+    let [dark, group, [, y0]] of [
+      [false, '.Sky_Sol', SUN_AT],
+      [true, '.Sky_Luna', MOON_AT],
+    ] as const
+  ) {
+    let { on, scope, gone } = sky({ dark })
+    let at = [0, .25, .5, .75, 1, 2].map((part) => {
+      scope.scrollY = part * feet
+      on.scroll({})
+      return gone(group)
+    })
+    assertEquals(at[0], [0, 0])
+    at.slice(1, 5).forEach(([, y], i) => assert(y > at[i][1], `${at}`))
+    // under the line once the line reaches the top of the window
+    assert(Math.abs(y0 + at[4][1] - (feet + 90)) < .1, `${at[4]}`)
+    assertEquals(at[5], at[4])
+  }
+  let calm = sky({ calm: true })
+  calm.scope.scrollY = 300
+  calm.on.scroll({})
+  assertEquals(calm.gone('.Sky_Sol'), [0, 0])
 })
 
 test('the sun and the moon answer a touch where they now show', () => {
