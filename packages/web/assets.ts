@@ -15,10 +15,13 @@
 // on one fetch instead of a chain, and what it points at is named by its
 // bytes too.
 //
-// The bundles marked `split` are made in one build (@yaks/cli/page `split`):
-// what two of them import is written once, in a chunk under `_yak/` named by
-// its bytes, which each imports from the site's root. A page that loads
-// several runs each shared module once.
+// The bundles `split` into one group are made in one build (@yaks/cli/page
+// `split`): what two of them import is written once, in a chunk under
+// `_yak/` named by its bytes, which each imports from the site's root. A page
+// that loads several runs each shared module once. A group is the bundles
+// that load together: chunks are made for each set of bundles sharing a
+// module, so bundles that never meet on a page cut what they share into
+// pieces no page needs apart.
 
 import * as io from '@yaks/file/io'
 import { bytes } from '@yaks/api/asset'
@@ -45,9 +48,9 @@ export type Asset = {
   body?: (signal?: AbortSignal) => Body | Promise<Body>
   file?: URL
   named?: boolean
-  /** made with the other split bundles, sharing their chunks; on its own
-   * (`make`, `served`) it is made whole */
-  split?: boolean
+  /** the group it is made with, sharing the chunks of the bundles in it;
+   * on its own (`make`, `served`) it is made whole */
+  split?: string
 }
 
 /** Where a named asset is written, below the directory the rest are. */
@@ -177,7 +180,7 @@ export let plan = (
  * }
  * let read = (name: string) => new TextEncoder().encode(files[name])
  * assertEquals(
- *   chunksOf([{ name: '_a.js', split: true, bundle: new URL('file:///a.ts') }], read),
+ *   chunksOf([{ name: '_a.js', split: 'pages', bundle: new URL('file:///a.ts') }], read),
  *   ['_yak/chunk.A1.js', '_yak/chunk.B2.js'],
  * )
  * ```
@@ -216,15 +219,18 @@ export let write = async (
   let encoded = (body: Body) =>
     typeof body == 'string' ? new TextEncoder().encode(body) : body
   let splits = assets.filter((asset) => asset.split && asset.bundle)
-  let together = splits.length
-    ? await split(
-      Object.fromEntries(
-        splits.map((asset) => [asset.name, asset.bundle as URL]),
-      ),
-      undefined,
-      { external: [...new Set(splits.flatMap((a) => a.external ?? []))] },
-    )
-    : { entries: {}, chunks: {} }
+  let groups = Map.groupBy(splits, (asset) => asset.split!)
+  let together = await Promise.all(
+    [...groups.values()].map((group) =>
+      split(
+        Object.fromEntries(
+          group.map((asset) => [asset.name, asset.bundle as URL]),
+        ),
+        undefined,
+        { external: [...new Set(group.flatMap((a) => a.external ?? []))] },
+      )
+    ),
+  )
   let bodies = new Map(
     await Promise.all(
       assets.filter((asset) => made(asset) && !splits.includes(asset)).map(
@@ -232,12 +238,16 @@ export let write = async (
       ),
     ),
   )
-  for (let [name, code] of Object.entries(together.entries)) {
-    bodies.set(name, encoded(code))
+  for (let made of together) {
+    for (let [name, code] of Object.entries(made.entries)) {
+      bodies.set(name, encoded(code))
+    }
   }
-  let chunks = Object.entries(together.chunks).map((
-    [at, code],
-  ) => [at, encoded(code)] as const)
+  let chunks = together.flatMap((made) =>
+    Object.entries(made.chunks).map(([at, code]) =>
+      [at, encoded(code)] as const
+    )
+  )
   let files = [
     ...bodies,
     ...chunks,

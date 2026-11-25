@@ -92,14 +92,14 @@ An **asset** (`Asset`) is one file a browser loads: its `name`, how it is made
 file a package ships, or none for a source already in the directory), and
 whether it is `named`, written again under `_yak/` at a name of its bytes so a
 browser keeps it for good. A named stylesheet has its `@import`s written in
-place and what it points at named too. The bundles marked `split` are made in
-one build: what two of them import is written once, as a chunk under `_yak/`
-named by its bytes, which each imports from the site's root, so a page that
-loads several runs each shared module once (`chunksOf` lists the chunks a build
-wrote). `served(assets, at)` answers each at `at` and its name;
-`write(dir, assets)` writes them into a static host's directory, with no earlier
-build's names left behind; `plan` is the naming alone, pure over the files'
-bytes.
+place and what it points at named too. The bundles `split` into one group (the
+scripts a page loads together) are made in one build: what two of them import is
+written once, as a chunk under `_yak/` named by its bytes, which each imports
+from the site's root, so a page that loads several runs each shared module once
+(`chunksOf` lists the chunks a build wrote). `served(assets, at)` answers each
+at `at` and its name; `write(dir, assets)` writes them into a static host's
+directory, with no earlier build's names left behind; `plan` is the naming
+alone, pure over the files' bytes.
 
 ```ts
 import { assertEquals } from '@std/assert'
