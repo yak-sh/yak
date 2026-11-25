@@ -1,4 +1,10 @@
-type Browser = Pick<typeof globalThis, 'getComputedStyle' | 'ResizeObserver'>
+type Browser = Pick<
+  typeof globalThis,
+  | 'getComputedStyle'
+  | 'ResizeObserver'
+  | 'requestAnimationFrame'
+  | 'cancelAnimationFrame'
+>
 
 let bottom = (view: HTMLElement, win: Browser) =>
   view.getBoundingClientRect().top + view.clientTop + view.clientHeight -
@@ -44,13 +50,21 @@ export let fitList = (list: HTMLElement, win: Browser): () => void => {
     fit()
     first?.focus()
   }
-  let size = new win.ResizeObserver(fit)
+  // Hiding overflow changes the observed list's height. Fit after delivery.
+  let frame: number | null = null
+  let size = new win.ResizeObserver(() => {
+    frame ??= win.requestAnimationFrame(() => {
+      frame = null
+      fit()
+    })
+  })
   size.observe(view)
   size.observe(list)
   more.addEventListener('click', toggle)
   fit()
   return () => {
     size.disconnect()
+    if (frame != null) win.cancelAnimationFrame(frame)
     more.removeEventListener('click', toggle)
   }
 }

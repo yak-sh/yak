@@ -21,8 +21,20 @@ test('a fitted list leaves room for the rest of the sidebar and reveals overflow
   let height = 380
   let scroll = 0
   let changed = () => {}
+  let next = 0
+  let frames = new Map<number, () => void>()
+  let draw = () => {
+    let pending = [...frames.values()]
+    frames.clear()
+    for (let fit of pending) fit()
+  }
   let win = {
     getComputedStyle: () => ({ paddingBottom: '10px' }),
+    requestAnimationFrame: (fit: () => void) => {
+      frames.set(next, fit)
+      return next++
+    },
+    cancelAnimationFrame: (id: number) => frames.delete(id),
     ResizeObserver: class {
       constructor(fit: () => void) {
         changed = fit
@@ -54,11 +66,18 @@ test('a fitted list leaves room for the rest of the sidebar and reveals overflow
   height = 280
   scroll = 115
   changed()
+  draw()
   press()
   assertEquals(said(), ['App 1', 'App 2', 'More'])
   assertEquals(more.getAttribute('aria-expanded'), 'false')
   height = 445
   changed()
+  changed()
+  assertEquals(said(), ['App 1', 'App 2', 'More'])
+  assertEquals(frames.size, 1)
+  draw()
   assertEquals(said(), rows.map((row) => row.textContent))
+  changed()
   stop()
+  assertEquals(frames.size, 0)
 })
