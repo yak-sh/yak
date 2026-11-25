@@ -671,7 +671,12 @@ let push = async (page: Page, origin: string, said: unknown) => {
   await cdp.send('ServiceWorker.enable')
   await named.promise
   clearTimeout(none)
-  if (!ids.size) throw new Error(`no service worker at ${origin}`)
+  if (!ids.size) {
+    throw new CallError(
+      'browser_no_service_worker',
+      `No service worker is registered at ${origin} to push to: open a page that registers one, and wait for it, before the push step.`,
+    )
+  }
   for (let registrationId of ids) {
     await cdp.send('ServiceWorker.deliverPushMessage', {
       origin,
