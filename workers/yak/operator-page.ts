@@ -1,7 +1,7 @@
 import { possessive } from '@yaks/text'
 import { Identity, Notice, Preview, Toolbar, Transcript } from '@yaks/ui/parts'
 import { BEAT } from '@yaks/notify/whereabouts'
-import { Time, wordsPage } from '@yaks/ui/parts'
+import { wordsPage } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -16,14 +16,7 @@ import {
   TabSet,
 } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
-import type { Server } from './chat.ts'
-import {
-  directoryOf,
-  type Panes,
-  type Reach,
-  type Space,
-  walkTo,
-} from './directory.ts'
+import { directoryOf, type Panes, type Space, walkTo } from './directory.ts'
 import { chatRows } from './connections.ts'
 import { reachOf } from './operator-reach.ts'
 import { background, caught } from './defects.ts'
@@ -44,7 +37,6 @@ import { spaceHost, url } from '@yaks/platform/host'
 import {
   backTo,
   chatPath,
-  enabling,
   logoPath,
   MANAGE,
   managePath,
@@ -67,34 +59,35 @@ import { fromChunks, holding } from '@yaks/blob'
 import { inApp, refuse } from './tool.ts'
 import { MOVES } from './mascot.ts'
 import { Ask, type Asking } from './operator-box.ts'
-import { CONSENT, stopping, type Texting } from './operator-texts.ts'
 import {
-  type Alerting,
-  alertsRow,
-  declinedRow,
-  pushRow,
-  routeOf,
-  vapidOf,
-} from './operator-alerts.ts'
-import { publicKey, type Subscription } from '@yaks/push'
-import { given } from '@yaks/persona'
-import { NameCard } from '@yaks/persona/ui'
-import { type Offer, VoiceCard } from '@yaks/speech/ui'
+  ALERTING,
+  alertingOf,
+  settingsOf,
+  settingsRow,
+  TEXTING,
+  textingOf,
+} from '@yaks/platform/operator-settings'
 import {
-  backendOf,
+  operatorSettingsView,
+  type OperatorView,
+} from '@yaks/platform/operator-settings-view'
+import { ACCOUNT, accountOf } from '@yaks/platform/account-rows'
+import { drawnRows } from '@yaks/platform/page-graph'
+import { personRows } from './side.ts'
+import { wearing } from './operator-persona.ts'
+import { alertsRow, declinedRow, pushRow, vapidOf } from './operator-alerts.ts'
+import { publicKey } from '@yaks/push'
+import {
   hearing,
-  modelOf,
   offered,
-  paceOf,
   sampled,
   setupOf,
   speaking,
   speechOf,
-  voiceOf,
 } from './speech.ts'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
-import { paneOf, talks } from './operator-view.ts'
+import { paneOf } from './operator-view.ts'
 import type { HelperPage } from './operator-host.ts'
 import { outcomeOf } from './operator-root.ts'
 import { inputOf } from '@yaks/session/intake'
@@ -133,7 +126,6 @@ import { r2RawObjects } from './lib/objects.ts'
 import { linkOf } from './preview.ts'
 import { VOCABS } from '@yaks/platform/manifest'
 import { DOCUMENTS } from '@yaks/platform/documents'
-import { provePhone } from './phone-contact.ts'
 import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
 import {
@@ -173,36 +165,6 @@ let READ = ['image/*', 'text/*', ...DOCUMENTS.map((d) => '.' + d)]
 // spare, and the most a line said at once.
 let HEARD = 2 * 1000 * 1000
 let SAID = 600
-
-let shown = (number: string) =>
-  number.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')
-
-// One of the Operator's settings, the way the dashboard draws one (pages.ts):
-// a form around its card, and under the card its actions, with what pressing
-// one said beside them (`settingsScript`). `id` names the form and the answer
-// it posts to (`operatorAnswer`). Changed fields join the page's Save bar.
-let setting = (at: string, id: string, card: Node, actions: Node = null) =>
-  h(
-    Form,
-    {
-      class: 'Page_Form',
-      id,
-      method: 'post',
-      action: `${at}?${id}=1`,
-      'data-save': id,
-    },
-    card,
-    h(
-      Form.Actions,
-      null,
-      actions,
-      h('p', { role: 'status', 'data-status': '' }),
-    ),
-  )
-
-// A card of this page's own, its head naming it.
-let titled = (title: string, ...inside: Node[]) =>
-  h(Card, null, h(Card.Head, null, h(Card.Title, null, title)), ...inside)
 
 // A field under its label.
 let field = (id: string, label: string, control: Node) =>
@@ -248,352 +210,6 @@ export let keepCard = (back: string) =>
       h(Button, { mod: 'go', type: 'submit' }, 'Send me a code'),
     ),
   )
-
-// One of a few to pick, as a radio: its name in bold, what it means beside
-// it, `also` on its input.
-type Option = {
-  id: string
-  name: string
-  about: string
-  checked: boolean
-  also?: Record<string, unknown>
-}
-let choice = (
-  name: string,
-  o: Option,
-  also: Record<string, unknown> = {},
-  more = '',
-) =>
-  h(
-    Check,
-    null,
-    h(Check.Input, {
-      type: 'radio',
-      name,
-      value: o.id,
-      ...also,
-      checked: o.checked,
-    }),
-    h(
-      'span',
-      null,
-      h('b', null, o.name),
-      more,
-      ' ',
-      h(Check.Note, null, o.about),
-    ),
-  )
-
-// A field of few to pick one from, its label over them.
-let choices = (id: string, label: string, name: string, offers: Option[]) =>
-  h(
-    Form.Field,
-    { role: 'radiogroup', 'aria-labelledby': id },
-    h(Form.Label, { id }, label),
-    offers.map((o) => choice(name, o, o.also)),
-  )
-
-// Where the space's owner adds the Operator to a chat platform (chat.ts):
-// yaks.app's own bot added to a server they manage, and their own account
-// there linked, so it knows them. Each button posts to the connections page,
-// which sends them straight to the platform to choose (connections.ts
-// `connecting`) and back here after; one still in its service's testing
-// mode is named there. For each server it was added to, they choose the room it hears in full
-// (chat.ts `choose`), posted here (`at`).
-export let chatCard = (
-  at: string,
-  connections: string,
-  operator: string,
-  offers: Awaited<ReturnType<typeof import('./chat.ts').offers>>,
-) =>
-  offers.map(({ platform, bot, user, kept, servers }) => {
-    let adding = (i: { name: string; testing?: boolean }, label: string) =>
-      h(
-        'form',
-        {
-          method: 'post',
-          action: enabling(connections, i.testing ? [i.name] : []),
-        },
-        h(Form.Hidden, { name: 'do', value: 'add' }),
-        h(Form.Hidden, { name: 'integration', value: i.name }),
-        h(Form.Hidden, { name: 'back', value: at }),
-        h(Button, { type: 'submit' }, label),
-      )
-    let hearing = (s: Server, i: number) => {
-      let id = `chat-room-${i}`
-      // A server the bot was removed from, or never joined: it is added
-      // again, which keeps this connection.
-      if (s.away) {
-        return h(
-          'div',
-          null,
-          h(
-            'p',
-            null,
-            s.own
-              ? `Your own ${platform.title} bot is no longer in this server. Add it again from the ${platform.title} Developer Portal.`
-              : `${operator} is no longer in this ${platform.title} server. Add it again to choose its channel.`,
-          ),
-          !s.own && kept ? adding(bot, `Add to ${platform.title} again`) : null,
-        )
-      }
-      return h(
-        'form',
-        { method: 'post', action: `${at}?chat=1` },
-        h(Form.Hidden, { name: 'connection', value: s.connection }),
-        s.rooms
-          ? field(
-            id,
-            s.own
-              ? `The channel ${operator} hears in full through your own ${platform.title} bot`
-              : `The ${platform.title} channel ${operator} hears in full`,
-            h(
-              Field,
-              { choose: true, id, name: 'room' },
-              h('option', { value: '' }, 'None, only what is said to it'),
-              s.rooms.map((r) =>
-                h(
-                  'option',
-                  { value: r.id, selected: r.eid == s.hears },
-                  `#${r.name}`,
-                )
-              ),
-            ),
-          )
-          : h(
-            'p',
-            null,
-            `${platform.title} did not list this server's channels just now. Reload to try again.`,
-          ),
-        s.rooms ? h(Button, { type: 'submit' }, 'Save') : null,
-      )
-    }
-    return titled(
-      platform.title,
-      h(
-        'p',
-        null,
-        `Add ${operator} to a ${platform.title} server you manage. Mention it there, reply to it, or message it directly, and it answers in the same place.`,
-      ),
-      kept ? adding(bot, `Add to ${platform.title}`) : null,
-      servers.length
-        ? h(
-          'p',
-          null,
-          `In the channel you choose, ${operator} reads everything said and answers only what is for it. Everyone there is a guest to it, who can do only what anyone can in this space.`,
-        )
-        : null,
-      servers.map(hearing),
-      user
-        ? h(
-          'p',
-          null,
-          `Connect your own ${platform.title} account so ${operator} knows it is you. Anyone else who talks to it there is a guest, who can do only what anyone can in this space.`,
-        )
-        : null,
-      user ? adding(user, `Connect my ${platform.title} account`) : null,
-    )
-  })
-
-// The texts' terms, their addresses links to yaks.app's own pages.
-let TERMS = /https:\/\/yaks\.app\/(terms|privacy)/g
-let terms = (said: string) =>
-  said.split(TERMS).map((part, i) =>
-    i % 2 ? h('a', { href: `/${part}` }, `yaks.app/${part}`) : part
-  )
-
-// Where a person agrees to texts from the operator, or stops them, and finds
-// the numbers to text and call it at. `from` is the number the Operator texts
-// from (its phone's `transport().number`) and `call` the platform's number
-// that answers calls (operator-calls.ts `rang`), both read from
-// configuration, so the card names them with no call to the provider.
-export let textsCard = (
-  at: string,
-  consent: Texting | null,
-  from?: string,
-  call?: string,
-) =>
-  h(
-    Fragment,
-    null,
-    setting(
-      at,
-      'texts',
-      titled(
-        'Texts and calls',
-        h(
-          'p',
-          null,
-          'Text your Operator about anything, and it answers by text; call it, and it answers by voice. It also texts you its alerts, unless you choose another way for them above, and apps you build can text you reminders. You can still use chat and email.',
-        ),
-        from || call
-          ? h(
-            'p',
-            null,
-            from === call
-              ? [h('a', { href: `sms:${from}` }, 'Text'), ' or call ']
-              : from
-              ? ['Text ', h('a', { href: `sms:${from}` }, shown(from))]
-              : null,
-            from && call && from !== call
-              ? ' or call '
-              : !from
-              ? 'Call '
-              : null,
-            call ? h('a', { href: `tel:${call}` }, shown(call)) : null,
-            consent
-              ? ' to reach your Operator.'
-              : ' from the mobile number you agree to texts at below to reach your Operator.',
-          )
-          : null,
-        consent
-          ? h(
-            'p',
-            null,
-            'Texts go to ',
-            h('b', null, shown(consent.number)),
-            from
-              ? ''
-              : '; to text your Operator, reply to the number your welcome text came from',
-            '. You agreed ',
-            h(Time, { at: consent.at }),
-            '.',
-          )
-          : null,
-        consent ? changing(agreeing('Change your mobile number')) : agreeing(
-          'Mobile number',
-        ),
-      ),
-      consent
-        ? h(Button, { type: 'submit', form: 'texts-stop' }, 'Stop texts')
-        : null,
-    ),
-    consent
-      ? h('form', {
-        id: 'texts-stop',
-        method: 'post',
-        action: `${at}?texts=1`,
-        hidden: true,
-      }, h(Form.Hidden, { name: 'stop', value: '1' }))
-      : null,
-  )
-
-// The number to text and the words agreed to with it.
-let agreeing = (label: string) => [
-  field(
-    'texts-number',
-    label,
-    h(Field, {
-      id: 'texts-number',
-      type: 'tel',
-      name: 'number',
-      autocomplete: 'tel',
-      inputmode: 'tel',
-      placeholder: '269-555-0142',
-    }),
-  ),
-  h(
-    Check,
-    { style: 'align-items:flex-start' },
-    h(Check.Input, { type: 'checkbox', name: 'agreed', value: 'yes' }),
-    h('span', null, terms(CONSENT)),
-  ),
-  field(
-    'texts-code',
-    'Verification code',
-    h(Field, {
-      id: 'texts-code',
-      placeholder: '6 digits from your text',
-      name: 'code',
-      inputmode: 'numeric',
-      autocomplete: 'one-time-code',
-      pattern: '[0-9]{6}',
-      maxlength: 6,
-    }),
-  ),
-  h(
-    'p',
-    null,
-    'Save to receive a code, then enter it and save again to confirm a new number.',
-  ),
-]
-
-// A number already agreed to changes behind a button, which shows the field
-// in its place (`settingsScript`). Its edits join the page's Save bar.
-let changing = (fields: Node) => [
-  h(Button, {
-    type: 'button',
-    'aria-expanded': 'false',
-    'aria-controls': 'texts-change',
-    'data-reveal': '',
-  }, 'Change number'),
-  h('div', { id: 'texts-change', hidden: true }, fields),
-]
-
-// Where a person chooses how their Operators tell them something away from
-// the page (operator-alerts.ts): what they would be told by when they have
-// not chosen is checked. Browser notifications are offered when yaks.app has
-// a VAPID key (`key`, its public half), which the page's script subscribes
-// this browser with before the choice is saved (`settingsScript`).
-export let alertsCard = (
-  at: string,
-  chosen: Alerting | null,
-  consent: Texting | null,
-  email: string | null,
-  browsers: Subscription[] = [],
-  key: string | null = null,
-) => {
-  let route = routeOf(chosen, consent, email, browsers)
-  let current = chosen ?? route?.by ?? 'updates'
-  let n = browsers.length
-  let offers: Omit<Option, 'checked'>[] = [
-    ...key
-      ? [{
-        id: 'push',
-        name: 'Browser notification',
-        about: n
-          ? `on the ${
-            n == 1 ? 'browser' : `${n} browsers`
-          } you allowed; saving here allows this one too`
-          : 'on this browser, once you allow it',
-        also: { 'data-push': key, 'data-at': `${at}?push=1` },
-      }]
-      : [],
-    {
-      id: 'text',
-      name: 'Text',
-      about: consent
-        ? `to ${shown(consent.number)}`
-        : 'once you agree to texts below; until then, by email',
-    },
-    {
-      id: 'email',
-      name: 'Email',
-      about: email
-        ? `to ${email}`
-        : 'once you give an address; until then, by text',
-    },
-    { id: 'updates', name: 'Only in Updates', about: 'nothing sent' },
-  ]
-  return setting(
-    at,
-    'alerts',
-    titled(
-      'Alerts',
-      h(
-        'p',
-        null,
-        'How your Operator tells you something when you are not here: work you are waiting on finished, something needs you, or you asked to be told. It is always in your Updates too.',
-      ),
-      choices(
-        'alerts-channel',
-        'Tell me by',
-        'channel',
-        offers.map((o) => ({ ...o, checked: o.id == current })),
-      ),
-    ),
-  )
-}
 
 /**
  * Alerts on this device, offered in the conversation (alerts-browser.ts
@@ -664,23 +280,6 @@ export let alertsOffer = (
     ],
   )
 }
-
-// Where a space's people change what its Operator is called, its persona's
-// name (@yaks/persona's card).
-export let nameCard = (at: string, name: string) =>
-  setting(at, 'name', h(NameCard, { name }))
-
-// Where a space's people hear a few voices its Operator may speak in on a
-// call, pick one, how fast it speaks, and how its calls are answered
-// (@yaks/speech's card), from what speech.ts `offered`s. Play speaks a sample
-// at the speed picked (speech.ts `sampled`); a voice the chosen way cannot
-// speak is greyed (`settingsScript`).
-export let voiceCard = (at: string, name: string, offer: Offer) =>
-  setting(
-    at,
-    'voice',
-    h(VoiceCard, { name, offer, sample: (id) => `${at}?sample=${id}` }),
-  )
 
 /** A request no session has taken yet, as its conversation draws it, with
  * the lines a settled one is drawn with: what was asked with the files sent
@@ -903,35 +502,23 @@ export let operatorAnswer = async (
       },
     )
   }
+  // A number a contact card in the chat agrees to texts at
+  // (operator-contacts.ts); the settings page writes its own through the
+  // page graph (@yaks/platform/operator-settings).
   if (q.has('texts') && req.method == 'POST') {
     let form = await req.formData()
-    let person = who.person ?? ''
-    let dir = directoryOf(env.STORE)
+    if (!form.has('contact')) {
+      return Response.json({ message: 'Not found' }, { status: 404 })
+    }
     try {
-      if (form.has('contact')) {
-        return Response.json(
-          await operatorDoor(env, space, who, 'contact', {
-            id: String(form.get('contact')),
-            number: String(form.get('number') ?? ''),
-            agreed: form.get('agreed') == 'yes',
-            code: String(form.get('code') ?? '').trim(),
-          }),
-        )
-      }
-      if (form.has('stop')) {
-        await dir.apply({ entities: stopping(person) }, vouched(who))
-        return Response.json(null)
-      }
-      let proof = await provePhone(
-        env,
-        person,
-        space,
-        String(form.get('number') ?? ''),
-        form.get('agreed') == 'yes',
-        String(form.get('code') ?? '').trim(),
+      return Response.json(
+        await operatorDoor(env, space, who, 'contact', {
+          id: String(form.get('contact')),
+          number: String(form.get('number') ?? ''),
+          agreed: form.get('agreed') == 'yes',
+          code: String(form.get('code') ?? '').trim(),
+        }),
       )
-      if (proof) return Response.json(proof, { status: 202 })
-      return Response.json(await dir.texting(person))
     } catch (e) {
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })
@@ -1037,30 +624,6 @@ export let operatorAnswer = async (
     }
     return new Response(null, { status: 303, headers: { location: at } })
   }
-  if (q.has('voice') && req.method == 'POST') {
-    let form = await req.formData()
-    try {
-      let { id } = voiceOf(String(form.get('voice') ?? ''))
-      let model = form.get('voice_model')
-      let speed = form.get('voice_speed')
-      let backend = form.get('voice_backend')
-      let set = await settingsAt(env, space, who, {
-        voice: id,
-        ...speed ? { voice_speed: paceOf(String(speed)).id } : {},
-        ...model ? { voice_model: modelOf(String(model), id) } : {},
-        ...backend ? { voice_backend: backendOf(String(backend)).id } : {},
-      })
-      return Response.json({
-        voice: set.voice,
-        voice_speed: set.voice_speed,
-        voice_model: set.voice_model,
-        voice_backend: set.voice_backend,
-      })
-    } catch (e) {
-      if (!(e instanceof CallError)) throw e
-      return Response.json({ message: e.message }, { status: 400 })
-    }
-  }
   if (q.has('sample') && req.method == 'GET') {
     try {
       let pace = q.get('pace') ?? undefined
@@ -1124,18 +687,6 @@ export let operatorAnswer = async (
         })
       }
       throw e
-    }
-  }
-  if (q.has('name') && req.method == 'POST') {
-    let form = await req.formData()
-    try {
-      let named = await settingsAt(env, space, who, {
-        name: given(String(form.get('name') ?? '')),
-      })
-      return Response.json({ name: named.operator })
-    } catch (e) {
-      if (!(e instanceof CallError)) throw e
-      return Response.json({ message: e.message }, { status: 400 })
     }
   }
   // A page loaded before its store's door (operator-api.ts) reads and writes
@@ -1532,8 +1083,10 @@ export let conversationOf = async (
 }
 
 // The Operator's settings, which the dashboard draws beside its side like
-// every other page (pages.ts `desk`): what it does and where, a link to its
-// conversations in the chat app (`chatPage`), and the texts it may send.
+// every other page (pages.ts `desk`), drawn from the rows the browser draws
+// it again from (@yaks/platform/operator-settings-view), which the page
+// carries for its first paint (`data-view`): what the page's door answers
+// of them (reach-door.ts), read here the same way.
 export let operatorBody = async (
   env: Env,
   seen: Space,
@@ -1541,117 +1094,94 @@ export let operatorBody = async (
   dir = directoryOf(env.STORE),
 ) => {
   let at = managePath('operator', seen.slug)
+  let person = who.person ?? ''
   let [
     space,
-    consent,
     { pa, beyond },
     phone,
     platform,
-    chosen,
-    email,
-    browsers,
-    chatting,
-  ] = await Promise
-    .all([
-      settingsAt(env, seen, who),
-      dir.texting(who.person ?? ''),
-      reachOf(dir, walkTo(seen.slug, seen.eid), who.person ?? ''),
-      phoneAt(env, seen.sender),
-      phoneAt(env),
-      dir.alerts(who.person ?? ''),
-      dir.emailAt(who.person ?? ''),
-      dir.pushes(who.person ?? ''),
-      // A chat platform that cannot be offered leaves the rest of the page.
-      who.role == 'owner'
-        ? Promise.all([
-          import('./chat.ts'),
-          chatRows(dir, walkTo(seen.slug, seen.eid)),
-        ]).then(([c, rows]) => c.offers(env, seen.eid, rows)).catch(
-          (e) => {
-            caught(e, { request: 'operator settings chat' })
-            return []
-          },
-        )
-        : Promise.resolve([]),
-    ])
-  let from = phone?.transport().number
-  let call = platform?.caller ? platform.transport().number : undefined
-  let address = mailFrom(space.slug, null, env)
-  let sub = subdomainMail(env, space)
-  let operator = space.operator
-  return html([
-    h(
-      Card,
-      null,
-      h(
-        'p',
-        null,
-        `${operator} is this space’s Operator. Ask ${operator} for a change in your apps, or send a PDF or a photo. Your space's plan covers its work.`,
-      ),
-      pa
-        ? h(
-          'p',
+    alerting,
+    texting,
+    account,
+    chats,
+  ] = await Promise.all([
+    settingsAt(env, seen, who),
+    reachOf(dir, walkTo(seen.slug, seen.eid), person),
+    phoneAt(env, seen.sender),
+    phoneAt(env),
+    personRows(dir, person, ALERTING),
+    personRows(dir, person, TEXTING),
+    personRows(dir, person, ACCOUNT),
+    // A chat platform that cannot be offered leaves the rest of the page.
+    who.role == 'owner'
+      ? Promise.all([
+        import('./chat.ts'),
+        chatRows(dir, walkTo(seen.slug, seen.eid)),
+      ]).then(([c, rows]) => c.offers(env, seen.eid, rows)).catch(
+        (e) => {
+          caught(e, { request: 'operator settings chat' })
+          return []
+        },
+      )
+      : Promise.resolve([]),
+  ])
+  let rows = [
+    settingsRow(space.eid, wearing(space)),
+    ...alerting,
+    ...texting,
+    ...account,
+  ]
+  let view: OperatorView = {
+    person,
+    space: { eid: space.eid, slug: space.slug },
+    at,
+    connections: managePath('connections', seen.slug),
+    operator: space.operator,
+    pa,
+    beyond: beyond.map((r) => ({
+      slug: r.space.slug,
+      title: r.space.title,
+      role: r.role,
+    })),
+    address: mailFrom(space.slug, null, env),
+    sub: subdomainMail(env, space),
+    from: phone?.transport().number,
+    call: platform?.caller ? platform.transport().number : undefined,
+    offer: offered(env, space),
+    key: pushKey(env),
+    chats: chats.map(({ platform, bot, user, kept, servers }) => ({
+      platform: { title: platform.title },
+      bot: { name: bot.name, testing: bot.testing },
+      ...user ? { user: { name: user.name, testing: user.testing } } : {},
+      kept,
+      servers: servers.map((s) => ({
+        ...s,
+        rooms: s.rooms?.map(({ id, eid, name }) => ({ id, eid, name })) ??
           null,
-          'This is your own space, so its Operator can also work in your other spaces, with your role in each.',
-        )
-        : null,
-      elsewhere(beyond, pa),
-      h(
-        'p',
-        null,
-        `You can also email ${operator} from any mail app: write to `,
-        h('a', { href: `mailto:${address}` }, address),
-        sub
-          ? ` (or any other name at ${sub} that is not an app's, such as clerk@${sub})`
-          : '',
-        ` with what you want changed, and attach a PDF or a photo if you have one. Send it from the email address you sign in with; ${operator} answers by email.`,
-      ),
+      })),
+    })),
+  }
+  return html(
+    h(
+      'div',
+      {
+        'data-view': 'operator-settings',
+        'data-operator-view': JSON.stringify(view),
+      },
+      operatorSettingsView(view, {
+        settings: settingsOf(rows)!,
+        alerting: alertingOf(rows)!,
+        texting: textingOf(rows),
+        email: accountOf(rows)?.email || null,
+      }),
+      h('script', {
+        type: 'application/json',
+        'data-page-graph': '',
+        dangerouslySetInnerHTML: { __html: drawnRows(person, rows) },
+      }),
     ),
-    talks(space.slug),
-    nameCard(at, operator),
-    voiceCard(at, operator, offered(env, space)),
-    alertsCard(at, chosen, consent, email, browsers, pushKey(env)),
-    textsCard(at, consent, from, call),
-    ...chatCard(at, managePath('connections', seen.slug), operator, chatting),
-  ]) + settingsScript
-}
-
-// Where else the Operator works and what it may do there, one sentence for
-// all of it: the spaces it changes things in, then those it only looks at.
-// Each space's owner sets that on its People page (pages.ts `operating`); on
-// a person's own space it follows their role in each.
-export let elsewhere = (beyond: Reach[], pa: boolean) => {
-  if (!beyond.length) return null
-  let named = (rs: Reach[]) =>
-    rs.length
-      ? LIST.formatToParts(rs.map((_, i) => String(i))).map((part) => {
-        let { space } = rs[Number(part.value)] ?? {}
-        return part.type == 'element' && space
-          ? h('a', { href: chatPath(space.slug) }, space.title || space.slug)
-          : part.value
-      })
-      : null
-  let changes = named(beyond.filter((r) => r.role != 'viewer'))
-  let looks = named(beyond.filter((r) => r.role == 'viewer'))
-  return h(
-    'p',
-    null,
-    ...changes && looks
-      ? [
-        'It can also change things in ',
-        changes,
-        ', and look at ',
-        looks,
-        ' without changing anything.',
-      ]
-      : changes
-      ? ['It can also work in ', changes, ', and change things there.']
-      : ['It can also look at ', looks, ', but not change anything there.'],
-    pa ? null : ' Each space’s owner chooses this on its People page.',
   )
 }
-
-let LIST = new Intl.ListFormat('en', { type: 'conjunction' })
 
 // The public half of yaks.app's VAPID key, which a browser subscribes with,
 // or null when browser notifications are not switched on.
@@ -1659,77 +1189,6 @@ let pushKey = (env: Env) => {
   let vapid = vapidOf(env)
   return vapid ? publicKey(vapid.key) : null
 }
-
-// The settings page's script: the name, the voice, the alerts and the texts
-// choice, and each voice's sample played in place of whichever was playing.
-// Choosing browser notifications first allows them on this browser: it
-// registers the service worker that shows them (public/push.js), subscribes
-// with yaks.app's VAPID key and keeps the subscription (\`?push\`).
-let settingsScript = `<script type="module">
-// A page brought in place (@yaks/ui/navigate) runs this again: what it
-// listens for, it lets go when its page leaves.
-let leave = new AbortController()
-document.addEventListener('yak-leave', () => { leave.abort(); playing.pause() }, { once: true })
-let signal = leave.signal
-let playing = new Audio()
-for (let play of document.querySelectorAll('[data-sample]')) {
-  play.addEventListener('click', async () => {
-    let said = document.querySelector('#voice [data-status]')
-    said.textContent = ''
-    play.disabled = true
-    try {
-      let pace = document.querySelector('#voice [name=voice_speed]:checked')?.value
-      let response = await fetch(play.dataset.sample + (pace ? '&pace=' + pace : ''))
-      if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? 'That voice could not be played. Try again.')
-      URL.revokeObjectURL(playing.src)
-      playing.src = URL.createObjectURL(await response.blob())
-      await playing.play()
-    } catch (error) { said.textContent = error.message }
-    play.disabled = false
-  }, { signal })
-}
-let voice = document.querySelector('#voice')
-let fit = () => {
-  let way = voice?.querySelector('[name=voice_model]:checked')?.value
-  for (let v of voice?.querySelectorAll('[name=voice]') ?? []) {
-    v.disabled = !!way && !v.dataset.ways.split(' ').includes(way)
-  }
-  let picked = voice?.querySelector('[name=voice]:checked')
-  if (picked?.disabled) voice.querySelector('[name=voice]:not(:disabled)').checked = true
-}
-voice?.addEventListener('change', fit, { signal })
-voice?.addEventListener('save-restored', fit, { signal })
-fit()
-for (let reveal of document.querySelectorAll('[data-reveal]')) {
-  reveal.addEventListener('click', () => {
-    let shown = reveal.getAttribute('aria-controls').split(' ').map((id) => document.getElementById(id))
-    for (let s of shown) s.hidden = false
-    reveal.hidden = true
-    reveal.setAttribute('aria-expanded', 'true')
-    shown[0].querySelector('input')?.focus()
-  }, { signal })
-}
-document.querySelector('#texts')?.addEventListener('save-restored', () => {
-  let number = document.querySelector('#texts-number')
-  let agreed = document.querySelector('#texts [name=agreed]')
-  if (number?.value || agreed?.checked) document.querySelector('#texts [data-reveal]')?.click()
-}, { signal })
-for (let form of document.querySelectorAll('#texts-stop')) {
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault()
-    let said = document.querySelector('#texts [data-status]')
-    let body = new FormData(form)
-    if (e.submitter?.name == 'stop') body.set('stop', '1')
-    said.textContent = 'Saving…'
-    try {
-      let response = await fetch(form.action, { method: 'POST', body })
-      let answer = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(answer?.message ?? 'Your choice could not be saved. Try again.')
-      location.reload()
-    } catch (error) { said.textContent = error.message }
-  }, { signal })
-}
-</script>`
 
 /** What the chat app's side holds beside every page of it, read by its door
  * (manage.ts `beside`): every space the person may open (its selector), the

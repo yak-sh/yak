@@ -5,6 +5,9 @@
 // name: a new one is given one, and a renamed one goes by its new name on the
 // page and in its instructions.
 
+import { settingsAt } from './build-door.ts'
+import { checked, type Settings } from './operator-persona.ts'
+import { CallError } from '@yaks/tools/errors'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -799,11 +802,18 @@ test('a new Operator is given a name, clear of the Operators its person already 
   assertEquals(new Set([space, orchard, pond].map((s) => s.operator)).size, 3)
 })
 
-let rename = (name: string) =>
-  answer(`${at}?name=1`, {
-    method: 'POST',
-    body: new URLSearchParams({ name }),
-  }).then((r) => r!.json().then((json) => ({ status: r!.status, json })))
+// What the settings page's Save bar writes through its door (reach-door.ts):
+// the settings asked for, checked, on the Operator's persona.
+let setting = async (set: Settings) => {
+  try {
+    let now = await settingsAt(p.env, (await dir.at(eid))!, who, checked(set))
+    return { status: 200, json: { name: now.operator } }
+  } catch (e) {
+    if (!(e instanceof CallError)) throw e
+    return { status: 400, json: { message: e.message } }
+  }
+}
+let rename = (name: string) => setting({ name })
 let empty = await rename('  ')
 let renamed = await rename('  Marlowe   Quince ')
 let after = (await dir.at(eid))!
@@ -834,10 +844,7 @@ test('a renamed Operator goes by its new name in its chat app, its settings and 
 
 // A Voice card saved through its door, then the settings drawn again.
 let voiced = async (voice: string, voice_model: string, speed = 'brisk') => {
-  let saved = await answer(`${at}?voice=1`, {
-    method: 'POST',
-    body: new URLSearchParams({ voice, voice_model, voice_speed: speed }),
-  })
+  let saved = await setting({ voice, voice_model, voice_speed: speed })
   let { document } = parseHTML(
     await operatorBody(
       { ...p.env, DEEPGRAM_API_KEY: 'a', OPENAI_VOICE_KEY: 'b' } as never,
@@ -846,7 +853,7 @@ let voiced = async (voice: string, voice_model: string, speed = 'brisk') => {
     ),
   )
   return {
-    status: saved!.status,
+    status: saved.status,
     voice: document.querySelector('#voice [name=voice]:checked')
       ?.getAttribute('value'),
     model: document.querySelector('#voice [name=voice_model]:checked')

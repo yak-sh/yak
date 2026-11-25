@@ -261,6 +261,10 @@ ${
       ? `<script type="module" src="${file('_updates.js')}"></script>`
       : ''
   }${
+    main.includes('data-operator-view=')
+      ? `<script type="module" src="${file('_operator-settings.js')}"></script>`
+      : ''
+  }${
     main.includes('data-domain-search=')
       ? `<script type="module" src="${file('_domains.js')}"></script>`
       : ''

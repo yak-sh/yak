@@ -31,8 +31,8 @@ import { APPROVE } from '@yaks/platform/routes'
 import { countedTexts } from './meter.ts'
 import { charged, costOf } from './text-spend.ts'
 
-export { CONSENT } from './operator-consent.ts'
-import { CONSENT } from './operator-consent.ts'
+export { CONSENT } from '@yaks/platform/consent'
+import { CONSENT } from '@yaks/platform/consent'
 
 /** The campaign's words (T-134538): the text sent when someone agrees on the
  * Operator page, and the answers to START, STOP and HELP. */

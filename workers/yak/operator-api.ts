@@ -20,6 +20,8 @@ import { type Level, writes } from '@yaks/member'
 import { UPDATE_WAITING, waitingBundle } from '@yaks/platform/update-waiting'
 import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
 import { draftRows, draftsSpace } from '@yaks/platform/operator-drafts'
+import { settingsRow, settingsSpace } from '@yaks/platform/operator-settings'
+import { settingsIn } from './operator-persona.ts'
 import { line } from '@yaks/query'
 import type { Bundle, Graph } from '@yaks/graph'
 import { mayWrite, sight } from './operator-access.ts'
@@ -138,14 +140,33 @@ export let operatorApi = (
     },
     tags: { request: 'Operator drafts' },
   })
+  // The Operator's name and voice, off its persona, as its settings page
+  // draws them (@yaks/platform/operator-settings): read again when a write
+  // may have moved the persona, by the page or by the Operator itself.
+  let settings = computed(store.g, {
+    affects: (bundles) =>
+      bundles.some((b) => 'doc' in b || 'speech' in b || 'persona' in b),
+    hold,
+    clock,
+    read: async (asked, read) => {
+      let space = await spaceOf(store)
+      if (!read?.person || !space || settingsSpace(asked) != space) return []
+      return [settingsRow(space, await settingsIn(store.g.storage, space))]
+    },
+    tags: { request: 'Operator settings' },
+  })
   // Whether each person holds a seat, as the directory last said for their
   // socket: what it is read with.
   let members = new Map<string, boolean>()
   let live = sockets(
     beside(
-      beside(subs, waiting, personal),
-      drafts,
-      (asked) => draftsSpace(asked) != undefined,
+      beside(
+        beside(subs, waiting, personal),
+        drafts,
+        (asked) => draftsSpace(asked) != undefined,
+      ),
+      settings,
+      (asked) => settingsSpace(asked) != undefined,
     ),
     {
       acceptWebSocket: (ws) => ctx.acceptWebSocket(ws),

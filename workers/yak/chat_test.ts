@@ -33,7 +33,7 @@ import {
   sayDirect,
   type Server,
 } from './chat.ts'
-import { chatCard } from './operator-page.ts'
+import { chatCard } from '@yaks/platform/operator-settings-view'
 import { chatRows } from './connections.ts'
 import { chatRows as replyIn, peopleIn } from './operator-rooms.ts'
 import { operatorMemory } from './operator-testing.ts'

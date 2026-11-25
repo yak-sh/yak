@@ -23,7 +23,7 @@ import {
 import { derivedEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
 import { short } from '@yaks/id'
-import { kept, type Reads, shipped } from '@yaks/persona'
+import { given, kept, type Reads, shipped } from '@yaks/persona'
 import { line, stringify, whole } from '@yaks/query'
 import { fill } from '@yaks/yaml'
 import { PERSONA } from './content.ts'
@@ -33,7 +33,14 @@ import { FREE, LETTERS, PRICE } from '@yaks/platform/plans'
 import { KERNEL, meta } from './meta.ts'
 import { url } from '@yaks/platform/host'
 import { chatPath } from '@yaks/platform/routes'
-import { choices, type Speaking } from './speech.ts'
+import {
+  backendOf,
+  choices,
+  modelOf,
+  paceOf,
+  type Speaking,
+  voiceOf,
+} from './speech.ts'
 import { speechFrom } from '@yaks/speech'
 import { BASE } from '@yaks/platform/operator-model'
 
@@ -121,6 +128,42 @@ let settingsOf = (row: Bundle | undefined, base?: Bundle): Settings => {
   }
 }
 
+/** The settings a person asked for, each one offered here: a name given,
+ * and a voice listed, spoken at a pace, by a way and a model that can speak
+ * it. A voice's choices come with the voice. */
+export let checked = (set: Settings): Settings => {
+  let voice = set.voice_speed || set.voice_model || set.voice_backend ||
+      'voice' in set
+    ? voiceOf(String(set.voice ?? '')).id
+    : undefined
+  return {
+    ...'name' in set ? { name: given(String(set.name ?? '')) } : {},
+    ...voice ? { voice } : {},
+    ...voice && set.voice_speed
+      ? { voice_speed: paceOf(set.voice_speed).id }
+      : {},
+    ...voice && set.voice_model
+      ? { voice_model: modelOf(set.voice_model, voice) }
+      : {},
+    ...voice && set.voice_backend
+      ? { voice_backend: backendOf(set.voice_backend).id }
+      : {},
+  }
+}
+
+/** The settings the persona of the space `space` holds, as its settings
+ * page draws them (@yaks/platform/operator-settings), read without moving
+ * it: a page reads them live once the page drawn from them has settled it. */
+export let settingsIn = async (
+  g: Reads,
+  space: Eid,
+): Promise<Omit<Settings, 'cache_retention'>> => {
+  let { cache_retention: _, ...settings } = settingsOf(
+    (await g.get([personaFor(space)]))[0],
+  )
+  return settings
+}
+
 // What `set` writes on persona `eid`: only the settings it names, null
 // putting one back to its base's or the platform's. A name is never null.
 let stored = (eid: Eid, set: Settings): Bundle => {
@@ -157,6 +200,16 @@ export let worn = (space: Space, own: Settings): Space => ({
   voice_model: own.voice_model ?? null,
   voice_backend: own.voice_backend ?? null,
   cache_retention: own.cache_retention ?? null,
+})
+
+/** The settings `space` wears (`worn`), as its settings page draws them
+ * (@yaks/platform/operator-settings). */
+export let wearing = (space: Space) => ({
+  name: space.operator,
+  voice: space.voice ?? null,
+  voice_speed: space.voice_speed ?? null,
+  voice_model: space.voice_model ?? null,
+  voice_backend: space.voice_backend ?? null,
 })
 
 /**

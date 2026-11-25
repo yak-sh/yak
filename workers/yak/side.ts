@@ -4,6 +4,14 @@
 // (manage.ts `beside`), and the directory answers the same as a live read of
 // the person (graph.ts `/person/ws`), so the side the page drew and the one
 // its rows redraw agree.
+import {
+  ALERTING,
+  alertingRow,
+  type Channel,
+  TEXTING,
+  textingRows,
+} from '@yaks/platform/operator-settings'
+import { routeOf } from './operator-alerts.ts'
 import { writes } from '@yaks/member'
 import type { Bundle } from '@yaks/graph'
 import { logoPath } from '@yaks/platform/routes'
@@ -129,6 +137,20 @@ export let personRows = async (
   if (line == SIGNED_IN) {
     return signedInRows(await dir.browserSessions(person))
   }
+  if (line == ALERTING) {
+    let [channel, texting, email, pushes] = await Promise.all([
+      dir.alerts(person),
+      dir.texting(person),
+      dir.emailAt(person),
+      dir.pushes(person),
+    ])
+    return [alertingRow(person, {
+      channel,
+      by: routeOf(channel, texting, email, pushes)?.by as Channel ?? 'updates',
+      browsers: pushes.length,
+    })]
+  }
+  if (line == TEXTING) return textingRows(person, await dir.texting(person))
   if (line == FRIENDS) {
     let all = await shared(dir, person)
     return friendRows(person, await friendList(dir, person, all))

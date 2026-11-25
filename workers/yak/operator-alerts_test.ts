@@ -11,6 +11,7 @@ import { letterFor, receive, textSigned } from './operator-channels.ts'
 import { notification, updating } from './operator-updates.ts'
 import { notificationSend, routeFor } from './operator-alerts.ts'
 import { chatPage, operatorAnswer, operatorBody } from './operator-page.ts'
+import { reachedApply } from './reached-writes.ts'
 import { endpoints } from './endpoints.ts'
 import { PER_SEGMENT } from './text-spend.ts'
 import { vapidKey } from '@yaks/push'
@@ -204,10 +205,26 @@ test('what the Operator asks a person is alerted, opening at it in their Updates
 })
 
 // Once they agree to texts, an alert is a text, paid from the space's budget.
-// They prove the number with the code texted to it.
-await page('texts', { number: ANA, agreed: 'yes' })
+// They prove the number with the code texted to it, as the settings page's
+// Save bar writes it through its door (reached-writes.ts).
+let agree = (code = '') =>
+  reachedApply(
+    [{
+      entity: { eid: crypto.randomUUID() },
+      agreeTexts: { space: eid, number: ANA, agreed: true, code },
+    }],
+    env,
+    dir,
+    held,
+    person,
+  )
+// Saving a number first texts a code, which the page says.
+assertStringIncludes(
+  await agree().then(() => '', (e: Error) => e.message),
+  'We texted a six-digit code.',
+)
 let code = take(texted).at(-1)!.text.match(/\d{6}/)![0]
-await page('texts', { number: ANA, agreed: 'yes', code })
+await agree(code)
 take(texted)
 let before = (await dir.at(eid))!.meter?.texts ?? 0
 let byText = await told('Open it from your Updates.', undefined, 'Report ready')

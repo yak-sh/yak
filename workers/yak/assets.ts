@@ -81,6 +81,14 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // A space's Operator settings kept current
+  // (@yaks/platform/operator-settings-browser).
+  {
+    name: '_operator-settings.js',
+    bundle: of('@yaks/platform/operator-settings-browser'),
+    external,
+    named: true,
+  },
   // A space's Updates cards kept current
   // (@yaks/platform/updates-list-browser).
   {

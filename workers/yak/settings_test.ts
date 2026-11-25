@@ -4,7 +4,9 @@ import { bindSave } from '@yaks/ux/save'
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
 import { desk } from './desk-pages.ts'
-import { alertsCard, nameCard } from './operator-page.ts'
+import { h } from 'preact'
+import { operatorSettingsView } from '@yaks/platform/operator-settings-view'
+import { offered } from './speech.ts'
 import { KEY } from '@yaks/connections'
 
 let drafts = () => {
@@ -85,11 +87,28 @@ let profile = await desk({
 let preferences = await desk({ space: 'ada', apps: [], view: 'settings' })
   .text()
 let operator = `<html><body>${
-  renderToString(nameCard('/manage/ada/operator', 'Elihu'))
-}${
-  renderToString(
-    alertsCard('/manage/ada/operator', 'updates', null, 'ada@example.test'),
-  )
+  renderToString(h(
+    'div',
+    null,
+    operatorSettingsView({
+      person: 'ada',
+      space: { eid: 'space-ada', slug: 'ada' },
+      at: '/manage/ada/operator',
+      connections: '/manage/ada/connections',
+      operator: 'Elihu',
+      pa: true,
+      beyond: [],
+      address: 'ada@yaks.app',
+      offer: offered({}, {}),
+      key: null,
+      chats: [],
+    }, {
+      settings: { name: 'Elihu' },
+      alerting: { channel: 'updates', by: 'email', browsers: 0 },
+      texting: null,
+      email: 'ada@example.test',
+    }),
+  ))
 }</body></html>`
 let connectionPage = (open?: string) =>
   desk({

@@ -6,7 +6,6 @@ import { bindSave, type SaveBinding } from '@yaks/ux/save'
 import { tips } from '@yaks/ui/parts'
 import { CallError } from '@yaks/tools/errors'
 import { settingsDrafts } from './settings-draft-browser.ts'
-import { allow } from './alerts-browser.ts'
 import { LEAVE, PAGE } from '@yaks/ui/navigate'
 import { SAVE_THROUGH, type SavingForm } from '@yaks/platform/page-parts'
 
@@ -54,8 +53,6 @@ export let settings = (root: Document = document) => {
     save: async (form: HTMLFormElement, body: FormData) => {
       let through = (form as SavingForm)[SAVE_THROUGH]
       if (through) return await through(body)
-      let offer = form.querySelector<HTMLInputElement>('[data-push]:checked')
-      if (offer) await allow(offer.dataset.push!, offer.dataset.at!)
       let response = await fetch(form.action, {
         method: 'POST',
         body,

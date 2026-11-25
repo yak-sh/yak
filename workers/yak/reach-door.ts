@@ -31,6 +31,12 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import { personLine } from '@yaks/platform/person-lines'
 import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
 import { draftsSpace, operatorWrite } from '@yaks/platform/operator-drafts'
+import {
+  reachedWrites,
+  settingsRow,
+  settingsSpace,
+  settingsWrite,
+} from '@yaks/platform/operator-settings'
 import type { Update } from '@yaks/platform/update-rows'
 import { writes } from '@yaks/member'
 import { personRows } from './side.ts'
@@ -39,7 +45,8 @@ import { whole } from '@yaks/query'
 import { CallError, refused as toolRefused } from '@yaks/tools/errors'
 import { workerUpgrade } from '@yaks/workerd'
 import { inReach } from './declared.ts'
-import { builderOf, operatorDoor, SPACE } from './build-door.ts'
+import { builderOf, operatorDoor, settingsAt, SPACE } from './build-door.ts'
+import { checked, wearing } from './operator-persona.ts'
 import { caught } from './defects.ts'
 import type { Directory } from './directory.ts'
 import { storeOf } from './door.ts'
@@ -52,6 +59,7 @@ import { vouched, type Who } from './session.ts'
 import type { Clock } from './timing.ts'
 import { acting, updatesApply, waitingSeats } from './updates.ts'
 import { accountApply, accountWrites } from './account-writes.ts'
+import { reachedApply } from './reached-writes.ts'
 
 let TAGS = { request: 'reach door' }
 
@@ -102,6 +110,20 @@ export let reachDoor = async (
     (await dir.seated(person)).find((s) =>
       s.space.eid == eid && !s.space.trashed && writes(s.role)
     )
+  // The Operator's settings in the space of `seat`, after writing `set`
+  // there, when given, as its settings page's row.
+  let settingsOf = async (
+    seat: NonNullable<Awaited<ReturnType<typeof seatIn>>>,
+    set?: Parameters<typeof settingsAt>[3],
+  ) => {
+    let now = await settingsAt(
+      env,
+      seat.space,
+      { ...who, role: seat.role },
+      set,
+    )
+    return settingsRow(seat.space.eid, wearing(now))
+  }
   try {
     if (door == '/query' && req.method == 'GET') {
       let q = new URL(req.url).searchParams
@@ -118,6 +140,12 @@ export let reachDoor = async (
           {},
         ) as { updates: Update[] }
         return Response.json(updateRows(person, cards, updates))
+      }
+      let named = settingsSpace(line)
+      if (named != undefined) {
+        let seat = await seatIn(named)
+        if (!seat) return Response.json([])
+        return Response.json([await settingsOf(seat)])
       }
       if (line != UPDATE_WAITING && personLine(line)) {
         return Response.json(await personRows(dir, person, line))
@@ -176,6 +204,22 @@ export let reachDoor = async (
           })
         )
       }
+      let setting = settingsWrite(bundles)
+      if (setting) {
+        let seat = await seatIn(setting.space)
+        if (!seat) {
+          return Response.json(
+            { error: 'Forbidden', message: 'You do not write in that space.' },
+            { status: 403 },
+          )
+        }
+        return Response.json([await settingsOf(seat, checked(setting.set))])
+      }
+      if (reachedWrites(bundles)) {
+        return Response.json(
+          await reachedApply(bundles, env, dir, who, person),
+        )
+      }
       if (acting(bundles)) {
         return await updatesApply(bundles, env, dir, person, who.until, c)
       }
@@ -232,7 +276,8 @@ export let reachDoor = async (
               )
             }
             // What the space's Operator store answers of the person.
-            let operator = cardsSpace(line) ?? draftsSpace(line)
+            let operator = cardsSpace(line) ?? draftsSpace(line) ??
+              settingsSpace(line)
             if (operator != undefined) {
               let closed = false
               let stop: (() => void) | undefined

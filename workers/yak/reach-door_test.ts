@@ -39,6 +39,14 @@ import {
 } from '@yaks/platform/update-rows'
 import type { UpdatesView } from '@yaks/platform/updates-view'
 import { draftRows } from '@yaks/platform/operator-drafts'
+import {
+  ALERTING,
+  alertingEid,
+  alertingOf,
+  operatorSettings,
+  settingsEid,
+  settingsOf,
+} from '@yaks/platform/operator-settings'
 import { draftEid } from '@yaks/draft'
 import { ALL } from './updates.ts'
 import { sessionRow } from './browser-sessions.ts'
@@ -198,6 +206,44 @@ test('a tab writes its person’s draft to their space’s Operator, and to no s
     [['Remind me', undefined]],
   )
   equal((await wrote(bea, typed(bea))).status, 403)
+})
+
+test('a tab renames its space’s Operator and picks its voice through the door, as offered, and in no space it does not write in', async () => {
+  let own = (await k.dir.seated(ada.person)).find((s) => s.own)!.space.eid
+  let set = (who: Tab, settings: Record<string, string>) =>
+    wrote(who, [{
+      entity: { eid: settingsEid(own) },
+      operatorSettings: { space: own, ...settings },
+    }])
+  let named = await set(ada, { name: 'Caleb' })
+  equal(named.status, 200, JSON.stringify(named.body))
+  equal(settingsOf(named.body)?.name, 'Caleb')
+  equal(settingsOf(await rowsOf(ada, operatorSettings(own)))?.name, 'Caleb')
+  let unheard = await set(ada, { voice: 'nobody' })
+  equal(
+    [
+      unheard.status,
+      JSON.stringify(unheard.body).includes('Pick one of the voices listed.'),
+    ],
+    [400, true],
+  )
+  equal((await set(bea, { name: 'Mallory' })).status, 403)
+  equal(await rowsOf(bea, operatorSettings(own)), [])
+})
+
+test('a tab chooses how its person is told things away from the page', async () => {
+  let chose = await wrote(ada, [{
+    entity: { eid: alertingEid(ada.person) },
+    alerting: { channel: 'updates' },
+  }])
+  equal(chose.status, 200, JSON.stringify(chose.body))
+  equal(alertingOf(chose.body), {
+    channel: 'updates',
+    by: 'updates',
+    browsers: 0,
+  })
+  equal(alertingOf(await rowsOf(ada, ALERTING))?.channel, 'updates')
+  equal(alertingOf(await rowsOf(bea, ALERTING))?.channel, null)
 })
 
 test('a tab writes its person’s account, messages and asks through the door, and only theirs', async () => {

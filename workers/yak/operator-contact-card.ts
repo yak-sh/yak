@@ -1,6 +1,6 @@
 import { h } from 'preact'
 import { Button, Check, Field, Form } from '@yaks/ui/parts'
-import { CONSENT } from './operator-consent.ts'
+import { CONSENT } from '@yaks/platform/consent'
 
 /** A proposed mobile number stays a proposal until the person submits the
  * same optional checkbox the Operator's settings page uses. */

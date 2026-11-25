@@ -7,6 +7,8 @@ import { clock, equal, test, until } from '@yaks/testing'
 import { UPDATE_WAITING, waitingFrom } from '@yaks/platform/update-waiting'
 import { updateCards, updatesIn } from '@yaks/platform/update-rows'
 import { operatorDrafts } from '@yaks/platform/operator-drafts'
+import { operatorSettings } from '@yaks/platform/operator-settings'
+import { personaFor } from './operator-persona.ts'
 import type { Level } from '@yaks/member'
 import { type Bundle, transient } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
@@ -243,6 +245,35 @@ test('a person’s drafts are live on their page graph’s line, marked with the
   } finally {
     await door.close(mine.ws)
     await door.close(theirs.ws)
+  }
+})
+
+test('the Operator’s settings are live on its settings page’s line: a name it gives itself is heard at once', async () => {
+  let page = await socket(ada, operatorSettings(space))
+  let named = () =>
+    page.flatMap((f) => (f.bundles ?? []) as Bundle[])
+      .map((b) => (b.operatorSettings as { name?: string | null }).name)
+  try {
+    await until(() => named().length > 0)
+    await write([{
+      entity: { eid: personaFor(space) },
+      doc: { title: 'Iris' },
+    }])
+    await until(() => named().includes('Iris'))
+    equal(
+      page.flatMap((f) => (f.bundles ?? []) as Bundle[]).at(-1)
+        ?.operatorSettings,
+      {
+        space,
+        name: 'Iris',
+        voice: null,
+        voice_speed: null,
+        voice_model: null,
+        voice_backend: null,
+      },
+    )
+  } finally {
+    await door.close(page.ws)
   }
 })
 

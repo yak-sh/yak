@@ -9,12 +9,7 @@ import {
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
 import type { Item, Model, Request } from '@yaks/model'
-import {
-  type Directory,
-  directoryOf,
-  type Role,
-  type Space,
-} from './directory.ts'
+import { type Directory, directoryOf, type Role } from './directory.ts'
 import { declared } from './directory-fixture.ts'
 import { modelPage } from '../../packages/workers-ai/testing.ts'
 import { platform } from './directory-rows-probe.ts'
@@ -52,12 +47,11 @@ let operatorOf = (
     tools: attachmentTools(env),
   })
 import { TOOLS } from './tools.ts'
-import {
-  conversation,
-  elsewhere,
-  operatorAnswer,
-  operatorBody,
-} from './operator-page.ts'
+import { conversation, operatorAnswer, operatorBody } from './operator-page.ts'
+import { reachedApply } from './reached-writes.ts'
+import { CallError } from '@yaks/tools/errors'
+import { textingOf } from '@yaks/platform/operator-settings'
+import { elsewhere } from '@yaks/platform/operator-settings-view'
 import { operatorDoor } from './build-door.ts'
 import { arrived, reading, Refused } from './inbox.ts'
 import type { Inbound } from './env.ts'
@@ -271,11 +265,7 @@ test("the operator page on a person's own space says it works in their other spa
 test('the operator page says once where else it works and what it may do there', () => {
   let said = (...roles: Role[]) => {
     let line = elsewhere(
-      roles.map((role, i) => ({
-        eid: `r${i}`,
-        role,
-        space: { slug: `s${i}`, title: `S${i}` } as Space,
-      })),
+      roles.map((role, i) => ({ role, slug: `s${i}`, title: `S${i}` })),
       true,
     )
     return line
@@ -366,23 +356,34 @@ Object.assign(f.env, {
     await crypto.subtle.exportKey('raw', signer.publicKey),
   ),
 })
-let textsAt = 'https://yaks.app/manage/clerk/operator?texts=1'
+// What the settings page's Save bar and Stop texts write through the page
+// graph's door (reached-writes.ts), as the person.
 let choose = async (fields: Record<string, string>) => {
-  let body = new FormData()
-  for (let [k, v] of Object.entries(fields)) body.set(k, v)
-  let response = (await operatorAnswer(
-    new Request(textsAt, { method: 'POST', body }),
-    f.env,
-    f.space,
-    f.held,
-  ))!
-  return { status: response.status, said: await response.json() }
+  let bundles = 'stop' in fields
+    ? [{ entity: { eid: crypto.randomUUID() }, stopTexts: {} }]
+    : [{
+      entity: { eid: crypto.randomUUID() },
+      agreeTexts: {
+        space: f.space.eid,
+        number: fields.number ?? '',
+        agreed: fields.agreed == 'yes',
+        code: fields.code ?? '',
+      },
+    }]
+  try {
+    let rows = await reachedApply(bundles, f.env, f.dir, f.held, f.held.person)
+    return { status: 200, said: { message: '', rows } }
+  } catch (e) {
+    if (!(e instanceof CallError)) throw e
+    return { status: 400, said: { message: e.message, rows: [] } }
+  }
 }
 let unticked = await choose({ number: '269-555-0142' })
 let wrong = await choose({ number: '555-0142', agreed: 'yes' })
 let proposed = await choose({ number: '(269) 555-0142', agreed: 'yes' })
 let code = texted.at(-1)!.text.match(/\d{6}/)![0]
 let agreed = await choose({ number: '(269) 555-0142', agreed: 'yes', code })
+let consented = await directoryOf(f.env.STORE).texting(f.held.person)
 texted.splice(0)
 let textsHtml = await operatorBody(f.env, f.space, f.held)
 let blank = await choose({ number: '', agreed: 'yes' })
@@ -391,12 +392,13 @@ let still = await directoryOf(f.env.STORE).texting(f.held.person)
 let stopped = await choose({ stop: '1', number: '269-555-0142' })
 let kept = await directoryOf(f.env.STORE).known(f.held.person)
 test('a person agrees to texts with a ticked box and a mobile number, and stops them', () => {
-  assertEquals(proposed.status, 202)
+  assertEquals(proposed.status, 400)
+  assertStringIncludes(proposed.said.message, 'We texted a six-digit code.')
   assertEquals(unticked.status, 400)
   assertStringIncludes(unticked.said.message, 'Tick the box')
   assertEquals(wrong.status, 400)
-  assertEquals(agreed.said.number, '+12695550142')
-  assertStringIncludes(agreed.said.consent, 'Msg & data rates may apply')
+  assertEquals(textingOf(agreed.said.rows)?.number, '+12695550142')
+  assertStringIncludes(consented!.consent, 'Msg & data rates may apply')
   assertStringIncludes(textsHtml, '269-555-0142')
   // The box is never ticked for them, whatever else the page has chosen.
   assertEquals(
@@ -404,7 +406,7 @@ test('a person agrees to texts with a ticked box and a mobile number, and stops 
       ?.hasAttribute('checked'),
     false,
   )
-  assertEquals(stopped.said, null)
+  assertEquals([stopped.status, textingOf(stopped.said.rows)], [200, null])
 })
 test('a Save with no number refuses and never stops texts; only Stop texts does', () => {
   assertEquals([blank.status, bare.status], [400, 400])
@@ -472,7 +474,7 @@ await texting('t3', 'STOP')
 let replies = texted.splice(0)
 let stoppedTexts = await directoryOf(f.env.STORE).texting(f.held.person)
 test('agreeing to texts sends the welcome from the toll-free number', () => {
-  assertEquals(rejoined.said.number, ANA)
+  assertEquals(textingOf(rejoined.said.rows)?.number, ANA)
   assertEquals(welcome, [{ from: FREE, to: ANA, text: REPLIES.welcome }])
 })
 test("a signed text reaches the space's Operator, which answers by text; an unsigned one is refused", () => {

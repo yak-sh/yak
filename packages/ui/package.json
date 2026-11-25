@@ -22,6 +22,7 @@
     "./Rows": "./Rows.ts",
     "./Time": "./Time.ts",
     "./Card": "./Card.ts",
+    "./Check": "./Check.ts",
     "./Dot": "./Dot.ts",
     "./Empty": "./Empty.ts",
     "./Field": "./Field.ts",

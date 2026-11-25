@@ -15,9 +15,8 @@ import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Host } from '@yaks/markdown'
 import { Folds } from '@yaks/ux/conversation'
-import { Button, Card, Rows } from '@yaks/ui/parts'
+import { Rows } from '@yaks/ui/parts'
 import { moment } from './html.ts'
-import { chatPath } from '@yaks/platform/routes'
 import type { Doing } from './mascot.ts'
 import {
   asked,
@@ -711,18 +710,3 @@ export let listed = <W extends Listed>(items: W[], href: (w: W) => string) =>
       })
     ),
   ))
-
-/** Where the Operator's settings send a person for its conversations: the
- * chat app, which holds them. Settings list none (T-144779). */
-export let talks = (space: string) =>
-  h(
-    Card,
-    null,
-    h(Card.Head, null, h(Card.Title, null, 'Conversations')),
-    h(
-      'p',
-      null,
-      'Your conversations with the Operator are in its chat. ',
-      h(Button, { mod: 'go', href: chatPath(space) }, 'Open the chat'),
-    ),
-  )
