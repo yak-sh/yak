@@ -10,11 +10,10 @@ import { platform } from './testing.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
-import { handleChannels, receive } from './operator-channels.ts'
+import { breakTask, handleChannels, receive } from './operator-channels.ts'
 import { rerun } from './operator-rerun.ts'
 import { conversationOf } from './operator-host.ts'
 import { within } from './defects.ts'
-import { derivedEid } from '@yaks/graph/identity'
 import { faultOf } from '@yaks/tracker'
 
 let reports: Bundle[] = []
@@ -103,10 +102,11 @@ test('the same fix handed back again asks nothing more', async () => {
 test("a break's task a bug stopped is taken up in its own conversation, and its person told about the task", async () => {
   broken = true
   let fix = crypto.randomUUID()
+  let app = crypto.randomUUID()
   await run(async () => {
     await receive(
       store,
-      { space, person: owner, channel: 'error', app: crypto.randomUUID() },
+      { space, person: owner, channel: 'error', app },
       'Fix this error in cookbook',
       { id: fix },
     )
@@ -118,7 +118,7 @@ test("a break's task a bug stopped is taken up in its own conversation, and its 
     await rerun(store, space, { faults: [fault], bug: 'b2', said })
     await drain(store)
   })
-  let task = derivedEid('operator-task|' + fix)
+  let task = breakTask(app)
   let notes = await store.g.read(
     q`.notification.about=${task}&.notification.to=${owner} .fields=doc`,
   )

@@ -137,11 +137,13 @@ test('a break starts one Operator run that fixes the app', async () => {
       JSON.stringify(k.reported.filter((r) => r.exception).slice(-3)),
     )
     await answered('unknown prop: .nothing')
+    // It is taken up in the app's one task, where the first fix is in view,
+    // never a second run of its own beside it (T-3724).
     assertEquals(
       JSON.parse(
         String((await agent.answer('operator_read', { space: slug })).text),
       ).tasks.length,
-      2,
+      1,
     )
     let files = await agent.tool('app_files', {
       ...app,

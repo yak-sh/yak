@@ -1548,6 +1548,12 @@ export let UNASKED = new Set(['machine', 'app', 'wake', 'subscription'])
  * the helper's own short request, decided as the Operator's work for the
  * person with their tools, whose privileged acts wait for their tap, as on
  * every channel of `RELAYED` (T-2079, T-3155). */
+/** The task an app's breaks are fixed in (unseen.ts `fix`): the app's own,
+ * so a break that comes while it works joins the run under way, rather than
+ * a second run fixing and deploying the same app beside it (T-3724), and a
+ * later break takes it up with what it already did in view. */
+export let breakTask = (app: string) => derivedEid('operator-task|error|' + app)
+
 export let HEARSAY = new Set(['subscription', 'error', THREAD, PAGE])
 
 /** The channels whose words are someone else's ask, carried to the person:
@@ -1751,11 +1757,11 @@ export let handleChannels = (
         person == request.person && request.administrative === true,
       )
       let role = access.administrative ? 'owner' as const : access.role ?? null
-      // A break is a task the Operator starts itself, and a fixed bug takes
-      // up the task it stopped; a person's words go to their conversation
-      // with it.
+      // A break is a task the Operator starts itself, one for each app, and a
+      // fixed bug takes up the task it stopped; a person's words go to their
+      // conversation with it.
       let task = request.channel == 'error'
-        ? derivedEid('operator-task|' + row.entity.eid)
+        ? breakTask(request.app ?? row.entity.eid)
         : request.channel == 'fixed'
         ? request.task
         : request.channel == HANDOFF
