@@ -26,7 +26,7 @@ import { live, newestAsk, textOf, usingBefore } from './state.ts'
 import { type Clock, system } from '@yaks/fp'
 import { changes } from './wait.ts'
 import { calledIn, childNotice, overheard } from './child-notice.ts'
-import { steered } from './answer.ts'
+import { askedFor, steered } from './answer.ts'
 
 export type ChildLimits = {
   /** Defaults for user-created tasks, resolved before durable queue admission. */
@@ -375,8 +375,12 @@ let delegation = (
           using,
           // What a steered turn starts is steered: a call made where someone
           // else's words may be asking hands its child those words' mark, so
-          // the child's own turn is steered too (./answer.ts `steered`).
-          ...!minted && !submitted && steered(ctx.entries) ? { heard: {} } : {},
+          // the child's own turn is steered too (./answer.ts `steered`),
+          // judged for whom the call's turn works (`askedFor`).
+          ...!minted && !submitted &&
+              steered(ctx.entries, askedFor(ctx.entries, ctx.call))
+            ? { heard: {} }
+            : {},
         },
       ], { trusted: true })
       return eid

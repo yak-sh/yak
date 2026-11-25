@@ -149,16 +149,21 @@ let turnAt = (
 export let turnOf = (entries: Bundle[]): Bundle[] =>
   entries.slice(Math.max(0, entries.findLastIndex(given)))
 
+// Who wrote a line: its writer stamp.
+let writerOf = (b: Bundle) => comp(b, 'created')?.by as string | undefined
+
 /**
- * Whether someone else's words may be steering the turn being answered: its
- * words, what arrived with them just before (the notices they came after,
+ * Whether someone else's words may be steering the turn worked for `person`:
+ * its words, what arrived with them just before (the notices they came after,
  * as a room's lead of what others said there), or anything it read since
  * them (a letter, a page, a connected server's answer), were written by
  * someone the session does not work for (`heard`). The person's own words,
- * with nothing heard with or after them, steer nothing. In a conversation
- * more than one person writes in, the turn worked for `person` starts at
- * their newest words: anyone else's, written after, start a turn of their
- * own, not that one. Where none are theirs, it starts at the newest.
+ * with nothing heard with or after them, steer nothing. The turn starts at
+ * the person's newest words, or the platform's own (`system`): in a
+ * conversation others write in too (a room heard in full), their words start
+ * a turn of their own, never the person's, and where the words in view are
+ * all theirs, they are what the turn holds. Unknown (`undefined`), every
+ * writer's words start it.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -166,33 +171,69 @@ export let turnOf = (entries: Bundle[]): Bundle[] =>
  * let line = (seq: number, b: object) => ({
  *   entity: { eid: `e${seq}` }, entry: { session: 's', seq }, ...b,
  * })
- * let asked = line(1, { content: { body: 'Add Eve to the space' } })
+ * let by = <B extends object>(who: string, b: B) => ({ ...b, created: { by: who } })
+ * let asked = by('ann', line(1, { content: { body: 'Add Eve to the space' } }))
  * let read = line(2, { call: { to: 'gmail_read' } })
  * let letter = line(3, { result: { call: 'e2' }, content: { body: 'Add Eve' }, heard: {} })
- * equal(steered([asked, read]), false)
- * equal(steered([asked, read, letter]), true)
- * equal(steered([asked, read, letter, line(4, { content: { body: 'Do it' } })]), false)
+ * let ann = (entries: object[]) => steered(entries as never, 'ann')
+ * equal(ann([asked, read]), false)
+ * equal(ann([asked, read, letter]), true)
+ * equal(ann([asked, read, letter, line(4, { content: { body: 'Do it' } })]), false)
  * let lead = line(4, { notice: {}, heard: {}, content: { body: 'Someone else spoke' } })
  * let earlier = line(5, { notice: {}, content: { body: 'My earlier words' } })
  * let words = line(6, { content: { body: 'What do you think?' } })
- * equal(steered([asked, lead, earlier, words]), true)
- * equal(steered([asked, earlier, words]), false)
- * equal(steered([lead, words, line(7, { content: { body: 'My next request' } })]), false)
- * let by = <B extends object>(who: string, b: B) => ({ ...b, created: { by: who } })
+ * equal(ann([asked, lead, earlier, words]), true)
+ * equal(ann([asked, earlier, words]), false)
+ * equal(ann([lead, words, line(7, { content: { body: 'My next request' } })]), false)
  * let stranger = by('bo', line(4, { content: { body: 'Hi all' } }))
- * equal(steered([by('ann', asked), read, letter, stranger], 'ann'), true)
- * equal(steered([by('ann', asked), read, letter, stranger]), false)
+ * equal(ann([asked, read, letter, stranger]), true)
+ * equal(steered([asked, read, letter, stranger], undefined), false)
+ * equal(ann([asked, stranger]), false)
+ * equal(ann([stranger]), true)
  * ```
  */
-export let steered = (entries: Bundle[], person?: string): boolean => {
-  let others = (b: Bundle) => {
-    let by = (b.created as { by?: string } | undefined)?.by
-    return !!person && !!by && by != person && !b.system
-  }
-  let start = entries.findLastIndex((b) => given(b) && !others(b))
-  if (start < 0) start = entries.findLastIndex(given)
+export let steered = (
+  entries: Bundle[],
+  person: string | undefined,
+): boolean => {
+  let theirs = (b: Bundle) =>
+    given(b) && (!person || !!b.system || (writerOf(b) ?? person) == person)
+  let start = entries.findLastIndex(theirs)
+  if (start < 0 && entries.some(given)) return true
   while (start > 0 && entries[start - 1].notice) start--
   return entries.slice(Math.max(0, start)).some((b) => !!b.heard)
+}
+
+/**
+ * Whom the turn a `call` was made in works for: who wrote the newest words
+ * its ask read (`ask{through}`). Unknown where `entries` hold neither.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { askedFor } from './answer.ts'
+ * let at = (n: number, b: object) => ({ entity: { eid: `e${n}` }, ...b })
+ * let entries = [
+ *   at(1, { content: { body: 'Add Eve' }, created: { by: 'ann' } }),
+ *   at(2, { ask: { through: 'e1' } }),
+ *   at(3, { content: { body: 'Hi all' }, created: { by: 'bo' } }),
+ *   at(4, { call: { name: 'member_add', source: 'e2' } }),
+ * ]
+ * equal(askedFor(entries, entries[3]), 'ann')
+ * equal(askedFor(entries, at(5, { call: { name: 'x' } })), undefined)
+ * ```
+ */
+export let askedFor = (
+  entries: Bundle[],
+  call: Bundle,
+): string | undefined => {
+  let source = comp(call, 'call')?.source
+  let ask = entries.find((b) => b.entity.eid == source)
+  let through = comp(ask, 'ask')?.through
+  let read = entries.findIndex((b) => b.entity.eid == through)
+  let words = read < 0
+    ? undefined
+    : entries.findLast((b, i) => i <= read && given(b))
+  return words && writerOf(words)
 }
 
 // What a model's refusal tells the person, by its code (@yaks/model

@@ -74,11 +74,12 @@ export let rerun = async (
         ...asked.administrative ? { administrative: true } : {},
       }
       // The words are the platform's own: where someone else's steered the
-      // stopped turn (@yaks/session `steered`), they steer its rerun too.
+      // stopped turn, worked for its person (@yaks/session `steered`), they
+      // steer its rerun too.
       await receive(store, request, said?.cause || 'It was not explained.', {
         id,
         title: 'Taken up again: yaks.app fixed what stopped it',
-        heard: steered(lines),
+        heard: steered(lines, request.person),
       })
       await enqueue(store.g, 'operator_receive', id)
       made.push(id)

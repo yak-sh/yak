@@ -12,7 +12,7 @@ import { line, sub } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import { short } from '@yaks/id'
-import { given } from '@yaks/session'
+import { askedFor, given } from '@yaks/session'
 import { toolEid } from '@yaks/tools'
 import { ESCALATING, steering } from './operator-approvals.ts'
 import { RELAYED, SMS } from './operator-channels.ts'
@@ -29,16 +29,18 @@ let privileged = (tool: unknown) =>
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-/** Whether a turn read back from its transcript, `entries` up to the
- * `wake_set` call in order, was steered, its words having come by
+/** Whether a turn read back from its transcript, `entries` through the
+ * `wake_set` `call` in order, was steered, its words having come by
  * `channel`: as `steering` decides it when the turn runs (operator.ts
- * `came`). Its words don't keep whether a call was in a room, so a turn by
- * voice counts as a phone call's, which a number alone could start. */
-export let steeredBy = (entries: Bundle[], channel: string) =>
+ * `came`), for whom the call's turn worked (@yaks/session `askedFor`). Its
+ * words don't keep whether a call was in a room, so a turn by voice counts
+ * as a phone call's, which a number alone could start. */
+export let steeredBy = (entries: Bundle[], channel: string, call: Bundle) =>
   steering(
     {
       texted: SMS.has(channel) || channel == 'voice',
       relayed: RELAYED.has(channel),
+      person: askedFor(entries, call),
     },
     { entries },
   )
@@ -117,8 +119,8 @@ export let heardWakes = async (
     let at = comp(call, 'entry')
     let session = String(at?.session ?? '')
     let lines = at ? await turnThrough(g, session, Number(at.seq)) : []
-    let read = lines.some((b) => b.entity.eid == call.entity.eid)
-    if (!read || steeredBy(lines, await channelOf(g, session, lines))) {
+    let made = lines.find((b) => b.entity.eid == call?.entity.eid)
+    if (!made || steeredBy(lines, await channelOf(g, session, lines), made)) {
       marked.push(wake.entity.eid)
     }
   }

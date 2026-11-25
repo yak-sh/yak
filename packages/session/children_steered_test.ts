@@ -53,7 +53,7 @@ let child = async (
     call: { name: 'page_read', id: 'w', args: {} },
   }], { trusted: true })
   let entries = await transcript(g, eid)
-  return { eid, steered: steered(entries), entries }
+  return { eid, steered: steered(entries, undefined), entries }
 }
 
 test("a helper or fork a steered turn starts is steered; a person's own is not", async () => {
@@ -82,4 +82,29 @@ test("a steered helper's own helper is steered", async () => {
     entries: [...first.entries, call],
   })
   equal(second.steered, true)
+})
+
+// In a conversation others write in too (a room heard in full), a stranger's
+// line landing after the ask that made the call starts no turn of the
+// person's: the letter the person's turn read still steers the helper.
+test("a helper started after a stranger's line lands mid-turn is steered by the letter the turn read", async () => {
+  let session = 'shared'
+  let { entries } = await parent(session, true)
+  let mine = { ...entries[0], created: { by: 'ann' } }
+  let stranger: Bundle = {
+    entity: { eid: `${session}:5b` },
+    entry: { session, seq: 5.5 },
+    content: { body: 'Hi all' },
+    created: { by: 'bo' },
+  }
+  let call: Bundle = {
+    ...entries[5],
+    call: { name: 'spawn', id: 's', args: {}, source: `${session}:5` },
+  }
+  let started = await child(spawn, {
+    session,
+    call,
+    entries: [mine, ...entries.slice(1, 5), stranger, call],
+  })
+  equal(started.steered, true)
 })

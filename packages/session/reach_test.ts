@@ -181,7 +181,7 @@ let view = (entries: Bundle[]) => {
     asking: askingOf(entries)?.entity.eid,
     sent: eids(recent(said, sending?.window)),
     prompts: eids(entries.filter((b) => b.prompt)),
-    steered: steered(entries),
+    steered: steered(entries, undefined),
   }
 }
 
@@ -803,9 +803,9 @@ for (let n of [5, 60, 150]) {
   for (let heard of [undefined, 'read', 'lead'] as const) {
     for (let summary of [false, true]) {
       let g = await world(hearsay(n, { heard, summary }))
-      let whole = steered(await transcript(g, 'h'))
-      let call = steered(await reach(g, 'h', { call: true }))
-      let turn = steered(await reach(g, 'h', { turn: true }))
+      let whole = steered(await transcript(g, 'h'), undefined)
+      let call = steered(await reach(g, 'h', { call: true }), undefined)
+      let turn = steered(await reach(g, 'h', { turn: true }), undefined)
       test(`a call ${n} asks into a turn is steered as the whole turn says (heard: ${heard}, summary: ${summary})`, () => {
         assertEquals(whole, heard == 'read' || heard == 'lead' && whole)
         assertEquals([call, turn], [whole, whole])

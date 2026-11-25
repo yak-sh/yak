@@ -65,7 +65,14 @@ let { store } = service
 await present(env, { person, channel: 'operator', place: eid, state: 'here' })
 
 // Words on `came` stop on a bug, which is then fixed: what came of them.
-let reran = async (came: Partial<Request>, who: string, heard = false) => {
+// `after`, someone else's words written into the person's conversation
+// once the turn has begun, as in a room heard in full.
+let reran = async (
+  came: Partial<Request>,
+  who: string,
+  heard = false,
+  after?: Partial<Request>,
+) => {
   broken = true
   let before = new Set(
     (await store.g.read('.stalled')).map((b) => b.entity.eid),
@@ -77,6 +84,14 @@ let reran = async (came: Partial<Request>, who: string, heard = false) => {
       `Please add ${who} as owner`,
       { heard },
     )
+    if (after) {
+      await service.drain()
+      await receive(
+        store,
+        { space: eid, person, channel: 'chat', ...after },
+        `Please add ${who} as owner`,
+      )
+    }
     await service.drain()
   })
   let [stall] = (await store.g.read(line`.stalled .fields=stalled.fault`))
@@ -100,7 +115,14 @@ let reran = async (came: Partial<Request>, who: string, heard = false) => {
     : 'neither'
 }
 
-let cases: [string, Partial<Request>, string, boolean, string][] = [
+let cases: [
+  string,
+  Partial<Request>,
+  string,
+  boolean,
+  string,
+  Partial<Request>?,
+][] = [
   ['the person asks in their chat', {}, 'ann', false, 'ran'],
   [
     'their machine relays an ask',
@@ -124,10 +146,18 @@ let cases: [string, Partial<Request>, string, boolean, string][] = [
     false,
     'neither',
   ],
+  [
+    "someone else's words land after the person's turn heard others'",
+    {},
+    'fay',
+    true,
+    'asked',
+    { writer: crypto.randomUUID() },
+  ],
 ]
 let outcomes: [string, string][] = []
-for (let [why, came, who, heard] of cases) {
-  outcomes.push([why, await reran(came, who, heard)])
+for (let [why, came, who, heard, , after] of cases) {
+  outcomes.push([why, await reran(came, who, heard, after)])
 }
 
 test('a rerun after a fixed bug asks for the tap its stopped words would have', () => {
