@@ -63,6 +63,7 @@ import {
   SHA,
 } from '@yaks/platform/versions'
 import type { Asset, Assets } from '@yaks/platform/fingerprint'
+import { etagOf, otherThanAsset } from '@yaks/platform/asset-response'
 import { assetsIn, keptAsset } from './release.ts'
 import * as files from './files.ts'
 import * as fence from '@yaks/platform/files'
@@ -707,9 +708,6 @@ let iconAsked = async (req: Request, env: Env, space: Space, app: App) => {
     cache: await iconCaching(req, env, space, app),
   }
 }
-
-// The tag for a file's bytes, whose version arrives from files.ts (`VERSION`).
-let etagOf = (version: string) => `"${version}"`
 
 // The tag for a page: a hash of the document as sent, never of the bytes it
 // was woven from. A page is its bytes plus what the platform weaves in at this
@@ -1412,20 +1410,22 @@ let releasedAlias = async (
   path: string,
   page: Response,
 ) => {
-  let etag = page.headers.get('etag')
   if (
-    req.method != 'GET' || page.status != 200 || !etag || !loadsAsset(req) ||
-    /no-store/i.test(page.headers.get('cache-control') ?? '') ||
-    page.headers.has('set-cookie') || page.headers.has('vary')
-  ) return page
-  if (
-    !/\.[a-z0-9]+$/i.test(path) || fence.page(path) || path == '/icon.png' ||
-    new URL(req.url).search
+    req.method != 'GET' || page.status != 200 || !loadsAsset(req) ||
+    page.headers.get('content-type')?.startsWith('text/html') ||
+    path == '/icon.png' || new URL(req.url).search
   ) return page
   let asset = releaseAsset(await releaseAssets(env, app.source), path)
-  if (!asset || etag != etagOf(asset.original.slice(0, 24))) return page
-  await page.body?.cancel()
-  return assetRedirect(req, mount, path, asset)
+  if (!asset) return page
+  let other = await otherThanAsset(
+    page,
+    asset,
+    () => r2RawObjects(env.BLOBS).open(pinnedAsset(asset.original)),
+  )
+  if (other) return other
+  let moved = assetRedirect(req, mount, path, asset)
+  moved.headers.set('cache-control', staticCaching(false))
+  return moved
 }
 
 // Report a page's file that loads without reusable bytes, once per app and
@@ -1697,9 +1697,17 @@ let appDoor = async (
       () => worker(new Request(url, { method: req.method, headers: grant })),
     )
     if (own && own.status != 200 && own.status != 404) return own
-    await own?.body?.cancel()
-    if (own?.status != 200) return refuse('not_a_reader')
-    if (own.headers.get('etag') != etagOf(current.original.slice(0, 24))) {
+    if (own?.status != 200) {
+      await own?.body?.cancel()
+      return refuse('not_a_reader')
+    }
+    let other = await otherThanAsset(
+      own,
+      current,
+      () => raw.open(pinnedAsset(current.original)),
+    )
+    if (other) {
+      await other.body?.cancel()
       // A worker may use this pathname for a response of its own.
       return new Response(null, {
         status: 302,

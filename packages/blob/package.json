@@ -9,6 +9,7 @@
     "./backend": "./backend.ts",
     "./store": "./store.ts",
     "./stream": "./stream.ts",
+    "./compare": "./compare.ts",
     "./file": "./file.ts",
     "./sqlite": "./sqlite.ts",
     "./vocab": "./vocab.ts",

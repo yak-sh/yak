@@ -48,7 +48,7 @@ test('a private app icon from an older release revalidates on both domains', asy
       let image = (headers: Record<string, string>) =>
         k.at(host, path, {
           redirect: 'manual',
-          headers: { 'sec-fetch-dest': 'image', ...headers },
+          headers,
         })
       let loaded = await image({ cookie })
       assertEquals(loaded.status, 200, host)
@@ -63,6 +63,20 @@ test('a private app icon from an older release revalidates on both domains', asy
       let signedOut = await image({ 'if-none-match': tag })
       assertEquals(signedOut.status, 303, host)
       await signedOut.body?.cancel()
+
+      let moved = await image({ cookie, 'sec-fetch-dest': 'image' })
+      let named = moved.headers.get('location')!
+      assertEquals(moved.status, 307)
+      assertEquals(
+        named,
+        path.replace('/icon.svg', `/api/assets/${sha}/icon.svg`),
+      )
+      let file = await k.at(host, named, { headers: { cookie } })
+      assertEquals(
+        file.headers.get('cache-control'),
+        'private, max-age=31536000, immutable',
+      )
+      assertEquals(await file.text(), svg)
     }
   } finally {
     await k.stop()

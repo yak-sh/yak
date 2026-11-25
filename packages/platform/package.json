@@ -170,6 +170,7 @@
     "./file-root": "./file-root.ts",
     "./files": "./files.ts",
     "./asset-url": "./asset-url.ts",
+    "./asset-response": "./asset-response.ts",
     "./fingerprint": "./fingerprint.ts",
     "./files-routes": "./files-routes.ts",
     "./blob-routes": "./blob-routes.ts",

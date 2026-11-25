@@ -4,12 +4,13 @@
 // what the worker answers with a validator is answered 304 when held.
 import { cleanup, equal, test } from '@yaks/testing'
 import { assertMatch } from '@std/assert'
+import { digest } from '@yaks/graph/sha256'
 import { KERNEL } from './meta.ts'
 import { connector, seed, unique } from './probe.ts'
 import { serverSource, workerKernel } from './worker-probe.ts'
 
 let worker = 'data:text/javascript,' + encodeURIComponent(`export default {
-  fetch: (req, env) => {
+  fetch: async (req, env) => {
     let url = new URL(req.url)
     let mount = req.headers.get('x-yak-mount') ?? '/' + req.headers.get('x-yak-app') + '/'
     let path = '/' + url.pathname.slice(mount.length)
@@ -43,6 +44,20 @@ let worker = 'data:text/javascript,' + encodeURIComponent(`export default {
     if (path == '/private.css') return new Response('.p{}', {
       headers: { 'content-type': 'text/css', 'cache-control': 'private, no-store' },
     })
+    if (path.startsWith('/images/')) {
+      let access = req.headers.get('cookie')?.includes('photos=allowed')
+      if (!access) return new Response('Passcode required', { status: 403 })
+      let file = await env.FILES.fetch(path)
+      let headers = {
+        'content-type': file.headers.get('content-type'),
+        'cache-control': 'private, max-age=3600',
+      }
+      if (path == '/images/dynamic.svg') {
+        await file.body?.cancel()
+        return new Response('<svg>drawn</svg>', { headers })
+      }
+      return new Response(file.body, { status: file.status, headers })
+    }
     if (path == '/styles/studio.css') return env.FILES.fetch(path)
     if (path.startsWith('/fonts/') || path == '/icon.svg' || path == '/icon.png') {
       return env.FILES.fetch(path)
@@ -104,6 +119,8 @@ await agent.tool('app_files', {
     { path: 'owner.css', content: '.owner{}' },
     { path: 'icon.png', base64: PNG },
     { path: 'fonts/f.ttf', content: 'gated font' },
+    { path: 'images/photo.svg', content: '<svg>photo</svg>' },
+    { path: 'images/dynamic.svg', content: '<svg>file</svg>' },
     {
       path: 'styles/studio.css',
       content: "@font-face{src:url('../fonts/f.ttf')}",
@@ -350,4 +367,27 @@ test("a private app's worker hands a stranger its release's file, kept privately
     headers: { 'if-none-match': font.headers.get('etag')! },
   })
   equal(held.status, 304)
+})
+
+test('a passcode-gated worker can replace headers and still serve fingerprinted images', async () => {
+  let headers = { 'sec-fetch-dest': 'image', cookie: 'photos=allowed' }
+  let path = '/images/photo.svg'
+  let sha = await digest('<svg>photo</svg>')
+  let url = `/gated/api/assets/${sha}${path}`
+  let moved = await at('/gated' + path, { headers })
+  equal([moved.status, moved.headers.get('location')], [307, url])
+  let named = await at(url, { headers })
+  equal(
+    named.headers.get('cache-control'),
+    'private, max-age=31536000, immutable',
+  )
+  equal(await named.text(), '<svg>photo</svg>')
+  let range = await at(url, { headers: { ...headers, range: 'bytes=5-9' } })
+  equal([range.status, await range.text()], [206, 'photo'])
+  for (let asked of ['/gated' + path, url]) {
+    let denied = await at(asked)
+    equal([denied.status, await denied.text()], [403, 'Passcode required'])
+  }
+  let dynamic = await at('/gated/images/dynamic.svg', { headers })
+  equal([dynamic.status, await dynamic.text()], [200, '<svg>drawn</svg>'])
 })

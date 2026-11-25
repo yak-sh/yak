@@ -76,7 +76,9 @@ export let assetUrl = (
   assets: Assets = {},
 ): string => {
   let found = localAsset(ref, mount, bare, reserved, base)
-  return found && /\.[a-z0-9]+$/i.test(found.path) &&
+  return found &&
+      (Object.hasOwn(assets, decoded(found.path)) ||
+        /\.[a-z0-9]+$/i.test(found.path)) &&
       !/\.html?$/i.test(found.path) && holds(decoded(found.path))
     ? versioned(mount, release, found, assets)
     : ref

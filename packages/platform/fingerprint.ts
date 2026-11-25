@@ -69,6 +69,15 @@ let browserFiles = (files: Files, config: Serving) => {
   return keys
 }
 
+let rewritten = (asset: Asset): boolean =>
+  asset.type.startsWith('text/css') || moduleAsset(asset)
+
+/** Files whose stored content address also names the browser's bytes. */
+export let plainAssets = (files: Files, config: Serving): Assets =>
+  Object.fromEntries(
+    [...browserFiles(files, config)].filter(([, asset]) => !rewritten(asset)),
+  )
+
 // References in a fingerprinted file work at any mount, including a
 // sandbox's token. Climb to the common assets directory to name a sibling.
 let up = (path: string) => '../'.repeat(path.split('/').length)
@@ -123,8 +132,6 @@ export let fingerprints = async (
   previous: Assets = {},
 ): Promise<Assets> => {
   let candidates = browserFiles(files, config)
-  let rewritten = (file: Asset) =>
-    file.type.startsWith('text/css') || moduleAsset(file)
   let unchanged = (path: string, file: Asset) => {
     let prior = Object.hasOwn(previous, path) ? previous[path] : undefined
     return prior?.original == file.original && prior.type == file.type

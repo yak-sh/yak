@@ -9,12 +9,14 @@ import {
   type Assets,
   fingerprints,
   PACKAGES,
+  plainAssets,
 } from '@yaks/platform/fingerprint'
-import { rootOf, type Serving } from '@yaks/platform/files'
+import { rootOf, type Serving, serving } from '@yaks/platform/files'
 import { elapsed } from './lib/hops.ts'
 import { background } from './defects.ts'
 import { addressed, BUILT, type Files, own, SHA } from '@yaks/platform/versions'
 import { decode, encode, type File, type Index, META } from './release_index.ts'
+import { sharing } from './lib/shared.ts'
 
 type Named = Pick<File, 'key'> & Partial<File>
 
@@ -147,11 +149,8 @@ export let filesIn = async (
 
 // A release's assets by served path. The platform's compiled packages are
 // anyone's in every release, those made before that was said too.
-let assetsByIndex = new WeakMap<Index, Assets>()
-let assetsOf = (index: Index): Assets => {
-  let found = assetsByIndex.get(index)
-  if (found) return found
-  let assets = Object.fromEntries(
+let assetsOf = (index: Index): Assets =>
+  Object.fromEntries(
     Object.entries(index).flatMap(([key, { asset }]) =>
       asset
         ? [[
@@ -163,13 +162,26 @@ let assetsOf = (index: Index): Assets => {
         : []
     ),
   )
-  assetsByIndex.set(index, assets)
-  return assets
+
+// Older indexes still pin the original files. Their documents, stylesheets
+// and scripts keep their release URLs, where relative references work.
+let unrewritten = async (raw: Objects, index: Index): Promise<Assets> => {
+  let config = index['wrangler.jsonc'] ?? index['wrangler.json']
+  let text = config?.text ?? (config && textOf(await raw.get(config.key)))
+  return plainAssets(filesOf(index), text ? serving(text) : {})
 }
 
+let assetsByIndex = new WeakMap<Index, Promise<Assets>>()
 export let assetsIn = async (raw: Objects, source: string): Promise<Assets> => {
   let index = await indexAt(raw, `${source}/`)
-  return index ? assetsOf(index) : {}
+  return index
+    ? sharing(assetsByIndex, index, () => {
+      let assets = assetsOf(index)
+      return Object.keys(assets).length
+        ? Promise.resolve(assets)
+        : unrewritten(raw, index)
+    })
+    : {}
 }
 
 export let atRelease = (raw: Objects, source: string) =>
@@ -187,8 +199,7 @@ export let assetKey = (root: string, path: string, sha: string) =>
  * `keptAsset` reads. What both releases serve is still the live release's,
  * so a release writes only what changed, never a pointer per asset: one of
  * every image the app holds was a put each, nine seconds of an on-page Save
- * (T-3600). A release from before assets were indexed has none to keep: its
- * pages never asked for one by its hash.
+ * (T-3600).
  */
 export let departed = async (
   raw: Objects,
