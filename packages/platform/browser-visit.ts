@@ -474,6 +474,9 @@ export let allowed = (
 export let waitRoom = (visit: Visit): number =>
   visit.audit === false ? Math.min(MOST, waiting(visit)) : 0
 
+// How long a push waits for DevTools to name the site's service workers.
+let REGISTERED = 2_000
+
 // How long a step waits for the element it names to appear.
 let FIND = 5_000
 let LOAD = 10_000
@@ -654,14 +657,20 @@ let network = async (page: Page, view: View, offline: boolean) => {
 let push = async (page: Page, origin: string, said: unknown) => {
   let cdp = await page.createCDPSession()
   let ids = new Set<string>()
+  // DevTools names the registrations once it has answered being enabled.
+  let named = Promise.withResolvers<void>()
+  let none = setTimeout(named.resolve, REGISTERED)
   cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations }) => {
     for (let r of registrations) {
       if (!r.isDeleted && new URL(r.scopeURL).origin == origin) {
         ids.add(r.registrationId)
+        named.resolve()
       }
     }
   })
   await cdp.send('ServiceWorker.enable')
+  await named.promise
+  clearTimeout(none)
   if (!ids.size) throw new Error(`no service worker at ${origin}`)
   for (let registrationId of ids) {
     await cdp.send('ServiceWorker.deliverPushMessage', {
