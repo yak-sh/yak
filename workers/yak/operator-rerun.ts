@@ -10,13 +10,17 @@
  * entrypoint ({@link reruns}) to the space's Operator ({@link rerun}): each
  * conversation stalled on one is said to again, on the `fixed` channel, in
  * the task or conversation it stopped in, once for each bug. Its answer tells
- * the person so in their Updates (operator.ts `answered`).
+ * the person so in their Updates (operator.ts `answered`). The rerun keeps
+ * what made the stopped words wait for the person's tap: the conversation
+ * keeps how they came and the number a tap goes to (operator.ts `carrying`),
+ * and the `fixed` words, the platform's own, are `heard` where someone
+ * else's steered the stopped turn (operator-approvals.ts `steering`).
  */
 import { line as q } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { enqueue } from '@yaks/effects'
-import { topOf } from '@yaks/session'
+import { steered, topOf, transcript } from '@yaks/session'
 import type { Explanation } from '@yaks/tracker/resolution'
 import type { OperatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
@@ -50,12 +54,13 @@ export let rerun = async (
     let top = await topOf(store.g, session)
     // Whose words it carried on, as its newest request says, and the task
     // it works on, where it has one.
-    let [[had], [newest], [link]] = await Promise.all([
+    let [[had], [newest], [link], lines] = await Promise.all([
       store.g.get([id]),
       store.g.read(
         q`.operator_request.session=${top} .order=-created.at .limit=1 .fields=operator_request`,
       ),
       store.g.read(q`.contains .edge.to=${top}`),
+      transcript(store.g, session),
     ])
     let asked = comp(newest, 'operator_request')
     let task = comp(link, 'edge')?.from
@@ -68,9 +73,12 @@ export let rerun = async (
         ...task ? { task: String(task) } : {},
         ...asked.administrative ? { administrative: true } : {},
       }
+      // The words are the platform's own: where someone else's steered the
+      // stopped turn (@yaks/session `steered`), they steer its rerun too.
       await receive(store, request, said?.cause || 'It was not explained.', {
         id,
         title: 'Taken up again: yaks.app fixed what stopped it',
+        heard: steered(lines),
       })
       await enqueue(store.g, 'operator_receive', id)
       made.push(id)

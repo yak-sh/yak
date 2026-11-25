@@ -3226,21 +3226,25 @@ export let operating = (
     o: Asking,
     conversation = false,
   ) => {
+    let was = await workingOf(store, session)
     // The words read from a file stay on its attachment.
     let files = [
       ...new Map(
-        [...(await workingOf(store, session))?.files ?? [], ...o.files ?? []]
+        [...was?.files ?? [], ...o.files ?? []]
           .map(({ text: _, ...f }) => [f.key, f]),
       ).values(),
     ]
+    // A fixed bug's words carry on the stopped ones (operator-rerun.ts), so
+    // the session keeps how those came and the number their taps go to.
+    let came = o.channel == 'fixed' && was ? was : o
     return {
       entity: { eid: session },
       completed: null,
       operator_session: {
         space: space.eid,
         person: held.person,
-        channel: o.channel ?? null,
-        confirm: o.confirm ?? null,
+        channel: came.channel ?? null,
+        confirm: came.confirm ?? null,
         ...o.signup ? { signup: o.signup } : {},
         administrative: held.administrative ?? null,
         ...conversation ? { conversation } : {},
@@ -3437,7 +3441,12 @@ export let operating = (
             session,
             held,
             space,
-            { files, channel, ...o.signup ? { signup: o.signup } : {} },
+            {
+              files,
+              channel,
+              confirm: o.confirm,
+              ...o.signup ? { signup: o.signup } : {},
+            },
             !o.signup && !o.resume,
           ),
           ...theirs ? await before(session, said, held, space) : [],
@@ -3935,7 +3944,10 @@ export type Operator = {
   listening: (
     held: Asker,
     space: Space,
-    o?: Pick<Asking, 'model' | 'provider' | 'effort' | 'signup' | 'resume'>,
+    o?: Pick<
+      Asking,
+      'model' | 'provider' | 'effort' | 'signup' | 'resume' | 'confirm'
+    >,
   ) => Promise<Listening>
   /** `held`'s one conversation in `space` (operator-root.ts `rootAt`)
    * begun with another transcript's lines (@yaks/session `grafted`): a
