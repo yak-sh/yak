@@ -11,8 +11,12 @@ import { kernel, seed, unique } from './probe.ts'
 let k = await kernel()
 let slug = unique('draftclient')
 await seed(k, [{ slug, apps: ['notes'] }])
+let host = `${slug}.yaks.app`
+let vocabulary = await k.at(host, '/notes/api/vocab.json')
+assertEquals(vocabulary.status, 200)
+let words = await vocabulary.json()
 let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-drafts-' })
-let response = await k.at(`${slug}.yaks.app`, '/notes/api/client.js')
+let response = await k.at(host, '/notes/api/client.js')
 assertEquals(response.status, 200)
 Deno.writeTextFileSync(`${dir}/client.js`, await response.text())
 let publicClient = await import(`file://${dir}/client.js`)
@@ -80,6 +84,9 @@ let transport = (
     let url = new URL(String(input))
     if (url.pathname.endsWith('/who')) return me()
     if (url.pathname.endsWith('/query')) return Promise.resolve(json([]))
+    if (url.pathname.endsWith('/vocab.json')) {
+      return Promise.resolve(Response.json(words))
+    }
     assert(url.pathname.endsWith('/apply'), url.href)
     let body = String(init?.body)
     return Promise.resolve(apply({
