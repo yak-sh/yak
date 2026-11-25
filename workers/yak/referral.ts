@@ -11,6 +11,7 @@ import { caught } from './defects.ts'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { signupAddress } from '@yaks/platform/host'
+import type { Invitation } from '@yaks/platform/account-rows'
 import { phoneOf, textable } from './phones.ts'
 export { qr } from '@yaks/platform/qr'
 
@@ -105,18 +106,6 @@ export let numberOf = async (env: Env): Promise<string | null> => {
     caught(e, { request: 'invite number' })
     return null
   }
-}
-
-/** What a person's invite page draws: the words, the links that open them
- * as a text (where there is a number to text) and as a letter, and how many
- * people signed up through it and how many of them built an app. */
-export type Invitation = {
-  said: string
-  text: string | null
-  mail: string
-  address: string
-  joined: number
-  built: number
 }
 
 /** The person's invite, their code minted if they had none. */

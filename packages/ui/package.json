@@ -22,6 +22,7 @@
     "./SideNav": "./SideNav.ts",
     "./Rows": "./Rows.ts",
     "./Report": "./Report.ts",
+    "./Tabs": "./Tabs.ts",
     "./Time": "./Time.ts",
     "./Card": "./Card.ts",
     "./Cards": "./Cards.ts",

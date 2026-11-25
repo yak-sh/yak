@@ -59,7 +59,6 @@ import { TOOLS } from './tools.ts'
 import { caught } from './defects.ts'
 import { type Clock, clock } from './timing.ts'
 import { woken } from './build-door.ts'
-import { invitation } from './referral.ts'
 import { DAYS } from './views.ts'
 import { admin } from './tool.ts'
 import { reachOf } from './operator-reach.ts'
@@ -70,7 +69,6 @@ import {
   listedApps,
   personRows,
   pickable,
-  shared,
   sideApps,
   visitsRows,
 } from './side.ts'
@@ -81,6 +79,8 @@ import {
   accountOf,
   FRIENDS,
   friendsOf,
+  INVITE_PAGE,
+  SHARED_APPS,
   SIGNED_IN,
 } from '@yaks/platform/account-rows'
 import { SIDE_SPACES, sideApps as sideAppsLine } from '@yaks/platform/side-rows'
@@ -867,6 +867,8 @@ let paymentDrawn = async (
 let DRAWN: Partial<Record<AccountView, string[]>> = {
   profile: [ACCOUNT, SIDE_SPACES, SIGNED_IN],
   friends: [ACCOUNT, FRIENDS],
+  invite: [INVITE_PAGE, SIDE_SPACES],
+  shared: [SHARED_APPS],
 }
 
 // One page of the person's own (pages.ts `desk`): their profile, their
@@ -894,8 +896,6 @@ let mine = async (
     picks,
     name,
     agents,
-    theirs,
-    referral,
     own,
     panes,
     provider,
@@ -905,8 +905,6 @@ let mine = async (
     pickable(dir, person),
     dir.nameAt(person),
     view == 'agents' ? agentsOf(env, person, dir) : [],
-    view == 'shared' ? shared(dir, person) : undefined,
-    view == 'invite' ? invitation(env, dir, person) : undefined,
     dir.own(person),
     dir.panes(person),
     payments(env),
@@ -917,7 +915,7 @@ let mine = async (
     // The rows a page drawn from the page graph's reads is drawn from
     // (@yaks/platform/account-rows), carried for its first paint.
     DRAWN[view] &&
-    Promise.all(DRAWN[view].map((l) => personRows(dir, person, l)))
+    Promise.all(DRAWN[view].map((l) => personRows(dir, person, l, env)))
       .then((rows) => rows.flat()),
   ])
   let chosen = q.get('space') ?? inOf(req)
@@ -935,8 +933,6 @@ let mine = async (
     agents,
     links,
     session: who.session,
-    shared: theirs,
-    referral,
     shops: provider.shops.on(),
     spaces: picks.some((s) => s.slug == own.slug) ? picks : [
       {

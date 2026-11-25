@@ -76,6 +76,20 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // The Invite page kept current (@yaks/platform/invite-browser).
+  {
+    name: '_invite.js',
+    bundle: of('@yaks/platform/invite-browser'),
+    external,
+    named: true,
+  },
+  // The Shared with you page kept current (@yaks/platform/shared-browser).
+  {
+    name: '_shared.js',
+    bundle: of('@yaks/platform/shared-browser'),
+    external,
+    named: true,
+  },
   // A space's Apps page kept current (@yaks/platform/space-apps-browser).
   {
     name: '_apps.js',

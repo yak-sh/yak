@@ -279,7 +279,7 @@ export let reachDoor = async (
         return Response.json(await spaceRows(env, dir, person, line))
       }
       if (line != UPDATE_WAITING && personLine(line)) {
-        return Response.json(await personRows(dir, person, line))
+        return Response.json(await personRows(dir, person, line, env))
       }
       if (line == UPDATE_WAITING) {
         let seats = await waitingSeats(dir, person)

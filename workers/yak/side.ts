@@ -36,9 +36,14 @@ import {
   accountRow,
   friendRows,
   FRIENDS,
+  INVITE_PAGE,
+  inviteRow,
+  SHARED_APPS,
+  sharedRows,
   SIGNED_IN,
   signedInRows,
 } from '@yaks/platform/account-rows'
+import { invitation } from './referral.ts'
 import { friendList, friendsOf } from './friends.ts'
 import {
   admittedRows,
@@ -136,12 +141,14 @@ export let sideApps = async (dir: Directory, space: Space, who: Who) =>
   ) => ({ eid, slug, title, source, generatedIcon }))
 
 /** The rows `line` asks of the person: their account, browsers, friends,
- * what the directory holds for them in a space, or the side's; none for a
- * space they hold no seat in that lets them change it. */
+ * what others shared with them, their invite (which says the number `env`
+ * texts from), what the directory holds for them in a space, or the side's;
+ * none for a space they hold no seat in that lets them change it. */
 export let personRows = async (
   dir: Directory,
   person: string,
   line: string,
+  env: Env = {} as Env,
 ): Promise<Bundle[]> => {
   if (line == ACCOUNT) {
     let [name, email, hidden] = await Promise.all([
@@ -172,6 +179,10 @@ export let personRows = async (
     })]
   }
   if (line == TEXTING) return textingRows(person, await dir.texting(person))
+  if (line == SHARED_APPS) return sharedRows(person, await shared(dir, person))
+  if (line == INVITE_PAGE) {
+    return [inviteRow(person, await invitation(env, dir, person))]
+  }
   if (line == FRIENDS) {
     let all = await shared(dir, person)
     return friendRows(person, await friendList(dir, person, all))

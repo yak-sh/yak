@@ -29,6 +29,10 @@ import {
   accountWords,
   FRIENDS,
   friendsOf,
+  INVITE_PAGE,
+  inviteOf,
+  SHARED_APPS,
+  sharedOf,
   SIGNED_IN,
   signedInOf,
 } from '@yaks/platform/account-rows'
@@ -93,6 +97,7 @@ import {
 } from '@yaks/platform/operator-matches'
 import { ALL } from './updates.ts'
 import { sessionRow } from './browser-sessions.ts'
+import { referralEid } from './referral.ts'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { installPair, made, type Pair } from '../../packages/workerd/testing.ts'
@@ -1035,6 +1040,33 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       await dir.stamp({ entities: [{ ...session, cancelled: {} }] })
       await until(() => !listed())
       browsers.close()
+
+      // An app someone lets her into is on her Shared with you, and a friend
+      // who signs up with her invite is counted on it, each as it is written.
+      let shared = page.watch(SHARED_APPS)
+      let invite = page.watch(INVITE_PAGE)
+      await until(() => shared.ready && invite.ready)
+      equal(sharedOf(shared.value), [])
+      equal(inviteOf(invite.value)?.joined, 0)
+      await dir.stamp({
+        entities: [{
+          entity: { eid: crypto.randomUUID() },
+          grant: { app, person: ADA, access: 'editor' },
+        }],
+      })
+      await until(() => sharedOf(shared.value).length == 1)
+      equal(sharedOf(shared.value), [
+        { eid: app, slug: 'offered', title: 'offered', space: 'club' },
+      ])
+      await dir.stamp({
+        entities: [{
+          entity: { eid: referralEid(friend) },
+          referral: { inviter: ADA, invitee: friend },
+        }],
+      })
+      await until(() => inviteOf(invite.value)?.joined == 1)
+      shared.close()
+      invite.close()
 
       // What an app beside the chat is made of, read again as its draft is
       // written, on a directory socket that stays admitted.

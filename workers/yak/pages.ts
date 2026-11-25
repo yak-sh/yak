@@ -67,7 +67,7 @@ import type { Befriended } from './friends.ts'
 
 import type { Panes, Role } from './directory.ts'
 
-import { type Invitation, qr } from './referral.ts'
+import { qr } from './referral.ts'
 
 export { esc } from './html.ts'
 
@@ -208,6 +208,14 @@ ${
   }${
     main.includes('data-profile-view=')
       ? `<script type="module" src="${file('_profile.js')}"></script>`
+      : ''
+  }${
+    main.includes('data-invite-view=')
+      ? `<script type="module" src="${file('_invite.js')}"></script>`
+      : ''
+  }${
+    main.includes('data-shared-view=')
+      ? `<script type="module" src="${file('_shared.js')}"></script>`
       : ''
   }${
     main.includes('data-updates-view=')
@@ -704,9 +712,6 @@ export type DeskPage = {
   allFriends?: boolean
   /** what was typed into the new space form, when it was refused */
   made?: { title: string; slug: string }
-  /** the apps of other people's spaces this person may open, each with the
-   * slug of the space it lives in */
-  shared?: (Listed & { space: string })[]
   /** the rows a page drawn from the page graph's reads was drawn from, which
    * it carries for its first paint (@yaks/platform/page-graph `drawnRows`) */
   drawn?: Bundle[]
@@ -720,8 +725,6 @@ export type DeskPage = {
   binned?: number
   /** every space this person may work in, this one among them */
   spaces?: Picked[]
-  /** the person's own invite to yaks.app (referral.ts `invitation`) */
-  referral?: Invitation
   /** the Operator page's content (operator-page.ts `operatorBody`) */
   operator?: string
   /** a member of the space who does not own it: of its pages they may open

@@ -1,9 +1,11 @@
 /**
  * The rows the signed-in person's own pages draw from (D-475 step 3): their
  * account, `account{name, email, hidden}`, each browser signed in as them,
- * `signedIn{agent, place, at}`, and each confirmed friend, `befriended{…}`,
- * online first. The directory answers both as reads of the
- * person (graph.ts `/person/ws`), and the tab's page graph watches them through
+ * `signedIn{agent, place, at}`, each confirmed friend, `befriended{…}`,
+ * online first, each app of someone else's they may open, `sharedApp{rank,
+ * eid, slug, title, space}`, and their invite to yaks.app, `invitePage{said,
+ * text, mail, address, joined, built}`. The directory answers each as a read
+ * of the person (graph.ts `/person/ws`), and the tab's page graph watches them through
  * its door (reach-door.ts), as it does the side's (./side-rows.ts).
  *
  * The person changes them through the page graph: an `account` row written
@@ -28,6 +30,12 @@ export let FRIENDS = '.befriended'
 /** The browsers signed in as the person. */
 export let SIGNED_IN = '.signedIn'
 
+/** The apps of other people's spaces the person may open. */
+export let SHARED_APPS = '.sharedApp'
+
+/** The person's own invite to yaks.app. */
+export let INVITE_PAGE = '.invitePage'
+
 /** How often where a friend is is read again while it is watched. */
 export let SEEN_EVERY = 30_000
 
@@ -44,6 +52,19 @@ export type SignedIn = { agent: string; place?: string; at?: string }
 
 /** An app someone let the reader into, in the space it lives in. */
 export type Shared = { eid: string; slug: string; title: string; space: string }
+
+/** What a person's invite page draws: the words carrying their code, the
+ * links that open them as a text (where there is a number to text) and as a
+ * letter to `address`, and how many people signed up through it and how many
+ * of them built an app. */
+export type Invitation = {
+  said: string
+  text: string | null
+  mail: string
+  address: string
+  joined: number
+  built: number
+}
 
 /** Where a friend is on yaks.app, as the reader may see it. */
 export type Seen = {
@@ -125,6 +146,31 @@ export let accountWords: VocabDoc = {
       },
       required: ['person', 'rank', 'name', 'shared'],
     },
+    sharedApp: {
+      component: true,
+      type: 'object',
+      properties: {
+        rank: { type: 'integer' },
+        eid: strings,
+        slug: strings,
+        title: strings,
+        space: strings,
+      },
+      required: ['rank', 'eid', 'slug', 'title', 'space'],
+    },
+    invitePage: {
+      component: true,
+      type: 'object',
+      properties: {
+        said: strings,
+        text: { type: ['string', 'null'] },
+        mail: strings,
+        address: strings,
+        joined: { type: 'integer' },
+        built: { type: 'integer' },
+      },
+      required: ['said', 'text', 'mail', 'address', 'joined', 'built'],
+    },
     friendMessage: {
       component: true,
       type: 'object',
@@ -186,6 +232,32 @@ export let friendsOf = (rows: Bundle[]): Befriended[] =>
     .sort((a, b) => a.rank - b.rank)
     .map(({ rank: _, ...f }) => f)
 
+/** The apps `shared` with `person` as rows, in their page's order. */
+export let sharedRows = (person: string, shared: Shared[]): Bundle[] =>
+  shared.map((a, rank) => ({
+    entity: { eid: derivedEid(`sharedApp|${person}|${a.eid}`) },
+    sharedApp: { rank, ...a },
+  }))
+
+/** The apps `rows` hold, in their page's order. */
+export let sharedOf = (rows: Bundle[]): Shared[] =>
+  rows.flatMap((r) =>
+    r.sharedApp ? [r.sharedApp as Shared & { rank: number }] : []
+  )
+    .sort((a, b) => a.rank - b.rank)
+    .map(({ rank: _, ...a }) => a)
+
+/** `person`'s invite as a row. */
+export let inviteRow = (person: string, invite: Invitation): Bundle => ({
+  entity: { eid: derivedEid(`invitePage|${person}`) },
+  invitePage: invite,
+})
+
+/** The invite `rows` hold, if any. */
+export let inviteOf = (rows: Bundle[]): Invitation | undefined =>
+  rows.find((r) => r.invitePage)?.invitePage as Invitation | undefined
+
 /** Whether the directory answers `line` as a read of the person. */
 export let accountLine = (line: string): boolean =>
-  line == ACCOUNT || line == FRIENDS || line == SIGNED_IN
+  line == ACCOUNT || line == FRIENDS || line == SIGNED_IN ||
+  line == SHARED_APPS || line == INVITE_PAGE

@@ -1,10 +1,8 @@
 // A person's own invite (referral.ts): the code it carries, the links its QR
-// codes open, and the page that shows them, over a directory in memory.
-import { equal, ok, test } from '@yaks/testing'
-import { parseHTML } from 'linkedom'
+// codes open, over a directory in memory.
+import { equal, test } from '@yaks/testing'
 import { rows } from './directory-rows-probe.ts'
 import type { Env, Vars } from './env.ts'
-import { desk } from './desk-pages.ts'
 import { codeIn, codeOf, invitation } from './referral.ts'
 
 let { dir } = rows()
@@ -39,11 +37,6 @@ let signupOff = await invitation(
   dir,
   jeff,
 )
-let { document } = parseHTML(
-  await desk({ space: 'jeff', view: 'invite', apps: [], referral: first })
-    .text(),
-)
-
 test("a person's invite carries their own code, the same every time, and the code finds them", async () => {
   equal(first.said, `Hi yaks.app, sign me up! (invite from Jeff, ${code})`)
   equal(again.said, first.said)
@@ -67,13 +60,4 @@ test('the invite opens a text to the number, or a letter to the sign-up address,
 test('with no provider to text through, or signing up by text off, the invite is the letter alone', () => {
   equal([mailOnly.text, signupOff.text], [null, null])
   equal(mailOnly.mail, first.mail)
-})
-
-test('the invite page shows each way as a code to scan, and what sending agrees to', () => {
-  let codes = [...document.querySelectorAll('.Invite_Code')]
-  equal(codes.map((a) => a.getAttribute('href')), [first.text, first.mail])
-  ok(codes.every((a) => a.querySelector('svg[role=img] path')))
-  ok(document.querySelector('.Invite_Words')?.textContent == first.said)
-  let said = document.querySelector('.Invite_Way .Note')?.textContent ?? ''
-  ok(said.includes('Reply STOP to stop'), said)
 })

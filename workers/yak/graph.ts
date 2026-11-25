@@ -2342,6 +2342,11 @@ export class Store extends Durable {
                 'hostname',
                 'domain_order',
                 'phone_line',
+                // Their invite: its code, and each friend who signs up with
+                // it and builds (account-rows `invitePage`).
+                'referral_code',
+                'referral',
+                'rewarded',
               ].some((key) => key in b)
             ),
         // Where friends are moves with time and with writes this read does
@@ -2368,7 +2373,12 @@ export class Store extends Durable {
           }
           if (line != UPDATE_WAITING) {
             let { personRows } = await import('./side.ts')
-            return await personRows(dir, read.person, line)
+            return await personRows(
+              dir,
+              read.person,
+              line,
+              this.#bind as Env,
+            )
           }
           let { waitingSeats } = await import('./updates.ts')
           return (await waitingSeats(dir, read.person)).map(({ bundle }) =>
