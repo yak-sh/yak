@@ -491,7 +491,7 @@ let handed = async (
       url.pathname = url.pathname.slice(prefix.length)
     }
   }
-  for (let h of [...VOUCH, GRANT, SELF, ADDRESS]) headers.delete(h)
+  for (let h of [...VOUCH, GRANT, SELF, ADDRESS, WARMING]) headers.delete(h)
   uncredited(headers)
   headers.set('x-yak-app', app.slug)
   headers.set('x-yak-app-eid', app.eid)

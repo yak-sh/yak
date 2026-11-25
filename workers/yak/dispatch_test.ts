@@ -358,6 +358,12 @@ test('a custom-domain worker receives its public URL and mount', async () => {
   }
 })
 
+test('a visitor cannot ask a worker for a warm start, which only the kernel sends', async () => {
+  let m = mirror()
+  await ran(envOf(m.get), space, app, visit('/', { [WARMING]: '1' }), who)
+  assertEquals(m.seen().headers.get(WARMING), null)
+})
+
 test('the worker acts as its vouched browser without receiving the browser cookie', async () => {
   let m = mirror()
   let guest = { ...nobody, via: who.via }
