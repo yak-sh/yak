@@ -43,6 +43,7 @@
   --negative: light-dark(#a8503f, #e67e80); /* brick; rose */
   --caution: light-dark(#a8503f, #e67e80); /* brick; rose */
   --presence-away: light-dark(#997000, #e8bb54); /* gold */
+  --presence-offline: light-dark(#747170, #a4a09e); /* gray */
   --special: light-dark(#785b47, #c9b19c); /* clay; taupe */
 
   --number: light-dark(#4e3b32, #f8e0c8); /* ember; blush */

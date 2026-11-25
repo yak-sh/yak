@@ -21,6 +21,7 @@ import { block, type Part } from './el.ts'
 import { Badge } from './Badge.ts'
 import { Button } from './Button.ts'
 import { Dot } from './Dot.ts'
+import { Identity } from './Identity.ts'
 import { layer } from './Layer.ts'
 import type { Colors, Specimen } from './theme.ts'
 
@@ -43,7 +44,7 @@ export let Dock:
   > = block('div', 'Dock', {
     Launcher: Button,
     Faces: 'span',
-    Face: 'span',
+    Face: Identity.Avatar,
     Word: 'span',
     Panel: layer('section'),
     Head: 'header',
@@ -94,8 +95,8 @@ export let specimens = (): Specimen[] => [[
       h(
         Dock.Faces,
         null,
-        h(Dock.Face, null, 'A'),
-        h(Dock.Face, null, 'B'),
+        h(Dock.Face, { person: 'ada' }, 'A'),
+        h(Dock.Face, { person: 'bo' }, 'B'),
       ),
       h(Dock.Word, null, 'Friends'),
       h(Badge, null, '2'),
@@ -108,7 +109,7 @@ export let specimens = (): Specimen[] => [[
     Dock.Launcher,
     { mod: 'bar' },
     'Friends',
-    h(Dot, { mod: 'positive', class: 'Dock_Here' }),
+    h(Dot, { mod: 'positive', class: 'Dock_Here Dock_Presence' }),
     h(Badge, null, '2'),
   ),
 ], [

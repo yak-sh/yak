@@ -218,8 +218,14 @@ test('away and offline update the launchers, the list and an open conversation',
   let corner = '.Dock > .Dock_Launcher'
   let bar = '[data-dock-bar]'
   let who = '.Dock_Who'
-  let change = async (activity: 'away' | 'offline') => {
-    await d.g.mutate(friendRows(ME, [friend('bo', { ...online, activity })]))
+  let avatarTone = (where: string) =>
+    indicator(`${where} .Identity_Avatar`)?.getAttribute('class')
+      ?.match(/\bIdentity_Avatar-tone-\d+\b/)?.[0]
+  let change = async (activity: 'away' | 'offline', name = 'bo') => {
+    await d.g.mutate(friendRows(ME, [{
+      ...friend('bo', { ...online, activity }),
+      name,
+    }]))
     await flush()
   }
   try {
@@ -232,17 +238,26 @@ test('away and offline update the launchers, the list and an open conversation',
       'Away',
     )
     equal(indicator('[data-dock-friend="person-cy"] .Friend_Dot'), null)
+    let tone = avatarTone(bo)
+    equal(!!tone, true)
+    equal(avatarTone(corner), tone)
     d.toggle('open')
     d.press(bo)
     equal(
       indicator(`${who} .Friend_Dot.Dot-caution`)?.getAttribute('aria-label'),
       'Away',
     )
-    await change('offline')
+    await change('offline', 'Bea')
     equal(indicator(`${bar} .Dock_Here`), null)
     equal(indicator(bar)?.getAttribute('aria-label'), 'Friends: 0 online')
     equal(
-      indicator(`${who} .Friend_Dot.Dot-ring`)?.getAttribute('aria-label'),
+      indicator(`${who} .Friend_Dot.Dot-offline`)?.getAttribute('aria-label'),
+      'Offline',
+    )
+    equal(avatarTone(who), tone)
+    d.press('[data-dock-back]')
+    equal(
+      indicator(`${bo} .Friend_Dot.Dot-offline`)?.getAttribute('aria-label'),
       'Offline',
     )
   } finally {

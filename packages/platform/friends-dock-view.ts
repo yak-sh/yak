@@ -74,7 +74,7 @@ export let between = (messages: Held[], me: string, friend: string): Held[] =>
     (m.from == me && m.to == friend) || (m.from == friend && m.to == me)
   )
 
-let tone = { active: 'positive', away: 'caution', offline: 'ring' }
+let tone = { active: 'positive', away: 'caution', offline: 'offline' }
 let status = { active: 'Active', away: 'Away', offline: 'Offline' }
 
 // The launcher uses the strongest presence among the friends it can see.
@@ -106,7 +106,11 @@ let launcherParts = (friends: Befriended[], waiting: number, word: boolean) => {
             Dock.Faces,
             { 'aria-hidden': 'true' },
             here.slice(0, FACES).map((f) =>
-              h(Dock.Face, { key: f.person, title: f.name }, initial(f.name))
+              h(
+                Dock.Face,
+                { key: f.person, person: f.person, title: f.name },
+                initial(f.name),
+              )
             ),
           ),
           h(
@@ -165,7 +169,7 @@ let face = (f: Befriended) => {
   let activity = activityOf(f.seen)
   return h(
     Identity.Avatar,
-    { class: 'Friend_Avatar' },
+    { class: 'Friend_Avatar', person: f.person },
     initial(f.name),
     activity
       ? h(Dot, {

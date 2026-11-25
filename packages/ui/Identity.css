@@ -19,13 +19,31 @@
   width: 2rem;
   height: 2rem;
   border-radius: var(--radius);
-  background: var(--accent);
+  background: var(--avatar, var(--accent));
   color: var(--bg);
   font-weight: 800;
 }
 img.Identity_Avatar {
   object-fit: cover;
   background: none;
+}
+.Identity_Avatar-tone-0 {
+  --avatar: light-dark(#495d89, #a8bde5);
+}
+.Identity_Avatar-tone-1 {
+  --avatar: light-dark(#6a5085, #c7afe2);
+}
+.Identity_Avatar-tone-2 {
+  --avatar: light-dark(#894964, #dea5bd);
+}
+.Identity_Avatar-tone-3 {
+  --avatar: light-dark(#914a42, #e3a79d);
+}
+.Identity_Avatar-tone-4 {
+  --avatar: light-dark(#465f6b, #a2c3d0);
+}
+.Identity_Avatar-tone-5 {
+  --avatar: light-dark(#71564a, #cfad9f);
 }
 .Identity_Text {
   flex: 1;

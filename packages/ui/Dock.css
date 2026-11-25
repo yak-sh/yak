@@ -37,24 +37,22 @@
 .Dock_Presence.Dot-caution {
   --dot: var(--presence-away, var(--caution));
 }
+.Dock_Presence.Dot-offline {
+  --dot: var(--presence-offline, var(--dim));
+}
 .Dock_Faces {
   display: inline-flex;
 }
 .Dock_Faces:empty {
   display: none;
 }
-.Dock_Face {
-  display: grid;
-  place-items: center;
+.Dock_Face.Identity_Avatar {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  background: var(--accent);
-  color: var(--bg);
   font-size: .75rem;
-  font-weight: 800;
   line-height: 1;
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--positive);
+  box-shadow: 0 0 0 2px var(--card);
 }
 .Dock_Face + .Dock_Face {
   margin-left: -.35rem;

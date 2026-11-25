@@ -1,25 +1,41 @@
 /** An image or initial, a name and a short description. @module */
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
-import { block, type Part } from './el.ts'
+import { type FunctionComponent, h } from 'preact'
+import { block, el, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
+
+type AvatarProps = Props & { person?: string }
+
+let avatar: Part = el('span', 'Identity_Avatar')
+
+let tone = (person: string): string => {
+  let hash = 0
+  for (let char of person) hash = Math.imul(hash, 31) + char.codePointAt(0)!
+  return `tone-${(hash >>> 0) % 6}`
+}
+
+let Avatar: FunctionComponent<AvatarProps> = ({ person, mod, ...props }) =>
+  h(avatar, { ...props, mod: [mod].flat().concat(person && tone(person)) })
 
 /** An image or initial, a name and a short description. */
 export let Identity:
   & Part
+  & { Avatar: typeof Avatar }
   & Record<
-    'Avatar' | 'Image' | 'Text' | 'Name' | 'Note' | 'Action' | 'Mark' | 'Add',
+    'Image' | 'Text' | 'Name' | 'Note' | 'Action' | 'Mark' | 'Add',
     Part
-  > = block('div', 'Identity', {
-    Avatar: 'span',
-    Image: 'img',
-    Text: 'span',
-    Name: 'b',
-    Note: 'small',
-    Action: 'span',
-    Mark: 'span',
-    Add: 'a',
-  })
+  > = Object.assign(
+    block('div', 'Identity', {
+      Image: 'img',
+      Text: 'span',
+      Name: 'b',
+      Note: 'small',
+      Action: 'span',
+      Mark: 'span',
+      Add: 'a',
+    }),
+    { Avatar },
+  )
 /** What this part presents. */
 export let description = 'An image or initial, a name and a short description.'
 /** The same parts in a terminal. */
@@ -36,7 +52,7 @@ export let specimens = (): Specimen[] => [
     h(
       Identity,
       {},
-      h(Identity.Avatar, { mod: 'large' }, 'A'),
+      h(Identity.Avatar, { mod: 'large', person: 'ada' }, 'A'),
       h(Identity.Image, {
         alt: '',
         src:
@@ -58,7 +74,7 @@ export let specimens = (): Specimen[] => [
     h(
       Identity,
       {},
-      h(Identity.Avatar, {}, 'A'),
+      h(Identity.Avatar, { person: 'ada' }, 'A'),
       h(
         Identity.Text,
         {},
