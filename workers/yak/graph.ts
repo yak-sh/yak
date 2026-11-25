@@ -450,6 +450,8 @@ import {
 import { UPDATE_WAITING } from '@yaks/platform/update-waiting'
 import { personLine } from '@yaks/platform/person-lines'
 import { draftedApp } from '@yaks/platform/app-canvas'
+import { movedSpace } from '@yaks/platform/connections-page'
+import { CONNECTION, USES } from '@yaks/connections'
 import { spaceLine } from '@yaks/platform/space-pages'
 import { SEEN_EVERY } from '@yaks/platform/account-rows'
 import {
@@ -1017,6 +1019,14 @@ let draftMoved = (b: Bundle, app: string) =>
   '$delete' in b || b.entity.eid == app ||
   (b.written as { app?: string } | undefined)?.app == app ||
   (b.app_draft as { app?: string } | undefined)?.app == app
+
+// Whether `b` may move a space's Connections page
+// (@yaks/platform/connections-page `connectionsMoved`): a connection, a link
+// an app calls out through, an MCP server, an app, or a row gone. A write
+// names only what changed, so which space it moves is not always on it, and
+// every open page reads itself again.
+let connectionsMoved = (b: Bundle) =>
+  ['$delete', CONNECTION, USES, 'mcp_server', 'app'].some((key) => key in b)
 
 export class Store extends Durable {
   #load: Load
@@ -2284,6 +2294,8 @@ export class Store extends Durable {
         affects: (bundles, line) =>
           draftedApp(line) != undefined
             ? bundles.some((b) => draftMoved(b, draftedApp(line)!))
+            : movedSpace(line) != undefined
+            ? bundles.some(connectionsMoved)
             : bundles.some((b) =>
               [
                 '$delete',
@@ -6050,7 +6062,16 @@ export class Store extends Durable {
     // does not answer here — hibernation is the runtime's, so `sockets` takes
     // it — which would leave it the one door with no policy on it. So it asks
     // the same seam, by hand, at the handshake. A watch of a word this app
-    // borrows is answered across its home (`#lending`).
+    // borrows is answered across its home (`#lending`). The directory holds
+    // no app, so nobody has standing on its own socket (`#socketStanding`):
+    // its person's reads are `/person/ws`, and this one is not opened only to
+    // be refused on its first frame.
+    if (path == '/ws' && this.#name() == PLATFORM_STORE) {
+      return json(
+        { error: 'NotFound', message: 'the directory’s socket is /person/ws' },
+        404,
+      )
+    }
     if (path == '/ws') {
       let actor
       try {

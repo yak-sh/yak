@@ -83,6 +83,7 @@ import {
 import {
   actedOf,
   connectionsPage,
+  connectionsWords,
   pageOf,
 } from '@yaks/platform/connections-page'
 import {
@@ -821,6 +822,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
         spacePagesWords,
         appCanvasWords,
         agentsWords,
+        connectionsWords,
       ]),
       [],
       {
@@ -1093,6 +1095,26 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       await dir.stamp({ entities: [{ ...grant, cancelled: {} }] })
       await until(() => agentsOf(agents.value)?.length == 0)
       agents.close()
+
+      // The space's Connections page, read again as a connection is made in
+      // the directory, which says so on a person's socket it keeps open.
+      let connections = page.watch(connectionsPage(home.eid, ''))
+      await until(() => pageOf(connections.value)?.list != undefined)
+      equal(pageOf(connections.value)?.list, [])
+      let weather = crypto.randomUUID()
+      await dir.stamp({
+        entities: [{
+          entity: { eid: weather },
+          connection: {
+            owner: home.eid,
+            integration: 'weather',
+            status: 'connected',
+          },
+        }],
+      })
+      await until(() => pageOf(connections.value)?.list.length == 1)
+      equal(pageOf(connections.value)?.list.map((c) => c.eid), [weather])
+      connections.close()
 
       // What an app beside the chat is made of, read again as its draft is
       // written, on a directory socket that stays admitted.

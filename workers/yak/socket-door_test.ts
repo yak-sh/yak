@@ -6,6 +6,7 @@ import { assert } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { installPair, made } from '../../packages/workerd/testing.ts'
 import * as apps from './apps.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { KERNEL } from './meta.ts'
 import { ADA, as, platform, seeded, visit } from './serving-probe.ts'
 
@@ -109,3 +110,31 @@ test("a page's watch its store refuses in its own words is filed once as the app
     breaks: [[said, 'subscribe .nope', true]],
   })
 })
+
+// The directory holds no app, so no caller has standing on its own `/ws`, and
+// every frame on one is refused: its person's reads are `/person/ws`. A
+// socket opened there is refused at its handshake, not admitted and then
+// refused on its first frame (#011e217c15).
+let directory = await (async () => {
+  await using scenario = platform()
+  let { env } = scenario
+  await seeded(env)
+  let undo = installPair()
+  try {
+    let res = await env.STORE.get(env.STORE.idFromName(PLATFORM_STORE)).fetch(
+      new Request('https://store/ws', {
+        headers: {
+          ...KERNEL,
+          'x-store': PLATFORM_STORE,
+          'x-yak-person': ADA,
+          upgrade: 'websocket',
+        },
+      }),
+    )
+    return [res.status, (await res.json()).error]
+  } finally {
+    undo()
+  }
+})()
+test('the directory refuses a socket on its own /ws at the handshake', () =>
+  equal(directory, [404, 'NotFound']))

@@ -79,11 +79,10 @@ import {
   actedRow,
   actOf,
   askOf,
+  connectionsMoved,
   formOf,
   pageAsked,
 } from '@yaks/platform/connections-page'
-import { CONNECTION, USES } from '@yaks/connections'
-import { joined, line as lined } from '@yaks/query'
 import { writes } from '@yaks/member'
 import { personRows, visitsRows } from './side.ts'
 import { countsSpace } from '@yaks/platform/visit-counts'
@@ -559,9 +558,10 @@ export let reachDoor = async (
               }
             }
             // The Connections page, which no store answers: read again
-            // whole each time what it is drawn from moves in the directory,
-            // the space's connections and the person's, the links its apps
-            // call out through, its apps, and the person's MCP servers.
+            // whole each time the directory says it moved, as a read of the
+            // person (`connectionsMoved`): the space's connections and the
+            // person's, the links its apps call out through, its apps, and
+            // the person's MCP servers.
             let page = pageAsked(line)
             if (page) {
               let closed = false
@@ -569,22 +569,9 @@ export let reachDoor = async (
               owning(page.space).then((seat) => {
                 if (closed) return
                 if (!seat) return sink({ bundles: [], reset: true })
-                let space = seat.space.eid
                 stop = rereading(
                   () => connectionsAt(seat, page.ask),
-                  (moved) =>
-                    watching(
-                      meta(env).door ?? storeOf(env.STORE, PLATFORM_STORE),
-                      'directory',
-                      joined([
-                        lined`.${CONNECTION}.owner=${[space, person]}&*`,
-                        lined`.${USES}&.edge.from.app.space=${space}&*`,
-                        lined`.mcp_server.owner=${person}&*`,
-                        lined`.app.space=${space}&*`,
-                      ], '|'),
-                      moved,
-                      { ...vouched(who), ...KERNEL },
-                    ),
+                  (moved) => personal(moved, connectionsMoved(seat.space.eid)),
                   sink,
                 )
               }, (error) => closed || sink({ refused: error }))

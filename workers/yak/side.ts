@@ -62,6 +62,7 @@ import { shelf } from './apps.ts'
 import { kernels } from '@yaks/platform/ladder'
 import { allowancesRow, paymentPart } from '@yaks/platform/payment-rows'
 import { draftedApp, draftedRow } from '@yaks/platform/app-canvas'
+import { movedRow, movedSpace } from '@yaks/platform/connections-page'
 import { gauges } from '@yaks/platform/standing'
 import { budget, spent } from '@yaks/platform/meter'
 import type { Who } from './session.ts'
@@ -307,6 +308,10 @@ let sideRows = async (
   if (line == SIDE_SPACES) return spaceRows(person, await pickable(dir, person))
   let drafted = draftedApp(line)
   if (drafted) return await draftedRows(dir, person, drafted)
+  let moved = movedSpace(line)
+  if (moved) {
+    return await ownedBy(dir, person, moved) ? [movedRow(person, moved)] : []
+  }
   let paid = paymentPart(line)
   if (paid) return await paymentRows(dir, person, paid)
   let apps = appsSpace(line)

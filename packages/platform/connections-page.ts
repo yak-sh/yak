@@ -13,6 +13,11 @@
  *   the fields its form sent (`do` among them) as `page` showed it. The door
  *   does it as the person and answers it with `connectionActed{say, no, go}`:
  *   what the page says of it, or where the person goes to sign in.
+ * - `connectionsMoved{space}`: the space's connections, the links its apps
+ *   call out through, its apps or its owner's MCP servers moved. The
+ *   directory answers it as a read of the person (./person-lines.ts), again
+ *   on each commit that touches them: how the door knows to read the page
+ *   again.
  *
  * @module
  */
@@ -320,6 +325,21 @@ export let pageAsked = (
   return connectionsPage(asked.space, asked.ask) == text ? asked : undefined
 }
 
+let MOVED = '.connectionsMoved.space='
+
+/** The line that moves as the Connections page of the space `space` does. */
+export let connectionsMoved = (space: string): string => MOVED + space
+
+/** The space a `connectionsMoved` line names, or undefined for another line. */
+export let movedSpace = (text: string): string | undefined =>
+  text.startsWith(MOVED) ? text.slice(MOVED.length) : undefined
+
+/** That the Connections page of `space` moved, as `person`'s row. */
+export let movedRow = (person: string, space: string): Bundle => ({
+  entity: { eid: derivedEid(`connections-moved|${person}|${space}`) },
+  connectionsMoved: { space },
+})
+
 let strings = { type: 'string' }
 let lists = { type: 'array' }
 let objects = { type: 'object' }
@@ -351,6 +371,12 @@ export let connectionsWords: VocabDoc = {
       type: 'object',
       properties: { space: strings, page: strings, form: objects },
       required: ['space', 'form'],
+    },
+    connectionsMoved: {
+      component: true,
+      type: 'object',
+      properties: { space: strings },
+      required: ['space'],
     },
     connectionActed: {
       component: true,

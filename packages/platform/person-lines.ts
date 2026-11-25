@@ -8,8 +8,9 @@
  * (./space-apps.ts), who is in a space they own (./people-rows.ts), a
  * space's payments (./payment-rows.ts), of a space they own, its
  * Settings, Domains and Trash pages' (./space-pages.ts), where an app's
- * drafts stand (./app-canvas.ts `appDrafted`), and the grants they hold
- * (./agents.ts `GRANTS`).
+ * drafts stand (./app-canvas.ts `appDrafted`), the grants they hold
+ * (./agents.ts `GRANTS`), and when a space's Connections page moved
+ * (./connections-page.ts `connectionsMoved`).
  *
  * @module
  */
@@ -24,10 +25,12 @@ import { paymentLine } from './payment-rows.ts'
 import { spaceLine } from './space-pages.ts'
 import { draftedApp } from './app-canvas.ts'
 import { GRANTS } from './agents.ts'
+import { movedSpace } from './connections-page.ts'
 
 /** Whether the directory answers `line` as a read of the person. */
 export let personLine = (line: string): boolean =>
   line == UPDATE_WAITING || sideLine(line) || accountLine(line) ||
   offersSpace(line) != undefined || reachedLine(line) ||
   listedSpace(line) != undefined || peopleLine(line) || paymentLine(line) ||
-  !!spaceLine(line) || draftedApp(line) != undefined || line == GRANTS
+  !!spaceLine(line) || draftedApp(line) != undefined || line == GRANTS ||
+  movedSpace(line) != undefined
