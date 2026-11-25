@@ -172,6 +172,12 @@ export let scriptName = (store: string) =>
 // `env.AI.run(model, input)` is the app itself posting `./api/ai/run`, which
 // meters the call against the space's budget (models.ts). The Cloudflare account's
 // own Workers AI binding is never on an app's script.
+/** The header the kernel starts an app's worker with, ahead of a person
+ * opening the app (app-warm.ts): the wrapper answers it before the app's
+ * code is asked anything, so the app's isolate is up and nothing it serves
+ * has run. */
+export let WARMING = 'x-yak-warm'
+
 export let shim = (
   main = WORKER,
   tunneled: string[] = [],
@@ -182,11 +188,13 @@ export * from ${JSON.stringify('./' + main)}
 
 let GRANT = '${GRANT}'
 let SELF = '${SELF}'
+let WARMING = '${WARMING}'
 let TUNNELED = ${JSON.stringify(tunneled)}
 let AI = ${JSON.stringify(ai)}
 
 export default {
   fetch(req, env, ctx, send = globalThis.fetch) {
+    if (req.headers.has(WARMING)) return new Response(null, { status: 204 })
     let grant = req.headers.get(GRANT) || ''
     let self = req.headers.get(SELF) || ''
     let headers = new Headers(req.headers)

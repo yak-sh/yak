@@ -28,7 +28,8 @@ import {
 } from '@yaks/platform/side-rows'
 import type { Env } from './env.ts'
 import { visitDayRows, visitRows } from './views.ts'
-import { type Directory, type Space, walkTo } from './directory.ts'
+import { type App, type Directory, type Space, walkTo } from './directory.ts'
+import { warmApps } from './app-warm.ts'
 import { type Listed, listedRows, listedSpace } from '@yaks/platform/space-apps'
 import { pilled, standing } from './gallery-row.ts'
 import {
@@ -143,10 +144,18 @@ export let pickable = async (
 }
 
 /** The apps of `space` that `who` may open from the side. */
-export let sideApps = async (dir: Directory, space: Space, who: Who) =>
-  shelf(await dir.apps(space), space, who).mine.map((
-    { eid, slug, title, source, generatedIcon },
-  ) => ({ eid, slug, title, source, generatedIcon }))
+export let appsFor = async (dir: Directory, space: Space, who: Who) =>
+  shelf(await dir.apps(space), space, who).mine
+
+/** What the side shows of each of `apps`. */
+export let sideApps = (apps: App[]) =>
+  apps.map(({ eid, slug, title, source, generatedIcon }) => ({
+    eid,
+    slug,
+    title,
+    source,
+    generatedIcon,
+  }))
 
 /** The rows `line` asks of the person: their account, browsers, linked chat
  * accounts (whose platforms `env`'s vault says), friends, messages with them,
@@ -228,7 +237,7 @@ export let personRows = async (
   }
   let people = holdersSpace(line) ?? admittedSpace(line)
   if (people) return await peopleRows(dir, person, line, people)
-  return await sideRows(dir, person, line)
+  return await sideRows(dir, person, line, env)
 }
 
 /** What the Visits page of the space `eid` is drawn from: its apps as the
@@ -333,6 +342,7 @@ let sideRows = async (
   dir: Directory,
   person: string,
   line: string,
+  env: Env,
 ): Promise<Bundle[]> => {
   if (line == SIDE_SPACES) return spaceRows(person, await pickable(dir, person))
   let drafted = draftedApp(line)
@@ -355,9 +365,11 @@ let sideRows = async (
   let { space, role } = seat
   let who = { person, role }
   if (listed) return listedRows(person, eid, await listedApps(dir, space, who))
-  return apps
-    ? appRows(person, eid, await sideApps(dir, space, who))
-    : offerRows(person, eid, await offersIn(dir, space, who))
+  if (!apps) return offerRows(person, eid, await offersIn(dir, space, who))
+  // Drawn in the side, each is a press away (app-warm.ts).
+  let mine = await appsFor(dir, space, who)
+  warmApps(env, space, mine)
+  return appRows(person, eid, sideApps(mine))
 }
 
 // Where an app's drafts stand, to a person seated in its space: what the

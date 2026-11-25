@@ -65,12 +65,14 @@ import { friendsOf as standingWith } from './friends.ts'
 import { json } from '@yaks/platform/refused'
 import { moved, redirect, shelf } from './apps.ts'
 import {
+  appsFor,
   listedApps,
   personRows,
   pickable,
   sideApps,
   visitsRows,
 } from './side.ts'
+import { warmApp, warmApps } from './app-warm.ts'
 import { listedRows } from '@yaks/platform/space-apps'
 import { brokenOf } from './apps-reads.ts'
 import { agentsIn } from './agent-rows.ts'
@@ -334,6 +336,16 @@ export let manage = async (
     !space.trashed
   ) {
     woken(env, space.eid)
+    // The app a chat opens beside it, from a side's link pressed or kept
+    // ready, starts with it (app-warm.ts). Its read is the side's, and a
+    // failure of it is met there.
+    let beside = url.searchParams.get('app')
+    if (view == 'operator' && beside) {
+      dir.apps(space).then((all) => {
+        let app = all.find((a) => a.slug == beside)
+        if (app) warmApp(env, space, app)
+      }, () => {})
+    }
   }
   if (view == 'updates' && writes(who.role) && !space.trashed) {
     if (req.method == 'POST') {
@@ -636,7 +648,10 @@ let beside = async (
 ): Promise<Beside> => {
   let [spaces, apps, name, panes, ways, platformAdmin] = await Promise.all([
     pickable(dir, who.person),
-    sideApps(dir, space, who),
+    // Drawn in the side, each is a press away (app-warm.ts).
+    appsFor(dir, space, who).then((mine) => (
+      warmApps(env, space, mine), sideApps(mine)
+    )),
     dir.nameAt(who.person),
     dir.panes(who.person),
     // As the page asked it ahead (`foresee`), so it is answered from there.

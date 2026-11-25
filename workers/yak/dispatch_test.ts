@@ -42,6 +42,7 @@ import {
   SHIM,
   shim,
   upload,
+  WARMING,
   workerBreak,
 } from './dispatch.ts'
 import { WORKER } from '@yaks/platform/files'
@@ -1171,6 +1172,31 @@ test('a door takes a Request or a URL as a Fetcher does', async () => {
     (await visit('https://jeff.yaks.app/style.css'))[0],
     'GET /recipes/style.css ',
   )
+})
+
+test('a warm start is answered by the wrapper, and the app is asked nothing', async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-shim-' })
+  try {
+    Deno.writeTextFileSync(`${dir}/entry.js`, shim(WORKER))
+    Deno.writeTextFileSync(
+      `${dir}/worker.js`,
+      `export let asked = []
+      export default { fetch(req) { asked.push(req.url); return new Response('the app') } }`,
+    )
+    let { default: entry } = await import(`file://${dir}/entry.js`)
+    let { asked } = await import(`file://${dir}/worker.js`)
+    let at = 'https://jeff.yaks.app/mail/'
+    let warm = await entry.fetch(
+      new Request(at, { method: 'HEAD', headers: { [WARMING]: '1' } }),
+      {},
+      {},
+    )
+    assertEquals([warm.status, asked], [204, []])
+    let page = await entry.fetch(new Request(at), {}, {})
+    assertEquals([await page.text(), asked], ['the app', [at]])
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
 })
 
 test('a vpc_services name is a door to the kernel as the app, never a binding', async () => {
