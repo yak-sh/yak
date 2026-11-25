@@ -5,16 +5,13 @@ import { writes } from '@yaks/member'
 import { manageAt } from '@yaks/platform/routes'
 import {
   type Ask,
-  type Choice,
   type Offered,
   remoteCommands,
-  type Shown,
   type Told,
 } from '@yaks/connections/mcp'
 import {
   addressed,
   grant as grantSource,
-  type Grantable,
   grantable,
   granted,
   grantees,
@@ -29,6 +26,7 @@ import {
   SPACE,
   str,
 } from './tool.ts'
+import type { Grantee, McpPage } from '@yaks/platform/connections-page'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
@@ -109,35 +107,6 @@ let commands = async (ctx: Ctx, asking?: Calling, space?: string) =>
  * to one space reaches. */
 export let pageServers = (env: Env, dir: Directory, who: Who, space: string) =>
   serversOf(env, dir, who.person ?? '', who, space)
-
-/** An app, as the connections page names it beside a source granted to it. */
-export type Grantee = {
-  eid: string
-  title: string
-  space: string
-  slug: string
-}
-
-/** What the connections page shows of a person's servers: each with the apps
- * it is granted to; with `open`, every tool that one offers, for choosing
- * which are offered; and with `grant`, an app asking for the sources `at`
- * names (@yaks/connections `grantable`), each with whether it holds it. */
-export type McpPage = {
-  servers: (Shown & { apps: Grantee[] })[]
-  /** where a sign-in returns, the redirect URI a server's own OAuth client
-   * names */
-  redirect?: string
-  tools?: {
-    server: string
-    list?: Choice[]
-    failed?: string
-  }
-  ask?: {
-    app: Grantee
-    at: string
-    sources: (Grantable & { granted: boolean })[]
-  }
-}
 
 // The app at `eid`, named, or null where there is none.
 let granteeOf = async (dir: Directory, eid: string) => {

@@ -65,6 +65,15 @@ import { paymentPart, paymentWrite } from '@yaks/platform/payment-rows'
 import { ownedSpace, paymentApply, paymentRead } from './payment-reads.ts'
 import { makingApp } from '@yaks/platform/app-canvas'
 import { making, watchMaking } from './canvas-read.ts'
+import {
+  actedRow,
+  actOf,
+  askOf,
+  formOf,
+  pageAsked,
+} from '@yaks/platform/connections-page'
+import { CONNECTION, USES } from '@yaks/connections'
+import { joined, line as lined } from '@yaks/query'
 import { writes } from '@yaks/member'
 import { personRows, visitsRows } from './side.ts'
 import { countsSpace } from '@yaks/platform/visit-counts'
@@ -84,7 +93,7 @@ import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { upgrading } from './protocol.ts'
 import { KERNEL, meta } from './meta.ts'
-import { type Reach, read, watch, watching } from './reach.ts'
+import { type Reach, read, rereading, watch, watching } from './reach.ts'
 import { reachWrite } from './agent.ts'
 import { vouched, type Who } from './session.ts'
 import type { Clock } from './timing.ts'
@@ -93,6 +102,7 @@ import { accountApply, accountWrites } from './account-writes.ts'
 import { reachedApply } from './reached-writes.ts'
 import { peopleWrites } from '@yaks/platform/people-rows'
 import { peopleApply } from './people-writes.ts'
+import { connecting, connectionsRow, pageOf } from './connections.ts'
 
 let TAGS = { request: 'reach door' }
 
@@ -175,6 +185,25 @@ export let reachDoor = async (
       })
       : []
   }
+  // The person's seat in the space a Connections line asks about, when they
+  // own it: the page is its owners' alone (apps.ts `manage`).
+  let owning = async (eid: string) =>
+    (await dir.seated(person)).find((s) =>
+      s.space.eid == eid && !s.space.trashed && s.role == 'owner'
+    )
+  // The Connections page of the space `seat` is in, as `ask` asks it.
+  let connectionsAt = async (
+    seat: NonNullable<Awaited<ReturnType<typeof owning>>>,
+    ask: string,
+  ) => [
+    await connectionsRow(
+      env,
+      dir,
+      { ...who, person, role: seat.role },
+      seat.space,
+      ask,
+    ),
+  ]
   try {
     if (door == '/query' && req.method == 'GET') {
       let q = new URL(req.url).searchParams
@@ -209,6 +238,12 @@ export let reachDoor = async (
       let app = makingApp(line)
       if (app != undefined) {
         return Response.json(await making(env, dir, who, app))
+      }
+      let page = pageAsked(line)
+      if (page) {
+        let seat = await owning(page.space)
+        if (!seat) return Response.json([])
+        return Response.json(await connectionsAt(seat, page.ask))
       }
       let named = settingsSpace(line)
       if (named != undefined) {
@@ -305,6 +340,41 @@ export let reachDoor = async (
         return Response.json(
           await spaceApply(bundles, env, dir, who, person, space),
         )
+      }
+      let act = actOf(bundles)
+      if (act) {
+        let seat = await owning(act.space)
+        if (!seat) {
+          return Response.json(
+            {
+              error: 'Forbidden',
+              message: 'Only this space’s owner can change its connections.',
+            },
+            { status: 403 },
+          )
+        }
+        // The press, as the page's own post would make it: at the page's
+        // address, so what it asks (the testing integrations it names) is
+        // what a sign-in comes back to.
+        let at = new URL(pageOf(env, seat.space.slug))
+        at.search = new URL(act.page || '/', at).search
+        let said = await connecting(
+          new Request(at, { method: 'POST' }),
+          env,
+          seat.space,
+          { ...who, role: seat.role },
+          formOf(act.form),
+        )
+        if (said instanceof Response) {
+          return Response.json([
+            actedRow(act.eid, { go: said.headers.get('location') ?? at.href }),
+          ])
+        }
+        if (said.no) throw new CallError('arguments', said.say)
+        return Response.json([
+          actedRow(act.eid, { say: said.say }),
+          ...await connectionsAt(seat, askOf(at.searchParams)),
+        ])
       }
       if (reachedWrites(bundles)) {
         return Response.json(
@@ -425,6 +495,41 @@ export let reachDoor = async (
               return () => {
                 asked = NaN
                 stop()
+              }
+            }
+            // The Connections page, which no store answers: read again
+            // whole each time what it is drawn from moves in the directory,
+            // the space's connections and the person's, the links its apps
+            // call out through, its apps, and the person's MCP servers.
+            let page = pageAsked(line)
+            if (page) {
+              let closed = false
+              let stop: (() => void) | undefined
+              owning(page.space).then((seat) => {
+                if (closed) return
+                if (!seat) return sink({ bundles: [], reset: true })
+                let space = seat.space.eid
+                stop = rereading(
+                  () => connectionsAt(seat, page.ask),
+                  (moved) =>
+                    watching(
+                      meta(env).door ?? storeOf(env.STORE, PLATFORM_STORE),
+                      'directory',
+                      joined([
+                        lined`.${CONNECTION}.owner=${[space, person]}&*`,
+                        lined`.${USES}&.edge.from.app.space=${space}&*`,
+                        lined`.mcp_server.owner=${person}&*`,
+                        lined`.app.space=${space}&*`,
+                      ], '|'),
+                      moved,
+                      { ...vouched(who), ...KERNEL },
+                    ),
+                  sink,
+                )
+              }, (error) => closed || sink({ refused: error }))
+              return () => {
+                closed = true
+                stop?.()
               }
             }
             // What the space's Operator store answers of the person.

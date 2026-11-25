@@ -343,6 +343,46 @@ export let watching = (
   }
 }
 
+/** A read no store answers live, kept live: `read` is sent to `sink` whole
+ * at once, and again each time a line it reads from moves, as `moved` watches
+ * it. The first answer `moved` gives is what was just read, and a read asked
+ * while one is in flight waits for it, so moves coming fast read once. What
+ * `moved` refuses, and a read that fails, is said as the refusal. */
+export let rereading = (
+  read: () => Promise<Bundle[]>,
+  moved: (sink: (frame: Frame) => void) => () => void,
+  sink: (frame: Frame) => void,
+): () => void => {
+  let closed = false, reading = false, again = false, heard = false
+  let ask = async () => {
+    if (reading) return void (again = true)
+    reading = true
+    try {
+      let bundles = await read()
+      if (!closed) sink({ bundles, reset: true })
+    } catch (error) {
+      if (!closed) sink({ refused: error })
+    }
+    reading = false
+    if (again && !closed) {
+      again = false
+      void ask()
+    }
+  }
+  void ask()
+  let stop = moved((frame) => {
+    if (closed) return
+    if (frame.refused) return sink({ refused: frame.refused })
+    if (!frame.bundles) return
+    if (heard || frame.reset) void ask()
+    heard = true
+  })
+  return () => {
+    closed = true
+    stop()
+  }
+}
+
 // The reach as members, ranked as a space's homes are (directory.ts `ranked`),
 // and the one named among them: routing goes by identity, so a named store
 // already in reach is that very member.

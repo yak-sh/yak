@@ -19,12 +19,12 @@ import {
   chatRows,
   connecting,
   connectionsAsked,
-  connectionsOf,
-  enabled,
+  connectionsRow,
 } from './connections.ts'
 import { paymentRead } from './payment-reads.ts'
 import { allowancesLine, type Part } from '@yaks/platform/payment-rows'
 import { type DeskPage, nothingHere, sentence } from './pages.ts'
+import { askOf } from '@yaks/platform/connections-page'
 import { desk as deskPage } from './desk-pages.ts'
 import { logoed, logoImage, logoPosted } from './logo.ts'
 import { monogram } from '@yaks/platform/monogram'
@@ -716,7 +716,6 @@ let desk = async (
   let [
     { here, all },
     drawn,
-    connections,
     picks,
     operator,
     provider,
@@ -731,8 +730,9 @@ let desk = async (
     // live, and what is broken in each, one read of the space's tracker, no
     // app's store woken (apps-reads.ts); Visits' apps and their views
     // (side.ts `visitsRows`); People's lines, as its view watches them
-    // (@yaks/platform/people-view); and what Selling and Billing are drawn
-    // from (@yaks/platform/payment-rows).
+    // (@yaks/platform/people-view); what Selling and Billing are drawn
+    // from (@yaks/platform/payment-rows); and the row Connections is drawn
+    // from, as its address asks it (connections.ts `connectionsRow`).
     view == 'apps'
       ? Promise.all([
         listedApps(dir, space, who).then((apps) =>
@@ -756,39 +756,8 @@ let desk = async (
       ).then((all) => all.flat())
       : view == 'selling' || view == 'billing'
       ? paymentDrawn(env, dir, space, owner, view)
-      : undefined,
-    // What this space calls out through (connections.ts), read only for the
-    // page that shows it; on the person's own space (`member.own`), what they
-    // connected for themselves and the services holding a grant from them.
-    view == 'connections'
-      ? connectionsOf(env, space, owner, {
-        dir,
-        by: walkTo(space.slug, space.eid).path,
-        own: dir.seats(owner, 'owner').then((seats) =>
-          seats.some((s) => s.own && s.space.eid == space.eid)
-        ),
-        // Asked beside the directory's reads, and kept only on their own.
-        services: identity().then((part) => part.services(env, owner, dir)),
-        // The MCP servers they keep, and the tools of the one opened.
-        mcp: async (kept) =>
-          (await import('./connected-mcp.ts')).mcpPage(
-            env,
-            dir,
-            { person: owner, role: who.role },
-            space.eid,
-            {
-              kept,
-              open: q.get('mcp') ?? undefined,
-              grant: q.get('grant') ?? undefined,
-              at: q.get('at') ?? undefined,
-            },
-          ),
-        enable: enabled(req),
-        add: q.get('detail') ?? undefined,
-        find: q.get('q') ?? undefined,
-        open: q.get('detail') ?? undefined,
-        trash: q.has('trash'),
-      })
+      : view == 'connections'
+      ? connectionsRow(env, dir, who, space, askOf(q)).then((row) => [row])
       : undefined,
     // Every space this person may work in, which the side's selector offers.
     pickable(dir, owner),
@@ -852,7 +821,6 @@ let desk = async (
     },
     renewals,
     agents: known,
-    connections,
     spaces: picks.some((s) => s.slug == space.slug) ? picks : [
       {
         slug: space.slug,

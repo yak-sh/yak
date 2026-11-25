@@ -18,6 +18,25 @@ import { Field } from '@yaks/ui/Field'
 import { Form } from '@yaks/ui/Form'
 import { State } from '@yaks/ui/State'
 
+/** A sentence out of a lowercase line: what a failed seal wrote beside it.
+ * An email address that opens it stays as it was typed.
+ *
+ * ```ts
+ * import { sentence } from '@yaks/platform/page-parts'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(sentence('no app x in y'), 'No app x in y.')
+ * equal(sentence('ana@x.test is you'), 'ana@x.test is you.')
+ * ```
+ */
+export let sentence = (text: string) =>
+  (/^\S+@/.test(text) ? text : text.charAt(0).toUpperCase() + text.slice(1)) +
+  (/[.!?]$/.test(text) ? '' : '.')
+
+/** A form's hidden field, only when there is something to carry. */
+export let held = (name: string, value?: string | null) =>
+  value ? h(Form.Hidden, { name, value }) : null
+
 /** A card's head: its mark, its title, how it stands, and what acts on the
  * whole card, at the right. */
 export let heading = (

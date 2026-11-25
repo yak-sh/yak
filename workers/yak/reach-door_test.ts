@@ -80,6 +80,11 @@ import {
   spaceSettings,
   spaceTrash,
 } from '@yaks/platform/space-pages'
+import {
+  actedOf,
+  connectionsPage,
+  pageOf,
+} from '@yaks/platform/connections-page'
 import { ALL } from './updates.ts'
 import { sessionRow } from './browser-sessions.ts'
 import { client } from '@yaks/client'
@@ -92,7 +97,7 @@ import { manage } from './manage.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { SPACE } from './build-door.ts'
-import { connector, kernel, pressPeople, seed, signIn } from './probe.ts'
+import { connector, kernel, meta, pressPeople, seed, signIn } from './probe.ts'
 import {
   admitted,
   admittedOf,
@@ -399,6 +404,41 @@ test('a tab reads its space’s plan and month, and only its owner acts on them'
     [left.status, left.body.message],
     [400, 'The paid tier is not switched on here.'],
   )
+})
+
+test('a tab reads its space’s Connections and presses its buttons through the door, its owner alone', async () => {
+  let own = (await k.dir.seated(ada.person)).find((s) => s.own)!.space.eid
+  let line = connectionsPage(own, '')
+  let [row] = await rowsOf(ada, line)
+  equal(pageOf([row])?.list, [])
+  equal(await rowsOf(bea, line), [])
+  let press = (who: Tab, form: Record<string, string>) =>
+    wrote(who, [{
+      entity: { eid: crypto.randomUUID() },
+      connectionAct: { space: own, page: '/manage/adas/connections', form },
+    }])
+  let weather = crypto.randomUUID()
+  await meta(k).apply([{
+    entity: { eid: weather },
+    connection: { owner: own, integration: 'weather', status: 'connected' },
+  }])
+  equal(
+    pageOf(await rowsOf(ada, line))?.list.map((c) => [c.eid, c.status]),
+    [[weather, 'connected']],
+  )
+  let ended = await press(ada, { do: 'disconnect', connection: weather })
+  equal(ended.status, 200, JSON.stringify(ended.body))
+  equal(actedOf(ended.body), { say: 'Disconnected.' })
+  equal(pageOf(ended.body)?.list, [])
+  let gone = await press(ada, {
+    do: 'disconnect',
+    connection: crypto.randomUUID(),
+  })
+  equal([gone.status, gone.body.message], [
+    400,
+    'That connection is not here any more.',
+  ])
+  equal((await press(bea, { do: 'disconnect' })).status, 403)
 })
 
 test('a tab writes its person’s account, messages and asks through the door, and only theirs', async () => {

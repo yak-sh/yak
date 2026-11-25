@@ -6,7 +6,19 @@ import {
 import { type Built, line, sub } from '@yaks/query'
 import { decodedPath } from './request-path.ts'
 import { CallError } from '@yaks/tools/errors'
-import type { McpPage } from './connected-mcp.ts'
+import {
+  type Borrowed,
+  type Catalog,
+  type Connections,
+  type Face,
+  type McpPage,
+  type Offered,
+  pageRow,
+  type Service,
+  SHOWN,
+  type Shown,
+  type Using,
+} from '@yaks/platform/connections-page'
 // Connections on yaks.app (D-38019): what the dashboard's connections page
 // shows and does, the door an outside service sends a person back to after
 // they sign in there, and the door its webhooks arrive at. What a connection
@@ -42,7 +54,6 @@ import type { McpPage } from './connected-mcp.ts'
 // refused rather than kept.
 import {
   ABOUT,
-  type About,
   attach,
   begin,
   bindingOf,
@@ -100,13 +111,13 @@ import type { Bundle, Comp, Taken } from '@yaks/graph'
 import { hooked, refusal } from '@yaks/hook'
 import { mode, reads } from '@yaks/member'
 import { reveal, SECRET } from '@yaks/secrets'
-import type { Service } from './connected.ts'
 import {
   type App,
   appStore,
   directory,
   scriptOf,
   type Space,
+  walkTo,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -171,35 +182,6 @@ export let logosOf = async (
   )
 }
 
-/** A service as a page draws it: what a person calls it, a line about it,
- * its site, its logo and how to get its key, each empty where its integration
- * says none. */
-export type Face = {
-  title: string
-  tagline: string
-  description?: string
-  details?: string
-  docs?: string
-  connects?: Integration['connects']
-  broker?: string
-  site: string
-  /** its integration's name, which a logo kept elsewhere is served by */
-  name: string
-  /** an SVG document, drawn as an image */
-  logo: string
-  /** its logo's address, for a service with no SVG kept here, served from
-   * our own door (@yaks/platform/routes `integrationLogo`) */
-  image: string
-  /** how a person gets its key, drawn from its markdown as HTML, its links
-   * marked as the writer's (theirs.ts) */
-  instructions: string
-  /** what it says was written by the space that made it, not by yaks.app */
-  theirs: boolean
-  /** what a person gives to connect it with a pasted key: its one key, or
-   * the fields it names */
-  fields: Field[]
-}
-
 // The face of an integration, called by its name where it has no title. A
 // card in a grid has no instructions.
 let faceOf = async (
@@ -235,154 +217,6 @@ export let givenOf = (form: FormData, fields: Field[]): Given | string => {
   )
   let missing = fields.find((f) => !said[f.name])
   return missing ? `Fill in ${missing.label} first.` : { fields: said }
-}
-
-/** One connection, as the page shows it. */
-export type Shown = {
-  eid: string
-  integration: string
-  face: Face
-  /** the signed-in person's own, rather than the space's: shown only on
-   * their own space's page */
-  own: boolean
-  /** each person who uses its apps connects their own; the space's is only
-   * the ask */
-  each: boolean
-  status: Status
-  account: string
-  /** what people call the account, where `account` is an id */
-  title: string
-  /** connected by pasting a key, rather than by signing in */
-  keyed: boolean
-  /** the hosts its key may be sent to */
-  hosts: string[]
-  /** its integration was made by the space or person it is kept for, who may
-   * change what is said about it: these, as written */
-  about: About | null
-  /** its integration is in the integration directory: listed by its owner,
-   * or built */
-  listed: boolean
-  scopes: string[]
-  /** the scopes its integration now asks for that it lacks: signing in again
-   * would give it them */
-  lacking: string[]
-  /** the apps that call out through it */
-  apps: Using[]
-  /** the name an app attached to it reads it by, unless the owner names one */
-  binding: string
-  /** live apps in this space that the owner may attach */
-  available: { app: string; title: string }[]
-  /** why it is not finished yet: the note on its `provisional` mark */
-  saving: string
-  /** how to get its key, as its integration says */
-  instructions: string
-  /** why its key could not be saved: the text beside its
-   * `exception` */
-  failed: string
-}
-
-/** One app calling out through a connection, as the page shows it. */
-export type Using = {
-  /** the app's eid */
-  app: string
-  title: string
-  /** its address, the name every tool takes, for an app of this space; empty
-   * for one elsewhere */
-  slug: string
-  /** what its code reads it as, env.NAME */
-  binding: string
-  /** handed the key itself rather than a sentinel */
-  direct: boolean
-  /** anyone using the app may call out through it, not only its members */
-  anyone: boolean
-  /** the space's side of an ask each person answers with their own */
-  each: boolean
-  /** the calls it made through it this month (@yaks/egress `calls`) */
-  calls: number
-  /** the most calls a month it may make, or null for no limit */
-  cap: number | null
-  /** the cap each copy installed from it borrows the connection under, or
-   * null where it lends it to none (@yaks/connections `lend`) */
-  lends: number | null
-  /** for a copy borrowing it from another space's app: the space the copy is
-   * in, as its people call it; null for an app of the connection's own */
-  borrower: string | null
-}
-
-/** A connection an app here borrows from the space that lends it, as the
- * page shows it: whose it is, and what the app has spent of its cap. */
-export type Borrowed = {
-  /** the connection lent */
-  eid: string
-  integration: string
-  face: Face
-  /** connected by pasting a key, rather than by signing in */
-  keyed: boolean
-  /** where its key may be sent, and so a key of the borrower's own */
-  hosts: string[]
-  /** the space lending it, as its people call it */
-  lender: string
-  /** the app borrowing it */
-  app: Using
-}
-
-/** A service the page offers to connect, as a card draws it. */
-export type Offered = {
-  name: string
-  keyed: boolean
-  face: Face
-  available?: boolean
-}
-
-/** The catalog, as the page shows it. */
-export type Catalog = {
-  /** what the page was asked to find (`?q=`) */
-  q: string
-  featured: Offered[]
-  /** what the search found, best first, at most `SHOWN` */
-  found: Offered[]
-  /** how many it found in all */
-  matched: number
-  /** how many services the catalog holds */
-  total: number
-  /** the kinds of service it holds, the most common first, each by its
-   * name and as a person reads it */
-  kinds: { name: string; label: string }[]
-}
-
-/** The most a search shows at once. */
-export let SHOWN = 48
-
-/** What the connections page is drawn from. */
-export type Connections = {
-  trash?: { id: string; integration: string; at: number }[]
-  /** whether this deploy can keep a key at all */
-  on: boolean
-  /** the person's MCP servers in this space */
-  mcp?: McpPage
-  list: Shown[]
-  /** outside services holding a grant from the person (connected.ts), on
-   * their own space's page */
-  services: Service[]
-  /** the built integrations nothing here is connected to yet, and this deploy
-   * can connect: one reached by OAuth needs the client it names kept in the
-   * vault (@yaks/connections `registration`) */
-  built: Offered[]
-  /** the testing integrations the page was opened for (`enabled`), which its
-   * forms carry */
-  enable?: string[]
-  /** the integration whose hash was opened (`?detail=<name>` when fetched),
-   * while this space has none through it */
-  asked?: Offered
-  /** the catalog (catalog.ts): what is featured, and what the page's search
-   * found, of everything nothing here is connected to yet and this deploy can
-   * connect */
-  catalog?: Catalog
-  /** the connection whose hash was opened (`?detail=<eid>` when fetched),
-   * shown whole where the rest are cards */
-  open?: string
-  /** what the apps of this space borrow from another space's lend */
-  borrowed: Borrowed[]
 }
 
 // A read of the directory. Every read the verbs make is a filter line.
@@ -1004,6 +838,49 @@ export let connectionsOf = async (
     enable,
     ...asked ? { asked } : {},
   }
+}
+
+/** The Connections page of `space` as `ask` asks it (@yaks/platform/
+ * connections-page `askOf`), as its row: what the page draws for its first
+ * paint, and what the page graph's door answers and reads again as it moves.
+ * On the person's own space it holds what they connected for themselves and
+ * the services holding a grant from them; always, the MCP servers they keep
+ * there, and the tools of the one the page opened. */
+export let connectionsRow = async (
+  env: Env,
+  dir: ReturnType<typeof dirOf>,
+  who: Who & { person: string },
+  space: Space,
+  ask: string,
+): Promise<Bundle> => {
+  let q = new URLSearchParams(ask)
+  let { person } = who
+  let asked = (k: string) => q.get(k) ?? undefined
+  let c = await connectionsOf(env, space, person, {
+    dir,
+    by: walkTo(space.slug, space.eid).path,
+    own: dir.seats(person, 'owner').then((seats) =>
+      seats.some((s) => s.own && s.space.eid == space.eid)
+    ),
+    // Asked beside the directory's reads, and kept only on their own.
+    services: import('./identity.ts').then((part) =>
+      part.services(env, person, dir)
+    ),
+    mcp: async (kept) =>
+      (await import('./connected-mcp.ts')).mcpPage(
+        env,
+        dir,
+        { person, role: who.role },
+        space.eid,
+        { kept, open: asked('mcp'), grant: asked('grant'), at: asked('at') },
+      ),
+    enable: q.getAll('enable').flatMap((n) => n.split(',')),
+    add: asked('detail'),
+    find: asked('q'),
+    open: asked('detail'),
+    trash: q.has('trash'),
+  })
+  return pageRow(space.eid, ask, c)
 }
 
 // What an integration says at length (@yaks/connections `Prose`).

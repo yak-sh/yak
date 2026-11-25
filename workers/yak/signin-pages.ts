@@ -15,7 +15,7 @@ import {
 } from '@yaks/ui/parts'
 import { h } from 'preact'
 import type { Agent } from './connected.ts'
-import type { Face, Shown } from './connections.ts'
+import type { Face, Shown } from '@yaks/platform/connections-page'
 import { agentList } from './connected_ui.ts'
 import { tile } from './render/mod.ts'
 import { shown } from '@yaks/phone'

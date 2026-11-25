@@ -1,6 +1,7 @@
 // A person's MCP servers on their connections page: added with a key, their
 // tools chosen, turned off, removed to the trash and restored, through the
 // page's own forms against a server that takes a key in a header.
+import { pageRow } from '@yaks/platform/connections-page'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { D1Like } from '@yaks/d1'
@@ -119,14 +120,14 @@ test('a person adds an MCP server with its key, chooses its tools, and removes a
     space: 'ada',
     apps: [],
     view: 'connections',
-    connections: {
+    drawn: [pageRow('space', '', {
       on: true,
       list: [],
       services: [],
       built: [],
       borrowed: [],
       mcp: await page(),
-    },
+    })],
   })).text()
   assertStringIncludes(drawn, 'MCP servers in the trash')
   assertStringIncludes(drawn, 'value="mcp-restore"')
@@ -179,7 +180,7 @@ let detail = async (open: string) => {
     space: 'ada',
     apps: [],
     view: 'connections',
-    connections: {
+    drawn: [pageRow('space', '', {
       on: true,
       list: [],
       services: [],
@@ -200,7 +201,7 @@ let detail = async (open: string) => {
           apps: [],
         }],
       },
-    },
+    })],
   })).text()
   return html.slice(html.indexOf('<dialog'), html.indexOf('</dialog>'))
 }
@@ -295,14 +296,14 @@ test('adding a server asks only for its address, with the rest behind Advanced',
     space: 'ada',
     apps: [],
     view: 'connections',
-    connections: {
+    drawn: [pageRow('space', '', {
       on: true,
       list: [],
       services: [],
       built: [],
       borrowed: [],
       mcp: { servers: [] },
-    },
+    })],
   })).text()
   let form = html.slice(html.indexOf('value="mcp-add"'))
   form = form.slice(0, form.indexOf('</form>'))

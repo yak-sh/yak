@@ -40,6 +40,10 @@
   width: min(100%, 42rem);
   margin-block: auto;
 }
+/* A body kept in the dialog while another is shown. */
+.Modal_Body[hidden] {
+  display: none;
+}
 /* The pane under the card's head flows, so the small card of actions floats
    at its top right and what the dialog says wraps beside and under it. */
 .Modal_Main {

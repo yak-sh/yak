@@ -25,7 +25,7 @@ export type Agent = {
   connectedAt: number
 }
 /** An outside service holding a grant, as the connections page lists it. */
-export type Service = { name: string; connectedAt: number }
+import type { Service } from '@yaks/platform/connections-page'
 
 export type Clients = Pick<OAuthHelpers, 'listUserGrants'> & {
   // A missing registration or unavailable metadata cannot hide a held grant.

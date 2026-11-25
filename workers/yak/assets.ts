@@ -83,6 +83,14 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // A space's Connections kept current
+  // (@yaks/platform/connections-browser).
+  {
+    name: '_connections.js',
+    bundle: of('@yaks/platform/connections-browser'),
+    external,
+    named: true,
+  },
   // A space's Operator settings kept current
   // (@yaks/platform/operator-settings-browser).
   {
@@ -167,9 +175,7 @@ export let ASSETS: Asset[] = [
     'menu.js',
     'side.js',
     'pane.js',
-    'find.js',
     'note.js',
-    'modal.js',
     'cta.js',
     'saving.js',
     'township-dues.js',

@@ -1,11 +1,17 @@
 import { test } from '@yaks/testing'
+import { pageRow } from '@yaks/platform/connections-page'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { fieldsOf, KEY, keyed, seeds, type Status } from '@yaks/connections'
 import { type DeskPage, lost, spaceBinned, spaceIndex } from './pages.ts'
 import { askCode, askConnect, askEmail } from './signin-pages.ts'
 import { desk } from './desk-pages.ts'
-import type { Borrowed, Connections, Shown, Using } from './connections.ts'
+import type {
+  Borrowed,
+  Connections,
+  Shown,
+  Using,
+} from '@yaks/platform/connections-page'
 import { drawn as theirs } from './theirs.ts'
 import { STARTER } from '@yaks/platform/plans'
 
@@ -173,7 +179,7 @@ test('connections: the space’s ask of each person offers nothing to connect, a
     await desk({
       ...page,
       view: 'connections',
-      connections: {
+      drawn: [pageRow('space', '', {
         on: true,
         borrowed: [],
         list: [{
@@ -213,7 +219,7 @@ test('connections: the space’s ask of each person offers nothing to connect, a
         services: [],
         built: [],
         open: 'c',
-      },
+      })],
     }, env).text()
   // Only the connection's own card, opened on it, not the page's box for a
   // new key.
@@ -263,7 +269,7 @@ test('connections: first a grid of cards, theirs on their own space and then the
     desk({
       ...page,
       view: 'connections',
-      connections: {
+      drawn: [pageRow('space', '', {
         on: true,
         borrowed: [],
         list: [
@@ -277,7 +283,7 @@ test('connections: first a grid of cards, theirs on their own space and then the
         built: [{ name: 'openrouter', keyed: true, face: named('OpenRouter') }],
         enable,
         open,
-      },
+      })],
     }, env).text()
   let { document } = parseHTML(await drawn())
   let groups = [...document.querySelectorAll('.Group')]
@@ -394,7 +400,7 @@ let listing = (
   desk({
     ...page,
     view: 'connections',
-    connections: {
+    drawn: [pageRow('space', '', {
       on: true,
       borrowed: [],
       list: [added(status, listed)],
@@ -402,7 +408,7 @@ let listing = (
       built: [],
       asked,
       open: asked ? undefined : 'w',
-    },
+    })],
   }, env).text()
 
 // The page as a document, its service connected, and listed or not.
@@ -515,7 +521,7 @@ let buttons = async (
   let html = await desk({
     ...page,
     view: 'connections',
-    connections: {
+    drawn: [pageRow('space', '', {
       on: true,
       borrowed: [],
       list: [],
@@ -523,7 +529,7 @@ let buttons = async (
       built: [],
       open,
       ...connections,
-    },
+    })],
   }, env).text()
   let { document } = parseHTML(html)
   let card = document.querySelector(`[${at}"${open}"]`)!
@@ -547,14 +553,14 @@ test('connections: retained credentials offer restore and a separate confirmatio
   let html = await desk({
     ...page,
     view: 'connections',
-    connections: {
+    drawn: [pageRow('space', '', {
       on: true,
       list: [],
       borrowed: [],
       services: [],
       built: [],
       trash: [{ id: 'saved', integration: 'Weather', at: 1 }],
-    },
+    })],
   }, env).text()
   let document = parseHTML(html).document
   let restore = document.querySelector('button[value="restore-credential"]')!
@@ -656,14 +662,14 @@ test('connection dialogs have one card: its title and close in its head, what ac
     let html = await desk({
       ...page,
       view: 'connections',
-      connections: {
+      drawn: [pageRow('space', '', {
         on: true,
         list: [],
         borrowed: [],
         services: [],
         built: [],
         ...over,
-      },
+      })],
     }, env).text()
     let { document } = parseHTML(html)
     let modal = document.querySelector('dialog[open]')!
@@ -704,14 +710,14 @@ test('a connection signed in to reconnects in place, from its card and its dialo
     let html = await desk({
       ...page,
       view: 'connections',
-      connections: {
+      drawn: [pageRow('space', '', {
         on: true,
         borrowed: [],
         list: [one],
         services: [],
         built: [],
         open: 'w',
-      },
+      })],
     }, env).text()
     let { document } = parseHTML(html)
     let dialog = document.querySelector('[data-connection="w"]')!
@@ -832,7 +838,7 @@ test('connections: a built integration is offered by its face, and a site is lin
     await desk({
       ...page,
       view: 'connections',
-      connections: {
+      drawn: [pageRow('space', '', {
         on: true,
         borrowed: [],
         list: [],
@@ -841,7 +847,7 @@ test('connections: a built integration is offered by its face, and a site is lin
         ...asked
           ? { asked: { name: 'cal', keyed: false, face: { ...CAL, site } } }
           : {},
-      },
+      })],
     }, env).text()
   // A card in the grid: its logo, name and line, and Connect.
   let tile = parseHTML(await offered(CAL.site)).document
@@ -896,7 +902,7 @@ test('a service detail URL is a server-open modal with its pitch, access, provid
     let html = await desk({
       ...page,
       view: 'connections',
-      connections: {
+      drawn: [pageRow('space', '', {
         on: true,
         list: [],
         services: [],
@@ -905,7 +911,7 @@ test('a service detail URL is a server-open modal with its pitch, access, provid
         enable: ['cal'],
         catalog,
         asked: { name: 'cal', keyed, face },
-      },
+      })],
     }, env).text()
     let { document } = parseHTML(html)
     let modal = document.querySelector('dialog[open]')!
@@ -955,7 +961,7 @@ test('a service detail URL is a server-open modal with its pitch, access, provid
     )
     assert(document.querySelector('[data-connections]')?.hasAttribute('inert'))
     assert(!modal.closest('[inert]'))
-    assertStringIncludes(html, '/modal.js')
+    assertStringIncludes(html, '/_connections.')
   }
 })
 
@@ -963,7 +969,7 @@ test('a catalog service without a connectable host still opens its details', asy
   let html = await desk({
     ...page,
     view: 'connections',
-    connections: {
+    drawn: [pageRow('space', '', {
       on: true,
       list: [],
       services: [],
@@ -981,7 +987,7 @@ test('a catalog service without a connectable host still opens its details', asy
           docs: 'https://cal.test/docs',
         },
       },
-    },
+    })],
   }, env).text()
   let modal = parseHTML(html).document.querySelector('dialog[open]')!
   assertStringIncludes(modal.textContent!, 'A calendar service.')
@@ -989,43 +995,4 @@ test('a catalog service without a connectable host still opens its details', asy
   assert(modal.querySelector('a[href="https://cal.test/docs"]'))
   assertEquals(modal.querySelector('button[disabled]')?.textContent, 'Connect')
   assertEquals(modal.querySelector('form'), null)
-})
-
-test('the connections page opens a built service from its hash without fetching or leaving the page', async () => {
-  let html = await desk({
-    ...page,
-    view: 'connections',
-    connections: {
-      on: true,
-      list: [],
-      services: [],
-      borrowed: [],
-      built: [{ name: 'cal', keyed: true, face: CAL }],
-    },
-  }, env).text()
-  let { document, window } = parseHTML(html)
-  let dialog = document.querySelector('dialog')!
-  Object.assign(dialog, {
-    close: () => dialog.removeAttribute('open'),
-    showModal: () => dialog.setAttribute('open', ''),
-  })
-  let location = new URL('https://yaks.fyi/manage/ada/connections#cal')
-  let code = await Deno.readTextFile(
-    new URL('./public/modal.js', import.meta.url),
-  )
-  new Function('document', 'globalThis', 'location', 'fetch', code)(
-    document,
-    window,
-    location,
-    () => {
-      throw new Error('The service should already be in the page')
-    },
-  )
-  assert(dialog.hasAttribute('open'))
-  assertEquals(
-    dialog.querySelector('input[name=integration]')?.getAttribute('value'),
-    'cal',
-  )
-  assert(dialog.querySelector('input[type=password]'))
-  assertStringIncludes(dialog.textContent!, 'Connect Cal')
 })

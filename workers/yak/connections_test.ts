@@ -3,6 +3,7 @@
 // vault and nowhere else, a seal's state reaches the page, an app calls out
 // with it only as its link allows, and a webhook lands in the app's store only
 // when its signature holds.
+import { pageRow } from '@yaks/platform/connections-page'
 import { integrationLogo } from '@yaks/platform/routes'
 import { type Line, line } from '@yaks/query'
 import { test } from '@yaks/testing'
@@ -445,7 +446,7 @@ test('the owner can attach a connected space key to a live app from the page', a
     apps: [],
     view: 'connections',
     // What acts on a connection is behind its Manage, on the page opened on it.
-    connections: { ...before, open: connected.eid },
+    drawn: [pageRow('space', '', { ...before, open: connected.eid })],
   })).text()
   assertStringIncludes(page, 'Let an app use it')
   assertStringIncludes(page, 'Only its members can call out through it')
@@ -487,7 +488,7 @@ test('a key added on the page is attached to an app under the name its code read
       space: s.space.slug,
       apps: [],
       view: 'connections',
-      connections: { ...await s.shown(), open: esv.eid },
+      drawn: [pageRow('space', '', { ...await s.shown(), open: esv.eid })],
     })).text(),
     'name="binding"',
   )
@@ -1541,7 +1542,7 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
         space: 'ada',
         apps: [],
         view: 'connections',
-        connections,
+        drawn: [pageRow('space', '', connections)],
       }, s.p.env)
       let { document } = parseHTML(await res.text())
       let fold = [...document.querySelectorAll('details')].find((d) =>

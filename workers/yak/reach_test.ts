@@ -23,7 +23,7 @@ import {
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
-import { type Reach, read, written } from './reach.ts'
+import { type Reach, read, rereading, written } from './reach.ts'
 import { bucket } from './testing.ts'
 import { keepDeclaration } from './declaration.ts'
 
@@ -715,4 +715,37 @@ const spanningFailure = await assertRejects(() =>
 ) as { status?: number }
 test('a spanning read never leaves out a store that answers 503', () => {
   assertEquals(spanningFailure.status, 503)
+})
+
+test('a read no store answers live is sent at once, and read again as what it reads moves, once for moves coming fast', async () => {
+  let reads = 0
+  let frames: unknown[] = []
+  let move: (frame: { bundles?: Bundle[]; reset?: boolean }) => void = () => {}
+  let done: () => void = () => {}
+  let stop = rereading(
+    async () => {
+      reads++
+      await new Promise<void>((r) => done = r)
+      return [{ entity: { eid: `read ${reads}` } }]
+    },
+    (sink) => (move = sink, () => {}),
+    (frame) => frames.push(frame),
+  )
+  move({ bundles: [] })
+  done()
+  await new Promise((r) => setTimeout(r, 0))
+  assertEquals(frames, [{
+    bundles: [{ entity: { eid: 'read 1' } }],
+    reset: true,
+  }])
+  move({ bundles: [] })
+  move({ bundles: [] })
+  done()
+  await new Promise((r) => setTimeout(r, 0))
+  done()
+  await new Promise((r) => setTimeout(r, 0))
+  assertEquals(reads, 3)
+  stop()
+  move({ bundles: [] })
+  assertEquals(reads, 3)
 })

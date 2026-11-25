@@ -4,6 +4,7 @@
 // and stopped as soon as they take it back. It calls the tools of a
 // connection its space connected it to the same way, as far as the caller
 // may call out through it.
+import { pageRow } from '@yaks/platform/connections-page'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { fixture } from '../../packages/mcp-client/testing.ts'
@@ -116,14 +117,14 @@ test("an app calls the tools of a person's MCP server only once they allow it, a
       space: 'ada',
       apps: [],
       view: 'connections',
-      connections: {
+      drawn: [pageRow('space', '', {
         on: true,
         list: [],
         services: [],
         built: [],
         borrowed: [],
         mcp: page,
-      },
+      })],
     })).text()
     assertStringIncludes(drawn, `asks to use what you connected`)
     assertStringIncludes(drawn, `Used by ${app.title}`)

@@ -5,12 +5,27 @@ import {
   fileDrop,
   firstAsk,
   heading,
+  held,
   labeled,
   send,
   state,
   status,
 } from '@yaks/platform/page-parts'
-export { copyable, firstAsk, heading, labeled, send, state, status }
+import { howTo, keyBox, logo, signingIn } from '@yaks/platform/connect-parts'
+export {
+  copyable,
+  firstAsk,
+  heading,
+  held,
+  howTo,
+  keyBox,
+  labeled,
+  logo,
+  send,
+  signingIn,
+  state,
+  status,
+}
 import { Head } from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
 // The kernel's own pages, in the home page's voice (workers/yak/public): what
@@ -29,8 +44,6 @@ import { Time } from '@yaks/ui/parts'
 // icon, the yak, a QR code, markdown theirs.ts drew) goes in whole (`raw`),
 // and so does a page's own script.
 
-import { type Field as Fielded, KEY } from '@yaks/connections'
-
 import {
   Button,
   Card,
@@ -38,9 +51,6 @@ import {
   Chips,
   Empty,
   Field,
-  Form,
-  Logo,
-  More,
   Notice,
   Rows,
 } from '@yaks/ui/parts'
@@ -49,7 +59,7 @@ import { type ComponentChildren, h } from 'preact'
 
 import type { Agent } from './connected.ts'
 
-import type { Connections, Face } from './connections.ts'
+import type { Face } from '@yaks/platform/connections-page'
 
 import { esc, markup, raw } from './html.ts'
 
@@ -61,12 +71,7 @@ import { type Invitation, qr } from './referral.ts'
 
 export { esc } from './html.ts'
 
-import {
-  integrationLogo,
-  managePath,
-  type MarkedApp,
-  type Setting,
-} from '@yaks/platform/routes'
+import { managePath, type MarkedApp, type Setting } from '@yaks/platform/routes'
 
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
@@ -108,10 +113,6 @@ ${code.trim()}
 }`,
     },
   })
-
-// A form's hidden field, only when there is something to carry.
-export let held = (name: string, value?: string | null) =>
-  value ? h(Form.Hidden, { name, value }) : null
 
 export let home = (env: Host) =>
   h('a', { class: 'Away', href: url(env, '/') }, 'yaks.app')
@@ -241,6 +242,10 @@ ${
       ? `<script type="module" src="${file('_space-pages.js')}"></script>`
       : ''
   }${
+    main.includes('data-connections-view=')
+      ? `<script type="module" src="${file('_connections.js')}"></script>`
+      : ''
+  }${
     main.includes('data-chart')
       ? `<script type="module" src="${file('chart.js')}"></script>`
       : ''
@@ -275,14 +280,6 @@ ${
   }${
     main.includes('data-pane')
       ? `<script src="${file('pane.js')}" defer></script>`
-      : ''
-  }${
-    main.includes('data-modal-close')
-      ? `<script src="${file('modal.js')}" defer></script>`
-      : ''
-  }${
-    main.includes('data-find')
-      ? `<script src="${file('find.js')}" defer></script>`
       : ''
   }${
     main.includes('data-note=')
@@ -694,7 +691,6 @@ export type DeskPage = {
   say?: string
   no?: boolean
   view?: Setting
-  connections?: Connections
   /** whether the person hides their presence from their friends
    * (`presence{hidden}`), on their profile */
   presenceHidden?: boolean
@@ -733,13 +729,6 @@ export type DeskPage = {
 
 export { sentence } from './html.ts'
 
-// A service's logo at the head of its card, read from its integration's row
-// (@yaks/platform/routes `integrationLogo`); a neutral mark where it has none.
-export let logo = (
-  f: { name: string; logo?: string; image?: string },
-  env: Host = {},
-) => h(Logo.Mark, { src: integrationLogo(f, env), class: 'Card_Mark' })
-
 // A line about a service and a link to its site, where it has them. Only an
 // https address is linked, so a site can never be a script.
 export let about = (f: Face) => {
@@ -753,62 +742,6 @@ export let about = (f: Face) => {
   return f.tagline || site
     ? h(Card.Sub, null, f.tagline, f.tagline && site ? ' ' : '', site)
     : null
-}
-
-// How a person gets a service's key, as its integration says, open while the
-// key is still wanted. The words are markdown theirs.ts drew.
-export let howTo = (f: Face, open: boolean) =>
-  f.instructions
-    ? h(
-      More,
-      { open },
-      h(More.Summary, null, 'How to get the key'),
-      h(More.Body, null, raw(f.instructions)),
-    )
-    : null
-
-// The box a key is pasted in and the button that saves it, one line under
-// its label; or, for a service that asks for several fields, a box for each
-// under its own label, masked unless the field is shown, and the button under
-// them. Each box shows what its field looks like, where the integration says,
-// and a row of dots where it does not. connections.ts `givenOf` reads what was
-// typed.
-export let keyBox = (
-  id: string,
-  label: Kids,
-  send: Kids,
-  hint: Kids = '',
-  fields: Fielded[] = [KEY],
-) => {
-  let box = (at: string, name: string, f: Fielded) =>
-    h(Field, {
-      id: at,
-      name,
-      type: f.shown ? 'text' : 'password',
-      placeholder: f.example || '••••••••',
-      autocomplete: 'off',
-      spellcheck: 'false',
-      required: true,
-    })
-  if (fields.length == 1) {
-    return labeled(
-      id,
-      fields[0].label == KEY.label ? label : fields[0].label,
-      h(Form.Line, null, box(id, 'key', fields[0]), send),
-      hint,
-    )
-  }
-  return [
-    ...fields.map((f) =>
-      labeled(
-        `${id}-${f.name}`,
-        f.label,
-        box(`${id}-${f.name}`, `key.${f.name}`, f),
-      )
-    ),
-    send ? h(Form.Actions, null, send) : null,
-    hint ? h(Form.Hint, null, hint) : null,
-  ]
 }
 
 /** The data editor's page (@yaks/data-editor/editor, served as data.js,
@@ -986,24 +919,6 @@ export let soon = (what: string, env: Host = {}) =>
     lead: 'This feature is still being built.',
     status: 404,
   }, home(env))
-
-/** The button that begins a sign-in at `face`'s service, sending its form's
- * `do` as `act` where it names one, `quiet` where it is not the next step.
- * A sign-in through a broker (Nango) opens in a new tab, since the broker's
- * page never sends the person back here; this page is read again once they
- * come back to it (public/away.js). */
-export let signingIn = (
-  face: Pick<Face, 'broker'>,
-  label: Kids,
-  act?: string,
-  quiet = false,
-) =>
-  h(Button, {
-    mod: !quiet && 'go',
-    type: 'submit',
-    ...act ? { name: 'do', value: act } : {},
-    ...face.broker ? { formtarget: '_blank' } : {},
-  }, label)
 
 // A TV paired with a person (screen.ts, T-136193). The TV's own two pages
 // are a screen across a room, so they say one thing each, large: the code

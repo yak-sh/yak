@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals'
+import { pageRow } from '@yaks/platform/connections-page'
 import { equal, test } from '@yaks/testing'
 import { bindSave } from '@yaks/ux/save'
 import { parseHTML } from 'linkedom'
@@ -134,7 +135,7 @@ let connectionPage = (open?: string) =>
     space: 'ada',
     apps: [],
     view: 'connections',
-    connections: {
+    drawn: [pageRow('space', '', {
       on: true,
       list: [{
         eid: 'weather',
@@ -172,7 +173,7 @@ let connectionPage = (open?: string) =>
       built: [],
       borrowed: [],
       open,
-    },
+    })],
   }).text()
 
 let connections = await connectionPage('weather')
@@ -245,37 +246,15 @@ test('connection key and description edits keep their form actions in one Save',
   })
 })
 
-test('connection forms bind their drafts before opening from a hash and keep them across closing', async () => {
+test('connection forms are bound to their drafts while their dialog is closed', async () => {
   await editing(
     await connectionPage(),
     async ({ document, input, save, writes }) => {
-      let dialog = document.querySelector('dialog')!
-      Object.assign(dialog, {
-        close: () => dialog.removeAttribute('open'),
-        showModal: () => dialog.setAttribute('open', ''),
-      })
-      let location = new URL('https://yaks.app/manage/ada/connections#weather')
-      let code = await Deno.readTextFile(
-        new URL('./public/modal.js', import.meta.url),
-      )
-      new Function('document', 'globalThis', 'location', 'fetch', code)(
-        document,
-        document.defaultView,
-        location,
-        () => {
-          throw new Error('The connection should be ready')
-        },
+      equal(
+        !!document.querySelector('[data-connection="weather"][hidden]'),
+        true,
       )
       input('key', 'draft key')
-      equal(save.count, 1)
-      let field = dialog.querySelector('[name=key]')!
-      for (let hash of ['', '#weather']) {
-        location.hash = hash
-        document.defaultView!.dispatchEvent(
-          new document.defaultView!.Event('hashchange'),
-        )
-      }
-      equal(dialog.querySelector('[name=key]'), field)
       equal(save.count, 1)
       await save.save()
       equal(writes.map((w) => [w.body.do, w.body.connection, w.body.key]), [[

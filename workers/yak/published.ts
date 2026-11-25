@@ -33,8 +33,8 @@ import {
   holdOf,
   pageOf,
   rebind,
-  type Using,
 } from './connections.ts'
+import type { Using } from '@yaks/platform/connections-page'
 import { CWD, TIMEOUT } from '@yaks/sandbox/cloudflare'
 import { vaulted } from './vault.ts'
 import {
