@@ -64,6 +64,7 @@ let worker = (files = 2) => {
     named: '/_yak/',
     files,
     databases: 'yaks-page:',
+    opens: (p) => (p as { url?: string }).url,
   })
   let waiting: Promise<unknown>[] = []
   let settled = async () => {
@@ -99,7 +100,23 @@ let worker = (files = 2) => {
     })
     await settled()
   }
-  return { site, asked, ask, open, leave, stores, databases: () => databases }
+  let push = async (pushed: unknown) => {
+    hear.get('push')!({
+      data: { json: () => pushed },
+      waitUntil: (p: Promise<unknown>) => void waiting.push(p),
+    })
+    await settled()
+  }
+  return {
+    site,
+    asked,
+    ask,
+    open,
+    leave,
+    push,
+    stores,
+    databases: () => databases,
+  }
 }
 
 let page = (said: string) =>
@@ -155,4 +172,17 @@ test('a file named by its bytes is answered from what was kept, the newest few o
   assertEquals([...w.stores.get(FILES)!.keys()].length, 2)
   // Everything else is the network's alone.
   assertEquals(await w.ask('/api/query'), null)
+})
+
+test('a push keeps the page its notification opens as it is then, to draw at once even offline', async () => {
+  let w = worker()
+  w.site.set('/checks/c1', page('the reply'))
+  await w.push({ url: '/checks/c1?from=3#row-e1', title: 'Hazel replied' })
+  await w.push({ close: ['t1'] })
+  await w.push({ url: '/gone' })
+  w.site.clear()
+  let drawn = (await w.open('/checks/c1?from=3'))!
+  assertEquals(drawn.includes('the reply'), true)
+  assertEquals(drawn.includes(KEPT), true)
+  assertEquals(await w.open('/gone'), 'gone')
 })

@@ -84,8 +84,10 @@ answers the picture at once while the worker asks for the page as it is now, and
 the picture's one script writes that page over it when it comes, whose scripts
 then run once as on any load; a page that cannot be had leaves the picture,
 saying it is offline. The worker also answers files named by their bytes from
-what it kept. Visiting an address it is told to forget at (signing out) forgets
-every kept page.
+what it kept. A push naming the page its notification opens (`opens`) keeps a
+picture of that page as it is when the push arrives, so opening it from the
+notification, or offline, shows what the push was about at once. Visiting an
+address it is told to forget at (signing out) forgets every kept page.
 
 An **asset** (`Asset`) is one file a browser loads: its `name`, how it is made
 (a browser module bundled with all it imports, a body made in the process, a

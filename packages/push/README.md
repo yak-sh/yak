@@ -75,6 +75,8 @@ notifications of `tags` once what they were about was read or answered.
 the subscription of a site whose push shows nothing. `refreshed` packages a
 quiet fallback notification as a mutable declarative push. Safari can display it
 even if the service worker fails. Older Safari reads the same payload as JSON.
+`opens(pushed)` reads the page a pushed message's notification opens, for a
+worker that keeps that page as the push arrives (@yaks/web/worker).
 
 ## In the browser
 

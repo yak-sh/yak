@@ -226,6 +226,28 @@ export let closing = (tags: string[], count?: number | null): string =>
   JSON.stringify({ close: tags, ...count == null ? {} : { count } })
 
 /**
+ * The page a push's notification opens (`said`'s or `refreshed`'s `url`),
+ * or none for a `closing`.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { closing, opens, refreshed, said } from '@yaks/push/notice'
+ * let notice = { title: 'Elihu replied', body: 'Yes', tag: 't1', url: '/ana' }
+ * equal(opens(JSON.parse(said(notice))), '/ana')
+ * equal(opens(JSON.parse(refreshed(notice, 't0', false))), '/ana')
+ * equal(opens(JSON.parse(closing(['t1']))), undefined)
+ * ```
+ */
+export let opens = (pushed: unknown): string | undefined => {
+  let p = pushed as {
+    url?: unknown
+    notification?: { data?: { url?: unknown } }
+  } | null
+  let url = p?.url ?? p?.notification?.data?.url
+  return typeof url == 'string' ? url : undefined
+}
+
+/**
  * Whether a browser may be pushed a message that shows nothing (`closing`).
  * Safari takes back the subscription of a site whose push showed no
  * notification. Send it a visible replacement instead. Chrome and Firefox

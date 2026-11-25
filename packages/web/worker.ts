@@ -12,6 +12,9 @@
  *   `files` of them stay, counted as a page is left rather than on each
  *   file's way to a page that is loading: a picture drawn by an earlier
  *   release still has its sheet and fonts.
+ * - A push naming the page its notification opens (`opens`) keeps a picture
+ *   of that page as it is when the push arrives, so opening it from the
+ *   notification, or offline, draws what the push was about at once.
  * - Visiting an address in `forget` (signing out, the sign-in page) forgets
  *   every kept page, any snapshot taken by a page loaded before it, and the
  *   databases its pages kept (`databases`).
@@ -29,13 +32,15 @@ export let FILES = 'yak-files'
 /** What a site keeps: the paths whose visit forgets its pages, where its
  * files named by their bytes are, and how many of each are kept. Forgetting
  * also deletes the IndexedDB databases whose names start with `databases`:
- * what its pages kept of their own. */
+ * what its pages kept of their own. `opens` reads the page a push's
+ * notification opens from what was pushed. */
 export type Keeping = {
   forget: string[]
   named?: string
   pages?: number
   files?: number
   databases?: string
+  opens?: (pushed: unknown) => string | undefined
 }
 
 /** What a page sends its worker as it is left (./keep.ts): its address, its
@@ -110,6 +115,10 @@ export type Scope = {
     type: 'message',
     hear: (e: { data: unknown; waitUntil(p: Promise<unknown>): void }) => void,
   ): void
+  addEventListener(
+    type: 'push',
+    hear: (e: PushLike) => void,
+  ): void
 }
 /** A fetch event, as far as this worker reads it. */
 export type FetchLike = {
@@ -117,6 +126,16 @@ export type FetchLike = {
   respondWith(r: Promise<Response>): void
   waitUntil(p: Promise<unknown>): void
 }
+
+/** A push event, as far as this worker reads it. */
+export type PushLike = {
+  data: { json(): unknown } | null
+  waitUntil(p: Promise<unknown>): void
+}
+
+// How long a push waits for the page it opens: a browser gives its handler
+// about half a minute.
+let PUSHED = 10_000
 
 /** Keep `scope`'s pages and files (see the module), now and as it runs. A
  * page open as the worker starts is its at once, so the page can be kept. */
@@ -178,6 +197,22 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     asked.set(pageKey(req.url), now)
     return kept
   }
+  // The page at `url` as it is now, kept as if it had just been left. One
+  // that sends elsewhere (signed out) or fails is not kept.
+  let refresh = async (url: string) => {
+    let key = pageKey(new URL(url, location.origin).href)
+    if (new URL(key).origin != location.origin) return
+    let since = Date.now()
+    let now = await scope.fetch(key, {
+      credentials: 'same-origin',
+      headers: { accept: 'text/html' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(PUSHED),
+    })
+    let html = (now.headers.get('content-type') ?? '').includes('text/html')
+    if (!now.ok || !html || (now.url && pageKey(now.url) != key)) return
+    await keep({ keep: key, html: await now.text(), at: since, since })
+  }
   let fresh = (req: Request) => {
     let key = pageKey(req.url)
     let held = asked.get(key)
@@ -198,6 +233,18 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     else if (how == 'page') e.respondWith(page(e.request))
     else if (how == 'fresh') e.respondWith(fresh(e.request))
     else if (how == 'file') e.respondWith(file(e.request))
+  })
+  // Beside showing the notification, never before it: what was pushed is
+  // read again here, and a page that cannot be had leaves the last picture.
+  scope.addEventListener('push', (e) => {
+    let pushed: unknown
+    try {
+      pushed = e.data?.json()
+    } catch {
+      return
+    }
+    let url = opts.opens?.(pushed)
+    if (url) e.waitUntil(refresh(url))
   })
   scope.addEventListener('message', (e) => {
     let said = e.data as Partial<Snapshot> | null
