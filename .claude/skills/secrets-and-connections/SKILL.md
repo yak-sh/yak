@@ -342,6 +342,8 @@ packages/admin/README.md). New Cloudflare tokens are minted as account-owned
 tokens with the 1Password "Homelab Cloudflare" item's token, and sealed into
 the vault by the minting script itself, never through a file or an argument.
 
+Workers Builds logs take a user-owned token; every account-owned one gets 403 or 12006. The 1Password item "cloudflare user read-only" (vault Yak Shaving LLC, field credential) is one, so an agent on the box reads a build's log with it: `op read` inside the script, sent as a Bearer token to `/accounts/<id>/builds/workers/<script tag>/builds` (the tag is the script's `tag` in `/workers/scripts`; yak's is f1694d3fa03d42dabe44ba70137c678a), then `/builds/builds/<uuid>/logs`. It is the owner's key and stays on the box; the Worker's `BUILD_LOG_TOKEN` waits on a scoped token he mints (T-123153).
+
 Wrangler's sign-in gets a 403 from this API. That refusal sends you here, not
 hunting for a token that might work. A token in another project's `.env` was
 minted for that project's job, so another project's `.env` is never read, not
