@@ -6,6 +6,9 @@ import { type TalkView, VIEW } from './talk-views.ts'
 import { type Heard, pageTalk } from './operator-talk-browser.ts'
 import { operatorTalk } from './operator-talk.ts'
 import { graph } from './page-graph_fixture_test.ts'
+import { CANVAS_CHANGED, type CanvasChoice, SLOT } from './app-canvas-view.ts'
+import { released, view as canvas } from './app-canvas_fixture_test.ts'
+import { bindCanvas } from './app-canvas-browser.ts'
 
 let view = (here: string, title: string, more: Partial<TalkView> = {}) =>
   JSON.stringify(
@@ -22,27 +25,41 @@ let view = (here: string, title: string, more: Partial<TalkView> = {}) =>
   ).replaceAll('"', '&quot;')
 
 // An Operator page opened at its conversation, its Updates standing hidden.
-let page = () => {
+let page = (appLinks = false) => {
+  let { app, ...scope } = canvas(released())
+  let attr = (value: unknown) => JSON.stringify(value).replaceAll('"', '&quot;')
   let { document } = parseHTML(`<html><head><title>Chat · Otto</title></head>
-<body><a class="Skip" href="#ask">Skip to the message box</a>
+<body><a class="Skip" href="#ask">Skip to the message box</a><div class="Talk">
 <aside id="menu" data-side-view="{&quot;talk&quot;:{&quot;all&quot;:false}}">
 <form data-side><input name="back" value="/club"></form>
 <a class="SideNav_Link SideNav_Link-on" aria-current="page" href="/club">Otto</a>
-<a class="SideNav_Link" href="/club/updates">Updates</a></aside>
-<b data-title>Chat</b><div class="Frame_AsideTools"></div>
+<a class="SideNav_Link" href="/club/updates">Updates</a>
+${
+    appLinks
+      ? `<a href="/club?app=recipes" data-side-app="${attr(app)}">Recipes</a>`
+      : ''
+  }
+</aside>
+<div class="Frame_Bar"><b data-title>Chat</b><div class="Frame_AsideTools"></div></div>
 <div id="content">
 <section ${VIEW}="${
     view('/club', 'Chat', {
       skip: ['#ask', 'Skip to the message box'],
       aside: true,
     })
-  }"><p>chat</p></section>
+  }"><div data-conversation><p>chat</p></div><form id="ask"><textarea></textarea></form></section>
 <section ${VIEW}="${
     view('/club/updates', 'Updates')
   }" hidden><p>news</p></section>
-</div><aside id="aside"></aside></body></html>`)
+</div><aside id="aside"></aside>
+${
+    appLinks
+      ? `<template ${SLOT}="${attr({ ...scope, here: '/club' })}"></template>`
+      : ''
+  }
+</div></body></html>`)
   let doc = document as unknown as Document
-  switching(doc)
+  if (!appLinks) switching(doc)
   return doc
 }
 
@@ -107,6 +124,52 @@ test('an address the page holds no view of is left to the navigator', () => {
   equal(press(doc, '/club?app=packing'), false)
   equal(press(doc, '/updates?in=club'), false)
   equal(shown(doc).view, ['chat'])
+})
+
+test('opening an app shows its shell before mounting its frame and keeps the chat and its draft', () => {
+  let doc = page(true)
+  let g = graph(() => Promise.resolve([]))
+  let opening: HTMLElement | undefined
+  let stop: (() => void) | undefined
+  switching(doc, (old, root) => {
+    if (old) stop?.()
+    opening = root
+  })
+  let choices: CanvasChoice[] = []
+  doc.addEventListener(
+    CANVAS_CHANGED,
+    (e) => choices.push((e as CustomEvent<CanvasChoice>).detail),
+  )
+  let conversation = doc.querySelector('[data-conversation]')
+  let text = doc.querySelector('textarea')!
+  text.value = 'Keep my draft'
+  equal(press(doc, '/club?app=recipes'), true)
+  equal(
+    doc.querySelector('[data-app]')?.getAttribute('aria-label'),
+    'Recipe box',
+  )
+  equal(doc.querySelector('iframe'), null)
+  equal(doc.querySelector('[data-side-open]')?.textContent, 'Open')
+  equal(doc.querySelector('.Talk_Show')?.getAttribute('href'), '#app')
+  equal(doc.querySelector('[data-conversation]') === conversation, true)
+  equal(doc.querySelector('textarea') === text, true)
+  equal(text.value, 'Keep my draft')
+  stop = bindCanvas(opening!, g)
+  equal(
+    doc.querySelector('iframe')?.getAttribute('src'),
+    'https://plum.yaks.app/recipes/',
+  )
+  equal(choices.map(({ here, app }) => [here, app?.slug]), [[
+    '/club?app=recipes',
+    'recipes',
+  ]])
+  equal(press(doc, '/club/updates'), true)
+  equal(doc.querySelector('[data-app], .Talk_Show, [data-side-open]'), null)
+  equal(g.open, [])
+  equal(choices.at(-1), { here: '/club', app: undefined })
+  press(doc, '/club')
+  equal(doc.querySelector('[data-conversation]') === conversation, true)
+  equal(text.value, 'Keep my draft')
 })
 
 test('the conversation is watched only while it shows: while Updates shows, the tab is not on its Operator, and shown again it hears it', () => {

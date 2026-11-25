@@ -149,14 +149,6 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
-  // The app beside the chat kept current
-  // (@yaks/platform/app-canvas-browser).
-  {
-    name: '_app-canvas.js',
-    bundle: of('@yaks/platform/app-canvas-browser'),
-    external,
-    named: true,
-  },
   // A space's Settings, Domains and Trash kept current
   // (@yaks/platform/space-pages-browser).
   {

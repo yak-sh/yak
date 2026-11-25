@@ -51,6 +51,25 @@ export type CanvasView = {
  * rows are watched for. */
 export type CanvasRoot = CanvasView & { person: string; space: string }
 
+/** The conversation's address when no app is open, and its canvas scope. */
+export type CanvasSlot = Omit<CanvasRoot, 'app'> & { here: string }
+
+/** The place beside the conversation where its canvas opens. */
+export let SLOT = 'data-canvas-slot'
+
+/** The app canvas view. */
+export let VIEW = '[data-view="app-canvas"]'
+
+/** The app selected beside the conversation changed. */
+export let CANVAS_CHANGED = 'yak-canvas-changed'
+
+/** The conversation's page and selected app, as its message box sends them. */
+export type CanvasChoice = { here: string; app?: MarkedApp }
+
+/** The prompt in a conversation about an app. */
+export let appQuestion = (app: { slug: string; title?: string }) =>
+  `What should change in ${app.title || app.slug}?`
+
 /** The attributes that make a canvas drawn for `root` a view the browser
  * draws again. */
 export let canvasAttrs = (root: CanvasRoot): Record<string, string> => ({
@@ -181,6 +200,7 @@ export let appCanvas = (
   view: CanvasView,
   making?: Making,
   attrs: Record<string, string> = {},
+  opening = false,
 ): Node => {
   let { app, operator } = view
   let title = app.title || app.slug
@@ -259,7 +279,7 @@ export let appCanvas = (
     h(
       'div',
       { class: 'Talk_Stage', 'aria-busy': making ? undefined : 'true' },
-      h(
+      opening ? null : h(
         TabSet,
         { class: 'Talk_Made', 'aria-label': `What ${title} is made of` },
         tab('keeps', 'Data', keeps(now.made, whose)),

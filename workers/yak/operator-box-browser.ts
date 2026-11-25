@@ -3,6 +3,7 @@
 // (operator-rows.ts). Only page code imports it, as operator-talk-browser.ts
 // says why.
 import { h, hydrate, render } from 'preact'
+import type { CanvasChoice } from '@yaks/platform/app-canvas-view'
 import { type Filed, PICTURES } from '@yaks/session/conversation'
 import {
   Ask,
@@ -84,6 +85,10 @@ export let mountAsk = (
     },
     set: (change: Held) => {
       now = { ...now, ...change }
+      draw()
+    },
+    about: (choice: CanvasChoice) => {
+      given.asking = { ...given.asking, ...choice }
       draw()
     },
     hold,

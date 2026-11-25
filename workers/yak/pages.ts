@@ -221,7 +221,8 @@ ${
       ? `<script type="module" src="${file('_updates.js')}"></script>`
       : ''
   }${
-    main.includes(' data-talk-view=')
+    main.includes(' data-talk-view=') || main.includes('data-canvas-slot=') ||
+      main.includes('data-canvas-view=')
       ? `<script type="module" src="${file('_talk-views.js')}"></script>`
       : ''
   }${
@@ -251,10 +252,6 @@ ${
   }${
     main.includes('data-payment-view=')
       ? `<script type="module" src="${file('_payment.js')}"></script>`
-      : ''
-  }${
-    main.includes('data-canvas-view=')
-      ? `<script type="module" src="${file('_app-canvas.js')}"></script>`
       : ''
   }${
     main.includes('data-space-view=')

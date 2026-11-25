@@ -17,6 +17,7 @@
 // back. The page holds them in the form's file input, so they go with the
 // words however the form is sent.
 import { h } from 'preact'
+import { appQuestion } from '@yaks/platform/app-canvas-view'
 import type { Bundle } from '@yaks/graph'
 import type { Drafts } from '@yaks/ux'
 import { Conversation } from '@yaks/ux/conversation'
@@ -136,7 +137,7 @@ export let Ask = (
   let asked = to
     ? `Message ${operator} in your conversation`
     : app
-    ? `What should change in ${app.title || app.slug}?`
+    ? appQuestion(app)
     : `Message ${operator}`
   return h(
     Conversation.Box,

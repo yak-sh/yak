@@ -24,13 +24,29 @@ import { leaving, morph, PAGE } from '@yaks/ui/navigate'
 import { pageGraph } from './page-graph.ts'
 import { appsOf, sideApps, sideWords } from './side-rows.ts'
 import { appCanvasWords, appMaking, makingOf } from './app-canvas.ts'
-import { appCanvas, canvasAttrs, type CanvasRoot } from './app-canvas-view.ts'
-
-/** The app canvas view. */
-export let VIEW = '[data-view="app-canvas"]'
+import {
+  appCanvas,
+  appQuestion,
+  CANVAS_CHANGED,
+  canvasAttrs,
+  type CanvasChoice,
+  type CanvasRoot,
+  type CanvasSlot,
+  showing,
+  VIEW,
+} from './app-canvas-view.ts'
+import { besideMark, type SideView } from './side-parts.ts'
 
 // The rows the page carried for its first paint stay as they are.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
+
+let OPENING = 'data-canvas-opening'
+
+let element = (doc: Document, node: ReturnType<typeof appCanvas>) => {
+  let t = doc.createElement('template')
+  t.innerHTML = renderToString(h(Fragment, null, node))
+  return t.content.firstElementChild as HTMLElement
+}
 
 /** The rows the canvas is drawn from. */
 export type Held = { apps: Bundle[]; making: Bundle[] }
@@ -68,19 +84,15 @@ let addresses = (root: Element) =>
  * not among the side's rows. */
 export let drawCanvas = (root: HTMLElement, held: Held): void => {
   let view = JSON.parse(root.dataset.canvasView!) as CanvasRoot
+  let opening = root.hasAttribute(OPENING)
   let app = appsOf(held.apps, view.space).find((a) => a.eid == view.app.eid)
+  if (opening) app ??= view.app
   if (!app) return
   let next: CanvasRoot = { ...view, app }
-  let doc = root.ownerDocument
-  let t = doc.createElement('template')
-  t.innerHTML = renderToString(
-    h(
-      Fragment,
-      null,
-      appCanvas(next, makingOf(held.making, app.eid), canvasAttrs(next)),
-    ),
+  let drawn = element(
+    root.ownerDocument,
+    appCanvas(next, makingOf(held.making, app.eid), canvasAttrs(next)),
   )
-  let drawn = t.content.firstElementChild as HTMLElement
   let stage = root.dataset.stage
   let picked = { made: checked(root, 'made'), screen: checked(root, 'screen') }
   let went = addresses(root)
@@ -126,7 +138,7 @@ export let bindCanvas = (
       making: watches.making.value,
     })
   let off = all.map((w) => w.subscribe(draw))
-  if (all.some((w) => w.value.length)) draw()
+  if (root.hasAttribute(OPENING) || all.some((w) => w.value.length)) draw()
   let shows = (e: Event) => {
     let link = (e.target as Element).closest?.('[data-shows]') as
       | HTMLElement
@@ -147,25 +159,126 @@ export let bindCanvas = (
   }
 }
 
-let start = (doc: Document = document) => {
-  let bound = new Set<Element>()
-  let each = () => {
-    for (let root of doc.querySelectorAll<HTMLElement>(VIEW)) {
-      if (bound.has(root)) continue
-      bound.add(root)
-      let { person } = JSON.parse(root.dataset.canvasView!) as CanvasRoot
-      let stop = bindCanvas(
-        root,
-        pageGraph([sideWords, appCanvasWords], person),
-      )
-      leaving(doc).addEventListener('abort', () => {
-        bound.delete(root)
-        stop()
-      }, { once: true })
+/** Keep a new canvas graph-bound after its opening frame has painted. */
+export let canvases = (doc: Document) => {
+  let bound = new WeakMap<Element, () => void>()
+  let bind = (root: HTMLElement) => {
+    if (bound.has(root)) return
+    let signal = leaving(doc)
+    let win = doc.defaultView
+    let stop: (() => void) | undefined
+    let close = () => {
+      bound.delete(root)
+      signal.removeEventListener('abort', close)
+      stop?.()
     }
+    bound.set(root, close)
+    signal.addEventListener('abort', close, { once: true })
+    let watch = () => {
+      if (!bound.has(root) || !root.isConnected) return
+      let { person } = JSON.parse(root.dataset.canvasView!) as CanvasRoot
+      stop = bindCanvas(root, pageGraph([sideWords, appCanvasWords], person))
+    }
+    if (win?.requestAnimationFrame) {
+      win.requestAnimationFrame(() => win.setTimeout(watch))
+    } else watch()
+  }
+  let each = () => {
+    for (let root of doc.querySelectorAll<HTMLElement>(VIEW)) bind(root)
   }
   each()
   doc.addEventListener(PAGE, each)
+  return (old: HTMLElement | null, root?: HTMLElement) => {
+    if (old) bound.get(old)?.()
+    if (root) bind(root)
+  }
 }
 
-if (typeof document != 'undefined') start()
+/** The app a sidebar link would open, where the page already holds its row. */
+export let canvasAt = (doc: Document, here: string) => {
+  let link = [...doc.querySelectorAll<HTMLElement>('[data-side-app]')]
+    .find((a) => a.getAttribute('href') == here)
+  return link && {
+    link,
+    app: JSON.parse(link.dataset.sideApp!) as CanvasRoot['app'],
+  }
+}
+
+let introduce = (doc: Document, operator: string, app?: CanvasRoot['app']) => {
+  let hello = doc.querySelector<HTMLElement>('[data-canvas-greeting]')
+  if (!hello) return
+  let [title, words] = JSON.parse(hello.dataset.canvasGreeting!) as string[]
+  hello.querySelector('h2')!.textContent = app ? appQuestion(app) : title
+  hello.querySelector('p')!.textContent = app
+    ? `Tell ${operator}, and watch it change beside this chat.`
+    : words
+  let slot = doc.querySelector<HTMLTemplateElement>('[data-talk-starts]')
+  if (!slot) return
+  let starts = slot.nextElementSibling
+  if (app && starts?.matches('.Talk_Starts')) slot.content.append(starts)
+  else if (!app) slot.after(slot.content)
+}
+
+/** Show just the app's shell on the opening frame. The conversation stays
+ * mounted, and the stage and its frames fill in from the page graph. */
+export let chooseCanvas = (
+  doc: Document,
+  slot: HTMLElement,
+  at: string,
+  choice: ReturnType<typeof canvasAt>,
+  bind: ReturnType<typeof canvases>,
+) => {
+  let old = doc.querySelector<HTMLElement>(VIEW)
+  let app = choice?.app
+  if (old?.dataset.app == app?.slug) return
+  let { here, ...scope } = JSON.parse(slot.dataset.canvasSlot!) as CanvasSlot
+  let frame = slot.parentElement!
+  let side = frame.querySelector<HTMLElement>('[data-side-view]')
+  if (side?.dataset.sideView) {
+    let view = JSON.parse(side.dataset.sideView) as SideView
+    if (view.talk) {
+      view.talk.app = app?.slug
+      side.dataset.sideView = JSON.stringify(view)
+    }
+  }
+  let previous = side?.querySelector('[data-side-app][aria-current="true"]')
+  previous?.removeAttribute('aria-current')
+  previous?.querySelector('[data-side-open]')?.remove()
+  let tool = frame.querySelector('.Talk_Show')
+  tool?.remove()
+  old?.remove()
+  frame.classList.toggle('Talk-app', !!app)
+  let root: HTMLElement | undefined
+  if (choice) {
+    let view: CanvasRoot = { ...scope, app: choice.app }
+    root = element(
+      doc,
+      appCanvas(view, undefined, { ...canvasAttrs(view), [OPENING]: '' }, true),
+    )
+    slot.before(root)
+    let bar = frame.querySelector('.Frame_Bar')
+    bar?.insertBefore(
+      element(doc, showing(choice.app)),
+      bar.querySelector('.Frame_AsideTools'),
+    )
+    choice.link.setAttribute('aria-current', 'true')
+    choice.link.append(element(doc, besideMark()))
+  }
+  bind(old, root)
+  introduce(doc, scope.operator, app)
+  let back = doc.querySelector<HTMLInputElement>('.Talk_Keep [name=return]')
+  if (back) back.value = app ? at : here
+  for (
+    let input of doc.querySelectorAll<HTMLInputElement>(
+      'form[data-side] input[name=back]',
+    )
+  ) {
+    input.value = at
+  }
+  let win = doc.defaultView ?? globalThis
+  doc.dispatchEvent(
+    new win.CustomEvent<CanvasChoice>(CANVAS_CHANGED, {
+      detail: { here: app ? at : here, app },
+    }),
+  )
+}

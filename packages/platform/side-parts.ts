@@ -54,6 +54,8 @@ export type Item = {
   /** Open beside the current page rather than the page itself: a quiet
    * "Open" mark, not the lit tab (an app beside the one conversation). */
   beside?: boolean
+  /** The row an Operator app link was drawn from, used to open its canvas. */
+  app?: MarkedApp
   /** How many there are, a plain number. */
   count?: number
   /** How many are new or wait on the person, on the red badge, which is
@@ -107,6 +109,7 @@ export let link = (at: Item) => {
       type: at.submit ? 'submit' : undefined,
       title: at.label,
       [NAMES]: at.names,
+      'data-side-app': at.app ? JSON.stringify(at.app) : undefined,
       mod: at.current && 'on',
       'aria-current': at.current ? 'page' : at.beside ? 'true' : undefined,
       target: at.external ? '_blank' : undefined,
@@ -121,7 +124,7 @@ export let link = (at: Item) => {
       : glyph(at.icon),
     h(SideNav.Label, null, at.label),
     at.beside
-      ? h(Badge, { mod: 'quiet', class: 'Sidebar_Count' }, 'Open')
+      ? besideMark()
       : at.across
       ? acrossBadge('', 'Sidebar_Count', at.across.count)
       : at.waiting != null
@@ -141,6 +144,14 @@ export let link = (at: Item) => {
     )
     : node
 }
+
+/** The mark on an app open beside the conversation. */
+export let besideMark = () =>
+  h(
+    Badge,
+    { mod: 'quiet', class: 'Sidebar_Count', 'data-side-open': '' },
+    'Open',
+  )
 
 let more = () =>
   h(
@@ -404,6 +415,7 @@ export let sideParts = (
       items: apps.map((a) => ({
         href: aboutPath(here.slug, a.slug, talk?.open),
         beside: a.slug == talk?.app,
+        app: a,
         icon: LayoutGrid,
         image: appMarkImage(`${talk?.at}/${a.slug}`, a),
         label: a.title || a.slug,

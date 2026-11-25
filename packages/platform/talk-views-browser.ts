@@ -22,6 +22,8 @@ import { actionWords } from '@yaks/inbox/actions-browser'
 import type { UpdatesView } from './updates-view.ts'
 import { pageGraph } from './page-graph.ts'
 import { SIDE } from './side-browser.ts'
+import { canvasAt, canvases, chooseCanvas } from './app-canvas-browser.ts'
+import { type CanvasSlot, SLOT } from './app-canvas-view.ts'
 import { type TalkView, VIEW, viewAt, VIEWED } from './talk-views.ts'
 
 let ON = 'SideNav_Link-on'
@@ -124,15 +126,27 @@ export let show = (
 
 /** Draw the views of each page in `doc` in place when a press or Back
  * leads to one. */
-export let switching = (doc: Document): void => {
+export let switching = (doc: Document, bind = canvases(doc)): void => {
   doc.addEventListener(DRAW, (e) => {
     let asked = (e as CustomEvent<Drawing>).detail
+    let to = new URL(asked.to)
+    let here = to.pathname + to.search
+    let app = to.searchParams.has('app') ? canvasAt(doc, here) : undefined
+    if (to.searchParams.has('app') && !app) return
+    if (app) to.searchParams.delete('app')
     let views = [...doc.querySelectorAll<HTMLElement>(`[${VIEW}]`)]
     let at = viewAt(
       views.map((el) => ({ here: said(el).here, el })),
-      asked.to.pathname + asked.to.search,
+      to.pathname + to.search,
     )
-    if (at) asked.draw = () => show(doc, views, at.el)
+    let slot = doc.querySelector<HTMLElement>(`[${SLOT}]`)
+    let chat = slot && JSON.parse(slot.dataset.canvasSlot!) as CanvasSlot
+    let sameChat = chat && chat.here == to.pathname + to.search
+    if (app ? !sameChat : !at && !sameChat) return
+    asked.draw = () => {
+      if (at?.el.hidden) show(doc, views, at.el)
+      if (slot) chooseCanvas(doc, slot, here, app, bind)
+    }
   })
 }
 

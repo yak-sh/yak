@@ -134,9 +134,13 @@ import {
 import { talkBeside } from './talk-beside.ts'
 import {
   appCanvas,
+  appQuestion,
+  CANVAS_CHANGED,
   canvasAttrs,
   type CanvasRoot,
+  type CanvasSlot,
   showing,
+  SLOT,
 } from '@yaks/platform/app-canvas-view'
 import { appRows } from '@yaks/platform/side-rows'
 
@@ -1171,8 +1175,7 @@ export { aboutPath }
  * list of them (operator-view.ts `frame`). The page goes there by its
  * address (`?app=`), which alone says what is open beside the chat. */
 type Follows = 'worked' | 'started' | null
-let following = (newcomer: boolean, chosen?: string | null): Follows =>
-  chosen ? null : newcomer ? 'worked' : 'started'
+let following = (newcomer: boolean): Follows => newcomer ? 'worked' : 'started'
 
 // The Operator page installs to a home screen as a web app (D-136811): each
 // space's own manifest (`installing`), named for its Operator and opening its
@@ -1252,6 +1255,7 @@ type TalkPage = {
   // the app open beside it, and its canvas (@yaks/platform/app-canvas-view)
   app?: MarkedApp
   canvas?: Node
+  canvasSlot?: CanvasSlot
   // what it is doing now at the top of the aside (operator-aside.ts), and
   // the summary the bar's button wears and describes
   aside?: Node
@@ -1294,6 +1298,7 @@ let talkPage = (
   let { listed } = page
   let waiting = page.waiting + (listed ? waitsOf(listed) : 0)
   let views = page.view ? [page, ...others.filter((o) => o.view)] : [page]
+  let slot = views.find((v) => v.canvasSlot)?.canvasSlot
   // The column stands, hidden, around a slot for lists not in yet, and shows
   // once one of them has something in it.
   let asided = views.find((v) => v.column || v.aside)
@@ -1350,7 +1355,10 @@ let talkPage = (
           hidden: aside != page,
         }
         : undefined,
-      beside: page.canvas ?? null,
+      beside: [
+        page.canvas,
+        slot && h('template', { [SLOT]: JSON.stringify(slot) }),
+      ],
       class: [
         'Talk',
         page.app && 'Talk-app',
@@ -1462,10 +1470,14 @@ export let column = (html: string, empty: Node = null) =>
     ...html ? { dangerouslySetInnerHTML: { __html: html } } : {},
   }, html ? undefined : empty)
 
-let hello = (heading: string, said: string) =>
+let hello = (heading: string, said: string, plain?: string[]) =>
   h(
     Empty,
-    { class: 'Talk_Hello', mod: 'welcome' },
+    {
+      class: 'Talk_Hello',
+      mod: 'welcome',
+      'data-canvas-greeting': plain && JSON.stringify(plain),
+    },
     h(Empty.Title, { mod: 'welcome' }, heading),
     h('p', null, said),
   )
@@ -1596,7 +1608,7 @@ let chatParts = async (
   if (open == 'new' && talked.title) open = root
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
-  let follows = following(!!newcomer, chosen)
+  let follows = following(!!newcomer)
   let app = chosen ? beside.apps?.find((a) => a.slug == chosen) : undefined
   // This page's address, which the words written on it name.
   let shown = open == root ? 'new' : open
@@ -1604,6 +1616,10 @@ let chatParts = async (
     ? aboutPath(space.slug, app.slug, shown)
     : chatPath(space.slug, shown)
   let operator = space.operator
+  let welcome: [string, string] = [
+    `What can I do for you${first ? `, ${first}` : ''}?`,
+    `Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.`,
+  ]
   let greeting = !fresh
     ? hello(
       'This chat is not here',
@@ -1611,17 +1627,30 @@ let chatParts = async (
     )
     : app
     ? hello(
-      `What should change in ${app.title || app.slug}?`,
+      appQuestion(app),
       `Tell ${operator}, and watch it change beside this chat.`,
+      welcome,
     )
-    : hello(
-      `What can I do for you${first ? `, ${first}` : ''}?`,
-      `Ask ${operator} to make an app, change one, or find something out. You can send a photo or a document too.`,
-    )
+    : hello(...welcome, welcome)
+  let waysToStart = fresh && h(
+    'div',
+    { class: 'Talk_Starts', role: 'group', 'aria-label': 'Ways to start' },
+    starts(operator, beside.apps),
+  )
   // The box, where the page has one (operator-box.ts): on a helper's page
   // the words still go to the person's conversation. Each conversation keeps
   // its own draft.
   let boxed = fresh || !!talked.title
+  let chat = chatPath(space.slug, shown)
+  let canvasSlot: CanvasSlot | undefined = who.person && boxed
+    ? {
+      here: chat,
+      at: `https://${spaceHost(env, space.slug)}`,
+      operator,
+      person: who.person,
+      space: space.eid,
+    }
+    : undefined
   let asking: Asking = {
     at,
     here,
@@ -1669,17 +1698,10 @@ let chatParts = async (
       talked.html ? column(talked.html) : column('', greeting),
       // the one menu every line's time opens
       h(EntryMenu, {}),
-      fresh && !app
-        ? h(
-          'div',
-          {
-            class: 'Talk_Starts',
-            role: 'group',
-            'aria-label': 'Ways to start',
-          },
-          starts(operator, beside.apps),
-        )
+      fresh
+        ? h('template', { 'data-talk-starts': '' }, app && waysToStart)
         : null,
+      !app && waysToStart,
       fresh || talked.title
         ? alertsOffer(
           at,
@@ -1728,14 +1750,15 @@ let chatParts = async (
       mentions,
     ),
     app,
+    canvasSlot,
     canvas: app && who.person
       ? canvasOf(env, space, who.person, beside, app)
       : undefined,
   }
-  let plain = !talked.helper && !app && (fresh || !!talked.title)
+  let plain = !talked.helper && (fresh || !!talked.title)
   if (plain) {
     page.view = {
-      here,
+      here: chat,
       link: chatPath(space.slug),
       title,
       page: `${title} · ${operator} · yaks.app`,
@@ -2177,6 +2200,12 @@ signal.addEventListener('abort', unheard, { once: true })
 // goes to this page's door, and Stop to its \`?stop=1\`; Newest, over it, takes
 // the reader back to the newest line.
 let given = ${script(boxOf)}
+let selected = document.querySelector('[data-canvas-view]')?.dataset.canvasView
+let selectedApp = selected && JSON.parse(selected).app || undefined
+if (given && selectedApp?.slug != given.asking.app?.slug) {
+  let { pathname, search } = location
+  given.asking = { ...given.asking, here: pathname + search, app: selectedApp }
+}
 let place = given?.place
 boxed = given && mountAsk({
   root: document.querySelector('[data-ask]'),
@@ -2186,6 +2215,9 @@ boxed = given && mountAsk({
   onStop: (b) => stop(b),
   onNewest: () => talk.newest(),
 })
+document.addEventListener(${JSON.stringify(CANVAS_CHANGED)}, (e) => {
+  boxed?.about(e.detail)
+}, { signal })
 let form = document.querySelector('#ask')
 let taking = 0
 let talk = mountTalk({
