@@ -151,7 +151,10 @@ export let turnOf = (entries: Bundle[]): Bundle[] =>
  * as a room's lead of what others said there), or anything it read since
  * them (a letter, a page, a connected server's answer), were written by
  * someone the session does not work for (`heard`). The person's own words,
- * with nothing heard with or after them, steer nothing.
+ * with nothing heard with or after them, steer nothing. In a conversation
+ * more than one person writes in, the turn worked for `person` starts at
+ * their newest words: anyone else's, written after, start a turn of their
+ * own, not that one. Where none are theirs, it starts at the newest.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -171,10 +174,19 @@ export let turnOf = (entries: Bundle[]): Bundle[] =>
  * equal(steered([asked, lead, earlier, words]), true)
  * equal(steered([asked, earlier, words]), false)
  * equal(steered([lead, words, line(7, { content: { body: 'My next request' } })]), false)
+ * let by = <B extends object>(who: string, b: B) => ({ ...b, created: { by: who } })
+ * let stranger = by('bo', line(4, { content: { body: 'Hi all' } }))
+ * equal(steered([by('ann', asked), read, letter, stranger], 'ann'), true)
+ * equal(steered([by('ann', asked), read, letter, stranger]), false)
  * ```
  */
-export let steered = (entries: Bundle[]): boolean => {
-  let start = entries.findLastIndex(given)
+export let steered = (entries: Bundle[], person?: string): boolean => {
+  let others = (b: Bundle) => {
+    let by = (b.created as { by?: string } | undefined)?.by
+    return !!person && !!by && by != person && !b.system
+  }
+  let start = entries.findLastIndex((b) => given(b) && !others(b))
+  if (start < 0) start = entries.findLastIndex(given)
   while (start > 0 && entries[start - 1].notice) start--
   return entries.slice(Math.max(0, start)).some((b) => !!b.heard)
 }

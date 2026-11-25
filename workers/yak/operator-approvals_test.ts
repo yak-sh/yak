@@ -851,6 +851,11 @@ test('a privileged act asks for the tap only when someone else asked for it', as
     heard: {},
   })
   let again = line(4, { content: { body: 'Yes, add her' } })
+  // A conversation more than one person writes in (a room heard in full):
+  // each line kept as its writer's.
+  let by = (who: string, b: Bundle) => ({ ...b, created: { by: who } })
+  let own = by(person, mine), ownAgain = by(person, line(6, again))
+  let stranger = by(crypto.randomUUID(), line(5, { content: { body: 'hi' } }))
   let asks = (role: Role, entries: Bundle[], o: Partial<Turn> = {}) =>
     confirming(
       [tool('member_add'), tool('mail_send')],
@@ -893,6 +898,23 @@ test('a privileged act asks for the tap only when someone else asked for it', as
       'a text from the owner’s number, which anyone can show',
       asks('owner', [mine], { texted: true })[0](add),
       asked,
+    ],
+    [
+      'a stranger posts in a shared room while the owner’s turn reads a letter',
+      asks('owner', [own, read, others, stranger], { person })[0](add),
+      asked,
+    ],
+    [
+      'the owner speaks again after the stranger',
+      asks('owner', [own, read, others, stranger, ownAgain], { person })[0](
+        add,
+      ),
+      'ran',
+    ],
+    [
+      'only the owner spoke in the room, and a stranger after',
+      asks('owner', [own, stranger], { person })[0](add),
+      'ran',
     ],
   ]
   for (let [who, said, want] of cases) {

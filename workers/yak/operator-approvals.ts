@@ -131,6 +131,9 @@ export type Turn = {
   connections?: (args: Args, tool: Widening) => Promise<string[]>
   texted?: boolean
   relayed?: boolean
+  /** whom the turn works for: in a conversation others write in too, their
+   * words start no turn of this person's (@yaks/session `steered`) */
+  person?: string
   place?: string
   role?: Role
 }
@@ -198,9 +201,11 @@ type Escalation = string | { say: string; args?: Args; note?: string }
  * proven channel with nothing heard since, ask nothing. A call with no
  * transcript to read is asked. */
 export let steering = (
-  turn: Pick<Turn, 'texted' | 'relayed'>,
+  turn: Pick<Turn, 'texted' | 'relayed' | 'person'>,
   context?: Pick<ToolContext, 'entries'>,
-) => !!turn.texted || !!turn.relayed || !context || steered(context.entries)
+) =>
+  !!turn.texted || !!turn.relayed || !context ||
+  steered(context.entries, turn.person)
 
 /** The privileged acts, yaks.app's own tools, each as what it does with
  * these arguments, in the person's words; nothing where these arguments

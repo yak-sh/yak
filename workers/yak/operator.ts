@@ -2665,7 +2665,11 @@ export let operating = (
     // How the words this turn answers came, which with what it read since
     // says whether someone else's may be steering it (operator-approvals.ts
     // `steering`): a wake set in it keeps that (operator-schedules.ts).
-    let came = { texted: !!confirm, relayed: RELAYED.has(channel) }
+    let came = {
+      texted: !!confirm,
+      relayed: RELAYED.has(channel),
+      person: ctx.person,
+    }
     let steers = (context?: ToolContext) =>
       !o.approved && steering(came, context)
     // What a member's turn holds beyond the space's tools: their alerts,
