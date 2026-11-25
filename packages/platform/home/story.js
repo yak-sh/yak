@@ -66,31 +66,36 @@ let swipe = (old, log, backwards) => {
 let navigation = (track, links) => {
   let current = track.querySelector('[aria-current]')
   let edges = () => {
-    track.toggleAttribute('data-earlier', track.scrollLeft > 1)
+    let { scrollLeft, clientWidth, scrollWidth } = track
+    track.toggleAttribute('data-earlier', scrollLeft > 1)
     track.toggleAttribute(
       'data-later',
-      track.scrollLeft + track.clientWidth < track.scrollWidth - 1,
+      scrollLeft + clientWidth < scrollWidth - 1,
     )
   }
-  let position = () => {
-    track.style.setProperty('--jump-left', `${current.offsetLeft}px`)
-    track.style.setProperty('--jump-width', `${current.offsetWidth}px`)
+  let position = (left, width) => {
+    track.style.setProperty('--jump-left', `${left}px`)
+    track.style.setProperty('--jump-width', `${width}px`)
   }
-  let resized = new ResizeObserver(() => (position(), edges()))
+  let resized = new ResizeObserver(() => {
+    let { offsetLeft, offsetWidth } = current
+    edges()
+    position(offsetLeft, offsetWidth)
+  })
   resized.observe(track)
   for (let link of links) resized.observe(link)
   track.addEventListener('scroll', edges, { passive: true })
   return (link, motion) => {
+    let { offsetLeft: left, offsetWidth: width } = link
+    track.scrollTo({
+      left: left - (track.clientWidth - width) / 2,
+      behavior: motion ? 'smooth' : 'instant',
+    })
     current?.removeAttribute('aria-current')
     current = link
     link.setAttribute('aria-current', 'location')
-    position()
+    position(left, width)
     track.dataset.highlight = motion ? 'smooth' : ''
-    track.scrollTo({
-      left: link.offsetLeft - (track.clientWidth - link.offsetWidth) / 2,
-      behavior: motion ? 'smooth' : 'instant',
-    })
-    edges()
   }
 }
 
@@ -196,11 +201,11 @@ let jumpFromMessage = (e, steps, calm) => {
   let message = e.target.closest('[data-line]')
   if (!message || e.target.closest('a:not(.Home_MessageLink)')) return
   let turn = Number(message.dataset.turn)
-  let section = steps[turn]
-  let top = turn
-    ? section.getBoundingClientRect().top + scrollY +
-      REVEAL * section.offsetHeight - readingLine()
-    : 0
+  let top = 0
+  if (turn) {
+    let rect = steps[turn].getBoundingClientRect()
+    top = rect.top + scrollY + REVEAL * rect.height - readingLine()
+  }
   e.preventDefault()
   scrollTo({ top, behavior: calm.matches ? 'instant' : 'smooth' })
 }
@@ -225,7 +230,7 @@ let mount = (root) => {
   let jumps = [...nav.querySelectorAll('[data-feature-link]')]
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
   let narrow = matchMedia('(width < 64rem)')
-  let i = 0, active = -1, frame = 0, timer = 0
+  let i = 0, active = -1, frame = 0, details = 0, timer = 0
   let playing = !calm.matches, hovered = false
   let highlight = navigation(nav, jumps)
   let pose = mascot(root, calm, narrow)
@@ -244,9 +249,14 @@ let mount = (root) => {
     if (active == at.step) return
     active = at.step
     demo.dataset.turn = active
-    highlight(jumps[active], motion)
-    pose(steps[active])
     if (active > 0) hold()
+    // Give the scroll and conversation their frame before moving the tabs
+    // and loading the mascot's pose.
+    cancelAnimationFrame(details)
+    details = requestAnimationFrame(() => {
+      highlight(jumps[active], motion)
+      pose(steps[active])
+    })
   }
   let soon = () => frame ||= requestAnimationFrame(() => (frame = 0, draw()))
   let pick = (n, direction = n < i) => {

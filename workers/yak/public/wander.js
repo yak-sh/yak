@@ -149,11 +149,8 @@
       lane = size < MIN
         ? { x: 0, size: 0, words }
         : { x: right - size * FIG[1], size, words }
+      wake()
     }
-    measure()
-    addEventListener('resize', measure)
-    addEventListener('load', measure)
-
     let shown = still
     still.dataset.on = ''
     let show = (layer, i = 0) => {
@@ -213,11 +210,23 @@
       show(strips[dir > 0 ? 'down' : 'up'], Math.floor(phase) % FRAMES)
     }
 
+    let frame = 0
+    let wake = () => {
+      if (!frame && (lane.size || where == 'out')) {
+        frame = requestAnimationFrame(tick)
+      }
+    }
     let tick = (now) => {
-      requestAnimationFrame(tick)
+      frame = 0
+      if (!lane.size) {
+        if (where == 'out') home()
+        return
+      }
+      wake()
       let dt = Math.min(.05, (now - last) / 1000 || 0)
       last = now
       let quiet = now - scrolled > DELAY
+      if (where == 'home' && !quiet) return
       let s = slot.getBoundingClientRect()
       let inView = s.bottom > 0 && s.top < innerHeight
       // the window's top and bottom, and his place in the hero, on the page
@@ -235,14 +244,12 @@
         )
 
       if (where == 'home') {
-        if (inView || !quiet || !lane.size) return
+        if (inView) return
         // out of sight in the hero: he comes in from the window's edge nearest it
         out()
         y = s.bottom <= 0 ? top - size : bottom
         act = 'walk', phase = 0
       }
-      if (!lane.size) return home()
-
       if (act == 'sit' && quiet && Math.abs(target() - y) > 1) {
         // carried far out of frame, he gets up just beyond its edge
         y = Math.min(Math.max(y, top - size), bottom)
@@ -285,7 +292,9 @@
       }
       yak.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
     }
-    requestAnimationFrame(tick)
+    measure()
+    addEventListener('resize', measure)
+    addEventListener('load', measure)
   }
 
   if (slot && still && !calm.matches) document.fonts.ready.then(start)

@@ -277,7 +277,8 @@ test('the dusk turns from blue to orange until the line reaches the top', () => 
     let { el, on, scope } = sky()
     scope.scrollY = y
     on.scroll({})
-    return Number((el('.Sky') as HTMLElement).style.getPropertyValue('--dusk'))
+    let air = el('.Sky_Air') as HTMLElement
+    return Number(air.style.getPropertyValue('--dusk'))
   }
   assertEquals([0, feet / 2, feet, 2 * feet].map(dusk), [0, .5, 1, 1])
 })

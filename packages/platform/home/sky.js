@@ -12,7 +12,7 @@
 // it sinks by (sky.tsx `DEPTH`), set on it as --sink, in his units. So the
 // hills go up a little slower than the line he sits on, the dusk sky and its
 // sun slower still, and the hills rise over the sun; the night sky hardly
-// moves at all. --dusk, set on the sky, goes from 0 at the top of the page to
+// moves at all. --dusk, set on the air, goes from 0 at the top of the page to
 // 1 once the line he sits on reaches the top of the window, and the dusk
 // turns from blue to orange with it.
 //
@@ -46,7 +46,10 @@
   let often = (f, lo, hi, wait = between(lo, hi)) =>
     setTimeout(() => (f(), often(f, lo, hi)), wait * 1000)
 
-  let layers = [...(sky?.querySelectorAll('[data-depth]') ?? [])]
+  let layers = [...(sky?.querySelectorAll('[data-depth]') ?? [])].map(
+    (el) => ({ el, depth: Number(el.dataset.depth) }),
+  )
+  let air = sky?.querySelector('.Sky_Air')
   let deep = sky?.querySelector('.Sky_Deep')
   let sun = sky?.querySelector('.Sky_Sun')
   let halo = sky?.querySelector('.Sky_Halo')
@@ -67,8 +70,12 @@
       ? 0
       : Number(el.closest('[data-depth]')?.dataset.depth ?? 0) * scrollY / u
   let scroll = () => {
-    for (let el of layers) el.style.setProperty('--sink', n1(sunk(el)))
-    sky.style.setProperty('--dusk', Math.min(1, scrollY / feet).toFixed(3))
+    // Reading the position after a layer changes can force layout again.
+    let y = scrollY, down = calm.matches ? 0 : y / u
+    for (let { el, depth } of layers) {
+      el.style.setProperty('--sink', n1(depth * down))
+    }
+    air?.style.setProperty('--dusk', Math.min(1, y / feet).toFixed(3))
   }
   let place = () => {
     let r = slot.getBoundingClientRect(), n = after.getBoundingClientRect()
