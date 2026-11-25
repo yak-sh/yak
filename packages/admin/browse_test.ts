@@ -212,6 +212,39 @@ test('a complete result publishes its files while the HTTP body is still open', 
     equal(cancelled, true)
   }))
 
+test('a visit keeps its result when the screenshot directory disappears', () =>
+  inDir(async (dir) => {
+    let to = `${dir}/new/output`
+    let calls = 0
+    let send: typeof fetch = () => {
+      calls++
+      return Promise.resolve(
+        new Response(
+          streamed((async function* () {
+            yield shot('before', 1)
+            yield new Uint8Array([7])
+            await fs.remove(to, { recursive: true })
+            yield shot('end', 1)
+            yield new Uint8Array([8])
+            yield end
+          })()),
+          { headers: { 'content-type': WIRE } },
+        ),
+      )
+    }
+    let got = await visit(
+      'session',
+      { ...asked, steps: [{ tap: 'button' }] },
+      to,
+      undefined,
+      send,
+    )
+    equal(calls, 1)
+    equal(got.text, 'Seen')
+    equal(got.files, [])
+    equal(got.missingShots, true)
+  }))
+
 test('an interactive visit can receive its result or failure after a gap in progress', () =>
   inDir(async (dir) => {
     let reset = header({ kind: 'reset' } satisfies BrowseFrame)

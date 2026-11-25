@@ -498,6 +498,11 @@ export let runs = (
             Math.round(got.duration / 100) / 10
           }s of browser`,
           ...got.files.map((f) => `shot      ${f}`),
+          ...got.missingShots
+            ? [
+              'warning  The screenshot directory disappeared during the visit.',
+            ]
+            : [],
           ...(got.timings ?? []).map((t) => `timing    ${timed(t)}`),
           ...got.dialogs.map((d) => `dialog    ${d.type}: ${d.message}`),
           ...got.errors.map((e) => `error     ${e.split('\n')[0]}`),

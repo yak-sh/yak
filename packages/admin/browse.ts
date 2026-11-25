@@ -25,20 +25,30 @@ import {
 } from './api.ts'
 import { FORWARDED } from './forward.ts'
 
-let write = async (
-  path: string,
+let missing = (e: unknown): undefined => {
+  if (!fs.isNotFound(e)) throw e
+}
+
+let scratch = async (to: string) => {
+  await fs.mkdir(to, { recursive: true })
+  return await fs.makeTempDir({ dir: to, prefix: '.browse-' })
+}
+
+let receive = async (
+  path: string | undefined,
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
 ) => {
-  using file = await fs.open(path, {
-    create: true,
+  using file = path == null ? undefined : await fs.open(path, {
+    createNew: true,
     write: true,
-    truncate: true,
     mode: 0o600,
-  })
+  }).catch(missing)
   await body.pipeTo(
     new WritableStream<Uint8Array>({
       async write(chunk) {
+        // Keep reading the browser's reply even if the caller's scratch is gone.
+        if (!file) return
         for (let at = 0; at < chunk.length;) {
           let wrote = await file.write(chunk.subarray(at))
           if (!wrote) throw new Error('Could not write the screenshot')
@@ -48,6 +58,7 @@ let write = async (
     }),
     { signal },
   )
+  return file != null
 }
 
 let screenshots = async (
@@ -55,10 +66,11 @@ let screenshots = async (
   to: string,
   signal: AbortSignal,
   progress: (stage: string) => void,
-): Promise<Browsed & { files: string[] }> => {
-  await fs.mkdir(to, { recursive: true })
-  let temp = await fs.makeTempDir({ dir: to, prefix: '.browse-' })
-  let files: string[] = []
+): Promise<Browsed & { files: string[]; missingShots: boolean }> => {
+  let temp = await scratch(to).catch(missing)
+  let staging = temp
+  let next = 0
+  let files: [name: string, slot: number][] = []
   let result: BrowseFrame & { kind: 'result' } | undefined
   try {
     for await (let { head, body } of frames<BrowseFrame>(source)) {
@@ -69,9 +81,12 @@ let screenshots = async (
         progress('waiting for the browser to render the page')
       } else if (head.kind == 'shot' && body) {
         let name = head.name.replace(/[^\w.-]+/g, '-') + '.png'
+        let slot = next++
         progress(`receiving screenshot ${name}`)
-        await write(`${temp}/${name}`, body, signal)
-        files.push(name)
+        if (!await receive(staging && `${staging}/${slot}`, body, signal)) {
+          staging = undefined
+        }
+        files.push([name, slot])
         progress(`waiting for the next frame after ${name}`)
       } else if (head.kind == 'result' && !body) {
         result = head
@@ -86,15 +101,28 @@ let screenshots = async (
       if (said.refusal) throw new CallError(said.refusal, said.failed)
       throw new Error(said.failed)
     }
-    if (files.at(-1) != 'end.png') {
+    if (files.at(-1)?.[0] != 'end.png') {
       throw new IncompleteBrowse('missing final screenshot')
     }
-    for (let file of new Set(files)) {
-      await fs.rename(`${temp}/${file}`, `${to}/${file}`)
+    let latest = new Map(files)
+    let published = new Set<string>()
+    if (staging) {
+      for (let [name, slot] of latest) {
+        let moved = await fs.rename(`${staging}/${slot}`, `${to}/${name}`)
+          .then(() => true, missing)
+        if (!moved) break
+        published.add(name)
+      }
     }
-    return { ...said, files: files.map((file) => `${to}/${file}`) }
+    return {
+      ...said,
+      files: files.flatMap(([name]) =>
+        published.has(name) ? [`${to}/${name}`] : []
+      ),
+      missingShots: published.size != latest.size,
+    }
   } finally {
-    await fs.remove(temp, { recursive: true })
+    if (temp) await fs.remove(temp, { recursive: true, force: true })
   }
 }
 
