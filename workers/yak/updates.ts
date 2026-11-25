@@ -369,6 +369,26 @@ export let updatesLater = (
 /** The person's Updates from every space's Operator, at `/updates`. */
 export let ALL = talkPath('updates')
 
+let allAbout = h(
+  'p',
+  { class: 'Note Update_About' },
+  'What the Operator of each of your spaces wrote or asked you, together. Ask about any of it, and its chat opens.',
+)
+
+/** Every space's Updates as a view on a page opened at another of its views
+ * (@yaks/platform/talk-views): the cards of each of `spaces` are drawn in
+ * the browser from the tab's page graph as its watches answer. */
+export let allLater = (env: Env, spaces: Spot[], person: string) =>
+  h(
+    Fragment,
+    null,
+    allAbout,
+    listed(env, person, spaces, { updates: [], waiting: 0 }, () => [], {
+      back: ALL,
+      drawn: false,
+    }),
+  )
+
 // The cards of `news` in `spaces`, as a view the browser draws again from
 // the page graph (@yaks/platform/updates-list-browser), carrying the rows
 // they were drawn from, which the page graph starts with until its watches
@@ -377,7 +397,7 @@ export let ALL = talkPath('updates')
 let listed = (
   env: Env,
   person: string,
-  spaces: Space[],
+  spaces: Spot[],
   { updates, read = [] }: Updates & { read?: Read[] },
   apps: (space: Spot) => Apps,
   { back, drawn = true }: { back?: string; drawn?: boolean } = {},
@@ -425,11 +445,7 @@ export let allUpdates = (
   h(
     Fragment,
     null,
-    h(
-      'p',
-      { class: 'Note Update_About' },
-      'What the Operator of each of your spaces wrote or asked you, together. Ask about any of it, and its chat opens.',
-    ),
+    allAbout,
     missed.map((space) =>
       h(
         'p',

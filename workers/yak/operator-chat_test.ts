@@ -184,13 +184,21 @@ let sided = async (
 }
 let spaces = [
   {
+    eid: space.eid,
     slug: 'clerk',
     title: 'Township',
     owner: true,
     own: false,
     operator: space.operator,
   },
-  { slug: 'jeff', title: 'Jeff', owner: true, own: true, operator: 'Wren' },
+  {
+    eid: crypto.randomUUID(),
+    slug: 'jeff',
+    title: 'Jeff',
+    owner: true,
+    own: true,
+    operator: 'Wren',
+  },
 ]
 // The test's Operator serves one store, so the other space shares it.
 let mill = { ...space, slug: 'mill', title: 'Mill Pond', operator: 'Fern' }

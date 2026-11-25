@@ -108,6 +108,7 @@ import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
 import {
   ALL,
+  allLater,
   allUpdates,
   type Apps,
   dismissedOf,
@@ -1150,7 +1151,7 @@ let pushKey = (env: Env) => {
  * apps of this one they may open, what they are called, whether they are
  * the platform's admin (tool.ts `admin`), and how to reach its Operator. */
 export type Beside = {
-  spaces?: Picked[]
+  spaces?: (Picked & { eid: string })[]
   apps?: MarkedApp[]
   name?: string | null
   admin?: boolean
@@ -1534,8 +1535,14 @@ export let chatPage = async (
 ) => {
   let chat = await chatParts(env, space, who, open, beside, chosen, from)
   if (chat instanceof Response) return chat
-  // A plain chat holds the space's Updates beside it, shown in place.
-  let others = chat.view ? [updatesBeside(env, space, who, chat.listed)] : []
+  // A plain chat holds the space's Updates and every space's beside it,
+  // shown in place.
+  let others = chat.view
+    ? [
+      updatesBeside(env, space, who, chat.listed),
+      allBeside(env, space, who, beside),
+    ]
+    : []
   return talkPage(env, space, who, beside, chat, others)
 }
 
@@ -1844,7 +1851,7 @@ export let updatesPage = async (
         who.person ?? '',
       ),
     ),
-  }, chat ? [chat] : [])
+  }, [...chat ? [chat] : [], allBeside(env, space, who, beside)])
 }
 
 // How Updates are shown as one of their page's views
@@ -1891,6 +1898,42 @@ let updatesBeside = (
         env,
         space,
         listed ? besides(listed, at, here, true) : later('waits'),
+        who.person ?? '',
+      ),
+    ),
+  }
+}
+
+// Every space's Updates as a view of a page opened at another of its views:
+// their cards drawn in the browser from the tab's page graph (updates.ts
+// `allLater`), for each space the side offers.
+let allBeside = (
+  env: Env,
+  space: Space,
+  who: Who,
+  beside: Beside,
+): TalkPage => {
+  let here = `${ALL}?in=${encodeURIComponent(space.slug)}`
+  return {
+    title: 'All updates',
+    status: 200,
+    waiting: 0,
+    listed: null,
+    current: ['all'],
+    here,
+    skip: ['#content', 'Skip to content'],
+    view: updatesView(space, here, 'All updates', true),
+    main: h(
+      'div',
+      updateColumn(space, who),
+      allLater(
+        env,
+        (beside.spaces ?? []).map(({ eid, slug, title, operator }) => ({
+          eid,
+          slug,
+          title,
+          operator: operator ?? space.operator,
+        })),
         who.person ?? '',
       ),
     ),

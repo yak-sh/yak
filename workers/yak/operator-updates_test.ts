@@ -716,27 +716,47 @@ test('dismissing from every space’s Updates comes back there, and never off ya
   )
 })
 
-test('the chat and its Updates are one page’s views: the one opened shown, the other hidden, each with its own script', async () => {
+test('the chat, its Updates and every space’s are one page’s views: the one opened shown, the others hidden, each with its own script', async () => {
   let space = (await directoryOf(p.env.STORE).at(eid))!
   let who = { person: ada, role: 'owner' as const, space: eid }
+  let other = crypto.randomUUID()
+  let beside = {
+    spaces: [
+      { eid, slug: 'club', title: 'Book club', owner: true, own: true },
+      { eid: other, slug: 'mill', title: 'Mill', owner: false, own: false },
+    ],
+  }
+  let page = async (r: Promise<Response>) => [
+    ...parseHTML(await (await r).text()).document.querySelectorAll(
+      '[data-talk-view]',
+    ),
+  ]
   let views = async (r: Promise<Response>) =>
-    [
-      ...parseHTML(await (await r).text()).document.querySelectorAll(
-        '[data-talk-view]',
-      ),
-    ].map((v) => [
+    (await page(r)).map((v) => [
       JSON.parse(v.getAttribute('data-talk-view')!).here,
       v.hasAttribute('hidden') ? 'hidden' : 'shown',
       v.querySelector('[data-operator-chat]') ? 'chat' : 'news',
     ])
-  assertEquals(await views(chatPage(p.env, space, who, 'new')), [
+  assertEquals(await views(chatPage(p.env, space, who, 'new', beside)), [
     ['/club', 'shown', 'chat'],
     ['/club/updates', 'hidden', 'news'],
+    ['/updates?in=club', 'hidden', 'news'],
   ])
-  assertEquals(await views(updatesPage(p.env, space, who)), [
+  assertEquals(await views(updatesPage(p.env, space, who, beside)), [
     ['/club/updates', 'shown', 'news'],
     ['/club', 'hidden', 'chat'],
+    ['/updates?in=club', 'hidden', 'news'],
   ])
+  // Every space's cards are drawn in the browser, from each one the side
+  // offers.
+  let all = (await page(chatPage(p.env, space, who, 'new', beside))).at(-1)!
+  assertEquals(
+    JSON.parse(
+      all.querySelector<HTMLElement>('[data-updates-view]')!.dataset
+        .updatesView!,
+    ).spaces.map((s: { eid: string }) => s.eid),
+    [eid, other],
+  )
 })
 
 test('Updates shown in place are read, as opening their page reads them', async () => {
