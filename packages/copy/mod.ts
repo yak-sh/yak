@@ -17,8 +17,12 @@
  * @module
  */
 
-/** A copy file's value: snippets by key, and nested objects of more. */
-export type Copy = { [key: string]: string | Copy }
+/** A copy file's value: snippets and lists of them by key, and nested
+ * objects of more. */
+export type Copy = { [key: string]: string | string[] | Copy }
+
+/** What a key holds: a snippet, or a list's snippets in order. */
+export type Value = string | string[]
 
 /** The attributes an element names its copy with. */
 export let names: {
@@ -26,11 +30,14 @@ export let names: {
   text: 'data-copy'
   /** The slot of its parent's snippet this element fills. */
   slot: 'data-copy-slot'
+  /** The key of the list whose items are the element's children. */
+  list: 'data-copy-list'
   /** The attribute naming the key of the element's attribute `name`. */
   attr: (name: string) => string
 } = {
   text: 'data-copy',
   slot: 'data-copy-slot',
+  list: 'data-copy-list',
   attr: (name) => `data-copy-${name}`,
 }
 
@@ -40,6 +47,8 @@ export type Marks = {
   text?: string
   /** The slot it fills in its parent's snippet. */
   slot?: string
+  /** The key of the list its children are the items of. */
+  list?: string
   /** The key of each attribute's value, by attribute. */
   attrs: Record<string, string>
 }
@@ -67,6 +76,7 @@ export let marks = (attributes: Attributes): Marks => {
   for (let [name, value] of pairs) {
     if (name == names.text) found.text = value
     else if (name == names.slot) found.slot = value
+    else if (name == names.list) found.list = value
     else if (name.startsWith(prefix)) {
       found.attrs[name.slice(prefix.length)] = value
     }
@@ -77,6 +87,9 @@ export let marks = (attributes: Attributes): Marks => {
 let object = (value: unknown): value is Copy =>
   typeof value == 'object' && value != null && !Array.isArray(value)
 
+let list = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item == 'string')
+
 let check = (value: unknown, path: string, file: string): Copy => {
   if (!object(value)) {
     throw new Error(
@@ -85,7 +98,12 @@ let check = (value: unknown, path: string, file: string): Copy => {
   }
   for (let [key, inner] of Object.entries(value)) {
     let at = path ? `${path}.${key}` : key
-    if (typeof inner != 'string') check(inner, at, file)
+    if (Array.isArray(inner) && !list(inner)) {
+      throw new Error(`${file}: ${at} is a list of something other than text`)
+    }
+    if (typeof inner != 'string' && !Array.isArray(inner)) {
+      check(inner, at, file)
+    }
   }
   return value
 }
@@ -111,8 +129,11 @@ export let parse = (text: string, file = 'copy.json'): Copy => {
 // answer `hero.title`.
 type Spot = { at: Copy; name: string }
 
+let held = (value: unknown): value is Value =>
+  typeof value == 'string' || list(value)
+
 let find = (copy: Copy, key: string): Spot | undefined => {
-  if (typeof copy[key] == 'string') return { at: copy, name: key }
+  if (held(copy[key])) return { at: copy, name: key }
   let parts = key.split('.')
   for (let n = parts.length - 1; n > 0; n--) {
     let inner = copy[parts.slice(0, n).join('.')]
@@ -122,18 +143,41 @@ let find = (copy: Copy, key: string): Spot | undefined => {
   return undefined
 }
 
-/** The snippet at `key`, a dotted path through nested objects. */
-export let read = (copy: Copy, key: string): string | undefined => {
+/** What `key`, a dotted path through nested objects, holds: a snippet or a
+ * list. */
+export let valueAt = (copy: Copy, key: string): Value | undefined => {
   let spot = find(copy, key)
-  return spot && spot.at[spot.name] as string
+  return spot && spot.at[spot.name] as Value
 }
 
-/** Every snippet's key, in the file's order. */
+/** The snippet at `key`; a list there is not one. */
+export let read = (copy: Copy, key: string): string | undefined => {
+  let value = valueAt(copy, key)
+  return typeof value == 'string' ? value : undefined
+}
+
+/**
+ * The list at `key`: its items' snippets, in order. A list is a JSON array
+ * of snippets, so its items can be added, removed and moved.
+ *
+ * ```ts
+ * items({ always: { items: ['Members', 'Visitors'] } }, 'always.items')
+ * // ['Members', 'Visitors']
+ * ```
+ */
+export let items = (copy: Copy, key: string): string[] | undefined => {
+  let value = valueAt(copy, key)
+  return Array.isArray(value) ? value : undefined
+}
+
+/** Whether two values are the same snippet, or the same list. */
+export let same = (a: Value | undefined, b: Value | undefined): boolean =>
+  JSON.stringify(a) == JSON.stringify(b)
+
+/** Every snippet's and list's key, in the file's order. */
 export let keys = (copy: Copy): string[] =>
   Object.entries(copy).flatMap(([key, value]) =>
-    typeof value == 'string'
-      ? [key]
-      : keys(value).map((inner) => `${key}.${inner}`)
+    held(value) ? [key] : keys(value).map((inner) => `${key}.${inner}`)
   )
 
 // `%{name}` is a slot; `%%{name}` is the text `%{name}`.
@@ -172,7 +216,6 @@ export let fill = <T>(
   return parts
 }
 
-/** The slots a snippet names, in order. */
 /**
  * A snippet from its parts in order, as `fill` gives them: text, which reads
  * as itself (a `%{name}` in it is escaped), and each slot by its name. A page
@@ -194,6 +237,7 @@ export let join = (parts: Array<string | { slot: string }>): string =>
       : `%{${part.slot}}`
   ).join('')
 
+/** The slots a snippet names, in order. */
 export let slots = (value: string): string[] =>
   [...value.matchAll(SLOT)].filter(([, escape]) => !escape).map(([, , name]) =>
     name
@@ -219,13 +263,14 @@ let place = (copy: Copy, key: string): Spot => {
 }
 
 /**
- * A copy file's text with `changes` set by key. A key already there keeps its
- * place; a new one is added at the end of the object its key leads into. The
- * file's indentation is kept, and each snippet stays on its own line.
+ * A copy file's text with `changes` set by key, a snippet or a whole list. A
+ * key already there keeps its place; a new one is added at the end of the
+ * object its key leads into. The file's indentation is kept, and each snippet
+ * and list item stays on its own line.
  */
 export let set = (
   text: string,
-  changes: Record<string, string>,
+  changes: Record<string, Value>,
   file = 'copy.json',
 ): string => {
   let copy = parse(text, file)
@@ -261,8 +306,10 @@ export let merge = (
   let [o, t, b] = [ours, theirs, base].map((text) => parse(text, file))
   let changes = Object.fromEntries(
     keys(t).flatMap((key) => {
-      let text = read(t, key)!
-      return text == read(b, key) || text == read(o, key) ? [] : [[key, text]]
+      let value = valueAt(t, key)!
+      return same(value, valueAt(b, key)) || same(value, valueAt(o, key))
+        ? []
+        : [[key, value]]
     }),
   )
   return Object.keys(changes).length ? set(ours, changes, file) : ours

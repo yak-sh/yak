@@ -665,9 +665,11 @@
     "together": {
       "title": "People type their details once",
       "note": "A forms tool, a directory and a calendar bought separately each keep their own list of people. Here they are parts of one website:",
-      "form": "A member who is signed in and signs up for the picnic doesn't type their name and phone number again. The form already has them from the directory.",
-      "added": "A detail the directory didn't have yet, such as a phone number, is added from what they type on the form. What it already has is left alone.",
-      "calendar": "What a member signs up for shows on the calendar on their own phone."
+      "items": [
+        "A member who is signed in and signs up for the picnic doesn't type their name and phone number again. The form already has them from the directory.",
+        "A detail the directory didn't have yet, such as a phone number, is added from what they type on the form. What it already has is left alone.",
+        "What a member signs up for shows on the calendar on their own phone."
+      ]
     },
     "saving": {
       "title": "One plan in place of several subscriptions",
@@ -866,12 +868,14 @@
     },
     "always": {
       "title": "Free on every plan",
-      "members": "Members and invitations, as many as you like",
-      "visitors": "Visitors to your apps",
-      "joining": "Joining other people's spaces",
-      "publishing": "Publishing your apps to the gallery",
-      "installing": "Installing a copy of someone's published app",
-      "exporting": "Exporting your data, and deleting it"
+      "items": [
+        "Members and invitations, as many as you like",
+        "Visitors to your apps",
+        "Joining other people's spaces",
+        "Publishing your apps to the gallery",
+        "Installing a copy of someone's published app",
+        "Exporting your data, and deleting it"
+      ]
     },
     "paying": {
       "title": "How paying works",
@@ -1402,15 +1406,17 @@
     "prohibited": {
       "title": "Prohibited uses",
       "lead": "You may not:",
-      "law": "Break the law, or use a yaks app to harm anyone.",
-      "children": "Post anything that sexualizes a child. We remove it, close the account and report it, without exception.",
-      "harassment": "Harass, threaten or campaign against people, including through an open app that anyone can write in.",
-      "work": "Post other people's work, writing or pictures without the right to do so.",
-      "malware": "Host malware, phishing pages, or anything impersonating a bank, a company or a person.",
-      "bulk": "Use invitations to send bulk email to people who didn't ask for it.",
-      "probing": "Try to access someone else's space, or probe the separation between spaces.",
-      "abuse": "Mine cryptocurrency, run a proxy or a botnet, or use yaks.app as storage for files no app serves.",
-      "traffic": "Send so much traffic that other people can't use the service."
+      "items": [
+        "Break the law, or use a yaks app to harm anyone.",
+        "Post anything that sexualizes a child. We remove it, close the account and report it, without exception.",
+        "Harass, threaten or campaign against people, including through an open app that anyone can write in.",
+        "Post other people's work, writing or pictures without the right to do so.",
+        "Host malware, phishing pages, or anything impersonating a bank, a company or a person.",
+        "Use invitations to send bulk email to people who didn't ask for it.",
+        "Try to access someone else's space, or probe the separation between spaces.",
+        "Mine cryptocurrency, run a proxy or a botnet, or use yaks.app as storage for files no app serves.",
+        "Send so much traffic that other people can't use the service."
+      ]
     },
     "enforcement": {
       "title": "Enforcement",

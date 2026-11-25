@@ -19,7 +19,7 @@ import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
 import { PRICE } from '@yaks/platform/plans'
 import { Page } from './frame.tsx'
-import { attr, type Slots, text } from './copy.ts'
+import { attr, list, type Slots, text } from './copy.ts'
 
 /** Where the page lives. */
 export let PATH = '/organizations'
@@ -179,14 +179,13 @@ export let Organizations = () => (
         {...text('organizations.together.title')}
       />
       <p class='Note' {...text('organizations.together.note')} />
-      <ul class='Plan_List'>
-        {['form', 'added', 'calendar'].map((item) => (
-          <li
-            class='Plan_Item'
-            {...text(`organizations.together.${item}`)}
-          />
-        ))}
-      </ul>
+      <ul
+        class='Plan_List'
+        {...list(
+          'organizations.together.items',
+          (says) => <li class='Plan_Item'>{says}</li>,
+        )}
+      />
     </section>
     <section class='Cost' aria-labelledby='saving'>
       <h2 class='Title' id='saving' {...text('organizations.saving.title')} />

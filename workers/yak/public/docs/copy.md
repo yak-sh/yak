@@ -7,8 +7,9 @@ guide:
   description: >-
     An app's copy, the words its pages show, kept in one file, copy.json, a
     key per snippet: nested objects and dotted keys, plain-text values, and
-    named slots (%{name}) for a link or a bold word inside a sentence. Marking
-    an element with data-copy, data-copy-<attr> for alt, placeholder, title,
+    named slots (%{name}) for a link or a bold word inside a sentence, and
+    lists whose items can be added, removed and moved. Marking an element with
+    data-copy, data-copy-list for a list, data-copy-<attr> for alt, placeholder, title,
     aria-label or a meta tag's content, and data-copy-slot; the platform
     fills each marked element as it serves the page, in previews too, and a
     key the file lacks leaves the element's own content. Text a script draws,
@@ -119,6 +120,32 @@ gap.
 Use a slot for anything inside a sentence that is not plain text: a link, a
 `<strong>`, a number the page computes (`<span data-copy-slot="count">`).
 
+## Lists
+
+A list whose items the person may add to, remove or reorder is a JSON array of
+snippets in `copy.json`, and the element holding the items names it with
+`data-copy-list`. Its child elements are its items, each one plain text:
+
+```json
+{
+  "always": {
+    "title": "Free on every plan",
+    "items": ["Members and invitations", "Visitors to your apps"]
+  }
+}
+```
+
+```html
+<ul class="Plan_List" data-copy-list="always.items">
+  <li class="Plan_Item"></li>
+</ul>
+```
+
+The platform draws an item for each snippet in the list, each one as the first
+item is written: its tag and attributes. Write one item and leave the rest to
+the file. An item holds no slots and no element of its own; a list whose items
+need a link or a bold word keeps each item a snippet of its own, as above.
+
 ## Text a script draws
 
 `copy.json` is served like any other file of the app, so a script that draws
@@ -153,14 +180,18 @@ sent it: not a visitor, not a guest.
 1. Click or tap the pencil to enter edit mode. Every marked element is outlined.
 2. Click one and type over its text where it stands. Links and buttons do not
    act while editing, and a slot's own element is edited on its own.
-3. Each change is kept as the person's draft of that snippet, `copy:<key>`, as
-   it is typed: it is there after a reload and on their other devices. The
-   pencil's panel counts the changes, "3 changes", and Discard empties them.
-   Typing a snippet back to its original words removes that change. Edit mode
-   stays on across a reload until Done.
-4. Save writes the person's changed snippets into the live `copy.json` and
-   releases the app. It releases only `copy.json`: other unreleased edits to the
-   app stay in its draft, and two people saving different snippets each keep
+3. In a list, Enter adds an item after the one being typed in, drawn as the
+   list's other items are, and Backspace in an empty item removes it. Each item
+   has a handle beside it: drag it, with a mouse or a finger, to move the item.
+   Alt with the up or down arrow moves it too.
+4. Each change is kept as the person's draft of that snippet, `copy:<key>`, or
+   of the whole list, `copy-list:<key>`, as it is typed: it is there after a
+   reload and on their other devices. The pencil's panel counts the changes, "3
+   changes", and Discard empties them. Typing a snippet back to its original
+   words removes that change. Edit mode stays on across a reload until Done.
+5. Save writes the person's changed snippets and lists into the live `copy.json`
+   and releases the app. It releases only `copy.json`: other unreleased edits to
+   the app stay in its draft, and two people saving different snippets each keep
    theirs. The release's message names the snippets it changed, `app_versions`
    lists it, and `app_rollback` takes it back. Once it is released the drafts
    are spent; a save that is refused or fails keeps every one. The panel then

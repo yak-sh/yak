@@ -3,7 +3,7 @@ import { Button, Card } from '@yaks/ui'
 import { Plan } from '@yaks/platform/home'
 import { Page } from './frame.tsx'
 import { CostNote } from './home.tsx'
-import { attr, type Slots, text } from './copy.ts'
+import { attr, list, type Slots, text } from './copy.ts'
 
 let PLANS = ['free', 'plus', 'pro'] as const
 
@@ -69,18 +69,13 @@ export let Pricing = () => (
     </section>
     <section aria-labelledby='always'>
       <h2 class='Title' id='always' {...text('pricing.always.title')} />
-      <ul class='Plan_List'>
-        {[
-          'members',
-          'visitors',
-          'joining',
-          'publishing',
-          'installing',
-          'exporting',
-        ].map((item) => (
-          <li class='Plan_Item' {...text(`pricing.always.${item}`)} />
-        ))}
-      </ul>
+      <ul
+        class='Plan_List'
+        {...list(
+          'pricing.always.items',
+          (says) => <li class='Plan_Item'>{says}</li>,
+        )}
+      />
     </section>
     <section class='Yours' aria-labelledby='paying'>
       <h2 class='Title' id='paying' {...text('pricing.paying.title')} />

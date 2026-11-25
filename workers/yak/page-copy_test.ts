@@ -15,6 +15,8 @@ let copy: Copy = {
   search: { hint: 'Find a "recipe"' },
   page: { about: 'Dinner, kept' },
   pic: 'Look: %{img} there',
+  always: ['Members & guests', 'Visitors', '<Exports>'],
+  none: [],
 }
 
 let fills = (html: string) => filled(new Response(html), copy).text()
@@ -76,6 +78,27 @@ let cases: [string, string, string][] = [
     'what follows a filled element is left alone',
     '<div><p data-copy="cost.limits"><a data-copy-slot="plans">x</a></p> after <b>it</b></div>',
     '<div><p data-copy="cost.limits">Tax is included. <a data-copy-slot="plans">x</a>.</p> after <b>it</b></div>',
+  ],
+  [
+    'a list has an item for each of its snippets, drawn as its first',
+    '<ul data-copy-list="always"><li class="Plan_Item" title="a &amp; &quot;b&quot;">Old <b>one</b></li></ul>',
+    '<ul data-copy-list="always"><li class="Plan_Item" title="a &amp; &quot;b&quot;">Members &amp; guests</li>' +
+    '<li class="Plan_Item" title="a &amp; &quot;b&quot;">Visitors</li><li class="Plan_Item" title="a &amp; &quot;b&quot;">&lt;Exports&gt;</li></ul>',
+  ],
+  [
+    'a list removes the items it no longer has',
+    '<ol data-copy-list="always"> <li>a</li> <li>b<i>!</i></li> <li>c</li> <li>d</li> </ol><p>after</p>',
+    '<ol data-copy-list="always"> <li>Members &amp; guests</li> <li>Visitors</li> <li>&lt;Exports&gt;</li>  </ol><p>after</p>',
+  ],
+  [
+    'an empty list has no items',
+    '<ul data-copy-list="none"><li>a</li><li>b</li></ul>',
+    '<ul data-copy-list="none"></ul>',
+  ],
+  [
+    'a list the file lacks is as written, its items filled as snippets',
+    '<ul data-copy-list="nope"><li data-copy="page.about">a</li></ul>',
+    '<ul data-copy-list="nope"><li data-copy="page.about">Dinner, kept</li></ul>',
   ],
 ]
 

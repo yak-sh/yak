@@ -1,6 +1,7 @@
 import { equal, suite, throws } from '@yaks/testing'
 import {
   fill,
+  items,
   join,
   keys,
   marks,
@@ -43,6 +44,38 @@ suite('a copy file', ({ it }) => {
 
   it('names the key whose value is not a snippet', () =>
     throws(() => parse('{"hero": {"count": 3}}'), 'hero.count'))
+})
+
+suite('a list', ({ it }) => {
+  let text =
+    '{\n  "always": {\n    "title": "Free",\n    "items": [\n      "Members",\n      "Visitors"\n    ]\n  }\n}\n'
+  let listed = parse(text)
+
+  it('is its items in order, and no snippet', () => {
+    equal(items(listed, 'always.items'), ['Members', 'Visitors'])
+    equal(read(listed, 'always.items'), undefined)
+    equal(items(listed, 'always.title'), undefined)
+  })
+
+  it('is one key', () => equal(keys(listed), ['always.title', 'always.items']))
+
+  it('is set whole, an item to a line', () =>
+    equal(
+      set(text, { 'always.items': ['Visitors', 'Members', 'Guests'] }),
+      text.replace(
+        '"Members",\n      "Visitors"',
+        '"Visitors",\n      "Members",\n      "Guests"',
+      ),
+    ))
+
+  it('holds only text', () =>
+    throws(() => parse('{"always": ["a", 3]}'), 'always is a list of'))
+
+  it('merges whole', () =>
+    equal(
+      parse(merge(text, set(text, { 'always.items': ['Members'] }), text)),
+      { always: { title: 'Free', items: ['Members'] } },
+    ))
 })
 
 suite('a slot', ({ it }) => {
@@ -148,6 +181,12 @@ suite('an element’s marks', ({ it }) => {
         attrs: { 'aria-label': 'cost.plans.label' },
       },
     ))
+
+  it('name the list its children are the items of', () =>
+    equal(marks({ 'data-copy-list': 'always.items', class: 'Plan_List' }), {
+      list: 'always.items',
+      attrs: {},
+    }))
 
   it('read from a list of attributes, as a DOM element has', () =>
     equal(marks([{ name: 'data-copy-alt', value: 'hero.image' }]), {

@@ -11,7 +11,12 @@
 // child a later slot's came before, shows as its `%{name}`, as `fill` shows a
 // slot it was given nothing for. A key the file lacks leaves the element as written: what
 // the copy says is the app's input, not a failure.
-import { type Copy, fill, marks, parse, read, slots } from '@yaks/copy'
+//
+// An element naming a list (`data-copy-list`) has an item for each of the
+// list's snippets: its children are the items, the first n of them each
+// showing its snippet as text and the rest removed, and an item the markup
+// lacks is drawn after the last as its first item is, its tag and attributes.
+import { type Copy, fill, items, marks, parse, read, slots } from '@yaks/copy'
 import type { Env } from './env.ts'
 import { fileBytes, ofRelease } from './files.ts'
 
@@ -19,8 +24,9 @@ export type { Copy }
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
-type End = { before(s: string): void }
+type End = { before(s: string, opts?: { html: boolean }): void }
 type Element = {
+  tagName: string
   attributes: Iterable<[string, string]>
   setAttribute(name: string, value: string): void
   setInnerContent(s: string): void
@@ -92,15 +98,40 @@ let place = (frame: Frame, name: string, el: Element) => {
   frame.at = next + 1
 }
 
-/** `page` with each element `copy` names a snippet for showing it. */
+// An element showing a list: its items' snippets, how many of its children
+// it has passed, the first one's tags, and how deep inside it the parser
+// stands.
+type List = {
+  items: string[]
+  at: number
+  first?: [string, string]
+  depth: number
+}
+
+let escaped = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+// An element's start tag; the rewriter gives attribute values as written.
+let startTag = (el: Element) =>
+  `<${el.tagName}${
+    [...el.attributes].map(([name, value]) =>
+      ` ${name}="${value.replace(/"/g, '&quot;')}"`
+    ).join('')
+  }>`
+
+/** `page` with each element `copy` names a snippet or a list for showing
+ * it. */
 export let filled = (page: Response, copy: Copy | null): Response => {
   if (!copy) return page
   let frames: Frame[] = []
+  let lists: List[] = []
   return new HTMLRewriter()
     .on('*', {
       element: (el) => {
         let outer = frames.at(-1)
+        let around = lists.at(-1)
         let own: Frame | undefined
+        let list: List | undefined
         // A void element has no end tag, and no content to fill.
         let ends = true
         try {
@@ -110,10 +141,29 @@ export let filled = (page: Response, copy: Copy | null): Response => {
               if (rest) end.before(rest)
               frames.pop()
             }
+            if (list) {
+              let [open, close] = list.first ?? []
+              let more = list.items.slice(list.at).map((item) =>
+                `${open}${escaped(said(item))}${close}`
+              )
+              if (open && more.length) end.before(more.join(''), { html: true })
+              lists.pop()
+            }
             if (outer) outer.depth--
+            if (around) around.depth--
           })
         } catch {
           ends = false
+        }
+        if (around && ends) around.depth++
+        // An item is its snippet's text, and what it held goes with it.
+        if (around && around.depth > (ends ? 1 : 0)) return
+        if (around) {
+          let n = around.at++
+          if (n == 0 && ends) around.first = [startTag(el), `</${el.tagName}>`]
+          if (n >= around.items.length) return el.remove()
+          if (ends) el.setInnerContent(said(around.items[n]))
+          return
         }
         let m = marks(Object.fromEntries(el.attributes))
         if (outer?.depth == 0) {
@@ -126,6 +176,12 @@ export let filled = (page: Response, copy: Copy | null): Response => {
           if (value != null) el.setAttribute(name, said(value))
         }
         if (!ends) return
+        let shows = m.list == null ? undefined : items(copy, m.list)
+        if (shows) {
+          list = { items: shows, at: 0, depth: 0 }
+          lists.push(list)
+          return
+        }
         let value = m.text == null ? undefined : read(copy, m.text)
         if (value == null) return
         let named = slots(value)

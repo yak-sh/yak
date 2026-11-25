@@ -3,7 +3,7 @@
 // that key. A page is drawn with the file's words in it, and a served page is
 // filled again from the copy as released (page-copy.ts), so a word changed on
 // the page needs no commit and no deploy.
-import { type Copy, fill, names, parse, read } from '@yaks/copy'
+import { type Copy, fill, items, names, parse, read } from '@yaks/copy'
 import { cloneElement, type VNode } from 'preact'
 import file from '../../../apps/home/copy.json' with { type: 'json' }
 
@@ -43,6 +43,24 @@ export let text = (key: string, slots: Slots = {}) => {
     ) => [name, cloneElement(el, { [names.slot]: name })]),
   )
   return { [names.text]: key, children: fill(snippet(key), marked) }
+}
+
+/**
+ * The props of an element showing the list at `key`: its name, and an item
+ * for each of the list's snippets, drawn by `item` with the snippet's text.
+ * Each item is drawn alike, so one added on the page is drawn as the rest.
+ *
+ * ```tsx
+ * <ul {...list('pricing.always.items', (says) => <li class='Plan_Item'>{says}</li>)} />
+ * ```
+ */
+export let list = (key: string, item: (says: string) => VNode) => {
+  let all = items(COPY, key)
+  if (!all) throw new Error(`apps/home/copy.json has no list ${key}`)
+  return {
+    [names.list]: key,
+    children: all.map((value) => item(fill(value).join(''))),
+  }
 }
 
 /** The props of an element whose attribute `name` is the snippet at `key`. */

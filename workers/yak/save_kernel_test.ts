@@ -14,7 +14,8 @@ await agent.tool('app_files', {
   files: [
     {
       path: 'index.html',
-      content: '<h1 data-copy="hero"></h1><p data-copy="note"></p>',
+      content: '<h1 data-copy="hero"></h1><p data-copy="note"></p>' +
+        '<ul data-copy-list="always"><li class="Item">Members</li></ul>',
     },
     { path: 'copy.json', content: '{\n  "hero": "Hi",\n  "note": "Old"\n}\n' },
   ],
@@ -56,8 +57,11 @@ let refused = [
   await post('save', { copy: { hero: 'x' } }, ''),
   await post('save', { copy: {} }),
   await post('save', { copy: { hero: 3 } }),
+  await post('save', { copy: { always: ['One', 3] } }),
 ].map((r) => r.status)
 let after = await page()
+let list = await post('save', { copy: { always: ['Members', 'Guests'] } })
+let grown = await page()
 
 test('each save sets its snippets in the live copy.json and releases it', () => {
   equal(first, { status: 200, body: { version: 2, keys: ['hero'] } })
@@ -87,8 +91,19 @@ test('undo takes the save back while it is live, and only then', () => {
 })
 
 test('a stranger, and a save naming no snippets, are refused', () => {
-  equal(refused, [401, 400, 400])
+  equal(refused, [401, 400, 400, 400])
   shows(after, 'Hello', 'Old')
+})
+
+test('a list is saved whole, and its page has an item for each', () => {
+  equal(list, { status: 200, body: { version: 4, keys: ['always'] } })
+  ok(
+    grown.includes(
+      '<ul data-copy-list="always"><li class="Item">Members</li>' +
+        '<li class="Item">Guests</li></ul>',
+    ),
+    grown,
+  )
 })
 
 let privateSpace = unique('private-save')

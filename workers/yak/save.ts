@@ -5,7 +5,7 @@
 //
 // Undo is app_rollback's path: the release Save made goes back to the one it
 // replaced, while it is still the live one.
-import { parse, read, set } from '@yaks/copy'
+import { parse, same, set, type Value, valueAt } from '@yaks/copy'
 import { seedy } from '@yaks/platform/files'
 import {
   addressed,
@@ -42,28 +42,36 @@ export type Saved = { version: number | null; keys: string[] }
 export let saying = (keys: string[]) =>
   `Saved on the page: ${keys.join(', ')} in ${COPY}`
 
-/** The snippets of `sent` that change `text`, a copy file. A file that is
- * not one is refused, naming why, since Save cannot say where a key goes. */
-export let changing = (text: string, sent: Record<string, string>) => {
+/** The snippets and lists of `sent` that change `text`, a copy file. A file
+ * that is not one is refused, naming why, since Save cannot say where a key
+ * goes. */
+export let changing = (text: string, sent: Record<string, Value>) => {
   let copy
   try {
     copy = parse(text)
   } catch (e) {
     throw refuse('arguments', (e as Error).message)
   }
-  return Object.keys(sent).filter((key) => read(copy, key) != sent[key])
+  return Object.keys(sent).filter((key) => !same(valueAt(copy, key), sent[key]))
 }
 
-/** Snippets as a request sends them: an object of key to text. */
-export let snippets = (value: unknown): Record<string, string> => {
+let text = (value: unknown) => typeof value == 'string'
+
+/** Snippets as a request sends them: an object of key to its text, or to a
+ * list's items' text. */
+export let snippets = (value: unknown): Record<string, Value> => {
   let ok = value != null && typeof value == 'object' && !Array.isArray(value) &&
-    Object.entries(value).every(([key, text]) =>
-      key.trim() && typeof text == 'string'
+    Object.entries(value).every(([key, sent]) =>
+      key.trim() &&
+      (text(sent) || Array.isArray(sent) && sent.every(text))
     )
   if (!ok || !Object.keys(value as object).length) {
-    throw refuse('arguments', 'copy is an object of snippet key to its text')
+    throw refuse(
+      'arguments',
+      'copy is an object of snippet key to its text, or a list of texts',
+    )
   }
-  return value as Record<string, string>
+  return value as Record<string, Value>
 }
 
 let decoder = new TextDecoder()
@@ -77,7 +85,7 @@ let carried = (app: App, files: Files) =>
     !app.seeded && seedy(p)
   )
 
-let changedCopy = async (text: string, sent: Record<string, string>) => {
+let changedCopy = async (text: string, sent: Record<string, Value>) => {
   let next = set(text, sent)
   let [file] = await hashed([{ path: COPY, bytes: encoder.encode(next) }])
   return { next, file }
@@ -101,7 +109,7 @@ let savedPrivately = async (
   app: App,
   who: Who,
   store: Door,
-  sent: Record<string, string>,
+  sent: Record<string, Value>,
 ): Promise<Saved | undefined> => {
   let raw = r2RawObjects(ctx.env.BLOBS)
   let c = ctx.clock ?? clock()
@@ -176,7 +184,7 @@ export let saved = async (
   app: App,
   who: Who,
   store: Door,
-  sent: Record<string, string>,
+  sent: Record<string, Value>,
 ): Promise<Saved> => {
   if (app.access == 'private' && !app.published) {
     let quick = await savedPrivately(ctx, space, app, who, store, sent)

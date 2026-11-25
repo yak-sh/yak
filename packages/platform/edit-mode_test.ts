@@ -5,7 +5,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { browserDrafts } from '@yaks/draft/browser'
 import type { Bundle } from '@yaks/graph'
-import { editMode, hint, placeOf, SAVED } from './edit-mode.ts'
+import { editMode, hint, listOf, placeOf, SAVED } from './edit-mode.ts'
 
 let BODY = `
 <h1 data-copy="hero.title">Build your ideas</h1>
@@ -412,4 +412,149 @@ test('Undo takes the save back, and its changes are drafts again', async () => {
   )
   p.mode.stop()
   equal(p.q('button').textContent, 'Start')
+})
+
+let LIST = `
+<ul class="Plan_List" data-copy-list="always"><li class="Plan_Item">Members</li><li class="Plan_Item">Visitors</li></ul>
+<h1 data-copy="hero.title">Build your ideas</h1>`
+let ALWAYS = placeOf('always', true)
+
+// A list page, a key pressed in an item, and the items' words.
+let listed = async (answers: Record<string, Answer> = {}) => {
+  let p = await load(LIST, answers)
+  let win = p.doc.defaultView!
+  let key = (el: Element, key: string, more: Record<string, unknown> = {}) => {
+    let e = Object.assign(
+      new win.Event('keydown', { bubbles: true, cancelable: true }),
+      { key, ...more },
+    )
+    el.dispatchEvent(e)
+    return e
+  }
+  let items = () => [...p.doc.querySelectorAll('li')]
+  let words = () => items().map((li) => li.textContent)
+  let type = (el: Element, text: string) => {
+    el.textContent = text
+    p.press(el, 'input')
+  }
+  return { ...p, key, items, words, type }
+}
+
+test('an item is typed over in place, and the draft is the whole list', async () => {
+  let p = await listed()
+  let [members] = p.items()
+  p.press(members, 'pointerdown')
+  equal(members.getAttribute('contenteditable'), 'plaintext-only')
+  p.type(members, 'Members, as many as you like')
+  equal(p.drafts.text(ALWAYS), '["Members, as many as you like","Visitors"]')
+  ok(p.q('ul').hasAttribute('data-yak-changed'))
+  equal(p.shown(), '1 change · Save · Discard ·  · Done')
+  p.mode.stop()
+})
+
+test('Enter adds an item after it, with the same markup, and Backspace in it empty removes it', async () => {
+  let p = await listed()
+  let [members] = p.items()
+  p.press(members, 'pointerdown')
+  ok(p.key(members, 'Enter').defaultPrevented)
+  let added = p.items()[1]
+  equal([added.tagName, added.className, added.textContent], [
+    'LI',
+    'Plan_Item',
+    '',
+  ])
+  p.type(added, 'Guests')
+  equal(p.words(), ['Members', 'Guests', 'Visitors'])
+  equal(listOf(p.drafts.text(ALWAYS)), ['Members', 'Guests', 'Visitors'])
+  p.type(added, '')
+  ok(p.key(added, 'Backspace').defaultPrevented)
+  equal(p.words(), ['Members', 'Visitors'])
+  equal(members.getAttribute('contenteditable'), 'plaintext-only')
+  // Back to the page's own items, the list is no change.
+  p.press(p.q('h1'), 'pointerdown')
+  await p.settled()
+  equal(p.drafts.places(), [])
+  p.mode.stop()
+})
+
+test('an item left empty goes, and the last item stays', async () => {
+  let p = await listed()
+  let [members, visitors] = p.items()
+  p.press(members, 'pointerdown')
+  p.key(members, 'Enter')
+  p.press(p.q('h1'), 'pointerdown')
+  equal(p.words(), ['Members', 'Visitors'])
+  p.press(visitors, 'pointerdown')
+  p.type(visitors, '')
+  p.key(visitors, 'Backspace')
+  p.type(members, '')
+  ok(!p.key(members, 'Backspace').defaultPrevented)
+  equal(p.items().length, 1)
+  p.mode.stop()
+})
+
+test('an item moves with Alt and an arrow, and by dragging its handle', async () => {
+  let p = await listed()
+  let [members, visitors] = p.items()
+  p.press(visitors, 'pointerdown')
+  p.key(visitors, 'ArrowUp', { altKey: true })
+  equal(p.words(), ['Visitors', 'Members'])
+  equal(listOf(p.drafts.text(ALWAYS)), ['Visitors', 'Members'])
+  // Each item a row 20px tall; the handle drags Visitors to the second row.
+  let row = (top: number) => () =>
+    ({ left: 40, top, width: 200, height: 20 }) as DOMRect
+  members.getBoundingClientRect = row(20)
+  visitors.getBoundingClientRect = row(0)
+  let handle = p.doc.querySelector('[data-yak-handle]')!
+  ok(!(handle as HTMLElement).hidden)
+  let pointer = (type: string, y: number) =>
+    handle.dispatchEvent(
+      Object.assign(
+        new (p.doc.defaultView!.Event)(type, { cancelable: true }),
+        {
+          clientX: 50,
+          clientY: y,
+        },
+      ),
+    )
+  pointer('pointerdown', 10)
+  pointer('pointermove', 32)
+  pointer('pointerup', 32)
+  equal(p.words(), ['Members', 'Visitors'])
+  await p.settled()
+  equal(p.drafts.places(), [])
+  p.mode.stop()
+  ok(!p.doc.querySelector('[data-yak-handle]'))
+})
+
+test('Save sends the list whole, and a list typed on another device is drawn', async () => {
+  let p = await listed({ save: OK({ version: 5, keys: ['always'] }) })
+  p.heard(ALWAYS, '["Members","Visitors","Guests"]')
+  equal(
+    p.q('ul').innerHTML,
+    '<li class="Plan_Item">Members</li><li class="Plan_Item">Visitors</li><li class="Plan_Item">Guests</li>',
+  )
+  p.press(p.button('save'))
+  await p.settled()
+  equal(p.sent.map((s) => s.body), [{
+    copy: { always: ['Members', 'Visitors', 'Guests'] },
+  }])
+  equal(p.drafts.places(), [])
+  equal(p.words(), ['Members', 'Visitors', 'Guests'])
+  p.mode.stop()
+  equal(p.words(), ['Members', 'Visitors', 'Guests'])
+})
+
+test('off, a list shows its own items again', async () => {
+  let p = await listed()
+  let [members] = p.items()
+  p.press(members, 'pointerdown')
+  p.key(members, 'Enter')
+  p.type(p.items()[1], 'Guests')
+  p.mode.stop()
+  equal(p.words(), ['Members', 'Visitors'])
+  equal(
+    p.q('ul').innerHTML,
+    '<li class="Plan_Item">Members</li><li class="Plan_Item">Visitors</li>',
+  )
 })

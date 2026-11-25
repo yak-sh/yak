@@ -24,6 +24,20 @@ so `hero.title` is `{"hero": {"title": "…"}}`, and a key written with its dots
 The file is written one snippet per line, so a text merge of two edits works by
 key: two people changing different snippets change different lines.
 
+## Lists
+
+A list is a JSON array of snippets, so its items can be added, removed and
+moved: `"always": {"items": ["Members", "Visitors"]}`. The element holding the
+items names it with `data-copy-list`, and each of its child elements is an item,
+plain text with no slots. A page draws an item for each snippet, each as its
+first item is written.
+
+```html
+<ul data-copy-list="always.items">
+  <li class="Plan_Item"></li>
+</ul>
+```
+
 ## Slots
 
 A link, a bold word or a part inside a sentence is a named slot in the value,
@@ -39,9 +53,10 @@ is the text `%{name}`, and a lone `%` is just a percent sign.
 | `data-copy="<key>"`        | the snippet that is the element's text                  |
 | `data-copy-<attr>="<key>"` | the snippet that is its attribute `<attr>`'s value      |
 | `data-copy-slot="<name>"`  | the slot of its parent's snippet that the element fills |
+| `data-copy-list="<key>"`   | the list whose items are the element's children         |
 
 `<attr>` is any attribute whose value is words: `alt`, `placeholder`, `title`,
-`aria-label`, a meta tag's `content`. `slot` is the one name taken.
+`aria-label`, a meta tag's `content`. `slot` and `list` are the names taken.
 
 ```html
 <p data-copy="cost.limits">
@@ -52,19 +67,22 @@ is the text `%{name}`, and a lone `%` is just a percent sign.
 
 ## Calls
 
-| call                         | what it does                                                     |
-| ---------------------------- | ---------------------------------------------------------------- |
-| `parse(text, file?)`         | a file's text as its value; blank text is an empty file          |
-| `read(copy, key)`            | the snippet at a key, or `undefined`                             |
-| `keys(copy)`                 | every snippet's key, in the file's order                         |
-| `fill(value, values)`        | the snippet's parts in order: text, and each slot's given value  |
-| `slots(value)`               | the slots a snippet names                                        |
-| `join(parts)`                | a snippet from `fill`'s parts: text escaped, each slot by name   |
-| `set(text, changes)`         | the file's text with keys set, its order and indentation kept    |
-| `format(copy, indent?)`      | a value as file text, one snippet per line                       |
-| `merge(ours, theirs, base?)` | the file with each key `theirs` changed from `base` laid over it |
-| `marks(attributes)`          | the keys and slot an element's attributes name                   |
-| `names`                      | the attribute names themselves                                   |
+| call                         | what it does                                                       |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `parse(text, file?)`         | a file's text as its value; blank text is an empty file            |
+| `read(copy, key)`            | the snippet at a key, or `undefined`                               |
+| `items(copy, key)`           | the list at a key, its snippets in order, or `undefined`           |
+| `valueAt(copy, key)`         | what a key holds: a snippet or a list                              |
+| `same(a, b)`                 | whether two values are the same snippet or the same list           |
+| `keys(copy)`                 | every snippet's and list's key, in the file's order                |
+| `fill(value, values)`        | the snippet's parts in order: text, and each slot's given value    |
+| `slots(value)`               | the slots a snippet names                                          |
+| `join(parts)`                | a snippet from `fill`'s parts: text escaped, each slot by name     |
+| `set(text, changes)`         | the file's text with keys set, a list whole, order and indent kept |
+| `format(copy, indent?)`      | a value as file text, one snippet per line                         |
+| `merge(ours, theirs, base?)` | the file with each key `theirs` changed from `base` laid over it   |
+| `marks(attributes)`          | the keys and slot an element's attributes name                     |
+| `names`                      | the attribute names themselves                                     |
 
 ```ts
 import { fill, parse, read, set } from '@yaks/copy'
