@@ -125,10 +125,14 @@ test('a watch refreshes from the alarm before and after hibernation', async () =
     deleteAlarm: () => Promise.resolve(void (alarm = null)),
   }
   let instance = () => {
+    let armed: Promise<void>[] = []
     let time = clock(storage, { sockets: () => live.renew() }, {
       now: () => now,
     })
-    let renewals = socketRenewals(time.arm, { now: () => now })
+    let renewals = socketRenewals(time.arm, {
+      now: () => now,
+      keep: (work) => void armed.push(work),
+    })
     let g = graph({ storage: ram(shop), vocab: shop })
     let timed = reached({
       read: () =>
@@ -153,10 +157,11 @@ test('a watch refreshes from the alarm before and after hibernation', async () =
         renewals,
       },
     )
-    return { live, ring: time.ring }
+    return { live, ring: time.ring, armed }
   }
   let warm = instance()
   await warm.live.message(ws, ask('price', '.product'))
+  await Promise.all(warm.armed)
   assertEquals(alarm, 40_000)
   now = 40_000
   await warm.ring()
@@ -177,6 +182,41 @@ test('a watch refreshes from the alarm before and after hibernation', async () =
   await cold.ring()
   assertEquals(alarm, null)
   assertEquals(ws.sent.length, 3)
+})
+
+test('a timed watch removed during its first read stays gone after hibernation', async () => {
+  let ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let first = Promise.withResolvers<Bundle[]>()
+  let reads = 0
+  let instance = () => {
+    let g = graph({ storage: ram(shop), vocab: shop })
+    let renewals = socketRenewals(() => Promise.resolve())
+    let timed = reached({
+      read: () => {
+        reads++
+        return first.promise
+      },
+      renewAt: renewals.at,
+    })
+    return sockets(
+      beside(subscriptions(g), timed, () => true),
+      ctx,
+      undefined,
+      {
+        renewals,
+      },
+    )
+  }
+  let live = instance()
+  let opening = live.message(ws, ask('price', '.product'))
+  await live.message(ws, JSON.stringify({ unsubscribe: 'price' }))
+  first.resolve([])
+  await opening
+
+  assertEquals(await instance().renew(), null)
+  assertEquals(reads, 1)
+  assertEquals(ws.sent, [])
 })
 
 test('hibernating clock probes do not recover attachments or touch subscriptions and storage', () => {

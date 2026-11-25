@@ -26,7 +26,7 @@ export type Reached = {
     line: string,
     opts?: ReadOpts,
     writer?: PeerWriter,
-  ) => void | Promise<void>
+  ) => void
   /** Reopen saved watches. With `quiet`, each is held and not asked until
    * {@link Reached.resume} or the next {@link Reached.hear}: a page that
    * kept its answers through its host's sleep is not sent them again. */
@@ -156,7 +156,11 @@ export let reached = (opts: {
   let joined = (work: Promise<void>[]) =>
     work.length ? Promise.all(work).then(() => {}) : undefined
   return {
-    open: (sink, id, line, read, writer) => open(sink, id, line, read, writer),
+    open: (sink, id, line, read, writer) => {
+      // The subscription is registered before its read settles, so a later
+      // unsubscribe can remove it from the socket attachment immediately.
+      void open(sink, id, line, read, writer)
+    },
     restore: (openings, quiet) => {
       let work: Promise<void>[] = []
       for (let { sink, id, query, opts: read, writer } of openings) {
