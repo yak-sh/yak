@@ -295,16 +295,20 @@ test('daily: a dense series, gaps and all', () => {
 
 // The fake SQL API: what it was asked, and what it answers.
 let sql = (
-  answer: (q: string, headers: Headers) => { status?: number; body: string },
+  answer: (
+    q: string,
+    headers: Headers,
+  ) =>
+    | { status?: number; body: string }
+    | Promise<{ status?: number; body: string }>,
 ) => {
   let asked: string[] = []
   let real = globalThis.fetch
   globalThis.fetch = ((_to: string | Request, init?: RequestInit) => {
     asked.push(String(init?.body ?? ''))
-    let said = answer(asked[asked.length - 1], new Headers(init?.headers))
     return Promise.resolve(
-      new Response(said.body, { status: said.status ?? 200 }),
-    )
+      answer(asked[asked.length - 1], new Headers(init?.headers)),
+    ).then((said) => new Response(said.body, { status: said.status ?? 200 }))
   }) as typeof fetch
   return { asked, done: () => void (globalThis.fetch = real) }
 }
@@ -572,6 +576,28 @@ test('the last day’s visits are one query over a day, held for a few minutes',
     assertStringIncludes(api.asked[0], "INTERVAL '1' DAY")
     assertEquals(lastDay(env({ CF_ANALYTICS_TOKEN: undefined }), [app]), null)
   } finally {
+    api.done()
+  }
+})
+
+test('a last-day read can finish and fill the cache while an earlier read is still pending', async () => {
+  let app = crypto.randomUUID()
+  let earlier = Promise.withResolvers<{ body: string }>()
+  let body = (views: number) => JSON.stringify({ data: [{ app, views }] })
+  let calls = 0
+  let api = sql(() => ++calls == 1 ? earlier.promise : { body: body(12) })
+  try {
+    let now = Date.parse('2026-11-05T12:00:00Z')
+    let first = lastDay(env(), [app], now)
+    let next = lastDay(env(), [app], now + 1)
+    assertEquals(api.asked.length, 2)
+    assertEquals((await next)?.get(app), 12)
+    earlier.resolve({ body: body(9) })
+    assertEquals((await first)?.get(app), 9)
+    assertEquals((await lastDay(env(), [app], now + 2))?.get(app), 12)
+    assertEquals(api.asked.length, 2)
+  } finally {
+    earlier.resolve({ body: body(9) })
     api.done()
   }
 })

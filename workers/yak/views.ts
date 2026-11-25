@@ -430,12 +430,18 @@ let listed = async (
   return each
 }
 
-// A few minutes' worth of answers, per app and window, held in this isolate
-// and no further — the promise rather than the value, so a page refreshed
-// twice in a second makes one round trip and not two. A rejection is dropped
-// rather than kept: a read that failed must not be the answer for the next
-// five minutes.
-let held = new Map<string, { at: number; stats: Promise<Stats> }>()
+// Each analytics read belongs to the request that started it. Keep it alive
+// to fill the cache if the page answers first. Only its data can be reused.
+let remember = <T>(read: Promise<T>, keep: (answer: T) => void): Promise<T> => {
+  let result = read.then((answer) => {
+    keep(answer)
+    return answer
+  })
+  background(result.then(() => {}, () => {}))
+  return result
+}
+
+let held = new Map<string, { at: number; stats: Stats }>()
 
 /**
  * Who visited these apps, one answer an app — or `null` where nobody has set
@@ -457,23 +463,24 @@ export let statsFor = (
     let kept = held.get(key(app))
     return kept && now - kept.at < FRESH ? kept.stats : undefined
   }
-  let missing = [...new Set(apps)].filter((app) => !fresh(app))
-  if (missing.length) {
-    let all = asked(env, missing, window, now)
-    // Later requests await this same read: held to its end (lib/shared.ts).
-    background(all.then(() => {}, () => {}))
-    for (let app of missing) {
-      let stats = all.then((all) => all.get(app)!)
-      held.set(key(app), { at: now, stats })
-      stats.catch(() => {
-        if (held.get(key(app))?.stats == stats) held.delete(key(app))
-      })
-    }
+  let found = new Map<string, Stats>()
+  let missing: string[] = []
+  for (let app of new Set(apps)) {
+    let kept = fresh(app)
+    if (kept) found.set(app, kept)
+    else missing.push(app)
   }
-  let each = apps.map((app) => fresh(app)!)
-  return Promise.all(each).then((all) =>
-    new Map(apps.map((app, i) => [app, all[i]]))
-  )
+  let inOrder = () => new Map(apps.map((app) => [app, found.get(app)!]))
+  if (!missing.length) return Promise.resolve(inOrder())
+  return remember(asked(env, missing, window, now), (all) => {
+    for (let [app, stats] of all) {
+      let id = key(app)
+      if ((held.get(id)?.at ?? -Infinity) <= now) {
+        held.set(id, { at: now, stats })
+      }
+      found.set(app, stats)
+    }
+  }).then(inOrder)
 }
 
 /**
@@ -494,7 +501,7 @@ export let visited = (
 // The last day's answers, by the apps asked about, held like `held`.
 let lastDays = new Map<
   string,
-  { at: number; views: Promise<Map<string, number>> }
+  { at: number; views: Map<string, number> }
 >()
 
 /** Each app's views over the last day, for a space's Updates (updates.ts),
@@ -509,13 +516,12 @@ export let lastDay = (
     [...apps].sort().join(',')
   }`
   let kept = lastDays.get(key)
-  if (kept && now - kept.at < FRESH) return kept.views
-  let views = visited(env, apps, 1)
-  lastDays.set(key, { at: now, views })
-  views.catch(() => {
-    if (lastDays.get(key)?.views == views) lastDays.delete(key)
+  if (kept && now - kept.at < FRESH) return Promise.resolve(kept.views)
+  return remember(visited(env, apps, 1), (views) => {
+    if ((lastDays.get(key)?.at ?? -Infinity) <= now) {
+      lastDays.set(key, { at: now, views })
+    }
   })
-  return views
 }
 
 // ---- one app's answer, kept at the edge (T-143071) -------------------------
