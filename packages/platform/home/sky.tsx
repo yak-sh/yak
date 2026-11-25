@@ -10,7 +10,8 @@
 // around him (style.css `.Sky`), draws and flies the birds, sends the
 // shooting stars, moves each layer up the window by less the farther back it
 // is as the page scrolls (DEPTH), and answers a touch on the sun, the moon
-// and the stars.
+// and the stars. Both scenes are always drawn, so a touch on the sun or the
+// moon can turn the sky through the other one and back.
 import type { ComponentChildren, JSX } from 'preact'
 
 /** How far the line he sits on is above the bottom of his hooves, in his
@@ -104,16 +105,14 @@ let wisp = (x: number, y: number, w: number, h: number, far = false) => (
 )
 
 /** The moon's lit shape, 24 across its middle, its terminator `edge` from
- * its middle: -24 is a new moon, 0 a half and 24 a full one. Every phase is
- * the same four curves, so one eases into the next. */
+ * its middle: -24 is a new moon, 0 a half and 24 a full one. */
 export let moon = (edge: number) => {
   let c = n1(edge * 4 / 3)
   return `M0 24C-32 24 -32 -24 0 -24C${c} -24 ${c} 24 0 24Z`
 }
 
-/** The phases a touch on the moon turns it through, as its terminator:
- * a crescent, a half, gibbous, full, and back. */
-export const PHASES = [-10, 0, 12, 24, 12, 0]
+/** The moon's terminator: a crescent. */
+export const PHASE = -10
 
 /** Where each thing a touch answers stands, in his units. */
 export const SUN = { x: 455, y: -100, r: 42 }
@@ -185,7 +184,7 @@ let Luna = () => (
       r='80'
     />
     <g transform={`translate(${MOON.x} ${MOON.y}) rotate(-28)`}>
-      <path class='Sky_Moon' d={moon(PHASES[0])} />
+      <path class='Sky_Moon' d={moon(PHASE)} />
     </g>
   </>
 )
@@ -280,9 +279,11 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
       data-sink={SINK}
       data-birds={BIRDS}
       data-shoot={SHOOT}
-      data-phases={PHASES.map(moon).join('|')}
     >
-      <div class='Sky_Air' data-depth={DEPTH.dusk} />
+      <div class='Sky_Air' data-depth={DEPTH.dusk}>
+        <div class='Sky_Dark' />
+        <div class='Sky_Twilight' />
+      </div>
       {landscape && <div class='Sky_SunSlot' data-sun-at='' />}
       <svg class='Sky_Far' viewBox='-3000 -800 6000 860' focusable='false'>
         <defs>

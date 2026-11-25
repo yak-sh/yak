@@ -9,15 +9,7 @@ import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { homeStyle, skyScript } from '@yaks/platform/home/assets'
 import { page as home } from './site/mod.ts'
-import {
-  DEPTH,
-  HILLS,
-  MOON,
-  moon,
-  PHASES,
-  SINK,
-  SUN,
-} from '@yaks/platform/home/sky'
+import { DEPTH, HILLS, MOON, SINK, SUN } from '@yaks/platform/home/sky'
 
 // The page Site keeps a home page's path in (site.ts `HOME`).
 let file = (path: string) =>
@@ -40,7 +32,8 @@ test('the homepage foreground hill fades into the page color in both themes', ()
 let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   let { document, window } = parseHTML(home(file(path)))
   let on: Record<string, (e: unknown) => void> = {}
-  let moved: string[] = []
+  // every animation played, by the class of what it moves
+  let played: { of: string; frames: Keyframe[]; done: () => void }[] = []
   let timers: (() => void)[] = [], frames: ((now: number) => void)[] = []
   let now = 0
   let rect = (r: Partial<DOMRect>) => () => r as DOMRect
@@ -79,9 +72,17 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     },
     configurable: true,
   })
-  window.Element.prototype.animate = function (this: Element) {
-    moved.push(this.getAttribute('class') ?? '')
-    return {} as Animation
+  window.Element.prototype.animate = function (
+    this: Element,
+    frames: Keyframe[],
+  ) {
+    let run = { cancel() {}, onfinish: null as null | (() => void) }
+    played.push({
+      of: this.getAttribute('class') ?? this.tagName,
+      frames,
+      done: () => run.onfinish?.(),
+    })
+    return run as unknown as Animation
   }
   let scope = {
     document,
@@ -97,6 +98,12 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     requestAnimationFrame: (f: (now: number) => void) => frames.push(f),
     performance,
     getSelection: () => ({ toString: () => '' }),
+    // what each paints with is the scheme it is drawn in
+    getComputedStyle: () => {
+      let scheme = (document.querySelector('.Sky') as HTMLElement).style
+        .colorScheme || (dark ? 'dark' : 'light')
+      return { fill: scheme, stroke: 'none', stopColor: 'black' }
+    },
     innerWidth: 1440,
     innerHeight: 860,
     scrollX: 0,
@@ -136,7 +143,7 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     touch,
     touchMoon,
     touchSun,
-    moved,
+    played,
     wait,
     watch,
     sat,
@@ -161,27 +168,78 @@ test('the home page and the describe page stand under the same sky', () => {
   }
 })
 
-test('a touch on the moon turns it through its phases and back', () => {
-  let { el, touchMoon } = sky({ dark: true })
-  let shapes = []
-  for (let i = 0; i <= PHASES.length; i++) {
-    shapes.push(el('.Sky_Moon').getAttribute('d'))
-    touchMoon()
+// The frames played for what `of` names, by the property `key` in each.
+let track = (
+  played: { of: string; frames: Keyframe[] }[],
+  of: string,
+  key = 'opacity',
+) => played.find((p) => p.of.split(' ').includes(of))?.frames.map((f) => f[key])
+
+test('a touch on the sun or the moon turns the sky round, through the other scene and back', () => {
+  for (let path of ['/', '/build']) {
+    for (let dark of [false, true]) {
+      let { touchSun, touchMoon, played, el } = sky({ dark, path })
+      dark ? touchMoon() : touchSun()
+      assert('turn' in (el('.Sky') as HTMLElement).dataset, `${path} ${dark}`)
+      let sun = track(played, 'Sky_Sun', 'translate')!
+      let moon = track(played, 'Sky_Halo', 'translate')!
+      let night = track(played, 'Sky_Dark')!
+      let half = (sun.length - 1) / 2
+      // it starts and ends as the page drew it
+      for (let i of [0, sun.length - 1]) {
+        assertEquals(dark ? moon[i] : sun[i], '0.0px 0.0px')
+        assertEquals(night[i], dark ? 1 : 0)
+      }
+      // and half way round it is the other scene, the other light where it
+      // stands in that one
+      assertEquals(dark ? sun[half] : moon[half], '0.0px 0.0px')
+      assertEquals(night[half], dark ? 0 : 1)
+      assertEquals(track(played, 'Sky_Night')![half], dark ? 0 : 1)
+      // where the sun stands in the window, it goes down to the right first
+      // and comes up from the left
+      let x = (at: unknown) => Number(String(at).split('px')[0])
+      if (path == '/') {
+        let up = dark ? half : 0, risen = dark ? half : sun.length - 1
+        assert(x(sun[up + 4]) > 0 && x(sun[risen - 4]) < 0, `${sun}`)
+      }
+    }
   }
-  assertEquals(shapes, [...PHASES, PHASES[0]].map(moon))
+})
+
+test('the hills and the grass take the other scheme’s colors as its hour comes', () => {
+  let { touchSun, played } = sky()
+  touchSun()
+  let fill = track(played, 'Sky_Near', 'fill')!
+  let half = (fill.length - 1) / 2
+  assertEquals(fill[0], 'color-mix(in srgb, light, dark 0.0%)')
+  assertEquals(fill[half], 'color-mix(in srgb, light, dark 100.0%)')
+  assertEquals(fill.at(-1), fill[0])
+})
+
+test('a touch while the sky turns is ignored, and once round it can turn again', () => {
+  let { touchSun, played, el } = sky()
+  touchSun()
+  let n = played.length
+  touchSun()
+  assertEquals(played.length, n)
+  played[0].done()
+  assert(!('turn' in (el('.Sky') as HTMLElement).dataset))
+  touchSun()
+  assertEquals(played.length, 2 * n)
+})
+
+test('shooting stars cross the night as the sky turns', () => {
+  let { touchSun, wait, all } = sky()
+  touchSun()
+  wait()
+  assertEquals(all('.Sky_Shoot').length, 4)
 })
 
 test('a touch on words or a control is the page’s, not the sky’s', () => {
-  let { el, touchMoon } = sky({ dark: true })
+  let { el, touchMoon, played } = sky({ dark: true })
   touchMoon(el('.Hello_Kicker'))
   touchMoon(el('.Hello form button'))
-  assertEquals(el('.Sky_Moon').getAttribute('d'), moon(PHASES[0]))
-})
-
-test('a touch on the sun sets it', () => {
-  let { touchSun, moved } = sky()
-  touchSun()
-  assertEquals(moved, ['Sky_Sun', 'Sky_Glow'])
+  assertEquals(played, [])
 })
 
 test('a touch on the night sky sends a shooting star through it from beyond the window', () => {
@@ -284,17 +342,14 @@ test('the dusk turns from blue to orange until the line reaches the top', () => 
 })
 
 test('the sun and the moon answer a touch where they now show', () => {
-  let day = sky()
-  day.scope.scrollY = 100
-  day.on.scroll({})
-  day.touchSun()
-  assertEquals(day.moved, ['Sky_Sun', 'Sky_Glow'])
   for (let path of ['/', '/build']) {
-    let night = sky({ dark: true, path })
-    night.scope.scrollY = 300
-    night.on.scroll({})
-    night.touchMoon()
-    assertEquals(night.el('.Sky_Moon').getAttribute('d'), moon(PHASES[1]))
+    for (let dark of [false, true]) {
+      let { scope, on, touchSun, touchMoon, played } = sky({ dark, path })
+      scope.scrollY = dark ? 300 : 100
+      on.scroll({})
+      dark ? touchMoon() : touchSun()
+      assert(played.length, `${path} ${dark}`)
+    }
   }
 })
 
@@ -302,7 +357,7 @@ test('for less motion no layer sinks as the page scrolls', () => {
   assert(Object.values(sinks(300, true)).every((s) => s == 0))
 })
 
-test('for less motion nothing in the sky moves, and the moon still turns', () => {
+test('for less motion nothing in the sky moves, and a touch on the sun or the moon fades there and back', () => {
   let day = sky({ calm: true })
   day.touchSun()
   day.wait()
@@ -312,8 +367,12 @@ test('for less motion nothing in the sky moves, and the moon still turns', () =>
   night.touchMoon()
   night.wait()
   night.watch()
-  assertEquals([...day.moved, ...night.moved], [])
-  assertEquals(night.el('.Sky_Moon').getAttribute('d'), moon(PHASES[1]))
+  let moved = [...day.played, ...night.played].filter((p) =>
+    p.frames.some((f) => f.translate || f.transform)
+  )
+  assertEquals(moved, [])
+  assertEquals(track(day.played, 'Sky_Sol'), track(day.played, 'Sky_Day'))
+  assertEquals(track(night.played, 'Sky_Dark')![0], 1)
   assertEquals(night.all('.Sky_Shoot').length, 0)
   // a few birds hang in the dusk, and stay as they are
   let birds = day.all('.Sky_Bird').map((b) => b.outerHTML)

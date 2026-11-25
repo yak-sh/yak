@@ -24,14 +24,14 @@
 // the Start Free button, slid along its post to stay in the window, and he
 // lowers it as he gets up (`rise`), before he walks.
 //
-// A touch on the sky: the sun sinks behind the hills and comes back up, the
-// moon turns through its phases (<.Sky data-phases>, its shapes), stars
+// A touch on the sky: a touch on the sun or the moon turns the sky once
+// around, through the other scene and back to where it was (`spin`), stars
 // brighten as a pointer passes them, and a tap on the night sky sends a
 // shooting star through it from beyond the window's edge. A touch on words
 // or a control is the page's, not the sky's. For anyone who asks for less
 // motion nothing in the sky moves or brightens: a few birds hang in the
-// dusk, the moon still turns, at once, and that is all. He sits as the logo
-// then, with the button beside him.
+// dusk, a touch on the sun or the moon fades to the other scene and back,
+// and that is all. He sits as the logo then, with the button beside him.
 {
   let slot = document.querySelector('.Hello_Yak')
   let after = document.querySelector('.Sky_End, .Yours')
@@ -326,50 +326,6 @@
     !el || el.closest?.(CONTROLS) ||
     [...el.childNodes].some((n) => n.nodeType == 3 && n.data.trim())
 
-  // the moon's phases, a touch turning it to the next
-  let phases = (sky?.dataset.phases ?? '').split('|'), phase = 0
-  let turn = () => {
-    let was = phases[phase]
-    phase = (phase + 1) % phases.length
-    moon.setAttribute('d', phases[phase])
-    // the fuller the moon, the brighter its halo
-    let full = phase / (phases.length / 2)
-    sky.style.setProperty(
-      '--halo',
-      (.32 + .3 * Math.min(full, 2 - full)).toFixed(2),
-    )
-    if (!calm.matches) {
-      moon.animate(
-        [{ d: `path("${was}")` }, { d: `path("${phases[phase]}")` }],
-        {
-          duration: 900,
-          easing: 'ease-in-out',
-        },
-      )
-    }
-  }
-
-  // the sun sinks behind the hills and comes back up
-  let setting
-  let set = () => {
-    if (setting) return
-    let ease = { duration: 7000, easing: 'ease-in-out' }
-    let down = sunAt ? '0 22px' : '0 94px'
-    setting = sun.animate([
-      { translate: '0 0' },
-      { translate: down, offset: .4 },
-      { translate: down, offset: .55 },
-      { translate: '0 0' },
-    ], ease)
-    sky.querySelector('.Sky_Glow').animate([
-      { opacity: 1 },
-      { opacity: .4, offset: .4 },
-      { opacity: .4, offset: .55 },
-      { opacity: 1 },
-    ], ease)
-    setting.onfinish = () => setting = null
-  }
-
   // A shooting star from one point to another, in his units: its head runs
   // the way, its tail growing behind it and drawn back in as it burns out.
   // It is drawn into the night sky, so as far up as the sky has sunk.
@@ -420,11 +376,10 @@
       unit([px + dx * on, py + dy * on]),
     )
   }
-  // and one of its own now and then, somewhere above the hills, while the
-  // night sky is in view and the tab is
-  let wish = () => {
+  // one somewhere above the hills, while they are in view
+  let star = () => {
     let [x0, top] = unit([0, 0]), [x1] = unit([innerWidth, 0])
-    if (document.hidden || !dark.matches || top > -240) return
+    if (top > -240) return
     let fall = between(.3, .75), dir = Math.random() < .5 ? 1 : -1
     let way = between(200, 420), wide = x1 - x0
     let x = between(x0 + wide * .1, x1 - wide * .1)
@@ -435,9 +390,164 @@
       between(.7, 1.1),
     )
   }
+  // and one of its own now and then, while the night sky is in view and the
+  // tab is
+  let wish = () => !document.hidden && dark.matches && star()
   let [rare, rarer] = (sky?.dataset.shoot ?? '').split(' ').map(Number)
   if (deep && far && rare && !calm.matches) {
     often(wish, rare, rarer, between(5, 12))
+  }
+
+  // One turn of the sky, from the scene it shows through the other and back.
+  // The sun and the moon ride one wheel turning about a point under the
+  // middle of the window, the moon across it from the sun, so half a turn
+  // from the day is the night and the other way round: the sun sets behind
+  // the hills on the right, the stars come out and shooting stars cross
+  // them, the moon rises from the left, crosses and sets, and the sun comes
+  // up again where it was. The light follows the sun's height: the day's
+  // things show as it is up and the night's as it is down, the twilight is
+  // clearest as it crosses the line, and the hills, the grass and he take
+  // the other scheme's colors as the night comes (or the day, from the
+  // night). Every move is drawn ahead, from where things are when it starts,
+  // as `STEPS` frames the browser plays. The stars stay where they are:
+  // turning all of them redraws them every frame, which a phone cannot keep
+  // up with. For anyone who asks for less motion nothing moves: the scene
+  // fades to the other and back.
+  const TURN = 3800, FADE = 1600, STEPS = 72, RAMP = .2
+  // what the light falls on: the paint of each that differs in the other
+  // scheme, as [element, property, now, then]
+  const LIT = '.Sky_Hills > path, [id^="Sky-hill-"] stop, .Sky_Turf0, .Sky_Line'
+  const PAINT = ['fill', 'stroke', 'stopColor']
+  let relit = (toNight) => {
+    let els = [...sky.querySelectorAll(LIT)]
+    let read = () =>
+      els.map((el) => {
+        let css = getComputedStyle(el)
+        return PAINT.map((p) => css[p])
+      })
+    let now = read()
+    sky.style.colorScheme = toNight ? 'dark' : 'light'
+    let then = read()
+    sky.style.colorScheme = ''
+    return els.flatMap((el, i) =>
+      PAINT.flatMap((p, j) =>
+        now[i][j] == then[i][j] ? [] : [[el, p, now[i][j], then[i][j]]]
+      )
+    )
+  }
+  let smooth = (lo, hi, v) => {
+    let t = Math.min(1, Math.max(0, (v - lo) / (hi - lo)))
+    return t * t * (3 - 2 * t)
+  }
+  let glow = sky?.querySelector('.Sky_Glow')
+  let turning
+  let spin = () => {
+    if (turning) return
+    let day = !dark.matches, still = calm.matches
+    let k = at(0, 0)[2], w = innerWidth, line = feet - scrollY
+    let below = w / 8, hub = [w / 2, line + below], edge = .55 * w
+    // each of the two on its circle about the hub, from where it stands, the
+    // one not out half a turn round; the circle is drawn out or in sideways
+    // so it rises and sets at the window's edges
+    let ride = (rest, out) => {
+      let dx = rest[0] - hub[0], dy = rest[1] - hub[1]
+      let wide = (edge ** 2 - dx ** 2) / (dy ** 2 - below ** 2)
+      wide = wide > 0 && isFinite(wide) ? Math.sqrt(wide) : 1
+      let r = Math.hypot(dx / wide, dy)
+      let a = Math.atan2(dy, dx / wide) + (out ? Math.PI : 0)
+      return (turn) => [
+        hub[0] + wide * r * Math.cos(a + turn),
+        hub[1] + r * Math.sin(a + turn),
+        r,
+      ]
+    }
+    let sunRest = sunAt ? center(sunAt) : circle(sun)
+    let moonRest = moonAt ? center(moonAt) : circle(halo)
+    let sunGo = ride(sunRest, !day), moonGo = ride(moonRest, day)
+    let high = line - sunRest[1], r = sunGo(0)[2]
+    // how light the sky is, 1 by day and 0 by night, at `turn`: the sun's
+    // height over the line, from the night's depth to the day's
+    let night = -Math.min(.6 * r, high + 2 * below),
+      noon = Math.min(.3 * r, high)
+    let light = (turn, s) =>
+      still
+        ? (1 + (day ? 1 : -1) * Math.cos(2 * Math.PI * s)) / 2
+        : smooth(night, noon, line - sunGo(turn)[1])
+    // the turn gathers speed over its first fifth and loses it over its last
+    let v = 1 / (1 - RAMP)
+    let ease = (s) =>
+      s < RAMP
+        ? v * s * s / (2 * RAMP)
+        : s > 1 - RAMP
+        ? 1 - v * (1 - s) ** 2 / (2 * RAMP)
+        : v * (s - RAMP / 2)
+    let frames = Array.from({ length: STEPS + 1 }, (_, i) => {
+      let s = i / STEPS, turn = 2 * Math.PI * ease(s), l = light(turn, s)
+      return { s, turn, l, dusk: 4 * l * (1 - l) }
+    })
+    let by = (f) => frames.map(f)
+    // as far as it has come from where it stands, in his units
+    let off = (v) => (Math.round(v / k * 10) / 10 + 0).toFixed(1)
+    let move = (go, rest) => (f) => {
+      let [x, y] = go(f.turn)
+      return { translate: `${off(x - rest[0])}px ${off(y - rest[1])}px` }
+    }
+    let runs = []
+    let play = (els, keys) => {
+      for (let el of els) {
+        if (!el) continue
+        runs.push(el.animate(by(keys), {
+          duration: still ? FADE : TURN,
+          easing: 'linear',
+          fill: 'forwards',
+        }))
+      }
+    }
+    let lights = '.Sky_Sol, .Sky_Luna'
+    let what = (name) =>
+      [...sky.querySelectorAll(name)].filter((el) =>
+        still || !el.matches(lights)
+      )
+    play(what('.Sky_Day'), (f) => ({ opacity: f.l }))
+    play(what('.Sky_Night'), (f) => ({ opacity: 1 - f.l }))
+    play([sky.querySelector('.Sky_Dark')], (f) => ({ opacity: 1 - f.l }))
+    play(
+      [sky.querySelector('.Sky_Twilight')],
+      (f) => ({ opacity: .9 * f.dusk }),
+    )
+    // the other scheme's paint comes as its hour does
+    for (let [el, p, now, then] of relit(day)) {
+      play([el], (f) => ({
+        [p]: `color-mix(in srgb, ${now}, ${then} ${
+          n1(100 * (day ? 1 - f.l : f.l))
+        }%)`,
+      }))
+    }
+    // and he is in shadow while it is darker than the page
+    if (day) {
+      play(document.querySelectorAll('.Wander_Image'), (f) => ({
+        filter: `brightness(${(.7 + .3 * f.l).toFixed(3)})`,
+      }))
+    }
+    if (!still) {
+      let sunlit = glow?.getAttribute('cy') == sun.getAttribute('cy')
+      play([sun, sunlit && glow], move(sunGo, sunRest))
+      play([moon.parentNode, halo], move(moonGo, moonRest))
+      // and a few shooting stars cross the deepest of the night
+      let starry = frames.filter((f) => f.l < .15)
+      for (let q of [1, 3, 5, 7]) {
+        let f = starry[Math.floor(starry.length * q / 8)]
+        if (f) setTimeout(star, f.s * TURN)
+      }
+    }
+    delete sky.dataset.over
+    sky.dataset.turn = ''
+    turning = true
+    runs[0].onfinish = () => {
+      for (let run of runs) run.cancel()
+      delete sky.dataset.turn
+      turning = null
+    }
   }
 
   // the stars a pointer passes brighten, and dim again once it has gone
@@ -468,7 +578,9 @@
       if (frame) return
       frame = requestAnimationFrame(() => {
         frame = 0
-        let on = !page(e.target) && over(e.clientX, e.clientY)
+        // the sun and the moon show they answer a touch to a mouse only
+        let on = e.pointerType == 'mouse' && !turning && !page(e.target) &&
+          over(e.clientX, e.clientY)
         if (on) sky.dataset.over = on
         else delete sky.dataset.over
         if (dark.matches && !calm.matches) brighten(e.clientX, e.clientY)
@@ -476,10 +588,8 @@
     }, { passive: true })
     addEventListener('click', (e) => {
       if (page(e.target) || getSelection()?.toString()) return
-      let on = over(e.clientX, e.clientY)
-      if (on == 'moon') return turn()
+      if (over(e.clientX, e.clientY)) return spin()
       if (calm.matches) return
-      if (on == 'sun') return set()
       let [, y] = unit([e.clientX, e.clientY])
       if (dark.matches && y < -40 && y > -700) {
         brighten(e.clientX, e.clientY), through(e.clientX, e.clientY)

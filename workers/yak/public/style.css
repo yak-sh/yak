@@ -715,7 +715,9 @@
      measures where he sits and sets the lengths it is laid out from on it:
      --u is a 128th of his slot, --x and --feet the middle of his figure and
      the line he sits on, --rule the pencil line above the section after the
-     hero. Dusk when the page is light, night when it is dark. */
+     hero. Dusk when the page is light, night when it is dark; a touch on
+     the sun or the moon turns it through the other and back (sky.js
+     `spin`). */
   :root:has(> .Home),
   .Home {
     overflow-x: clip;
@@ -729,6 +731,8 @@
   .Sky {
     --air: linear-gradient(#c3cfee 0%, #d9d6ea 42%, #eed9d3 74%, #f8dfc4 100%);
     --set: linear-gradient(#e3c6cf 0%, #f1c4b4 40%, #f7b78e 74%, #fbc387 100%);
+    --night: linear-gradient(#151a2c 0%, #1c2340 50%, #2a2e4d 85%, #35345a 100%);
+    --twilight: linear-gradient(#3d4170 0%, #7d5d86 45%, #d9837a 80%, #f6ad73 100%);
     position: absolute;
     z-index: -1;
     top: 0;
@@ -749,7 +753,9 @@
   }
 
   /* The air, from the top of the page to just under the line. At dusk it
-     starts blue and turns orange as the page scrolls (sky.js --dusk). */
+     starts blue and turns orange as the page scrolls (sky.js --dusk); the
+     night's air lies over it, and the twilight's over that, each as clear
+     as the hour makes it. */
   .Sky_Air {
     top: 0;
     left: 0;
@@ -758,12 +764,23 @@
     background: var(--air);
     translate: 0 calc(var(--sink, 0) * var(--u));
   }
-  .Sky_Air::after {
-    content: '';
+  .Sky_Air::before,
+  .Sky_Air > * {
     position: absolute;
     inset: 0;
+  }
+  .Sky_Air::before {
+    content: '';
     background: var(--set);
     opacity: var(--dusk, 0);
+  }
+  .Sky_Dark {
+    background: var(--night);
+    opacity: 0;
+  }
+  .Sky_Twilight {
+    background: var(--twilight);
+    opacity: 0;
   }
 
   /* Each layer of the far scene sinks by its share of the scroll (sky.js
@@ -825,7 +842,7 @@
   }
   .Sky_Halo0 {
     stop-color: #f6efd9;
-    stop-opacity: var(--halo, 0.32);
+    stop-opacity: 0.32;
   }
   .Sky_Halo1 {
     stop-color: #f6efd9;
@@ -879,9 +896,8 @@
   }
 
   @media (prefers-color-scheme: dark) {
-    .Sky {
-      --air: linear-gradient(#151a2c 0%, #1c2340 50%, #2a2e4d 85%, #35345a 100%);
-      --set: none;
+    .Sky_Dark {
+      opacity: 1;
     }
   }
   @media not (prefers-color-scheme: dark) {
@@ -894,9 +910,14 @@
       display: none;
     }
   }
+  /* While the sky turns, both scenes are drawn, each as clear as the hour
+     makes it. */
+  .Sky[data-turn] :is(.Sky_Day, .Sky_Night) {
+    display: revert;
+  }
 
   /* A touch on the sky (sky.js): the sun's glow and the moon's halo swell
-     under a pointer, which shows they answer one, and the stars it passes
+     under a mouse, which shows they answer one, and the stars it passes
      brighten. */
   .Home:has(> .Sky[data-over]) {
     cursor: pointer;
