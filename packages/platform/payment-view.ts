@@ -497,6 +497,33 @@ let sellingPage = (view: PaymentView, rows: PaymentRows) => {
       ready ? 'Payments are connected' : 'Sell from your apps',
       leadOf(at, paying),
     ),
+    h(
+      Card,
+      null,
+      heading('Donations'),
+      h(
+        Card.Sub,
+        null,
+        'Set up one-time and monthly gifts through your connected account.',
+      ),
+      rows.apps.length
+        ? h(
+          'ul',
+          null,
+          rows.apps.map((app) =>
+            h(
+              'li',
+              null,
+              h('a', {
+                href: `https://${
+                  spaceHost({ APEX: view.apex }, view.space.slug)
+                }/${app.slug}/api/pay/donations`,
+              }, `Donations for ${app.title || app.slug}`),
+            )
+          ),
+        )
+        : h('p', null, 'Create an app to add a donation fund.'),
+    ),
     offered(by, rows.apps),
     at.costs ? costing(view, at, paying, at.costs) : null,
     // Once the costs are read, the button is at hand again rather than a

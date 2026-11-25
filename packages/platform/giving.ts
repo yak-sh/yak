@@ -11,6 +11,7 @@ export type Fund = {
   holder: string
   amounts: number[]
   statement: string
+  test?: boolean
 }
 
 /** What a receipt says was given in return, unless the fund says otherwise. */
@@ -32,20 +33,25 @@ export let NOTHING_GIVEN =
  */
 export let fundOf = (row: {
   doc?: { title?: string | null } | null
+  fund_receipt?: { holder?: string | null; statement?: string | null } | null
   fund?: {
     holder?: string | null
     amounts_cents?: string | null
     statement?: string | null
+    test?: boolean | null
   } | null
 }): Fund => {
   let title = row.doc?.title?.trim() || 'Gift'
   return {
     title,
-    holder: row.fund?.holder?.trim() || title,
+    holder: row.fund_receipt?.holder?.trim() || row.fund?.holder?.trim() ||
+      title,
     amounts: String(row.fund?.amounts_cents ?? '').split(',')
       .map((a) => Number(a.trim()))
       .filter((a) => Number.isInteger(a) && a > 0),
-    statement: row.fund?.statement?.trim() || NOTHING_GIVEN,
+    statement: row.fund_receipt?.statement?.trim() ||
+      row.fund?.statement?.trim() || NOTHING_GIVEN,
+    ...(row.fund?.test != null ? { test: row.fund.test } : {}),
   }
 }
 
@@ -79,6 +85,7 @@ export let charge = (
   body: unknown,
   card: Costs['card'],
   minimum: number,
+  recurring = 0,
 ): { asked: Asked; charge: Charge } | { refused: string } => {
   let b = (body ?? {}) as Record<string, unknown>
   let cents = Number(b.cents)
@@ -90,7 +97,8 @@ export let charge = (
   }
   if (cents > MOST) return { refused: `a gift is at most ${money(MOST)}` }
   let asked = { cents, monthly: b.monthly === true, cover: b.cover === true }
-  let covered = asked.cover ? covering(card, cents) : 0
+  let rate = asked.monthly ? { ...card, bps: card.bps + recurring } : card
+  let covered = asked.cover ? covering(rate, cents) : 0
   return { asked, charge: { cents, covered, total: cents + covered } }
 }
 
@@ -195,4 +203,47 @@ export let statement = (fund: Fund, year: number, gifts: Received[]) => {
       'Keep this letter with your tax records.',
     ].join('\n'),
   }
+}
+
+/** A dollar input in whole cents, with validation shared by the page and its door. */
+export let centsOf = (input: unknown) => {
+  let value = String(input ?? '').trim()
+  if (!/^(?:[0-9]{1,5}(?:[.][0-9]{0,2})?|[.][0-9]{1,2})$/.test(value)) {
+    return NaN
+  }
+  let [dollars, cents = ''] = value.split('.')
+  return Number(dollars) * 100 + Number(cents.padEnd(2, '0'))
+}
+
+export let suggested = (input: string, minimum: number) => {
+  let amounts = [...new Set(input.split(',').map(centsOf))]
+  return amounts.length <= 6 &&
+      amounts.every((cents) => cents >= minimum && cents <= MOST)
+    ? amounts
+    : null
+}
+
+export type Choice = {
+  amount: string
+  monthly: boolean
+  cover: boolean
+  key: string
+}
+export type Rates = { card: Costs['card']; recurring?: number; minimum: number }
+
+export let priceOf = (choice: Omit<Choice, 'key'>, rates: Rates) =>
+  charge(
+    { ...choice, cents: centsOf(choice.amount) },
+    rates.card,
+    rates.minimum,
+    rates.recurring,
+  )
+
+export let totalOf = (choice: Omit<Choice, 'key'>, rates: Rates) => {
+  let price = priceOf(choice, rates)
+  if ('refused' in price) return ''
+  let { covered, total } = price.charge
+  return `${covered ? `${money(covered)} added · ` : ''}${money(total)} total${
+    choice.monthly ? ' per month' : ''
+  }`
 }

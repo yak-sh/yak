@@ -50,6 +50,11 @@ export let ASSETS: Asset[] = [
   { name: '_draft.js', bundle: of('@yaks/draft/browser') },
   { name: '_outbox.js', bundle: of('@yaks/sync/outbox') },
   { name: '_wire.js', bundle: of('@yaks/vocab/wire') },
+  {
+    name: '_giving.js',
+    bundle: of('@yaks/platform/giving-browser'),
+    named: true,
+  },
   { name: 'chart.js', bundle: here('./chart.js'), named: true },
   { name: 'data.js', bundle: of('@yaks/data-editor/editor') },
   { name: '_dates.js', bundle: here('./dates-browser.ts'), named: true },

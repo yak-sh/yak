@@ -55,6 +55,7 @@ import type {
 } from '@yaks/host/payments'
 import { ask, found, idOf, type Keyed, minimum } from './mod.ts'
 import { refund, refundedOf } from './refunds.ts'
+import { giftPortal } from './gift-portal.ts'
 import {
   ending,
   periodEnd,
@@ -230,22 +231,13 @@ export let sellerOf = (a: Account): Seller => ({
  * pricing does. */
 export let COSTS: Costs = {
   card: { bps: 290, cents: 30 },
+  recurring: 70,
   abroad: 150,
   dispute: 1500,
   refunded: false,
   payout: { days: 2, first: 7 },
   country: 'US',
   pricing: 'https://stripe.com/pricing',
-}
-
-/** The portal a connected account is given when it has none of its own:
- * a payer cancels at once or changes their card, and reads their invoices. */
-export let PORTAL = {
-  features: {
-    subscription_cancel: { enabled: true, mode: 'immediately' },
-    payment_method_update: { enabled: true },
-    invoice_history: { enabled: true },
-  },
 }
 
 /** The longest metadata value Stripe keeps, in characters: the most one
@@ -359,6 +351,9 @@ let marked = (tags: Tags): Tags => ({ ...tags, [HOUSE]: 'true' })
  */
 export let session = (sale: Sale, house = false): Record<string, unknown> => ({
   mode: sale.per ? 'subscription' : 'payment',
+  ...(sale.cardOnly
+    ? { payment_method_types: ['card'], adaptive_pricing: { enabled: false } }
+    : {}),
   ...(sale.expires
     ? { expires_at: Math.floor(Date.parse(sale.expires) / 1000) }
     : {}),
@@ -439,6 +434,8 @@ let settledBy = (type: string, o: Charge): Settled | null =>
 
 type Event = {
   type?: string
+  created?: number
+  livemode?: boolean
   account?: string
   data?: { object?: Record<string, unknown> }
 }
@@ -472,6 +469,12 @@ export let shops = (options: Options): Shops => {
     on: () => !!options.key,
     costs: COSTS,
     minimum,
+    mode: () =>
+      /^(?:sk|rk)_test_/.test(options.key ?? '')
+        ? 'test'
+        : /^(?:sk|rk)_live_/.test(options.key ?? '')
+        ? 'live'
+        : undefined,
     tag: TAG,
     open: async (who) => {
       let a = await ask(options, '/v1/accounts', account(who)) as Account
@@ -543,34 +546,8 @@ export let shops = (options: Options): Shops => {
         ) as Sub,
       ),
     refund: (on, request) => refund(options, on, request),
-    // A connected account has no portal configuration until its owner saves
-    // one in their dashboard, and Stripe refuses a session without one, so
-    // the account's first is made here when it has none: cancelling and
-    // changing the card, and the invoices paid.
-    portal: async (on, payer, back) => {
-      let held = await ask(
-        options,
-        '/v1/billing_portal/configurations?active=true&limit=1',
-        undefined,
-        on,
-      ) as { data?: { id?: string }[] }
-      let configuration = held.data?.[0]?.id ||
-        String(
-          (await ask(
-            options,
-            '/v1/billing_portal/configurations',
-            PORTAL,
-            on,
-            'POST',
-            `portal:${on}`,
-          )).id ?? '',
-        )
-      return await made('a portal session', '/v1/billing_portal/sessions', {
-        customer: payer,
-        return_url: back,
-        configuration,
-      }, on)
-    },
+    portal: (on, payer, subscription, back) =>
+      giftPortal(options, on, payer, subscription, back),
     refundFee: async (id, refunded, total) => {
       if (!total || !refunded) return
       let fee = await ask(
@@ -694,13 +671,21 @@ export let shopped = (options: Keyed) => (event: unknown): Shopped => {
     return { account, about: 'revoked' }
   }
   if (type == 'checkout.session.completed') {
-    return { account, about: 'sale', sale: paidOf(o as Session) }
+    let sale = paidOf(o as Session)
+    if (sale.tags.fund && e.created && typeof e.livemode == 'boolean') {
+      sale.gift = {
+        at: new Date(e.created * 1000).toISOString(),
+        live: e.livemode,
+      }
+    }
+    return { account, about: 'sale', sale }
   }
   let renewed = subscribedBy(type, o)
   if (renewed != null) {
-    let invoice = type == 'invoice.paid' && renewed
-      ? billedOf(o as Invoice, renewed)
-      : undefined
+    let invoice =
+      type == 'invoice.paid' && renewed && o.paid_out_of_band !== true
+        ? { ...billedOf(o as Invoice, renewed), live: e.livemode }
+        : undefined
     return {
       account,
       about: 'term',

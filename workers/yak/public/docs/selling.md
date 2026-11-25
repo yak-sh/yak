@@ -331,28 +331,38 @@ Refunds made in the seller's provider dashboard also update the order and
 reconcile that fee. A provider failure remains recorded and is reported to the
 platform tracker.
 
-## Donations: the `fund` and `gift` components
+## Donations
 
 A space that sells can also take gifts, through the same connected Stripe
 account. yaks.app takes no fee on a gift: the donor's money goes to the space's
 own Stripe balance less Stripe's processing fee, which the donor may choose to
 cover.
 
-A fund is a row with the platform's own `fund` component:
+Open **Selling**, then select the app under **Donations**. Save the fund's name,
+legal recipient and suggested amounts, then open its giving page. The same
+settings page shows calendar-year totals and queues year-end statements after
+the year ends. It shows test and live totals separately.
 
-    fund { holder, amounts_cents, statement }
+Choose **Test** to open a fund without taking live payments. A test fund can
+open Checkout only when the deployment and the space both use Stripe's sandbox.
+Choose **Live** after connecting the space's live Stripe account.
+
+For a custom giving page, write the platform's `fund` and `fund_receipt`
+components:
+
+    fund { amounts_cents, test }
+    fund_receipt { holder, statement }
 
     { "entity": { "eid": "$roof" },
       "alias": { "name": "fund:roof" },
       "doc": { "title": "The Roof Fund" },
-      "fund": { "holder": "Grace Hall Inc.",
-                "amounts_cents": "2500, 5000, 10000, 25000" } }
+      "fund": { "amounts_cents": "2500, 5000, 10000, 25000", "test": true },
+      "fund_receipt": { "holder": "Grace Hall Inc." } }
 
-`doc.title` is the name the donor sees first. `holder` is the legal name the
-receipt says received the gift. `amounts_cents` lists the suggested amounts for
-the page to offer, in cents. `statement` replaces the receipt's default "No
-goods or services were provided in exchange for this gift." when that is not the
-case.
+`doc.title` is the fund name. `amounts_cents` lists suggested amounts in cents.
+Only editors and owners can read `fund_receipt`. Its `holder` is the legal
+recipient named in the receipt. Its `statement` can replace the default
+acknowledgement that no goods or services were provided.
 
 A page posts the donor's choice:
 
@@ -362,12 +372,14 @@ A page posts the donor's choice:
 
     → 200 { "url": "https://checkout.stripe.com/c/pay/cs_test_…" }
 
-`cents` is the gift itself. With `cover: true` the checkout adds the least
-amount that leaves the space the whole gift after Stripe's card fee: at 2.9% +
-30¢, $50.00 adds $1.80. A page shows the donor that exact amount before they pay
-by asking for it:
+`cents` is the gift itself. With `cover: true` Checkout adds an amount based on
+the published domestic card fee, plus the published Billing rate for monthly
+gifts. The page displays the exact amount it will add. For a one-time $50.00
+gift, the addition is $1.80:
 
     GET ./api/pay/give?cents=5000  →  { "cents": 5000, "covered": 180, "total": 5180 }
+
+Pass `monthly=true` in the quote request for a monthly gift.
 
 `monthly: true` charges the same amount every month until the donor cancels.
 `success`, `cancel` and `email` work as they do for a cart. A gift below
@@ -382,13 +394,13 @@ its checkout completes, and a monthly gift once for each month's paid invoice.
 
 Like orders, gifts are private to the app's editors and owners, and only the
 platform writes them. `total_cents` is what was paid, of which `covered_cents`
-the donor added for the fee. `per` is `month` for a monthly gift. The owner's
-totals are a query, `.gift`, summed on the page.
+the donor added for the fee. `per` is `month` for a monthly gift. Owners can
+also read the records with `.gift`.
 
 Each gift sends the donor a receipt from the app's address: the holder's name,
 the amount, the date, and the statement. A monthly gift's receipt carries a link
-to Stripe's customer portal on the space's account, where the donor changes
-their card or cancels. The link stays good for as long as the gift does.
+to Stripe's customer portal on the space's account, where the donor can cancel
+that subscription. The link stays good for as long as the gift does.
 
 Year-end statements go out when the seller asks for them, from a page an editor
 uses (`pay('statements', { year: 2026 })`) or the app's worker through

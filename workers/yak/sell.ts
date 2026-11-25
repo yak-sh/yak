@@ -1030,7 +1030,8 @@ let sold = async (env: Env, space: Space, account: string, o: Paid) => {
         total: o.total,
         email: o.email,
         ...(o.name ? { name: o.name } : {}),
-        at: new Date().toISOString(),
+        at: o.gift?.at ?? new Date().toISOString(),
+        live: o.gift?.live,
         tags: o.tags,
       })
   }
@@ -1188,8 +1189,6 @@ export let giving = async (
   },
   body: unknown,
 ) => {
-  let shut = await closed(env, at.space)
-  if (shut) return shut
   let lent = await shops(env)
   let made: Sale
   try {
@@ -1202,7 +1201,29 @@ export let giving = async (
       : []
     if (!row?.fund) throw refuse('missing', `no fund ${id || '?'} in this app`)
     let fund = fundOf(row as Parameters<typeof fundOf>[0])
-    let priced = charge(asked, lent.costs.card, lent.minimum('usd'))
+    let mode = lent.mode()
+    if (fund.test && mode != 'test') {
+      return json(
+        409,
+        'test_only',
+        'This fund is in test mode. A sandbox connection is required.',
+      )
+    }
+    if (!at.space.seller?.account || at.space.seller.house) {
+      return json(
+        409,
+        'not_connected',
+        'This fund needs its own connected payment account.',
+      )
+    }
+    let shut = await closed(env, at.space)
+    if (shut) return shut
+    let priced = charge(
+      asked,
+      lent.costs.card,
+      lent.minimum('usd'),
+      lent.costs.recurring,
+    )
     if ('refused' in priced) throw refuse('arguments', priced.refused)
     let email = String(asked.email ?? '').trim()
     made = {
@@ -1214,6 +1235,7 @@ export let giving = async (
         qty: 1,
       }],
       currency: 'usd',
+      cardOnly: true,
       ...(priced.asked.monthly ? { per: 'month' as const } : {}),
       bps: 0,
       ...(email ? { email } : {}),
@@ -1224,10 +1246,16 @@ export let giving = async (
         space: at.space.eid,
         app: at.app,
         fund: id,
+        ...mode ? { gift_mode: mode } : {},
         covered: String(priced.charge.covered),
         ...(at.buyer ? { buyer: at.buyer } : {}),
         ...(at.via ? { via: at.via } : {}),
       },
+    }
+    if (typeof asked.key == 'string' && /^[0-9a-f-]{36}$/i.test(asked.key)) {
+      made.key = sha256(
+        JSON.stringify([at.space.seller.account, asked.key, made]),
+      )
     }
   } catch (e) {
     return json(
@@ -1253,12 +1281,13 @@ export let giving = async (
 /** What a gift of `cents` charges with the fee covered, as the giving door
  * would charge it (`GET /api/pay/give?cents=`), so the page shows the donor
  * the exact amount before they choose. */
-export let covered = async (env: Env, cents: unknown) => {
+export let covered = async (env: Env, cents: unknown, monthly = false) => {
   let lent = await shops(env)
   let priced = charge(
-    { cents: Number(cents), cover: true },
+    { cents: Number(cents), cover: true, monthly },
     lent.costs.card,
     lent.minimum('usd'),
+    lent.costs.recurring,
   )
   return 'refused' in priced
     ? json(400, 'refused', priced.refused)
@@ -1277,6 +1306,7 @@ type Given = {
   email: string
   name?: string
   at: string
+  live?: boolean
   tags: Record<string, string>
 }
 
@@ -1291,7 +1321,13 @@ export let giftEid = (key: string) => derivedEid(`gift\x00${key}`)
  * gift is, since a donor finds it months later.
  */
 let gave = async (env: Env, space: Space, account: string, g: Given) => {
-  if (!(g.total > 0)) return 'a gift of nothing'
+  if (!account || space.seller?.house || g.tags.space != space.eid) {
+    return 'not a connected gift'
+  }
+  if (!g.key || !(g.total > 0)) return 'a gift of nothing'
+  if (g.tags.gift_mode && g.tags.gift_mode != (g.live ? 'live' : 'test')) {
+    return 'gift payment mode does not match checkout'
+  }
   let slug = String(g.tags.app ?? '')
   let app = await inApp(env, space, slug)
   if (!app) return `no app ${slug || '?'} in ${space.slug}`
@@ -1301,6 +1337,10 @@ let gave = async (env: Env, space: Space, account: string, g: Given) => {
   if (existing?.gift) return 'unchanged'
   let [row] = await store.query(line`.entity.eid=${g.tags.fund}`)
   let fund = fundOf((row ?? {}) as Parameters<typeof fundOf>[0])
+  if (fund.test && g.live && g.tags.gift_mode != 'live') {
+    return 'fund is test only'
+  }
+  let test = g.live === false
   let monthly = !!g.subscription
   let covered = Math.min(g.total, Math.max(0, Number(g.tags.covered) || 0))
   let cancel = monthly && env.SESSION_SECRET
@@ -1328,6 +1368,9 @@ let gave = async (env: Env, space: Space, account: string, g: Given) => {
         account,
         total_cents: g.total,
         covered_cents: covered,
+        test,
+        holder: fund.holder,
+        statement: fund.statement,
         email: g.email,
         ...(g.name ? { name: g.name } : {}),
         ...(monthly ? { per: 'month' } : {}),
@@ -1346,7 +1389,7 @@ let letterTo = (
   address: string,
   eid: string,
   letter: { title: string; body: string },
-  them = `$${eid}`,
+  them = derivedEid(`giving/recipient/${eid}`),
 ) => [
   { entity: { eid: them }, email: { address } },
   { entity: { eid }, doc: letter, mail: {}, deliver: { to: them } },
@@ -1359,6 +1402,10 @@ type GiftRow = {
     fund?: string
     payer?: string
     account?: string
+    subscription?: string
+    test?: boolean
+    holder?: string
+    statement?: string
     email?: string
     total_cents?: number
     covered_cents?: number
@@ -1392,14 +1439,26 @@ export let giftPortal = async (
   let [row] = await asApp(env, at.space, at.app).query(
     line`.entity.eid=${gift}`,
   ) as GiftRow[]
-  let { payer, account } = row?.gift ?? {}
-  if (!payer || !account) {
+  let { payer, account, subscription, test } = row?.gift ?? {}
+  if (!payer || !account || !subscription) {
     return json(404, 'not_found', 'that gift does not repeat')
   }
   try {
     let lent = await shops(env)
+    if (test ? lent.mode() != 'test' : lent.mode() == 'test') {
+      return json(
+        409,
+        'wrong_mode',
+        'This gift belongs to another payment mode.',
+      )
+    }
     return Response.redirect(
-      await lent.portal(account, payer, appUrl(at.space, at.app, env)),
+      await lent.portal(
+        account,
+        payer,
+        subscription,
+        appUrl(at.space, at.app, env),
+      ),
       303,
     )
   } catch (e) {
@@ -1428,18 +1487,28 @@ export let statements = async (
     return json(400, 'refused', 'year: the calendar year, such as 2026')
   }
   let store = asApp(env, at.space, at.app)
-  let gifts = (await store.query(line`.gift`) as GiftRow[])
-    .filter((r) => r.gift?.email && r.gift.at?.startsWith(`${year}-`))
+  let test = (await shops(env)).mode() == 'test'
+  let from = `${year}-01-01T00:00:00.000Z`
+  let to = `${year + 1}-01-01T00:00:00.000Z`
+  let gifts =
+    (await store.query(line`.gift.at>=${from}&.gift.at<${to}`) as GiftRow[])
+      .filter((r) => r.gift?.email && !!r.gift.test == test)
   let by = Map.groupBy(
     gifts,
-    (r) => `${r.gift!.fund ?? ''}\x00${r.gift!.email}`,
+    (r) =>
+      JSON.stringify([
+        r.gift!.fund ?? '',
+        r.gift!.holder,
+        r.gift!.email!.trim().toLowerCase(),
+      ]),
   )
   let funds = new Map<string, Fund>()
   for (let id of new Set(gifts.map((r) => r.gift!.fund).filter(Boolean))) {
     let [row] = await store.query(line`.entity.eid=${id!}`)
     funds.set(id!, fundOf((row ?? {}) as Parameters<typeof fundOf>[0]))
   }
-  let eid = (key: string) => derivedEid(`statement\x00${year}\x00${key}`)
+  let eid = (key: string) =>
+    derivedEid(`statement\x00${year}\x00${test}\x00${key}`)
   let sent = new Set(
     by.size
       ? (await store.query(line`.entity.eid=${[...by.keys()].map(eid)}`))
@@ -1448,9 +1517,14 @@ export let statements = async (
   )
   let rows = [...by].filter(([key]) => !sent.has(eid(key))).flatMap(
     ([key, mine]) => {
-      let { fund, email } = mine[0].gift!
+      let { fund, email, holder, statement: words } = mine[0].gift!
+      let named = funds.get(fund ?? '') ?? fundOf({})
       let letter = statement(
-        funds.get(fund ?? '') ?? fundOf({}),
+        {
+          ...named,
+          holder: holder ?? named.holder,
+          statement: words ?? named.statement,
+        },
         year,
         mine.map((r) => ({
           total: r.gift!.total_cents ?? 0,

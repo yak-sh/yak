@@ -1885,14 +1885,27 @@ let appDoor = async (
   // the fund comes off the app's own row and the amount is the donor's.
   if (path == '/pay/give') {
     if (!mayUse) return refuse('not_a_reader')
-    if (req.method == 'GET') {
-      return await covered(env, new URL(req.url).searchParams.get('cents'))
+    let params = new URL(req.url).searchParams
+    if (req.method == 'GET' && params.has('cents')) {
+      return await covered(
+        env,
+        params.get('cents'),
+        params.get('monthly') == 'true',
+      )
+    }
+    if (
+      req.method == 'GET' || req.method == 'HEAD' ||
+      req.method == 'POST' &&
+        req.headers.get('content-type')?.split(';')[0] ==
+          'application/x-www-form-urlencoded'
+    ) {
+      return (await import('./sale-door.ts')).showGiving(asked)
     }
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     return giving(env, {
       space,
       app: app.slug,
-      root: urlOf(space, app),
+      root: urlOf(space, app, env),
       buyer: who.service?.person ?? who.person,
       via: who.via,
     }, await req.json().catch(() => null))

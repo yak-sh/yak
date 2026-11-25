@@ -724,6 +724,7 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
     entities: [{
       entity: { eid: k.space.eid },
       seller: { via: 'stripe', account: 'acct_shop', ready: true },
+      comped: { until: '2100-01-01T00:00:00.000Z' },
     }],
   })
   let store = metaOf(appStore(k.env.STORE, k.space, k.app, k.env), {
@@ -735,7 +736,8 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
   await store.apply([{
     entity: { eid: FUND },
     doc: { title: 'The Roof' },
-    fund: { holder: 'Grace Hall Inc.', amounts_cents: '2500,10000' },
+    fund: { amounts_cents: '2500,10000', test: true },
+    fund_receipt: { holder: 'Grace Hall Inc.' },
   }])
 
   let real = globalThis.fetch
@@ -758,7 +760,59 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
     )
   })
   let space = { ...(await k.dir.space('ada'))!, tier: 'plus' as const }
-  let env = { ...k.env, STRIPE_KEY: 'sk_probe' }
+  let env = { ...k.env, STRIPE_KEY: 'rk_test_probe' }
+  let page = await apps.fetch(visit('/shop/api/pay/give?fund=' + FUND), env)
+  let html = await page.text()
+  assertEquals(page.status, 200, html.slice(0, 500))
+  assertStringIncludes(html, 'The Roof')
+  assertStringIncludes(html, 'Test giving page.')
+  assertStringIncludes(html, 'Cover estimated payment fees')
+  assert(!html.includes('Grace Hall Inc.'))
+  let rows = await apps.fetch(
+    visit('/shop/api/query?q=' + encodeURIComponent('.fund&?fund_receipt')),
+    env,
+  )
+  assert(!((await rows.text()).includes('Grace Hall Inc.')))
+
+  let settings = '/shop/api/pay/donations'
+  assertEquals((await apps.fetch(visit(settings), env)).status, 403)
+  let owner = await as(ADA)
+  let ready = await apps.fetch(
+    visit(settings, { headers: { cookie: owner } }),
+    env,
+  )
+  assertEquals(ready.status, 200, await ready.clone().text())
+  assertStringIncludes(await ready.text(), 'Giving totals')
+
+  let live = { ...env, STRIPE_KEY: 'rk_live_fixture' }
+  let blocked = await sell.giving(live, {
+    space,
+    app: 'shop',
+    root: 'https://ada.yaks.app/shop/',
+  }, { fund: FUND, cents: 2500 })
+  assertEquals(blocked.status, 409)
+  assertEquals(asked.length, 0)
+
+  let review = await apps.fetch(
+    visit('/shop/api/pay/give', {
+      method: 'POST',
+      body: new URLSearchParams({
+        fund: FUND,
+        amount: '25.00',
+        cover: 'on',
+        frequency: 'month',
+        key: '33333333-3333-4333-8333-333333333333',
+        act: 'review',
+      }),
+    }),
+    env,
+  )
+  let quote = await review.text()
+  assertEquals(review.status, 200)
+  assertStringIncludes(quote, '$26.24 each month')
+  assertStringIncludes(quote, '$1.24 to cover estimated fees')
+  assertEquals(asked.length, 0)
+
   let give = async (body: Record<string, unknown>) => {
     let res = await sell.giving(env, {
       space,

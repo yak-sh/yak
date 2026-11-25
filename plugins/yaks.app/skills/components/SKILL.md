@@ -854,8 +854,8 @@ The complete list of reserved names:
     edge effect email entity entry error event exception execution failed
     favorite featured fee feed feedback file file_retirement filed finding
     fired form form_guest form_mail form_phone form_post former free_spaces
-    fund gallery gift gitobj grant grants_listed handoff_spent heard
-    heard_turn hearing held home hook hostname image inference install
+    fund fund_receipt gallery gift gitobj grant grants_listed handoff_spent
+    heard heard_turn hearing held home hook hostname image inference install
     installed integration integration_install interrupted invite inviting
     key knock last_deploy lease lent lines located mail mail_answered
     mail_dismissed mail_domain mail_post mail_task mcp_list mcp_server

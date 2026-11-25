@@ -307,6 +307,8 @@ export type Sale = {
   bps: number
   /** the buyer's address to start the page with, if one is known */
   email?: string
+  /** Offer cards and card wallets in the sale currency. */
+  cardOnly?: boolean
   /** the seller's name, which the buyer's card statement reads after the
    * host's on a sale on the host's own account; a seller's own account
    * already names them there */
@@ -343,6 +345,8 @@ export type Paid = {
   email: string
   /** the name the buyer gave, where the checkout asked for one */
   name?: string
+  /** Time and mode of the provider event that confirmed a gift. */
+  gift?: { at: string; live: boolean }
   /** what the checkout carried ({@link Sale.tags}) */
   tags: Tags
 }
@@ -414,6 +418,7 @@ export type Billed = {
   at: string
   email: string
   name?: string
+  live?: boolean
   tags: Tags
 }
 
@@ -455,6 +460,8 @@ export type Costs = {
   /** a payment by a card from the seller's own country: a rate in basis
    * points of the payment, plus a fixed amount in cents */
   card: { bps: number; cents: number }
+  /** Additional estimated billing costs for recurring payments. */
+  recurring?: number
   /** what a card from another country adds to the rate, in basis points */
   abroad: number
   /** the fee for a payment a buyer disputes with their bank, in cents,
@@ -521,6 +528,8 @@ export type Shops = {
   costs: Costs
   /** the least one payment may be in a currency, in its smallest unit */
   minimum: (currency: string) => number
+  /** Which mode this connection can charge in. */
+  mode: () => 'test' | 'live' | undefined
   /** the most characters one tag's value carries ({@link Sale.tags}): a
    * longer one the provider refuses or cuts short */
   tag: number
@@ -556,7 +565,12 @@ export type Shops = {
   /** the address of the provider's hosted portal on a seller's account,
    * where its payer manages and cancels what it pays, handing them back to
    * `back` */
-  portal: (account: string, payer: string, back: string) => Promise<string>
+  portal: (
+    account: string,
+    payer: string,
+    subscription: string,
+    back: string,
+  ) => Promise<string>
   /** Reconcile a dashboard refund's cumulative application-fee reversal. */
   refundFee: (fee: string, refunded: number, total: number) => Promise<void>
 }

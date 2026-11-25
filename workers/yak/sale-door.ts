@@ -1,16 +1,29 @@
 // The customer door returns one checked receipt or artifact. The seller's
 // graph remains behind its existing editor authority.
 import type { Bundle, Comp } from '@yaks/graph'
+import type { ComponentChildren } from 'preact'
 import { type Built, joined, type Line, line, sub } from '@yaks/query'
 import type { Answer, Asked } from './apps.ts'
-import { appStore } from './directory.ts'
+import { appStore, url as appUrl } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { blobPrefix } from './blob-key.ts'
 import { blobBytes } from './files.ts'
 import { uploaded } from './uploads.ts'
 import { Untaken, useOf } from '@yaks/blob/upload'
 import { bodyOf } from '@yaks/blob'
-import { giftPortal, quoteDoor, refundDoor, statements } from './sell.ts'
+import {
+  backTo,
+  giftPortal,
+  giving,
+  quoteDoor,
+  refundDoor,
+  refusedSell,
+  statements,
+} from './sell.ts'
+import { donationSettings, givingPage } from '@yaks/platform/giving-pages'
+import { payments } from './payments.ts'
+import { page } from './pages.ts'
+import { asset } from './sheets.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import {
   ARTIFACT_LIFE,
@@ -310,7 +323,77 @@ let artifacts = async (at: Asked, sha: string, link: boolean) => {
   return new Response(body.body, { status: body.status, headers })
 }
 
+let pagesOf = async (at: Asked) => {
+  let { req, env, space, app, who } = at
+  let { name: provider, shops } = await payments(env)
+  let root = appUrl(space, app, env)
+  let store = storeOf(at)
+  let connected = shops.on() && !refusedSell(space, env) &&
+    !!space.seller?.account &&
+    space.seller.ready && !space.seller.house
+  return {
+    request: req,
+    link: new URL('api/pay/give', root).href,
+    provider,
+    mode: shops.mode(),
+    connected,
+    rates: {
+      card: shops.costs.card,
+      recurring: shops.costs.recurring,
+      minimum: shops.minimum('usd'),
+    },
+    store: {
+      read: store.query,
+      write: (rows: Parameters<typeof store.apply>[0]) =>
+        store.apply(rows, { 'x-yak-person': who.person ?? app.eid }),
+    },
+    page: (
+      { controls, ...params }: {
+        title: string
+        lead?: string
+        status?: number
+        controls?: boolean
+      },
+      ...parts: ComponentChildren[]
+    ) =>
+      page(env, {
+        ...params,
+        headers: {
+          'cache-control': 'private, no-store',
+          'referrer-policy': 'no-referrer',
+        },
+        head: controls
+          ? `<script type="module" src="${
+            asset(env, '_giving.js')
+          }" crossorigin></script>`
+          : '',
+      }, ...parts),
+  }
+}
+
+export let showGiving = async (at: Asked) =>
+  givingPage(await pagesOf(at), (body) =>
+    giving(at.env, {
+      space: at.space,
+      app: at.app.slug,
+      root: appUrl(at.space, at.app, at.env),
+      buyer: at.who.service?.person ?? at.who.person,
+      via: at.who.via,
+    }, body))
+
 export let saleDoor: Answer = async (at) => {
+  if (at.path == '/pay/donations') {
+    if (at.who.role != 'owner') return at.json(403, 'not_an_owner')
+    if (!['GET', 'HEAD', 'POST'].includes(at.req.method)) {
+      return at.json(405, 'method_not_allowed')
+    }
+    return donationSettings(
+      await pagesOf(at),
+      backTo(at.space, at.env),
+      at.env.CLOCK?.now() ?? Date.now(),
+      (year) => statements(at.env, at, { year }),
+    )
+  }
   if (at.path == '/pay/artifacts/links') return artifactLinks(at)
   let quote = /^\/pay\/quotes(?:\/([0-9a-f-]{36,64}))?$/.exec(at.path)
   if (quote) {

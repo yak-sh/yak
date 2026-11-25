@@ -252,12 +252,13 @@ let say = (words, wrong) => {
 
 // What covering the fee adds to this amount, asked of the platform, which
 // charges exactly that.
-let coverOf = async (cents) => {
-  if (!fees.has(cents)) {
-    let r = await fetch(`./api/pay/give?cents=${cents}`)
-    fees.set(cents, r.ok ? (await r.json()).covered : null)
+let coverOf = async (cents, monthly) => {
+  let key = `${cents}:${monthly}`
+  if (!fees.has(key)) {
+    let r = await fetch(`./api/pay/give?cents=${cents}&monthly=${monthly}`)
+    if (r.ok) fees.set(key, (await r.json()).covered)
   }
-  return fees.get(cents)
+  return fees.get(key)
 }
 
 let draw = async () => {
@@ -266,29 +267,28 @@ let draw = async () => {
   }
   $('once').setAttribute('aria-pressed', String(!choice.monthly))
   $('monthly').setAttribute('aria-pressed', String(choice.monthly))
-  let every = choice.monthly ? ' a month' : ''
-  $('give').disabled = !choice.cents
+  let { cents, monthly } = choice
+  let every = monthly ? ' a month' : ''
+  $('give').disabled = true
   if (!choice.cents) {
     $('give').replaceChildren(text('Give'))
     $('covering').replaceChildren(
-      text('Add the card fee so the whole gift arrives'),
+      text('Cover estimated payment fees'),
     )
     return
   }
-  let cents = choice.cents
-  let added = await coverOf(cents)
-  if (cents != choice.cents) return
+  let added = await coverOf(cents, monthly)
+  if (cents != choice.cents || monthly != choice.monthly) return
   $('covering').replaceChildren(
     text(
       added == null
-        ? 'Add the card fee so the whole gift arrives'
-        : `Add ${money(added)} to cover the card fee, so the whole ${
-          money(cents)
-        } arrives`,
+        ? 'Cover estimated payment fees'
+        : `Add ${money(added)} to cover estimated payment fees`,
     ),
   )
   let total = cents + (choice.cover && added ? added : 0)
   $('give').replaceChildren(text(`Give ${money(total)}${every}`))
+  $('give').disabled = choice.cover && added == null
 }
 
 $('once').onclick = () => {

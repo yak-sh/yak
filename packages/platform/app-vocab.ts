@@ -222,7 +222,16 @@ export let appsDoc: VocabDoc = {
         holder: text,
         amounts_cents: text,
         statement: text,
+        test: { type: 'boolean' },
       },
+    },
+    fund_receipt: {
+      component: true,
+      type: 'object',
+      shown: 'editor',
+      description:
+        'The legal recipient and acknowledgement used in a fund’s receipts.',
+      properties: { holder: text, statement: text },
     },
     // A gift received (sell.ts `gave`): one row per payment, a one-time
     // gift's checkout or one month of a monthly gift's invoice, written by
@@ -245,6 +254,9 @@ export let appsDoc: VocabDoc = {
         account: owned(text),
         total_cents: owned(num),
         covered_cents: owned(num),
+        test: owned({ type: 'boolean' }),
+        holder: owned(text),
+        statement: owned(text),
         email: owned(text),
         name: owned(text),
         per: owned({ type: 'string', enum: ['month'] }),
