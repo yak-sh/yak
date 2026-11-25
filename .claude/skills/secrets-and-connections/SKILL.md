@@ -338,9 +338,10 @@ only the parameters you name.
 The admin's Wrangler commands have a token of their own:
 `yak admin deploys|tail|rollback --as admin` run Wrangler with
 `CLOUDFLARE_ADMIN_TOKEN` (Workers Scripts read and write, Workers Tail read;
-packages/admin/README.md). New Cloudflare tokens are minted as account-owned
-tokens with the 1Password "Homelab Cloudflare" item's token, and sealed into
-the vault by the minting script itself, never through a file or an argument.
+packages/admin/README.md). New Cloudflare tokens were minted as account-owned
+tokens with the 1Password "Homelab Cloudflare" item's token, sealed into the
+vault by the minting script itself, never through a file or an argument. That
+token now answers 401 Invalid API Token, so nothing on the box can mint one.
 
 Workers Builds logs take a user-owned token; every account-owned one gets 403 or 12006. The 1Password item "cloudflare user read-only" (vault Yak Shaving LLC, field credential) is one, so an agent on the box reads a build's log with it: `op read` inside the script, sent as a Bearer token to `/accounts/<id>/builds/workers/<script tag>/builds` (the tag is the script's `tag` in `/workers/scripts`; yak's is f1694d3fa03d42dabe44ba70137c678a), then `/builds/builds/<uuid>/logs`. It is the owner's key and stays on the box; the Worker's `BUILD_LOG_TOKEN` waits on a scoped token he mints (T-123153).
 
