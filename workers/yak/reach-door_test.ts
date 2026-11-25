@@ -736,7 +736,8 @@ test('a page socket pushes presence to confirmed friends through hibernation and
     await until(() => rows.length)
     return {
       rows: () => friendsOf(rows.at(-1)!),
-      tab: (visible: boolean) => send({ tab: { visible, focused: visible } }),
+      tab: (visible: boolean, focused: boolean, idle: boolean) =>
+        send({ tab: { visible, focused, idle } }),
       close: () => ws.close(),
     }
   }
@@ -744,18 +745,28 @@ test('a page socket pushes presence to confirmed friends through hibernation and
     let watching = await open(friend)
     let outsiders = await open(stranger)
     let seen = () => watching.rows().find((f) => f.person == ADA)?.seen
-    equal(seen(), undefined)
+    equal(seen()?.activity, 'offline')
     let first = await open(ADA)
-    await until(() => seen()?.state == 'online')
+    await until(() => seen()?.activity == 'away')
     equal(outsiders.rows(), [])
-    first.tab(true)
+    first.tab(true, true, false)
+    await until(() => seen()?.activity == 'active')
+    first.tab(true, false, false)
+    await until(() => seen()?.activity == 'away')
+    first.tab(true, true, false)
+    await until(() => seen()?.activity == 'active')
+    first.tab(true, true, true)
+    await until(() => seen()?.activity == 'away')
+    first.tab(true, true, false)
+    await until(() => seen()?.activity == 'active')
     let second = await open(ADA)
-    second.tab(false)
-    first.close()
+    second.tab(false, true, false)
     await runtime.settled()
-    equal(seen()?.state, 'online')
+    equal(seen()?.activity, 'active')
 
     runtime.evict(PLATFORM_OBJECT)
+    first.close()
+    await until(() => seen()?.activity == 'away')
     let [where] = await dir.whereabouts([ADA])
     equal(where.whereabouts?.state, 'background')
     equal(where.whereabouts?.live, true)
@@ -768,11 +779,11 @@ test('a page socket pushes presence to confirmed friends through hibernation and
       await hide(person, true)
       await until(() => seen() === undefined)
       await hide(person, false)
-      await until(() => seen()?.state == 'online')
+      await until(() => seen()?.activity == 'away')
     }
     runtime.evict(PLATFORM_OBJECT)
     second.close()
-    await until(() => seen()?.state == 'away')
+    await until(() => seen()?.activity == 'offline')
     equal(typeof seen()?.last, 'string')
     equal(outsiders.rows(), [])
   } finally {

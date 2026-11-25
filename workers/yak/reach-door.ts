@@ -510,12 +510,15 @@ export let reachDoor = async (
         return () => void sayers.delete(say)
       }
       // The friends watch is on every framed page. Its directory socket
-      // follows that page and carries only visibility or focus changes.
+      // follows that page and carries only visibility, focus or idle changes.
       let sayPresence = (say: (frame: unknown) => void) => {
         let last: Tab | undefined
         return sayTab((frame) => {
           let next = tabSaid(frame)!
-          if (next.visible == last?.visible && next.focused == last.focused) {
+          if (
+            next.visible == last?.visible && next.focused == last.focused &&
+            next.idle == last.idle
+          ) {
             return
           }
           last = next

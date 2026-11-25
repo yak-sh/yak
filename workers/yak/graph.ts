@@ -364,6 +364,7 @@ import {
   pageWord,
   type Row as WhereaboutsRow,
   type Tab,
+  tabActivity,
   tabSaid,
   tabsState,
 } from '@yaks/notify/whereabouts'
@@ -643,6 +644,7 @@ type Pages = {
 // What a page's socket holds that its store reads: who opened it (`sockets`'
 // `read`), and what it last said of its tab (`#framed`).
 type Paging = { read?: ReadOpts; tab?: Tab; page?: true }
+let QUIET_TAB: Tab = { visible: false, focused: false }
 
 let pageTag = (person: string) => `page:${person}`
 
@@ -2252,6 +2254,7 @@ export class Store extends Durable {
     // are watching is re-opened against the new one. Without this a deploy
     // would leave every open page subscribed to a registry nothing commits to.
     let restored = this.#dormant ? undefined : this.#live.wake(!rebinding)
+    this.#pageWatchesReady = restored
     if (isPromise(restored)) {
       restored.catch((error) =>
         defect(error, { request: 'socket restore', store: name })
@@ -2410,6 +2413,7 @@ export class Store extends Durable {
         },
         tags: { request: 'directory read of a person' },
       })
+      this.#friendsWatch = pending
       watching = beside(
         watching,
         pending,
@@ -3554,7 +3558,13 @@ export class Store extends Durable {
     if (tab) {
       let held = ws.deserializeAttachment() as Paging | null
       ws.serializeAttachment({ ...held, tab })
-      if (held?.page) return
+      if (held?.page) {
+        let person = held.read?.person
+        if (person) {
+          await this.#pageChanged(person, ws, held.tab ?? QUIET_TAB, tab)
+        }
+        return
+      }
       return await this.#whereabouts(ws)
     }
     if (!await take()) return
@@ -3580,9 +3590,7 @@ export class Store extends Durable {
     let person = held?.read?.person
     if (closing && held?.page && person) {
       ws.serializeAttachment({ ...held, page: undefined })
-      await this.#ensureStarted()
-      await this.#live.wake()
-      return await this.#pageChanged(person, false)
+      return await this.#pageChanged(person, ws, held.tab ?? QUIET_TAB)
     }
     if (
       !held?.tab || !person || held.read?.administrative || !this.#bind.STORE
@@ -3610,7 +3618,7 @@ export class Store extends Durable {
     return this.#ctx.getWebSockets(pageTag(person)).flatMap((ws) => {
       if (ws == except || ws.readyState != 1) return []
       let held = ws.deserializeAttachment() as Paging | null
-      return held?.page ? [held.tab ?? { visible: false, focused: false }] : []
+      return held?.page ? [held.tab ?? QUIET_TAB] : []
     })
   }
 
@@ -3632,13 +3640,30 @@ export class Store extends Durable {
     )
   }
 
-  // Keep last activity and wake friends' computed reads on the first open
-  // or last close. Their answers use the sockets that the runtime still holds.
-  async #pageChanged(person: string, open: boolean, except?: Wire) {
-    if (this.#pageTabs(person, except).length) return
-    await this.#asIs([
-      pageWord(person, open ? 'open' : 'away', this.#now()),
-    ], { stamp: false })
+  #friendsWatch?: Reached
+  #pageWatchesReady: void | Promise<void> = undefined
+
+  // A tab's change only moves the friends read if it changes the aggregate.
+  // The first open and last close also keep a timestamp for last seen.
+  async #pageChanged(person: string, ws: Wire, before?: Tab, after?: Tab) {
+    if (
+      tabActivity(before ? [before] : []) == tabActivity(after ? [after] : [])
+    ) {
+      return
+    }
+    let tabs = this.#pageTabs(person, ws)
+    let was = tabActivity(before ? [...tabs, before] : tabs)
+    let now = tabActivity(after ? [...tabs, after] : tabs)
+    if (was == now) return
+    await this.#ensureStarted()
+    await this.#pageWatchesReady
+    if (was == 'offline' || now == 'offline') {
+      await this.#asIs([
+        pageWord(person, now == 'offline' ? 'away' : 'open', this.#now()),
+      ], { stamp: false })
+    } else {
+      await this.#friendsWatch?.hear((line) => line == FRIENDS)
+    }
   }
 
   // A work of the store's own: worked once it is awake and started, inside
@@ -5564,12 +5589,13 @@ export class Store extends Durable {
                 ...ws.deserializeAttachment() as object,
                 page: true,
               })
-              let work = this.#pageChanged(person, true, ws).catch((error) =>
-                defect(error, {
-                  request: 'page presence open',
-                  store: PLATFORM_STORE,
-                })
-              )
+              let work = this.#pageChanged(person, ws, undefined, QUIET_TAB)
+                .catch((error) =>
+                  defect(error, {
+                    request: 'page presence open',
+                    store: PLATFORM_STORE,
+                  })
+                )
               this.#ctx.waitUntil?.(work)
             },
           }

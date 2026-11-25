@@ -115,16 +115,19 @@ export let noted = (
   }
 }
 
-/** One tab's say: whether its page is visible and has focus. A page says it
- * on its socket as `{tab}` when it changes and every {@link BEAT}. */
-export type Tab = { visible: boolean; focused: boolean }
+/** What a tab reports on its socket. Older clients omit the input signal. */
+export type Tab = { visible: boolean; focused: boolean; idle?: boolean }
 
 /** The tab a socket's frame says, none for any other frame. */
 export let tabSaid = (frame: unknown): Tab | undefined => {
   let tab = (frame as { tab?: unknown } | null)?.tab
   if (!tab || typeof tab != 'object') return
-  let { visible, focused } = tab as Record<string, unknown>
-  return { visible: visible === true, focused: focused === true }
+  let { visible, focused, idle } = tab as Record<string, unknown>
+  return {
+    visible: visible === true,
+    focused: focused === true,
+    ...typeof idle == 'boolean' ? { idle } : {},
+  }
 }
 
 /** The state of a page across a person's tabs on it: `here`
@@ -136,6 +139,16 @@ export let tabsState = (tabs: Tab[]): State =>
     : tabs.length
     ? 'background'
     : 'away'
+
+/** The activity visible to friends across the person's open page tabs. */
+export type Activity = 'active' | 'away' | 'offline'
+
+export let tabActivity = (tabs: Tab[]): Activity =>
+  tabs.some((t) => t.visible && t.focused && t.idle === false)
+    ? 'active'
+    : tabs.length
+    ? 'away'
+    : 'offline'
 
 /** The durable timestamp of when a person's first page opened or last page closed. */
 export let pageWord = (person: string, state: State, now: number): Row => ({
@@ -159,7 +172,12 @@ export let pageWhereabouts = (
   let eid = whereaboutsEid(person, 'apps')
   let past = history.find((row) => row.entity.eid == eid)
   if (!past && !tabs.length) return history
-  let state = tabsState(tabs)
+  let activity = tabActivity(tabs)
+  let state: State = activity == 'active'
+    ? 'here'
+    : activity == 'away'
+    ? 'background'
+    : 'away'
   let page = past ?? pageWord(person, state, now)
   return [
     ...history.filter((row) => row.entity.eid != eid),
@@ -168,6 +186,16 @@ export let pageWhereabouts = (
       whereabouts: { ...page.whereabouts, state, live: !!tabs.length },
     },
   ]
+}
+
+/** Activity as seen in the computed unplaced page row. */
+export let pageActivity = (rows: Row[]): Activity => {
+  let page = rows.find(({ whereabouts: p }) =>
+    p?.live && p.channel == 'apps' && !p.place
+  )
+  return page
+    ? page.whereabouts?.state == 'here' ? 'active' : 'away'
+    : 'offline'
 }
 
 /** Whether a channel's last word still stands. A live page follows its socket. */

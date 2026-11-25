@@ -1,8 +1,6 @@
 /**
- * Where a page's person is: whether its tab is visible and has focus, said on
- * the page's socket when that changes and every `BEAT` while it is open, so
- * the server keeps their whereabouts (./whereabouts.ts) and lets a row fade
- * once the page is gone without a word. The page's half of whereabouts, which
+ * Where a page's person is: whether its tab is visible, focused, and has
+ * recent input. The page's half of whereabouts, which
  * @yaks/client and the yaks.app app pages' client both say through.
  *
  * ```ts ignore
@@ -13,15 +11,32 @@
  * ```
  */
 
+import { type Clock, system } from '@yaks/fp'
 import { BEAT, type Tab } from './whereabouts.ts'
+
+/** How long input counts toward a tab's presence. */
+export let IDLE = 5 * 60_000
+
+let INPUT = [
+  'pointerdown',
+  'pointermove',
+  'keydown',
+  'wheel',
+  'touchmove',
+  'input',
+]
 
 /** The page a client says its tab from: a browser's `window`, by default. */
 export type Page = {
   document: {
     visibilityState: string
     hasFocus: () => boolean
-    addEventListener: (type: string, fn: () => void) => void
-    removeEventListener: (type: string, fn: () => void) => void
+    addEventListener: (type: string, fn: () => void, capture?: boolean) => void
+    removeEventListener: (
+      type: string,
+      fn: () => void,
+      capture?: boolean,
+    ) => void
   }
   addEventListener: (type: string, fn: () => void) => void
   removeEventListener: (type: string, fn: () => void) => void
@@ -37,24 +52,46 @@ export let browserPage = (): Page | undefined => {
     : undefined
 }
 
-/** Say `page`'s tab to `say` now, on each change and every `BEAT`; the
- * returned function stops. */
-export let sayTab = (page: Page, say: (tab: Tab) => void): () => void => {
+/** Say the tab's changes and renew the legacy whereabouts timestamp every
+ * `BEAT`. The returned function stops both. */
+export let sayTab = (
+  page: Page,
+  say: (tab: Tab) => void,
+  clock: Clock = system,
+): () => void => {
   let { document } = page
-  let now = () =>
+  let last = -Infinity
+  let stopIdle: (() => void) | undefined
+  let left = () => last + IDLE - clock.now()
+  let report = () =>
     say({
       visible: document.visibilityState == 'visible',
       focused: document.hasFocus(),
+      idle: left() <= 0,
     })
-  document.addEventListener('visibilitychange', now)
-  page.addEventListener('focus', now)
-  page.addEventListener('blur', now)
-  let beat = page.setInterval(now, BEAT)
-  now()
+  let expire = () => {
+    let remaining = left()
+    stopIdle = remaining > 0 ? clock.after(remaining, expire) : undefined
+    if (!stopIdle) report()
+  }
+  let input = () => {
+    let idle = left() <= 0
+    last = clock.now()
+    stopIdle ??= clock.after(IDLE, expire)
+    if (idle) report()
+  }
+  document.addEventListener('visibilitychange', report)
+  page.addEventListener('focus', report)
+  page.addEventListener('blur', report)
+  for (let event of INPUT) document.addEventListener(event, input, true)
+  let beat = page.setInterval(report, BEAT)
+  report()
   return () => {
-    document.removeEventListener('visibilitychange', now)
-    page.removeEventListener('focus', now)
-    page.removeEventListener('blur', now)
+    document.removeEventListener('visibilitychange', report)
+    page.removeEventListener('focus', report)
+    page.removeEventListener('blur', report)
+    for (let event of INPUT) document.removeEventListener(event, input, true)
     page.clearInterval(beat)
+    stopIdle?.()
   }
 }

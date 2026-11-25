@@ -14,7 +14,12 @@ import {
   type Verdict,
 } from '@yaks/platform/friends'
 import { sendable } from '@yaks/mail'
-import { lastSeen, presence, type Row } from '@yaks/notify/whereabouts'
+import {
+  lastSeen,
+  pageActivity,
+  presence,
+  type Row,
+} from '@yaks/notify/whereabouts'
 import { line } from '@yaks/query'
 import { ordered } from '@yaks/platform/presence'
 import { friendsLine } from '@yaks/platform/updates-day'
@@ -71,7 +76,7 @@ export let friendsOf = async (
 /** What `reader` may see of each of `friends`' presence
  * (@yaks/notify/whereabouts `presence` and `lastSeen`), by person. Showing
  * is mutual: someone who hides their own (`presence{hidden}`) is shown to no
- * friend and sees none of theirs. A friend never seen on yaks.app has none.
+ * friend and sees none of theirs.
  * Call it for confirmed friends alone. */
 export let presencesOf = async (
   dir: Directory,
@@ -93,7 +98,7 @@ export let presencesOf = async (
       )
     ),
   )
-  return new Map(visible.flatMap((f, i) => seen[i] ? [[f, seen[i]]] : []))
+  return new Map(visible.map((f, i) => [f, seen[i]]))
 }
 
 let presenceOf = async (
@@ -101,10 +106,12 @@ let presenceOf = async (
   reader: string,
   rows: Row[],
   now: number,
-): Promise<Seen | undefined> => {
-  let said = presence(rows, now), last = lastSeen(rows)
+): Promise<Seen> => {
+  let said = presence(rows, now),
+    last = lastSeen(rows),
+    activity = pageActivity(rows)
   if (!said) {
-    return last ? { state: 'away', last, spaces: [], apps: [] } : undefined
+    return { state: 'away', activity, last, spaces: [], apps: [] }
   }
   let [spaces, apps] = await Promise.all([
     Promise.all(said.spaces.map(async (eid) => {
@@ -122,6 +129,7 @@ let presenceOf = async (
   ])
   return {
     state: said.state,
+    activity,
     last,
     spaces: spaces.flat().map((s) => ({ slug: s.slug, title: s.title })),
     apps: apps.flat().map(({ app, space }) => ({
@@ -298,9 +306,12 @@ export let friendTools: ToolRow[] = [
         ctx.person,
         all.filter((f) => f.standing == 'friend').map((f) => f.person),
       )
-      let friends = all.map((f) =>
-        seen.has(f.person) ? { ...f, presence: seen.get(f.person) } : f
-      )
+      let friends = all.map((f) => {
+        let presence = seen.get(f.person)
+        return presence && (presence.state != 'away' || presence.last)
+          ? { ...f, presence }
+          : f
+      })
       return { text: '', value: { friends } }
     },
   },

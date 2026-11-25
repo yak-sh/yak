@@ -177,8 +177,8 @@ export type WireOpts = {
   report: (err: unknown) => void
 }
 
-/** One page's tab: whether it is visible and has focus. */
-export type Tab = { visible: boolean; focused: boolean }
+/** One page's tab: whether it is visible, focused, and idle. */
+export type Tab = { visible: boolean; focused: boolean; idle?: boolean }
 
 /** A live WebSocket with subscriptions held open on it. */
 export type Wire = {

@@ -42,6 +42,7 @@
   --positive: light-dark(#4c773e, #a7c080); /* meadow; moss */
   --negative: light-dark(#a8503f, #e67e80); /* brick; rose */
   --caution: light-dark(#a8503f, #e67e80); /* brick; rose */
+  --presence-away: light-dark(#997000, #e8bb54); /* gold */
   --special: light-dark(#785b47, #c9b19c); /* clay; taupe */
 
   --number: light-dark(#4e3b32, #f8e0c8); /* ember; blush */

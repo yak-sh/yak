@@ -25,6 +25,7 @@
  */
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
+import type { Activity } from '@yaks/notify/whereabouts'
 import type { VocabDoc } from '@yaks/vocab'
 
 /** The person's account. */
@@ -90,6 +91,7 @@ export type ChatLink = {
 /** Where a friend is on yaks.app, as the reader may see it. */
 export type Seen = {
   state: 'building' | 'online' | 'away'
+  activity?: Activity
   last?: string
   spaces: { slug: string; title: string }[]
   apps: { slug: string; title: string; space: string }[]
@@ -159,6 +161,7 @@ export let accountWords: VocabDoc = {
           type: 'object',
           properties: {
             state: strings,
+            activity: { type: 'string', enum: ['active', 'away', 'offline'] },
             last: strings,
             spaces: named,
             apps: named,

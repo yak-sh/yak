@@ -35,7 +35,7 @@ import X from 'lucide/dist/esm/icons/x.mjs'
 import type { Befriended, FriendMessage } from './account-rows.ts'
 import { appTile } from './app-tile.ts'
 import { empty, said, send } from './page-parts.ts'
-import { online, seenWords } from './presence.ts'
+import { activityOf, online, seenWords } from './presence.ts'
 import { possessive } from '@yaks/text'
 
 /** Whose the dock is, and the zone their friends' spaces answer under. */
@@ -74,14 +74,28 @@ export let between = (messages: Held[], me: string, friend: string): Held[] =>
     (m.from == me && m.to == friend) || (m.from == friend && m.to == me)
   )
 
-// What a launcher says: the faces of a few friends online and the word, or
-// in a bar the friends glyph wearing a green dot while any is online, and
-// how many messages wait.
+let tone = { active: 'positive', away: 'caution', offline: 'ring' }
+let status = { active: 'Active', away: 'Away', offline: 'Offline' }
+
+// The launcher uses the strongest presence among the friends it can see.
 let launcherParts = (friends: Befriended[], waiting: number, word: boolean) => {
   let here = friends.filter((f) => online(f.seen))
+  let active = here.filter((f) => activityOf(f.seen) == 'active').length
+  let away = here.length - active
+  let dot = here.length
+    ? h(Dot, {
+      mod: tone[active ? 'active' : 'away'],
+      class: 'Dock_Here Dock_Presence',
+      'aria-hidden': 'true',
+    })
+    : null
   let said = [
     waiting ? `${waiting} unread` : '',
-    here.length ? `${here.length} online` : '',
+    active ? `${active} active` : '',
+    away ? `${away} away` : '',
+    !here.length && friends.some((f) => activityOf(f.seen) == 'offline')
+      ? '0 online'
+      : '',
   ].filter(Boolean).join(', ')
   return {
     label: said ? `Friends: ${said}` : 'Friends',
@@ -101,10 +115,8 @@ let launcherParts = (friends: Befriended[], waiting: number, word: boolean) => {
             here.length ? `Friends · ${here.length} online` : 'Friends',
           ),
         ]
-        : [
-          glyph(Users),
-          here.length ? h(Dot, { mod: 'positive', class: 'Dock_Here' }) : null,
-        ],
+        : glyph(Users),
+      dot,
       waiting ? h(Badge, { 'data-dock-waiting': '' }, String(waiting)) : null,
     ],
   }
@@ -149,20 +161,22 @@ let close = () =>
     glyph(X),
   )
 
-let face = (f: Befriended) =>
-  h(
+let face = (f: Befriended) => {
+  let activity = activityOf(f.seen)
+  return h(
     Identity.Avatar,
     { class: 'Friend_Avatar' },
     initial(f.name),
-    online(f.seen)
+    activity
       ? h(Dot, {
-        mod: 'positive',
-        class: 'Friend_Dot',
+        mod: tone[activity],
+        class: 'Friend_Dot Dock_Presence',
         role: 'img',
-        'aria-label': 'Online',
+        'aria-label': status[activity],
       })
       : null,
   )
+}
 
 // One friend in the list: their face, their name, their last message or
 // when they were last on, and how many of theirs wait.

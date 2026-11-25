@@ -34,6 +34,9 @@
   top: .35rem;
   box-shadow: 0 0 0 2px var(--bg);
 }
+.Dock_Presence.Dot-caution {
+  --dot: var(--presence-away, var(--caution));
+}
 .Dock_Faces {
   display: inline-flex;
 }

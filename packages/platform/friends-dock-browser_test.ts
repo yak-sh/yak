@@ -18,7 +18,12 @@ import {
 } from './account-rows.ts'
 
 let ME = 'person-ada'
-let online = { state: 'online' as const, spaces: [], apps: [] }
+let online = {
+  state: 'online' as const,
+  activity: 'active' as const,
+  spaces: [],
+  apps: [],
+}
 let friend = (name: string, seen?: Befriended['seen']): Befriended => ({
   person: `person-${name}`,
   name,
@@ -193,17 +198,56 @@ let flush = () => new Promise((r) => setTimeout(r, 0))
 test('the launcher says who is online and how many messages wait, in the corner and the bar', async () => {
   let d = await bound(said('m1', 'person-cy', ME, 'Hi Ada'))
   let launcher = d.root.querySelector('.Dock > .Dock_Launcher')!
-  equal(launcher.getAttribute('aria-label'), 'Friends: 1 unread, 1 online')
+  equal(launcher.getAttribute('aria-label'), 'Friends: 1 unread, 1 active')
   equal(text(launcher.querySelector('.Dock_Word')), 'Friends · 1 online')
   equal(text(launcher.querySelector('.Badge')), '1')
   let bar = d.document.querySelector('[data-dock-bar]')!
   equal(text(bar.querySelector('.Badge')), '1')
-  equal(bar.getAttribute('aria-label'), 'Friends: 1 unread, 1 online')
-  equal(!!bar.querySelector('.Dock_Here'), true)
+  equal(bar.getAttribute('aria-label'), 'Friends: 1 unread, 1 active')
+  equal(!!bar.querySelector('.Dock_Here.Dot-positive'), true)
   equal(
     [...d.root.querySelectorAll('[data-dock-friend] .Identity_Name')].map(text),
     ['bo', 'cy'],
   )
+})
+
+test('away and offline update the launchers, the list and an open conversation', async () => {
+  let d = await bound()
+  let indicator = (where: string) => d.document.querySelector(where)
+  let bo = '[data-dock-friend="person-bo"]'
+  let corner = '.Dock > .Dock_Launcher'
+  let bar = '[data-dock-bar]'
+  let who = '.Dock_Who'
+  let change = async (activity: 'away' | 'offline') => {
+    await d.g.mutate(friendRows(ME, [friend('bo', { ...online, activity })]))
+    await flush()
+  }
+  try {
+    await change('away')
+    equal(!!indicator(`${bar} .Dock_Here.Dot-caution`), true)
+    equal(!!indicator(`${corner} .Dock_Here.Dot-caution`), true)
+    equal(indicator(bar)?.getAttribute('aria-label'), 'Friends: 1 away')
+    equal(
+      indicator(`${bo} .Friend_Dot.Dot-caution`)?.getAttribute('aria-label'),
+      'Away',
+    )
+    equal(indicator('[data-dock-friend="person-cy"] .Friend_Dot'), null)
+    d.toggle('open')
+    d.press(bo)
+    equal(
+      indicator(`${who} .Friend_Dot.Dot-caution`)?.getAttribute('aria-label'),
+      'Away',
+    )
+    await change('offline')
+    equal(indicator(`${bar} .Dock_Here`), null)
+    equal(indicator(bar)?.getAttribute('aria-label'), 'Friends: 0 online')
+    equal(
+      indicator(`${who} .Friend_Dot.Dot-ring`)?.getAttribute('aria-label'),
+      'Offline',
+    )
+  } finally {
+    d.stop()
+  }
 })
 
 test('opening a friend draws the conversation in the same call, and reads theirs once the panel shows', async () => {
