@@ -215,8 +215,8 @@ export let frame = (at: {
               : null,
           ),
           at.tools,
-          at.aside ? asideTools(at.aside) : null,
           at.friends ? barLauncher() : null,
+          at.aside ? asideTools(at.aside) : null,
         ),
         h(
           Shell.Body,
