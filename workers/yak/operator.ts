@@ -1420,7 +1420,7 @@ let confirmAt = async (store: Store, session: string, work?: Working) => {
   let channel = await channelAt(store, session, work)
   if (!SMS.has(channel) && channel != 'voice') return undefined
   let request = (await requestAt(store, session))?.request
-  return confirmOf({ channel, address: request?.address })
+  return confirmOf({ ...request, channel })
 }
 // The newest request of a session's conversation, and when it came.
 let requestAt = async (store: Store, session: string) => {
@@ -1449,7 +1449,7 @@ export let actorOf = async (
     q`.entry.session=${await topOf(
       store.g,
       session,
-    )} .intake .order=-entry.seq .limit=1 .fields=channel.name,created.by`,
+    )} .intake !notice .order=-entry.seq .limit=1 .fields=channel.name,created.by`,
   )
   let writer = comp(newest, 'created')?.by as string | undefined
   // A chat room's words, or a voice room's, said on the `voice` channel by

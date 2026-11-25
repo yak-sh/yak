@@ -1017,11 +1017,9 @@ export let upgraded = upgrading(CALL)
 // The WebSocket pair the runtime makes, declared structurally as build.ts does.
 declare let WebSocketPair: { new (): { 0: unknown; 1: Upgraded } }
 
-/** Who began speaking in a voice room: their account there, the person
- * here it is linked to or else the guest it speaks as (chat.ts `guestOf`),
- * and the name they go by there. */
+/** Who began speaking in a voice room: the person their account is linked
+ * to or the guest it speaks as (chat.ts `guestOf`), and their name. */
 type Speaking = {
-  account: string
   person: string
   linked: boolean
   name: string
@@ -1043,7 +1041,6 @@ let speakingIn = async (
   ])
   let known = mine ? await directoryOf(env.STORE).known(mine) : undefined
   return {
-    account,
     person: mine ?? await guestOf(env, room.via, account),
     linked: !!mine,
     name: known?.name ||
@@ -1085,41 +1082,49 @@ export let calling = async (
   let call: Call | undefined
   // In a voice room, who spoke last: the words asked of the Operator are
   // theirs, as a room's are their writer's, and the call is told their name.
-  let speaker: Speaking | undefined
+  let speaker:
+    | { account: string; known: Promise<Speaking | undefined> }
+    | undefined
   let spoke = ticket.room
     ? (account: string) => {
       if (speaker?.account == account) return
-      let room = ticket.room!
-      speakingIn(env, room, account).then((s) => {
-        speaker = s
-        call?.spoke?.(s.name)
-      }).catch((e) => defect(e, CALL))
+      let known = speakingIn(env, ticket.room!, account).catch((error) => {
+        if (speaker?.known == known) speaker = undefined
+        defect(error, CALL)
+        return undefined
+      })
+      speaker = { account, known }
+      void known.then((s) => {
+        if (s && speaker?.known == known) call?.spoke?.(s.name)
+      }).catch((error) => defect(error, CALL))
     }
     : undefined
   // The caller's words, or a talking model's request made of them (`call`),
   // to their conversation, answered by `model`.
   let asking = (model: string, call?: string) => async (text: string) => {
+    let id = requestId(space.eid, opens.turn(++turn))
+    let writer = await speaker?.known
     await receive(
       operator.store,
       {
         space: space.eid,
         person: ticket.person,
         channel: 'voice',
-        address: speaker?.name ?? ticket.from,
+        address: writer?.name ?? ticket.from,
         reply_to: ticket.to,
         via: ticket.via,
         ...ticket.attested ? { attested: true } : {},
-        ...speaker
+        ...writer
           ? {
-            writer: speaker.person,
-            ...speaker.linked ? { linked: true } : {},
+            writer: writer.person,
+            ...writer.linked ? { linked: true } : {},
           }
           : {},
         model,
         ...call ? { call } : {},
       },
       text,
-      { id: requestId(space.eid, opens.turn(++turn)) },
+      { id },
     )
     await armed()
   }

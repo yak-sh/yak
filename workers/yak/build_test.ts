@@ -19,8 +19,8 @@ import { ai, modelPage, platform, state, type Turn } from './testing.ts'
 import { rootOf } from './operator-root.ts'
 import { test, until } from '@yaks/testing'
 import { line } from '@yaks/query'
-import { seal, sign } from './lib/token.ts'
-import { streamDoor, type Ticket } from './operator-calls.ts'
+import { opened, seal, sign } from './lib/token.ts'
+import { calling, streamDoor, type Ticket } from './operator-calls.ts'
 import type { Bundle } from '@yaks/graph'
 import { manage } from './manage.ts'
 import { operatorStore } from './operator-store.ts'
@@ -35,9 +35,12 @@ import { trashSpace } from './erase.ts'
 import { discord } from '@yaks/discord'
 import { roomEid, type Said } from '@yaks/chat'
 import { PASS } from '@yaks/session/turn'
-import { arrived } from './chat.ts'
+import { arrived, guestId } from './chat.ts'
 import { registration } from '@yaks/connections'
 import { KERNEL, meta } from './meta.ts'
+import { roomCall } from './chat-voice.ts'
+import { operating } from './operator.ts'
+import { setupOf } from './speech.ts'
 import { d1 } from '../../packages/d1/testing.ts'
 import type { D1Like } from '@yaks/d1'
 
@@ -1509,7 +1512,11 @@ test('in a room it does not hear, a message naming the Operator by name is answe
 // has their own tools, and anyone else is the room's guest. Each line in the
 // conversation names its own speaker, verification and role.
 test("in a room heard in full, a member's words keep that member's tools, and a stranger's are a guest's", async () => {
-  let o = await seeded([{ text: 'Added.' }, { text: PASS }])
+  let o = await seeded([
+    { calls: [{ name: 'member_add', arguments: { email: 'jo@x.example' } }] },
+    { text: 'Added.' },
+    { text: PASS },
+  ], { MAIL: { send: () => Promise.resolve({ messageId: 'sent' }) } })
   o.bound()
   let [connection, SERVER, BARN] = [
     crypto.randomUUID(),
@@ -1549,25 +1556,41 @@ test("in a room heard in full, a member's words keep that member's tools, and a 
     })
     while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
   }
-  await say('ann-id', 'Ann', 'add Bo to the space')
+  await say('ann-id', 'Ann', 'add Jo to the space')
   await say('bo-id', 'Bo', 'and mail everyone my link')
   let model = o.env.AI as unknown as ReturnType<typeof ai>
-  let [member, guest] = model.asked.map((a) => JSON.stringify(a))
+  let [, result, guest] = model.asked.map((a) => JSON.stringify(a))
+  let offered = ({ input }: (typeof model.asked)[number]) =>
+    JSON.stringify({
+      tools: input.tools,
+      instructions: (input.messages as { role: string }[]).filter((m) =>
+        m.role == 'system'
+      ),
+    })
+  let memberTools = offered(model.asked[0]),
+    guestTools = offered(model.asked[2])
   assertEquals(
     ['member_add', 'mail_send', 'escalate'].map((t) => [
-      offers(member, t),
-      offers(guest, t),
+      offers(memberTools, t),
+      offers(guestTools, t),
     ]),
     [[true, false], [true, false], [false, true]],
   )
   assertStringIncludes(
     guest,
-    'from Ann (verified by their linked Discord account; owner of ada): add Bo',
+    'from Ann (verified by their linked Discord account; owner of ada): add Jo',
   )
   assertStringIncludes(
     guest,
     'from Bo (unverified: a Discord account linked to nobody here; not a member of ada): and mail',
   )
+  assertStringIncludes(result, 'jo@x.example is invited')
+  let store = await operatorStore(o.ctx.storage)
+  assertEquals(await store.g.read('.operator_approval'), [])
+  let [entry] = await store.g.read(
+    '.entry&.intake .order=entry.seq .limit=1 .fields=created.by',
+  )
+  assertEquals((entry.created as { by: string }).by, ADA)
 })
 
 // A voice room's audio streams in under the guest who stands for the room
@@ -1613,4 +1636,50 @@ test("a voice room's stream reaches its call under a guest who holds no seat", a
     (errors[0][0].exception as { value: string }).value,
     "A call's stream was refused: speech is off",
   )
+})
+
+test("a voice request waits for the current Discord speaker's identity", async () => {
+  let o = await seeded([], VAULTED)
+  let r = await roomed(o, [])
+  try {
+    await meta(o.env).apply([{
+      entity: { eid: crypto.randomUUID() },
+      connection: {
+        integration: 'discord-account',
+        owner: ADA,
+        account: 'ann',
+        status: 'connected',
+      },
+    }], KERNEL)
+    let room = {
+      via: 'discord',
+      connection: r.connection,
+      server: SERVER,
+      room: BARN,
+    }
+    let stream = new URL(await roomCall(o.env, o.space, room, 'ann'))
+    let ticket =
+      (await opened<Ticket>('call', stream.searchParams.get('call')!, SECRET))!
+    let operator = operating(r.store, o.env)
+    let c = await calling(o.env, operator, o.space, ticket, () => undefined, {
+      setup: setupOf(o.env, { voice_model: 'claude-haiku-5-5' }),
+      perMinute: 0,
+      hangup: () => Promise.resolve(),
+      line: 'discord',
+    })
+    let ask = c.asking('claude-haiku-5-5', ticket.call)
+    c.around.spoke!('ann')
+    await ask('Ann asks.')
+    c.around.spoke!('bo')
+    await ask('Bo asks.')
+    let rows = await r.store.g.read(
+      '.operator_request&.order=doc.title&.fields=operator_request.writer',
+    )
+    assertEquals(
+      rows.map((row) => (row.operator_request as { writer?: string })?.writer),
+      [ADA, guestId('discord', 'bo')],
+    )
+  } finally {
+    r.restore()
+  }
 })

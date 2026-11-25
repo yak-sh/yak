@@ -137,8 +137,8 @@ export type Request = {
   // they have not agreed to its texts or replied STOP to it (operator-signup.ts
   // `unagreed`). While any are, the answer goes to its sender alone.
   withheld?: string[]
-  // In a group text, or a chat room the space hears in full (chat.ts
-  // `arrived`), the person who wrote the words, whose they are kept as.
+  // In a group text or a shared chat or voice room, the speaker whose words
+  // these are. `person` holds the conversation and routes the answer.
   writer?: string
   // In a group text, whether the words named the Operator (@yaks/session/turn
   // `named`).
@@ -370,7 +370,7 @@ let FROM: Record<string, (request: Request) => string | undefined> = {
 export let proofOf = (
   request: Pick<Request, 'channel' | 'attested' | 'linked' | 'via'>,
 ) => {
-  let platform = PLATFORMS.get(request.channel) ?? roomOf(request)
+  let platform = chatPlatformOf(request)
   if (platform) {
     return request.linked
       ? `verified by their linked ${platform.title} account`
@@ -398,6 +398,12 @@ export let proofOf = (
 export let roomOf = (request: Pick<Request, 'channel' | 'via'>) =>
   request.channel == 'voice' ? PLATFORMS.get(request.via ?? '') : undefined
 
+let chatPlatformOf = (request: Pick<Request, 'channel' | 'via'>) =>
+  PLATFORMS.get(request.channel) ?? roomOf(request)
+
+let writerOf = (request: Pick<Request, 'person' | 'writer'>) =>
+  request.writer ?? request.person
+
 /** Who wrote words, as the Operator reads them before the words: their
  * name, whether that is verified and how ({@link proofOf}), and their role
  * in the space, or that they are not a member. The Operator weighs what they
@@ -418,7 +424,7 @@ export let speaker = (
 export let speakerOf = async (env: Env, space: Space, request: Request) => {
   if (OWN.has(request.channel) || UNASKED.has(request.channel)) return ''
   let dir = directoryOf(env.STORE)
-  let who = request.writer ?? request.person
+  let who = writerOf(request)
   let [called, role] = await Promise.all([
     dir.nameAt(who),
     dir.role(space, who),
@@ -510,7 +516,7 @@ export let hear = async (
       session: open.session,
       body: text,
       source: '',
-      by: OWN.has(channel) ? space.eid : request.writer ?? request.person,
+      by: OWN.has(channel) ? space.eid : writerOf(request),
       item: id,
       ...from ? { from } : {},
       channel: channelOf(channel, framing),
@@ -1712,11 +1718,14 @@ export let handleChannels = (
         )
         return
       }
-      let access = await dir.page(
-        space.slug,
-        null,
-        request.person,
-        request.administrative === true,
+      // A shared room routes answers through its guest. Its newest words
+      // carry the speaker's identity, and guests can ask with guest tools.
+      let chat = chatPlatformOf(request)
+      let person = chat ? writerOf(request) : request.person
+      let access = await dir.seat(
+        space.eid,
+        person,
+        person == request.person && request.administrative === true,
       )
       let role = access.administrative ? 'owner' as const : access.role ?? null
       // A break is a task the Operator starts itself, and a fixed bug takes
@@ -1733,7 +1742,7 @@ export let handleChannels = (
         if (request.channel == HANDOFF && role != 'owner') {
           throw refuse('access', 'You no longer administer this space.')
         }
-        if (!role && !ANSWERING.has(request.channel)) {
+        if (!role && !chat && !ANSWERING.has(request.channel)) {
           throw refuse(
             'access',
             'Only a member can ask the operator.',
@@ -1801,7 +1810,7 @@ export let handleChannels = (
             ...request.call ? { call: request.call } : {},
             ...request.model ? { model: request.model } : {},
             ...request.provider ? { provider: request.provider } : {},
-            // A group's words are their writer's, in the group's conversation.
+            // In a shared conversation, keep the input as its speaker's.
             ...request.writer ? { by: request.writer } : {},
             // Nobody asked for a break's fix, nor raised what another
             // conversation did: the Operator did.
