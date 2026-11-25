@@ -45,8 +45,10 @@
   font-size: var(--small);
   cursor: pointer;
 }
-.Composer_Attach:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .Composer_Attach:hover {
+    color: var(--text);
+  }
 }
 .Composer_File {
   position: absolute;

@@ -14,7 +14,7 @@
     let dots = bar.querySelector('.Demo_Dots')
     let pause = bar.querySelector('.Demo_Pause')
     let calm = matchMedia('(prefers-reduced-motion: reduce)')
-    let at = 0, playing = !calm.matches, reading = false, timer = 0
+    let at = 0, playing = !calm.matches, hovered = false, timer = 0
 
     let named = (slide) =>
       slide.querySelector('.Card_Title')?.textContent.replace('↗', '').trim()
@@ -45,7 +45,10 @@
       clearTimeout(timer)
       track.setAttribute('aria-live', playing ? 'off' : 'polite')
       pause.textContent = playing ? 'Pause' : 'Play'
-      if (playing && !reading && !document.hidden) {
+      if (
+        playing && !hovered && !track.matches(':focus-within') &&
+        !document.hidden
+      ) {
         timer = setTimeout(() => (go(at + 1), wait()), EVERY)
       }
     }
@@ -103,13 +106,15 @@
       }, 100)
     }, { passive: true })
 
-    let read = (now) => () => (reading = now, wait())
-    track.addEventListener('pointerenter', read(true))
-    track.addEventListener('pointerleave', read(false))
-    track.addEventListener('focusin', read(true))
-    track.addEventListener('focusout', (e) => {
-      if (!track.contains(e.relatedTarget)) read(false)()
-    })
+    let hover = (e) => {
+      if (e.pointerType != 'mouse') return
+      hovered = e.type == 'pointerenter'
+      wait()
+    }
+    track.addEventListener('pointerenter', hover)
+    track.addEventListener('pointerleave', hover)
+    track.addEventListener('focusin', wait)
+    track.addEventListener('focusout', () => queueMicrotask(wait))
     document.addEventListener('visibilitychange', wait)
     calm.addEventListener('change', () => calm.matches && stop())
 

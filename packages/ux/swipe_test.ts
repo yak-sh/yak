@@ -6,11 +6,11 @@ import { kept, moves, swipe } from './swipe.ts'
 // A phone's page, 390 wide, with a menu from the left (`menu` its ways), the
 // page's column over it, a panel from the right and their links, and a strip
 // that scrolls sideways.
-let page = (hash = '', html = '', menu = 'Layer-left') => {
+let page = (hash = '', html = '', menu = 'Layer-left', nav = '') => {
   let { document } = parseHTML(`<html><body>
     <a href="#menu">Menu</a><a href="#aside">Reach</a>
-    <nav id="menu" class="Layer ${menu}" data-swipe></nav>
-    <main id="column" class="Layer_Cover"></main>
+    <nav id="menu" class="Layer ${menu}" data-swipe>${nav}</nav>
+    <main id="column" class="Layer_Cover"><a class="Layer_Shut" href="#">Close</a></main>
     <aside id="aside" class="Layer Layer-right" data-swipe></aside>
     <section id="app" class="Layer Layer-right"></section>
     <div id="strip"><p id="in">wide</p></div>${html}
@@ -36,7 +36,7 @@ let page = (hash = '', html = '', menu = 'Layer-left') => {
     })
     let p = [{ clientX: x, clientY: y }]
     Object.assign(e, {
-      touches: type == 'touchend' ? [] : p,
+      touches: type == 'touchend' || type == 'touchcancel' ? [] : p,
       changedTouches: p,
     })
     Object.defineProperty(e, 'timeStamp', { value: t })
@@ -47,7 +47,7 @@ let page = (hash = '', html = '', menu = 'Layer-left') => {
   let drag = (
     x: number,
     to: number,
-    opt: { ms?: number; dy?: number; on?: string } = {},
+    opt: { ms?: number; dy?: number; on?: string; cancel?: boolean } = {},
   ) => {
     let steps = 6
     let ms = opt.ms ?? 300
@@ -66,10 +66,16 @@ let page = (hash = '', html = '', menu = 'Layer-left') => {
       document.getElementById(id)!
     )
     let mid = [menu.style.translate, column.style.translate]
-    touch('touchend', to, 400, ms, opt.on)
-    return { moved, mid, menu, column }
+    let end = touch(
+      opt.cancel ? 'touchcancel' : 'touchend',
+      to,
+      400,
+      ms,
+      opt.on,
+    )
+    return { moved, mid, menu, column, end }
   }
-  return { document, location, drag }
+  return { document, location, drag, touch }
 }
 
 test('a slow swipe right past the middle opens the menu, following the finger as it goes', () => {
@@ -115,6 +121,47 @@ test('a swipe left closes the open menu; one right leaves it open', () => {
   assertEquals(p.location.hash, '#menu')
   p.drag(300, 100)
   assertEquals(p.location.hash, '')
+})
+
+for (
+  let [control, nav] of [
+    ['link', '<a id="way" href="/apps"><span>Apps</span></a>'],
+    ['button', '<button id="way"><span>More</span></button>'],
+    ['input button', '<input id="way" type="submit" value="Save">'],
+  ]
+) {
+  test(`a tap can activate a sidebar ${control} and a swipe from it closes the sidebar`, () => {
+    let p = page('#menu', '', 'Layer-left Layer-under', nav)
+    let on = control == 'input button' ? '#way' : '#way span'
+    p.touch('touchstart', 260, 400, 0, on)
+    assertEquals(p.touch('touchend', 260, 400, 20, on).defaultPrevented, false)
+    assertEquals(p.location.hash, '#menu')
+
+    let scroll = p.drag(260, 245, { dy: 200, on })
+    assertEquals(scroll.moved.some((event) => event.defaultPrevented), false)
+    assertEquals(p.location.hash, '#menu')
+
+    let close = p.drag(260, 55, { on })
+    assertEquals(close.mid, ['', '95px 0'])
+    assertEquals(close.end.defaultPrevented, true)
+    assertEquals(p.location.hash, '')
+  })
+}
+
+test('swiping the exposed page strip closes the menu', () => {
+  let p = page('#menu', '', 'Layer-left Layer-under')
+  let close = p.drag(350, 120, { on: '.Layer_Shut' })
+  assertEquals([p.location.hash, close.mid, close.end.defaultPrevented], [
+    '',
+    ['', '70px 0'],
+    true,
+  ])
+})
+
+test('an interrupted swipe leaves the menu where it started', () => {
+  let p = page('#menu', '', 'Layer-left Layer-under')
+  let { column } = p.drag(350, 120, { cancel: true })
+  assertEquals([p.location.hash, column.style.translate], ['#menu', ''])
 })
 
 test('what is not the gesture leaves the page as it is', () => {

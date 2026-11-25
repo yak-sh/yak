@@ -147,8 +147,10 @@
   cursor: pointer;
 }
 
-.Home_ServicePick:hover {
-  color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  .Home_ServicePick:hover {
+    color: var(--accent);
+  }
 }
 
 .Home_Logo {
@@ -501,7 +503,12 @@
   filter: saturate(var(--sat, 1));
 }
 
-.Home_Message .Chat_Bubble:is(:hover, :focus-within) {
+@media (hover: hover) and (pointer: fine) {
+  .Home_Message .Chat_Bubble:hover {
+    filter: none;
+  }
+}
+.Home_Message .Chat_Bubble:focus-within {
   filter: none;
 }
 
@@ -515,7 +522,11 @@
   text-decoration: none;
 }
 
-.Home_MessageLink:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Home_MessageLink:hover {
+    text-decoration: underline;
+  }
+}
 .Home_MessageLink:focus-visible {
   text-decoration: underline;
 }
@@ -564,7 +575,12 @@
   cursor: pointer;
 }
 
-.Story_Page .Home_Pick:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Story_Page .Home_Pick:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
 .Story_Page .Home_Pick[aria-pressed='true'] {
   border-color: var(--accent);
   color: var(--accent);
@@ -648,8 +664,10 @@
   text-decoration: none;
 }
 
-.Home_JumpLink:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .Home_JumpLink:hover {
+    text-decoration: underline;
+  }
 }
 
 .Home_Jumps:not([data-highlight]) .Home_JumpLink[aria-current='location'] {

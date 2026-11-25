@@ -32,8 +32,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-a.Turns_Who:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  a.Turns_Who:hover {
+    text-decoration: underline;
+  }
 }
 .Turns_Text {
   min-width: 0;

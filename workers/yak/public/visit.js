@@ -40,12 +40,16 @@ a {
   text-decoration: none;
   white-space: nowrap;
 }
-a:hover { background: #3d6232 }
+@media (hover: hover) and (pointer: fine) {
+  a:hover { background: #3d6232 }
+}
 a:focus-visible { outline: 2px solid #4c773e; outline-offset: 2px }
 @media (prefers-color-scheme: dark) {
   p { border-color: #4d3d34; background: #2b231f; color: #f1e6d8 }
   a { background: #a7c080; color: #1d1a17 }
-  a:hover { background: #bcd298 }
+  @media (hover: hover) and (pointer: fine) {
+    a:hover { background: #bcd298 }
+  }
   a:focus-visible { outline-color: #a7c080 }
 }`
   // Read while this script runs: afterwards there is no current script.

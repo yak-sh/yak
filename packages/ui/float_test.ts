@@ -125,10 +125,13 @@ test('a kit tooltip appears after pointer hover and cancels when the pointer lea
   let { document, button, Event } = documentOf()
   let time = clock()
   tips(document, time)
-  let point = (type: string) =>
+  let point = (type: string, pointerType = 'mouse') =>
     button.querySelector('svg')!.dispatchEvent(
-      new Event(type, { bubbles: true }),
+      Object.assign(new Event(type, { bubbles: true }), { pointerType }),
     )
+  point('pointerover', 'touch')
+  await time.advance(300)
+  assertEquals(document.querySelector('[role=tooltip]'), null)
   point('pointerover')
   assertEquals(document.querySelector('[role=tooltip]'), null)
   await time.advance(300)

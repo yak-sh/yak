@@ -45,8 +45,10 @@
   min-width: 0;
   border-radius: var(--radius);
 }
-.Rows_Link:hover {
-  background: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  .Rows_Link:hover {
+    background: var(--soft);
+  }
 }
 .Rows_Link:focus-visible {
   outline: 2px solid var(--accent);
@@ -115,9 +117,11 @@
   min-height: var(--tap);
   cursor: pointer;
 }
-.Rows_Toggle:hover {
-  color: var(--text);
-  background: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  .Rows_Toggle:hover {
+    color: var(--text);
+    background: var(--soft);
+  }
 }
 .Rows_Toggle:focus-visible {
   outline: 2px solid var(--accent);
@@ -210,8 +214,10 @@
   position: relative;
   flex-wrap: nowrap;
 }
-.Rows_Item:has(.Rows_Open):hover {
-  background: var(--hover, var(--soft));
+@media (hover: hover) and (pointer: fine) {
+  .Rows_Item:has(.Rows_Open):hover {
+    background: var(--hover, var(--soft));
+  }
 }
 .Rows_Open {
   color: inherit;

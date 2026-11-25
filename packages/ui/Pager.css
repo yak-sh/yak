@@ -20,8 +20,10 @@
   cursor: pointer;
   min-height: var(--tap);
 }
-.Pager_Step:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .Pager_Step:hover {
+    text-decoration: underline;
+  }
 }
 .Pager_Step:disabled {
   color: var(--dim);

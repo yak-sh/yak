@@ -12,9 +12,11 @@
   color: var(--text);
   text-decoration: none;
 }
-a.Passage:hover,
-.Passage[data-href]:hover {
-  background-color: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  a.Passage:hover,
+  .Passage[data-href]:hover {
+    background-color: var(--soft);
+  }
 }
 .Passage_By {
   display: flex;

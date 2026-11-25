@@ -20,7 +20,11 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.Choices_Item:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Choices_Item:hover {
+    background: color-mix(in srgb, var(--soft) 50%, transparent);
+  }
+}
 .Choices_Item-hover {
   background: color-mix(in srgb, var(--soft) 50%, transparent);
 }

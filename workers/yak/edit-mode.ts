@@ -82,7 +82,11 @@ let CSS = `
 [${EDITING}] [${names.text}][${CHANGED}] {
   outline-color: rgb(201 122 26 / 0.9) !important;
 }
-[${EDITING}] [${names.text}]:hover,
+@media (hover: hover) and (pointer: fine) {
+  [${EDITING}] [${names.text}]:hover {
+    outline-style: solid !important;
+  }
+}
 [${EDITING}] [${names.text}][contenteditable=plaintext-only],
 [${EDITING}] [${names.text}][contenteditable=true] {
   outline-style: solid !important;

@@ -7,7 +7,12 @@
   color: var(--muted);
   text-decoration: none;
 }
-.Id:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Id:hover {
+    text-decoration: underline;
+    color: var(--text);
+  }
+}
 .Id-hover {
   text-decoration: underline;
   color: var(--text);
@@ -17,6 +22,8 @@
   text-decoration: line-through;
   opacity: 0.55;
 }
-.Id-retired:hover {
-  text-decoration: line-through underline;
+@media (hover: hover) and (pointer: fine) {
+  .Id-retired:hover {
+    text-decoration: line-through underline;
+  }
 }

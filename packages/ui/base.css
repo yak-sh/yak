@@ -180,6 +180,8 @@
   background: var(--border2);
   border: 1px solid var(--bg); /* a seam of floor around the thumb */
 }
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+  }
 }

@@ -24,7 +24,11 @@
   justify-content: center;
   gap: 3px;
 }
-.Tabs_Tab:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Tabs_Tab:hover {
+    color: var(--text); /* the face alone answers the pointer: no fill */
+  }
+}
 .Tabs_Tab-hover {
   color: var(--text); /* the face alone answers the pointer: no fill */
 }

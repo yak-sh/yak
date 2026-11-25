@@ -412,7 +412,11 @@
     text-decoration: none;
   }
 
-  .Nav_Link:hover,
+  @media (hover: hover) and (pointer: fine) {
+    .Nav_Link:hover {
+      color: var(--text);
+    }
+  }
   .Nav_Link[aria-current='page'] {
     color: var(--text);
   }

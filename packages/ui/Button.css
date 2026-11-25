@@ -25,8 +25,10 @@
 .Button[hidden] {
   display: none;
 }
-.Button:hover {
-  background: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  .Button:hover {
+    background: var(--soft);
+  }
 }
 .Button:disabled {
   opacity: 0.5;
@@ -43,8 +45,10 @@
   --ink: var(--muted);
   --pencil-style: dashed;
 }
-.Button-add:hover {
-  --ink: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .Button-add:hover {
+    --ink: var(--text);
+  }
 }
 .Button-danger {
   --ink: var(--negative);
@@ -55,8 +59,10 @@
   --line: var(--accent);
   background: var(--accent);
 }
-.Button-go:hover {
-  background: color-mix(in srgb, var(--accent) 85%, var(--text));
+@media (hover: hover) and (pointer: fine) {
+  .Button-go:hover {
+    background: color-mix(in srgb, var(--accent) 85%, var(--text));
+  }
 }
 /* a glyph that waits for the pointer */
 .Button-quiet {
@@ -64,9 +70,13 @@
   --pencil: transparent;
   padding: 0 4px;
 }
-.Button-quiet:hover {
-  --ink: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .Button-quiet:hover {
+    --ink: var(--text);
+  }
 }
-.Button-quiet.Button-danger:hover {
-  --ink: var(--negative);
+@media (hover: hover) and (pointer: fine) {
+  .Button-quiet.Button-danger:hover {
+    --ink: var(--negative);
+  }
 }

@@ -34,8 +34,10 @@
   color: var(--muted);
   text-decoration: none;
 }
-.Contents_Link:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .Contents_Link:hover {
+    color: var(--text);
+  }
 }
 .Contents_Link-on {
   border-color: var(--accent);

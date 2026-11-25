@@ -33,8 +33,13 @@
   color: var(--muted);
   padding-left: var(--gap);
 }
-.Index_Head:hover,
-.Index_Item:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Index_Head:hover,
+  .Index_Item:hover {
+    background: var(--soft);
+    color: var(--text);
+  }
+}
 .Index_Item-hover {
   background: var(--soft);
   color: var(--text);

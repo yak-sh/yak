@@ -72,7 +72,11 @@
     font-size: .8rem;
   }
 }
-.Tabs_Tab:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Tabs_Tab:hover {
+    color: var(--text);
+  }
+}
 .Tabs_Tab-hover {
   color: var(--text);
 }

@@ -28,11 +28,17 @@
   padding: 1px var(--half-gap);
   cursor: pointer;
 }
-a.Tile:hover,
-.Tile[data-href]:hover {
-  background-color: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  a.Tile:hover,
+  .Tile[data-href]:hover {
+    background-color: var(--soft);
+  }
 }
-:where(button.Tile):hover,
+@media (hover: hover) and (pointer: fine) {
+  :where(button.Tile):hover {
+    background-color: color-mix(in srgb, var(--soft) 50%, transparent);
+  }
+}
 .Tile-hover {
   background-color: color-mix(in srgb, var(--soft) 50%, transparent);
 }

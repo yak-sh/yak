@@ -17,8 +17,10 @@
   cursor: text;
   border-radius: var(--radius);
 }
-.Body-typed:hover {
-  background: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  .Body-typed:hover {
+    background: var(--soft);
+  }
 }
 /* A document's source: its lines kept and wrapped at the measure, every
    character where it stands, smaller, in the face of what is typed. */

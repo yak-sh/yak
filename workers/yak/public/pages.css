@@ -659,8 +659,10 @@
     gap: .5rem 1.5rem;
     padding: .85rem 1.25rem;
   }
-  .Directory_Row:hover {
-    background: color-mix(in srgb, var(--bg), var(--card) 55%);
+  @media (hover: hover) and (pointer: fine) {
+    .Directory_Row:hover {
+      background: color-mix(in srgb, var(--bg), var(--card) 55%);
+    }
   }
   .Directory_Who {
     display: grid;
@@ -1440,6 +1442,8 @@
     }
     .Sidebar_Scroll {
       --overlap: 0px;
+      /* This is the menu's scroll container, so it owns the touch action. */
+      touch-action: pan-y pinch-zoom;
     }
     .Sidebar_Whose .Menu-below {
       position: relative;
@@ -1451,6 +1455,7 @@
     }
     .Sidebar_Whose .Menu_List {
       max-height: none;
+      overflow: visible;
     }
     .Sidebar_Close {
       display: inline-flex;

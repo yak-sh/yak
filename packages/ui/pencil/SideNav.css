@@ -56,7 +56,11 @@
 .SideNav_Link:where(button) {
   width: 100%;
 }
-.SideNav_Link:hover:not(.SideNav_Link-on),
+@media (hover: hover) and (pointer: fine) {
+  .SideNav_Link:hover:not(.SideNav_Link-on) {
+    background: color-mix(in srgb, var(--card) 60%, transparent);
+  }
+}
 .SideNav_Link-hover:not(.SideNav_Link-on) {
   background: color-mix(in srgb, var(--card) 60%, transparent);
 }

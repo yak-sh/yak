@@ -1,4 +1,8 @@
-.Menu_Item:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Menu_Item:hover {
+    background: var(--hover);
+  }
+}
 .Menu_Item-hover,
 .Menu_Item:focus-visible {
   background: var(--hover);

@@ -11,9 +11,11 @@
   padding: 0 4px;
   text-decoration: none;
 }
-a.Chip:hover,
-.Chip[data-href]:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  a.Chip:hover,
+  .Chip[data-href]:hover {
+    text-decoration: underline;
+  }
 }
 .Chip-0 {
   --hue: var(--hue-0);

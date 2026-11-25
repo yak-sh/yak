@@ -57,8 +57,10 @@
 .Table_Heading-sorts {
   cursor: pointer;
 }
-.Table_Heading-sorts:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .Table_Heading-sorts:hover {
+    color: var(--text);
+  }
 }
 .Table_Heading-asc,
 .Table_Heading-desc {
@@ -88,7 +90,11 @@
 .Table_Row-quiet {
   color: var(--muted);
 }
-.Table_Row-picks:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Table_Row-picks:hover {
+    background: var(--soft);
+  }
+}
 .Table_Row-hover {
   background: var(--soft);
 }
@@ -121,8 +127,10 @@
 .Table_Toggle-open::before {
   content: '▾';
 }
-.Table_Toggle:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .Table_Toggle:hover {
+    color: var(--text);
+  }
 }
 
 .Table_Sort {

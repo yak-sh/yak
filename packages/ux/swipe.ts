@@ -129,7 +129,8 @@ let cover = (el: Element) => {
   return at as HTMLElement | null
 }
 
-let EDITABLE = 'input, textarea, select, [contenteditable]'
+let EDITABLE =
+  'input:not([type=button], [type=submit], [type=reset], [type=image]), textarea, select, [contenteditable]'
 
 // The page's sidebars a swipe may move now, or none while another layer is
 // open over the page.
@@ -207,7 +208,7 @@ export let swipe = (doc: Document, win: Window): () => void => {
     if (!drag) {
       let locked = axis(dx, p.clientY - touch.y)
       if (!locked) return
-      drag = locked == 'x' ? lock(dx) : undefined
+      drag = locked == 'x' && e.cancelable ? lock(dx) : undefined
       if (!drag) return void (touch = undefined)
     }
     if (e.cancelable) e.preventDefault()
@@ -216,14 +217,18 @@ export let swipe = (doc: Document, win: Window): () => void => {
     drag.recent = [...drag.recent, [e.timeStamp, p.clientX]]
       .filter(([t]) => t >= e.timeStamp - RECENT)
   }
-  let end = () => {
+  let end = (e: TouchEvent) => {
     let d = drag
     touch = drag = undefined
     if (!d) return
+    // A drag owns the release too, so a link or button only activates on a tap.
+    if (e.cancelable) e.preventDefault()
     let [first, last] = [d.recent[0], d.recent.at(-1)]
     let took = first && last ? last[0] - first[0] : 0
     let speed = took ? (last![1] - first[1]) / took : 0
-    let open = settles(d.edge, d.width, d.at, speed)
+    let open = e.type == 'touchcancel'
+      ? d.open
+      : settles(d.edge, d.width, d.at, speed)
     // Handed back to its own motion, which carries it on from the finger.
     d.moved.style.removeProperty('translate')
     d.moved.style.removeProperty('transition')
@@ -232,7 +237,7 @@ export let swipe = (doc: Document, win: Window): () => void => {
 
   doc.addEventListener('touchstart', start, { passive: true })
   doc.addEventListener('touchmove', move, { passive: false })
-  doc.addEventListener('touchend', end)
+  doc.addEventListener('touchend', end, { passive: false })
   doc.addEventListener('touchcancel', end)
   return () => {
     doc.removeEventListener('touchstart', start)

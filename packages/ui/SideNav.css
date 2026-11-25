@@ -19,7 +19,11 @@
   -webkit-user-select: none; /* pressed, not read */
   user-select: none;
 }
-.SideNav_Link:hover,
+@media (hover: hover) and (pointer: fine) {
+  .SideNav_Link:hover {
+    color: var(--text); /* the words alone answer the pointer */
+  }
+}
 .SideNav_Link-hover {
   color: var(--text); /* the words alone answer the pointer */
 }

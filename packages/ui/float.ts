@@ -225,11 +225,15 @@ export let tips = (
   let target = (e: Event) =>
     (e.target as Element)?.closest?.('[data-tip]') ?? null
   doc.addEventListener('pointerover', (e) => {
+    if (e.pointerType != 'mouse') return
     let next = target(e)
     if (next != host) show(next, 300)
   })
   doc.addEventListener('pointerout', (e) => {
-    if (host && !host.contains((e as PointerEvent).relatedTarget as Node)) {
+    if (
+      e.pointerType == 'mouse' && host &&
+      !host.contains(e.relatedTarget as Node)
+    ) {
       hide()
     }
   })

@@ -27,6 +27,10 @@
   .Layer-right {
     box-shadow: -.25rem 0 var(--layer-shadow);
   }
+  .Layer[data-swipe],
+  .Layer_Shut {
+    touch-action: pan-y pinch-zoom;
+  }
   .Layer-under {
     box-shadow: none;
   }

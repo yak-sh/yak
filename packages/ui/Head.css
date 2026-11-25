@@ -27,9 +27,11 @@ a.Head_Title,
   color: inherit;
   text-decoration: none;
 }
-a.Head_Title:hover,
-.Head_Link:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  a.Head_Title:hover,
+  .Head_Link:hover {
+    text-decoration: underline;
+  }
 }
 .Head_Id,
 .Head_Kind {

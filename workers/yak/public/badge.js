@@ -87,7 +87,9 @@ a {
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
 }
-a:hover { border-color: #c9b19c }
+@media (hover: hover) and (pointer: fine) {
+  a:hover { border-color: #c9b19c }
+}
 a:focus-visible { outline: 2px solid #4c773e; outline-offset: 2px }
 b { font-weight: 800 }
 :host([at=foot]) a {
@@ -99,7 +101,9 @@ b { font-weight: 800 }
   color: #767676;
   font: 400 12px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
-:host([at=foot]) a:hover { text-decoration: underline }
+@media (hover: hover) and (pointer: fine) {
+  :host([at=foot]) a:hover { text-decoration: underline }
+}
 :host([at=foot]) b { font-weight: 600 }
 @media (prefers-color-scheme: dark) {
   a {
@@ -108,7 +112,9 @@ b { font-weight: 800 }
     color: #f1e6d8;
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
   }
-  a:hover { border-color: #785b47 }
+  @media (hover: hover) and (pointer: fine) {
+    a:hover { border-color: #785b47 }
+  }
   a:focus-visible { outline-color: #a7c080 }
 }`
   // What a person presses or types into, as markup says it; a `cursor:

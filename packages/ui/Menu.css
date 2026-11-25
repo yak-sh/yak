@@ -32,7 +32,11 @@
   text-decoration: none;
   cursor: pointer;
 }
-.Menu_Item:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Menu_Item:hover {
+    background: var(--hover, var(--soft));
+  }
+}
 .Menu_Item-hover,
 .Menu_Item:focus-visible {
   background: var(--hover, var(--soft));
@@ -137,7 +141,13 @@
 .Menu_Summary.Menu_Summary-icon::after {
   content: none;
 }
-.Menu_Fold > .Menu_Summary.Menu_Summary-icon:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Menu_Fold > .Menu_Summary.Menu_Summary-icon:hover {
+    background: var(--hover, var(--soft));
+    color: var(--text);
+    transform: none;
+  }
+}
 .Menu_Fold[open] > .Menu_Summary.Menu_Summary-icon {
   background: var(--hover, var(--soft));
   color: var(--text);

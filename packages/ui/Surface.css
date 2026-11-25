@@ -48,11 +48,13 @@
 :is(.Surface_Press) {
   cursor: pointer;
 }
-:where(.Surface_Press, .Button, .Card-button, .Menu_Summary):hover:not(:disabled, [aria-pressed='true']) {
-  --lift: var(--raised-hover-lift, var(--raised-lift));
-  transform: var(--press-shift);
-  background: color-mix(in srgb, var(--button-fill, var(--card)),
-    var(--press-wash) var(--press-wash-weight));
+@media (hover: hover) and (pointer: fine) {
+  :where(.Surface_Press, .Button, .Card-button, .Menu_Summary):hover:not(:disabled, [aria-pressed='true']) {
+    --lift: var(--raised-hover-lift, var(--raised-lift));
+    transform: var(--press-shift);
+    background: color-mix(in srgb, var(--button-fill, var(--card)),
+      var(--press-wash) var(--press-wash-weight));
+  }
 }
 :where(.Surface_Press, .Button, .Card-button, .Menu_Summary):active:not(:disabled),
 :is(.Surface_Press, .Button)[aria-pressed='true'],

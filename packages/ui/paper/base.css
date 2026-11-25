@@ -15,8 +15,10 @@
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
-:where(a:hover) {
-  color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  :where(a:hover) {
+    color: var(--accent);
+  }
 }
 
 /* Headings are set in the face's medium weight, drawn in tight. */

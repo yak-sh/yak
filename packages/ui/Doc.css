@@ -18,8 +18,10 @@
   cursor: text;
   border-radius: var(--radius);
 }
-.Doc-typed > .Doc_Title:hover {
-  background: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  .Doc-typed > .Doc_Title:hover {
+    background: var(--soft);
+  }
 }
 .Doc-typed > .Doc_Title:not(:focus-within):has(> .Edit:empty)::before {
   content: 'Untitled';

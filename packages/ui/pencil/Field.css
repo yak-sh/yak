@@ -16,8 +16,10 @@
 select.Field {
   cursor: pointer;
 }
-select.Field:not(:disabled):hover {
-  border-color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  select.Field:not(:disabled):hover {
+    border-color: var(--accent);
+  }
 }
 /* A textarea is as tall as what is typed in it, from two controls' height
    up to most of the window, where it starts to scroll. */

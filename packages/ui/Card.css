@@ -47,9 +47,11 @@
   color: inherit;
   text-decoration: none;
 }
-.Card_Link:hover {
-  color: var(--link);
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .Card_Link:hover {
+    color: var(--link);
+    text-decoration: underline;
+  }
 }
 .Card_Mark {
   flex: none;
@@ -91,9 +93,11 @@
   text-decoration: none;
   cursor: pointer;
 }
-.Card-button:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow);
+@media (hover: hover) and (pointer: fine) {
+  .Card-button:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
 }
 .Card-button:focus-visible {
   outline: 2px solid var(--text);
@@ -131,9 +135,11 @@
   inset: 0;
   border-radius: inherit;
 }
-.Card-button .Card_Link:hover {
-  color: inherit;
-  text-decoration: none;
+@media (hover: hover) and (pointer: fine) {
+  .Card-button .Card_Link:hover {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 .Card-button .Card_Form > * {
   position: relative;

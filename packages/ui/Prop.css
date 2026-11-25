@@ -13,8 +13,10 @@
 .Prop-live > .Prop_Val {
   cursor: pointer;
 }
-.Prop-live > .Prop_Val:hover {
-  border-bottom-color: var(--dim);
+@media (hover: hover) and (pointer: fine) {
+  .Prop-live > .Prop_Val:hover {
+    border-bottom-color: var(--dim);
+  }
 }
 .Prop_Val-nil {
   color: var(--dim);
@@ -31,14 +33,18 @@
   border: 0;
   padding: 0;
 }
-.Prop_Hand:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .Prop_Hand:hover {
+    color: var(--text);
+  }
 }
 .Prop_Hand-empty {
   opacity: 0.6;
 }
-.Prop_Hand-empty:hover {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .Prop_Hand-empty:hover {
+    opacity: 1;
+  }
 }
 .Prop_Pop {
   /* floated in an Overlay: a box only, no positioning */
@@ -68,7 +74,12 @@
   cursor: pointer;
   min-height: var(--tap);
 }
-.Prop_Tab:hover,
+@media (hover: hover) and (pointer: fine) {
+  .Prop_Tab:hover {
+    background: var(--soft);
+    color: var(--text);
+  }
+}
 .Prop_Tab-on {
   background: var(--soft);
   color: var(--text);
@@ -80,8 +91,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.Prop_Row:hover {
-  background: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  .Prop_Row:hover {
+    background: var(--soft);
+  }
 }
 .Prop_Row-none {
   color: var(--muted);

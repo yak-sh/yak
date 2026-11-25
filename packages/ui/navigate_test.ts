@@ -399,9 +399,12 @@ test('a pointer that moves on before its page comes lets it go, and one look ahe
   b.press('mousedown', 'a[href="/updates"]')
   b.press('mousedown', 'img')
   assertEquals(b.stopped, ['https://y.test/updates'], 'another look ahead')
-  let out = new (b.doc.defaultView as unknown as typeof globalThis).Event(
-    'mouseout',
-    { bubbles: true },
+  let out = Object.assign(
+    new (b.doc.defaultView as unknown as typeof globalThis).Event(
+      'pointerout',
+      { bubbles: true },
+    ),
+    { pointerType: 'mouse' },
   )
   b.doc.querySelector('a[href="/updates"]')!.dispatchEvent(out)
   assertEquals(b.stopped, ['https://y.test/updates'], 'not its own')

@@ -32,9 +32,11 @@ a.Chip {
   -webkit-user-select: none;
   user-select: none;
 }
-a.Chip:hover {
-  --pencil: var(--accent);
-  --chip-fill: color-mix(in srgb, var(--accent) 7%, var(--card));
+@media (hover: hover) and (pointer: fine) {
+  a.Chip:hover {
+    --pencil: var(--accent);
+    --chip-fill: color-mix(in srgb, var(--accent) 7%, var(--card));
+  }
 }
 a.Chip:active {
   transform: translate(1px, 1px);

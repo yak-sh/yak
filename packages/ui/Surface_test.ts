@@ -47,14 +47,18 @@ let { document } = parseHTML(
     )
   }</body></html>`,
 )
-let rules = [...document.querySelector('style')!.sheet!.cssRules]
-  .filter((rule) => rule.type == 1) as CSSStyleRule[]
+let cssRules = [...document.querySelector('style')!.sheet!.cssRules]
+let rules = cssRules.filter((rule) => rule.type == 1) as CSSStyleRule[]
+let fine = cssRules.filter((rule): rule is CSSMediaRule =>
+  rule.type == 4 &&
+  (rule as CSSMediaRule).media.mediaText == '(hover: hover) and (pointer: fine)'
+).flatMap((rule) => [...rule.cssRules]) as CSSStyleRule[]
 // Read declarations through the emitted selector, so this fails when a new
 // class falls outside the shared drawing rule. This does not render pixels.
-let matching = (part: string, property: string, pseudo = '') => {
+let matching = (part: string, property: string, pseudo = '', from = rules) => {
   let node = document.querySelector(part)!
   pseudo = pseudo.replaceAll("'", '"')
-  return rules.filter((rule) =>
+  return from.filter((rule) =>
     !rule.selectorText.slice(0, pseudo ? -pseudo.length : undefined).includes(
       '::',
     ) &&
@@ -87,6 +91,7 @@ test('a component absent from the skin inherits its surface paint in a subset ki
       '.Receipt_Action',
       'background',
       ":hover:not(:disabled, [aria-pressed='true'])",
+      fine,
     ).length,
   )
   assert(matching('.Receipt_Choices', 'box-shadow').length)

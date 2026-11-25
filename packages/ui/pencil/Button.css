@@ -41,8 +41,17 @@
 .Button-quiet {
   --button-ink: var(--accent);
 }
+@media (hover: hover) and (pointer: fine) {
+  .Button-quiet:hover:not(:disabled, [aria-pressed='true']) {
+    --lift: 0px;
+    padding: 0;
+    background: none;
+    font-weight: inherit;
+    text-decoration: underline;
+    transform: none;
+  }
+}
 .Button-quiet,
-.Button-quiet:hover:not(:disabled, [aria-pressed='true']),
 .Button-quiet:active:not(:disabled) {
   --lift: 0px;
   padding: 0;
@@ -59,8 +68,10 @@
   --pencil-style: dashed;
   --button-ink: var(--muted);
 }
-.Button-add:hover {
-  --button-ink: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .Button-add:hover {
+    --button-ink: var(--text);
+  }
 }
 .Button-danger {
   --button-ink: var(--negative);

@@ -226,7 +226,7 @@ let mount = (root) => {
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
   let narrow = matchMedia('(width < 64rem)')
   let i = 0, active = -1, frame = 0, timer = 0
-  let playing = !calm.matches
+  let playing = !calm.matches, hovered = false
   let highlight = navigation(nav, jumps)
   let pose = mascot(root, calm, narrow)
 
@@ -272,7 +272,9 @@ let mount = (root) => {
       `${playing ? 'Pause' : 'Play'} example rotation`,
     )
     pause.firstElementChild.textContent = playing ? 'Ⅱ' : '▶'
-    if (playing && !document.hidden && !demo.matches(':hover, :focus-within')) {
+    if (
+      playing && !document.hidden && !hovered && !demo.matches(':focus-within')
+    ) {
       timer = setTimeout(
         () => (pick((i + 1) % logs.length, false), wait()),
         7500,
@@ -295,7 +297,14 @@ let mount = (root) => {
     button.addEventListener('click', () => (hold(), pick(at)))
   }
   pause.addEventListener('click', () => (playing = !playing, wait()))
-  for (let event of ['pointerenter', 'pointerleave', 'focusin', 'focusout']) {
+  let hover = (e) => {
+    if (e.pointerType != 'mouse') return
+    hovered = e.type == 'pointerenter'
+    wait()
+  }
+  demo.addEventListener('pointerenter', hover)
+  demo.addEventListener('pointerleave', hover)
+  for (let event of ['focusin', 'focusout']) {
     demo.addEventListener(event, () => queueMicrotask(wait))
   }
   calm.addEventListener('change', () => (hold(), soon()))

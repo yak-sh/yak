@@ -705,7 +705,8 @@ export let start = (
   // A pointer passing over a link on its way elsewhere does not ask for it;
   // one that stays `INTENT` milliseconds, or presses, does.
   let hovering: ReturnType<typeof setTimeout> | undefined
-  win.addEventListener('mouseover', (e: MouseEvent) => {
+  win.addEventListener('pointerover', (e: PointerEvent) => {
+    if (e.pointerType != 'mouse') return
     clearTimeout(hovering)
     hovering = setTimeout(() => ahead(e), INTENT)
   })
@@ -718,7 +719,9 @@ export let start = (
     let to = new URL(link.getAttribute('href')!, win.location.href)
     if (looking?.key == page(to)) drop()
   }
-  win.addEventListener('mouseout', left)
+  win.addEventListener('pointerout', (e: PointerEvent) => {
+    if (e.pointerType == 'mouse') left(e)
+  })
   win.addEventListener('focusout', left)
   // A touch the browser takes for a scroll is no press.
   win.addEventListener('pointercancel', left)

@@ -68,6 +68,8 @@
   );
   opacity: 0.5;
 }
-.Peek_Grip:hover {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .Peek_Grip:hover {
+    opacity: 1;
+  }
 }

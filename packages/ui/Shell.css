@@ -73,8 +73,10 @@
   color: var(--text);
   text-decoration: none;
 }
-.Shell_Item:hover {
-  background: var(--soft);
+@media (hover: hover) and (pointer: fine) {
+  .Shell_Item:hover {
+    background: var(--soft);
+  }
 }
 .Shell_Item-on {
   background: color-mix(in srgb, var(--text) 10%, transparent);
