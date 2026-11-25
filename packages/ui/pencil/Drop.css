@@ -11,7 +11,6 @@
 .Drop_Zone {
   --pencil: var(--border2);
   --pencil-style: dashed;
-  --pencil-drawing: var(--edge-dashes);
   position: relative;
   display: grid;
   place-items: center;
@@ -34,7 +33,6 @@
 .Drop_Zone-over {
   --pencil: var(--accent);
   --pencil-style: solid;
-  --pencil-drawing: var(--edge-line);
   background: var(--card);
 }
 .Drop_Zone:has(.Drop_File:disabled) {

@@ -3,7 +3,6 @@
 .Empty {
   --pencil: var(--border2);
   --pencil-style: dashed;
-  --pencil-drawing: var(--edge-dashes);
   position: relative;
   display: grid;
   justify-items: center;

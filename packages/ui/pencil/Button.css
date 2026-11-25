@@ -57,7 +57,6 @@
 }
 .Button-add {
   --pencil-style: dashed;
-  --pencil-drawing: var(--edge-dashes);
   --button-ink: var(--muted);
 }
 .Button-add:hover {

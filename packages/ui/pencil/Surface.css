@@ -55,39 +55,6 @@
   /* How tall a press or a field stands; a part that holds a row of them
      smaller re-points it. */
   --control-height: 2.25rem;
-
-  /* What an outline and a rule are cut from where a browser can: a box
-     drawn in pencil once (edge.svg, edge-dashed.svg), 12px either side of
-     its line, sliced nine ways. Its corners are this skin's 4px radius. */
-  --edge-line: url(edge.svg) 12 / 12px round;
-  --edge-dashes: url(edge-dashed.svg) 12 / 12px round;
-  --rule-drawing: url(edge.svg) 12 / 12px 0 0 round;
-}
-
-/* Where a browser can cut an outline from a drawing, it does: the pencil
-   is drawn once and reused, rather than drawn again through the filter
-   (--drawn) over the whole of every box each time any of it is painted,
-   which a long list pays for as it scrolls. One that cannot draws through
-   the filter. A dashed part draws from --edge-dashes (--pencil-drawing). */
-@supports (-webkit-mask-box-image: url(edge.svg) 12 / 12px round) or
-  (mask-border: url(edge.svg) 12 / 12px round) {
-  :root {
-    --edge-room: calc((12px - var(--edge-width)) / 2);
-    --edge-style: solid;
-    --edge-drawing: var(--edge-line);
-    --outline-filter: none;
-  }
-
-  /* The drawing's corners bend only as far as this skin's 4px radius. A
-     part rounder than that (a phone, a pill) marks itself Surface-round
-     and draws its outline through the filter, as a browser without
-     mask-border does, so its line follows its own corners. */
-  .Surface-round {
-    --edge-room: 0px;
-    --edge-style: initial;
-    --pencil-drawing: none;
-    --outline-filter: var(--edge-filter);
-  }
 }
 
 /* In a Shell the panes scroll apart, so the grain cannot lie over the page:

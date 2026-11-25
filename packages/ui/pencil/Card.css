@@ -51,19 +51,6 @@
   background: var(--rule);
   filter: var(--drawn);
 }
-/* Cut from the top of the drawn box, as an outline is (Surface.css), where
-   a browser can: its line on the same centre, 12px tall. */
-@supports (-webkit-mask-box-image: url(edge.svg) 12 / 12px round) or
-  (mask-border: url(edge.svg) 12 / 12px round) {
-  .Card_Head::after {
-    bottom: calc(var(--stroke) / 2 - 6px);
-    height: 12px;
-    background: var(--graphite);
-    -webkit-mask-box-image: var(--rule-drawing);
-    mask-border: var(--rule-drawing);
-    filter: none;
-  }
-}
 .Card_Head:last-child {
   margin-bottom: calc(-1 * var(--pad-block));
 }

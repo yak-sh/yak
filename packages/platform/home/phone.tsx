@@ -132,7 +132,7 @@ export let Picks = () => (
 )
 
 export let Phone = () => (
-  <Card class='Home_Phone Surface-round'>
+  <Card class='Home_Phone'>
     <div class='Home_Log' data-log=''>
       {DEMOS.map((demo, i) => (
         <Conversation key={demo.slug} demo={demo} first={i == 0} />

@@ -1,28 +1,18 @@
 /* Shared paint. Existing class names are aliases for string-rendered pages;
-   new parts compose Surface. Skins change tokens, never this list of parts.
-
-   An outline is a border on ::after, in --pencil. A skin may cut it from a
-   drawing instead (--edge-drawing, a mask-border; a part's own is
-   --pencil-drawing): the border then reaches --edge-room past the line on
-   either side, in --edge-style, so the drawing has room to wander, and
-   --outline-filter draws over it. */
+   new parts compose Surface. Skins change tokens, never this list of parts. */
 :where(.Surface, .Surface_Raised, .Surface_Press, .Card, .Button, .Menu, .Menu_Summary, .Empty, .Drop_Zone, a.Chip) {
   --pencil: initial;
   --pencil-style: initial;
-  --pencil-drawing: initial;
   position: relative;
 }
 :where(.Surface, .Surface_Raised, .Surface_Press, .Card, .Button, .Menu, .Menu_Summary, .Empty, .Drop_Zone, a.Chip)::after {
   content: var(--surface-outline, none);
   position: absolute;
-  inset: calc(-1px - var(--edge-room));
-  border: calc(var(--edge-width) + 2 * var(--edge-room))
-    var(--edge-style, var(--pencil-style, solid))
-    var(--pencil, var(--edge-color));
+  inset: -1px;
+  border: var(--edge-width) var(--pencil-style, solid) var(--pencil,
+    var(--edge-color));
   border-radius: inherit;
-  -webkit-mask-box-image: var(--pencil-drawing, var(--edge-drawing));
-  mask-border: var(--pencil-drawing, var(--edge-drawing));
-  filter: var(--outline-filter, var(--edge-filter));
+  filter: var(--edge-filter);
   pointer-events: none;
 }
 :is(.Surface, .Surface_Raised, .Surface_Press, .Card, .Button, .Menu)::after {
