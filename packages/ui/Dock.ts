@@ -71,7 +71,7 @@ export let sheet = (c: Colors): Sheet => ({
   Dock_Toast: { fg: c.muted },
 })
 
-/** A launcher with two faces and a count waiting, and its panel open. */
+/** The dock, its launchers, and the three presence states. */
 export let specimens = (): Specimen[] => [[
   'Dock, Launcher, Faces, Panel',
   h(
@@ -119,5 +119,23 @@ export let specimens = (): Specimen[] => [[
     { mod: 'bar' },
     'Friends',
     h(Dot, { mod: 'caution', class: 'Dock_Here Dock_Presence' }),
+  ),
+], [
+  'Friend presence',
+  h(
+    'div',
+    { style: 'display: flex; flex-wrap: wrap; gap: 1rem' },
+    [['Active', 'positive'], ['Away', 'caution'], ['Offline', 'offline']].map(
+      ([label, mod]) =>
+        h(
+          'span',
+          {
+            key: mod,
+            style: 'display: inline-flex; align-items: center; gap: .4rem',
+          },
+          h(Dot, { mod, class: 'Dock_Presence', 'aria-hidden': 'true' }),
+          label,
+        ),
+    ),
   ),
 ]]

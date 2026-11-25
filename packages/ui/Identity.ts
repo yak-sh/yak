@@ -6,12 +6,14 @@ import type { Colors, Specimen } from './theme.ts'
 
 type AvatarProps = Props & { person?: string }
 
+const TONES = ['tone-0', 'tone-1', 'tone-2', 'tone-3', 'tone-4', 'tone-5']
+
 let avatar: Part = el('span', 'Identity_Avatar')
 
 let tone = (person: string): string => {
   let hash = 0
   for (let char of person) hash = Math.imul(hash, 31) + char.codePointAt(0)!
-  return `tone-${(hash >>> 0) % 6}`
+  return TONES[(hash >>> 0) % TONES.length]
 }
 
 let Avatar: FunctionComponent<AvatarProps> = ({ person, mod, ...props }) =>
@@ -80,6 +82,16 @@ export let specimens = (): Specimen[] => [
         {},
         h(Identity.Name, {}, 'Ada'),
         h(Identity.Note, {}, 'Your workspace'),
+      ),
+    ),
+  ],
+  [
+    'Avatar tones',
+    h(
+      'div',
+      { style: 'display: flex; flex-wrap: wrap; gap: .5rem' },
+      TONES.map((mod, i) =>
+        h(Identity.Avatar, { key: mod, mod }, String.fromCharCode(65 + i))
       ),
     ),
   ],
