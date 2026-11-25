@@ -463,7 +463,16 @@ export let runs = (
         (page.startsWith('/') ? `https://${zone()}${page}` : page)
       let steps = typeof a.steps == 'string' ? JSON.parse(a.steps) : a.steps
       let view = Object.fromEntries(
-        (['width', 'height', 'wait', 'touch', 'dark'] as const)
+        ([
+          'width',
+          'height',
+          'wait',
+          'touch',
+          'dark',
+          'cpu',
+          'network',
+          'cold',
+        ] as const)
           .filter((k) => a[k] != null)
           .map((k) => [k, a[k]]),
       ) as Browse['view']

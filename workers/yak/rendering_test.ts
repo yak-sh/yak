@@ -250,21 +250,46 @@ test('browse reads bounded visible text and both kinds of timing from the page',
   let next = 'https://checks.yaks.app/domains'
   let load = {
     name: url,
+    domainLookupStart: 1,
+    domainLookupEnd: 2,
+    connectStart: 2,
+    connectEnd: 9.5,
     requestStart: 10,
     responseStart: 25.34,
     responseEnd: 28,
+    encodedBodySize: 2048,
     domContentLoadedEventEnd: 36.13,
     serverTiming: [{ name: 'kernel', duration: 12.67 }],
   }
+  let file = (
+    name: string,
+    responseEnd: number,
+    transferSize: number,
+    renderBlockingStatus = 'non-blocking',
+  ) => ({
+    name: 'https://checks.yaks.app' + name,
+    responseEnd,
+    encodedBodySize: 1024,
+    transferSize,
+    renderBlockingStatus,
+  })
+  let files = [
+    file('/pages.abc.css', 30, 1100, 'blocking'),
+    file('/_talk.abc.js', 50, 0),
+    file('/frames.js', 40, 1100),
+  ]
   let head = 'a'.repeat(2000), tail = 'b'.repeat(4000)
   let document = { body: { innerText: `${head}middle${tail}` } }
   let performance = {
-    getEntriesByType: (type: string) => type == 'navigation' ? [load] : [],
+    getEntriesByType: (type: string) =>
+      type == 'navigation' ? [load] : type == 'resource' ? files : [],
     getEntriesByName: (name: string) => {
       if (name == url) return [load]
       if (name == next) {
         return [{ serverTiming: [{ name: 'kernel', duration: 4.34 }] }]
       }
+      if (name == 'first-contentful-paint') return [{ startTime: 31.04 }]
+      if (name == 'yak-usable') return [{ startTime: 60.06 }]
       return name == 'yak-page'
         ? [{
           name,
@@ -276,10 +301,12 @@ test('browse reads bounded visible text and both kinds of timing from the page',
   }
   let p = page({
     world: (expression) =>
-      new Function('document', 'performance', `return (${expression})`)(
-        document,
-        performance,
-      ),
+      new Function(
+        'document',
+        'performance',
+        'location',
+        `return (${expression})`,
+      )(document, performance, { href: url }),
   })
   let result = await capture(p.browsing, { url, view, audit: false })
   assertEquals(result.text, `${head}\n… 6 characters left out …\n${tail}`)
@@ -288,9 +315,32 @@ test('browse reads bounded visible text and both kinds of timing from the page',
       name: 'load',
       url,
       ms: 36.1,
-      parts: { wait: 15.3, read: 2.7, build: 8.1 },
+      parts: {
+        dns: 1,
+        connect: 7.5,
+        wait: 15.3,
+        read: 2.7,
+        kb: 2,
+        build: 8.1,
+        paint: 31,
+      },
       server: { kernel: 12.7 },
     },
+    {
+      name: 'css',
+      url,
+      ms: 30,
+      parts: { files: 1, kb: 1, cached: 0, blocking: 1 },
+      server: {},
+    },
+    {
+      name: 'js',
+      url,
+      ms: 50,
+      parts: { files: 2, kb: 2, cached: 1, blocking: 0 },
+      server: {},
+    },
+    { name: 'usable', url, ms: 60.1, parts: {}, server: {} },
     {
       name: 'yak-page',
       url: next,
@@ -298,6 +348,43 @@ test('browse reads bounded visible text and both kinds of timing from the page',
       parts: { frame: 5.7, made: 'partial' },
       server: { kernel: 4.3 },
     },
+  ])
+})
+
+test('a slow phone opens the page cold, then again through what it cached', async () => {
+  let p = page()
+  let sent: string[] = []
+  let { createCDPSession, goto } = p.p
+  p.p.createCDPSession = async () => {
+    let cdp = await createCDPSession()
+    return {
+      send: (method, params) => {
+        if (method.startsWith('Runtime') || method.startsWith('Page')) {
+          return cdp.send(method, params)
+        }
+        sent.push(`${method} ${JSON.stringify(params ?? {})}`)
+        return Promise.resolve({})
+      },
+    }
+  }
+  let went: string[] = []
+  p.p.goto = (url, o) => (went.push(url), goto(url, o))
+  await capture(p.browsing, {
+    url: 'https://yaks.app/checks',
+    view: { ...view, cpu: 4, network: 'fast-4g', cold: true },
+    steps: [{ open: '/checks?again' }],
+    audit: false,
+  })
+  assertEquals(sent, [
+    'Network.clearBrowserCache {}',
+    'Storage.clearDataForOrigin {"origin":"https://yaks.app","storageTypes":"cache_storage,indexeddb,service_workers,local_storage"}',
+    'Emulation.setCPUThrottlingRate {"rate":4}',
+    'Network.enable {}',
+    'Network.emulateNetworkConditions {"offline":false,"latency":165,"downloadThroughput":1012500,"uploadThroughput":168750}',
+  ])
+  assertEquals(went, [
+    'https://yaks.app/checks',
+    'https://yaks.app/checks?again',
   ])
 })
 

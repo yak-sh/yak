@@ -2246,6 +2246,9 @@ let talk = mountTalk({
     return (await response.json()).lines
   },
 })
+// The page can be used from here: its box takes words and its lines follow.
+// A load's timings read this mark (@yaks/platform/browser-visit).
+if (!performance.getEntriesByName('yak-usable').length) performance.mark('yak-usable')
 let heading = document.querySelector('[data-title]')
 // The conversation's title is its view's (@yaks/platform/talk-views), which
 // a press showing it again names the page with, and the bar's while it shows.

@@ -41,14 +41,27 @@ export { bounded, BrowserTimeout } from './browser-time.ts'
 
 /** A window: its size, how long to wait after loading, whether it is a
  * phone's (touch events, a mobile viewport), and whether the system asks for
- * the dark theme. */
+ * the dark theme. `cpu` slows the processor by that factor and `network`
+ * holds the connection to a mobile one (`NETWORKS`), as a slower phone
+ * opens the page; `cold` opens it with no cache, service worker or stored
+ * data from an earlier visit, as a first open does. */
 export type View = {
   width: number
   height: number
   wait: number
   touch?: boolean
   dark?: boolean
+  cpu?: number
+  network?: Network
+  cold?: boolean
 }
+/** Chrome DevTools' own mobile presets: round trip in ms, and bytes a
+ * second each way. */
+export let NETWORKS = {
+  'slow-4g': { latency: 562.5, down: 1.6e6 / 8 * 0.9, up: 750e3 / 8 * 0.9 },
+  'fast-4g': { latency: 165, down: 9e6 / 8 * 0.9, up: 1.5e6 / 8 * 0.9 },
+} as const
+export type Network = keyof typeof NETWORKS
 /** A cookie the page is opened with: a private app's sign-in. One with a
  * `url` and no `domain` is host-only, as a `__Host-` cookie must be. */
 export type Cookie = {
@@ -78,6 +91,8 @@ export type Cookie = {
  *             resized (`interactive-widget=resizes-content`); 0 closes it
  *   wait      wait this many milliseconds
  *   shot      take a screenshot, kept under this name
+ *   open      open this address, relative to the page, as a person opening
+ *             it again does: a warm open, through what the first one cached
  */
 export type Step =
   | { tap: string }
@@ -89,6 +104,7 @@ export type Step =
   | { keyboard: number }
   | { wait: number }
   | { shot: string }
+  | { open: string }
 /** What yak-browser is asked to open. */
 export type Visit = {
   url: string
@@ -268,18 +284,54 @@ let TIMELINE = `(() => {
     return Object.fromEntries(
       (last?.serverTiming ?? []).map((t) => [t.name, round(t.duration)]))
   }
+  let kb = (n) => round(n / 1024)
   let out = []
   let load = performance.getEntriesByType('navigation')[0]
+  let paint = performance.getEntriesByName('first-contentful-paint')[0]
   if (load) out.push({
     name: 'load',
     url: load.name,
     ms: round(load.domContentLoadedEventEnd),
     parts: {
+      dns: round(load.domainLookupEnd - load.domainLookupStart),
+      connect: round(load.connectEnd - load.connectStart),
       wait: round(load.responseStart - load.requestStart),
       read: round(load.responseEnd - load.responseStart),
+      kb: kb(load.encodedBodySize),
       build: round(load.domContentLoadedEventEnd - load.responseEnd),
+      ...paint ? { paint: round(paint.startTime) } : {},
     },
     server: server(load.name),
+  })
+  // What the page fetched to draw and run, by kind: how many files, their
+  // bytes over the wire, how many held the first paint, and when the last
+  // of them arrived.
+  let kinds = { css: /[.]css$/, js: /[.]m?js$/, font: /[.](woff2?|ttf|otf)$/ }
+  let files = performance.getEntriesByType('resource')
+  for (let [kind, test] of Object.entries(kinds)) {
+    let of = files.filter((e) => test.test(new URL(e.name).pathname))
+    if (!of.length) continue
+    out.push({
+      name: kind,
+      url: location.href,
+      ms: round(Math.max(...of.map((e) => e.responseEnd))),
+      parts: {
+        files: of.length,
+        kb: kb(of.reduce((n, e) => n + e.encodedBodySize, 0)),
+        cached: of.filter((e) => e.transferSize == 0).length,
+        blocking: of.filter((e) => e.renderBlockingStatus == 'blocking').length,
+      },
+      server: {},
+    })
+  }
+  // When the page could first be used: its own yak-usable mark.
+  let usable = performance.getEntriesByName('yak-usable')[0]
+  if (usable) out.push({
+    name: 'usable',
+    url: location.href,
+    ms: round(usable.startTime),
+    parts: usable.detail ?? {},
+    server: {},
   })
   // The pages the navigator fetched (its yak-fetch marks), how many of
   // them ahead, and the server's time on them all: the load its looking
@@ -403,6 +455,7 @@ export let allowed = (
   Math.min(
     MOST,
     RENDER + steps.length * STEP +
+      steps.filter((s) => 'open' in s).length * LOAD +
       (includeWaits ? steps.reduce((ms, s) => ms + stepWait(s), 0) : 0),
   )
 
@@ -538,6 +591,33 @@ let shown = async (
       throw missing(step, selector)
     }
     throw e
+  }
+}
+
+// A slower phone's processor and network, and a first open's empty cache,
+// set through the page's DevTools session before it loads.
+let throttled = async (page: Page, view: View, url: string) => {
+  if (!view.cpu && !view.network && !view.cold) return
+  let cdp = await page.createCDPSession()
+  if (view.cold) {
+    await cdp.send('Network.clearBrowserCache')
+    await cdp.send('Storage.clearDataForOrigin', {
+      origin: new URL(url).origin,
+      storageTypes: 'cache_storage,indexeddb,service_workers,local_storage',
+    })
+  }
+  if (view.cpu) {
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: view.cpu })
+  }
+  let net = view.network && NETWORKS[view.network]
+  if (net) {
+    await cdp.send('Network.enable')
+    await cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: net.latency,
+      downloadThroughput: net.down,
+      uploadThroughput: net.up,
+    })
   }
 }
 
@@ -715,6 +795,8 @@ let loaded = async (
       signal.throwIfAborted()
       await page.setViewport(viewport(view))
       signal.throwIfAborted()
+      await throttled(page, view, url)
+      signal.throwIfAborted()
       if (view.dark) {
         await page.emulateMediaFeatures([
           { name: 'prefers-color-scheme', value: 'dark' },
@@ -788,6 +870,14 @@ let loaded = async (
         if ('wait' in step) {
           waitingFor(`${stage} (waiting ${step.wait} ms)`)
           await pause(step.wait, at, deadline - time.now(), signal, time)
+          continue
+        }
+        if ('open' in step) {
+          waitingFor(`opening ${step.open}`)
+          status = (await page.goto(new URL(step.open, url).href, {
+            waitUntil: 'domcontentloaded',
+            timeout: LOAD,
+          }))?.status() ?? 0
           continue
         }
         if ('shot' in step) {
