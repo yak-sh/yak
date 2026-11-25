@@ -584,6 +584,7 @@ test('an idle area subscriber hears a mover after hibernation', async () => {
 
   let [, woken] = instance(storage, ctx, vocab)
   woken.wake()
+  assertEquals(moving.sent, [{ id: '', resay: true }])
   send(woken, moving, {
     relay: [{ entity: { eid: 'mover' }, position: { x: 3 } }],
   })

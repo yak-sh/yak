@@ -15,10 +15,9 @@ also zoom buttons. The app lives in `jeff/stream-desk`.
   over IP, Pelco or ONVIF) and offers `ptz_preset_recall` and `ptz_move` as
   vendor requests on the same socket. A preset is recalled before its scene is
   cut to, so the camera moves off air.
-- The desk writes what OBS has on air, and its scenes, in
-  `desk{scene, scenes, seen}`, again every 30 s. A phone takes a desk not seen
-  for 75 s as away. (`./api/client.js` sends every write to the store, so a
-  `sync: peers` value would not be relayed from this page.)
+- The desk relays `desk{scene, scenes}` when OBS connects or changes. Phones see
+  the current status as soon as they subscribe. It clears when OBS or the desk
+  page disconnects.
 - The Operator can watch (`watch.js`): every 10 s the desk takes a still of each
   shot's scene from OBS (`GetSourceScreenshot`, 512 px), adds what was said in
   the last minute, and asks Llama 4 Scout through `./api/ai/run` which shot

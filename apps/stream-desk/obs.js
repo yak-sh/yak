@@ -31,7 +31,8 @@ export let secret = async (password, { salt, challenge }) =>
 /** Connects to OBS at `url` and resolves once it has identified us, to
  * `{call, on, close, closed}`. `call(type, data)` resolves to the request's
  * responseData and rejects with OBS's comment; `on(fn)` hears each event as
- * `fn(type, data)`; `closed` resolves with the reason the socket closed. */
+ * `fn(type, data)` and returns an unsubscribe function. `closed` resolves
+ * with the reason the socket closed. */
 export let connect = (url, password = '', hears = HEARS) =>
   new Promise((resolve, reject) => {
     let socket = new WebSocket(url)
@@ -47,7 +48,10 @@ export let connect = (url, password = '', hears = HEARS) =>
           waiting.set(requestId, { ok, fail })
           send(OP.request, { requestType, requestId, requestData })
         }),
-      on: (fn) => heard.add(fn),
+      on: (fn) => {
+        heard.add(fn)
+        return () => heard.delete(fn)
+      },
       close: () => socket.close(),
       closed: new Promise((done) => ended = done),
     }

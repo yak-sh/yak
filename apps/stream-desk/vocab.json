@@ -72,7 +72,9 @@
     "desk": {
       "component": true,
       "type": "object",
-      "description": "What the desk, the page on the computer running OBS, sees: the scene on air and the scenes OBS has. The desk writes it again every 30 seconds; one not seen for 75 seconds is away.",
+      "sync": "peers",
+      "durable": "connection",
+      "description": "The scene on air and the list of scenes in OBS. The desk relays this when OBS connects or changes and clears it when OBS disconnects.",
       "properties": {
         "scene": {
           "type": "string"
@@ -82,12 +84,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "seen": {
-          "type": "string",
-          "title": "Last heard from OBS",
-          "description": "When the OBS desk last reported its status, as an ISO timestamp.",
-          "readOnly": true
         }
       }
     }

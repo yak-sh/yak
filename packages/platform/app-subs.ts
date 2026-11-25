@@ -2,7 +2,7 @@
 // query. Socket ownership and transport stay with the host.
 import { type Frame, type PeerWriter, type Sink, type Subs } from '@yaks/api'
 import { type Bundle, type Taken } from '@yaks/graph'
-import { after } from '@yaks/fp'
+import { after, isPromise } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import { type Line, whole } from '@yaks/query'
 import { instrumentActor } from './instrument.ts'
@@ -33,23 +33,30 @@ export let naming = (
   let by = (sink: Sink): Sink => {
     let held = wrapped.get(sink)
     if (!held) {
-      wrapped.set(
-        sink,
-        held = (f) => {
-          if (!f.bundles) return sink(f)
-          // What a projection reaches rides beside the rows, in the same
-          // words.
-          let bundles = f.bundles.map(kind)
-          let peers = f.peers?.map(kind)
-          let rode = peers ? { peers } : {}
-          after(names([...bundles, ...peers ?? []]), (said) => {
-            let spoken: Frame & Partial<Names> = Object.keys(said.names).length
-              ? { ...f, bundles, ...rode, ...said }
-              : { ...f, bundles, ...rode }
-            sink(spoken)
-          })
-        },
-      )
+      let waiting: Promise<void> | undefined
+      let speak = (f: Frame) => {
+        if (!f.bundles && !f.peers && !f.relay) return sink(f)
+        let bundles = f.bundles?.map(kind)
+        let peers = f.peers?.map(kind)
+        let spoken = { ...f, ...bundles && { bundles }, ...peers && { peers } }
+        return after(
+          names([...bundles ?? [], ...peers ?? [], ...f.relay ?? []]),
+          (said) =>
+            sink(
+              Object.keys(said.names).length ? { ...spoken, ...said } : spoken,
+            ),
+        )
+      }
+      held = (f) => {
+        let out = waiting ? waiting.then(() => speak(f)) : speak(f)
+        if (!isPromise(out)) return
+        let pending = waiting = out.catch(() => {})
+        void pending.then(() => {
+          if (waiting === pending) waiting = undefined
+        })
+        return out
+      }
+      wrapped.set(sink, held)
     }
     return held
   }

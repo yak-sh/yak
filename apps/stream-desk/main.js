@@ -189,19 +189,19 @@ let run = async ({ url, password, ...asked }) => {
       query,
       apply,
       obs,
-      relay: (seen) => apply({ entity: { eid: DESK }, desk: seen }),
+      relay: (desk) => apply({ entity: { eid: DESK }, desk }),
     })
     state.mine = obs
     state.trouble = ''
     kick = d.kick
     kick()
     draw()
-    let leave = await attend(obs, d, asked)
+    let attending = attend(obs, d, asked)
     let why = await obs.closed
-    leave()
-    d.stop()
     kick = null
     if (state.mine == obs) state.trouble = `${why}. Connecting again…`
+    void attending.then((leave) => leave())
+    await d.stop()
   } catch (e) {
     let refused = e.message == 'OBS refused the password'
     if (refused) localStorage.removeItem(SAVED)
@@ -230,7 +230,6 @@ $('#leave').addEventListener('click', () => {
   state.mine = null
   state.trouble = ''
   obs?.close()
-  apply({ entity: { eid: DESK }, desk: null })
   draw()
 })
 
@@ -243,17 +242,10 @@ subscribe('.cue&?aired&?missed&?suggested&?created&limit=50', (rows) => {
   kick?.()
   draw()
 })
-// A desk that stopped writing is away; the status is read again each beat.
-let deskRows = []
-let recheck = () => {
-  state.desk = present(deskRows, Date.now())
-  draw()
-}
 subscribe('.desk', (rows) => {
-  deskRows = rows
-  recheck()
+  state.desk = present(rows)
+  draw()
 })
-setInterval(recheck, 15_000)
 let saved = JSON.parse(localStorage.getItem(SAVED) ?? 'null')
 if (saved) run(saved)
 draw()

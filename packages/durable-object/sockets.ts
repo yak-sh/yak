@@ -675,8 +675,15 @@ export let sockets = (
     if (held?.acks) fresh.enable(held.frames)
     // The relay keys first: whatever else this socket did, the registry has to
     // know what it is saying before a close can stop saying it.
-    let out = after(subs.relayed(send, relayOf(ws)), () => {
+    let relay = relayOf(ws)
+    let out = after(subs.relayed(send, relay), () => {
       if (closed.has(ws)) return
+      if (
+        relay.some((key) => {
+          let comp = key.slice(key.indexOf(' ') + 1)
+          return subs.vocab?.comp(comp)?.durable == 'connection'
+        })
+      ) transport.send(JSON.stringify({ id: '', resay: true }))
       return after(
         over(Object.entries(asks(ws)), ([id, ask]) => {
           if (openings) {

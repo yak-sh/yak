@@ -93,6 +93,8 @@ export type Revision = number | Record<string, number>
  * subscription could not be opened.
  */
 export type Frame = {
+  /** Peer values held by this connection need to be sent again after wake. */
+  resay?: true
   /** the token a socket subscriber echoes after applying this frame */
   ack?: string
   /** a whole answer after a hibernating socket wakes */

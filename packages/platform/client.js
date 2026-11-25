@@ -1,9 +1,13 @@
+import { comps } from '@yaks/graph/bundle'
 import { decode, stringify, unpack } from '@yaks/vocab/wire'
+import { loadVocab, paced } from '@yaks/vocab'
 import { browserDrafts, draftEid } from '@yaks/draft/browser'
 import { durableOutbox } from '@yaks/sync/outbox'
+import { pacer, saying } from '@yaks/sync'
 import { system } from '@yaks/fp'
 import { carried } from './installs.ts'
 import { browserPage, sayTab } from '@yaks/notify/tab'
+import { landRelay, relayed, split, withRelay } from './page-relay.js'
 export { draftEid }
 export { qr } from './qr.ts'
 
@@ -24,11 +28,11 @@ export { qr } from './qr.ts'
 // app's client in a copy someone installed at another address. An absolute `/<app>/api/client.js` still works; it just stops working
 // the moment the app is copied.
 //
-// `subscribe(filter, cb)` is `query(filter)` that keeps answering: one socket
+// `subscribe(filter, cb)` keeps answering over one socket
 // onto the app's API, which watches any component homes the app uses, so a
 // write from another device — or another tab, or an agent — re-renders the
-// page without a poll. It hands back the same rows `query` does, the first of
-// them over the page's own connection while the socket opens; the returned
+// page without a poll. It includes current peer values alongside stored rows.
+// An HTTP query supplies the first rows while the socket opens. The returned
 // function ends it, and its `ready` is those first rows, for a page that waits
 // for them. A page that subscribes to what it draws, all of it at once, loads
 // in one round.
@@ -461,7 +465,10 @@ let lanes = async (items, go) => {
   if (failed) throw failed
 }
 
-export let store = (base, { clock = system } = {}) => {
+export let store = (base, {
+  clock = system,
+  connect = (url) => new WebSocket(url),
+} = {}) => {
   base = based(base)
   let once = door(base)
   // A read is asked again while it has no answer, so a page that loads as
@@ -470,9 +477,13 @@ export let store = (base, { clock = system } = {}) => {
     init ? once(path, init) : again(clock, () => once(path), read)
   // The store's words: each component it declares, by name, its documents
   // (`vocab.json`) merged. Asked once, and again after a failure.
-  let vocabulary
+  let vocabulary, documents, definitions, compiled
   let words = () =>
-    vocabulary ??= rawAsk('vocab.json').then((docs) => {
+    vocabulary ??= rawAsk('vocab.json', undefined, {
+      when: unanswered,
+      tries: Infinity,
+    }).then((docs) => {
+      documents = docs
       let defs = {}
       for (let doc of docs) {
         for (let [name, def] of Object.entries(doc.$defs ?? {})) {
@@ -483,11 +494,13 @@ export let store = (base, { clock = system } = {}) => {
           }
         }
       }
-      return defs
+      return definitions = defs
     }).catch((error) => {
       vocabulary = undefined
       throw error
     })
+  let vocab = () => compiled ??= loadVocab(documents)
+  let pacing = { comp: (name) => ({ pace: paced(definitions?.[name]?.pace) }) }
   let readWire = async (value, payload) => {
     // No extra request for a page whose answers contain no byte tags. Only
     // the vocabulary, never a global JSON reviver, gives the tag meaning.
@@ -586,12 +599,20 @@ export let store = (base, { clock = system } = {}) => {
   // itself because even reading the property can throw in a sandbox.
   if ('indexedDB' in globalThis) void boot().catch(() => {})
   let apply = async (bundles) => {
-    // Snapshot intent before the asynchronous identity lookup.
-    let payload = structuredClone({
-      entities: Array.isArray(bundles) ? bundles : [bundles],
-    })
-    await boot()
-    return queue.submit(payload)
+    // Snapshot intent before the asynchronous vocabulary and identity reads.
+    let entities = structuredClone(Array.isArray(bundles) ? bundles : [bundles])
+    let declared = definitions ??
+      (entities.some((b) => b && comps(b).length) ? await words() : {})
+    let batch = split(entities, declared)
+    let receipt = { ok: true, aliases: {}, bundles: [] }
+    if (batch.stored.length || !batch.relay.length) {
+      await boot()
+      receipt = await queue.submit({ entities: batch.stored })
+    }
+    if (!batch.relay.length) return receipt
+    let { sent, answer } = relayed(batch.relay, receipt, batch.unnamed, vocab)
+    broadcast(sent)
+    return answer
   }
   // The filter line, the grammar the boards speak: '.doc.title~=cake',
   // '.opaque.format=recipe', 'id=<eid>', 'limit='. Oldest first, in the order
@@ -724,12 +745,31 @@ export let store = (base, { clock = system } = {}) => {
   // Every file this app published, by path.
   let publicFiles = () => ask('public')
 
-  // The live half: one socket onto this store, opened on the first
-  // subscription and shared by all of them, reconnecting on its own.
+  // One socket for this store's subscriptions and peer writes.
   let subs = new Map()
+  let said = saying()
   let sock = null
   let tries = 0
   let n = 0
+  let needed = () => subs.size || said.held().length
+  let closeIdle = () => {
+    if (needed()) return false
+    let s = sock
+    sock = null
+    s?.close()
+    return true
+  }
+  let pace
+  let broadcast = (bundles) => {
+    let s = open()
+    let connected = s.readyState == 1
+    said.wrote(bundles, connected)
+    if (connected) pace(bundles)
+    for (let sub of subs.values()) {
+      if (landRelays(sub, bundles)) sub.cb(rows(sub))
+    }
+    closeIdle()
+  }
   // Where this page's person is (@yaks/notify/tab): its tab, said on the
   // socket as it opens, on each change and every beat, which the store keeps
   // as their whereabouts. A page with no socket open says nothing.
@@ -747,21 +787,39 @@ export let store = (base, { clock = system } = {}) => {
     let version = pageVersion()
     if (version != null) url.searchParams.set('version', version)
     url.protocol = url.protocol == 'https:' ? 'wss:' : 'ws:'
-    let s = sock = new WebSocket(url)
+    let s = sock = connect(url)
+    pace = pacer(pacing, (relay) => {
+      if (sock == s && s.readyState == 1) s.send(stringify({ relay }))
+    }, (fn, ms) => clock.after(ms, fn))
     // Every subscription is (re)declared on open, so a reconnect needs no
     // catch-up: the store answers each declaration with the whole set, so the
     // rows it replaces are dropped first.
     s.onopen = () => {
+      if (sock != s) return
       tries = 0
+      pace(said.again())
       if (tab) s.send(JSON.stringify({ tab }))
       for (let [name, sub] of subs) {
-        sub.rows.clear()
-        sub.riders = []
+        reset(sub)
         s.send(JSON.stringify({ subscribe: sub.q, id: name }))
       }
+      closeIdle()
     }
     let receiving
     let land = (f) => {
+      if (sock != s) return
+      if (f.resay) {
+        let held = said.held().flatMap((b) => {
+          let own = comps(b).filter(([name, patch]) =>
+            patch != null && definitions?.[name]?.durable == 'connection'
+          )
+          return own.length
+            ? [{ entity: b.entity, ...Object.fromEntries(own) }]
+            : []
+        })
+        pace(held)
+        return
+      }
       let sub = subs.get(f.id)
       if (!sub) return
       sub.heard = true
@@ -782,7 +840,8 @@ export let store = (base, { clock = system } = {}) => {
         sub.first.reject(new Error(f.refused.message ?? f.refused.error))
         return
       }
-      fold(sub, f)
+      said.heard(f.relay ?? [])
+      if (!fold(sub, f, said.held())) return
       let now = rows(sub)
       sub.first.resolve(now)
       sub.cb(now)
@@ -813,9 +872,10 @@ export let store = (base, { clock = system } = {}) => {
       let held = receiving
     }
     s.onclose = () => {
+      if (sock != s) return
       sock = null
-      let again = () => subs.size && open()
-      if (subs.size) clock.after(Math.min(1000 * 2 ** tries++, 15000), again)
+      let again = () => needed() && open()
+      if (needed()) clock.after(Math.min(1000 * 2 ** tries++, 15000), again)
     }
     return s
   }
@@ -833,7 +893,7 @@ export let store = (base, { clock = system } = {}) => {
     sock = null
     s.onopen = s.onclose = s.onmessage = null
     s.close()
-    if (subs.size) open()
+    if (needed()) open()
   })
   let tell = (frame) => {
     let s = open()
@@ -858,7 +918,8 @@ export let store = (base, { clock = system } = {}) => {
     let first
     let ready = new Promise((resolve, reject) => first = { resolve, reject })
     ready.catch(() => {})
-    let sub = { q, rows: new Map(), riders: [], cb, heard: false, first }
+    let sub = { q, cb, heard: false, first }
+    reset(sub)
     subs.set(name, sub)
     tell({ subscribe: q, id: name })
     // A socket that is not open yet is a handshake away — a connection of
@@ -876,14 +937,7 @@ export let store = (base, { clock = system } = {}) => {
     }
     let stop = () => {
       if (!subs.delete(name)) return
-      // No subscriptions, no socket: the last one to leave closes it, and the
-      // next subscribe opens a new one.
-      if (!subs.size) {
-        let s = sock
-        sock = null
-        return s && s.close()
-      }
-      tell({ unsubscribe: name })
+      if (!closeIdle()) tell({ unsubscribe: name })
     }
     stop.ready = ready
     return stop
@@ -907,16 +961,37 @@ export let store = (base, { clock = system } = {}) => {
   }
 }
 
-// One subscription frame folded into its rows. A frame carries whole rows —
-// the rows `query()` gives, once they are `named` — so folding is just keeping
-// them: a row replaces the one it names, and one that is `gone` (it died, or it
-// stopped matching) leaves. A `.fields` projection whose paths cross a
-// reference also brings its riders, the entities those paths reach, every one
-// of them in every frame, so they are kept as they come.
-let fold = (sub, f) => {
-  for (let row of f.bundles ?? []) sub.rows.set(row.entity.eid, named(row, f))
-  for (let eid of f.gone ?? []) sub.rows.delete(eid)
+let reset = (sub) => {
+  sub.rows = new Map()
+  sub.riders = []
+  sub.relays = new Map()
+  sub.coverage = new Map()
+}
+
+let landRelays = (sub, bundles) => {
+  let changed = false
+  for (let b of bundles) if (landRelay(sub, b)) changed = true
+  return changed
+}
+
+// The store supplies membership and whole stored rows. A relay only patches
+// values on those members, and the writer remembers its own unreturned relay.
+let fold = (sub, f, own) => {
+  if (f.reset) reset(sub)
+  for (let row of f.bundles ?? []) {
+    let eid = row.entity.eid
+    sub.rows.set(eid, named(row, f))
+    sub.coverage.set(eid, f.coverage?.[eid])
+  }
+  let changed = landRelays(sub, (f.relay ?? []).map((row) => named(row, f)))
+  if (f.bundles?.length && own.length) landRelays(sub, own)
+  for (let eid of f.gone ?? []) {
+    sub.rows.delete(eid)
+    sub.relays.delete(eid)
+    sub.coverage.delete(eid)
+  }
   if (f.peers) sub.riders = f.peers.map((row) => named(row, f))
+  return changed || !f.relay || f.bundles || f.gone || f.peers || f.reset
 }
 
 // A frame's row as `query()` answers it. The socket keeps each row in the
@@ -989,8 +1064,9 @@ let asked = (filter = '') =>
 // in and the order a live row is added at, so the map already holds it. The
 // riders follow, as `query()` lists them: one the query also selects is one
 // row, carrying what both said of it.
-let rows = ({ rows, riders }) => {
-  let out = new Map(rows)
+let rows = ({ rows, riders, relays }) => {
+  let out = new Map()
+  for (let [eid, row] of rows) out.set(eid, withRelay(row, relays.get(eid)))
   for (let r of riders) {
     let held = out.get(r.entity.eid) ?? {}
     let row = { ...held, ...r }

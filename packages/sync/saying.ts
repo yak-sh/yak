@@ -30,12 +30,15 @@ export type Saying = {
   heard: (bundles: Bundle[]) => void
   /** whether this node is saying this component of this entity */
   mine: Mine
+  /** the current patches, without consuming any waiting clears */
+  held: () => Bundle[]
   /** everything to say again on a new connection */
   again: () => Bundle[]
 }
 
 export let saying = (): Saying => {
   let said = new Map<string, Said>()
+  let held = () => bundled([...said.values()])
   return {
     wrote: (bundles, carried) => {
       for (let b of bundles) {
@@ -56,8 +59,9 @@ export let saying = (): Saying => {
       }
     },
     mine: (eid, comp) => said.get(key(eid, comp))?.[2] != null,
+    held,
     again: () => {
-      let out = bundled([...said.values()])
+      let out = held()
       for (let [k, [, , patch]] of said) if (patch == null) said.delete(k)
       return out
     },

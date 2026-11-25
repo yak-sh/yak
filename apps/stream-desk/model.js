@@ -16,16 +16,9 @@ export let NUDGE = 400
  * to, when the cut changes the scene. */
 export let SETTLE = 1500
 
-/** How often the desk says it is still there, and how long a desk not
- * heard from is taken to be away. */
-export let BEAT = 30_000
-export let AWAY = 75_000
-
 /** The desk's own row while it is there, else null. */
-export let present = (rows, now) => {
-  let desk = rows.find((r) => r.entity.eid == DESK)?.desk
-  return desk?.seen && now - Date.parse(desk.seen) <= AWAY ? desk : null
-}
+export let present = (rows) =>
+  rows.find((r) => r.entity.eid == DESK)?.desk ?? null
 
 /** A reference as a read speaks it: the eid, or `{eid, name}`. */
 export let idOf = (v) => typeof v == 'string' ? v : v?.eid ?? null

@@ -8,7 +8,7 @@ import { appStore } from '../../workers/yak/directory.ts'
 import { ADA_OWNS, platform, seeded } from '../../workers/yak/serving-probe.ts'
 import { connect } from './obs.js'
 import { desk } from './desk.js'
-import { AWAY, DESK, due, onAir, present, shots, STALE } from './model.js'
+import { DESK, due, onAir, present, shots, STALE } from './model.js'
 import { look, proposal } from './watch.js'
 import { mockObs } from './mock_obs.ts'
 
@@ -59,7 +59,7 @@ test('the desk plays each pressed cue into OBS and marks it', async () => {
     query,
     apply,
     obs: client,
-    relay: ({ seen: _, ...v }: Comp) => relayed.push(v),
+    relay: (v: Comp | null) => v && relayed.push(v),
     wait: () => Promise.resolve(),
   })
   equal(relayed, [{
@@ -118,26 +118,37 @@ test('the desk plays each pressed cue into OBS and marks it', async () => {
   equal(await client.closed, 'OBS closed the connection (1005)')
 })
 
-test('the desk heartbeat survives a store round trip', async () => {
-  let { p, apply, query } = await opened()
-  await using _ = p
-  await using obs = mockObs()
-  let client = await connect(obs.url, 'desk')
+test('the desk publishes on connect and scene changes, then clears its status', async () => {
+  let event: ((type: string, data: Comp) => void) | undefined
+  let relayed: (Comp | null)[] = []
   let d = await desk({
-    query,
-    apply,
-    obs: client,
-    relay: (status: Comp) => apply({ entity: { eid: DESK }, desk: status }),
+    query: () => [],
+    apply: () => {},
+    obs: {
+      call: (type: string) => {
+        equal(type, 'GetSceneList')
+        return { currentProgramSceneName: 'Opening', scenes: [] }
+      },
+      on: (heard: typeof event) => {
+        event = heard
+        return () => event = undefined
+      },
+    },
+    relay: (status: Comp | null) => relayed.push(status),
   })
-  try {
-    let status = present(await query('.desk'), Date.now())
-    equal(status?.scene, 'Projector')
-    equal(status?.scenes, ['Projector', 'Camera', 'PIP'])
-  } finally {
-    d.stop()
-    client.close()
-    await client.closed
-  }
+  event?.('SceneListChanged', { scenes: [{ sceneName: 'Wide' }] })
+  event?.('CurrentProgramSceneChanged', { sceneName: 'Wide' })
+  let status = present([{ entity: { eid: DESK }, desk: relayed.at(-1) }])
+  equal(status, { scene: 'Wide', scenes: ['Wide'] })
+  d.stop()
+  equal(event, undefined)
+  equal(relayed, [
+    { scene: 'Opening', scenes: [] },
+    { scene: 'Opening', scenes: ['Wide'] },
+    { scene: 'Wide', scenes: ['Wide'] },
+    null,
+  ])
+  equal(present([]), null)
 })
 
 test('OBS refuses a wrong password', async () => {
@@ -168,17 +179,6 @@ test('a cue pressed while the desk was away is missed, not played', () => {
     ['c2', 'c3'],
     ['c1'],
   ])
-})
-
-test('a desk not heard from for a while is away', () => {
-  let desk = (ms: number) => [{
-    entity: { eid: DESK },
-    desk: { scene: 'Camera', seen: new Date(ms).toISOString() },
-  }]
-  let now = 1_000_000
-  equal(present(desk(now - AWAY), now)?.scene, 'Camera')
-  equal(present(desk(now - AWAY - 1), now), null)
-  equal(present([], now), null)
 })
 
 test('the Operator looks at each scene, hears the last minute, and proposes a shot nobody plays until it is taken', async () => {

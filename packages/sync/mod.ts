@@ -84,7 +84,8 @@ export {
   WriteUnknown,
 } from './outbound.ts'
 export { changes, hear, land, snapshot, strip } from './inbound.ts'
-export { type Mine } from './saying.ts'
+export { pacer } from './pace.ts'
+export { type Mine, saying } from './saying.ts'
 export {
   type Ask,
   backoff,

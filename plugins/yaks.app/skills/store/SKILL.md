@@ -113,8 +113,8 @@ zone, so it can be sized with CSS and printed on a dark page.
 ### apply(bundles)
 
 A bundle is one entity and the components you are writing on it. `apply` accepts
-one bundle or an array of them (`apply(b)` or `apply([b1, b2])`) and POSTs them
-to `./api/apply` as `{entities: [...]}`. It returns:
+one bundle or an array (`apply(b)` or `apply([b1, b2])`). Stored components go
+to `./api/apply` as `{entities: [...]}`. A write returns this receipt.
 
     { ok: true,
       aliases: { $cake: '4f3c…' },
@@ -122,9 +122,12 @@ to `./api/apply` as `{entities: [...]}`. It returns:
 
 `aliases` maps each `$alias` you sent to the eid it minted. `bundles` is what
 was written: one bundle per entity, each carrying the `$alias` you named it by,
-with the properties the store stamped on it. The whole array is one batch (every
-bundle in one `apply` call is applied in one transaction), so if any bundle is
-refused, nothing in that call is written.
+with the properties the store stamped on it. The stored writes are one
+transaction. A refusal leaves them all unapplied.
+
+Components declared `sync: peers` go over the subscription WebSocket. The client
+relays them after any stored part of the same call is acknowledged. See
+[Realtime Sync and Persistence](./storage.md) for delivery and lifetime.
 
 If the answer is neither an acceptance nor a refusal (the request failed, or
 yaks.app itself is failing, not your data), `apply` throws an `Error`, and the
@@ -173,11 +176,10 @@ body snippet with each match wrapped between `\x01` and `\x02`, and
 
 ### subscribe(filter, cb)
 
-A `query` that keeps calling back with the current rows as they change, and the
-way a page loads the data it draws: the first rows come over the page's existing
-connection while its WebSocket opens. `subscribe` returns at once the function
-that ends the subscription; that function's `ready` property is a promise of the
-first rows. It is described in full in its own section below.
+Calls back with the current stored and relayed rows as they change. The first
+stored rows can arrive over HTTP while the WebSocket opens. `subscribe` returns
+the function that ends the subscription. Its `ready` property is a promise of
+the first rows. It is described in full in its own section below.
 
 ### upload(file, {name}?)
 
@@ -451,11 +453,9 @@ not exceptions.
     // …later
     stop()
 
-What arrives is the _whole_ row set, not a delta: on the first call, and again
-after every committed write that changes the filter's answer, the callback is
-handed the current rows sorted oldest first, with the same shape and the same
-components `query()` returns for that filter. So redraw the list from what
-arrives; never append to what you drew last time.
+The callback receives the whole row set on its first call and whenever stored or
+relayed values change the answer. Rows include the components selected by the
+filter. Redraw the list from the callback's current rows.
 
 - Ask for the components you will draw. A subscription's rows carry the
   components its filter names, exactly like a query, so `.task.status=open`
@@ -467,8 +467,9 @@ arrives; never append to what you drew last time.
   page needs no code to catch up after a reconnect.
 - A row that is deleted, or that stops matching the filter, is removed from the
   set the callback receives. The rest of the set is unchanged.
-- `stop()` removes that one subscription; removing the last one closes the
-  socket. Call it on `beforeunload`, or when the view it feeds is torn down.
+- `stop()` removes one subscription. The socket stays open while the page has
+  another subscription or is publishing a relayed value. Call `stop()` when the
+  view it feeds is torn down.
 - Subscribe to rows. An aggregate filter like `.count` returns no rows, so the
   callback is always handed an empty array. Poll an aggregate with `query`
   instead.
@@ -896,8 +897,7 @@ filter named. `query('.recipe')` returns recipes with no titles, and a page
 drawing `row.doc.title` prints `undefined` for every one of them. Ask for the
 title beside it: `query('.recipe&?doc')`. `&?doc` is how to ask for a _second_
 component; `.recipe.doc` addresses a _property_ of `recipe` named `doc`, which
-`recipe` does not have. `subscribe` returns the same components a query does, so
-the same mistake applies there.
+`recipe` does not have. The same component selection applies to `subscribe()`.
 
 **Using localStorage.** State a page keeps in the browser is invisible to the
 person's other devices, to anyone else looking at the same page, and to the

@@ -40,8 +40,13 @@ but this held value is not a durable record. A server restart can lose unsaved
 relay values. Subscriptions select what a page receives; `peers` does not mean
 every visitor receives every value, and it is not an access setting.
 
-Use the same `apply` operation for all three. The client routes each component
-according to its declaration; don't send a fetch on every animation frame.
+The page client at `./api/client.js` routes `server` and `peers` components from
+the same `apply()` call. `subscribe()` receives the relayed values, including
+the latest value when a page joins. `query()` reads stored rows by default. For
+a mixed write, the store acknowledges its part before the client relays the
+rest. A relay-only write returns once the client accepts it for delivery.
+`sync: none` components and local persistence use the `@yaks/client` graph
+client.
 
 ## How long a value is kept: `durable`
 
