@@ -1264,6 +1264,23 @@ let leading = (ctx: Ctx, comp: string, prop: string): string | undefined => {
   return index && indexName(ctx.v, comp, index.props)
 }
 
+// From the child filter's matching referents, seek the owners of each
+// forward reference in reverse order. Keep the dialect's screened or
+// overlaid sources when they replace a physical table.
+let backThrough = (ctx: Ctx, hops: Hop[], set: Query): Query =>
+  hops.reduceRight((targets, { comp, prop }, i) => {
+    let alias = `__back${i}`
+    let table = source(ctx, comp)
+    let index = table == `"${comp}"` ? leading(ctx, comp, prop) : undefined
+    return select({
+      cols: [as(col('entity', alias), 'id')],
+      from: index
+        ? { t: 'table', name: comp, as: alias, indexed: index }
+        : raw(`${table} as "${alias}"`),
+      where: among(col(field(prop), alias), targets),
+    })
+  }, set)
+
 // A compound seek consumes equalities before its first range. Indexes with
 // the same leading property can therefore ask very different amounts of work.
 let indexFor = (ctx: Ctx, comp: string, prop: string, cs: Clause[]) => {
@@ -2881,12 +2898,12 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
       )
       chained(ctx.v, hops)
       let root = hops[0]
-      ctx.tables.add(root.comp)
       // Inside a reverse hop the row is the child's, its components joined
       // beside it, so the path starts at its own column: the seats beside a
       // person's (`.members_person.member.space.members_space…`) are read by
       // the index on `member.space`.
       if (ctx.owner) {
+        ctx.tables.add(root.comp)
         let target = chain(ctx, hops, refKey(ctx, root.comp, root.prop))
         return and(
           notNull(raw(target)),
@@ -2905,16 +2922,32 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
         } as "__forward"` +
         ` where "__forward"."entity" = ${ctx.d.ownerKey('entity')})`
       let target = chain(ctx, hops, start)
+      let test = reverse(
+        ctx,
+        c.path[back],
+        ctx.v.assoc(c.path[back])!,
+        { ...c, path: c.path.slice(back) },
+        target,
+      )
+      let refs = hops.slice(0, -1)
+      if (
+        test.t == 'in' && !Array.isArray(test.set) && ctx.d.indexed &&
+        refs.every(({ comp, prop }) =>
+          comp != 'entity' && !computed(ctx.v, comp) &&
+          ctx.v.prop(comp, prop)?.computed === false &&
+          !ctx.derived[`${comp}.${prop}`] && !lands(ctx.v, comp, prop)
+        )
+      ) {
+        return among(
+          raw(ctx.d.ownerKey('entity')),
+          backThrough(ctx, refs, test.set),
+        )
+      }
+      ctx.tables.add(root.comp)
       return and(
         cond(ctx.d.presence(root.comp)),
         notNull(raw(target)),
-        reverse(
-          ctx,
-          c.path[back],
-          ctx.v.assoc(c.path[back])!,
-          { ...c, path: c.path.slice(back) },
-          target,
-        ),
+        test,
       )
     }
     if (c.not || c.where) throw new Unsupported('a reverse hop', c.path[0])

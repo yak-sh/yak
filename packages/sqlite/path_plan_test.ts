@@ -143,7 +143,11 @@ let seated = loadVocab([archetypeDoc, {
     member: {
       component: true,
       type: 'object',
-      properties: { space: ref('space'), person: ref('entity') },
+      properties: {
+        space: ref('space'),
+        person: ref('entity'),
+        role: { type: 'string' },
+      },
     },
     app: {
       component: true,
@@ -216,31 +220,40 @@ let beside = (n: number) => {
   let store = storage(d, seated)
   store.install()
   let g = graph({ storage: store, vocab: seated, plugins: [archetypes()] })
-  let seat = (eid: string, space: string, person: string) => ({
+  let seat = (eid: string, space: string, person: string, role = 'owner') => ({
     entity: { eid },
-    member: { space, person },
+    member: { space, person, role },
   })
   g.apply([
     ...['P', 'Q', 'R'].map((eid) => ({ entity: { eid }, person: {} })),
     ...['mine', 'away'].map((eid) => ({ entity: { eid }, space: {} })),
-    seat('p', 'mine', 'P'),
+    seat('p', 'mine', 'P', 'viewer'),
     seat('q', 'mine', 'Q'),
+    seat('other-viewer', 'mine', 'R', 'viewer'),
     seat('r', 'away', 'R'),
     ...Array.from({ length: n }, (_, i) => seat(`x${i}`, 'away', `R`)),
   ])
-  let q = '.members_person.member.space.members_space.member.person=P'
-  let sql = render(compile(parse(q), seated, { archetypes: catalog(d) }))
-  let stmt = db.prepare(sql.sql)
-  let eids = stmt.all(...sql.params).map((r) => String(r.eid)).sort()
-  return {
-    eids,
-    steps: status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 1),
+  return (q: string) => {
+    let sql = render(compile(parse(q), seated, { archetypes: catalog(d) }))
+    let stmt = db.prepare(sql.sql)
+    try {
+      let eids = stmt.all(...sql.params).map((r) => String(r.eid)).sort()
+      return {
+        eids,
+        steps: status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 1),
+      }
+    } finally {
+      stmt.finalize()
+    }
   }
 }
-let besides = [10, 40].map(beside)
+let memberships = [10, 250].map(beside)
+let besides = memberships.map((read) =>
+  read('.members_person.member.space.members_space.member.person=P')
+)
 
 test('a reverse hop inside a reverse hop answers the people beside one', () => {
-  equal(besides.map((b) => b.eids), [['P', 'Q'], ['P', 'Q']])
+  equal(besides.map((b) => b.eids), [['P', 'Q', 'R'], ['P', 'Q', 'R']])
 })
 
 test('a reverse hop inside a reverse hop reads the seats it reaches', () => {
@@ -248,5 +261,19 @@ test('a reverse hop inside a reverse hop reads the seats it reaches', () => {
   ok(
     large.steps < small.steps + 30,
     `${small.steps} then ${large.steps} VM steps for four times the seats`,
+  )
+})
+
+let seats = '(.member.person=P)|(.space&.members_space.member.person=P)' +
+  '|(.member.role=owner&.member.space.members_space.member.person=P)&*'
+let owners = memberships.map((read) => read(seats))
+
+test("a person's seats and their spaces' owners cost the same as other memberships grow", () => {
+  let [small, large] = owners
+  equal(small.eids, ['mine', 'p', 'q'])
+  equal(large.eids, small.eids)
+  ok(
+    large.steps < small.steps + 50,
+    `${small.steps} then ${large.steps} VM steps for 10 and 250 unrelated seats`,
   )
 })
