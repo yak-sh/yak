@@ -3,7 +3,71 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { digest } from '@yaks/graph/sha256'
-import { connector, kernel, seed } from './probe.ts'
+import { addressed } from '@yaks/platform/versions'
+import { bucket } from './binding-probe.ts'
+import { r2RawObjects } from './lib/objects.ts'
+import { KERNEL } from './meta.ts'
+import { encode, META } from './release_index.ts'
+import { connector, fresh, kernel, seed } from './probe.ts'
+
+test('a private app icon from an older release revalidates on both domains', async () => {
+  let { r2 } = bucket()
+  let k = await fresh({ BLOBS: r2 })
+  try {
+    let space = 'iconcache'
+    let { cookie, eids } = await seed(k, [{ slug: space, apps: ['chores'] }])
+    let app = eids[space + '/chores']
+    let source = `${space}/.releases/${app}/${crypto.randomUUID()}`
+    let domain = 'iconcache.example'
+    let svg = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+    let sha = await digest(svg)
+    let key = addressed(sha)
+    let raw = r2RawObjects(r2)
+    await raw.put(key, new TextEncoder().encode(svg))
+    await raw.put(source + META, encode({ 'icon.svg': { key, sha } }))
+    await k.dir.apply({
+      entities: [
+        {
+          entity: { eid: app },
+          app: { access: 'private', source, worker: '' },
+        },
+        {
+          entity: { eid: crypto.randomUUID() },
+          hostname: { name: domain, serves: app, stage: 'active' },
+        },
+      ],
+    }, KERNEL)
+
+    let cache = 'private, max-age=60, must-revalidate'
+    for (
+      let [host, path] of [
+        [`${space}.yaks.app`, '/chores/icon.svg'],
+        [domain, '/icon.svg'],
+      ]
+    ) {
+      let image = (headers: Record<string, string>) =>
+        k.at(host, path, {
+          redirect: 'manual',
+          headers: { 'sec-fetch-dest': 'image', ...headers },
+        })
+      let loaded = await image({ cookie })
+      assertEquals(loaded.status, 200, host)
+      assertEquals(loaded.headers.get('cache-control'), cache, host)
+      assertEquals(await loaded.text(), svg, host)
+      let tag = loaded.headers.get('etag')!
+      assertMatch(tag, /^"[0-9a-f]+"$/)
+      let held = await image({ cookie, 'if-none-match': tag })
+      assertEquals(held.status, 304, host)
+      assertEquals(held.headers.get('cache-control'), cache, host)
+      assertEquals(await held.text(), '')
+      let signedOut = await image({ 'if-none-match': tag })
+      assertEquals(signedOut.status, 303, host)
+      await signedOut.body?.cancel()
+    }
+  } finally {
+    await k.stop()
+  }
+})
 
 test('a page uses release assets whose bytes survive deploy and rollback', async () => {
   let k = await kernel()
