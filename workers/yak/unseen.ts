@@ -537,26 +537,6 @@ let fixings = async (
   }))
 }
 
-/** The breaks the space's Operator took up on its own, newest first: the
- * app each was in, what it said it did, and whether it could not finish
- * (@yaks/platform/dashboard-view `Fix`). */
-export let fixesOf = async (
-  env: Env,
-  space: Space,
-  who: Who,
-  count = 5,
-): Promise<import('@yaks/platform/dashboard-view').Fix[]> => {
-  let { operatorDoor } = await import('./build-door.ts')
-  let rows = await operatorDoor(env, space, who, 'fixes', { count }) as Bundle[]
-  return rows.flatMap((row) => {
-    let asked = row.operator_request as { app?: string } | undefined
-    let answer = row.operator_answer as { text?: string } | undefined
-    if (!asked?.app || answer?.text == null) return []
-    let at = (row.created as { at?: string } | undefined)?.at ?? ''
-    return [{ app: asked.app, said: answer.text, at, failed: !!row.failed }]
-  })
-}
-
 // The place in a stack a person opens to fix it. A break reported from a
 // browser arrives as `<source>:<line>` already (public/report.js through
 // apps.ts `broken`); one thrown in a page's own code arrives as a JS stack,

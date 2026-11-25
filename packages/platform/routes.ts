@@ -41,12 +41,9 @@ export type Door<E = unknown> = (
 
 // A person's spaces and account live at the apex rather than on any space's
 // hostname, so no app sharing a space's origin can reach them (T-39354). A
-// space's own address, `/<space>`, is its Dashboard (T-3702): its apps, what
-// its Operator has been doing, its Updates and what it suggests. Its Operator
-// is at `/<space>/operator` (D-473): a new chat, each conversation at
-// `/<space>/operator/<id>` (and still at `/<space>/<id>`, where links from
-// before name it), its Updates at `/<space>/updates` and its Matches at
-// `/<space>/matches`; the person's Updates from every space are
+// space's own address, `/<space>`, is its Operator (D-473): a new chat, each
+// conversation at `/<space>/<id>`, its Updates at `/<space>/updates` and its
+// Matches at `/<space>/matches`; the person's Updates from every space are
 // `/updates`. Manage is the settings: a space's at `/manage/<space>/<page>`,
 // and the person's own, wherever they are, at `/manage/account/<page>`
 // (T-136122), which no space can be named (./names.ts `RESERVED` holds
@@ -63,7 +60,6 @@ export type SpaceView =
   | 'apps'
   | 'new'
   | 'operator'
-  | 'dashboard'
   | 'updates'
   | 'matches'
   | 'people'
@@ -84,8 +80,8 @@ export type AccountView =
   | 'space'
 export type ManageView = SpaceView | AccountView
 /** A page of a space's Operator, at the space's own address. */
-export type Talk = 'updates' | 'matches' | 'dashboard'
-let TALK: string[] = ['updates', 'matches', 'dashboard'] satisfies Talk[]
+export type Talk = 'updates' | 'matches'
+let TALK: string[] = ['updates', 'matches'] satisfies Talk[]
 let talks = (view: string): view is Talk => TALK.includes(view)
 /** A settings page: every page of a person's spaces but their Operator's. */
 export type Setting = Exclude<ManageView, Talk>
@@ -93,7 +89,6 @@ let SPACE_VIEWS: SpaceView[] = [
   'apps',
   'new',
   'operator',
-  'dashboard',
   'updates',
   'matches',
   'people',
@@ -134,22 +129,10 @@ let LEGACY: Record<string, ManageView> = {
  */
 export let rooted = (slug: string): boolean =>
   SLUG.test(slug) && !RESERVED.has(slug) && !ROOT.has(slug)
-// Where a space's pages stand: its own address, else its old one under
+// Where a space's Operator stands: its own address, else its old one under
 // Manage.
 let home = (space: string) =>
   rooted(space) ? `/${space}` : `${MANAGE}/${encodeURIComponent(space)}`
-/** A space's Dashboard: its own address, else under Manage, where the
- * space's bare address is still its Operator.
- *
- * ```ts
- * import { dashboardPath } from '@yaks/platform/routes'
- * import { assertEquals } from '@std/assert'
- * assertEquals(dashboardPath('ada'), '/ada')
- * assertEquals(dashboardPath('yak'), '/manage/yak/dashboard')
- * ```
- */
-export let dashboardPath = (space: string): string =>
-  rooted(space) ? home(space) : `${home(space)}/dashboard`
 /** A page of a space's Operator: its Updates or its Matches. Without a
  * space, Updates from every space the person talks to.
  *
@@ -162,11 +145,7 @@ export let dashboardPath = (space: string): string =>
  * ```
  */
 export let talkPath = (view: Talk, space?: string): string =>
-  !space
-    ? UPDATES
-    : view == 'dashboard'
-    ? dashboardPath(space)
-    : `${home(space)}/${view}`
+  space ? `${home(space)}/${view}` : UPDATES
 /** A settings page's path. A space's page without a space names the one the
  * person opens first, whichever that is when they follow it. */
 export let managePath = (
@@ -206,23 +185,23 @@ export let backTo = (env: Host, back: string, fallback: string): string => {
 let OPEN = /^(new|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/
 /** An Operator conversation's own page, the chat app (operator-page.ts
  * `chatPage`): one opened by its task or request, or a new one, which is the
- * Operator's own address. Its other conversations are under it.
+ * space's own address. Its other conversations are under it, so `open` empty
+ * is the prefix they share.
  *
  * ```ts
  * import { chatPath } from '@yaks/platform/routes'
  * import { assertEquals } from '@std/assert'
  * let id = '0b5e6a52-3c1d-4f2e-9a8b-7c6d5e4f3a2b'
- * assertEquals(chatPath('ada'), '/ada/operator')
- * assertEquals(chatPath('ada', id), `/ada/operator/${id}`)
- * assertEquals(chatPath('yak'), '/manage/yak')
+ * assertEquals(chatPath('ada'), '/ada')
+ * assertEquals(chatPath('ada', id), `/ada/${id}`)
  * assertEquals(chatPath('yak', id), `/manage/yak/operator/${id}`)
  * ```
  */
 export let chatPath = (space: string, open = 'new'): string =>
-  rooted(space)
-    ? `/${space}/operator${open == 'new' ? '' : `/${open}`}`
-    : open == 'new'
+  open == 'new'
     ? home(space)
+    : rooted(space)
+    ? `/${space}/${open}`
     : `${managePath('operator', space)}/${open}`
 /** Where a space's logo is drawn from, or none where it has none: its bytes'
  * own address, so the address changes with the picture and nothing is ever
@@ -496,55 +475,24 @@ export let managed = (path: string): Managed | null => {
   return talks(two) ? talked(one, two) : { space: one, view: two as SpaceView }
 }
 /** What an address at the apex's root asks for: the person's Updates from
- * every space (`/updates`), or a page of a space at the space's own address
- * (`rooted`): its Dashboard, its Operator's chat, or another page of its
- * Operator; or null where it is none. A conversation's address from before
- * the chat moved under `/operator` still opens it.
+ * every space (`/updates`), or a page of a space's Operator at the space's
+ * own address (`rooted`), or null where it is neither.
  *
  * ```ts
  * import { spaced } from '@yaks/platform/routes'
  * import { assertEquals } from '@std/assert'
- * let id = '0b5e6a52-3c1d-4f2e-9a8b-7c6d5e4f3a2b'
- * assertEquals(spaced('/ada'), { space: 'ada', view: 'dashboard' })
- * assertEquals(spaced('/ada/operator'), { space: 'ada', view: 'operator', open: 'new' })
- * assertEquals(spaced(`/ada/operator/${id}`), { space: 'ada', view: 'operator', open: id })
- * assertEquals(spaced(`/ada/${id}`), { space: 'ada', view: 'operator', open: id })
+ * assertEquals(spaced('/ada'), { space: 'ada', view: 'operator', open: 'new' })
  * assertEquals(spaced('/ada/updates'), { space: 'ada', view: 'updates' })
- * assertEquals(spaced('/ada/dashboard'), { moved: '/ada' })
  * assertEquals(spaced('/pricing'), null)
  * ```
  */
 export let spaced = (path: string): Managed | null => {
   if (path == UPDATES) return { updates: true }
   let [, one, two, ...rest] = path.split('/')
-  if (!rooted(one)) return null
-  if (two == 'operator' && rest.length < 2) {
-    let open = rest[0] ?? 'new'
-    return OPEN.test(open) ? { space: one, view: 'operator', open } : null
-  }
-  if (rest.length) return null
-  if (two == null) return { space: one, view: 'dashboard' }
-  if (two == 'dashboard') return { moved: dashboardPath(one) }
+  if (rest.length || !rooted(one)) return null
+  if (two == null) return { space: one, view: 'operator', open: 'new' }
   if (talks(two)) return { space: one, view: two }
   return OPEN.test(two) ? { space: one, view: 'operator', open: two } : null
-}
-/** Who may frame the apex's page at `path` besides the platform itself: a
- * space's Dashboard, by that space's own hostname, whose apps page holds it
- * in a tab for its members. No other page of the apex is framed by a space.
- *
- * ```ts
- * import { framers } from '@yaks/platform/routes'
- * import { assertEquals } from '@std/assert'
- * assertEquals(framers('/ada'), ['https://ada.yaks.app'])
- * assertEquals(framers('/manage/yak/dashboard'), ['https://yak.yaks.app'])
- * assertEquals(framers('/ada/operator'), [])
- * ```
- */
-export let framers = (path: string, env: Host = {}): string[] => {
-  let at = managed(path) ?? spaced(path)
-  return at && 'view' in at && at.view == 'dashboard'
-    ? [`https://${spaceHost(env, at.space)}`]
-    : []
 }
 /** Whether `path` is a page a signed-in person opens in the frame: a space's
  * page, every space's Updates, a settings page, or an address moved to one;

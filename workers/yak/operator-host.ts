@@ -2334,18 +2334,6 @@ export let operatorRequest = async (
       ),
     )
   }
-  // The breaks it took up on its own (unseen.ts `fix`), newest first, each
-  // with its answer: the Dashboard's recent work.
-  if (path == '/operator/fixes') {
-    let rows = (await store.g.read(REQUESTS)).filter((r) =>
-      comp(r, 'operator_request')?.channel == 'error'
-    )
-    let allowed = await Promise.all(rows.map((r) => own(r.entity.eid)))
-    let count = Number(args.count) || 5
-    return Response.json(
-      await answering(store, rows.filter((_, i) => allowed[i]).slice(0, count)),
-    )
-  }
   if (path == '/operator/messages') {
     let rows = (await requested(store)).reverse()
     let allowed = await Promise.all(rows.map((r) => own(r.entity.eid)))

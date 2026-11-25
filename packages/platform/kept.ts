@@ -219,22 +219,15 @@ export let packageAt = (path: string): string =>
  * defense: a same-site frame would otherwise carry the viewer's session
  * cookie and load signed in, and the browser is the one thing that knows the
  * full ancestor chain. On the apex's own pages it only governs who may frame
- * them, never what they may frame, and `also` names who else may frame
- * one (a space's Dashboard, by its space's hostname: routes.ts `framers`),
- * which the router decides from the address, never from the answer.
- * Appended, not set, so it stacks with an answer's own policy (a blob's
- * sandbox) and no app can widen past it.
+ * them, never what they may frame. Appended, not set, so it stacks with an
+ * answer's own policy (a blob's sandbox) and no app can widen past it.
  */
-export let sealed = (
-  res: Response,
-  env: Host = {},
-  also: string[] = [],
-): Response => {
+export let sealed = (res: Response, env: Host = {}): Response => {
   if (res.status == 101) return res
   let headers = new Headers(res.headers)
   headers.append(
     'content-security-policy',
-    `frame-ancestors ${["'self'", url(env), ...also].join(' ')}`,
+    `frame-ancestors 'self' ${url(env)}`,
   )
   if (!headers.has('cache-control')) {
     headers.set('cache-control', 'private, no-store')

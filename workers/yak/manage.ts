@@ -275,8 +275,7 @@ export let manage = async (
     at.space,
     null,
     person,
-    view == 'operator' || view == 'updates' || view == 'matches' ||
-      view == 'dashboard',
+    view == 'operator' || view == 'updates' || view == 'matches',
   )
   if (!page && (req.method == 'GET' || req.method == 'HEAD') && !at.door) {
     // The page drawn on the dashboard, not a conversation in the chat app
@@ -367,24 +366,6 @@ export let manage = async (
       })
     }
   }
-  // Its Dashboard (dashboard.ts) is its members' who may change it, at the
-  // space's own address. A link there from before the chat moved under
-  // `/operator` named a conversation by its query, and opens it still.
-  if (view == 'dashboard' && writes(who.role) && !space.trashed) {
-    let { dashboardPage, dismissAnswer } = await import('./dashboard.ts')
-    if (req.method == 'POST') {
-      return dismissAnswer(req, env, dir, space, who)
-    }
-    if (!reading) return nothingHere(env)
-    if (url.searchParams.has('app') || url.searchParams.has('from')) {
-      return redirect(chatPath(space.slug) + url.search, 303)
-    }
-    return ready(dashboardPage(env, dir, space, who, {
-      apps: apps(),
-      side: sidebar(),
-      framed: url.searchParams.has('framed'),
-    }, c))
-  }
   if (view == 'updates' && writes(who.role) && !space.trashed) {
     if (req.method == 'POST') {
       let { updatesAnswer } = await import('./updates.ts')
@@ -458,9 +439,7 @@ export let manage = async (
     return redirect(`https://${spaceHost(env, space.slug)}/`, 303)
   }
   // The Operator's own pages were answered above; the rest are settings.
-  if (view == 'updates' || view == 'matches' || view == 'dashboard') {
-    return nothingHere(env)
-  }
+  if (view == 'updates' || view == 'matches') return nothingHere(env)
   let softphone = url.searchParams.get('softphone')
   if (softphone && view == 'settings') {
     if (role != 'owner') return nothingHere(env)

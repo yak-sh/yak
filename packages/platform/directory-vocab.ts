@@ -422,14 +422,6 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { shut: { type: 'boolean' } },
     },
-    // What a person dismissed of what a space's Operator suggests on its
-    // Dashboard (@yaks/platform/suggestions), each `<space eid> <feature>`:
-    // a dismissed suggestion never comes back.
-    dismissed_suggestions: {
-      component: true,
-      type: 'object',
-      properties: { keys: { type: 'array', items: { type: 'string' } } },
-    },
     // One list an MCP server a person connected offers their Operator's page,
     // drawn beside the conversation with no model turn (operator-lists.ts),
     // on an entity of its own whose `doc{title}` heads it: the `server`'s

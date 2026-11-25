@@ -28,11 +28,6 @@ export {
   status,
 }
 import { Head } from '@yaks/ui/parts'
-import {
-  type Launched,
-  Launcher,
-  launchFilter,
-} from '@yaks/platform/dashboard-view'
 import { Time } from '@yaks/ui/parts'
 // The kernel's own pages, in the home page's voice (workers/yak/public): what
 // a person sees when there is nothing at an address, when an app broke, and
@@ -50,7 +45,16 @@ import { Time } from '@yaks/ui/parts'
 // icon, the yak, a QR code, markdown theirs.ts drew) goes in whole (`raw`),
 // and so does a page's own script.
 
-import { Button, Card, Empty, Field, Notice, Rows } from '@yaks/ui/parts'
+import {
+  Button,
+  Card,
+  Chip,
+  Chips,
+  Empty,
+  Field,
+  Notice,
+  Rows,
+} from '@yaks/ui/parts'
 
 import { type ComponentChildren, h } from 'preact'
 
@@ -625,8 +629,7 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
 export type SpacePage = {
   space: string
   title: string
-  /** the apps whoever is asking may open, as the launcher lists them */
-  apps: Launched[]
+  apps: Listed[]
   warm?: string[]
   hidden: number
   role: string | null
@@ -634,9 +637,6 @@ export type SpacePage = {
   signIn: string
   /** the dashboard's address, shown to the space's owner */
   manage?: string
-  /** where its Dashboard's member parts are framed from, for a member who
-   * may change it (dashboard.ts `?framed`), and the apex that answers it */
-  dashboard?: { src: string; origin: string }
 }
 
 type Listed = MarkedApp & {
@@ -782,13 +782,21 @@ await open({
     }),
   )
 
-/** A space's own address where no app of its answers there: its Dashboard
- * as anyone may see it, its apps to launch, most opened first; to a member
- * who may change it, beside them, what its Operator has been doing, its
- * Updates and what it suggests, in a frame from yaks.app, which no app's code
- * on this origin can read (dashboard.ts); to anyone else, the way in. */
 export let spaceIndex = (at: SpacePage, env: Host = {}) => {
-  let apps = at.apps.length ? h(Launcher, { apps: at.apps }) : null
+  let mine = at.apps.length
+    ? h(
+      Chips,
+      { as: 'nav', 'aria-label': 'Apps here' },
+      at.apps.map((a) =>
+        h(
+          Chip,
+          { href: `/${a.slug}/` },
+          a.title || a.slug,
+          a.gallery ? h(Chip.Tag, null, a.gallery) : null,
+        )
+      ),
+    )
+    : null
   let ask = at.hidden
     ? h(
       'p',
@@ -820,24 +828,6 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
         h('p', null, h('a', { href: url(env, '/') }, 'Make one of your own')),
       ),
     ]
-  let member = at.dashboard
-    ? [
-      h('iframe', {
-        class: 'Space_Frame',
-        src: at.dashboard.src,
-        title: 'Your Operator and Updates',
-        loading: 'lazy',
-      }),
-      // The frame says how tall it has grown, and nothing else crosses.
-      run(`
-let frame = document.querySelector('.Space_Frame')
-addEventListener('message', (e) => {
-  if (e.origin == ${
-        JSON.stringify(at.dashboard.origin)
-      } && e.source == frame.contentWindow && Number.isFinite(e.data?.height)) frame.style.height = e.data.height + 'px'
-})`),
-    ]
-    : null
   return page(
     env,
     {
@@ -845,19 +835,13 @@ addEventListener('message', (e) => {
       // A kept listing still gives its linked workers a head start.
       head: at.warm?.map((href) => `<link rel="prefetch" href="${esc(href)}">`)
         .join(''),
-      layout: 'Space',
       lead: at.apps.length
-        ? at.dashboard ? null : 'Here is what you can open.'
+        ? 'Here is what you can open.'
         : 'Nothing here is open to visitors yet.',
     },
-    at.dashboard && at.apps.length ? h('h1', null, at.title || at.space) : null,
-    h(
-      'div',
-      { class: 'Space_Body' },
-      h('div', { class: 'Space_Apps' }, apps, ask, pitch),
-      member,
-    ),
-    at.apps.length > 6 ? run(launchFilter) : null,
+    mine,
+    ask,
+    pitch,
   )
 }
 

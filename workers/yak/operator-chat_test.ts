@@ -39,7 +39,6 @@ import { mailFrom } from '@yaks/platform/host'
 import { waysOf } from './operator-ways.ts'
 import {
   chatPath,
-  dashboardPath,
   managed,
   managePath,
   manifestPath,
@@ -394,12 +393,11 @@ test('the sidebar and Apps page ask for the same app icons', () => {
   )
 })
 
-test('the side holds the space, its Dashboard, the Operator, Updates, the apps and Manage', () => {
+test('the side holds the space, the Operator, Updates, the apps and Manage', () => {
   let op = space.operator
   assertEquals(owner.said, [
     'yaks.app',
     'Township',
-    'Dashboard',
     op,
     'Updates',
     'Your apps',
@@ -413,9 +411,8 @@ test('the side holds the space, its Dashboard, the Operator, Updates, the apps a
   ])
   // Each app opens beside the conversation on screen.
   assertEquals(owner.to, {
-    'yaks.app': dashboardPath('clerk'),
+    'yaks.app': chatPath('clerk'),
     Township: null,
-    Dashboard: dashboardPath('clerk'),
     [op]: chatPath('clerk'),
     Updates: talkPath('updates', 'clerk'),
     'Your apps': null,

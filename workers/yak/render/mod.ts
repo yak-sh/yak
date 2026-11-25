@@ -6,7 +6,7 @@
 import type { Stamp, Writers } from '@yaks/platform/app-tile'
 import { render as markup } from '@yaks/html'
 import { type Bundle, type Context, define } from '@yaks/render'
-import type { MarkedApp } from '@yaks/platform/routes'
+import type { SpacePage } from '../pages.ts'
 import { platformVocab } from '../vocab.ts'
 import { once } from '@yaks/fp'
 import { app, appTile } from '@yaks/platform/app-tile'
@@ -35,7 +35,5 @@ export type Around = {
   me?: string
 }
 
-export let tile = (
-  a: MarkedApp & { gallery?: string; home?: boolean; access?: string | null },
-  around: Around = {},
-) => appTile(a, { gallery: a.gallery, ...around })
+export let tile = (a: SpacePage['apps'][number], around: Around = {}) =>
+  appTile(a, { gallery: a.gallery, ...around })

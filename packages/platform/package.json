@@ -81,8 +81,6 @@
     "./space-logo": "./space-logo.ts",
     "./domain-pages": "./domain-pages.ts",
     "./space-pages": "./space-pages.ts",
-    "./suggestions": "./suggestions.ts",
-    "./dashboard-view": "./dashboard-view.ts",
     "./space-pages-view": "./space-pages-view.ts",
     "./space-pages-browser": "./space-pages-browser.ts",
     "./domain-settings": "./domain-settings.ts",

@@ -26,7 +26,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { chatPath, dashboardPath, managePath } from '@yaks/platform/routes'
+import { chatPath, managePath } from '@yaks/platform/routes'
 import {
   accepted,
   connector,
@@ -53,7 +53,6 @@ let build = async () => {
     reached: unique('reached'),
     whose: unique('whose'),
     crawled: unique('crawled'),
-    dashed: unique('dashed'),
   }
   let them = await seed(k, [
     { slug: at.shown, apps: ['recipes', 'garden'] },
@@ -64,7 +63,6 @@ let build = async () => {
     { slug: at.reached, apps: [] },
     { slug: at.whose, apps: [] },
     { slug: at.crawled, apps: ['site'] },
-    { slug: at.dashed, apps: ['recipes'] },
   ])
   let agent = connector(k, them.cookie)
   // The listed space shows a stranger an app once it is released: before, it
@@ -115,18 +113,15 @@ test('a space with no front page lists what you may open', async () => {
   // block is about rather than the sentence it says it in.
   assert(!cold.includes('front page'), cold)
 
-  // The owner: both apps, and their Dashboard's member parts framed from
-  // the apex, which no app's code here can read; no pitch or sign-in — they
-  // are home.
+  // The owner: both apps, the way to manage their apps at the apex, and no
+  // pitch or sign-in — they are home.
   let mine = await (await at(them.cookie)).text()
   assertStringIncludes(mine, 'href="/recipes/"')
   assertStringIncludes(mine, 'href="/garden/"')
-  assertStringIncludes(mine, `src="https://yaks.app/${jeff21}?framed"`)
   assertStringIncludes(
     mine,
     `href="https://yaks.app${managePath('apps', jeff21)}"`,
   )
-  assert(!cold.includes('<iframe'), cold)
   assert(!mine.includes('name="name"'), mine)
   assert(!mine.includes('What is yaks.app?'), mine)
   assert(!mine.includes('login?return='), mine)
@@ -141,7 +136,6 @@ test('a space with no front page lists what you may open', async () => {
   assert(!guest.includes('garden'), guest)
   assertStringIncludes(guest, 'private')
   assert(!guest.includes('What is yaks.app?'), guest)
-  assert(!guest.includes('<iframe'), guest)
 
   // A space with nothing in it is still a space, and still a 200: the
   // owner is told they can build here, a stranger is told nothing is open.
@@ -557,61 +551,4 @@ test("the selector names whose space each one you're a member of is", async () =
   assert(
     (await rows(guest.cookie)).includes(`${owner}’s space · you’re a member`),
   )
-})
-
-// A space's Dashboard (T-3702) is its own address at the apex, its chat under
-// it; its member parts are framed by the space's own page and by no other.
-test("a space's Dashboard suggests what it doesn't use, keeps a dismissal, and only its own page frames it", async () => {
-  let { k, at: { dashed }, them, agent } = await world()
-  await agent.tool('app_deploy', { space: dashed, app: 'recipes' })
-  let get = (path: string, init: RequestInit = {}) =>
-    k.at('yaks.app', path, {
-      redirect: 'manual',
-      ...init,
-      headers: { cookie: them.cookie, ...init.headers },
-    })
-  let framed = await get(`${dashboardPath(dashed)}?framed`)
-  assertEquals(framed.status, 200)
-  assertStringIncludes(
-    framed.headers.get('content-security-policy')!,
-    `https://${dashed}.yaks.app`,
-  )
-  let page = await framed.text()
-  assertStringIncludes(page, '<base target="_top">')
-  assertStringIncludes(page, 'Put recipes on a domain of its own')
-  // In the Operator's frame it is the side's Dashboard, its apps first.
-  let whole = await (await get(dashboardPath(dashed))).text()
-  let { document } = parseHTML(whole)
-  assertEquals(
-    document.querySelector('.SideNav [aria-current="page"]')?.textContent
-      ?.trim(),
-    'Dashboard',
-  )
-  assert(document.querySelector('.Launch_Tile[href$="/recipes/"]'), whole)
-  // Its chat moved under it, and a chat's old address still opens it.
-  assertEquals(
-    (await get(`${dashboardPath(dashed)}?app=recipes`)).headers.get('location'),
-    `${chatPath(dashed)}?app=recipes`,
-  )
-  assertEquals(
-    (await get(chatPath(dashed))).headers.get('content-security-policy'),
-    "frame-ancestors 'self' https://yaks.app",
-  )
-  // A dismissal is kept, and that suggestion never comes back.
-  let form = new FormData()
-  form.set('dismiss', 'domain')
-  form.set('back', `${dashboardPath(dashed)}?framed`)
-  let pressed = await get(dashboardPath(dashed), {
-    method: 'POST',
-    body: form,
-    headers: { origin: 'https://yaks.app' },
-  })
-  assertEquals(pressed.status, 303)
-  let after = await (await get(`${dashboardPath(dashed)}?framed`)).text()
-  assert(!after.includes('a domain of its own'), after)
-  // A stranger is sent to sign in.
-  let stranger = await k.at('yaks.app', dashboardPath(dashed), {
-    redirect: 'manual',
-  })
-  assertEquals(stranger.status, 303)
 })

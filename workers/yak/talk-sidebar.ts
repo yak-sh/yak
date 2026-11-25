@@ -14,7 +14,6 @@ import { spaceHost, url } from '@yaks/platform/host'
 import {
   ADMIN,
   chatPath,
-  dashboardPath,
   logoPath,
   managePath,
   talkPath,
@@ -30,11 +29,10 @@ export let talkSide = (
   at: { current: string[]; waiting: number; app?: string; here: string },
 ) => {
   let owner = who.role == 'owner'
-  // `updates` is the space's Updates, `all` every space's, and `dashboard`
-  // its Dashboard.
-  let views = ['updates', 'all', 'dashboard']
-  let reading = at.current.some((c) => views.includes(c))
-  let open = at.current.find((c) => c && !views.includes(c)) ?? 'new'
+  // `updates` is the space's Updates, `all` every space's.
+  let reading = at.current.some((c) => c == 'updates' || c == 'all')
+  let open = at.current.find((c) => c && c != 'updates' && c != 'all') ??
+    'new'
   let view: SideView = {
     person: who.person ?? '',
     here: {
@@ -56,7 +54,7 @@ export let talkSide = (
   let parts = sideParts(view, beside.spaces ?? [], beside.apps ?? [])
   return h(Sidebar, {
     base: url(env),
-    home: dashboardPath(space.slug),
+    home: chatPath(space.slug),
     label: 'Menu',
     view: who.person ? view : undefined,
     fold: { collapsed: !!beside.panes?.collapsed, back: at.here },
@@ -68,13 +66,6 @@ export let talkSide = (
           id: 'side-operator',
           label: space.operator,
           items: [
-            {
-              href: dashboardPath(space.slug),
-              current: at.current.includes('dashboard'),
-              icon: icons['layout-grid'],
-              label: 'Dashboard',
-              names: 'Dashboard',
-            },
             {
               href: chatPath(space.slug),
               // The conversation stays the page with an app open beside it.

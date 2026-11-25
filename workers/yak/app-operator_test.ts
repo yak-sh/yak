@@ -355,10 +355,7 @@ test("the corner's note is yaks.app's page, quoting the passage, and sends as th
   )
   let r = await noted(form)
   assertEquals(r.status, 303)
-  assertStringIncludes(
-    r.headers.get('location')!,
-    `/${slug}/operator/${request}`,
-  )
+  assertStringIncludes(r.headers.get('location')!, `/${slug}/${request}`)
   await k.settled()
   let { entries } = JSON.parse(
     String(
@@ -437,7 +434,7 @@ test("the corner's note shows the moment it is sent, then opens the conversation
     return noted(body, { accept: 'application/json' })
   })
   assertEquals(p.now, [false, 'Make it June.', 'Sending…'])
-  assertStringIncludes(await p.went, `/${slug}/operator/${request}`)
+  assertStringIncludes(await p.went, `/${slug}/${request}`)
 })
 
 test('a note its door did not take is back in its box, and says why', async () => {

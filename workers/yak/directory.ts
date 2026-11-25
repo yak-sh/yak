@@ -945,7 +945,6 @@ export type Row = MeteredRow & {
   operator_alerts?: { channel?: Alerting | null; declined?: string | null }
   desk_sidebar?: { collapsed?: boolean | null }
   desk_aside?: { shut?: boolean | null }
-  dismissed_suggestions?: { keys?: string[] | null }
   presence?: { hidden?: boolean | null }
   free_spaces?: { count?: number | null }
   role_free_spaces?: Partial<Record<Role, Allowance>>
@@ -4407,28 +4406,6 @@ export let directoryRows = (rows: {
         collapsed: !!row?.desk_sidebar?.collapsed,
         shut: !!row?.desk_aside?.shut,
       }
-    },
-    // What this person dismissed of the suggestions on `space`'s Dashboard,
-    // by feature (@yaks/platform/suggestions).
-    dismissed: async (person: string, space: string): Promise<string[]> =>
-      ((await one(line`.entity.eid=${person}`))?.dismissed_suggestions?.keys ??
-        [])
-        .flatMap((key) => {
-          let [at, name] = key.split(' ')
-          return at == space && name ? [name] : []
-        }),
-    // Dismisses `name` of the suggestions on `space`'s Dashboard for good.
-    dismiss: async (person: string, space: string, name: string) => {
-      let row = await one(line`.entity.eid=${person}`)
-      let keys = row?.dismissed_suggestions?.keys ?? []
-      let key = `${space} ${name}`
-      if (keys.includes(key)) return
-      await write({
-        entities: [{
-          entity: { eid: person },
-          dismissed_suggestions: { keys: [...keys, key] },
-        }],
-      }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
     },
     // The browsers this person allowed notifications on (@yaks/push), each
     // as its `PushSubscription` gave it, and since when.
