@@ -1,12 +1,26 @@
-import { equal, test } from '@yaks/testing'
+import { clock, equal, test } from '@yaks/testing'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
+import { client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
-import { drawSide } from './side-browser.ts'
+import { loadVocab } from '@yaks/vocab'
+import { pair } from '../sync/testing.ts'
+import { bindSide, drawSide } from './side-browser.ts'
 import { section, sideParts, type SideView } from './side-parts.ts'
-import { appRows, type Picked, spaceRows } from './side-rows.ts'
-import { waitingBundle } from './update-waiting.ts'
+import {
+  appRows,
+  type Picked,
+  SIDE_SPACES,
+  sideApps,
+  sideWords,
+  spaceRows,
+} from './side-rows.ts'
+import {
+  UPDATE_WAITING,
+  waitingBundle,
+  waitingWords,
+} from './update-waiting.ts'
 
 let ADA = 'person-ada'
 let space = (slug: string, more: Partial<Picked> = {}) => ({
@@ -123,6 +137,71 @@ test('a selector held open stays open as its badges change', () => {
   equal(root.querySelector('details'), menu)
   equal(menu.hasAttribute('open'), true)
   equal(said(root).badges, { all: '1', ada: '1' })
+})
+
+test('the sidebar keeps its badge DOM until the count watch answers again', async () => {
+  let root = drawn(talk, [ada, club])
+  let doc = root.ownerDocument
+  let time = clock()
+  let socket = pair().client
+  let graph = client(loadVocab([sideWords, waitingWords]), [], {
+    url: 'http://page.test',
+    connect: () => socket,
+    timer: (fn, ms) => void time.after(ms, fn),
+    time: time.now,
+    vault: false,
+    wireVault: false,
+  })
+  let stop = bindSide(doc, () => graph)
+  let mutations = 0
+  let observer = new doc.defaultView!.MutationObserver((records) => {
+    mutations += records.length
+  })
+  let changes = () => mutations + observer.takeRecords().length
+  let unchanged = () => {
+    equal(changes(), 0)
+    equal(said(root).badges, { all: '3', ada: '2', club: '1' })
+  }
+  let answer = (query: string, bundles: Bundle[]) => {
+    let asked = (socket.sent as { subscribe?: string; id?: string }[])
+      .find((m) => m.subscribe == query)!
+    socket.emit('message', JSON.stringify({ id: asked.id, bundles }))
+  }
+  let initial = rows([ada, club], [app('notes')], { ada: 2, club: 1 })
+  let side = () => {
+    answer(SIDE_SPACES, initial.spaces)
+    answer(sideApps(ada.eid), initial.apps)
+  }
+  try {
+    socket.emit('open')
+    side()
+    answer(UPDATE_WAITING, initial.waiting!)
+    observer.observe(root, {
+      subtree: true,
+      attributes: true,
+      childList: true,
+      characterData: true,
+    })
+    for (let counts of [{ ada: 2, club: 1 }, { ada: 4, club: 1 }]) {
+      socket.close()
+      unchanged()
+      socket = pair().client
+      await time.advance(500)
+      socket.emit('open')
+      side()
+      unchanged()
+      answer(UPDATE_WAITING, rows([ada, club], [], counts).waiting!)
+      if (counts.ada == 2) unchanged()
+    }
+    equal(said(root).badges, { all: '5', ada: '4', club: '1' })
+    equal(changes(), 3) // Ada and the two totals update once each.
+    answer(UPDATE_WAITING, rows([ada, club], [], { ada: 0, club: 0 }).waiting!)
+    equal(said(root).badges, {})
+  } finally {
+    observer.disconnect()
+    stop()
+    graph.close()
+  }
 })
 
 test('what has not answered stays as the server drew it', () => {

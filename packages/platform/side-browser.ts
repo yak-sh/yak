@@ -9,8 +9,8 @@
  * laid over the ones on screen (@yaks/ui/navigate `morph`). The rest of the
  * side is the page's.
  *
- * A watch that has not answered leaves what the server drew; one that is
- * refused leaves it too, and the page's next load draws it again.
+ * A watch that has not answered leaves what the server drew. On reconnect,
+ * the badges keep their last answer while the count watch resyncs.
  *
  * @module
  */
@@ -92,7 +92,7 @@ export let bindSide = (
   doc: Document,
   graph: (person: string) => Pick<Client, 'watch'>,
 ): () => void => {
-  let held: { key: string; watches: Watch[] } | undefined
+  let held: { key: string; watches: Watch[]; waiting?: Bundle[] } | undefined
   let close = () => {
     for (let w of held?.watches ?? []) w.close()
     held = undefined
@@ -107,10 +107,11 @@ export let bindSide = (
     if (!root || !view || !held) return
     let [spaces, apps, waiting] = held.watches
     let rows = (w?: Watch) => w?.ready ? w.value : undefined
+    if (waiting?.ready) held.waiting = waiting.value
     drawSide(root, view, {
       spaces: rows(spaces),
       apps: rows(apps),
-      waiting: rows(waiting),
+      waiting: held.waiting,
     })
   }
   let page = () => {
