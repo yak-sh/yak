@@ -1,7 +1,12 @@
 import { CallError } from '@yaks/tools/errors'
 import { noFile } from './versions.ts'
 
-export type Edit = { path: string; find: string; replace: string }
+export type Edit = {
+  path: string
+  find: string
+  replace: string
+  all?: boolean
+}
 
 let WIDTH = 160
 let CONTEXT = 64 * 1024
@@ -42,28 +47,34 @@ let locations = (text: string, find: string, parts: string[]) => {
 
 let patched = (
   was: string,
-  { find, replace }: Edit,
+  { find, replace, all }: Edit,
   where: string,
-  batch: boolean,
+  entry?: string,
 ) => {
   let parts = was.split(find)
   let hits = parts.length - 1
-  if (hits == 1) {
-    return { text: parts.join(replace), line: parts[0].split('\n').length }
+  if (hits == 1 || (all && hits > 0)) {
+    return {
+      text: parts.join(replace),
+      line: parts[0].split('\n').length,
+      hits,
+    }
   }
-  let found =
-    `find matched ${hits} times in ${where} — a patch replaces exactly one`
+  let found = `find matched ${hits} times in ${where}`
   if (!hits) {
     throw new CallError(
       'arguments',
-      batch
-        ? `find matched 0 times in ${where}. Edits apply in order. Make find match the text left by any earlier edits.`
-        : found + ': read the file back and copy the text exactly',
+      entry
+        ? found +
+          '. Edits apply in order. Make find match the text left by any earlier edits.'
+        : found + (all ? ' —' : ' — a patch replaces exactly one:') +
+          ' read the file back and copy the text exactly',
     )
   }
   throw new CallError(
     'arguments',
-    found + '. Add surrounding text to find so it matches one place.',
+    found + '. Add surrounding text to find so it matches one place, or set ' +
+      `all: true${entry ? ` on ${entry}` : ''} to replace every match.`,
     locations(was, find, parts),
   )
 }
@@ -80,15 +91,16 @@ export let patching = (
   } = {},
 ) => {
   let now = { ...texts }
-  let lines = list.map((edit, i) => {
+  let results = list.map((edit, i) => {
     let { path } = edit
-    let where = batch ? `${path} (edits[${i}])` : path
+    let entry = batch ? `edits[${i}]` : undefined
+    let where = entry ? `${path} (${entry})` : path
     if (!Object.hasOwn(now, path)) {
       throw new CallError('missing', missing(path, where))
     }
-    let { text, line } = patched(now[path], edit, where, batch)
+    let { text, line, hits } = patched(now[path], edit, where, entry)
     now[path] = text
-    return line
+    return { path, line, hits }
   })
-  return { texts: now, lines }
+  return { texts: now, results }
 }

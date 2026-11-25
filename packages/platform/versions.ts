@@ -21,6 +21,7 @@
 // kept and how a deploy writes one are the host's: yaks.app's directory
 // (workers/yak/versions.ts `record`).
 import type { Blobs, Objects } from '@yaks/blob'
+import { score } from '@yaks/names'
 import type { Reload } from './release.ts'
 
 /** A version's file set: the path the app serves it at, and the name of its
@@ -89,6 +90,31 @@ let KEPT = ['blobs/', BUILT]
 export let own = (paths: string[]) =>
   paths.filter((p) => !KEPT.some((k) => p.startsWith(k)))
 
+let basename = (path: string) => path.slice(path.lastIndexOf('/') + 1)
+let nearestPaths = (path: string, names: string[]) =>
+  names.map((name) => ({
+    name,
+    rank: Math.max(
+      score(path, name),
+      0.95 * score(basename(path), basename(name)),
+    ),
+  })).sort((a, b) => b.rank - a.rank).slice(0, 5).map(({ name }) => name)
+
+let namedFiles = (path: string, there: string[]) => {
+  if (!there.length) return '; it holds no files yet'
+  let names = [...there].sort()
+  let all = names.join(', ')
+  let budget = 160
+  if (names.length <= 8 && all.length <= budget) return `; it holds ${all}`
+  let shown: string[] = []
+  for (let name of nearestPaths(path, names)) {
+    if (shown.length && name.length + 2 > budget) continue
+    shown.push(name)
+    budget -= name.length + 2
+  }
+  return `; it holds ${names.length} files. Closest paths: ${shown.join(', ')}`
+}
+
 /** A missing path, the files in the tree searched, and how to list them. */
 export let noFile = (
   path: string,
@@ -98,12 +124,7 @@ export let noFile = (
   where = path,
 ) => {
   let missed = `no file ${where}${tree ? ` in ${tree}` : ''}`
-  let names = [...there].sort().slice(0, 40)
-  let more = there.length - names.length
-  let held = names.length
-    ? `; it holds ${names.join(', ')}${more ? ` and ${more} more` : ''}`
-    : '; it holds no files yet'
-  return `${missed}${held}. ` +
+  return `${missed}${namedFiles(path, there)}. ` +
     (listing
       ? `This call lists the files.\napp_files ${
         JSON.stringify({ ...listing, op: 'list' })

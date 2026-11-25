@@ -444,3 +444,43 @@ test('missing reads and patches point to the files in the tree they searched', a
     }
   }
 })
+
+let crowded = await made('many-file-names')
+let assets = Object.fromEntries(
+  Array.from({ length: 46 }, (_, i) => [`assets/image-${i}.txt`, 'x']),
+)
+await run('app_files', {
+  app: crowded,
+  files: sent({ ...assets, 'index.html': '<p>Hi</p>', 'wrangler.jsonc': '{}' }),
+})
+await run('app_deploy', { app: crowded })
+
+test('a missing file in a long live list gets the count and nearby whole paths', async () => {
+  for (
+    let args of [
+      { op: 'read' },
+      {
+        op: 'patch',
+        edits: [{ path: 'wrangler.json', find: 'x', replace: 'y' }],
+      },
+    ]
+  ) {
+    let { message } = await throws(
+      () =>
+        run('app_files', {
+          app: crowded,
+          draft: 'new',
+          path: 'wrangler.json',
+          ...args,
+        }),
+      'in live v1; it holds 48 files. Closest paths: wrangler.jsonc',
+    ) as Error
+    let recoveryArgs = recovery(message, 'app_files')
+    equal([recoveryArgs.app, recoveryArgs.draft, recoveryArgs.op], [
+      crowded,
+      'new',
+      'list',
+    ])
+    ok(message.length < 500)
+  }
+})

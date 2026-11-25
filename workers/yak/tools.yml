@@ -234,7 +234,9 @@ app_files:
     neither every text file in the app, up to 64 KB in all;
     patch: path, find and replace edit one file in place, and
     edits: [{path, find, replace}, …] many across any of the app's files,
-    so send every edit a change needs as one patch call;
+    so send every edit a change needs as one patch call. Make find unique
+    with surrounding text, or set all: true on a single patch or an
+    edits entry to replace every match;
     fetch: path and url download an https body to path (how a library is
     vendored);
     delete: path;

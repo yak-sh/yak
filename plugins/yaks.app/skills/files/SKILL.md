@@ -225,19 +225,19 @@ property value in JSON at position 45971`
 gives the position of the error. That is a note in the reply, not a refusal: the
 file is still stored.
 
-**`op: patch` edits one file in place** — `path`, `find`, `replace`. `find` is
-exact text, not a pattern, and must match exactly once; anything else refuses
-saying how many matches there were, so lengthen `find` until it names one place.
-An empty `replace` removes the text. Use it to fix one wrong line without
-sending the whole file again.
+**`op: patch` edits one file in place** using `path`, `find`, and `replace`. By
+default, the exact text in `find` must match once. If it matches several times,
+the refusal gives the count and match locations. Add surrounding text to `find`
+to select one match, or set `all: true` to replace every non-overlapping match.
+An empty `replace` removes the text.
 
 **Many edits are one patch call.** `edits` takes a list of
 `{path, find,
 replace}`, across any of the app's files, in place of `path`,
-`find` and `replace`. They apply in order, so a later edit to a file sees the
-earlier ones, and all or none: one that does not match refuses the call, naming
-the edit, and nothing is written. The reply gives the line each edit landed on.
-Ten changes to a stylesheet are one call, not ten:
+`find` and `replace` at the top level. Each entry may set `all: true`. Edits
+apply in order, so a later edit must match the text left by earlier edits. If
+any edit fails, the refusal names it and the batch writes nothing. The reply
+gives the starting line of each edit's first match.
 
     app_files(app, op: 'patch', edits: [
       { path: 'style.css', find: 'color: #333', replace: 'color: #222' },

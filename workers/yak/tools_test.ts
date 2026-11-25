@@ -372,6 +372,7 @@ test('an ambiguous patch gives the count and the starting line of each match', (
     }]), Error).message
   assertStringIncludes(why, 'find matched 2 times in index.html')
   assertStringIncludes(why, 'Add surrounding text to find')
+  assertStringIncludes(why, 'all: true to replace every match')
   assertStringIncludes(why, '\nline 1: before Old\nline 4: after Old')
 })
 
@@ -414,7 +415,11 @@ test('a patch takes a list of edits across files, in order, all or none', () => 
       'a.css': 'h1 { color: blue }\np { color: green }\n',
       'b.html': '<h1>New</h1>',
     },
-    lines: [1, 1, 2],
+    results: [
+      { path: 'a.css', line: 1, hits: 1 },
+      { path: 'b.html', line: 1, hits: 1 },
+      { path: 'a.css', line: 2, hits: 1 },
+    ],
   })
   // The lone form is a list of one.
   assertEquals(edits({ path: 'a', find: 'x', replace: '' }), [
@@ -436,6 +441,19 @@ test('a patch takes a list of edits across files, in order, all or none', () => 
     'edits[0].replace is required',
   )
   assertStringIncludes(refused({ edits: [] }), 'edits: a list of')
+})
+
+test('an all patch replaces every non-overlapping match with literal text', () => {
+  let edit = { path: 'a.txt', find: 'xx', replace: '$&', all: true }
+  assertEquals(patching({ 'a.txt': 'xxx\nxx' }, [edit]), {
+    texts: { 'a.txt': '$&x\n$&' },
+    results: [{ path: 'a.txt', line: 1, hits: 2 }],
+  })
+  assertThrows(
+    () => patching({ 'a.txt': 'none' }, [edit]),
+    Error,
+    'find matched 0 times',
+  )
 })
 
 let emptyDigest = await digest(new Uint8Array())

@@ -634,16 +634,23 @@ let FILES_INPUT: Shape = {
     ),
     find: str(
       'for patch: the exact text to replace, which must appear exactly ' +
-        'once in the file',
+        'once unless all is true',
     ),
+    all: { type: 'boolean', description: 'for patch: replace every match' },
     edits: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
           path: str('path relative to the app root'),
-          find: str('the exact text, which must appear exactly once'),
+          find: str(
+            'the exact text, which must appear once unless all is true',
+          ),
           replace: str('what goes in its place; empty removes it'),
+          all: {
+            type: 'boolean',
+            description: 'replace every match for this edit',
+          },
         },
         required: ['path', 'find', 'replace'],
       },
@@ -3377,9 +3384,16 @@ export let edits = (args: Record<string, unknown>): Edit[] => {
       path: text(f.path, `${at}path`).replace(/^\/+/, ''),
       find: text(f.find, `${at}find`),
       replace: f.replace,
+      ...f.all != null ? { all: flag(f.all, `${at}all`) } : {},
     }
   }
   if (args.edits == null) return [one(args, '')]
+  if (args.all != null) {
+    throw refuse(
+      'arguments',
+      'Put all on each edits entry that should replace every match.',
+    )
+  }
   if (!Array.isArray(args.edits) || !args.edits.length) {
     throw refuse('arguments', 'edits: a list of {path, find, replace}')
   }
@@ -4932,21 +4946,30 @@ let OURS: Row[] = [
           ),
         )
         if (list.length == 1) {
+          let { hits } = done.results[0]
           return {
-            text: `patched ${each[0]}; staged for app_deploy${where0}`,
+            text: `patched ${each[0]}${
+              hits > 1 ? ` (${hits} matches)` : ''
+            }; staged for app_deploy${where0}`,
             space,
             value: { draft: into },
           }
         }
         return {
-          text: `patched ${list.length} places in ${sent.length} ` +
+          text: `patched ${
+            done.results.reduce((n, r) => n + r.hits, 0)
+          } places in ${sent.length} ` +
             `file${sent.length == 1 ? '' : 's'}:\n` +
-            list.map((e, i) => `edits[${i}] ${e.path}: line ${done.lines[i]}`)
+            done.results.map(({ path, line, hits }, i) =>
+              `edits[${i}] ${path}: ${
+                hits > 1 ? `${hits} matches, first at ` : ''
+              }line ${line}`
+            )
               .join('\n') +
             '\n' + each.join('\n') + '\nStaged for app_deploy.' + where0,
           space,
           value: {
-            edits: list.map((e, i) => ({ path: e.path, line: done.lines[i] })),
+            edits: done.results.map(({ path, line }) => ({ path, line })),
             draft: into,
           },
         }

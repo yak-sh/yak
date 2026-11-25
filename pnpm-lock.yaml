@@ -4041,6 +4041,9 @@ importers:
       '@yaks/model':
         specifier: 0.2.32
         version: link:../model
+      '@yaks/names':
+        specifier: 0.2.23
+        version: link:../names
       '@yaks/notify':
         specifier: 0.2.28
         version: link:../notify

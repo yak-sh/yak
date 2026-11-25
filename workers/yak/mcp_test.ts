@@ -882,6 +882,29 @@ test(
         await agent.tool('app_files', { ...app, op: 'read', path: 'site.css' }),
         'h1 { color: blue }',
       )
+      await agent.tool('app_files', {
+        ...app,
+        path: 'labels.txt',
+        content: 'Old header\nOld footer',
+      })
+      let mark = { path: 'labels.txt', find: 'Old', replace: 'New', all: true }
+      await agent.tool('app_files', {
+        ...app,
+        op: 'patch',
+        edits: [mark, { path: mark.path, find: 'New footer', replace: 'End' }],
+      })
+      await agent.tool('app_files', {
+        ...app,
+        op: 'patch',
+        ...mark,
+        find: 'e',
+        replace: 'E',
+      })
+      assertEquals(
+        await agent.tool('app_files', { ...app, op: 'read', path: mark.path }),
+        'NEw hEadEr\nEnd',
+      )
+      await agent.tool('app_files', { ...app, op: 'delete', path: mark.path })
       // One edit that misses writes none of them.
       await assertRejects(
         () =>
