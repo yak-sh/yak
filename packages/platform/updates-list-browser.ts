@@ -72,6 +72,9 @@ export let bindUpdates = (
     placedIn(lines.flatMap((l) => l.news.flatMap((w) => w.value)), view.spaces)
   // New when the page opened, which opening it read.
   let fresh = new Set(held().filter((u) => u.unread).map((u) => u.eid))
+  // What the cards were last drawn from: a write that moves none of it
+  // (another line's, or what is already drawn) draws nothing.
+  let drawn = ''
   let draw = () => {
     // Each line answered, or refused: a space whose Operator is away
     // keeps what it last said.
@@ -79,6 +82,9 @@ export let bindUpdates = (
     let updates = held().map((u) =>
       fresh.has(u.eid) ? { ...u, unread: true } : u
     )
+    let said = JSON.stringify([updates, lines.map((l) => l.apps.value)])
+    if (said == drawn) return
+    drawn = said
     let apps = new Map(lines.map((l) => [l.eid, l.apps]))
     let next = root.cloneNode(false) as HTMLElement
     next.append(

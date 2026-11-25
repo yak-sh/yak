@@ -9,7 +9,7 @@
  * stood hidden since the page came starts when first shown (a script that
  * started says so with `STARTED`). Updates shown this way are read, as
  * opening their page reads them: each space's are marked through the tab's
- * page graph (@yaks/inbox `seen`).
+ * page graph (@yaks/inbox `seen`), after the frame that shows them.
  *
  * @module
  */
@@ -104,7 +104,12 @@ export let show = (
     )
   ) back.value = view.here
   light(doc, view)
-  read(next)
+  // Marking them read is no part of what the press shows: it is written
+  // once the frame showing them is drawn.
+  let win = doc.defaultView
+  if (win?.requestAnimationFrame) {
+    win.requestAnimationFrame(() => win.setTimeout(() => read(next)))
+  } else read(next)
 }
 
 /** Draw the views of each page in `doc` in place when a press or Back
