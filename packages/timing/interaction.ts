@@ -60,12 +60,13 @@ export let interactionName = (
 
 // T-3503's fast-4G runs: 152–512 ms to the picture and 945–1441 ms
 // to a fresh reopen, with cold paint and usable usually within 2.1 and 3.3 s.
-// A shell paints as soon as a picture, and is usable when a cold page is.
+// T-3578's live shell painted in 60–140 ms: a page drawn from the phone
+// paints within a few hundred. A shell is usable when a cold page is.
 // The existing under100 count tracks the picture's paint goal.
 export let openMilestones = (
   open: Open,
 ): { name: string; ms: number | null; budget: number }[] => {
-  let paint = open.picture ? 550 : 2200
+  let paint = open.picture ? 400 : 2200
   let usable = open.picture && open.source != 'shell' ? 1500 : 3500
   return [
     { name: 'paint', ms: open.paint, budget: paint },
