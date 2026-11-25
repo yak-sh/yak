@@ -6,7 +6,7 @@ import { client, WriteRefused } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { graph as fixture } from './page-graph_fixture_test.ts'
-import { bindDock, type Typed } from './friends-dock-browser.ts'
+import { bindDock, PHONE, type Typed } from './friends-dock-browser.ts'
 import { barLauncher, dock, PANEL } from './friends-dock-view.ts'
 import {
   accountWords,
@@ -80,8 +80,77 @@ let held = async (rows: Bundle[]) => {
   return g
 }
 
-let bound = async (rows: Bundle[] = []) => {
+// A phone's window for `doc`, 844px tall: its history, at a page's own
+// address, and its visual viewport, which `keyboard` shortens by that many
+// px; `typing` moves focus into a field or out. The window is its own, as
+// what is set on linkedom's is set on globalThis.
+let phone = (doc: Document, Made: typeof Event) => {
+  let steps: unknown[] = [null], at = 0, visible = 844
+  let focused: Element | null = null
+  let grew: (() => void)[] = []
+  let view = Object.defineProperties(new EventTarget(), {
+    height: { get: () => visible },
+    offsetTop: { value: 0 },
+    scale: { value: 1 },
+  })
+  let target = new EventTarget()
+  let win = Object.assign(
+    target,
+    {
+      visualViewport: view,
+      scrollY: 0,
+      scrollTo: () => {},
+      location: { href: 'https://yaks.app/settings' },
+      matchMedia: (q: string) => ({ matches: q == PHONE }),
+      history: {
+        get state() {
+          return steps[at]
+        },
+        pushState: (state: unknown) => {
+          steps.splice(++at, Infinity, state)
+        },
+        back: () => {
+          at--
+          target.dispatchEvent(new Event('popstate'))
+        },
+      },
+      ResizeObserver: class {
+        constructor(fn: () => void) {
+          grew.push(fn)
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    },
+  )
+  Object.defineProperty(doc, 'defaultView', { value: win })
+  Object.defineProperty(doc, 'activeElement', {
+    get: () => focused ?? doc.body,
+  })
+  return {
+    win,
+    steps: () => steps.slice(0, at + 1),
+    back: () => win.history.back(),
+    keyboard: (px: number) => {
+      visible = 844 - px
+      view.dispatchEvent(new Event('resize'))
+      for (let fn of grew) fn()
+    },
+    typing: (to: Element | null) => {
+      focused?.dispatchEvent(new Made('focusout', { bubbles: true }))
+      focused = to
+      to?.dispatchEvent(new Made('focusin', { bubbles: true }))
+    },
+  }
+}
+
+let bound = async (
+  rows: Bundle[] = [],
+  on?: (doc: Document, made: typeof Event) => void,
+) => {
   let p = page()
+  on?.(p.document, p.window.Event)
   let g = await held(rows)
   let drafts = typed()
   let timers: (() => void)[] = []
@@ -91,11 +160,13 @@ let bound = async (rows: Bundle[] = []) => {
     now: () => Date.parse(at(30)),
     timer: (fn) => timers.push(fn),
   })
+  let panel = p.document.getElementById(PANEL)!
   let toggle = (state: 'open' | 'closed') => {
     let e = new p.window.Event('toggle')
     Object.assign(e, { newState: state })
-    p.document.getElementById(PANEL)!.dispatchEvent(e)
+    panel.dispatchEvent(e)
   }
+  Object.assign(panel, { hidePopover: () => toggle('closed') })
   let press = (selector: string) =>
     p.root.querySelector<HTMLElement>(selector)!.dispatchEvent(
       new p.window.Event('click', { bubbles: true }),
@@ -249,4 +320,48 @@ test('a toast pressed in another conversation opens its own, with its own draft'
     'person-bo': 'for bo',
     'person-cy': 'for cy',
   })
+})
+
+test('at a phone’s width the open panel stands on a step of history at the same address, which back closes', async () => {
+  let ph: ReturnType<typeof phone>
+  let d = await bound([], (doc, made) => ph = phone(doc, made))
+  let closed = 0
+  d.document.getElementById(PANEL)!.addEventListener('toggle', (e) => {
+    if ((e as ToggleEvent).newState == 'closed') closed++
+  })
+  d.toggle('open')
+  equal(ph!.steps(), [null, { [PANEL]: true }])
+  ph!.back()
+  equal([closed, ph!.steps()], [1, [null]])
+  d.toggle('open')
+  d.toggle('closed')
+  equal(ph!.steps(), [null])
+})
+
+test('while the panel is open a keyboard shortens it to what shows, and the newest message stays in view', async () => {
+  let ph: ReturnType<typeof phone>
+  let d = await bound(
+    said('m1', 'person-bo', ME, 'Hi', 1),
+    (doc, made) => ph = phone(doc, made),
+  )
+  let root = d.document.documentElement
+  let height = () => root.style.getPropertyValue('--viewport-height')
+  d.toggle('open')
+  d.press('[data-dock-friend="person-bo"]')
+  let talk = d.root.querySelector<HTMLElement>('[data-dock-said]')!
+  let top = 0, tall = 600
+  Object.defineProperties(talk, {
+    clientHeight: { get: () => tall },
+    scrollHeight: { get: () => 1000 },
+    scrollTop: { get: () => top, set: (v: number) => top = v },
+  })
+  top = 400
+  ph!.typing(d.root.querySelector('textarea'))
+  tall = 300
+  ph!.keyboard(300)
+  equal([height(), top], ['544px', 1000])
+  ph!.typing(null)
+  ph!.keyboard(0)
+  d.toggle('closed')
+  equal(height(), '')
 })

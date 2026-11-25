@@ -4474,6 +4474,7 @@
             "npm:@yaks/tools@0.2.30",
             "npm:@yaks/tracker@0.2.33",
             "npm:@yaks/ui@0.2.30",
+            "npm:@yaks/ux@0.2.23",
             "npm:@yaks/vocab@0.2.32",
             "npm:@yaks/yaml@0.2.24",
             "npm:es-module-lexer@2.3.2",

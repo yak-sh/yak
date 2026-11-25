@@ -246,6 +246,7 @@
     "@yaks/tools": "0.2.30",
     "@yaks/tracker": "0.2.33",
     "@yaks/ui": "0.2.30",
+    "@yaks/ux": "0.2.23",
     "@yaks/vocab": "0.2.32",
     "@yaks/yaml": "0.2.24",
     "es-module-lexer": "2.3.2",

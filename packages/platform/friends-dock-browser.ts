@@ -15,6 +15,15 @@
  * conversation is not on screen raises a quiet toast and the launcher's
  * count, never a dialog.
  *
+ * While the panel is open it holds the page to what a person sees, as the
+ * Operator's chat does (@yaks/ux/conversation `fit`): a phone's keyboard
+ * shortens the panel rather than scrolling the page, so the box sits on the
+ * keyboard, and a conversation at its newest stays there as it shortens. At
+ * a phone's width the open panel is a screen of its own, and the phone's
+ * back closes it: opening it adds a step to history at the same address,
+ * which navigation leaves be, and closing it any other way takes that step
+ * back.
+ *
  * @module
  */
 import { type ComponentChildren, Fragment, h } from 'preact'
@@ -22,6 +31,7 @@ import { renderToString } from 'preact-render-to-string'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
 import { morph, PAGE } from '@yaks/ui/navigate'
+import { fit } from '@yaks/ux/conversation'
 import {
   accountWords,
   FRIEND_MESSAGES,
@@ -48,6 +58,9 @@ export let TOAST = 6_000
 
 /** The dock's element. */
 export let VIEW = `#${DOCK}[data-friends-dock]`
+
+/** Where the open panel takes the screen (@yaks/ui/Dock.css). */
+export let PHONE = '(max-width: 700px)'
 
 let made = (doc: Document, node: ComponentChildren) => {
   let t = doc.createElement('template')
@@ -93,6 +106,30 @@ export let bindDock = (root: HTMLElement, o: Docking): () => void => {
   let held = () => messagesOf(messages.value) as Held[]
   let listed = () => friends.ready ? friendsOf(friends.value) : undefined
   let body = () => root.querySelector<HTMLElement>('[data-dock-said]')
+  let win = doc.defaultView
+  // What holds the page to what a person sees while the panel is open.
+  let unfit = () => {}
+  // Whether the conversation was at its newest when it last scrolled.
+  let newest = true
+  let pin = () => {
+    let said = body()
+    if (said && newest) said.scrollTop = said.scrollHeight
+  }
+  let sizes = win?.ResizeObserver ? new win.ResizeObserver(pin) : undefined
+  let sized: Element | null = null
+  // The step in history the open panel stands on, at a phone's width.
+  let stepped = false
+  let step = () => {
+    if (stepped || !win?.matchMedia?.(PHONE).matches) return
+    let state = win.history.state
+    win.history.pushState({ ...state, [PANEL]: true }, '', win.location.href)
+    stepped = true
+  }
+  let unstep = () => {
+    if (!stepped) return
+    stepped = false
+    if (win!.history.state?.[PANEL]) win!.history.back()
+  }
 
   // The open conversation's messages to the person, read once it shows.
   let read = () => {
@@ -136,7 +173,15 @@ export let bindDock = (root: HTMLElement, o: Docking): () => void => {
     }
     keep()
     let after = body()
-    if (after && (end || after != said)) after.scrollTop = after.scrollHeight
+    if (after && (end || after != said)) {
+      after.scrollTop = after.scrollHeight
+      newest = true
+    }
+    if (after != sized) {
+      if (sized) sizes?.unobserve(sized)
+      if (after) sizes?.observe(after)
+      sized = after
+    }
     read()
   }
 
@@ -243,9 +288,31 @@ export let bindDock = (root: HTMLElement, o: Docking): () => void => {
   }
 
   let toggled = (e: Event) => {
+    let was = opened
     opened = (e as ToggleEvent).newState == 'open'
+    if (opened && !was) {
+      unfit = fit(doc)
+      step()
+    } else if (!opened && was) {
+      unfit()
+      unfit = () => {}
+      unstep()
+    }
     if (opened) at.toast = undefined
     draw()
+  }
+
+  // Back to the step under the panel's own closes it.
+  let popped = () => {
+    if (!stepped || win!.history.state?.[PANEL]) return
+    stepped = false
+    panel()?.hidePopover()
+  }
+
+  let scrolled = (e: Event) => {
+    let said = body()
+    if (e.target != said) return
+    newest = said!.scrollTop + said!.clientHeight >= said!.scrollHeight - 2
   }
 
   let off = [
@@ -258,7 +325,9 @@ export let bindDock = (root: HTMLElement, o: Docking): () => void => {
   root.addEventListener('click', click)
   root.addEventListener('submit', submit)
   root.addEventListener('keydown', key)
+  root.addEventListener('scroll', scrolled, true)
   panel()?.addEventListener('toggle', toggled)
+  win?.addEventListener('popstate', popped)
   let page = () => draw()
   doc.addEventListener(PAGE, page)
   heard()
@@ -268,7 +337,11 @@ export let bindDock = (root: HTMLElement, o: Docking): () => void => {
     root.removeEventListener('click', click)
     root.removeEventListener('submit', submit)
     root.removeEventListener('keydown', key)
+    root.removeEventListener('scroll', scrolled, true)
     panel()?.removeEventListener('toggle', toggled)
+    win?.removeEventListener('popstate', popped)
+    sizes?.disconnect()
+    unfit()
     field?.stop()
     for (let stop of off) stop()
     friends.close()
