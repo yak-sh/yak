@@ -26,8 +26,10 @@ import {
   grafted,
   inputOf,
   type Intake,
+  kindOf,
   recall,
   running,
+  seqOf,
   sessionTools,
   take,
   taskSession,
@@ -1451,18 +1453,62 @@ export let actorOf = async (
       session,
     )} .intake !notice .order=-entry.seq .limit=1 .fields=channel.name,created.by`,
   )
-  let writer = comp(newest, 'created')?.by as string | undefined
-  // A chat room's words, or a voice room's, said on the `voice` channel by
-  // whoever spoke last (operator-calls.ts `Ticket.room`): a phone call's
-  // writer is its person.
-  let channel = String(comp(newest, 'channel')?.name)
+  let member = await seatedWriter(newest, o, dir)
+  return member ? { ...o, person: member, administrative: undefined } : o
+}
+// The member whose words an input is, said in a chat or voice room by
+// someone other than the conversation's person, or nothing. A voice room's
+// words are said on the `voice` channel by whoever spoke last
+// (operator-calls.ts `Ticket.room`): a phone call's writer is its person.
+let seatedWriter = async (
+  input: Bundle | undefined,
+  o: Working,
+  dir: Pick<Directory, 'role'>,
+) => {
+  let writer = comp(input, 'created')?.by as string | undefined
+  let channel = String(comp(input, 'channel')?.name)
   if (
     !writer || writer == o.person ||
     !(PLATFORMS.has(channel) || channel == 'voice')
-  ) return o
-  return await dir.role({ eid: o.space }, writer)
-    ? { ...o, person: writer, administrative: undefined }
-    : o
+  ) return undefined
+  return await dir.role({ eid: o.space }, writer) ? writer : undefined
+}
+/** The lines of a conversation a turn acting for someone with no seat in
+ * the space reads (@yaks/session/react `Deps.readable`): the words said, the
+ * Operator's answers, and what turns acting for no member brought in. A turn
+ * a member's words began ({@link actorOf}) ran with their tools, so its
+ * calls, results and other inputs are theirs, as is a summary of them. Every
+ * line, where no member's words began a turn. */
+export let unseated = async (
+  store: Store,
+  session: string,
+  o: Working,
+  dir: Pick<Directory, 'role'>,
+): Promise<((line: Bundle) => boolean) | undefined> => {
+  let inputs = await store.g.read(
+    q`.entry.session=${session} .intake !notice .order=entry.seq .fields=entity.eid,entry.seq,channel.name,created.by`,
+  )
+  // Each writer's role is asked once, however often they spoke.
+  let roles = new Map<string, ReturnType<Directory['role']>>()
+  let once: Pick<Directory, 'role'> = {
+    role: (space, person) => {
+      let role = roles.get(person) ?? dir.role(space, person)
+      roles.set(person, role)
+      return role
+    },
+  }
+  let turns = await Promise.all(inputs.map(async (input) => ({
+    seq: seqOf(input),
+    member: !!await seatedWriter(input, o, once),
+  })))
+  if (!turns.some((t) => t.member)) return undefined
+  let said = new Set(inputs.map((input) => input.entity.eid))
+  let theirs = (line: Bundle) =>
+    !!turns.findLast((t) => t.seq < seqOf(line))?.member
+  return (line) =>
+    line.checkpoint
+      ? !turns.some((t) => t.member && t.seq < seqOf(line))
+      : said.has(line.entity.eid) || kindOf(line) == 'output' || !theirs(line)
 }
 // Whether a conversation has begun: its row is a session. Presence is
 // counted, so its computed status is never read.
@@ -3136,6 +3182,14 @@ export let operating = (
         undefined,
         (value, source) => keepResult(g, value, source, work.person),
       )
+    },
+    // A turn acting for someone with no seat reads none of what a member's
+    // turns brought in (`unseated`).
+    readable: async (session) => {
+      let work = await workFor(session)
+      return (await work.ctx).role
+        ? undefined
+        : await unseated(store, session, work.held, dir())
     },
     // A room can change whose authority it acts with between turns.
     instructionScope: async (session) => {

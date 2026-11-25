@@ -211,6 +211,8 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   instructions?: string | ((session: Eid) => Promise<string>)
   /** Changing this scope refreshes instructions even with a warm prefix cache. */
   instructionScope?: Deps['instructionScope']
+  /** Which of a transcript's lines a turn reads, for whom it acts. */
+  readable?: Deps['readable']
   /** The persona base shared by this application's transcripts. */
   cachePrefix?: Omit<NonNullable<Request['cachePrefix']>, 'length'> & {
     persona: Eid
@@ -592,6 +594,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       ? opened(opts.instructions)
       : undefined,
     instructionScope: opts.instructionScope,
+    readable: opts.readable,
     requestInstructions: opts.cachePrefix && (async (session) => {
       let { persona, ...cache } = opts.cachePrefix!
       let [layers, added] = await Promise.all([

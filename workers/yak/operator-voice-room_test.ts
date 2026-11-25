@@ -14,7 +14,7 @@ import { drain } from './operator-store.ts'
 import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
 import { operating } from './operator.ts'
 
-let fixture = async (account: string) => {
+let fixture = async () => {
   let { env, dir } = platform('voice-room', {
     MAIL: { send: () => Promise.resolve({ messageId: 'sent' }) },
   })
@@ -45,12 +45,19 @@ let fixture = async (account: string) => {
     stream.searchParams.get('call')!,
     env.SESSION_SECRET!,
   ))!
-  let member = await linked(env, discord, account)
-  let writer = member ?? await guestOf(env, room.via, account)
   let store = operatorMemory()
   let tools: string[] = []
   let answered: string[] = []
+  // What each model request was handed, by item kind and its name or words.
+  let read: string[][] = []
   let model = operatorModel((req) => {
+    read.push(
+      req.items.map((item) =>
+        `${item.kind}:${
+          'name' in item ? item.name : 'text' in item ? item.text : ''
+        }`
+      ),
+    )
     let last = req.items.at(-1)
     let offered = callable(req)
     tools.push(...offered)
@@ -79,8 +86,11 @@ let fixture = async (account: string) => {
     },
   })
   let ask = async (
+    account: string,
     { heard = false, talking = false, stranger = false } = {},
   ) => {
+    let member = await linked(env, discord, account)
+    let writer = member ?? await guestOf(env, room.via, account)
     let id = await receive(
       store,
       {
@@ -113,27 +123,27 @@ let fixture = async (account: string) => {
     equal((intake.created as Comp).by, writer)
     return store.g.read('.operator_approval&*')
   }
-  return { ask, answered, dir, owner, tools }
+  return { ask, answered, dir, owner, read, tools }
 }
 
-let ann = await fixture('ann')
+let ann = await fixture()
 test('a linked Discord voice speaker asks as the member, with no tap', async () => {
-  equal(await ann.ask({ talking: true }), [])
+  equal(await ann.ask('ann', { talking: true }), [])
   equal((await ann.dir.read('.invite')).length, 1)
   equal(ann.answered[0]?.includes('jo@x.example is invited'), true)
 })
 
-let bo = await fixture('bo')
+let bo = await fixture()
 test('an unlinked Discord voice speaker gets a guest turn', async () => {
-  equal(await bo.ask(), [])
+  equal(await bo.ask('bo'), [])
   equal(bo.tools.includes('member_add'), false)
   equal(bo.tools.includes('escalate'), true)
   equal(bo.answered, ['Please ask a space owner.'])
 })
 
-let steered = await fixture('ann')
+let steered = await fixture()
 test('a linked Discord voice turn steered by others asks the member to tap', async () => {
-  let approvals = await steered.ask({ heard: true })
+  let approvals = await steered.ask('ann', { heard: true })
   equal(
     approvals.map((row) => {
       let approval = row.operator_approval as Comp
@@ -146,12 +156,28 @@ test('a linked Discord voice turn steered by others asks the member to tap', asy
 
 // A stranger who speaks while the Operator works on the member's own ask is
 // heard (operator-calls.ts `voices`), and steers the rest of that turn.
-let interrupted = await fixture('ann')
+let interrupted = await fixture()
 test("a stranger's voice heard during a member's turn asks the member to tap", async () => {
-  let approvals = await interrupted.ask({ stranger: true })
+  let approvals = await interrupted.ask('ann', { stranger: true })
   equal(
     approvals.map((row) => (row.operator_approval as Comp).tool),
     ['member_add'],
   )
   equal((await interrupted.dir.read('.invite')).length, 0)
+})
+
+let shared = await fixture()
+test("a stranger's voice turn reads what was said, not a member's tool calls", async () => {
+  let turn = async (account: string) => {
+    let from = shared.read.length
+    await shared.ask(account)
+    return shared.read[from].filter((line) => !line.startsWith('instruction:'))
+  }
+  let calls = (lines: string[]) =>
+    lines.filter((line) => /^(call|result):/.test(line)).length
+  await turn('ann')
+  let guest = await turn('bo')
+  equal(calls(guest), 0)
+  equal(guest.filter((line) => line.includes('is invited')).length, 1)
+  equal(calls(await turn('ann')), 2)
 })

@@ -372,6 +372,13 @@ export type Deps = {
   resolveTools?: (
     session: Eid,
   ) => string[] | undefined | Promise<string[] | undefined>
+  /** Which of a transcript's lines the turn may read, for whom it acts: a
+   * host whose conversations change hands between turns keeps some from a
+   * turn acting for someone else. Every line, where absent or undefined.
+   * Only what the model is handed is narrowed; summaries weigh every line. */
+  readable?: (
+    session: Eid,
+  ) => Promise<((line: Bundle) => boolean) | undefined>
   /** Host rendering of each input's prose in a transcript, resolved once per
    * step (it may read the graph, to name who sent each input); stored
    * content stays unchanged. */
@@ -1928,15 +1935,17 @@ export let react = async (
     entries.find((b) => b.entity.eid == comp(asked!, ASK)?.through)
   let asking = askingOf(entries)
   let said = lines(elide(context(entries), elision), asking)
+  let readable = await deps.readable?.(session)
+  let reads = readable ? said.filter((b) => b == asking || readable(b)) : said
   let window = anchorId
-    ? said.filter((b) =>
+    ? reads.filter((b) =>
       seqOf(b) > seqOf(asked!) ||
       // An input committed while this ask was in flight was not sent to the
       // provider, even though its sequence precedes the recorded ask result.
       (boundary && seqOf(b) > seqOf(boundary) &&
         ['input', 'result'].includes(kindOf(b) ?? '') && !b.notice)
     )
-    : recent(said, sending?.window)
+    : recent(reads, sending?.window)
   if (!bodies) await withProse(g, window)
   let held = checkpoint ? await tasksOf(g, session) : []
   if (checkpoint) {
