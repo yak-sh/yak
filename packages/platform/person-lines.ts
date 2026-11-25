@@ -14,7 +14,8 @@
  *
  * @module
  */
-import { type Bundle, dead } from '@yaks/graph'
+import { type Bundle, dead, type ReadOpts, type ReadTx } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import { appsSpace, sideLine } from './side-rows.ts'
 import { accountLine, FRIENDS } from './account-rows.ts'
 import { UPDATE_WAITING } from './update-waiting.ts'
@@ -27,6 +28,7 @@ import { spaceLine } from './space-pages.ts'
 import { draftedApp } from './app-canvas.ts'
 import { GRANTS } from './agents.ts'
 import { movedSpace } from './connections-page.ts'
+import { confirmedFriends } from './friends.ts'
 
 /** A directory socket following the lifetime of a signed-in page. */
 export let PAGE_PRESENCE = 'x-yak-page-presence'
@@ -43,6 +45,24 @@ export let personLine = (line: string): boolean =>
 export let releaseSpace = (line: string): string | undefined =>
   appsSpace(line) ?? listedSpace(line) ?? offersSpace(line) ??
     spaceLine(line)?.space ?? movedSpace(line)
+
+type Watch = (line: string, read?: ReadOpts) => boolean
+
+/** The Friends watches of confirmed friends of these people. A
+ * partial patch without a person refreshes Friends watches conservatively. */
+export let presenceWatches = (
+  read: ReadTx['read'],
+  people: (string | null)[],
+): Watch | Promise<Watch> => {
+  if (!people.length) return () => false
+  let known = people.filter((id) => id != null)
+  if (known.length != people.length) return (line) => line == FRIENDS
+  return after(
+    confirmedFriends(read, known),
+    (friends) => (line, who) =>
+      line == FRIENDS && !!who?.person && friends.has(who.person),
+  )
+}
 
 // Whether `b` moves where the app `app`'s drafts stand
 // (@yaks/platform/app-canvas `appDrafted`): its row, one of its drafts, a
@@ -165,9 +185,18 @@ export let personChanges = (bundles: Bundle[]) => {
     bundles.filter((b) => 'meter' in b || 'credit' in b)
       .map((b) => b.entity.eid),
   )
-  let presence = bundles.some((b) => 'whereabouts' in b)
+  let presence = [
+    ...new Set(
+      bundles.flatMap((b) =>
+        'whereabouts' in b
+          ? [(b.whereabouts as { person?: string } | null)?.person ?? null]
+          : []
+      ),
+    ),
+  ]
   return {
     releases: other && connections ? [] : releases,
+    presence: other ? [] : presence,
     affects: (line: string, spaces: ReadonlySet<string | null>) => {
       let draft = draftedApp(line)
       if (draft != undefined) return relevant.some((b) => draftMoved(b, draft))
@@ -175,8 +204,7 @@ export let personChanges = (bundles: Bundle[]) => {
       if (space && spaces.has(space)) return true
       if (movedSpace(line) != undefined) return connections
       let payment = paymentPart(line)
-      return other || line == FRIENDS && presence ||
-        !!payment && spending.has(payment.space)
+      return other || !!payment && spending.has(payment.space)
     },
   }
 }

@@ -35,9 +35,9 @@ export type Reached = {
   resume: () => void | Promise<void>
   close: (sink: Sink, id: string) => void
   drop: (sink: Sink) => void
-  /** A member's graph moved: every line `only` names (every line, without
-   * it) is asked again, settled when each answer is. */
-  hear: (only?: (line: string) => boolean) => Promise<void>
+  /** A member's graph moved: each watch selected by its line and read
+   * options is asked again. Omit `only` to refresh every watch. */
+  hear: (only?: (line: string, read?: ReadOpts) => boolean) => Promise<void>
   /** Whether any line is watched. */
   watching: () => boolean
 }
@@ -196,7 +196,9 @@ export let reached = (opts: {
       let asked: Promise<void>[] = []
       for (let [sink, mine] of held) {
         for (let [id, watch] of mine) {
-          if (!only || only(watch.line)) asked.push(ask(sink, id, watch))
+          if (!only || only(watch.line, watch.opts)) {
+            asked.push(ask(sink, id, watch))
+          }
         }
       }
       await Promise.all(asked)
@@ -242,7 +244,7 @@ export let computed = (
   return queries
 }
 
-type Affected = boolean | ((line: string) => boolean)
+type Affected = boolean | NonNullable<Parameters<Reached['hear']>[0]>
 
 /**
  * One registry of two: the lines `borrows` names asked of `lent`, and every

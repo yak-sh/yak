@@ -2,8 +2,9 @@ import { equal, test } from '@yaks/testing'
 import { ACCOUNT, FRIENDS } from './account-rows.ts'
 import { appDrafted } from './app-canvas.ts'
 import { connectionsMoved } from './connections-page.ts'
+import { friendSide } from './friends.ts'
 import { allowancesLine, planLine } from './payment-rows.ts'
-import { personChanges } from './person-lines.ts'
+import { personChanges, presenceWatches } from './person-lines.ts'
 import { SIDE_SPACES, sideApps } from './side-rows.ts'
 import { spaceApps } from './space-apps.ts'
 import { UPDATE_WAITING } from './update-waiting.ts'
@@ -91,4 +92,26 @@ test("model spending refreshes only the paying space's payment views", () => {
     allowances,
     plan,
   ])
+})
+
+test('a presence update refreshes the Friends watches of confirmed friends', async () => {
+  let yes = { decided: { verdict: 'approved' } }
+  let change = personChanges([
+    {
+      entity: { eid: 'presence' },
+      whereabouts: { person: 'ada', state: 'here' },
+    },
+  ])
+  let affected = await presenceWatches(() => [
+    friendSide('ada', 'bea', yes),
+    friendSide('bea', 'ada', yes),
+    friendSide('ada', 'cy', yes),
+  ], change.presence)
+  equal(
+    ['ada', 'bea', 'cy', 'dee'].filter((person) =>
+      affected(FRIENDS, { person })
+    ),
+    ['bea'],
+  )
+  equal(affected(SIDE_SPACES, { person: 'bea' }), false)
 })

@@ -246,7 +246,7 @@ import {
   sleeper,
   watch as watchEmbedding,
 } from '@yaks/embedding'
-import { after, type Clock, isPromise, system } from '@yaks/fp'
+import { after, type Clock, isPromise, system, together } from '@yaks/fp'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { setImmediate } from 'node:timers'
 import {
@@ -460,9 +460,9 @@ import {
   PAGE_PRESENCE,
   personChanges,
   personLine,
+  presenceWatches,
 } from '@yaks/platform/person-lines'
 import { spaceLine } from '@yaks/platform/space-pages'
-import { FRIENDS } from '@yaks/platform/account-rows'
 import {
   isRetired,
   RECEIPTS,
@@ -2292,10 +2292,16 @@ export class Store extends Durable {
           let apps = changes.releases.length
             ? g.get(changes.releases, ['app'])
             : []
-          return after(apps, (rows) => {
-            let spaces = new Set(rows.map((b) => refOf((b.app as Comp)?.space)))
-            return (line) => changes.affects(line, spaces)
-          })
+          return after(
+            together([apps, presenceWatches(g.read, changes.presence)]),
+            ([rows, friends]) => {
+              let spaces = new Set(
+                rows.map((b) => refOf((b.app as Comp)?.space)),
+              )
+              return (line, read) =>
+                changes.affects(line, spaces) || friends(line, read)
+            },
+          )
         },
         clock: clockOf(this.#time),
         hold: (work) => this.#ctx.waitUntil?.(work),
@@ -3579,7 +3585,9 @@ export class Store extends Durable {
         pageWord(person, now == 'offline' ? 'away' : 'open', this.#now()),
       ], { stamp: false })
     } else {
-      await this.#friendsWatch?.hear((line) => line == FRIENDS)
+      await this.#friendsWatch?.hear(
+        await presenceWatches(this.#graph.read, [person]),
+      )
     }
   }
 

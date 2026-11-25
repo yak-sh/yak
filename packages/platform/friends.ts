@@ -9,7 +9,7 @@
 // Each person writes only their own side (`decide`), so nobody is friended
 // without saying so, and turning someone down or unfriending them writes
 // their own side declined, which the other person is never told.
-import type { Bundle, Comp, Plugin, Tx } from '@yaks/graph'
+import type { Bundle, Comp, Plugin, ReadTx, Tx } from '@yaks/graph'
 import { hook } from '@yaks/graph/plugin'
 import { Refused } from '@yaks/graph/errors'
 import { edgeEid } from '@yaks/edge'
@@ -115,6 +115,20 @@ export let standings = (
   }
   return out
 }
+
+/** The confirmed friends of people whose presence changed. */
+export let confirmedFriends = (read: ReadTx['read'], people: string[]) =>
+  after(
+    read(
+      line`.relationship.role=${FRIEND}&.decided.verdict=approved&(.edge.from=${people}|.edge.to=${people})&.fields=edge,relationship,decided`,
+    ),
+    (rows) =>
+      new Set(people.flatMap((person) =>
+        [...standings(person, rows)].flatMap(([other, stand]) =>
+          stand.standing == 'friend' ? [other] : []
+        )
+      )),
+  )
 
 /** The side `person` writes for a `$friend` request: their own, toward a
  * person the directory holds who is not them. */

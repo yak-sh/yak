@@ -63,6 +63,20 @@ test('a change that names its lines asks only those again', async () => {
   equal([r.taken(), r.state.reads], [[{ id: 'n', count: 2 }], 3])
 })
 
+test('a change can refresh only selected readers of the same line', async () => {
+  let r = reach([book('dune')])
+  r.subs.open(r.sink, 'one', '.book', { person: 'ada' })
+  r.subs.open(r.sink, 'two', '.book', { person: 'bea' })
+  await tick()
+  r.taken()
+  r.state.answer = [book('emma')]
+  await r.subs.hear((_, read) => read?.person == 'ada')
+  equal([r.taken(), r.state.reads], [
+    [{ id: 'one', bundles: [book('emma')], reset: true }],
+    3,
+  ])
+})
+
 test('a refusal is said under its id, told once, and the next change asks again', async () => {
   let r = reach(new Refused('unknown prop: .loan'))
   r.subs.open(r.sink, 'all', '.book')
