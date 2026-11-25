@@ -1,0 +1,11 @@
+[
+  {
+    "entity": { "eid": "$fund" },
+    "alias": { "name": "fund:general" },
+    "doc": {
+      "title": "General Fund",
+      "body": "Every gift goes to the fund's work."
+    },
+    "fund": { "amounts_cents": "2500, 5000, 10000, 25000" }
+  }
+]

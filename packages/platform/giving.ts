@@ -143,7 +143,9 @@ export let receipt = (
   body: [
     `Thank you. ${fund.holder} received your ${
       gift.monthly ? 'monthly ' : ''
-    }gift of **${money(gift.total)}** on ${day(gift.at)}, for ${fund.title}.`,
+    }gift of **${money(gift.total)}** on ${day(gift.at)}${
+      fund.holder == fund.title ? '' : `, for ${fund.title}`
+    }.`,
     ...(gift.covered
       ? ['', `It includes ${money(gift.covered)} you added to cover the fee.`]
       : []),

@@ -1,0 +1,420 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f6f2ea">
+<title>Give</title>
+
+<style>
+:root {
+  --ink: #23221f;
+  --soft: #6b675f;
+  --page: #f6f2ea;
+  --card: #fffdf9;
+  --line: #e2dbcd;
+  --accent: #2f5d50;
+  --on-accent: #fff;
+  --danger: #8a3d33;
+  --gap: 1rem;
+  --half-gap: calc(var(--gap) / 2);
+  --radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: var(--gap);
+  background: var(--page);
+  color: var(--ink);
+  font: 17px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.Give {
+  max-width: 28rem;
+  margin: 0 auto;
+}
+.Give_Fund {
+  margin: var(--gap) 0 var(--half-gap);
+  font-size: 2rem;
+  line-height: 1.15;
+}
+.Give_Words {
+  margin: 0 0 var(--gap);
+  color: var(--soft);
+}
+.Give_Note {
+  margin: var(--gap) 0;
+  padding: var(--gap);
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.Give_Note-wrong {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.Form {
+  display: grid;
+  gap: var(--gap);
+  padding: var(--gap);
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.Toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--page);
+}
+.Toggle_Choice {
+  padding: 0.6rem;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: none;
+  color: var(--soft);
+  font: inherit;
+  font-weight: 600;
+}
+.Toggle_Choice[aria-pressed="true"] {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+}
+
+.Amounts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--half-gap);
+}
+.Amount {
+  min-height: 3.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.Amount[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.Other {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding: 0 var(--gap);
+  min-height: 3.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.Other:focus-within {
+  border-color: var(--accent);
+}
+.Other_Input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 1.15rem;
+  outline: none;
+}
+
+.Cover {
+  display: flex;
+  gap: var(--half-gap);
+  align-items: flex-start;
+  color: var(--soft);
+}
+.Cover_Box {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+}
+
+.Button {
+  min-height: 3.25rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.Button:disabled {
+  opacity: 0.5;
+}
+.Button-quiet {
+  background: var(--page);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.Fine {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--soft);
+  text-align: center;
+}
+
+.Owner {
+  margin-top: calc(var(--gap) * 2);
+}
+.Owner_Grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--half-gap);
+  margin: 0 0 var(--gap);
+}
+.Stat {
+  padding: var(--gap);
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.Stat_Value {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+.Stat_Name {
+  color: var(--soft);
+  font-size: 0.9rem;
+}
+.Owner .Button {
+  width: 100%;
+}
+</style>
+
+<main class="Give">
+  <h1 class="Give_Fund" id="fund">Give</h1>
+  <p class="Give_Words" id="words" hidden></p>
+
+  <p class="Give_Note" id="said" hidden></p>
+
+  <form class="Form" id="form" hidden>
+    <div class="Toggle" role="group" aria-label="How often">
+      <button class="Toggle_Choice" type="button" id="once"
+        aria-pressed="true">Give once</button>
+      <button class="Toggle_Choice" type="button" id="monthly"
+        aria-pressed="false">Monthly</button>
+    </div>
+
+    <div class="Amounts" id="amounts" role="group" aria-label="Amount"></div>
+    <label class="Other">
+      <span aria-hidden="true">$</span>
+      <input class="Other_Input" id="other" inputmode="decimal"
+        autocomplete="off" placeholder="Other amount" aria-label="Other amount">
+    </label>
+
+    <label class="Cover">
+      <input class="Cover_Box" type="checkbox" id="cover" checked>
+      <span id="covering">Add the card fee so the whole gift arrives</span>
+    </label>
+
+    <button class="Button" type="submit" id="give" disabled>Give</button>
+    <p class="Fine">Paid securely with Stripe. Apple Pay and Google Pay work
+      where your phone has them. A receipt is emailed to you.</p>
+  </form>
+
+  <section class="Owner" id="owner" hidden>
+    <h2>Gifts</h2>
+    <div class="Owner_Grid" id="stats"></div>
+    <button class="Button Button-quiet" type="button" id="statements"></button>
+  </section>
+</main>
+
+<script type="module">
+import { me, subscribe } from './api/client.js'
+import { amounts, asked, money, totals, typed } from './gift.js'
+
+let $ = (id) => document.getElementById(id)
+let text = (s) => document.createTextNode(String(s ?? ''))
+
+let choice = { fund: '', cents: 0, monthly: false, cover: true }
+let fees = new Map()
+
+let say = (words, wrong) => {
+  $('said').hidden = !words
+  $('said').className = wrong ? 'Give_Note Give_Note-wrong' : 'Give_Note'
+  $('said').replaceChildren(text(words))
+}
+
+// What covering the fee adds to this amount, asked of the platform, which
+// charges exactly that.
+let coverOf = async (cents) => {
+  if (!fees.has(cents)) {
+    let r = await fetch(`./api/pay/give?cents=${cents}`)
+    fees.set(cents, r.ok ? (await r.json()).covered : null)
+  }
+  return fees.get(cents)
+}
+
+let draw = async () => {
+  for (let b of $('amounts').children) {
+    b.setAttribute('aria-pressed', String(Number(b.value) == choice.cents))
+  }
+  $('once').setAttribute('aria-pressed', String(!choice.monthly))
+  $('monthly').setAttribute('aria-pressed', String(choice.monthly))
+  let every = choice.monthly ? ' a month' : ''
+  $('give').disabled = !choice.cents
+  if (!choice.cents) {
+    $('give').replaceChildren(text('Give'))
+    $('covering').replaceChildren(
+      text('Add the card fee so the whole gift arrives'),
+    )
+    return
+  }
+  let cents = choice.cents
+  let added = await coverOf(cents)
+  if (cents != choice.cents) return
+  $('covering').replaceChildren(
+    text(
+      added == null
+        ? 'Add the card fee so the whole gift arrives'
+        : `Add ${money(added)} to cover the card fee, so the whole ${
+          money(cents)
+        } arrives`,
+    ),
+  )
+  let total = cents + (choice.cover && added ? added : 0)
+  $('give').replaceChildren(text(`Give ${money(total)}${every}`))
+}
+
+$('once').onclick = () => {
+  choice.monthly = false
+  draw()
+}
+$('monthly').onclick = () => {
+  choice.monthly = true
+  draw()
+}
+$('cover').onchange = () => {
+  choice.cover = $('cover').checked
+  draw()
+}
+$('other').oninput = () => {
+  choice.cents = typed($('other').value)
+  draw()
+}
+
+// The one call that takes money: the platform's own door, on the space's
+// connected Stripe account. The page never sees a card.
+$('form').onsubmit = async (e) => {
+  e.preventDefault()
+  $('give').disabled = true
+  say('')
+  try {
+    let r = await fetch('./api/pay/give', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(asked(choice)),
+    })
+    let out = await r.json()
+    if (!r.ok) {
+      throw new Error(
+        out.error?.code == 'not_selling' || out.error?.code == 'plus_required'
+          ? 'Giving here is not open yet. Please check back soon.'
+          : out.error?.message ?? `giving ${r.status}`,
+      )
+    }
+    location.href = out.url
+  } catch (e) {
+    say(e.message, true)
+    $('give').disabled = false
+  }
+}
+
+let drawFund = (fund) => {
+  choice.fund = fund.entity.eid
+  document.title = `Give to ${fund.doc?.title ?? ''}`
+  $('fund').replaceChildren(text(fund.doc?.title))
+  $('words').hidden = !fund.doc?.body
+  $('words').replaceChildren(text(fund.doc?.body))
+  let offered = amounts(fund)
+  $('amounts').replaceChildren(...offered.map((cents) => {
+    let b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'Amount'
+    b.value = String(cents)
+    b.append(text(money(cents)))
+    b.onclick = () => {
+      choice.cents = cents
+      $('other').value = ''
+      draw()
+    }
+    return b
+  }))
+  if (!choice.cents && offered.length) choice.cents = offered[1] ?? offered[0]
+  $('form').hidden = false
+  draw()
+}
+
+subscribe('.fund&?doc', (rows) => {
+  if (rows.length) drawFund(rows[0])
+})
+
+if (new URLSearchParams(location.search).get('thanks')) {
+  say('Thank you. Your gift went through, and a receipt is on its way.')
+}
+
+// The owner's view: what has come in, and the year-end statements.
+let mine = await me()
+if (mine.writes) {
+  let year = new Date().getUTCFullYear()
+  let last = year - 1
+  let drawGifts = (gifts) => {
+    let t = totals(gifts, year)
+    $('stats').replaceChildren(
+      ...[
+        [money(t.year), `given in ${year}`],
+        [money(t.all), 'given in all'],
+        [t.donors, t.donors == 1 ? 'donor' : 'donors'],
+        [t.monthly, 'giving monthly'],
+      ].map(([value, name]) => {
+        let div = document.createElement('div')
+        div.className = 'Stat'
+        let v = document.createElement('span')
+        v.className = 'Stat_Value'
+        v.append(text(value))
+        let n = document.createElement('span')
+        n.className = 'Stat_Name'
+        n.append(text(name))
+        div.append(v, n)
+        return div
+      }),
+    )
+  }
+  $('owner').hidden = false
+  $('statements').replaceChildren(text(`Email ${last} statements to donors`))
+  $('statements').onclick = async () => {
+    $('statements').disabled = true
+    let r = await fetch('./api/pay/statements', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ year: last }),
+    })
+    let out = await r.json()
+    say(
+      r.ok
+        ? `${out.letters} ${
+          out.letters == 1 ? 'statement' : 'statements'
+        } sent for ${last}.`
+        : out.error?.message ?? `statements ${r.status}`,
+      !r.ok,
+    )
+    $('statements').disabled = false
+  }
+  subscribe('.gift', drawGifts)
+}
+</script>
