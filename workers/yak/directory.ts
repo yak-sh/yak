@@ -3333,6 +3333,12 @@ export let directoryRows = (rows: {
           .filter((a) => a.space != space.eid)
         : []
     },
+    // When the app last came by app_transfer from another space, the
+    // newest accepted transfer's answer; null for an app never given.
+    given: async (app: Pick<App, 'eid'>) =>
+      (await query(
+        line`.app_transfer.app=${app.eid}&.app_transfer_answer&.app_transfer_answer.slugs`,
+      )).map((r) => r.app_transfer_answer!.at).sort().at(-1) ?? null,
     transferredApp: async (space: Space, slug: string) => {
       let receipts = await query(
         line`.app_transfer.from=${space.eid}&.app_transfer_answer&.app_transfer_answer.slugs`,

@@ -894,6 +894,30 @@ export let goingBack = (rows: Written[]) => {
 export let history = async (dir: Directory, app: App, path: string) =>
   newest((await dir.written(app)).filter((row) => row.path == path))
 
+/** Whether any of these files holds bytes someone outside the space left
+ * there (`ours` says who is inside). Bytes a copy's publisher released at a
+ * path (`theirs`, the files of each of their releases) are theirs, whoever's
+ * install or update copied them in. Any other file is the words of every
+ * kept write that left its sha at its path, and where none did (a file older
+ * than the rows) the space's own unless the app came from elsewhere
+ * (`copied`). */
+/// strangers({ a: 's' }, [{ path: 'a', sha: 's', by: 'm' }], (by) => by == 'm', true) -> false
+/// strangers({ a: 's' }, [{ path: 'a', sha: 's', by: 'x' }], (by) => by == 'm', false) -> true
+/// strangers({ a: 's' }, [{ path: 'a', sha: 's', by: 'm' }], (by) => by == 'm', true, [{ a: 's' }]) -> true
+/// strangers({ a: 's' }, [], () => true, true) -> true
+export let strangers = (
+  files: Files,
+  rows: Pick<Written, 'path' | 'sha' | 'by'>[],
+  ours: (by: string) => boolean,
+  copied: boolean,
+  theirs: Files[] = [],
+) =>
+  Object.entries(files).some(([path, sha]) => {
+    if (theirs.some((f) => f[path] == sha)) return true
+    let left = rows.filter((w) => w.path == path && w.sha == sha)
+    return left.length ? left.some((w) => !w.by || !ours(w.by)) : copied
+  })
+
 /** What each write to a path took away, newest first, from its history
  * newest first: the bytes it replaced, until when and by whom. A write that
  * put a file where there was none took nothing. */

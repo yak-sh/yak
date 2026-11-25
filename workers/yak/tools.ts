@@ -413,6 +413,7 @@ import {
   selecting,
   served,
   shipping,
+  strangers,
   when,
   whichDraft,
   type Written,
@@ -4396,6 +4397,36 @@ let OURS: Row[] = [
       let reading: Promise<AppDraft[]> | undefined
       let drafts = () => reading ??= draftsOf(ctx.dir, app)
       let mine = async () => selecting(ctx.dir, app, await drafts(), who, asked)
+      let writing: Promise<Written[]> | undefined
+      let writes = () => writing ??= ctx.dir.written(app)
+      // Whether a read answers words from outside the space, so the turn
+      // hears them (operator.ts `OWN_WORDS`, T-3462): bytes an installed
+      // copy's publisher in another space released, or a file no member
+      // wrote (`strangers`); a copy's release words, or a given app's from
+      // before it came; any file the admin reads in a space they hold no
+      // seat in. Its members' files are its own.
+      let outside = async (files: Files, said: Version[] = []) => {
+        let of = app.installed?.of
+        let [members, rows, given, source, theirs] = await Promise.all([
+          ctx.dir.members(space),
+          writes(),
+          ctx.dir.given(app),
+          of ? ctx.dir.appAt(of) : null,
+          of ? ctx.dir.deploys({ eid: of }) : [],
+        ])
+        let ours = new Set([...members, ctx.person])
+        let from = source?.space.eid != space.eid ? theirs : []
+        let copied = from.length > 0 || !!given
+        return (!!who.administrative && !members.includes(ctx.person)) ||
+          strangers(
+            files,
+            rows,
+            (by) => ours.has(by),
+            copied,
+            from.map((v) => v.files),
+          ) ||
+          said.some((v) => from.length > 0 || !!given && v.at <= given)
+      }
       // The draft names every file it holds by sha (written.ts), so listing,
       // comparing and finding a file read no bytes; only a file asked for
       // whole is read, from its content address.
@@ -4475,7 +4506,7 @@ let OURS: Row[] = [
         let [d, all, rows] = await Promise.all([
           draft(),
           versions(ctx.dir, app),
-          ctx.dir.written(app),
+          writes(),
         ])
         let live = all.find((v) => v.version == app.version)
         let files: Files = Object.fromEntries(
@@ -4589,6 +4620,7 @@ let OURS: Row[] = [
             ...dir && { serves: dir, sourceOnly: source },
             releases: releases(said),
           },
+          ...await outside(files, said) ? { heard: true as const } : {},
         }
       }
       // One path is that file whole, as what it is (files_read.ts `glance`):
@@ -4624,6 +4656,9 @@ let OURS: Row[] = [
           space,
           value: { version: app.version ?? 0, ...value },
           ...images ? { images } : {},
+          ...await outside({ [path]: d.files[path] })
+            ? { heard: true as const }
+            : {},
         }
       }
       // The releases' own words come with it: what the agents before this one
@@ -4650,6 +4685,12 @@ let OURS: Row[] = [
             version,
             releases: releases(said),
           },
+          ...await outside(
+              Object.fromEntries(read.files.map((f) => [f.path, f.sha])),
+              said,
+            )
+            ? { heard: true as const }
+            : {},
         }
       }
       if (op == 'delete') {
