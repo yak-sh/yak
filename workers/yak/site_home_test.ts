@@ -281,13 +281,20 @@ let drawn = await site({
     new URL('../../apps/home/wrangler.jsonc', import.meta.url),
   ),
   'index.html': html('<h1>the app from before</h1>', 'a'),
-  'pricing.html': html('<h1>the app prices</h1>', 'b'),
+  'pricing.html': html('<h1>the old pricing page</h1>', 'a'),
+  'help.html': html('<h1>the app helps</h1>', 'b'),
 }, deploy('b'))
-let [older, same] = await Promise.all(['/', '/pricing'].map(drawn))
+let [older, oldPricing, same] = await Promise.all(
+  ['/', '/pricing', '/help'].map(drawn),
+)
 
-test("the home app's page of another drawing than the deploy's is the Worker's own until a release brings it, never kept", () => {
+test("the deploy's compatible pages are kept and purged when the home app releases", () => {
   assertStringIncludes(older.text, "the Worker's /")
-  assertEquals(older.kept, 'private, no-store')
-  assertStringIncludes(same.text, 'the app prices')
+  assertStringIncludes(oldPricing.text, "the Worker's /pricing")
+  assertStringIncludes(same.text, 'the app helps')
   assert(same.tags.includes('app:'), same.tags)
+  for (let page of [older, oldPricing]) {
+    assertStringIncludes(page.kept, 'public')
+    assertEquals(page.tags, same.tags)
+  }
 })

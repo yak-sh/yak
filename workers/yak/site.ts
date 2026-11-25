@@ -36,7 +36,7 @@ import {
 } from '@yaks/platform/kept'
 import { matches } from '@yaks/blob/serve'
 import { caught } from './defects.ts'
-import { drawing } from './drawing.ts'
+import { compatibleDrawing } from '@yaks/platform/drawing'
 import {
   aim,
   API_AT,
@@ -196,8 +196,9 @@ let fromHome = async (
 
 /** A page of the site: the home app's, else this deploy's own file
  * (site/mod.ts `deployed`), which answers until the app does, whenever it
- * can't, and while its page is another drawing (`beside`), kept only where
- * the app has none. The app answering a page this deploy has a file for
+ * can't, and while its page is another drawing. A compatible built-in page
+ * can be kept when the directory confirmed the home release. The app answering
+ * a page this deploy has a file for
  * with 404 is a page new in this deploy, which the app's release after it
  * carries (packages/admin service.ts `RELEASED`, `afterWorker`), as a
  * changed page is another drawing until then; any other answer of the
@@ -210,7 +211,10 @@ let sitePage = async (
   visitor?: Request,
 ) => {
   let [home, file] = await Promise.all([
-    fromHome(env, path, dir, visitor),
+    fromHome(env, path, dir, visitor).catch((error) => {
+      caught(error, { request: 'home page', path })
+      return { page: null, kept: false, status: undefined }
+    }),
     env.ASSETS.fetch(req),
   ])
   if (home.status && !(home.status == 404 && file.ok)) {
@@ -218,24 +222,8 @@ let sitePage = async (
       request: 'home page',
     })
   }
-  let page = home.page && await beside(home.page, file)
-  if (page) {
-    await file.body?.cancel()
-    return page
-  }
+  if (home.page) return compatibleDrawing(home.page, file)
   return home.kept ? file : uncached(file)
-}
-
-// The home app's page where it is the drawing this deploy's own file is
-// (drawing.ts), else null: between a deploy and the release of the app that
-// follows it, or a push from a checkout and the deploy that follows that, the
-// file answers, never kept, so the page a visitor gets is the one the
-// deploy's scripts and sheet read.
-let beside = async (page: Response, file: Response) => {
-  let body = await page.text()
-  return file.ok && drawing(body) != drawing(await file.clone().text())
-    ? null
-    : new Response(body, page)
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {

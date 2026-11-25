@@ -15,7 +15,7 @@
 import { type FunctionComponent, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { createHash } from 'node:crypto'
-import { DRAWING } from '../drawing.ts'
+import { DRAWING } from '@yaks/platform/drawing'
 import { AcceptableUse } from './acceptable-use.tsx'
 import { Churches } from './churches.tsx'
 import { Cookies } from './cookies.tsx'

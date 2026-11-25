@@ -183,6 +183,7 @@
     "./blob-routes": "./blob-routes.ts",
     "./uploads": "./uploads.ts",
     "./kept": "./kept.ts",
+    "./drawing": "./drawing.ts",
     "./client": "./client.js",
     "./qr": "./qr.ts",
     "./escape": "./escape.ts",

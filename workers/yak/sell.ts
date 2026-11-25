@@ -1555,14 +1555,15 @@ export let priceAt = async (dir: Directory, file: Response) => {
   let html = await file.text()
   let bps = await feeOf(dir).catch((e) => {
     caught(e, { request: 'pricing fee' })
-    return 0
+    return null
   })
   let headers = new Headers(file.headers)
   // The two headers that describe the bytes: the body just changed length, and
   // it is no longer the file that etag names.
   headers.delete('content-length')
   headers.delete('etag')
-  return new Response(quoted(html, bps), { status: file.status, headers })
+  if (bps == null) headers.set('cache-control', 'private, no-store')
+  return new Response(quoted(html, bps ?? 0), { status: file.status, headers })
 }
 
 /**
