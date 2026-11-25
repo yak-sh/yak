@@ -204,9 +204,12 @@ test('grok runs headless on its thread, its persona in its rules', () => {
 })
 
 test('grok refuses a run it cannot give its servers or take them from', () => {
+  // This machine's server is `yak mcp`, which grok's own config names.
+  let here = { mcp: { tasks: 'http://localhost:5173/mcp' } }
+  assertEquals(grok.argv({ ...job, ...here }).slice(0, 2), ['grok', '-p'])
   for (
     let ask of [
-      { mcp: { tasks: 'http://127.0.0.1:5173/mcp' } },
+      { mcp: { yaks: 'https://yaks.app/mcp' } },
       { without: ['railway'] },
       { bare: true },
     ]

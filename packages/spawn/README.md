@@ -293,7 +293,7 @@ stamped `by` its actor and `via` its session from its first call, with nothing
 asked of the agent. Grok has no flag for a run's servers: it connects the ones
 its configuration names (Claude Code's `~/.claude.json` among them, where the
 box's `tasks` server is `yak mcp`, told the session by `TASKS_SESSION`), and
-refuses a run asked to connect or go without one.
+refuses a run asked to connect a remote server or go without one.
 
 `without` names the MCP servers of a provider's own configuration its runs go
 without, by the provider's name and then the names that provider lists them

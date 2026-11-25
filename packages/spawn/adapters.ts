@@ -284,16 +284,24 @@ export let codex: Adapter = {
  * reads it. Grok signs in with its own account (`GROK_HOME`), a Grok
  * subscription or an API key, and connects the MCP servers its own
  * configuration names, Claude Code's `~/.claude.json` among them; the session
- * reaches a server run as `yak mcp` through `TASKS_SESSION`.
+ * reaches a server run as `yak mcp` through `TASKS_SESSION`, and a run asked
+ * for a remote server, or to go without one, is refused.
  */
 export let grok: Adapter = {
   argv: (j) => {
     // Grok takes no MCP server, and drops none, for one run: only its
-    // configuration names them. One started anyway would carry what it was
-    // asked to go without, or write with no actor.
+    // configuration names them (its GROK_CONFIG overlay refuses
+    // `mcp_servers`). A server on this machine is `yak mcp`, which its config
+    // names and which reads the session from the run's environment; a remote
+    // one would be connected without the session, and one a run goes without
+    // would be connected anyway, so either is refused.
     if (j.bare) throw new Error('grok cannot run bare: it keeps its tools')
-    if (servers(j).length || j.without?.length) {
-      throw new Error('grok connects only the MCP servers its own config names')
+    let remote = servers(j).filter(([, url]) => !local(url, j.session))
+    if (remote.length || j.without?.length) {
+      throw new Error(
+        'grok connects only the MCP servers its own config names, so a run ' +
+          'can neither add a remote one nor go without one',
+      )
     }
     return [
       'grok',
