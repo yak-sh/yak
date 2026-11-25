@@ -108,8 +108,12 @@ let scenario = async (
     }
     return Response.json({ success: true, errors: [], result: {} })
   }) as typeof fetch
+  // What a browser gets at the path: a worker app's package file moves to
+  // its fingerprint first, never asking the worker.
   let served = async (path: string) => {
     let res = await response(path)
+    let moved = res.status == 307 && res.headers.get('location')
+    if (moved) res = await apps.fetch(visit(moved), p.env)
     return { type: res.headers.get('content-type'), body: await res.text() }
   }
   let response = (path: string, init: RequestInit = {}) =>

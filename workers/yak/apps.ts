@@ -3259,11 +3259,14 @@ let served = async (
     )
     if (found) return json(found, 'not_found')
   }
+  let mayRead = to.seen == 'page'
   // A release can give its static files to everyone while its worker and
-  // store keep their own access rules. Old page links move to the same bytes.
+  // store keep their own access rules. Old page links move to the same bytes,
+  // where the worker would be asked for them or the visitor refused; the
+  // files door serves them as they are to everyone else.
   if (
     !itself && path != '/icon.png' && !fence.page(path) &&
-    ['GET', 'HEAD'].includes(req.method)
+    ['GET', 'HEAD'].includes(req.method) && (app.worker !== '' || !mayRead)
   ) {
     let asset = releaseAsset(await releaseAssets(env, app.source), path)
     if (asset?.public) {
@@ -3271,7 +3274,6 @@ let served = async (
       return edge ? marked(keep(page, space, app, [307])) : wall(page)
     }
   }
-  let mayRead = to.seen == 'page'
   // Both at once, because they are two halves of one answer and neither
   // needs the other's result (T-33176). The app's own worker answers first
   // where it has one and the file is what it falls back to, so asking the
