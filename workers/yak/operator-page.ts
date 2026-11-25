@@ -2734,7 +2734,7 @@ let chatScript = (
   `<script type="module" data-operator-chat="${visit}">
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
-import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, ordered, selfHtml, showing, sleep, storeAt, turnHtml } from '/_talk.js'
+import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, selfHtml, showing, sleep, turnHtml } from '/_talk.js'
 import words from '/_words.js'
 import { voice } from '/voice.js'
 // Imports may arrive after a second navigation has already replaced this page.
@@ -2769,18 +2769,17 @@ let WAIT = 10_000
 // What the page says goes under its box (\`boxed\`, mounted once its drafts are).
 let boxed
 let said = (e) => { if (!signal.aborted) boxed?.set({ said: e.message }) }
-// The Operator's store as this person reads and writes it, through @yaks/api
-// (operator-api.ts): their drafts are its rows, heard on its socket as each
-// change lands, from this page or another, and read again whenever the socket
-// opens again. They are never read on a timer: what is typed here is kept on
-// the device and written whether or not a read answered.
+// The person's drafts in the Operator's store, held in the tab's page graph
+// (@yaks/platform/operator-drafts): heard as each change lands, from this
+// page or another, and answered again whenever the page graph's socket opens
+// again. They are never read on a timer: what is typed here is kept on the
+// device and written whether or not a read answered.
 // While its socket cannot reach the store, the page says the draft is kept.
 let KEPT = 'Your draft is kept on this device until syncing returns.'
-let store = storeAt(location.origin + '${at}', '${who.person}', (e) => {
-  if (!signal.aborted) boxed?.set({ said: e?.name == 'Dropped' ? KEPT : e.message })
-}, { signal, timer: after })
+let page = pageDrafts('${space.eid}', '${who.person}')
+let store = operatorAt(location.origin + '${at}', signal)
 let disconnected
-store.connected((open) => {
+let unheard = page.connected((open) => {
   cancel(disconnected)
   if (!open) disconnected = after(() => {
     if (!boxed?.said()) boxed?.set({ said: KEPT })
@@ -2791,9 +2790,9 @@ store.connected((open) => {
 // takes the words in.
 let submission
 let draftClient = {
-  ...store,
+  ...page.store,
   apply: async (bundles) => {
-    if (!submission) return store.apply(bundles).catch(() => { throw new Error('Your draft could not sync. A recovery copy is kept on this device.') })
+    if (!submission) return page.store.apply(bundles).catch(() => { throw new Error('Your draft could not sync. A recovery copy is kept on this device.') })
     let sent = submission; submission = undefined
     sent.set('draft', JSON.stringify(bundles))
     let response = await fetch('${at}', { method: 'POST', body: sent })
@@ -2801,7 +2800,8 @@ let draftClient = {
     return response.json()
   },
 }
-let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: said })
+let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: said, line: page.line })
+signal.addEventListener('abort', unheard, { once: true })
 // The box (operator-box.ts), mounted over what the server drew: what is sent
 // goes to this page's door, and Stop to its \`?stop=1\`; Newest, over it, takes
 // the reader back to the newest line.
@@ -3343,7 +3343,6 @@ signal.addEventListener('abort', () => {
   boxed?.close()
   talk.close()
   drafts.close()
-  store.close()
 }, { once: true })
 listen()
 }

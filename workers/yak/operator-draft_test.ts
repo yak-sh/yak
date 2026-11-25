@@ -18,7 +18,15 @@ import {
   operatorAnswer,
   storeAnswer,
 } from './operator-page.ts'
-import type { StoreDoor } from '@yaks/platform/routes'
+import { REACH, type StoreDoor } from '@yaks/platform/routes'
+import {
+  installPair,
+  made as pairs,
+  type Pair,
+} from '../../packages/workerd/testing.ts'
+import { reachDoor } from './reach-door.ts'
+import type { Frame } from '@yaks/api'
+import { clock } from './timing.ts'
 import type { Wire } from '@yaks/durable-object'
 import type { Who } from './session.ts'
 import { pageModule } from './page-module-probe.ts'
@@ -54,15 +62,60 @@ await released(
   'Notes',
 )
 let base = 'https://yaks.app/manage/clerk/operator'
-// What the kernel answers the page at its address: a door of its store
-// (operator-api.ts), or the Operator's own.
+// The lines the page graph watches the person's drafts in a space on.
+let DRAFTS = '.operatorDraft.space='
+// What the kernel answers the page at its address: the tab's page graph's
+// door (reach-door.ts), a door of its store (operator-api.ts), or the
+// Operator's own.
 let serve = async (url: string | URL, init?: RequestInit, as: Who = who) => {
   let req = new Request(new URL(url, base), init)
-  let door = /\/operator\/(apply|query|ws)$/.exec(new URL(req.url).pathname)
+  let { pathname } = new URL(req.url)
+  if (pathname.startsWith(REACH)) {
+    return await reachDoor(req, p.env, directoryOf(p.env.STORE), as, clock())
+  }
+  let door = /\/operator\/(apply|query|ws)$/.exec(pathname)
   return door
     ? await storeAnswer(req, p.env, space, as, door[1] as StoreDoor)
     : (await operatorAnswer(req, p.env, space, as))!
 }
+
+// The runtime's socket pairs, for the page graph's socket and the sockets
+// its door opens onto the Builder object (reach.ts `watching`), each Builder
+// socket carried to the object as the runtime carries it.
+installPair()
+let linked = new Set<Pair>()
+let builders = p.env.BUILDER
+p.env.BUILDER = {
+  idFromName: builders.idFromName,
+  get: (id, options) => ({
+    fetch: async (req: Request) => {
+      let res = await builders.get(id, options).fetch(req)
+      let accepted = p.sockets.get(`builder ${id}`) ?? []
+      let pair = pairs.findLast((pair) =>
+        !linked.has(pair) && accepted.includes(pair[1] as unknown as Wire)
+      )
+      if (res.status != 101 || !pair) return res
+      linked.add(pair)
+      let [client, server] = [pair[0], pair[1]]
+      let object = p.builder(String(id))
+      client.send = (data) => void object.webSocketMessage(server, data)
+      server.send = (data) => client.emit('message', data)
+      client.close = () => {
+        if (client.readyState == 3) return
+        client.readyState = 3
+        void object.webSocketClose(server)
+        client.emit('close')
+      }
+      server.close = () => {
+        if (server.readyState == 3) return
+        server.readyState = 3
+        client.readyState = 3
+        client.emit('close')
+      }
+      return Object.assign(res, { webSocket: client, pair })
+    },
+  }),
+} as typeof builders
 
 // A browser that hears and speaks (public/voice.js), for the load that sets
 // it: what it is told it heard, and what it says.
@@ -136,8 +189,21 @@ let scriptAt = (url: string) => {
   return read
 }
 
+// A tab: its page graph, kept on the tab's global as @yaks/client `shared`
+// keeps it, the page graph's sockets, and how many frames they have heard.
+type Tab = {
+  graphs: Map<string, { close: () => void }>
+  stores: { readyState: number; close: () => void; sent: string[] }[]
+  /** the frames answering its drafts subscriptions */
+  frames: number
+  /** the subscriptions its page graph holds open, by id */
+  live: Map<string, string>
+  /** the drafts packets sent it, not yet taken in */
+  acks: Set<string>
+}
 type View = Pick<ReturnType<typeof parseHTML>, 'document'> & {
   windowEvents: EventTarget
+  tab: Tab
 }
 // linkedom supports once but needs the browser's removal on abort.
 let bound = new WeakSet<EventTarget>()
@@ -173,8 +239,20 @@ let load = async (
   // The side drawn live from the tab's page graph is reach-door_test.ts's:
   // here the page holds its conversation alone.
   next.querySelector('[data-side-view]')?.removeAttribute('data-side-view')
-  let { document, windowEvents } = view ??
-    { document: next, windowEvents: next.createElement('div') }
+  let { document, windowEvents, tab } = view ?? {
+    document: next,
+    windowEvents: next.createElement('div'),
+    tab: {
+      graphs: new Map(),
+      stores: [],
+      frames: 0,
+      live: new Map(),
+      acks: new Set(),
+    } as Tab,
+  }
+  // The frames the tab's page graph heard before this page: one after them
+  // answers this page's drafts.
+  let before = tab.frames
   if (view) {
     let doc = document as unknown as Document
     swap(doc, next as unknown as Document, sources(doc, base), () => {}, base)
@@ -224,6 +302,8 @@ let load = async (
   }
   let left = false
   let timers = new Map<number, ReturnType<typeof setTimeout>>()
+  // The waits the tab's page graph set, which outlive the page.
+  let tabTimers = new Set<number>()
   // The page's waits on the held clock: each runs once `pass` reaches its
   // moment, `now`, which the page reads as `performance.now()`.
   let held = network == 'down'
@@ -232,6 +312,7 @@ let load = async (
   let after = (fn: () => void, ms: number) => {
     if (left) return 0
     let id = ++n
+    if (new Error().stack?.includes('_page-client')) tabTimers.add(id)
     if (held) waits.set(id, { at: now + ms, fn })
     else {
       timers.set(
@@ -273,9 +354,9 @@ let load = async (
     now = end
     return done()
   }
-  // The frames of drafts the page has heard on its store's socket, each taken
-  // in before the next, and the reads of its drafts it asked by any other way.
-  let reads = 0, asked = 0, probes = 0
+  // The reads of its drafts the page asked by any way but its page graph,
+  // and the page graph's handshakes it tried over HTTP first.
+  let asked = 0, probes = 0
   let down = network == 'down'
   let failed = new Set<string>()
   // Each read of the conversation.
@@ -292,8 +373,10 @@ let load = async (
   let fetch = async (input: string | URL | Request, init?: RequestInit) => {
     let url = input instanceof Request ? input.url : String(input)
     if (input instanceof Request) init ??= input
-    let door = /\/operator\/(ws|query|apply)$/.exec(new URL(url, base).pathname)
-    if (door?.[1] == 'ws') probes++
+    let door = /\/(operator|reach)\/(ws|query|apply)$/.exec(
+      new URL(url, base).pathname,
+    )
+    if (door?.[2] == 'ws') probes++
     if (door && down) throw new TypeError('Network unreachable')
     if (url.includes('?talk=') && slow) {
       let answer = await serve(url, init, as)
@@ -332,40 +415,71 @@ let load = async (
     })
   }
   // The page's socket onto its Operator, which a test speaks for, or carries
-  // to the Builder object as the edge does (`connect`), and its sockets onto
-  // its store, carried there as they open (`reach`).
-  let sockets: Page[] = [], stores: Page[] = []
-  // The Builder's halves of the store's sockets, closed as the page is left.
+  // to the Builder object as the edge does (`connect`), and the tab's page
+  // graph's sockets, carried to its door as they open (`reach`).
+  let sockets: Page[] = [], stores = tab.stores
+  // The Builder's halves of the Operator's sockets, closed as the page is
+  // left.
   let servers: Wire[] = []
   let handshakes = 0
   let reach = async (page: Page) => {
     handshakes++
+    // Its address says more each time it opens again: the first to its door
+    // is the one a deploy fails.
+    let at = new URL(page.url).pathname
     let refused = down ||
-      network == 'deploying' && !failed.has(page.url) && !!failed.add(page.url)
+      network == 'deploying' && !failed.has(at) && !!failed.add(at)
     if (network == 'held' && handshakes == 1) return
     if (refused) return page.emit('close')
-    let server = await upgrade(page.url, as, (data) => {
-      if (left || page.readyState != 1) return
+    let res = await serve(page.url, { headers: { upgrade: 'websocket' } }, as)
+    // The door's half: the pair it accepted, which nothing has carried yet.
+    let pair = pairs.findLast((pair) => pair[1].accepted && !linked.has(pair))
+    if (res.status != 101 || !pair) return page.emit('close')
+    linked.add(pair)
+    let door = pair[1]
+    door.send = (data) => {
+      if (page.readyState != 1) return
+      let packet = JSON.parse(data) as
+        | Frame
+        | { frames: Frame[]; ack?: string }
+      let frames = 'frames' in packet ? packet.frames : [packet]
+      let drafts = frames.some((f) =>
+        !f.refused && tab.live.get(f.id)?.startsWith(DRAFTS)
+      )
+      // Heard once the page has taken it in, which it says by acking it.
+      if (drafts && packet.ack) tab.acks.add(packet.ack)
       page.emit('message', { data })
-      // A frame other than the time is the store's answer.
-      if (!('clock' in JSON.parse(data))) queueMicrotask(() => void reads++)
-    })
-    if (left || page.readyState != 0) return shut(server)
-    servers.push(server)
-    page.server = server
-    page.send = (data) => p.builder(eid).webSocketMessage(server, data)
+    }
+    if (page.readyState != 0) return door.emit('close')
+    page.door = door
+    page.send = (data) => {
+      page.sent.push(data)
+      let said = JSON.parse(data) as {
+        subscribe?: string
+        unsubscribe?: string
+        id?: string
+        ack?: string
+      }
+      if (typeof said.subscribe == 'string') {
+        tab.live.set(said.id!, said.subscribe)
+      }
+      if (said.unsubscribe) tab.live.delete(said.unsubscribe)
+      if (said.ack && tab.acks.delete(said.ack)) tab.frames++
+      door.emit('message', data)
+    }
     page.emit('open')
   }
   class Page {
     readyState = 0
     server?: Wire
+    door?: Pair[1]
     onopen?: () => void
     onmessage?: (e: { data: string }) => void
     onclose?: () => void
     sent: string[] = []
     #heard: Record<string, ((e: unknown) => void)[]> = {}
     constructor(public url: string) {
-      if (!new URL(url).pathname.endsWith('/operator/ws')) sockets.push(this)
+      if (new URL(url).pathname != `${REACH}/ws`) sockets.push(this)
       else stores.push(this), queueMicrotask(() => void reach(this))
     }
     send(data: string) {
@@ -389,6 +503,7 @@ let load = async (
       if (this.readyState == 3) return
       this.readyState = 3
       if (this.server) shut(this.server)
+      this.door?.emit('close')
       queueMicrotask(() => this.emit('close'))
     }
   }
@@ -417,6 +532,8 @@ let load = async (
     for (let t of timers.values()) clearTimeout(t)
     waits.clear()
     for (let server of servers.splice(0)) shut(server)
+    // The tab is closed: its page graph goes with it.
+    for (let graph of [...tab.graphs.values()]) graph.close()
   })
   // The browser's interfaces belong to this load, including those used inside
   // imported modules: storage, speech, timers and the page's socket.
@@ -454,6 +571,7 @@ let load = async (
         }
         : {},
       WebSocket: Page,
+      [Symbol.for('@yaks/client/shared')]: tab.graphs,
     },
   })
   return {
@@ -462,12 +580,15 @@ let load = async (
     copied,
     loads,
     document,
-    view: { document, windowEvents },
+    view: { document, windowEvents, tab },
     focus: () => windowEvents.dispatchEvent(new Event('focus')),
     sockets,
     stores,
     intervals,
-    timeouts: () => timers.size + waits.size,
+    // The page's own waits: the tab's page graph's outlive it.
+    timeouts: () =>
+      [...timers.keys(), ...waits.keys()].filter((id) => !tabTimers.has(id))
+        .length,
     // What the page says under its box.
     status: () => document.querySelector('#ask .Composer_Status')!.textContent,
     went,
@@ -519,10 +640,13 @@ let load = async (
         Object.assign(new Event('keydown', { bubbles: true }), { key }),
       ),
     // Whether the page has heard the store's drafts.
-    read: () => reads > 0,
+    read: () => tab.frames > before,
+    // How many drafts subscriptions the tab's page graph holds open.
+    drafting: () =>
+      [...tab.live.values()].filter((q) => q.startsWith(DRAFTS)).length,
     // Once the page has heard the store's drafts.
     heard: async () => {
-      await until(() => reads, { label: 'the store’s draft' })
+      await until(() => tab.frames > before, { label: 'the store’s draft' })
     },
     type: (text: string) => {
       say.value = text
@@ -541,24 +665,15 @@ let load = async (
 let upgrading = Promise.resolve()
 let upgrade = (url: string, as: Who, hear: (data: string) => void) => {
   let made = upgrading.then(async () => {
-    let held: unknown = null
-    let server: Wire = {
-      readyState: 1,
-      send: hear,
-      serializeAttachment: (v) => void (held = structuredClone(v)),
-      deserializeAttachment: () => held,
-    }
-    let factory = globalThis as { WebSocketPair?: unknown }
-    factory.WebSocketPair = function () {
-      return { 0: {}, 1: server }
-    }
-    try {
-      let to = url.replace(/^ws/, 'http')
-      await serve(to, { headers: { upgrade: 'websocket' } }, as)
-    } finally {
-      delete factory.WebSocketPair
-    }
-    return server
+    let to = url.replace(/^ws/, 'http')
+    let res = await serve(to, { headers: { upgrade: 'websocket' } }, as)
+    let { pair } = res as Response & { pair?: Pair }
+    if (!pair) throw new Error(`${to}: no socket (${res.status})`)
+    // What the Builder says on it goes to the page: first what it said as
+    // it took the socket, before anything was listening.
+    for (let said of pair[1].taken()) hear(JSON.stringify(said))
+    pair[1].send = hear
+    return pair[1] as unknown as Wire
   })
   upgrading = made.then(() => {}, () => {})
   return made
@@ -686,7 +801,8 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   assert(!stays(doc), 'the navigator can leave the conversation in place')
   first.leave()
   assertEquals(first.sockets.map((s) => s.readyState), [3])
-  assertEquals(first.stores.map((s) => s.readyState), [3])
+  // The tab's page graph stays open, holding no page's drafts.
+  assertEquals(first.drafting(), 0)
   assertEquals(first.intervals.size, 0)
   assertEquals(first.timeouts(), 0)
   assert(!doc.querySelector('#ask'))
@@ -733,7 +849,7 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   swap(doc, manage as unknown as Document, sources(doc, base), () => {}, base)
   assertEquals(doc.querySelector('main')?.textContent, 'Manage')
   assertEquals(second.sockets.map((s) => s.readyState), [3])
-  assertEquals(second.stores.map((s) => s.readyState), [3])
+  assertEquals(second.drafting(), 0)
   assertEquals(second.intervals.size, 0)
   assertEquals(second.timeouts(), 0)
 

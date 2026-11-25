@@ -6,6 +6,7 @@
 import { clock, equal, test, until } from '@yaks/testing'
 import { UPDATE_WAITING, waitingFrom } from '@yaks/platform/update-waiting'
 import { updateCards, updatesIn } from '@yaks/platform/update-rows'
+import { operatorDrafts } from '@yaks/platform/operator-drafts'
 import type { Level } from '@yaks/member'
 import { type Bundle, transient } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
@@ -213,6 +214,35 @@ test('a person’s Updates cards are live: a notice shows as it is written, and 
     equal(shown(), ['Recipes prints again.'])
   } finally {
     await host.close(seen.ws)
+  }
+})
+
+test('a person’s drafts are live on their page graph’s line, marked with the space, and nobody else’s', async () => {
+  let [mine, theirs] = [
+    await socket(ada, operatorDrafts(space)),
+    await socket(bea, operatorDrafts(space)),
+  ]
+  let place = `operator:${adas.root}`
+  try {
+    equal(await apply(ada, [draft(ada, place)]), 200)
+    await until(() =>
+      mine.some((f) =>
+        ((f.bundles ?? []) as Bundle[]).some((b) =>
+          (b.draft as { place: string } | undefined)?.place == place
+        )
+      )
+    )
+    let heard = mine.flatMap((f) => (f.bundles ?? []) as Bundle[])
+      .find((b) => (b.draft as { place: string }).place == place)!
+    equal(heard.operatorDraft, { space })
+    equal(
+      theirs.flatMap((f) => (f.bundles ?? []) as Bundle[])
+        .filter((b) => (b.draft as { by: string }).by != bea.person),
+      [],
+    )
+  } finally {
+    await door.close(mine.ws)
+    await door.close(theirs.ws)
   }
 })
 

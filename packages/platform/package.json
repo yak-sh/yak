@@ -28,6 +28,8 @@
     "./page-parts": "./page-parts.ts",
     "./friends-view": "./friends-view.ts",
     "./update-rows": "./update-rows.ts",
+    "./operator-drafts": "./operator-drafts.ts",
+    "./operator-drafts-browser": "./operator-drafts-browser.ts",
     "./updates-view": "./updates-view.ts",
     "./updates-list-browser": "./updates-list-browser.ts",
     "./profile-view": "./profile-view.ts",

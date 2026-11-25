@@ -61,5 +61,7 @@ export { menus, tips } from '@yaks/ui/parts'
 export { leaving } from '@yaks/ui/navigate'
 export { sleep } from '@yaks/fp'
 
-// The page's store, read and written through @yaks/api (operator-api.ts).
-export { storeAt } from './operator-api-page.ts'
+// The page's store, asked through @yaks/api (operator-api.ts), and the
+// person's drafts in it, kept in the page graph.
+export { operatorAt } from './operator-api-page.ts'
+export { pageDrafts } from '@yaks/platform/operator-drafts-browser'

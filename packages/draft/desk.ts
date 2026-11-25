@@ -85,6 +85,9 @@ export type DeskOpts = {
   pace?: number
   /** a write the store refused; the text stays, and goes with the next */
   report?: (err: unknown) => void
+  /** the line the store answers `by`'s drafts on (default `.draft.by=<by>`),
+   * where it names them otherwise, as a page graph of several stores does */
+  line?: (by: string) => string
 }
 
 // The store's text, and which revision of it.
@@ -354,7 +357,7 @@ export let desk = (
     let by = opts.by()
     if (!by) return
     return untracked(() => {
-      let watch = client.watch(`.draft.by=${by}`)
+      let watch = client.watch(opts.line?.(by) ?? `.draft.by=${by}`)
       let hear = (rows: Bundle[]) =>
         batch(() => {
           for (let b of rows) {

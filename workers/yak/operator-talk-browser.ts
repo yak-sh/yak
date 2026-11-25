@@ -7,6 +7,8 @@ import { h, hydrate, render } from 'preact'
 import { Host } from '@yaks/markdown'
 import { pageGraph } from '@yaks/platform/page-graph'
 import type { Bundle } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
+import { replicate } from '@yaks/sync'
 import type { VocabDoc } from '@yaks/vocab'
 import { docs as uxDocs } from '@yaks/ux/vocab'
 import {
@@ -103,15 +105,16 @@ export let mountTalk = (
   },
 ) => {
   let front = pageGraph(pageWords(words), person)
-  // What the store sent, as @yaks/sync puts a server's rows in a page's graph
-  // (its `replicate`), and what the page holds of its own: committed at once,
-  // over a memory store.
-  let put = (bundles: Bundle[]) =>
-    void front.graph.apply(bundles, {
-      trusted: true,
-      replica: true,
-      stamp: false,
-    })
+  // What the store sent, and what the page holds of its own, put in the page
+  // graph as @yaks/sync puts a server's rows there (its `replicate`), so none
+  // of it is sent back as the page's write; and `then` once it
+  // is in: at once over a memory store, or once the graph has landed what it
+  // was landing before (a frame of the tab's other watches).
+  let put = (bundles: Bundle[], then = () => {}) => {
+    let landed = replicate(front.graph, bundles)
+    if (isPromise(landed)) landed.then(then, onError)
+    else then()
+  }
   let held = parsed(box)
   // The tab's page graph may hold this conversation's own state from an
   // earlier visit to it: the page as the server drew it now is what stands,
@@ -211,9 +214,8 @@ export let mountTalk = (
       }
       fetching.delete(id)
       closeFold(body)
-      put(sent.entries)
       held = heard(held, sent)
-      draw()
+      put(sent.entries, () => draw())
     }).catch((e) => {
       fetching.delete(id)
       if (!held) return
@@ -233,7 +235,9 @@ export let mountTalk = (
       )
     })
   }
+  // Whether a reply is being written, and its words so far.
   let typing = false
+  let replying = ''
   return {
     close: () => {
       held = null
@@ -258,7 +262,6 @@ export let mountTalk = (
       o: { task: string; lines?: Lines; now?: string; doing?: string },
     ) => {
       if (!held || o.task != held.task || !o.lines) return
-      put(o.lines.entries)
       typing = false
       let next = heard(held, o.lines)
       let written = typingAt(held.task)
@@ -269,21 +272,19 @@ export let mountTalk = (
         pending: !!o.now,
         ...o.doing ? { doing: o.doing } : {},
       }
-      draw()
+      put(o.lines.entries, () => draw())
     },
     /** words of a reply as they are written, until the step lands */
     typed: (text: string) => {
       if (!held) return
       let eid = typingAt(held.task)
-      let body = typing
-        ? String((front.ent(eid)?.content as { body?: string })?.body ?? '')
-        : ''
-      put([{
+      replying = (typing ? replying : '') + text
+      let entry = {
         entity: { eid },
         output: {},
-        content: { body: body + text },
+        content: { body: replying },
         ...typing ? {} : { created: { at: clock() } },
-      }])
+      }
       typing = true
       let lines = held.lines.some((l) => l.id == eid)
         ? held.lines
@@ -295,7 +296,7 @@ export let mountTalk = (
         pending: true,
         doing: 'writing',
       }
-      draw()
+      put([entry], () => draw())
     },
     /** the whole conversation read again, as the `?talk=` answer drew it;
      * what it answers is the person's words it left out */

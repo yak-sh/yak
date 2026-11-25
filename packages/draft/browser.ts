@@ -13,7 +13,7 @@ export type Store = {
   me: () => Promise<{ person: string | null }>
   subscribe: (query: string, hear: (rows: Bundle[]) => void) => () => void
 }
-export type BrowserOpts = Pick<DeskOpts, 'pace' | 'report'> & {
+export type BrowserOpts = Pick<DeskOpts, 'pace' | 'report' | 'line'> & {
   /** Supply identity when the page already knows it; otherwise ask me(). */
   by?: string
   /** Earlier principals vouched by this host, such as this browser's guest
@@ -209,7 +209,7 @@ export let browserDrafts = (
           close,
         }
       },
-    }, { by: () => by, stash, pace: opts.pace, report })
+    }, { by: () => by, stash, pace: opts.pace, report, line: opts.line })
   }
   // Never open another person's recovery copy. A bound field is briefly
   // read-only until me answers, not an editable field whose first keystrokes

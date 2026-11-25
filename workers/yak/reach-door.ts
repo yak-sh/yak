@@ -8,8 +8,9 @@
 //
 // The person's side (@yaks/platform/side-rows) and their Updates badges are
 // reads of the person the directory answers, live on its `/person/ws`; their
-// Updates cards in a space (@yaks/platform/update-rows) are the space's
-// Operator store's, live on its `/api/waiting/ws`.
+// Updates cards and drafts in a space (@yaks/platform/update-rows,
+// operator-drafts) are the space's Operator store's, live on its
+// `/api/waiting/ws`, and a write of drafts goes to that store.
 //
 // Some writes are not rows: an Updates card's action (updates.ts `acting`),
 // and the person's own account, messages and friend asks
@@ -29,6 +30,7 @@ import {
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { personLine } from '@yaks/platform/person-lines'
 import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
+import { draftsSpace, operatorWrite } from '@yaks/platform/operator-drafts'
 import type { Update } from '@yaks/platform/update-rows'
 import { writes } from '@yaks/member'
 import { personRows } from './side.ts'
@@ -153,6 +155,27 @@ export let reachDoor = async (
     }
     if (door == '/apply' && req.method == 'POST') {
       let bundles = await req.json() as Bundle[]
+      let drafted = operatorWrite(bundles)
+      if (drafted) {
+        let seat = await seatIn(drafted.space)
+        if (!seat) {
+          return Response.json(
+            { error: 'Forbidden', message: 'You do not write in that space.' },
+            { status: 403 },
+          )
+        }
+        return await builderOf(env, drafted.space)(() =>
+          new Request('https://builder/api/apply', {
+            method: 'POST',
+            headers: {
+              ...vouched(who),
+              [SPACE]: drafted.space,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify(drafted.bundles),
+          })
+        )
+      }
       if (acting(bundles)) {
         return await updatesApply(bundles, env, dir, person, who.until, c)
       }
@@ -208,20 +231,21 @@ export let reachDoor = async (
                 sink,
               )
             }
-            let cards = cardsSpace(line)
-            if (cards != undefined) {
+            // What the space's Operator store answers of the person.
+            let operator = cardsSpace(line) ?? draftsSpace(line)
+            if (operator != undefined) {
               let closed = false
               let stop: (() => void) | undefined
-              seatIn(cards).then((seat) => {
+              seatIn(operator).then((seat) => {
                 if (closed) return
                 if (!seat) return sink({ bundles: [], reset: true })
-                let ask = builderOf(env, cards)
+                let ask = builderOf(env, operator)
                 stop = watching(
                   doorOf((req) => ask(() => req)),
                   seat.space.slug,
                   line,
                   sink,
-                  { ...vouched(who), [SPACE]: cards },
+                  { ...vouched(who), [SPACE]: operator },
                   '/api/waiting/ws',
                 )
               }, (error) => closed || sink({ refused: error }))

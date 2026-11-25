@@ -80,6 +80,7 @@ export let pageModule = async (source: string, page: Page) => {
     setTimeout,
     clearTimeout,
     queueMicrotask,
+    structuredClone,
     performance,
     reportError: (error: unknown) => globalThis.reportError(error),
     ...page.globals,

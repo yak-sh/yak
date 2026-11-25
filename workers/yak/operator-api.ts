@@ -19,6 +19,8 @@ import { type Clock, system } from '@yaks/fp'
 import { type Level, writes } from '@yaks/member'
 import { UPDATE_WAITING, waitingBundle } from '@yaks/platform/update-waiting'
 import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
+import { draftRows, draftsSpace } from '@yaks/platform/operator-drafts'
+import { line } from '@yaks/query'
 import type { Bundle, Graph } from '@yaks/graph'
 import { mayWrite, sight } from './operator-access.ts'
 import { spaceOf } from './operator-root.ts'
@@ -76,8 +78,8 @@ let expiring = (rows: Bundle[], at: number): Bundle[] =>
 
 /** Whether the person's live read answers `line`: their Updates count, or
  * their Updates cards in the space. */
-let personal = (line: string) =>
-  line == UPDATE_WAITING || cardsSpace(line) != undefined
+let personal = (asked: string) =>
+  asked == UPDATE_WAITING || cardsSpace(asked) != undefined
 
 /** @yaks/api over `store`, its sockets among the object's (`ctx`). */
 export let operatorApi = (
@@ -123,11 +125,28 @@ export let operatorApi = (
         : undefined,
     tags: { request: 'Operator Updates' },
   })
+  // The person's drafts, as their page graph holds them
+  // (@yaks/platform/operator-drafts): read again only when a draft moves.
+  let drafts = computed(store.g, {
+    affects: (bundles) => bundles.some((b) => 'draft' in b || '$delete' in b),
+    hold,
+    clock,
+    read: async (asked, read) => {
+      let person = read?.person, space = await spaceOf(store)
+      if (!person || !space || draftsSpace(asked) != space) return []
+      return draftRows(space, await store.g.read(line`.draft.by=${person}&*`))
+    },
+    tags: { request: 'Operator drafts' },
+  })
   // Whether each person holds a seat, as the directory last said for their
   // socket: what it is read with.
   let members = new Map<string, boolean>()
   let live = sockets(
-    beside(subs, waiting, personal),
+    beside(
+      beside(subs, waiting, personal),
+      drafts,
+      (asked) => draftsSpace(asked) != undefined,
+    ),
     {
       acceptWebSocket: (ws) => ctx.acceptWebSocket(ws),
       getWebSockets: () =>

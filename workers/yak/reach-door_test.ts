@@ -38,6 +38,8 @@ import {
   updatesIn,
 } from '@yaks/platform/update-rows'
 import type { UpdatesView } from '@yaks/platform/updates-view'
+import { draftRows } from '@yaks/platform/operator-drafts'
+import { draftEid } from '@yaks/draft'
 import { ALL } from './updates.ts'
 import { sessionRow } from './browser-sessions.ts'
 import { client } from '@yaks/client'
@@ -176,6 +178,26 @@ test('a tab reads its person’s Updates in a space: a friend’s request from t
       $delete: true,
     }],
   })
+})
+
+test('a tab writes its person’s draft to their space’s Operator, and to no space they do not write in', async () => {
+  let own = (await k.dir.seated(ada.person)).find((s) => s.own)!.space.eid
+  let typed = (who: Tab) =>
+    draftRows(own, [{
+      entity: { eid: draftEid(who.person, 'operator') },
+      draft: { by: who.person, place: 'operator', text: 'Remind me' },
+      typed: { over: '' },
+    }])
+  let mine = await wrote(ada, typed(ada))
+  equal(mine.status, 200, JSON.stringify(mine.body))
+  equal(
+    (mine.body as Bundle[]).map((b) => [
+      (b.draft as { text: string }).text,
+      b.operatorDraft,
+    ]),
+    [['Remind me', undefined]],
+  )
+  equal((await wrote(bea, typed(bea))).status, 403)
 })
 
 test('a tab writes its person’s account, messages and asks through the door, and only theirs', async () => {
