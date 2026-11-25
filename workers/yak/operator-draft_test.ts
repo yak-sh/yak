@@ -594,6 +594,7 @@ let load = async (
   })
   // The browser's interfaces belong to this load, including those used inside
   // imported modules: storage, speech, timers and the page's socket.
+  let marks = new Map<string, { name: string; startTime: number }>()
   await pageModule(source, {
     at: base,
     read: scriptAt,
@@ -613,7 +614,16 @@ let load = async (
       clearInterval: (id: number) => void intervals.delete(id),
       setTimeout: after,
       clearTimeout: cancel,
-      ...held ? { performance: { now: () => now } } : {},
+      ...held
+        ? {
+          performance: {
+            now: () => now,
+            mark: (name: string) => marks.set(name, { name, startTime: now }),
+            getEntriesByName: (name: string) =>
+              marks.has(name) ? [marks.get(name)] : [],
+          },
+        }
+        : {},
       FormData: FormOf,
       DataTransfer: class {
         files: File[] = []
