@@ -160,7 +160,8 @@ let theirs = (req: Request, env: Env, path: string) =>
 // release of it purges (`KEEP`), or none where it has none to give: the
 // platform's own space holds no `home` yet (a 404 that names no app, as on
 // a box or staging with no such app), a release of it is under way (a pass
-// for now, `NOW`), or anything else, which is a failure. A `visitor` who may
+// for now, `NOW`), or anything else, its `status`, which `sitePage` judges.
+// A `visitor` who may
 // write it is served it as themselves, by their session alone (as Site
 // serves a session's own key, @yaks/platform/kept `visitor`), and it is
 // theirs: never kept.
@@ -189,18 +190,18 @@ let fromHome = async (
   }
   await page.body?.cancel()
   let absent = page.status == 404 && !seen.app
-  if (!absent && !page.headers.has(NOW)) {
-    caught(new Error(`the home app answered ${page.status} for ${path}`), {
-      request: 'home page',
-    })
-  }
-  return { page: null, kept: absent }
+  let status = absent || page.headers.has(NOW) ? undefined : page.status
+  return { page: null, kept: absent, status }
 }
 
 /** A page of the site: the home app's, else this deploy's own file
  * (site/mod.ts `deployed`), which answers until the app does, whenever it
  * can't, and while its page is another drawing (`beside`), kept only where
- * the app has none. */
+ * the app has none. The app answering a page this deploy has a file for
+ * with 404 is a page new in this deploy, which the app's release after it
+ * carries (packages/admin service.ts `RELEASED`, `afterWorker`), as a
+ * changed page is another drawing until then; any other answer of the
+ * app's that is no page is a failure. */
 let sitePage = async (
   env: Env,
   path: string,
@@ -212,6 +213,11 @@ let sitePage = async (
     fromHome(env, path, dir, visitor),
     env.ASSETS.fetch(req),
   ])
+  if (home.status && !(home.status == 404 && file.ok)) {
+    caught(new Error(`the home app answered ${home.status} for ${path}`), {
+      request: 'home page',
+    })
+  }
   let page = home.page && await beside(home.page, file)
   if (page) {
     await file.body?.cancel()
