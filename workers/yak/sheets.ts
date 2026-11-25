@@ -3,7 +3,7 @@
 // states the content-made names (assets.ts `planned`); without one, in a test or
 // under `wrangler dev`, the sources answer instead.
 import { type Host, url } from '@yaks/platform/host'
-import { island, signedIn } from './signed.ts'
+import { island, signedIn } from '@yaks/platform/site-nav'
 import { DATA_TIMING } from '@yaks/platform/ladder'
 import { INTERACTION_PATH } from '@yaks/timing/interaction'
 
@@ -74,14 +74,16 @@ let NAMING = /\b(src|href)=(["'])\/?([\w.-]+)\2/g
 
 /** A static page with its source's link swapped for what `links` says, the
  * nav's island beside it, beside its Sign in the link the island shows a
- * person signed in instead (signed.ts), and every other file of the site it
+ * person signed in instead, and every other file of the site it
  * names at its content-made address. A page the home app served wears the
  * reporter already (`links`). */
 export let sheeted = (html: string, env: Host, names = NAMES) =>
   html.replace(
     /<link rel="stylesheet" href="([\w-]+\.css)"\s*\/?>/,
     (_, sheet: string) =>
-      `${links(env, sheet, names, undefined, WOVEN.test(html))}\n${island}`,
+      `${links(env, sheet, names, undefined, WOVEN.test(html))}\n${
+        island(asset(env, '_ready.js', names))
+      }`,
   ).replace(
     /<a class="[^"]*\bNav_SignIn\b[^"]*"[^>]*>Sign in<\/a>/,
     (a) => a + signedIn,

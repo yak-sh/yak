@@ -1760,7 +1760,7 @@ test(
   },
 )
 
-// The site's island (signed.ts) asks whether this browser is signed in, and
+// The site's island asks whether this browser is signed in, and
 // the answer is the browser's alone: never cached, true only with a session.
 test('/login/who answers whether the cookie signs somebody in', async () => {
   let k = await kernel()

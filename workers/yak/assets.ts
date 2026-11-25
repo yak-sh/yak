@@ -209,6 +209,7 @@ export let ASSETS: Asset[] = [
   },
   // A signed-in page's links followed in place (pages.ts `documented`).
   { name: '_navigate.js', bundle: of('@yaks/web/navigate'), named: true },
+  { name: '_ready.js', bundle: of('@yaks/web/ready'), named: true },
   {
     name: '_interaction.js',
     bundle: of('@yaks/platform/interaction-browser'),

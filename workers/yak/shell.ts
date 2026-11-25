@@ -11,7 +11,7 @@ import type { VNode } from 'preact'
 import { esc, markup } from './html.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { asset, links } from './sheets.ts'
-import { island, signedIn } from './signed.ts'
+import { island, signedIn } from '@yaks/platform/site-nav'
 import { idle } from './mascot.ts'
 import { tags as previewTags } from './link-preview.ts'
 
@@ -42,7 +42,7 @@ ${links(env, 'style.css')}
 <script src="${asset(env, 'away.js')}" data-home="${
     esc(apex(env))
   }" defer></script>
-${island}`
+${island(asset(env, '_ready.js'))}`
 
 export let top = `<header class="Top">
 <a class="Top_Name" href="/" aria-label="yaks.app, home">${

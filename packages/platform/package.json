@@ -17,6 +17,7 @@
     "./host": "./host.ts",
     "./letters": "./letters.ts",
     "./routes": "./routes.ts",
+    "./site-nav": "./site-nav.ts",
     "./page-graph": "./page-graph.ts",
     "./updates-browser": "./updates-browser.ts",
     "./update-waiting": "./update-waiting.ts",

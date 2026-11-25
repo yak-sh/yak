@@ -421,8 +421,7 @@
     color: var(--text);
   }
 
-  /* A person signed in reads "Open yaks.app" where "Sign in" is (signed.ts sets
-     data-signed on the root before the page paints). */
+  /* The site's sign-in check sets data-signed on the root. */
   .Nav_Open,
   :root[data-signed] .Nav_SignIn {
     display: none;

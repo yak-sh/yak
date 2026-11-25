@@ -30,6 +30,7 @@ import {
   talkPath,
 } from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
+import { CHAT, WHO } from '@yaks/platform/site-nav'
 import { parseHTML } from 'linkedom'
 
 // One space, built as the file loads: a homepage app, a private one, one to
@@ -164,6 +165,38 @@ test('the apex and a space’s pages wake its Operator for the chat opened next'
     [await woken(MANAGE), await woken(apps), await woken(MANAGE, '')],
     [1, 1, 0],
   )
+})
+
+test('the home sign-in check opts into waking only the signed-in Operator', async () => {
+  let builder = k.builder((await k.dir.space(slug))!.eid)
+  let wakes = 0
+  let fetch = builder.fetch.bind(builder)
+  builder.fetch = (r) => (new URL(r.url).pathname == WAKE && wakes++, fetch(r))
+  try {
+    let who = async (path: string, cookie: string) => {
+      let answer = await (await get(path, cookie)).json()
+      await k.settled()
+      return { signedIn: answer.signedIn, chat: answer.chat, wakes }
+    }
+    let opening = `${WHO}?${CHAT}`
+    assertEquals(await who(opening, ''), {
+      signedIn: false,
+      chat: undefined,
+      wakes: 0,
+    })
+    assertEquals(await who(WHO, them.cookie), {
+      signedIn: true,
+      chat: undefined,
+      wakes: 0,
+    })
+    assertEquals(await who(opening, them.cookie), {
+      signedIn: true,
+      chat: chatPath(slug),
+      wakes: 1,
+    })
+  } finally {
+    builder.fetch = fetch
+  }
 })
 
 // Where the dashboard was, letters and answers still send people: each page

@@ -327,7 +327,12 @@ export type Browsing =
     'document' | 'location' | 'addEventListener' | 'fetch' | 'scrollTo'
   >
   & Partial<Pick<Window, 'requestIdleCallback'>>
-  & { DOMParser: typeof DOMParser }
+  & {
+    DOMParser: typeof DOMParser
+    /** Open a READY page as a document when the current page has its own
+     * scripts and styles. The address has already moved to the answer. */
+    enter?: (html: string) => void
+  }
 
 /** Where a click's time went, in milliseconds: waiting for the page whole
  * and parsed (nothing, for one already held), and laying it over the page. */
@@ -430,6 +435,7 @@ let followed = (
   e: MouseEvent | Event,
   base: string,
   here: string,
+  readyOnly = false,
 ): URL | null => {
   let link = (e.target as Element | null)?.closest?.('a[href]') as
     | HTMLAnchorElement
@@ -438,7 +444,8 @@ let followed = (
   if (
     !link || e.defaultPrevented || m.button > 0 || m.metaKey || m.ctrlKey ||
     m.shiftKey || m.altKey || link.hasAttribute('download') ||
-    (link.target && link.target != '_self')
+    (link.target && link.target != '_self') ||
+    (readyOnly && !link.hasAttribute(READY))
   ) return null
   let to = new URL(link.getAttribute('href')!, base)
   if (to.origin != new URL(base).origin) return null
@@ -454,6 +461,7 @@ type Answer = {
   page: Document
   url: string
   again: boolean
+  ok: boolean
   received: number
 }
 /** A page held: its answer, or null where it cannot be swapped in, when it
@@ -514,6 +522,9 @@ let going = (win: Browsing, link: Element, to: URL) => {
  * changed. A click on a page not held draws what it can of that page at
  * once, from what the page holds (`going`), and the rest when it comes.
  * A link marked `READY` is asked for ahead once each page holding it is drawn.
+ * A page with its own document scripts can supply `enter` to open only its
+ * READY links this way, keeping that document's ordinary links with the
+ * browser. An expired or incomplete answer opens through the browser.
  * A page that draws the address itself (`DRAW`) is drawn in place, with no
  * fetch. Sending a form makes every held page old: still drawn at once, and
  * asked for again.
@@ -545,12 +556,14 @@ export let start = (
     }).catch(() => null)
     let type = answer?.headers.get('content-type') ?? ''
     if (!answer || !type.includes('text/html')) return null
+    let url = new URL(answer.url || to.href)
+    if (url.origin != to.origin) return null
     let text = await answer.text().catch(() => null)
     if (text == null) return null
     let received = now()
     let page = new win.DOMParser().parseFromString(text, 'text/html')
     let again = answer.headers.has(AGAIN)
-    return { text, page, url: answer.url || to.href, again, received }
+    return { text, page, url: url.href, again, ok: answer.ok, received }
   }
   let ask = (to: URL, ahead = false): Held => {
     let key = page(to)
@@ -692,12 +705,34 @@ export let start = (
       return pressed?.drawn(0)
     }
     let held = pages.get(page(to))
+    if (win.enter && held && !fresh(held)) {
+      pressed?.leaving()
+      return load(to, pop)
+    }
     let from: From = held ? 'held' : 'fetch'
     let using = held ?? ask(to)
     using.used = true
     let answer = await using.answer
     if (mine != turn) return pressed?.cancel()
-    if (!answer || !draw(to, answer, from, began, now() - began, pop)) {
+    if (
+      win.enter && answer?.ok && !answer.again &&
+      answer.page.querySelector(`script[${TAKES}]`)
+    ) {
+      let at = new URL(answer.url)
+      at.hash = to.hash
+      history.write({ path: page(at) + at.hash, state: null })
+      pressed?.leaving()
+      try {
+        return win.enter(answer.text)
+      } catch (error) {
+        globalThis.reportError?.(error)
+        return load(at, true)
+      }
+    }
+    if (
+      win.enter || !answer ||
+      !draw(to, answer, from, began, now() - began, pop)
+    ) {
       pressed?.leaving()
       return load(answer ? new URL(answer.url) : to, pop)
     }
@@ -741,7 +776,7 @@ export let start = (
     if (pages.get(key) == held) pages.delete(key)
   }
   let ahead = (e: Event) => {
-    let to = followed(e, win.location.href, here)
+    let to = followed(e, win.location.href, here, !!win.enter)
     if (!to || pages.has(page(to)) || drawing(to)) return
     drop()
     let key = page(to), held = ask(to, true)
@@ -778,7 +813,7 @@ export let start = (
     for (let held of pages.values()) held.at = -Infinity
   })
   win.addEventListener('click', (e: MouseEvent) => {
-    let to = followed(e, win.location.href, here)
+    let to = followed(e, win.location.href, here, !!win.enter)
     if (!to) return
     let pressed = result(doc, e)
     e.preventDefault()
@@ -789,10 +824,12 @@ export let start = (
     }
     go(to, false, pressed, own)
   })
-  history.listen(({ path }) => {
-    let to = new URL(path, win.location.href)
-    if (page(to) == here) return
-    go(to, true)
-  })
+  if (!win.enter) {
+    history.listen(({ path }) => {
+      let to = new URL(path, win.location.href)
+      if (page(to) == here) return
+      go(to, true)
+    })
+  }
   return go
 }

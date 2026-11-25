@@ -43,13 +43,18 @@
 
     let wait = () => {
       clearTimeout(timer)
+      if (!track.isConnected) return
       track.setAttribute('aria-live', playing ? 'off' : 'polite')
       pause.textContent = playing ? 'Pause' : 'Play'
       if (
         playing && !hovered && !track.contains(document.activeElement) &&
         !document.hidden
       ) {
-        timer = setTimeout(() => (go(at + 1), wait()), EVERY)
+        timer = setTimeout(() => {
+          if (!track.isConnected) return
+          go(at + 1)
+          wait()
+        }, EVERY)
       }
     }
 

@@ -11,6 +11,7 @@
     "./page": "./page.ts",
     "./assets": "./assets.ts",
     "./navigate": "./navigate.ts",
+    "./ready": "./ready.ts",
     "./picture": "./picture.ts",
     "./worker": "./worker.ts",
     "./keep": "./keep.ts"

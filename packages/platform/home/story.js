@@ -293,6 +293,7 @@ let mount = (root) => {
   }
   let wait = () => {
     clearTimeout(timer)
+    if (!demo.isConnected) return
     pause.hidden = calm.matches
     pause.setAttribute(
       'aria-label',
@@ -304,7 +305,11 @@ let mount = (root) => {
       !demo.contains(document.activeElement)
     ) {
       timer = setTimeout(
-        () => (pick((i + 1) % logs.length, false), wait()),
+        () => {
+          if (!demo.isConnected) return
+          pick((i + 1) % logs.length, false)
+          wait()
+        },
         7500,
       )
     }

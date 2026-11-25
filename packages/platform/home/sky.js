@@ -44,7 +44,11 @@
   let n1 = (v) => v.toFixed(1)
   // `f` now and then: every `lo` to `hi` seconds, first after `wait`
   let often = (f, lo, hi, wait = between(lo, hi)) =>
-    setTimeout(() => (f(), often(f, lo, hi)), wait * 1000)
+    setTimeout(() => {
+      if (!sky?.isConnected) return
+      f()
+      often(f, lo, hi)
+    }, wait * 1000)
 
   let layers = [...(sky?.querySelectorAll('[data-depth]') ?? [])].map(
     (el) => ({ el, depth: Number(el.dataset.depth) }),
@@ -229,6 +233,7 @@
     let swell = between(0, 6.3)
     let t = 0, last
     let frame = (now) => {
+      if (!roost.isConnected) return
       t += Math.min(now - (last ?? now), 50) / 1000
       last = now
       if (speed * t > way) return birds.forEach((b) => b.el.remove())

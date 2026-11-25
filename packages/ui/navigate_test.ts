@@ -145,7 +145,11 @@ test('a swap runs a script it names for the first time once, and a written one e
 let settled = () => new Promise((done) => setTimeout(done, 0))
 
 // A window over a page at `path`, its fetches answered from `pages`.
-let browsing = (pages: Record<string, string>, path = '/apps') => {
+let browsing = (
+  pages: Record<string, string>,
+  path = '/apps',
+  enter?: (html: string) => void,
+) => {
   let { document } = parseHTML(pages[new URL(path, 'https://y.test').pathname])
   let doc = document as unknown as Document
   let at = new URL(path, 'https://y.test')
@@ -212,6 +216,7 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
     },
     scrollTo: () => {},
     DOMParser,
+    enter,
   } as unknown as Parameters<typeof start>[0]
   let history = {
     read: () => ({ path: at.pathname, state: null }),
@@ -277,6 +282,46 @@ let site = {
   '/updates': framed('updates', '<h1>Updates</h1>'),
   '/home': '<html><body>the home page</body></html>',
 }
+
+test('a ready link can open its held HTML as a document', async () => {
+  let chat = framed('chat', '<textarea></textarea>')
+  let entered: string[] = []
+  let b = browsing(
+    {
+      '/':
+        `<a id="chat" href="/chat" ${READY}>Chat</a><a href="/help">Help</a>`,
+      '/chat': chat,
+    },
+    '/',
+    (html) => entered.push(html),
+  )
+  await settled()
+  assertEquals(b.fetched, ['https://y.test/chat prefetch'])
+  assertEquals(b.click('a[href="/help"]'), false)
+  assert(b.click('#chat'))
+  await settled()
+  assertEquals(entered, [chat])
+  assertEquals(b.fetched, ['https://y.test/chat prefetch'])
+  assertEquals(b.entries.map((e) => e.path), ['/chat'])
+  assertEquals(b.loaded, [])
+})
+
+test('an expired ready document is opened through the browser', async () => {
+  let entered: string[] = []
+  let b = browsing(
+    {
+      '/': `<a href="/chat" ${READY}>Chat</a>`,
+      '/chat': framed('chat', '<textarea></textarea>'),
+    },
+    '/',
+    (html) => entered.push(html),
+  )
+  await settled()
+  b.tick(FRESH)
+  assert(b.click('a'))
+  assertEquals(entered, [])
+  assertEquals(b.loaded, ['https://y.test/chat'])
+})
 
 test('a click on a link of the site swaps its page in and keeps the shell', async () => {
   let b = browsing(site)

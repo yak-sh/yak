@@ -240,7 +240,7 @@ import {
   signedOut,
 } from './session.ts'
 import type { SessionSeed } from './browser-sessions.ts'
-import { WHO } from './signed.ts'
+import { CHAT, WHO } from '@yaks/platform/site-nav'
 import { versionOf } from './running.ts'
 import { background, caught, defect, failing, refusing } from './defects.ts'
 import { step } from './funnel.ts'
@@ -1642,12 +1642,25 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     })
   }
 
-  // Whether this browser is signed in, for the site's island (signed.ts), and
-  // which deploy answers, for a page drawn by an older one (public/deploy.js).
+  // The site's navigation can wake an existing Operator as soon as the
+  // browser's session is known. Deploy checks only need the sign-in answer.
   if (path == WHO && req.method == 'GET') {
+    let person = await browser(env, req)
+    let chat: string | undefined
+    if (person && url.searchParams.has(CHAT)) {
+      let own = (await dirOf(env).seats(person, 'owner').catch((error) => {
+        caught(error, { request: 'home Operator wake' })
+        return []
+      })).find((s) => s.own)?.space
+      if (own && !own.trashed) {
+        woken(env, own.eid)
+        chat = chatPath(own.slug)
+      }
+    }
     return Response.json({
-      signedIn: !!await browser(env, req),
+      signedIn: !!person,
       deploy: versionOf(env.CF_VERSION_METADATA),
+      chat,
     }, {
       headers: { 'cache-control': 'private, no-store' },
     })
