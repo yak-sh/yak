@@ -1,6 +1,8 @@
 {
   "$defs": {
     "shot": {
+      "component": true,
+      "type": "object",
       "description": "A button the crew presses: an OBS scene, a camera preset, or both. Its label is doc.title.",
       "properties": {
         "scene": {
@@ -18,6 +20,8 @@
       }
     },
     "cue": {
+      "component": true,
+      "type": "object",
       "description": "One press, from anyone's phone or the Operator: a shot to take, or a zoom step. The desk plays cues in the order they were written.",
       "properties": {
         "shot": {
@@ -33,24 +37,44 @@
       }
     },
     "aired": {
+      "component": true,
+      "type": "object",
       "description": "On a cue: the desk played it into OBS.",
       "properties": {
-        "at": { "type": "string", "description": "When, as ISO text." }
+        "at": {
+          "type": "string",
+          "description": "When, as ISO text."
+        }
       }
     },
     "missed": {
+      "component": true,
+      "type": "object",
       "description": "On a cue: the desk could not play it, and why.",
       "properties": {
-        "reason": { "type": "string" }
+        "reason": {
+          "type": "string"
+        }
       }
     },
     "desk": {
-      "description": "What the desk, the page on the computer running OBS, sees: the scene on air and the scenes OBS has. It goes away when that page closes.",
-      "sync": "peers",
-      "durable": "connection",
+      "component": true,
+      "type": "object",
+      "description": "What the desk, the page on the computer running OBS, sees: the scene on air and the scenes OBS has. The desk writes it again every 30 seconds; one not seen for 75 seconds is away.",
       "properties": {
-        "scene": { "type": "string" },
-        "scenes": { "type": "array", "items": { "type": "string" } }
+        "scene": {
+          "type": "string"
+        },
+        "scenes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seen": {
+          "type": "string",
+          "description": "When the desk last wrote it, as ISO text."
+        }
       }
     }
   }
