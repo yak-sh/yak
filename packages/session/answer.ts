@@ -147,10 +147,11 @@ export let turnOf = (entries: Bundle[]): Bundle[] =>
 
 /**
  * Whether someone else's words may be steering the turn being answered: its
- * words, or anything it read since them (a letter, a page, a room's other
- * speakers, a connected server's answer), were written by someone the
- * session does not work for (`heard`). The person's own words, with nothing
- * heard after them, steer nothing.
+ * words, what arrived with them just before (the notices they came after,
+ * as a room's lead of what others said there), or anything it read since
+ * them (a letter, a page, a connected server's answer), were written by
+ * someone the session does not work for (`heard`). The person's own words,
+ * with nothing heard with or after them, steer nothing.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -164,10 +165,19 @@ export let turnOf = (entries: Bundle[]): Bundle[] =>
  * equal(steered([asked, read]), false)
  * equal(steered([asked, read, letter]), true)
  * equal(steered([asked, read, letter, line(4, { content: { body: 'Do it' } })]), false)
+ * let lead = line(4, { notice: {}, heard: {}, content: { body: 'Someone else spoke' } })
+ * let earlier = line(5, { notice: {}, content: { body: 'My earlier words' } })
+ * let words = line(6, { content: { body: 'What do you think?' } })
+ * equal(steered([asked, lead, earlier, words]), true)
+ * equal(steered([asked, earlier, words]), false)
+ * equal(steered([lead, words, line(7, { content: { body: 'My next request' } })]), false)
  * ```
  */
-export let steered = (entries: Bundle[]): boolean =>
-  turnOf(entries).some((b) => !!b.heard)
+export let steered = (entries: Bundle[]): boolean => {
+  let start = entries.findLastIndex(given)
+  while (start > 0 && entries[start - 1].notice) start--
+  return entries.slice(Math.max(0, start)).some((b) => !!b.heard)
+}
 
 // What a model's refusal tells the person, by its code (@yaks/model
 // `ModelError`); any other code is the host's own failure, never the model's.

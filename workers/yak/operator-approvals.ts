@@ -5,9 +5,9 @@
 // may be asking (`steering`): the turn's words came by a number alone,
 // which anyone can show, or were relayed from someone else (operator-
 // channels.ts `RELAYED`: a stranger's conversation, another space's
-// Operator, an app's code), or since the person's newest words the turn
-// heard others' (@yaks/session `steered`: a letter, a page, a room's other
-// speakers, a connected server's answer). That one rule decides for every
+// Operator, an app's code), or with or since the person's newest words the
+// turn heard others' (@yaks/session `steered`: a room's other speakers,
+// a letter, a page, a connected server's answer). That one rule decides for every
 // tool; a tool only says what its act is.
 //
 // The privileged acts are yaks.app's own (`ESCALATING`: mail to someone new,
