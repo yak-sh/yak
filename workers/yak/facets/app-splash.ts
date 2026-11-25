@@ -90,16 +90,11 @@ let inputs = async (
   }
 }
 
-// The directory draws one app's set at a time, one image at a time: drawn
-// side by side, sixteen apps' sets held the directory's connections and its
-// own requests waited behind them for up to a minute.
-let turn: Promise<unknown> = Promise.resolve()
-let inTurn = <T>(work: () => Promise<T>): Promise<T> => {
-  let mine = turn.then(work, work)
-  turn = mine.catch(() => {})
-  return mine
-}
-
+// Each app's set is drawn one image at a time (@yaks/platform/splash
+// `ensureSplash`), so the directory's pool, which bounds how many runs go at
+// once, bounds how many drawings do: sixteen apps drawing six images each held
+// the directory's connections, and its own requests waited behind them for up
+// to a minute.
 export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
   if (!store.env.RASTER || !store.env.BLOBS) return {}
   let env = store.env as Env
@@ -110,22 +105,20 @@ export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
       let record = (drawn: { key: string; dark: boolean }) => async () =>
         await write([{ entity, app_splash: drawn }])
       let work = () =>
-        inTurn(() =>
-          ensureSplash({
-            live: async () => {
-              let at = await dir.appAt(entity.eid)
-              return at && released(at) ? at : null
-            },
-            inputs: (at) => inputs(env, raw, at),
-            has: raw.has,
-            draw: (svg, width, height) => pictured(env, svg, width, height),
-            put: raw.put,
-            record: (drawn) =>
-              attempt?.retry ? attempt.retry(record(drawn)) : record(drawn)(),
-            list: raw.list,
-            delete: raw.delete,
-          })
-        ).finally(() => pending.delete(entity.eid))
+        ensureSplash({
+          live: async () => {
+            let at = await dir.appAt(entity.eid)
+            return at && released(at) ? at : null
+          },
+          inputs: (at) => inputs(env, raw, at),
+          has: raw.has,
+          draw: (svg, width, height) => pictured(env, svg, width, height),
+          put: raw.put,
+          record: (drawn) =>
+            attempt?.retry ? attempt.retry(record(drawn)) : record(drawn)(),
+          list: raw.list,
+          delete: raw.delete,
+        }).finally(() => pending.delete(entity.eid))
       await sharing(pending, entity.eid, work)
     },
   }

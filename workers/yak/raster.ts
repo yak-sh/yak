@@ -55,11 +55,16 @@ export let pictured = async (
   return pngOf(await rastered(env, `width=${width}&height=${height}`, svg))
 }
 
+// A drawing takes under a second; one that takes a minute is stuck, and
+// fails rather than holding its caller.
+let PATIENCE = 60_000
+
 let rastered = (env: Env, query: string, svg: string) =>
   env.RASTER!.fetch(
     new Request(`https://raster.invalid/?${query}`, {
       method: 'POST',
       body: svg,
+      signal: AbortSignal.timeout(PATIENCE),
     }),
   )
 
