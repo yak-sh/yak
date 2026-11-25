@@ -75,9 +75,7 @@ let declares = (page: string, tag: string, attr: string, value: string) =>
     'i',
   ).test(page)
 
-// The platform's own page background in its two linen schemes.
-export let PLATFORM_BACKGROUND = '#fdf7ee'
-export let PLATFORM_DARK_BACKGROUND = '#2b231f'
+export { PLATFORM_BACKGROUND, PLATFORM_DARK_BACKGROUND } from './opening.ts'
 
 /** An app's own colours, both CSS, either half null where its owner set
  * none. */

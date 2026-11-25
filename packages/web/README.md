@@ -73,6 +73,7 @@ more-specific routes.
 | `./picture`  | a kept page's picture, made from a snapshot of it         |
 | `./worker`   | a service worker keeping pages and files named by bytes   |
 | `./keep`     | a page registering that worker and sending it snapshots   |
+| `./opening`  | what a page shows while it opens, and when opening fails  |
 
 A **kept page** is drawn at once when its person opens it again, before the
 network answers. A **snapshot** is a page's whole document as its person last
@@ -88,6 +89,16 @@ what it kept. A push naming the page its notification opens (`opens`) keeps a
 picture of that page as it is when the push arrives, so opening it from the
 notification, or offline, shows what the push was about at once. Visiting an
 address it is told to forget at (signing out) forgets every kept page.
+
+A page **opening** (`opening`) wears its site's background from its first frame,
+and its head's inline script shows the site's mark with a quiet bar when nothing
+has painted 300 ms in. A page with nothing painted 4 s in is reported and loads
+once more from the network; blank again in the same tab, it says so and offers
+Try again. One whose own scripts fail before it loads says so too. Try again
+forgets every kept page and loads the page again. An open the worker cannot get
+from the network (offline, unreachable, no answer in 8 s, or a server error the
+site's own page does not say) is answered with the site's **failure page**
+(`failurePage`), drawn by the same script.
 
 An **asset** (`Asset`) is one file a browser loads: its `name`, how it is made
 (a browser module bundled with all it imports, a body made in the process, a
