@@ -67,15 +67,19 @@ let inputs = async (
     manifest = JSON.parse(await text(`/${MANIFEST}`) ?? 'null')
   } catch { /* a manifest that is not JSON says no colour */ }
   let page = await text('/index.html')
-  let sheets = await Promise.all(
-    pageSheets(page ?? '').slice(0, SHEETS).map(async (sheet) => {
-      if ('text' in sheet) return sheet.text
-      let at = new URL(sheet.href, 'https://app.invalid/')
-      return at.origin == 'https://app.invalid'
+  let sheets: string[] = []
+  for (let sheet of pageSheets(page ?? '').slice(0, SHEETS)) {
+    let at = 'href' in sheet
+      ? new URL(sheet.href, 'https://app.invalid/')
+      : null
+    sheets.push(
+      'text' in sheet
+        ? sheet.text
+        : at?.origin == 'https://app.invalid'
         ? await text(decodeURIComponent(at.pathname)) ?? ''
-        : ''
-    }),
-  )
+        : '',
+    )
+  }
   return {
     icon,
     palette: palette({
@@ -84,6 +88,16 @@ let inputs = async (
       sheets,
     }),
   }
+}
+
+// The directory draws one app's set at a time, one image at a time: drawn
+// side by side, sixteen apps' sets held the directory's connections and its
+// own requests waited behind them for up to a minute.
+let turn: Promise<unknown> = Promise.resolve()
+let inTurn = <T>(work: () => Promise<T>): Promise<T> => {
+  let mine = turn.then(work, work)
+  turn = mine.catch(() => {})
+  return mine
 }
 
 export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
@@ -96,20 +110,22 @@ export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
       let record = (drawn: { key: string; dark: boolean }) => async () =>
         await write([{ entity, app_splash: drawn }])
       let work = () =>
-        ensureSplash({
-          live: async () => {
-            let at = await dir.appAt(entity.eid)
-            return at && released(at) ? at : null
-          },
-          inputs: (at) => inputs(env, raw, at),
-          has: raw.has,
-          draw: (svg, width, height) => pictured(env, svg, width, height),
-          put: raw.put,
-          record: (drawn) =>
-            attempt?.retry ? attempt.retry(record(drawn)) : record(drawn)(),
-          list: raw.list,
-          delete: raw.delete,
-        }).finally(() => pending.delete(entity.eid))
+        inTurn(() =>
+          ensureSplash({
+            live: async () => {
+              let at = await dir.appAt(entity.eid)
+              return at && released(at) ? at : null
+            },
+            inputs: (at) => inputs(env, raw, at),
+            has: raw.has,
+            draw: (svg, width, height) => pictured(env, svg, width, height),
+            put: raw.put,
+            record: (drawn) =>
+              attempt?.retry ? attempt.retry(record(drawn)) : record(drawn)(),
+            list: raw.list,
+            delete: raw.delete,
+          })
+        ).finally(() => pending.delete(entity.eid))
       await sharing(pending, entity.eid, work)
     },
   }

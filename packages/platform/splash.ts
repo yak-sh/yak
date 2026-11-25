@@ -220,7 +220,9 @@ type SplashTarget = {
 
 /** Draw the live release's set unless it is drawn, record it, and delete
  * the app's other sets. A set already kept, from an interrupted run, is
- * recorded without drawing again. */
+ * recorded without drawing again. Its images are drawn one at a time: the
+ * caller's other work shares its connections, and a set is only wanted by
+ * the next install. */
 export let ensureSplash = async <T extends SplashTarget>(io: {
   live: () => Promise<T | null>
   inputs: (at: T) => Promise<{ icon: Uint8Array; palette: Palette }>
@@ -241,31 +243,21 @@ export let ensureSplash = async <T extends SplashTarget>(io: {
   let prefix = `${sets}${key}/`
   if (!await io.has(prefix + DONE)) {
     let mark = `data:image/png;base64,${base64(icon)}`
-    let jobs = [
-      ...splashes(palette).map((s) => () =>
-        io.draw(splashSvg(s, mark), s.width, s.height)
-          .then((png) => io.put(`${prefix}${s.name}.png`, png))
-      ),
-      () =>
-        io.draw(iconSvg(mark), 512, 512)
-          .then((png) => io.put(`${prefix}${ICON_512}.png`, png)),
-    ]
-    await pooled(jobs, 6)
+    for (let s of splashes(palette)) {
+      await io.put(
+        `${prefix}${s.name}.png`,
+        await io.draw(splashSvg(s, mark), s.width, s.height),
+      )
+    }
+    await io.put(
+      `${prefix}${ICON_512}.png`,
+      await io.draw(iconSvg(mark), 512, 512),
+    )
     await io.put(prefix + DONE, new Uint8Array())
   }
   await io.record(drawn)
   let old = (await io.list(sets)).filter((k) => !k.startsWith(prefix))
   if (old.length) await io.delete(old)
-}
-
-// At most `width` jobs at once.
-let pooled = async (jobs: (() => Promise<unknown>)[], width: number) => {
-  let next = 0
-  await Promise.all(
-    Array.from({ length: Math.min(width, jobs.length) }, async () => {
-      while (next < jobs.length) await jobs[next++]()
-    }),
-  )
 }
 
 let base64 = (bytes: Uint8Array) => {
