@@ -318,6 +318,7 @@
   /* As tall as a card's head beside it: its padding and its presses. */
   .Frame_Bar {
     --toolbar-padding-block: .5rem;
+    --frame-bar-gutter: 1.25rem;
     --control-height: 2rem;
     anchor-name: --frame-bar;
     position: sticky;
@@ -325,6 +326,8 @@
     z-index: 1;
     padding-block-start: calc(var(--toolbar-padding-block) +
       env(safe-area-inset-top, 0px));
+    padding-inline: max(var(--frame-bar-gutter), env(safe-area-inset-left, 0px))
+      max(var(--frame-bar-gutter), env(safe-area-inset-right, 0px));
   }
   .Frame_Menu {
     display: none;
@@ -343,6 +346,8 @@
   .Frame_Body {
     isolation: isolate;
     overflow: hidden auto;
+    padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right,
+      0px);
   }
   /* A page pressed for and not yet come: what stands waits, quietly, and
      only if the wait is noticeable. */
@@ -352,7 +357,9 @@
   }
   /* The title bar holds the panel's controls in both layouts. */
   .Frame_AsideBody {
-    padding: calc(1rem + env(safe-area-inset-top, 0px)) 1rem 1rem;
+    padding: calc(1rem + env(safe-area-inset-top, 0px))
+      max(1rem, env(safe-area-inset-right, 0px))
+      calc(1rem + env(safe-area-inset-bottom, 0px)) 1rem;
   }
   .Frame_AsideBody > :not([hidden]) ~ * {
     margin-top: .75rem;
@@ -430,8 +437,16 @@
     }
   }
   @media (max-width: 700px) {
+    .Frame_Bar {
+      --frame-bar-gutter: 1rem;
+    }
     .Frame_Menu {
       display: inline-flex;
+    }
+  }
+  @media (max-width: 26rem) {
+    .Frame_AsideBody {
+      padding-left: max(1rem, env(safe-area-inset-left, 0px));
     }
   }
   .Desk_Logo {
@@ -1189,7 +1204,9 @@
     gap: .75rem;
     height: var(--viewport-height, 100dvh);
     min-width: 0;
-    padding: 1rem var(--sidebar-padding);
+    padding: calc(1rem + env(safe-area-inset-top, 0px))
+      var(--sidebar-padding) calc(1rem + env(safe-area-inset-bottom, 0px))
+      calc(var(--sidebar-padding) + env(safe-area-inset-left, 0px));
     background: var(--surface);
     z-index: 1;
   }
@@ -1432,6 +1449,8 @@
       display: none;
       width: var(--layer-width);
       height: auto;
+      /* Paint the whole fixed layer, including the insets around its list. */
+      background: var(--surface-fill);
     }
     .Sidebar:target {
       display: flex;
@@ -1442,6 +1461,7 @@
     }
     .Sidebar_Scroll {
       --overlap: 0px;
+      background: none;
       /* This is the menu's scroll container, so it owns the touch action. */
       touch-action: pan-y pinch-zoom;
     }
