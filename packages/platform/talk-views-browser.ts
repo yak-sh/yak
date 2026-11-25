@@ -143,6 +143,7 @@ export let switching = (doc: Document, bind = canvases(doc)): void => {
     let chat = slot && JSON.parse(slot.dataset.canvasSlot!) as CanvasSlot
     let sameChat = chat && chat.here == to.pathname + to.search
     if (app ? !sameChat : !at && !sameChat) return
+    asked.focusAfterPaint = !!sameChat && (!!app || !at?.el.hidden)
     asked.draw = () => {
       if (at?.el.hidden) show(doc, views, at.el)
       if (slot) chooseCanvas(doc, slot, here, app, bind)

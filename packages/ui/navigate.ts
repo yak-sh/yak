@@ -335,8 +335,13 @@ export let DRAW = 'yak-draw'
 export let SHOWN = 'yak-shown'
 
 /** The detail of `DRAW`: where the press leads, and how the page on screen
- * draws it, where it can. `draw` changes the document in place, at once. */
-export type Drawing = { to: URL; draw?: () => void }
+ * draws it, where it can. `draw` changes the document in place, at once.
+ * A view can put the content's focus after paint when it keeps its layout. */
+export type Drawing = {
+  to: URL
+  draw?: () => void
+  focusAfterPaint?: boolean
+}
 
 /** What a swap said once done: when the click was (`began`, on the clock
  * `start` was given), how long it took to the new page, in milliseconds,
@@ -555,6 +560,7 @@ export let start = (
     began: number,
     wait: number,
     pop: boolean,
+    focusAfterPaint = false,
   ) => {
     let lap = now()
     let fetched = from != 'drawn'
@@ -587,7 +593,20 @@ export let start = (
         win.scrollTo(0, 0)
         if (main) main.scrollTop = 0
       }
-      main?.focus?.({ preventScroll: true })
+      let view = doc.defaultView
+      if (main && focusAfterPaint && view?.requestAnimationFrame) {
+        let focused = doc.activeElement
+        let mine = turn
+        view.requestAnimationFrame(() =>
+          view.setTimeout(() => {
+            if (
+              mine == turn && main.isConnected && doc.activeElement == focused
+            ) {
+              main.focus({ preventScroll: true })
+            }
+          })
+        )
+      } else main?.focus?.({ preventScroll: true })
     }
     let end = now()
     let phases = { wait, swap: end - lap }
@@ -622,7 +641,10 @@ export let start = (
     let asked: Drawing = { to }
     tell(doc, DRAW, asked)
     let own = asked.draw
-    return own && (() => (own(), { kept: 0, made: 0, dropped: 0 }))
+    return own && {
+      change: () => (own(), { kept: 0, made: 0, dropped: 0 }),
+      focusAfterPaint: asked.focusAfterPaint,
+    }
   }
   let go = async (
     to: URL,
@@ -636,7 +658,10 @@ export let start = (
     }
     let mine = ++turn
     let began = now()
-    if (own && land(new URL(to), own, 'drawn', began, 0, pop)) {
+    if (
+      own &&
+      land(new URL(to), own.change, 'drawn', began, 0, pop, own.focusAfterPaint)
+    ) {
       return pressed?.drawn(0)
     }
     let held = pages.get(page(to))
