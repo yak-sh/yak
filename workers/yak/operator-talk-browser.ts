@@ -69,8 +69,9 @@ export type Talking = ReturnType<typeof mountTalk>
 /**
  * The conversation mounted over what the server drew in `box`, in the tab's
  * page graph (@yaks/platform/page-graph), drawn for `person` and grown with
- * the store's `words` (`_words.js`, assets.ts): a step's frame (`heard`), a reply as it is
- * written (`typed`), a whole read (`read`, the `?talk=` answer's HTML) and
+ * the store's `words` (`_words.js`, assets.ts): a step's frame (`heard`), a
+ * reply's words as written so far (`typed`), a whole read (`read`, the
+ * `?talk=` answer's HTML) and
  * Stop pressed (`stopped`). Where its reader is goes to `onAway`, and
  * `newest` takes them back; `older` is asked for a read of `take` lines when
  * the reader asks for lines the page does not hold. A fold drawn closed
@@ -235,9 +236,8 @@ export let mountTalk = (
       )
     })
   }
-  // Whether a reply is being written, and its words so far.
+  // Whether a reply is being written.
   let typing = false
-  let replying = ''
   return {
     close: () => {
       held = null
@@ -274,15 +274,14 @@ export let mountTalk = (
       }
       put(o.lines.entries, () => draw())
     },
-    /** words of a reply as they are written, until the step lands */
+    /** a reply's words as written so far, until the step lands */
     typed: (text: string) => {
       if (!held) return
       let eid = typingAt(held.task)
-      replying = (typing ? replying : '') + text
       let entry = {
         entity: { eid },
         output: {},
-        content: { body: replying },
+        content: { body: text },
         ...typing ? {} : { created: { at: clock() } },
       }
       typing = true

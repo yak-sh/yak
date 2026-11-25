@@ -6,7 +6,7 @@ import { draftEid } from '@yaks/draft'
 import { attachmentRows } from '@yaks/blob/attachment'
 import type { Held } from './build-door.ts'
 import type { Operator } from './operator.ts'
-import { operatorMemory } from './operator-testing.ts'
+import { operatorMemory, talking } from './operator-testing.ts'
 import { operatorFrames, operatorRequest } from './operator-host.ts'
 import { seenBy } from './operator-access.ts'
 import { chatPage, operatorAnswer } from './operator-page.ts'
@@ -207,48 +207,22 @@ test('drafts keep the caller’s authorship and only name their own conversation
 })
 
 test('live transcript and typing frames go only to the conversation’s owner', async () => {
-  let listen = (person: string, at = space) => {
-    let sent: string[] = []
-    return {
-      sent,
-      send: (data: string) => void sent.push(data),
-      deserializeAttachment: () => ({
-        ...who(person),
-        space: at,
-        operator: true,
-      }),
-    }
-  }
-  let own = listen(ada), other = listen(bea), elsewhere = listen(ada, unknown)
-  let frames = operatorFrames(store, () => [own, other, elsewhere])
+  let frames = operatorFrames(store)
+  let own = talking(frames, ada, space), other = talking(frames, bea, space)
+  let elsewhere = talking(frames, ada, unknown)
+  await Promise.all([own, other, elsewhere].map((page) => page.ready()))
   for (let session of [root, helper, taskSession]) {
     await frames.tell(session)
     await frames.typing(session, secret)
   }
-  // each a step and typing, and the helper's step on its own page as well
-  assertEquals(own.sent.length, 7)
-  assertStringIncludes(own.sent.join(''), secret)
-  assertEquals(other.sent, [])
-  assertEquals(elsewhere.sent, [])
-})
-
-test('a person who no longer writes in the space hears no frame, and their pages close', async () => {
-  let sent: string[] = [], closed = 0
-  let page = {
-    send: (data: string) => void sent.push(data),
-    close: () => void closed++,
-    deserializeAttachment: () => ({ ...who(ada), operator: true }),
+  // each a step, and the helper's step on its own page as well, and each
+  // reply as it was written
+  assertEquals(own.steps().length, 4)
+  assertEquals(own.typed(), secret.repeat(3))
+  for (let page of [other, elsewhere]) {
+    assertEquals([page.steps(), page.typed()], [[], ''])
   }
-  let frames = operatorFrames(
-    store,
-    () => [page],
-    undefined,
-    (held) => Promise.resolve(held.person != ada),
-  )
-  await frames.tell(root)
-  await frames.typing(root, secret)
-  await frames.drafts(who(ada), [draft(ada, root)])
-  assertEquals([sent, closed], [[], 3])
+  assertEquals(elsewhere.heard, [{ id: 'talk', bundles: [], reset: true }])
 })
 
 let { env } = platform('operator-privacy')
@@ -294,39 +268,6 @@ test('the chat page and its polling door conceal foreign and unknown ids alike',
     })
   }
   assertEquals((await chatPage(env, at, who(ada), root)).status, 200)
-})
-
-test('a saved draft is told only to its owner’s pages in its space', async () => {
-  let sent = new Map<string, unknown[]>()
-  let page = (name: string, person: string, at = space) => ({
-    send: (data: string) =>
-      void sent.set(name, [...sent.get(name) ?? [], JSON.parse(data)]),
-    deserializeAttachment: () => ({
-      ...who(person),
-      space: at,
-      operator: true,
-    }),
-  })
-  let frames = operatorFrames(store, () => [
-    page('own', ada),
-    page('other', bea),
-    page('elsewhere', ada, unknown),
-  ])
-  let told: Promise<void>[] = []
-  let answered = await operatorRequest(
-    operator,
-    who(ada),
-    '/operator/draft',
-    { bundles: [draft(ada, root, 'Words on the way')] },
-    () => undefined,
-    (bundles) => void told.push(frames.drafts(who(ada), bundles)),
-  )
-  assertEquals(told.length, 1)
-  await told[0]
-  assertEquals(sent.get('own'), [
-    { drafts: (await answered!.json()).bundles },
-  ])
-  assertEquals([sent.has('other'), sent.has('elsewhere')], [false, false])
 })
 
 test("the Operator's own store, read for one person, shows none of another's conversations", async () => {

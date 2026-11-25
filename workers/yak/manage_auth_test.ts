@@ -45,7 +45,6 @@ for (let [i, token] of tokens.entries()) {
         [`${operator}?browser=1`, 'POST'],
         [`${operator}/query?browser=1`, 'GET'],
         [`${chatPath(slug)}?browser=1`, 'GET'],
-        [`${operator}?browser=1&live=1`, 'GET'],
         [`${operator}?browser=1&settings-draft=1`, 'GET'],
       ]
     ) {

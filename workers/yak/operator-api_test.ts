@@ -8,6 +8,7 @@ import { UPDATE_WAITING, waitingFrom } from '@yaks/platform/update-waiting'
 import { updateCards, updatesIn } from '@yaks/platform/update-rows'
 import { operatorDrafts } from '@yaks/platform/operator-drafts'
 import { operatorSettings } from '@yaks/platform/operator-settings'
+import { operatorTalk, type Told } from '@yaks/platform/operator-talk'
 import { personaFor } from './operator-persona.ts'
 import {
   matchesOf,
@@ -22,6 +23,7 @@ import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
 import { operatorMemory } from './operator-testing.ts'
 import { type Asker, operatorApi } from './operator-api.ts'
+import { operatorFrames } from './operator-host.ts'
 import { state } from './testing.ts'
 
 let id = () => crypto.randomUUID()
@@ -53,8 +55,10 @@ let seats = new Map<string, Level>([[ada.person, 'owner'], [
   'editor',
 ]])
 let ctx = state()
+let frames = operatorFrames(store)
 let door = operatorApi(store, ctx, {
   seat: (person) => Promise.resolve(seats.get(person) ?? null),
+  talks: frames.talks,
 })
 let ask = async (who: Asker, path: string, init?: RequestInit) =>
   await door.answer(new Request('https://builder/api' + path, init), who)
@@ -346,6 +350,67 @@ test('a socket hears its person’s lines, and a reply as it is written, and nob
   })
   equal(carried(overheard), { lines: [beas.line], typed: '' })
   await writer.discard()
+})
+
+test('a conversation’s watch hears where it stands, each step, and a reply as it is written, its person’s alone', async () => {
+  let [mine, theirs] = [
+    await socket(ada, operatorTalk(space, adas.root)),
+    await socket(bea, operatorTalk(space)),
+  ]
+  let told = (frames: Record<string, unknown>[]) =>
+    frames.flatMap((f) => (f.bundles ?? []) as Bundle[])
+      .map((b) => b.operatorTalk as Told)
+  let typed = (frames: Record<string, unknown>[]) =>
+    frames.flatMap((f) => (f.transient ?? []) as { text?: string }[])
+      .map((t) => t.text ?? '').join('')
+  try {
+    let [opening] = told(mine)
+    equal([opening.n, typeof opening.standing], [0, 'string'])
+    await frames.typing(adas.root, 'On ')
+    await frames.typing(adas.root, 'it')
+    await until(() => typed(mine) == 'On it')
+    equal([told(mine).at(-1)?.writing, typed(mine)], [adas.root, 'On it'])
+    // A watch opened again mid-reply, as after a reconnect, starts from the
+    // words so far.
+    let again = await socket(ada, operatorTalk(space, adas.root))
+    await until(() => typed(again) == 'On it')
+    await write([{
+      entity: { eid: id() },
+      entry: { session: adas.root, seq: 3 },
+      content: { body: 'On it' },
+    }])
+    await frames.tell(adas.root)
+    await until(() => told(mine).at(-1)?.n == 1)
+    let [step] = told(mine).slice(-1)
+    equal([step.n, (step.step as { task: string }).task], [1, adas.root])
+    equal(
+      mine.at(-1)?.transient,
+      [{
+        id: (mine.findLast((f) => f.transient && f.bundles)!.transient as {
+          id: string
+        }[])[0].id,
+        entity: (mine.at(-1)!.bundles as Bundle[])[0].entity.eid,
+        component: 'operatorTalk',
+        property: 'typing',
+        seq: 2,
+        op: 'end',
+      }],
+    )
+    equal([told(theirs).map((t) => t.n), typed(theirs)], [[0], ''])
+    await door.close(again.ws)
+  } finally {
+    await door.close(mine.ws)
+    await door.close(theirs.ws)
+  }
+})
+
+test('a conversation’s watch in another space is answered with nothing', async () => {
+  let page = await socket(ada, operatorTalk(id(), adas.root))
+  try {
+    equal(page.at(-1), { id: 'lines', bundles: [], reset: true })
+  } finally {
+    await door.close(page.ws)
+  }
 })
 
 test('a person removed from the space hears nothing more, and their socket closes', async () => {

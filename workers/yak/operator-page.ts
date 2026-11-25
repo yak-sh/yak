@@ -786,24 +786,6 @@ export let operatorAnswer = async (
       headers: { location: chatPath(space.slug, request) },
     })
   }
-  if (q.has('live')) {
-    if (!upgrading(req)) {
-      return new Response("This is the Operator page's WebSocket.", {
-        status: 426,
-      })
-    }
-    // The conversation the page shows, for its socket to say where it
-    // stands.
-    let on = new URLSearchParams()
-    if (q.get('talk')) on.set('talk', q.get('talk')!)
-    return socketTo(
-      env,
-      space,
-      req,
-      who,
-      '/operator/ws' + (on.size ? '?' + on : ''),
-    )
-  }
   // A browser lent to the Operator (operator-browser.ts), signed in by the
   // token it bears (apps.ts `manage`).
   if (q.has('browser')) {
@@ -1890,10 +1872,10 @@ export let matchesPage = async (
 
 // The chat app's script: the box mounted over what the server drew
 // (operator-box.ts), its words the person's drafts and where they and Stop
-// go, talking instead of typing, and the conversation kept current from the
-// Builder object's socket, each step's lines drawn from the entries its
-// frame sends (operator-talk.ts) and what it says aloud said to a person who
-// talked. `boxOf` is the box, where the page has one; `paid` is whether the
+// go, talking instead of typing, and the conversation kept current from its
+// row in the tab's page graph (@yaks/platform/operator-talk), each step's
+// lines drawn from the entries its frame sends (operator-talk.ts) and what it
+// says aloud said to a person who talked. `boxOf` is the box, where the page has one; `paid` is whether the
 // platform's speech is on, for a browser that has none of its own.
 let chatScript = (
   now: Asided,
@@ -2289,9 +2271,15 @@ let stop = async (b) => {
     said(error)
   }
 }
+// The conversation, heard in the tab's page graph, whose socket says where
+// its person is: whether this tab is in view and focused, so their Operator
+// knows to tell them here, notify them, or reach them elsewhere
+// (whereabouts.ts).
+let conversation = pageTalk('${space.eid}', '${who.person}', open == 'new' ? undefined : open)
 // Where the conversation stood when the page last drew it (operator-host.ts
-// \`standingAt\`), until a step is heard; the socket says where it stands as
-// it opens, and the page reads it again only when that moved.
+// \`standingAt\`), until a step is heard; its row says where it stands each
+// time the page graph's watch of it is answered whole, and the page reads it
+// again only when that moved.
 let standing = ${JSON.stringify(standing)}
 // One read at a time; a step heard during one reads once more after it,
 // since what the read answered may predate the line the step put in place.
@@ -2345,16 +2333,12 @@ let read = async () => {
   })()
   try { await reading } finally { reading = undefined }
 }
-// Each step the Operator takes arrives on the socket as the lines it changed,
-// each as the entries it draws, which the conversation draws as the server
-// does (operator-talk.ts); a conversation the page has not drawn yet (a
-// request just taken up) reads the page again, and another one's step is not
-// this page's.
-let live = false, opened = false
-let hear = (frame) => {
-  if (frame.ready && (frame.standing == null || frame.standing !== standing)) read().catch(said)
-  let o = frame.operator
-  if (!o) return
+// Each step the Operator takes arrives on the conversation's row as the
+// lines it changed, each as the entries it draws, which the conversation
+// draws as the server does (operator-talk.ts); a conversation the page has
+// not drawn yet (a request just taken up) reads the page again, and another
+// one's step is not this page's.
+let hear = (o) => {
   changing(o)
   if (!talk.task()) return void read().catch(said)
   if (o.refresh) return void read().catch(said)
@@ -2363,34 +2347,38 @@ let hear = (frame) => {
   if (o.helping) helped(o.helping)
   if (o.said) speech?.tell(o.said)
   standing = undefined
-  // A reply as it is written, drawn as a settled one, until the step that
-  // wrote it lands.
-  if (o.typing) return void (talk.typed(o.typing), doing('writing'))
   talk.heard(o)
   dates(document)
   if (reading) again = true
   doing(o.doing)
 }
-// The conversation, watched in the tab's page graph, whose socket says
-// where its person is: whether this tab is in view and focused, so their
-// Operator knows to tell them here, notify them, or reach them elsewhere
-// (whereabouts.ts).
-let conversation = pageTalk('${space.eid}', '${who.person}', open == 'new' ? undefined : open)
-let wire
-let listen = () => {
-  let socket = wire = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
-  // A socket still opening after the wait is closed, and so opened again.
-  let opening = after(() => socket.close(), WAIT)
-  // A socket opening again may follow a deploy, which the page then moves onto
-  // (public/deploy.js).
-  socket.onopen = () => {
-    cancel(opening); live = true
-    if (opened) dispatchEvent(new Event('yak-reconnect'))
-    opened = true
+// The conversation's row (@yaks/platform/operator-talk): answered whole as
+// its watch opens, again after a reconnect (\`opened\`), with where the
+// conversation stands; then each step (\`n\` one more; one skipped reads the
+// page again), and a reply's words as written so far, drawn as a settled
+// reply until the step that wrote it lands.
+let answer, stepped = 0, replying = ''
+let unhear = conversation.hear((told) => {
+  if (told.opened != answer) {
+    answer = told.opened
+    stepped = told.n
+    if (told.standing == null || told.standing !== standing) read().catch(said)
+  } else if (told.n > stepped) {
+    let skipped = told.n > stepped + 1
+    stepped = told.n
+    if (told.step) hear(told.step)
+    if (skipped) read().catch(said)
   }
-  socket.onmessage = (e) => { try { hear(JSON.parse(e.data)) } catch (error) { said(error) } }
-  socket.onclose = () => { cancel(opening); live = false; poll(); after(listen, 3000) }
-}
+  if (!told.typing) return void (replying = '')
+  if (told.typing == replying || talk.task() != told.writing) return
+  replying = told.typing
+  talk.typed(replying)
+  doing('writing')
+})
+// While the page graph's socket is closed the page reads its conversation
+// while it works; opening again may follow a deploy, which the page then
+// moves onto (public/deploy.js).
+let live = false, opened = false
 let polling = false
 let poll = async () => {
   if (signal.aborted || live || polling || !working()) return
@@ -2398,6 +2386,15 @@ let poll = async () => {
   try { await read() } catch (e) { said(e) }
   finally { polling = false; if (working()) after(poll, 2000) }
 }
+// It says at once whether it is open, which only a later close polls on.
+let known = false
+let unlive = conversation.connected((open) => {
+  live = open
+  if (!open) return void (known && poll())
+  if (opened) dispatchEvent(new Event('yak-reconnect'))
+  opened = true
+})
+known = true
 // Words sent from the box go to this page's door with the rest of its form,
 // the files held with them, in the request that spends their draft, so the
 // draft is spent only once the door has taken them in; words it did not take
@@ -2431,16 +2428,13 @@ let send = async (b) => {
 }
 signal.addEventListener('abort', () => {
   clearInterval(datesBeat)
+  unhear()
+  unlive()
   conversation.close()
   for (let id of timers) cancel(id)
-  if (wire) {
-    wire.onopen = wire.onmessage = wire.onclose = null
-    wire.close()
-  }
   boxed?.close()
   talk.close()
   drafts.close()
 }, { once: true })
-listen()
 }
 </script>`

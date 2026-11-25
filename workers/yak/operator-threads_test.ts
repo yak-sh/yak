@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
-import { operatorMemory, sentRows } from './operator-testing.ts'
+import { operatorMemory, sentRows, talking } from './operator-testing.ts'
 import {
   conversationOf,
   operatorFrames,
@@ -67,22 +67,27 @@ await store.g.apply([
 let named = (id: string) => Promise.resolve(id == person ? 'Ada' : 'Bea')
 let read = () => conversationOf(store, '/operator', root, named)
 let before = await read()
-let sent: { operator: { task: string; refresh?: boolean; lines?: Lines } }[] =
-  []
-let attachment = {
-  operator: true,
-  lines: true,
-  person,
-  space,
-  called: 'Pip',
-  opens: '/operator',
+let frames = operatorFrames(
+  store,
+  named,
+  () => Promise.resolve({ called: 'Pip', opens: '/operator' }),
+)
+let watched = talking(frames, person, space)
+await watched.ready()
+// The steps the page heard since it last looked, each as its socket sent it.
+let taken = 0
+let take = () => {
+  let steps = watched.steps() as {
+    task: string
+    refresh?: boolean
+    lines?: Lines
+  }[]
+  let fresh = steps.slice(taken).map((operator) => ({ operator }))
+  taken = steps.length
+  return fresh
 }
-let frames = operatorFrames(store, () => [{
-  deserializeAttachment: () => attachment,
-  send: (text) => sent.push(JSON.parse(text)),
-}], named)
 await frames.tell(chat)
-let privateFrames = sent.splice(0)
+let privateFrames = take()
 let closed =
   'Asked: Check the calendar. Done: Tuesday is free. Open: choose a time.'
 await store.g.apply([
@@ -118,7 +123,7 @@ let opening = (line: string) =>
 let line = first.lines()!.lines.find((l) => l.of?.includes(notice))!.id
 let unfolded = await opening(line)
 await frames.tell(root)
-let delivered = sent.splice(0)
+let delivered = take()
 let latest =
   'Asked: Check the calendar. Done: chose Tuesday at noon. Open: nothing.'
 await store.g.apply([{
@@ -126,7 +131,7 @@ await store.g.apply([{
   content: { body: latest },
   delivery: { through: input },
 }], { trusted: true })
-let refresh = sent.splice(0)
+let refresh = take()
 let updated = await read()
 let denied = await operatorRequest(
   { store, named } as unknown as Operator,

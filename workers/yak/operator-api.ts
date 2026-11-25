@@ -7,13 +7,15 @@
 //
 // The object the store stands in (build.ts) hands this its `/api/*` requests
 // from people who write in the space, and only theirs, and the sockets it
-// accepted; its other sockets (a build's page, a lent
-// browser, a page on the Operator's frames from before) are not this door's.
+// accepted; its other sockets (a build's page, a lent browser) are not this
+// door's. A person's chat page watches its conversation here too
+// (@yaks/platform/operator-talk), answered by the Operator's frames
+// (operator-host.ts `operatorFrames`).
 // A socket outlives the seat it was opened with, so it stands by its person's
 // seat as the directory has it now, on every frame in and every delivery out:
 // once they no longer write in the space it hears nothing more, and closes.
 import { api, type Handler, subscriptions } from '@yaks/api'
-import { beside, computed, reached } from '@yaks/api/reached'
+import { beside, computed, type Reached } from '@yaks/api/reached'
 import { type Hibernation, sockets } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
 import { type Level, writes } from '@yaks/member'
@@ -22,7 +24,7 @@ import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
 import { draftRows, draftsSpace } from '@yaks/platform/operator-drafts'
 import { settingsRow, settingsSpace } from '@yaks/platform/operator-settings'
 import { settingsIn } from './operator-persona.ts'
-import { talkAsked, talkRow } from '@yaks/platform/operator-talk'
+import { talkAsked } from '@yaks/platform/operator-talk'
 import {
   type Matches,
   matchesAsked,
@@ -50,6 +52,9 @@ export type Seating = {
   report?: (error: Error) => void
   clock?: Clock
   hold?: (work: Promise<void>) => void
+  /** the person's conversations, as their chat pages watch them
+   * (operator-host.ts `operatorFrames`); none are answered without */
+  talks?: Reached
 }
 
 let inputs = [
@@ -94,7 +99,7 @@ let personal = (asked: string) =>
 export let operatorApi = (
   store: OperatorStore,
   ctx: Hibernation,
-  { seat, report, clock = system, hold }: Seating,
+  { seat, report, clock = system, hold, talks }: Seating,
 ) => {
   let subs = subscriptions(store.g)
   let waiting = computed(store.g, {
@@ -184,38 +189,28 @@ export let operatorApi = (
     },
     tags: { request: 'Operator matches' },
   })
-  // The person's conversation with the Operator, which the chat page
-  // watches; its socket carries where their tab is (build.ts).
-  let talks = reached({
-    read: async (asked, read) => {
-      let person = read?.person, space = await spaceOf(store)
-      let talk = talkAsked(asked)
-      if (!person || !space || talk?.space != space) return []
-      return [talkRow(String(person), talk)]
-    },
-    tags: { request: 'Operator conversation' },
-  })
   // Whether each person holds a seat, as the directory last said for their
   // socket: what it is read with.
   let members = new Map<string, boolean>()
-  let live = sockets(
+  let theirs = beside(
     beside(
       beside(
-        beside(
-          beside(
-            beside(subs, waiting, personal),
-            drafts,
-            (asked) => draftsSpace(asked) != undefined,
-          ),
-          settings,
-          (asked) => settingsSpace(asked) != undefined,
-        ),
-        matches,
-        (asked) => matchesAsked(asked) != undefined,
+        beside(subs, waiting, personal),
+        drafts,
+        (asked) => draftsSpace(asked) != undefined,
       ),
-      talks,
-      (asked) => talkAsked(asked) != undefined,
+      settings,
+      (asked) => settingsSpace(asked) != undefined,
     ),
+    matches,
+    (asked) => matchesAsked(asked) != undefined,
+  )
+  let live = sockets(
+    // Its chat pages' conversations, each socket carrying where its tab is
+    // (build.ts).
+    talks
+      ? beside(theirs, talks, (asked) => talkAsked(asked) != undefined)
+      : theirs,
     {
       acceptWebSocket: (ws) => ctx.acceptWebSocket(ws),
       getWebSockets: () =>

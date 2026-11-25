@@ -22,6 +22,7 @@ import {
   operatorOn,
   operatorService,
   sentRows,
+  talking,
 } from './operator-testing.ts'
 import {
   attachmentTools,
@@ -141,7 +142,7 @@ let fixture = async () => {
     store,
     held,
     ctx,
-    sockets: service.sockets,
+    frames: service.frames,
     // The store the Builder's doors write, which a channel's words reach.
     served: service.store,
     drain: service.drain,
@@ -720,41 +721,20 @@ let email = (id: string, reply?: string, authenticated = true): Inbound => {
     setReject: () => {},
   }
 }
-// A page watching the Operator, at the object's sockets the way the
-// handshake leaves one (build.ts `#accept`), and a page watching a build.
-let watched = (operator: boolean) => {
-  let sent: {
-    operator?: { task: string; lines?: Lines; now: string }
-  }[] = []
-  let held: unknown = {
-    person: f.person,
-    role: 'owner',
-    space: f.space.eid,
-    operator,
-  }
-  let ws = {
-    readyState: 1,
-    send: (data: string) => void sent.push(JSON.parse(data)),
-    serializeAttachment: (v: unknown) => void (held = v),
-    deserializeAttachment: () => held,
-  }
-  f.sockets.push(ws)
-  return sent
-}
-let operatorPage = watched(true)
-let buildPage = watched(false)
+// A page watching the person's conversation with the Operator.
+let operatorPage = talking(f.frames, f.person, f.space.eid)
+await operatorPage.ready()
 let firstEmail = await arrived(await reading(email('request-1'), f.env), f.env)
 await f.drain()
 // Each step's frame, its lines drawn as the page draws them.
-let heard = operatorPage.flatMap((frame) =>
-  frame.operator
-    ? [{
-      ...frame.operator,
-      rows: frame.operator.lines ? sentRows(frame.operator.lines) : [],
-    }]
-    : []
-)
-test('a page watching the Operator hears each step as the lines it changed, and a build page hears none', () => {
+let heard = (operatorPage.steps() as {
+  lines?: Lines
+  now: string
+}[]).map((step) => ({
+  ...step,
+  rows: step.lines ? sentRows(step.lines) : [],
+}))
+test('a page watching the Operator hears each step as the lines it changed', () => {
   assertEquals(heard.length > 1, true)
   // The letter is the newest words of the person's one conversation.
   assertStringIncludes(
@@ -768,7 +748,6 @@ test('a page watching the Operator hears each step as the lines it changed, and 
   )
   // Ended, however it ended: nothing is said to be under way.
   assertEquals(heard.at(-1)!.now.endsWith('…'), false)
-  assertEquals(buildPage.length, 0)
 })
 let duplicateEmail = await arrived(
   await reading(email('request-1'), f.env),

@@ -1,11 +1,21 @@
 /**
- * A person's conversation with a space's Operator, as the chat page watches
- * it in the tab's page graph (D-475 step 4): the line `operatorTalk(space,
- * task)`, which the space's Operator store answers live with one row,
- * `operatorTalk{space, task}`, for the conversation `task` shows (none for a
- * new chat). The page graph's door routes the line to that store
- * (yaks.app's reach-door.ts), and carries the tab's whereabouts on it: a tab
- * watching an Operator's conversation is a tab on that Operator.
+ * A person's conversation with a space's Operator, as the chat page hears it
+ * in the tab's page graph (D-475 step 4): the line `operatorTalk(space,
+ * task)`, which the space's Operator store answers live (yaks.app's
+ * operator-host.ts `operatorFrames`) with one row, `operatorTalk{…}`, for
+ * the conversation `task` shows (none for a new chat). The page graph's door
+ * routes the line to that store (yaks.app's reach-door.ts), and carries the
+ * tab's whereabouts on it: a tab watching an Operator's conversation is a tab
+ * on that Operator.
+ *
+ * The row is answered whole each time the watch opens, again after a
+ * reconnect: `opened` is that answer's, and `standing` says where the
+ * conversation shown stands, so the page reads it again only when it moved.
+ * Each step after it is the row again with the step's frame (`step`, the
+ * Operator's lines, what it is doing, and what it changed) and `n` one more;
+ * a page that sees `n` skip reads the conversation again. A reply as it is
+ * written is a transient on `typing` (@yaks/graph `transient`), for the
+ * conversation `writing` names, ended as the step that wrote it lands.
  *
  * @module
  */
@@ -38,16 +48,33 @@ export let operatorTalkWords: VocabDoc = {
       properties: {
         space: { type: 'string' },
         task: { type: 'string' },
+        opened: { type: 'string' },
+        standing: { type: 'string' },
+        n: { type: 'integer' },
+        step: { type: 'object' },
+        typing: { type: 'string' },
+        writing: { type: 'string' },
       },
-      required: ['space'],
+      required: ['space', 'opened', 'n', 'typing'],
     },
   },
 }
 
-/** The row `person`'s line `talk` is answered with. */
-export let talkRow = (person: string, talk: Talk): Bundle => ({
-  entity: {
-    eid: derivedEid(`operatorTalk|${talk.space}|${person}|${talk.task ?? ''}`),
-  },
-  operatorTalk: { space: talk.space, ...talk.task ? { task: talk.task } : {} },
+/** What a conversation's row says beside what its line asks. */
+export type Told = {
+  opened: string
+  n: number
+  standing?: string
+  step?: Record<string, unknown>
+  writing?: string
+}
+
+/** The eid of `person`'s row for the line `talk`. */
+export let talkEid = (person: string, talk: Talk): string =>
+  derivedEid(`operatorTalk|${talk.space}|${person}|${talk.task ?? ''}`)
+
+/** The row `person`'s line `talk` is answered with, saying `told`. */
+export let talkRow = (person: string, talk: Talk, told: Told): Bundle => ({
+  entity: { eid: talkEid(person, talk) },
+  operatorTalk: { ...talk, typing: '', ...told },
 })

@@ -144,7 +144,7 @@ test('a step that joins the one before it is drawn with it as one line, in its p
 test('a reply as it is written is drawn as a settled reply, until its step lands', () => {
   using p = page([asked])
   p.talk.typed('It is the ')
-  p.talk.typed('**lentil** soup.')
+  p.talk.typed('It is the **lentil** soup.')
   let typed = p.box.querySelector('.Transcript_Lines > :last-child')!
   equal(typed.querySelector('.Transcript_Reply strong')?.textContent, 'lentil')
   equal(typed.querySelector('time') != null, true)

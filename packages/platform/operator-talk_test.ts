@@ -12,10 +12,15 @@ test('a conversation’s line says its space and the conversation shown, and par
 })
 
 test('each person’s conversation is its own row', () => {
-  let talk = { space: 'space-home', task: 'T-1' }
-  equal(talkRow('ada', talk).operatorTalk, talk)
+  let talk = { space: 'space-home', task: 'T-1' }, told = { opened: 'o', n: 0 }
+  equal(talkRow('ada', talk, told).operatorTalk, {
+    ...talk,
+    typing: '',
+    ...told,
+  })
   equal(
-    talkRow('ada', talk).entity.eid == talkRow('bea', talk).entity.eid,
+    talkRow('ada', talk, told).entity.eid ==
+      talkRow('bea', talk, told).entity.eid,
     false,
   )
 })

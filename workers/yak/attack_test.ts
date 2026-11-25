@@ -240,12 +240,7 @@ test("a page in another space opens none of the Operator's sockets (T-704)", asy
       k.at('yaks.app', path, {
         headers: { cookie: me.cookie, origin, upgrade: 'websocket' },
       })
-    for (
-      let path of [
-        `/manage/${me.name}/operator/ws`,
-        `/${me.name}?live=1`,
-      ]
-    ) {
+    for (let path of [`/manage/${me.name}/operator/ws`]) {
       let r = await socket(path, 'https://eve.yaks.app')
       assertEquals(r.status, 403, path)
       assertEquals((await r.json()).error.code, 'foreign_origin', path)

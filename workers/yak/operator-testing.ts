@@ -15,6 +15,7 @@ import type { Listed, Model, Price, Request as Ask } from '@yaks/model'
 import { choosing } from '@yaks/platform/operator-model'
 import { KERNEL, meta } from './meta.ts'
 import { assertEquals } from '@std/assert'
+import { until } from '@yaks/testing'
 import { background, caught, refusing } from './defects.ts'
 import type { Held } from './build-door.ts'
 import type { Env } from './env.ts'
@@ -23,11 +24,12 @@ import { operating, type Operator, type Options } from './operator.ts'
 import { chat, converse, ended } from './operator-conversations.ts'
 import type { Space } from './directory.ts'
 import {
-  type Listener,
   operatorFrames,
   operatorReply,
   operatorRequest,
 } from './operator-host.ts'
+import type { Frame } from '@yaks/api'
+import { operatorTalk, type Told } from '@yaks/platform/operator-talk'
 import {
   attachmentTools,
   handleChannels,
@@ -174,12 +176,7 @@ export let operatorService = (
     operator: operatorPost(env),
   }),
 ) => {
-  let sockets: Listener[] = []
-  let frames = operatorFrames(
-    store,
-    () => sockets,
-    (person) => operator.named(person),
-  )
+  let frames = operatorFrames(store, (person) => operator.named(person))
   let pending: Promise<void>[] = []
   let operator = operating(store, env, {
     tools: attachmentTools(env),
@@ -284,7 +281,7 @@ export let operatorService = (
   }
   return {
     binding,
-    sockets,
+    frames,
     store,
     drain: async () => {
       await drain(store, undefined, operator.watching)
@@ -334,3 +331,35 @@ export let sentRows = (sent: Lines, mentions?: string): Row[] =>
       ),
     ),
   }))
+
+/** A chat page's watch of `person`'s conversation `task` (none for a new
+ * chat) with the Operator of `space`, on its `frames` (operator-host.ts
+ * `operatorFrames`): every frame it heard, the steps among them (each a
+ * step's frame, as the page hears it), and the words of a reply it heard
+ * written. Steps are heard once it is `ready`. */
+export let talking = (
+  frames: Pick<ReturnType<typeof operatorFrames>, 'talks'>,
+  person: string,
+  space: string,
+  task?: string,
+) => {
+  let heard: Frame[] = []
+  frames.talks.open(
+    (f) => void heard.push(f),
+    'talk',
+    operatorTalk(space, task),
+    { person },
+  )
+  let told = () =>
+    heard.flatMap((f) => f.bundles ?? []).map((b) => b.operatorTalk as Told)
+  return {
+    heard,
+    told,
+    steps: () => told().flatMap((t) => t.step ? [t.step] : []),
+    typed: () =>
+      heard.flatMap((f) => f.transient ?? []).map((t) => t.text ?? '').join(
+        '',
+      ),
+    ready: () => until(() => heard.length > 0, { label: 'its answer' }),
+  }
+}

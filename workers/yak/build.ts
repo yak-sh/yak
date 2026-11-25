@@ -6,7 +6,6 @@
 import type { OperatorStore } from './operator-store.ts'
 import type { Press } from './operator-approvals.ts'
 import type { Bundle } from '@yaks/graph'
-import { line as ql } from '@yaks/query'
 import type { Hibernation, Wire } from '@yaks/durable-object'
 import { type DurableStorage, freely } from '@yaks/durable-object/sql'
 import type { Alarms } from '@yaks/durable-object/alarm'
@@ -32,7 +31,6 @@ import { COPY, copying } from './store-copy.ts'
 import { GRAPH, type Graphed } from './operator-graph.ts'
 import { type Bookmarked, bookmarks, RESTORING } from './bookmarks.ts'
 import {
-  type Held,
   NOBODY,
   NOT_A_WRITER,
   OWED,
@@ -73,10 +71,9 @@ let tabOf = (data: string | ArrayBuffer): Tab | undefined => {
   } catch { /* not a tab's say */ }
 }
 
-// Who is at a socket: a page watching the Operator, or a browser lent to it
+// Who is at a socket of the Operator's own: a browser lent to it
 // (operator-browser.ts).
-type Watching = Held & { operator: true }
-type Socket = Watching | Lent
+type Socket = Lent
 // A page reading the Operator's store (operator-api.ts), and where its tab
 // is, once it said.
 type Paged = { read?: { person?: string }; tab?: Tab }
@@ -601,21 +598,7 @@ export class Builder extends Durable {
     let read = await reading
     if (API.test(new URL(request.url).pathname)) {
       let asker = { person, space: spaceId }
-      let answer = await read.door.answer(
-        request,
-        asker,
-        access.administrative,
-      )
-      // A page loaded before it read its drafts here hears them on the
-      // Operator's frames, as it did when they were written there, until
-      // T-165931.
-      if (request.method == 'POST' && answer.ok) {
-        let drafts = await read.store.g.read(ql`.draft.by=${person}`)
-        void this.#frames?.drafts(asker, drafts).catch((e) =>
-          caught(e, { request: 'operator socket' })
-        )
-      }
-      return answer
+      return await read.door.answer(request, asker, access.administrative)
     }
     if (new URL(request.url).pathname == '/operator/settings') {
       let { setting } = await import('./operator-persona.ts')
@@ -643,27 +626,6 @@ export class Builder extends Durable {
         () => this.#arming,
       )
     }
-    if (new URL(request.url).pathname == '/operator/ws') {
-      let asked = new URL(request.url).searchParams
-      let watching = {
-        person,
-        role,
-        space: spaceId,
-        administrative: access.administrative,
-        called: space.operator,
-        opens: managePath('operator', space.slug),
-        operator: true as const,
-      }
-      // The conversation the page was drawn with, whose standing its `ready`
-      // says, read once the socket hears every step after it.
-      let talk = asked.get('talk')
-      let { standingAt } = await import('./operator-host.ts')
-      return this.#accept(
-        watching,
-        undefined,
-        talk ? () => standingAt(read.store, talk, watching) : undefined,
-      )
-    }
     let args = await request.json() as Record<string, unknown>
     let { operatorRequest } = await import('./operator-host.ts')
     let held = {
@@ -679,10 +641,6 @@ export class Builder extends Durable {
       new URL(request.url).pathname,
       args,
       () => this.#arming,
-      (bundles) =>
-        void this.#frames?.drafts(held, bundles).catch((e) =>
-          caught(e, { request: 'operator socket' })
-        ),
     )
     if (response) return response
     // Its steps run on the pool, as every other Operator session's do: words
@@ -844,17 +802,27 @@ export class Builder extends Durable {
         // `named`).
         let named = (person: string) =>
           dirPart.directoryOf(this.#env.STORE).nameAt(person)
-        this.#frames = operatorFrames(
-          store,
-          () => this.#ctx.getWebSockets(),
-          named,
-          (held) => this.#writes(held),
-        )
-        // Its pages' reads and writes through @yaks/api, whose sockets the
-        // runtime kept while the object was away are watching again.
         let { operatorApi } = await import('./operator-api.ts')
         let { spaceOf } = await import('./operator-root.ts')
+        // Its conversations as their pages watch them, drawn with the
+        // Operator's name and where a conversation opens.
+        let opens = async () => {
+          let eid = this.ctx.id?.name ?? await spaceOf(store)
+          let space = eid
+            ? await dirPart.directoryOf(this.#env.STORE).at(eid)
+            : null
+          return space
+            ? {
+              called: space.operator,
+              opens: managePath('operator', space.slug),
+            }
+            : {}
+        }
+        this.#frames = operatorFrames(store, named, opens)
+        // Its pages' reads and writes through @yaks/api, whose sockets the
+        // runtime kept while the object was away are watching again.
         let door = operatorApi(store, this.#ctx, {
+          talks: this.#frames.talks,
           clock: this.#env.CLOCK,
           hold: (work) => this.#ctx.waitUntil?.(work),
           // A page's socket stands by its person's seat in the space as it is
@@ -1109,36 +1077,13 @@ export class Builder extends Durable {
     },
   })
 
-  // The 101, and the socket handed to the runtime so it outlives this object.
-  // A browser's socket speaks the platform's subprotocol, which the 101 names
-  // as a browser requires (identity.ts `PROTOCOL`). A page watching the
-  // Operator is told it is ready with where the conversation it shows stands,
-  // so it reads it again only when that moved (operator-host.ts `standingAt`).
-  #accept(
-    held: Socket,
-    request?: Request,
-    standing?: () => Promise<string | undefined>,
-  ): Response {
+  // The 101, and the socket handed to the runtime so it outlives this object:
+  // a browser lent to the Operator, which speaks the platform's subprotocol,
+  // which the 101 names as a browser requires (identity.ts `PROTOCOL`).
+  #accept(held: Socket, request?: Request): Response {
     let pair = new WebSocketPair()
     this.#ctx.acceptWebSocket(pair[1])
-    if ('browser' in held) pair[1].serializeAttachment(held)
-    else {
-      let ws = pair[1]
-      ws.serializeAttachment(held)
-      let ready = (at?: string) =>
-        ws.send(
-          JSON.stringify(
-            at == null ? { ready: true } : { ready: true, standing: at },
-          ),
-        )
-      if (!standing) ready()
-      else {
-        void standing().then(ready, (e) => {
-          caught(e, { request: 'operator socket' })
-          ready()
-        })
-      }
-    }
+    pair[1].serializeAttachment(held)
     return new Response(
       null,
       {

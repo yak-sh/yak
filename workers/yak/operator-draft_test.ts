@@ -19,6 +19,7 @@ import {
   storeAnswer,
 } from './operator-page.ts'
 import { REACH, type StoreDoor } from '@yaks/platform/routes'
+import { talkAsked, talkRow, type Told } from '@yaks/platform/operator-talk'
 import {
   installPair,
   made as pairs,
@@ -30,7 +31,7 @@ import { clock } from './timing.ts'
 import type { Wire } from '@yaks/durable-object'
 import type { Who } from './session.ts'
 import { pageModule } from './page-module-probe.ts'
-import { released } from './operator-testing.ts'
+import { released, talking } from './operator-testing.ts'
 import { openedOf, operatorFrames } from './operator-host.ts'
 import { operatorStore } from './operator-store.ts'
 import { inputOf } from '@yaks/session'
@@ -62,8 +63,10 @@ await released(
   'Notes',
 )
 let base = 'https://yaks.app/manage/clerk/operator'
-// The lines the page graph watches the person's drafts in a space on.
+// The lines the page graph watches the person's drafts and conversation in a
+// space on.
 let DRAFTS = '.operatorDraft.space='
+let TALK = '.operatorTalk.space='
 // What the kernel answers the page at its address: the tab's page graph's
 // door (reach-door.ts), a door of its store (operator-api.ts), or the
 // Operator's own.
@@ -215,6 +218,20 @@ type Tab = {
   live: Map<string, string>
   /** the drafts packets sent it, not yet taken in */
   acks: Set<string>
+  /** each conversation subscription's answer and steps as the page holds
+   * them, by id */
+  talks: Map<
+    string,
+    {
+      opened: string
+      n: number
+      typing?: string
+      seq?: number
+      writing?: boolean
+    }
+  >
+  /** every conversation row it was sent, as the page took it */
+  told: Told[]
 }
 type View = Pick<ReturnType<typeof parseHTML>, 'document'> & {
   windowEvents: EventTarget
@@ -263,6 +280,8 @@ let load = async (
       frames: 0,
       live: new Map(),
       acks: new Set(),
+      talks: new Map(),
+      told: [],
     } as Tab,
   }
   // The frames the tab's page graph heard before this page: one after them
@@ -432,13 +451,13 @@ let load = async (
       set: () => void loads.app++,
     })
   }
-  // The page's socket onto its Operator, which a test speaks for, or carries
-  // to the Builder object as the edge does (`connect`), and the tab's page
-  // graph's sockets, carried to its door as they open (`reach`).
+  // Any socket the page opens of its own, which it should not, and the tab's
+  // page graph's sockets, carried to its door as they open (`reach`).
   let sockets: Page[] = [], stores = tab.stores
-  // The Builder's halves of the Operator's sockets, closed as the page is
-  // left.
-  let servers: Wire[] = []
+  // The open conversation subscription the Operator answered, if any.
+  let talking = () =>
+    [...tab.live].findLast(([id, q]) => q.startsWith(TALK) && tab.talks.has(id))
+      ?.[0]
   let handshakes = 0
   let reach = async (page: Page) => {
     handshakes++
@@ -466,7 +485,21 @@ let load = async (
       )
       // Heard once the page has taken it in, which it says by acking it.
       if (drafts && packet.ack) tab.acks.add(packet.ack)
-      page.emit('message', { data })
+      // The Operator's conversation rows, numbered with what a test says for
+      // it (`hear`), as one sequence.
+      for (let f of frames) {
+        if (!tab.live.get(f.id)?.startsWith(TALK)) continue
+        for (let b of f.bundles ?? []) {
+          let told = b.operatorTalk as Told | undefined
+          if (!told) continue
+          if (f.reset) tab.talks.set(f.id, { opened: told.opened, n: told.n })
+          let held = tab.talks.get(f.id)!
+          told.opened = held.opened
+          told.n = told.step ? ++held.n : held.n
+          tab.told.push(told)
+        }
+      }
+      page.emit('message', { data: JSON.stringify(packet) })
     }
     if (page.readyState != 0) return door.emit('close')
     page.door = door
@@ -489,7 +522,6 @@ let load = async (
   }
   class Page {
     readyState = 0
-    server?: Wire
     door?: Pair[1]
     onopen?: () => void
     onmessage?: (e: { data: string }) => void
@@ -520,7 +552,6 @@ let load = async (
     close() {
       if (this.readyState == 3) return
       this.readyState = 3
-      if (this.server) shut(this.server)
       this.door?.emit('close')
       queueMicrotask(() => this.emit('close'))
     }
@@ -549,7 +580,6 @@ let load = async (
     leave()
     for (let t of timers.values()) clearTimeout(t)
     waits.clear()
-    for (let server of servers.splice(0)) shut(server)
     // The tab is closed: its page graph goes with it.
     for (let graph of [...tab.graphs.values()]) graph.close()
   })
@@ -626,30 +656,86 @@ let load = async (
       await until(() => received == talks)
       await tick()
     },
-    // The Operator's socket opening, as after a deploy restarted it.
-    open: () => sockets[0].emit('open'),
-    // The page's newest socket upgraded through the Builder object, which
-    // speaks for it from then on.
-    connect: async () => {
-      let page = sockets.at(-1)!
-      let opened = false
-      // What the Builder says before the page hears its socket open comes
-      // after, as a browser delivers it.
-      let early: string[] = []
-      servers.push(
-        await upgrade(
-          page.url,
-          as,
-          (data) => opened ? page.onmessage?.({ data }) : void early.push(data),
-        ),
-      )
-      page.onopen?.()
-      opened = true
-      for (let data of early.splice(0)) page.onmessage?.({ data })
+    // Once the Operator answered the page's conversation, through its page
+    // graph: what a test says for it (`hear`) comes after.
+    answered: () =>
+      until(() => talking() != undefined, { label: 'its answer' }),
+    // A frame the Operator says of the page's conversation, on its page
+    // graph's socket as the door carries it, once the page took it in: a
+    // step's (`{operator}`), its watch answered whole again
+    // (`{ready, standing}`, with no row when `gone`), and words of a reply
+    // written in the conversation `writing` (`{typing}`, the words so far
+    // when it is answered whole).
+    hear: async (frame: {
+      operator?: object
+      ready?: true
+      standing?: string
+      gone?: true
+      typing?: string
+      writing?: string
+    }) => {
+      let id = await until(() => talking(), { label: 'its answer' })
+      let held = tab.talks.get(id)!
+      let page = stores.findLast((s) => s.readyState == 1) as Page
+      let talk = talkAsked(tab.live.get(id)!)!
+      if (frame.ready) {
+        held.opened = crypto.randomUUID(), held.n = 0, held.writing = false
+      }
+      let row = talkRow(as.person!, talk, {
+        opened: held.opened,
+        n: frame.operator ? ++held.n : held.n,
+        ...frame.standing == null ? {} : { standing: frame.standing },
+        ...frame.operator ? { step: frame.operator as Told['step'] } : {},
+        ...frame.writing ? { writing: frame.writing } : {},
+      })
+      // A reply's words, said whole as it begins and each after on the
+      // last; a step ends it.
+      let typed = []
+      let to = (op: string, text?: string) => ({
+        id: held.typing!,
+        entity: row.entity.eid,
+        component: 'operatorTalk',
+        property: 'typing',
+        seq: held.seq = op == 'begin' ? 0 : held.seq! + 1,
+        op,
+        ...text == null ? {} : { text },
+      })
+      if (frame.operator && held.writing) {
+        typed.push(to('end'))
+        held.writing = false
+      }
+      if (frame.typing != null) {
+        if (!held.writing) held.typing = crypto.randomUUID()
+        typed.push(to(held.writing ? 'append' : 'begin', frame.typing))
+        held.writing = true
+      }
+      let ack = crypto.randomUUID()
+      page.emit('message', {
+        data: JSON.stringify({
+          frames: [{
+            id,
+            ...frame.gone
+              ? { bundles: [] }
+              : frame.typing != null && !frame.writing
+              ? {}
+              : { bundles: [row] },
+            ...frame.ready
+              ? { reset: true, transientReset: [row.entity.eid] }
+              : {},
+            ...typed.length ? { transient: typed } : {},
+          }],
+          ack,
+        }),
+      })
+      await until(() => page.sent.some((d) => d.includes(ack)), {
+        label: 'the page took it in',
+      })
     },
-    // A frame the Operator's socket sends the page.
-    hear: (frame: unknown) =>
-      sockets[0].onmessage!({ data: JSON.stringify(frame) }),
+    // Where the page's conversation stood as the server drew it.
+    standing: () =>
+      JSON.parse(
+        /let standing = ([^\n]*)/.exec(source)?.[1] ?? 'null',
+      ) as string | null,
     press: (button: Element) =>
       button.dispatchEvent(new Event('click', { bubbles: true })),
     // A key pressed on the page.
@@ -662,6 +748,11 @@ let load = async (
     // How many drafts subscriptions the tab's page graph holds open.
     drafting: () =>
       [...tab.live.values()].filter((q) => q.startsWith(DRAFTS)).length,
+    // The conversation rows its page graph was sent.
+    told: () => tab.told,
+    // How many conversation subscriptions it holds open.
+    conversing: () =>
+      [...tab.live.values()].filter((q) => q.startsWith(TALK)).length,
     // Once the page has heard the store's drafts.
     heard: async () => {
       await until(() => tab.frames > before, { label: 'the store’s draft' })
@@ -676,29 +767,6 @@ let load = async (
     },
     leave,
   }
-}
-// The runtime's socket factory, one upgrade at a time: the Builder's half of
-// a socket a page opened, carried to it as the edge does, its frames heard on
-// the page's half and sent on to `hear`.
-let upgrading = Promise.resolve()
-let upgrade = (url: string, as: Who, hear: (data: string) => void) => {
-  let made = upgrading.then(async () => {
-    let to = url.replace(/^ws/, 'http')
-    let res = await serve(to, { headers: { upgrade: 'websocket' } }, as)
-    let { pair } = res as Response & { pair?: Pair }
-    if (!pair) throw new Error(`${to}: no socket (${res.status})`)
-    pair[0].addEventListener('message', (e) => hear(String(e.data)))
-    pair[0].accept()
-    return pair[1] as unknown as Wire
-  })
-  upgrading = made.then(() => {}, () => {})
-  return made
-}
-// A socket the page closed, closed as the runtime closes it: no longer open,
-// and its object told.
-let shut = (server: Wire) => {
-  server.readyState = 3
-  p.builder(eid).webSocketClose(server)
 }
 // While set, a read of the conversation is answered as the store stood when
 // it was asked, but reaches the page only once this settles.
@@ -788,10 +856,10 @@ await until(async () => await stored() == 'Order salt for the township garage')
 typed.leave()
 let waited = await load(storage(), false, 'new', {}, undefined, 'held')
 await until(waited.read)
-await until(() => waited.sockets.length > 1)
+await until(() => waited.stores.length > 1)
 waited.leave()
 
-test("the Operator's chat app reads its draft again when its socket is never answered", () => {
+test("the Operator's chat app reads its draft again when its page graph's socket is never answered", () => {
   assertEquals(waited.say.value, 'Order salt for the township garage')
 })
 
@@ -816,11 +884,11 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   let doc = first.document as unknown as Document
   let menu = doc.getElementById('menu')
   await first.heard()
-  first.open()
   assert(!stays(doc), 'the navigator can leave the conversation in place')
   first.leave()
-  assertEquals(first.sockets.map((s) => s.readyState), [3])
-  // The tab's page graph stays open, holding no page's drafts.
+  // The tab's page graph stays open, holding no page's drafts or
+  // conversation, and the page opened no socket of its own.
+  assertEquals([first.sockets.length, first.conversing()], [0, 0])
   assertEquals(first.drafting(), 0)
   assertEquals(first.intervals.size, 0)
   assertEquals(first.timeouts(), 0)
@@ -840,8 +908,7 @@ test('swapping between conversations and leaving for Manage lets go of each chat
     first.view,
   )
   await second.heard()
-  second.open()
-  assertEquals(second.sockets.length, 1)
+  assertEquals([second.sockets.length, second.conversing()], [0, 1])
   assertEquals(second.stores.length, 1)
   assertEquals(second.intervals.size, 1)
   assertEquals(doc.querySelectorAll('#ask').length, 1)
@@ -852,16 +919,13 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   )
   assertEquals(doc.querySelectorAll('[data-task]').length, 1)
 
-  // Where the tab is goes on its page graph's socket, not the Operator's.
+  // Where the tab is goes on its page graph's socket.
   let tabs = () =>
     second.stores.flatMap((s) => s.sent).filter((d) => 'tab' in JSON.parse(d))
       .length
-  let before = [second.sockets[0].sent.length, tabs()]
+  let before = tabs()
   second.focus()
-  assertEquals([second.sockets[0].sent.length, tabs()], [
-    before[0],
-    before[1] + 1,
-  ])
+  assertEquals(tabs(), before + 1)
   let trigger = doc.querySelector('[data-menu-trigger]')!
   second.press(trigger)
   second.press(doc.querySelector('[data-entry-copy]')!)
@@ -874,7 +938,7 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   ).document
   swap(doc, manage as unknown as Document, sources(doc, base), () => {}, base)
   assertEquals(doc.querySelector('main')?.textContent, 'Manage')
-  assertEquals(second.sockets.map((s) => s.readyState), [3])
+  assertEquals([second.sockets.length, second.conversing()], [0, 0])
   assertEquals(second.drafting(), 0)
   assertEquals(second.intervals.size, 0)
   assertEquals(second.timeouts(), 0)
@@ -890,8 +954,7 @@ test('swapping between conversations and leaving for Manage lets go of each chat
     second.view,
   )
   await back.heard()
-  back.open()
-  assertEquals(back.sockets.length, 1)
+  assertEquals([back.sockets.length, back.conversing()], [0, 1])
   assertEquals(back.stores.length, 1)
   assertStringIncludes(
     doc.querySelector('[data-conversation]')!.textContent!,
@@ -1006,10 +1069,10 @@ test('Stop in the box stops the conversation it shows', async () => {
 
 test('the app beside the chat loads again when the Operator changes it, and only then', async () => {
   let page = await load(storage(), false, 'new', apps, 'notes')
-  page.hear(changing('x', { space: '', app: 'club' }))
-  page.hear(changing('x', { space: 'mill', app: 'notes' }))
-  page.hear(changing('x', { space: 'clerk', app: 'notes' }))
-  page.hear(changing('x', { space: '', app: 'notes' }))
+  await page.hear(changing('x', { space: '', app: 'club' }))
+  await page.hear(changing('x', { space: 'mill', app: 'notes' }))
+  await page.hear(changing('x', { space: 'clerk', app: 'notes' }))
+  await page.hear(changing('x', { space: '', app: 'notes' }))
   assertEquals(page.loads, { app: 2, page: 0 })
   page.leave()
 })
@@ -1028,7 +1091,7 @@ test('a chat with no app beside it stays as it is when the Operator changes one'
   let task = page.document.querySelector('[data-task]')!.getAttribute(
     'data-task',
   )!
-  page.hear(changing(task, { space: '', app: 'club' }))
+  await page.hear(changing(task, { space: '', app: 'club' }))
   assertEquals(page.loads, { app: 0, page: 0 })
   page.leave()
 })
@@ -1079,7 +1142,7 @@ test("a newcomer's chat goes to the app their Operator is making, by its address
   await files(newcomer, 'recipes', ['vocab.json', {
     $defs: { recipe: { properties: { serves: { type: 'number' } } } },
   }])
-  page.hear(working({ space: '', app: 'recipes' }))
+  await page.hear(working({ space: '', app: 'recipes' }))
   assert(await until(() => page.went.length > 0))
   assertEquals(new URL(page.went[0]).searchParams.get('app'), 'recipes')
   assertEquals(page.document.querySelector('[data-app]'), null)
@@ -1106,11 +1169,13 @@ test("a newcomer's chat goes to the app their Operator is making, by its address
 
 test('a signed-in person’s chat goes to an app their Operator starts there, and not one it only works on', async () => {
   let page = await load(storage())
-  page.hear(working({ space: '', app: 'notes' }))
+  await page.hear(working({ space: '', app: 'notes' }))
   await tick()
   assertEquals(page.went, [])
   let recipes = { space: '', app: 'recipes' }
-  page.hear({ operator: { ...working(recipes).operator, started: [recipes] } })
+  await page.hear({
+    operator: { ...working(recipes).operator, started: [recipes] },
+  })
   assert(await until(() => page.went.length > 0))
   assertEquals(new URL(page.went[0]).searchParams.get('app'), 'recipes')
   assertEquals(page.document.querySelector('[data-app]'), null)
@@ -1133,9 +1198,8 @@ test('words typed on one page show on the person’s other open page as its sock
 test('a page whose reads meet a deploy’s 502 reads again and catches up quietly', async () => {
   let page = await load(storage(), false, park, {}, undefined, 'deploying')
   let box = page.document.querySelector('[data-conversation]')!
-  page.open()
   // where the conversation stands, moved by a line the page has not drawn
-  page.hear({ ready: true, standing: 'moved' })
+  await page.hear({ ready: true, standing: 'moved' })
   await page.heard()
   await until(() => page.talks() >= 2 && box.querySelector('[data-task]'))
   assertEquals(page.failed.size, 2, 'the draft and the conversation met it')
@@ -1145,18 +1209,19 @@ test('a page whose reads meet a deploy’s 502 reads again and catches up quietl
   page.leave()
 })
 
-// The page is served with the conversation drawn, and its socket opening
-// reads it again only when a line landed between the two.
+// The page is served with the conversation drawn, and the Operator's answer
+// to its watch of it reads it again only when a line landed between the two.
 test('opening the chat app reads the conversation once, with the page', async () => {
   let page = await load(storage(), false, park)
-  await page.connect()
+  await page.answered()
   await tick()
   let still = page.talks()
   page.leave()
-  let landed = await load(storage(), false, park)
+  // Its page graph's first handshake goes unanswered while a line lands.
+  let landed = await load(storage(), false, park, {}, undefined, 'held')
   let box = landed.document.querySelector('[data-conversation]')!
   await begun('Ask for the north shelter as well')
-  await landed.connect()
+  await landed.answered()
   await until(() => box.innerHTML.includes('Ask for the north shelter as well'))
   assertEquals([still, landed.talks()], [0, 1])
   assertStringIncludes(box.innerHTML, 'Ask for the north shelter as well')
@@ -1175,7 +1240,7 @@ test('archive and restore while disconnected refresh the conversation once on re
         entity: { eid: id },
         archived: archived ? {} : null,
       }], { trusted: true })
-      await page.connect()
+      await page.answered()
       let button = () =>
         page.document.querySelector(`[data-archive-entries="${id}"]`)
       await until(() =>
@@ -1236,12 +1301,12 @@ test('words sent are drawn before the Operator takes them in, then once as its l
 // put in place meanwhile is read again, never drawn over.
 test('a line heard while the page reads the conversation stays on it', async () => {
   let page = await load(storage(), false, park)
-  await page.connect()
+  await page.answered()
   await tick()
   let box = page.document.querySelector('[data-conversation]')!
   let release = () => {}
   slow = new Promise((ok) => release = ok)
-  page.hear({ ready: true, standing: 'moved' })
+  await page.hear({ ready: true, standing: 'moved' })
   await until(page.talks)
   slow = undefined
   await begun('Ask for the lakeside shelter too')
@@ -1265,7 +1330,7 @@ test(
   'a read that leaves out words the page showed keeps their order and reports it, unless they were removed',
   async () => {
     let page = await load(storage(), false, park)
-    await page.connect()
+    await page.answered()
     await tick()
     let card = page.document.querySelector('[data-task]') as HTMLElement
     let ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
@@ -1280,7 +1345,7 @@ test(
       })),
       { trusted: true },
     )
-    page.hear({
+    await page.hear({
       operator: {
         task: card.dataset.task,
         lines: {
@@ -1302,7 +1367,7 @@ test(
     let was = globalThis.reportError
     globalThis.reportError = (e: unknown) => void reported.push(String(e))
     try {
-      page.hear({ ready: true, standing: 'moved' })
+      await page.hear({ ready: true, standing: 'moved' })
       await until(() => reported.length == 2)
       await tick()
       assertEquals(
@@ -1326,7 +1391,10 @@ test(
 
 // A helper's line, drawn under the step that started it, moves where the
 // conversation stands as the conversation's own lines do.
-test('a helper’s line landing before the socket opens is read, once', async () => {
+test('a helper’s line landing before the conversation is answered is read, once', async () => {
+  // The Operator's work owed from before is done, so no step of it lands.
+  await p.builder(eid).alarm()
+  await p.settled()
   // The Builder object's store, beside the object, as another write lands.
   let store = await operatorStore(p.states.get(`builder ${eid}`)!.storage)
   let { g } = store
@@ -1349,16 +1417,17 @@ test('a helper’s line landing before the socket opens is read, once', async ()
     told('Find the pavilion’s June dates'),
   ], { trusted: true })
   let page = await load(storage(), false, park)
-  await page.connect()
+  await page.answered()
   await tick()
   let still = page.talks()
   page.leave()
-  let landed = await load(storage(), false, park)
+  // Its page graph's first handshake goes unanswered while a line lands.
+  let landed = await load(storage(), false, park, {}, undefined, 'held')
   let box = landed.document.querySelector('[data-conversation]')!
   await g.apply([told('Find the north shelter’s June dates too')], {
     trusted: true,
   })
-  await landed.connect()
+  await landed.answered()
   await until(landed.talks)
   await landed.received()
   assertEquals([still, landed.talks()], [0, 1])
@@ -1397,10 +1466,6 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
   await step({ content: { body: 'Import the people CSV' }, using: {} })
   let own = await load(storage(), false, helper)
   let theirs = await load(storage(), false, park)
-  // Both pages' sockets onto the Operator are open, so neither gives up on
-  // its socket and polls the conversation while a slow run lasts.
-  own.open()
-  theirs.open()
   let text = (page: typeof own, at: string) =>
     page.document.querySelector(at)?.textContent ?? ''
   // How a row stands is its mark's label, beside its title.
@@ -1434,30 +1499,40 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
   }
   let first = drawn()
   let link = theirs.document.querySelector(`${row} a`)?.getAttribute('href')
-  // The Builder object's frames, to both pages' sockets.
-  let frames = operatorFrames(store, () =>
-    [own, theirs].map((page) => ({
-      send: (data: string) => page.sockets[0].onmessage!({ data }),
-      deserializeAttachment: () => ({
-        operator: true,
-        lines: true,
-        person,
-        space: eid,
-        opens: link?.replace(/\/[^/]+$/, ''),
-      }),
-    })))
-  await frames.tell(helper)
+  // The Operator's frames, which this test tells of the helper's steps it
+  // writes, each step said to both pages as their conversations hear it.
+  let frames = operatorFrames(
+    store,
+    undefined,
+    () => Promise.resolve({ opens: link?.replace(/\/[^/]+$/, '') }),
+  )
+  let watches = [own, theirs].map((page) => ({
+    page,
+    heard: 0,
+    watch: talking(frames, person, eid),
+  }))
+  await Promise.all(watches.map((w) => w.watch.ready()))
+  let tell = async (session: string) => {
+    await frames.tell(session)
+    for (let w of watches) {
+      for (let step of w.watch.steps().slice(w.heard)) {
+        w.heard++
+        await w.page.hear({ operator: step })
+      }
+    }
+  }
+  await tell(helper)
   let tool = crypto.randomUUID()
   await step({ ask: {}, using: {} })
   await step({
     entity: { eid: tool },
     call: { to: crypto.randomUUID(), args: {} },
   })
-  await frames.tell(helper)
+  await tell(helper)
   let running = drawn()
   await step({ result: { call: tool }, content: { body: 'ok' } })
   await step({ output: {}, content: { body: 'Imported 100 people.' } })
-  await frames.tell(helper)
+  await tell(helper)
   let ended = drawn()
   own.leave()
   theirs.leave()
@@ -1541,7 +1616,7 @@ test('the bar’s button to the aside shows a dot for each, “+N” past four, 
   }
   // A helper's step lands: its dot changes, and the button says so.
   let at = new Date().toISOString()
-  page.hear({
+  await page.hear({
     operator: {
       task: document.querySelector('[data-task]')?.getAttribute('data-task'),
       helping: {
@@ -1564,12 +1639,118 @@ test('the bar’s button to the aside shows a dot for each, “+N” past four, 
   assertStringIncludes(label!, '2 failed')
 })
 
+// A step that changed no line.
+let none = { lines: [], entries: [], helpers: [], offers: {}, tools: {} }
+
+// A reply's words reach the page as they are written, through its page
+// graph and no socket of its own, and are drawn once: across a reconnect
+// mid-reply, which answers with the words so far, and as the step that wrote
+// them lands.
+test('a reply shows as it is written, once across a reconnect, until its step lands', async () => {
+  let page = await load(storage(), false, park)
+  let task = page.document.querySelector('[data-task]')!.getAttribute(
+    'data-task',
+  )!
+  let last = () =>
+    page.document.querySelector('[data-conversation] .Transcript_Lines')!
+      .lastElementChild!.textContent!
+  await page.answered()
+  await page.hear({ typing: 'It is the ', writing: task })
+  await page.hear({ typing: 'lentil soup.' })
+  let written = last()
+  let talks = page.talks()
+  // The page graph's socket opens again: the conversation stands where the
+  // page drew it, and the reply's words so far come whole.
+  await page.hear({
+    ready: true,
+    standing: page.standing()!,
+    typing: 'It is the lentil soup. With bread.',
+    writing: task,
+  })
+  let again = last()
+  await page.hear({ operator: { task, lines: none, now: '' } })
+  let landed = page.document.querySelector('[data-conversation]')!.textContent!
+  page.leave()
+  assertStringIncludes(written, 'It is the lentil soup.')
+  assertStringIncludes(again, 'It is the lentil soup. With bread.')
+  assertEquals(again.split('It is the').length, 2, 'drawn once')
+  assertEquals(page.talks(), talks, 'nothing read again')
+  assertEquals(landed.includes('With bread.'), false, 'the step took its place')
+  assertEquals(page.sockets.length, 0)
+})
+
+// The watch's answer can hold no row (a conversation not theirs any more, a
+// store answering it after a restore): the page keeps what it shows, and a
+// later answer and its steps are heard as ever.
+test('a conversation’s row taken away leaves the page as it stands, and its next answer is heard', async () => {
+  let page = await load(storage(), false, park)
+  let task = page.document.querySelector('[data-task]')!.getAttribute(
+    'data-task',
+  )!
+  await page.answered()
+  let shown = page.document.querySelector('[data-conversation]')!.innerHTML
+  let talks = page.talks()
+  await page.hear({ ready: true, gone: true })
+  let kept = page.document.querySelector('[data-conversation]')!.innerHTML
+  await page.hear({ ready: true, standing: page.standing()! })
+  await page.hear({
+    operator: { task, lines: none, now: 'Thinking…', doing: 'thinking' },
+  })
+  let now = [...page.document.querySelectorAll('[data-task] [data-now]')]
+    .at(-1)?.textContent
+  page.leave()
+  assertEquals([kept == shown, page.talks()], [true, talks])
+  assertEquals(now, 'Thinking…')
+})
+
+// However long the conversation, the page graph holds one row of it beside
+// the entries its steps drew, each step's frame replacing the last's.
+test('a long conversation is one row in the page graph, whatever its steps', async () => {
+  let page = await load(storage(), false, park)
+  let task = page.document.querySelector('[data-task]')!.getAttribute(
+    'data-task',
+  )!
+  await page.answered()
+  let steps = 200
+  for (let i = 0; i < steps; i++) {
+    let id = crypto.randomUUID()
+    await page.hear({
+      operator: {
+        task,
+        lines: {
+          lines: [{ id, uses: [id] }],
+          entries: [{
+            entity: { eid: id },
+            entry: { session: task, seq: 2000 + i },
+            created: { at: new Date().toISOString() },
+            output: {},
+            content: { body: `Step ${i} of the long run` },
+          }],
+          helpers: [],
+          offers: {},
+          tools: {},
+        },
+        now: '',
+      },
+    })
+  }
+  let [graph] = [...page.view.tab.graphs.values()] as unknown as {
+    graph: { read: (q: string) => Promise<{ operatorTalk?: Told }[]> }
+  }[]
+  let rows = await graph.graph.read('.operatorTalk&*')
+  let entries = await graph.graph.read('.entry&*')
+  let bytes = (b: unknown) => new TextEncoder().encode(JSON.stringify(b)).length
+  page.leave()
+  assertEquals(rows.length, 1)
+  assertEquals(rows[0].operatorTalk?.n, steps)
+  assert(bytes(rows) < 2_000, `its row is the last step's: ${bytes(rows)} B`)
+  assert(entries.length >= steps, 'each step’s entries, which it draws')
+})
+
 // Drafts are read only as the store's socket answers: one it cannot open is
 // tried again, and a page is never asked to read them on a timer.
 test('a page whose store cannot be reached says its draft is kept, and asks for it no other way', async () => {
   let page = await load(storage(), false, 'new', {}, undefined, 'down')
-  // Only the store is out of reach: the Operator's socket opens.
-  page.open()
   // until the page says so, within a minute, then a hundred seconds more
   let said = await page.pass(60_000, () => page.status() != '')
   await page.pass(100_000)
@@ -1587,7 +1768,6 @@ test('a page whose store cannot be reached says its draft is kept, and asks for 
 test('a connected page reassures while offline, then clears its reassurance when its store reconnects', async () => {
   let page = await load(storage(), false, 'new', {}, undefined, 'down')
   try {
-    page.open()
     page.recover()
     assert(await page.pass(60_000, () => page.read() && page.status() == ''))
     page.disconnect()
@@ -1627,7 +1807,7 @@ test('words said to the chat are its draft as they are heard, and once sent, wha
   )
   t.stops()
   await tick()
-  page.hear({
+  await page.hear({
     operator: {
       task,
       rows: [],
@@ -1692,12 +1872,12 @@ test(
         growingEntry('A later step', true),
         growingEntry('The newest request'),
       ], { trusted: true })
-      page.hear({ ready: true, standing: 'changed' })
+      await page.hear({ ready: true, standing: 'changed' })
       await until(() => words().includes('The newest request'))
       await all()
       assertEquals(words(), [...oldWords, 'The newest request'])
       let talks = page.talks()
-      page.hear({ ready: true, standing: 'reconnected' })
+      await page.hear({ ready: true, standing: 'reconnected' })
       await until(() => page.talks() > talks)
       await page.received()
       await all()

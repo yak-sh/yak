@@ -14,6 +14,7 @@ import { ENTRY_MENU } from './operator-draw.ts'
 import { namer } from '@yaks/session/conversation'
 import { recentOf } from './operator-glance.ts'
 import { rootOf } from './operator-root.ts'
+import { talking } from './operator-testing.ts'
 
 let space = crypto.randomUUID(), person = crypto.randomUUID()
 let store = await operatorStore(durable())
@@ -37,11 +38,8 @@ await store.g.apply([
   entry(ids[1], root, 'Pruning canary two'),
   entry(foreign, other, 'Other person'),
 ], { trusted: true })
-let heard: string[] = []
-operatorFrames(store, () => [{
-  deserializeAttachment: () => ({ ...held, operator: true }),
-  send: (frame) => void heard.push(frame),
-}])
+let page = talking(operatorFrames(store), person, space)
+await page.ready()
 let operator = {
   store,
   named: () => Promise.resolve('Person'),
@@ -104,7 +102,7 @@ test('timestamps offer entry actions, and hiding preserves readable words and re
 test('an archive span cannot include another person’s entry, and old-row edits refresh watching pages', () => {
   equal(refused!.status, 404)
   equal(unchanged.every((b) => !!b.archived), true)
-  equal(heard.filter((s) => JSON.parse(s).operator?.refresh).length, 2)
+  equal(page.steps().filter((s) => s.refresh).length, 2)
 })
 
 test('archive and restore change the reconnect cursor without adding a transcript line', () => {

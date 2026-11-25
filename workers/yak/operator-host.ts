@@ -1,6 +1,23 @@
 import { type Built, type Line, line as q, sub } from '@yaks/query'
 import { openedIn, updatesOf, updating } from './operator-updates.ts'
-import { addressed, type Bundle, type Comp, type Graph } from '@yaks/graph'
+import {
+  addressed,
+  type Bundle,
+  type Comp,
+  type Graph,
+  type ReadOpts,
+  type TransientFrame,
+} from '@yaks/graph'
+import type { Frame, Opening, Sink } from '@yaks/api'
+import type { Reached } from '@yaks/api/reached'
+import { refusal } from '@yaks/api/refuse'
+import {
+  type Talk,
+  talkAsked,
+  talkEid,
+  talkRow,
+  type Told,
+} from '@yaks/platform/operator-talk'
 import { refuse } from './tool.ts'
 import { remove } from './operator-remove.ts'
 import { draftEid } from '@yaks/draft'
@@ -24,7 +41,7 @@ import type { Held } from './build-door.ts'
 import type { Copy } from './operator-skills.ts'
 import type { Operator } from './operator.ts'
 import type { Request } from './operator-channels.ts'
-import { askedAt, rootAt, rootOf, titleAt } from './operator-root.ts'
+import { askedAt, rootAt, rootOf, spaceOf, titleAt } from './operator-root.ts'
 import { inputOf } from '@yaks/session/intake'
 import { attachmentId, drawnFiles, type File, moved } from './operator-files.ts'
 import { attachmentOf } from '@yaks/blob/attachment'
@@ -1573,77 +1590,162 @@ let hushed = <F extends { operator: { said: string[] } }>(
   f: F,
 ) => from == null ? { ...f, operator: { ...f.operator, said: [] } } : f
 
-export type Listener = {
-  send: (data: string) => void
-  close?: (code?: number, reason?: string) => void
-  deserializeAttachment: () => unknown
+/** Where the Operator's conversations are drawn from: its name, and where a
+ * conversation opens by its id (build.ts). */
+export type Opens = { called?: string; opens?: string }
+
+// One watch of a conversation (@yaks/platform/operator-talk): whose, what its
+// line asks, its answer's `opened` and steps since (`n`), whether that answer
+// went (`ready`), a step it missed before then, and the reply it is hearing
+// written.
+type Watch = {
+  sink: Sink
+  id: string
+  person: string
+  talk: Talk
+  opened: string
+  n: number
+  ready: boolean
+  missed: boolean
+  typing?: { session: string; id: string; seq: number }
 }
 
-/** Whether the person a socket was opened for still writes in its space, as
- * the directory has it now (build.ts `#writes`). */
-export type Stands = (held: Held) => Promise<boolean>
-
-/** Frames for the pages watching this Operator, with each session's cursor.
- * A page outlives the seat it was opened with, so its person's seat is asked
- * again before each frame (`stands`): once they no longer write in the space
- * their pages hear nothing more, and close. */
+/**
+ * The person's conversations on this Operator, as their chat pages watch
+ * them (@yaks/platform/operator-talk): each watch answered with its row,
+ * where the conversation it shows stands, and each step after it the row
+ * again with the step's frame, and a reply as it is written a transient on
+ * it. A session's frames go to its owner's watches alone, computed once per
+ * step from where the last left off (`frameOf`), and every frame leaves in
+ * the order its step or words were told. Whether a person still writes in
+ * the space is their socket's to say (operator-api.ts).
+ */
 export let operatorFrames = (
   store: Store,
-  sockets: () => Listener[],
   named: Named = nameless,
-  stands: Stands = () => Promise.resolve(true),
+  place: () => Promise<Opens> = () => Promise.resolve({}),
 ) => {
   let told = new Map<string, number>()
-  let tasks = new Map<string, string>()
-  // The pages open on this Operator, and those one person has open.
-  let open = () =>
-    sockets().filter((ws) =>
-      (ws.deserializeAttachment() as { operator?: boolean } | null)?.operator
-    )
-  let pagesOf = (owner: Pick<Held, 'person' | 'space'>, pages = open()) =>
-    pages.filter((ws) => {
-      let held = ws.deserializeAttachment() as Held
-      return held.person == owner.person && held.space == owner.space
-    })
-  // `pages`, all one person's, while that person still writes in the space.
-  // Each seat is answered after the one asked before it, so a reply's typing
-  // frames leave in the order they were written.
-  let asked: Promise<unknown> = Promise.resolve()
-  let seated = (pages: Listener[]) => {
-    let answered = asked.then(async () => {
-      if (
-        !pages.length || await stands(pages[0].deserializeAttachment() as Held)
-      ) {
-        return pages
-      }
-      for (let ws of pages) {
-        try {
-          ws.close?.(1012, 'authorization handshake required')
-        } catch {
-          // A page that has gone away is closed already.
-        }
-      }
-      return []
-    })
-    asked = answered.catch(() => {})
-    return answered
-  }
-  // Whom a session works for is asked only while a page is open.
-  let watching = async (session: string) => {
-    let pages = open()
-    if (!pages.length) return []
-    let owner = await ownerOf(store, session)
-    return owner ? await seated(pagesOf(owner, pages)) : []
-  }
-  let send = (watching: Listener[], frame: unknown) => {
-    let sent = JSON.stringify(frame)
-    for (let ws of watching) {
-      try {
-        ws.send(sent)
-      } catch {
-        // A page that has gone away hears nothing more.
-      }
+  // The replies being written, by session: whose, in which conversation,
+  // and their words so far.
+  let replies = new Map<
+    string,
+    { person: string; task: string; text: string }
+  >()
+  let held = new Map<Sink, Map<string, Watch>>()
+  let quiet: Opening[] = []
+  let all = () => [...held.values()].flatMap((m) => [...m.values()])
+  let send = (w: Watch, frame: Omit<Frame, 'id'>) => {
+    try {
+      w.sink({ id: w.id, ...frame })
+    } catch {
+      // A page that has gone away hears nothing more.
     }
+  }
+  let eid = (w: Watch) => talkEid(w.person, w.talk)
+  let row = (w: Watch, said: Omit<Told, 'opened' | 'n'> = {}) =>
+    talkRow(w.person, w.talk, { opened: w.opened, n: w.n, ...said })
+  let typed = (w: Watch, op: TransientFrame['op'], text?: string) => {
+    let t = w.typing!
+    return {
+      id: t.id,
+      entity: eid(w),
+      component: 'operatorTalk',
+      property: 'typing',
+      seq: op == 'begin' ? t.seq = 0 : ++t.seq,
+      op,
+      ...text == null ? {} : { text },
+    }
+  }
+  // The reply `w` hears written, ended.
+  let ending = (w: Watch, session?: string): TransientFrame[] => {
+    if (!w.typing || session && w.typing.session != session) return []
+    let end = typed(w, 'end')
+    w.typing = undefined
+    return [end]
+  }
+  // `w` begins hearing the reply written in `session`, its words so far.
+  let begin = (w: Watch, session: string) => {
+    let reply = replies.get(session)!
+    let end = ending(w)
+    w.typing = { session, id: crypto.randomUUID(), seq: 0 }
+    return {
+      writing: reply.task,
+      transient: [...end, typed(w, 'begin', reply.text)],
+    }
+  }
+  // What is told goes out in the order it was told.
+  let line: Promise<unknown> = Promise.resolve()
+  let inOrder = <T>(work: () => Promise<T>): Promise<T> => {
+    let done = line.then(work)
+    line = done.catch(() => {})
+    return done
+  }
+  let ownersOf = async (session: string) => {
+    if (!all().length) return []
+    let owner = await ownerOf(store, session)
+    return owner ? all().filter((w) => w.person == owner.person) : []
+  }
+  // A step's frame on each of `watches`, ending the reply it wrote.
+  let step = (watches: Watch[], frame: unknown, session?: string) => {
+    for (let w of watches) {
+      if (!w.ready) {
+        w.missed = true
+        continue
+      }
+      let end = ending(w, session)
+      w.n++
+      send(w, {
+        bundles: [row(w, { step: frame as Record<string, unknown> })],
+        ...end.length ? { transient: end } : {},
+      })
+    }
+  }
+  let close = (sink: Sink, id: string) => {
+    held.get(sink)?.delete(id)
+    if (!held.get(sink)?.size) held.delete(sink)
+  }
+  let open = (sink: Sink, id: string, line: string, read?: ReadOpts) => {
+    let talk = talkAsked(line), person = read?.person
+    let mine = held.get(sink) ?? new Map<string, Watch>()
+    held.set(sink, mine)
+    let w: Watch = {
+      sink,
+      id,
+      person: typeof person == 'string' ? person : '',
+      talk: talk ?? { space: '' },
+      opened: crypto.randomUUID(),
+      n: 0,
+      ready: false,
+      missed: false,
+    }
+    mine.set(id, w)
+    let current = () => held.get(sink)?.get(id) === w
+    void (async () => {
+      let space = await spaceOf(store)
+      if (!talk || !w.person || talk.space != space) {
+        close(sink, id)
+        return send(w, { bundles: [], reset: true })
+      }
+      let standing = talk.task
+        ? await standingAt(store, talk.task, { person: w.person, space })
+        : undefined
+      if (!current()) return
+      // A step told meanwhile is in no answer: the page reads it.
+      let stands = w.missed ? undefined : standing
+      let [writing] = [...replies].filter(([, r]) => r.person == w.person)
+      let hearing = writing && begin(w, writing[0])
+      w.ready = true
+      send(w, {
+        bundles: [row(w, {
+          ...stands == null ? {} : { standing: stands },
+          ...hearing ? { writing: hearing.writing } : {},
+        })],
+        reset: true,
+        transientReset: [eid(w)],
+        ...hearing ? { transient: hearing.transient } : {},
+      })
+    })().catch((error) => current() && send(w, { refused: refusal(error) }))
   }
   // Marks and refreshed closing notices edit rows outside the step cursor.
   // Ask pages watching their conversation to read it again.
@@ -1656,7 +1758,7 @@ export let operatorFrames = (
           'operator_contact' in b || 'verified' in b || 'cancelled' in b ||
           'declined' in b
         ).map((b) => b.entity.eid)
-        if (ids.length) {
+        if (ids.length && all().length) {
           let entries = await store.g.get(ids, ['entry'])
           let sessions = new Set(
             entries.flatMap((b) =>
@@ -1664,50 +1766,83 @@ export let operatorFrames = (
             ),
           )
           for (let session of sessions) {
-            send(await watching(session), {
-              operator: { task: await keyOf(store, session), refresh: true },
-            })
+            await inOrder(async () =>
+              step(await ownersOf(session), {
+                task: await keyOf(store, session),
+                refresh: true,
+              })
+            )
           }
         }
         return bundles
       },
     },
   })
+  let talks: Reached = {
+    open: (sink, id, line, read) => open(sink, id, line, read),
+    restore: (openings, hold) => {
+      if (hold) quiet.push(...openings)
+      else for (let o of openings) open(o.sink, o.id, String(o.query), o.opts)
+    },
+    resume: () => {
+      for (let o of quiet.splice(0)) open(o.sink, o.id, String(o.query), o.opts)
+    },
+    close,
+    drop: (sink) => void held.delete(sink),
+    hear: () => Promise.resolve(),
+    watching: () => all().length > 0,
+  }
   return {
-    /** A person's drafts as they now stand, to every page they have open, so
-     * words typed on one show on the others as they land. */
-    drafts: async (owner: Pick<Held, 'person' | 'space'>, bundles: Bundle[]) =>
-      send(await seated(pagesOf(owner)), { drafts: bundles }),
-    tell: async (session: string) => {
-      let pages = await watching(session)
-      if (!pages.length) return
-      let { called, opens } = pages[0].deserializeAttachment() as Held
-      let made = await frameOf(
-        store,
-        session,
-        told.get(session),
-        named,
-        called,
-        opens,
-      )
-      if (!made) return
-      told.set(session, made.seq)
-      // Each page keeps the frame for the conversation it shows: a helper's
-      // step goes to the conversation that started it and to its own.
-      for (let frame of made.own ? [made.frame, made.own] : [made.frame]) {
-        send(pages, frame)
-      }
-    },
-    typing: async (session: string, text: string) => {
-      let pages = await watching(session)
-      if (!pages.length) return
-      let task = tasks.get(session)
-      if (!task) {
-        task = await keyOf(store, session)
-        tasks.set(session, task)
-      }
-      send(pages, { operator: { task, typing: text } })
-    },
+    /** the watches of conversations (operator-api.ts) */
+    talks,
+    /** a session's step landed */
+    tell: (session: string) =>
+      inOrder(async () => {
+        replies.delete(session)
+        let watches = await ownersOf(session)
+        if (!watches.length) return
+        let { called, opens } = await place()
+        let made = await frameOf(
+          store,
+          session,
+          told.get(session),
+          named,
+          called,
+          opens,
+        )
+        if (!made) return
+        told.set(session, made.seq)
+        // Each page keeps the frame for the conversation it shows: a helper's
+        // step goes to the conversation that started it and to its own.
+        for (let frame of made.own ? [made.frame, made.own] : [made.frame]) {
+          step(watches, frame.operator, session)
+        }
+      }),
+    /** words of a reply written in a session, stored, until its step lands */
+    typing: (session: string, text: string) =>
+      inOrder(async () => {
+        let reply = replies.get(session)
+        if (!reply) {
+          let owner = await ownerOf(store, session)
+          if (!owner) return
+          reply = {
+            person: owner.person,
+            task: await keyOf(store, session),
+            text: '',
+          }
+          replies.set(session, reply)
+        }
+        reply.text += text
+        for (let w of all()) {
+          if (w.person != reply.person || !w.ready) continue
+          if (w.typing?.session == session) {
+            send(w, { transient: [typed(w, 'append', text)] })
+            continue
+          }
+          let { writing, transient } = begin(w, session)
+          send(w, { bundles: [row(w, { writing })], transient })
+        }
+      }),
   }
 }
 
@@ -1910,7 +2045,6 @@ export let operatorRequest = async (
   path: string,
   args: Record<string, unknown>,
   armed: () => Promise<void> | undefined,
-  drafted: (bundles: Bundle[]) => void = () => {},
 ): Promise<Response | null> => {
   let { person, space: spaceId } = held
   let { store } = operator
@@ -2015,7 +2149,6 @@ export let operatorRequest = async (
       await store.g.apply(bundles)
     }
     let kept = await allowedDrafts(await store.g.read(q`.draft.by=${person}`))
-    if (Array.isArray(args.bundles)) drafted(kept)
     return Response.json({ bundles: kept })
   }
   // Words a channel's door takes in itself go to the Operator (build.ts
@@ -2057,9 +2190,6 @@ export let operatorRequest = async (
     let { receive } = await channels()
     let id = await receive(store, intake, String(args.say ?? ''), options)
     await armed()
-    if (options?.also) {
-      drafted(await allowedDrafts(await store.g.read(q`.draft.by=${person}`)))
-    }
     return Response.json({
       request: id,
       ...(options?.also
