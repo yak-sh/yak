@@ -7,7 +7,8 @@ import { deskSide } from './desk-sidebar.ts'
 import { frame, FRAMED } from './frame.ts'
 import { choice, spaceTile } from '@yaks/platform/side-parts'
 import { Time } from '@yaks/ui/parts'
-import { agentSetup, pasteLink } from './signin-pages.ts'
+import { agentSetup } from './signin-pages.ts'
+import { AGENT } from './docs.ts'
 import {
   Button,
   Card,
@@ -47,6 +48,12 @@ import { icons } from './icons.ts'
 import { fileDrop, markup, raw } from './html.ts'
 import { LOGO_TYPES } from './logo.ts'
 import { drawnRows } from '@yaks/platform/page-graph'
+import { agentsOf, listedOf } from '@yaks/platform/space-apps'
+import {
+  type AppsView,
+  appsView,
+  connectCard as connecting,
+} from '@yaks/platform/space-apps-view'
 import { type FriendsView, friendsView } from '@yaks/platform/friends-view'
 import { type VisitsView, visitsView } from '@yaks/platform/visits-view'
 import { countsOf } from '@yaks/platform/visit-counts'
@@ -79,7 +86,6 @@ import {
   dropping,
   dropZone,
   firstAsk,
-  fixing,
   heading,
   held,
   howTo,
@@ -200,24 +206,10 @@ export let deskFrame = (
     ),
   })
 
+// Where a person who has not connected an agent is asked to
+// (@yaks/platform/space-apps-view `connectCard`).
 let connectCard = (at: DeskPage, env: Host) =>
-  h(
-    Card,
-    { mod: 'accent', ...state(false, at.agents) },
-    heading('Connect your agent', {
-      actions: h(
-        Button,
-        { mod: 'go', href: managePath('agents') },
-        'Connect agent',
-      ),
-    }),
-    h(
-      Card.Sub,
-      null,
-      'Build and improve your apps in the conversations you already have with Claude or ChatGPT.',
-    ),
-    pasteLink(env),
-  )
+  connecting(at.agents?.length, url(env, AGENT.path))
 
 // What others let this person into (Your account › Shared with you): drawn by
 // the same Tile as their own, each with the address it lives at.
@@ -244,129 +236,27 @@ let sharedWith = (at: DeskPage, env: Host) =>
       ),
     )
 
-type Listed = DeskPage['apps'][number]
-// When an app last changed: its last deploy, or else when it was made.
-let changed = (a: Listed) => (a.deployed ?? a.made)?.at ?? ''
-// The orders the apps page offers, the first the one it opens in.
-let ORDERS = [
-  ['changed', 'Recent'],
-  ['name', 'Name'],
-] as const
-
-/** The apps whose name or address holds every word of `q`, newest change
- * first, or with `sort` 'name', by name. public/sift.js does the same in the
- * page as a person types. */
-/// sifted([], 'x', 'name') -> []
-export let sifted = (apps: Listed[], q = '', sort = '') => {
-  let words = q.toLowerCase().split(/\s+/).filter(Boolean)
-  return apps
-    .filter((a) =>
-      words.every((w) => `${a.title} ${a.slug}`.toLowerCase().includes(w))
-    )
-    .toSorted(
-      sort == 'name'
-        ? (a, b) => named(a).localeCompare(named(b))
-        : (a, b) => changed(b).localeCompare(changed(a)),
-    )
-}
-
-// More apps than this and the list can be searched and sorted.
-let LONG = 8
-
-// The search and the order above a long list, in its card's head: sent, the
-// page answers sifted; with script, the list narrows as a person types.
-let finding = (at: DeskPage) =>
-  h(
-    Card.Form,
-    { method: 'get', role: 'search', 'data-sift': 'apps' },
-    h(Field, {
-      type: 'search',
-      name: 'q',
-      value: at.sift?.q ?? '',
-      placeholder: 'Find an app',
-      'aria-label': 'Find an app',
-      // Narrow enough to share a phone's line with the order beside it.
-      size: 14,
-    }),
-    h(
-      Field,
-      { choose: true, name: 'sort', 'aria-label': 'Order' },
-      ORDERS.map(([value, label]) =>
-        option(value, label, (at.sift?.sort || 'changed') == value)
-      ),
-    ),
-  )
-
-/** The apps view: the space's apps, one row each, every row opening its app
- * and the errors it has opening over the page; with none, the way to make
- * one. Each says its address from its path: the host is the space's, the same
- * on every row and named above them. */
+// Apps, drawn from the space's rows as the browser draws it again
+// (@yaks/platform/space-apps-view), which the page carries for its first
+// paint (`data-view`).
 export let library = (at: DeskPage, env: Host) => {
-  let host = spaceHost(env, at.space)
-  let long = at.apps.length > LONG
-  let shown = sifted(at.apps, at.sift?.q, at.sift?.sort)
-  let n = at.apps.length
-  return [
-    connectCard(at, env),
-    n
-      ? [
-        h(
-          Card,
-          null,
-          heading(n == 1 ? '1 app' : `${n} apps`, {
-            actions: long ? finding(at) : null,
-          }),
-          h(
-            Rows,
-            { as: 'ul', id: 'apps' },
-            shown.map((a) =>
-              tile(a, {
-                at: `https://${host}`,
-                errors: a.errors?.length,
-                editor: true,
-                visits: `${managePath('visits', at.space)}#visits-${a.slug}`,
-                made: a.made,
-                deployed: a.deployed,
-                writers: at.writers,
-                me: at.person,
-              })
-            ),
-          ),
-          long
-            ? h(
-              Rows.Note,
-              { hidden: shown.length > 0, 'data-none': '' },
-              'No app here has that in its name or address.',
-            )
-            : null,
-        ),
-        at.apps.filter((a) => a.errors?.length).map((a) => fixing(a, at.space)),
-      ]
-      : empty(
-        'Your apps will live here',
-        h(
-          'div',
-          state(true, at.agents),
-          h('p', null, 'Ask your agent for your first app. Try this:'),
-          firstAsk(),
-        ),
-        h(
-          'div',
-          state(false, at.agents),
-          h(
-            'p',
-            null,
-            'A recipe box, a book club page, a tool for your day. Start with an idea.',
-          ),
-          h(
-            'a',
-            { href: managePath('new', at.space) },
-            'More ways to make an app',
-          ),
-        ),
-      ),
-    copying(),
-  ]
+  let view: AppsView = {
+    person: at.person ?? '',
+    space: { eid: at.spaceEid ?? '', slug: at.space },
+    host: spaceHost(env, at.space),
+    agent: url(env, AGENT.path),
+    sift: at.sift ?? { q: '', sort: '' },
+  }
+  let rows = at.drawn ?? []
+  return h(
+    'div',
+    { 'data-view': 'apps', 'data-apps-view': JSON.stringify(view) },
+    appsView(view, {
+      apps: listedOf(rows, view.space.eid, rows),
+      agents: agentsOf(rows),
+    }),
+    drawing(at),
+  )
 }
 
 // Profile (Your account), drawn from the person's rows as the browser draws
@@ -2884,7 +2774,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     body = [
       h(
         Card,
-        { class: 'Desk_Start', ...state(true, at.agents) },
+        { class: 'Desk_Start', ...state(true, at.agents?.length) },
         heading('Ask your agent for a new yaks app'),
         agentList(at.agents ?? [], 'links'),
         h(Form.Field, null, h(Form.Label, { as: 'p' }, 'Try this'), firstAsk()),
@@ -2978,10 +2868,8 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       ],
       content: [said(at.say, at.no), body],
     }),
-    ['apps', 'new'].includes(view) ? copying() : null,
-    ['apps', 'new', 'agents'].includes(view)
-      ? agentLive('/oauth/agents')
-      : null,
+    view == 'new' ? copying() : null,
+    ['new', 'agents'].includes(view) ? agentLive('/oauth/agents') : null,
   )
 }
 

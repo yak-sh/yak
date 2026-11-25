@@ -10,8 +10,10 @@
 import { type ComponentChildren as Kids, h } from 'preact'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
+import { Copy } from '@yaks/ui/Copy'
 import { Empty } from '@yaks/ui/Empty'
 import { Form } from '@yaks/ui/Form'
+import { State } from '@yaks/ui/State'
 
 /** A card's head: its mark, its title, how it stands, and what acts on the
  * whole card, at the right. */
@@ -42,6 +44,53 @@ export let labeled = (
     control,
     hint ? h(Form.Hint, null, hint) : null,
   )
+
+/** How something stands, as a word in a pill: good, bad, or neither. */
+export let status = (word: Kids, tone?: 'positive' | 'negative') =>
+  h(State, { mod: tone }, word)
+
+/** One thing to say, and a button that puts it on the clipboard. The words
+ * are selectable on their own (`.Copy_Text` is `user-select: all`), so a
+ * browser that ran no script still takes them in one gesture: the button is
+ * all the page's script adds (yaks.app's pages.ts `copying`,
+ * ./space-apps-browser.ts), and it stays hidden until that script shows it,
+ * because a button that does nothing is worse than no button. `what` names
+ * the words to a screen reader. */
+export let copyable = (said: Kids, what = '') =>
+  h(Copy, { what: what || undefined, go: { hidden: true } }, said)
+
+/** What a person asks for their first app. The assistant already knows them,
+ * so the ask hands it their own situation rather than a scenario we made up
+ * for them (yaks.app's prompts/app-ideas.md). */
+export let firstAsk = () =>
+  copyable(
+    "Any yaks.app ideas you think I'd like, based on our chat history?",
+    'the first app request',
+  )
+
+/** The link a person pastes into their AI agent, `link`, which tells it how
+ * to connect to yaks.app (yaks.app's docs.ts `AGENT`, public/agent.md). */
+export let pasteLink = (link: string) =>
+  h(
+    Form.Field,
+    null,
+    h(Form.Label, { as: 'p' }, 'Paste this link into your AI agent'),
+    copyable(link, 'the link for your agent'),
+    h(
+      'span',
+      { class: 'Note' },
+      'Claude, ChatGPT, Claude Code, Cursor or another agent reads from it how to connect to yaks.app, does what it can itself, and tells you the one step that’s yours.',
+    ),
+  )
+
+/** Shows a part only while an agent is connected, or only while none is, as
+ * the count of `agents` says, and neither on a page drawn before they were
+ * known, which marks it unsettled until the page learns them. */
+export let state = (connected: boolean, agents?: number) => ({
+  [`data-${connected ? 'connected' : 'disconnected'}`]: '',
+  hidden: agents == undefined || connected != agents > 0,
+  ...agents == undefined ? { 'data-unsettled': '' } : {},
+})
 
 /** One button that sends the form it is in. */
 export let send = (label: Kids) =>

@@ -44,6 +44,7 @@ import {
   spaced,
   talkPath,
 } from '@yaks/platform/routes'
+import { listedRows } from '@yaks/platform/space-apps'
 
 let p = platform('operator-chat')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -359,6 +360,8 @@ let library = parseHTML(
     space: space.slug,
     apps: six,
     view: 'apps',
+    spaceEid: space.eid,
+    drawn: listedRows('person', space.eid, six),
   }, p.env).text(),
 ).document
 

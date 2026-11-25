@@ -9,10 +9,6 @@
  * @module
  */
 import { h } from 'preact'
-import { render } from '@yaks/preact'
-import { define } from '@yaks/render'
-import { loadVocab } from '@yaks/vocab'
-import { once } from '@yaks/fp'
 import { Card } from '@yaks/ui/Card'
 import { Dot } from '@yaks/ui/Dot'
 import { Field } from '@yaks/ui/Field'
@@ -20,8 +16,8 @@ import { Form } from '@yaks/ui/Form'
 import { Identity } from '@yaks/ui/Identity'
 import { Rows } from '@yaks/ui/Rows'
 import { Time } from '@yaks/ui/Time'
-import type { Account, Befriended, Shared } from './account-rows.ts'
-import { app } from './app-tile.ts'
+import type { Account, Befriended } from './account-rows.ts'
+import { appTile } from './app-tile.ts'
 import {
   empty,
   fieldsOf,
@@ -38,41 +34,6 @@ import { managePath } from './routes.ts'
 /** What the Friends page says about itself beside the rows: whose it is,
  * the zone its spaces answer under, and whether it shows every friend. */
 export type FriendsView = { person: string; apex: string; all: boolean }
-
-// The app tile (./app-tile.ts), matched against the words it draws alone.
-let tiles = define([app])
-let words = once(() =>
-  loadVocab([{
-    $defs: {
-      app: {
-        component: true,
-        type: 'object',
-        properties: {
-          slug: { type: 'string' },
-          access: { type: ['string', 'null'] },
-          source: { type: ['string', 'null'] },
-          generatedIcon: { type: 'string' },
-        },
-      },
-      doc: {
-        component: true,
-        type: 'object',
-        properties: { title: { type: 'string' } },
-      },
-      home: { component: true, type: 'object' },
-    },
-  }])
-)
-
-/** An app someone let the reader into, as a row of their list. */
-let appTile = (a: Shared, around: Record<string, unknown>) =>
-  render(
-    tiles,
-    { entity: { eid: a.eid }, app: { slug: a.slug }, doc: { title: a.title } },
-    'List.Tile',
-    words(),
-    around,
-  )
 
 // "Show when I'm online": the person's `presence{hidden}`, the same one
 // choice Profile has, saved as it changes.
@@ -182,7 +143,10 @@ let friendRow = (f: Befriended, apex: string, now: number) => {
             { as: 'ul' },
             f.shared.map((a) => {
               let host = `${a.space}.${apex}`
-              return appTile(a, { at: `https://${host}`, host, editor: true })
+              return appTile(
+                { eid: a.eid, slug: a.slug, title: a.title },
+                { at: `https://${host}`, host, editor: true },
+              )
             }),
           )
           : h(Form.Hint, { as: 'p' }, `Nothing of ${f.name}’s yet.`),

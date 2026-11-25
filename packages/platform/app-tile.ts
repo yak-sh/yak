@@ -20,7 +20,10 @@
 // its owner.
 
 import { parse } from '@yaks/query'
-import type { ComponentRenderer } from '@yaks/preact'
+import { type ComponentRenderer, render } from '@yaks/preact'
+import { define } from '@yaks/render'
+import { loadVocab } from '@yaks/vocab'
+import { once } from '@yaks/fp'
 import { Badge } from '@yaks/ui/Badge'
 import { Icon } from '@yaks/ui/Icon'
 import { Menu } from '@yaks/ui/Menu'
@@ -38,7 +41,7 @@ import House from 'lucide/dist/esm/icons/house.mjs'
 import Lock from 'lucide/dist/esm/icons/lock.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Pencil from 'lucide/dist/esm/icons/pencil.mjs'
-import { appMarkImage } from './routes.ts'
+import { appMarkImage, type MarkedApp } from './routes.ts'
 
 /** When something was written, and by whom. */
 export type Stamp = { at: string; by: string | null }
@@ -188,3 +191,52 @@ export let app: ComponentRenderer = {
     )
   },
 }
+
+// The tile, matched against the words it draws alone.
+let tiles = define([app])
+let words = once(() =>
+  loadVocab([{
+    $defs: {
+      app: {
+        component: true,
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          access: { type: ['string', 'null'] },
+          source: { type: ['string', 'null'] },
+          generatedIcon: { type: 'string' },
+        },
+      },
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
+      home: { component: true, type: 'object' },
+    },
+  }])
+)
+
+/** An app as a row of a list, with what the page around it says
+ * (`around`, the page context above). */
+export let appTile = (
+  a: MarkedApp & { home?: boolean; access?: string | null },
+  around: Record<string, unknown> = {},
+) =>
+  render(
+    tiles,
+    {
+      entity: { eid: a.eid },
+      app: {
+        slug: a.slug,
+        access: a.access,
+        source: a.source,
+        generatedIcon: a.generatedIcon,
+      },
+      doc: { title: a.title },
+      ...a.home ? { home: {} } : {},
+    },
+    'List.Tile',
+    words(),
+    around,
+  )

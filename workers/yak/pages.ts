@@ -1,7 +1,15 @@
 import type { Picked } from '@yaks/platform/side-rows'
 import type { Bundle } from '@yaks/graph'
-import { heading, labeled, send } from '@yaks/platform/page-parts'
-export { heading, labeled, send }
+import {
+  copyable,
+  firstAsk,
+  heading,
+  labeled,
+  send,
+  state,
+  status,
+} from '@yaks/platform/page-parts'
+export { copyable, firstAsk, heading, labeled, send, state, status }
 import { DOMAIN_RENEWAL } from '@yaks/platform/plans'
 import { Head } from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
@@ -21,7 +29,6 @@ import { Time } from '@yaks/ui/parts'
 // icon, the yak, a QR code, markdown theirs.ts drew) goes in whole (`raw`),
 // and so does a page's own script.
 
-import type { Stamp, Writers } from './stamps.ts'
 import { type Field as Fielded, KEY } from '@yaks/connections'
 
 import {
@@ -30,20 +37,14 @@ import {
   Card,
   Chip,
   Chips,
-  Copy,
   Empty,
   Field,
   Form,
-  Icon,
   Logo,
-  Modal,
   More,
   Notice,
   Rows,
-  State,
 } from '@yaks/ui/parts'
-import { icons } from './icons.ts'
-import { fixId } from '@yaks/platform/app-tile'
 
 import { type ComponentChildren, h } from 'preact'
 
@@ -58,14 +59,11 @@ import type { Befriended } from './friends.ts'
 
 import type { Panes, Role } from './directory.ts'
 
-import type { Plain } from './unseen.ts'
-
 import { type Invitation, qr } from './referral.ts'
 
 export { esc } from './html.ts'
 
 import {
-  chatPath,
   integrationLogo,
   managePath,
   type MarkedApp,
@@ -163,10 +161,6 @@ export let billButton = (
 // The style guide's parts (public/style-guide.html, One design language),
 // said once: a card's head, a status word, and a field under its label.
 
-/** How something stands, in its role's colour. */
-export let status = (word: Kids, tone?: 'positive' | 'negative') =>
-  h(State, { mod: tone }, word)
-
 /** A value as text a script can hold: JSON, with nothing that could close
  * it. */
 export let script = (value: unknown) =>
@@ -261,6 +255,10 @@ ${
       ? `<script type="module" src="${file('_updates.js')}"></script>`
       : ''
   }${
+    main.includes('data-apps-view=')
+      ? `<script type="module" src="${file('_apps.js')}"></script>`
+      : ''
+  }${
     main.includes('data-operator-view=')
       ? `<script type="module" src="${file('_operator-settings.js')}"></script>`
       : ''
@@ -319,10 +317,6 @@ ${
   }${
     main.includes('data-note=')
       ? `<script src="${file('note.js')}" defer></script>`
-      : ''
-  }${
-    main.includes('data-sift')
-      ? `<script src="${file('sift.js')}" defer></script>`
       : ''
   }${
     main.includes('data-save=')
@@ -642,17 +636,6 @@ export let dropped = (at: {
     dropping(),
   )
 
-// One thing to say, and a button that puts it on the clipboard (T-34420). The
-// words are selectable on their own (`.Copy_Text` is `user-select: all`), so a
-// browser that ran no script still takes them in one gesture — the button is
-// all the script below adds, and it stays hidden until that script un-hides
-// it, because a button that does nothing is worse than no button.
-//
-// One control, everywhere something is meant to be pasted: the three things to
-// say below, and each of the three a connector form asks for (T-34412).
-export let copyable = (said: Kids, what = '') =>
-  h(Copy, { what: what || undefined, go: { hidden: true } }, said)
-
 // The button's half. Constant code, no interpolation, and nothing is written
 // to the page but a class: the words come from the span beside the button
 // rather than an attribute of its own, so there is one copy of them on the
@@ -711,18 +694,12 @@ export type DeskPage = {
   space: string
   /** the signed-in person whose settings drafts this page keeps */
   person?: string
-  /** each with its open errors, newest first (unseen.ts `plain`), and when
-   * it was made and last deployed, and by whom, where known */
-  apps: (Listed & {
-    errors?: Plain[]
-    made?: Stamp | null
-    deployed?: Stamp | null
-  })[]
-  /** what the apps page was asked to find and how to order it (desk-pages.ts
-   * `sifted`) */
+  /** the space's apps, as the pages other than Apps list them; Apps is drawn
+   * from `drawn` (@yaks/platform/space-apps) */
+  apps: Listed[]
+  /** what the apps page was asked to find and how to order it
+   * (@yaks/platform/space-apps-view `sifted`) */
   sift?: { q: string; sort: string }
-  /** what each writer those stamps name is called (stamps.ts `writers`) */
-  writers?: Writers
   trash?: { eid: string; slug: string; title: string; days: number }[]
   numbers?: { eid: string; number: string; monthly: string; days: number }[]
   name?: string
@@ -824,113 +801,6 @@ export type DeskPage = {
   member?: boolean
   /** how the person keeps the panes (directory.ts `Panes`) */
   panes?: Panes
-}
-
-let SHOWN = 5
-
-// What the space's Operator made of one break, with the way to its
-// conversation in the Operator's chat app.
-export let operated = (e: Plain, space: string) => {
-  let o = e.operator
-  if (!o) return null
-  let said = o.failed != null
-    ? `The Operator could not fix it. ${o.failed}`.trim()
-    : o.answer != null
-    ? `The Operator: ${o.answer}`
-    : 'The Operator is fixing it.'
-  return h(
-    Rows.Meta,
-    null,
-    `${said} `,
-    h('a', { href: chatPath(space, e.fix) }, 'See what it did'),
-  )
-}
-
-// What broke in an app, for its owner: each break as its line says it to their
-// assistant, how often and when last, and the one thing to do, which is to
-// ask that assistant. It is a dialog over the apps page, opened by the error
-// badge on the app's row (@yaks/platform/app-tile) with no script: a popover, which the
-// backdrop, the close button and Escape put away.
-export let fixing = (a: DeskPage['apps'][number], space: string) => {
-  let errors = a.errors ?? []
-  let n = errors.length
-  let title = a.title || a.slug
-  let id = fixId(a.slug)
-  let shut = { popovertarget: id, popovertargetaction: 'hide', type: 'button' }
-  return h(
-    Modal,
-    {
-      as: 'div',
-      popover: '',
-      id,
-      role: 'dialog',
-      'aria-label': `What broke in ${title}`,
-    },
-    h(Modal.Backdrop, {
-      as: 'button',
-      ...shut,
-      tabIndex: -1,
-      'aria-label': 'Close',
-    }),
-    h(
-      Modal.Body,
-      { class: 'Fix' },
-      heading(title, {
-        status: status(n == 1 ? '1 error' : `${n} errors`, 'negative'),
-        actions: h(
-          Button,
-          {
-            ...shut,
-            mod: 'quiet',
-            'aria-label': 'Close',
-            'data-tip': 'Close',
-            autofocus: true,
-          },
-          h(Icon, { of: icons.x }),
-        ),
-      }),
-      h(
-        Rows,
-        { as: 'ul' },
-        errors.slice(0, SHOWN).map((e) =>
-          h(
-            Rows.Item,
-            { as: 'li' },
-            h(
-              Rows.Main,
-              null,
-              h('span', { class: 'Fix_Said' }, e.said || 'No message'),
-              h(
-                Rows.Meta,
-                null,
-                `${e.where ? `${e.where} · ` : ''}${
-                  e.times == 1 ? 'once' : `${e.times} times`
-                }`,
-                e.at
-                  ? [`, ${e.times == 1 ? '' : 'last '}`, h(Time, { at: e.at })]
-                  : null,
-              ),
-              operated(e, space),
-            ),
-          )
-        ),
-      ),
-      n > SHOWN ? h(Rows.Meta, { as: 'p' }, `And ${n - SHOWN} more.`) : null,
-      h(
-        Form.Field,
-        null,
-        h(
-          Form.Label,
-          { as: 'p' },
-          `Ask your assistant to fix ${n == 1 ? 'it' : 'them'}`,
-        ),
-        copyable(
-          `Fix the errors in my ${title} app on yaks.app`,
-          `the request to fix ${title}`,
-        ),
-      ),
-    ),
-  )
 }
 
 export { sentence } from './html.ts'
@@ -1822,27 +1692,8 @@ export let b = (words: string) => h('b', null, words)
 
 export let code = (words: string) => h('code', null, words)
 
-// What a person asks for their first app. The assistant already knows them,
-// so the ask hands it their own situation rather than a scenario we made up
-// for them (the app-ideas prompt's own question, prompts/app-ideas.md).
-export let firstAsk = () =>
-  copyable(
-    "Any yaks.app ideas you think I'd like, based on our chat history?",
-    'the first app request',
-  )
-
 // An address on this platform, written out for somebody to type or paste.
 export let at = (path: string, env: Host) => code(url(env, path))
-
-// Shows a part only while an agent is connected, or only while none is, as
-// `agents` says, and neither on a page drawn before they were known, which
-// marks it unsettled (connected_ui.ts `agentLive` settles it as the page
-// loads, and keeps it true as agents come and go).
-export let state = (connected: boolean, agents?: readonly unknown[]) => ({
-  [`data-${connected ? 'connected' : 'disconnected'}`]: '',
-  hidden: !agents || connected != agents.length > 0,
-  ...agents ? {} : { 'data-unsettled': '' },
-})
 
 // The only script a tab needs, and it is not what switches one: the radios do
 // that with no script at all. This keeps the chosen one in the address, so a

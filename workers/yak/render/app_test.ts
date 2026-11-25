@@ -12,6 +12,7 @@ import { markup } from '../html.ts'
 import { desk } from '../desk-pages.ts'
 import { app } from '@yaks/platform/app-tile'
 import { registry, tile, vocab } from './mod.ts'
+import { listedRows } from '@yaks/platform/space-apps'
 
 type Listed = Parameters<typeof tile>[0]
 let row = (node: ComponentChildren) => {
@@ -54,17 +55,20 @@ test('app Tile resolves by component and draws the same row served and mounted',
     ),
     undefined,
   )
+  let apps = [{
+    eid: 'app-1',
+    slug: 'recipes',
+    title: 'Recipes',
+    home: true,
+    access: 'private',
+    gallery: 'waiting for the gallery',
+  }]
   let html = await desk({
     space: 'ada',
-    apps: [{
-      eid: 'app-1',
-      slug: 'recipes',
-      title: 'Recipes',
-      home: true,
-      access: 'private',
-      gallery: 'waiting for the gallery',
-    }],
+    apps,
     view: 'apps',
+    spaceEid: 'space-ada',
+    drawn: listedRows('person-ada', 'space-ada', apps),
   }).text()
   let served = row(html)
   assertEquals(served.querySelector('.Rows_Open')?.textContent, 'Recipes')

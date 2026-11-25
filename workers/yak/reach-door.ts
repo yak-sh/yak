@@ -14,6 +14,10 @@
 // visits (@yaks/platform/visit-counts) are in no store: they are read from
 // Cloudflare's analytics here, again each time the space's apps move.
 //
+// What no store holds, a space's Apps page's breaks and the person's agents
+// (apps-reads.ts), is read as the page asks, and a watch of it is answered
+// once.
+//
 // Some writes are not rows: an Updates card's action (updates.ts `acting`),
 // and the person's own account, messages and friend asks
 // (account-writes.ts), are done here and answered with what they came to,
@@ -40,6 +44,8 @@ import {
   settingsWrite,
 } from '@yaks/platform/operator-settings'
 import type { Update } from '@yaks/platform/update-rows'
+import { AGENTS, brokenSpace } from '@yaks/platform/space-apps'
+import { agentsIn, brokenOf } from './apps-reads.ts'
 import { writes } from '@yaks/member'
 import { personRows, visitsRows } from './side.ts'
 import { countsSpace } from '@yaks/platform/visit-counts'
@@ -128,6 +134,20 @@ export let reachDoor = async (
     )
     return settingsRow(seat.space.eid, wearing(now))
   }
+  // What the door reads as the page asks, once: what no store holds.
+  let once = (line: string) => line == AGENTS || brokenSpace(line) != undefined
+  let readOnce = async (line: string): Promise<Bundle[]> => {
+    let space = brokenSpace(line)
+    if (space == undefined) return await agentsIn(env, dir, person)
+    let seat = await seatIn(space)
+    return seat
+      ? await brokenOf(env, dir, seat.space, {
+        ...who,
+        person,
+        role: seat.role,
+      })
+      : []
+  }
   try {
     if (door == '/query' && req.method == 'GET') {
       let q = new URL(req.url).searchParams
@@ -151,6 +171,7 @@ export let reachDoor = async (
           (await visitsRows(env, dir, person, counted)).counts,
         )
       }
+      if (once(line)) return Response.json(await readOnce(line))
       let named = settingsSpace(line)
       if (named != undefined) {
         let seat = await seatIn(named)
@@ -265,6 +286,16 @@ export let reachDoor = async (
               )
             if (line != UPDATE_WAITING && personLine(line)) {
               return personal(sink)
+            }
+            if (once(line)) {
+              let closed = false
+              readOnce(line).then(
+                (bundles) => closed || sink({ bundles, reset: true }),
+                (error) => closed || sink({ refused: error }),
+              )
+              return () => {
+                closed = true
+              }
             }
             if (line == UPDATE_WAITING) {
               let headers = vouched(who)

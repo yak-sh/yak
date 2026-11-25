@@ -1,6 +1,7 @@
 // What the person's own pages draw, read from the directory: the sidebar's
-// spaces and apps (@yaks/platform/side-rows), and their account, browsers and
-// friends (@yaks/platform/account-rows). A page asks it as it is drawn
+// spaces and apps (@yaks/platform/side-rows), their account, browsers and
+// friends (@yaks/platform/account-rows), and the apps a space's Apps page
+// lists (@yaks/platform/space-apps). A page asks it as it is drawn
 // (manage.ts `beside`), and the directory answers the same as a live read of
 // the person (graph.ts `/person/ws`), so the side the page drew and the one
 // its rows redraw agree.
@@ -26,7 +27,9 @@ import {
 } from '@yaks/platform/side-rows'
 import type { Env } from './env.ts'
 import { visitRows } from './views.ts'
-import type { Directory, Space } from './directory.ts'
+import { type Directory, type Space, walkTo } from './directory.ts'
+import { type Listed, listedRows, listedSpace } from '@yaks/platform/space-apps'
+import { pilled, standing } from './gallery-row.ts'
 import {
   ACCOUNT,
   accountRow,
@@ -177,6 +180,37 @@ export let visitsRows = async (
   return { apps, counts }
 }
 
+/** The apps of `space` its Apps page lists for `who`, each with when it was
+ * made and last deployed, and by whom, as the page draws them. */
+export let listedApps = async (
+  dir: Directory,
+  space: Space,
+  who: Who,
+): Promise<Listed[]> => {
+  let [{ all }, made] = await Promise.all([
+    dir.apps(space).then((apps) => shelf(apps, space, who)),
+    dir.provenance(walkTo(space.slug, space.eid)),
+  ])
+  let named = (s?: { at: string; by: string | null } | null) =>
+    s &&
+    {
+      ...s,
+      ...s.by && made.writers.has(s.by) ? { name: made.writers.get(s.by) } : {},
+    }
+  return all.map((a) => ({
+    eid: a.eid,
+    slug: a.slug,
+    title: a.title,
+    source: a.source,
+    generatedIcon: a.generatedIcon,
+    home: a.home || undefined,
+    access: a.access,
+    gallery: pilled(standing(a)) || undefined,
+    made: named(made.of.get(a.eid)?.made),
+    deployed: named(made.of.get(a.eid)?.deployed),
+  }))
+}
+
 let sideRows = async (
   dir: Directory,
   person: string,
@@ -185,7 +219,8 @@ let sideRows = async (
   if (line == SIDE_SPACES) return spaceRows(person, await pickable(dir, person))
   let apps = appsSpace(line)
   let offers = offersSpace(line)
-  let eid = apps ?? offers
+  let listed = listedSpace(line)
+  let eid = apps ?? offers ?? listed
   if (!eid) return []
   let seat = (await dir.seated(person)).find((s) =>
     s.space.eid == eid && !s.space.trashed && writes(s.role)
@@ -193,6 +228,7 @@ let sideRows = async (
   if (!seat) return []
   let { space, role } = seat
   let who = { person, role }
+  if (listed) return listedRows(person, eid, await listedApps(dir, space, who))
   return apps
     ? appRows(person, eid, await sideApps(dir, space, who))
     : offerRows(person, eid, await offersIn(dir, space, who))

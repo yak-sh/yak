@@ -29,6 +29,7 @@ import type { Copy } from './preview-route.ts'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { INVITE, REPO as PUBLIC } from '@yaks/platform/names'
 import { STARTER } from '@yaks/platform/plans'
+import { pasteLink as linkToPaste } from '@yaks/platform/page-parts'
 
 import {
   about,
@@ -1158,36 +1159,25 @@ export let doors = (env: Host) =>
 
 // The one link a person pastes into their own agent, which reads from it how
 // to connect itself (docs.ts `AGENT`, public/agent.md).
-export let pasteLink = (env: Host) =>
-  h(
-    Form.Field,
-    null,
-    h(Form.Label, { as: 'p' }, 'Paste this link into your AI agent'),
-    copyable(url(env, AGENT.path), 'the link for your agent'),
-    h(
-      'span',
-      { class: 'Note' },
-      'Claude, ChatGPT, Claude Code, Cursor or another agent reads from it how to connect to yaks.app, does what it can itself, and tells you the one step that’s yours.',
-    ),
-  )
+export let pasteLink = (env: Host) => linkToPaste(url(env, AGENT.path))
 
 // `back` is where a row's Disconnect returns to: the page it is on.
 export let agentSetup = (agents: Agent[], env: Host, back: string) => [
   agentList(agents, 'rows', back),
   h(
     'p',
-    state(true, agents),
+    state(true, agents.length),
     'Ask for an app, or keep improving one in the same chat.',
   ),
   h(
     'p',
-    state(false, agents),
+    state(false, agents.length),
     'Connect once, then build and keep improving your apps in your usual chats.',
   ),
   h(
     'section',
     { class: 'Connect_Setup' },
-    h(Group, state(true, agents), 'Connect another agent'),
+    h(Group, state(true, agents.length), 'Connect another agent'),
     pasteLink(env),
     h('p', null, 'Or connect it yourself, with the steps for your app:'),
     doors(env),

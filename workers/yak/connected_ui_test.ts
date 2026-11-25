@@ -35,7 +35,7 @@ let script = new Function(
 // A part shown while an agent is connected or while none is, as the page
 // draws it from what it knew (pages.ts `state`).
 let part = (connected: boolean, agents?: Agent[], text = '') =>
-  renderToString(h('p', state(connected, agents), text))
+  renderToString(h('p', state(connected, agents?.length), text))
 
 let mount = (
   initial: Agent[] = [],

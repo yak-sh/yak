@@ -3,8 +3,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { App } from './directory.ts'
 import { markup } from './html.ts'
-import { fixing, operated } from './pages.ts'
-import { library } from './desk-pages.ts'
+import { appsView, fixing, operated } from '@yaks/platform/space-apps-view'
 import { chatPath } from '@yaks/platform/routes'
 import { folds, type Plain, plain, type Seen } from './unseen.ts'
 
@@ -22,15 +21,21 @@ let report = (eid: string): Seen => ({
   },
 })
 let page = (errors: Plain[]) =>
-  markup(library(
+  markup(appsView(
     {
-      space: 'fixme',
+      person: 'ada',
+      space: { eid: 's1', slug: 'fixme' },
+      host: 'fixme.yaks.app',
+      agent: 'https://yaks.app/agent',
+      sift: { q: '', sort: '' },
+    },
+    {
       apps: [
         { eid: 'a1', slug: 'chores', title: 'chores', errors },
         { eid: 'a2', slug: 'notes', title: 'notes' },
       ],
-    } as Parameters<typeof library>[0],
-    {},
+      agents: 1,
+    },
   ))
 
 let reports = [report('1'), report('2')]

@@ -9,6 +9,7 @@
 // Reads and marks go through the store's own doors with the caller vouched,
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
+import type { Fixing, Plain } from '@yaks/platform/space-apps'
 import { type Line, line as ql, sub } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { cmp } from '@yaks/fp'
@@ -437,21 +438,9 @@ export let line = (fold: Seen[]) => {
   }${times > 1 ? ` (${times} times${first ? ` since ${first}` : ''})` : ''}`
 }
 
-/** What the space's Operator made of a break: still working, its answer, or
- * what it told the person when it could not finish. */
-export type Fixing = { answer?: string; failed?: string }
-
-/** A break as its owner's dashboard shows it: what it said and where, in the
- * words its line says to their assistant, how often, when it last did, and
- * the Operator request its first occurrence started ({@link fixOf}). */
-export type Plain = {
-  said: string
-  where: string
-  times: number
-  at: string
-  fix: string
-  operator?: Fixing
-}
+// A break as its owner's dashboard shows it, its request the one its first
+// occurrence started ({@link fixOf}), and what the Operator made of it.
+export type { Fixing, Plain } from '@yaks/platform/space-apps'
 
 export let plain = (fold: Seen[]): Plain => ({
   said: said(fold[0].hit),

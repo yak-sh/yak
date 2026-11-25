@@ -11,7 +11,7 @@ import type { SpacePage } from '../pages.ts'
 import type { Person } from '../people.ts'
 import { platformVocab } from '../vocab.ts'
 import { once } from '@yaks/fp'
-import { app } from '@yaks/platform/app-tile'
+import { app, appTile } from '@yaks/platform/app-tile'
 import { directory } from './directory.ts'
 import { guest, invitation, seat } from './held.ts'
 
@@ -39,23 +39,7 @@ export type Around = {
 }
 
 export let tile = (a: SpacePage['apps'][number], around: Around = {}) =>
-  render(
-    registry,
-    {
-      entity: { eid: a.eid },
-      app: {
-        slug: a.slug,
-        access: a.access,
-        source: a.source,
-        generatedIcon: a.generatedIcon,
-      },
-      doc: { title: a.title },
-      ...(a.home ? { home: {} } : {}),
-    },
-    'List.Tile',
-    vocab(),
-    { gallery: a.gallery, ...around },
-  )
+  appTile(a, { gallery: a.gallery, ...around })
 
 // The row itself, as the directory keeps it, and who it is for beside it.
 let comps = {

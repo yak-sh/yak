@@ -87,7 +87,6 @@ import { vouched, type Who, whoIs } from './session.ts'
 import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
 import { writes } from '@yaks/member'
-import { brokenIn, trackedIn } from './unseen.ts'
 import { TOOLS } from './tools.ts'
 import { caught, defect } from './defects.ts'
 import { type Clock, clock } from './timing.ts'
@@ -100,7 +99,16 @@ import { admin, refuse } from './tool.ts'
 import { letIn, letOut, reachOf } from './operator-reach.ts'
 import { json } from '@yaks/platform/refused'
 import { moved, redirect, shelf } from './apps.ts'
-import { personRows, pickable, shared, sideApps, visitsRows } from './side.ts'
+import {
+  listedApps,
+  personRows,
+  pickable,
+  shared,
+  sideApps,
+  visitsRows,
+} from './side.ts'
+import { listedRows } from '@yaks/platform/space-apps'
+import { agentsIn, brokenOf } from './apps-reads.ts'
 import {
   ACCOUNT,
   accountOf,
@@ -767,9 +775,6 @@ let desk = async (
   }
   // Everything a page shows, asked at once: nothing here waits on anything but
   // the apps it says something about.
-  if (view == 'apps') {
-    void trackedIn(env, space, who, true).catch(() => {})
-  }
   let shelved = dir.apps(space).then((apps) => shelf(apps, space, who))
   // Whether an agent is connected, for the pages that say how to make an app
   // with one. They are drawn with it only if it is in hand once everything
@@ -777,8 +782,10 @@ let desk = async (
   // them read from the provider's KV, which takes longer than the rest of
   // the page (T-149703, grant-rows.ts), and the page's script
   // settles what depends on it (pages.ts `state`). A read that fails is
-  // reported and left to the script too.
-  let agents = view == 'apps' || view == 'new'
+  // reported and left to the script too. The Apps page carries them as a row
+  // (apps-reads.ts), which its page graph asks for when it is not in hand.
+  let agentsRow = view == 'apps' ? agentsIn(env, dir, owner) : undefined
+  let agents = view == 'new'
     ? agentsOf(env, owner, dir).catch((e) => {
       caught(e, { request: 'read agents', space: space.slug })
       return undefined
@@ -786,7 +793,6 @@ let desk = async (
     : undefined
   let [
     { here, all },
-    broken,
     drawn,
     fee,
     people,
@@ -795,7 +801,6 @@ let desk = async (
     operator,
     billed,
     provider,
-    made,
     panes,
     lines,
     domains,
@@ -803,23 +808,19 @@ let desk = async (
     renewals,
   ] = await Promise.all([
     shelved,
-    // What is broken in each app (unseen.ts `brokenIn`), read only for the
-    // page that lists them: one read of the space's tracker, no app's store
-    // woken. A read that fails is reported and the apps are drawn without it.
-    view == 'apps'
-      ? shelved.then(({ all }) =>
-        all.length
-          ? brokenIn(env, space, who, all).catch((e) => {
-            caught(e, { request: 'read open errors', space: space.slug })
-            return undefined
-          })
-          : undefined
-      )
-      : undefined,
     // The rows a page drawn from the page graph's reads is drawn from,
-    // carried for its first paint: Visits' apps and their views (side.ts
-    // `visitsRows`).
-    view == 'visits'
+    // carried for its first paint: Apps' apps, as the directory answers them
+    // live, and what is broken in each, one read of the space's tracker, no
+    // app's store woken (apps-reads.ts); Visits' apps and their views
+    // (side.ts `visitsRows`).
+    view == 'apps'
+      ? Promise.all([
+        listedApps(dir, space, who).then((apps) =>
+          listedRows(owner, space.eid, apps)
+        ),
+        brokenOf(env, dir, space, who),
+      ]).then((rows) => rows.flat())
+      : view == 'visits'
       ? visitsRows(env, dir, owner, space.eid).then((r) => [
         ...r.apps,
         ...r.counts,
@@ -884,15 +885,6 @@ let desk = async (
       })
       : undefined,
     payments(env),
-    // Who made each app and who deployed it last (T-151161), for the page
-    // that lists them. A read that fails is reported and the apps are drawn
-    // without it.
-    view == 'apps'
-      ? dir.provenance(walkTo(space.slug, space.eid)).catch((e) => {
-        caught(e, { request: 'read app provenance', space: space.slug })
-        return undefined
-      })
-      : undefined,
     // How the person keeps the panes (directory.ts `Panes`).
     dir.panes(owner),
     dir.lines(walkTo(space.slug, space.eid)),
@@ -908,9 +900,11 @@ let desk = async (
       : undefined,
   ])
   let known = await inHand(agents)
+  let connected = await inHand(agentsRow)
   let page = deskPage({
     person: who.person,
-    drawn,
+    // The Apps page's rows carry the agents connected, where in hand.
+    drawn: drawn && [...drawn, ...connected ?? []],
     viewDays: DAYS,
     space: space.slug,
     spaceEid: space.eid,
@@ -924,12 +918,8 @@ let desk = async (
       home: a.home,
       access: a.access,
       gallery: pilled(standing(a)),
-      errors: broken?.get(a.eid),
-      made: made?.of.get(a.eid)?.made,
-      deployed: made?.of.get(a.eid)?.deployed,
     })),
     sift: { q: q.get('q') ?? '', sort: q.get('sort') ?? '' },
-    writers: made?.writers,
     trash: here.filter((a) => a.trashed).map((a) => ({
       eid: a.eid,
       slug: a.slug,

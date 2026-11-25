@@ -81,6 +81,13 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // A space's Apps page kept current (@yaks/platform/space-apps-browser).
+  {
+    name: '_apps.js',
+    bundle: of('@yaks/platform/space-apps-browser'),
+    external,
+    named: true,
+  },
   // A space's Operator settings kept current
   // (@yaks/platform/operator-settings-browser).
   {
@@ -136,7 +143,6 @@ export let ASSETS: Asset[] = [
     'pane.js',
     'find.js',
     'note.js',
-    'sift.js',
     'modal.js',
     'cta.js',
     'saving.js',

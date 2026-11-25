@@ -54,6 +54,15 @@ import {
   visitCounts,
   visitWords,
 } from '@yaks/platform/visit-counts'
+import {
+  AGENTS,
+  agentsOf,
+  brokenApps,
+  listedOf,
+  spaceApps,
+} from '@yaks/platform/space-apps'
+import type { AppsView } from '@yaks/platform/space-apps-view'
+import { managePath } from '@yaks/platform/routes'
 import { ALL } from './updates.ts'
 import { sessionRow } from './browser-sessions.ts'
 import { client } from '@yaks/client'
@@ -776,4 +785,40 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
     for (let wire of opened) wire.close?.(1000)
     undo()
   }
+})
+
+test('an Apps page carries the rows it was drawn from and the script that draws it again, and a tab reads them through the door', async () => {
+  let { space } = (await k.dir.seated(ada.person)).find((s) =>
+    s.space.slug == 'adas'
+  )!
+  let page = await k.at(k.host, managePath('apps', 'adas'), {
+    headers: { cookie: ada.cookie },
+  })
+  let { document } = parseHTML(await page.text())
+  let scripts = [...document.querySelectorAll('script[src]')]
+    .map((s) => s.getAttribute('src')!)
+  equal(scripts.some((src) => src.includes('/_apps.')), true)
+  let view = document.querySelector<HTMLElement>('[data-view=apps]')!
+  equal(
+    (JSON.parse(view.dataset.appsView!) as AppsView).space,
+    { eid: space.eid, slug: 'adas' },
+  )
+  let drawn = JSON.parse(
+    view.querySelector('script[data-page-graph]')!.textContent!,
+  ) as { person: string; rows: Bundle[] }
+  let listed = (rows: Bundle[]) =>
+    listedOf(rows, space.eid).map((a) => a.slug).sort()
+  equal(listed(drawn.rows), ['lists', 'notes'])
+  equal(
+    [...view.querySelectorAll('#apps .Rows_Open')].map((a) => a.textContent)
+      .sort(),
+    ['lists', 'notes'],
+  )
+  // The tab reads the same, and nothing of a space its person holds no
+  // seat in.
+  equal(listed(await rowsOf(ada, spaceApps(space.eid))), ['lists', 'notes'])
+  equal(await rowsOf(bea, spaceApps(space.eid)), [])
+  equal(await rowsOf(ada, brokenApps(space.eid)), [])
+  equal(await rowsOf(bea, brokenApps(space.eid)), [])
+  equal(agentsOf(await rowsOf(ada, AGENTS)), 0)
 })

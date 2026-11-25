@@ -10,16 +10,30 @@ import { managePath } from '@yaks/platform/routes'
 import { accountRow } from '@yaks/platform/account-rows'
 import { appRows, spaceRows } from '@yaks/platform/side-rows'
 import { countRows } from '@yaks/platform/visit-counts'
+import { agentRows, listedRows } from '@yaks/platform/space-apps'
 
 // The dashboard itself, drawn straight (pages.ts `desk` is pure): the order
 // it puts its blocks in, and what stands where the connect steps were. Every
 // state a person passes through is one call here — landed, connected,
 // something built — where reaching each through the kernel is a sign-in, an
 // OAuth grant and an app apiece (identity_test.ts holds those ends).
+// The Apps page is drawn from rows (@yaks/platform/space-apps): its apps,
+// and the agents connected where they are known.
 let block = (
   at: Partial<Parameters<typeof desk>[0]> = {},
   env: Parameters<typeof desk>[1] = {},
-) => desk({ space: 'dana', apps: [], name: 'dana', ...at }, env).text()
+) =>
+  desk({
+    space: 'dana',
+    apps: [],
+    name: 'dana',
+    spaceEid: 'space-dana',
+    ...at,
+    drawn: at.drawn ?? [
+      ...listedRows('person-dana', 'space-dana', at.apps ?? []),
+      ...at.agents ? agentRows('person-dana', at.agents.length) : [],
+    ],
+  }, env).text()
 
 // The space's front door, which anybody may be shown.
 let face = (at: Partial<Parameters<typeof spaceIndex>[0]> = {}) =>
