@@ -8,6 +8,7 @@ import {
   interactionRows,
   MAX_MS,
   MAX_POINTS,
+  type Navigation,
   type Open,
   OPEN_SOURCES,
   openMilestones,
@@ -30,6 +31,15 @@ let OBJECT = (value: unknown): value is Record<string, unknown> =>
 let duration = (n: unknown): n is number =>
   typeof n == 'number' && n >= 0 && n <= MAX_MS
 let milestone = (n: unknown): n is number | null => n === null || duration(n)
+
+let navigationOf = (value: unknown): Navigation | undefined => {
+  if (!OBJECT(value)) return
+  let { workerStart, fetchStart, requestStart, responseStart } = value
+  if (
+    duration(workerStart) && duration(fetchStart) && duration(requestStart) &&
+    duration(responseStart)
+  ) return { workerStart, fetchStart, requestStart, responseStart }
+}
 
 let opening = (value: unknown): Open | undefined => {
   if (!OBJECT(value)) return
@@ -54,6 +64,7 @@ let opening = (value: unknown): Open | undefined => {
     !milestone(paint) || !milestone(usable) || !milestone(server) ||
     paint != null && usable != null && usable < paint
   ) return
+  let navigation = navigationOf(value.navigation)
   return {
     source,
     picture,
@@ -64,6 +75,7 @@ let opening = (value: unknown): Open | undefined => {
     server,
     estimated,
     ...controlled == null ? {} : { controlled },
+    ...navigation ? { navigation } : {},
   }
 }
 
@@ -139,6 +151,8 @@ let slowOpen = (
         ms,
         budget,
         ...open.server == null ? {} : { server: open.server },
+        ...open.navigation,
+        ...open.controlled == null ? {} : { controlled: open.controlled },
         account: 'person',
         entrypoint: 'browser interaction',
       },

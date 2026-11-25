@@ -24,7 +24,8 @@
  *
  * - A picture that cannot be replaced by its page sends its address
  *   (`NETWORK`) before it loads again, and that next open of it comes from
- *   the network; one the worker cannot draw does too.
+ *   the network; one the worker cannot draw does too. The browser can
+ *   start network-only opens while the worker starts (navigation preload).
  * - A page the network cannot give (`failed`) is answered with the site's
  *   page saying so: the browser offline, the site unreachable, or an error
  *   page the site did not draw (`drew`). One that is only slow is waited for.
@@ -135,11 +136,9 @@ export type Scope = {
   caches: CacheStorage
   fetch: typeof fetch
   location: { origin: string }
-  clients: {
-    claim(): Promise<void>
-    matchAll?(
-      o: { type: 'window' },
-    ): Promise<{ url: string; navigate?(url: string): Promise<unknown> }[]>
+  clients: { claim(): Promise<void> }
+  registration?: {
+    navigationPreload?: { enable(): Promise<void> }
   }
   indexedDB?: Pick<IDBFactory, 'databases' | 'deleteDatabase'>
   navigator?: { onLine: boolean }
@@ -169,6 +168,7 @@ export type Scope = {
 /** A fetch event, as far as this worker reads it. */
 export type FetchLike = {
   request: Request
+  preloadResponse?: Promise<Response | undefined>
   respondWith(r: Promise<Response>): void
   waitUntil(p: Promise<unknown>): void
 }
@@ -187,19 +187,7 @@ let PUSHED = 10_000
  * page open as the worker starts is its at once, so the page can be kept. */
 export let keeping = (scope: Scope, opts: Keeping): void => {
   let { caches, location } = scope
-  // Pictures off: every page goes to the network, and what was kept is
-  // dropped as this worker takes over. Windows open while pictures were on
-  // load again from the network once, since one may be a picture stuck.
   let pictures = opts.pictures ?? true
-  let unpicture = async () => {
-    if (!await caches.delete(PAGES)) return
-    let open = await scope.clients.matchAll?.({ type: 'window' }) ?? []
-    await Promise.all(open.map((w) => w.navigate?.(w.url).catch(() => {})))
-  }
-  scope.addEventListener('activate', (e) =>
-    e.waitUntil(
-      scope.clients.claim().then(() => pictures ? undefined : unpicture()),
-    ))
   let address = opts.address ?? ((url: string) => url)
   let keyOf = (url: string) => pageKey(address(url))
   let most = { pages: opts.pages ?? 24, files: opts.files ?? 400 }
@@ -218,7 +206,10 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   }
   let reports = opts.report && keptReports(scope, opts.report, forgotAt)
   // What the worker itself could not do, told at the site's door.
-  let tell = (e: unknown) => {
+  let tell = (
+    e: unknown,
+    message = 'The worker could not draw a kept page',
+  ) => {
     if (!opts.broke) return
     let error = e instanceof Error ? e : Error(String(e))
     scope.fetch(location.origin + opts.broke, {
@@ -226,13 +217,32 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        message: 'The worker could not draw a kept page: ' + error.message,
+        message: message + ': ' + error.message,
         stack: `${error.stack ?? ''}\n${location.origin}/worker.js`,
         page: location.origin + '/worker.js',
         mechanism: 'catch',
       }),
     }).catch(() => {})
   }
+  scope.addEventListener('activate', (e) => {
+    // A navigation can wait for activation. Activation must never open a page.
+    if (!pictures) {
+      let preload = scope.registration?.navigationPreload
+      if (preload) {
+        e.waitUntil(
+          preload.enable().catch((error) =>
+            tell(error, 'The worker could not enable navigation preload')
+          ),
+        )
+      }
+      e.waitUntil(
+        caches.delete(PAGES).catch((error) =>
+          tell(error, 'The worker could not clear its old pictures')
+        ),
+      )
+    }
+    e.waitUntil(scope.clients.claim())
+  })
   let forget = async () => {
     asked.clear()
     let { databases } = opts
@@ -305,7 +315,6 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   // A page's own picture, else the shell where it stands for the page: never
   // in a frame, whose page is another's.
   let kept = async (req: Request, key: string) => {
-    if (!pictures) return undefined
     let pages = await caches.open(PAGES)
     let shell = (req.destination || 'document') == 'document' &&
       opts.shelled?.(key)
@@ -315,9 +324,9 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   // The page from the network, however long it takes, or the site's page
   // saying why it can't be had. A slow answer is never given up on: the
   // site is slow, and asking again would only add to its load.
-  let reached = async (req: Request) => {
+  let reached = async (answer: Promise<Response>) => {
     let { failed } = opts
-    if (!failed) return scope.fetch(req)
+    if (!failed) return answer
     let said = (why: Failure) =>
       new Response(failed(why), {
         status: 503,
@@ -328,7 +337,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       })
     let got: Response
     try {
-      got = await scope.fetch(req)
+      got = await answer
     } catch (e) {
       return said({
         state: scope.navigator?.onLine == false ? 'offline' : 'unreachable',
@@ -340,12 +349,12 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   }
   let page = async (req: Request) => {
     let key = keyOf(req.url)
-    if (unpictured.delete(key)) return reached(req)
+    if (unpictured.delete(key)) return reached(scope.fetch(req))
     let drawn = await kept(req, key).catch((e) => {
       tell(e)
       return undefined
     })
-    if (!drawn) return reached(req)
+    if (!drawn) return reached(scope.fetch(req))
     let now = timed(
       scope.fetch(key, {
         credentials: 'same-origin',
@@ -359,6 +368,9 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     asked.set(key, now)
     return drawn
   }
+  let requested = ({ request, preloadResponse }: FetchLike) =>
+    preloadResponse?.then((preloaded) => preloaded ?? scope.fetch(request)) ??
+      scope.fetch(request)
   // The page at `url` as it is now, kept as if it had just been left. One
   // that sends elsewhere (signed out) or fails is not kept.
   let refresh = async (url: string) => {
@@ -396,9 +408,12 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       e.request.url == location.origin + opts.report
     ) return e.respondWith(reports.send(e.request))
     let how = route(e.request, location.origin, opts)
-    if (how == 'forget') e.waitUntil(forget())
-    else if (how == 'page') e.respondWith(page(e.request))
-    else if (how == 'fresh') e.respondWith(fresh(e.request))
+    if (how == 'forget') {
+      e.waitUntil(forget())
+      if (!pictures && e.request.method == 'GET') e.respondWith(requested(e))
+    } else if (how == 'page') {
+      e.respondWith(pictures ? page(e.request) : reached(requested(e)))
+    } else if (how == 'fresh') e.respondWith(fresh(e.request))
     else if (how == 'file') e.respondWith(file(e.request))
   })
   // Beside showing the notification, never before it: what was pushed is
@@ -410,7 +425,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     } catch {
       return
     }
-    let url = opts.opens?.(pushed)
+    let url = pictures && opts.opens?.(pushed)
     if (url) e.waitUntil(refresh(url))
   })
   scope.addEventListener('message', (e) => {

@@ -24,6 +24,12 @@ export type Point = {
 export let OPEN_PATH: string = INTERACTION_PATH + '?open=1'
 export let OPEN_SOURCES = ['cold', 'picture', 'shell', 'push'] as const
 export let DEVICES = ['iphone-compact', 'phone', 'tablet', 'desktop'] as const
+export type Navigation = {
+  workerStart: number
+  fetchStart: number
+  requestStart: number
+  responseStart: number
+}
 export type Open = {
   source: typeof OPEN_SOURCES[number]
   picture: boolean
@@ -33,8 +39,10 @@ export type Open = {
   usable: number | null
   server: number | null
   estimated: boolean
-  // a service worker answered the page's address, as the page says
+  // The page has a service worker controller.
   controlled?: boolean
+  // Offsets in the browser from the navigation start (Batch.at).
+  navigation?: Navigation
 }
 export type Batch = { id: string; at: number; points: Point[]; open?: Open }
 export type Phases = Pick<Point, 'input' | 'server' | 'script' | 'render'>

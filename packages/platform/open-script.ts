@@ -44,6 +44,12 @@ let OPENING = `(endpoint, source) => {
       server: picture || !nav || !nav.responseStart ? null : nav.responseStart - nav.requestStart,
       estimated: false,
       controlled: !!navigator.serviceWorker?.controller,
+      navigation: picture || !nav ? undefined : {
+        workerStart: nav.workerStart,
+        fetchStart: nav.fetchStart,
+        requestStart: nav.requestStart,
+        responseStart: nav.responseStart,
+      },
     }
     let id = !checked && crypto.randomUUID?.()
     let at = Math.floor(performance.timeOrigin)

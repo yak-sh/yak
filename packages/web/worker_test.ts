@@ -86,7 +86,12 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
   // leaves the request to the network.
   let ask = async (
     path: string,
-    o: { mode?: RequestMode; method?: string; fresh?: boolean } = {},
+    o: {
+      mode?: RequestMode
+      method?: string
+      fresh?: boolean
+      preloadResponse?: Promise<Response | undefined>
+    } = {},
   ) => {
     let answer: Promise<Response> | undefined
     let request = {
@@ -97,6 +102,7 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
     } as Request
     let e: FetchLike = {
       request,
+      preloadResponse: o.preloadResponse,
       respondWith: (r) => void (answer = r),
       waitUntil: (p) => void waiting.push(p),
     }
@@ -105,6 +111,12 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
     return answer ? await (await answer).text() : null
   }
   let open = (path: string) => ask(path, { mode: 'navigate' })
+  let activate = async () => {
+    hear.get('activate')!({
+      waitUntil: (p: Promise<unknown>) => void waiting.push(p),
+    })
+    await settled()
+  }
   let leave = async (
     path: string,
     html: string,
@@ -135,6 +147,8 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
     await settled()
   }
   return {
+    scope,
+    activate,
     site,
     navigator,
     asked,
@@ -245,6 +259,75 @@ test('a picture that could not be replaced opens next from the network, once', a
   assertEquals(w.failed('/checks#row-1'), [true])
   assertEquals(await w.open('/checks'), page('now'))
   assertEquals((await w.open('/checks'))!.includes(KEPT), true)
+})
+
+test('a network-only upgrade drops old pictures without reopening any window', async () => {
+  let w = worker(2, { pictures: false })
+  await (await w.scope.caches.open('yak-pages')).put(
+    'https://yaks.app/checks',
+    new Response('a picture from the previous release'),
+  )
+  let reopens: string[] = []
+  let clients = {
+    claim: () => Promise.resolve(),
+    matchAll: () =>
+      Promise.resolve([{
+        url: 'https://yaks.app/checks',
+        navigate: (url: string) => Promise.resolve(reopens.push(url)),
+      }]),
+  }
+  let enabled = false
+  w.scope.clients = clients
+  w.scope.registration = {
+    navigationPreload: {
+      enable: () => {
+        enabled = true
+        return Promise.resolve()
+      },
+    },
+  }
+  await w.activate()
+  equal(w.stores.has('yak-pages'), false)
+  equal(reopens, [])
+  equal(enabled, true)
+})
+
+test('network-only opens use the browser request, including a slow answer or an offline failure', async () => {
+  let w = worker(2, {
+    pictures: false,
+    failed: ({ state }) => state,
+    forget: ['/login'],
+  })
+  let { promise, resolve } = Promise.withResolvers<Response>()
+  let opened = w.ask('/checks', { mode: 'navigate', preloadResponse: promise })
+  equal(w.asked, [])
+  resolve(new Response('ready'))
+  equal(await opened, 'ready')
+  equal(
+    await w.ask('/login', {
+      mode: 'navigate',
+      preloadResponse: Promise.resolve(new Response('sign in')),
+    }),
+    'sign in',
+  )
+  w.navigator.onLine = false
+  equal(
+    await w.ask('/checks', {
+      mode: 'navigate',
+      preloadResponse: Promise.reject(new TypeError('Load failed')),
+    }),
+    'offline',
+  )
+  equal(w.asked, [])
+  w.site.set('/checks', 'network fallback')
+  equal(
+    await w.ask('/checks', {
+      mode: 'navigate',
+      preloadResponse: Promise.resolve(undefined),
+    }),
+    'network fallback',
+  )
+  equal(w.asked, ['/checks'])
 })
 
 test("an open the network cannot give is answered with the site's page saying why, and a slow one is waited for", async () => {

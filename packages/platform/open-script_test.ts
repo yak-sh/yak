@@ -5,6 +5,13 @@ import type { Batch } from '@yaks/timing/interaction'
 import type { TimingRow } from '@yaks/timing'
 import type { Bundle } from '@yaks/graph'
 
+let navigation = {
+  workerStart: 10,
+  fetchStart: 20,
+  requestStart: 60,
+  responseStart: 180,
+}
+
 let browser = (href = 'https://yaks.app/ada') => {
   let document = Object.assign(new EventTarget(), {
     readyState: 'loading',
@@ -18,7 +25,7 @@ let browser = (href = 'https://yaks.app/ada') => {
   let performance = {
     timeOrigin: 1795626000000,
     now: () => clock,
-    getEntriesByType: () => [{ requestStart: 60, responseStart: 180 }],
+    getEntriesByType: () => [navigation],
     getEntriesByName: (name: string) =>
       entries.has(name) ? [entries.get(name)] : [],
     mark: (name: string, { startTime = clock } = {}) =>
@@ -88,6 +95,26 @@ let browser = (href = 'https://yaks.app/ada') => {
   }
 }
 
+let reported = async (
+  b: ReturnType<typeof browser>,
+  opened: { page: string; person?: string },
+): Promise<Bundle[]> => {
+  let rows: Bundle[] = []
+  let req = new Request('https://yaks.app/api/interaction?open=1', {
+    method: 'POST',
+    body: JSON.stringify(b.sent[0]),
+  })
+  await reportInteractions(req, {
+    sink: (got) => Promise.resolve(void rows.push(...got)),
+    now: () => b.at,
+    failed: (error) => {
+      throw error
+    },
+    opened,
+  })
+  return rows
+}
+
 test('a cold document opened from a notification records paint, readiness and the network wait once', () => {
   let b = browser('https://yaks.app/ada?_yak_open=push#row-123')
   b.run()
@@ -105,7 +132,24 @@ test('a cold document opened from a notification records paint, readiness and th
     server: 120,
     estimated: false,
     controlled: false,
+    navigation,
   }])
+})
+
+test('a slow network open reports the browser navigation timestamps with the incident', async () => {
+  let b = browser()
+  b.run()
+  b.parsed(4000)
+  b.frame(4100)
+  let rows = await reported(b, { page: 'updates' })
+  let tags = rows.flatMap((row) =>
+    row.error ? [(row.error as { tags: typeof navigation }).tags] : []
+  )
+  let names = Object.keys(navigation) as (keyof typeof navigation)[]
+  equal(tags.map((tag) => names.map((name) => tag[name])), [
+    Object.values(navigation),
+    Object.values(navigation),
+  ])
 })
 
 test('a picture and its replacement report one paired sample and use the picture paint budget', async () => {
@@ -122,20 +166,8 @@ test('a picture and its replacement report one paired sample and use the picture
   b.entries.set('yak-usable', { startTime: 980 })
   b.parsed(1000)
   equal(b.sent.length, 1)
-  let rows: Bundle[] = []
   let person = crypto.randomUUID()
-  let req = new Request('https://yaks.app/api/interaction?open=1', {
-    method: 'POST',
-    body: JSON.stringify(b.sent[0]),
-  })
-  await reportInteractions(req, {
-    sink: (got) => Promise.resolve(void rows.push(...got)),
-    now: () => b.at,
-    failed: (error) => {
-      throw error
-    },
-    opened: { page: 'operator', person },
-  })
+  let rows = await reported(b, { page: 'operator', person })
   let timings = rows.filter((row) => row.timing) as TimingRow[]
   equal(timings.map((row) => [row.timing.total, row.during.entity]), [
     [590, person],
@@ -177,21 +209,7 @@ test('a shell paints on the picture budget and is usable on the cold one', async
   b.entries.set('yak-usable', { startTime: 2400 })
   b.parsed(2500)
   equal(b.sent.map((p) => [p.open?.source, p.open?.picture]), [['shell', true]])
-  let rows: Bundle[] = []
-  await reportInteractions(
-    new Request('https://yaks.app/api/interaction?open=1', {
-      method: 'POST',
-      body: JSON.stringify(b.sent[0]),
-    }),
-    {
-      sink: (got) => Promise.resolve(void rows.push(...got)),
-      now: () => b.at,
-      failed: (error) => {
-        throw error
-      },
-      opened: { page: 'updates', person: crypto.randomUUID() },
-    },
-  )
+  let rows = await reported(b, { page: 'updates', person: crypto.randomUUID() })
   let timings = rows.filter((row) => row.timing) as TimingRow[]
   equal(
     timings.map((row) => [row.timing.total, row.timing.counts.overBudget]),
