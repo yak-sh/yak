@@ -3,6 +3,7 @@
 // that index, beside what its compile made, before the app row selects it.
 import { gathered, type Objects, prefixed, type Put, stored } from '@yaks/blob'
 import { lanes } from '@yaks/fp'
+import { digest } from '@yaks/graph/sha256'
 import {
   type Asset,
   type Assets,
@@ -86,8 +87,9 @@ let indexAt = (raw: Objects, prefix: string) => {
 // config of 99% of them came to under 27 KB.
 let PACKED = 64 * 1024
 let PACKS = 32
-let FIRST = /(?:^|\/)[^/]+\.html?$|^wrangler\.jsonc?$/i
+let FIRST = /(?:^|\/)[^/]+\.html?$|^wrangler\.jsonc?$|^copy\.json$/i
 let utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+let encodeText = new TextEncoder()
 let textOf = (bytes: Uint8Array) => {
   try {
     return utf8.decode(bytes)
@@ -100,14 +102,27 @@ let ranked = (path: string) =>
 
 /** The index with the text of the files a first view reads, as far as
  * PACKED goes: each is read once here, so a reader of the index has it. */
-export let packed = async (raw: Objects, index: Index): Promise<Index> => {
+export let packed = async (
+  raw: Objects,
+  index: Index,
+  previous: Index | null = null,
+  texts: Record<string, string> = {},
+): Promise<Index> => {
   let paths = Object.keys(index).filter((path) => FIRST.test(path))
     .sort((a, b) => {
       let [x, y] = [ranked(a), ranked(b)]
       return x[0] - y[0] || x[1] - y[1] || (a < b ? -1 : 1)
     })
     .slice(0, PACKS)
-  let read = await Promise.all(paths.map((path) => raw.read(index[path].key)))
+  let read = await Promise.all(paths.map((path) => {
+    let prior = previous?.[path]
+    let text = Object.hasOwn(texts, path)
+      ? texts[path]
+      : prior?.key == index[path].key
+      ? prior.text
+      : undefined
+    return text == null ? raw.read(index[path].key) : encodeText.encode(text)
+  }))
   let room = PACKED
   let out = { ...index }
   paths.forEach((path, i) => {
@@ -186,12 +201,17 @@ export let departed = async (
   let gone = Object.entries(prior).filter(([path, asset]) =>
     assets[path]?.sha != asset.sha
   )
-  await lanes(16)(gone, async ([path, { public: _, ...asset }]) => {
-    await raw.put(
-      assetKey(root, path, asset.sha),
-      new TextEncoder().encode(JSON.stringify({ ...asset, source: previous })),
-    )
-  })
+  await lanes(16)(
+    gone,
+    async ([path, { public: _, links: _links, ...asset }]) => {
+      await raw.put(
+        assetKey(root, path, asset.sha),
+        new TextEncoder().encode(
+          JSON.stringify({ ...asset, source: previous }),
+        ),
+      )
+    },
+  )
 }
 
 export let keptAsset = async (
@@ -214,18 +234,24 @@ let sourceText = async (raw: Objects, sha: string) => {
 
 let withAssets = async (
   raw: Objects,
-  source: string,
   files: Files,
   config: Serving,
-  previous?: string | null,
+  previous: Index | null,
 ): Promise<Index> => {
-  let write = async (text: string) =>
-    (await stored(prefixed(raw, SHA), new TextEncoder().encode(text))).sha
+  let prior = previous ? assetsOf(previous) : {}
+  let pinned = new Set(Object.values(prior).map(({ sha }) => sha))
+  let write = async (text: string) => {
+    let bytes = new TextEncoder().encode(text)
+    let sha = await digest(bytes)
+    if (!pinned.has(sha)) await raw.put(addressed(sha), bytes)
+    return sha
+  }
   let assets = await fingerprints(
     files,
     config,
     (sha) => sourceText(raw, sha),
     write,
+    prior,
   )
   let folder = rootOf('', config)
   let index: Index = Object.fromEntries(
@@ -240,12 +266,6 @@ let withAssets = async (
         : `${folder}/${path}`.slice(1)
     index[key].asset = { ...asset, path }
   }
-  await departed(
-    raw,
-    source.slice(0, source.lastIndexOf('/') + 1),
-    previous,
-    assets,
-  )
   return index
 }
 
@@ -416,12 +436,21 @@ export let staged = (raw: Objects, from: Files, prefix: string) => {
   let finish = async (
     config: Serving = {},
     previous?: string | null,
+    texts?: Record<string, string>,
   ): Promise<Files> => {
-    await written(
-      raw,
-      prefix,
-      await packed(raw, await withAssets(raw, prefix, files, config, previous)),
-    )
+    let prior = previous ? await atRelease(raw, previous) : null
+    let index = await withAssets(raw, files, config, prior)
+    await Promise.all([
+      packed(raw, index, prior, texts).then((next) =>
+        written(raw, prefix, next)
+      ),
+      departed(
+        raw,
+        prefix.slice(0, prefix.lastIndexOf('/') + 1),
+        previous,
+        assetsOf(index),
+      ),
+    ])
     return manifest()
   }
   return { files: view, manifest, finish }

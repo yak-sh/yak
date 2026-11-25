@@ -124,7 +124,7 @@ export let waiting = async (
  * turn behind it. */
 export let overtaken = (error: unknown, app: App) =>
   error instanceof Stale && error.eid == app.eid && error.comp == 'app' &&
-  ['fence', 'source', 'version'].includes(error.prop)
+  ['fence', 'source', 'version', 'declaration', 'access'].includes(error.prop)
 
 /** A fence not yet taken: when it was drawn, which `waiting` reads its age
  * from, and a name no other fence shares. A job that can die holding one
@@ -226,6 +226,8 @@ export let record = async (
     join,
     speaks,
     message,
+    head,
+    accessWas,
   }: {
     homes?: { app: App; release: string }[]
     sourceWas?: string | null
@@ -242,10 +244,12 @@ export let record = async (
     speaks?: Record<string, number>
     /** Everything the release changed and why, as its deployer wrote it. */
     message?: string
+    head?: Awaited<ReturnType<Directory['deployHead']>>
+    /** A release without a fence commits only while the app stays private. */
+    accessWas?: App['access']
   } = {},
 ) => {
-  let all = await dir.deploys(app)
-  let prior = all.find((v) => v.version == app.version)
+  head ??= await dir.deployHead(app)
   let eid = target?.eid ?? mint()
   // Who put it live, and when: the agent writing for a person, or the person
   // (M-31958), with its session. The deploy row's `created` says the same of
@@ -280,6 +284,9 @@ export let record = async (
             version: token(app.version),
             declaration: token(app.declaration),
             source: token(sourceWas),
+            ...accessWas !== undefined
+              ? { access: token(accessWas), space: token(app.space) }
+              : {},
             ...taken?.legacy ? { draft: token(taken.eid) } : {},
             fence: token(fenceWas),
           },
@@ -313,7 +320,7 @@ export let record = async (
         entity: { eid: mint() },
         switched: {
           app: app.eid,
-          from: prior?.eid ?? null,
+          from: head.live,
           to: eid,
           source: app.source,
           ...moved,

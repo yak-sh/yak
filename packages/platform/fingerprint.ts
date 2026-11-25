@@ -18,6 +18,8 @@ export type Asset = {
   original: string
   type: string
   public?: true
+  /** Local paths consulted when rewriting a stylesheet or module. */
+  links?: string[]
 }
 export type Assets = Record<string, Asset>
 
@@ -118,15 +120,26 @@ export let fingerprints = async (
   config: Serving,
   read: (sha: string) => Promise<string | null>,
   write: (text: string) => Promise<string>,
+  previous: Assets = {},
 ): Promise<Assets> => {
   let candidates = browserFiles(files, config)
   let rewritten = (file: Asset) =>
     file.type.startsWith('text/css') || moduleAsset(file)
+  let unchanged = (path: string, file: Asset) => {
+    let prior = Object.hasOwn(previous, path) ? previous[path] : undefined
+    return prior?.original == file.original && prior.type == file.type
+      ? prior
+      : undefined
+  }
   // Each stylesheet and module is read for what it links, in the order the
   // walk below asks for them, a few ahead of it: read one after another,
   // each was a trip to the bucket in turn on every release (T-3600).
   let order = [
-    ...new Set([...candidates.values()].filter(rewritten).map((f) => f.sha)),
+    ...new Set(
+      [...candidates].filter(([path, file]) =>
+        rewritten(file) && !unchanged(path, file)?.links
+      ).map(([, file]) => file.sha),
+    ),
   ]
   let ahead = new Map<string, Promise<string | null>>()
   let taken = new Set<string>()
@@ -167,6 +180,22 @@ export let fingerprints = async (
   ): Promise<Asset | null> => {
     let css = file.type.startsWith('text/css')
     if (!rewritten(file)) return file
+    let prior = unchanged(path, file)
+    let linksStillMatch = async (paths: string[]) => {
+      for (let name of paths) {
+        let before = Object.hasOwn(previous, name) ? previous[name] : undefined
+        if (!candidates.has(name)) {
+          if (before) return false
+        } else {
+          let after = await follow(name)
+          if (!after || after.sha != before?.sha) return false
+        }
+      }
+      return true
+    }
+    if (prior?.links && await linksStillMatch(prior.links)) {
+      return { ...file, sha: prior.sha, links: prior.links }
+    }
     let source = await sourceOf(file.sha)
     if (source == null) return null
     let refs = css ? [] : links(source)
@@ -179,9 +208,11 @@ export let fingerprints = async (
       return ref
     })
     let moved = new Map<string, string>()
+    let depends = new Set<string>()
     for (let [ref, match] of found) {
       if (!match) continue
       let { name, url } = match
+      depends.add(name)
       let tail = url.search + url.hash
       if (candidates.has(name)) {
         let dep = await follow(name)
@@ -192,7 +223,11 @@ export let fingerprints = async (
       }
     }
     let text = rewrite((ref) => moved.get(ref) ?? ref)
-    return text == source ? file : { ...file, sha: await write(text) }
+    return {
+      ...file,
+      sha: text == source ? file.sha : await write(text),
+      links: [...depends],
+    }
   }
   for (let path of candidates.keys()) await follow(path)
   return Object.fromEntries(

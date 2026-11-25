@@ -1,6 +1,7 @@
 // What a release serves each browser file as (fingerprint.ts), read through a
 // bucket that answers when the test lets it: no network.
 import { equal, test } from '@yaks/testing'
+import { digest } from '@yaks/graph/sha256'
 import { fingerprints } from './fingerprint.ts'
 
 // Stylesheets read a few at a time, ahead of the walk that needs them, rather
@@ -21,4 +22,49 @@ test('a release reads its stylesheets a few at a time, and serves each the same'
   })
   equal(Object.values(assets).map((a) => a.sha), Object.values(files))
   equal(most > 1 && most <= 7, true)
+})
+
+test('a release reuses unchanged assets and follows only the references that changed', async () => {
+  let files = {
+    'index.html': 'page',
+    'style.css': 'style',
+    'theme.css': 'theme',
+    'logo.svg': 'logo',
+    'plain.js': 'plain',
+    'module.js': 'module',
+  }
+  let sources: Record<string, string> = {
+    style: '@import "./theme.css";',
+    theme: 'a { background: url(logo.svg), url(missing.svg) }',
+    plain: 'export let n = 1',
+    module: 'import "./plain.js"',
+  }
+  let reads: string[] = [], writes: string[] = []
+  let release = (next: Record<string, string>, previous = {}) =>
+    fingerprints(next, {}, (sha) => {
+      reads.push(sha)
+      return Promise.resolve(sources[sha])
+    }, (text) => {
+      writes.push(text)
+      return digest(new TextEncoder().encode(text))
+    }, previous)
+  let start = await release(files)
+  reads = []
+  writes = []
+  let page = await release({ ...files, 'index.html': 'new page' }, start)
+  equal(page, start)
+  equal([reads, writes], [[], []])
+
+  let linked = await release({ ...files, 'missing.svg': 'now-present' }, page)
+  equal(reads, ['theme', 'style'])
+  equal(writes.length, 2)
+  equal(writes[0].includes('now-present/missing.svg'), true)
+  equal(linked['module.js'], start['module.js'])
+
+  reads = []
+  writes = []
+  let { 'logo.svg': _, ...left } = files
+  await release({ ...left, 'missing.svg': 'now-present' }, linked)
+  equal(reads, ['theme', 'style'])
+  equal(writes[0].includes('logo/logo.svg'), false)
 })

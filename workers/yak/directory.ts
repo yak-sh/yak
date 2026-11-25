@@ -3851,6 +3851,24 @@ export let directoryRows = (rows: {
     // the moment it writes one.
     deploys: async (app: Pick<App, 'eid'>, through?: number) =>
       (await self.deploysOf([app], through)).get(app.eid) ?? [],
+    // What the next release needs from history, without any file manifests.
+    deployHead: async (app: Pick<App, 'eid' | 'version'>) => {
+      let releases =
+        line`.deploy.app=${app.eid}&.fields=deploy.version,deploy.speaks`
+      let newest = await one(
+        line`${sub(releases)}&.order=-deploy.version&.limit=1`,
+      )
+      let live = newest?.deploy?.version == app.version
+        ? newest
+        : app.version
+        ? await one(line`${sub(releases)}&.deploy.version=${app.version}`)
+        : undefined
+      return {
+        newest: newest?.deploy?.version ?? 0,
+        live: live?.entity.eid ?? null,
+        speaks: live?.deploy?.speaks,
+      }
+    },
     // When the app's newest release made of a draft went out (written.ts
     // `marked`), or null where none was: a release of other files (a Save,
     // a version put back) took no draft.

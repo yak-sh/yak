@@ -1,23 +1,37 @@
 // Save in edit mode (edit-mode.ts): the snippets a member drafted on an app's
-// page, set in its copy.json (@yaks/copy) and released. It is a release like
-// any other, made the one way (tools.ts `released`), so app_versions lists it
-// and app_rollback takes it back. It releases only the copy: the live files
-// with copy.json replaced, read while the release's fence holds them, so two
-// people saving different snippets each change what the other released. The
-// app's draft, anybody's unreleased edits, stays a draft.
+// page, set in its copy.json (@yaks/copy) and released. A private static app
+// can carry its declaration and publish the changed files in one commit.
+// Both paths record a version and merge against the release they replace.
 //
 // Undo is app_rollback's path: the release Save made goes back to the one it
 // replaced, while it is still the live one.
 import { parse, read, set } from '@yaks/copy'
+import { seedy } from '@yaks/platform/files'
+import {
+  addressed,
+  BUILT,
+  deployedOver,
+  type Files,
+} from '@yaks/platform/versions'
 import type { Door } from '@yaks/durable-object/door'
+import { Stale } from '@yaks/graph/errors'
+import { declarationOf, keepDeclaration } from './declaration.ts'
+import { background, caught } from './defects.ts'
 import type { App, Space } from './directory.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { COPY } from './page-copy.ts'
+import { atRelease, filesOf, staged } from './release.ts'
 import type { Who } from './session.ts'
+import { clock } from './timing.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { fullAt, hashed, released } from './tools.ts'
-import { versions } from './versions.ts'
-import { addressed, deployedOver, type Files } from '@yaks/platform/versions'
+import {
+  fullAt,
+  hashed,
+  released,
+  releaseNotice,
+  releaseUpdate,
+} from './tools.ts'
+import { overtaken, record, releaseOf, versions, waiting } from './versions.ts'
 import { served } from './written.ts'
 
 /** What a save answers: the version it released, or the live one where
@@ -55,6 +69,106 @@ export let snippets = (value: unknown): Record<string, string> => {
 let decoder = new TextDecoder()
 let encoder = new TextEncoder()
 
+let carried = (app: App, files: Files) =>
+  app.worker === '' && !!app.declaration &&
+  !Object.keys(files).some((p) =>
+    p.startsWith(BUILT) || p == 'package.json' ||
+    p == 'wrangler.json' || p == 'wrangler.jsonc' ||
+    !app.seeded && seedy(p)
+  )
+
+let changedCopy = async (text: string, sent: Record<string, string>) => {
+  let next = set(text, sent)
+  let [file] = await hashed([{ path: COPY, bytes: encoder.encode(next) }])
+  return { next, file }
+}
+
+let roomFor = async (
+  ctx: Ctx,
+  space: Space,
+  file: Awaited<ReturnType<typeof changedCopy>>['file'],
+) => {
+  let full = await fullAt(ctx.env, space, [file])
+  if (full) throw refuse('space_full', full)
+}
+
+// A private unpublished app has no edge pages to purge. The app row's
+// compare-and-swap replaces the release and records its history together.
+// A concurrent release or save makes us read and merge against its result.
+let savedPrivately = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  store: Door,
+  sent: Record<string, string>,
+): Promise<Saved | undefined> => {
+  let raw = r2RawObjects(ctx.env.BLOBS)
+  let c = ctx.clock ?? clock()
+  for (;;) {
+    let live = await waiting(ctx.dir, space, app, who)
+    if (live.access != 'private' || live.published || !live.source) return
+    let index = await atRelease(raw, live.source)
+    if (!index) return
+    let files = filesOf(index)
+    if (!carried(live, files)) return
+    let copy = index[COPY]
+    let text = copy?.text ??
+      (copy ? decoder.decode(await raw.get(copy.key)) : '')
+    let keys = changing(text, sent)
+    if (!keys.length) return { version: live.version ?? null, keys }
+    let { file, next } = await changedCopy(text, sent)
+    await roomFor(ctx, space, file)
+    let source = releaseOf(space, live)
+    let candidate = { ...live, source }
+    let stage = staged(raw, { ...files, [COPY]: file.sha }, source)
+    let [head, pinned] = await Promise.all([
+      ctx.dir.deployHead(live),
+      c.time('snapshot', () => stage.finish({}, live.source, { [COPY]: next })),
+      raw.put(addressed(file.sha), file.bytes),
+      declarationOf(ctx.env, space, live).then((words) =>
+        keepDeclaration(ctx.env, space, candidate, live.declaration!, words)
+      ),
+    ])
+    let version = head.newest + 1
+    let message = saying(keys)
+    try {
+      await c.time(
+        'record',
+        () =>
+          record(ctx.dir, who, candidate, version, pinned, '', {
+            head,
+            declaration: live.declaration!,
+            sourceWas: live.source,
+            accessWas: live.access,
+            speaks: head.speaks,
+            message,
+          }),
+      )
+    } catch (error) {
+      if (!overtaken(error, live)) throw error
+      ctx.dir.reread()
+      if (error instanceof Stale && error.prop == 'access') return
+      continue
+    }
+    background(releaseNotice(store, version, {
+      request: 'POST /api/save',
+      space: space.slug,
+      app: app.slug,
+    }))
+    background(
+      releaseUpdate(ctx, space, live, who, message).catch((error) =>
+        caught(error, {
+          request: 'save update',
+          space: space.slug,
+          app: app.slug,
+        })
+      ),
+    )
+    return { version, keys }
+  }
+}
+
 /** `sent` set in the app's live copy.json and released. */
 export let saved = async (
   ctx: Ctx,
@@ -64,6 +178,10 @@ export let saved = async (
   store: Door,
   sent: Record<string, string>,
 ): Promise<Saved> => {
+  if (app.access == 'private' && !app.published) {
+    let quick = await savedPrivately(ctx, space, app, who, store, sent)
+    if (quick) return quick
+  }
   let raw = r2RawObjects(ctx.env.BLOBS)
   let textOf = async (live: Files) =>
     live[COPY] ? decoder.decode(await raw.get(addressed(live[COPY]))) : ''
@@ -75,12 +193,8 @@ export let saved = async (
   let { version } = await released(ctx, space, app, who, store, {
     message: saying(keys),
     over: async (live) => {
-      let [file] = await hashed([{
-        path: COPY,
-        bytes: encoder.encode(set(await textOf(live), sent)),
-      }])
-      let full = await fullAt(ctx.env, space, [file])
-      if (full) throw refuse('space_full', full)
+      let { file } = await changedCopy(await textOf(live), sent)
+      await roomFor(ctx, space, file)
       await raw.put(addressed(file.sha), file.bytes)
       return { ...live, [COPY]: file.sha }
     },

@@ -90,3 +90,66 @@ test('a stranger, and a save naming no snippets, are refused', () => {
   equal(refused, [401, 400, 400])
   shows(after, 'Hello', 'Old')
 })
+
+let privateSpace = unique('private-save')
+let privateOwner = await seed(k, [{ slug: privateSpace, apps: ['site'] }])
+let privateAgent = connector(k, privateOwner.cookie)
+let privateApp = { space: privateSpace, app: 'site' }
+await privateAgent.tool('app_set', { ...privateApp, access: 'private' })
+await privateAgent.tool('app_files', {
+  ...privateApp,
+  files: [
+    {
+      path: 'index.html',
+      content: '<h1 data-copy="hero"></h1><p data-copy="note"></p>',
+    },
+    { path: 'copy.json', content: '{"hero":"Hi","note":"Old"}' },
+  ],
+})
+await privateAgent.tool('app_deploy', privateApp)
+
+test('concurrent private page saves reuse the live declaration and merge both edits', async () => {
+  let at = (path: string, init: RequestInit = {}) =>
+    k.at(
+      privateSpace + '.yaks.app',
+      '/site/' + path,
+      {
+        ...init,
+        headers: {
+          cookie: privateOwner.cookie,
+          'content-type': 'application/json',
+        },
+      },
+    )
+  let current = async () =>
+    (await k.dir.app(
+      (await k.dir.space(privateSpace))!,
+      'site',
+    ))!
+  let before = await current()
+  let save = async (copy: Record<string, string>) => {
+    let response = await at('api/save', {
+      method: 'POST',
+      body: JSON.stringify({ copy }),
+    })
+    let answer = await response.json()
+    equal(response.status, 200, JSON.stringify(answer))
+    return answer.version as number
+  }
+  let versions = await Promise.all([
+    save({ hero: 'Hello' }),
+    save({ note: 'New' }),
+  ])
+  equal(versions.sort(), [2, 3])
+  let after = await current()
+  equal(after.declaration, before.declaration)
+  shows(await (await at('')).text(), 'Hello', 'New')
+  equal(await save({ note: 'New' }), 3)
+  let undo = await at('api/save/undo', {
+    method: 'POST',
+    body: '{"version":3}',
+  })
+  equal(await undo.json(), { version: 2 })
+  let newVersion = await save({ hero: 'Again' })
+  equal(newVersion, 4)
+})

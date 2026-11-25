@@ -381,7 +381,6 @@ import {
   type Files,
   indented,
   KEEP,
-  nextVersion,
   noFile,
   noted,
   own,
@@ -1515,6 +1514,28 @@ export let releaseNotice = async (
   }
 }
 
+export let releaseUpdate = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  message?: string,
+) => {
+  let { person, agent, actor } = who
+  let summary = message?.split(/\r?\n\s*\r?\n/, 1)[0].replace(/\s+/g, ' ')
+    .trim()
+  if (!summary || !person || agent || actor && actor != person) return
+  if (isFleetAddress(await ctx.dir.emailAt(person) ?? '')) return
+  await tell(ctx.env, space, {
+    to: space.eid,
+    subject: app.title || app.slug,
+    words: summary,
+    about: app.eid,
+    by: person,
+    id: `changed|${app.eid}|${person}|${new Date().toISOString().slice(0, 13)}`,
+  })
+}
+
 // The refusal of a release whose pages load files it does not have, in the
 // caller's terms: which file names which reference, and what is not there.
 let unfoundSaid = (missing: Unfound[]) => {
@@ -1568,7 +1589,7 @@ let published = async (
   let kept = !recompile && target?.source && target.script ? target : undefined
   let held = pins(r2Objects(ctx.env.BLOBS))
   let early = Promise.all([
-    versions(ctx.dir, standing),
+    ctx.dir.deployHead(standing),
     declaring(blobs, space, app),
     ...Object.values(kept?.files ?? {}).map(async (sha) => {
       if (!await held.has(sha)) throw refuse('missing', `no blob for ${sha}`)
@@ -1662,9 +1683,9 @@ let published = async (
     () => files.finish(parsed.config, standing.source),
   )
   snapshot.catch(() => {})
-  let [[all, { file: vocabFile, source, pkg }], [stored, serving]] =
+  let [[head, { file: vocabFile, source, pkg }], [stored, serving]] =
     await Promise.all([early, readServing()])
-  let version = target?.version ?? nextVersion(all)
+  let version = target?.version ?? head.newest + 1
   // And what its declaration is called. A rollback selects a version again,
   // so it declares under a name of its own: a declaration once written is
   // never written again, which is what lets discovery keep one
@@ -2047,6 +2068,7 @@ let published = async (
             appDoc(source ?? {}, vocabFile),
           ),
           message,
+          head,
         },
       ),
   )
@@ -2101,26 +2123,8 @@ let published = async (
     }),
   )
   // One Update per app, person and hour, with the release's own description.
-  let { person, agent, actor } = who
-  let summary = message?.split(/\r?\n\s*\r?\n/, 1)[0].replace(/\s+/g, ' ')
-    .trim()
-  if (
-    summary && person && !agent && (!actor || actor == person) && !target &&
-    !recompile && !repair
-  ) {
-    background(after(async () => {
-      if (isFleetAddress(await ctx.dir.emailAt(person) ?? '')) return
-      await tell(ctx.env, space, {
-        to: space.eid,
-        subject: app.title || app.slug,
-        words: summary,
-        about: app.eid,
-        by: person,
-        id: `changed|${app.eid}|${person}|${
-          new Date().toISOString().slice(0, 13)
-        }`,
-      })
-    }))
+  if (!target && !recompile && !repair) {
+    background(after(() => releaseUpdate(ctx, space, app, who, message)))
   }
   // A preview link open on the draft this released goes on showing it: its
   // pages show what was released.

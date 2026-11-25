@@ -205,6 +205,14 @@ let directory = () => {
     drafts: () => Promise.resolve([]),
     draftsOf: none,
     deploys: (app: App) => Promise.resolve(deploys(app)),
+    deployHead: (app: App) => {
+      let all = deploys(app)
+      return Promise.resolve({
+        newest: all[0]?.version ?? 0,
+        live: all.find((v) => v.version == app.version)?.eid ?? null,
+        speaks: undefined,
+      })
+    },
     deploysOf: (apps: App[]) =>
       Promise.resolve(new Map(apps.map((a) => [a.eid, deploys(a)]))),
     written: (app: App, draft?: string) => Promise.resolve(written(app, draft)),
