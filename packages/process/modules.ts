@@ -55,7 +55,7 @@ export let modules = async (
     let lock = await copyFile(`${cwd}/deno.lock`, `${dir}/deno.lock`)
       .then(() => `--lock=${dir}/deno.lock`, () => '--no-lock')
     let out = await command(execPath(), {
-      args: ['info', '--json', lock, entry],
+      args: ['info', '--json', lock, '--frozen=false', entry],
       cwd,
       stdout: 'piped',
       stderr: 'null',

@@ -1,4 +1,7 @@
 {
+  "lock": {
+    "frozen": true
+  },
   "tasks": {
     "check": "deno run -A bin/check.ts",
     "check:fmt": "deno fmt --check",

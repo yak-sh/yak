@@ -494,9 +494,13 @@ it shared. No test suite is run here, and this operation knows of none.
 If publishing fails and the upstream has advanced, landing brings the base up to
 the fetched commit under the same lock. Unpublished base commits are rebased
 onto it, then the caller's branch rebases onto the base and returns for
-retesting. Tracked edits in the shared checkout are preserved and refuse that
-replay. A conflicting replay is aborted before the lock is released, restoring
-the base and returning Git's conflict output to the caller.
+retesting. Before a fast-forward, Git checks whether the incoming files would
+overwrite local edits in the shared checkout. Landing saves the blocking staged,
+unstaged and untracked edits in a named Git stash and leaves unrelated paths in
+place. Replaying unpublished base commits saves all staged, unstaged and
+untracked edits first. The saved edits are available through `git stash list`. A
+conflicting replay is aborted before the lock is released, restoring the base
+and returning Git's conflict output to the caller.
 
 Before merging, landing runs `deno fmt` on changed regular files of a checkout
 with a `deno.json` or `deno.jsonc`, using its formatting configuration and

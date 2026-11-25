@@ -158,6 +158,7 @@ export let project = async <T>(
       `${target}/deno.json`,
       JSON.stringify({
         ...config,
+        lock: { frozen: false },
         nodeModulesDir: 'none',
         workspace: dirs.map((dir) => `./${dir}`),
       }),

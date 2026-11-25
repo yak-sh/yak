@@ -8,8 +8,8 @@
 // A landing refused for the caller's own state is an expected invocation
 // failure: a moved base is returned as a divergence, which becomes a
 // `CallError` carrying Git's whole account, and a worktree that is dirty,
-// detached or on the base, shared-checkout changes overlap the landing, or a
-// revert the guard caught, is a `LandError`, which is one already. The tool
+// detached or on the base, or a revert the guard caught, is a `LandError`,
+// which is one already. The tool
 // runner records either as a failed call and a command line reports it as
 // exit 1. An unexpected Git command failure escapes as a plain error, for the
 // runner to report as the fault it is.

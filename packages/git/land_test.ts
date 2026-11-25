@@ -89,6 +89,14 @@ let fixture = (answers: Record<string, Answer | Answer[]> = {}) => {
   }
 }
 
+let sharedStatus = 'status --porcelain=v1 -z --untracked-files=all --no-renames'
+let stash = (target: string, paths: string[] = []) =>
+  [
+    '--literal-pathspecs stash push --include-untracked -m',
+    `yak land: shared checkout edits before ${target}`,
+    ...paths.length ? ['--', ...paths] : [],
+  ].join(' ')
+
 test('land identifies the writer and files when its worktree is dirty', async () => {
   let f = fixture({
     'status --porcelain=v1 --untracked-files=all': {
@@ -131,10 +139,10 @@ test('land writes the shared checkout only while it holds its lock', async () =>
   let held = at.slice(at.indexOf('hold'), at.indexOf('release') + 1)
   assertEquals(held, [
     'hold',
+    'merge-base --is-ancestor main work',
     'update-index -q --refresh',
     'read-tree -n -m -u HEAD work',
     'log --format=%H%x00%B%x01 HEAD..work',
-    'merge-base --is-ancestor main work',
     'push --quiet origin work:main',
     'merge --ff-only work',
     'rev-parse HEAD',
@@ -143,10 +151,36 @@ test('land writes the shared checkout only while it holds its lock', async () =>
   assertEquals(f.calls.find((c) => c.args[0] == 'hold')?.cwd, '/repo/.git')
 })
 
-test('land releases the lock when the shared checkout refuses it', async () => {
+test('land releases the lock when Git cannot prepare the shared checkout', async () => {
   let f = fixture({ 'read-tree -n -m -u HEAD work': { code: 1 } })
-  await assertRejects(() => f.invoke(), LandError)
+  let error = await assertRejects(
+    () => f.invoke(),
+    Error,
+    'prepare shared checkout',
+  )
+  assertEquals(error.name, 'Error')
+  assert(!f.commands().includes('push --quiet origin work:main'))
   assertEquals(f.commands().filter((c) => c == 'release').length, 1)
+})
+
+test('land saves blocking staged and untracked edits and leaves unrelated paths in place', async () => {
+  let check = 'read-tree -n -m -u HEAD work'
+  let save = stash('work', ['deno.lock', 'assets'])
+  let f = fixture({
+    [check]: [{ code: 128 }, {}],
+    'diff --name-only -z --no-renames HEAD work': {
+      out: 'deno.lock\0assets/icon.svg\0',
+    },
+    [sharedStatus]: { out: 'MM deno.lock\0?? assets\0 M other\0' },
+    [save]: { out: 'Saved working directory and index state' },
+  })
+  assertEquals(await f.invoke(), { landed: 'sha', root: '/repo', commits: [] })
+  let at = f.commands()
+  assertEquals(at.filter((command) => command.includes('stash push')), [save])
+  assert(at.indexOf(check) < at.indexOf(save))
+  assert(at.indexOf(save) < at.lastIndexOf(check))
+  assert(at.lastIndexOf(check) < at.indexOf('push --quiet origin work:main'))
+  assert(f.said.includes('Saved working directory and index state'))
 })
 
 for (
@@ -173,12 +207,6 @@ for (
     ['uncommitted work', {
       'status --porcelain=v1 --untracked-files=all': { out: '?? scratch.txt' },
     }, 'worktree is dirty'],
-    ['overlapping shared edits', {
-      'read-tree -n -m -u HEAD work': {
-        code: 128,
-        err: 'base.txt has local edits',
-      },
-    }, 'shared checkout blocks landing'],
   ] as [string, Record<string, Answer>, string][]
 ) {
   test(`land refuses ${name} before merging`, async () => {
@@ -334,13 +362,15 @@ test('a failed restoration of the shared checkout is a fault with both Git error
   assertEquals(f.commands().filter((c) => c == 'release').length, 1)
 })
 
-test('catching up preserves tracked edits in the shared checkout', async () => {
+test('catching up saves edits before replaying unpublished base commits', async () => {
   let f = split({
-    'status --porcelain=v1 --untracked-files=no': { out: ' M base.txt' },
+    [sharedStatus]: { out: ' M base.txt\0' },
   })
-  await assertRejects(f.invoke, LandError, 'base.txt')
-  assert(!f.commands().includes(replay))
-  assertEquals(f.commands().filter((c) => c == 'release').length, 1)
+  assertEquals(await f.invoke(), { diverged: true, conflict: false })
+  let at = f.commands()
+  assert(at.indexOf('hold') < at.indexOf(stash('up')))
+  assert(at.indexOf(stash('up')) < at.indexOf(replay))
+  assert(at.indexOf(replay) < at.indexOf('release'))
 })
 
 let failed = 'remote: Internal Server Error\n' +

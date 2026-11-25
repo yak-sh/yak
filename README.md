@@ -117,6 +117,10 @@ deno task test     # the tests this branch's changes reach, against main
 deno task check    # fmt, lint, types, and the package checks
 ```
 
+Deno commands open `deno.lock` frozen. After changing dependencies, update it
+explicitly with `deno install --lockfile-only --frozen=false` and commit it with
+the manifests. pnpm manages `node_modules` and `pnpm-lock.yaml`.
+
 A clone may send its test runs to another computer, so their memory is not the
 one its editors and agents share: `git config yak.machine
 ssh://user@host` names

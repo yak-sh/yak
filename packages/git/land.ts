@@ -69,8 +69,7 @@ export type Ran = { ok: boolean; code: number; out: string; err: string }
 export type Run = (args: string[], cwd: string) => Promise<Ran>
 
 /** A landing refused for the caller's own state: not in a linked worktree on
- * a branch, a dirty worktree, local changes in the shared checkout that the
- * landing would overwrite, a revert the guard caught, or commits the base's
+ * a branch, a dirty worktree, a revert the guard caught, or commits the base's
  * upstream declined. It is a `CallError`,
  * so whatever tool lands, a refusal reaches its caller as an answer and never
  * as a fault. An unexpected Git command failure is a plain `Error`, a fault
@@ -570,46 +569,24 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
         )
       }
     }
-    // The shared checkout need not be spotless: Git leaves unrelated edits
-    // alone. `read-tree` runs the same two-tree/worktree safety check as the
-    // fast-forward, without changing the index or files. A refusal here is the
-    // checkout's state. Another landing can still move the base while this one
-    // waits for the lock; then the merge is refused, and ancestry distinguishes
-    // that contention from a Git fault. The
-    // fast-forward refreshes the index before its check and `read-tree` does
-    // not, so the refresh comes first: a file touched but not changed is not
-    // in the way. Its exit code only says some file differs, which the check
-    // reads for itself.
-    // From the refresh to reading the landed commit, every git command here
-    // takes the shared checkout's index, so the checkout is this landing's
-    // alone until then.
     let up = await upstream(git, root, base)
     let release = await (ops.hold ?? ((dir) => hold(dir, true)))(gitdir)
     let sha: string | undefined
     let landing: Commit[] = []
     try {
-      await git(root, ['update-index', '-q', '--refresh'], false)
-      let ready = await git(
-        root,
-        ['read-tree', '-n', '-m', '-u', 'HEAD', branch],
-        false,
-      )
-      if (ready.code) {
-        throw new LandError(
-          message('land: shared checkout blocks landing', ready),
+      let moved = await ancestry() == 1
+      if (!moved) {
+        await prepare(git, root, branch)
+        landing = commits(
+          await need('list landing commits', root, [
+            'log',
+            '--format=%H%x00%B%x01',
+            `HEAD..${branch}`,
+          ]),
         )
       }
-      // What lands: the branch's commits the base lacks.
-      landing = commits(
-        await need('list landing commits', root, [
-          'log',
-          '--format=%H%x00%B%x01',
-          `HEAD..${branch}`,
-        ]),
-      )
       // Under the lock nothing that lands moves the base, so what is pushed
       // contains it, and the fast-forward after the push follows it.
-      let moved = await ancestry() == 1
       if (!moved && up) {
         let to = await publish(git, write, ops, root, branch, up)
         if (to) await catchUp(git, write, root, base, up, to)
@@ -668,6 +645,68 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
 }
 
 type Git = (at: string, args: string[], show?: boolean) => Promise<Ran>
+
+let sharedEdits = async (git: Git, root: string) => {
+  let status = await git(root, [
+    'status',
+    '--porcelain=v1',
+    '-z',
+    '--untracked-files=all',
+    '--no-renames',
+  ], false)
+  if (status.code) throw new Error(message('read shared checkout', status))
+  return status.out.split('\0').filter(Boolean).map((entry) => entry.slice(3))
+}
+
+let saveEdits = async (
+  git: Git,
+  root: string,
+  target: string,
+  paths: string[] = [],
+) => {
+  let saved = await git(root, [
+    '--literal-pathspecs',
+    'stash',
+    'push',
+    '--include-untracked',
+    '-m',
+    `yak land: shared checkout edits before ${target}`,
+    ...paths.length ? ['--', ...paths] : [],
+  ])
+  if (saved.code) throw new Error(message('save shared checkout edits', saved))
+}
+
+let overlaps = (a: string, b: string) =>
+  a == b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
+
+// Run Git's fast-forward safety check before publishing. Save edits on paths
+// it needs to replace, including a file in the way of an incoming directory.
+// A conflicting edit stays in the stash, so the shared index remains usable.
+let prepare = async (git: Git, root: string, target: string) => {
+  await git(root, ['update-index', '-q', '--refresh'], false)
+  let check = () =>
+    git(root, ['read-tree', '-n', '-m', '-u', 'HEAD', target], false)
+  let ready = await check()
+  if (!ready.code) return
+  let changed = await git(root, [
+    'diff',
+    '--name-only',
+    '-z',
+    '--no-renames',
+    'HEAD',
+    target,
+  ], false)
+  if (changed.code) throw new Error(message('read incoming paths', changed))
+  let incoming = changed.out.split('\0').filter(Boolean)
+  let paths = (await sharedEdits(git, root)).filter((edit) =>
+    incoming.some((path) => overlaps(edit, path))
+  )
+  if (paths.length) {
+    await saveEdits(git, root, target, paths)
+    ready = await check()
+  }
+  if (ready.code) throw new Error(message('prepare shared checkout', ready))
+}
 
 /** The base's upstream, split into the remote and its branch. */
 type Upstream = { remote: string; branch: string }
@@ -797,11 +836,10 @@ let catchUp = async (
     return
   }
   write(`land: ${at} moved — bringing ${base} up to it.`)
+  await prepare(git, root, to)
   let merged = await git(root, ['merge', '--ff-only', to])
   if (merged.code) {
-    throw new LandError(
-      message('land: shared checkout blocks catching up', merged),
-    )
+    throw new Error(message('fast-forward shared checkout', merged))
   }
 }
 
@@ -813,17 +851,7 @@ let replay = async (
   at: string,
   to: string,
 ) => {
-  let dirty = await git(
-    root,
-    ['status', '--porcelain=v1', '--untracked-files=no'],
-    false,
-  )
-  if (dirty.code) throw new Error(message('read shared checkout', dirty))
-  if (dirty.out.trim()) {
-    throw new LandError(
-      `land: shared checkout blocks catching up — commit or stash its edits:\n${dirty.out.trim()}`,
-    )
-  }
+  if ((await sharedEdits(git, root)).length) await saveEdits(git, root, to)
   write(`land: ${at} moved — rebasing unpublished ${base} commits onto it.`)
   // Ignore config that would stash shared edits or rewrite other branches.
   let rebased = await git(root, [
