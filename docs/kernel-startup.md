@@ -729,8 +729,9 @@ The eager edges returned with these changes:
   also brought it in through the settings socket read.
 - `1ad52d4f7` imported the file migration mark into store boot and the
   attachment door into conversation reads. `c17a72711` added the intake mark.
-- `2c4caf692`, `eddc03fd8`, `6bffb71a4` and `564bb8b70` loaded the mail sender,
-  vector provider, chatters and subscription scheduler during boot.
+- `3a9183953`, `eddc03fd8`, `6bffb71a4` and `564bb8b70` loaded the mail sender,
+  vector provider, chatters and subscription scheduler during boot. `2c4caf692`
+  kept the mail import when it added unmetered platform letters.
 - `c894bb65e` and `bf81e7ffb` added the room code and jq-backed result reads to
   the conversation host. `be295fa43` imported the persona package into directory
   reads for naming helpers.
@@ -756,3 +757,19 @@ deno run -A --no-check --no-code-cache bench/operator-read.ts \
 On yaks.app, `operator_boot_wait` identifies the Builder request that started
 the store. Its duration is inside `operator_wait`, which can sum overlapping
 calls.
+
+### Production observations
+
+Three browser visits to `/checks/updates` returned HTTP 200. Cloudflare recorded
+Builder startup on the page's trace for both cold visits.
+
+| Kernel commit             | Builder      | Server-Timing total |   Builder Updates event |
+| ------------------------- | ------------ | ------------------: | ----------------------: |
+| `4719601a2` before T-3613 | Cold         |            2,670 ms | 1,303 ms wall, 0 ms CPU |
+| `8098eba39`               | Already open |              633 ms | 170 ms wall, 163 ms CPU |
+| `970535164` with T-3613   | Cold         |            3,553 ms | 1,895 ms wall, 0 ms CPU |
+
+The cold visits overlapped a Builder wake and a conversation read. Their
+directory and Builder waits varied. These samples measure what the page waited
+for, and the Deno replay isolates the change in module loading. The deployed
+`/updates` page also returned HTTP 200 with 455 ms of server time.
