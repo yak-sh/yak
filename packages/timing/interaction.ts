@@ -22,7 +22,13 @@ export type Point = {
   render: number
 }
 export let OPEN_PATH: string = INTERACTION_PATH + '?open=1'
-export let OPEN_SOURCES = ['cold', 'picture', 'shell', 'push'] as const
+export let OPEN_SOURCES = [
+  'cold',
+  'picture',
+  'shell',
+  'push',
+  'prerender',
+] as const
 export let DEVICES = ['iphone-compact', 'phone', 'tablet', 'desktop'] as const
 export type Navigation = {
   workerStart: number

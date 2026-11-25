@@ -43,7 +43,11 @@ export let pageTalk = (
   let heard = new Set<(told: Heard) => void>()
   let watch: Watch | undefined, off: (() => void) | undefined
   let view = at?.closest<HTMLElement>(`[${VIEW}]`)
+  let doc = at?.ownerDocument as
+    | (Document & { prerendering?: boolean })
+    | undefined
   let showing = () => {
+    if (doc?.prerendering) return
     if (view?.hidden && watch) {
       off!()
       watch.close()
@@ -57,6 +61,9 @@ export let pageTalk = (
     }
   }
   view?.addEventListener(VIEWED, showing)
+  if (doc?.prerendering) {
+    doc.addEventListener('prerenderingchange', showing, { once: true })
+  }
   showing()
   return {
     /** be told the row each time it moves, from now on */
@@ -73,6 +80,7 @@ export let pageTalk = (
     },
     close: () => {
       view?.removeEventListener(VIEWED, showing)
+      doc?.removeEventListener('prerenderingchange', showing)
       off?.()
       watch?.close()
       watch = off = undefined

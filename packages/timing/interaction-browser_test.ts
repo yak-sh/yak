@@ -8,8 +8,12 @@ let browser = (
   path: string,
   origin: number,
   storage = new Map<string, string>(),
+  prerendering = false,
 ) => {
-  let doc = Object.assign(new EventTarget(), { visibilityState: 'visible' })
+  let doc = Object.assign(new EventTarget(), {
+    visibilityState: prerendering ? 'hidden' : 'visible',
+    prerendering,
+  })
   let win = new EventTarget()
   let now = 0
   let raf: (() => void)[] = []
@@ -35,6 +39,9 @@ let browser = (
       timeOrigin: origin,
       getEntriesByType: (type: string) =>
         observed.filter((entry) => entry.entryType == type),
+      getEntriesByName: (name: string) =>
+        observed.filter((entry) => entry.name == name),
+      measure: () => {},
     },
     crypto,
     sessionStorage: {
@@ -86,6 +93,11 @@ let browser = (
     click,
     change: () => change(),
     at: (t: number) => now = t,
+    activate: () => {
+      doc.prerendering = false
+      doc.visibilityState = 'visible'
+      doc.dispatchEvent(new Event('prerenderingchange'))
+    },
     result: (input: Event) => {
       let chosen: Result | undefined
       doc.dispatchEvent(
@@ -107,6 +119,38 @@ let browser = (
     seen: () => seen.flatMap((batch) => batch.points),
   }
 }
+
+test('a prerendered navigation counts the press through the activated usable frame', () => {
+  let storage = new Map<string, string>()
+  let home = browser('/', 1_000, storage)
+  home.install()
+  let chat = browser('/chat', 2_000, storage, true)
+  chat.install()
+  chat.observe({
+    entryType: 'navigation',
+    type: 'navigate',
+    activationStart: 1_050,
+    responseEnd: 250,
+  })
+  chat.observe({ entryType: 'mark', name: 'yak-usable', startTime: 500 })
+  home.at(2_020)
+  home.click('/chat')
+  home.at(2_040)
+  home.leave()
+  chat.activate()
+  chat.frame(1_052)
+  chat.frame(1_066)
+  chat.leave()
+  equal(chat.seen(), [{
+    page: '',
+    target: 'click',
+    ms: 46,
+    input: 0,
+    server: 0,
+    script: 30,
+    render: 16,
+  }])
+})
 
 test('the event clock follows a keyboard-activated link through loading to its result', () => {
   let page = browser('/pricing', 1_000)

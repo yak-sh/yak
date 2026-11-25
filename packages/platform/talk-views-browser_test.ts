@@ -264,3 +264,17 @@ test('a conversation that is no view of its page is watched until it is closed',
   talk.close()
   equal(g.open, [])
 })
+
+test('a prerendered Operator starts watching its conversation on activation', () => {
+  let doc = Object.assign(page(), { prerendering: true })
+  let g = graph((b) => Promise.resolve(b))
+  let talk = pageTalk('club', 'ada', 'chat', {
+    graph: g,
+    in: doc.querySelector('p')!,
+  })
+  equal(g.open, [])
+  doc.prerendering = false
+  doc.dispatchEvent(new doc.defaultView!.Event('prerenderingchange'))
+  equal(g.open, [operatorTalk('club', 'chat')])
+  talk.close()
+})

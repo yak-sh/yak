@@ -310,6 +310,7 @@ let TIMELINE = `(() => {
       read: round(load.responseEnd - load.responseStart),
       kb: kb(load.encodedBodySize),
       build: round(load.domContentLoadedEventEnd - load.responseEnd),
+      ...load.activationStart ? { activation: round(load.activationStart) } : {},
       ...paint ? { paint: round(paint.startTime) } : {},
     },
     server: server(load.name),
@@ -382,11 +383,11 @@ let TIMELINE = `(() => {
     ...performance.getEntriesByName('yak-page'),
   ].sort((a, b) => a.startTime - b.startTime)
   for (let m of moves) {
-    let { url = '', ...parts } = m.detail ?? {}
+    let { url = '', elapsed = m.duration, ...parts } = m.detail ?? {}
     out.push({
       name: m.name,
       url: String(url),
-      ms: round(m.duration),
+      ms: round(elapsed),
       parts: Object.fromEntries(Object.entries(parts)
         .map(([k, v]) => [k, typeof v == 'number' ? round(v) : v])),
       server: server(String(url)),

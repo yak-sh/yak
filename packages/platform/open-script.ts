@@ -29,6 +29,7 @@ let OPENING = `(endpoint, source) => {
     let checked = navigator.webdriver ||
       new URLSearchParams(location.search).get('utm_source') == 'agent-check'
     let nav = performance.getEntriesByType('navigation')[0]
+    let prerender = !!document.prerendering
     let picture = !!source
     let ua = navigator.userAgent
     let short = Math.min(screen.width, screen.height)
@@ -59,7 +60,7 @@ let OPENING = `(endpoint, source) => {
     let observer
     let saw = () => performance.getEntriesByName('first-contentful-paint')[0]?.startTime
     let send = (leaving = false) => {
-      if (sent || (!leaving && (!ready || open.paint == null))) return
+      if (document.prerendering || sent || (!leaving && (!ready || open.paint == null))) return
       sent = true
       observer?.disconnect()
       // Paint Timing can publish after the frame callback. Its timestamp
@@ -75,7 +76,13 @@ let OPENING = `(endpoint, source) => {
       }
       if (open.usable != null) open.usable = Math.max(open.usable, open.paint ?? 0)
       if (!id) return
-      let body = JSON.stringify({ id, at, points: [], open })
+      let activation = prerender ? nav?.activationStart ?? 0 : 0
+      let since = (mark) => mark == null ? null : Math.max(0, mark - activation)
+      let timing = activation ? {
+        ...open, source: 'prerender', server: 0, navigation: undefined,
+        paint: since(open.paint), usable: since(open.usable),
+      } : open
+      let body = JSON.stringify({ id, at: at + Math.floor(activation), points: [], open: timing })
       if (!navigator.sendBeacon?.(endpoint, body)) {
         void fetch(endpoint, { method: 'POST', body, keepalive: true }).catch(() => {})
       }

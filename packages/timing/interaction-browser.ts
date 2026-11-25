@@ -1,7 +1,7 @@
 // The input and paint boundary shared by the platform's documents. Most
 // controls need only their native input or DOM change. An asynchronous
 // result takes its input with @yaks/ui/interaction before doing any work.
-import { RESULT, type ResultEvent } from '@yaks/ui/interaction'
+import { RESULT, type ResultEvent, whenUsable } from '@yaks/ui/interaction'
 import {
   type Batch,
   MAX_MS,
@@ -148,8 +148,36 @@ let crossed = (
   // would count the time the person spent there.
   if (!restored && perf.timeOrigin > held.left + SLACK) return
   let nav = perf.getEntriesByType('navigation')[0] as
-    | PerformanceNavigationTiming
+    | (PerformanceNavigationTiming & { activationStart?: number })
     | undefined
+  let activation = nav?.activationStart
+  if (activation && !restored) {
+    let began = held.began - perf.timeOrigin
+    whenUsable(win, (usable) =>
+      painted(win, (end) => {
+        let ms = end - began
+        let ready = Math.max(began, activation, usable)
+        if (ms < 0 || win.document.visibilityState == 'hidden') return
+        perf.measure('yak-page', {
+          start: Math.max(0, began),
+          end,
+          detail: {
+            url: win.location.href,
+            from: 'prerender',
+            wait: 0,
+            usable: ready - began,
+            ...(began < 0 ? { elapsed: ms } : {}),
+          },
+        })
+        record({
+          page: held.page,
+          target: held.target,
+          ms,
+          ...phases(ms, 0, 0, end - ready),
+        })
+      }))
+    return
+  }
   let finish = (end: number) => {
     let ms = perf.timeOrigin + end - held.began
     if (ms < 0 || win.document.visibilityState == 'hidden') return
@@ -351,5 +379,10 @@ export let interactions = (win: Browser, labels: Labels): void => {
   win.addEventListener('pageshow', (e) => {
     if (e.persisted) crossed(win, store, record, true)
   })
-  crossed(win, store, record)
+  let cross = () => crossed(win, store, record)
+  if ((doc as Document & { prerendering?: boolean }).prerendering) {
+    doc.addEventListener('prerenderingchange', () => win.setTimeout(cross, 0), {
+      once: true,
+    })
+  } else cross()
 }

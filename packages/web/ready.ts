@@ -1,9 +1,8 @@
-import { result } from '@yaks/ui/interaction'
+import { result, USABLE, whenUsable } from '@yaks/ui/interaction'
 import { type Entering, READY, start } from '@yaks/ui/navigate'
 import { browserHistory } from './history.ts'
 
 let FILES = 'link[rel=stylesheet], link[rel=modulepreload], script[src]'
-let USABLE = 'yak-usable'
 
 // Start the held page's stylesheets and scripts without installing them in
 // the current page. The destination declares its own module dependencies.
@@ -44,11 +43,7 @@ let prepare = (doc: Document) => {
 // the destination says it is usable, using the clock of the original click.
 let finished = (win: Window & typeof globalThis, opening: Entering) => {
   let { performance } = win
-  let observer = new win.PerformanceObserver((list) => {
-    let usable = list.getEntriesByName(USABLE)[0]
-    if (!usable) return
-    observer.disconnect()
-    win.clearTimeout(stop)
+  whenUsable(win, (usable) => {
     opening.drawn?.()
     win.requestAnimationFrame(() =>
       win.setTimeout(() => {
@@ -56,13 +51,32 @@ let finished = (win: Window & typeof globalThis, opening: Entering) => {
         performance.measure('yak-page', {
           start: began,
           end: performance.now(),
-          detail: { url, from, wait, usable: usable.startTime - began },
+          detail: { url, from, wait, usable: usable - began },
         })
       }, 0)
     )
   })
-  let stop = win.setTimeout(() => observer.disconnect(), 10_000)
-  observer.observe({ entryTypes: ['mark'] })
+}
+
+/** Ask the browser to prepare a running document for this same-tab link. */
+export let prerender = (
+  link: HTMLAnchorElement,
+  to: string,
+): (input: Event) => void => {
+  let doc = link.ownerDocument
+  let win = doc.defaultView!
+  link.href = to
+  link.setAttribute(READY, '')
+  let rule = doc.createElement('script')
+  rule.type = 'speculationrules'
+  rule.textContent = JSON.stringify({
+    prerender: [{ source: 'list', urls: [link.href] }],
+  })
+  doc.head.append(rule)
+  return (input) => {
+    result(doc, input)?.leaving()
+    win.location.assign(link.href)
+  }
 }
 
 /** Keep a link's document ready. Return an opener for a press received
