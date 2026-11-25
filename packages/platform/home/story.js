@@ -193,21 +193,23 @@ let copyLinks = (root) => {
 
 let readingLine = () => innerHeight / 2
 
-let jumpFromMessage = (e, steps, calm) => {
-  if (
-    e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey ||
-    e.altKey
-  ) return
+let ordinary = (e) =>
+  !e.defaultPrevented && !e.button && !e.metaKey && !e.ctrlKey &&
+  !e.shiftKey && !e.altKey
+
+let jumpFromMessage = (e, bounds) => {
+  if (!ordinary(e)) return
   let message = e.target.closest('[data-line]')
   if (!message || e.target.closest('a:not(.Home_MessageLink)')) return
   let turn = Number(message.dataset.turn)
   let top = 0
   if (turn) {
-    let rect = steps[turn].getBoundingClientRect()
-    top = rect.top + scrollY + REVEAL * rect.height - readingLine()
+    let step = bounds[turn]
+    top = step.top + REVEAL * (step.bottom - step.top) - readingLine()
   }
   e.preventDefault()
-  scrollTo({ top, behavior: calm.matches ? 'instant' : 'smooth' })
+  scrollTo({ top, behavior: 'instant' })
+  return true
 }
 
 let mount = (root) => {
@@ -234,15 +236,21 @@ let mount = (root) => {
   let playing = !calm.matches, hovered = false
   let highlight = navigation(nav, jumps)
   let pose = mascot(root, calm, narrow)
+  let bounds, tabHeight
+  let measure = () => {
+    let y = scrollY
+    bounds = steps.map((el) => {
+      let { top, bottom } = el.getBoundingClientRect()
+      return { top: y + top, bottom: y + bottom }
+    })
+    tabHeight = contents.offsetHeight
+  }
 
   let draw = (motion = !calm.matches) => {
-    let rects = steps.map((el) => el.getBoundingClientRect())
-    let at = reading(rects, readingLine())
+    let y = scrollY
+    let at = reading(bounds, y + readingLine())
     // Cover the features as they scroll under the tabs.
-    contents.toggleAttribute(
-      'data-cover',
-      rects[1].top <= contents.getBoundingClientRect().bottom,
-    )
+    contents.toggleAttribute('data-cover', bounds[1].top <= y + tabHeight)
     reveal(lines[i], at, calm.matches)
     mark(illustrated, at)
     demo.inert = narrow.matches && at.step == 0
@@ -259,6 +267,15 @@ let mount = (root) => {
     })
   }
   let soon = () => frame ||= requestAnimationFrame(() => (frame = 0, draw()))
+  // The jump can paint its destination before the reading line moves the
+  // conversation and changes each section's ink.
+  let afterJump = () => {
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(() => {
+      frame = 0
+      soon()
+    })
+  }
   let pick = (n, direction = n < i) => {
     if (n == i) return
     let old = logs[i]
@@ -298,10 +315,15 @@ let mount = (root) => {
   // in this document even when the visitor arrived with a query string.
   for (
     let link of document.querySelectorAll(
-      '.Top a[href^="#"], [data-story] a[href^="#"]',
+      '.Top a[href^="#"], [data-story] a[href^="#"], .Home_Foot a[href^="/#"]',
     )
   ) {
-    link.href = location.pathname + location.search + link.getAttribute('href')
+    link.href = location.pathname + location.search + link.hash
+    if (!link.matches('.Home_MessageLink')) {
+      link.addEventListener('click', (e) => {
+        if (ordinary(e)) afterJump()
+      })
+    }
   }
   picks.hidden = false
   for (let [at, button] of buttons.entries()) {
@@ -321,12 +343,19 @@ let mount = (root) => {
   calm.addEventListener('change', () => (hold(), soon()))
   document.addEventListener('visibilitychange', wait)
   addEventListener('scroll', soon, { passive: true })
-  addEventListener('resize', soon)
-  new ResizeObserver(soon).observe(root)
-  demo.addEventListener('click', (e) => jumpFromMessage(e, steps, calm))
+  // Section positions change with layout, while scrolling only moves the
+  // reading line. Read their geometry together after layout.
+  let resized = () => (measure(), soon())
+  addEventListener('resize', resized)
+  let layout = new ResizeObserver(resized)
+  for (let el of [root, contents, ...steps]) layout.observe(el)
+  demo.addEventListener('click', (e) => {
+    if (jumpFromMessage(e, bounds)) afterJump()
+  })
   copyLinks(root)
   ideas(root)
   run(root)
+  measure()
   draw(false)
   wait()
 }

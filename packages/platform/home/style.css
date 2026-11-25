@@ -338,6 +338,7 @@
 /* Leave room for the turf to reach the page color beyond the hero. */
 .Story_Page .Sky {
   height: max(var(--rule, 0px), calc(var(--feet, 0px) + 240 * var(--u, 0px)));
+  contain: layout paint;
 }
 
 .Sky_SunSlot {
@@ -445,6 +446,7 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
+  contain: layout paint;
   mask-image: linear-gradient(transparent, #000 4rem);
 }
 
@@ -690,6 +692,7 @@
   display: grid;
   gap: .9rem clamp(1rem, 2.1vw, 2rem);
   align-items: start;
+  contain: layout;
 }
 
 .Home_Features,
@@ -1008,6 +1011,11 @@
 
 .Home_Pricing {
   gap: 1.55rem;
+}
+
+.Home_Pricing,
+.Home_Details {
+  contain: layout;
 }
 
 .Home_Pricing .Plans {

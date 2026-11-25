@@ -1,6 +1,7 @@
 // Only these code coordinates cross the wire. Never read labels, typed text,
 // ids, space names, app names, search terms or an arbitrary element selector.
 import { managed, spaced } from './routes.ts'
+import { SECTIONS } from './home/parts.ts'
 
 let MARKETING = [
   'home',
@@ -11,6 +12,8 @@ let MARKETING = [
   'pricing',
   'gallery',
   'docs',
+  'agent',
+  'integrations',
   'help',
   'operator-tour',
   'login',
@@ -129,6 +132,20 @@ let NATIVE = [
   'plans',
   'skip',
 ]
+let HOME_SECTIONS = new Set([
+  ...SECTIONS,
+  'examples',
+  'cost',
+  'say',
+  'example-say',
+])
+let HOME_TARGETS = [
+  ...[...HOME_SECTIONS].flatMap((id) => [`section-${id}`, `in-${id}`]),
+  ...SECTIONS.map((id) => `example-${id}`),
+  'home-background',
+  'home-mascot',
+  'home-sky',
+]
 /** Why a page reloaded itself, as the script that reloaded it stamps it in
  * `sessionStorage` under `yak-reload` (workers/yak/public, pages.ts): following
  * a preview's draft, the person pressing a release notice's Reload, coming
@@ -162,6 +179,7 @@ export let unexpected = (target: string): string | null => {
 let TARGETS = new Set([
   ...Object.values(ACTIONS),
   ...NATIVE,
+  ...HOME_TARGETS,
   reloadTarget(null),
   ...[...RELOAD_CAUSES, ...UNEXPECTED_RELOADS].map(reloadTarget),
 ])
@@ -182,6 +200,21 @@ let HASH: Record<string, string> = {
 let CONTROL =
   'a[href], button, input, select, textarea, summary, label, [role=button], [role=tab]'
 
+let messageSection = (at: Element) => {
+  let turn = at.closest('[data-line][data-turn]')?.getAttribute('data-turn')
+  return SECTIONS[Number(turn ?? NaN)]
+}
+
+let homeBackground = (at: Element): string => {
+  let example = messageSection(at)
+  if (example) return `example-${example}`
+  if (at.closest('[data-wander], .Wander')) return 'home-mascot'
+  if (at.closest('.Home_SkySpace')) return 'home-sky'
+  let step = at.closest('[data-story-step]')
+  let id = step?.id || step?.querySelector('#cost, #hello')?.id
+  return id && HOME_SECTIONS.has(id) ? `in-${id}` : 'home-background'
+}
+
 /** Identify a control by its code or native role. Link destinations collapse
  * to the same view name as the page itself. */
 export let targetKind = (
@@ -194,6 +227,7 @@ export let targetKind = (
   let kind = named && actions.find(([selector]) => named.matches(selector))?.[1]
   if (kind && (event != 'submit' || kind != 'disclosure')) return kind
   let href = control.getAttribute('href')
+  let home = here.pathname == '/'
   if (href) {
     let to: URL
     try {
@@ -202,6 +236,15 @@ export let targetKind = (
       return 'anchor'
     }
     if (to.origin != here.origin) return 'external'
+    if (home && to.pathname == '/') {
+      let id = to.hash.slice(1)
+      if (HOME_SECTIONS.has(id)) {
+        let example = control.matches('.Home_MessageLink') &&
+          messageSection(control)
+        return example ? `example-${example}` : `section-${id}`
+      }
+      if (!to.hash && to.search == here.search) return 'open-home'
+    }
     if (to.pathname == here.pathname && to.search == here.search) {
       return (Object.hasOwn(HASH, href) ? HASH[href] : HASH[to.hash]) ??
         'anchor'
@@ -216,5 +259,7 @@ export let targetKind = (
     ? tag
     : control.getAttribute('role') == 'button'
     ? 'button'
+    : home
+    ? homeBackground(at)
     : 'page'
 }

@@ -1,5 +1,7 @@
 import { equal, test } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
 import { reloaded } from './interaction-browser.ts'
+import { interactionTarget, targetKind } from './interaction.ts'
 
 // A tab: its session storage, how its document came to be, and its first
 // paint, `ms` after the reload began.
@@ -46,4 +48,37 @@ test('a reload is counted by why it happened: the stamp, a page that never left,
   t.leave()
   t.kept.set('yak-reload', 'whim')
   equal(await t.open('reload'), ['reload-unknown', 640, 90])
+})
+
+test('homepage timings name the link, example jump or section that was tapped', () => {
+  let { document } = parseHTML(`
+    <a href="/?campaign=test#helpers"><span id="tab">Helpers</span></a>
+    <a id="pricing" href="#cost">Pricing</a>
+    <a id="catalog" href="/integrations">All integrations</a>
+    <li data-line="1" data-turn="5">
+      <a id="message" class="Home_MessageLink" href="#helpers">A reply</a>
+      <div id="edge"></div>
+    </li>
+    <div data-wander><img id="yak"></div>
+    <div class="Home_SkySpace"><span id="sky"></span></div>
+    <section data-story-step="5" id="helpers"><div id="text"></div></section>
+    <a id="private" href="#private-fragment">An arbitrary fragment</a>
+  `)
+  let here = new URL('https://yaks.app/?campaign=test')
+  let labels = [
+    ['tab', 'section-helpers'],
+    ['pricing', 'section-cost'],
+    ['catalog', 'open-integrations'],
+    ['message', 'example-helpers'],
+    ['edge', 'example-helpers'],
+    ['yak', 'home-mascot'],
+    ['sky', 'home-sky'],
+    ['text', 'in-helpers'],
+    ['private', 'anchor'],
+  ]
+  for (let [id, target] of labels) {
+    equal(targetKind(document.getElementById(id)!, here, 'click'), target)
+    equal(interactionTarget(target), true)
+  }
+  equal(interactionTarget('section-private-fragment'), false)
 })
