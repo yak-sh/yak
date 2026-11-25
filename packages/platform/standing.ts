@@ -469,6 +469,10 @@ export let UNKEPT: string =
   `it. Give your email in the card above this chat to keep this app and ` +
   `keep building, free`
 
+/** What a paid plan includes each month for AI use. */
+export let aiUse = (tier: 'plus' | 'pro'): string =>
+  `$${BUDGET[tier]} of AI use per month`
+
 /**
  * What the Pro plan gives beyond the Plus plan, AI use first, from the
  * numbers it holds.
@@ -479,21 +483,19 @@ export let UNKEPT: string =
  *
  * equal(
  *   beyond(),
- *   '$100 of AI use a month, 50 GB of app data, 250 GB of photos and ' +
+ *   '$35 of AI use per month, 50 GB of app data, 250 GB of photos and ' +
  *     'files and 10,000 emails a month',
  * )
  * ```
  */
 export let beyond = (): string =>
-  `$${BUDGET.pro} of AI use a month, ${size(PRO.bytes)} of app data, ` +
+  `${aiUse('pro')}, ${size(PRO.bytes)} of app data, ` +
   `${size(PRO.files)} of photos and files and ${
     count(letters('pro'))
   } emails a month`
 
-// Where every refusal ends: the page that describes the plans, after the plan
-// above this one, which allows more of everything, and the building credit
-// taking it adds: a person's first subscription's (./plans.ts `SUBSCRIBED`)
-// and the Pro plan's (`PRO_GRANT`).
+// A refusal points to the space's plan settings and says what room an upgrade
+// can give, including the one-time building credit for each paid plan.
 export let plans = (space: Metered, env: Host): string =>
   `${
     space.tier == 'pro'
@@ -502,9 +504,11 @@ export let plans = (space: Metered, env: Host): string =>
       ? `Putting ${space.slug} on the Pro plan allows more: ${beyond()}, ` +
         `and adds $${PRO_GRANT} of building credit once. Manage usage and ` +
         `plan settings`
-      : `Putting ${space.slug} on the Plus plan allows more, the Pro plan ` +
-        `more again. Your first subscription adds $${SUBSCRIBED} of ` +
-        `building credit, and the Pro plan $${PRO_GRANT} more once. Compare ` +
+      : `Putting ${space.slug} on the Plus plan allows more apps and storage ` +
+        `and includes ${aiUse('plus')}. A first paid ` +
+        `subscription to the Plus plan adds $${SUBSCRIBED} of building ` +
+        `credit. The Pro plan includes ${aiUse('pro')} and adds ` +
+        `$${PRO_GRANT} of building credit once per space. Compare ` +
         `paid plans in its settings`
   }: ${planSettings(space.slug, env)}`
 

@@ -83,8 +83,7 @@ export let PLUS: Ceilings = {
   files: 50 * GB,
 }
 // The Pro plan (D-134567) holds more of each than the Plus plan, about five
-// times, as it costs about five times as much; it also adds twice the model
-// budget, the operator and support.
+// times. It also adds a larger model budget, the Operator and support.
 export let PRO: Ceilings = {
   apps: null,
   requests: 5_000_000,
@@ -131,25 +130,29 @@ export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 // person's first space draws on {@link STARTER} before it. The free month is
 // sized so a year of free spaces spends the model credits we hold rather than
 // saving them (T-138720): a free person talks with their Operator and never
-// meets a figure. Each paid plan holds more than the one below it, which is
-// what a refusal's "the Plus plan allows more" promises.
+// meets a figure.
 export let BUDGET: Record<Tier, number> = {
   free: 20,
-  plus: 30,
-  pro: 100,
+  plus: 8,
+  pro: 35,
 }
 
+let MONTHLY: Record<string, Partial<Record<Tier, number>>> = {
+  '2026-11': { plus: 30, pro: 100 },
+}
+
+/** Included AI use for a UTC month. The paid plans keep their November
+ * allowances through month end so usage already covered stays covered. */
+export let monthlyBudget = (tier: Tier | null, month: string): number =>
+  MONTHLY[month]?.[tier ?? 'free'] ?? BUDGET[tier ?? 'free']
+
 // The building credit given once, spent before a space's monthly budget.
-// Signing up free gives {@link STARTER} on their first space, and their first
-// paid subscription adds {@link SUBSCRIBED} to the space it pays for: each once
-// per person. A space minted for someone who already holds one, or who has had
-// theirs, holds no starter (workers/yak directory.ts `mint`, `started`), and a
-// person who subscribed once wears `subscribed`. A space that first takes the
-// Pro plan, paid or comped, adds {@link PRO_GRANT}, once per space, and wears
-// `pro_grant` (workers/yak billing.ts `granted`). Jeff, 2026-11-19: "you get
-// $20 building credits for signing up free and $100 when you subscribe to paid
-// plan"; 2026-11-21: "put pro at $100/mo and a one-time $200 grant at
-// sign-up".
+// Signing up free gives {@link STARTER} on the person's first space. A first
+// paid subscription to the Plus plan adds {@link SUBSCRIBED}, once per person.
+// The first time a space takes the Pro plan, paid or comped, it adds
+// {@link PRO_GRANT}, once per space. The first paid subscription stamps
+// `subscribed` on either plan, and the Pro grant stamps `pro_grant`
+// (workers/yak directory.ts `granting`).
 export let STARTER: number = 20
 export let SUBSCRIBED: number = 100
 export let PRO_GRANT: number = 200

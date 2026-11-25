@@ -1,7 +1,8 @@
 /** @jsxImportSource preact */
 import { Button, Card } from '@yaks/ui'
 import { Plan } from '@yaks/platform/home'
-import { Page, Yours } from './frame.tsx'
+import { Page } from './frame.tsx'
+import { CostNote } from './home.tsx'
 import { attr, type Slots, text } from './copy.ts'
 
 let PLANS = ['free', 'plus', 'pro'] as const
@@ -46,10 +47,7 @@ export let Pricing = () => (
         id='hello'
         {...text('pricing.hello.title')}
       />
-      <p
-        class='Note Note-lead'
-        {...text('home.cost.note', { yours: <Yours /> })}
-      />
+      <CostNote class='Note Note-lead' />
       <p class='Note' {...text('pricing.hello.lead')} />
     </section>
     <section class='Cost' aria-labelledby='plans'>

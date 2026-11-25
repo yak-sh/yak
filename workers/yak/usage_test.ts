@@ -930,6 +930,27 @@ test('a space draws its starter once, before its months', () => {
   assertEquals(given({ drawn: 500 }, 0), SUBSCRIBED + BUDGET.free)
 })
 
+test('paid AI budgets change at month end and building credit carries over', () => {
+  let pro = {
+    ...space({ month: '2026-11', models: 60, drawn: 175 }),
+    tier: 'pro' as const,
+    starter: 200,
+  }
+  let end = new Date('2026-11-30T23:59:59Z')
+  let next = new Date('2026-12-01T00:00:00Z')
+  assertEquals(budget(pro, end), {
+    spent: 60,
+    limit: 185,
+  })
+  assertEquals(budget(pro, next), {
+    spent: 0,
+    limit: 25 + BUDGET.pro,
+  })
+  let plus = { ...pro, tier: 'plus' as const }
+  assertEquals(budget(plus, end), { spent: 60, limit: 115 })
+  assertEquals(budget(plus, next), { spent: 0, limit: 25 + BUDGET.plus })
+})
+
 test('a conversation that shipped nothing pays for its model and seconds', async () => {
   let c = await counting({
     month: '2026-09',

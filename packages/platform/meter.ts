@@ -5,10 +5,10 @@
 import { type ByDay, kept } from '@yaks/ui/chart'
 import {
   allowance,
-  BUDGET,
   budgeted,
   DOLLARS,
   type Limited,
+  monthlyBudget,
   paid,
   type Spend,
   STARTER,
@@ -309,7 +309,8 @@ export let topUp = (
  * credit: the month the platform's owner set on it (budget.ts), else its
  * plan's, and what is left of its starter. */
 export let budgetOf = (space: Metered, now: Date = new Date()): number =>
-  (space.budget ?? BUDGET[space.tier ?? 'free']) + starterOf(space, now)
+  (space.budget ?? monthlyBudget(space.tier, monthOf(now))) +
+  starterOf(space, now)
 
 /** The dollars a space's models and voice may spend this month: its budget,
  * and past it what its credit allows. */

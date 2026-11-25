@@ -23,7 +23,7 @@ let offer = (plan: string) => ({
   'availability': 'https://schema.org/InStock',
   'description': `${said(`home.data.${plan}.offer`)} ${
     said(`home.cost.${plan}.credit`)
-  }`,
+  } ${said(`home.cost.${plan}.ai`)}.`,
   ...(plan == 'free' ? {} : {
     'priceSpecification': {
       '@type': 'UnitPriceSpecification',
@@ -267,6 +267,17 @@ export let Walkthrough = () => (
   </section>
 )
 
+/** The space and what a subscription pays for, above the plan cards. */
+export let CostNote = ({ class: classes = 'Note' }: { class?: string }) => (
+  <p
+    class={classes}
+    {...text('home.cost.note', {
+      yours: <Yours />,
+      space: <strong {...text('home.cost.space')} />,
+    })}
+  />
+)
+
 /** What a space costs: what one is, a card for each plan, and where the
  * limits are. */
 export let Cost = ({ story }: { story?: boolean } = {}) => (
@@ -276,7 +287,7 @@ export let Cost = ({ story }: { story?: boolean } = {}) => (
       id='cost'
       {...text(story ? 'home.story.pricing.heading' : 'home.cost.title')}
     />
-    <p class='Note' {...text('home.cost.note', { yours: <Yours /> })} />
+    <CostNote />
     <div class='Plans'>
       <Plan
         copy={{ attr, text }}
@@ -288,17 +299,18 @@ export let Cost = ({ story }: { story?: boolean } = {}) => (
         copy={{ attr, text }}
         plan='plus'
         cta='plus'
-        items={['domain', 'payments']}
+        items={['domain', 'renewal', 'payments']}
         slots={{ domain: <b {...text('home.cost.plus.example')} /> }}
       />
       <Plan
         copy={{ attr, text }}
         plan='pro'
         cta='pro'
-        items={['domain', 'change']}
+        items={['domain', 'renewal', 'change']}
         slots={{ domain: <b {...text('home.cost.pro.example')} /> }}
       />
     </div>
+    <p class='Note Note-small' {...text('pricing.plans.renewal')} />
     <p class='Note Note-small' {...text('home.cost.ai')} />
     <p
       class='Note Note-small'

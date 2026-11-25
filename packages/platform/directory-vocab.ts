@@ -762,9 +762,8 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { space: owned(ref('keep')) },
     },
-    // The space a person's first paid subscription went to, which was given
-    // plans.ts `SUBSCRIBED` of building credit (billing.ts `granted`): kept
-    // once that space is gone, so the credit is theirs once.
+    // The space a person's first paid subscription went to. Kept when the
+    // space is gone so the Plus plan's first-subscription credit is given once.
     subscribed: {
       component: true,
       type: 'object',

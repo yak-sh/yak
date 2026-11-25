@@ -151,12 +151,14 @@
     },
     "cost": {
       "title": "Free to start, a plan for more",
-      "note": "Your web address, like %{yours}, comes with a place for your apps, their data and the people you invite. We call that a **space**. Your first space is free. Each subscription pays for one space.",
+      "note": "Your web address, like %{yours}, comes with a place for your apps, their data and the people you invite. We call that a %{space}. Your first space is free. Each subscription pays for one space.",
+      "space": "space",
       "per": "per month",
       "free": {
         "price": "Free",
         "note": "Your first space.",
         "credit": "$20 of bonus building credit on sign up.",
+        "ai": "Limited AI use per month",
         "apps": "5 apps",
         "visitors": "Unlimited visitors",
         "data": "1 GB of app data",
@@ -174,13 +176,14 @@
         "price": "$12 %{per}",
         "note": "The Plus plan, or $120 a year.",
         "credit": "$100 of bonus building credit when upgrading to this plan.",
+        "ai": "$8 of AI use per month",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "data": "10 GB of app data",
         "files": "50 GB of photos and files",
         "emails": "2,500 emails a month",
-        "domain": "A custom domain, like %{domain}",
-        "renewal": "Up to $12 per year toward one domain renewal when you pay yearly",
+        "domain": "Attach your custom domain",
+        "renewal": "A custom domain like %{domain} is included when paid annually",
         "payments": "Take payments with Stripe",
         "badge": "No yaks.app badge",
         "change": "Your Operator, or your own assistant, makes the changes",
@@ -190,21 +193,22 @@
       "pro": {
         "price": "$49 %{per}",
         "note": "The Pro plan, or $490 a year.",
-        "credit": "$200 of bonus building credit when upgrading to this plan, then $35 of AI use per month.",
+        "credit": "$200 of bonus building credit when upgrading to this plan.",
+        "ai": "$35 of AI use per month",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "data": "50 GB of app data",
         "files": "250 GB of photos and files",
         "emails": "10,000 emails a month",
-        "domain": "A custom domain, like %{domain}",
-        "renewal": "Up to $12 per year toward one domain renewal, with monthly or yearly billing",
+        "domain": "Attach your custom domain",
+        "renewal": "A custom domain like %{domain} is included",
         "payments": "Take payments with Stripe",
         "badge": "No yaks.app badge",
-        "change": "Your staff ask the Operator by email or chat, and it makes the change",
-        "example": "ourtownship.org",
+        "change": "Your team can ask the Operator by email or chat",
+        "example": "ourbookclub.com",
         "go": "Get Started"
       },
-      "ai": "When you subscribe, any building credit you get is added to what’s left on the space you pay for, including unused sign-up credit. The same AI work uses building credit first, then the month’s included AI use. Both cover the built-in assistant, app helpers, voice calls and texts. Building credit never expires. When the included AI use runs out, the assistant and helpers pause until next month unless you buy more on the Pro plan. Your apps stay online, and you can keep building from Claude or ChatGPT.",
+      "ai": "The Plus bonus applies to your first paid subscription. The Pro bonus applies the first time a space goes Pro. When you subscribe, your bonus is added to any unused building credit in that space. Building credit never expires and is spent before the month’s included AI use. Both cover the built-in assistant, app helpers, voice calls and texts. When the included AI use runs out, the assistant and helpers pause until next month unless you buy more on the Pro plan. Your apps stay online, and you can keep building from Claude or ChatGPT.",
       "limits": "Tax is included. Going over a limit never deletes your apps or data. %{plans}.",
       "plans": "Compare plans and limits"
     },
@@ -286,10 +290,7 @@
           "name": "Owner",
           "note": "Manage your app and who can open it."
         },
-        "editor": {
-          "name": "Editor",
-          "note": "Change what your app keeps."
-        },
+        "editor": { "name": "Editor", "note": "Change what your app keeps." },
         "viewer": {
           "name": "Viewer",
           "note": "Open your app and see what’s shared."
@@ -733,7 +734,7 @@
       "asks": "Your office asks by email or chat, and the change is made",
       "people": "No charge per person: staff, members and visitors cost nothing extra",
       "domain": "Your own web address, like %{domain}",
-      "ai": "$100 of AI use a month for the assistant's work, and $200 more when you start",
+      "ai": "$200 of building credit when your space first goes Pro, then $35 of AI use per month",
       "emails": "10,000 emails a month sent or received by your site, such as the list each Friday of who is coming to Saturday's food pantry shift",
       "support": "Support from us, by email",
       "limits": "Tax is included, and the bill never grows by itself. If a very busy month uses up the AI work the plan includes, the assistant waits until the 1st, unless you choose to buy more, $10 at a time and paid in advance. Your site stays online either way. There are two smaller plans, Free and $12 a month, for a site that needs less. %{plans}, where the assistant is called your Operator.",
@@ -861,7 +862,7 @@
     },
     "plans": {
       "title": "Each space is free or on a paid plan.",
-      "renewal": "One domain’s renewal is included on the Pro plan, and on the Plus plan when you pay yearly. The plan covers up to $12 per year for that domain. Other domains renew at the registrar’s price, with no markup."
+      "renewal": "An included domain gets up to $12 a year toward renewal when registered through yaks.app. The first year and other domains’ renewals are at the registrar’s price, with no markup."
     },
     "always": {
       "title": "Free on every plan",
@@ -952,8 +953,8 @@
         "name": "AI use a month %{note}",
         "note": "Includes AI in your apps, the built-in assistant, voice calls and texts.",
         "free": "Included",
-        "plus": "Included",
-        "pro": "$100"
+        "plus": "$8",
+        "pro": "$35"
       },
       "compute": {
         "name": "Compute time a month %{note}",

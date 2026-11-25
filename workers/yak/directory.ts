@@ -4208,13 +4208,10 @@ export let directoryRows = (rows: {
       (await query(line`.member.space=${space.eid}&.member.role=owner`))
         .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
-    // The building credit a space's plan gives, as the write that gives it,
-    // on top of what is left of its starter: plans.ts `SUBSCRIBED` when it is
-    // `subscribed`, for its owners who never subscribed, who wear
-    // `subscribed` from now on; and plans.ts `PRO_GRANT` when it is on the
-    // Pro plan, paid or comped, once per space, which wears `pro_grant`. None
-    // once each was had. Each row is guarded (`$was`), so two deliveries of
-    // the same purchase give it once.
+    // Add the plan's building credit to what is left of the starter. A first
+    // paid subscription marks its owners as subscribed on either tier. Only
+    // the Plus plan gives SUBSCRIBED. The Pro plan gives PRO_GRANT once per
+    // space, paid or comped. The guards make a repeated delivery give it once.
     granting: async (
       space: Space,
       on: { subscribed: boolean; pro: boolean },
@@ -4227,20 +4224,22 @@ export let directoryRows = (rows: {
       ])
       let fresh = owners.filter((_, i) => !rows[i]?.subscribed)
       let pro = on.pro && !!held && !held.pro_grant
-      let dollars = (fresh.length ? SUBSCRIBED : 0) + (pro ? PRO_GRANT : 0)
-      if (!dollars) return []
+      let plus = !on.pro && fresh.length > 0
+      let dollars = pro ? PRO_GRANT : plus ? SUBSCRIBED : 0
       return [
-        {
-          entity: { eid: space.eid },
-          starter: { dollars: topUp(space, dollars, now) },
-          ...(pro ? { pro_grant: { at: now.toISOString() } } : {}),
-          $was: {
-            starter: {
-              dollars: space.starter == null ? null : token(space.starter),
+        ...(dollars
+          ? [{
+            entity: { eid: space.eid },
+            starter: { dollars: topUp(space, dollars, now) },
+            ...(pro ? { pro_grant: { at: now.toISOString() } } : {}),
+            $was: {
+              starter: {
+                dollars: space.starter == null ? null : token(space.starter),
+              },
+              ...(pro ? { pro_grant: { at: null } } : {}),
             },
-            ...(pro ? { pro_grant: { at: null } } : {}),
-          },
-        },
+          }]
+          : []),
         ...fresh.map((p) => ({
           entity: { eid: p },
           subscribed: { space: space.eid },

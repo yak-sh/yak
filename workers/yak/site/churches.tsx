@@ -139,6 +139,7 @@ export let Churches = () => (
           price='home.cost.free.price'
           note='churches.cost.free.note'
           items={[
+            ['home.cost.free.ai'],
             ['home.cost.free.apps'],
             ['home.cost.free.visitors'],
             ['home.cost.free.address', { yours }],
@@ -151,9 +152,10 @@ export let Churches = () => (
           note='home.cost.pro.note'
           items={[
             ['home.cost.pro.credit'],
+            ['home.cost.pro.ai'],
             ['home.cost.pro.apps'],
             ['churches.cost.pro.invited'],
-            ['home.cost.pro.domain', { domain }],
+            ['home.cost.pro.domain'],
             ['home.cost.pro.change'],
           ]}
           go={

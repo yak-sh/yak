@@ -329,7 +329,7 @@ let COLUMNS = [
   ], ['cookies', '/cookies']]],
 ] as const
 
-let PLAN_FEATURES = ['apps', 'visitors', 'data', 'files', 'emails']
+let PLAN_FEATURES = ['ai', 'apps', 'visitors', 'data', 'files', 'emails']
 
 /** The same plan card on the home and pricing pages, with room for a page's
  * selection of features. */

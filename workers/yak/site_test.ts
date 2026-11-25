@@ -443,16 +443,17 @@ test('the plan cards and every offer carry the meter allowances', () => {
 // says FEATURES[n]. What a plan lacks is a line on its card that says so.
 let FEATURES = [
   'building credit',
+  'AI use per month',
   'apps',
   'visitors',
   'app data',
   'photos and files',
   'emails',
   'custom domain',
-  'domain renewal',
+  /domain renewals|domain like .* is included/i,
   'payments',
   'badge',
-  'change',
+  'Operator',
 ]
 
 let pricing = () => parseHTML(read('pricing.html')).document
@@ -463,12 +464,16 @@ test('every pricing card lists the same features in the same order', () => {
   cards.forEach((card, i) => {
     let lines = [...card.querySelectorAll('.Plan_List li')]
       .map((li) => flat(li.textContent!))
-    let named = lines.map((line, n) =>
-      line.toLowerCase().includes(FEATURES[n]?.toLowerCase())
-        ? FEATURES[n]
-        : line
-    )
-    assertEquals(named, FEATURES, TIERS[i])
+    assertEquals(lines.length, FEATURES.length, TIERS[i])
+    FEATURES.forEach((feature, n) => {
+      let line = lines[n]
+      assert(
+        typeof feature == 'string'
+          ? line.toLowerCase().includes(feature.toLowerCase())
+          : feature.test(line),
+        `${TIERS[i]}: ${line}`,
+      )
+    })
   })
 })
 
@@ -481,7 +486,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
     ['Photos and files', (t) => size(FILES[t])],
     ['Visits a month', (t) => count(LIMITS[t].requests)],
     ['Emails a month', (t) => count(LETTERS[t])],
-    ['AI use a month', (t) => t == 'pro' ? `$${BUDGET.pro}` : 'Included'],
+    ['AI use a month', (t) => t == 'free' ? 'Included' : `$${BUDGET[t]}`],
     ['Compute time a month', (t) => hours(SECONDS[t])],
     ['Sandboxes at once', (t) => String(AWAKE[t])],
   ]
@@ -1019,18 +1024,26 @@ test('the plan pages quote the prices the offers name, and no other', () => {
       'townships.html',
     ]
   ) {
-    let html = flat(parseHTML(read(page)).document.body.textContent!)
+    let body = parseHTML(read(page)).document.body
+    body.querySelector('[data-copy="pricing.plans.renewal"]')?.remove()
+    let text = flat(body.textContent!)
+    let prices = [...text.matchAll(/\$(\d+) (?:a|per) (month|year)/g)]
+    let says = (dollars: number, kind: string) =>
+      assert(
+        prices.some(([, n, per]) => Number(n) == dollars && per == kind),
+        `${page} omits the $${dollars} ${kind} price`,
+      )
     if (page != 'churches.html') {
-      assertStringIncludes(html, `$${PRICE.plus} a month`)
+      says(PRICE.plus, 'month')
     }
-    assertStringIncludes(html, `$${PRICE.pro} a month`)
-    assertStringIncludes(html, `$${YEARLY.pro} a year`)
+    says(PRICE.pro, 'month')
+    says(YEARLY.pro!, 'year')
     // The plans' cards say what the Plus plan costs by the year.
     if (['index.html', 'pricing.html'].includes(page)) {
-      assertStringIncludes(html, `$${YEARLY.plus} a year`)
+      says(YEARLY.plus!, 'year')
     }
-    for (let [, n, per] of html.matchAll(/\$(\d+) a (month|year)/g)) {
-      assert(charged[per].includes(Number(n)), `${page} quotes $${n} a ${per}`)
+    for (let [price, n, per] of prices) {
+      assert(charged[per].includes(Number(n)), `${page} quotes ${price}`)
     }
   }
 })
@@ -1234,23 +1247,20 @@ test('the signed-in plan copy derives both tiers from the meter', () => {
 })
 
 // The building credit a person is given, said where they decide: signing up
-// free gives the starter, and a first subscription adds its own, each the
-// figure @yaks/platform/plans grants.
+// free gives the starter, and the paid plans give their own one-time grants.
 test('every place a person decides names the building credit the code grants', async () => {
   let starter = `$${STARTER} of building credit`
   let subscribed = `$${SUBSCRIBED} of building credit`
   let pro = `$${PRO_GRANT} of building credit`
   let grants = {
-    free: [starter],
-    plus: [subscribed],
-    pro: [`one-time ${pro}`, `$${SUBSCRIBED} more`],
+    free: `$${STARTER} of bonus building credit`,
+    plus: `$${SUBSCRIBED} of bonus building credit`,
+    pro: `$${PRO_GRANT} of bonus building credit`,
   }
   for (let [page, tiers] of Object.entries(CARDS)) {
     for (let tier of tiers) {
       let card = parsed(page).querySelector(cardOf(tier))!
-      for (let grant of grants[tier]) {
-        assertStringIncludes(flat(card.textContent!).toLowerCase(), grant, page)
-      }
+      assertStringIncludes(flat(card.textContent!), grants[tier], page)
     }
   }
   let [doc] = ld(read('index.html'))
@@ -1259,45 +1269,51 @@ test('every place a person decides names the building credit the code grants', a
       n['@type'] == 'SoftwareApplication'
     ).offers
   for (let [i, tier] of TIERS.entries()) {
-    for (let grant of grants[tier]) {
-      assertStringIncludes(offers[i].description.toLowerCase(), grant, tier)
-    }
+    assertStringIncludes(offers[i].description, grants[tier], tier)
   }
   assertStringIncludes(await askEmail({}).text(), starter)
   let card = planCard
   assertStringIncludes(card('free'), subscribed)
   assertEquals(card('plus').includes(subscribed), false)
   let space = { slug: 'dana', budget: null, meter: null }
-  assertStringIncludes(refused({ ...space, tier: 'free' }, {}), subscribed)
+  let free = refused({ ...space, tier: 'free' }, {})
+  assertStringIncludes(free, `the Plus plan adds ${subscribed}`)
+  assertStringIncludes(free, `adds ${pro} once per space`)
   assertEquals(
     refused({ ...space, tier: 'plus' }, {}).includes(subscribed),
     false,
   )
 })
 
-// The free and Plus plans' monthly AI use is the platform's to allocate, so
-// no page, nor its offers to search engines, names an amount for it: the
-// only monthly figure is the Pro plan's, on its cards.
-test("only the Pro plan's monthly AI use is named in dollars", () => {
+test('the paid plans name their AI allowance and Free describes it without a figure', () => {
+  let use = {
+    free: 'Limited AI use per month',
+    plus: `$${BUDGET.plus} of AI use per month`,
+    pro: `$${BUDGET.pro} of AI use per month`,
+  }
   for (let name of Object.keys(site.PAGES)) {
     let html = read(name)
     for (let [said] of html.matchAll(/\$[\d,]+ (to \$[\d,]+ )?of AI use/g)) {
-      assertEquals(said, `$${BUDGET.pro} of AI use`, name)
+      assert([use.plus, use.pro].some((line) => line.startsWith(said)), name)
     }
-    assertEquals(html.match(/\$[\d,]+ on the (free|Plus) plan/), null, name)
+    assertEquals(html.match(/\$[\d,]+ on the free plan/i), null, name)
   }
   for (let page of Object.keys(CARDS)) {
     for (let tier of TIERS) {
-      let card = flat(parsed(page).querySelector(cardOf(tier))!.textContent!)
-      assertStringIncludes(
-        card,
-        tier == 'pro'
-          ? `$${BUDGET.pro} of AI use a month`
-          : 'Monthly AI use included',
-        page,
-      )
+      let card = parsed(page).querySelector(cardOf(tier))!
+      let lines = [...card.querySelectorAll('li')].map((li) => li.textContent)
+      assertEquals(lines.filter((line) => line?.includes('AI use')), [
+        use[tier],
+      ], page)
     }
   }
+  let [doc] = ld(read('index.html'))
+  let { offers } = doc['@graph'].find((n: { '@type': string }) =>
+    n['@type'] == 'SoftwareApplication'
+  )
+  TIERS.forEach((tier, i) =>
+    assertStringIncludes(offers[i].description, use[tier])
+  )
 })
 
 // style.css lays a plan card's parts on four rows the cards share, so the

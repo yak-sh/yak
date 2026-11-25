@@ -169,7 +169,7 @@ and the pricing page hold what each one carries:
   and no payments.
 - **The Plus plan** is $12 a month or $120 a year, for any space (T-131900;
   Jeff: "*plus* to $12", "$12/mo, $120/yr"): unlimited apps, 10 GB of app data,
-  50 GB of photos and files, 2,500 emails a month, a custom domain, payments
+  50 GB of photos and files, 2,500 emails a month, $8 of AI use per month, a custom domain, payments
   with Stripe and no badge. A space that subscribed at $9 keeps paying $9 until
   Jeff says otherwise: Stripe keeps its price, and @yaks/stripe reads it as the
   Plus plan (`kept`). Whether a Plus space can pay for model use past its
@@ -178,20 +178,19 @@ and the pricing page hold what each one carries:
   by the year (D-412, T-135234). It holds about five times the Plus plan's
   allowances (50 GB of app data, 250 GB of photos and files, 10,000 emails,
   5,000,000 request units and 50 compute hours a month, three
-  sandboxes at once) and twice its AI budget, which its cards say first
-  (T-1317). It adds the Operator built in, so staff ask by email or chat and
+  sandboxes at once) and $35 of AI use per month. It adds the Operator built
+  in, so staff ask by email or chat and
   yaks.app makes the change, and support. Past that budget it spends AI
   credit its owner buys in $10 blocks, paid before it is spent, up to a monthly
   cap they set on the plan card: $0 until they choose one, and nothing is ever
   charged past it (@yaks/platform/meter `creditOf`, billing.ts `buy`).
 
-Building credit is the space's model budget, as a person is told it. Signing up
-free gives $20 of it on a person's first space (plans.ts `STARTER`), and their
-first paid subscription adds $100 to the space it pays for (`SUBSCRIBED`,
-billing.ts `granted`), each once per person and spent before the month's budget.
-Jeff, 2026-11-19: "you get $20 building credits for signing up free and $100
-when you subscribe to paid plan". The sign-up page, the plan cards,
-/manage/billing and the upgrade refusal say it. Sharing is said as reward.ts
+Building credit is spent before the space's monthly AI budget and never
+expires. Signing up gives $20 to a person's first space (plans.ts `STARTER`).
+A first paid subscription to the Plus plan adds $100 to the space it pays for
+(`SUBSCRIBED`). The Pro plan adds $200 the first time a space takes it
+(`PRO_GRANT`), paid or comped. Billing records each grant once and adds it to
+any credit the space still has (billing.ts `granted`). Sharing is said as reward.ts
 grants it: each friend who signs up through a person's own invite and builds
 their first app gives that person's space one more free month of the Plus plan;
 a seat in a space earns nothing.

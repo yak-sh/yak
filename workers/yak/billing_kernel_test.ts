@@ -30,7 +30,7 @@ import {
 } from './probe.ts'
 import { delivered, fakeSub, signed } from '@yaks/stripe/testing'
 import { GET_PLAN } from '@yaks/platform/routes'
-import { PRICE, STARTER, SUBSCRIBED } from '@yaks/platform/plans'
+import { PRICE, PRO_GRANT, STARTER, SUBSCRIBED } from '@yaks/platform/plans'
 
 test(
   'the webhook flips a plan, once, whatever order it arrives in, and gives its credit once',
@@ -427,6 +427,12 @@ test('an invoiced plan starts when its invoice is paid, and stops past due', asy
     }
     assertEquals(await post('invoice.paid', paid, now + 10), `${slug} is pro`)
     assertEquals((await plan())?.tier, 'pro')
+    let credit = async () => (await k.dir.at(space))!.starter
+    assertEquals(await credit(), STARTER + PRO_GRANT)
+    let [owner] = await meta(k).query(`id=${them.person}`)
+    assertEquals(owner.subscribed, { space })
+    assertEquals(await post('invoice.paid', paid, now + 10), 'unchanged')
+    assertEquals(await credit(), STARTER + PRO_GRANT)
 
     // A year on, the renewal's invoice is past due: the plan stops.
     stands = sub('open', { status: 'past_due' })
@@ -436,6 +442,7 @@ test('an invoiced plan starts when its invoice is paid, and stops past due', asy
     )
     let late = await plan()
     assertEquals([late?.tier, late?.status], ['free', 'unpaid'])
+    assertEquals(await credit(), STARTER + PRO_GRANT)
   } finally {
     await k.stop()
   }

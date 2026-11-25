@@ -42,7 +42,14 @@ import {
   YEARLY,
 } from './plans.ts'
 import { amount } from './price.ts'
-import { beyond, type Ceiling, count, dollars, share } from './standing.ts'
+import {
+  aiUse,
+  beyond,
+  type Ceiling,
+  count,
+  dollars,
+  share,
+} from './standing.ts'
 import { heading, labeled, said, status } from './page-parts.ts'
 import type {
   Allowances,
@@ -104,6 +111,10 @@ let hostOf = (view: PaymentView): Host => ({ APEX: view.apex })
 
 // The meter's prices are whole US dollars, as on the public pricing page.
 let plusPrice = () => `$${count(PRICE.plus)}`
+let plusOffer = () =>
+  `The Plus plan includes ${
+    aiUse('plus')
+  }. If it is your first paid subscription, it adds $${SUBSCRIBED} of building credit.`
 
 // What a plan costs, said on its button: "$49 a month", "$490 a year".
 let priced = (want: Want) =>
@@ -142,7 +153,9 @@ let planCard = (view: PaymentView, plan: PlanCard, payer?: Payer) => {
     ? `Unlimited apps, unlimited visitors, ${beyond()}, and email support`
     : `${
       limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
-    }, unlimited visitors, ${size(limits.bytes)} of app data`
+    }, unlimited visitors, ${size(limits.bytes)} of app data${
+      tier == 'plus' ? `, and ${aiUse(tier)}` : ''
+    }`
   let env = hostOf(view)
   let host = spaceHost(env, view.space.slug)
   let head = tier == 'free'
@@ -151,8 +164,7 @@ let planCard = (view: PaymentView, plan: PlanCard, payer?: Payer) => {
       null,
       `${host} is on the `,
       h('b', null, 'free'),
-      ` plan — ${allowance}. Your first subscription adds $${SUBSCRIBED} ` +
-        'of building credit. ',
+      ` plan — ${allowance}. ${plusOffer()} `,
       h('a', { href: url(env, '/pricing') }, 'Compare plans'),
       '.',
     )
@@ -495,7 +507,7 @@ let sellingPage = (view: PaymentView, rows: PaymentRows) => {
   return [
     start(
       ready ? 'Payments are connected' : 'Sell from your apps',
-      leadOf(at, paying),
+      [leadOf(at, paying), !paying ? h(Form.Hint, null, plusOffer()) : null],
     ),
     h(
       Card,

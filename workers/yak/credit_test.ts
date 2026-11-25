@@ -107,7 +107,7 @@ test('a space with no credit is billed and limited as before', async () => {
     meter: null,
   } as unknown as Space
   equal([creditOf(none), capped(none), buyable(none)], [0, null, false])
-  equal(limitOf(none), 30)
+  equal(limitOf(none, new Date('2026-12-01T00:00:00Z')), 8)
   equal(planCard(await plans({}), none).credit, undefined)
   equal(planCard(await plans({}), { ...none, tier: 'pro' }).credit, {
     cap: 0,

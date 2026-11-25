@@ -1123,9 +1123,9 @@ let follow = async (
   return `${space.slug} is ${next.tier}`
 }
 
-// The building credit a plan gives (directory.ts `granting`): a first paid
-// subscription's, given to the space it pays for once per person, and the
-// Pro plan's, once per space, paid (here) or comped (comp.ts). A delivery
+// The building credit a plan gives (directory.ts `granting`): the Plus
+// plan's on a first paid subscription, or the Pro plan's once per space,
+// paid (here) or comped (comp.ts). A delivery
 // that lost the race to another finds its guard moved and gives nothing.
 export let granted = async (
   env: Env,

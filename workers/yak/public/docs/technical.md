@@ -128,18 +128,17 @@ free plan allows five apps, 1 GB of app data, and 100 emails a month. A person
 owns one free space, and every other space they make is on a paid plan; a space
 somebody invited you into does not count toward yours, and spaces that were free
 before stay free. Each space has its own monthly budget for models and voice,
-included on every plan. Plus allows unlimited apps, 10 GB of app data, 50 GB of
-photos and files, and 2,500 emails a month. Pro allows a $100 model and voice
-budget a month, 50 GB of app data, 250 GB of photos and files, and 10,000 emails
-a month, and a space that takes it is given $200 of building credit once, spent
-before its monthly budget. Visitors are never capped on any plan: an app is
-served to however many people come. The hourly meter estimates each space's
-request units (an ordinary request uses one unit; incoming WebSocket messages
-use one unit per 20 messages, as Cloudflare bills them), and your assistant is
-told when a month passes 50,000 on Free, 1,000,000 on the Plus plan or 5,000,000
-on the Pro plan. Operations that exceed a limit are refused, but existing apps
-and data are not deleted. Your assistant receives a notice when usage reaches
-80% of a limit.
+included on every plan. The Plus plan includes $8 of AI use per month, unlimited
+apps, 10 GB of app data, 50 GB of photos and files, and 2,500 emails a month.
+The Pro plan includes $35 of AI use per month, 50 GB of app data, 250 GB of
+photos and files, and 10,000 emails a month. Visitors are never capped on any
+plan: an app is served to however many people come. The hourly meter estimates
+each space's request units (an ordinary request uses one unit; incoming
+WebSocket messages use one unit per 20 messages, as Cloudflare bills them), and
+your assistant is told when a month passes 50,000 on Free, 1,000,000 on the Plus
+plan or 5,000,000 on the Pro plan. Operations that exceed a limit are refused,
+but existing apps and data are not deleted. Your assistant receives a notice
+when usage reaches 80% of a limit.
 
 Every page an app serves on the free plan wears a small "Made with yaks.app"
 badge in a corner. On a published app it opens the app's own page on yaks.app,
@@ -162,6 +161,11 @@ Your Operator and your apps share the space's monthly AI budget for models,
 generated media, voice and texts. The Operator's model calls count as they
 happen, including conversations that never deploy an app. A connected assistant
 such as Claude or ChatGPT uses its own subscription to build and change apps.
+
+Building credit is spent before the monthly AI budget and never expires. The
+first space gets $20 at sign-up. A first paid subscription to the Plus plan adds
+$100 to the space it pays for. The first time a space takes the Pro plan, it
+gets $200.
 
 Each person has a sandbox in each space: a private Linux container where the
 Operator or your agent runs commands and keeps files while it works, to run a
