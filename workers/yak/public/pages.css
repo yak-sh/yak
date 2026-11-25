@@ -871,6 +871,11 @@
     align-content: start;
     gap: .75rem;
   }
+  /* The day's lines, drawn in the browser where Updates show in place
+     (updates-day-browser): its cards stand in the column's grid. */
+  .Update_Day {
+    display: contents;
+  }
   /* The cards themselves, drawn again from the page graph
      (updates-list-browser). */
   .Update_List {

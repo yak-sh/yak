@@ -1539,7 +1539,7 @@ export let chatPage = async (
   // shown in place.
   let others = chat.view
     ? [
-      updatesBeside(env, space, who, chat.listed),
+      updatesBeside(env, space, who, beside, chat.listed),
       allBeside(env, space, who, beside),
     ]
     : []
@@ -1878,6 +1878,7 @@ let updatesBeside = (
   env: Env,
   space: Space,
   who: Who,
+  beside: Beside,
   listed: Listed[] | null,
 ): TalkPage => {
   let at = managePath('operator', space.slug)
@@ -1899,9 +1900,19 @@ let updatesBeside = (
         space,
         listed ? besides(listed, at, here, true) : later('waits'),
         who.person ?? '',
+        ownSpace(space, who, beside),
       ),
     ),
   }
+}
+
+// Whether `space` is the person's own, which their Updates there say their
+// friends on yaks.app now in (friends.ts `friendsHere`): the one they own
+// and open first, else the first they own.
+let ownSpace = (space: Space, who: Who, beside: Beside) => {
+  let owned = (beside.spaces ?? []).filter((s) => s.owner)
+  return who.role == 'owner' &&
+    (owned.find((s) => s.own) ?? owned[0])?.eid == space.eid
 }
 
 // Every space's Updates as a view of a page opened at another of its views:
@@ -2005,7 +2016,7 @@ export let allUpdatesPage = async (
     ),
   }, [
     ...chat ? [chat] : [],
-    updatesBeside(env, space, who, listed),
+    updatesBeside(env, space, who, beside, listed),
   ])
 }
 

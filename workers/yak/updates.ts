@@ -19,7 +19,6 @@ import { bound, type Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import { type ComponentChildren, Fragment, h } from 'preact'
-import { Card } from '@yaks/ui/parts'
 import { operatorDoor } from './build-door.ts'
 import { backTo, chatPath, talkPath } from '@yaks/platform/routes'
 import { apex } from '@yaks/platform/host'
@@ -40,6 +39,7 @@ import { newsOrder, offerRows, updateRows } from '@yaks/platform/update-rows'
 import { appRows } from '@yaks/platform/side-rows'
 import type { MarkedApp } from '@yaks/platform/routes'
 import { drawnRows } from '@yaks/platform/page-graph'
+import { DAY, type Day, dayCards, dayLine } from '@yaks/platform/updates-day'
 
 export { type Apps, bySha, chatAt, draftAt }
 import { lastDay } from './views.ts'
@@ -258,35 +258,6 @@ export let visitsOf = async (
   }
 }
 
-let COUNT = new Intl.NumberFormat('en')
-
-/** The Operator's word on the last day, said when the page is drawn: the
- * visits across the apps and the busiest of them, when there are any to
- * count. How many things need the person is the side's bell to say. The
- * server knows no one's clock, so it is the last day and not today. */
-export let lastDayLine = (
-  apps: Apps,
-  views: Map<string, number> | undefined,
-) => {
-  let said: string[] = []
-  if (views && apps.length) {
-    let counted = apps.map((a) => ({ a, n: views.get(a.eid) ?? 0 }))
-      .filter((c) => c.n > 0).sort((x, y) => y.n - x.n)
-    let total = counted.reduce((sum, c) => sum + c.n, 0)
-    said.push(
-      total
-        ? `In the last day, your apps had ${COUNT.format(total)} visit${
-          total == 1 ? '' : 's'
-        }.`
-        : 'Nobody visited your apps in the last day.',
-    )
-    if (counted.length > 1) {
-      said.push(`${counted[0].a.title || counted[0].a.slug} was the busiest.`)
-    }
-  }
-  return said.join(' ')
-}
-
 /** What the Updates page shows under its bar: the day, then what waits on
  * the person, the rows of their servers' `lists` that wait before the
  * Updates that need them, then what happened. */
@@ -299,33 +270,16 @@ export let updates = (
   views?: Map<string, number>,
   friends?: string,
   person = '',
-) => {
-  let day = lastDayLine(apps, views)
-  return h(
+) =>
+  h(
     Fragment,
     null,
     about(space),
-    day
-      ? h(
-        Card,
-        { class: 'Update Update-day' },
-        h('p', {
-          class: 'Update_Words',
-        }, day),
-      )
-      : null,
-    friends
-      ? h(
-        Card,
-        { class: 'Update Update-day' },
-        h('p', { class: 'Update_Words' }, friends),
-      )
-      : null,
+    dayCards(dayLine(apps, views), friends ?? ''),
     lists,
     listed(env, person, [space], news, () => apps),
     dismissedLink(space),
   )
-}
 
 let about = (space: Space) =>
   h(
@@ -347,18 +301,26 @@ let dismissedLink = (space: Space) =>
 
 /** The Updates page's view on a page opened at another of its views
  * (@yaks/platform/talk-views): its cards are drawn in the browser from the
- * tab's page graph as its watches answer, and the last day's word is left
- * to the page itself. */
+ * tab's page graph as its watches answer, and the day's lines once it first
+ * shows (@yaks/platform/updates-day-browser), the friends line where
+ * `friends` says it is said. */
 export let updatesLater = (
   env: Env,
   space: Space,
   lists: ComponentChildren,
   person: string,
+  friends: boolean,
 ) =>
   h(
     Fragment,
     null,
     about(space),
+    h('div', {
+      class: 'Update_Day',
+      [DAY]: JSON.stringify(
+        { person, space: space.eid, friends } satisfies Day,
+      ),
+    }),
     lists,
     listed(env, person, [space], { updates: [], waiting: 0 }, () => [], {
       drawn: false,

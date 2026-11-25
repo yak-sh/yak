@@ -63,6 +63,7 @@
     "./app-canvas": "./app-canvas.ts",
     "./app-canvas-view": "./app-canvas-view.ts",
     "./app-canvas-browser": "./app-canvas-browser.ts",
+    "./updates-day": "./updates-day.ts",
     "./updates-view": "./updates-view.ts",
     "./updates-list-browser": "./updates-list-browser.ts",
     "./talk-views": "./talk-views.ts",

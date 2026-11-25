@@ -58,7 +58,7 @@ import { elapsed } from './lib/hops.ts'
 import { failure, resent } from '@yaks/cloudflare/api'
 import { isView, pointOf, type Visited } from './view-point.ts'
 import { appTag, type Seen } from '@yaks/platform/kept'
-import { countRows, NOT_ON } from '@yaks/platform/visit-counts'
+import { countRows, dayRows, NOT_ON } from '@yaks/platform/visit-counts'
 import type { Bundle } from '@yaks/graph'
 import { type Space, storeName } from './directory.ts'
 export { classed } from './crawlers.ts'
@@ -671,6 +671,24 @@ export let visitRows = async (
   } catch (e) {
     caught(e, { request: 'views' })
     return countRows(space, null)
+  }
+}
+
+/** The last day's views of each of `apps` of the space `space`, as rows
+ * (@yaks/platform/visit-counts `dayRows`): none counted where the platform
+ * cannot say, or its analytics did not answer. */
+export let visitDayRows = async (
+  env: Env,
+  space: string,
+  apps: string[],
+): Promise<Bundle[]> => {
+  if (!apps.length) return dayRows(space, new Map())
+  let asked = lastDay(env, apps)
+  try {
+    return dayRows(space, asked && await asked)
+  } catch (e) {
+    caught(e, { request: 'views last day' })
+    return dayRows(space, null)
   }
 }
 

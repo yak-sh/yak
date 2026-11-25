@@ -88,8 +88,8 @@ import {
   pageAsked,
 } from '@yaks/platform/connections-page'
 import { writes } from '@yaks/member'
-import { personRows, visitsRows } from './side.ts'
-import { countsSpace } from '@yaks/platform/visit-counts'
+import { personRows, visitDay, visitsRows } from './side.ts'
+import { countsSpace, daySpace } from '@yaks/platform/visit-counts'
 import { sideApps } from '@yaks/platform/side-rows'
 import { offersQuery, spaceLine, spaceWrite } from '@yaks/platform/space-pages'
 import { offersFor, spaceApply, spaceRows } from './space-pages.ts'
@@ -189,6 +189,21 @@ export let reachDoor = async (
     )
     return settingsRow(seat.space.eid, wearing(now))
   }
+  // Visits, which no store holds: the space a visits line asks of, and its
+  // rows, read of the apps there the person may open.
+  let visitsOf = (line: string) => {
+    let counted = countsSpace(line)
+    if (counted != undefined) {
+      return {
+        space: counted,
+        read: async () => (await visitsRows(env, dir, person, counted)).counts,
+      }
+    }
+    let day = daySpace(line)
+    if (day != undefined) {
+      return { space: day, read: () => visitDay(env, dir, person, day) }
+    }
+  }
   // What the door reads as the page asks, once: what no store holds.
   let once = (line: string) =>
     brokenSpace(line) != undefined || offersQuery(line) != undefined
@@ -240,12 +255,8 @@ export let reachDoor = async (
         ) as { updates: Update[] }
         return Response.json(updateRows(person, cards, updates))
       }
-      let counted = countsSpace(line)
-      if (counted != undefined) {
-        return Response.json(
-          (await visitsRows(env, dir, person, counted)).counts,
-        )
-      }
+      let visits = visitsOf(line)
+      if (visits) return Response.json(await visits.read())
       if (once(line)) return Response.json(await readOnce(line))
       if (line == AGENTS) return Response.json(await agentsIn(env, dir, person))
       let paid = paymentPart(line)
@@ -568,19 +579,18 @@ export let reachDoor = async (
             }
             // Visits, which no store holds: read again whole each time the
             // space's apps move, the latest read the one that stands.
-            let counted = countsSpace(line)
-            if (counted != undefined) {
+            let visits = visitsOf(line)
+            if (visits) {
               let asked = 0
               let stop = personal((frame) => {
                 if (frame.refused) return sink(frame)
                 let mine = ++asked
                 let latest = () => mine == asked
-                visitsRows(env, dir, person, counted).then(
-                  ({ counts }) =>
-                    latest() && sink({ bundles: counts, reset: true }),
+                visits.read().then(
+                  (rows) => latest() && sink({ bundles: rows, reset: true }),
                   (refused) => latest() && sink({ refused }),
                 )
-              }, sideApps(counted))
+              }, sideApps(visits.space))
               return () => {
                 asked = NaN
                 stop()

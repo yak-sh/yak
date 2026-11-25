@@ -27,7 +27,7 @@ import {
   spaceRows,
 } from '@yaks/platform/side-rows'
 import type { Env } from './env.ts'
-import { visitRows } from './views.ts'
+import { visitDayRows, visitRows } from './views.ts'
 import { type Directory, type Space, walkTo } from './directory.ts'
 import { type Listed, listedRows, listedSpace } from '@yaks/platform/space-apps'
 import { pilled, standing } from './gallery-row.ts'
@@ -227,6 +227,18 @@ export let visitsRows = async (
   let apps = await personRows(dir, person, appsLine(eid))
   let counts = await visitRows(env, eid, appsOf(apps, eid).map((a) => a.eid))
   return { apps, counts }
+}
+
+/** The last day's visits to the apps of the space `eid` that `person` may
+ * open, as rows (@yaks/platform/visit-counts `dayVisits`). */
+export let visitDay = async (
+  env: Env,
+  dir: Directory,
+  person: string,
+  eid: string,
+): Promise<Bundle[]> => {
+  let apps = await personRows(dir, person, appsLine(eid))
+  return visitDayRows(env, eid, appsOf(apps, eid).map((a) => a.eid))
 }
 
 /** The apps of `space` its Apps page lists for `who`, each with when it was

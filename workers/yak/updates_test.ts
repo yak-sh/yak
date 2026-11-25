@@ -17,7 +17,7 @@ import type { Bundle } from '@yaks/graph'
 import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
-import { lastDayLine, updates } from './updates.ts'
+import { updates } from './updates.ts'
 import { AGAIN, AHEAD } from '@yaks/ui/navigate'
 import type { Telling } from './operator-updates.ts'
 import { SPACE } from './build-door.ts'
@@ -57,22 +57,6 @@ test('a change to an app tells the space’s other people, and not who made it',
   assertEquals(words.length, 1)
   assertEquals(words[0]!.endsWith(' changed notes.'), true)
   assertEquals(await said(cookie), [])
-})
-
-test('the last day in a line: visits and the busiest app', () => {
-  let apps = ['Recipe box', 'Chores', 'Book club']
-    .map((title, i) => ({ eid: `a${i}`, slug: `a${i}`, title }))
-  let line = (views: [string, number][] | undefined, of = apps) =>
-    lastDayLine(of, views && new Map(views))
-  assertEquals(
-    line([['a0', 70], ['a1', 16]]),
-    'In the last day, your apps had 86 visits. Recipe box was the busiest.',
-  )
-  assertEquals(line([['a2', 1]]), 'In the last day, your apps had 1 visit.')
-  assertEquals(line([]), 'Nobody visited your apps in the last day.')
-  // Visits not switched on, or no apps to count: nothing to say.
-  assertEquals(line(undefined), '')
-  assertEquals(line([['a0', 5]], []), '')
 })
 
 test('an update’s words, and a question that needs the person, are drawn from their Markdown', () => {

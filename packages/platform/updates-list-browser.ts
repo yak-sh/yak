@@ -22,6 +22,8 @@ import { appsOf, sideApps, sideWords } from './side-rows.ts'
 import { cardsView, placedIn, type UpdatesView } from './updates-view.ts'
 import { pageGraph } from './page-graph.ts'
 import { REDRAWN } from '@yaks/inbox/actions-browser'
+// The day's lines beside the cards, where Updates show in place.
+import './updates-day-browser.ts'
 
 /** The Updates cards view. */
 export let VIEW = '[data-view="updates"]'

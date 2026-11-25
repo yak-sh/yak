@@ -57,6 +57,8 @@ import { draftEid } from '@yaks/draft'
 import {
   countRows,
   countsOf,
+  dayRows,
+  dayVisits,
   visitCounts,
   visitWords,
 } from '@yaks/platform/visit-counts'
@@ -304,7 +306,9 @@ test('a tab reads its space’s visits, which no store holds, and none of a spac
     .find((s) => s.space.slug == 'adas')!.space.eid
   // This platform has no analytics token: the page says it cannot count.
   equal(await rowsOf(ada, visitCounts(adas)), countRows(adas, null))
+  equal(await rowsOf(ada, dayVisits(adas)), dayRows(adas, null))
   equal(await rowsOf(bea, visitCounts(adas)), [])
+  equal(await rowsOf(bea, dayVisits(adas)), [])
 })
 
 test('a tab reads what an app it may open is made of, and nothing of one it may not', async () => {

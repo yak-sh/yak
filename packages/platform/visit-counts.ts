@@ -8,6 +8,10 @@
  * countries}` an app, or one `visitCount{space, off}` where the platform
  * cannot say.
  *
+ * The visits of the last day alone, which a space's Updates say at their head
+ * (./updates-day.ts), are the line `dayVisits(space)`, answered the same way
+ * as `visitDay{space, app, views}` an app, or one `visitDay{space, off}`.
+ *
  * @module
  */
 import type { Bundle } from '@yaks/graph'
@@ -37,6 +41,15 @@ export let visitCounts = (eid: string): string => COUNTS + eid
  * line. */
 export let countsSpace = (line: string): string | undefined =>
   line.startsWith(COUNTS) ? line.slice(COUNTS.length) : undefined
+
+let DAY = '.visitDay.space='
+
+/** The visits to the apps of the space `eid` in the last day. */
+export let dayVisits = (eid: string): string => DAY + eid
+
+/** The space a `dayVisits` line asks about, or undefined for another line. */
+export let daySpace = (line: string): string | undefined =>
+  line.startsWith(DAY) ? line.slice(DAY.length) : undefined
 
 /** What the page says where the platform cannot count visits: no analytics
  * token is set, or Cloudflare's analytics did not answer. */
@@ -75,6 +88,17 @@ export let visitWords: VocabDoc = {
         pages: named,
         from: named,
         countries: named,
+        off: { type: 'boolean' },
+      },
+      required: ['space'],
+    },
+    visitDay: {
+      component: true,
+      type: 'object',
+      properties: {
+        space: { type: 'string' },
+        app: { type: 'string' },
+        views: { type: 'integer' },
         off: { type: 'boolean' },
       },
       required: ['space'],
@@ -122,6 +146,42 @@ export let countsOf = (
     if (c.off) return null
     let { space: _, app, off: _off, ...counted } = c
     if (app) all.set(app, counted)
+  }
+  return all
+}
+
+/** The last day's views of each app of the space `space`, as rows: `views`
+ * by app, or null where the platform cannot say. */
+export let dayRows = (
+  space: string,
+  views: Map<string, number> | null,
+): Bundle[] =>
+  views
+    ? [...views].map(([app, n]) => ({
+      entity: { eid: derivedEid(`visit-day|${space}|${app}`) },
+      visitDay: { space, app, views: n },
+    }))
+    : [{
+      entity: { eid: derivedEid(`visit-day-off|${space}`) },
+      visitDay: { space, off: true },
+    }]
+
+/** The last day's views `rows` hold of each app of `space`, by app; null
+ * where they say the platform cannot count them. */
+/// dayOf(dayRows('s', new Map([['a', 3]])), 's')?.get('a') -> 3
+/// dayOf(dayRows('s', null), 's') -> null
+export let dayOf = (
+  rows: Bundle[],
+  space: string,
+): Map<string, number> | null => {
+  let all = new Map<string, number>()
+  for (let r of rows) {
+    let d = r.visitDay as
+      | { space: string; app?: string; views?: number; off?: boolean }
+      | undefined
+    if (d?.space != space) continue
+    if (d.off) return null
+    if (d.app) all.set(d.app, d.views ?? 0)
   }
   return all
 }
