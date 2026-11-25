@@ -3814,6 +3814,13 @@ export let directoryRows = (rows: {
     // the moment it writes one.
     deploys: async (app: Pick<App, 'eid'>, through?: number) =>
       (await self.deploysOf([app], through)).get(app.eid) ?? [],
+    // When the app's newest release made of a draft went out (written.ts
+    // `marked`), or null where none was: a release of other files (a Save,
+    // a version put back) took no draft.
+    picked: async (app: Pick<App, 'eid'>) =>
+      (await one(
+        line`.deploy.app=${app.eid}&.deploy.draft&?created&.order=-deploy.version&.limit=1&.fields=deploy.version,created.at`,
+      ))?.created?.at ?? null,
     draftRelease: async (app: App, draft: string) => {
       let [release, kept] = await Promise.all([
         one(

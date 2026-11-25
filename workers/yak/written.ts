@@ -168,28 +168,26 @@ export let openDraft = async (
   return draft
 }
 
-/** `drafts` with each one the live release left behind marked `behind`:
- * opened before the live version and last worked in before it went out. A
- * release is a pick: once it is out, a person's draft is the live version
- * and what they wrote since, never an option it did not take, nor edits it
- * went out over (T-3487). Such a draft stays open (M-59093), and only a call
- * that names it works in it. Only a draft opened before the live version
- * reads its writes and the app's switches to say so. */
+/** `drafts` with each one a release left behind marked `behind`: opened
+ * before the live version and last worked in before the newest release made
+ * of a draft went out. Such a release is a pick: once it is out, a person's
+ * draft is the live version and what they wrote since, never an option it
+ * did not take, nor edits it went out over (T-3487). A release of other files
+ * (a Save, a version put back) picks nothing, and leaves every draft as it
+ * was. A draft left behind stays open (M-59093), and only a call that names
+ * it works in it. Only a draft opened before the live version reads its
+ * writes and the app's releases to say so. */
 export let marked = async (
-  dir: Pick<Directory, 'switches' | 'written'>,
+  dir: Pick<Directory, 'picked' | 'written'>,
   app: App,
   drafts: AppDraft[],
 ): Promise<AppDraft[]> => {
   let older = drafts.filter((d) => (d.base ?? 0) < (app.version ?? 0))
   if (!older.length) return drafts
-  let [moves, ...rows] = await Promise.all([
-    dir.switches(app),
-    ...older.map((d) => dir.written(app, d.eid)),
+  let [out, rows] = await Promise.all([
+    dir.picked(app),
+    Promise.all(older.map((d) => dir.written(app, d.eid))),
   ])
-  let out = moves.reduce<string>(
-    (last, m) => (m.switched?.at ?? '') > last ? m.switched!.at! : last,
-    '',
-  )
   let left = new Set(
     older.filter((d, i) => out && touched(d, rows[i]) <= out).map((d) => d.eid),
   )
