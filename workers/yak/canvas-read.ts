@@ -2,10 +2,10 @@
 // `appMaking`), as the page graph's door reads it for the person (reach-door.ts):
 // what its draft declares and the pages it holds, read from the draft as it
 // stands (written.ts `drafting`), its workflow in its live store, and its
-// draft's preview link. No store holds this, so it is read whole, and read
-// again whenever what it is read from moves: where its drafts stand, which
-// the directory answers as a read of the person (@yaks/platform/app-canvas
-// `appDrafted`), and its builders and their edges in its own store.
+// draft's preview link and when it was last written. No store holds this, so
+// it is read whole, and read again whenever what it is read from moves: where
+// its drafts stand, which the directory answers as a read of the person
+// (@yaks/platform/app-canvas `appDrafted`), and its builders and their edges in its own store.
 import type { Bundle } from '@yaks/graph'
 import { type Built, line } from '@yaks/query'
 import { workflow } from '@yaks/builders/workflow'
@@ -26,7 +26,7 @@ import { linkOf } from './preview.ts'
 import { watching } from './reach.ts'
 import { vouched, type Who } from './session.ts'
 import { inApp } from './tool.ts'
-import { drafting, draftsOf, theirs } from './written.ts'
+import { type Draft, drafting, draftsOf, theirs } from './written.ts'
 
 type Found = NonNullable<Awaited<ReturnType<typeof inApp>>>
 
@@ -69,6 +69,13 @@ let stepsOf = async (found: Found, space: Space) => {
   }
 }
 
+// When the draft was last written: its newest write, else when it opened.
+let editedAt = ({ rows, of }: Draft) =>
+  rows.reduce<string | null>(
+    (at, w) => w.at && (!at || w.at > at) ? w.at : at,
+    null,
+  ) ?? of?.at ?? null
+
 // What the app is made of, from the draft the person and their Operator
 // write in (written.ts `theirs`).
 let makingOf = async (
@@ -99,15 +106,17 @@ let makingOf = async (
       ),
     ),
   )
-  let pending = !!pages.length && draft.unreleased && !!env.SESSION_SECRET
+  let shown = !!pages.length && draft.unreleased && !!env.SESSION_SECRET &&
+    draft.of
   let ctx = { env, dir, person: found.who.person ?? '' }
   return {
     made: madeOf(words && decoded(words), file),
     pages,
     steps: await stepsOf(found, space),
-    draft: pending && draft.of
-      ? (await linkOf(ctx, space, app, found.who, draft.of)).at
+    draft: shown
+      ? (await linkOf(ctx, space, app, found.who, draft.of!)).at
       : null,
+    edited: shown ? editedAt(draft) : null,
   }
 }
 

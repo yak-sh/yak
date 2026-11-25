@@ -1,7 +1,7 @@
 // A newcomer watching their Operator build their app (D-146737): the app
 // their address names opens beside the conversation, with Data, Commands,
-// Workflow when it has one, and Screens, the newest stage open. Its
-// screens are the draft until it is released, then the app itself. An
+// Workflow when it has one, and Preview, the newest stage open. Its
+// preview is the draft until it is released, then the app itself. An
 // address naming no app opens none, whatever the chat has made. The page
 // draws the app from the side's row of it, and what it is made of from the
 // page graph's read of it (canvas-read.ts), as the browser draws it
@@ -105,21 +105,21 @@ let at = (chosen: string | null) => async (...steps: Item[]) => {
     // The steps of how it runs, each with what it waits for, stage by stage.
     runs: [...part('runs')?.querySelectorAll('.Notice, .Rows_Item') ?? []]
       .map((e) => e.textContent),
-    screens: part('screens')?.querySelector('iframe')?.getAttribute('src') ??
-      part('screens')?.textContent,
-    // Its frames by which they are, the radios that switch them and which
-    // is on, and what each says it is.
+    preview: part('preview')?.querySelector('iframe')?.getAttribute('src') ??
+      part('preview')?.textContent,
+    // Its frames by which they are, and the radios that switch them and
+    // which is on.
     frames: Object.fromEntries(
-      [...part('screens')?.querySelectorAll('iframe') ?? []].map((f) => [
-        f.getAttribute('data-screen'),
+      [...part('preview')?.querySelectorAll('iframe') ?? []].map((f) => [
+        f.getAttribute('data-frame'),
         f.getAttribute('src'),
       ]),
     ),
-    switch: [...part('screens')?.querySelectorAll('.Check') ?? []].map((
+    switch: [...part('preview')?.querySelectorAll('.Check') ?? []].map((
       c,
     ) => [c.textContent, c.querySelector('input')?.hasAttribute('checked')]),
-    notes: [...part('screens')?.querySelectorAll('p[data-screen]') ?? []]
-      .map((p) => p.getAttribute('data-screen')),
+    // Anything said beside the frames: an address or a line about them.
+    said: [...part('preview')?.querySelectorAll('a, p') ?? []].length,
     // Where each page listed in Commands is shown.
     pages: [...part('does')?.querySelectorAll('[data-shows]') ?? []].map((
       a,
@@ -159,46 +159,47 @@ let changing = await after(
 )
 let again = await after(call('app_deploy', { app: 'recipes' }))
 
-test('beside a newcomer’s chat, what their app keeps and can do as their Operator decides them, before any screen', () => {
+test('beside a newcomer’s chat, what their app keeps and can do as their Operator decides them, before any page', () => {
   equal(started, {
     app: 'recipes',
     open: 'keeps',
     keeps: ['Recipe'],
     does: ['Plan week', 'Add and find what it keeps'],
     runs: [],
-    screens: `Recipe box’s screens show here as ${space.operator} draws them.`,
+    preview: `Recipe box shows here as ${space.operator} makes it.`,
     frames: {},
     switch: [],
-    notes: [],
+    said: 1,
     pages: [],
     asks: 'recipes',
   })
 })
 
-test('its screens open once the first is drawn: the draft, following each write', () => {
-  equal(drawn.open, 'screens')
+test('its preview opens once its first page is drawn: the draft, following each write', () => {
+  equal(drawn.open, 'preview')
   ok(
     /^https:\/\/plum\.yaks\.app\/recipes\/~[a-z0-9]{12}\/$/.test(
-      String(drawn.screens),
+      String(drawn.preview),
     ),
-    String(drawn.screens),
+    String(drawn.preview),
   )
   // Commands lists the page, which its draft shows.
   equal(drawn.does.at(-1), 'Recipes')
-  equal(drawn.pages, [['screen-draft', drawn.screens ?? null]])
+  equal(drawn.pages, [['preview-draft', drawn.preview ?? null]])
+  equal([drawn.switch, drawn.said], [[], 0])
 })
 
-test('once released, its screens are the app itself, live', () => {
-  equal(live.open, 'screens')
-  equal(live.screens, 'https://plum.yaks.app/recipes/')
-  equal([live.switch, live.notes], [[], []])
-  equal(live.pages, [['screen-live', 'https://plum.yaks.app/recipes/']])
+test('once released, its preview is the app itself, live', () => {
+  equal(live.open, 'preview')
+  equal(live.preview, 'https://plum.yaks.app/recipes/')
+  equal([live.switch, live.said], [[], 0])
+  equal(live.pages, [['preview-live', 'https://plum.yaks.app/recipes/']])
 })
 
-test('while a live app has changes not yet released, its screens show the draft, with a switch to live and a line saying each', () => {
-  equal(changing.open, 'screens')
-  equal(changing.switch, [['Draft', true], ['Live', false]])
-  equal(changing.notes, ['draft', 'live'])
+test('while a live app has changes not yet released, its preview shows the draft, named for its last edit, with a switch to live and nothing else above them', () => {
+  equal(changing.open, 'preview')
+  equal(changing.switch, [['Edited just now', true], ['Live', false]])
+  equal(changing.said, 0)
   equal(Object.keys(changing.frames), ['draft', 'live'])
   ok(
     /^https:\/\/plum\.yaks\.app\/recipes\/~[a-z0-9]{12}\/$/.test(

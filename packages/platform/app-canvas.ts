@@ -4,9 +4,10 @@
  *
  * - the app's `sideApp` row (./side-rows.ts), which the side already watches:
  *   its name, its icon, and whether it is live, so the app's head and its
- *   live screens draw at once;
- * - `appMaking{app, made, pages, steps, draft}`: what it is made of, read
- *   from its draft as it stands, its workflow, and its draft's preview link.
+ *   live preview draw at once;
+ * - `appMaking{app, made, pages, steps, draft, edited}`: what it is made of,
+ *   read from its draft as it stands, its workflow, and its draft's preview
+ *   link and when that draft was last written.
  *   No store holds this: yaks.app's page graph door answers the line
  *   `appMaking(app)` by reading it, and reads it again as the app's draft,
  *   its row or its workflow moves;
@@ -25,13 +26,15 @@ import type { Made, Page } from './app-made.ts'
 
 /** What an app beside the chat is made of as it is being made: its kinds and
  * commands (./app-made.ts), its pages, its workflow stage by stage, and its
- * draft's preview link while the draft holds a page that is not live: before
- * the first release, and while changes wait for the next. */
+ * draft's preview link while the draft holds a page that is not live (before
+ * the first release, and while changes wait for the next), with when that
+ * draft was last written. */
 export type Making = {
   made: Made
   pages: Page[]
   steps: Step[][]
   draft: string | null
+  edited: string | null
 }
 
 let MAKING = '.appMaking.app='
@@ -84,6 +87,7 @@ export let appCanvasWords: VocabDoc = {
         pages: list,
         steps: list,
         draft: nullable,
+        edited: nullable,
       },
       required: ['app', 'made', 'pages', 'steps'],
     },
@@ -117,6 +121,6 @@ export let makingOf = (rows: Bundle[], app: string): Making | undefined => {
     (r.appMaking as { app?: string } | undefined)?.app == app
   )?.appMaking as (Making & { app: string }) | undefined
   if (!row) return undefined
-  let { made, pages, steps, draft } = row
-  return { made, pages, steps, draft: draft ?? null }
+  let { made, pages, steps, draft, edited } = row
+  return { made, pages, steps, draft: draft ?? null, edited: edited ?? null }
 }

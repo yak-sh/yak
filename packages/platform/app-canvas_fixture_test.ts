@@ -30,10 +30,12 @@ export let view = (app = RECIPES): CanvasRoot => ({
   space: SPACE,
 })
 
-/** What the app is made of, with `kinds` its kinds' names. */
+/** What the app is made of, with `kinds` its kinds' names, and its draft's
+ * preview link and last write. */
 export let made = (
   kinds: string[] = [],
   draft: string | null = null,
+  edited: string | null = null,
 ): Making => ({
   made: {
     kinds: kinds.map((name) => ({ name, holds: ['Name'] })),
@@ -43,6 +45,7 @@ export let made = (
   pages: [],
   steps: [],
   draft,
+  edited,
 })
 
 /** The canvas as the server draws it for `root`, before what it is made of

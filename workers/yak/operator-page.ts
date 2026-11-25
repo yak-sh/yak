@@ -758,7 +758,7 @@ export let operatorAnswer = async (
     // The tab of that app in front of them (operator-view.ts `paneOf`).
     let pane = paneOf(
       String(form.get('made') ?? ''),
-      String(form.get('screen') ?? ''),
+      String(form.get('preview') ?? ''),
     )
     // From the corner's note (`notePage`), what the app's page gave, and
     // that page, which the words were written beside.
@@ -1771,7 +1771,7 @@ let chatParts = async (
 }
 
 // The app beside the chat as its view draws it (@yaks/platform/app-canvas-view):
-// its head and live screens from the side's row of it, which the page carries,
+// its head and live preview from the side's row of it, which the page carries,
 // and what it is made of once the page graph's read of it is in.
 let canvasOf = (
   env: Env,
@@ -2248,7 +2248,7 @@ let titled = (title) => {
 }
 // The app open beside the chat (T-140509) is drawn again from the page graph
 // as the Operator works on it (@yaks/platform/app-canvas-browser), and its
-// live screens loaded again when the Operator changes it. With none open, the
+// live preview loaded again when the Operator changes it. With none open, the
 // page goes to the one the Operator is making, by its address (D-146737): any
 // it works on for a newcomer, else one it starts while they watch
 // (\`following\`), each a frame's list.
@@ -2663,12 +2663,12 @@ let send = async (b) => {
     let request = b.entity.eid
     submission = new FormData(form)
     submission.set('request', request)
-    // The tab of the app beside the chat in front of them, and which screens.
+    // The tab of the app beside the chat in front of them, and which preview.
     let made = document.querySelector('input[name=made]:checked')
-    let screen = document.querySelector('input[name=screen]:checked')?.value ??
+    let preview = document.querySelector('input[name=preview]:checked')?.value ??
       document.querySelector('[data-frame]')?.dataset.frame
     if (made) submission.set('made', made.value)
-    if (screen) submission.set('screen', screen)
+    if (preview) submission.set('preview', preview)
     submission.set('say', b.content.body)
     let saved = await drafts.spend(place, [{ entity: { eid: request } }])
     if (signal.aborted) return

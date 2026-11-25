@@ -2,13 +2,14 @@
  * The app open beside the chat (T-140509), and the one the Operator is making
  * in it (D-146737), drawn from rows (./app-canvas.ts): its icon, its name and
  * where it lives, a way to open it in a tab of its own, and under them what
- * it is made of: Data, Commands, Workflow when it has one, and Screens, with
- * the newest stage of making it open. Its screens are the app itself, live,
- * or before it is released its draft, which follows each write. The app's
+ * it is made of: Data, Commands, Workflow when it has one, and Preview, with
+ * the newest stage of making it open. Its preview is the app itself, live,
+ * and its draft while that holds changes not released, which follows each
+ * write and is named for when it was last written. The app's
  * host lets the platform frame it (./kept.ts `sealed`). On a phone it takes
  * the screen in the chat's place while chosen (`#app`), and Chat goes back.
  *
- * Its head and live screens are drawn from the side's row of the app at once;
+ * Its head and live preview are drawn from the side's row of the app at once;
  * what it is made of fills in once its `appMaking` row is in, the stage busy
  * until then. The server draws it for the first paint, and
  * ./app-canvas-browser.ts draws it again as its rows move.
@@ -24,7 +25,6 @@ import {
   Icon,
   Identity,
   layer,
-  Notice,
   Preview,
   TabSet,
   Toolbar,
@@ -33,6 +33,7 @@ import {
 import ArrowLeft from 'lucide/dist/esm/icons/arrow-left.mjs'
 // @ts-types="@yaks/ui/lucide"
 import ExternalLink from 'lucide/dist/esm/icons/external-link.mjs'
+import { Time } from '@yaks/ui/Time'
 import { does, keeps, runs } from './app-made.ts'
 import type { Making } from './app-canvas.ts'
 import { appMark, type MarkedApp } from './routes.ts'
@@ -82,6 +83,7 @@ let NOTHING: Making = {
   pages: [],
   steps: [],
   draft: null,
+  edited: null,
 }
 
 /** Where the app's own address is, once released. */
@@ -89,81 +91,52 @@ export let liveAt = ({ at, app }: Pick<CanvasView, 'at' | 'app'>) =>
   app.source ? `${at}/${app.slug}/` : null
 
 // Which of the canvas's tabs opens: the newest stage of making it reached,
-// screens once there are any.
+// the preview once there is one.
 let stageOf = (live: string | null, { made, draft }: Making) =>
   live || draft
-    ? 'screens'
+    ? 'preview'
     : !made.kinds.length && made.acts.length
     ? 'does'
     : 'keeps'
 
-// Its screens: the draft while it differs from what is live, and the app
-// itself once released, each in a frame, the one on screen said. While both
-// are there a pair of radios switches them (pages.css shows the frame of the
-// checked one, and the other loads once shown), the draft first, since it
-// is what is changing.
-let screens = (
+// Its preview: the draft while it differs from what is live, named for when
+// it was last written, and the app itself once released, each in a frame
+// that keeps where its page has gone (`data-at`, public/frames.js) and fills
+// the panel. While both are there a pair of radios switches them (pages.css
+// shows the frame of the checked one, and the other loads once shown), the
+// draft first, since it is what is changing.
+let preview = (
   title: string,
   operator: string,
   live: string | null,
   draft: string | null,
+  edited: string | null,
 ) => {
-  let frame = (which: 'draft' | 'live', at: string) => [
-    h(Preview.Address, {
-      href: at,
-      target: '_blank',
-      rel: 'noopener',
-      title: 'Preview address, opens in a new tab',
-      'data-address': which,
-      'data-screen': which,
-    }, at),
-    h(Preview.Frame, {
-      mod: 'flat',
-      src: at,
-      title: `${title}, ${which == 'draft' ? 'the draft' : 'live'}`,
-      name: `screen-${which}`,
-      'data-frame': which,
-      'data-screen': which,
-      ...which == 'live' && draft ? { loading: 'lazy' } : {},
-    }),
-  ]
-  let note = (which: string, said: string) =>
-    h(Notice, { mod: 'fine', 'data-screen': which }, said)
   if (!live && !draft) {
     return h(
       Empty,
       null,
-      h('p', null, `${title}’s screens show here as ${operator} draws them.`),
+      h('p', null, `${title} shows here as ${operator} makes it.`),
     )
   }
   let choices = [
-    draft &&
-    {
+    draft && {
       id: 'draft' as const,
-      title: 'Draft',
       at: draft,
-      note: live
-        ? `${operator}’s changes, not live yet, over the live rows; what it writes stays in the draft.`
-        : `A draft over the live rows, changing as ${operator} works on it; what it writes stays in the draft.`,
+      said: edited
+        ? ['Edited ', h(Time, { at: edited, tabindex: -1 })]
+        : 'Draft',
     },
-    live &&
-    {
-      id: 'live' as const,
-      title: 'Live',
-      at: live,
-      note: draft
-        ? 'What people see now. The draft’s changes show here once released.'
-        : '',
-    },
+    live && { id: 'live' as const, at: live, said: 'Live' },
   ].filter((x) => !!x)
   return h(
     Preview.Choices,
-    { role: 'radiogroup', 'aria-label': 'Which screens' },
+    { role: 'radiogroup', 'aria-label': 'Which preview' },
     choices.map((choice, i) =>
       h(
         Preview.Item,
-        // Keyed, so a draft arriving beside the live screens leaves them
-        // loaded where they are (@yaks/ui/navigate `morph`).
+        // Keyed, so a draft arriving beside the live app leaves it loaded
+        // where it is (@yaks/ui/navigate `morph`).
         { 'data-key': choice.id },
         choices.length > 1
           ? h(
@@ -171,18 +144,25 @@ let screens = (
             {},
             h(Check.Input, {
               type: 'radio',
-              name: 'screen',
+              name: 'preview',
               value: choice.id,
               checked: i == 0,
             }),
-            choice.title,
+            choice.said,
           )
           : null,
         h(
           Preview.View,
           {},
-          choice.note ? note(choice.id, choice.note) : null,
-          frame(choice.id, choice.at),
+          h(Preview.Frame, {
+            mod: 'flat',
+            src: choice.at,
+            title: `${title}, ${choice.id == 'draft' ? 'the draft' : 'live'}`,
+            name: `preview-${choice.id}`,
+            'data-frame': choice.id,
+            'data-at': choice.at,
+            ...choice.id == 'live' && draft ? { loading: 'lazy' } : {},
+          }),
         ),
       )
     ),
@@ -229,7 +209,7 @@ export let appCanvas = (
           as: Card,
           class: `Talk_Part Talk_Part-${id}`,
           'data-part': id,
-          'data-compact': id == 'screens' ? '' : undefined,
+          'data-compact': id == 'preview' ? '' : undefined,
         },
         h('div', { class: 'Talk_Sheet' }, ...inside),
       ),
@@ -299,7 +279,11 @@ export let appCanvas = (
           ),
         ),
         now.steps.length ? tab('runs', 'Workflow', runs(now.steps)) : null,
-        tab('screens', 'Screens', screens(title, operator, live, now.draft)),
+        tab(
+          'preview',
+          'Preview',
+          preview(title, operator, live, now.draft, now.edited),
+        ),
       ),
     ),
   )

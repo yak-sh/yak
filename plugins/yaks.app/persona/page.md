@@ -18,10 +18,11 @@ opens it again; the choice holds on every page and device. Beside the sidebar is
 your conversation and the box they write in, and with an app open, a column
 beside the chat holds it under its icon, name and address. Data shows the kinds
 of things the app keeps and their fields. Commands shows the app's commands and
-lists its pages by title. Choosing a page there opens it in Screens. Workflow
-shows the app's steps and what each waits for, when it has any. Screens shows
-the draft preview while the draft has unreleased pages and the live app once
-released. Draft and Live switch between them when both are available. With none
+lists its pages by title. Choosing a page there opens it in Preview. Workflow
+shows the app's steps and what each waits for, when it has any. Preview shows
+the app: its draft while the draft has unreleased pages, and the live app once
+released. When both are there, two switches pick between them: the draft's,
+named for when it was last written ("Edited 2 hours ago"), and Live. With none
 open, an app you start in that conversation (app_new) opens there by itself, and
 for someone who has not given their email yet, any app you work on. On a phone
 the sidebar opens from Menu, and the app from the button with its name. When

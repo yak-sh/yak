@@ -18,12 +18,12 @@ let drawn = (root: HTMLElement) => ({
   ),
 })
 
-test('a released app draws its head and live screens from its row at once, what it is made of busy until in', () => {
+test('a released app draws its head and live preview from its row at once, what it is made of busy until in', () => {
   equal(drawn(page(view(released()))), {
     name: 'Recipe box',
     where: 'plum.yaks.app/recipes',
     open: 'https://plum.yaks.app/recipes/',
-    stage: 'screens',
+    stage: 'preview',
     busy: 'true',
     frames: ['https://plum.yaks.app/recipes/'],
     keeps: [],
@@ -43,8 +43,24 @@ test('an app not yet released opens what it keeps, and its draft once one holds 
   })
   let drafted = drawn(page(view(), made(['Recipe'], draft)))
   equal([drafted.stage, drafted.frames, drafted.open], [
-    'screens',
+    'preview',
     [draft],
     draft,
   ])
+})
+
+test('beside the live app, its draft is named for when it was last written, and nothing but the switch stands over the frames', () => {
+  let draft = 'https://plum.yaks.app/recipes/~abcdefabcdef/'
+  let at = new Date(Date.now() - 2 * 3600_000).toISOString()
+  let root = page(view(released()), made(['Recipe'], draft, at))
+  let part = root.querySelector('[data-part=preview]')!
+  equal(
+    [...part.querySelectorAll('.Check')].map((c) => c.textContent),
+    ['Edited 2 hours ago', 'Live'],
+  )
+  equal(part.querySelectorAll('a, p').length, 0)
+  equal(
+    [...part.querySelectorAll('iframe')].map((f) => f.dataset.at),
+    [draft, 'https://plum.yaks.app/recipes/'],
+  )
 })

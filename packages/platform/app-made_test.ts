@@ -121,7 +121,7 @@ test('what an app can do is asked for in the chat once it is live', () => {
   )
 })
 
-test('what an app can do lists its pages, each shown in its screens when pressed', () => {
+test('what an app can do lists its pages, each opening its preview there when pressed', () => {
   let pages = pagesOf([
     ['index.html', '<title>Recipes</title>'],
     ['about.html', '<h1>About</h1>'],
@@ -141,16 +141,12 @@ test('what an app can do lists its pages, each shown in its screens when pressed
     'About: /about',
   ])
   equal(
-    document.querySelector('.Notice-fine')?.textContent,
-    'Its pages, each shown in Screens.',
-  )
-  equal(
     [...document.querySelectorAll('[data-shows]')].map((
       a,
     ) => [a.textContent, a.getAttribute('href'), a.getAttribute('target')]),
     [
-      ['Show', at, 'screen-draft'],
-      ['Show', at + 'about', 'screen-draft'],
+      ['Show', at, 'preview-draft'],
+      ['Show', at + 'about', 'preview-draft'],
     ],
   )
 })

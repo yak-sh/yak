@@ -7,8 +7,8 @@
  * paint left busy.
  *
  * Drawn again, the canvas keeps what the person did in it: the tab they
- * picked stays until a newer stage of making it is reached, the screens they
- * switched to stay, and a frame's address stays where its page has gone,
+ * picked stays until a newer stage of making it is reached, the preview they
+ * switched to stays, and a frame keeps where its page has gone (`data-at`)
  * while the frame stays the same.
  *
  * The view is `[data-view="app-canvas"]`, saying what it draws for in
@@ -67,17 +67,18 @@ let check = (root: Element, name: string, value?: string) => {
   return input
 }
 
-// Where each frame's page has gone (public/frames.js keeps its address), by
-// which frame, with the address the frame was opened at.
+let framesIn = (root: Element) => [
+  ...root.querySelectorAll<HTMLIFrameElement>('iframe[data-frame]'),
+]
+
+// Where each frame's page has gone (public/frames.js keeps it as `data-at`),
+// by which frame, with the address the frame was opened at.
 let addresses = (root: Element) =>
   new Map(
-    [...root.querySelectorAll<HTMLAnchorElement>('[data-address]')].map(
-      (a) => [a.dataset.address!, {
-        href: a.href,
-        src: root.querySelector(`iframe[data-frame="${a.dataset.address}"]`)
-          ?.getAttribute('src'),
-      }],
-    ),
+    framesIn(root).map((f) => [f.dataset.frame!, {
+      at: f.dataset.at,
+      src: f.getAttribute('src'),
+    }]),
   )
 
 /** Draw `root` again from the rows its graph holds; nothing where the app is
@@ -94,7 +95,10 @@ export let drawCanvas = (root: HTMLElement, held: Held): void => {
     appCanvas(next, makingOf(held.making, app.eid), canvasAttrs(next)),
   )
   let stage = root.dataset.stage
-  let picked = { made: checked(root, 'made'), screen: checked(root, 'screen') }
+  let picked = {
+    made: checked(root, 'made'),
+    preview: checked(root, 'preview'),
+  }
   let went = addresses(root)
   morph(root, drawn, KEPT)
   // A newer stage opens as it is reached; until then the person's pick stays.
@@ -103,25 +107,23 @@ export let drawCanvas = (root: HTMLElement, held: Held): void => {
     'made',
     root.dataset.stage == stage ? picked.made : root.dataset.stage,
   )
-  check(root, 'screen', picked.screen)
-  for (let [which, now] of addresses(root)) {
-    let was = went.get(which)
-    if (!was || was.src != now.src || was.href == now.href) continue
-    let a = root.querySelector<HTMLAnchorElement>(
-      `[data-address="${which}"]`,
-    )!
-    a.href = a.textContent = was.href
+  check(root, 'preview', picked.preview)
+  let frames = framesIn(root)
+  for (let frame of frames) {
+    let was = went.get(frame.dataset.frame!)
+    if (was?.at && was.src == frame.getAttribute('src')) {
+      frame.dataset.at = was.at
+    }
   }
   let open = root.querySelector<HTMLAnchorElement>('[data-open]')
-  let shown = root.querySelector<HTMLAnchorElement>(
-    `[data-address="${checked(root, 'screen') ?? 'live'}"]`,
-  ) ?? root.querySelector<HTMLAnchorElement>('[data-address]')
-  if (open && shown) open.href = shown.href
+  let which = checked(root, 'preview') ?? 'live'
+  let shown = frames.find((f) => f.dataset.frame == which) ?? frames[0]
+  if (open && shown?.dataset.at) open.href = shown.dataset.at
 }
 
 /** Keep the canvas `root` drawn from `graph`. A page chosen in Commands opens
- * in its frame by itself (its link's target); Screens, and that frame among
- * them, come forward with it. The answer lets go of it all. */
+ * in its frame by itself (its link's target); Preview, and that frame in it,
+ * come forward with it. The answer lets go of it all. */
 export let bindCanvas = (
   root: HTMLElement,
   graph: Pick<Client, 'watch'>,
@@ -144,11 +146,11 @@ export let bindCanvas = (
       | HTMLElement
       | null
     if (!link) return
-    check(root, 'made', 'screens')
-    // Open follows the screens on show (public/frames.js).
+    check(root, 'made', 'preview')
+    // Open follows the preview on show (public/frames.js).
     let win =
       (root.ownerDocument.defaultView ?? globalThis) as typeof globalThis
-    check(root, 'screen', link.dataset.shows)
+    check(root, 'preview', link.dataset.shows)
       ?.dispatchEvent(new win.Event('change', { bubbles: true }))
   }
   root.addEventListener('click', shows)

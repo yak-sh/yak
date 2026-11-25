@@ -232,7 +232,7 @@ export let operatorDoc: VocabDoc = {
         pane: {
           type: 'string',
           description:
-            'The tab of the app open beside the chat that was in front of the person, on the chat channel: keeps (Data), does (Commands), runs (Workflow) or screens (Screens), the screens with which they showed, as screens:draft or screens:live.',
+            'The tab of the app open beside the chat that was in front of the person, on the chat channel: keeps (Data), does (Commands), runs (Workflow) or preview (Preview), the preview with which of the two it showed, as preview:draft or preview:live.',
         },
         about: {
           type: 'string',

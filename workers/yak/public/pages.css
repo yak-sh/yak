@@ -1078,7 +1078,7 @@
   }
   /* What it is made of, a tab each over one sheet that fills the column
      under its name: the lists scroll inside the sheet, whose drawn edge
-     stays put, and its screens fill it. */
+     stays put, and its preview fills it. */
   .Talk_Made {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1106,16 +1106,16 @@
     overscroll-behavior: contain;
   }
 
-  .Talk_Part-screens .Talk_Sheet {
+  .Talk_Part-preview .Talk_Sheet {
     display: flex;
     flex-direction: column;
     gap: .5rem;
     overflow: visible;
   }
-  .Talk_Part-screens .Empty {
+  .Talk_Part-preview .Empty {
     margin: auto 0;
   }
-  .Talk_Part-screens .Preview_Frame {
+  .Talk_Part-preview .Preview_Frame {
     flex: 1 1 auto;
     min-height: 0;
   }

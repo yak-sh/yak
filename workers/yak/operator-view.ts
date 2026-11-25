@@ -60,7 +60,7 @@ let TABS: Record<string, string> = {
   keeps: 'Data',
   does: 'Commands',
   runs: 'Workflow',
-  screens: 'Screens',
+  preview: 'Preview',
 }
 let SHOWING: Record<string, string> = {
   draft: 'showing the draft',
@@ -68,35 +68,35 @@ let SHOWING: Record<string, string> = {
 }
 
 /** The tab of the app column a page sent, as its request keeps it: the
- * tab's id, and for Screens which of them it showed; none for anything
+ * tab's id, and for Preview which of the two it showed; none for anything
  * else.
  *
  * ```ts
  * import { onPage, paneOf } from './operator-view.ts'
  * import { equal } from '@yaks/testing'
  * equal(
- *   [paneOf('screens', 'draft'), paneOf('keeps', 'live'), paneOf('x', '')],
- *   ['screens:draft', 'keeps', undefined],
+ *   [paneOf('preview', 'draft'), paneOf('keeps', 'live'), paneOf('x', '')],
+ *   ['preview:draft', 'keeps', undefined],
  * )
  * equal(
- *   onPage('https://yaks.app/ada', 'menu', 'screens:draft'),
+ *   onPage('https://yaks.app/ada', 'menu', 'preview:draft'),
  *   'In the chat on their yaks.app page https://yaks.app/ada, with the app ' +
- *     'menu open beside it on its Screens tab, showing the draft: ',
+ *     'menu open beside it on its Preview tab, showing the draft: ',
  * )
  * ```
  */
-export let paneOf = (tab: string, screen: string): string | undefined =>
+export let paneOf = (tab: string, shown: string): string | undefined =>
   !TABS[tab]
     ? undefined
-    : tab == 'screens' && SHOWING[screen]
-    ? `${tab}:${screen}`
+    : tab == 'preview' && SHOWING[shown]
+    ? `${tab}:${shown}`
     : tab
 
-// That tab in words: " on its Screens tab, showing the draft".
+// That tab in words: " on its Preview tab, showing the draft".
 let tabOf = (pane?: string) => {
-  let [tab, screen] = (pane ?? '').split(':')
+  let [tab, shown] = (pane ?? '').split(':')
   return TABS[tab!]
-    ? ` on its ${TABS[tab!]} tab${screen ? `, ${SHOWING[screen]}` : ''}`
+    ? ` on its ${TABS[tab!]} tab${shown ? `, ${SHOWING[shown]}` : ''}`
     : ''
 }
 

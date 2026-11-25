@@ -203,13 +203,14 @@ export let keeps = (made: Made, { app, operator }: Whose): Node =>
       `The kinds of things ${app} keeps show here as ${operator} decides them.`,
     )
 
-/** Where an app's pages open: the screens frame they go to
- * (./app-canvas-view.ts `screens`), and the address under which they are served there. */
+/** Where an app's pages open: the preview frame they go to
+ * (./app-canvas-view.ts `preview`), and the address under which they are
+ * served there. */
 export type Shows = { frame: 'draft' | 'live'; at: string }
 
 /** What an app can do: its own commands, then adding and finding what it
  * keeps, which a person can ask for in the chat once it is live; and its
- * pages, each shown in its screens when pressed. */
+ * pages, each a way to open the app's preview at it. */
 export let does = (
   made: Made,
   { app, operator }: Whose,
@@ -243,7 +244,7 @@ export let does = (
         : null,
       pages.length
         ? [
-          h(Notice, { mod: 'fine' }, 'Its pages, each shown in Screens.'),
+          h(Notice, { mod: 'fine' }, 'Its pages. Show opens one in Preview.'),
           h(
             Rows,
             null,
@@ -263,7 +264,7 @@ export let does = (
                     null,
                     h(Button, {
                       href: shows.at + page.path,
-                      target: `screen-${shows.frame}`,
+                      target: `preview-${shows.frame}`,
                       'data-shows': shows.frame,
                     }, 'Show'),
                   )

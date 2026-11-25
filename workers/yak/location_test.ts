@@ -28,10 +28,9 @@ test('live and draft app shells serve the location reporter inline', () => {
 
 let page = () => {
   let { document, Event } = parseHTML(
-    '<html><body><section data-app=notes><a data-open href="https://ada.yaks.app/draft/" target="_blank">Open</a><input name=screen value=draft type=radio checked><input name=screen value=live type=radio>' +
+    '<html><body><section data-app=notes><a data-open href="https://ada.yaks.app/draft/" target="_blank">Open</a><input name=preview value=draft type=radio checked><input name=preview value=live type=radio>' +
       ['draft', 'live'].map((which) =>
-        `<a data-address="${which}" target="_blank" href="https://ada.yaks.app/${which}/">https://ada.yaks.app/${which}/</a>` +
-        `<iframe data-frame="${which}" src="https://ada.yaks.app/${which}/"></iframe>`
+        `<iframe data-frame="${which}" src="https://ada.yaks.app/${which}/" data-at="https://ada.yaks.app/${which}/"></iframe>`
       ).join('') + '</section></body></html>',
   )
   let parent = new EventTarget()
@@ -42,9 +41,6 @@ let page = () => {
   }
   let make = (which: string) => {
     let frame = document.querySelector(`[data-frame=${which}]`)!
-    let address = document.querySelector(
-      `[data-address=${which}]`,
-    ) as HTMLAnchorElement
     let listeners: Record<string, ((event: unknown) => void)[]> = {}
     let host = {
       postMessage: (data: unknown) =>
@@ -86,15 +82,12 @@ let page = () => {
       )
     }
     load()
-    return { frame, address, source, location, history, fire, load }
+    return { frame, source, location, history, fire, load }
   }
   let draft = make('draft'), live = make('live')
   let refresh = frames(parent as Window, document)
-  let shown = (p: typeof live, at = p.location.href) => {
-    equal(p.address.textContent, at)
-    equal(p.address.getAttribute('href'), at)
-    equal(p.address.target, '_blank')
-  }
+  let shown = (p: typeof live, at = p.location.href) =>
+    equal(p.frame.getAttribute('data-at'), at)
   return { document, Event, draft, live, send, shown, refresh }
 }
 
@@ -186,10 +179,10 @@ test('Open follows the visible frame’s address through navigation, switching a
   p.draft.history.replaceState(null, '', 'draft-records?q=tea#today')
   equal(open(), p.draft.location.href)
   let pick = (which: string) => {
-    for (let radio of p.document.querySelectorAll('[name=screen]')) {
+    for (let radio of p.document.querySelectorAll('[name=preview]')) {
       radio.toggleAttribute('checked', radio.getAttribute('value') == which)
     }
-    p.document.querySelector(`[name=screen][value=${which}]`)!
+    p.document.querySelector(`[name=preview][value=${which}]`)!
       .dispatchEvent(new p.Event('change', { bubbles: true }))
   }
   pick('live')
