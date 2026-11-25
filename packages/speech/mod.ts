@@ -884,6 +884,28 @@ let words = (text: string) =>
   text.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z]/g, ''))
     .filter(Boolean)
 
+/** Whether `text` holds a word a transcript may have made of `name`, which
+ * it mishears even when told to expect it: one of the same letters where
+ * `name` has consonants, and any vowels where it has vowels ("Amber" for
+ * "Ember"). A name of fewer than three consonants sounds like too many words
+ * to be told apart this way.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { heardAs } from '@yaks/speech'
+ * let heard = ['Thanks, Amber.', 'ember, you there?', 'remember the barn',
+ *   'Embers']
+ * equal(heard.map((t) => heardAs(t, 'Ember')), [true, true, false, false])
+ * equal(heardAs('Eve said so', 'Ava'), false)
+ * ```
+ */
+export let heardAs = (text: string, name: string): boolean => {
+  let shape = (w: string) => w.replace(/[aeiouy]/g, '_')
+  let want = shape(words(name).join(''))
+  return want.replaceAll('_', '').length >= 3 &&
+    words(text).some((w) => shape(w) == want)
+}
+
 /** How many of `text`'s words say something, the `FILLERS` aside.
  *
  * ```ts
@@ -1214,8 +1236,9 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
   // its words are heard (`awaiting`). Whether the turn is being answered,
   // so a tool's output is followed by words; and whether the response under
   // way is a choice of tools, whose words, if any, are never said.
-  // A turn said to it that it let go on, such as its name alone, carries to
-  // the next (`called`).
+  // A turn said to it that it let go on, such as its name alone, or one
+  // whose words stop where a sentence goes on ("Ember,"), carries to the
+  // next (`called`).
   let awaiting = false, answering = false, choosing = false, called = false
   let put = () => {
     let to = called || !!o.addressed?.(heard)
@@ -1312,6 +1335,7 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
         if (said.heard != undefined) {
           if (said.heard) o.told.heard?.(said.heard)
           heard = said.heard, unheard = false
+          if (listening() && o.addressed?.(heard)) called = true
           if (pending && open(heard)) withdraw(), unanswered = true
           if (awaiting && !open(heard)) put()
           awaiting = false

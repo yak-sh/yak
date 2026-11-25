@@ -73,6 +73,7 @@ import type { Integration } from '@yaks/connections'
 import { accountLink, integrationLogo, managePath } from '@yaks/platform/routes'
 import { url as hostUrl } from '@yaks/platform/host'
 import { CallError } from '@yaks/tools/errors'
+import { named } from '@yaks/session/turn'
 
 // What answering and hearing need, loaded when they first run: the
 // Operator's channels import the platform list alone.
@@ -1190,7 +1191,8 @@ let toApps = async (
  * conversation of a guest who stands for the room, the words kept as their
  * writer's. A turn there acts for a member whose linked account wrote the
  * newest words, with that member's tools, and for anyone else has only what
- * the space lets anyone do (operator.ts `actorOf`). Elsewhere, one addressed to the bot goes to its
+ * the space lets anyone do (operator.ts `actorOf`). Elsewhere, one addressed to the bot, or
+ * naming its Operator in words as a group text does (`calledBy`), goes to its
  * writer's own conversation with that Operator; a direct one to yaks.app's
  * own, from someone linked here, to their own space's. Anything else is not
  * for the Operator. An edit is taken only where it is addressed, as a
@@ -1206,8 +1208,8 @@ export let arrived = async (
   said: Said,
   bot: Bot = { via: platform.name },
 ) => {
-  if (said.edited && !said.addressed) return
   if (!bot.connection && !said.server) {
+    if (said.edited) return
     if (said.addressed == 'direct' && platform.user) {
       await queueDirect(env, platform, said)
     }
@@ -1221,7 +1223,8 @@ export let arrived = async (
     : said.server
     ? await serving(env, platform.name, said.server)
     : []
-  if (said.server) {
+  // An edit is kept where it was said to the bot, as one said then.
+  if (said.server && (!said.edited || said.addressed)) {
     await Promise.all(heard.map((c) => toApps(env, platform, said, c)))
   }
   let { directoryOf } = await need()
@@ -1236,11 +1239,13 @@ export let arrived = async (
     if (!c) return
     room = !!said.server &&
       comp(c, HEARS).room == roomEid(platform.name, said.room)
-    if (!room && !said.addressed) return
     connection = c.entity.eid
     space = await dir.at(String(comp(c, CONNECTION).owner))
   }
   if (!space || space.trashed || !connection) return
+  said = calledBy(said, space)
+  if (said.edited && !said.addressed) return
+  if (!room && !said.addressed) return
   let mine = await author()
   let writer = mine ?? await guestOf(env, platform.name, said.author.id)
   let person = room
@@ -1254,6 +1259,24 @@ export let arrived = async (
     ...mine ? { linked: true } : {},
   })
 }
+
+/** `said` as said to `space`'s Operator where its words name it, as a group
+ * text's do (@yaks/session/turn `named`): its name typed without a mention
+ * is a mention.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { calledBy } from './chat.ts'
+ * let said = { id: '1', room: 'r', author: { id: 'a', name: 'A' }, at: '' }
+ * let space = { operator: 'Ember' }
+ * equal(calledBy({ ...said, text: 'ember, you there?' }, space).addressed, 'mention')
+ * equal(calledBy({ ...said, text: 'remember this' }, space).addressed, undefined)
+ * ```
+ */
+export let calledBy = (said: Said, space: Pick<Space, 'operator'>): Said =>
+  said.addressed || !named(said.text, [space.operator, 'operator'])
+    ? said
+    : { ...said, addressed: 'mention' }
 
 let toOperator = async (
   env: Env,

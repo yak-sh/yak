@@ -866,7 +866,7 @@ test('a model asked to stay silent is put each turn as a choice of tools, and sp
 
 // In a room it always only listens, and is offered no way to stop.
 test('a model that always listens is put every turn as a choice of tools once its words are heard, and answers one that names it', () => {
-  let { turn, last, s, speak, quiet, asks } = listener(true)
+  let { turn, last, s, speak, quiet, heard, asks } = listener(true)
   equal(s.json()[0].session.tools.map((t: { name: string }) => t.name), [
     'listen',
     'ask',
@@ -889,6 +889,12 @@ test('a model that always listens is put every turn as a choice of tools once it
   speak()
   quiet()
   equal(asks(), 6)
+  // Named in words that go on, it is asked nothing yet, and answers the
+  // turn that goes on.
+  heard('Ember,')
+  equal(asks(), 6)
+  equal(turn('what time is it?'), 'words')
+  equal(turn('Thanks.', 'listen'), 'call')
 })
 
 // While it listens, what the model writes beside its choice of tools is never

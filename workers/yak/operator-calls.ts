@@ -36,6 +36,7 @@ import type { Frame, Line, Ring } from '@yaks/phone'
 import {
   type Backend,
   first,
+  heardAs,
   type Provider,
   type Setup,
   type Socket,
@@ -1206,11 +1207,13 @@ export let calling = async (
     instructions: `${instructed(name, setup.duplex, roomTitle)}\n\n${FIXED}`,
     tools,
     // Its name, which its hearing expects. Words that name it are said to
-    // it, as in a group text (@yaks/session/turn). In a voice room it always
-    // only listens, and speaks when named or when it chooses to answer
-    // (@yaks/speech `talk`).
+    // it, as in a group text (@yaks/session/turn), and so are words its name
+    // was misheard as ("Amber" for "Ember", @yaks/speech `heardAs`). In a
+    // voice room it always only listens, and speaks when named or when it
+    // chooses to answer (@yaks/speech `talk`).
     words: [name],
-    addressed: (words) => named(words, [name, 'operator']),
+    addressed: (words) =>
+      named(words, [name, 'operator']) || heardAs(words, name),
     ...ticket.room ? { listening: true } : {},
     ...own
       ? {

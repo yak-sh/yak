@@ -1485,6 +1485,25 @@ test('in a room heard in full, an edit that adds a mention to a message it passe
   )
 })
 
+// A room the Operator does not hear in full (chat.ts `arrived`, `calledBy`):
+// its name typed without a mention is said to it, as a mention is, and
+// answered; words that only contain it inside another word are not.
+test('in a room it does not hear, a message naming the Operator by name is answered', async () => {
+  let o = await seeded([{ text: 'Joining now.' }])
+  let { connection, ELSEWHERE, say } = await hearing(o)
+  let name = o.space.operator
+  await say(ELSEWHERE, 'Ann', `${name.toLowerCase()}s are hot`)
+  await say(ELSEWHERE, 'Ann', `${name} can join now, i want to test`)
+  let store = await operatorStore(o.ctx.storage)
+  let posted = await store.g.read(
+    line`.chat_message.connection=${connection}&.deliver&*`,
+  )
+  assertEquals(
+    posted.map((b) => (b.doc as { body: string }).body),
+    ['Joining now.'],
+  )
+})
+
 // In the room a space hears in full, each turn acts for whoever wrote its
 // newest words (operator.ts `actorOf`): a member whose linked account spoke
 // has their own tools, and anyone else is the room's guest. Each line in the
