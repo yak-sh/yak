@@ -161,9 +161,9 @@ let writerOf = (b: Bundle) => comp(b, 'created')?.by as string | undefined
  * with nothing heard with or after them, steer nothing. The turn starts at
  * the person's newest words, or the platform's own (`system`): in a
  * conversation others write in too (a room heard in full), their words start
- * a turn of their own, never the person's, and where the words in view are
- * all theirs, they are what the turn holds. Unknown (`undefined`), every
- * writer's words start it.
+ * a turn of their own, never the person's. Where none in view are the
+ * person's (a helper's brief, its parent session's words), the newest start
+ * it, as every writer's do where the person is unknown (`undefined`).
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -189,7 +189,7 @@ let writerOf = (b: Bundle) => comp(b, 'created')?.by as string | undefined
  * equal(ann([asked, read, letter, stranger]), true)
  * equal(steered([asked, read, letter, stranger], undefined), false)
  * equal(ann([asked, stranger]), false)
- * equal(ann([stranger]), true)
+ * equal(ann([stranger]), false)
  * ```
  */
 export let steered = (
@@ -199,7 +199,7 @@ export let steered = (
   let theirs = (b: Bundle) =>
     given(b) && (!person || !!b.system || (writerOf(b) ?? person) == person)
   let start = entries.findLastIndex(theirs)
-  if (start < 0 && entries.some(given)) return true
+  if (start < 0) start = entries.findLastIndex(given)
   while (start > 0 && entries[start - 1].notice) start--
   return entries.slice(Math.max(0, start)).some((b) => !!b.heard)
 }
