@@ -151,12 +151,12 @@
     },
     "cost": {
       "title": "Free to start, a plan for more",
-      "note": "Your web address, like %{yours}, comes with a place for your apps, their data and the people you invite. We call that a space. Your first space is free. Each subscription pays for one space.",
-      "per": "a month",
+      "note": "Your web address, like %{yours}, comes with a place for your apps, their data and the people you invite. We call that a **space**. Your first space is free. Each subscription pays for one space.",
+      "per": "per month",
       "free": {
         "price": "Free",
-        "note": "Your first space. Monthly AI use included.",
-        "credit": "$20 of building credit when you sign up.",
+        "note": "Your first space.",
+        "credit": "$20 of bonus building credit on sign up.",
         "apps": "5 apps",
         "visitors": "Unlimited visitors",
         "data": "1 GB of app data",
@@ -172,8 +172,8 @@
       },
       "plus": {
         "price": "$12 %{per}",
-        "note": "The Plus plan, or $120 a year. Monthly AI use included.",
-        "credit": "Your first paid subscription adds $100 of building credit to the space you pay for.",
+        "note": "The Plus plan, or $120 a year.",
+        "credit": "$100 of bonus building credit when upgrading to this plan.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "data": "10 GB of app data",
@@ -190,7 +190,7 @@
       "pro": {
         "price": "$49 %{per}",
         "note": "The Pro plan, or $490 a year.",
-        "credit": "A one-time $200 of building credit when a space first goes Pro, then $100 of AI use a month. Your first paid subscription adds $100 more.",
+        "credit": "$200 of bonus building credit when upgrading to this plan, then $35 of AI use per month.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "data": "50 GB of app data",
@@ -286,7 +286,10 @@
           "name": "Owner",
           "note": "Manage your app and who can open it."
         },
-        "editor": { "name": "Editor", "note": "Change what your app keeps." },
+        "editor": {
+          "name": "Editor",
+          "note": "Change what your app keeps."
+        },
         "viewer": {
           "name": "Viewer",
           "note": "Open your app and see what’s shared."
