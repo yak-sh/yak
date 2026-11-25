@@ -185,10 +185,9 @@ let browsing = (
       return at.hash
     },
     assign: (to: string) => void loaded.push(to),
-    // A fragment alone moves only the address's fragment.
     replace: (to: string) => {
       loaded.push(to)
-      if (to.startsWith('#')) at.hash = to
+      at = new URL(to, at)
     },
   }
   let win = {
@@ -425,7 +424,7 @@ test('a layer the address opened closes when its page is left', async () => {
   let b = browsing(site, '/apps#menu')
   b.click('a[href="/updates"]')
   await b.swapped
-  assertEquals(b.loaded, ['#'])
+  assertEquals(b.loaded, ['https://y.test/apps#'])
   assertEquals(b.entries.map((e) => e.path), ['/updates'])
 })
 
@@ -680,10 +679,10 @@ test('a click from an open menu on a page not yet held closes the menu and names
   )
   b.slow()
   b.click('a[href="/updates"]')
-  assertEquals(b.loaded, ['#'])
+  assertEquals(b.loaded, ['https://y.test/apps#'])
   assertEquals(b.doc.querySelector(`[${TITLE}]`)?.textContent, 'Updates')
   await b.answer()
-  assertEquals(b.loaded, ['#'], 'the menu closes once')
+  assertEquals(b.loaded, ['https://y.test/apps#'], 'the menu closes once')
   assertEquals(b.doc.querySelector('h1')?.textContent, 'updates')
 })
 

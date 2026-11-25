@@ -66,13 +66,18 @@ let joined = (
 ) => {
   let { document: doc } = win
   let address = win.location.pathname + win.location.search
+  let base = doc.querySelector('base[href]')
+  let homeBase = base?.getAttribute('href')
   let homeTitle = doc.title
   let workspaceTitle = title
   let visible = (workspace: boolean) => {
     if (view.inert == !workspace) return
     view.inert = !workspace
     home.inert = workspace
-    doc.body.toggleAttribute('data-site-workspace', workspace)
+    // Home's base belongs to its published app. The frame's fragment links
+    // point to its current address, including after a switch to Updates.
+    if (workspace) base?.removeAttribute('href')
+    else if (homeBase != null) base?.setAttribute('href', homeBase)
     if (workspace) doc.title = workspaceTitle
     else {
       workspaceTitle = doc.title

@@ -443,6 +443,13 @@ let content = (doc: Document) => {
 
 let page = (url: URL | Location) => url.pathname + url.search
 
+// Resolve against the current address even when the document has a base.
+let closeLayer = (location: Browsing['location'], to: URL) => {
+  if (location.hash && location.hash != to.hash) {
+    location.replace(new URL('#', location.href).href)
+  }
+}
+
 // An event told to the whole document, made by its own window.
 let tell = (doc: Document, type: string, detail?: unknown) => {
   let view = (doc.defaultView ?? globalThis) as typeof globalThis
@@ -526,9 +533,7 @@ export let TITLE = 'data-title'
 // (`aria-busy`). The page, once laid over, says it all again.
 let going = (win: Browsing, link: Element, to: URL) => {
   let doc = win.document
-  if (win.location.hash && win.location.hash != to.hash) {
-    win.location.replace('#')
-  }
+  closeLayer(win.location, to)
   let was = link.closest('nav')?.querySelector('a[aria-current="page"]')
   if (was && was != link) {
     let marks = [...was.classList].filter((c) => !link.classList.contains(c))
@@ -707,9 +712,7 @@ export let start = (
     let first = from != 'fresh'
     // A layer the old address opened (`#menu`, shown by `:target`) closes,
     // as it would on a new document: writing history leaves `:target` be.
-    if (first && win.location.hash && win.location.hash != at.hash) {
-      win.location.replace('#')
-    }
+    if (first) closeLayer(win.location, at)
     if (first && !pop) {
       history.write({ path: at.pathname + at.search + at.hash, state: null })
     }

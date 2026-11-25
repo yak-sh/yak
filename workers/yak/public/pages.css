@@ -312,16 +312,16 @@
     position: fixed;
     inset: 0;
     z-index: 1;
-  }
-  .Site_Workspace[inert],
-  [data-site-home][inert] {
-    visibility: hidden;
+    contain: layout paint;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    will-change: opacity;
   }
   .Site_Workspace[inert] {
     opacity: 0;
   }
-  body[data-site-workspace] {
-    overflow: hidden;
+  [data-site-home] {
+    isolation: isolate;
   }
   /* What the column holds is sized to it: the yak beside the Operator's
      box (operator-page.ts `composer`), and what its bar opens. */
