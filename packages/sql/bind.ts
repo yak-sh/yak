@@ -2186,17 +2186,38 @@ let reverse = (
     present: undefined,
     ...semi ? { archetypes: undefined } : {},
   }
-  let inner = render(
-    clause(sub, p.where ?? { ...p, path: rest, not: undefined }),
-  )
+  let filter = p.where ?? { ...p, path: rest, not: undefined }
+  let test = clause(sub, filter)
+  let inner = render(test)
   if (semi) {
+    // A child's reference equality or reference into a set can seek its
+    // index even when old statistics say every child points at one entity.
+    let prop = filter.kind == 'pred' &&
+        filter.path[0] == a.comp && !filter.not && !filter.where &&
+        opOf(filter) == '' && literals(filter.value)?.length
+      ? filter.path[1]
+      : undefined
+    let stored = prop && ctx.v.prop(a.comp, prop)
+    let seeks = prop && filter.kind == 'pred' &&
+      (filter.path.length == 2 ||
+        conjunctsOf(test).some((part) =>
+          part.t == 'in' && !Array.isArray(part.set) &&
+          render(part.e).sql == refKey(ctx, a.comp, prop)
+        ))
+    let index =
+      prop && stored && stored.category == 'ref' && !stored.computed &&
+        seeks && !ctx.derived[`${a.comp}.${prop}`] &&
+        child == `"${a.comp}"` && source(ctx, a.comp) == child
+        ? leading(ctx, a.comp, prop)
+        : undefined
+    let from = index && ctx.d.indexed?.(a.comp, index) || child
     // An owner selection, as an extension's hit list is, so a statement can
     // drive from it (`selection`).
     return among(
       raw(target),
       select({
         cols: [as(raw(refKey(ctx, a.comp, a.prop)), 'id')],
-        from: raw(`${child}${joined(joinsOf(sub, a.comp))}`),
+        from: raw(`${from}${joined(joinsOf(sub, a.comp))}`),
         where: inner.sql == '1' ? undefined : raw(inner.sql, inner.params),
       }),
     )

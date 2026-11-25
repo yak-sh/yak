@@ -227,11 +227,15 @@ let beside = (n: number) => {
   g.apply([
     ...['P', 'Q', 'R'].map((eid) => ({ entity: { eid }, person: {} })),
     ...['mine', 'away'].map((eid) => ({ entity: { eid }, space: {} })),
+    seat('r', 'away', 'R'),
+    ...Array.from({ length: n }, (_, i) => seat(`x${i}`, 'away', `R`)),
+  ])
+  // Statistics from before P and Q joined describe a single person.
+  d.query({ t: 'analyze', table: 'member' })
+  g.apply([
     seat('p', 'mine', 'P', 'viewer'),
     seat('q', 'mine', 'Q'),
     seat('other-viewer', 'mine', 'R', 'viewer'),
-    seat('r', 'away', 'R'),
-    ...Array.from({ length: n }, (_, i) => seat(`x${i}`, 'away', `R`)),
   ])
   return (q: string) => {
     let sql = render(compile(parse(q), seated, { archetypes: catalog(d) }))
@@ -260,7 +264,7 @@ test('a reverse hop inside a reverse hop reads the seats it reaches', () => {
   let [small, large] = besides
   ok(
     large.steps < small.steps + 30,
-    `${small.steps} then ${large.steps} VM steps for four times the seats`,
+    `${small.steps} then ${large.steps} VM steps for 10 and 250 unrelated seats`,
   )
 })
 
