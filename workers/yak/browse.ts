@@ -27,6 +27,7 @@ import {
 } from '@yaks/platform/routes'
 import * as dirPart from './directory.ts'
 import { type Directory, directory } from './directory.ts'
+import { copyOf } from './directory-copy.ts'
 import { bound, type Env } from './env.ts'
 import { sessionAt } from './session.ts'
 import { HOST_COOKIE, sessionCookie } from './browser-cookie.ts'
@@ -81,6 +82,12 @@ export type Asked = {
 
 // A phone's window unless the caller names another.
 let PHONE: View = { width: 390, height: 844, wait: 1000, touch: true }
+
+// During T-3638 the checks account's directory reads took 7.3 s in series,
+// and the admin account's last lookup finished 14 s after the request began.
+// Leave room for a direct read when the serving copy is cold or fenced.
+let PREPARE = 15_000
+type WaitingOn = (stage: string) => void
 
 // The caller's session, as the cookies a browser signed in at the apex holds:
 // the shared one every space's host reads, and the apex's own (browser-
@@ -137,7 +144,13 @@ export let browsingAdmin = async (req: Request, env: Env) => {
   return visit && visit.until > Date.now() ? visit.person : null
 }
 
-let adminCaller = async (req: Request, env: Env, dir: Directory) => {
+let adminCaller = async (
+  req: Request,
+  env: Env,
+  dir: Directory,
+  waitingOn: WaitingOn,
+) => {
+  waitingOn('Reading the platform space for the admin browser visit')
   let meta = await dir.space(dirPart.META.space)
   if (!meta || !env.SESSION_SECRET) {
     return json(
@@ -146,17 +159,28 @@ let adminCaller = async (req: Request, env: Env, dir: Directory) => {
       'admin visits require a configured platform',
     )
   }
-  let who = await adminWho(env, req, (person) => dir.role(meta, person))
-  if (
-    !who.person || who.role != 'owner' ||
-    who.person != await dir.personAt(ADMIN_BOT)
-  ) {
+  waitingOn('Verifying the admin browser credential')
+  let who = await adminWho(env, req, (person) => {
+    waitingOn('Checking the platform owner seat for the admin browser visit')
+    return dir.role(meta, person)
+  })
+  if (!who.person || who.role != 'owner') {
+    return json(403, 'admin_account', 'choose the platform admin bot')
+  }
+  waitingOn('Looking up the admin bot for the browser visit')
+  if (who.person != await dir.personAt(ADMIN_BOT)) {
     return json(403, 'admin_account', 'choose the platform admin bot')
   }
   return { person: who.person, token: null }
 }
 
-let sessionCaller = async (req: Request, env: Env, dir: Directory) => {
+let sessionCaller = async (
+  req: Request,
+  env: Env,
+  dir: Directory,
+  waitingOn: WaitingOn,
+) => {
+  waitingOn('Checking whether the browser session is still valid')
   let claims = await sessionAt(req, env, null, dir)
   let token = sessionCookie(req, env)
   if (!claims || !token) {
@@ -166,6 +190,7 @@ let sessionCaller = async (req: Request, env: Env, dir: Directory) => {
       'sign in: this door takes a session cookie',
     )
   }
+  waitingOn('Reading the test account for the browser visit')
   let known = await dir.known(claims.person)
   if (!isTestAddress(known?.email ?? '') && known?.email != ADMIN_BOT) {
     return json(
@@ -185,16 +210,26 @@ let visitOf = async (
   env: Env,
   path: string,
   signal: AbortSignal,
+  setStage: WaitingOn,
 ) => {
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let waitingOn: WaitingOn = (stage) => {
+    signal.throwIfAborted()
+    setStage(stage)
+  }
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
   let caller = await (path == ADMIN_PATH ? adminCaller : sessionCaller)(
     req,
     env,
     dir,
+    waitingOn,
   )
   if (caller instanceof Response) return caller
   let { person, token } = caller
   let stream = req.headers.get('content-type') == WIRE
+  waitingOn('Reading the browser visit request body')
   let file = stream ? await readAsk<Asked>(req.body) : undefined
   try {
     signal.throwIfAborted()
@@ -206,6 +241,7 @@ let visitOf = async (
         'Use a browse stream to upload a mockup.',
       )
     }
+    waitingOn('Preparing the browser visit and its cookies')
     let visit = await prepared(asked, env, person, token, file?.size ?? 0)
     if (visit instanceof Response) return visit
     signal.throwIfAborted()
@@ -290,12 +326,16 @@ export let fetch = async (
     return json(405, 'method_not_allowed', 'post a visit')
   }
   let where = { request: `POST ${path}` }
+  let stage = 'Preparing the browser visit'
   try {
     let asked = await bounded(
       env.CLOCK ?? system,
-      5_000,
-      () => 'Reading and authorizing the browser visit',
-      (signal) => visitOf(req, env, path, signal),
+      PREPARE,
+      () => stage,
+      (signal) =>
+        visitOf(req, env, path, signal, (next) => {
+          stage = next
+        }),
     )
     if (asked instanceof Response) return asked
     let { visit, person, file } = asked

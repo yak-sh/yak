@@ -20,7 +20,10 @@ import {
   WIRE,
 } from '@yaks/platform/browser-wire'
 import { actions } from './browser/testing.ts'
+import { fetch as visitDoor } from './browse.ts'
 import { bearerFor, fresh, type Kernel, signIn } from './probe.ts'
+import { fetch as directoryDoor } from './directory.ts'
+import type { Env } from './env.ts'
 import { HOST_COOKIE } from './browser-cookie.ts'
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { ADMIN } from '@yaks/platform/bots'
@@ -111,9 +114,11 @@ let browsing: Browsing = {
   axe: { source: '', version: 'test' },
 }
 let slow = answer(browsing, time)
+let bindings: Env
 let k: Kernel = await fresh({
   ERRORS: { send: () => Promise.resolve() },
 }, (env) => {
+  bindings = env
   env.BROWSER = {
     fetch: async (req: Request) => {
       if (req.headers.get('content-type') == WIRE) {
@@ -196,6 +201,80 @@ test('a test account opens a page as a stranger, holding no cookie', async () =>
   })
   equal(r.status, 200)
   equal(visits.at(-1)!.cookies, [])
+})
+
+test('browse can authorize a test account from a current copy during a directory stall', async () => {
+  let time = clock()
+  let answers = new Map<string, { revision: number; body: string }>()
+  let stalled = false
+  let entered = Promise.withResolvers<void>()
+  let env: Env = {
+    ...bindings,
+    CLOCK: time,
+    DIRECTORY: {
+      fetch: async (req: Request) => {
+        if (stalled) {
+          entered.resolve()
+          return await new Promise<Response>(() => {})
+        }
+        return await directoryDoor(req, bindings)
+      },
+    },
+    SERVING_COPY: {
+      idFromName: (name) => name,
+      get: () => ({
+        read: (key) => Promise.resolve(answers.get(key) ?? null),
+        valid: (revision) =>
+          Promise.resolve(
+            [...answers.values()].some((answer) => answer.revision == revision),
+          ),
+        publish: (revision, key, body) => {
+          answers.set(key, { revision, body })
+          return Promise.resolve(true)
+        },
+        begin: () => Promise.resolve(0),
+        finish: () => Promise.resolve(true),
+        put: () => Promise.resolve(false),
+        get: () => Promise.resolve(null),
+      }),
+    },
+  }
+  let open = () =>
+    visitDoor(
+      new Request(`https://${k.host}/api/browse`, {
+        method: 'POST',
+        headers: { cookie: checks.cookie },
+        body: JSON.stringify(manage),
+      }),
+      env,
+    )
+  let warm = await open()
+  equal(warm.status, 200)
+  await warm.body?.cancel()
+  stalled = true
+  let recovered = open()
+  await entered.promise
+  await time.advance(1_000)
+  await time.advance(1_000)
+  await time.advance(15_000)
+  let r = await recovered
+  match(await r.json(), { image: 'png' })
+  equal(r.status, 200)
+
+  answers.clear()
+  entered = Promise.withResolvers<void>()
+  let unavailable = open()
+  await entered.promise
+  await time.advance(15_001)
+  let failed = await unavailable
+  equal(failed.status, 504)
+  match(await failed.json(), {
+    error: {
+      code: 'browser_timeout',
+      message:
+        'Checking whether the browser session is still valid timed out after 15 seconds',
+    },
+  })
 })
 
 test('a page brought as a checkout renders it goes to the browser as its document, within bounds', async () => {
