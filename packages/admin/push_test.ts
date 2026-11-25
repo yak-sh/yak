@@ -33,6 +33,7 @@ let platform = (
   let versions = new Map(Object.keys(apps).map((app) => [app, 1]))
   let bases: unknown[] = []
   let past = new Map<string, string[]>()
+  let made: Args[] = []
   let ok = (text: string, value?: Record<string, unknown>) => ({
     content: [{ type: 'text', text: text + more }],
     structuredContent: {
@@ -49,6 +50,7 @@ let platform = (
     let app = String(a.app ?? a.slug)
     let files = apps[app]
     if (name == 'app_new') {
+      made.push(a)
       return ok(`${apps[app] = new Map()}`)
     }
     if (!files) return no(`no app ${app}`)
@@ -129,7 +131,7 @@ let platform = (
     return ok('done')
   }
   let held = (app: string) => [...apps[app].keys()].sort()
-  return { ask, held, deployed, writes, bases, lists: () => lists }
+  return { ask, held, deployed, writes, bases, made, lists: () => lists }
 }
 
 let examples = new Map<string, File>()
@@ -333,6 +335,23 @@ test('a push leaves the app holding exactly the directory, released once', async
   assertEquals(p.deployed, ['mail'])
   assertEquals(p.writes, [['new.js']])
   assertEquals(said[0], 'wrote 1 file, deleted old.js')
+})
+
+test('a new app is made with the title and access the push names', async () => {
+  let p = platform()
+  await push(p.ask, [file('index.html')], {
+    app: 'desk',
+    space: 'jeff',
+    title: 'Stream Desk',
+    access: 'private',
+  })
+  assertEquals(p.made, [{
+    slug: 'desk',
+    title: 'Stream Desk',
+    space: 'jeff',
+    access: 'private',
+  }])
+  assertEquals(p.held('desk'), ['index.html'])
 })
 
 test('a changed file is written and an unchanged file is left alone', async () => {

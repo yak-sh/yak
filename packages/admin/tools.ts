@@ -84,7 +84,14 @@ import { gateway } from './gateway.ts'
 import { erase } from './erase.ts'
 import { select, sweep } from './move.ts'
 import { relocate } from './relocate.ts'
-import { homeOf, push, type PushProgress, read, versions } from './push.ts'
+import {
+  homeOf,
+  push,
+  type PushProgress,
+  read,
+  type Target,
+  versions,
+} from './push.ts'
 import { fileHistory, saveCarried, workingSource } from './git-files.ts'
 import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
@@ -916,6 +923,7 @@ export let runs = (
         app: word(a, 'app') ?? dir.slice(dir.lastIndexOf('/') + 1),
         space: word(a, 'space'),
         title: word(a, 'title'),
+        access: word(a, 'access') as Target['access'],
       }
       let known = await versions(
         homeOf(host.config.db),

@@ -35,7 +35,7 @@
 import { checkout } from './checkout.ts'
 import { account } from './account.ts'
 import { rpc, zone } from './api.ts'
-import { homeOf, push, versions } from './push.ts'
+import { homeOf, push, type Target, versions } from './push.ts'
 import {
   blobs,
   carrying,
@@ -131,6 +131,8 @@ export type Release = {
   links?: string[]
   keep?: string[]
   afterWorker?: boolean
+  /** who may use the app when the release makes it; an app keeps its own */
+  access?: Target['access']
 }
 
 let repoApps = (space: string, apps: string[], as?: string): Release[] =>
@@ -164,9 +166,15 @@ export let RELEASED: Release[] = [
     'orbits',
     'settlement',
     'sound',
-    'stream-desk',
     'voiced-video',
   ], 'jeff@yak.sh'),
+  {
+    dir: 'apps/stream-desk',
+    app: 'stream-desk',
+    space: 'jeff',
+    as: 'jeff@yak.sh',
+    access: 'private',
+  },
   ...repoApps('yourname', [
     'guestbook',
     'handouts',

@@ -47,9 +47,14 @@ export type File = { path: string; content: string } | {
 }
 
 /** Where a push goes: the app's slug, its space when the account has several,
- * and the title it is created with when it does not exist yet (the slug
- * unless named). */
-export type Target = { app: string; space?: string; title?: string }
+ * and the title and access it is created with when it does not exist yet (the
+ * slug, and app_new's own default, unless named). */
+export type Target = {
+  app: string
+  space?: string
+  title?: string
+  access?: 'public' | 'open' | 'private'
+}
 
 /** A connector call, as ./api.ts `rpc` makes one. */
 export type Ask = (method: string, params?: unknown) => Promise<unknown>
@@ -473,6 +478,7 @@ let pushing = async (
         slug: to.app,
         title: to.title ?? to.app,
         ...to.space ? { space: to.space } : {},
+        ...to.access ? { access: to.access } : {},
       }),
     )
     opts.progress?.({ phase: 'create', state: 'done' })
