@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from 'smol-toml'
-import { claude, codex } from './adapters.ts'
+import { claude, codex, grok } from './adapters.ts'
 
 let job = {
   session: 'S1',
@@ -184,4 +184,67 @@ test("a bare run is given none of its provider's tools, settings or servers", ()
   assertEquals(said.slice(-2), ['--', '-x fix it'])
   // A provider that cannot go without its tools refuses, not runs with them.
   assertThrows(() => codex.argv({ ...job, bare: true }), Error, 'bare')
+})
+
+test('grok runs headless on its thread, its persona in its rules', () => {
+  let first = grok.argv({ ...job, persona: 'Be brief.' })
+  assertEquals(first.slice(0, 2), ['grok', '-p'])
+  assertEquals(first[first.indexOf('--session-id') + 1], 'S1')
+  assertEquals(
+    first[first.indexOf('--output-format') + 1],
+    'streaming-messages-json',
+  )
+  assertEquals(first[first.indexOf('--model') + 1], 'opus-5')
+  assertEquals(first[first.indexOf('--reasoning-effort') + 1], 'high')
+  assertEquals(first[first.indexOf('--rules') + 1], 'Be brief.')
+  assertEquals(first.slice(-2), ['--', '-x fix it'])
+  let again = grok.argv({ ...job, thread: 'T1' })
+  assertEquals(again[again.indexOf('--resume') + 1], 'T1')
+  assert(!again.includes('--session-id'))
+})
+
+test('grok refuses a run it cannot give its servers or take them from', () => {
+  for (
+    let ask of [
+      { mcp: { tasks: 'http://127.0.0.1:5173/mcp' } },
+      { without: ['railway'] },
+      { bare: true },
+    ]
+  ) assertThrows(() => grok.argv({ ...job, ...ask }), Error)
+})
+
+test("grok's stream reads as a transcript, its thread named by its opening line", () => {
+  let lines = [
+    { type: 'system', subtype: 'init', session_id: 'S1', model: 'grok-build' },
+    {
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: {
+        content: [
+          { type: 'text', text: 'Reading.' },
+          {
+            type: 'tool_use',
+            id: 'c1',
+            name: 'read_file',
+            input: { path: 'a.ts' },
+          },
+        ],
+      },
+    },
+    {
+      type: 'user',
+      parent_tool_use_id: null,
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: 'c1', content: 'x' }],
+      },
+    },
+  ].map(grok.read)
+  assertEquals(lines[0].about, { session: { id: 'S1' } })
+  assertEquals(lines[0].model, 'grok-build')
+  assertEquals(lines[1].entries[0], {
+    content: { body: 'Reading.' },
+    output: {},
+  })
+  assertEquals(lines[1].entries[1].call?.to, 'read_file')
+  assertEquals(lines[2].entries[0].result?.call, 'c1')
 })

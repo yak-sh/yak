@@ -278,10 +278,51 @@ export let codex: Adapter = {
 }
 
 /**
+ * `grok -p --output-format streaming-messages-json`, carrying on its thread
+ * with `--resume` (xAI's Grok Build, docs.x.ai/build/cli/headless-scripting).
+ * That format is Claude Code's stream-json wire format, so Claude's reader
+ * reads it. Grok signs in with its own account (`GROK_HOME`), a Grok
+ * subscription or an API key, and connects the MCP servers its own
+ * configuration names, Claude Code's `~/.claude.json` among them; the session
+ * reaches a server run as `yak mcp` through `TASKS_SESSION`.
+ */
+export let grok: Adapter = {
+  argv: (j) => {
+    // Grok takes no MCP server, and drops none, for one run: only its
+    // configuration names them. One started anyway would carry what it was
+    // asked to go without, or write with no actor.
+    if (j.bare) throw new Error('grok cannot run bare: it keeps its tools')
+    if (servers(j).length || j.without?.length) {
+      throw new Error('grok connects only the MCP servers its own config names')
+    }
+    return [
+      'grok',
+      '-p',
+      ...(j.thread ? ['--resume', j.thread] : ['--session-id', j.session]),
+      '--output-format',
+      'streaming-messages-json',
+      // Nobody is at the prompt, and the run owns its worktree: approve every
+      // call, and trust the folder, without which grok reads no AGENTS.md.
+      '--always-approve',
+      '--trust',
+      ...(j.model ? ['--model', j.model] : []),
+      ...(j.effort ? ['--reasoning-effort', j.effort] : []),
+      ...(j.persona ? ['--rules', j.persona] : []),
+      '--',
+      j.instruction,
+    ]
+  },
+  read: readers.claude,
+  file: 'AGENTS.md',
+  env: { GROK_DISABLE_AUTOUPDATER: '1' },
+  account: 'grok',
+}
+
+/**
  * The CLIs run as commands, keyed by the name a `provider` entity speaks: its
  * `api`, else its own `name`. A server with a CLI of its own builds its own table
  * ({@link https://jsr.io/@yaks/spawn/doc/effects/~/spawning | spawning}). A
  * provider missing from this table is one this package does not launch, which
  * is how an `http` provider is left to the in-process daemon.
  */
-export let adapters: Record<string, Adapter> = { claude, codex }
+export let adapters: Record<string, Adapter> = { claude, codex, grok }

@@ -65,16 +65,20 @@ much memory pressure, the start waits 15 seconds before checking again.
 
 The `@yaks/spawn/effects` handlers run after the batch commits. They read the
 CLI the provider speaks (`provider.api`, else its `name`), select the matching
-`claude` or `codex` adapter, validate the requested effort against the model,
-and start the command: the adapter's own program, or the one the row names in
-`provider.command`. A request that names a provider alone runs the model in the
-provider's own `using{model}`. Configure Claude's default with the `opus` model
-row, retaining the alias so the CLI resolves its current release. The selected
-model is recorded on the request before launch and passed explicitly to the CLI,
-including on resumed runs. Claude's transcript also records the release that
-answered; Codex's JSON output never says which model answered. Providers handled
-over HTTP have no command adapter and remain the responsibility of the
-in-process `@yaks/session` daemon.
+`claude`, `codex` or `grok` adapter, validate the requested effort against the
+model, and start the command: the adapter's own program, or the one the row
+names in `provider.command`. A request that names a provider alone runs the
+model in the provider's own `using{model}`. Configure Claude's default with the
+`opus` model row, retaining the alias so the CLI resolves its current release.
+The selected model is recorded on the request before launch and passed
+explicitly to the CLI, including on resumed runs. Claude's transcript also
+records the release that answered; Codex's JSON output never says which model
+answered. Grok (xAI's Grok Build,
+`grok -p --output-format streaming-messages-json`) prints Claude Code's
+stream-json format, read by Claude's reader, and signs in with its own account
+(`GROK_HOME`), a Grok subscription (`grok login --device-auth`) or an API key.
+Providers handled over HTTP have no command adapter and remain the
+responsibility of the in-process `@yaks/session` daemon.
 
 A CLI signs in with an **account**, an `account{home, provider}` row naming its
 config directory (`~/.claude`, `~/.claude-teams-bob`); a second account is one
@@ -92,9 +96,9 @@ instead, where another offered account has room: its thread moves to that
 account's transcripts (@yaks/session `moveThread`), the request names the new
 account, and a request telling it to carry on starts its next run there, on the
 same thread and in the same checkout. The run is started with that account's
-variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), and without it for the CLI's
-default directory, which Claude Code reads its `~/.claude.json` beside. A
-provider that offers no account runs on the server's own environment.
+variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`), and without it for
+the CLI's default directory, which Claude Code reads its `~/.claude.json`
+beside. A provider that offers no account runs on the server's own environment.
 
 The process is stored on the session entity. It runs through `@yaks/process` in
 a detached systemd user scope, so it can outlive the process that opened the
@@ -286,7 +290,10 @@ codex's `-c mcp_servers={…}`), replacing a server of that name in the person's
 own config, and with an `x-via` header naming the run's session. The door
 resolves that header (@yaks/session `authenticate`), so what the agent writes is
 stamped `by` its actor and `via` its session from its first call, with nothing
-asked of the agent.
+asked of the agent. Grok has no flag for a run's servers: it connects the ones
+its configuration names (Claude Code's `~/.claude.json` among them, where the
+box's `tasks` server is `yak mcp`, told the session by `TASKS_SESSION`), and
+refuses a run asked to connect or go without one.
 
 `without` names the MCP servers of a provider's own configuration its runs go
 without, by the provider's name and then the names that provider lists them
@@ -392,7 +399,7 @@ reads no disk and starts no process, so yaks.app imports it, and
 
 ## Exports
 
-The main module exports the built-in `claude` and `codex` adapters, the
+The main module exports the built-in `claude`, `codex` and `grok` adapters, the
 `adapters` table, adapter types, and the lower-level `asked()`, `accountFor()`,
 `follow()`, `start()`, `resume()`, `takeUp()`, and `down()` functions.
 Additional entry points are:
