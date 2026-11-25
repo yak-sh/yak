@@ -39,7 +39,10 @@ let draw = () => {
     }</small></button>`
   ).join('')
   let named = new Map(state.shots.map((s) => [s.entity.eid, s.doc?.title]))
-  $('#log').innerHTML = state.cues.toReversed().slice(0, 8).map((c) => {
+  let newest = state.cues.toSorted((a, b) =>
+    b.created.at.localeCompare(a.created.at)
+  )
+  $('#log').innerHTML = newest.slice(0, 8).map((c) => {
     let what = c.cue.zoom
       ? (c.cue.zoom > 0 ? 'Zoom in' : 'Zoom out')
       : named.get(idOf(c.cue.shot)) ?? 'A shot'
