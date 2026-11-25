@@ -16,9 +16,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { signal } from '@preact/signals'
 import { equal, ok, test, until } from '@yaks/testing'
-import { bindSave } from '@yaks/ux/save'
 import { challenge } from '@yaks/oauth'
 import {
   allowed,
@@ -33,13 +31,15 @@ import {
   owned,
   saveAccount,
   signIn,
+  spaceAct,
   unique,
 } from './probe.ts'
 import { COOKIE, cookieValue, sign, verify } from './lib/token.ts'
 import { SENDS } from './signin.ts'
 import { NO_MAILBOX, NOT_EMAIL } from './identity.ts'
 import { ours } from './asking.ts'
-import { managePath } from '@yaks/platform/routes'
+import { managePath, REACH, TAB_PERSON } from '@yaks/platform/routes'
+import { settingsEid as spaceEid } from '@yaks/platform/space-pages'
 import type { Agent } from './connected.ts'
 
 // Styling and attribute order do not change the sign-in form's contract.
@@ -1238,80 +1238,14 @@ test(
 )
 
 // The two questions the sign-in card stopped asking (T-34236), asked on the
-// page a sign-in now lands on instead: what to call them, and the address
-// their apps live at. One form, one POST to the space's own address, and the
-// answer is a redirect — a changed address moves this hostname, so where they
-// land is wherever the space now is.
+// pages a sign-in now lands on instead: what to call them, and the address
+// their apps live at. Both are written through the page graph's door
+// (reach-door.ts), as Profile's and Settings' Save bars write them.
 test('Profile saves the name, and Settings the address', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
-  let post = (
-    space: string | null,
-    fields: Record<string, string>,
-    cookie?: string,
-  ) =>
-    k.at(
-      'yaks.app',
-      space ? managePath('settings', space) : managePath('profile'),
-      {
-        method: 'POST',
-        redirect: 'manual',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          ...(cookie ? { cookie } : {}),
-        },
-        body: new URLSearchParams(fields).toString(),
-      },
-    )
   let read = async (path: string, cookie: string) =>
     await (await k.at('yaks.app', path, { headers: { cookie } })).text()
-  let save = async (
-    html: string,
-    name: string,
-    value: string,
-    cookie: string,
-  ) => {
-    let { document, window } = parseHTML(html)
-    let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-    Object.defineProperty(globalThis, 'document', {
-      value: document,
-      configurable: true,
-    })
-    let drafts = signal<Record<string, string>>({})
-    let sent: Promise<Response> | undefined
-    let binding = bindSave(document, {
-      drafts: {
-        text: (place) => drafts.value[place] ?? '',
-        type: (place, text) => {
-          drafts.value = { ...drafts.value, [place]: text }
-        },
-      },
-      save: (form, body) => {
-        sent = k.at('yaks.app', form.getAttribute('action')!, {
-          method: 'POST',
-          redirect: 'manual',
-          headers: { cookie },
-          body,
-        })
-        return sent
-      },
-    })
-    try {
-      let field = document.querySelector<HTMLInputElement>(`[name="${name}"]`)!
-      field.value = value
-      field.dispatchEvent(new window.Event('input', { bubbles: true }))
-      let button = [...document.querySelectorAll<HTMLButtonElement>('button')]
-        .find((b) => b.textContent == 'Save')
-      assert(button && !button.disabled, 'the changed page offers Save')
-      button.click()
-      assert(sent, 'Save sends the changed form')
-      return await sent
-    } finally {
-      binding.close()
-      if (prior) Object.defineProperty(globalThis, 'document', prior)
-      else Reflect.deleteProperty(globalThis, 'document')
-    }
-  }
   try {
     let { cookie, email, person } = await signIn(k)
     let slug = email.split('@')[0]
@@ -1348,67 +1282,67 @@ test('Profile saves the name, and Settings the address', async () => {
     let [quiet] = await dir.query(`.entity.eid=${person}&?doc`)
     assertEquals((quiet.doc as { title: string }).title, slug)
 
-    // A taken address is refused in a sentence, and the page
-    // comes back around it with everything typed still in the one form —
-    // nothing has moved.
+    // A taken address is refused in a sentence, and nothing has moved.
+    let space = (await dir.query(`.space.slug=${slug}`))[0].entity.eid
+    let move = (to: string, who = { person, cookie }) =>
+      spaceAct(k, who, space, { spaceSettings: { slug: to } })
     let theirs = await signIn(k, `rex-${uniq()}@yaks.app`)
     let other = theirs.email.split('@')[0]
-    let taken = await post(slug, { space: other }, cookie)
+    let taken = await move(other)
     assertEquals(taken.status, 400)
-    let again = await taken.text()
-    assertMatch(again, /is taken/)
-    assertMatch(again, new RegExp(`name="space"[^>]*value="${other}"`))
+    assertMatch((await taken.json()).message, /is taken/)
 
     // A badly shaped one says what an address is.
-    let bad = await post(slug, { space: 'Not An Address' }, cookie)
+    let bad = await move('Not An Address')
     assertEquals(bad.status, 400)
-    assertMatch(await bad.text(), /lowercase letters, numbers and dashes/)
-
-    // And a free one moves the space — and the page that named it by its old
-    // address names it by the new one.
-    let want = `dana-${uniq()}`
-    let moved = await save(again, 'space', want, cookie)
-    assertEquals(moved.status, 303)
-    await moved.body?.cancel()
-    assertEquals(
-      moved.headers.get('location'),
-      `https://yaks.app${managePath('settings', want)}`,
+    assertMatch(
+      (await bad.json()).message,
+      /lowercase letters, numbers and dashes/,
     )
+
+    // And a free one moves the space, and its Settings answer at the new
+    // address.
+    let want = `dana-${uniq()}`
+    let moved = await move(want)
+    assertEquals(moved.status, 200, await moved.text())
     assert(
       (await dir.query(`.space.slug=${want}`)).length,
       `a space at ${want}`,
     )
     assertEquals(await dir.query(`.space.slug=${slug}`), [])
-
-    // Nobody but the owner may write it: a stranger's POST is sent to sign
-    // in, somebody else's is told what a wrong address is told, and nothing
-    // moves.
-    let no = await post(want, { space: `nope-${uniq()}` })
-    assertEquals(no.status, 303)
-    assertStringIncludes(no.headers.get('location')!, '/login')
-    await no.body?.cancel()
-    let nobody = await post(
-      want,
-      { space: `nope-${uniq()}` },
-      (await signIn(k, `rex-${uniq()}@yaks.app`)).cookie,
+    assertMatch(
+      await read(managePath('settings', want), cookie),
+      new RegExp(`name="space"[^>]*value="${want}"`),
     )
-    assertEquals(nobody.status, 404)
+
+    // Nobody but the owner may write it: a stranger is asked to sign in,
+    // somebody else is refused, and nothing moves.
+    let no = await move(`nope-${uniq()}`, { person, cookie: '' })
+    assertEquals(no.status, 401)
+    await no.body?.cancel()
+    let rex = await signIn(k, `rex-${uniq()}@yaks.app`)
+    let nobody = await move(`nope-${uniq()}`, rex)
+    assertEquals(nobody.status, 403)
     await nobody.body?.cancel()
     assert((await dir.query(`.space.slug=${want}`)).length, 'still theirs')
 
     // And nor may their own cookie, carried by somebody else's page. Every
     // space is same-site with the apex, so `SameSite=Lax` lets the session
-    // ride a form a space's page posts at the dashboard — the origin check is
-    // what does not (@yaks/platform/routes `guarded`).
-    let forged = await k.at('yaks.app', managePath('settings', want), {
+    // ride a write a space's page aims at the door; the origin check is what
+    // does not (@yaks/platform/routes `guarded`).
+    let forged = await k.at('yaks.app', `${REACH}/apply`, {
       method: 'POST',
       redirect: 'manual',
       headers: {
-        'content-type': 'application/x-www-form-urlencoded',
+        'content-type': 'application/json',
         origin: 'https://elsewhere.yaks.app',
+        [TAB_PERSON]: person,
         cookie,
       },
-      body: new URLSearchParams({ space: `taken-${uniq()}` }).toString(),
+      body: JSON.stringify([{
+        entity: { eid: spaceEid(space) },
+        spaceSettings: { space, slug: `taken-${uniq()}` },
+      }]),
     })
     assertEquals(forged.status, 403)
     await forged.body?.cancel()

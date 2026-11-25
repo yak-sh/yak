@@ -3,7 +3,7 @@
 // Objects and email handler are the runtime's own
 // (space_rename_workerd_test.ts). Ada's space, with two apps, a deployed page,
 // a row, a letter and a custom domain, moves twice, once from the connector and
-// once from the settings card; everything answers at the new name, the old one
+// once from Settings' Save bar; everything answers at the new name, the old one
 // redirects, and once somebody else takes it, it is wholly theirs.
 import {
   assert,
@@ -21,6 +21,7 @@ import {
   rfc822,
   seed,
   signIn,
+  spaceAct,
   unique,
 } from './probe.ts'
 
@@ -177,14 +178,11 @@ export let renamed = async (k: Kernel) => {
   assertEquals(their.status, 200)
   assertStringIncludes(await their.text(), '<h1>Our recipe box</h1>')
   // And the roster is the space's own: its owner is still its owner, which
-  // is what lets them move it again, from the settings card this time.
-  let card = await k.at('yaks.app', `/manage/${adacooks46}/settings`, {
-    method: 'POST',
-    body: new URLSearchParams({ space: adakitchen46 }),
-    redirect: 'manual',
-    headers: { cookie: them.cookie },
+  // is what lets them move it again, from Settings' Save bar this time.
+  let card = await spaceAct(k, them, them.eids[ada46], {
+    spaceSettings: { slug: adakitchen46 },
   })
-  assertEquals(card.status, 303, await card.text())
+  assertEquals(card.status, 200, await card.text())
   assertEquals((await row(adakitchen46)).space.store, store)
   assertEquals(
     (await k.at(`${adakitchen46}.yaks.app`, '/cookbook/')).status,
