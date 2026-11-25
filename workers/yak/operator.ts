@@ -2599,10 +2599,12 @@ export let operating = (
         connecting,
         remote,
         trials,
-        // App transfers and updates that need approval have their own ask,
-        // including when replaying an approved script.
+        // A privileged act is called direct, where it asks for itself; a
+        // script approved on its own words reaches none it did not name.
         unscripted: new Set(
-          asking ? Object.keys(ESCALATING) : ['app_transfer', 'app_update'],
+          asking || o.approved
+            ? Object.keys(ESCALATING)
+            : ['app_transfer', 'app_update'],
         ),
       })
         .then((r) => reached('roster', r)),

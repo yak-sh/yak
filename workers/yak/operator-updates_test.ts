@@ -642,7 +642,9 @@ test('a generic answer to an approval resumes once, after its approved call', as
   )
   await receive(store, { space: eid, person: ada, channel: 'chat' }, 'Lamps')
   await service.drain()
-  let approval = (await read(ada)).updates.find((u) => u.words == title + '?')!
+  let approval = (await read(ada)).updates.find((u) =>
+    u.words.startsWith(`${title} (`)
+  )!
   let before = asked.length
   script.push(said('I created the task about the lamps.'))
   await decide(approval.eid, 'Approve')

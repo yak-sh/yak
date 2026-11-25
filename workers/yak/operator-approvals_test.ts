@@ -190,7 +190,7 @@ test('approval_request asks for any tool the turn holds, and only those', async 
   })
   equal(
     texts.at(-1)!.words.startsWith(
-      'Post the closing notice on the home page? Tap',
+      'Post the closing notice on the home page (app_files)? Tap',
     ),
     true,
   )

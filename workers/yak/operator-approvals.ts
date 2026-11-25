@@ -664,9 +664,13 @@ export let confirming = (
         }
         let call = (args.args ?? {}) as Args
         let connections = await connectionsFor(name, call)
-        let act = name == 'app_transfer'
-          ? await ESCALATING[name](call, turn, connections)
-          : String(args.say ?? '').trim().replace(/[.?!]+$/, '')
+        // What the tap approves is said from the act itself, never only in
+        // the Operator's words, which someone else's may have chosen: a
+        // privileged act as its own tool words it, any other beside the
+        // name of the tool that runs.
+        let said = String(args.say ?? '').trim().replace(/[.?!]+$/, '')
+        let act = await ESCALATING[name]?.(call, turn, connections) ??
+          (said && `${said} (${t.title ?? name})`)
         if (!act) throw refuse('arguments', 'Say what it does.')
         return request(t, call, act, connections)
       },
