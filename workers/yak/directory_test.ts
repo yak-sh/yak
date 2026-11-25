@@ -205,12 +205,15 @@ let hosts = () => {
 
 test('one directory read resolves a hostname to its space and app', async () => {
   let { dir, reads } = hosts()
-  let at = await dir.serves('herbusiness.com')
-  assertEquals([at?.space.slug, at?.app?.slug], ['jeff', 'recipes'])
+  let at = await dir.domain('herbusiness.com')
+  assertEquals([at?.target?.space.slug, at?.target?.app?.slug], [
+    'jeff',
+    'recipes',
+  ])
   assertEquals(at?.host.name, 'herbusiness.com')
-  assertEquals(at?.app?.rooted, true)
   assertEquals(reads(), 1)
-  assertEquals(await dir.serves('elsewhere.com'), null)
+  assertEquals(await dir.domain('elsewhere.com'), null)
+  assertEquals((await dir.serves('herbusiness.com'))?.app?.rooted, true)
 })
 
 test('a hostname on the space resolves to the space, with no app', async () => {

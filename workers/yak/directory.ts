@@ -1435,6 +1435,16 @@ export let SPACE_PARTS = [
 ]
 let SPACE_ABOUT = chain(SPACE_PARTS.map((part) => line`?${part}`), '&')
 
+let DOMAIN_FIELDS = [
+  'hostname',
+  'verified',
+  'mail_domain',
+  'trashed',
+  'hostname.serves.app.slug',
+  'hostname.serves.space.slug',
+  'hostname.serves.app.space.space.slug',
+]
+
 // The plan as a whole row, however little of it is written: a property nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
 // for null twice.
@@ -3508,30 +3518,33 @@ export let directoryRows = (rows: {
       )
       return row?.hostname ? hostOf(row) : null
     },
-    // Read the name and the rows it points to in one snapshot, including a
-    // held name with no destination. An app's siblings play no part here.
+    // Start at the indexed hostname and follow only its destination's
+    // references. Routing needs identities and slugs from those rows.
     domain: async (name: string) => {
-      let serves = line`.hostnames_serves.hostname.name=${name}`
-      let rows = await query(chain([
-        line`(.hostname.name=${name}&?verified&?mail_domain&?trashed)`,
-        line`(.app&${sub(serves)}&${sub(ABOUT)})`,
-        line`(.space&(${sub(serves)}|.apps${sub(serves)})&${sub(SPACE_ABOUT)})`,
-      ], '|'))
+      let rows = await query(
+        line`.hostname.name=${name}&.fields=${DOMAIN_FIELDS}`,
+      )
       let row = rows.find((r) => r.hostname?.name == name)
       if (!row) return null
       let host = hostOf(row)
       let to = rows.find((r) => r.entity.eid == host.serves)
-      let app = to?.app ? appOf(to) : null
-      let space = app ? rows.find((r) => r.entity.eid == app.space) : to
+      let app = to?.app ? { eid: to.entity.eid, slug: to.app.slug } : null
+      let spaceEid = to?.app?.space ? idOf(to.app.space) : host.serves
+      let space = rows.find((r) => r.entity.eid == spaceEid)
       let target =
-        space?.space && (!app || !host.space || host.space == app.space)
-          ? { space: spaceOf(space), app }
+        space?.space && (!app || !host.space || host.space == space.entity.eid)
+          ? { space: { eid: space.entity.eid, slug: space.space.slug }, app }
           : null
       return { host, target }
     },
     serves: async (host: string) => {
       let domain = await self.domain(host)
-      return domain?.target ? { host: domain.host, ...domain.target } : null
+      if (!domain?.target) return null
+      let { app, space } = domain.target
+      let full = await self.target(space.eid, '', app?.eid)
+      return full.space && (!app || full.app)
+        ? { host: domain.host, space: full.space, app: full.app }
+        : null
     },
     domainTransfersTo: (space: Space) =>
       query(

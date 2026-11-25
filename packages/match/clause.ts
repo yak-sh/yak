@@ -522,7 +522,7 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
   // forward, and its own reverse hop is read from the child.
   let back = ctx.v.turn(rest)
   if (
-    rest.length && !ctx.v.assoc(rest[0]) &&
+    rest.length &&
     ctx.v.aim((back > 0 ? rest.slice(0, back) : rest).join('.'))
       .some((h) => h.comp == 'entity')
   ) {

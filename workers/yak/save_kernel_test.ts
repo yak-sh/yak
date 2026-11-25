@@ -143,7 +143,13 @@ test('a public save commits before purging and answers while purge is pending', 
     if (tags.some((tag) => tag == page || tag == card)) await purgeDone.promise
   }
   try {
-    let response = await publicSave.at(
+    let deadline = AbortSignal.timeout(5_000)
+    let unanswered = new Promise<never>((_, reject) => {
+      deadline.addEventListener('abort', () => reject(deadline.reason), {
+        once: true,
+      })
+    })
+    let saving = publicSave.at(
       `${publicSpace}.yaks.app`,
       '/site/api/save',
       {
@@ -153,9 +159,9 @@ test('a public save commits before purging and answers while purge is pending', 
           'content-type': 'application/json',
         },
         body: '{"copy":{"hero":"Saved"}}',
-        signal: AbortSignal.timeout(5_000),
       },
     )
+    let response = await Promise.race([saving, unanswered])
     equal(response.status, 200)
     equal(await response.json(), { version: 2, keys: ['hero'] })
     equal((await purged.get(page))?.version, 2)

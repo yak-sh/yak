@@ -114,14 +114,14 @@ let atDomain = async (asked: Request, env: Env, host: string) => {
   let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env), {
     time: env.CLOCK,
     public: true,
-  }).serves(host)
+  }).domain(host)
   if (
-    !at || !ready(at) || at.host.to ||
+    !at?.target || !ready({ ...at.target, host: at.host }) || at.host.to ||
     handedOff(host, new URL(asked.url).pathname, env)
   ) {
     return passed()
   }
-  let page = await edged(aim(asked, host, at, env), env)
+  let page = await edged(aim(asked, host, at.target, env), env)
   let tags = page.headers.get(KEEP)
   if (tags) page.headers.set(KEEP, `${tags},${hostTag(at.host.eid)}`)
   return page
