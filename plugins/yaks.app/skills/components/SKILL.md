@@ -95,10 +95,13 @@ the browser it was typed in, until sign-in hands it to a person. Write it with
 the action that sends it. Keep a local recovery copy until the store
 acknowledges that batch.
 
-**`typed`** — `over` (text). An event sent with a draft write, naming the text
-the interface last received from the store. The store merges both interfaces'
-edits against that shared text and increments the draft's revision; the event
-itself is not stored.
+**`typed`** — `over` (text), `writer` (text), `order` (number), `confirmed`
+(number). A draft edit carries the text it was based on in `over`. The store
+uses that text to merge concurrent edits. `writer` optionally identifies a draft
+editor by UUID, and `order` is that editor's increasing write number. When
+sending or discarding a draft, `confirmed` names the last write the store
+acknowledged to that editor, or `0` if none. The store uses these numbers to
+keep delayed saves from restoring the cleared draft. The event is transient.
 
     await apply({
       entity: { eid: draftEid(person, 'command') },
