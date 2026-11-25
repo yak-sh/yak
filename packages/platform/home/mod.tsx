@@ -4,21 +4,28 @@ import { Button, Card, Copy as Copyable, Field, Icon } from '@yaks/ui'
 import type { Tier } from '../plans.ts'
 import { GET_PLAN } from '../routes.ts'
 import { DEMOS, SCENES, TURNS } from './demos.ts'
+import { GAME_DEMOS, GAME_FEATURES, GAME_SCENES } from './games.ts'
 import { gift, ICONS, priceTag } from './icons.ts'
 import { DemoLinks, Phone, Picks, type Told } from './phone.tsx'
 import { FEATURES, RUN } from './parts.ts'
 import { Change, People, type Pictures, Scene, Services } from './scenes.tsx'
 import type { Copy } from './words.ts'
 
+export { FEATURES } from './parts.ts'
+
 /**
  * What a landing page's story tells: its features in order, `build` first
  * as the hero (parts.ts `FEATURES`), the demos its phone plays, a turn of
  * each for each feature, each demo's pictures by its slug, and the
- * questions it answers, each by its name under `home.story.faq`. The words
- * are the copy's the page is drawn with, so a page with words of its own
- * says them in the home page's parts.
+ * questions it answers, each by its name under `home.story.faq`. A page
+ * with an `offer` says it under the hero's box, at `home.hello.offer`. The
+ * words are the copy's the page is drawn with, so a page with words of its
+ * own says them in the home page's parts.
  */
-export type Landing = Told & { questions: readonly string[] }
+export type Landing = Told & {
+  questions: readonly string[]
+  offer?: boolean
+}
 
 /** The home page's story. */
 export const HOMEPAGE: Landing = {
@@ -26,6 +33,14 @@ export const HOMEPAGE: Landing = {
   demos: DEMOS,
   scenes: SCENES,
   questions: ['code', 'access', 'limits', 'leave', 'data'],
+}
+
+/** The games landing page's story. */
+export const GAMES: Landing = {
+  features: GAME_FEATURES,
+  demos: GAME_DEMOS,
+  scenes: GAME_SCENES,
+  questions: ['code', 'friends', 'devices', 'limits', 'leave'],
 }
 
 // The features with a picture of each demo's.
@@ -98,11 +113,12 @@ let YakRun = ({ copy }: { copy: Copy }) => (
 )
 
 let Hero = (
-  { copy, action, yak, works }: {
+  { copy, action, yak, works, offer }: {
     copy: Copy
     action: string
     yak: ComponentChildren
     works: boolean
+    offer?: boolean
   },
 ) => (
   <section class='Hello Story_Hero' aria-labelledby='hello' data-story-step='0'>
@@ -120,6 +136,11 @@ let Hero = (
           {...copy.text('home.hello.examples')}
         />
       </Ask>
+      {offer && (
+        <p class='Note Home_Lead'>
+          <b {...copy.text('home.hello.offer')} />
+        </p>
+      )}
       <p
         class='Note Note-small Home_Lead'
         {...copy.text('home.hello.note', {
@@ -296,6 +317,7 @@ export let Story = (
         action={action}
         yak={yak}
         works={landing.features.includes('connect')}
+        offer={landing.offer}
       />
       <FeatureNav copy={copy} landing={landing} />
       <aside

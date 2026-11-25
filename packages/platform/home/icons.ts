@@ -14,6 +14,10 @@ import bot from 'lucide/dist/esm/icons/bot.mjs'
 import users from 'lucide/dist/esm/icons/users.mjs'
 // @ts-types="@yaks/ui/lucide"
 import globe from 'lucide/dist/esm/icons/globe.mjs'
+// @ts-types="@yaks/ui/lucide"
+import gamepad from 'lucide/dist/esm/icons/gamepad-2.mjs'
+// @ts-types="@yaks/ui/lucide"
+import code from 'lucide/dist/esm/icons/code-xml.mjs'
 
 export const ICONS = {
   build: sparkles,
@@ -24,6 +28,8 @@ export const ICONS = {
   helper: bot,
   team: users,
   domain: globe,
+  play: gamepad,
+  code,
 }
 
 // @ts-types="@yaks/ui/lucide"

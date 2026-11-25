@@ -12,6 +12,8 @@ export const FEATURES = {
   helper: { section: 'helpers', poses: ['thinking'], points: [1, 2, 3] },
   team: { section: 'people', poses: ['wave'], points: [1, 3] },
   domain: { section: 'domains', poses: ['flag'], points: [1, 2] },
+  play: { section: 'play', poses: ['wave'], points: [1, 2, 3] },
+  code: { section: 'code', poses: ['typing'], points: [1, 2, 3] },
 } as const
 
 /** A feature, by its name. */

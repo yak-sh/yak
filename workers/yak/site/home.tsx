@@ -1,7 +1,15 @@
 /** @jsxImportSource preact */
 import { keys, read } from '@yaks/copy'
 import { Button, Card, Field, Form } from '@yaks/ui'
-import { Plan, Story, StoryFooter } from '@yaks/platform/home'
+import type { ComponentChildren } from 'preact'
+import {
+  FEATURES,
+  HOMEPAGE,
+  type Landing,
+  Plan,
+  Story,
+  StoryFooter,
+} from '@yaks/platform/home'
 import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
 import { attr, COPY, said, type Slots, text, voiced } from './copy.ts'
@@ -359,38 +367,70 @@ let yak = () => (
   </div>
 )
 
-/** The homepage keeps the shared frame, copy and plan cards. */
+/**
+ * A landing page told with the home page's parts (@yaks/platform/home
+ * `Story`): the sky, the yak, the phone and its demos, the feature tabs,
+ * the plans and the questions. Its words are the copy's under `copy`, each
+ * the home page's where it has none of its own (copy.ts `voiced`), at
+ * `path`, telling `landing`; `head` is what its head carries besides.
+ */
+export let Told = (
+  { copy, path, landing, robots, head }: {
+    copy: string
+    path: string
+    landing: Landing
+    robots?: string
+    head?: ComponentChildren
+  },
+) => {
+  let words = voiced(copy)
+  return (
+    <Page
+      copy={copy}
+      path={path}
+      kind='Home Story_Page'
+      sheet='_home.css'
+      robots={robots}
+      sections={[
+        ...landing.features.map((feature) => FEATURES[feature].section),
+        'cost',
+      ]}
+      head={
+        <>
+          <script type='module' src='_home.js' />
+          <Walk />
+          <script src='cta.js' defer />
+          {head}
+        </>
+      }
+      before={<Sky landscape />}
+      foot={
+        <StoryFooter
+          copy={words}
+          action={START}
+          yak={<Idle class='Yak Yak-small' base='.' />}
+        />
+      }
+    >
+      <Story
+        copy={words}
+        action={START}
+        yak={yak()}
+        plans={<Cost story />}
+        landing={landing}
+      />
+    </Page>
+  )
+}
+
+/** The home page, the first landing page. */
 export let StoryHome = () => (
-  <Page
+  <Told
     copy='home'
     path='/'
-    kind='Home Story_Page'
-    sheet='_home.css'
-    sections
-    head={
-      <>
-        <script type='module' src='_home.js' />
-        <Walk />
-        <script src='cta.js' defer />
-        <Data of={data()} />
-      </>
-    }
-    before={<Sky landscape />}
-    foot={
-      <StoryFooter
-        copy={{ attr, text }}
-        action={START}
-        yak={<Idle class='Yak Yak-small' base='.' />}
-      />
-    }
-  >
-    <Story
-      copy={{ attr, text }}
-      action={START}
-      yak={yak()}
-      plans={<Cost story />}
-    />
-  </Page>
+    landing={HOMEPAGE}
+    head={<Data of={data()} />}
+  />
 )
 
 export let Home = ({ pitch }: { pitch: Pitch }) => {

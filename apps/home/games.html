@@ -1,0 +1,1175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <base href="https://yaks.app/">
+    <meta name="yak-drawing" content="395102f303">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title
+      data-copy="games.title">Make a game to play with your friends — yaks.app</title>
+    <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="https://yaks.app/games" />
+    <meta name="robots" content="noindex" />
+    <meta name="description"
+      content="Describe a game, and yaks.app builds it and puts it online. Send your friends the link and play together in the browser."
+      data-copy-content="games.description" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="yaks.app" />
+    <meta property="og:url" content="https://yaks.app/games" />
+    <meta property="og:title"
+      content="Make a game to play with your friends — yaks.app"
+      data-copy-content="games.name" />
+    <meta property="og:description"
+      content="Describe a game, and yaks.app builds it and puts it online. Send your friends the link and play together in the browser."
+      data-copy-content="games.description" />
+    <meta property="og:image" content="https://yaks.app/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title"
+      content="Make a game to play with your friends — yaks.app"
+      data-copy-content="games.name" />
+    <meta name="twitter:description"
+      content="Describe a game, and yaks.app builds it and puts it online. Send your friends the link and play together in the browser."
+      data-copy-content="games.description" />
+    <meta name="twitter:image" content="https://yaks.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"
+      content="yaks.app: build, host and share web apps"
+      data-copy-content="frame.alt" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:image:alt"
+      content="yaks.app: build, host and share web apps"
+      data-copy-content="frame.alt" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="stylesheet" href="_home.css" />
+    <script src="idle.js" defer></script>
+    <script src="away.js" defer></script>
+    <script type="module" src="_home.js"></script>
+    <script src="wander.js" defer></script>
+    <script src="sky.js" defer></script>
+    <script src="cta.js" defer></script>
+  </head>
+  <body class="Home Story_Page">
+    <div class="Sky" data-landscape aria-hidden="true" data-sink="8"
+      data-birds="7 35 70 170 260" data-shoot="20 45">
+      <div class="Sky_Air" data-depth="0.5">
+        <div class="Sky_Dark"></div>
+        <div class="Sky_Twilight"></div>
+      </div>
+      <div class="Sky_SunSlot" data-sun-at></div>
+      <canvas class="Sky_Trails"></canvas>
+      <svg class="Sky_Far" viewBox="-3000 -800 6000 860" focusable="false">
+        <defs>
+          <linearGradient id="Sky-hill-Farthest" x2="0" y2="1">
+            <stop class="Sky_FarthestTop"></stop>
+            <stop offset="1" class="Sky_FarthestFoot"></stop>
+          </linearGradient>
+          <linearGradient id="Sky-hill-Farther" x2="0" y2="1">
+            <stop class="Sky_FartherTop"></stop>
+            <stop offset="1" class="Sky_FartherFoot"></stop>
+          </linearGradient>
+          <linearGradient id="Sky-hill-Near" x2="0" y2="1">
+            <stop class="Sky_NearTop"></stop>
+            <stop offset="1" class="Sky_NearFoot"></stop>
+          </linearGradient>
+          <radialGradient id="Sky-glow">
+            <stop offset="0" class="Sky_Glow0"></stop>
+            <stop offset=".35" class="Sky_Glow1"></stop>
+            <stop offset="1" class="Sky_Glow2"></stop>
+          </radialGradient>
+          <radialGradient id="Sky-halo">
+            <stop offset="0" class="Sky_Halo0"></stop>
+            <stop offset="1" class="Sky_Halo1"></stop>
+          </radialGradient>
+          <linearGradient id="Sky-tail">
+            <stop offset="0" class="Sky_Tail0"></stop>
+            <stop offset="1" class="Sky_Tail1"></stop>
+          </linearGradient>
+          <radialGradient id="Sky-fly">
+            <stop offset="0" class="Sky_Fly0"></stop>
+            <stop offset=".3" class="Sky_Fly1"></stop>
+            <stop offset="1" class="Sky_Fly2"></stop>
+          </radialGradient>
+        </defs>
+        <g class="Sky_Day" data-depth="0.5">
+          <g class="Sky_Drift">
+            <path class="Sky_Wisp Sky_Wisp-far"
+              d="M-480 -214Q-380 -225 -180 -216.2Q-292.5 -208.5 -480 -214Z"></path>
+            <path class="Sky_Wisp"
+              d="M85 -128Q195 -140 415 -130.4Q291.25 -122 85 -128Z"></path>
+            <path class="Sky_Wisp Sky_Wisp-far"
+              d="M610 -186Q763.3333333333334 -201 1070 -189Q897.5 -178.5 610 -186Z"></path>
+            <path class="Sky_Wisp"
+              d="M970 -112Q1096.6666666666667 -123 1350 -114.2Q1207.5 -106.5 970 -112Z"></path>
+            <path class="Sky_Wisp"
+              d="M-1110 -150Q-970 -163 -690 -152.6Q-847.5 -143.5 -1110 -150Z"></path>
+          </g>
+        </g>
+        <g class="Sky_Day Sky_Sol">
+          <circle class="Sky_Glow" fill="url(#Sky-glow)" cx="455" cy="-100"
+            r="84"></circle>
+          <circle class="Sky_Sun" cx="455" cy="-100" r="27"></circle>
+        </g>
+        <g class="Sky_Night Sky_Deep" data-depth="0.95">
+          <g class="Sky_Stars">
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-3.1s" cx="230.4" cy="-121.7" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1418.2" cy="-451.1" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="-839.8" cy="-170" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1451.8" cy="-342.3" r="1.1"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="566.1" cy="-312.4" r="0.7"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1976.1" cy="-208.9" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="376.7" cy="-273.6" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="166.1" cy="-73" r="0.9"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1513.7" cy="-75.9" r="1.1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-0.3s" cx="579.9" cy="-127" r="1.1"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="482.3" cy="-369.7" r="1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="358" cy="-114.6" r="1.3"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1239.3" cy="-336.6" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="2184.7" cy="-385.9" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="-572.3" cy="-326.6" r="1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="-799.7" cy="-73.5" r="0.8"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="853.3" cy="-130.3" r="0.7"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="2258.3" cy="-231.8" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-0.7s" cx="122.2" cy="-591.4" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="714.1" cy="-247.9" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1132.2" cy="-576.9" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="1595.2" cy="-564.3" r="1.3"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="976.8" cy="-160.9" r="1.6"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="294.4" cy="-148.7" r="1.1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="-645.8" cy="-654" r="1.1"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="2101.4" cy="-427" r="0.8"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1251.3" cy="-196.5" r="0.6"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-3.6s" cx="466.8" cy="-315.8" r="0.8"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1242.7" cy="-508.2" r="1.2"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-376.4" cy="-392.7" r="1.3"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1625.3" cy="-640.9" r="1.5"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="421.9" cy="-377.4" r="0.6"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1092.3" cy="-457.6" r="0.6"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="724.3" cy="-61.6" r="1.4"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="2233.3" cy="-176.8" r="0.9"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-882.6" cy="-112.6" r="1.3"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-3.2s" cx="1703.4" cy="-399.8" r="0.9"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="2030.6" cy="-229.8" r="0.8"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="586.7" cy="-367.9" r="0.7"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1851.8" cy="-292.1" r="1"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1541.3" cy="-313.7" r="1.1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="1987.9" cy="-450.8" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-456" cy="-105.2" r="0.7"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="240.2" cy="-193.4" r="0.8"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="614.9" cy="-616.9" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-2.3s" cx="277.8" cy="-367.4" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="766.3" cy="-468.9" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="252.9" cy="-190.7" r="0.8"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1292.5" cy="-322.6" r="0.9"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="2240.3" cy="-162.1" r="0.6"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="445.2" cy="-115.9" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1184.8" cy="-258.7" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="1023.7" cy="-204" r="0.8"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="792.6" cy="-556.4" r="0.8"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-1.4s" cx="1054.9" cy="-376.1" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="280.9" cy="-587.6" r="1.2"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1512.5" cy="-608.2" r="0.8"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="357" cy="-367.3" r="0.9"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="2123.7" cy="-379.8" r="1"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="288.4" cy="-640.6" r="0.8"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1940.5" cy="-434.3" r="1.4"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="834.3" cy="-254.4" r="1"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="916.7" cy="-483.9" r="0.7"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-4.2s" cx="1158.1" cy="-463.6" r="1.2"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="524.1" cy="-218.6" r="1.4"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1046.2" cy="-200.7" r="1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="121.5" cy="-413" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="291.9" cy="-209.5" r="1.1"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="-594.9" cy="-346.8" r="0.9"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1832.1" cy="-393.7" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-886.8" cy="-104.2" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1373.1" cy="-368.4" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-0.6s" cx="-751.1" cy="-407.2" r="0.8"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="2146.9" cy="-387" r="1.2"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-829.1" cy="-234.2" r="0.8"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1922.4" cy="-173.8" r="0.7"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="4.8" cy="-81.6" r="0.9"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1268.5" cy="-267.4" r="1"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="-885.6" cy="-624.3" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-608.7" cy="-255.3" r="0.8"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="2126.3" cy="-117.5" r="0.8"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-4.2s" cx="-246.5" cy="-139.9" r="0.7"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="2294" cy="-143.4" r="1.1"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1028.5" cy="-597.7" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="-306.5" cy="-308.8" r="0.8"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1082.9" cy="-536.1" r="0.7"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="314.7" cy="-211.9" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="1784.8" cy="-559.6" r="0.8"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1933.1" cy="-182.5" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="1629.5" cy="-115.1" r="1.1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-1.2s" cx="-541.3" cy="-302.6" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="2165.5" cy="-616.6" r="0.7"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="303.3" cy="-499.9" r="0.8"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1576.3" cy="-580.9" r="0.6"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-845.7" cy="-91.2" r="1.4"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="271.1" cy="-179.2" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="2061.4" cy="-628.5" r="1.2"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="-49.1" cy="-647.6" r="0.6"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1668.6" cy="-469.9" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-2.7s" cx="246.3" cy="-513.8" r="0.9"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-324.8" cy="-532.8" r="0.9"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="-538.2" cy="-208.9" r="0.9"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1660" cy="-137.4" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1900.9" cy="-290.5" r="0.8"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1796" cy="-432.3" r="1.1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-474" cy="-176.6" r="0.7"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="315.1" cy="-443.2" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="109.9" cy="-496.1" r="0.7"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-2.6s" cx="69.9" cy="-74.9" r="1.2"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1040.1" cy="-586.4" r="0.8"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1686.4" cy="-119.4" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="391.5" cy="-353.3" r="0.8"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="121.9" cy="-64.4" r="1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="671.4" cy="-142" r="0.7"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-643.4" cy="-546.1" r="0.8"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1818.3" cy="-543.1" r="0.9"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="-346.1" cy="-188.8" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star Sky_Star-blink" style="animation-delay:-1s"
+              cx="1447.6" cy="-607.7" r="1" opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="222.7" cy="-226.5" r="1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="541.6" cy="-640.7" r="1"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="440.1" cy="-415.8" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-283.2" cy="-523.5" r="0.6"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1013.9" cy="-621.3" r="0.9"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1964.6" cy="-500.8" r="0.6"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1027.2" cy="-336.9" r="1.6"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="37.2" cy="-511.6" r="0.8"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-1.5s" cx="-734.2" cy="-607.6" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-128.9" cy="-302" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="-674.1" cy="-177.4" r="0.9"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="2293.8" cy="-276.3" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1636.9" cy="-183.2" r="1.3"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1134.5" cy="-128.8" r="1.1"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-299.7" cy="-604.7" r="0.9"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="932.8" cy="-572.3" r="0.7"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="116.6" cy="-105.9" r="0.6"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-3.6s" cx="646.2" cy="-224.9" r="1.2"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1722.3" cy="-288" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-422.8" cy="-224.6" r="1.3"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1810.9" cy="-332.5" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1707.9" cy="-488.9" r="0.6"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="280.8" cy="-417.6" r="1.3"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="-228" cy="-424.2" r="1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-706" cy="-646.9" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="-318.7" cy="-552.4" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-1.8s" cx="2106.6" cy="-463.1" r="0.8"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="1388.9" cy="-61" r="0.9"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1012.9" cy="-288.8" r="1.6"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1588.1" cy="-85.8" r="0.8"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1504.5" cy="-75.9" r="0.8"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1976.6" cy="-529.2" r="0.8"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-785.9" cy="-582.4" r="0.8"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="848.1" cy="-73.1" r="0.8"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="480.1" cy="-176" r="1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star Sky_Star-blink" style="animation-delay:-2s"
+              cx="1942.7" cy="-257.2" r="1.2" opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="1179.3" cy="-176.4" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1469.7" cy="-387.7" r="1.4"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-554.8" cy="-560.6" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1929.3" cy="-513" r="0.6"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1398.5" cy="-357.6" r="0.6"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1516.1" cy="-562.3" r="1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="563.2" cy="-618.7" r="1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="39.7" cy="-503.2" r="1.1"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-2.4s" cx="1540.4" cy="-656.4" r="1.5"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="-79.3" cy="-403.4" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="2043.2" cy="-139.2" r="0.6"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="36.7" cy="-528.2" r="0.6"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="881.6" cy="-456.2" r="1.1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="-755.9" cy="-248.1" r="0.8"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="44.1" cy="-135.8" r="0.9"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="2083.6" cy="-116.2" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-404.1" cy="-502.7" r="0.9"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star Sky_Star-blink" style="animation-delay:-1s"
+              cx="1037.3" cy="-516" r="0.9" opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="455.3" cy="-474.4" r="0.6"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="-860.9" cy="-355.4" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-821.9" cy="-440.2" r="0.7"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="202.7" cy="-622.5" r="1"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="850.1" cy="-185.6" r="0.8"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="546.5" cy="-109" r="1.2"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1648.8" cy="-207.1" r="1.4"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1988.4" cy="-232.6" r="0.8"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-3.2s" cx="-5.8" cy="-602.4" r="1.4"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-714.9" cy="-548.7" r="1.2"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="769.1" cy="-251.5" r="0.8"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1713.8" cy="-209.2" r="1.4"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="-326.2" cy="-123.2" r="1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-145.7" cy="-62.2" r="0.7"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1876.7" cy="-463.1" r="0.9"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="2171.8" cy="-78.5" r="0.7"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="18.9" cy="-307.2" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star Sky_Star-blink" style="animation-delay:-3s"
+              cx="641.2" cy="-340.6" r="1.3" opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="185.9" cy="-581.7" r="1.1"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-158.2" cy="-140.4" r="1.4"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="1382.1" cy="-308.4" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1074.3" cy="-117.9" r="0.9"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="2095.2" cy="-372" r="0.6"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1589.7" cy="-396.9" r="1.3"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-191.7" cy="-572.6" r="1.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="542.9" cy="-191.6" r="0.9"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-2.6s" cx="1661.9" cy="-576.6" r="0.8"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="508.1" cy="-145.8" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="67.3" cy="-316.4" r="0.9"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="2175.3" cy="-203" r="0.7"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="562.8" cy="-105.2" r="0.8"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="466.9" cy="-183.8" r="0.8"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-89.1" cy="-233.3" r="0.6"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-89" cy="-619.4" r="0.6"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="964" cy="-316.8" r="0.9"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-1.7s" cx="1748.4" cy="-646.9" r="0.8"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1279.6" cy="-301.8" r="0.6"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-287.4" cy="-642" r="1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1931.1" cy="-104" r="1"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="1221.2" cy="-179.4" r="1.1"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="-718.6" cy="-643.7" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="-37.9" cy="-342" r="0.8"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="319.7" cy="-384.7" r="1.1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="454.3" cy="-89" r="0.7"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-2.9s" cx="2199.7" cy="-182.1" r="0.9"
+              opacity="0.7"></circle>
+            <circle class="Sky_Star" cx="1300" cy="-486.6" r="0.6"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="1966.9" cy="-64.9" r="1"
+              opacity="0.4"></circle>
+            <circle class="Sky_Star" cx="1008.8" cy="-279.9" r="0.7"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="642.1" cy="-421.7" r="1.4"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star" cx="-8.2" cy="-587.2" r="0.7"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="556.3" cy="-311.7" r="1.2"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="2003.6" cy="-652.1" r="1.4"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="1637" cy="-450.6" r="1.2"
+              opacity="0.6"></circle>
+            <circle class="Sky_Star Sky_Star-blink"
+              style="animation-delay:-2.4s" cx="1218.6" cy="-124.1" r="0.7"
+              opacity="0.8"></circle>
+            <circle class="Sky_Star" cx="648.5" cy="-297.6" r="0.8"
+              opacity="0.9"></circle>
+            <circle class="Sky_Star" cx="-610.5" cy="-142.8" r="0.8"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="26.3" cy="-398.8" r="1.2"
+              opacity="0.5"></circle>
+            <circle class="Sky_Star" cx="1059.4" cy="-514.5" r="0.9"
+              opacity="0.5"></circle>
+          </g>
+        </g>
+        <g class="Sky_Night Sky_Luna">
+          <circle class="Sky_Halo" fill="url(#Sky-halo)" cx="520" cy="-188"
+            r="80"></circle>
+          <g transform="translate(520 -188) rotate(-150)">
+            <path class="Sky_Moon"
+              d="M0 24A24 24 0 0 1 0 -24A10 24 0 0 0 0 24Z"></path>
+          </g>
+        </g>
+        <g class="Sky_Hills">
+          <path class="Sky_Farthest" data-depth="0.15"
+            style="fill:url(#Sky-hill-Farthest);"
+            d="M-3000 -222.3C-2995.8 -221.5 -2983.3 -219.2 -2975 -217.7C-2966.7 -216.2 -2958.3 -214.7 -2950 -213.2C-2941.7 -211.7 -2933.3 -210.1 -2925 -208.7C-2916.7 -207.4 -2908.3 -206.1 -2900 -205.1C-2891.7 -204.2 -2883.3 -203.9 -2875 -202.8C-2866.7 -201.8 -2858.3 -199.8 -2850 -198.9C-2841.7 -197.9 -2833.3 -197.8 -2825 -197.4C-2816.7 -197 -2808.3 -196.6 -2800 -196.4C-2791.7 -196.1 -2783.3 -195.9 -2775 -195.9C-2766.7 -195.8 -2758.3 -196.1 -2750 -196.2C-2741.7 -196.2 -2733.3 -195.8 -2725 -196.1C-2716.7 -196.4 -2708.3 -197.9 -2700 -198.1C-2691.7 -198.3 -2683.3 -197.8 -2675 -197.5C-2666.7 -197.1 -2658.3 -196.5 -2650 -195.9C-2641.7 -195.3 -2633.3 -195 -2625 -194.1C-2616.7 -193.2 -2608.3 -191.7 -2600 -190.5C-2591.7 -189.2 -2583.3 -188.3 -2575 -186.3C-2566.7 -184.4 -2558.3 -181.4 -2550 -179C-2541.7 -176.6 -2533.3 -174.5 -2525 -172C-2516.7 -169.4 -2508.3 -166.7 -2500 -163.5C-2491.7 -160.2 -2483.3 -156.1 -2475 -152.4C-2466.7 -148.8 -2458.3 -145.4 -2450 -141.7C-2441.7 -138.1 -2433.3 -133.8 -2425 -130.3C-2416.7 -126.9 -2408.3 -124.2 -2400 -120.9C-2391.7 -117.7 -2383.3 -114.1 -2375 -110.9C-2366.7 -107.7 -2358.3 -104.3 -2350 -101.8C-2341.7 -99.2 -2333.3 -97.7 -2325 -95.7C-2316.7 -93.7 -2308.3 -91.3 -2300 -89.7C-2291.7 -88.2 -2283.3 -87.3 -2275 -86.3C-2266.7 -85.4 -2258.3 -84.2 -2250 -84C-2241.7 -83.8 -2233.3 -84.3 -2225 -84.9C-2216.7 -85.6 -2208.3 -87.1 -2200 -88C-2191.7 -88.9 -2183.3 -89.2 -2175 -90.4C-2166.7 -91.6 -2158.3 -93.7 -2150 -95.3C-2141.7 -96.9 -2133.3 -98.3 -2125 -100C-2116.7 -101.6 -2108.3 -103.7 -2100 -105.3C-2091.7 -107 -2083.3 -108.5 -2075 -110C-2066.7 -111.4 -2058.3 -112.3 -2050 -113.9C-2041.7 -115.5 -2033.3 -118 -2025 -119.4C-2016.7 -120.7 -2008.3 -121.2 -2000 -121.9C-1991.7 -122.6 -1983.3 -123.3 -1975 -123.7C-1966.7 -124.2 -1958.3 -124.4 -1950 -124.6C-1941.7 -124.9 -1933.3 -124.9 -1925 -125.1C-1916.7 -125.2 -1908.3 -125.9 -1900 -125.8C-1891.7 -125.7 -1883.3 -124.6 -1875 -124.6C-1866.7 -124.6 -1858.3 -125.3 -1850 -125.7C-1841.7 -126.1 -1833.3 -126.5 -1825 -126.9C-1816.7 -127.3 -1808.3 -127.5 -1800 -128C-1791.7 -128.6 -1783.3 -129.5 -1775 -130.4C-1766.7 -131.3 -1758.3 -131.8 -1750 -133.3C-1741.7 -134.8 -1733.3 -137.5 -1725 -139.5C-1716.7 -141.5 -1708.3 -143.1 -1700 -145.2C-1691.7 -147.3 -1683.3 -149.6 -1675 -152.2C-1666.7 -154.8 -1658.3 -158.2 -1650 -161C-1641.7 -163.8 -1633.3 -166.3 -1625 -169C-1616.7 -171.8 -1608.3 -175.1 -1600 -177.6C-1591.7 -180.2 -1583.3 -181.9 -1575 -184.3C-1566.7 -186.7 -1558.3 -189.6 -1550 -192C-1541.7 -194.5 -1533.3 -197.1 -1525 -198.8C-1516.7 -200.6 -1508.3 -201.5 -1500 -202.7C-1491.7 -203.9 -1483.3 -205.4 -1475 -206.1C-1466.7 -206.8 -1458.3 -206.7 -1450 -206.8C-1441.7 -207 -1433.3 -207.3 -1425 -206.8C-1416.7 -206.3 -1408.3 -205.1 -1400 -203.9C-1391.7 -202.7 -1383.3 -200.9 -1375 -199.7C-1366.7 -198.5 -1358.3 -198.1 -1350 -196.7C-1341.7 -195.3 -1333.3 -193.1 -1325 -191.4C-1316.7 -189.7 -1308.3 -188.2 -1300 -186.5C-1291.7 -184.7 -1283.3 -182.5 -1275 -180.9C-1266.7 -179.3 -1258.3 -178 -1250 -176.9C-1241.7 -175.7 -1233.3 -175.1 -1225 -174.1C-1216.7 -173.1 -1208.3 -171.4 -1200 -170.9C-1191.7 -170.4 -1183.3 -171 -1175 -171.3C-1166.7 -171.6 -1158.3 -171.9 -1150 -172.6C-1141.7 -173.2 -1133.3 -174.1 -1125 -175.1C-1116.7 -176 -1108.3 -177.1 -1100 -178.1C-1091.7 -179.2 -1083.3 -180 -1075 -181.6C-1066.7 -183.1 -1058.3 -185.9 -1050 -187.6C-1041.7 -189.3 -1033.3 -190.4 -1025 -191.9C-1016.7 -193.5 -1008.3 -195.2 -1000 -196.8C-991.7 -198.4 -983.3 -200.2 -975 -201.5C-966.7 -202.9 -958.3 -204 -950 -205.1C-941.7 -206.1 -933.3 -207.4 -925 -207.8C-916.7 -208.2 -908.3 -207.3 -900 -207.4C-891.7 -207.4 -883.3 -207.9 -875 -207.9C-866.7 -207.8 -858.3 -207.7 -850 -207.1C-841.7 -206.6 -833.3 -205.5 -825 -204.7C-816.7 -203.9 -808.3 -203.3 -800 -202.3C-791.7 -201.4 -783.3 -199.8 -775 -198.9C-766.7 -197.9 -758.3 -197.7 -750 -196.8C-741.7 -195.8 -733.3 -194.1 -725 -193C-716.7 -191.9 -708.3 -190.8 -700 -190.3C-691.7 -189.9 -683.3 -190.2 -675 -190.2C-666.7 -190.1 -658.3 -189.8 -650 -190C-641.7 -190.2 -633.3 -191.2 -625 -191.6C-616.7 -192.1 -608.3 -192.1 -600 -192.9C-591.7 -193.7 -583.3 -195.2 -575 -196.5C-566.7 -197.7 -558.3 -199.3 -550 -200.4C-541.7 -201.6 -533.3 -202 -525 -203.2C-516.7 -204.4 -508.3 -206.4 -500 -207.8C-491.7 -209.1 -483.3 -210.2 -475 -211.3C-466.7 -212.5 -458.3 -214 -450 -214.7C-441.7 -215.4 -433.3 -215.5 -425 -215.5C-416.7 -215.5 -408.3 -214.8 -400 -214.5C-391.7 -214.2 -383.3 -214.5 -375 -213.5C-366.7 -212.6 -358.3 -210.5 -350 -208.8C-341.7 -207.2 -333.3 -205.5 -325 -203.4C-316.7 -201.2 -308.3 -198.7 -300 -196.1C-291.7 -193.6 -283.3 -190.9 -275 -188C-266.7 -185.2 -258.3 -182.4 -250 -178.9C-241.7 -175.4 -233.3 -170.6 -225 -167C-216.7 -163.3 -208.3 -160.4 -200 -157C-191.7 -153.7 -183.3 -150.1 -175 -146.8C-166.7 -143.5 -158.3 -140.2 -150 -137.2C-141.7 -134.2 -133.3 -131.5 -125 -128.8C-116.7 -126.2 -108.3 -123.3 -100 -121.3C-91.7 -119.3 -83.3 -118.5 -75 -116.9C-66.7 -115.3 -58.3 -113 -50 -111.6C-41.7 -110.2 -33.3 -109.1 -25 -108.4C-16.7 -107.7 -8.3 -107.6 0 -107.5C8.3 -107.3 16.7 -107.1 25 -107.2C33.3 -107.4 41.7 -108.3 50 -108.5C58.3 -108.7 66.7 -108.1 75 -108.4C83.3 -108.8 91.7 -109.9 100 -110.4C108.3 -110.8 116.7 -111.3 125 -111.3C133.3 -111.4 141.7 -110.8 150 -110.6C158.3 -110.5 166.7 -110.8 175 -110.6C183.3 -110.4 191.7 -109.7 200 -109.5C208.3 -109.2 216.7 -109.6 225 -109C233.3 -108.4 241.7 -107.1 250 -106.1C258.3 -105.1 266.7 -103.8 275 -102.9C283.3 -102.1 291.7 -101.8 300 -101C308.3 -100.1 316.7 -98.5 325 -97.6C333.3 -96.8 341.7 -96.4 350 -95.9C358.3 -95.3 366.7 -94.5 375 -94.4C383.3 -94.4 391.7 -95.1 400 -95.7C408.3 -96.3 416.7 -97.4 425 -98.1C433.3 -98.9 441.7 -99 450 -100.3C458.3 -101.7 466.7 -104 475 -106C483.3 -108.1 491.7 -110 500 -112.5C508.3 -115 516.7 -118.2 525 -121.1C533.3 -124.1 541.7 -127.1 550 -130.3C558.3 -133.5 566.7 -136.6 575 -140.3C583.3 -144 591.7 -148.8 600 -152.4C608.3 -156 616.7 -158.7 625 -161.9C633.3 -165.1 641.7 -168.5 650 -171.5C658.3 -174.6 666.7 -177.5 675 -180.3C683.3 -183 691.7 -185.7 700 -188.1C708.3 -190.6 716.7 -193.2 725 -194.8C733.3 -196.5 741.7 -197 750 -198.2C758.3 -199.3 766.7 -201.1 775 -201.9C783.3 -202.6 791.7 -202.9 800 -202.8C808.3 -202.8 816.7 -202.2 825 -201.7C833.3 -201.2 841.7 -200.6 850 -199.8C858.3 -199.1 866.7 -197.7 875 -197C883.3 -196.3 891.7 -196.4 900 -195.6C908.3 -194.7 916.7 -193 925 -192C933.3 -190.9 941.7 -190 950 -189.4C958.3 -188.7 966.7 -188.5 975 -188.1C983.3 -187.6 991.7 -186.8 1000 -186.6C1008.3 -186.3 1016.7 -186.7 1025 -186.7C1033.3 -186.8 1041.7 -186.3 1050 -186.8C1058.3 -187.4 1066.7 -189 1075 -190.1C1083.3 -191.2 1091.7 -192.5 1100 -193.5C1108.3 -194.5 1116.7 -194.9 1125 -196C1133.3 -197.1 1141.7 -198.9 1150 -200C1158.3 -201.2 1166.7 -201.9 1175 -203C1183.3 -204.1 1191.7 -205.8 1200 -206.6C1208.3 -207.5 1216.7 -207.7 1225 -208.1C1233.3 -208.5 1241.7 -208.8 1250 -209.3C1258.3 -209.7 1266.7 -210.8 1275 -210.7C1283.3 -210.6 1291.7 -209.5 1300 -208.8C1308.3 -208 1316.7 -207.4 1325 -206.3C1333.3 -205.1 1341.7 -203.4 1350 -202C1358.3 -200.6 1366.7 -199.4 1375 -198C1383.3 -196.6 1391.7 -195.2 1400 -193.5C1408.3 -191.7 1416.7 -189 1425 -187.4C1433.3 -185.7 1441.7 -185 1450 -183.7C1458.3 -182.4 1466.7 -180.7 1475 -179.5C1483.3 -178.2 1491.7 -177.1 1500 -176.1C1508.3 -175.1 1516.7 -174.1 1525 -173.5C1533.3 -172.9 1541.7 -172.3 1550 -172.5C1558.3 -172.7 1566.7 -174.1 1575 -174.8C1583.3 -175.4 1591.7 -175.5 1600 -176.4C1608.3 -177.3 1616.7 -178.9 1625 -180.4C1633.3 -181.9 1641.7 -183.7 1650 -185.4C1658.3 -187.1 1666.7 -188.9 1675 -190.7C1683.3 -192.6 1691.7 -194.8 1700 -196.5C1708.3 -198.1 1716.7 -199 1725 -200.7C1733.3 -202.4 1741.7 -205.1 1750 -206.9C1758.3 -208.6 1766.7 -210.1 1775 -211.2C1783.3 -212.3 1791.7 -212.9 1800 -213.5C1808.3 -214.1 1816.7 -214.8 1825 -214.8C1833.3 -214.9 1841.7 -214.2 1850 -213.7C1858.3 -213.3 1866.7 -213.3 1875 -212.2C1883.3 -211.1 1891.7 -208.9 1900 -207.1C1908.3 -205.4 1916.7 -203.5 1925 -201.8C1933.3 -200 1941.7 -198.5 1950 -196.4C1958.3 -194.3 1966.7 -191.4 1975 -188.9C1983.3 -186.4 1991.7 -184.1 2000 -181.4C2008.3 -178.8 2016.7 -175.3 2025 -172.8C2033.3 -170.3 2041.7 -168.4 2050 -166.2C2058.3 -164 2066.7 -161.9 2075 -159.7C2083.3 -157.5 2091.7 -154.8 2100 -153.2C2108.3 -151.5 2116.7 -150.8 2125 -149.7C2133.3 -148.5 2141.7 -147.1 2150 -146.2C2158.3 -145.3 2166.7 -145 2175 -144.3C2183.3 -143.6 2191.7 -142.5 2200 -141.8C2208.3 -141.2 2216.7 -140.6 2225 -140.5C2233.3 -140.3 2241.7 -141.1 2250 -141C2258.3 -140.8 2266.7 -139.9 2275 -139.6C2283.3 -139.3 2291.7 -139.4 2300 -139.1C2308.3 -138.7 2316.7 -138.1 2325 -137.5C2333.3 -136.9 2341.7 -136.4 2350 -135.5C2358.3 -134.6 2366.7 -133.6 2375 -132C2383.3 -130.4 2391.7 -127.8 2400 -126C2408.3 -124.3 2416.7 -123.4 2425 -121.6C2433.3 -119.8 2441.7 -117.6 2450 -115.4C2458.3 -113.3 2466.7 -111 2475 -108.8C2483.3 -106.5 2491.7 -104.1 2500 -101.8C2508.3 -99.5 2516.7 -96.8 2525 -94.8C2533.3 -92.8 2541.7 -91.6 2550 -89.7C2558.3 -87.7 2566.7 -84.9 2575 -83.3C2583.3 -81.6 2591.7 -80.5 2600 -79.7C2608.3 -78.9 2616.7 -78.7 2625 -78.5C2633.3 -78.3 2641.7 -78.3 2650 -78.7C2658.3 -79.1 2666.7 -80.3 2675 -81.2C2683.3 -82.1 2691.7 -82.5 2700 -84.1C2708.3 -85.7 2716.7 -88.5 2725 -90.9C2733.3 -93.2 2741.7 -95.6 2750 -98.1C2758.3 -100.6 2766.7 -103 2775 -106C2783.3 -109 2791.7 -112.8 2800 -116.2C2808.3 -119.5 2816.7 -122.7 2825 -126.2C2833.3 -129.6 2841.7 -133.8 2850 -137C2858.3 -140.1 2866.7 -142.4 2875 -145.2C2883.3 -147.9 2891.7 -150.7 2900 -153.4C2908.3 -156.1 2916.7 -159.3 2925 -161.5C2933.3 -163.7 2941.7 -165.1 2950 -166.8C2958.3 -168.6 2966.7 -170.6 2975 -172C2983.3 -173.4 2995.8 -174.6 3000 -175.1L3000 60L-3000 60Z"></path>
+          <path class="Sky_Farther" data-depth="0.1"
+            style="fill:url(#Sky-hill-Farther);"
+            d="M-3000 -122.7C-2995.8 -123.7 -2983.3 -127 -2975 -128.8C-2966.7 -130.6 -2958.3 -131.6 -2950 -133.4C-2941.7 -135.1 -2933.3 -137.6 -2925 -139.3C-2916.7 -141 -2908.3 -142.2 -2900 -143.9C-2891.7 -145.5 -2883.3 -147.3 -2875 -149.3C-2866.7 -151.2 -2858.3 -154.3 -2850 -155.6C-2841.7 -157 -2833.3 -156.8 -2825 -157.4C-2816.7 -158 -2808.3 -159 -2800 -159.2C-2791.7 -159.4 -2783.3 -158.8 -2775 -158.4C-2766.7 -158.1 -2758.3 -157.8 -2750 -157.1C-2741.7 -156.4 -2733.3 -155.6 -2725 -154.2C-2716.7 -152.8 -2708.3 -150.2 -2700 -148.7C-2691.7 -147.2 -2683.3 -147 -2675 -145.4C-2666.7 -143.8 -2658.3 -141.3 -2650 -139.1C-2641.7 -136.8 -2633.3 -134.4 -2625 -132.1C-2616.7 -129.7 -2608.3 -127.2 -2600 -124.9C-2591.7 -122.7 -2583.3 -120.1 -2575 -118.5C-2566.7 -116.8 -2558.3 -116.6 -2550 -115.2C-2541.7 -113.9 -2533.3 -111.4 -2525 -110.4C-2516.7 -109.4 -2508.3 -109.3 -2500 -109C-2491.7 -108.8 -2483.3 -109 -2475 -109C-2466.7 -109 -2458.3 -108.8 -2450 -109.1C-2441.7 -109.4 -2433.3 -110.3 -2425 -110.8C-2416.7 -111.3 -2408.3 -110.9 -2400 -112C-2391.7 -113.1 -2383.3 -115.8 -2375 -117.4C-2366.7 -119 -2358.3 -120.4 -2350 -121.6C-2341.7 -122.9 -2333.3 -123.8 -2325 -125.1C-2316.7 -126.4 -2308.3 -128.3 -2300 -129.3C-2291.7 -130.3 -2283.3 -130.5 -2275 -131.1C-2266.7 -131.7 -2258.3 -133 -2250 -133.1C-2241.7 -133.2 -2233.3 -131.9 -2225 -131.5C-2216.7 -131.2 -2208.3 -131.1 -2200 -130.9C-2191.7 -130.7 -2183.3 -131.2 -2175 -130.5C-2166.7 -129.8 -2158.3 -127.9 -2150 -126.6C-2141.7 -125.4 -2133.3 -124.7 -2125 -123.1C-2116.7 -121.6 -2108.3 -119 -2100 -117.3C-2091.7 -115.7 -2083.3 -114.7 -2075 -113.1C-2066.7 -111.5 -2058.3 -109.7 -2050 -108C-2041.7 -106.2 -2033.3 -103.6 -2025 -102.4C-2016.7 -101.2 -2008.3 -101.5 -2000 -100.7C-1991.7 -99.9 -1983.3 -98.5 -1975 -97.7C-1966.7 -96.9 -1958.3 -96.7 -1950 -95.9C-1941.7 -95.1 -1933.3 -93.9 -1925 -93.2C-1916.7 -92.4 -1908.3 -91.8 -1900 -91.6C-1891.7 -91.5 -1883.3 -92.5 -1875 -92.3C-1866.7 -92.1 -1858.3 -90.6 -1850 -90.4C-1841.7 -90.1 -1833.3 -90.8 -1825 -90.8C-1816.7 -90.8 -1808.3 -90.5 -1800 -90.2C-1791.7 -89.8 -1783.3 -89.5 -1775 -88.7C-1766.7 -88 -1758.3 -87.1 -1750 -85.7C-1741.7 -84.3 -1733.3 -81.5 -1725 -80.1C-1716.7 -78.7 -1708.3 -78.5 -1700 -77.1C-1691.7 -75.7 -1683.3 -73.5 -1675 -71.7C-1666.7 -69.9 -1658.3 -67.9 -1650 -66.1C-1641.7 -64.2 -1633.3 -62.6 -1625 -60.7C-1616.7 -58.7 -1608.3 -56.3 -1600 -54.5C-1591.7 -52.8 -1583.3 -51.9 -1575 -50.1C-1566.7 -48.2 -1558.3 -44.9 -1550 -43.4C-1541.7 -41.8 -1533.3 -41.1 -1525 -40.6C-1516.7 -40 -1508.3 -40.2 -1500 -40.2C-1491.7 -40.2 -1483.3 -40 -1475 -40.5C-1466.7 -41.1 -1458.3 -42.6 -1450 -43.5C-1441.7 -44.5 -1433.3 -44.8 -1425 -46.5C-1416.7 -48.1 -1408.3 -51.1 -1400 -53.4C-1391.7 -55.6 -1383.3 -57.4 -1375 -59.7C-1366.7 -61.9 -1358.3 -63.9 -1350 -66.9C-1341.7 -69.8 -1333.3 -74 -1325 -77.3C-1316.7 -80.7 -1308.3 -83.5 -1300 -86.8C-1291.7 -90.1 -1283.3 -94.2 -1275 -97.1C-1266.7 -100 -1258.3 -101.7 -1250 -104.1C-1241.7 -106.5 -1233.3 -109 -1225 -111.4C-1216.7 -113.8 -1208.3 -116.7 -1200 -118.4C-1191.7 -120.1 -1183.3 -120.5 -1175 -121.8C-1166.7 -123.1 -1158.3 -125.1 -1150 -126.3C-1141.7 -127.4 -1133.3 -127.8 -1125 -128.6C-1116.7 -129.4 -1108.3 -130.6 -1100 -131C-1091.7 -131.4 -1083.3 -131.2 -1075 -130.8C-1066.7 -130.4 -1058.3 -128.8 -1050 -128.6C-1041.7 -128.3 -1033.3 -129.2 -1025 -129.1C-1016.7 -129 -1008.3 -128 -1000 -127.9C-991.7 -127.7 -983.3 -128.1 -975 -128.2C-966.7 -128.3 -958.3 -128.3 -950 -128.6C-941.7 -128.9 -933.3 -129.2 -925 -129.8C-916.7 -130.5 -908.3 -132.2 -900 -132.6C-891.7 -133 -883.3 -131.9 -875 -132.3C-866.7 -132.6 -858.3 -134 -850 -134.9C-841.7 -135.8 -833.3 -136.8 -825 -137.7C-816.7 -138.7 -808.3 -139.7 -800 -140.7C-791.7 -141.6 -783.3 -142.9 -775 -143.5C-766.7 -144 -758.3 -143.4 -750 -143.9C-741.7 -144.3 -733.3 -145.9 -725 -145.9C-716.7 -146 -708.3 -144.9 -700 -144.2C-691.7 -143.4 -683.3 -142.3 -675 -141.5C-666.7 -140.6 -658.3 -140.2 -650 -139.2C-641.7 -138.3 -633.3 -136.8 -625 -135.8C-616.7 -134.8 -608.3 -134.6 -600 -133.1C-591.7 -131.7 -583.3 -128.7 -575 -126.9C-566.7 -125.2 -558.3 -123.9 -550 -122.4C-541.7 -121 -533.3 -119.8 -525 -118.2C-516.7 -116.7 -508.3 -114.3 -500 -113.1C-491.7 -111.8 -483.3 -111.4 -475 -110.7C-466.7 -110 -458.3 -108.8 -450 -108.8C-441.7 -108.7 -433.3 -110.1 -425 -110.5C-416.7 -110.9 -408.3 -111 -400 -111.3C-391.7 -111.6 -383.3 -111.4 -375 -112.3C-366.7 -113.1 -358.3 -115.2 -350 -116.4C-341.7 -117.7 -333.3 -118.3 -325 -119.7C-316.7 -121.1 -308.3 -123.4 -300 -124.9C-291.7 -126.5 -283.3 -127.4 -275 -128.9C-266.7 -130.4 -258.3 -132.4 -250 -134C-241.7 -135.6 -233.3 -137.8 -225 -138.6C-216.7 -139.4 -208.3 -138.5 -200 -138.6C-191.7 -138.7 -183.3 -139.4 -175 -139.3C-166.7 -139.1 -158.3 -138.2 -150 -137.6C-141.7 -137 -133.3 -136.7 -125 -135.7C-116.7 -134.7 -108.3 -133.5 -100 -131.8C-91.7 -130.1 -83.3 -127.3 -75 -125.4C-66.7 -123.6 -58.3 -122.9 -50 -120.6C-41.7 -118.4 -33.3 -114.9 -25 -112.1C-16.7 -109.2 -8.3 -106.4 0 -103.6C8.3 -100.9 16.7 -98 25 -95.5C33.3 -92.9 41.7 -90.4 50 -88.5C58.3 -86.5 66.7 -85.7 75 -83.8C83.3 -81.8 91.7 -78.6 100 -76.9C108.3 -75.2 116.7 -74.5 125 -73.4C133.3 -72.3 141.7 -71.2 150 -70.1C158.3 -69.1 166.7 -67.8 175 -67C183.3 -66.3 191.7 -66.1 200 -65.6C208.3 -65.2 216.7 -64.1 225 -64.2C233.3 -64.4 241.7 -66.1 250 -66.5C258.3 -66.8 266.7 -66.4 275 -66.2C283.3 -66.1 291.7 -65.6 300 -65.5C308.3 -65.4 316.7 -65.8 325 -65.5C333.3 -65.2 341.7 -64.2 350 -63.8C358.3 -63.4 366.7 -63.7 375 -63.1C383.3 -62.5 391.7 -60.7 400 -60.1C408.3 -59.5 416.7 -59.6 425 -59.4C433.3 -59.1 441.7 -59.3 450 -58.7C458.3 -58 466.7 -56.3 475 -55.5C483.3 -54.8 491.7 -54.7 500 -54.2C508.3 -53.7 516.7 -52.5 525 -52.5C533.3 -52.4 541.7 -53.5 550 -54C558.3 -54.5 566.7 -54.9 575 -55.6C583.3 -56.4 591.7 -56.9 600 -58.5C608.3 -60.1 616.7 -63.3 625 -65.4C633.3 -67.4 641.7 -68.8 650 -70.9C658.3 -73.1 666.7 -75.9 675 -78.3C683.3 -80.7 691.7 -82.7 700 -85.5C708.3 -88.2 716.7 -91.5 725 -94.9C733.3 -98.2 741.7 -102.6 750 -105.7C758.3 -108.8 766.7 -110.7 775 -113.6C783.3 -116.5 791.7 -120.4 800 -123.2C808.3 -126 816.7 -128.2 825 -130.4C833.3 -132.5 841.7 -134.5 850 -136.1C858.3 -137.6 866.7 -138.8 875 -139.6C883.3 -140.4 891.7 -140.2 900 -140.9C908.3 -141.7 916.7 -143.7 925 -144C933.3 -144.4 941.7 -143.5 950 -143C958.3 -142.5 966.7 -141.9 975 -141.1C983.3 -140.3 991.7 -139.3 1000 -138.1C1008.3 -136.9 1016.7 -135.2 1025 -133.9C1033.3 -132.7 1041.7 -132.1 1050 -130.6C1058.3 -129.1 1066.7 -126.2 1075 -125C1083.3 -123.8 1091.7 -123.7 1100 -123.3C1108.3 -122.8 1116.7 -122.5 1125 -122.1C1133.3 -121.6 1141.7 -120.7 1150 -120.4C1158.3 -120.1 1166.7 -120.4 1175 -120.2C1183.3 -120.1 1191.7 -119.2 1200 -119.6C1208.3 -119.9 1216.7 -121.7 1225 -122.4C1233.3 -123.1 1241.7 -123.1 1250 -123.8C1258.3 -124.4 1266.7 -125.1 1275 -126.2C1283.3 -127.4 1291.7 -129.6 1300 -130.8C1308.3 -132 1316.7 -132.4 1325 -133.2C1333.3 -134 1341.7 -135.4 1350 -135.8C1358.3 -136.1 1366.7 -135.2 1375 -135.3C1383.3 -135.3 1391.7 -135.9 1400 -136.1C1408.3 -136.3 1416.7 -136.9 1425 -136.6C1433.3 -136.3 1441.7 -134.8 1450 -134.3C1458.3 -133.9 1466.7 -134.2 1475 -133.7C1483.3 -133.1 1491.7 -131.8 1500 -131C1508.3 -130.2 1516.7 -129.9 1525 -128.9C1533.3 -127.9 1541.7 -126.3 1550 -125C1558.3 -123.7 1566.7 -121.9 1575 -121.2C1583.3 -120.6 1591.7 -121.4 1600 -121.2C1608.3 -120.9 1616.7 -119.9 1625 -119.8C1633.3 -119.6 1641.7 -120.2 1650 -120.4C1658.3 -120.6 1666.7 -120.5 1675 -120.9C1683.3 -121.3 1691.7 -121.9 1700 -122.6C1708.3 -123.4 1716.7 -124.8 1725 -125.3C1733.3 -125.8 1741.7 -125 1750 -125.7C1758.3 -126.4 1766.7 -128.4 1775 -129.5C1783.3 -130.7 1791.7 -131.7 1800 -132.6C1808.3 -133.4 1816.7 -134.3 1825 -134.8C1833.3 -135.3 1841.7 -135.7 1850 -135.5C1858.3 -135.3 1866.7 -134 1875 -133.5C1883.3 -133.1 1891.7 -133.6 1900 -132.6C1908.3 -131.5 1916.7 -129.1 1925 -127.3C1933.3 -125.4 1941.7 -123.5 1950 -121.6C1958.3 -119.7 1966.7 -118.1 1975 -115.8C1983.3 -113.5 1991.7 -110.7 2000 -108.1C2008.3 -105.4 2016.7 -103.3 2025 -100.1C2033.3 -96.8 2041.7 -92 2050 -88.6C2058.3 -85.2 2066.7 -82.6 2075 -79.7C2083.3 -76.8 2091.7 -73.9 2100 -71C2108.3 -68.1 2116.7 -64.6 2125 -62.2C2133.3 -59.8 2141.7 -58.3 2150 -56.5C2158.3 -54.6 2166.7 -52.4 2175 -51.1C2183.3 -49.9 2191.7 -50 2200 -49.1C2208.3 -48.2 2216.7 -46.7 2225 -45.9C2233.3 -45.1 2241.7 -44.2 2250 -44.4C2258.3 -44.5 2266.7 -45.9 2275 -46.6C2283.3 -47.3 2291.7 -47.5 2300 -48.5C2308.3 -49.5 2316.7 -51.5 2325 -52.8C2333.3 -54 2341.7 -54.6 2350 -56C2358.3 -57.3 2366.7 -59.2 2375 -60.7C2383.3 -62.2 2391.7 -64 2400 -64.8C2408.3 -65.7 2416.7 -65.2 2425 -66C2433.3 -66.8 2441.7 -68.6 2450 -69.5C2458.3 -70.5 2466.7 -70.9 2475 -71.8C2483.3 -72.7 2491.7 -74 2500 -74.7C2508.3 -75.4 2516.7 -75.7 2525 -75.9C2533.3 -76.2 2541.7 -75.7 2550 -76.2C2558.3 -76.6 2566.7 -78.3 2575 -78.6C2583.3 -78.9 2591.7 -78 2600 -78.2C2608.3 -78.4 2616.7 -79.1 2625 -79.9C2633.3 -80.6 2641.7 -81.4 2650 -82.6C2658.3 -83.8 2666.7 -85.2 2675 -86.9C2683.3 -88.6 2691.7 -91.1 2700 -92.6C2708.3 -94.1 2716.7 -94.3 2725 -96C2733.3 -97.7 2741.7 -100.6 2750 -102.8C2758.3 -104.9 2766.7 -106.9 2775 -109C2783.3 -111.1 2791.7 -113.1 2800 -115.3C2808.3 -117.6 2816.7 -120.3 2825 -122.5C2833.3 -124.7 2841.7 -126.4 2850 -128.7C2858.3 -131 2866.7 -134.6 2875 -136.4C2883.3 -138.2 2891.7 -138.6 2900 -139.5C2908.3 -140.4 2916.7 -141 2925 -141.6C2933.3 -142.3 2941.7 -143.2 2950 -143.4C2958.3 -143.5 2966.7 -142.9 2975 -142.7C2983.3 -142.5 2995.8 -142.1 3000 -142L3000 60L-3000 60Z"></path>
+          <path class="Sky_Near" data-depth="0.05"
+            style="fill:url(#Sky-hill-Near);"
+            d="M-3000 -45.4C-2995.8 -45.5 -2983.3 -46.2 -2975 -46.2C-2966.7 -46.3 -2958.3 -45.4 -2950 -45.5C-2941.7 -45.5 -2933.3 -46.4 -2925 -46.7C-2916.7 -47 -2908.3 -47.3 -2900 -47.3C-2891.7 -47.2 -2883.3 -46.6 -2875 -46.3C-2866.7 -46.1 -2858.3 -46.1 -2850 -45.9C-2841.7 -45.7 -2833.3 -45.2 -2825 -45.1C-2816.7 -45.1 -2808.3 -45.9 -2800 -45.7C-2791.7 -45.6 -2783.3 -44.8 -2775 -44.2C-2766.7 -43.7 -2758.3 -42.9 -2750 -42.4C-2741.7 -42 -2733.3 -42.2 -2725 -41.6C-2716.7 -41.1 -2708.3 -40 -2700 -39.2C-2691.7 -38.4 -2683.3 -37.8 -2675 -36.9C-2666.7 -36 -2658.3 -34.4 -2650 -33.6C-2641.7 -32.9 -2633.3 -32.6 -2625 -32.1C-2616.7 -31.6 -2608.3 -31.4 -2600 -30.5C-2591.7 -29.7 -2583.3 -27.9 -2575 -27C-2566.7 -26.1 -2558.3 -25.8 -2550 -25C-2541.7 -24.3 -2533.3 -23.3 -2525 -22.7C-2516.7 -22.1 -2508.3 -21.8 -2500 -21.2C-2491.7 -20.7 -2483.3 -19.8 -2475 -19.2C-2466.7 -18.7 -2458.3 -18 -2450 -18C-2441.7 -18 -2433.3 -19.1 -2425 -19.2C-2416.7 -19.4 -2408.3 -18.8 -2400 -18.8C-2391.7 -18.9 -2383.3 -19.1 -2375 -19.3C-2366.7 -19.5 -2358.3 -19.6 -2350 -20.1C-2341.7 -20.6 -2333.3 -21.4 -2325 -22.2C-2316.7 -23.1 -2308.3 -24.4 -2300 -25.2C-2291.7 -26 -2283.3 -25.9 -2275 -27C-2266.7 -28 -2258.3 -30 -2250 -31.4C-2241.7 -32.8 -2233.3 -34.2 -2225 -35.5C-2216.7 -36.8 -2208.3 -38 -2200 -39.2C-2191.7 -40.4 -2183.3 -41.6 -2175 -42.8C-2166.7 -44 -2158.3 -44.9 -2150 -46.5C-2141.7 -48 -2133.3 -50.6 -2125 -52.1C-2116.7 -53.6 -2108.3 -54.4 -2100 -55.6C-2091.7 -56.8 -2083.3 -58 -2075 -59.3C-2066.7 -60.7 -2058.3 -62.4 -2050 -63.6C-2041.7 -64.8 -2033.3 -65.6 -2025 -66.6C-2016.7 -67.5 -2008.3 -68.7 -2000 -69.3C-1991.7 -69.8 -1983.3 -69.5 -1975 -70.1C-1966.7 -70.7 -1958.3 -72 -1950 -72.7C-1941.7 -73.4 -1933.3 -74.2 -1925 -74.5C-1916.7 -74.8 -1908.3 -74.4 -1900 -74.4C-1891.7 -74.5 -1883.3 -74.8 -1875 -74.7C-1866.7 -74.7 -1858.3 -74.1 -1850 -73.9C-1841.7 -73.7 -1833.3 -74.1 -1825 -73.7C-1816.7 -73.2 -1808.3 -72.1 -1800 -71.4C-1791.7 -70.7 -1783.3 -69.8 -1775 -69.4C-1766.7 -69 -1758.3 -69.5 -1750 -69C-1741.7 -68.6 -1733.3 -67.6 -1725 -66.9C-1716.7 -66.2 -1708.3 -65.7 -1700 -65C-1691.7 -64.2 -1683.3 -62.9 -1675 -62.2C-1666.7 -61.5 -1658.3 -61.2 -1650 -60.7C-1641.7 -60.3 -1633.3 -60 -1625 -59.3C-1616.7 -58.6 -1608.3 -57.1 -1600 -56.6C-1591.7 -56.1 -1583.3 -56.5 -1575 -56.4C-1566.7 -56.2 -1558.3 -55.9 -1550 -55.7C-1541.7 -55.6 -1533.3 -55.6 -1525 -55.3C-1516.7 -55.1 -1508.3 -54.5 -1500 -54.2C-1491.7 -53.8 -1483.3 -53.2 -1475 -53.3C-1466.7 -53.4 -1458.3 -54.5 -1450 -54.7C-1441.7 -54.8 -1433.3 -54.2 -1425 -54.2C-1416.7 -54.2 -1408.3 -54.4 -1400 -54.6C-1391.7 -54.8 -1383.3 -55.2 -1375 -55.4C-1366.7 -55.6 -1358.3 -55.9 -1350 -56.1C-1341.7 -56.3 -1333.3 -56.7 -1325 -56.5C-1316.7 -56.3 -1308.3 -55.1 -1300 -55C-1291.7 -54.8 -1283.3 -55.6 -1275 -55.7C-1266.7 -55.8 -1258.3 -55.9 -1250 -55.7C-1241.7 -55.6 -1233.3 -55.1 -1225 -54.8C-1216.7 -54.5 -1208.3 -54.3 -1200 -53.8C-1191.7 -53.4 -1183.3 -52.5 -1175 -52.1C-1166.7 -51.6 -1158.3 -51.9 -1150 -51.2C-1141.7 -50.4 -1133.3 -48.8 -1125 -47.7C-1116.7 -46.6 -1108.3 -45.5 -1100 -44.7C-1091.7 -43.9 -1083.3 -43.7 -1075 -42.8C-1066.7 -42 -1058.3 -40.8 -1050 -39.9C-1041.7 -38.9 -1033.3 -38.2 -1025 -37C-1016.7 -35.8 -1008.3 -33.8 -1000 -32.7C-991.7 -31.5 -983.3 -31 -975 -30.1C-966.7 -29.2 -958.3 -28.2 -950 -27C-941.7 -25.8 -933.3 -23.9 -925 -22.9C-916.7 -21.9 -908.3 -21.6 -900 -20.9C-891.7 -20.3 -883.3 -19.4 -875 -18.9C-866.7 -18.4 -858.3 -18.5 -850 -18C-841.7 -17.5 -833.3 -16.4 -825 -15.8C-816.7 -15.2 -808.3 -14.6 -800 -14.5C-791.7 -14.5 -783.3 -15.3 -775 -15.5C-766.7 -15.6 -758.3 -15.1 -750 -15.2C-741.7 -15.4 -733.3 -16.1 -725 -16.6C-716.7 -17.1 -708.3 -17.5 -700 -18.3C-691.7 -19.1 -683.3 -20.4 -675 -21.4C-666.7 -22.4 -658.3 -23.7 -650 -24.4C-641.7 -25.2 -633.3 -25.1 -625 -26C-616.7 -27 -608.3 -28.9 -600 -30.2C-591.7 -31.6 -583.3 -32.8 -575 -34.1C-566.7 -35.5 -558.3 -36.9 -550 -38.3C-541.7 -39.6 -533.3 -40.9 -525 -42.2C-516.7 -43.5 -508.3 -44.5 -500 -46C-491.7 -47.5 -483.3 -49.8 -475 -51.1C-466.7 -52.3 -458.3 -52.5 -450 -53.3C-441.7 -54.2 -433.3 -55.2 -425 -56.2C-416.7 -57.2 -408.3 -58.4 -400 -59.4C-391.7 -60.5 -383.3 -61.4 -375 -62.3C-366.7 -63.2 -358.3 -64.3 -350 -64.7C-341.7 -65.2 -333.3 -64.8 -325 -65.2C-316.7 -65.6 -308.3 -66.7 -300 -67.1C-291.7 -67.5 -283.3 -67.7 -275 -67.6C-266.7 -67.5 -258.3 -66.9 -250 -66.8C-241.7 -66.6 -233.3 -66.8 -225 -66.7C-216.7 -66.6 -208.3 -66.2 -200 -66.2C-191.7 -66.2 -183.3 -66.9 -175 -66.7C-166.7 -66.4 -158.3 -65.3 -150 -64.7C-141.7 -64.1 -133.3 -63.5 -125 -63.2C-116.7 -62.9 -108.3 -63.1 -100 -62.8C-91.7 -62.4 -83.3 -61.5 -75 -61C-66.7 -60.6 -58.3 -60.5 -50 -60.1C-41.7 -59.8 -33.3 -58.9 -25 -58.8C-16.7 -58.7 -8.3 -59.3 0 -59.4C8.3 -59.5 16.7 -59.6 25 -59.3C33.3 -59.1 41.7 -58 50 -57.9C58.3 -57.7 66.7 -58.3 75 -58.4C83.3 -58.5 91.7 -58.4 100 -58.6C108.3 -58.8 116.7 -59.5 125 -59.7C133.3 -59.9 141.7 -59.7 150 -59.9C158.3 -60.2 166.7 -60.4 175 -60.9C183.3 -61.5 191.7 -62.9 200 -63.2C208.3 -63.6 216.7 -63 225 -63.1C233.3 -63.1 241.7 -63.4 250 -63.6C258.3 -63.7 266.7 -63.8 275 -64C283.3 -64.3 291.7 -64.8 300 -65.1C308.3 -65.4 316.7 -65.8 325 -65.6C333.3 -65.5 341.7 -64.5 350 -64.4C358.3 -64.3 366.7 -65 375 -64.9C383.3 -64.8 391.7 -64.2 400 -63.7C408.3 -63.1 416.7 -62.3 425 -61.5C433.3 -60.8 441.7 -59.9 450 -59.1C458.3 -58.3 466.7 -57.3 475 -56.7C483.3 -56 491.7 -56.2 500 -55.3C508.3 -54.4 516.7 -52.4 525 -51.1C533.3 -49.9 541.7 -48.7 550 -47.6C558.3 -46.4 566.7 -45.5 575 -44.3C583.3 -43 591.7 -41.4 600 -40C608.3 -38.7 616.7 -37.5 625 -36.1C633.3 -34.6 641.7 -32.5 650 -31.3C658.3 -30.2 666.7 -30 675 -29.1C683.3 -28.2 691.7 -27.2 700 -26C708.3 -24.8 716.7 -23.1 725 -22C733.3 -21 741.7 -20.4 750 -19.6C758.3 -18.8 766.7 -17.7 775 -17.1C783.3 -16.6 791.7 -16.7 800 -16.2C808.3 -15.8 816.7 -14.7 825 -14.4C833.3 -14 841.7 -14 850 -14.2C858.3 -14.5 866.7 -15.6 875 -15.9C883.3 -16.2 891.7 -15.8 900 -16.1C908.3 -16.3 916.7 -16.9 925 -17.3C933.3 -17.8 941.7 -17.8 950 -18.6C958.3 -19.3 966.7 -20.8 975 -21.8C983.3 -22.9 991.7 -24 1000 -24.9C1008.3 -25.8 1016.7 -26 1025 -27.1C1033.3 -28.2 1041.7 -30.3 1050 -31.6C1058.3 -32.9 1066.7 -33.9 1075 -35C1083.3 -36.1 1091.7 -37.4 1100 -38.3C1108.3 -39.3 1116.7 -39.9 1125 -40.8C1133.3 -41.8 1141.7 -42.7 1150 -43.9C1158.3 -45.2 1166.7 -47.3 1175 -48.3C1183.3 -49.4 1191.7 -49.4 1200 -50.2C1208.3 -50.9 1216.7 -51.9 1225 -52.7C1233.3 -53.5 1241.7 -54.2 1250 -54.8C1258.3 -55.4 1266.7 -56 1275 -56.4C1283.3 -56.8 1291.7 -57.2 1300 -57.3C1308.3 -57.4 1316.7 -56.6 1325 -56.8C1333.3 -57 1341.7 -58.3 1350 -58.6C1358.3 -59 1366.7 -59 1375 -59C1383.3 -59 1391.7 -58.6 1400 -58.5C1408.3 -58.3 1416.7 -58.2 1425 -58C1433.3 -57.8 1441.7 -57.4 1450 -57.3C1458.3 -57.2 1466.7 -57.8 1475 -57.5C1483.3 -57.3 1491.7 -56.1 1500 -55.7C1508.3 -55.4 1516.7 -55.5 1525 -55.6C1533.3 -55.7 1541.7 -56.4 1550 -56.5C1558.3 -56.6 1566.7 -56.2 1575 -56.2C1583.3 -56.2 1591.7 -56.4 1600 -56.4C1608.3 -56.3 1616.7 -55.6 1625 -55.8C1633.3 -55.9 1641.7 -57 1650 -57.4C1658.3 -57.8 1666.7 -58.1 1675 -58.3C1683.3 -58.6 1691.7 -58.3 1700 -58.8C1708.3 -59.3 1716.7 -60.6 1725 -61.3C1733.3 -61.9 1741.7 -62.3 1750 -63C1758.3 -63.6 1766.7 -64.7 1775 -65.1C1783.3 -65.5 1791.7 -65.3 1800 -65.6C1808.3 -65.9 1816.7 -66.4 1825 -67.2C1833.3 -67.9 1841.7 -69.3 1850 -69.9C1858.3 -70.4 1866.7 -70.2 1875 -70.5C1883.3 -70.9 1891.7 -71.6 1900 -72C1908.3 -72.3 1916.7 -72.4 1925 -72.6C1933.3 -72.9 1941.7 -73.5 1950 -73.5C1958.3 -73.6 1966.7 -73.4 1975 -73C1983.3 -72.5 1991.7 -71.2 2000 -70.9C2008.3 -70.5 2016.7 -71.1 2025 -70.8C2033.3 -70.5 2041.7 -69.8 2050 -69.2C2058.3 -68.6 2066.7 -67.9 2075 -67C2083.3 -66.2 2091.7 -65 2100 -63.9C2108.3 -62.9 2116.7 -61.6 2125 -60.6C2133.3 -59.6 2141.7 -59.2 2150 -57.9C2158.3 -56.5 2166.7 -54 2175 -52.5C2183.3 -51 2191.7 -49.8 2200 -48.6C2208.3 -47.3 2216.7 -46.3 2225 -45.1C2233.3 -43.8 2241.7 -42.5 2250 -41.2C2258.3 -39.9 2266.7 -38.6 2275 -37.1C2283.3 -35.6 2291.7 -33.3 2300 -32C2308.3 -30.7 2316.7 -30.4 2325 -29.4C2333.3 -28.3 2341.7 -26.9 2350 -25.7C2358.3 -24.6 2366.7 -23.2 2375 -22.3C2383.3 -21.4 2391.7 -21.1 2400 -20.6C2408.3 -20 2416.7 -19.4 2425 -19.1C2433.3 -18.8 2441.7 -19.2 2450 -18.8C2458.3 -18.4 2466.7 -17.2 2475 -16.8C2483.3 -16.5 2491.7 -16.6 2500 -16.8C2508.3 -17 2516.7 -17.8 2525 -18.1C2533.3 -18.5 2541.7 -18.3 2550 -18.7C2558.3 -19.2 2566.7 -20 2575 -20.7C2583.3 -21.3 2591.7 -21.5 2600 -22.4C2608.3 -23.2 2616.7 -24.8 2625 -25.8C2633.3 -26.7 2641.7 -27.3 2650 -27.9C2658.3 -28.5 2666.7 -28.4 2675 -29.2C2683.3 -30 2691.7 -31.7 2700 -32.7C2708.3 -33.7 2716.7 -34.4 2725 -35.4C2733.3 -36.3 2741.7 -37.7 2750 -38.5C2758.3 -39.3 2766.7 -39.6 2775 -40.3C2783.3 -41 2791.7 -41.8 2800 -42.6C2808.3 -43.5 2816.7 -44.9 2825 -45.3C2833.3 -45.8 2841.7 -45.2 2850 -45.4C2858.3 -45.6 2866.7 -46.3 2875 -46.6C2883.3 -47 2891.7 -47.3 2900 -47.7C2908.3 -48.1 2916.7 -48.8 2925 -49C2933.3 -49.3 2941.7 -49.5 2950 -49.4C2958.3 -49.3 2966.7 -48.4 2975 -48.4C2983.3 -48.4 2995.8 -49.2 3000 -49.3L3000 60L-3000 60Z"></path>
+        </g>
+        <g class="Sky_Night">
+          <circle class="Sky_Fly" cx="1114.5" cy="-1.9" r="4.5"
+            fill="url(#Sky-fly)"
+            style="animation-delay:-0.7s;animation-duration:9.6s"></circle>
+          <circle class="Sky_Fly" cx="280.7" cy="-17.3" r="4.5"
+            fill="url(#Sky-fly)"
+            style="animation-delay:-4s;animation-duration:9.7s"></circle>
+          <circle class="Sky_Fly" cx="676.7" cy="-16.5" r="4.5"
+            fill="url(#Sky-fly)"
+            style="animation-delay:-7.6s;animation-duration:10.1s"></circle>
+          <circle class="Sky_Fly" cx="664.2" cy="-42.8" r="4.5"
+            fill="url(#Sky-fly)"
+            style="animation-delay:-8.8s;animation-duration:11.8s"></circle>
+          <circle class="Sky_Fly" cx="1190" cy="-17.3" r="4.5"
+            fill="url(#Sky-fly)"
+            style="animation-delay:-2.2s;animation-duration:11.4s"></circle>
+          <circle class="Sky_Fly" cx="404" cy="-34" r="4.5" fill="url(#Sky-fly)"
+            style="animation-delay:-7s;animation-duration:12.2s"></circle>
+          <circle class="Sky_Fly" cx="761.4" cy="-22.6" r="4.5"
+            fill="url(#Sky-fly)"
+            style="animation-delay:-7.4s;animation-duration:10.5s"></circle>
+          <circle class="Sky_Fly" cx="760.7" cy="-33.8" r="4.5"
+            fill="url(#Sky-fly)"
+            style="animation-delay:-3.4s;animation-duration:10.2s"></circle>
+          <circle class="Sky_Fly" cx="400.2" cy="-45.7" r="4.5"
+            fill="url(#Sky-fly)"
+            style="animation-delay:-5s;animation-duration:11.3s"></circle>
+        </g>
+        <g class="Sky_Day Sky_Birds"></g>
+      </svg>
+      <div class="Sky_Grass">
+        <svg class="Sky_Turf" viewBox="-3000 -60 6000 300" focusable="false">
+          <defs>
+            <linearGradient id="Sky-turf" gradientUnits="userSpaceOnUse" x1="0"
+              y1="-10" x2="0" y2="80">
+              <stop offset="0" class="Sky_Turf0"></stop>
+              <stop offset="1" class="Sky_Turf1"></stop>
+            </linearGradient>
+          </defs>
+          <path class="Sky_Base"
+            d="M-3000 12.3C-2995.8 12.5 -2983.3 13.1 -2975 13.5C-2966.7 13.9 -2958.3 14.3 -2950 14.8C-2941.7 15.2 -2933.3 15.8 -2925 16.2C-2916.7 16.5 -2908.3 16.7 -2900 16.9C-2891.7 17.2 -2883.3 17.9 -2875 17.9C-2866.7 17.9 -2858.3 17 -2850 16.8C-2841.7 16.6 -2833.3 16.8 -2825 16.8C-2816.7 16.8 -2808.3 17 -2800 16.9C-2791.7 16.8 -2783.3 16.3 -2775 16C-2766.7 15.8 -2758.3 15.8 -2750 15.5C-2741.7 15.1 -2733.3 14.2 -2725 13.8C-2716.7 13.5 -2708.3 13.6 -2700 13.2C-2691.7 12.7 -2683.3 11.9 -2675 11.2C-2666.7 10.5 -2658.3 9.4 -2650 8.9C-2641.7 8.4 -2633.3 8.5 -2625 8.1C-2616.7 7.7 -2608.3 7 -2600 6.6C-2591.7 6.2 -2583.3 6.2 -2575 5.7C-2566.7 5.2 -2558.3 4.2 -2550 3.6C-2541.7 3.1 -2533.3 2.8 -2525 2.4C-2516.7 2.1 -2508.3 2.1 -2500 1.7C-2491.7 1.2 -2483.3 0.1 -2475 -0.3C-2466.7 -0.7 -2458.3 -0.6 -2450 -0.8C-2441.7 -0.9 -2433.3 -1.3 -2425 -1.4C-2416.7 -1.5 -2408.3 -1.2 -2400 -1.3C-2391.7 -1.4 -2383.3 -1.7 -2375 -2C-2366.7 -2.4 -2358.3 -3.2 -2350 -3.4C-2341.7 -3.5 -2333.3 -3 -2325 -3.1C-2316.7 -3.1 -2308.3 -3.7 -2300 -3.9C-2291.7 -4.1 -2283.3 -4.1 -2275 -4.2C-2266.7 -4.3 -2258.3 -4.5 -2250 -4.5C-2241.7 -4.6 -2233.3 -4.7 -2225 -4.7C-2216.7 -4.7 -2208.3 -4.3 -2200 -4.6C-2191.7 -4.9 -2183.3 -6 -2175 -6.4C-2166.7 -6.8 -2158.3 -6.8 -2150 -7C-2141.7 -7.2 -2133.3 -7.4 -2125 -7.6C-2116.7 -7.8 -2108.3 -8.1 -2100 -8.3C-2091.7 -8.5 -2083.3 -8.6 -2075 -8.9C-2066.7 -9.2 -2058.3 -10 -2050 -10.1C-2041.7 -10.3 -2033.3 -9.8 -2025 -10C-2016.7 -10.2 -2008.3 -10.9 -2000 -11.4C-1991.7 -11.8 -1983.3 -12.4 -1975 -12.6C-1966.7 -12.9 -1958.3 -12.8 -1950 -12.9C-1941.7 -13 -1933.3 -13.3 -1925 -13.2C-1916.7 -13.2 -1908.3 -12.6 -1900 -12.7C-1891.7 -12.7 -1883.3 -13.4 -1875 -13.4C-1866.7 -13.5 -1858.3 -13.1 -1850 -12.9C-1841.7 -12.7 -1833.3 -12.4 -1825 -12.3C-1816.7 -12.2 -1808.3 -12.6 -1800 -12.5C-1791.7 -12.4 -1783.3 -11.9 -1775 -11.6C-1766.7 -11.3 -1758.3 -11.3 -1750 -10.9C-1741.7 -10.4 -1733.3 -9.3 -1725 -8.8C-1716.7 -8.3 -1708.3 -8.1 -1700 -7.8C-1691.7 -7.6 -1683.3 -7.6 -1675 -7.3C-1666.7 -6.9 -1658.3 -5.9 -1650 -5.5C-1641.7 -5.1 -1633.3 -5.2 -1625 -4.9C-1616.7 -4.6 -1608.3 -4 -1600 -3.6C-1591.7 -3.3 -1583.3 -3.4 -1575 -3.1C-1566.7 -2.8 -1558.3 -2.2 -1550 -1.7C-1541.7 -1.3 -1533.3 -0.5 -1525 -0.4C-1516.7 -0.3 -1508.3 -1 -1500 -1C-1491.7 -1.1 -1483.3 -0.7 -1475 -0.7C-1466.7 -0.7 -1458.3 -1 -1450 -1C-1441.7 -1.1 -1433.3 -0.9 -1425 -1C-1416.7 -1.1 -1408.3 -1.2 -1400 -1.5C-1391.7 -1.7 -1383.3 -2.3 -1375 -2.4C-1366.7 -2.5 -1358.3 -1.8 -1350 -2C-1341.7 -2.2 -1333.3 -3 -1325 -3.4C-1316.7 -3.8 -1308.3 -4.2 -1300 -4.6C-1291.7 -5 -1283.3 -5.4 -1275 -5.7C-1266.7 -6 -1258.3 -6.3 -1250 -6.4C-1241.7 -6.5 -1233.3 -6.1 -1225 -6.3C-1216.7 -6.5 -1208.3 -7.4 -1200 -7.6C-1191.7 -7.8 -1183.3 -7.4 -1175 -7.3C-1166.7 -7.3 -1158.3 -7.3 -1150 -7.4C-1141.7 -7.4 -1133.3 -7.7 -1125 -7.8C-1116.7 -7.8 -1108.3 -7.6 -1100 -7.6C-1091.7 -7.5 -1083.3 -7.8 -1075 -7.5C-1066.7 -7.1 -1058.3 -5.9 -1050 -5.5C-1041.7 -5 -1033.3 -5 -1025 -4.7C-1016.7 -4.4 -1008.3 -4.2 -1000 -3.8C-991.7 -3.3 -983.3 -2.5 -975 -2.1C-966.7 -1.6 -958.3 -1.5 -950 -1C-941.7 -0.6 -933.3 0.2 -925 0.7C-916.7 1.1 -908.3 0.9 -900 1.4C-891.7 1.9 -883.3 2.9 -875 3.6C-866.7 4.3 -858.3 5.3 -850 5.7C-841.7 6.2 -833.3 6.1 -825 6.4C-816.7 6.8 -808.3 7.4 -800 7.8C-791.7 8.1 -783.3 8 -775 8.3C-766.7 8.6 -758.3 9.3 -750 9.6C-741.7 9.9 -733.3 9.8 -725 9.9C-716.7 10 -708.3 9.9 -700 10.1C-691.7 10.4 -683.3 11.4 -675 11.6C-666.7 11.8 -658.3 11.4 -650 11.4C-641.7 11.3 -633.3 11.5 -625 11.4C-616.7 11.2 -608.3 10.7 -600 10.6C-591.7 10.5 -583.3 10.5 -575 10.6C-566.7 10.7 -558.3 11.1 -550 11C-541.7 10.9 -533.3 10.1 -525 10C-516.7 9.9 -508.3 10.5 -500 10.5C-491.7 10.6 -483.3 10.4 -475 10.4C-466.7 10.3 -458.3 10.3 -450 10.1C-441.7 10 -433.3 9.8 -425 9.6C-416.7 9.4 -408.3 8.8 -400 8.9C-391.7 8.9 -383.3 9.8 -375 10C-366.7 10.1 -358.3 9.7 -350 9.7C-341.7 9.6 -333.3 9.7 -325 9.7C-316.7 9.8 -308.3 9.9 -300 9.9C-291.7 9.9 -283.3 9.7 -275 9.7C-266.7 9.7 -258.3 10 -250 9.8C-241.7 9.5 -233.3 8.6 -225 8.4C-216.7 8.3 -208.3 8.7 -200 8.8C-191.7 8.8 -183.3 9 -175 8.8C-166.7 8.7 -158.3 8.2 -150 7.9C-141.7 7.6 -133.3 7.5 -125 7.1C-116.7 6.7 -108.3 5.9 -100 5.5C-91.7 5.1 -83.3 5.3 -75 4.8C-66.7 4.3 -58.3 3.3 -50 2.7C-41.7 2 -33.3 1.3 -25 0.8C-16.7 0.4 -8.3 0.5 0 0C8.3 -0.5 16.7 -1.4 25 -2C33.3 -2.6 41.7 -2.9 50 -3.6C58.3 -4.4 66.7 -5.8 75 -6.5C83.3 -7.3 91.7 -7.6 100 -8.2C108.3 -8.7 116.7 -9 125 -9.6C133.3 -10.3 141.7 -11.5 150 -12C158.3 -12.6 166.7 -12.5 175 -12.8C183.3 -13.2 191.7 -13.7 200 -14.1C208.3 -14.4 216.7 -14.3 225 -14.7C233.3 -15 241.7 -15.6 250 -16C258.3 -16.4 266.7 -17.1 275 -17.1C283.3 -17.2 291.7 -16.5 300 -16.4C308.3 -16.3 316.7 -16.7 325 -16.6C333.3 -16.5 341.7 -16.1 350 -15.9C358.3 -15.7 366.7 -15.5 375 -15.2C383.3 -15 391.7 -14.5 400 -14.2C408.3 -13.8 416.7 -13.1 425 -12.9C433.3 -12.7 441.7 -13.3 450 -13C458.3 -12.7 466.7 -11.8 475 -11.2C483.3 -10.6 491.7 -10.2 500 -9.7C508.3 -9.2 516.7 -8.7 525 -8.3C533.3 -7.8 541.7 -7.3 550 -7C558.3 -6.7 566.7 -6.8 575 -6.5C583.3 -6.1 591.7 -5 600 -4.8C608.3 -4.5 616.7 -5 625 -4.9C633.3 -4.9 641.7 -4.8 650 -4.6C658.3 -4.3 666.7 -3.8 675 -3.6C683.3 -3.4 691.7 -3.4 700 -3.2C708.3 -3.1 716.7 -2.6 725 -2.7C733.3 -2.8 741.7 -3.6 750 -3.8C758.3 -4 766.7 -3.6 775 -3.6C783.3 -3.6 791.7 -3.7 800 -3.9C808.3 -4.1 816.7 -4.7 825 -4.9C833.3 -5 841.7 -4.7 850 -4.8C858.3 -4.8 866.7 -5.1 875 -5.1C883.3 -5.1 891.7 -4.5 900 -4.5C908.3 -4.6 916.7 -5.2 925 -5.4C933.3 -5.7 941.7 -6.1 950 -6.1C958.3 -6.1 966.7 -5.5 975 -5.4C983.3 -5.4 991.7 -5.7 1000 -5.6C1008.3 -5.6 1016.7 -5.1 1025 -4.9C1033.3 -4.8 1041.7 -4.9 1050 -4.7C1058.3 -4.5 1066.7 -3.9 1075 -3.5C1083.3 -3.2 1091.7 -2.7 1100 -2.6C1108.3 -2.6 1116.7 -3.2 1125 -3.1C1133.3 -3 1141.7 -2.3 1150 -1.9C1158.3 -1.6 1166.7 -1.5 1175 -1.2C1183.3 -0.9 1191.7 -0.2 1200 0.1C1208.3 0.4 1216.7 0.6 1225 0.7C1233.3 0.9 1241.7 0.8 1250 1.1C1258.3 1.4 1266.7 2.4 1275 2.5C1283.3 2.7 1291.7 2.1 1300 2C1308.3 2 1316.7 2.1 1325 2.2C1333.3 2.2 1341.7 2.3 1350 2.4C1358.3 2.5 1366.7 2.7 1375 2.9C1383.3 3.1 1391.7 3.6 1400 3.5C1408.3 3.4 1416.7 2.6 1425 2.5C1433.3 2.4 1441.7 2.9 1450 2.9C1458.3 2.9 1466.7 2.7 1475 2.5C1483.3 2.4 1491.7 2.1 1500 2C1508.3 1.9 1516.7 2 1525 1.9C1533.3 1.9 1541.7 1.7 1550 1.9C1558.3 2.1 1566.7 3 1575 3.1C1583.3 3.2 1591.7 2.7 1600 2.6C1608.3 2.6 1616.7 2.5 1625 2.7C1633.3 2.8 1641.7 3.3 1650 3.5C1658.3 3.7 1666.7 3.6 1675 3.8C1683.3 4.1 1691.7 4.7 1700 5C1708.3 5.3 1716.7 5.1 1725 5.5C1733.3 5.9 1741.7 6.9 1750 7.5C1758.3 8.1 1766.7 8.6 1775 8.9C1783.3 9.2 1791.7 8.9 1800 9.2C1808.3 9.5 1816.7 10.2 1825 10.5C1833.3 10.9 1841.7 10.9 1850 11.4C1858.3 11.8 1866.7 12.7 1875 13.1C1883.3 13.5 1891.7 13.4 1900 13.7C1908.3 13.9 1916.7 14 1925 14.3C1933.3 14.7 1941.7 15.6 1950 15.7C1958.3 15.8 1966.7 15.2 1975 15.1C1983.3 15 1991.7 15.1 2000 14.9C2008.3 14.7 2016.7 14.2 2025 14.1C2033.3 13.9 2041.7 14.1 2050 14C2058.3 13.9 2066.7 13.9 2075 13.5C2083.3 13.1 2091.7 12 2100 11.5C2108.3 11 2116.7 11.2 2125 10.7C2133.3 10.2 2141.7 9.4 2150 8.7C2158.3 8 2166.7 7.4 2175 6.7C2183.3 5.9 2191.7 5.1 2200 4.3C2208.3 3.6 2216.7 2.7 2225 2.2C2233.3 1.7 2241.7 1.9 2250 1.4C2258.3 0.8 2266.7 -0.5 2275 -1.2C2283.3 -2 2291.7 -2.5 2300 -3.2C2308.3 -3.8 2316.7 -4.4 2325 -5C2333.3 -5.6 2341.7 -6.3 2350 -6.8C2358.3 -7.3 2366.7 -7.5 2375 -8C2383.3 -8.6 2391.7 -9.7 2400 -10C2408.3 -10.3 2416.7 -9.8 2425 -9.9C2433.3 -10 2441.7 -10.2 2450 -10.5C2458.3 -10.7 2466.7 -11.3 2475 -11.5C2483.3 -11.7 2491.7 -11.7 2500 -11.9C2508.3 -12.1 2516.7 -12.6 2525 -12.6C2533.3 -12.6 2541.7 -11.9 2550 -11.9C2558.3 -11.9 2566.7 -12.4 2575 -12.4C2583.3 -12.4 2591.7 -12.3 2600 -12.1C2608.3 -11.9 2616.7 -11.2 2625 -11.1C2633.3 -11 2641.7 -11.3 2650 -11.3C2658.3 -11.3 2666.7 -11.1 2675 -11.2C2683.3 -11.3 2691.7 -11.9 2700 -11.9C2708.3 -11.9 2716.7 -11.3 2725 -11.1C2733.3 -11 2741.7 -10.7 2750 -10.8C2758.3 -10.8 2766.7 -11.4 2775 -11.3C2783.3 -11.3 2791.7 -10.8 2800 -10.7C2808.3 -10.7 2816.7 -11 2825 -11.1C2833.3 -11.1 2841.7 -10.9 2850 -11.1C2858.3 -11.2 2866.7 -11.8 2875 -12C2883.3 -12.2 2891.7 -12.4 2900 -12.2C2908.3 -12.1 2916.7 -11.3 2925 -11.2C2933.3 -11 2941.7 -11.6 2950 -11.5C2958.3 -11.5 2966.7 -11.2 2975 -11.1C2983.3 -11.1 2995.8 -11.1 3000 -11.1L3000 240L-3000 240Z"></path>
+          <path class="Sky_Ground" fill="url(#Sky-turf)"
+            d="M-3000 12.3C-2995.8 12.5 -2983.3 13.1 -2975 13.5C-2966.7 13.9 -2958.3 14.3 -2950 14.8C-2941.7 15.2 -2933.3 15.8 -2925 16.2C-2916.7 16.5 -2908.3 16.7 -2900 16.9C-2891.7 17.2 -2883.3 17.9 -2875 17.9C-2866.7 17.9 -2858.3 17 -2850 16.8C-2841.7 16.6 -2833.3 16.8 -2825 16.8C-2816.7 16.8 -2808.3 17 -2800 16.9C-2791.7 16.8 -2783.3 16.3 -2775 16C-2766.7 15.8 -2758.3 15.8 -2750 15.5C-2741.7 15.1 -2733.3 14.2 -2725 13.8C-2716.7 13.5 -2708.3 13.6 -2700 13.2C-2691.7 12.7 -2683.3 11.9 -2675 11.2C-2666.7 10.5 -2658.3 9.4 -2650 8.9C-2641.7 8.4 -2633.3 8.5 -2625 8.1C-2616.7 7.7 -2608.3 7 -2600 6.6C-2591.7 6.2 -2583.3 6.2 -2575 5.7C-2566.7 5.2 -2558.3 4.2 -2550 3.6C-2541.7 3.1 -2533.3 2.8 -2525 2.4C-2516.7 2.1 -2508.3 2.1 -2500 1.7C-2491.7 1.2 -2483.3 0.1 -2475 -0.3C-2466.7 -0.7 -2458.3 -0.6 -2450 -0.8C-2441.7 -0.9 -2433.3 -1.3 -2425 -1.4C-2416.7 -1.5 -2408.3 -1.2 -2400 -1.3C-2391.7 -1.4 -2383.3 -1.7 -2375 -2C-2366.7 -2.4 -2358.3 -3.2 -2350 -3.4C-2341.7 -3.5 -2333.3 -3 -2325 -3.1C-2316.7 -3.1 -2308.3 -3.7 -2300 -3.9C-2291.7 -4.1 -2283.3 -4.1 -2275 -4.2C-2266.7 -4.3 -2258.3 -4.5 -2250 -4.5C-2241.7 -4.6 -2233.3 -4.7 -2225 -4.7C-2216.7 -4.7 -2208.3 -4.3 -2200 -4.6C-2191.7 -4.9 -2183.3 -6 -2175 -6.4C-2166.7 -6.8 -2158.3 -6.8 -2150 -7C-2141.7 -7.2 -2133.3 -7.4 -2125 -7.6C-2116.7 -7.8 -2108.3 -8.1 -2100 -8.3C-2091.7 -8.5 -2083.3 -8.6 -2075 -8.9C-2066.7 -9.2 -2058.3 -10 -2050 -10.1C-2041.7 -10.3 -2033.3 -9.8 -2025 -10C-2016.7 -10.2 -2008.3 -10.9 -2000 -11.4C-1991.7 -11.8 -1983.3 -12.4 -1975 -12.6C-1966.7 -12.9 -1958.3 -12.8 -1950 -12.9C-1941.7 -13 -1933.3 -13.3 -1925 -13.2C-1916.7 -13.2 -1908.3 -12.6 -1900 -12.7C-1891.7 -12.7 -1883.3 -13.4 -1875 -13.4C-1866.7 -13.5 -1858.3 -13.1 -1850 -12.9C-1841.7 -12.7 -1833.3 -12.4 -1825 -12.3C-1816.7 -12.2 -1808.3 -12.6 -1800 -12.5C-1791.7 -12.4 -1783.3 -11.9 -1775 -11.6C-1766.7 -11.3 -1758.3 -11.3 -1750 -10.9C-1741.7 -10.4 -1733.3 -9.3 -1725 -8.8C-1716.7 -8.3 -1708.3 -8.1 -1700 -7.8C-1691.7 -7.6 -1683.3 -7.6 -1675 -7.3C-1666.7 -6.9 -1658.3 -5.9 -1650 -5.5C-1641.7 -5.1 -1633.3 -5.2 -1625 -4.9C-1616.7 -4.6 -1608.3 -4 -1600 -3.6C-1591.7 -3.3 -1583.3 -3.4 -1575 -3.1C-1566.7 -2.8 -1558.3 -2.2 -1550 -1.7C-1541.7 -1.3 -1533.3 -0.5 -1525 -0.4C-1516.7 -0.3 -1508.3 -1 -1500 -1C-1491.7 -1.1 -1483.3 -0.7 -1475 -0.7C-1466.7 -0.7 -1458.3 -1 -1450 -1C-1441.7 -1.1 -1433.3 -0.9 -1425 -1C-1416.7 -1.1 -1408.3 -1.2 -1400 -1.5C-1391.7 -1.7 -1383.3 -2.3 -1375 -2.4C-1366.7 -2.5 -1358.3 -1.8 -1350 -2C-1341.7 -2.2 -1333.3 -3 -1325 -3.4C-1316.7 -3.8 -1308.3 -4.2 -1300 -4.6C-1291.7 -5 -1283.3 -5.4 -1275 -5.7C-1266.7 -6 -1258.3 -6.3 -1250 -6.4C-1241.7 -6.5 -1233.3 -6.1 -1225 -6.3C-1216.7 -6.5 -1208.3 -7.4 -1200 -7.6C-1191.7 -7.8 -1183.3 -7.4 -1175 -7.3C-1166.7 -7.3 -1158.3 -7.3 -1150 -7.4C-1141.7 -7.4 -1133.3 -7.7 -1125 -7.8C-1116.7 -7.8 -1108.3 -7.6 -1100 -7.6C-1091.7 -7.5 -1083.3 -7.8 -1075 -7.5C-1066.7 -7.1 -1058.3 -5.9 -1050 -5.5C-1041.7 -5 -1033.3 -5 -1025 -4.7C-1016.7 -4.4 -1008.3 -4.2 -1000 -3.8C-991.7 -3.3 -983.3 -2.5 -975 -2.1C-966.7 -1.6 -958.3 -1.5 -950 -1C-941.7 -0.6 -933.3 0.2 -925 0.7C-916.7 1.1 -908.3 0.9 -900 1.4C-891.7 1.9 -883.3 2.9 -875 3.6C-866.7 4.3 -858.3 5.3 -850 5.7C-841.7 6.2 -833.3 6.1 -825 6.4C-816.7 6.8 -808.3 7.4 -800 7.8C-791.7 8.1 -783.3 8 -775 8.3C-766.7 8.6 -758.3 9.3 -750 9.6C-741.7 9.9 -733.3 9.8 -725 9.9C-716.7 10 -708.3 9.9 -700 10.1C-691.7 10.4 -683.3 11.4 -675 11.6C-666.7 11.8 -658.3 11.4 -650 11.4C-641.7 11.3 -633.3 11.5 -625 11.4C-616.7 11.2 -608.3 10.7 -600 10.6C-591.7 10.5 -583.3 10.5 -575 10.6C-566.7 10.7 -558.3 11.1 -550 11C-541.7 10.9 -533.3 10.1 -525 10C-516.7 9.9 -508.3 10.5 -500 10.5C-491.7 10.6 -483.3 10.4 -475 10.4C-466.7 10.3 -458.3 10.3 -450 10.1C-441.7 10 -433.3 9.8 -425 9.6C-416.7 9.4 -408.3 8.8 -400 8.9C-391.7 8.9 -383.3 9.8 -375 10C-366.7 10.1 -358.3 9.7 -350 9.7C-341.7 9.6 -333.3 9.7 -325 9.7C-316.7 9.8 -308.3 9.9 -300 9.9C-291.7 9.9 -283.3 9.7 -275 9.7C-266.7 9.7 -258.3 10 -250 9.8C-241.7 9.5 -233.3 8.6 -225 8.4C-216.7 8.3 -208.3 8.7 -200 8.8C-191.7 8.8 -183.3 9 -175 8.8C-166.7 8.7 -158.3 8.2 -150 7.9C-141.7 7.6 -133.3 7.5 -125 7.1C-116.7 6.7 -108.3 5.9 -100 5.5C-91.7 5.1 -83.3 5.3 -75 4.8C-66.7 4.3 -58.3 3.3 -50 2.7C-41.7 2 -33.3 1.3 -25 0.8C-16.7 0.4 -8.3 0.5 0 0C8.3 -0.5 16.7 -1.4 25 -2C33.3 -2.6 41.7 -2.9 50 -3.6C58.3 -4.4 66.7 -5.8 75 -6.5C83.3 -7.3 91.7 -7.6 100 -8.2C108.3 -8.7 116.7 -9 125 -9.6C133.3 -10.3 141.7 -11.5 150 -12C158.3 -12.6 166.7 -12.5 175 -12.8C183.3 -13.2 191.7 -13.7 200 -14.1C208.3 -14.4 216.7 -14.3 225 -14.7C233.3 -15 241.7 -15.6 250 -16C258.3 -16.4 266.7 -17.1 275 -17.1C283.3 -17.2 291.7 -16.5 300 -16.4C308.3 -16.3 316.7 -16.7 325 -16.6C333.3 -16.5 341.7 -16.1 350 -15.9C358.3 -15.7 366.7 -15.5 375 -15.2C383.3 -15 391.7 -14.5 400 -14.2C408.3 -13.8 416.7 -13.1 425 -12.9C433.3 -12.7 441.7 -13.3 450 -13C458.3 -12.7 466.7 -11.8 475 -11.2C483.3 -10.6 491.7 -10.2 500 -9.7C508.3 -9.2 516.7 -8.7 525 -8.3C533.3 -7.8 541.7 -7.3 550 -7C558.3 -6.7 566.7 -6.8 575 -6.5C583.3 -6.1 591.7 -5 600 -4.8C608.3 -4.5 616.7 -5 625 -4.9C633.3 -4.9 641.7 -4.8 650 -4.6C658.3 -4.3 666.7 -3.8 675 -3.6C683.3 -3.4 691.7 -3.4 700 -3.2C708.3 -3.1 716.7 -2.6 725 -2.7C733.3 -2.8 741.7 -3.6 750 -3.8C758.3 -4 766.7 -3.6 775 -3.6C783.3 -3.6 791.7 -3.7 800 -3.9C808.3 -4.1 816.7 -4.7 825 -4.9C833.3 -5 841.7 -4.7 850 -4.8C858.3 -4.8 866.7 -5.1 875 -5.1C883.3 -5.1 891.7 -4.5 900 -4.5C908.3 -4.6 916.7 -5.2 925 -5.4C933.3 -5.7 941.7 -6.1 950 -6.1C958.3 -6.1 966.7 -5.5 975 -5.4C983.3 -5.4 991.7 -5.7 1000 -5.6C1008.3 -5.6 1016.7 -5.1 1025 -4.9C1033.3 -4.8 1041.7 -4.9 1050 -4.7C1058.3 -4.5 1066.7 -3.9 1075 -3.5C1083.3 -3.2 1091.7 -2.7 1100 -2.6C1108.3 -2.6 1116.7 -3.2 1125 -3.1C1133.3 -3 1141.7 -2.3 1150 -1.9C1158.3 -1.6 1166.7 -1.5 1175 -1.2C1183.3 -0.9 1191.7 -0.2 1200 0.1C1208.3 0.4 1216.7 0.6 1225 0.7C1233.3 0.9 1241.7 0.8 1250 1.1C1258.3 1.4 1266.7 2.4 1275 2.5C1283.3 2.7 1291.7 2.1 1300 2C1308.3 2 1316.7 2.1 1325 2.2C1333.3 2.2 1341.7 2.3 1350 2.4C1358.3 2.5 1366.7 2.7 1375 2.9C1383.3 3.1 1391.7 3.6 1400 3.5C1408.3 3.4 1416.7 2.6 1425 2.5C1433.3 2.4 1441.7 2.9 1450 2.9C1458.3 2.9 1466.7 2.7 1475 2.5C1483.3 2.4 1491.7 2.1 1500 2C1508.3 1.9 1516.7 2 1525 1.9C1533.3 1.9 1541.7 1.7 1550 1.9C1558.3 2.1 1566.7 3 1575 3.1C1583.3 3.2 1591.7 2.7 1600 2.6C1608.3 2.6 1616.7 2.5 1625 2.7C1633.3 2.8 1641.7 3.3 1650 3.5C1658.3 3.7 1666.7 3.6 1675 3.8C1683.3 4.1 1691.7 4.7 1700 5C1708.3 5.3 1716.7 5.1 1725 5.5C1733.3 5.9 1741.7 6.9 1750 7.5C1758.3 8.1 1766.7 8.6 1775 8.9C1783.3 9.2 1791.7 8.9 1800 9.2C1808.3 9.5 1816.7 10.2 1825 10.5C1833.3 10.9 1841.7 10.9 1850 11.4C1858.3 11.8 1866.7 12.7 1875 13.1C1883.3 13.5 1891.7 13.4 1900 13.7C1908.3 13.9 1916.7 14 1925 14.3C1933.3 14.7 1941.7 15.6 1950 15.7C1958.3 15.8 1966.7 15.2 1975 15.1C1983.3 15 1991.7 15.1 2000 14.9C2008.3 14.7 2016.7 14.2 2025 14.1C2033.3 13.9 2041.7 14.1 2050 14C2058.3 13.9 2066.7 13.9 2075 13.5C2083.3 13.1 2091.7 12 2100 11.5C2108.3 11 2116.7 11.2 2125 10.7C2133.3 10.2 2141.7 9.4 2150 8.7C2158.3 8 2166.7 7.4 2175 6.7C2183.3 5.9 2191.7 5.1 2200 4.3C2208.3 3.6 2216.7 2.7 2225 2.2C2233.3 1.7 2241.7 1.9 2250 1.4C2258.3 0.8 2266.7 -0.5 2275 -1.2C2283.3 -2 2291.7 -2.5 2300 -3.2C2308.3 -3.8 2316.7 -4.4 2325 -5C2333.3 -5.6 2341.7 -6.3 2350 -6.8C2358.3 -7.3 2366.7 -7.5 2375 -8C2383.3 -8.6 2391.7 -9.7 2400 -10C2408.3 -10.3 2416.7 -9.8 2425 -9.9C2433.3 -10 2441.7 -10.2 2450 -10.5C2458.3 -10.7 2466.7 -11.3 2475 -11.5C2483.3 -11.7 2491.7 -11.7 2500 -11.9C2508.3 -12.1 2516.7 -12.6 2525 -12.6C2533.3 -12.6 2541.7 -11.9 2550 -11.9C2558.3 -11.9 2566.7 -12.4 2575 -12.4C2583.3 -12.4 2591.7 -12.3 2600 -12.1C2608.3 -11.9 2616.7 -11.2 2625 -11.1C2633.3 -11 2641.7 -11.3 2650 -11.3C2658.3 -11.3 2666.7 -11.1 2675 -11.2C2683.3 -11.3 2691.7 -11.9 2700 -11.9C2708.3 -11.9 2716.7 -11.3 2725 -11.1C2733.3 -11 2741.7 -10.7 2750 -10.8C2758.3 -10.8 2766.7 -11.4 2775 -11.3C2783.3 -11.3 2791.7 -10.8 2800 -10.7C2808.3 -10.7 2816.7 -11 2825 -11.1C2833.3 -11.1 2841.7 -10.9 2850 -11.1C2858.3 -11.2 2866.7 -11.8 2875 -12C2883.3 -12.2 2891.7 -12.4 2900 -12.2C2908.3 -12.1 2916.7 -11.3 2925 -11.2C2933.3 -11 2941.7 -11.6 2950 -11.5C2958.3 -11.5 2966.7 -11.2 2975 -11.1C2983.3 -11.1 2995.8 -11.1 3000 -11.1L3000 240L-3000 240Z"></path>
+          <path class="Sky_Line"
+            d="M-3000 12.3C-2995.8 12.5 -2983.3 13.1 -2975 13.5C-2966.7 13.9 -2958.3 14.3 -2950 14.8C-2941.7 15.2 -2933.3 15.8 -2925 16.2C-2916.7 16.5 -2908.3 16.7 -2900 16.9C-2891.7 17.2 -2883.3 17.9 -2875 17.9C-2866.7 17.9 -2858.3 17 -2850 16.8C-2841.7 16.6 -2833.3 16.8 -2825 16.8C-2816.7 16.8 -2808.3 17 -2800 16.9C-2791.7 16.8 -2783.3 16.3 -2775 16C-2766.7 15.8 -2758.3 15.8 -2750 15.5C-2741.7 15.1 -2733.3 14.2 -2725 13.8C-2716.7 13.5 -2708.3 13.6 -2700 13.2C-2691.7 12.7 -2683.3 11.9 -2675 11.2C-2666.7 10.5 -2658.3 9.4 -2650 8.9C-2641.7 8.4 -2633.3 8.5 -2625 8.1C-2616.7 7.7 -2608.3 7 -2600 6.6C-2591.7 6.2 -2583.3 6.2 -2575 5.7C-2566.7 5.2 -2558.3 4.2 -2550 3.6C-2541.7 3.1 -2533.3 2.8 -2525 2.4C-2516.7 2.1 -2508.3 2.1 -2500 1.7C-2491.7 1.2 -2483.3 0.1 -2475 -0.3C-2466.7 -0.7 -2458.3 -0.6 -2450 -0.8C-2441.7 -0.9 -2433.3 -1.3 -2425 -1.4C-2416.7 -1.5 -2408.3 -1.2 -2400 -1.3C-2391.7 -1.4 -2383.3 -1.7 -2375 -2C-2366.7 -2.4 -2358.3 -3.2 -2350 -3.4C-2341.7 -3.5 -2333.3 -3 -2325 -3.1C-2316.7 -3.1 -2308.3 -3.7 -2300 -3.9C-2291.7 -4.1 -2283.3 -4.1 -2275 -4.2C-2266.7 -4.3 -2258.3 -4.5 -2250 -4.5C-2241.7 -4.6 -2233.3 -4.7 -2225 -4.7C-2216.7 -4.7 -2208.3 -4.3 -2200 -4.6C-2191.7 -4.9 -2183.3 -6 -2175 -6.4C-2166.7 -6.8 -2158.3 -6.8 -2150 -7C-2141.7 -7.2 -2133.3 -7.4 -2125 -7.6C-2116.7 -7.8 -2108.3 -8.1 -2100 -8.3C-2091.7 -8.5 -2083.3 -8.6 -2075 -8.9C-2066.7 -9.2 -2058.3 -10 -2050 -10.1C-2041.7 -10.3 -2033.3 -9.8 -2025 -10C-2016.7 -10.2 -2008.3 -10.9 -2000 -11.4C-1991.7 -11.8 -1983.3 -12.4 -1975 -12.6C-1966.7 -12.9 -1958.3 -12.8 -1950 -12.9C-1941.7 -13 -1933.3 -13.3 -1925 -13.2C-1916.7 -13.2 -1908.3 -12.6 -1900 -12.7C-1891.7 -12.7 -1883.3 -13.4 -1875 -13.4C-1866.7 -13.5 -1858.3 -13.1 -1850 -12.9C-1841.7 -12.7 -1833.3 -12.4 -1825 -12.3C-1816.7 -12.2 -1808.3 -12.6 -1800 -12.5C-1791.7 -12.4 -1783.3 -11.9 -1775 -11.6C-1766.7 -11.3 -1758.3 -11.3 -1750 -10.9C-1741.7 -10.4 -1733.3 -9.3 -1725 -8.8C-1716.7 -8.3 -1708.3 -8.1 -1700 -7.8C-1691.7 -7.6 -1683.3 -7.6 -1675 -7.3C-1666.7 -6.9 -1658.3 -5.9 -1650 -5.5C-1641.7 -5.1 -1633.3 -5.2 -1625 -4.9C-1616.7 -4.6 -1608.3 -4 -1600 -3.6C-1591.7 -3.3 -1583.3 -3.4 -1575 -3.1C-1566.7 -2.8 -1558.3 -2.2 -1550 -1.7C-1541.7 -1.3 -1533.3 -0.5 -1525 -0.4C-1516.7 -0.3 -1508.3 -1 -1500 -1C-1491.7 -1.1 -1483.3 -0.7 -1475 -0.7C-1466.7 -0.7 -1458.3 -1 -1450 -1C-1441.7 -1.1 -1433.3 -0.9 -1425 -1C-1416.7 -1.1 -1408.3 -1.2 -1400 -1.5C-1391.7 -1.7 -1383.3 -2.3 -1375 -2.4C-1366.7 -2.5 -1358.3 -1.8 -1350 -2C-1341.7 -2.2 -1333.3 -3 -1325 -3.4C-1316.7 -3.8 -1308.3 -4.2 -1300 -4.6C-1291.7 -5 -1283.3 -5.4 -1275 -5.7C-1266.7 -6 -1258.3 -6.3 -1250 -6.4C-1241.7 -6.5 -1233.3 -6.1 -1225 -6.3C-1216.7 -6.5 -1208.3 -7.4 -1200 -7.6C-1191.7 -7.8 -1183.3 -7.4 -1175 -7.3C-1166.7 -7.3 -1158.3 -7.3 -1150 -7.4C-1141.7 -7.4 -1133.3 -7.7 -1125 -7.8C-1116.7 -7.8 -1108.3 -7.6 -1100 -7.6C-1091.7 -7.5 -1083.3 -7.8 -1075 -7.5C-1066.7 -7.1 -1058.3 -5.9 -1050 -5.5C-1041.7 -5 -1033.3 -5 -1025 -4.7C-1016.7 -4.4 -1008.3 -4.2 -1000 -3.8C-991.7 -3.3 -983.3 -2.5 -975 -2.1C-966.7 -1.6 -958.3 -1.5 -950 -1C-941.7 -0.6 -933.3 0.2 -925 0.7C-916.7 1.1 -908.3 0.9 -900 1.4C-891.7 1.9 -883.3 2.9 -875 3.6C-866.7 4.3 -858.3 5.3 -850 5.7C-841.7 6.2 -833.3 6.1 -825 6.4C-816.7 6.8 -808.3 7.4 -800 7.8C-791.7 8.1 -783.3 8 -775 8.3C-766.7 8.6 -758.3 9.3 -750 9.6C-741.7 9.9 -733.3 9.8 -725 9.9C-716.7 10 -708.3 9.9 -700 10.1C-691.7 10.4 -683.3 11.4 -675 11.6C-666.7 11.8 -658.3 11.4 -650 11.4C-641.7 11.3 -633.3 11.5 -625 11.4C-616.7 11.2 -608.3 10.7 -600 10.6C-591.7 10.5 -583.3 10.5 -575 10.6C-566.7 10.7 -558.3 11.1 -550 11C-541.7 10.9 -533.3 10.1 -525 10C-516.7 9.9 -508.3 10.5 -500 10.5C-491.7 10.6 -483.3 10.4 -475 10.4C-466.7 10.3 -458.3 10.3 -450 10.1C-441.7 10 -433.3 9.8 -425 9.6C-416.7 9.4 -408.3 8.8 -400 8.9C-391.7 8.9 -383.3 9.8 -375 10C-366.7 10.1 -358.3 9.7 -350 9.7C-341.7 9.6 -333.3 9.7 -325 9.7C-316.7 9.8 -308.3 9.9 -300 9.9C-291.7 9.9 -283.3 9.7 -275 9.7C-266.7 9.7 -258.3 10 -250 9.8C-241.7 9.5 -233.3 8.6 -225 8.4C-216.7 8.3 -208.3 8.7 -200 8.8C-191.7 8.8 -183.3 9 -175 8.8C-166.7 8.7 -158.3 8.2 -150 7.9C-141.7 7.6 -133.3 7.5 -125 7.1C-116.7 6.7 -108.3 5.9 -100 5.5C-91.7 5.1 -83.3 5.3 -75 4.8C-66.7 4.3 -58.3 3.3 -50 2.7C-41.7 2 -33.3 1.3 -25 0.8C-16.7 0.4 -8.3 0.5 0 0C8.3 -0.5 16.7 -1.4 25 -2C33.3 -2.6 41.7 -2.9 50 -3.6C58.3 -4.4 66.7 -5.8 75 -6.5C83.3 -7.3 91.7 -7.6 100 -8.2C108.3 -8.7 116.7 -9 125 -9.6C133.3 -10.3 141.7 -11.5 150 -12C158.3 -12.6 166.7 -12.5 175 -12.8C183.3 -13.2 191.7 -13.7 200 -14.1C208.3 -14.4 216.7 -14.3 225 -14.7C233.3 -15 241.7 -15.6 250 -16C258.3 -16.4 266.7 -17.1 275 -17.1C283.3 -17.2 291.7 -16.5 300 -16.4C308.3 -16.3 316.7 -16.7 325 -16.6C333.3 -16.5 341.7 -16.1 350 -15.9C358.3 -15.7 366.7 -15.5 375 -15.2C383.3 -15 391.7 -14.5 400 -14.2C408.3 -13.8 416.7 -13.1 425 -12.9C433.3 -12.7 441.7 -13.3 450 -13C458.3 -12.7 466.7 -11.8 475 -11.2C483.3 -10.6 491.7 -10.2 500 -9.7C508.3 -9.2 516.7 -8.7 525 -8.3C533.3 -7.8 541.7 -7.3 550 -7C558.3 -6.7 566.7 -6.8 575 -6.5C583.3 -6.1 591.7 -5 600 -4.8C608.3 -4.5 616.7 -5 625 -4.9C633.3 -4.9 641.7 -4.8 650 -4.6C658.3 -4.3 666.7 -3.8 675 -3.6C683.3 -3.4 691.7 -3.4 700 -3.2C708.3 -3.1 716.7 -2.6 725 -2.7C733.3 -2.8 741.7 -3.6 750 -3.8C758.3 -4 766.7 -3.6 775 -3.6C783.3 -3.6 791.7 -3.7 800 -3.9C808.3 -4.1 816.7 -4.7 825 -4.9C833.3 -5 841.7 -4.7 850 -4.8C858.3 -4.8 866.7 -5.1 875 -5.1C883.3 -5.1 891.7 -4.5 900 -4.5C908.3 -4.6 916.7 -5.2 925 -5.4C933.3 -5.7 941.7 -6.1 950 -6.1C958.3 -6.1 966.7 -5.5 975 -5.4C983.3 -5.4 991.7 -5.7 1000 -5.6C1008.3 -5.6 1016.7 -5.1 1025 -4.9C1033.3 -4.8 1041.7 -4.9 1050 -4.7C1058.3 -4.5 1066.7 -3.9 1075 -3.5C1083.3 -3.2 1091.7 -2.7 1100 -2.6C1108.3 -2.6 1116.7 -3.2 1125 -3.1C1133.3 -3 1141.7 -2.3 1150 -1.9C1158.3 -1.6 1166.7 -1.5 1175 -1.2C1183.3 -0.9 1191.7 -0.2 1200 0.1C1208.3 0.4 1216.7 0.6 1225 0.7C1233.3 0.9 1241.7 0.8 1250 1.1C1258.3 1.4 1266.7 2.4 1275 2.5C1283.3 2.7 1291.7 2.1 1300 2C1308.3 2 1316.7 2.1 1325 2.2C1333.3 2.2 1341.7 2.3 1350 2.4C1358.3 2.5 1366.7 2.7 1375 2.9C1383.3 3.1 1391.7 3.6 1400 3.5C1408.3 3.4 1416.7 2.6 1425 2.5C1433.3 2.4 1441.7 2.9 1450 2.9C1458.3 2.9 1466.7 2.7 1475 2.5C1483.3 2.4 1491.7 2.1 1500 2C1508.3 1.9 1516.7 2 1525 1.9C1533.3 1.9 1541.7 1.7 1550 1.9C1558.3 2.1 1566.7 3 1575 3.1C1583.3 3.2 1591.7 2.7 1600 2.6C1608.3 2.6 1616.7 2.5 1625 2.7C1633.3 2.8 1641.7 3.3 1650 3.5C1658.3 3.7 1666.7 3.6 1675 3.8C1683.3 4.1 1691.7 4.7 1700 5C1708.3 5.3 1716.7 5.1 1725 5.5C1733.3 5.9 1741.7 6.9 1750 7.5C1758.3 8.1 1766.7 8.6 1775 8.9C1783.3 9.2 1791.7 8.9 1800 9.2C1808.3 9.5 1816.7 10.2 1825 10.5C1833.3 10.9 1841.7 10.9 1850 11.4C1858.3 11.8 1866.7 12.7 1875 13.1C1883.3 13.5 1891.7 13.4 1900 13.7C1908.3 13.9 1916.7 14 1925 14.3C1933.3 14.7 1941.7 15.6 1950 15.7C1958.3 15.8 1966.7 15.2 1975 15.1C1983.3 15 1991.7 15.1 2000 14.9C2008.3 14.7 2016.7 14.2 2025 14.1C2033.3 13.9 2041.7 14.1 2050 14C2058.3 13.9 2066.7 13.9 2075 13.5C2083.3 13.1 2091.7 12 2100 11.5C2108.3 11 2116.7 11.2 2125 10.7C2133.3 10.2 2141.7 9.4 2150 8.7C2158.3 8 2166.7 7.4 2175 6.7C2183.3 5.9 2191.7 5.1 2200 4.3C2208.3 3.6 2216.7 2.7 2225 2.2C2233.3 1.7 2241.7 1.9 2250 1.4C2258.3 0.8 2266.7 -0.5 2275 -1.2C2283.3 -2 2291.7 -2.5 2300 -3.2C2308.3 -3.8 2316.7 -4.4 2325 -5C2333.3 -5.6 2341.7 -6.3 2350 -6.8C2358.3 -7.3 2366.7 -7.5 2375 -8C2383.3 -8.6 2391.7 -9.7 2400 -10C2408.3 -10.3 2416.7 -9.8 2425 -9.9C2433.3 -10 2441.7 -10.2 2450 -10.5C2458.3 -10.7 2466.7 -11.3 2475 -11.5C2483.3 -11.7 2491.7 -11.7 2500 -11.9C2508.3 -12.1 2516.7 -12.6 2525 -12.6C2533.3 -12.6 2541.7 -11.9 2550 -11.9C2558.3 -11.9 2566.7 -12.4 2575 -12.4C2583.3 -12.4 2591.7 -12.3 2600 -12.1C2608.3 -11.9 2616.7 -11.2 2625 -11.1C2633.3 -11 2641.7 -11.3 2650 -11.3C2658.3 -11.3 2666.7 -11.1 2675 -11.2C2683.3 -11.3 2691.7 -11.9 2700 -11.9C2708.3 -11.9 2716.7 -11.3 2725 -11.1C2733.3 -11 2741.7 -10.7 2750 -10.8C2758.3 -10.8 2766.7 -11.4 2775 -11.3C2783.3 -11.3 2791.7 -10.8 2800 -10.7C2808.3 -10.7 2816.7 -11 2825 -11.1C2833.3 -11.1 2841.7 -10.9 2850 -11.1C2858.3 -11.2 2866.7 -11.8 2875 -12C2883.3 -12.2 2891.7 -12.4 2900 -12.2C2908.3 -12.1 2916.7 -11.3 2925 -11.2C2933.3 -11 2941.7 -11.6 2950 -11.5C2958.3 -11.5 2966.7 -11.2 2975 -11.1C2983.3 -11.1 2995.8 -11.1 3000 -11.1"></path>
+        </svg>
+      </div>
+      <div
+        class="Sky_Day Sky_Motes"><span class="Sky_Mote" style="--x-at:2%;--y-at:-18;--time:11s;--lead:-0s;"></span><span class="Sky_Mote" style="--x-at:15%;--y-at:8;--time:13s;--lead:-2.6s;"></span><span class="Sky_Mote" style="--x-at:32%;--y-at:-27;--time:15s;--lead:-5.2s;"></span><span class="Sky_Mote" style="--x-at:51%;--y-at:6;--time:17s;--lead:-7.8s;"></span><span class="Sky_Mote" style="--x-at:62%;--y-at:-13;--time:11s;--lead:-10.4s;"></span><span class="Sky_Mote" style="--x-at:83%;--y-at:14;--time:13s;--lead:-13s;"></span><span class="Sky_Mote" style="--x-at:96%;--y-at:-8;--time:15s;--lead:-15.6s;"></span></div>
+    </div>
+    <header
+      class="Top"><a class="Top_Name" href="/" aria-label="yaks.app, home" data-copy-aria-label="frame.top.home"><img class="Yak Yak-small" src="./mascot/idle-rest-128.webp" srcset="./mascot/idle-rest-128-1x.webp 1x, ./mascot/idle-rest-128.webp 2x, ./mascot/idle-rest-128-3x.webp 3x" width="128" height="128" alt data-idle="glance:3370 ears:2070 tail:2380 stretch:2250 lick:2070 doze:3550"/><span data-copy="frame.top.name">yaks.app</span></a><nav class="Nav" aria-label="Site" data-copy-aria-label="frame.nav.label"><a class="Nav_Link" href="#how" data-copy="frame.nav.features">Features</a><a class="Nav_Link" href="/gallery" data-copy="frame.nav.gallery">Gallery</a><a class="Nav_Link" href="#cost" data-copy="frame.nav.pricing">Pricing</a><a class="Nav_Link" href="/docs" data-copy="frame.nav.docs">Documentation</a><a class="Nav_SignIn Nav_Link" href="/login" data-copy="frame.nav.sign-in">Sign in</a></nav></header>
+    <main class="Page">
+      <div class="Home_Story" data-story>
+        <div class="Home_SkySpace"
+          aria-hidden="true"><span class="Home_MoonSlot" data-moon-at></span></div>
+        <div class="Home_Desk">
+          <section class="Hello Story_Hero" aria-labelledby="hello"
+            data-story-step="0">
+            <div class="Hello_Copy Home_Words">
+              <p class="Hello_Kicker"
+                data-copy="games.hello.kicker">Make games by asking</p>
+              <h1 class="Title Title-hero"
+                id="hello"><label for="say" data-copy="games.hello.title">Make a game to play with your friends.</label></h1>
+              <p class="Note Note-lead Home_Lead"
+                data-copy="games.story.lead">Describe your game, and an AI assistant builds it and puts it online. Send your friends the link and play together in the browser.</p>
+              <form class="Home_Ask Home_Ask-hero" method="post"
+                action="/start"><textarea id="say" name="say" required maxlength="4000" placeholder="Type your game, like “Make a 3D tower defense game for me and three friends”" data-copy-placeholder="games.hello.hint" class="Surface_Well Field Home_Field"></textarea><button type="submit" data-cta="start" data-copy="home.hello.go" class="Surface_Press Button Button-go Home_Build">Build it</button><a class="Home_More" href="#examples" data-cta="examples" data-copy="home.hello.examples">See examples</a></form>
+              <p class="Note Note-small Home_Lead"
+                data-copy="home.hello.note">Free, no card: 5 apps and $20 of building credit for the AI. The Personal plan is <a href="#cost" data-copy="home.hello.price" data-copy-slot="price">$12 a month</a>.</p>
+              <div class="Hello_Yak"
+                data-wander><img class="Wander_Image" src="./mascot/idle-rest-128.webp" srcset="./mascot/idle-rest-128-1x.webp 1x, ./mascot/idle-rest-128.webp 2x, ./mascot/idle-rest-128-3x.webp 3x" width="128" height="128" alt data-idle="glance:3370 ears:2070 tail:2380 stretch:2250 lick:2070 doze:3550"/></div>
+              <ol class="Home_YakRun" data-yak-run hidden>
+                <li data-pose="wave"
+                  data-ms="2500"><span data-say data-copy="home.yak.wave">Oh! Hi there.</span></li>
+                <li data-pose="thinking"
+                  data-ms="2950"><span data-say data-copy="home.yak.thinking">Got an idea? I love ideas.</span></li>
+                <li data-pose="calculating"
+                  data-ms="2750"><span data-say data-copy="home.yak.calculating">Trying it is free. No card needed.</span></li>
+                <li data-pose="plane"
+                  data-ms="3150"><span data-say data-copy="home.yak.plane">You say it, I build it, and off it goes, online.</span></li>
+                <li data-pose="typing" data-ms="2600"
+                  data-act="start"><span data-say data-copy="home.yak.typing">Here, I’ll start it for you.</span><span data-had data-copy="home.yak.typing-had">Ooh, I like it. Press Build it!</span><span data-type data-copy="games.yak.typing-type">Make me a game where </span></li>
+                <li data-pose="flag" data-ms="3000"
+                  data-act="point"><span data-say data-copy="home.yak.flag">Your turn! Finish it and press Build it.</span></li>
+              </ol>
+              <div class="Sky_End" aria-hidden="true"></div>
+            </div>
+          </section>
+          <nav class="Home_Contents" aria-label="Features on this page"
+            data-copy-aria-label="home.story.features">
+            <ul class="Home_Jumps" data-feature-nav>
+              <li
+                class="Home_Jump"><a class="Home_JumpLink" href="#hello" data-feature-link="0" aria-current="location"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path><path d="M20 2v4"></path><path d="M22 4h-4"></path><circle cx="4" cy="20" r="2"></circle></svg><span data-copy="home.story.turn.build.short">Build</span></a></li>
+              <li
+                class="Home_Jump"><a class="Home_JumpLink" href="#how" data-feature-link="1"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg><span data-copy="home.story.turn.change.short">Edit</span></a></li>
+              <li
+                class="Home_Jump"><a class="Home_JumpLink" href="#play" data-feature-link="2"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><line x1="6" x2="10" y1="11" y2="11"></line><line x1="8" x2="8" y1="9" y2="13"></line><line x1="15" x2="15.01" y1="12" y2="12"></line><line x1="18" x2="18.01" y1="10" y2="10"></line><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"></path></svg><span data-copy="games.story.turn.play.short">Play together</span></a></li>
+              <li
+                class="Home_Jump"><a class="Home_JumpLink" href="#helpers" data-feature-link="3"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg><span data-copy="games.story.turn.helper.short">Characters</span></a></li>
+              <li
+                class="Home_Jump"><a class="Home_JumpLink" href="#code" data-feature-link="4"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="m18 16 4-4-4-4"></path><path d="m6 8-4 4 4 4"></path><path d="m14.5 4-5 16"></path></svg><span data-copy="games.story.turn.code.short">Code</span></a></li>
+              <li
+                class="Home_Jump"><a class="Home_JumpLink" href="#domains" data-feature-link="5"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg><span data-copy="home.story.turn.domain.short">Domains</span></a></li>
+              <li
+                class="Home_Jump"><a class="Home_JumpLink" href="#cost" data-feature-link="6"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg><span data-copy="home.story.turn.pricing.short">Pricing</span></a></li>
+            </ul>
+          </nav>
+          <aside class="Home_Demo" aria-labelledby="example-title"
+            data-story-demo>
+            <header class="Home_DemoHeader">
+              <p class="Home_DemoTitle" id="example-title"
+                data-copy="home.story.example">Example conversation</p>
+              <div
+                class="Home_DemoLinks"><a href="https://yourname.yaks.app/holdfast/" data-demo-scene="holdfast">Open demo</a><a href="https://yourname.yaks.app/vale/" data-demo-scene="vale" hidden>Open demo</a></div>
+            </header>
+            <section class="Surface Card Home_Phone">
+              <div class="Home_Log" data-log>
+                <div class="Home_Track" data-conversation="holdfast"
+                  role="group" aria-label="Example messages">
+                  <ol class="Home_Messages">
+                    <li class="Home_Message Home_Message-you" data-turn="0"
+                      data-line="0" data-count="2">
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#hello">Make a 3D tower defense game for me and three friends, where we build towers together and share one purse of gold</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="0"
+                      data-line="1" data-count="2">
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#hello">Here’s your game.</a><a class="Home_Shot" href="https://yourname.yaks.app/holdfast/" tabindex="-1" aria-hidden="true"><img class="Home_Image" src="https://yourname.yaks.app/holdfast/api/blob/b7fd442d60021fe8d7bdf9a1d6400705e1bfcff74c31312e073bf0efe0c291c3/20dcd1a3ea707584021c878d3acbc17f51e19bdc51ccdcc6c807c5a8b8cb32f3" alt width="1280" height="900" loading="lazy"/></a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="1"
+                      data-line="0" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#how">Add flying bats in wave 5 that only arrows can hit</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="1"
+                      data-line="1" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#how">Done. Bats fly over the walls in wave 5.</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="2"
+                      data-line="0" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#play">Let my friends join the same game from a link</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="2"
+                      data-line="1" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#play">Invited 3 friends. They sign in with a code by email.</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="3"
+                      data-line="0" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#helpers">Add a scout who tells players which tower to build</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="3"
+                      data-line="1" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#helpers">Done. Ask the scout about the next wave.</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="4"
+                      data-line="0" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#code">Where are the wave rules?</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="4"
+                      data-line="1" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#code">In rules.ts. Change them yourself, or ask me.</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="5"
+                      data-line="0" data-count="4" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#domains">Put the game at holdthefort.example</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="5"
+                      data-line="1" data-count="4" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#domains">You can buy a domain in your plan settings. Choose this app at checkout and we’ll connect it for you.</a><a href="#cost">See the plans</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="5"
+                      data-line="2" data-count="4" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#domains">I bought it and chose the game</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="5"
+                      data-line="3" data-count="4" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#domains">Your app is ready at holdthefort.example.</a></div>
+                    </li>
+                  </ol>
+                </div>
+                <div class="Home_Track" data-conversation="vale" hidden
+                  role="group" aria-label="Example messages">
+                  <ol class="Home_Messages">
+                    <li class="Home_Message Home_Message-you" data-turn="0"
+                      data-line="0" data-count="2">
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#hello">Build a fantasy world my friends and I can explore together, with quests, crafting and a village</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="0"
+                      data-line="1" data-count="2">
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#hello">Here’s your world.</a><a class="Home_Shot" href="https://yourname.yaks.app/vale/" tabindex="-1" aria-hidden="true"><img class="Home_Image" src="/gallery/image/0f562744-e91e-4958-bfb7-1ef06af52dc2/af7747ba58d7c51fa8770bed1f44c26377d5042aaa91033ab7b2c13fbe84d826" alt width="1280" height="900" loading="lazy"/></a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="1"
+                      data-line="0" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#how">Add a fishing pond by the village</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="1"
+                      data-line="1" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#how">Done. Cast a line from the dock.</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="2"
+                      data-line="0" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#play">Show who else is playing right now</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="2"
+                      data-line="1" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#play">Done. Friends playing now show by name.</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="3"
+                      data-line="0" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#helpers">Let players talk to the villagers</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="3"
+                      data-line="1" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#helpers">Done. Villagers answer from the world’s story.</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="4"
+                      data-line="0" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#code">Let me read the quest code</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="4"
+                      data-line="1" data-count="2" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#code">It’s in quests.ts. Change it yourself, or ask me.</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="5"
+                      data-line="0" data-count="4" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#domains">Put the world at ourvale.example</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="5"
+                      data-line="1" data-count="4" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#domains">You can buy a domain in your plan settings. Choose this app at checkout and we’ll connect it for you.</a><a href="#cost">See the plans</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-you" data-turn="5"
+                      data-line="2" data-count="4" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-you"><a class="Home_MessageLink" href="#domains">I bought it and chose the world</a></div>
+                    </li>
+                    <li class="Home_Message Home_Message-them" data-turn="5"
+                      data-line="3" data-count="4" hidden>
+                      <div
+                        class="Chat_Bubble Chat_Bubble-them"><a class="Home_MessageLink" href="#domains">Your app is ready at ourvale.example.</a></div>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </section>
+            <div role="group" aria-label="Example apps" data-picks hidden
+              class="Chips Home_Picks"><button type="button" data-pick="holdfast" aria-pressed="true" class="Chip Home_Pick">Tower defense</button><button type="button" data-pick="vale" aria-pressed="false" class="Chip Home_Pick">Fantasy world</button><button type="button" aria-label="Pause example rotation" data-pause hidden class="Surface_Press Button Button-quiet Home_Pause"><span aria-hidden="true">Ⅱ</span></button></div>
+            <form class="Home_Ask" method="post"
+              action="/start"><input id="example-say" name="say" required maxlength="4000" placeholder="Make me a game where…" data-copy-placeholder="games.story.prompt" aria-label="The game you would like" data-copy-aria-label="games.story.ask" class="Surface_Well Field Home_Field"/><button type="submit" data-cta="walk" data-copy="home.hello.go" class="Surface_Press Button Button-go Home_Build">Build it</button></form>
+          </aside>
+          <div class="Home_Features" id="examples">
+            <section class="Home_Feature" id="how"
+              aria-labelledby="title-change" data-story-step="1"
+              data-story-pose="typing">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-change"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg></span><span data-copy="home.story.turn.change.heading">Change anything by asking.</span><img class="Home_SectionYak" data-section-yak src="/mascot/idle-rest-128-1x.webp" alt width="80" height="80" loading="lazy"/></h2>
+              <div class="Home_FeatureWords">
+                <p class="Note"
+                  data-copy="games.story.turn.change.body">Ask for a new level, a boss, a rule or a sound. Your assistant makes the change, checks the result and puts the new version online.</p>
+                <ul class="Home_FeatureList">
+                  <li
+                    data-copy="games.story.turn.change.point2">Art, music and other files, up to 50 GB on the Personal plan</li>
+                  <li
+                    data-copy="home.story.turn.change.point3">Earlier versions are kept, and going back never touches your data</li>
+                </ul>
+              </div>
+              <section class="Surface Card Home_Illustration">
+                <ul class="Home_IllustrationRows">
+                  <li class="Home_IllustrationRow Home_In" style="--i:0">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"
+                      focusable="false" class="Icon">
+                      <path
+                        d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path>
+                    </svg>
+                    <div
+                      class="Home_IllustrationCopy"><b data-copy="home.story.change.chat.name">In chat</b><p class="Note Note-small" data-copy="home.story.change.chat.note">Ask here, in Claude or in ChatGPT.</p></div>
+                  </li>
+                  <li class="Home_IllustrationRow Home_In" style="--i:1">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"
+                      focusable="false" class="Icon">
+                      <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"></path>
+                      <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                    </svg>
+                    <div
+                      class="Home_IllustrationCopy"><b data-copy="home.story.change.mail.name">By email</b><p class="Note Note-small" data-copy="home.story.change.mail.note">Send your assistant the change and any files.</p></div>
+                  </li>
+                  <li class="Home_IllustrationRow Home_In" style="--i:2">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"
+                      focusable="false" class="Icon">
+                      <path
+                        d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path>
+                      <path d="M7 11h10"></path>
+                      <path d="M7 15h6"></path>
+                      <path d="M7 7h8"></path>
+                    </svg>
+                    <div
+                      class="Home_IllustrationCopy"><b data-copy="home.story.change.text.name">By text</b><p class="Note Note-small" data-copy="home.story.change.text.note">Ask for a change from your phone.</p></div>
+                  </li>
+                </ul>
+              </section>
+            </section>
+            <section class="Home_Feature" id="play" aria-labelledby="title-play"
+              data-story-step="2" data-story-pose="wave">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-play"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><line x1="6" x2="10" y1="11" y2="11"></line><line x1="8" x2="8" y1="9" y2="13"></line><line x1="15" x2="15.01" y1="12" y2="12"></line><line x1="18" x2="18.01" y1="10" y2="10"></line><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"></path></svg></span><span data-copy="games.story.turn.play.heading">Your friends play from a link.</span><img class="Home_SectionYak" data-section-yak src="/mascot/idle-rest-128-1x.webp" alt width="80" height="80" loading="lazy"/></h2>
+              <div class="Home_FeatureWords">
+                <p class="Note"
+                  data-copy="games.story.turn.play.body">Send the link, and your friends play in their web browser, on a phone or a computer, with nothing to install. Everyone sees the same game at the same moment, and the game keeps your progress for next time.</p>
+                <ul class="Home_FeatureList">
+                  <li
+                    data-copy="games.story.turn.play.point1">Friends you invite sign in with a code sent to their email</li>
+                  <li
+                    data-copy="games.story.turn.play.point2">Play with a keyboard, a touchscreen or a game controller</li>
+                  <li
+                    data-copy="games.story.turn.play.point3">Friends play free on every plan</li>
+                </ul>
+              </div>
+            </section>
+            <section class="Home_Feature" id="helpers"
+              aria-labelledby="title-helper" data-story-step="3"
+              data-story-pose="thinking">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-helper"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg></span><span data-copy="games.story.turn.helper.heading">Characters who talk with your players.</span><img class="Home_SectionYak" data-section-yak src="/mascot/idle-rest-128-1x.webp" alt width="80" height="80" loading="lazy"/></h2>
+              <div class="Home_FeatureWords">
+                <p class="Note"
+                  data-copy="games.story.turn.helper.body">Give your game characters who answer what players say to them: a shopkeeper, a guide, a rival. An AI writes each answer from what your game knows.</p>
+                <ul class="Home_FeatureList">
+                  <li
+                    data-copy="home.story.turn.helper.point1">AI use is included on every plan</li>
+                  <li
+                    data-copy="home.story.turn.helper.point2">You choose how much of your monthly AI budget visitors may spend</li>
+                  <li
+                    data-copy="home.story.turn.helper.point3">Each visitor has a daily limit, so no stranger spends the whole budget</li>
+                </ul>
+              </div>
+              <div class="Home_Scene Home_Scene-helper">
+                <div data-demo-scene="holdfast">
+                  <section class="Surface Card Home_Helper">
+                    <p class="Chat_Bubble Chat_Bubble-you Home_In"
+                      style="--i:0">What’s coming in wave 5?</p>
+                    <p class="Chat_Bubble Chat_Bubble-them Home_In"
+                      style="--i:1.5">Bats. They fly over the walls, so build arrows near the gate.</p>
+                  </section>
+                </div>
+                <div data-demo-scene="vale" hidden>
+                  <section class="Surface Card Home_Helper">
+                    <p class="Chat_Bubble Chat_Bubble-you Home_In"
+                      style="--i:0">Elder Wren, what do you need?</p>
+                    <p class="Chat_Bubble Chat_Bubble-them Home_In"
+                      style="--i:1.5">Four jellies from the moss slimes in the meadow, and I’ll brew you a tonic.</p>
+                  </section>
+                </div>
+              </div>
+            </section>
+            <section class="Home_Feature" id="code" aria-labelledby="title-code"
+              data-story-step="4" data-story-pose="typing">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-code"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="m18 16 4-4-4-4"></path><path d="m6 8-4 4 4 4"></path><path d="m14.5 4-5 16"></path></svg></span><span data-copy="games.story.turn.code.heading">Your game is code you can open and change.</span><img class="Home_SectionYak" data-section-yak src="/mascot/idle-rest-128-1x.webp" alt width="80" height="80" loading="lazy"/></h2>
+              <div class="Home_FeatureWords">
+                <p class="Note"
+                  data-copy="games.story.turn.code.body">Games are TypeScript that runs in the browser, with three.js for 3D. Read and change every file yourself, or ask your assistant. yaks.app saves the game and keeps every player in step, so there’s no server for you to run.</p>
+                <ul class="Home_FeatureList">
+                  <li
+                    data-copy="games.story.turn.code.point1">Add packages from npm</li>
+                  <li
+                    data-copy="games.story.turn.code.point2">Ready-made parts for game controls, on-screen displays and 3D worlds</li>
+                  <li
+                    data-copy="games.story.turn.code.point3">Build from Claude or ChatGPT as well as here</li>
+                </ul>
+              </div>
+            </section>
+            <section class="Home_Feature" id="domains"
+              aria-labelledby="title-domain" data-story-step="5"
+              data-story-pose="flag">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-domain"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg></span><span data-copy="home.story.turn.domain.heading">Use your own domain.</span><img class="Home_SectionYak" data-section-yak src="/mascot/idle-rest-128-1x.webp" alt width="80" height="80" loading="lazy"/></h2>
+              <div class="Home_FeatureWords">
+                <p class="Note"
+                  data-copy="home.story.turn.domain.body">Give your app or space its own web address on the Personal or Pro plan. Buy a domain through yaks.app and we’ll connect it for you. You can also connect a domain you already own.</p>
+                <ul class="Home_FeatureList">
+                  <li
+                    data-copy="home.story.turn.domain.point1">Connecting a domain you own takes two settings where you bought it</li>
+                  <li
+                    data-copy="home.story.turn.domain.point2">Your yaks.app address keeps working</li>
+                </ul>
+              </div>
+              <div class="Home_Scene Home_Scene-domain">
+                <div data-demo-scene="holdfast">
+                  <section
+                    class="Surface Card Home_Address"><span>yourname.yaks.app/holdfast</span> <span aria-hidden="true">→</span> <b>holdthefort.example</b></section>
+                </div>
+                <div data-demo-scene="vale" hidden>
+                  <section
+                    class="Surface Card Home_Address"><span>yourname.yaks.app/vale</span> <span aria-hidden="true">→</span> <b>ourvale.example</b></section>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+        <div class="Home_After">
+          <div class="Home_Pricing" data-story-step>
+            <section class="Cost" aria-labelledby="cost">
+              <h2 class="Title" id="cost"
+                data-copy="home.story.pricing.heading">Free to start, a plan for more.</h2>
+              <p class="Note"
+                data-copy="home.cost.note">Your web address, like <span data-copy-slot="yours" class="Address"><strong class="Address_Name">yourname</strong>.yaks.app</span>, comes with a place for your apps, their data and the people you invite. We call that a <strong data-copy="home.cost.space" data-copy-slot="space">space</strong>. Your first space is free. Each subscription pays for one space.</p>
+              <div class="Plans">
+                <div
+                  class="Surface Card Plan"><h3 class="Plan_Price" data-copy="home.cost.free.price">Free</h3><p class="Note Note-small" data-copy="home.cost.free.note">Your first space.</p><ul class="Plan_List"><li class="Plan_Credit"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon Plan_CreditIcon"><path d="M12 7v14"></path><path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"></path><path d="M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5"></path><rect x="3" y="7" width="18" height="4" rx="1"></rect></svg><span data-copy="home.cost.free.credit">$20 of bonus building credit on sign up.</span></li><li class="Plan_Item" data-copy="home.cost.free.ai">Limited AI use per month</li><li class="Plan_Item" data-copy="home.cost.free.apps">5 apps</li><li class="Plan_Item" data-copy="home.cost.free.visitors">Unlimited visitors</li><li class="Plan_Item" data-copy="home.cost.free.data">1 GB of app data</li><li class="Plan_Item" data-copy="home.cost.free.files">1 GB of photos and files</li><li class="Plan_Item" data-copy="home.cost.free.emails">100 emails a month</li><li class="Plan_Item" data-copy="home.cost.free.address">An address like <span data-copy-slot="yours" class="Address"><strong class="Address_Name">yourname</strong>.yaks.app</span></li></ul> <a data-copy="home.cost.free.go" href="/login" class="Surface_Press Button Button-go">Start Free</a></div>
+                <div
+                  class="Surface Card Plan Plan-plus"><h3 class="Plan_Price" data-copy="home.cost.plus.price">$12 <span class="Plan_Per" data-copy="home.cost.per" data-copy-slot="per">per month</span></h3><p class="Note Note-small" data-copy="home.cost.plus.note">The Personal plan, or $120 a year.</p><ul class="Plan_List"><li class="Plan_Credit"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon Plan_CreditIcon"><path d="M12 7v14"></path><path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"></path><path d="M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5"></path><rect x="3" y="7" width="18" height="4" rx="1"></rect></svg><span data-copy="home.cost.plus.credit">$100 of bonus building credit when upgrading to this plan.</span></li><li class="Plan_Item" data-copy="home.cost.plus.ai">$8 of AI use per month</li><li class="Plan_Item" data-copy="home.cost.plus.apps">Unlimited apps</li><li class="Plan_Item" data-copy="home.cost.plus.visitors">Unlimited visitors</li><li class="Plan_Item" data-copy="home.cost.plus.data">10 GB of app data</li><li class="Plan_Item" data-copy="home.cost.plus.files">50 GB of photos and files</li><li class="Plan_Item" data-copy="home.cost.plus.emails">2,500 emails a month</li><li class="Plan_Item" data-copy="home.cost.plus.domain">Attach your custom domain</li><li class="Plan_Item" data-copy="home.cost.plus.renewal">A custom domain like <b data-copy="home.cost.plus.example" data-copy-slot="domain">ourbookclub.com</b> is included when paid annually</li><li class="Plan_Item" data-copy="home.cost.plus.payments">Take payments with Stripe</li></ul> <a data-cta="plus" data-copy="home.cost.plus.go" href="/login?return=%2Fmanage%2Fbilling" class="Surface_Press Button Button-go">Get Started</a></div>
+                <div
+                  class="Surface Card Plan Plan-pro"><h3 class="Plan_Price" data-copy="home.cost.pro.price">$49 <span class="Plan_Per" data-copy="home.cost.per" data-copy-slot="per">per month</span></h3><p class="Note Note-small" data-copy="home.cost.pro.note">The Pro plan, or $490 a year.</p><ul class="Plan_List"><li class="Plan_Credit"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon Plan_CreditIcon"><path d="M12 7v14"></path><path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"></path><path d="M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5"></path><rect x="3" y="7" width="18" height="4" rx="1"></rect></svg><span data-copy="home.cost.pro.credit">$200 of bonus building credit when upgrading to this plan.</span></li><li class="Plan_Item" data-copy="home.cost.pro.ai">$35 of AI use per month</li><li class="Plan_Item" data-copy="home.cost.pro.apps">Unlimited apps</li><li class="Plan_Item" data-copy="home.cost.pro.visitors">Unlimited visitors</li><li class="Plan_Item" data-copy="home.cost.pro.data">50 GB of app data</li><li class="Plan_Item" data-copy="home.cost.pro.files">250 GB of photos and files</li><li class="Plan_Item" data-copy="home.cost.pro.emails">10,000 emails a month</li><li class="Plan_Item" data-copy="home.cost.pro.domain">Attach your custom domain</li><li class="Plan_Item" data-copy="home.cost.pro.renewal">A custom domain like <b data-copy="home.cost.pro.example" data-copy-slot="domain">ourbookclub.com</b> is included</li><li class="Plan_Item" data-copy="home.cost.pro.change">Your team can ask the Operator by email or chat</li></ul> <a data-cta="pro" data-copy="home.cost.pro.go" href="/login?return=%2Fmanage%2Fbilling" class="Surface_Press Button Button-go">Get Started</a></div>
+              </div>
+              <p class="Note Note-small"
+                data-copy="pricing.plans.renewal">An included domain gets up to $12 a year toward renewal when registered through yaks.app. The first year and other domains’ renewals are at the registrar’s price, with no markup.</p>
+              <p class="Note Note-small"
+                data-copy="home.cost.ai">The Personal plan bonus applies to your first paid subscription. The Pro bonus applies the first time a space goes Pro. When you subscribe, your bonus is added to any unused building credit in that space. Building credit never expires and is spent before the month’s included AI use. Both cover the built-in assistant, app helpers, voice calls and texts. When the included AI use runs out, the assistant and helpers pause until next month unless you buy more on the Pro plan. Your apps stay online, and you can keep building from Claude or ChatGPT.</p>
+              <p class="Note Note-small"
+                data-copy="home.cost.limits">Tax is included. Going over a limit never deletes your apps or data. <a href="/pricing" data-copy="home.cost.plans" data-copy-slot="plans">Compare plans and limits</a>.</p>
+            </section>
+            <section class="Surface Card Home_Reward">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+                class="Icon">
+                <path d="M12 7v14"></path>
+                <path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8"></path>
+                <path
+                  d="M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5"></path>
+                <rect x="3" y="7" width="18" height="4" rx="1"></rect>
+              </svg>
+              <div
+                class="Home_RewardWords"><b data-copy="home.story.pricing.reward.title">A free month when a friend builds their first app.</b><p class="Note" data-copy="home.story.pricing.reward.body">Each friend who signs up with your invite and builds their first app earns you one month of the Personal plan.</p></div>
+            </section>
+          </div>
+          <div class="Home_Details">
+            <section class="Home_Detail"
+              aria-labelledby="assistant"><h2 class="Title" id="assistant" data-copy="home.story.assistant.title">Build from the assistant you already use.</h2><p class="Note" data-copy="home.story.assistant.body">Paste <span data-copy-slot="agent" class="Copy"><span class="Copy_Text">yaks.app/agent</span><button type="button" aria-label="Copy the connector address" title="Copy" data-copy-link class="Surface_Press Button Copy_Go"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon Copy_Icon"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon Copy_Icon Copy_Icon-done"><path d="M20 6 9 17l-5-5"></path></svg></button></span> into Claude or ChatGPT to build, change and publish the same apps you use on yaks.app.</p><a href="/agent" data-copy="home.story.assistant.more">Set up Claude or ChatGPT</a></section>
+            <section class="Home_Detail" aria-labelledby="questions">
+              <h2 class="Title" id="questions"
+                data-copy="home.story.faq.title">Common questions, answered.</h2>
+              <details class="Surface Card Home_Question">
+                <summary class="Home_Summary"
+                  data-copy="home.story.faq.code.question">Do I need to know how to code?</summary>
+                <p class="Note"
+                  data-copy="home.story.faq.code.answer">You describe what you need in your own words. The assistant writes the code and puts your app online. If you write code, you can read and change every file.</p>
+              </details>
+              <details class="Surface Card Home_Question">
+                <summary class="Home_Summary"
+                  data-copy="games.story.faq.friends.question">Do my friends have to pay?</summary>
+                <p class="Note"
+                  data-copy="games.story.faq.friends.answer">No. Every plan has unlimited visitors, and friends you invite sign in with a code sent to their email.</p>
+              </details>
+              <details class="Surface Card Home_Question">
+                <summary class="Home_Summary"
+                  data-copy="games.story.faq.devices.question">What do my friends need to play?</summary>
+                <p class="Note"
+                  data-copy="games.story.faq.devices.answer">A web browser on a phone or a computer. There’s nothing to download, and a game can take a keyboard, a touchscreen or a game controller.</p>
+              </details>
+              <details class="Surface Card Home_Question">
+                <summary class="Home_Summary"
+                  data-copy="home.story.faq.limits.question">What happens when I reach a limit?</summary>
+                <p class="Note"
+                  data-copy="home.story.faq.limits.answer">Your apps and data stay. You may have to wait for room to add something, such as a new app or another email. Visitors can still open the apps you share.</p>
+              </details>
+              <details class="Surface Card Home_Question">
+                <summary class="Home_Summary"
+                  data-copy="home.story.faq.leave.question">What happens if I stop paying?</summary>
+                <p class="Note"
+                  data-copy="home.story.faq.leave.answer">Your paid plan runs to the end of the period you paid for. Then your space returns to the free plan’s limits, and your apps and data stay.</p>
+              </details>
+            </section>
+            <section class="Home_Detail" aria-labelledby="made">
+              <h2 class="Title" id="made"
+                data-copy="home.story.company">Made by a small company in Michigan.</h2>
+              <p class="Note"
+                data-copy="home.made.us.detail">yaks.app is made by Yak Shaving LLC, in Sturgis, Michigan. Write to <a href="mailto:hello@yaks.app" data-copy-slot="mail">hello@yaks.app</a> and we answer.</p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+    <footer class="Foot Home_Foot">
+      <div class="Home_FootLead"
+        id="join"><img class="Yak Yak-small" src="./mascot/idle-rest-128.webp" srcset="./mascot/idle-rest-128-1x.webp 1x, ./mascot/idle-rest-128.webp 2x, ./mascot/idle-rest-128-3x.webp 3x" width="128" height="128" alt data-idle="glance:3370 ears:2070 tail:2380 stretch:2250 lick:2070 doze:3550"/><div class="Home_Join"><h2 class="Title" data-copy="games.join.title">What game would you like to make?</h2><form class="Home_Ask" method="post" action="/start"><input id="join-say" name="say" required maxlength="4000" placeholder="Make me a game where…" data-copy-placeholder="games.story.prompt" aria-label="The game you would like" data-copy-aria-label="games.story.ask" class="Surface_Well Field Home_Field"/><button type="submit" data-cta="join" data-copy="home.hello.go" class="Surface_Press Button Button-go Home_Build">Build it</button></form><p class="Note Note-small" data-copy="home.join.note">Free to start.</p></div></div>
+      <nav class="Home_FootLinks" aria-label="More from yaks.app"
+        data-copy-aria-label="home.story.footer.label">
+        <div class="Home_FootColumn">
+          <h2 class="Home_FootTitle"
+            data-copy="home.story.footer.product">yaks.app</h2>
+          <ul class="Home_FootList">
+            <li><a class="Foot_Link" href="/#how" data-copy="home.story.footer.links.features">Features</a></li>
+            <li><a class="Foot_Link" href="/integrations" data-copy="home.story.footer.links.integrations">Integrations</a></li>
+            <li><a class="Foot_Link" href="/gallery" data-copy="home.story.footer.links.gallery">Gallery</a></li>
+            <li><a class="Foot_Link" href="/pricing" data-copy="home.story.footer.links.pricing">Pricing</a></li>
+            <li><a class="Foot_Link" href="/login" data-copy="home.story.footer.links.sign-in">Sign in</a></li>
+          </ul>
+        </div>
+        <div class="Home_FootColumn">
+          <h2 class="Home_FootTitle"
+            data-copy="home.story.footer.audience">Made for</h2>
+          <ul class="Home_FootList">
+            <li><a class="Foot_Link" href="/churches" data-copy="home.story.footer.links.churches">Churches</a></li>
+            <li><a class="Foot_Link" href="/organizations" data-copy="home.story.footer.links.organizations">Organizations</a></li>
+            <li><a class="Foot_Link" href="/townships" data-copy="home.story.footer.links.townships">Townships</a></li>
+          </ul>
+        </div>
+        <div class="Home_FootColumn">
+          <h2 class="Home_FootTitle"
+            data-copy="home.story.footer.help">Help</h2>
+          <ul class="Home_FootList">
+            <li><a class="Foot_Link" href="/help" data-copy="home.story.footer.links.help">Help</a></li>
+            <li><a class="Foot_Link" href="/docs" data-copy="home.story.footer.links.docs">Documentation</a></li>
+            <li><a class="Foot_Link" href="/agent" data-copy="home.story.footer.links.agent">Claude and ChatGPT</a></li>
+            <li><a class="Foot_Link" href="/operator" data-copy="home.story.footer.links.operator">Your assistant by text</a></li>
+          </ul>
+        </div>
+        <div class="Home_FootColumn">
+          <h2 class="Home_FootTitle"
+            data-copy="home.story.footer.company">Company</h2>
+          <ul class="Home_FootList">
+            <li><a class="Foot_Link" href="/terms" data-copy="home.story.footer.links.terms">Terms</a></li>
+            <li><a class="Foot_Link" href="/privacy" data-copy="home.story.footer.links.privacy">Privacy</a></li>
+            <li><a class="Foot_Link" href="/acceptable-use" data-copy="home.story.footer.links.acceptable-use">Acceptable use</a></li>
+            <li><a class="Foot_Link" href="/cookies" data-copy="home.story.footer.links.cookies">Cookies</a></li>
+          </ul>
+        </div>
+      </nav>
+      <div
+        class="Home_FootBy"><p data-copy="frame.foot.by">yaks.app · Yak Shaving LLC</p><a class="Foot_Link" href="mailto:hello@yaks.app">hello@yaks.app</a></div>
+    </footer>
+    <script type="module" src="_dates.js"></script>
+  </body>
+</html>

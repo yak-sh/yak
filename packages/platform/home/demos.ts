@@ -8,23 +8,23 @@ export type Line = {
 }
 export type Demo = { slug: string; name: string; turn: Line[][] }
 
-const SHOT = '/gallery/image/'
-const DEMO_AT = 'https://yourname.yaks.app/'
-const you = (text: string): Line => ({
+export const SHOT = '/gallery/image/'
+export const DEMO_AT = 'https://yourname.yaks.app/'
+export const you = (text: string): Line => ({
   who: 'you',
   text: text[0].toUpperCase() + text.slice(1),
 })
-const them = (text: string): Line => ({ who: 'them', text })
+export const them = (text: string): Line => ({ who: 'them', text })
 /** The first reply: the app, its picture and its link. */
-const built = (text: string, d: { slug: string; shot: Shot }): Line => ({
+export const built = (text: string, d: { slug: string; shot: Shot }): Line => ({
   who: 'them',
   text,
   shot: d.shot,
   link: { label: 'Open demo', href: `${DEMO_AT}${d.slug}/` },
 })
-const live = (domain: string) => them(`Your app is ready at ${domain}.`)
+export const live = (domain: string) => them(`Your app is ready at ${domain}.`)
 /** Where to buy a domain and have it connected to the app. */
-const buyDomain: Line = {
+export const buyDomain: Line = {
   who: 'them',
   text:
     'You can buy a domain in your plan settings. Choose this app at checkout and we’ll connect it for you.',

@@ -19,6 +19,7 @@ import { DRAWING } from '../drawing.ts'
 import { AcceptableUse } from './acceptable-use.tsx'
 import { Churches } from './churches.tsx'
 import { Cookies } from './cookies.tsx'
+import { Games } from './games.tsx'
 import { Help } from './help.tsx'
 import { DESCRIBE, Home, StoryHome } from './home.tsx'
 import { Operator } from './operator.tsx'
@@ -43,6 +44,8 @@ export let PAGES: Record<string, FunctionComponent> = {
   'churches.html': Churches,
   'organizations.html': Organizations,
   'townships.html': Townships,
+  // The games landing page, unlisted (games.tsx).
+  'games.html': Games,
   'pricing.html': Pricing,
   'help.html': Help,
   'terms.html': Terms,

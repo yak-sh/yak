@@ -23,6 +23,7 @@ let MARKETING = [
   'acceptable-use',
   'cookies',
   'churches',
+  'games',
   'start',
   'published-app',
   'publisher',

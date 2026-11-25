@@ -19,6 +19,7 @@ export let VARIANTS: Variant[] = [
   { name: 'church', path: '/churches' },
   { name: 'organization', path: '/organizations' },
   { name: 'township', path: '/townships' },
+  { name: 'games', path: '/games' },
 ]
 
 /** The pages Site keeps for the home page (kept-page.ts `LISTINGS`). */

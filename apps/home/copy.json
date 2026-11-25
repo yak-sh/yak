@@ -854,6 +854,68 @@
       "note": "Free to start, with a sign-in by email."
     }
   },
+  "games": {
+    "name": "Make a game to play with your friends — yaks.app",
+    "title": "Make a game to play with your friends — yaks.app",
+    "description": "Describe a game, and yaks.app builds it and puts it online. Send your friends the link and play together in the browser.",
+    "hello": {
+      "kicker": "Make games by asking",
+      "title": "Make a game to play with your friends.",
+      "hint": "Type your game, like “Make a 3D tower defense game for me and three friends”"
+    },
+    "yak": {
+      "typing-type": "Make me a game where "
+    },
+    "story": {
+      "lead": "Describe your game, and an AI assistant builds it and puts it online. Send your friends the link and play together in the browser.",
+      "prompt": "Make me a game where…",
+      "ask": "The game you would like",
+      "turn": {
+        "build": {
+          "heading": "Say what game you want, and it’s built.",
+          "body": "Describe your game in plain words: the world, the rules and how friends play together. An AI assistant builds it while you watch and puts it online at a web address of its own."
+        },
+        "change": {
+          "body": "Ask for a new level, a boss, a rule or a sound. Your assistant makes the change, checks the result and puts the new version online.",
+          "point2": "Art, music and other files, up to 50 GB on the Personal plan"
+        },
+        "play": {
+          "short": "Play together",
+          "heading": "Your friends play from a link.",
+          "body": "Send the link, and your friends play in their web browser, on a phone or a computer, with nothing to install. Everyone sees the same game at the same moment, and the game keeps your progress for next time.",
+          "point1": "Friends you invite sign in with a code sent to their email",
+          "point2": "Play with a keyboard, a touchscreen or a game controller",
+          "point3": "Friends play free on every plan"
+        },
+        "helper": {
+          "short": "Characters",
+          "heading": "Characters who talk with your players.",
+          "body": "Give your game characters who answer what players say to them: a shopkeeper, a guide, a rival. An AI writes each answer from what your game knows."
+        },
+        "code": {
+          "short": "Code",
+          "heading": "Your game is code you can open and change.",
+          "body": "Games are TypeScript that runs in the browser, with three.js for 3D. Read and change every file yourself, or ask your assistant. yaks.app saves the game and keeps every player in step, so there’s no server for you to run.",
+          "point1": "Add packages from npm",
+          "point2": "Ready-made parts for game controls, on-screen displays and 3D worlds",
+          "point3": "Build from Claude or ChatGPT as well as here"
+        }
+      },
+      "faq": {
+        "friends": {
+          "question": "Do my friends have to pay?",
+          "answer": "No. Every plan has unlimited visitors, and friends you invite sign in with a code sent to their email."
+        },
+        "devices": {
+          "question": "What do my friends need to play?",
+          "answer": "A web browser on a phone or a computer. There’s nothing to download, and a game can take a keyboard, a touchscreen or a game controller."
+        }
+      }
+    },
+    "join": {
+      "title": "What game would you like to make?"
+    }
+  },
   "pricing": {
     "name": "Pricing: your first space is free, and the Personal plan is $12 a month",
     "title": "Pricing: your first space is free, and the Personal plan is $12 a month · yaks.app",

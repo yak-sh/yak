@@ -122,7 +122,14 @@ let HOME_NAV = [
   ['/docs', 'docs'],
 ]
 
-let Top = ({ path, sections }: { path: string; sections?: boolean }) => {
+// The nav of a page of sections: each of HOME_NAV's jumps to a section the
+// page has, and its other links.
+let jumps = (sections: string[]) =>
+  HOME_NAV.filter(([href]) =>
+    !href.startsWith('#') || sections.includes(href.slice(1))
+  )
+
+let Top = ({ path, sections }: { path: string; sections?: string[] }) => {
   let home = path == '/'
   return (
     <header class='Top'>
@@ -136,7 +143,7 @@ let Top = ({ path, sections }: { path: string; sections?: boolean }) => {
         <span {...text('frame.top.name')} />
       </a>
       <nav class='Nav' {...attr('aria-label', 'frame.nav.label')}>
-        {(sections ? HOME_NAV : NAV).map(([href, key]) => (
+        {(sections ? jumps(sections) : NAV).map(([href, key]) => (
           <a
             class='Nav_Link'
             href={href}
@@ -209,7 +216,7 @@ export let Page = (
     kind?: string
     robots?: string
     sheet?: string
-    sections?: boolean
+    sections?: string[]
     head?: ComponentChildren
     before?: ComponentChildren
     after?: ComponentChildren
