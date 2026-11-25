@@ -15,6 +15,7 @@ import {
   morph,
   NAMES,
   PAGE,
+  SHOWN,
   start,
   swap,
   type Swapped,
@@ -494,26 +495,32 @@ test('sending a form makes every page held old: drawn at once, then asked for ag
   ])
 })
 
-test('a page that draws the address itself is drawn in place: nothing fetched, its scripts run again, the address moved', async () => {
+test('a page that draws the address itself is drawn in place: nothing fetched, nothing leaves or runs again, the address moved', async () => {
   let b = browsing({
     '/apps': framed('apps', '<h1>Apps</h1><script>go()</script>'),
   })
   let written = b.doc.querySelector('script:not([src])')
   let left = b.left()
+  let shown: string[] = []
+  b.doc.addEventListener(
+    SHOWN,
+    (e) => shown.push((e as CustomEvent).detail.from),
+  )
   b.doc.addEventListener(DRAW, (e) => {
     let asked = (e as CustomEvent<Drawing>).detail
     if (asked.to.pathname != '/updates') return
     asked.draw = () => b.doc.querySelector('h1')!.textContent = 'Updates'
   })
+  b.press('touchstart', 'a[href="/updates"]')
   b.click('a[href="/updates"]')
   await settled()
-  assertEquals(b.fetched, [])
+  assertEquals(b.fetched, [], 'not even ahead')
   assertEquals(b.doc.querySelector('h1')?.textContent, 'Updates')
-  assert(!written?.isConnected, 'the written script is run again, anew')
-  assertEquals(b.doc.querySelector('script:not([src])')?.textContent, 'go()')
-  assertEquals(b.left(), left + 1, 'the page before heard it leave')
+  assert(written?.isConnected, 'its script stands as it ran')
+  assertEquals(b.left(), left, 'nothing left')
   assertEquals(b.entries.map((e) => e.path), ['/updates'])
-  assertEquals(b.drawn.map((d) => [d.from, d.phases.wait]), [['drawn', 0]])
+  assertEquals(shown, ['drawn'])
+  assertEquals(b.drawn, [], 'no page came')
   b.back('/apps')
   await settled()
   assertEquals(

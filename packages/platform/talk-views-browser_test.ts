@@ -86,6 +86,19 @@ test('a press on another view of the page shows it in place, named, lit, and its
   equal(shown(doc).aside, true)
 })
 
+test('each view keeps where it was scrolled', () => {
+  let doc = page()
+  let body = doc.getElementById('content')!
+  body.scrollTop = 40
+  press(doc, '/club/updates')
+  equal(body.scrollTop, 0, 'a view never shown opens at its top')
+  body.scrollTop = 7
+  press(doc, '/club')
+  equal(body.scrollTop, 40)
+  press(doc, '/club/updates')
+  equal(body.scrollTop, 7)
+})
+
 test('an address the page holds no view of is left to the navigator', () => {
   let doc = page()
   equal(press(doc, '/club?app=packing'), false)

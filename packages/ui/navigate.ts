@@ -324,10 +324,15 @@ export type From = 'fetch' | 'held' | 'fresh' | 'drawn'
 
 /** Heard on the document before a press or Back fetches anything, its detail
  * a `Drawing`: a page that can show `to` itself, from what the tab holds,
- * sets `draw` to do so. The navigator then lands it as it would a page it
- * fetched (`LEAVE`, the page's written scripts run again, the address,
- * `PAGE`), and fetches nothing. */
+ * sets `draw` to do so. The navigator then moves the address and the focus
+ * as it would for a page it fetched, and fetches nothing. The page stays the
+ * page: nothing leaves, no script runs again, and it keeps where it was
+ * scrolled; the document hears `SHOWN` in place of `PAGE`. */
 export let DRAW = 'yak-draw'
+
+/** Heard on the document once a press or Back was drawn in place (`DRAW`),
+ * its detail a `Swapped`. */
+export let SHOWN = 'yak-shown'
 
 /** The detail of `DRAW`: where the press leads, and how the page on screen
  * draws it, where it can. `draw` changes the document in place, at once. */
@@ -541,7 +546,8 @@ export let start = (
   // Put the page at `at` on screen by `change`, as a new document comes: the
   // page leaving hears it, the address moves, the content starts at its top
   // and takes the focus, and the page that came hears it; false where it
-  // cannot be.
+  // cannot be. A page drawn in place (`DRAW`) leaves nothing and keeps its
+  // scroll.
   let land = (
     at: URL,
     change: () => Tally,
@@ -551,9 +557,10 @@ export let start = (
     pop: boolean,
   ) => {
     let lap = now()
+    let fetched = from != 'drawn'
     let tally: Tally
     try {
-      tell(doc, LEAVE)
+      if (fetched) tell(doc, LEAVE)
       tally = change()
     } catch (error) {
       // A page half laid over is no page: the next loads as a document, and
@@ -576,7 +583,7 @@ export let start = (
         doc.getElementById(decodeURIComponent(at.hash.slice(1)))
       let main = content(doc) as HTMLElement | null
       if (target) target.scrollIntoView()
-      else {
+      else if (fetched) {
         win.scrollTo(0, 0)
         if (main) main.scrollTop = 0
       }
@@ -592,7 +599,7 @@ export let start = (
       tally,
       url: at.href,
     }
-    tell(doc, PAGE, detail)
+    tell(doc, fetched ? PAGE : SHOWN, detail)
     return true
   }
   // Draw `answer` as the page at `to`; false where it cannot be.
@@ -610,17 +617,12 @@ export let start = (
     let change = () => swap(doc, answer.page, ran, rerun, at.href)
     return land(at, change, from, began, wait, pop)
   }
-  // How the page on screen draws `to` itself, where it can (`DRAW`): its
-  // change, then its written scripts run again, as a swap runs them.
+  // How the page on screen draws `to` itself, where it can (`DRAW`).
   let drawing = (to: URL) => {
     let asked: Drawing = { to }
     tell(doc, DRAW, asked)
     let own = asked.draw
-    return own && (() => {
-      own()
-      for (let s of scripts(doc)) if (!s.hasAttribute('src')) rerun(s)
-      return { kept: 0, made: 0, dropped: 0 }
-    })
+    return own && (() => (own(), { kept: 0, made: 0, dropped: 0 }))
   }
   let go = async (
     to: URL,
@@ -669,7 +671,7 @@ export let start = (
   }
   let ahead = (e: Event) => {
     let to = followed(e, win.location.href, here)
-    if (!to || pages.has(page(to))) return
+    if (!to || pages.has(page(to)) || drawing(to)) return
     drop()
     let key = page(to), held = ask(to, true)
     looking = { key, held }

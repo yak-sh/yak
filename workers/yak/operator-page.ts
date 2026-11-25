@@ -2050,8 +2050,11 @@ import words from '/_words.js'
 import { voice } from '/voice.js'
 // Imports may arrive after a second navigation has already replaced this page,
 // and a conversation standing hidden as one of its page's views starts when
-// a press shows it (@yaks/platform/talk-views).
-if (document.querySelector('script[data-operator-chat="${visit}"]:not([hidden] *)')) {
+// a press first shows it, and runs on while another view shows
+// (@yaks/platform/talk-views).
+let started = document.querySelector('script[data-operator-chat="${visit}"]:not([hidden] *)')
+if (started) {
+started.setAttribute('data-started', '')
 let signal = leaving(document)
 let timers = new Set()
 let cancel = (id) => { clearTimeout(id); timers.delete(id) }
@@ -2164,7 +2167,8 @@ let changing = (o) => {
   if (shown && ours(o.changed).includes(app.dataset.app)) shown.src = shown.getAttribute('src')
   if (app) return
   let opening = follows ? ours(o[follows]) : []
-  if (opening.length) {
+  // Another view of the page showing, the person is not watching it work.
+  if (opening.length && !box.closest('[hidden]')) {
     let to = new URL(location.href)
     to.searchParams.set('app', opening.at(-1))
     location.assign(to)
