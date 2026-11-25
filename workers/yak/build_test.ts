@@ -907,7 +907,7 @@ test("a turn in a room knows the room's other threads, what they promised, and w
         name: 'chat_send',
         arguments: {
           message: '1',
-          text: "Matt, the explainer's owner is now Bo.",
+          text: "@Matt, the explainer's owner is now Bo.",
         },
       }],
     },
