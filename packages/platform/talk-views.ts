@@ -6,8 +6,10 @@
  * shows it in place (./talk-views-browser.ts): no page is fetched and no node
  * is drawn again, so the press lands in one frame. A hidden view stays
  * standing: Updates draws its cards from the tab's page graph
- * (./updates-list-browser.ts) and the conversation is heard there, so a view
- * shown is current.
+ * (./updates-list-browser.ts), so it is current when shown. The conversation
+ * is heard there only while it shows, since a tab watching it is on its
+ * Operator (./operator-talk-browser.ts); shown again, it reads what came
+ * meanwhile.
  *
  * Each view's element says how it is shown (`TalkView`, `VIEW`).
  *
@@ -30,6 +32,9 @@ export type TalkView = {
 
 /** The attribute on each view's element, holding its `TalkView`. */
 export let VIEW = 'data-talk-view'
+
+/** The event a view's element hears as it is shown or hidden. */
+export let VIEWED = 'yak-viewed'
 
 /** The attributes of a view's element: what it is, and hidden unless it is
  * the one `shown`. */

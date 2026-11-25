@@ -2440,11 +2440,12 @@ let stop = async (b) => {
     said(error)
   }
 }
-// The conversation, heard in the tab's page graph, whose socket says where
-// its person is: whether this tab is in view and focused, so their Operator
-// knows to tell them here, notify them, or reach them elsewhere
-// (whereabouts.ts).
-let conversation = pageTalk('${space.eid}', '${who.person}', open == 'new' ? undefined : open)
+// The conversation, heard in the tab's page graph while its view shows,
+// whose socket says where its person is: whether this tab is in view and
+// focused, so their Operator knows to tell them here, notify them, or reach
+// them elsewhere (whereabouts.ts). While Updates shows in its place, the tab
+// is not on the Operator.
+let conversation = pageTalk('${space.eid}', '${who.person}', open == 'new' ? undefined : open, { in: box })
 // Where the conversation stood when the page last drew it (operator-host.ts
 // \`standingAt\`), until a step is heard; its row says where it stands each
 // time the page graph's watch of it is answered whole, and the page reads it

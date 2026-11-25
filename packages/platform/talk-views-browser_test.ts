@@ -3,6 +3,9 @@ import { parseHTML } from 'linkedom'
 import { DRAW, type Drawing } from '@yaks/ui/navigate'
 import { switching } from './talk-views-browser.ts'
 import { type TalkView, VIEW } from './talk-views.ts'
+import { type Heard, pageTalk } from './operator-talk-browser.ts'
+import { operatorTalk } from './operator-talk.ts'
+import { graph } from './page-graph_fixture_test.ts'
 
 let view = (here: string, title: string, more: Partial<TalkView> = {}) =>
   JSON.stringify(
@@ -104,4 +107,50 @@ test('an address the page holds no view of is left to the navigator', () => {
   equal(press(doc, '/club?app=packing'), false)
   equal(press(doc, '/updates?in=club'), false)
   equal(shown(doc).view, ['chat'])
+})
+
+test('the conversation is watched only while it shows: while Updates shows, the tab is not on its Operator, and shown again it hears it', () => {
+  let doc = page()
+  let g = graph((b) => Promise.resolve(b))
+  let line = operatorTalk('club', 'chat')
+  let talk = pageTalk('club', 'ada', 'chat', {
+    graph: g,
+    in: doc.querySelector('p')!,
+  })
+  let heard: number[] = []
+  talk.hear((told) => heard.push(told.n))
+  let say = (n: number) =>
+    g.set(line, [{
+      entity: { eid: 'row' },
+      operatorTalk: {
+        space: 'club',
+        task: 'chat',
+        opened: 'o',
+        n,
+        typing: '',
+      } satisfies Heard,
+    }])
+  equal(g.open, [line])
+  say(1)
+  press(doc, '/club/updates')
+  equal(
+    g.open,
+    [],
+    'Updates showing: a reply tells them in Updates and by push',
+  )
+  say(2)
+  press(doc, '/club')
+  equal(g.open, [line])
+  say(3)
+  equal(heard, [1, 3])
+  talk.close()
+  equal(g.open, [])
+})
+
+test('a conversation that is no view of its page is watched until it is closed', () => {
+  let g = graph((b) => Promise.resolve(b))
+  let talk = pageTalk('club', 'ada', undefined, { graph: g })
+  equal(g.open, [operatorTalk('club')])
+  talk.close()
+  equal(g.open, [])
 })
