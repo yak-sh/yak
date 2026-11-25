@@ -10,6 +10,7 @@ import { operatorContext } from './operator.ts'
 import { letterFor, receive, textSigned } from './operator-channels.ts'
 import { notification, updating } from './operator-updates.ts'
 import { notificationSend, routeFor } from './operator-alerts.ts'
+import { rootAt } from './operator-root.ts'
 import { chatPage, operatorAnswer, operatorBody } from './operator-page.ts'
 import { reachedApply } from './reached-writes.ts'
 import { endpoints } from './endpoints.ts'
@@ -361,6 +362,24 @@ let afterGone = await told('The laptop is gone.')
 let onPhone = await opened()
 let goneOnce = take(refused)
 let left = await dir.pushes(person)
+let root = await rootAt(store, eid, person)
+let replyLine = crypto.randomUUID()
+await store.g.apply([{
+  entity: { eid: replyLine },
+  entry: { session: root },
+  content: { body: 'Did the report go out?' },
+}])
+let [repliedTo] = await store.g.get([replyLine])
+await store.g.apply([
+  notification({
+    to: person,
+    words: 'Yes, it went out.',
+    by: eid,
+    replies: replyLine,
+  }),
+], { trusted: true })
+await service.drain()
+let replyPush = (await opened()).phone
 pushes['/phone'] = 404
 take(texted)
 let fellBack = await told('Every browser is gone.')
@@ -377,6 +396,15 @@ test('a person allows browser notifications on the Operator page, one subscripti
   }])
   assertMatch(chosePush, /value="push"[^>]*checked/)
   assertStringIncludes(chosePush, 'on the 2 browsers you allowed')
+})
+test('a notification for a reply in the main conversation opens its canonical page at that line', () => {
+  let at = new URL(replyPush.url)
+  assertEquals(at.pathname, '/ana')
+  assertEquals(
+    at.searchParams.get('from'),
+    String(Number((repliedTo.entry as Comp).seq) - 1),
+  )
+  assertEquals(at.hash, `#row-${replyLine}`)
 })
 test('the conversation offers alerts on this device in one press, once yaks.app can push', () => {
   assertEquals(/<div[^>]*data-alerts-offer/.test(chatOfferless), false)

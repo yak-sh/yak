@@ -46,6 +46,7 @@ import { type Ctx, refuse } from './tool.ts'
 import type { Texting } from './operator-texts.ts'
 import type { Direct } from './chat.ts'
 import type { OperatorStore } from './operator-store.ts'
+import { rootAt } from './operator-root.ts'
 
 type Store = OperatorStore
 
@@ -416,7 +417,7 @@ let sent = async (
   // What asks them opens at itself in their Updates, answered there.
   let answer = note.asks ? `${updates}#${updateAnchor(id)}` : undefined
   if (route.by == 'push') {
-    let notice = await noticeFor(env, store, space, note.row, note)
+    let notice = await noticeFor(env, store, space, person, note.row, note)
     let { count } = await waitingOn(env, store, person, space.eid)
     let refused: Unpushed | undefined
     try {
@@ -532,6 +533,7 @@ let noticeFor = async (
   env: Env,
   store: Store,
   space: Space,
+  person: string,
   row: Bundle,
   note: Pick<Told, 'asks' | 'about'> | null = toldOf(row),
 ) => {
@@ -539,21 +541,31 @@ let noticeFor = async (
   let updates = url(env, talkPath('updates', space.slug))
   let open = note.asks
     ? `${updates}#${updateAnchor(row.entity.eid)}`
-    : await replyAt(env, store, space, row) ??
+    : await replyAt(env, store, space, person, row) ??
       openAt(url(env, chatPath(space.slug)), updates, note.about)
   return noticeIn(store, row, tellingOf(env, space, pushAddress(open)))
 }
 
 // Where a reply opens: the conversation at the words it answers, drawn
 // from just before them (updates.ts `chatAt`); none for another row.
-let replyAt = async (env: Env, store: Store, space: Space, row: Bundle) => {
+let replyAt = async (
+  env: Env,
+  store: Store,
+  space: Space,
+  person: string,
+  row: Bundle,
+) => {
   let to = part(row, 'reply')?.to
   if (!to) return undefined
   let { placed } = await import('./operator-updates.ts')
   let { chatAt } = await import('./updates.ts')
   let [words] = await store.g.get([String(to)])
   let from = await placed(store, words)
-  return from ? url(env, chatAt(space, { from })) : undefined
+  if (!from) return
+  // The push worker keeps the address it can open offline. The root's
+  // session address redirects to the space's conversation page.
+  if (from.chat == await rootAt(store, space.eid, person)) from.chat = 'new'
+  return url(env, chatAt(space, { from }))
 }
 
 /** Whether `payload` reached any of `browsers`. A browser whose
@@ -622,7 +634,7 @@ export let unalert = async (
   let { operator, icon, badge } = tellingOf(env, space, open)
   let close = closing([notice.tag], count)
   let nextNotice = safari.length && next
-    ? await noticeFor(env, store, space, next)
+    ? await noticeFor(env, store, space, to, next)
     : null
   let empty = !next && count != null
   let refresh = refreshed(
