@@ -43,6 +43,7 @@ if (typeof document != 'undefined') {
       fetch,
       addEventListener: win.addEventListener.bind(win),
       scrollTo: win.scrollTo.bind(win),
+      requestIdleCallback: win.requestIdleCallback?.bind(win),
       DOMParser,
     },
     browserHistory(),

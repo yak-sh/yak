@@ -46,8 +46,9 @@ export let pageTalk = (
   let doc = at?.ownerDocument as
     | (Document & { prerendering?: boolean })
     | undefined
+  let closed = false
   let showing = () => {
-    if (doc?.prerendering) return
+    if (closed || doc?.prerendering) return
     if (view?.hidden && watch) {
       off!()
       watch.close()
@@ -60,9 +61,16 @@ export let pageTalk = (
       })
     }
   }
+  // An already mounted conversation can paint before its live watch opens.
+  let activated = () => {
+    let win = doc?.defaultView
+    if (win?.requestAnimationFrame) {
+      win.requestAnimationFrame(() => win.setTimeout(showing, 0))
+    } else showing()
+  }
   view?.addEventListener(VIEWED, showing)
   if (doc?.prerendering) {
-    doc.addEventListener('prerenderingchange', showing, { once: true })
+    doc.addEventListener('prerenderingchange', activated, { once: true })
   }
   showing()
   return {
@@ -79,8 +87,9 @@ export let pageTalk = (
       return off
     },
     close: () => {
+      closed = true
       view?.removeEventListener(VIEWED, showing)
-      doc?.removeEventListener('prerenderingchange', showing)
+      doc?.removeEventListener('prerenderingchange', activated)
       off?.()
       watch?.close()
       watch = off = undefined
