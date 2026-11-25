@@ -60,6 +60,8 @@
     "desk": {
       "component": true,
       "type": "object",
+      "component": true,
+      "type": "object",
       "description": "What the desk, the page on the computer running OBS, sees: the scene on air and the scenes OBS has. The desk writes it again every 30 seconds; one not seen for 75 seconds is away.",
       "properties": {
         "scene": {
@@ -70,10 +72,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "seen": {
-          "type": "string",
-          "description": "When the desk last wrote it, as ISO text."
         }
       }
     }
