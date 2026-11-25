@@ -1441,6 +1441,7 @@ let DOMAIN_FIELDS = [
   'mail_domain',
   'trashed',
   'hostname.serves.app.slug',
+  'hostname.serves.former.slug',
   'hostname.serves.space.slug',
   'hostname.serves.app.space.space.slug',
 ]
@@ -1722,9 +1723,11 @@ export let skillOfferOf = (r: Row): SkillOffer | null => {
   }
 }
 
+let appSlug = (r: Row) => r.app?.slug ?? r.former?.slug ?? ''
+
 export let appAbout = (r: Row): AppInfo => ({
   eid: r.entity.eid,
-  slug: r.app!.slug ?? r.former?.slug ?? '',
+  slug: appSlug(r),
   space: idOf(r.app!.space),
   version: r.app!.version,
   ...(r.app!.lenses ? { lenses: r.app!.lenses } : {}),
@@ -3528,7 +3531,7 @@ export let directoryRows = (rows: {
       if (!row) return null
       let host = hostOf(row)
       let to = rows.find((r) => r.entity.eid == host.serves)
-      let app = to?.app ? { eid: to.entity.eid, slug: to.app.slug } : null
+      let app = to?.app ? { eid: to.entity.eid, slug: appSlug(to) } : null
       let spaceEid = to?.app?.space ? idOf(to.app.space) : host.serves
       let space = rows.find((r) => r.entity.eid == spaceEid)
       let target =
