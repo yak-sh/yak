@@ -116,6 +116,14 @@ export let STEPS = [
   { name: 'first_deploy', say: "Apps' first deploys", of: 'first_app' },
   { name: 'checkout', say: 'Checkouts started', of: 'signup' },
   { name: 'paid', say: 'Plans bought', of: 'checkout' },
+  // A trial's clock stopping while its owners were away, starting again when
+  // they came back, ending, and its space subscribing (D-476, trial.ts and
+  // billing.ts `granted`). Where each trial stands now is admin_funnel's
+  // trials line, read from the rows (@yaks/platform/trial `tally`).
+  { name: 'trial_paused', say: 'Trials paused while their owners were away' },
+  { name: 'trial_resumed', say: 'Paused trials whose owners came back' },
+  { name: 'trial_ended', say: 'Trials ended without a subscription' },
+  { name: 'trial_converted', say: 'Trials subscribed', of: 'signup' },
   { name: 'returned', say: 'People back a day or more later' },
 ] as const
 
@@ -166,7 +174,7 @@ export let CTAS = [
   { name: 'examples', say: 'See examples' },
   { name: 'walk', say: "Start free, beside a demo's walkthrough" },
   { name: 'walk-ask', say: "Ask for your own change to a demo's step" },
-  { name: 'plus', say: "The Plus plan's Get Started" },
+  { name: 'plus', say: "The Personal plan's Get Started" },
   { name: 'pro', say: "The Pro plan's Get Started" },
   { name: 'join', say: 'Start, in the closing card' },
 ] as const

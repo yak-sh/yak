@@ -38,7 +38,7 @@ test('a paid plan says unlimited apps, and offers nothing more to buy', () => {
   }
 })
 
-test('the plan card says what the Pro plan gives beyond the Plus plan', () => {
+test('the plan card says what the Pro plan gives beyond the Personal plan', () => {
   let gives = `The Pro plan gives ${beyond()}, and email support. Taking ` +
     `it adds $${PRO_GRANT} of building credit once.`
   has(said({}, { plan: plan({ known: true }) }), gives)
@@ -51,7 +51,7 @@ test('the plan card says what the Pro plan gives beyond the Plus plan', () => {
   has(pro, `unlimited visitors, ${beyond()}, and email support`)
 })
 
-test('a space on the Plus plan free says through when, and offers to keep it after', () => {
+test('a space on the Personal plan free says through when, and offers to keep it after', () => {
   let text = said({}, {
     plan: plan({ tier: 'plus', free: '2026-12-05T15:00:00.000Z' }),
   })
@@ -59,7 +59,7 @@ test('a space on the Plus plan free says through when, and offers to keep it aft
     text,
     'free through Dec 5th, 2026',
     ...SOLD.plus.map((per) =>
-      `Keep the Plus plan for ada — ${cost('plus', per)}`
+      `Keep the Personal plan for ada — ${cost('plus', per)}`
     ),
   )
 })
@@ -68,7 +68,7 @@ test('the plan card offers each plan by the month and the year only where it is 
   let monthly = billing({ sold: { plus: ['month'], pro: [] } })
   has(
     monthly.textContent!,
-    `Get the Plus plan for ada — ${cost('plus', 'month')}`,
+    `Get the Personal plan for ada — ${cost('plus', 'month')}`,
     'The Pro plan is not on sale here yet',
   )
   equal(!!monthly.querySelector('[data-per="year"]'), false)
@@ -79,7 +79,7 @@ test('the plan card offers each plan by the month and the year only where it is 
       let b = all.querySelector(`[data-plan="${tier}"][data-per="${per}"]`)
       equal(
         b?.textContent,
-        `Get the ${tier == 'pro' ? 'Pro' : 'Plus'} plan for ada — ${
+        `Get the ${tier == 'pro' ? 'Pro' : 'Personal'} plan for ada — ${
           cost(tier, per)
         }`,
       )
@@ -142,7 +142,7 @@ test('billing shows each allowance and whom it bills', () => {
   })
   has(
     one,
-    `Get the Plus plan for Ada’s kitchen — ${cost('plus', 'month')}`,
+    `Get the Personal plan for Ada’s kitchen — ${cost('plus', 'month')}`,
     'Nothing is billed.',
     'last read at 14:00 UTC',
     '3 of 5',
@@ -250,7 +250,7 @@ test('selling spells out every cost and works a $20 sale through them', () => {
     '$18.92',
   )
   has(text({ fee: 0 }), 'yaks.app: nothing per sale', '$19.12')
-  has(text({ fee: 100 }, 'free'), 'The Plus plan: $12 a month')
+  has(text({ fee: 100 }, 'free'), 'The Personal plan: $12 a month')
   has(
     text({ state: 'ready', house: true, fee: 100 }),
     'as the house',

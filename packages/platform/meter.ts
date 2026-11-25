@@ -16,6 +16,7 @@ import {
   tierOf,
   WARN,
 } from './plans.ts'
+import { freeUntil, type Trial } from './trial.ts'
 
 // What a space or an app spent this calendar month (platform.rs `Meter`,
 // usage.ts writes it): on an app its own store's, on a space every app of it
@@ -77,10 +78,15 @@ export type Credit = { cap: number; bought: number; spent: number }
  * is one of these and more. */
 export type Metered = {
   slug: string
-  // What this space pays (D-32751), a comp read as the plan it gives
-  // (`tierOf`). Null for a space the sweep has not reached yet, which means
-  // free — the terms every space is on today.
+  // What this space pays (D-32751), a comp or a trial read as the plan it
+  // gives (`tierOf`). Null for a space on no plan.
   tier: Tier | null
+  // Its trial of the Personal plan (./trial.ts), where it was given one: a
+  // person's first space. Null on every other.
+  trial?: Trial | null
+  // Whether that trial is all that gives it the Personal plan now: while it
+  // does, the trial's AI use is the starter alone (`budgetOf`).
+  trialing?: boolean
   // Its AI credit, where its owner ever set a cap or bought any; null on
   // every other space, which spends nothing past its budget.
   credit?: Credit | null
@@ -122,6 +128,7 @@ export type MeteredRow = {
     at?: string | null
   }
   comped?: { until: string }
+  plan_trial?: Partial<Trial>
   comp?: {
     tier: 'plus' | 'pro'
     reason: string
@@ -165,16 +172,33 @@ export let meterOf = (r: MeteredRow): Meter | null =>
     }
     : null
 
-/** A space's row as its meter reads it. */
-export let meteredOf = (r: MeteredRow): Metered => ({
-  slug: r.space!.slug,
-  tier: tierOf(
-    r.space!.slug,
-    r.plan?.tier ?? null,
-    r.comped?.until,
-    Date.now(),
-    r.comp,
-  ),
+/** A trial as its row holds it, or none for a row without one whole. */
+export let trialRow = (r: Pick<MeteredRow, 'plan_trial'>): Trial | null =>
+  r.plan_trial?.at && r.plan_trial.through ? r.plan_trial as Trial : null
+
+/** A space's row as its meter reads it. A trial gives the Personal plan as
+ * a comped month does, and while nothing else gives it, the space is
+ * `trialing`. */
+export let meteredOf = (r: MeteredRow, now: number = Date.now()): Metered => {
+  let slug = r.space!.slug
+  let tier = r.plan?.tier ?? null
+  let trial = trialRow(r)
+  let comped = r.comped?.until ?? null
+  let without = tierOf(slug, tier, comped, now, r.comp)
+  let until = freeUntil(trial, now)
+  let given = until && (!comped || Date.parse(until) > Date.parse(comped))
+    ? until
+    : comped
+  return {
+    ...metered(r),
+    slug,
+    tier: tierOf(slug, tier, given, now, r.comp),
+    trial,
+    trialing: !paid(without) && !!until,
+  }
+}
+
+let metered = (r: MeteredRow) => ({
   credit: r.credit
     ? {
       cap: r.credit.cap ?? 0,
@@ -256,7 +280,7 @@ export let used = (m: Meter, what: Spend): number =>
     : m[what]
 
 /** A space on the free tier: not on a paid plan, and not comped
- * (`tierOf` reads a comp as the Plus plan). */
+ * (`tierOf` reads a comp as the Personal plan). */
 export let free = (space: Pick<Metered, 'tier'>): boolean => !paid(space.tier)
 
 /** Whether a space draws from the platform's Free plan allowance. */
@@ -313,9 +337,13 @@ export let topUp = (
 
 /** The dollars a space's models and voice may spend this month before its
  * credit: the month the platform's owner set on it (budget.ts), else its
- * plan's, and what is left of its starter. */
+ * plan's, none while a trial gives it its plan (the trial's AI use is the
+ * starter, D-476), and what is left of its starter. */
 export let budgetOf = (space: Metered, now: Date = new Date()): number =>
-  (space.budget ?? monthlyBudget(space.tier, monthOf(now), space.freeMonthly)) +
+  (space.budget ??
+    (space.trialing
+      ? 0
+      : monthlyBudget(space.tier, monthOf(now), space.freeMonthly))) +
   starterOf(space, now)
 
 /** The dollars a space's models and voice may spend this month: its budget,

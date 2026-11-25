@@ -120,7 +120,7 @@ separate administrative change.
 
 ## Space comps
 
-`comp` grants a space the Plus or Pro plan without a subscription. Only the
+`comp` grants a space the Personal or Pro plan without a subscription. Only the
 platform role may grant or revoke it. A comp records its reason and the actor
 who granted it; the higher of its tier and the subscription's tier applies.
 Revoking the comp leaves the subscription and referral rewards intact.

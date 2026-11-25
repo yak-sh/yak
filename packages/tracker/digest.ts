@@ -268,6 +268,10 @@ export type Sending = {
   /** What makes this letter one of its own: the day by default, so the
    * day's firings write one; a request that asks for one names its moment. */
   key?: string
+  /** Sections of the host's own, in Markdown, below the bugs' chart: the
+   * platform's trials (workers/tracker). One that fails leaves the digest
+   * without it, reported. */
+  more?: (now: number) => Promise<string[]>
 }
 
 /** Write the digest due at `now` as a letter to `to`, once a day: a retried
@@ -275,7 +279,8 @@ export type Sending = {
 export let send = async (
   g: Desk,
   now: number,
-  { to, from, url, store, chart, key = day(now) }: Sending,
+  { to, from, url, store, chart, key = day(now), more }: Sending,
+  report: (error: unknown) => void = () => {},
 ): Promise<void> => {
   if (!to) return
   let eid = derivedEid(
@@ -303,6 +308,13 @@ export let send = async (
     bug: (bug) => link(remoteBug('yaks.app', bug, { scope: store })),
     ...chart ? { chart } : {},
   }, timings)
+  let extra = more
+    ? await more(now).catch((e) => {
+      report(e)
+      return []
+    })
+    : []
+  if (extra.length) body = [...extra, body].join('\n\n')
   await g.apply([{
     entity: { eid },
     doc: { title, body },

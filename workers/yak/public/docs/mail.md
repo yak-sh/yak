@@ -37,8 +37,8 @@ is the space, the part after is the app; the bare space name is the app that
 space made its front page with `app_set(app, home: true)`. Every space has these
 addresses, on every plan.
 
-A space on the Plus plan also takes mail at its own subdomain, which is set up
-the first time the space sends or receives an email:
+A space on the Personal plan also takes mail at its own subdomain, which is set
+up the first time the space sends or receives an email:
 
     <app>@<space>.yaks.app        cookbook@ada.yaks.app — that app
     <anything>@<space>.yaks.app   clerk@ada.yaks.app — the space's own mailbox
@@ -48,9 +48,9 @@ An app's name there is that app's address, and any other name (`clerk@`,
 `clerk@` from `treasurer@` by the email's `mail.to`. Setting it up takes a few
 minutes after that first email, and `app_list` says each app's addresses once it
 is set up. A free space has only the addresses at yaks.app. A space that leaves
-the Plus plan keeps receiving at its subdomain. A domain attached to the space
-or an app takes mail the same way (<https://yaks.app/docs/domains.md>, "Mail at
-the domain").
+the Personal plan keeps receiving at its subdomain. A domain attached to the
+space or an app takes mail the same way (<https://yaks.app/docs/domains.md>,
+"Mail at the domain").
 
 Case does not matter (`Ada.Cookbook@Yaks.App` is the same mailbox). Underscores
 cannot be used in an address, at yaks.app or upstream, so an app whose slug has

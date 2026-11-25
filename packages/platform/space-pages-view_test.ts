@@ -86,7 +86,7 @@ test('Domains lists the space’s domains with their actions, and buying only on
     held({ s: settings({ included: false }) }),
   )
   equal(
-    free.textContent!.includes('Buying a domain comes with the Plus plan.'),
+    free.textContent!.includes('Buying a domain comes with the Personal plan.'),
     true,
   )
 })

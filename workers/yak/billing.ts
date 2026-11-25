@@ -67,7 +67,8 @@ import { manageAt, planSettings } from '@yaks/platform/routes'
 import type { Payer, PlanCard, Want } from '@yaks/platform/payment-rows'
 import * as dirPart from './directory.ts'
 import { directory, type Plan, type Space, stamp } from './directory.ts'
-import { CURRENCY, paid, type Tier } from '@yaks/platform/plans'
+import { CURRENCY, paid, planName, type Tier } from '@yaks/platform/plans'
+import { freeUntil } from '@yaks/platform/trial'
 import { bound, type Env } from './env.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { derivedEid } from '@yaks/graph/identity'
@@ -293,16 +294,25 @@ export let wanted = (form: FormData | null): Want => ({
   per: form?.get('per') == 'year' ? 'year' : 'month',
 })
 
-/** The day a space's Plus plan given free runs through (`comped`, a month
- * for each person its owner invited who built an app), while it runs and
- * the provider bills the space nothing; null otherwise. */
+/** The day the provider bills a space nothing through, while the platform
+ * gives it the Personal plan free and it pays for nothing: a comped month
+ * (`comped`, one for each person its owner invited who built an app), and
+ * for the Personal plan, its trial's days left (D-476), so subscribing early
+ * keeps them. The Pro plan is never a trial, so a trial adds nothing to it.
+ * Null when neither is running. */
 export let freeThrough = (
-  space: Pick<Space, 'plan' | 'comped'>,
+  space: Pick<Space, 'plan' | 'comped' | 'trial'>,
+  tier: Tier = 'plus',
   now = Date.now(),
-) =>
-  !paid(space.plan?.tier) && space.comped && Date.parse(space.comped) > now
+) => {
+  if (paid(space.plan?.tier)) return null
+  let comped = space.comped && Date.parse(space.comped) > now
     ? space.comped
     : null
+  let tried = tier == 'plus' ? freeUntil(space.trial, now) : null
+  return [comped, tried].filter((d): d is string => !!d)
+    .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null
+}
 
 // How often a plan is sold here: by the month, by the year, both or neither.
 let sold = (lent: Plans, tier: Want['tier']): Per[] =>
@@ -347,13 +357,7 @@ export let billedTo = async (
   return await lent.billed(customer)
 }
 
-/** A tier as its plan is said: "the Plus plan", never bare "Plus". */
-export let planName = (tier: Tier) =>
-  tier == 'pro'
-    ? 'the Pro plan'
-    : tier == 'plus'
-    ? 'the Plus plan'
-    : 'the free plan'
+export { planName }
 
 // Start a subscription. Answers the URL to send the person to, and nothing
 // else: this door is reachable from a signed-in page only, never from a tool.
@@ -385,12 +389,12 @@ export let checkout = async (
     )
   }
   // One subscription per space: a second would charge twice. A change of
-  // plan is the portal's, where the provider prorates it. A space on the Plus
-  // plan free subscribes for after it, its trial lasting as long as the free
-  // time.
-  let free = freeThrough(space)
+  // plan is the portal's, where the provider prorates it. A space on the
+  // Personal plan free, or trying it, subscribes for after it, the
+  // provider's trial lasting as long as the free time.
+  let free = freeThrough(space, want.tier)
   if (awaiting(lent, space)) return json(409, 'awaiting', waitingOn(space))
-  if (paid(space.tier) && !free) {
+  if (paid(space.tier) && !free && !space.trialing) {
     return json(
       409,
       'already_paid',
@@ -465,8 +469,8 @@ export let invoice = async (env: Env, req: Request, space: Space, to: To) => {
   if (await dir.role(space, person) != 'owner') {
     return `Only ${space.slug}'s owner may pay for it`
   }
-  let free = freeThrough(space)
-  if (paid(space.tier) && !free) {
+  let free = freeThrough(space, INVOICED.tier)
+  if (paid(space.tier) && !free && !space.trialing) {
     return `${space.slug} is already on ${
       planName(space.tier!)
     }; Manage billing changes it`
@@ -1153,10 +1157,11 @@ let follow = async (
   return `${space.slug} is ${next.tier}`
 }
 
-// The building credit a plan gives (directory.ts `granting`): the Plus
-// plan's on a first paid subscription, or the Pro plan's once per space,
-// paid (here) or comped (comp.ts). A delivery
-// that lost the race to another finds its guard moved and gives nothing.
+// The building credit a plan gives (directory.ts `granting`): the Personal
+// plan's to a space subscribing during its trial, or the Pro plan's once per
+// space, paid (here) or comped (comp.ts), and a trial's subscription marked,
+// which the funnel counts as the trial bought (D-476). A delivery that lost
+// the race to another finds its guard moved and gives nothing.
 export let granted = async (
   env: Env,
   dir: Dir,
@@ -1169,6 +1174,16 @@ export let granted = async (
     await stamp(env, { entities: grant })
   } catch (e) {
     if (!(e instanceof Stale)) throw e
+    return
+  }
+  if (
+    grant.some((b) => (b.plan_trial as { subscribed?: string })?.subscribed)
+  ) {
+    step(env, 'trial_converted', undefined, {
+      who: await Promise.all(
+        (await dir.owners(space)).map((p) => dir.emailAt(p)),
+      ),
+    })
   }
 }
 

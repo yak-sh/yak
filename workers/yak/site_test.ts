@@ -21,6 +21,7 @@ import {
   FILES,
   FREE,
   LETTERS,
+  NAMES,
   PLUS,
   PRICE,
   PRO,
@@ -493,7 +494,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
   let table = pricing().querySelector('.Limits table')!
   assertEquals(
     [...table.querySelectorAll('thead th')].map((th) => th.textContent),
-    ['Free', 'Plus', 'Pro'],
+    ['Free', 'Personal', 'Pro'],
   )
   assertEquals(
     [...table.querySelectorAll('tbody tr')].map((tr) => [
@@ -947,9 +948,13 @@ test('the home page describes itself at the prices the code charges', () => {
     'SoftwareApplication',
   ])
   let app = nodes.find((n) => n['@type'] == 'SoftwareApplication')
+  // Each offer is named as its plan is (@yaks/platform/plans `NAMES`).
   let offers = Object.fromEntries(
     // deno-lint-ignore no-explicit-any
-    app.offers.map((o: any) => [o.name.toLowerCase(), o]),
+    app.offers.map((o: any) => [
+      Object.entries(NAMES).find(([, name]) => name == o.name)?.[0] ?? o.name,
+      o,
+    ]),
   )
   assertEquals(Object.keys(offers).sort(), Object.keys(PRICE).sort())
   for (let [tier, price] of Object.entries(PRICE)) {
@@ -994,8 +999,8 @@ test('the townships page installs the township app and counts with its own funct
 })
 
 // The home page's hero and the pages it is split with say the free plan's
-// apps and the Plus plan's price in their own copy, as the code holds a space to them.
-test('the split home pages quote the free apps and the Plus price the code holds', () => {
+// apps and the Personal plan's price in their own copy, as the code holds a space to them.
+test('the split home pages quote the free apps and the Personal plan price the code holds', () => {
   let apps = `${FREE.apps} apps`, plus = `$${PRICE.plus} a month`
   for (
     let [key, said] of [
@@ -1005,7 +1010,7 @@ test('the split home pages quote the free apps and the Plus price the code holds
       ['operator.hello.price', plus],
       ['operator.cost.title', plus],
       ['operator.cost.note', `with ${apps}`],
-      ['operator.cost.note', `The Plus plan is ${plus}`],
+      ['operator.cost.note', `The Personal plan is ${plus}`],
     ]
   ) assertStringIncludes(copied(key), said, key)
 })
@@ -1038,7 +1043,7 @@ test('the plan pages quote the prices the offers name, and no other', () => {
     }
     says(PRICE.pro, 'month')
     says(YEARLY.pro!, 'year')
-    // The plans' cards say what the Plus plan costs by the year.
+    // The plans' cards say what the Personal plan costs by the year.
     if (['index.html', 'pricing.html'].includes(page)) {
       says(YEARLY.plus!, 'year')
     }
@@ -1277,7 +1282,7 @@ test('every place a person decides names the building credit the code grants', a
   assertEquals(card('plus').includes(subscribed), false)
   let space = { slug: 'dana', budget: null, meter: null }
   let free = refused({ ...space, tier: 'free' }, {})
-  assertStringIncludes(free, `the Plus plan adds ${subscribed}`)
+  assertStringIncludes(free, `the Personal plan adds ${subscribed}`)
   assertStringIncludes(free, `adds ${pro} once per space`)
   assertEquals(
     refused({ ...space, tier: 'plus' }, {}).includes(subscribed),

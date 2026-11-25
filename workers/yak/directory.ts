@@ -71,6 +71,7 @@ import {
   SUBSCRIBED,
   type Tier,
 } from '@yaks/platform/plans'
+import { inTrial } from '@yaks/platform/trial'
 import { type Price, priceOf } from '@yaks/platform/price'
 import { token } from '@yaks/graph/sha256'
 import type { Sample } from '@yaks/platform/visits'
@@ -229,7 +230,7 @@ export type Space = Metered & {
   plan: Plan | null
   domainChoice?: string | null
   domainCreditUsed?: UsedCredit | null
-  // The day the Plus plan given free runs through (`comped`, reward.ts),
+  // The day the Personal plan given free runs through (`comped`, reward.ts),
   // past or to come; absent or null where none was ever given.
   comped?: string | null
   comp?: Comp | null
@@ -238,7 +239,7 @@ export type Space = Metered & {
   // that has never asked to sell, which is almost all of them.
   seller: Seller | null
   // Where the space's own mail is beside `<space>@yaks.app`, and the provider
-  // carrying it: its subdomain, set up the first time a Plus plan space uses
+  // carrying it: its subdomain, set up the first time a Personal plan space uses
   // mail (space-mail.ts, D-415). Null until then.
   mail?: MailDomain | null
   // What the platform takes from a sale here, in basis points (sell.ts
@@ -1429,6 +1430,7 @@ export let SPACE_PARTS = [
   'sender',
   'phone',
   'comped',
+  'plan_trial',
   'comp',
   'space_logo',
   'preview',
@@ -4250,9 +4252,13 @@ export let directoryRows = (rows: {
         .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
     // Add the plan's building credit to what is left of the starter. A first
-    // paid subscription marks its owners as subscribed on either tier. Only
-    // the Plus plan gives SUBSCRIBED. The Pro plan gives PRO_GRANT once per
-    // space, paid or comped. The guards make a repeated delivery give it once.
+    // paid subscription marks its owners as subscribed on either tier, and
+    // a space's trial (@yaks/platform/trial) as subscribed: what the trial
+    // turned into, counted once. Subscribing to the Personal plan while the
+    // trial is still open gives SUBSCRIBED (D-476); a space with no trial
+    // gives it on its owners' first paid subscription. The Pro plan gives
+    // PRO_GRANT once per space, paid or comped. The guards make a repeated
+    // delivery give each once.
     granting: async (
       space: Space,
       on: { subscribed: boolean; pro: boolean },
@@ -4264,20 +4270,36 @@ export let directoryRows = (rows: {
         on.pro ? one(line`.entity.eid=${space.eid}&?pro_grant`) : null,
       ])
       let fresh = owners.filter((_, i) => !rows[i]?.subscribed)
+      let tried = on.subscribed && !!space.trial && !space.trial.subscribed
       let pro = on.pro && !!held && !held.pro_grant
-      let plus = !on.pro && fresh.length > 0
+      // A space never given a trial (as every space is until trials begin,
+      // trial.ts) keeps the first-subscription credit, once a person.
+      let plus = !on.pro &&
+        (space.trial
+          ? tried && inTrial(space.trial, now.getTime())
+          : fresh.length > 0)
       let dollars = pro ? PRO_GRANT : plus ? SUBSCRIBED : 0
       return [
-        ...(dollars
+        ...(dollars || tried
           ? [{
             entity: { eid: space.eid },
-            starter: { dollars: topUp(space, dollars, now) },
+            ...(dollars
+              ? { starter: { dollars: topUp(space, dollars, now) } }
+              : {}),
             ...(pro ? { pro_grant: { at: now.toISOString() } } : {}),
+            ...(tried ? { plan_trial: { subscribed: now.toISOString() } } : {}),
             $was: {
-              starter: {
-                dollars: space.starter == null ? null : token(space.starter),
-              },
+              ...(dollars
+                ? {
+                  starter: {
+                    dollars: space.starter == null
+                      ? null
+                      : token(space.starter),
+                  },
+                }
+                : {}),
               ...(pro ? { pro_grant: { at: null } } : {}),
+              ...(tried ? { plan_trial: { subscribed: null } } : {}),
             },
           }]
           : []),

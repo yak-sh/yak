@@ -86,7 +86,7 @@ a person to write for, and D-398 has the model built on them:
 
 - **Jill** builds tools for her work and for a hobby business, in one free
   space. She gets value and says she'd pay, yet pays nothing because she has hit
-  no limit. Her next steps are what the Plus plan carries: her custom domain,
+  no limit. Her next steps are what the Personal plan carries: her custom domain,
   payments to sell merch, coding taken off her own assistant's allowance, and a
   long list of features waiting in her app.
 - **companygardener** is a developer with more ideas than he builds, because of
@@ -127,7 +127,7 @@ Copy never says a plan, budget or allowance is a person's or an account's.
 
 ## Upgrades by pull
 
-Jill may never hit a limit, so the Plus plan carries what a maker wants next,
+Jill may never hit a limit, so the Personal plan carries what a maker wants next,
 and yaks.app helps them get there: "let's get your recipe site set up with your
 custom domain and here are some features i tihnk we could work on." That's the
 operator in D-398, an agent that works for the maker, often through their own
@@ -167,15 +167,15 @@ and the pricing page hold what each one carries:
 - **The Free plan** is a person's first space: 5 apps, 1 GB of app data, 1 GB of
   photos and files and 100 emails a month, with a small badge, no custom domain
   and no payments.
-- **The Plus plan** is $12 a month or $120 a year, for any space (T-131900;
+- **The Personal plan** is $12 a month or $120 a year, for any space (T-131900;
   Jeff: "*plus* to $12", "$12/mo, $120/yr"): unlimited apps, 10 GB of app data,
   50 GB of photos and files, 2,500 emails a month, $8 of AI use per month, a custom domain, payments
   with Stripe and no badge. A space that subscribed at $9 keeps paying $9 until
   Jeff says otherwise: Stripe keeps its price, and @yaks/stripe reads it as the
-  Plus plan (`kept`). Whether a Plus space can pay for model use past its
+  Personal plan (`kept`). Whether a Personal plan space can pay for model use past its
   budget is T-131904.
 - **The Pro plan** is $49 a month or $490 a year, since an organization budgets
-  by the year (D-412, T-135234). It holds about five times the Plus plan's
+  by the year (D-412, T-135234). It holds about five times the Personal plan's
   allowances (50 GB of app data, 250 GB of photos and files, 10,000 emails,
   5,000,000 request units and 50 compute hours a month, three
   sandboxes at once) and $35 of AI use per month. It adds the Operator built
@@ -185,14 +185,26 @@ and the pricing page hold what each one carries:
   cap they set on the plan card: $0 until they choose one, and nothing is ever
   charged past it (@yaks/platform/meter `creditOf`, billing.ts `buy`).
 
+**The trial** (D-476) replaces the Free plan once it is switched on: every
+space starts with 30 days of the Personal plan, free and with no card, whose
+clock stops while its owners are away for a week and starts again when they
+are back. After it, apps keep running and stay shared, and building (a new
+app, an install, a deploy) waits until the space subscribes. Subscribing
+during it keeps its days left and adds $100. The Pro plan is never a trial.
+It is `plan_trial{at, through, paused, resumed, subscribed, told}` on the
+space, computed by @yaks/platform/trial and kept by workers/yak trial.ts,
+whose sweep does nothing until the Worker's `TRIALS` names when trials began.
+Until then, pages keep selling the Free plan; Jeff sees the trial's pages and
+letters as mockups first (https://shared.yak.sh/trial/).
+
 Building credit is spent before the space's monthly AI budget and never
 expires. Signing up gives $20 to a person's first space (plans.ts `STARTER`).
-A first paid subscription to the Plus plan adds $100 to the space it pays for
+A first paid subscription to the Personal plan adds $100 to the space it pays for
 (`SUBSCRIBED`). The Pro plan adds $200 the first time a space takes it
 (`PRO_GRANT`), paid or comped. Billing records each grant once and adds it to
 any credit the space still has (billing.ts `granted`). Sharing is said as reward.ts
 grants it: each friend who signs up through a person's own invite and builds
-their first app gives that person's space one more free month of the Plus plan;
+their first app gives that person's space one more free month of the Personal plan;
 a seat in a space earns nothing.
 
 Jeff expects the organizations to have "plenty of work for us aside from the
@@ -212,7 +224,7 @@ is reference, explicit and technical; the owner, verbatim: "the docs are the
 place for explicitness and technicality!" (`writing-documentation`).
 
 - Define "space" before you use it.
-- Say "the Plus plan" (M-37846) and "the Pro plan".
+- Say "the Personal plan" (M-37846) and "the Pro plan".
 - Use the one-liner as it stands (M-37845).
 - Show live apps from the yourname space (M-37804).
 - Let prompts start from the person's own situation (M-37856).

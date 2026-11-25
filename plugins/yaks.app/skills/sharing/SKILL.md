@@ -205,7 +205,7 @@ friend who signs up by sending it gets their own free space with $20 of building
 credit, like anyone signing up free.
 
 Each friend who signs up through that invite and then builds their first app
-gives the inviter's own space one more free month of the Plus plan. Months
+gives the inviter's own space one more free month of the Personal plan. Months
 stack, one per friend. On a space already paying for a subscription, the next
 charge moves a month later instead. The invite page counts how many people have
 signed up with it and how many built an app.
@@ -284,7 +284,7 @@ the version that is live now.
   republish and the previous one stays.
 - `price` sells each copy, in dollars to the cent (`40`, `4.99`). It is paid
   once, or each month or year with `interval: 'month'` or `'year'`. Only a space
-  on the Plus plan whose payment account is ready may set one, which
+  on the Personal plan whose payment account is ready may set one, which
   `space_sell` connects (see the selling guide); otherwise the refusal names
   what is missing. A republish keeps the price unless it names another, and a
   new price reaches new buyers only. `free: true` takes the price off.
@@ -333,7 +333,7 @@ app.
   addresses, and a former address stops redirecting when another app takes it.
   The default skips addresses held by live apps.
 - An installed app counts against the space's app ceiling like any other (the
-  free tier allows five, the Plus plan has no limit, and trashed apps do not
+  free tier allows five, the Personal plan has no limit, and trashed apps do not
   count).
 - The copy keeps the published app's `access` setting, so an app built for
   anyone to vote on still accepts votes. `app_set` changes it afterwards.

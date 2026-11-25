@@ -121,6 +121,7 @@ let DIRECTORY_VIEWS = [
   'plan',
   'seller',
   'comped',
+  'plan_trial',
   'comp',
   'fee',
   'budget',

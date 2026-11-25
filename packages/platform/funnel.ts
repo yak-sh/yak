@@ -1,6 +1,7 @@
 // yaks.app's own funnel as the platform answers it (workers/yak funnel.ts)
 // and as a person reads it, the same on the box's admin_funnel and wherever
 // else it is shown in lines.
+import { type Tally, tallyLines } from './trial.ts'
 
 /** One step's count over the window, and its share of the step it is
  * measured against (`of`), where that step was taken. */
@@ -98,6 +99,9 @@ export type Funnel = {
    * line "Website by yaks.app", by the space it was on, busiest first. A
    * Worker older than these has none. */
   badges?: { space: string; n: number }[]
+  /** Every trial of the Personal plan (./trial.ts `tally`), read from the
+   * spaces' own rows. A Worker older than these has none. */
+  trials?: Tally
 }
 
 /** A stage most go no further than, and the share of it that went on. */
@@ -197,6 +201,7 @@ export let funnelLines = (f: Funnel): string[] => {
       : [],
     `People since ${f.since}:`,
     ...f.steps.map(count),
+    ...f.trials ? tallyLines(f.trials, f.since) : [],
     ...group(
       'Came to the home page from:',
       f.from,

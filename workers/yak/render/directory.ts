@@ -11,7 +11,7 @@
 import { parse } from '@yaks/query'
 import { type Days, sparkline } from '@yaks/ui/chart'
 import type { Child, Context, H, Renderer } from '@yaks/render'
-import { COMPED } from '@yaks/platform/plans'
+import { COMPED, NAMES } from '@yaks/platform/plans'
 import { time } from '@yaks/ui/parts'
 import {
   personName,
@@ -75,15 +75,15 @@ let stamped = <N>(
   s: unknown,
   _month?: 'long' | 'short',
 ) => saying(h, stampOf(s), (ctx.writers ?? new Map()) as Writers) || 'never'
-// What a space pays: a paid plan, or the Plus plan given (a comp).
+// What a space pays: a paid plan, or the Personal plan given (a comp).
 let plan = (b: Record<string, unknown>) =>
   COMPED.includes(str((b.space as Comp)?.slug))
-    ? 'Plus, comped'
+    ? `${NAMES.plus}, comped`
     : str((b.plan as Comp)?.tier) == 'pro'
-    ? 'Pro'
+    ? NAMES.pro
     : str((b.plan as Comp)?.tier) == 'plus'
-    ? 'Plus'
-    : 'Free'
+    ? NAMES.plus
+    : NAMES.free
 
 let visits = (n?: number | null) =>
   n === undefined || n === null ? 'not counted yet' : count(n)

@@ -315,7 +315,7 @@ export let domainsPage = (
       page.canBuy ? null : h(
         Notice,
         null,
-        'Buying a domain comes with the Plus plan. ',
+        'Buying a domain comes with the Personal plan. ',
         h('a', { href: managePath('billing', space) }, 'Compare plans'),
         '.',
       ),

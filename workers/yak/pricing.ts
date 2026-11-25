@@ -58,7 +58,7 @@ export let refusedPrice = (space: Space, name: string, env: Host = {}) => {
   let stands = selling(space)
   if (!plan && stands == 'ready') return null
   let lacks = [
-    plan ? `the Plus plan (compare plans: ${url(env, '/pricing')})` : '',
+    plan ? `the Personal plan (compare plans: ${url(env, '/pricing')})` : '',
     stands == 'none' ? `a ${name} account connected to it` : '',
     stands == 'setup'
       ? `${name} to finish setting up the account it connected`

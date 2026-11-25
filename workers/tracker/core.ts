@@ -63,7 +63,6 @@ export type Kept = {
 export type Config = Options & {
   sink: Sink
   sender?: Sender
-  report?: (error: unknown) => void | Promise<void>
   /** where the bugs' tag is kept, so the instance a Durable Object wakes as
    * after hibernating answers a reader as the one before did; without it,
    * the tag lives as long as the store */
@@ -367,7 +366,12 @@ export let store = (storage: Storage, config: Config) => {
           trusted: true,
         })
       }
-      await send(g, now, { ...config, to, key: new Date(now).toISOString() })
+      await send(
+        g,
+        now,
+        { ...config, to, key: new Date(now).toISOString() },
+        (e) => void config.report?.(e),
+      )
     },
     // Only composed handlers can make progress (@yaks/effects `next`), so an
     // unknown or disabled errand keeps no otherwise idle object awake. Behind

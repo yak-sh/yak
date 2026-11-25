@@ -88,6 +88,9 @@ export type Env = {
   }
   MODEL_RECEIPTS?: Bucket
   APEX?: string
+  // When yaks.app began giving trials of the Personal plan (trial.ts, D-476),
+  // an ISO time; unset, it gives none and every space keeps the terms it had.
+  TRIALS?: string
   // Local loopback probes may supply x-yak-host; never set on a deploy.
   LOCAL_DEV?: string
   // The time the kernel keeps and its waits (@yaks/fp `Clock`); unset, the

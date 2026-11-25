@@ -23,6 +23,7 @@ import {
 import { plans } from './payments.ts'
 import type { Plan } from './directory.ts'
 import { tierOf } from '@yaks/platform/plans'
+import { begun } from '@yaks/platform/trial'
 
 // --- the plan, derived --------------------------------------------------
 
@@ -124,23 +125,49 @@ test('an invoice goes to an email address, made out to a name of reasonable leng
   )
 })
 
-// --- the Plus plan given free ---------------------------------------------
+// --- the Personal plan given free --------------------------------------------
 
 let NOW = Date.parse('2026-11-05T15:00:00.000Z')
 let COMP = '2026-12-05T15:00:00.000Z'
 let paying = plan()
 
-test('a space given the Plus plan free is on it through that day, unless Stripe bills it', () => {
+test('a space given the Personal plan free is on it through that day, unless Stripe bills it', () => {
   assertEquals(tierOf('ana', null, COMP, NOW), 'plus')
   assertEquals(tierOf('ana', 'free', COMP, Date.parse(COMP) + 1), 'free')
   assertEquals(tierOf('ana', 'pro', COMP, NOW), 'pro')
-  assertEquals(freeThrough({ plan: null, comped: COMP }, NOW), COMP)
+  assertEquals(freeThrough({ plan: null, comped: COMP }, 'plus', NOW), COMP)
   assertEquals(
-    freeThrough({ plan: null, comped: COMP }, Date.parse(COMP)),
+    freeThrough({ plan: null, comped: COMP }, 'plus', Date.parse(COMP)),
     null,
   )
-  assertEquals(freeThrough({ plan: paying, comped: COMP }, NOW), null)
-  assertEquals(freeThrough({ plan: null }, NOW), null)
+  assertEquals(freeThrough({ plan: paying, comped: COMP }, 'plus', NOW), null)
+  assertEquals(freeThrough({ plan: null }, 'plus', NOW), null)
+})
+
+test('subscribing during a trial keeps its days left on the Personal plan, never on the Pro plan', () => {
+  let trial = begun(NOW)
+  let day = 86_400_000
+  assertEquals(
+    freeThrough({ plan: null, trial }, 'plus', NOW + day),
+    trial.through,
+  )
+  assertEquals(freeThrough({ plan: null, trial }, 'pro', NOW + day), null)
+  // a later comped month wins
+  let later = new Date(NOW + 60 * day).toISOString()
+  assertEquals(
+    freeThrough({ plan: null, trial, comped: later }, 'plus', NOW),
+    later,
+  )
+  // paused while away, its days left count from now
+  let away = { ...trial, paused: new Date(NOW + 9 * day).toISOString() }
+  assertEquals(
+    freeThrough({ plan: null, trial: away }, 'plus', NOW + 20 * day),
+    new Date(NOW + 41 * day).toISOString(),
+  )
+  assertEquals(
+    freeThrough({ plan: null, trial }, 'plus', NOW + 31 * day),
+    null,
+  )
 })
 
 // --- at-least-once, out of order ----------------------------------------

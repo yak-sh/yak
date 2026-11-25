@@ -147,15 +147,15 @@ MAIL_VIA = "resend"
 # is on. Not a secret either: a zone id names a zone, it does not open one.
 CF_ZONE = "3b2518c3647029d687bb4f40bebf0f77"
 
-# The recurring price a Plus subscription is for (billing.ts, T-37141),
+# The recurring price a Personal plan subscription is for (billing.ts, T-37141),
 # tax-inclusive, live mode. A price id names a price, it does not open an
 # account, and it belongs beside the account and zone above rather than in a
 # secret store where nobody can read what the site is selling.
 # $12 a month and $120 a year.
 STRIPE_PRICE = "price_1UdbLQITlUS6lUlgCFNwxJIW"
 STRIPE_PRICE_YEAR = "price_1UdbLQITlUS6lUlgPu2QQ4XG"
-# The Plus prices no longer sold that existing subscriptions stay on, which
-# still read as the Plus plan (config.ts `payments`): $9 a month.
+# The Personal plan prices no longer sold that existing subscriptions stay on, which
+# still read as the Personal plan (config.ts `payments`): $9 a month.
 STRIPE_PRICE_KEPT = ["price_1UEDP0ITlUS6lUlggbJ9klVH"]
 
 # Telnyx's webhook signing key, which config.ts `phoneConfig` names for its
@@ -597,7 +597,7 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # CF_HOSTNAMES_TOKEN attaches a person's own domain as a custom hostname on
 # the zone above (Zone → SSL and Certificates → Edit on yaks.app, T-33038);
 # unset, domain_attach refuses saying so and nothing is half-attached.
-# CF_DNS_TOKEN writes the records a Plus plan space's subdomain takes mail by
+# CF_DNS_TOKEN writes the records a Personal plan space's subdomain takes mail by
 # in that zone (Zone → DNS → Edit on yaks.app, zone.ts); unset, no subdomain
 # is set up for mail.
 # STRIPE_KEY is the restricted Stripe API key checkout, the customer portal,
@@ -662,7 +662,7 @@ WORKER_NAME = "yak-staging"
 DISPATCH_NAMESPACE = "yak-apps-staging"
 VIEWS_DATASET = "yak_views_staging"
 ENVIRONMENT = "staging"
-# The Stripe sandbox's Plus prices (acct_1UBa7vRMiIEYfSxg), $12 a month and
+# The Stripe sandbox's Personal plan prices (acct_1UBa7vRMiIEYfSxg), $12 a month and
 # $120 a year, the ones the probes buy, and the $9 monthly price kept for the
 # subscriptions already on it.
 STRIPE_PRICE = "price_1Udb3XRMiIEYfSxgO5jLEyT2"

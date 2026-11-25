@@ -15,7 +15,7 @@ import { type ByDay, columns, series, sparkline, summed } from '@yaks/ui/chart'
 import { count, dollars } from '@yaks/platform/standing'
 import { SOURCES } from '@yaks/platform/meter'
 import { day } from './html.ts'
-import type { Tier } from '@yaks/platform/plans'
+import { NAMES as PLANS, type Tier } from '@yaks/platform/plans'
 import {
   joined,
   none,
@@ -246,7 +246,7 @@ let topSpaces = (spaces: Counted[], base: string, now: number) => {
       top.map(({ s, n }) => ({
         values: [
           s.slug,
-          { free: 'Free', plus: 'Plus', pro: 'Pro' }[s.tier],
+          PLANS[s.tier],
           n,
           s.month,
         ],
@@ -262,7 +262,7 @@ let topSpaces = (spaces: Counted[], base: string, now: number) => {
                 s.tier != 'free' && !s.paying && 'Plan granted without payment',
               ].filter(Boolean).join('. ') || undefined,
             },
-            { free: 'Free', plus: 'Plus', pro: 'Pro' }[s.tier],
+            PLANS[s.tier],
           ),
           h(Table.Cell, { mod: 'num' }, dollars(n)),
           h(Table.Cell, { mod: 'num' }, dollars(s.month)),

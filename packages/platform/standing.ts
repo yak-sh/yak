@@ -15,6 +15,7 @@ import {
   LIMITED,
   type Limited,
   paid,
+  planName,
   PRO,
   PRO_GRANT,
   SPACES,
@@ -23,6 +24,7 @@ import {
   type Tier,
   WARN,
 } from './plans.ts'
+import { days, trialOf } from './trial.ts'
 import {
   budget,
   type Capped,
@@ -138,10 +140,38 @@ export let refusedSpend = (
   return over(space, what, more, now) ? atCeiling(space, what, env) : null
 }
 
-/** A plan as a person reads it: "the free plan", "the Plus plan" or "the
- * Pro plan", never a bare tier name (M-37846). */
-export let planName = (tier: Tier | null): string =>
-  `the ${{ free: 'free', plus: 'Plus', pro: 'Pro' }[tier ?? 'free']} plan`
+export { planName }
+
+/**
+ * Where a space's trial stands, as a person reads it: none for a space with
+ * no trial, or one a plan has taken over.
+ *
+ * ```ts
+ * import { trialSaid } from '@yaks/platform/standing'
+ * import { begun } from '@yaks/platform/trial'
+ * import { equal } from '@yaks/testing'
+ *
+ * let at = Date.parse('2026-12-01T00:00:00Z')
+ * let trial = begun(at)
+ * let day = 86_400_000
+ * equal(trialSaid({ tier: 'plus', trialing: true, trial }, at + day), 'a free trial, 29 days left')
+ * equal(trialSaid({ tier: null, trial }, at + 31 * day), 'its trial has ended')
+ * ```
+ */
+export let trialSaid = (
+  space: Pick<Metered, 'tier' | 'trial' | 'trialing'>,
+  now: number = Date.now(),
+): string | null => {
+  if (!space.trial) return null
+  if (paid(space.tier) && !space.trialing) return null
+  let s = trialOf(space.trial, now)
+  let left = `${count(days(s.left))} ${days(s.left) == 1 ? 'day' : 'days'} left`
+  return s.state == 'ended'
+    ? 'its trial has ended'
+    : s.state == 'paused'
+    ? `a free trial, paused while you are away, ${left}`
+    : `a free trial, ${left}`
+}
 
 /**
  * The plan a space is on and what it allows a month, in one line: what its
@@ -154,16 +184,26 @@ export let planName = (tier: Tier | null): string =>
  *
  * equal(
  *   planned({ slug: 'yourname', tier: 'plus' }),
- *   'yourname is on the Plus plan: as many apps as it likes, 2,500 emails and ' +
+ *   'yourname is on the Personal plan: as many apps as it likes, 2,500 emails and ' +
  *     '36,000 compute seconds a month.',
  * )
  * ```
  */
-export let planned = (space: Pick<Metered, 'slug' | 'tier'>): string => {
+export let planned = (
+  space: Pick<Metered, 'slug' | 'tier' | 'trial' | 'trialing'>,
+  now: number = Date.now(),
+): string => {
+  let trial = trialSaid(space, now)
+  if (trial && !paid(space.tier)) {
+    return `${space.slug}: ${trial}. ${PAUSED}: no new apps or versions ` +
+      `until it subscribes to ${planName('plus')}.`
+  }
   let apps = ceilings(space.tier, space.slug)?.apps
-  return `${space.slug} is on ${planName(space.tier)}: ${
-    apps == null ? 'as many apps as it likes' : `${count(apps)} apps`
-  }, ${count(letters(space.tier))} emails and ${
+  return `${space.slug} is on ${planName(space.tier)}${
+    trial ? ` (${trial})` : ''
+  }: ${apps == null ? 'as many apps as it likes' : `${count(apps)} apps`}, ${
+    count(letters(space.tier))
+  } emails and ${
     count(allowance('seconds', space.tier))
   } compute seconds a month.`
 }
@@ -188,7 +228,7 @@ export let planned = (space: Pick<Metered, 'slug' | 'tier'>): string => {
  *     new Date('2026-11-24'),
  *     { name: 'Ada', email: 'ada@example.com' },
  *   ),
- *   'ada is on the Plus plan, ending 2026-12-03, billed to Ada <ada@example.com>.',
+ *   'ada is on the Personal plan, ending 2026-12-03, billed to Ada <ada@example.com>.',
  * )
  * ```
  */
@@ -205,10 +245,12 @@ export let billing = (
     ? space.comped
     : null
   let credit = space.credit ? creditOf(space, now) : 0
+  let trial = trialSaid(space, now.getTime())
   return `${space.slug} is on ${
     [
       planName(space.tier),
-      free && `given free through ${free.slice(0, 10)}`,
+      trial,
+      !space.trialing && free && `given free through ${free.slice(0, 10)}`,
       space.plan?.ending && `ending ${space.plan.ending.slice(0, 10)}`,
       credit &&
       `${dollars(Math.max(0, credit - drawnOf(space, now)))} of ${
@@ -474,7 +516,7 @@ export let aiUse = (tier: 'plus' | 'pro'): string =>
   `$${BUDGET[tier]} of AI use per month`
 
 /**
- * What the Pro plan gives beyond the Plus plan, AI use first, from the
+ * What the Pro plan gives beyond the Personal plan, AI use first, from the
  * numbers it holds.
  *
  * ```ts
@@ -495,22 +537,66 @@ export let beyond = (): string =>
   } emails a month`
 
 // A refusal points to the space's plan settings and says what room an upgrade
-// can give, including the one-time building credit for each paid plan.
+// can give, including the one-time building credit for each paid plan. A
+// space in its trial hears what subscribing during it adds, and one whose
+// trial is over that subscribing keeps it building (D-476).
 export let plans = (space: Metered, env: Host): string =>
   `${
     space.tier == 'pro'
       ? `Manage usage and plan settings`
+      : space.trialing
+      ? `${space.slug} is trying ${planName('plus')}. Subscribing to it ` +
+        `before the trial ends adds $${SUBSCRIBED} of building credit, and ` +
+        `the trial's days left come first. The Pro plan includes ` +
+        `${aiUse('pro')} and adds $${PRO_GRANT} of building credit once ` +
+        `per space. Compare paid plans in its settings`
       : paid(space.tier)
-      ? `Putting ${space.slug} on the Pro plan allows more: ${beyond()}, ` +
-        `and adds $${PRO_GRANT} of building credit once. Manage usage and ` +
-        `plan settings`
-      : `Putting ${space.slug} on the Plus plan allows more apps and storage ` +
-        `and includes ${aiUse('plus')}. A first paid ` +
-        `subscription to the Plus plan adds $${SUBSCRIBED} of building ` +
-        `credit. The Pro plan includes ${aiUse('pro')} and adds ` +
+      ? `Putting ${space.slug} on ${planName('pro')} allows more: ` +
+        `${beyond()}, and adds $${PRO_GRANT} of building credit once. ` +
+        `Manage usage and plan settings`
+      : space.trial
+      ? `Subscribing to ${planName('plus')} keeps ${space.slug} building, ` +
+        `with as many apps as it likes, more storage and ` +
+        `${aiUse('plus')}. The Pro plan includes ${aiUse('pro')} and ` +
+        `adds $${PRO_GRANT} of building credit once per space. Compare ` +
+        `paid plans in its settings`
+      : `Putting ${space.slug} on ${planName('plus')} allows more apps and ` +
+        `storage and includes ${aiUse('plus')}. A first paid ` +
+        `subscription to ${planName('plus')} adds $${SUBSCRIBED} of ` +
+        `building credit. The Pro plan includes ${aiUse('pro')} and adds ` +
         `$${PRO_GRANT} of building credit once per space. Compare ` +
         `paid plans in its settings`
   }: ${planSettings(space.slug, env)}`
+
+/** The words that say building has paused, on every page and refusal that
+ * says it (D-476). */
+export let PAUSED: string = 'Your apps keep running; subscribe to keep building'
+
+/**
+ * What stops building in this space (a new app, an install or a deploy), or
+ * null to go ahead: a space whose trial is over and that pays for no plan
+ * builds nothing until it subscribes. Its apps keep running, its content can
+ * still be saved and its people keep everything; only building pauses. A paid
+ * plan, a comp, a trial still open, and a space never given a trial (as every
+ * space is until trials begin, workers/yak trial.ts) all build.
+ *
+ * ```ts
+ * import { buildPaused } from '@yaks/platform/standing'
+ * import { equal } from '@yaks/testing'
+ *
+ * let space = (tier: 'plus' | null) => ({ slug: 'ada', tier, budget: null, meter: null })
+ * equal(buildPaused(space('plus')), null)
+ * equal(buildPaused(space(null)), null)
+ * equal(
+ *   buildPaused({ ...space(null), trial: { at: '', through: '' } })!.split('. ').slice(0, 2),
+ *   ["ada's trial has ended", 'Your apps keep running; subscribe to keep building'],
+ * )
+ * ```
+ */
+export let buildPaused = (space: Metered, env: Host = {}): string | null =>
+  paid(space.tier) || !space.trial
+    ? null
+    : `${space.slug}'s trial has ended. ${PAUSED}. ${plans(space, env)}`
 
 /** What one app holds, as a person reads it, leaving out what it holds none
  * of: `holds 2 MB of app data and 880 MB of photos and files`, or nothing. */
@@ -589,7 +675,7 @@ export let tooManySpaces = (
   } ${gets}, and you own ${count(held.length)} ` +
     `(${held.map((s) => s.slug).join(', ')}) — put ${
       extra == 1 ? 'one' : extra
-    } on the Plus plan or delete ${
+    } on ${planName('plus')} or delete ${
       extra == 1 ? 'one' : 'them'
     } (space_delete) to make another. A space on a paid plan does not ` +
     `count, and neither does a space somebody else invited you into. ` +

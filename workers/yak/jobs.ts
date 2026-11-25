@@ -72,6 +72,13 @@ export let jobs: Record<string, Job> = {
       Number(monthly),
     )
   },
+  // The trial sweep (trial.ts): trials begun and kept, and their notes sent.
+  plan_trial: (env, row) =>
+    reporting(env, row, async () => {
+      let { trials } = await import('./trial.ts')
+      let n = await trials(env, new Date(row.Now.at))
+      if (n) console.log(`yak-trial: ${n} spaces`)
+    }),
   // The kill sweep (kills.ts). Each run reads on from where the last one
   // finished, which the row keeps as `sweep.through`.
   kills: (env, row) =>

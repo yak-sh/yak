@@ -24,6 +24,10 @@ export type Options = {
   url?: string
   /** Where the digest's chart is drawn: a `/chart.png` (./chart.ts). */
   chart?: string
+  /** Sections of the host's own the digest carries (./digest.ts `Sending`). */
+  more?: (now: number) => Promise<string[]>
+  /** Where a failure the digest survives is reported. */
+  report?: (error: unknown) => void | Promise<void>
   retain?: number
   /** Archive these occurrences in the tracker of `scope` (a space's) for
    * `reason`, as its owner's `fixed` would, and resolve with `said` a bug of
@@ -159,7 +163,9 @@ export let effects = (
     bug_digest: async (e) => {
       let [row] = await host.graph.get([e.entity.eid], ['fired'])
       let at = Date.parse(str(comp(row, 'fired').at))
-      if (Number.isFinite(at)) await send(host.graph, at, options)
+      if (Number.isFinite(at)) {
+        await send(host.graph, at, options, (e) => void options.report?.(e))
+      }
     },
     bug_settle: (e) => settle(host.graph, e.entity.eid, options),
   }

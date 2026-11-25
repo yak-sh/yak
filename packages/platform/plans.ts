@@ -6,7 +6,30 @@ import type { Comp } from './comp.ts'
 
 export type Tier = 'free' | 'plus' | 'pro'
 
-/** Whether a tier is paid for: the Plus plan or the Pro plan
+/** What each plan is called where a person reads it. The stored tier keeps
+ * its id (`plus` is the Personal plan, D-476), so a rename is this one line
+ * and no row moves. */
+export let NAMES: Record<Tier, string> = {
+  free: 'Free',
+  plus: 'Personal',
+  pro: 'Pro',
+}
+
+/** A plan as a person reads it: "the Personal plan" or "the Pro plan", never
+ * a bare name (M-37846).
+ *
+ * ```ts
+ * import { planName } from '@yaks/platform/plans'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(planName('plus'), 'the Personal plan')
+ * equal(planName(null), 'the free plan')
+ * ```
+ */
+export let planName = (tier: Tier | null | undefined): string =>
+  !tier || tier == 'free' ? 'the free plan' : `the ${NAMES[tier]} plan`
+
+/** Whether a tier is paid for: the Personal plan or the Pro plan
  * (D-134567). Every paid feature asks this, never one plan's name. */
 export let paid = (tier: Tier | null | undefined): boolean =>
   tier == 'plus' || tier == 'pro'
@@ -24,10 +47,11 @@ export let COMPED: string[] = ['yourname', 'yak']
 /**
  * The tier a space is on. Paid features and usage allowances: `plus`
  * also applies to comps. Their separate app/data exemption is resolved by
- * `ceilings` from COMPED. A space given the Plus plan free until a day
- * (`comped`, a month for each person its owner invited who built an app,
- * workers/yak referral.ts) is on it until then. Operational comps are granted
- * through the platform-only door (workers/yak comp.ts).
+ * `ceilings` from COMPED. A space given the Personal plan free until a day
+ * (`comped`: a month for each person its owner invited who built an app,
+ * workers/yak referral.ts, or the day its trial runs through, ./trial.ts
+ * `freeUntil`) is on it until then. Operational comps are granted through the
+ * platform-only door (workers/yak comp.ts).
  *
  * ```ts
  * import { tierOf } from '@yaks/platform/plans'
@@ -82,7 +106,7 @@ export let PLUS: Ceilings = {
   bytes: 10 * GB,
   files: 50 * GB,
 }
-// The Pro plan (D-134567) holds more of each than the Plus plan, about five
+// The Pro plan (D-134567) holds more of each than the Personal plan, about five
 // times. It also adds a larger model budget, the Operator and support.
 export let PRO: Ceilings = {
   apps: null,
@@ -102,7 +126,7 @@ export let FILES: Record<Tier, number> = {
 // Where the warning line sits, as a fraction of a ceiling.
 export let WARN: number = 0.8
 
-// Comped spaces retain their app/data/visit exemption independently of Plus.
+// Comped spaces retain their app/data/visit exemption independently of the Personal plan.
 export let ceilings = (tier: Tier | null, slug = ''): Ceilings | null =>
   COMPED.includes(slug)
     ? null
@@ -153,19 +177,21 @@ export let monthlyBudget = (
 }
 
 // The building credit given once, spent before a space's monthly budget.
-// Signing up free gives {@link STARTER} on the person's first space. A first
-// paid subscription to the Plus plan adds {@link SUBSCRIBED}, once per person.
+// A person's first space starts its trial with {@link STARTER}, which is the
+// trial's AI use (./trial.ts). Subscribing to the Personal plan while that
+// trial runs or is paused adds {@link SUBSCRIBED}, once
+// (`plan_trial.subscribed`); a space never given a trial adds it on its
+// owners' first paid subscription, once a person (`subscribed`).
 // The first time a space takes the Pro plan, paid or comped, it adds
-// {@link PRO_GRANT}, once per space. The first paid subscription stamps
-// `subscribed` on either plan, and the Pro grant stamps `pro_grant`
-// (workers/yak directory.ts `granting`).
+// {@link PRO_GRANT}, once per space, stamped `pro_grant` (workers/yak
+// directory.ts `granting`).
 export let STARTER: number = 20
 export let SUBSCRIBED: number = 100
 export let PRO_GRANT: number = 200
 
 // Compute seconds a month: the sandbox container's (sandbox.ts) and the compile
 // at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox
-// budget (sandbox.ts `BUDGET`); ten hours on the Plus plan is about $1.30 of
+// budget (sandbox.ts `BUDGET`); ten hours on the Personal plan is about $1.30 of
 // standard-2 time at Cloudflare's rates (wrangler.toml), and fifty on the Pro
 // plan about $6.50. A compile's second
 // costs less than a container's, so the one allowance bounds both.
@@ -209,7 +235,9 @@ export let domainCredit = (
 ): number => DOMAIN_CREDIT[tier ?? 'free'][per ?? 'month']
 
 export let DOMAIN_RENEWAL: string =
-  'One domain’s renewal is included on the Pro plan, and on the Plus plan when you pay yearly. ' +
+  `One domain’s renewal is included on ${planName('pro')}, and on ${
+    planName('plus')
+  } when you pay yearly. ` +
   'The plan covers up to $12 a year for that domain. Other domains renew at the registrar’s price, with no markup.'
 
 // ---- the space (D-131886) ----------------------------------------------------

@@ -98,6 +98,36 @@ test("a firing writes the day's digest once, and the next day's is another lette
   equal((await g.read('.mail')).length, 2)
 })
 
+test("the host's own sections lead the digest, and one that fails is reported, never the letter", async () => {
+  let jeff = crypto.randomUUID()
+  let failed: unknown[] = []
+  let send = async (more: () => Promise<string[]>) => {
+    let g = fixture({
+      to: jeff,
+      store: 's',
+      more,
+      report: (e) => void failed.push(e),
+    })
+    await g.apply([
+      { entity: { eid: jeff }, email: { address: 'jeff@example.test' } },
+      ...rows,
+      wake(now),
+    ], { trusted: true })
+    await g.apply([{
+      entity: wake(now).entity,
+      fired: { at: '2026-11-20T12:00:00.000Z' },
+    }], { trusted: true })
+    return str(comp((await g.read('.mail *'))[0], 'doc').body)
+  }
+  ok(
+    (await send(() => Promise.resolve(['## Trials\n\n3 begun']))).startsWith(
+      '## Trials',
+    ),
+  )
+  ok((await send(() => Promise.reject(new Error('no')))).includes('## New'))
+  equal(failed.length, 1)
+})
+
 test("a section lists fifteen, a person's first, and counts the rest", () => {
   let many = Array.from({ length: 20 }, (_, i) =>
     bug(`b${i}`, {

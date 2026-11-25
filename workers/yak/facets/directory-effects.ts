@@ -57,6 +57,12 @@ export let schedules: Wake[] = [{
   },
   sweep: { kind: 'refusals' },
 }, {
+  // Trials of the Personal plan begun, paused, resumed and written about
+  // (trial.ts, D-476): nothing until `TRIALS` says when they began.
+  entity: { eid: 'yak-plan-trial' },
+  wake: { every: '@hourly', note: 'Keep yaks.app trials of the Personal plan' },
+  sweep: { kind: 'plan_trial' },
+}, {
   entity: { eid: 'yak-trash' },
   wake: { every: TRASH, note: 'Collect expired yaks.app trash' },
   sweep: { kind: 'trash' },

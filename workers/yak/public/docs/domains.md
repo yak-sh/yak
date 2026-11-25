@@ -51,8 +51,8 @@ Back to the map: <https://yaks.app/docs.md>
 
 ## Plan requirement
 
-Custom domains require the Plus plan (or a space that is explicitly exempt). If
-the space is not eligible, `domain_attach` returns a message carrying the
+Custom domains require the Personal plan (or a space that is explicitly exempt).
+If the space is not eligible, `domain_attach` returns a message carrying the
 space's plan-settings link, and provisions no hostname. Give the person that
 link to compare paid plans; never link directly to checkout. The link is their
 space's `https://yaks.app/manage/<space>/billing` page. If they need to sign in,
@@ -71,10 +71,10 @@ yearly renewal price. An agent can search with `domain_search(query)` and send
 you to the same Domains page.
 
 You pay Cloudflare’s price for the first year with no markup. The Pro plan and
-the Plus plan billed yearly cover up to $12 a year toward one domain renewal.
-Your first purchase is the default. To change it, choose **Make included
-domain** beside another domain in the space. You pay any remainder and the
-registrar’s full price for other domains.
+the Personal plan billed yearly cover up to $12 a year toward one domain
+renewal. Your first purchase is the default. To change it, choose **Make
+included domain** beside another domain in the space. You pay any remainder and
+the registrar’s full price for other domains.
 
 When payment is due, open **Domains** to review the price and pay before the
 registration expires. A domain you bought through yaks.app can renew even after

@@ -74,7 +74,9 @@ let refunds = hook(
 // not a month's spend (./meter.ts `credited`), and a space holding credit
 // draws on it for what the month spends past its budget.
 let spending = (row: Bound) => {
-  let space = row.space ? meteredOf(row as unknown as MeteredRow) : null
+  let space = row.space
+    ? meteredOf(row as unknown as MeteredRow, Date.parse(row.Now.at))
+    : null
   if (
     !space || !usesFreeBudget(space) || !props(row.spend).held && !row.credit
   ) {

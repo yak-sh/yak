@@ -132,7 +132,7 @@ space_sell:
     done: 'Set up payments for your space'
   description: >-
     Connect this space to Stripe so its apps can take payments. Requires the
-    Plus plan and the space owner. This makes them a new Stripe account;
+    Personal plan and the space owner. This makes them a new Stripe account;
     someone who already has one connects it on their space's Selling page
     instead, so ask first. The tool returns a link where the person
     finishes setting up with Stripe (their name, their bank account,
@@ -319,7 +319,7 @@ sandbox_shell:
     revoked when the container is destroyed. Use is metered in seconds
     charged to the space: {{budget}} seconds per managed build or per call
     outside one, and the space's monthly allowance. One sandbox awake in a
-    space at a time on the free tier, two on the Plus plan. A managed build
+    space at a time on the free tier, two on the Personal plan. A managed build
     stops the container when it ends; separate MCP calls reuse it until
     five idle minutes put it to sleep. Changed files are snapshotted before
     either shutdown and restored when it wakes; older snapshots are retained
@@ -1062,7 +1062,7 @@ domain_attach:
     person has to add where their domain is managed, in the response text:
     type, name, value. Nothing serves until that record is in place at the
     registrar; domain_status reports when it has arrived. Only the space
-    owner may attach one. Custom domains require the Plus plan unless the space is
+    owner may attach one. Custom domains require the Personal plan unless the space is
     exempt. If the space is not eligible, the tool returns the plan-settings
     URL, where paid plans are compared in the space settings, and returns no
     checkout link; signing in returns the person to that page. No hostname
@@ -1107,7 +1107,7 @@ domain_search:
     Results include common endings and related names, with first-year and
     renewal prices or a reason a name is unavailable. The owner buys from
     Domains in the space settings. The first year costs the registrar's price
-    with no markup. The Pro plan, and the Plus plan billed yearly, cover up to
+    with no markup. The Pro plan, and the Personal plan billed yearly, cover up to
     $12 a year toward one domain renewal. Other domains renew at the registrar's
     price. The space owns the domain and can attach it to an app at any time.
     Documentation: https://yaks.app/docs/domains.
@@ -1252,7 +1252,7 @@ app_publish:
     nothing. Nobody who installed it moves to the new version until they
     call app_update. Only the space owner may publish. price sells each
     copy for that many dollars, paid once or, with interval, each month or
-    year; it needs a space on the Plus plan whose payment account is ready,
+    year; it needs a space on the Personal plan whose payment account is ready,
     which space_sell connects. Publishing again keeps the price unless it
     names another, which only new buyers pay, and free: true takes it off.
     gallery: true also
@@ -1417,7 +1417,7 @@ member_add:
     An invitation is a seat, not a referral: someone new to yaks.app who
     signs up through the person's own invite
     (https://yaks.app/manage/account/invite) and builds their first app
-    gives the person's own space one more free month of the Plus plan, so
+    gives the person's own space one more free month of the Personal plan, so
     tell them so when they share with someone new.
     Documentation: https://yaks.app/docs/sharing.
 member_remove:

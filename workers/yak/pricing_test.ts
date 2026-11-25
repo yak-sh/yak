@@ -34,12 +34,12 @@ let sell = "space_sell(space: 'ada')"
 test('a price is refused from a space that cannot sell, naming all it lacks', async () => {
   await on({ plan: null, seller: null })
   let lacks = await refused({ price: 40 })
-  for (let said of ['the Plus plan', 'a Stripe account connected', sell]) {
+  for (let said of ['the Personal plan', 'a Stripe account connected', sell]) {
     assertStringIncludes(lacks, said)
   }
   await on({ plan: { tier: 'plus' } })
   lacks = await refused({ price: 40 })
-  assert(!lacks.includes('Plus plan'), lacks)
+  assert(!lacks.includes('Personal plan'), lacks)
   assertStringIncludes(lacks, `account connected to it. ${sell} connects one`)
   await seller(false)
   assertStringIncludes(

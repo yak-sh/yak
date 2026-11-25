@@ -104,6 +104,7 @@ export let sweepDoc: VocabDoc = {
             'refusals',
             'remake',
             'trash',
+            'plan_trial',
             'wrap',
           ],
         },

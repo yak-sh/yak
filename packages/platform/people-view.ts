@@ -142,7 +142,7 @@ let inviting = (at: PeopleView, rows: PeopleRows) => {
       'To bring a friend to yaks.app itself, use ',
       h('a', { href: managePath('invite') }, 'Invite a friend'),
       ': each friend who signs up from it and builds their first app gives ' +
-        'your own space one more free month of the Plus plan.',
+        'your own space one more free month of the Personal plan.',
     ),
     acting(
       at,

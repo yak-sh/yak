@@ -40,7 +40,7 @@ let refused = (b: Bundle[]) =>
   Promise.reject(
     new WriteRefused(b, {
       error: 'conflict',
-      message: 'Ada is already on the Plus plan.',
+      message: 'Ada is already on the Personal plan.',
     } as never),
   )
 let acts = (g: ReturnType<typeof bound>['g']) =>
@@ -75,7 +75,7 @@ test('a refusal is said on the card the button is in', async () => {
   let { root, went, click } = bound({ answer: refused })
   await click('[data-door="checkout"]')
   equal(went, [])
-  equal(notice(root), 'Ada is already on the Plus plan.')
+  equal(notice(root), 'Ada is already on the Personal plan.')
 })
 
 test('the cap joins the Save bar, and the invoice is asked for in its form', async () => {

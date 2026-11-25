@@ -230,7 +230,7 @@ export let refused = async (space: Space, env: HostEnv) =>
     ? `${META.space} is the platform itself`
     : space.plan?.subscription &&
         (await plans(env)).standing(space.plan.status) != 'ended'
-    ? `${space.slug} is subscribed to the Plus plan. ` +
+    ? `${space.slug} is subscribed to the Personal plan. ` +
       'Cancel the subscription first with "Manage billing" at ' +
       `${planSettings(space.slug, env)}, and delete it after that, so ` +
       'nothing keeps billing for a space that is gone'
@@ -1246,7 +1246,7 @@ export let abandoned = async (env: Env, now = new Date(), only?: string) => {
     let apps = rows.filter((r) => r.app && idOf(r.app.space) == space.eid)
     let refs = [space.eid, ...apps.map((app) => app.entity.eid)]
     let used = false
-    // Plus spaces have no app ceiling; each read must stay under the
+    // Personal plan spaces have no app ceiling; each read must stay under the
     // directory's parameter and SQL statement-size limits.
     for (let i = 0; i < refs.length && !used; i += 5) {
       let writes = await meta(env).query(

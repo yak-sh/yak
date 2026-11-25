@@ -67,7 +67,7 @@ new_sqlite_classes = ["Workbench"]
 #
 # `max_instances` bounds what can be running at once — one sandbox per space,
 # so five spaces building simultaneously, and one person holds at most one of
-# them on the free tier, two on the Plus plan and three on the Pro plan
+# them on the free tier, two on the Personal plan and three on the Pro plan
 # (../sandbox.ts `AWAKE`).
 # Raising it is one number.
 #

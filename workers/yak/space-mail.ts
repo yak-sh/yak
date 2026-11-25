@@ -1,4 +1,4 @@
-// A Plus plan space's mail at its own subdomain (D-415): `clerk@ada.yaks.app`
+// A Personal plan space's mail at its own subdomain (D-415): `clerk@ada.yaks.app`
 // beside `ada@yaks.app`. A free space keeps `<space>@yaks.app` alone.
 //
 // Each subdomain is a mail domain of its own at the provider (Resend allows
@@ -14,7 +14,7 @@
 // Where a letter there lands is post.ts `mailedTo`, the same as anywhere. A
 // renamed space has its new subdomain set up at its next letter, and the
 // former one stays, so mail to it keeps arriving as long as the name answers
-// on the web. A space that leaves the Plus plan keeps receiving there: mail
+// on the web. A space that leaves the Personal plan keeps receiving there: mail
 // already on its way to a person is never dropped. Only erasing the space
 // removes them.
 import { spaceHost } from '@yaks/platform/host'
@@ -97,7 +97,7 @@ let setUp = async (env: Bound, space: Space, name: string) => {
 }
 
 /**
- * The space used mail: on the Plus plan, its subdomain is set up for mail if
+ * The space used mail: on the Personal plan, its subdomain is set up for mail if
  * it is not already. Never rejects, since a letter is never held up by it: a
  * provider or zone without its key waits silently, and any other failure is
  * reported, to be tried again at the next letter.

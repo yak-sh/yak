@@ -4,7 +4,7 @@
 // page-script.ts): a published app's own page on yaks.app, where a visitor can
 // open it and make their own copy (T-131901), or yaks.app itself. Woven inline beside the reporter, and only into
 // a free space's pages (page-script.ts), so a kept version or a published
-// release wears it without its files changing, and a space on the Plus plan
+// release wears it without its files changing, and a space on the Personal plan
 // sheds it on its next load. A site's preview (newcomer.ts `previewing`)
 // wears it on every plan, saying it was made on yaks.app and is not that
 // site's own (`data-yak-preview`).

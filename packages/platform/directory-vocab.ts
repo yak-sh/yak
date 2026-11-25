@@ -771,8 +771,8 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { space: owned(ref('keep')) },
     },
-    // The space a person's first paid subscription went to. Kept when the
-    // space is gone so the Plus plan's first-subscription credit is given once.
+    // The space a person's first paid subscription went to, kept when the
+    // space is gone.
     subscribed: {
       component: true,
       type: 'object',
@@ -1065,14 +1065,14 @@ export let referralDoc: VocabDoc = {
         invitee: owned(ref('cascade')),
       },
     },
-    // The month of the Plus plan a referral gave its inviter once the
+    // The month of the Personal plan a referral gave its inviter once the
     // invitee built their first app (referral.ts `rewarding`): when, to which
     // space, the day that space's free time now runs through, and, for a
     // space already paying, the provider's subscription whose next charge
     // moved a month later. A mark, written once.
     rewarded: {
       description:
-        "The free month of the Plus plan a referral gave its inviter's space when the invitee built their first app.",
+        "The free month of the Personal plan a referral gave its inviter's space when the invitee built their first app.",
       component: true,
       type: 'object',
       properties: {
@@ -1082,15 +1082,35 @@ export let referralDoc: VocabDoc = {
         subscription: owned(text),
       },
     },
-    // The Plus plan given to a space free, through `until`, where the payment
+    // The Personal plan given to a space free, through `until`, where the payment
     // provider bills it nothing (plans.ts `tierOf`): each reward adds a month
     // after the later of now and the free time it already had.
     comped: {
       description:
-        'The Plus plan given to a space free, through `until`, with nothing billed for it.',
+        'The Personal plan given to a space free, through `until`, with nothing billed for it.',
       component: true,
       type: 'object',
       properties: { until: owned(time) },
+    },
+    // A space's trial of the Personal plan (D-476, @yaks/platform/trial):
+    // when it began and the day it ends, moved later by each time its owners
+    // were away; when its clock stopped, none while it runs; when it last
+    // started again; when the space subscribed during it, which gave the
+    // early credit once; and the notes its owners were sent, by key. Running,
+    // paused or ended is computed from these. The platform's to write.
+    plan_trial: {
+      description:
+        "A space's 30-day trial of the Personal plan, whose clock stops while its owners are away.",
+      component: true,
+      type: 'object',
+      properties: {
+        at: owned(time),
+        through: owned(time),
+        paused: owned(time),
+        resumed: owned(time),
+        subscribed: owned(time),
+        told: owned(text),
+      },
     },
     // An app made in a space whose owner was invited gives their inviter
     // the month, the first time (facets/directory-effects.ts).
@@ -1099,7 +1119,7 @@ export let referralDoc: VocabDoc = {
       created: ['app'],
       target: '.app !installed',
       description:
-        "give an invitee's inviter a free month of the Plus plan when the invitee builds their first app",
+        "give an invitee's inviter a free month of the Personal plan when the invitee builds their first app",
     },
     chat_dm: {
       component: true,

@@ -99,6 +99,9 @@ export type Settings = {
       bug: string,
       said?: Explanation,
     ) => Promise<unknown>
+    /** The platform's trials of the Personal plan, in Markdown, for the
+     * day's digest (workers/yak admin.ts `trialsSince`). */
+    trials?: (now: number) => Promise<string[]>
   }
   TRACKER_SECRET?: string
   ERRORS?: {
@@ -225,6 +228,10 @@ export class Tracker extends Durable {
       // stopped, which runs it again.
       ...this.scope == platform && env.KERNEL
         ? { rerun: rerunning(env.KERNEL) }
+        : {},
+      // and its digest says where yaks.app's trials stand.
+      ...this.scope == platform && env.KERNEL?.trials
+        ? { more: (now: number) => env.KERNEL!.trials!(now) }
         : {},
     }
     // Its ceiling is named before any driver: trace intake opens storage

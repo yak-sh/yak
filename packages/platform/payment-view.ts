@@ -34,7 +34,9 @@ import { BLOCK } from './meter.ts'
 import {
   ceilings,
   DOMAIN_RENEWAL,
+  NAMES,
   paid,
+  planName,
   PRICE,
   PRO_GRANT,
   SUBSCRIBED,
@@ -112,7 +114,7 @@ let hostOf = (view: PaymentView): Host => ({ APEX: view.apex })
 // The meter's prices are whole US dollars, as on the public pricing page.
 let plusPrice = () => `$${count(PRICE.plus)}`
 let plusOffer = () =>
-  `The Plus plan includes ${
+  `The Personal plan includes ${
     aiUse('plus')
   }. If it is your first paid subscription, it adds $${SUBSCRIBED} of building credit.`
 
@@ -133,9 +135,6 @@ let leaving = (door: Door, label: string, want?: Want, quiet = false) =>
 
 // Where a card's buttons say how it went.
 let saying = () => h(Notice, { class: 'Bill_Say', role: 'status' })
-
-// A paid plan as it is said: "the Plus plan", never bare "Plus" (M-37846).
-let NAMES = { plus: 'the Plus plan', pro: 'the Pro plan' }
 
 // The plan card (T-33125). One card: the paid plans when they are free,
 // Manage billing when they are paying. Each button leaves for the page the
@@ -172,7 +171,7 @@ let planCard = (view: PaymentView, plan: PlanCard, payer?: Payer) => {
       'p',
       null,
       `${host} is on `,
-      h('b', null, NAMES[tier]),
+      h('b', null, planName(tier)),
       ` — ${allowance}.`,
       ends ? ` It runs until ${ends} and then stops renewing.` : '',
       plan.free
@@ -188,7 +187,7 @@ let planCard = (view: PaymentView, plan: PlanCard, payer?: Payer) => {
     leaving(
       'checkout',
       `${plan.free && want.tier == 'plus' ? 'Keep' : 'Get'} ${
-        NAMES[want.tier]
+        planName(want.tier)
       } for ${space} — ${priced(want)}`,
       want,
     )
@@ -217,7 +216,7 @@ let planCard = (view: PaymentView, plan: PlanCard, payer?: Payer) => {
     : plan.invoice && open
     ? byInvoice(plan.invoice)
     : null
-  // What the Pro plan adds, for every space not on it yet: a paying Plus
+  // What the Pro plan adds, for every space not on it yet: a paying Personal
   // space moves to it from the billing portal.
   let more = tier == 'pro' ? null : h(
     Form.Hint,
@@ -241,9 +240,7 @@ let planCard = (view: PaymentView, plan: PlanCard, payer?: Payer) => {
     Card,
     { class: 'Bill', id: 'plan' },
     heading('Plan', {
-      status: tier == 'free'
-        ? status('Free')
-        : status(tier == 'plus' ? 'Plus' : 'Pro', 'positive'),
+      status: tier == 'free' ? status('Free') : status(NAMES[tier], 'positive'),
       actions: doors.length ? doors : null,
     }),
     head,
@@ -283,7 +280,9 @@ let byInvoice = (due: number) =>
             autocomplete: 'email',
             required: true,
           }),
-          `For an organization that pays by check or bank transfer: ${NAMES.pro} for a year, ${
+          `For an organization that pays by check or bank transfer: ${
+            planName('pro')
+          } for a year, ${
             priced({ tier: 'pro', per: 'year' })
           }, due ${due} days after each invoice is sent. The plan starts when the first invoice is paid, and each year's invoice comes as the year turns.`,
         ),
@@ -542,7 +541,7 @@ let sellingPage = (view: PaymentView, rows: PaymentRows) => {
     // scroll back up.
     ready ? null : start(
       !paying
-        ? 'Start selling on the Plus plan'
+        ? 'Start selling on the Personal plan'
         : at.state == 'setup'
         ? `Finish setting up ${by}`
         : 'Start selling',
@@ -561,13 +560,13 @@ let leadOf = (at: Selling, paying: boolean) => {
       : at.state == 'ready'
       ? `Payments go to your ${by} account, and ${by} pays them into your bank. You manage refunds and disputes in your ${by} dashboard.`
       : !paying && at.state != 'none'
-      ? `Your ${by} account is connected. Upgrade to the Plus plan to take new payments.`
+      ? `Your ${by} account is connected. Upgrade to the Personal plan to take new payments.`
       : at.state == 'setup'
       ? `Finish connecting your ${by} account to start taking payments.`
       : `Your apps can take card payments, and ${by} pays the money into your bank account.${
         paying
           ? ''
-          : ` Selling comes with the Plus plan, ${plusPrice()} a month.`
+          : ` Selling comes with the Personal plan, ${plusPrice()} a month.`
       }`,
   )
 }
@@ -686,8 +685,8 @@ let costing = (
       Rows,
       { as: 'ul' },
       paying ? null : fact(
-        `The Plus plan: ${plusPrice()} a month`,
-        'Selling comes with the Plus and Pro plans.',
+        `The Personal plan: ${plusPrice()} a month`,
+        `Selling comes with the ${NAMES.plus} and ${NAMES.pro} plans.`,
       ),
       fact(`${by}: ${card} a payment`, [
         `On a card from the ${costs.country}. A card from another country adds ${

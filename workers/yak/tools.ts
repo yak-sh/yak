@@ -345,6 +345,7 @@ import { countedSpend } from './meter.ts'
 import {
   atCeiling,
   billing,
+  buildPaused,
   count,
   gauged,
   type Held,
@@ -353,7 +354,7 @@ import {
   standingOf,
   tooManySpaces,
 } from '@yaks/platform/standing'
-import { ceilings, paid as paying } from '@yaks/platform/plans'
+import { ceilings, paid as paying, planName } from '@yaks/platform/plans'
 import {
   free,
   monthOf,
@@ -2313,6 +2314,16 @@ type DeployReview = {
   replaced: string[]
 }
 
+/** Refuse building in a space whose trial is over and that pays for no
+ * plan (D-476, @yaks/platform/standing `buildPaused`): a new app, an install
+ * or a deploy. Its apps keep running, and saving content, rolling back and
+ * taking a maker's update to an installed copy all still work: those build
+ * nothing new of the space's own. */
+export let paused = (ctx: Ctx, space: Space) => {
+  let no = buildPaused(space, ctx.env)
+  if (no) throw refuse('limit', no)
+}
+
 export let released = async (
   ctx: Ctx,
   space: Space,
@@ -3730,7 +3741,7 @@ let noteOf = (v: unknown) => {
  * their own allowance, else one person's (@yaks/platform/plans `freeSpaces`,
  * `SPACES`, T-131887). A space in the trash is on
  * its way out, so it does not count; one somebody else made and invited them
- * into is not theirs, and one on the Plus plan is paid for on its own. */
+ * into is not theirs, and one on the Personal plan is paid for on its own. */
 let roomFor = async (ctx: Ctx) => {
   let { held, allowed, canCreate } = await ctx.dir.spaceRoom(ctx.person)
   if (!canCreate) {
@@ -3814,7 +3825,7 @@ let sells = (space: Space, cut: string) => {
     ? `It takes payments, ${kept}.`
     : state == 'setup'
     ? `Selling waits on the owner finishing at Stripe (space_sell gives the link again); then ${kept}.`
-    : `It takes no payments yet (space_sell sets that up on the Plus plan; ${kept}).`
+    : `It takes no payments yet (space_sell sets that up on the Personal plan; ${kept}).`
 }
 
 /** An app's place among published apps: what it offers others, or what it
@@ -4319,6 +4330,7 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let { space, who } = await inSpace(ctx, args, true)
+      paused(ctx, space)
       let s = fresh(args.slug, 'slug')
       let previews = previewing(space)
       // Its object starts first, beside every read and write below.
@@ -5386,6 +5398,7 @@ let OURS: Row[] = [
           },
         }
       }
+      paused(ctx, space)
       let draft = releasing(
         app,
         await draftsOf(ctx.dir, app),
@@ -6896,7 +6909,9 @@ let OURS: Row[] = [
         const settings = planSettings(space.slug, ctx.env)
         return {
           text:
-            `Custom domains require Plus. Open your space's plan settings ` +
+            `Custom domains require ${
+              planName('plus')
+            }. Open your space's plan settings ` +
             `to compare paid plans: ${settings}. Sign in if asked; you will ` +
             `return to settings. No domain or DNS changes have been made.`,
           space,
@@ -7240,7 +7255,7 @@ let OURS: Row[] = [
             : `No names found for ${query}.`) +
           '\n\n' +
           `Search and manage domains at ${settings}. ` +
-          'Domains come with the Plus plan. You pay the registrar’s price ' +
+          'Domains come with the Personal plan. You pay the registrar’s price ' +
           'for the first year, with no markup. ' + DOMAIN_RENEWAL +
           ' The space owns the domain and can attach it to an app at any time.',
         space,
@@ -7283,7 +7298,7 @@ let OURS: Row[] = [
           type: 'number',
           description:
             'what a copy costs, in dollars to the cent (40, or 4.99), from ' +
-            'a space on the Plus plan whose payment account is ready ' +
+            'a space on the Personal plan whose payment account is ready ' +
             '(space_sell). Kept when publishing again without one',
         },
         interval: {
@@ -7631,6 +7646,7 @@ let OURS: Row[] = [
         )
       }
       let { space, who } = await inSpace(ctx, args, true)
+      paused(ctx, space)
       // An installed app costs what any other does, so it is counted like any
       // other (T-32758) — the same refusal app_new gives. A visit's store
       // waits for an install that fits.

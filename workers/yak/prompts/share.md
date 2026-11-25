@@ -24,4 +24,5 @@ Then invite them, and tell me they accept from the letter they receive.
 
 If they are new to yaks.app, remind me of my own invite at
 https://yaks.app/manage/account/invite: each friend who signs up through it and
-builds their first app gives my own space one more free month of the Plus plan.
+builds their first app gives my own space one more free month of the Personal
+plan.

@@ -406,8 +406,11 @@ test("a newcomer's space holds one build's dollars and no starter", () => {
 test("a newcomer's build at its budget asks for their email, not a plan", () => {
   assertEquals(unaffordable(space, 'models', PER_BUILD + 1), UNKEPT)
   assertEquals(atCeiling(space, 'models'), UNKEPT)
-  assertEquals(atCeiling(space, 'seconds').includes('Plus plan'), true)
-  assertEquals(unaffordable(kept, 'models', 1e6)?.includes('Plus plan'), true)
+  assertEquals(atCeiling(space, 'seconds').includes('Personal plan'), true)
+  assertEquals(
+    unaffordable(kept, 'models', 1e6)?.includes('Personal plan'),
+    true,
+  )
 })
 
 test('a newcomer is a person with no address yet', () => {

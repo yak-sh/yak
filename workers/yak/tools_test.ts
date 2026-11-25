@@ -867,7 +867,10 @@ test('free custom domains return plan settings before provisioning', async () =>
       hostname: 'recipes.example.com',
       ...args,
     })
-    assertStringIncludes(result.text, 'Custom domains require Plus')
+    assertStringIncludes(
+      result.text,
+      'Custom domains require the Personal plan',
+    )
     assertStringIncludes(
       result.text,
       'https://yaks.fyi/manage/ada/billing',
@@ -916,7 +919,7 @@ test('paid and comped domain attachment still provisions normally', async () => 
         hostname: slug + '.example.com',
       })
       assertStringIncludes(result.text, 'CNAME')
-      assertEquals(result.text.includes('require Plus'), false)
+      assertEquals(result.text.includes('require the Personal plan'), false)
       assertEquals((await dir.serves(slug + '.example.com'))?.space.slug, slug)
     }
     assertEquals(provisions, 2)

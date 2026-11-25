@@ -193,6 +193,7 @@ export let directoryConfig: Config = {
     { use: 'yak/wrap', facets: ['graph'] },
     { use: 'yak/remake', facets: ['graph'] },
     { use: 'yak/kills', facets: ['graph'] },
+    { use: 'yak/plan-trial', facets: ['graph'] },
     { use: 'yak/signin', facets: ['graph'] },
     ...behind,
   ]),

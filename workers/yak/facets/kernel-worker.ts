@@ -328,9 +328,10 @@ export let classes: Record<string, Deferred> = {
     },
   ),
   // The platform tracker, handing back the Operator runs a bug it resolved
-  // had stopped (operator-rerun.ts, @yaks/tracker/effects `settle`). Only
-  // its KERNEL binding reaches this entrypoint.
-  Reruns: entered(WorkerEntrypoint, ['rerun'], async (_ctx, env) => {
+  // had stopped (operator-rerun.ts, @yaks/tracker/effects `settle`), and
+  // asking where trials stand for its daily digest (admin.ts
+  // `trialsSince`). Only its KERNEL binding reaches this entrypoint.
+  Reruns: entered(WorkerEntrypoint, ['rerun', 'trials'], async (_ctx, env) => {
     let { reruns } = await import('../operator-rerun.ts')
     return {
       rerun: (
@@ -339,6 +340,22 @@ export let classes: Record<string, Deferred> = {
         bug: string,
         said?: Explanation,
       ) => reruns(env, space, { faults, bug, said }),
+      trials: async (now: number) => {
+        let [{ trialsSince }, { directory, fetch }, { bound }, { tallyLines }] =
+          await Promise.all([
+            import('../admin.ts'),
+            import('../directory.ts'),
+            import('../env.ts'),
+            import('@yaks/platform/trial'),
+          ])
+        let since = new Date(now - 86_400_000).toISOString()
+        let t = await trialsSince(
+          directory(bound(env.DIRECTORY, fetch, env)),
+          Date.parse(since),
+          now,
+        )
+        return [`## yaks.app trials\n\n${tallyLines(t, since).join('\n')}`]
+      },
     }
   }),
   // No public route reaches this entrypoint. Each executor callback is

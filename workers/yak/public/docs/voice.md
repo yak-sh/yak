@@ -104,4 +104,4 @@ Voice spends the same monthly allowance as AI models, each space its own.
 and how much of that was voice. When the allowance is spent, new calls and new
 voice requests are refused (`limit`), the voices already being received stop
 within a minute, and everything else in the app keeps working. Voice works again
-on the 1st of the month, or as soon as the space moves to the Plus plan.
+on the 1st of the month, or as soon as the space moves to the Personal plan.

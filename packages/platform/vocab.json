@@ -304,7 +304,7 @@
           "description": "the name of the mail provider that sets the domain up and carries its mail both ways, as the host lends it"
         }
       },
-      "description": "where a hostname's or a space's own mail is, and the provider that carries it; letters there reach the place the hostname serves, or the space. A space's is its subdomain, set up the first time it uses mail on the Plus plan. Whether its DNS records have arrived is read from the provider, never stored"
+      "description": "where a hostname's or a space's own mail is, and the provider that carries it; letters there reach the place the hostname serves, or the space. A space's is its subdomain, set up the first time it uses mail on the Personal plan. Whether its DNS records have arrived is read from the provider, never stored"
     },
     "installed": {
       "component": true,

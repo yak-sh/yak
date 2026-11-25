@@ -66,7 +66,7 @@ export let bases = (env: Pick<Env, 'STORE' | 'META' | 'CLOCK'>): Reads => ({
 })
 
 // What the base's files leave to the platform to say: what a free space
-// holds, and what Plus costs and adds (@yaks/platform/plans), which starting.md
+// holds, and what the Personal plan costs and adds (@yaks/platform/plans), which starting.md
 // tells someone signing up.
 let slots = () => ({
   free_apps: String(FREE.apps),

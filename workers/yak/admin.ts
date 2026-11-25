@@ -64,6 +64,7 @@ import {
   testIs,
 } from './directory.ts'
 import { paid } from '@yaks/platform/plans'
+import { type Tally, tally } from '@yaks/platform/trial'
 import { budget, monthOf, starterOf } from '@yaks/platform/meter'
 import { freeBudgetOf } from '@yaks/platform/budget'
 import { DAILY, opened, PER_BUILD, PER_SOURCE } from './newcomer.ts'
@@ -1324,9 +1325,29 @@ export let funnelDoor = async (req: Request, env: Env): Promise<Response> => {
     spaceOfApp(dir),
   )
   return f
-    ? Response.json({ ...f, people: await arrivals(env, f.since) })
+    ? Response.json({
+      ...f,
+      people: await arrivals(env, f.since),
+      trials: await trialsSince(dir, Date.parse(f.since)),
+    })
     : refused(503, 'not_on', 'visitor counts are not switched on here')
 }
+
+/** Every trial of the Personal plan counted (@yaks/platform/trial `tally`),
+ * from the spaces' own rows, since `since`: admin_funnel's trials, and the
+ * platform's daily digest (facets/kernel-worker.ts `Reruns`). */
+export let trialsSince = async (
+  dir: Pick<Directory, 'all'>,
+  since: number,
+  now = Date.now(),
+): Promise<Tally> =>
+  tally(
+    (await dir.all()).flatMap((s) =>
+      s.trial ? [{ trial: s.trial, tier: s.plan?.tier ?? null }] : []
+    ),
+    since,
+    now,
+  )
 
 /** The admin's directory, at {@link PATH}, or null for any other path. */
 export let answer = async (
