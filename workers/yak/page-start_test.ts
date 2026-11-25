@@ -10,6 +10,7 @@ import { test } from '@yaks/testing'
 import { broken } from '@yaks/tracker/report'
 import { parseHTML } from 'linkedom'
 import { client, connector, kernel, seed, unique } from './probe.ts'
+import { runReporter } from './report-testing.ts'
 
 let space = unique('start')
 let host = `${space}.yaks.app`
@@ -22,30 +23,14 @@ let opened = (html: string, page: string) => {
   let sent: Blob[] = []
   Object.defineProperty(document, 'currentScript', { value: reporter })
   let fetch = () => Promise.resolve(new Response(null, { status: 404 }))
-  new Function(
-    'document',
-    'location',
-    'navigator',
-    'self',
-    'globalThis',
-    'fetch',
-    'addEventListener',
-    'removeEventListener',
-    'setTimeout',
-    'clearTimeout',
-    reporter.textContent ?? '',
-  )(
+  runReporter(reporter.textContent ?? '', page, { fetch }, {
     document,
-    new URL(page),
-    { sendBeacon: (_: string, body: Blob) => sent.push(body) },
-    { origin: new URL(page).origin },
-    { fetch, console: { error: () => {} } },
-    fetch,
-    window.addEventListener.bind(window),
-    window.removeEventListener.bind(window),
-    () => 0,
-    () => {},
-  )
+    sendBeacon: (_, body) => (sent.push(body), true),
+    addEventListener: window.addEventListener.bind(window),
+    removeEventListener: window.removeEventListener.bind(window),
+    setTimeout: () => 0,
+    clearTimeout: () => {},
+  })
   let main = document.querySelector('script[src]') as HTMLScriptElement
   // An event at the window, or at an element, which the browser hands the
   // window's capturing listener as the event's target.

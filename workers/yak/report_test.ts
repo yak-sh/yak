@@ -17,7 +17,9 @@ import {
 import { fetch as fileFetch } from './files.ts'
 import { COPY } from './page-copy.ts'
 import { test, tick, until } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
 import type { Bundle, Comp } from '@yaks/graph'
+import { runReporter } from './report-testing.ts'
 import {
   client,
   connector,
@@ -61,17 +63,10 @@ test('a page reports its own breaks, and the agent hears', async () => {
     await agent.tool('app_deploy', app)
     let page = await k.at(`${jeff59}.yaks.app`, '/recipes/')
     let html = await page.text()
-    assertStringIncludes(reporterIn(html), "addEventListener('error'")
-    assertEquals(
-      html.split('data-yak-at="/recipes/"').length - 1,
-      5,
-      'injected once, beside the release listener, location reporter, ' +
-        'install tags and badge',
-    )
-    assertMatch(
-      html,
-      /<head><script data-yak-at="\/recipes\/" data-yak-version="\d+">/,
-    )
+    let reporter = reporterIn(html)
+    assertEquals(reporter.dataset.yakAt, '/recipes/')
+    assertEquals(reporter.parentElement?.tagName, 'HEAD')
+    assertEquals(reporter.parentElement?.querySelector('script'), reporter)
     assertMatch(
       page.headers.get('reporting-endpoints') ?? '',
       /yak="http.*\/recipes\/api\/report"/,
@@ -363,10 +358,13 @@ test('a break names the page version that ran, not the newest release', async ()
     )
     await agent.tool('app_deploy', { space: jeff64, app: 'recipes' })
     let html = await (await k.at(`${jeff64}.yaks.app`, '/recipes/')).text()
-    let tag = html.match(/<script data-yak-at[^>]*data-yak-version="(\d+)"/)
-    assert(tag, 'the served page names its reporter version')
-    let version = Number(tag[1])
-    let code = reporterIn(html)
+    let reporter = reporterIn(html)
+    let version = Number(reporter.dataset.yakVersion)
+    assert(
+      Number.isInteger(version),
+      'the served page names its reporter version',
+    )
+    let code = reporter.textContent ?? ''
     let old = browser(code, page, version)
     await meta(k).apply([
       {
@@ -449,25 +447,32 @@ test('a page that dies on its first import says so', async () => {
     await agent.tool('app_deploy', app)
     let page = await k.at(`${jeff62}.yaks.app`, '/weather/')
     let shell = await page.text()
-    assertMatch(
-      shell,
-      /<script data-yak-at="\/weather\/" data-yak-version="\d+">/,
-    )
+    let reporter = reporterIn(shell)
+    assertEquals(reporter.dataset.yakAt, '/weather/')
     assertEquals(
       (await k.at(`${jeff62}.yaks.app`, '/weather/app.js')).status,
       404,
     )
 
+    let address = `https://${jeff62}.yaks.app/weather/`
+    let opened = browser(
+      reporter.textContent ?? '',
+      address,
+      Number(reporter.dataset.yakVersion),
+    )
+    opened.blocked('SCRIPT', address + 'app.js', 'module')
+    await until(() => opened.drawn.length, { label: 'the soft state' })
+    assertEquals(opened.drawn.map((el) => el.textContent), [
+      'Something went wrong. Try reloading the page.',
+    ])
+    let reports = await opened.filed()
+    assertEquals(reports.length, 1)
     // What the reporter posts for that, and the one break it becomes.
     assertEquals(
       (await k.at(`${jeff62}.yaks.app`, '/weather/api/report', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          message:
-            `failed to load script https://${jeff62}.yaks.app/weather/app.js`,
-          url: `https://${jeff62}.yaks.app/weather/app.js`,
-        }),
+        body: JSON.stringify(reports[0]),
       })).status,
       204,
     )
@@ -477,17 +482,8 @@ test('a page that dies on its first import says so', async () => {
       1,
       'one break, not none',
     )
-    assertMatch(told, /page \/weather\/app\.js — failed to load script/)
+    assertMatch(told, /page \/weather\/ — failed to load script/)
     assertStringIncludes(told, `https://${jeff62}.yaks.app/weather/app.js`)
-
-    // And the soft state the page shows instead of empty space, carried by
-    // the reporter the page is served.
-    let reporter = reporterIn(shell)
-    assertStringIncludes(
-      reporter,
-      'Something went wrong. Try reloading the page.',
-    )
-    assertMatch(reporter, /addEventListener\('error'[\s\S]*\}, true\)/)
   } finally {
     await k.stop()
   }
@@ -495,8 +491,14 @@ test('a page that dies on its first import says so', async () => {
 
 // The reporter as a served page carries it: the first of the platform's
 // inline scripts (page-script.ts).
-let reporterIn = (html: string) =>
-  /<script data-yak-at[^>]*>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? ''
+let reporterIn = (html: string): HTMLScriptElement => {
+  let { document } = parseHTML(html)
+  let reporter = document.querySelector<HTMLScriptElement>(
+    'script[data-yak-at]',
+  )
+  assert(reporter, 'the page carries its reporter')
+  return reporter
+}
 
 // Not everything in a page is the app's. Cloudflare's assets layer injects
 // its analytics beacon into every page we serve and cannot be told not to
@@ -507,12 +509,13 @@ let reporterIn = (html: string) =>
 // injected, what it beacons, and the body it draws the soft state on.
 let browser = (code: string, page: string, version = 1) => {
   let beacons: Blob[] = []
-  let drawn: unknown[] = []
-  let ears: Record<string, ((e: unknown) => void)[]> = {}
+  let drawn: { textContent: string }[] = []
+  let ears: Record<string, { hear: (e: unknown) => void; capture: boolean }[]> =
+    {}
   let body = {
     innerText: '',
     querySelector: () => null,
-    append: (el: unknown) => drawn.push(el),
+    append: (el: { textContent: string }) => drawn.push(el),
   }
   let doc = {
     currentScript: {
@@ -520,6 +523,7 @@ let browser = (code: string, page: string, version = 1) => {
     },
     baseURI: page,
     readyState: 'complete',
+    querySelector: () => null,
     body,
     documentElement: body,
     createElement: () => ({ style: {}, setAttribute: () => {} }),
@@ -535,35 +539,26 @@ let browser = (code: string, page: string, version = 1) => {
         : gone.has(String(url))
         ? Promise.resolve(new Response(null, { status: 404 }))
         : Promise.reject(new TypeError('Load failed')),
-    matchMedia: () => ({ matches: false }),
   }
-  new Function(
-    'document',
-    'navigator',
-    'location',
-    'addEventListener',
-    'removeEventListener',
-    'matchMedia',
-    'globalThis',
-    'fetch',
-    code,
-  )(
-    doc,
-    { sendBeacon: (_: string, b: Blob) => (beacons.push(b), true) },
-    { origin: new URL(page).origin, href: page },
-    (name: string, fn: (e: unknown) => void) => (ears[name] ??= []).push(fn),
-    () => {},
-    win.matchMedia,
-    win,
-    win.fetch,
-  )
+  runReporter(code, page, win, {
+    document: doc,
+    sendBeacon: (_, b) => (beacons.push(b), true),
+    addEventListener: (
+      name: string,
+      hear: (e: unknown) => void,
+      capture = false,
+    ) => (ears[name] ??= []).push({ hear, capture }),
+    removeEventListener: () => {},
+  })
   return {
     // A file that never loaded, on the element it never loaded into: that
     // event fires on the element and does not bubble, which is why the
     // reporter listens in the capture phase (T-32909).
-    blocked: (tagName: string, src: string) => {
+    blocked: (tagName: string, src: string, type?: string) => {
       gone.add(src)
-      ears.error?.forEach((fn) => fn({ target: { tagName, src } }))
+      for (let { hear, capture } of ears.error ?? []) {
+        if (capture) hear({ target: { tagName, src, type } })
+      }
     },
     // The page asks and gives up waiting for the answer.
     late: (url: string) =>
@@ -573,7 +568,7 @@ let browser = (code: string, page: string, version = 1) => {
         ),
       }),
     // The person leaves the page, which says whatever the reporter held.
-    leave: () => ears.pagehide?.forEach((fn) => fn({})),
+    leave: () => ears.pagehide?.forEach(({ hear }) => hear({})),
     filed: () =>
       Promise.all(beacons.map(async (b) => JSON.parse(await b.text()))),
     drawn,
