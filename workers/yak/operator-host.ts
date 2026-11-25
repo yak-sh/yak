@@ -12,6 +12,7 @@ import type { Frame, Opening, Sink } from '@yaks/api'
 import type { Reached } from '@yaks/api/reached'
 import { refusal } from '@yaks/api/refuse'
 import {
+  stand,
   type Talk,
   talkAsked,
   talkEid,
@@ -1094,7 +1095,7 @@ let standing = (sessions: string[], entries: Bundle[], archived: Bundle[]) =>
   sessions.map((eid) => {
     let seqs = entries.filter((b) => comp(b, 'entry')?.session == eid)
       .map((b) => Number(comp(b, 'entry')?.seq ?? 0))
-    return `${eid}:${Math.max(0, ...seqs)}`
+    return stand(eid, Math.max(0, ...seqs))
   }).join(',') + (archived.length
     ? '/' + sha256(JSON.stringify(
       archived.map((b) => b.entity.eid).sort(),
@@ -1829,9 +1830,11 @@ export let operatorFrames = (
         if (!made) return
         told.set(session, made.seq)
         // Each page keeps the frame for the conversation it shows: a helper's
-        // step goes to the conversation that started it and to its own.
+        // step goes to the conversation that started it and to its own, each
+        // saying where the session stands after it.
+        let at = stand(session, made.seq)
         for (let frame of made.own ? [made.frame, made.own] : [made.frame]) {
-          step(watches, frame.operator, session)
+          step(watches, { ...frame.operator, at }, session)
         }
       }),
     /** words of a reply written in a session, stored, until its step lands */

@@ -191,9 +191,9 @@ let storage = (): Stash => {
 // until the page gives each up; 'deploying' answers the first read of each
 // address 502, and the store's first handshake as failed, as the edge does
 // while a deploy replaces the Worker; 'down' fails every handshake of the
-// store's socket, and gives the page a clock the test holds: its time passes
-// only by `pass`. Under the others, the page's waits run a thousand times
-// faster.
+// store's socket. 'held' and 'down' give the page a clock the test holds: its
+// time passes only by `pass`. Under the others, the page's waits run a
+// thousand times faster.
 let scripts = new Map<string, Promise<string>>()
 let scriptAt = (url: string) => {
   let read = scripts.get(url)
@@ -341,7 +341,7 @@ let load = async (
   let tabTimers = new Set<number>()
   // The page's waits on the held clock: each runs once `pass` reaches its
   // moment, `now`, which the page reads as `performance.now()`.
-  let held = network == 'down'
+  let held = network == 'held' || network == 'down'
   let now = 0, n = 0
   let waits = new Map<number, { at: number; fn: () => void }>()
   let after = (fn: () => void, ms: number) => {
@@ -433,7 +433,7 @@ let load = async (
       return new Response('Bad Gateway', { status: 502 })
     }
     if (/draft=1|\/query/.test(url)) asked++
-    if (url.includes('?talk=')) talks++
+    if (url.includes('?talk=')) talks++, await late
     if (network == 'deploying' && !init?.method && !failed.has(url)) {
       failed.add(url)
       return new Response('Bad Gateway', { status: 502 })
@@ -786,6 +786,9 @@ let load = async (
 // While set, a read of the conversation is answered as the store stood when
 // it was asked, but reaches the page only once this settles.
 let slow: Promise<void> | undefined
+// While set, a read of the conversation is asked of the store only once this
+// settles.
+let late: Promise<void> | undefined
 // While set, the page's door refuses what is sent to it; and every address
 // a page posted to, in order.
 let refused = false
@@ -876,8 +879,7 @@ typed.type('Order salt for the township garage')
 await until(async () => await stored() == 'Order salt for the township garage')
 typed.leave()
 let waited = await load(storage(), false, 'new', {}, undefined, 'held')
-await until(waited.read)
-await until(() => waited.stores.length > 1)
+await waited.pass(60_000, () => waited.read() && waited.stores.length > 1)
 waited.leave()
 
 test("the Operator's chat app reads its draft again when its page graph's socket is never answered", () => {
@@ -1288,8 +1290,8 @@ test('opening the chat app reads the conversation once, with the page', async ()
   let landed = await load(storage(), false, park, {}, undefined, 'held')
   let box = landed.document.querySelector('[data-conversation]')!
   await begun('Ask for the north shelter as well')
-  await landed.answered()
-  await until(() => box.innerHTML.includes('Ask for the north shelter as well'))
+  await landed.pass(60_000, () => landed.talks() > 0)
+  await landed.received()
   assertEquals([still, landed.talks()], [0, 1])
   assertStringIncludes(box.innerHTML, 'Ask for the north shelter as well')
   landed.leave()
@@ -1386,6 +1388,36 @@ test('a line heard while the page reads the conversation stays on it', async () 
   assertEquals(
     [heard, box.innerHTML.includes('Ask for the lakeside shelter too')],
     [true, true],
+  )
+  page.leave()
+})
+
+// A read asked as the Operator's steps land answers them all: the steps
+// heard while it was on its way are not read again.
+test('a step heard while the page reads, and held in what the read answers, is read once', async () => {
+  let page = await load(storage(), false, park)
+  await page.answered()
+  await tick()
+  let box = page.document.querySelector('[data-conversation]')!
+  let asked = Promise.withResolvers<void>()
+  late = asked.promise
+  await page.hear({ ready: true, standing: 'moved' })
+  await until(page.talks)
+  late = undefined
+  await begun('Ask for the east shelter too')
+  let heard = await until(() =>
+    box.innerHTML.includes('Ask for the east shelter too')
+  )
+  asked.resolve()
+  await page.received()
+  await tick()
+  assertEquals(
+    [
+      heard,
+      page.talks(),
+      box.innerHTML.includes('Ask for the east shelter too'),
+    ],
+    [true, 1, true],
   )
   page.leave()
 })
@@ -1494,8 +1526,7 @@ test('a helper’s line landing before the conversation is answered is read, onc
   await g.apply([told('Find the north shelter’s June dates too')], {
     trusted: true,
   })
-  await landed.answered()
-  await until(landed.talks)
+  await landed.pass(60_000, () => landed.talks() > 0)
   await landed.received()
   assertEquals([still, landed.talks()], [0, 1])
   // what it was told closed, its words fetched as it opens

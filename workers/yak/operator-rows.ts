@@ -62,7 +62,9 @@ export { leaving } from '@yaks/ui/navigate'
 export { sleep } from '@yaks/fp'
 
 // The page's store, asked through @yaks/api (operator-api.ts), and the
-// person's drafts and conversation in it, kept in the page graph.
+// person's drafts and conversation in it, kept in the page graph, and
+// whether a read of it holds a step heard meanwhile.
 export { operatorAt } from './operator-api-page.ts'
 export { pageDrafts } from '@yaks/platform/operator-drafts-browser'
 export { pageTalk } from '@yaks/platform/operator-talk-browser'
+export { covers } from '@yaks/platform/operator-talk'

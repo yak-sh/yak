@@ -2099,7 +2099,7 @@ let chatScript = (
   `<script type="module" data-operator-chat="${visit}">
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
-import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, selfHtml, showing, sleep, turnHtml } from '/_talk.js'
+import { asideHtml, browserDrafts, covers, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, selfHtml, showing, sleep, turnHtml } from '/_talk.js'
 import words from '/_words.js'
 import { voice } from '/voice.js'
 // Imports may arrive after a second navigation has already replaced this page,
@@ -2505,9 +2505,11 @@ let conversation = pageTalk('${space.eid}', '${who.person}', open == 'new' ? und
 // time the page graph's watch of it is answered whole, and the page reads it
 // again only when that moved.
 let standing = ${JSON.stringify(standing)}
-// One read at a time; a step heard during one reads once more after it,
-// since what the read answered may predate the line the step put in place.
-let reading, again = false
+// One read at a time; a step heard during one reads once more after it
+// when what the read answered predates the line the step put in place
+// (each step says where its session stands, \`at\`).
+let reading, again = false, heard = []
+let behind = (got) => again || heard.some((at) => !covers(got.standing, at))
 // Keep reading from where this page began, so a growing transcript never
 // slides its oldest displayed entries out of the next read.
 let from = talk.from()
@@ -2530,17 +2532,18 @@ let read = async () => {
   if (signal.aborted || open == 'new') return
   if (reading) return void (again = true)
   reading = (async () => {
+    let got
     do {
-      again = false
+      again = false, heard = []
       let response = await ask('${at}?talk=' + encodeURIComponent(open) + (from == null ? '' : '&from=' + encodeURIComponent(from)) + (taking ? '&take=' + taking : ''))
       if (!response.ok) throw new Error('This page could not be brought up to date. Your conversation is saved; reload to try again.')
-      let got = await response.json()
+      got = await response.json()
       if (signal.aborted) return
       standing = got.standing
       if (got.html) {
         let missing = talk.read(got.html)
         redrawn()
-        if (missing.length && !again) await left(missing)
+        if (missing.length && !behind(got)) await left(missing)
         if (signal.aborted) return
       }
       from ??= talk.from()
@@ -2553,7 +2556,7 @@ let read = async () => {
       }
       if (got.title) titled(got.title)
       dates(document)
-    } while (again)
+    } while (behind(got))
   })()
   try { await reading } finally { reading = undefined }
 }
@@ -2573,7 +2576,7 @@ let hear = (o) => {
   standing = undefined
   talk.heard(o)
   dates(document)
-  if (reading) again = true
+  if (reading) heard.push(o.at)
   doing(o.doing)
 }
 // The conversation's row (@yaks/platform/operator-talk): answered whole as
