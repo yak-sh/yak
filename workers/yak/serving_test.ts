@@ -69,9 +69,11 @@ import { addressed } from '@yaks/platform/versions'
 import { APP_WARM, appMark, iconAt } from '@yaks/platform/routes'
 import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
 import { generatedIconKey } from '@yaks/platform/app-icon'
+import { splashPrefix } from '@yaks/platform/splash'
 import { digest } from '@yaks/graph/sha256'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
+import { handler as gateway } from './kernel.ts'
 
 let platform = (vars: Partial<Env> = {}, physical = false) => {
   let runtime = bindings(SECRET, { BUILDER: operators, ...vars })
@@ -2208,30 +2210,76 @@ test("a private app's release asset is its worker's to give a stranger", async (
 test('a worker storefront can install without opening its private files', async () => {
   let open = true
   let own = false
+  let key = '0123456789abcdef'
+  let png = new Uint8Array([137, 80, 78, 71])
   await using k = await router((req) => {
     let { pathname } = new URL(req.url)
     if (own && pathname == '/manifest.webmanifest') {
       return Response.json({ name: 'Storefront', background_color: '#abcdef' })
     }
-    if (open && pathname == '/') {
+    if (open && pathname == '/' && req.method == 'GET') {
       return new Response('<!doctype html><head><title>Shop</title></head>', {
         headers: { 'content-type': 'text/html' },
       })
     }
     return new Response(null, { status: 404 })
   })
-  await k.dir.apply({
-    entities: [{ entity: { eid: k.app.eid }, app: { access: 'private' } }],
+  k.env.RASTER = { fetch: () => Promise.resolve(new Response(png)) }
+  k.put('ada/cookbook/icon.svg', '<svg viewBox="0 0 1 1"/>')
+  k.put('ada/cookbook/private.txt', 'private')
+  let blobs = r2RawObjects(k.env.BLOBS)
+  for (let name of ['1320x2868', 'icon-512']) {
+    await blobs.put(`${splashPrefix(k.space, k.app)}${key}/${name}.png`, png)
+  }
+  await k.dir.stamp({
+    entities: [{
+      entity: { eid: k.app.eid },
+      app: { access: 'private' },
+      app_splash: { key, dark: false },
+    }, {
+      entity: { eid: crypto.randomUUID() },
+      hostname: { name: 'shop.example', serves: k.app.eid, stage: 'active' },
+    }],
   }, ADA_OWNS)
 
-  let html = await (await k.at('/')).text()
-  assertStringIncludes(html, 'href="/manifest.webmanifest"')
-  assertStringIncludes(html, 'content="black-translucent"')
   let path = '/manifest.webmanifest?background_color=123456&theme_color=345678'
-  let manifest = await (await k.at(path)).json()
-  assertEquals(manifest.background_color, '#123456')
-  assertEquals(manifest.theme_color, '#345678')
-  assertEquals(manifest.start_url, '/')
+  for (let host of ['ada.yaks.app', 'shop.example']) {
+    let get = (path: string, init?: RequestInit) =>
+      gateway.fetch(new Request(`https://${host}${path}`, init), k.env)
+    let html = await (await get('/')).text()
+    assertStringIncludes(html, 'href="/manifest.webmanifest"')
+    assertStringIncludes(html, 'content="black-translucent"')
+    let touch = /rel="apple-touch-icon" href="([^"]+)"/.exec(html)![1]
+    let splash = /rel="apple-touch-startup-image" href="([^"]+)"/.exec(html)![1]
+    let manifest = await (await get(path)).json()
+    assertEquals(manifest.background_color, '#123456')
+    assertEquals(manifest.theme_color, '#345678')
+    assertEquals(manifest.start_url, '/')
+    assertEquals(manifest.icons[1].src, touch)
+    for (
+      let image of [touch, '/icon.png?display', splash, manifest.icons[0].src]
+    ) {
+      let got = await get(image)
+      assertEquals([got.status, got.headers.get('content-type')], [
+        200,
+        'image/png',
+      ])
+      assertEquals(await got.bytes(), png)
+    }
+    let head = await get(touch, { method: 'HEAD' })
+    assertEquals([head.status, head.headers.get('content-type')], [
+      200,
+      'image/png',
+    ])
+    await head.body?.cancel()
+    let manifestHead = await get(path, { method: 'HEAD' })
+    assertEquals(
+      [manifestHead.status, manifestHead.headers.get('content-type')],
+      [200, 'application/manifest+json'],
+    )
+    assertEquals(manifestHead.body, null)
+    assertEquals((await get('/private.txt')).status, 303)
+  }
 
   own = true
   assertEquals(await (await k.at(path)).json(), {
@@ -2242,6 +2290,7 @@ test('a worker storefront can install without opening its private files', async 
   own = false
   open = false
   assertEquals((await k.at(path)).status, 404)
+  assertEquals((await k.at('/icon.png')).status, 303)
 })
 
 // Where Cloudflare refuses the hop to the cache in front of `Files`, as it

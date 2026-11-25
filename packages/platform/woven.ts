@@ -6,6 +6,7 @@
 // apps.ts `woven`), and the box's `yak/files` facet into the release pages it
 // serves (./files-routes.ts).
 import { holding } from '@yaks/blob'
+import { ICON_PNG } from './app-icon.ts'
 import { esc } from './escape.ts'
 import { type Host, url } from './host.ts'
 import { free, type Metered } from './meter.ts'
@@ -245,6 +246,27 @@ export let manifesting = (
     sizes,
   })),
 })
+
+/** Ask for the start page when a worker leaves an install asset to the host. */
+export let installStart = (req: Request, path: string): Request | null => {
+  if (path != `/${ICON_PNG}` && path != `/${MANIFEST}`) return null
+  if (req.method != 'GET' && req.method != 'HEAD') return null
+  let headers = new Headers(req.headers)
+  for (
+    let name of [
+      'if-match',
+      'if-modified-since',
+      'if-none-match',
+      'if-range',
+      'if-unmodified-since',
+      'range',
+    ]
+  ) headers.delete(name)
+  headers.set('accept', 'text/html')
+  headers.set('sec-fetch-dest', 'document')
+  headers.set('sec-fetch-mode', 'navigate')
+  return new Request(new URL('.', req.url), { headers, signal: req.signal })
+}
 
 /** Defaults for the colour fields a manifest leaves out. */
 export let manifestColors = (app: Themed, painted?: Theme) => ({

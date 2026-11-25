@@ -173,6 +173,7 @@ import {
   based,
   baseOf,
   hasBase,
+  installStart,
   intoHead,
   manifesting,
   paintedColors,
@@ -848,24 +849,15 @@ export let unwritten = async (
   )
 }
 
-// A worker can open its storefront while keeping its files private. Its own
-// manifest still has first say. A generated one is available to a visitor
-// who can open the start page through the worker.
+// A worker can open its storefront while keeping its files private.
 let storefront = async (
-  req: Request,
+  start: Request,
   env: Env,
   space: Space,
   app: App,
   who: Who,
 ) => {
-  let start = new URL(req.url)
-  start.pathname = start.pathname.slice(0, -MANIFEST.length)
-  start.search = ''
-  let headers = new Headers(req.headers)
-  headers.delete('if-none-match')
-  headers.delete('if-modified-since')
-  headers.set('accept', 'text/html')
-  let page = await ran(env, space, app, new Request(start, { headers }), who)
+  let page = await ran(env, space, app, start, who)
   await page?.body?.cancel()
   return page?.status == 200 &&
     !!page.headers.get('content-type')?.startsWith('text/html')
@@ -3477,6 +3469,18 @@ let served = async (
       own.headers.set(MOVED, '1')
     }
   }
+  // A visitor who can open the storefront can install it. Give them its
+  // icon and a generated manifest while the app's own files stay private.
+  let start = !mayRead && own?.status == 404 ? installStart(req, path) : null
+  if (start && await storefront(start, env, space, app, who)) {
+    let install = path == `/${MANIFEST}`
+      ? await unwritten(req, env, space, app, path, bare, false, true)
+      : await asset(req, env, space, app, who, path, at, c, null, bare)
+    if (install) {
+      await own?.body?.cancel()
+      return wall(reporting(install, req, at, app))
+    }
+  }
   // The worker's 404 is its pass, and the files answer behind it.
   let answering = await behind({
     worker: !own ? 'none' : own.status == 404 ? 'pass' : 'answer',
@@ -3493,21 +3497,6 @@ let served = async (
       app,
       { person: who.person!, role: who.role, guest: who.guest },
       bare,
-    )
-  }
-  if (
-    answering == 'pass' && path == `/${MANIFEST}` &&
-    ['GET', 'HEAD'].includes(req.method) &&
-    await storefront(req, env, space, app, who)
-  ) {
-    await own?.body?.cancel()
-    return wall(
-      reporting(
-        (await unwritten(req, env, space, app, path, at, false, true))!,
-        req,
-        at,
-        app,
-      ),
     )
   }
   let page = answering == 'files' ? await file ?? own ?? nothingHere(env) : own!
