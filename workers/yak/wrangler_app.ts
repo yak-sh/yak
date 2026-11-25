@@ -3,10 +3,11 @@
 // tenant ask for another tenant's data.
 import { migrationMetadata } from './app_migrations.ts'
 import {
+  type Assets,
   folder,
   jsonc,
   NOT_FOUND,
-  type NotFound,
+  publicAssets,
   WORKER,
 } from '@yaks/platform/files'
 // The upload wrapper is platform-owned, never the app's `main`.
@@ -63,7 +64,7 @@ export type Config = {
   // app's, read back through app_files. Absent, the app's root is served.
   // `assets.not_found_handling`, Cloudflare's own key for a path with no file
   // (files.ts `resolve`). Absent, a missing page infers it.
-  assets?: { directory?: string; not_found_handling?: NotFound }
+  assets?: Assets
 }
 export type Parsed = { config: Config; report: string[]; refused: string[] }
 export type Request = {
@@ -301,7 +302,7 @@ export let allowlist = (value: unknown): Parsed => {
     if (!object(assets)) {
       no('assets', 'expected an object: { "directory": "dist" }')
     } else {
-      keys(assets, ['directory', 'not_found_handling'], 'assets.')
+      keys(assets, ['directory', 'not_found_handling', 'public'], 'assets.')
       let handling = NOT_FOUND.find((n) => n == assets.not_found_handling)
       if (handling) config.assets = { not_found_handling: handling }
       else if ('not_found_handling' in assets) {
@@ -321,6 +322,17 @@ export let allowlist = (value: unknown): Parsed => {
           config.assets = dir
             ? { ...config.assets, directory: dir }
             : config.assets ?? {}
+        }
+      }
+      if ('public' in assets) {
+        let paths = publicAssets(assets.public)
+        if (paths == null) {
+          no(
+            'assets.public',
+            'expected a list of file paths or directories ending in /',
+          )
+        } else if (paths.length) {
+          config.assets = { ...config.assets, public: paths }
         }
       }
     }

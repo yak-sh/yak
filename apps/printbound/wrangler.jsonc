@@ -1,4 +1,16 @@
 {
   // The worker answers every page; an address it passes is no page.
-  "assets": { "not_found_handling": "none" }
+  "assets": {
+    "not_found_handling": "none",
+    "public": [
+      "__packages/@yaks/ui/",
+      "favicon.svg",
+      "fonts/",
+      "img/",
+      "look/skin.css",
+      "look/site.css",
+      "look/spellbound.css",
+      "look/studio.css"
+    ]
+  }
 }

@@ -1208,6 +1208,17 @@ let releaseAssets = (
     ? assetsIn(r2RawObjects(env.BLOBS), source!)
     : Promise.resolve({})
 
+let releaseAsset = (assets: Assets, path: string) => {
+  let name = fence.decoded(path)?.slice(1)
+  return name && Object.hasOwn(assets, name) ? assets[name] : null
+}
+
+let assetRedirect = (req: Request, mount: string, path: string, asset: Asset) =>
+  redirect(
+    `${mount}api/assets/${asset.sha}${path}${new URL(req.url).search}`,
+    307,
+  )
+
 let workerPage = async (
   page: Response,
   app: App,
@@ -1326,8 +1337,8 @@ let releasedAlias = async (
   req: Request,
   env: Env,
   app: App,
-  at: string,
-  bare: string,
+  mount: string,
+  path: string,
   page: Response,
 ) => {
   let etag = page.headers.get('etag')
@@ -1336,27 +1347,14 @@ let releasedAlias = async (
     /no-store/i.test(page.headers.get('cache-control') ?? '') ||
     page.headers.has('set-cookie') || page.headers.has('vary')
   ) return page
-  let id = releaseId(app.source)
-  if (!id) return page
-  let address = new URL(req.headers.get(ADDRESS) ?? req.url)
-  if (address.search) return page
-  let assets = await releaseAssets(env, app.source)
-  let path = fence.decoded(address.pathname.slice(bare.length))
-  let asset = path && Object.hasOwn(assets, path) ? assets[path] : null
+  if (
+    !/\.[a-z0-9]+$/i.test(path) || fence.page(path) || path == '/icon.png' ||
+    new URL(req.url).search
+  ) return page
+  let asset = releaseAsset(await releaseAssets(env, app.source), path)
   if (!asset || etag != etagOf(asset.original.slice(0, 24))) return page
-  let next = assetUrl(
-    address.href,
-    at,
-    bare,
-    id,
-    platformPath,
-    address.href,
-    undefined,
-    assets,
-  )
-  if (next == address.href) return page
   await page.body?.cancel()
-  return redirect(next, 307)
+  return assetRedirect(req, mount, path, asset)
 }
 
 // A page's file that answered at an address it can be asked again at (the
@@ -1590,20 +1588,23 @@ let appDoor = async (
     if (req.method != 'GET' && req.method != 'HEAD') {
       return json(405, 'method_not_allowed')
     }
-    let name = fence.decoded(fingerprint.path)?.slice(1)
-    if (!name || fence.inside('/' + name)) return json(404, 'no_such_file')
+    let decoded = fence.decoded(fingerprint.path)
+    if (!decoded || fence.inside(decoded)) return json(404, 'no_such_file')
+    let name = decoded.slice(1)
     let raw = r2RawObjects(env.BLOBS)
     let sha = fingerprint.sha
     let inRelease = async (source: string | null | undefined) => {
-      let index: Assets = await releaseAssets(env, source)
-      return Object.hasOwn(index, name) && index[name].sha == sha
-        ? index[name]
-        : null
+      let asset = releaseAsset(
+        await releaseAssets(env, source),
+        fingerprint.path,
+      )
+      return asset?.sha == sha ? asset : null
     }
     let current = await inRelease(app.source)
     let cache = app.access == 'public'
       ? immutable['cache-control']
       : browserImmutable
+    if (current?.public) return contentBytes(req, raw, current, cache)
     if (mayUse) {
       if (current) return contentBytes(req, raw, current, cache)
       let asset = await keptAsset(raw, releasesPrefix(space, app), name, sha)
@@ -3247,6 +3248,18 @@ let served = async (
     )
     if (found) return json(found, 'not_found')
   }
+  // A release can give its static files to everyone while its worker and
+  // store keep their own access rules. Old page links move to the same bytes.
+  if (
+    !itself && path != '/icon.png' && !fence.page(path) &&
+    ['GET', 'HEAD'].includes(req.method)
+  ) {
+    let asset = releaseAsset(await releaseAssets(env, app.source), path)
+    if (asset?.public) {
+      let page = reporting(assetRedirect(req, at, path, asset), req, at, app)
+      return edge ? marked(keep(page, space, app, [307])) : wall(page)
+    }
+  }
   let mayRead = to.seen == 'page'
   // Both at once, because they are two halves of one answer and neither
   // needs the other's result (T-33176). The app's own worker answers first
@@ -3329,10 +3342,12 @@ let served = async (
       page = redirect(await iconAddress(env, space, app, at), 307)
     }
   }
+  // The Files validator identifies the release's original bytes before
+  // kept() rewrites CSS and gives it a validator of its own.
+  if (!itself) page = await releasedAlias(req, env, app, at, path, page)
   if (worker) {
     page = await kept(req, env, app, at, bare, page)
   }
-  if (!itself) page = await releasedAlias(req, env, app, at, bare, page)
   if (
     worker && page.body &&
     page.headers.get('content-type')?.startsWith('text/html')

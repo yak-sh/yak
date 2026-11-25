@@ -13,7 +13,12 @@ import { BUILT, type Files } from './versions.ts'
 
 /** The bytes a browser receives at a served path, and the original file
  * bytes a private app's worker can authorize at that path. */
-export type Asset = { sha: string; original: string; type: string }
+export type Asset = {
+  sha: string
+  original: string
+  type: string
+  public?: true
+}
 export type Assets = Record<string, Asset>
 
 export let encoded = (path: string) =>
@@ -41,7 +46,15 @@ let browserFiles = (files: Files, config: Serving) => {
     let type = mimeOf(built ? 'compiled.js' : path)
     if (type.startsWith('text/html')) continue
     let original = built || sha
-    keys.set(path, { sha: original, original, type })
+    let open = config.assets?.public?.some((entry) =>
+      entry.endsWith('/') ? path.startsWith(entry) : path == entry
+    )
+    keys.set(path, {
+      sha: original,
+      original,
+      type,
+      ...open ? { public: true } : {},
+    })
   }
   return keys
 }

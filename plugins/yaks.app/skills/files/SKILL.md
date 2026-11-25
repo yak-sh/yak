@@ -265,6 +265,13 @@ still revalidate; they show the current release. A page with its own `<base>`
 keeps its chosen URL behavior. App access is checked whenever a request reaches
 the server, including a request for an older release.
 
+A private app can serve selected release assets to everyone through
+`assets.public` in its Wrangler config. List paths relative to the served
+folder. A path ending in `/` includes the directory's fingerprinted assets. For
+example, `"public": ["favicon.svg", "__packages/@yaks/ui/"]` serves the favicon
+and the kit files directly from the release. The app's own pages, worker routes
+and store keep their access rules.
+
 ## Page URLs and 404 handling
 
 Every HTML file is a page, at the URL a static host would give it:

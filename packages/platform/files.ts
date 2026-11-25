@@ -17,7 +17,11 @@ export type NotFound = typeof NOT_FOUND[number]
  * (a build's `dist` beside the source that made it), and what answers a path
  * with no file. Absent, the app's root is served and a missing page infers
  * its handling. */
-export type Assets = { directory?: string; not_found_handling?: NotFound }
+export type Assets = {
+  directory?: string
+  not_found_handling?: NotFound
+  public?: string[]
+}
 
 /** What serving reads of an app's wrangler config: its server source
  * (`main`, never served) and its `assets`. */
@@ -236,6 +240,20 @@ export let folder = (v: unknown): string | null => {
     : null
 }
 
+/** Public release assets are named by file or by directory ending in /.
+ * Paths are relative to the served folder. */
+export let publicAssets = (value: unknown): string[] | null => {
+  if (!Array.isArray(value)) return null
+  return value.every((path) =>
+      typeof path == 'string' &&
+      path.replace(/\/$/, '').split('/').every((part) =>
+        /^[\w@.-]+$/.test(part) && part != '.' && part != '..'
+      )
+    )
+    ? value
+    : null
+}
+
 /** What serving honors of a wrangler config's text, and nothing it would
  * refuse: a host that deploys checks the whole config (workers/yak
  * wrangler_app.ts `parse`), and one serving a release as it stands reads
@@ -255,12 +273,14 @@ export let serving = (text: string): Serving => {
   if (typeof value.main == 'string') {
     config.main = value.main.replace(/^(?:\.\/)+/, '')
   }
-  let { directory, not_found_handling } = value.assets ?? {}
+  let { directory, not_found_handling, public: paths } = value.assets ?? {}
   let dir = folder(directory)
   let handling = NOT_FOUND.find((n) => n == not_found_handling)
+  let open = publicAssets(paths)
   let assets: Assets = {
     ...(dir ? { directory: dir } : {}),
     ...(handling ? { not_found_handling: handling } : {}),
+    ...(open?.length ? { public: open } : {}),
   }
   if (Object.keys(assets).length) config.assets = assets
   return config

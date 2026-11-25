@@ -27,6 +27,11 @@ let worker = 'data:text/javascript,' + encodeURIComponent(`export default {
       return text('<base href="' + mount + 'styles/">' +
         '<link rel="stylesheet" href="studio.css">', 'text/html')
     }
+    if (path == '/public-files') {
+      return text('<link rel="stylesheet" href="theme/kit.css">' +
+        '<link rel="stylesheet" href="owner.css">', 'text/html')
+    }
+    if (path == '/theme/kit.css') throw new Error('dispatch should not run for this file')
     if (path == '/look.css') {
       return text("@font-face{src:url('fonts/f.ttf')}" +
         '.x{background:url(drawn.png)}', 'text/css')
@@ -48,7 +53,7 @@ let k = await workerKernel(new URL(worker))
 cleanup(() => k.stop())
 
 let space = unique('kept')
-let { cookie } = await seed(k, [{ slug: space, apps: ['made'] }])
+let { cookie } = await seed(k, [{ slug: space, apps: ['made', 'front'] }])
 let agent = connector(k, cookie)
 let host = `${space}.yaks.app`
 await agent.tool('app_files', {
@@ -63,6 +68,16 @@ await agent.tool('app_files', {
   ],
 })
 await agent.tool('app_deploy', { space, app: 'made' })
+await agent.tool('app_files', {
+  space,
+  app: 'front',
+  files: [
+    serverSource,
+    { path: 'icon.svg', content: '<svg/>' },
+    { path: 'styles/studio.css', content: '.front{}' },
+  ],
+})
+await agent.tool('app_deploy', { space, app: 'front' })
 let customHost = `${space}.example`
 await agent.tool('app_new', {
   space,
@@ -75,6 +90,9 @@ await agent.tool('app_files', {
   app: 'gated',
   files: [
     serverSource,
+    { path: 'wrangler.jsonc', content: '{"assets":{"public":["theme/"]}}' },
+    { path: 'theme/kit.css', content: '.kit{}' },
+    { path: 'owner.css', content: '.owner{}' },
     { path: 'fonts/f.ttf', content: 'gated font' },
     {
       path: 'styles/studio.css',
@@ -85,11 +103,12 @@ await agent.tool('app_files', {
 await agent.tool('app_deploy', { space, app: 'gated' })
 let placed = (await k.dir.space(space))!
 let app = (await k.dir.app(placed, 'gated'))!
+let front = (await k.dir.app(placed, 'front'))!
 await k.dir.apply({
   entities: [{
     entity: { eid: crypto.randomUUID() },
     hostname: { name: customHost, serves: app.eid, stage: 'active' },
-  }],
+  }, { entity: { eid: front.eid }, home: {} }],
 }, KERNEL)
 let at = (path: string, init: RequestInit = {}) => k.at(host, path, init)
 let release = (path: string) =>
@@ -161,6 +180,50 @@ test('a worker-served release icon at its bare address leads to its fingerprint'
     named.headers.get('cache-control'),
     'public, max-age=31536000, immutable',
   )
+})
+
+test("a home app's mounted icon and stylesheet lead to their fingerprints", async () => {
+  for (
+    let [path, dest, body] of [
+      ['icon.svg', 'image', '<svg/>'],
+      ['styles/studio.css', 'style', '.front{}'],
+    ]
+  ) {
+    let alias = await at('/front/' + path, {
+      headers: { 'sec-fetch-dest': dest },
+    })
+    equal(alias.status, 307)
+    let location = alias.headers.get('location')!
+    assertMatch(location, /^\/api\/assets\/[a-f0-9]{64}\//)
+    equal(await (await at(location)).text(), body)
+  }
+})
+
+test('a private release serves its public assets without dispatching', async () => {
+  for (let domain of [host, customHost]) {
+    let mount = domain == host ? '/gated/' : '/'
+    let get = (path: string, init?: RequestInit) => k.at(domain, path, init)
+    let html = await (await get(mount + 'public-files')).text()
+    let kit = html.match(/href="([^"]+\/theme\/kit\.css)"/)![1]
+    let owner = html.match(/href="([^"]+\/owner\.css)"/)![1]
+    assertMatch(kit, /\/api\/assets\/[a-f0-9]{64}\//)
+    equal((await get(mount + 'theme/kit.css')).headers.get('location'), kit)
+    let css = await get(kit)
+    equal(await css.text(), '.kit{}')
+    equal(
+      css.headers.get('cache-control'),
+      'private, max-age=31536000, immutable',
+    )
+    equal((await get(kit, { method: 'HEAD' })).status, 200)
+    equal((await get(owner)).status, 401)
+    if (domain == host) {
+      equal(
+        await (await get(owner, { headers: { cookie } })).text(),
+        '.owner{}',
+      )
+      equal(await (await get(kit, { headers: { cookie } })).text(), '.kit{}')
+    }
+  }
 })
 
 test('a file the worker passes at its bare address leads to its fingerprint', async () => {
