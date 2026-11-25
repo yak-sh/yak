@@ -23,6 +23,7 @@ import {
   swap,
   type Swapped,
   TITLE,
+  WARM,
 } from './navigate.ts'
 
 let parse = (html: string) =>
@@ -356,6 +357,21 @@ test('a failed refresh leaves the ready document available until a usable answer
   await settled()
   assertEquals(entered, [after])
   assertEquals(b.fetched, Array(3).fill('https://y.test/chat prefetch'))
+})
+
+test('a link can warm a worker while keeping the browser in charge of opening it', async () => {
+  let b = browsing({
+    '/': `<a id="app" href="https://space.y.test/box/" target="_blank"
+      ${HOLD} ${WARM}="https://space.y.test/box/_web/warm">Box</a>`,
+  }, '/')
+  await settled()
+  assertEquals(b.fetched, ['https://space.y.test/box/_web/warm'])
+  b.press('touchstart', '#app')
+  assertEquals(b.fetched.length, 1)
+  b.tick(FRESH)
+  b.press('touchstart', '#app')
+  assertEquals(b.fetched.length, 2)
+  assertEquals(b.click('#app'), false)
 })
 
 test('a ready document falls back to native navigation when the server revokes access', async () => {

@@ -28,6 +28,7 @@ import { Badge } from '@yaks/ui/Badge'
 import { Icon } from '@yaks/ui/Icon'
 import { Menu } from '@yaks/ui/Menu'
 import { Rows } from '@yaks/ui/Rows'
+import { WARM } from '@yaks/ui/navigate'
 import { Time } from '@yaks/ui/Time'
 import { h } from 'preact'
 import type { IconNode } from 'lucide'
@@ -41,7 +42,7 @@ import House from 'lucide/dist/esm/icons/house.mjs'
 import Lock from 'lucide/dist/esm/icons/lock.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Pencil from 'lucide/dist/esm/icons/pencil.mjs'
-import { appMarkImage, type MarkedApp } from './routes.ts'
+import { appMarkImage, appWarmAt, type MarkedApp } from './routes.ts'
 
 /** When something was written, and by whom. */
 export type Stamp = { at: string; by: string | null }
@@ -122,7 +123,12 @@ export let app: ComponentRenderer = {
           { mod: 'line' },
           h(
             Rows.Open,
-            { href: `${at}/`, target: '_blank', rel: 'noopener' },
+            {
+              href: `${at}/`,
+              [WARM]: appWarmAt(at),
+              target: '_blank',
+              rel: 'noopener',
+            },
             title,
           ),
         ),

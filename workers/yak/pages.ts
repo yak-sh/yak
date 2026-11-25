@@ -630,6 +630,7 @@ export type SpacePage = {
   space: string
   title: string
   apps: Listed[]
+  warm?: string[]
   hidden: number
   role: string | null
   person: boolean
@@ -831,6 +832,9 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
     env,
     {
       title: at.title || at.space,
+      // A kept listing still gives its linked workers a head start.
+      head: at.warm?.map((href) => `<link rel="prefetch" href="${esc(href)}">`)
+        .join(''),
       lead: at.apps.length
         ? 'Here is what you can open.'
         : 'Nothing here is open to visitors yet.',

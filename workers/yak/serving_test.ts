@@ -40,7 +40,7 @@ import { badged, badgeOf } from '@yaks/platform/woven'
 import { planned } from './assets.ts'
 import { client as clientNamed } from './sheets.ts'
 import * as dirPart from './directory.ts'
-import { granting, scriptName } from './dispatch.ts'
+import { granting, scriptName, WARMING } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { analytics, assets, bucket, dataset } from './binding-probe.ts'
 import { app as appFixture, declared } from './directory-fixture.ts'
@@ -68,7 +68,7 @@ import { stores } from './app-store-probe.ts'
 import { sqliteApp } from './sqlite-app-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { addressed } from '@yaks/platform/versions'
-import { appMark, iconAt } from '@yaks/platform/routes'
+import { APP_WARM, appMark, iconAt } from '@yaks/platform/routes'
 import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
 import { generatedIconKey } from '@yaks/platform/app-icon'
 import { digest } from '@yaks/graph/sha256'
@@ -2077,6 +2077,34 @@ test('a space in the trash serves nothing, and its owner restores it', async () 
 })
 
 // ---- env.APP: the worker as the app's own gatekeeper (T-34303) --------------
+
+test('warming a worker leaves the decision to give its file with the worker', async () => {
+  let calls: string[] = []
+  await using k = await router((req) => {
+    if (req.headers.has(WARMING)) {
+      calls.push(req.method)
+      return new Response(null, { status: 204 })
+    }
+    return new URL(req.url).searchParams.has('invited')
+      ? new Response(null, { status: 404 })
+      : new Response('An invitation is required', { status: 403 })
+  })
+  k.put(
+    'ada/cookbook/index.html',
+    '<!doctype html><body>Invitation only</body>',
+  )
+  let prefetch = await k.at(APP_WARM)
+  assertEquals(prefetch.status, 204)
+  assertEquals(prefetch.headers.get('set-cookie'), null)
+  assertEquals(calls, ['HEAD'])
+
+  let turnedAway = await k.at('/')
+  assertEquals(turnedAway.status, 403)
+  assertEquals(await turnedAway.text(), 'An invitation is required')
+  let letIn = await k.at('/?invited')
+  assertEquals(letIn.status, 200)
+  assertStringIncludes(await letIn.text(), 'Invitation only')
+})
 
 // The RSVP shape, end to end over the same stand-in: a `private` app nobody
 // may read, and a worker route that checks an invitation code and writes the

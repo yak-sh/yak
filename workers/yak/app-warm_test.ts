@@ -38,12 +38,27 @@ test('an app drawn is started once a minute, through its wrapper, and an app wit
   assertEquals(s.started.length, 2)
 })
 
+test('a new release starts even while the old worker is warm', async () => {
+  let s = site()
+  let notes = app('notes', 'worker.js')
+  warmApp(s.env, space, { ...notes, script: 'notes-old' }, 0)
+  warmApp(s.env, space, { ...notes, script: 'notes-new' }, 1)
+  await s.settled()
+  assertEquals(s.started, [
+    'notes-old https://jeff.yaks.app/notes/',
+    'notes-new https://jeff.yaks.app/notes/',
+  ])
+})
+
 test('a page starts the first few of the apps it draws', async () => {
   let s = site()
   warmApps(
     s.env,
     space,
-    Array.from({ length: 12 }, (_, i) => app(`a${i}`, 'worker.js')),
+    [
+      app('plain', ''),
+      ...Array.from({ length: 12 }, (_, i) => app(`a${i}`, 'worker.js')),
+    ],
   )
   await s.settled()
   assertEquals(s.started.length, 8)

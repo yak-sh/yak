@@ -92,6 +92,7 @@ import {
   type Visitor,
 } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
+import { warmable, warmApp } from './app-warm.ts'
 import { pilled, standing } from './gallery-row.ts'
 import { buying } from './sell.ts'
 import {
@@ -126,6 +127,8 @@ import {
 import { join, joinable } from './join.ts'
 import {
   API_AT,
+  APP_WARM,
+  appWarmAt,
   chatPath,
   hostOf,
   iconAt,
@@ -2448,6 +2451,8 @@ export let index = async (
 ): Promise<{ page: Response; alone: Alone | null }> => {
   let who = await whoIs(req, env, seatOf, space.eid, dir)
   let { all, mine } = shelf(apps, space, who)
+  let warming = warmable(mine).filter((app) => app.worker !== '')
+  if (req.method == 'GET') { for (let app of warming) warmApp(env, space, app) }
   let owner = who.role == 'owner'
   let alone = aloneOf(who)
   let page = spaceIndex({
@@ -2465,6 +2470,7 @@ export let index = async (
       gallery: owner || standing(a) == 'listed' ? pilled(standing(a)) : '',
     })),
     hidden: all.length - mine.length,
+    warm: warming.map((app) => appWarmAt(`/${app.slug}`)),
     role: who.role,
     person: !!who.person,
     signIn: signInAt(req.url, env),
@@ -2607,7 +2613,7 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     let path = new URL(req.url).pathname
     let remember = !pagePath(path) && !bearing(req) &&
       !req.headers.has('authorization') && !fixed(path) && !uploaded(path) &&
-      !checking(path)
+      !checking(path) && !path.endsWith(APP_WARM)
     let res = await browsing(
       req,
       env,
@@ -2814,6 +2820,12 @@ let served = async (
     // the visitor's query is put back on as it is served (kept-page.ts
     // `asked`).
     let slash = redirect(step.href)
+    if (
+      req.method == 'GET' && step.app.worker !== '' &&
+      reads(mode(step.app.access), routing.role ?? null)
+    ) {
+      warmApp(env, space, step.app)
+    }
     if (!edge) return slash
     return keeps(step.app, '')
       ? marked(keep(slash, space, step.app, [302]))
@@ -2823,6 +2835,17 @@ let served = async (
   let { home } = routing
   let app = step.app
   let path = step.path
+  if (path == APP_WARM && (req.method == 'HEAD' || req.method == 'GET')) {
+    if (edge) return passed()
+    let role = routing.role ?? (person ? routing.grants?.get(app.eid) : null)
+    if (app.worker !== '' && reads(mode(app.access), role ?? null)) {
+      warmApp(env, space, app)
+    }
+    return new Response(null, {
+      status: 204,
+      headers: { 'cache-control': 'no-store' },
+    })
+  }
   // The app's own worker, coming back through its service binding for its
   // store or its files (dispatch.ts): the grant says who it is acting as, so
   // there is no cookie to read — and a request holding one is never sent back
@@ -3341,6 +3364,7 @@ let served = async (
     ? await iconAsked(req, env, space, app)
     : null
   if (icon && !icon.named) {
+    if (mayRead && app.worker !== '') warmApp(env, space, app)
     let page = reporting(redirect(icon.at(at), 307), req, at, app)
     return edge ? marked(keep(page, space, app, [307])) : wall(page)
   }

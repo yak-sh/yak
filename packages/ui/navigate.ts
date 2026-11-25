@@ -411,6 +411,8 @@ export let READY = 'data-ready'
 export let HOLD = 'data-hold'
 // Bound the work a long sidebar can start in the background.
 let HOLDS = 10
+/** A link's lightweight warm URL, asked when the navigator looks ahead. */
+export let WARM = 'data-warm'
 /** The header on an answer to a look ahead (`AHEAD`) that left out what
  * opening the page does (marking what it shows read): the page is asked for
  * again once it is opened. */
@@ -561,6 +563,23 @@ export let start = (
   let here = page(win.location)
   let turn = 0
   let pages = new Map<string, Held>()
+  let warmed = new Map<string, number>()
+  let warmLink = (link: Element) => {
+    let path = link.getAttribute(WARM)
+    if (!path) return
+    let to = new URL(path, win.location.href)
+    if (to.protocol != 'https:' && to.protocol != 'http:') return
+    if (now() - (warmed.get(to.href) ?? -Infinity) < FRESH) return
+    warmed.delete(to.href)
+    warmed.set(to.href, now())
+    if (warmed.size > HELD) warmed.delete(warmed.keys().next().value!)
+    void win.fetch(to.href, {
+      method: 'HEAD',
+      mode: 'no-cors',
+      credentials: 'include',
+      keepalive: true,
+    }).catch(() => {})
+  }
   // Back and Forward have already moved the address: the page loads there.
   let load = (to: URL, pop = false) =>
     pop ? win.location.replace(to.href) : win.location.assign(to.href)
@@ -792,12 +811,17 @@ export let start = (
       ) {
         if (most <= 0) break
         if (link.closest('[hidden]')) continue
+        let marked = link.hasAttribute(WARM)
+        if (marked) {
+          warmLink(link)
+          most--
+        }
         let to = destination(link, win.location.href, here)
         if (!to) continue
         let key = page(to)
         if (key == here || targets.has(key) || drawing(to)) continue
         targets.set(key, to)
-        most--
+        if (!marked) most--
       }
     }
     add(READY, Infinity)
@@ -856,6 +880,8 @@ export let start = (
     if (pages.get(key) == held) pages.delete(key)
   }
   let ahead = (e: Event) => {
+    let link = (e.target as Element | null)?.closest?.(`a[${WARM}][href]`)
+    if (link && !e.defaultPrevented) warmLink(link)
     let to = followed(e, win.location.href, here, !!win.enter)
     if (!to || pages.has(page(to)) || drawing(to)) return
     drop()

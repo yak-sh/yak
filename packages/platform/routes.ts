@@ -257,6 +257,12 @@ export let iconVersion = (
     space.logo?.sha.slice(0, 12) ?? ''
   }${app.generatedIcon ? `.${app.generatedIcon.slice(0, 12)}` : ''}`
 
+/** The platform's empty response that starts an app ahead of navigation. */
+export let APP_WARM = '/_web/warm'
+
+/** The warm door under the app mount `at`. */
+export let appWarmAt = (at: string) => at.replace(/\/$/, '') + APP_WARM
+
 /** An app's icon below its address `at` (ending in a slash), named by what
  * draws it (`iconVersion`), so a browser keeps it until a release or the
  * logo changes it (workers/yak apps.ts `caching`).

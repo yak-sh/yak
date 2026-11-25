@@ -72,7 +72,8 @@ import {
   sideApps,
   visitsRows,
 } from './side.ts'
-import { warmApp, warmApps } from './app-warm.ts'
+import { warmApps } from './app-warm.ts'
+import { background, caught } from './defects.ts'
 import { listedRows } from '@yaks/platform/space-apps'
 import { brokenOf } from './apps-reads.ts'
 import { agentsIn } from './agent-rows.ts'
@@ -336,16 +337,16 @@ export let manage = async (
     !space.trashed
   ) {
     woken(env, space.eid)
-    // The app a chat opens beside it, from a side's link pressed or kept
-    // ready, starts with it (app-warm.ts). Its read is the side's, and a
-    // failure of it is met there.
-    let beside = url.searchParams.get('app')
-    if (view == 'operator' && beside) {
-      dir.apps(space).then((all) => {
-        let app = all.find((a) => a.slug == beside)
-        if (app) warmApp(env, space, app)
-      }, () => {})
-    }
+    // Start the apps while the space's page is read. A chat opened beside
+    // a particular app puts it first, including when looked up ahead.
+    let chosen = view == 'operator' ? url.searchParams.get('app') : null
+    background(
+      appsFor(dir, space, who).then(
+        (apps) => warmApps(env, space, apps, chosen),
+        (error) =>
+          caught(error, { request: 'app warm roster', space: space.eid }),
+      ),
+    )
   }
   if (view == 'updates' && writes(who.role) && !space.trashed) {
     if (req.method == 'POST') {

@@ -29,10 +29,11 @@ import { Icon } from '@yaks/ui/Icon'
 import { Identity } from '@yaks/ui/Identity'
 import { Menu } from '@yaks/ui/Menu'
 import { SideNav } from '@yaks/ui/SideNav'
-import { HOLD, NAMES, READY } from '@yaks/ui/navigate'
+import { HOLD, NAMES, READY, WARM } from '@yaks/ui/navigate'
 import {
   accountView,
   appMarkImage,
+  appWarmAt,
   chatPath,
   managePath,
   type MarkedApp,
@@ -51,6 +52,7 @@ export type Item = {
   /** Whether its page is kept ready, fetched ahead once the page is drawn
    * (@yaks/ui/navigate `READY`): one its server is slow to answer. */
   ready?: boolean
+  warm?: string
   icon: IconNode
   image?: ReturnType<typeof appMarkImage>
   current?: boolean
@@ -114,6 +116,7 @@ export let link = (at: Item) => {
       [NAMES]: at.names,
       [READY]: at.ready || undefined,
       [HOLD]: !(at.submit || at.external) || undefined,
+      [WARM]: at.warm,
       'data-side-app': at.app ? JSON.stringify(at.app) : undefined,
       mod: at.current && 'on',
       'aria-current': at.current ? 'page' : at.beside ? 'true' : undefined,
@@ -421,6 +424,7 @@ export let sideParts = (
         href: aboutPath(here.slug, a.slug, talk?.open),
         beside: a.slug == talk?.app,
         app: a,
+        warm: talk?.at ? appWarmAt(`${talk.at}/${a.slug}`) : undefined,
         icon: LayoutGrid,
         image: appMarkImage(`${talk?.at}/${a.slug}`, a),
         label: a.title || a.slug,

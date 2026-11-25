@@ -31,7 +31,9 @@ if (typeof document != 'undefined') {
   // what its looking ahead costs is counted apart from a page's own fetches.
   let fetch: typeof win.fetch = (url, init) => {
     let ahead = new Headers(init?.headers).has(AHEAD)
-    performance.mark('yak-fetch', { detail: { url: String(url), ahead } })
+    if (init?.method != 'HEAD') {
+      performance.mark('yak-fetch', { detail: { url: String(url), ahead } })
+    }
     return win.fetch(url, init)
   }
   start(
