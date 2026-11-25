@@ -146,11 +146,13 @@
   color: var(--negative);
 }
 
-/* A textarea is as tall as what is typed in it, up to most of the window,
-   where it starts to scroll. */
+/* A textarea fills its available width and grows with its text, then
+   scrolls once it reaches its height limit. */
 :where(textarea) {
   field-sizing: content;
+  width: 100%;
   max-block-size: 60vh;
+  overflow-y: auto;
 }
 
 /* In-place editing: the same node and the same look, plus a caret and a

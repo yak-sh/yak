@@ -419,7 +419,6 @@ export let notePage = (
             placeholder: 'Ask about this, or say what should change',
             lines: true,
             name: 'say',
-            rows: 4,
             required: true,
             autofocus: true,
             'data-note': `${app}|${on}|${passage.slice(0, 200)}`,
