@@ -2305,6 +2305,7 @@ export let released = async (
     rows = 'none',
     patience,
     repair = false,
+    purgeInBackground = false,
   }: {
     target?: Version
     reload?: Reload
@@ -2340,6 +2341,8 @@ export let released = async (
     patience?: number
     /** A platform vocabulary repair changes live files and schema only. */
     repair?: boolean
+    /** Confirm an editor save at commit and purge its pages after it. */
+    purgeInBackground?: boolean
   } = {},
 ): Promise<
   { version: number; said: string; serves?: string; review?: DeployReview }
@@ -2409,22 +2412,20 @@ export let released = async (
     who = current.who
     store = current.store!
   }
-  // The app's pages leave the edge as the release begins, beside its work
-  // rather than after it: Site keeps none of a fenced app's pages
-  // (page-cache.ts `keep`), so the commit purges nothing of the app's
-  // (facets/pages-graph.ts), and the answer waits only on this, until the
-  // purge has reached every colo (@yaks/workerd/purge `SPREAD`), so whoever
-  // opens the app next, anywhere, is shown this release. An app Site
-  // keeps nothing of has none to purge. Before its first release an app
-  // answered nothing, and nothing written to it was purged, so the space's
-  // 404s kept at its address go now, whoever may read it.
+  // Deploy starts purging under the release fence, when Site keeps none of
+  // the app's pages, and answers once the purge has spread. An editor save
+  // confirms the committed release and leaves its purge to run in the
+  // background. The release commit itself owes no app purge (pages-graph.ts).
+  // A first release also purges the space's cached 404s.
   let tags = reviewing ? [] : [
     ...keepable(standing) ? [appTag(standing.eid)] : [],
     ...standing.version ? [] : [spaceTag(space.eid)],
   ]
-  let purged = purge(ctx.env.PURGER, tags, true).catch((e) =>
-    caught(e, { request: 'release purge', space: space.slug, app: app.slug })
-  )
+  let purgePages = (spread: boolean) =>
+    purge(ctx.env.PURGER, tags, spread).catch((e) =>
+      caught(e, { request: 'release purge', space: space.slug, app: app.slug })
+    )
+  let purged = purgeInBackground ? null : purgePages(true)
   // A committed release clears the fence in its own record (versions.ts
   // `record`), so only a release that stopped short has one left to lift.
   let released = false
@@ -2508,7 +2509,8 @@ export let released = async (
       repair,
     )
     released = true
-    await c.time('purge', () => purged)
+    if (purged) await c.time('purge', () => purged)
+    else background(purgePages(false))
     return out
   } finally {
     if (!released) await unfenced(ctx.dir, standing, fence, who)

@@ -2,7 +2,7 @@
 // snippets set in copy.json and released, two saves each keeping the other's,
 // the app's other unreleased edits left in its draft, and Undo going back.
 import { equal, ok, test } from '@yaks/testing'
-import { connector, kernel, seed, unique } from './probe.ts'
+import { connector, fresh, kernel, seed, unique } from './probe.ts'
 
 let k = await kernel()
 let space = unique('save')
@@ -104,6 +104,70 @@ test('a list is saved whole, and its page has an item for each', () => {
     ),
     grown,
   )
+})
+
+let observePurge: ((tags: string[]) => Promise<void>) | undefined
+let publicSave = await fresh({}, (env) => {
+  env.PURGER = {
+    idFromName: () => 'purger',
+    get: () => ({ purge: async (tags) => await observePurge?.(tags) }),
+  }
+})
+let publicSpace = unique('public-save')
+let publicOwner = await seed(publicSave, [{
+  slug: publicSpace,
+  apps: ['site'],
+}])
+let publicAgent = connector(publicSave, publicOwner.cookie)
+let publicApp = { space: publicSpace, app: 'site' }
+await publicAgent.tool('app_files', {
+  ...publicApp,
+  path: 'index.html',
+  content: '<h1 data-copy="hero">Hi</h1>',
+})
+await publicAgent.tool('app_deploy', publicApp)
+await publicAgent.tool('app_publish', { ...publicApp, about: 'Save timing' })
+await publicSave.settled()
+
+test('a public save commits before purging and answers while purge is pending', async () => {
+  let space = (await publicSave.dir.space(publicSpace))!
+  let current = () => publicSave.dir.app(space, 'site')
+  let app = (await current())!
+  let purgeDone = Promise.withResolvers<void>()
+  let purged = new Map<string, ReturnType<typeof current>>()
+  let page = `app:${app.eid}`, card = `card:${app.eid}`
+  observePurge = async (tags) => {
+    for (let tag of tags) {
+      if (tag == page || tag == card) purged.set(tag, current())
+    }
+    if (tags.some((tag) => tag == page || tag == card)) await purgeDone.promise
+  }
+  try {
+    let response = await publicSave.at(
+      `${publicSpace}.yaks.app`,
+      '/site/api/save',
+      {
+        method: 'POST',
+        headers: {
+          cookie: publicOwner.cookie,
+          'content-type': 'application/json',
+        },
+        body: '{"copy":{"hero":"Saved"}}',
+        signal: AbortSignal.timeout(5_000),
+      },
+    )
+    equal(response.status, 200)
+    equal(await response.json(), { version: 2, keys: ['hero'] })
+    equal((await purged.get(page))?.version, 2)
+    equal((await purged.get(card))?.version, 2)
+    let loaded = await publicSave.at(`${publicSpace}.yaks.app`, '/site/', {
+      headers: { cookie: publicOwner.cookie },
+    })
+    ok((await loaded.text()).includes('>Saved</h1>'))
+  } finally {
+    purgeDone.resolve()
+    await publicSave.settled()
+  }
 })
 
 let privateSpace = unique('private-save')

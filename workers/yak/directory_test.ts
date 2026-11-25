@@ -171,55 +171,60 @@ let stub = () => {
   }
 }
 
-// A hostname someone else owns, resolved to the place it serves (T-33037,
-// T-34596) — the read index.ts makes before it falls back to the apex. One
-// aimed at an app answers that app and the space it is in; one aimed at the
-// space answers the space with no app, which is how `aimed` knows to leave the
-// path alone. A hostname nobody attached answers null, which is what keeps
-// every address that exists today routing as it always has.
-let hosts = () =>
-  directory(fixture({
+let routingVocab = platformVocab()
+let domains = graph({ storage: ram(routingVocab), vocab: routingVocab })
+await domains.apply([
+  { entity: { eid: 's1' }, space: { slug: 'jeff', store: 'jeff' } },
+  {
+    entity: { eid: 'a1' },
+    app: { slug: 'recipes', space: 's1', version: 1 },
+    rooted: {},
+  },
+  {
+    entity: { eid: 'd1' },
+    hostname: { name: 'herbusiness.com', serves: 'a1' },
+  },
+  {
+    entity: { eid: 'd2' },
+    hostname: { name: 'ourbookclub.com', serves: 's1' },
+  },
+  { entity: { eid: 'd3' }, hostname: { name: 'held.com', space: 's1' } },
+], { trusted: true })
+
+let hosts = () => {
+  let reads = 0
+  let dir = directory(fixture({
     query: (q) => {
-      let rows = q.includes('hostname.name=herbusiness.com')
-        ? [{
-          entity: { eid: 'd1', num: 3 },
-          hostname: { name: 'herbusiness.com', serves: 'a1' },
-        }]
-        : q.includes('hostname.name=ourbookclub.com')
-        ? [{
-          entity: { eid: 'd2', num: 4 },
-          hostname: { name: 'ourbookclub.com', serves: 's1' },
-        }]
-        : q.includes('.app.space=s1') || q.includes('.entity.eid=a1')
-        ? [{
-          entity: { eid: 'a1', num: 2 },
-          app: { slug: 'recipes', space: 's1', version: 1 },
-        }]
-        : q.includes('.entity.eid=s1')
-        ? [{
-          entity: { eid: 's1', num: 1 },
-          space: { slug: 'jeff', store: 'jeff' },
-        }]
-        : []
-      return Promise.resolve(rows)
+      reads++
+      return domains.read(q as Taken) as Promise<dirPart.Row[]>
     },
     apply: () => Promise.resolve([]),
   }))
+  return { dir, reads: () => reads }
+}
 
-test('a hostname resolves to its space and app, or to nobody', async () => {
-  let dir = hosts()
+test('one directory read resolves a hostname to its space and app', async () => {
+  let { dir, reads } = hosts()
   let at = await dir.serves('herbusiness.com')
   assertEquals([at?.space.slug, at?.app?.slug], ['jeff', 'recipes'])
   assertEquals(at?.host.name, 'herbusiness.com')
+  assertEquals(at?.app?.rooted, true)
+  assertEquals(reads(), 1)
   assertEquals(await dir.serves('elsewhere.com'), null)
 })
 
 test('a hostname on the space resolves to the space, with no app', async () => {
-  let dir = hosts()
+  let { dir } = hosts()
   let at = await dir.serves('ourbookclub.com')
   assertEquals(at?.space.slug, 'jeff')
   assertEquals(at?.app, null)
   assertEquals(at?.host.serves, 's1')
+})
+
+test('a held hostname can have no destination', async () => {
+  let { dir } = hosts()
+  let found = await dir.domain('held.com')
+  assertEquals([found?.host.space, found?.target], ['s1', null])
 })
 
 test('an app read selects the current release', async () => {
@@ -308,7 +313,6 @@ test('a request answers an app from its first read until it asks again', async (
 
 // Read real graph predicates so address/home filtering, not a stub's roster,
 // determines which apps may route a path.
-let routingVocab = platformVocab()
 let routingGraph = graph({ storage: ram(routingVocab), vocab: routingVocab })
 await routingGraph.apply([
   { entity: { eid: 's1' }, space: { slug: 'jeff', store: 'jeff' } },

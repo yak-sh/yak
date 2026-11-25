@@ -3508,17 +3508,30 @@ export let directoryRows = (rows: {
       )
       return row?.hostname ? hostOf(row) : null
     },
+    // Read the name and the rows it points to in one snapshot, including a
+    // held name with no destination. An app's siblings play no part here.
+    domain: async (name: string) => {
+      let serves = line`.hostnames_serves.hostname.name=${name}`
+      let rows = await query(chain([
+        line`(.hostname.name=${name}&?verified&?mail_domain&?trashed)`,
+        line`(.app&${sub(serves)}&${sub(ABOUT)})`,
+        line`(.space&(${sub(serves)}|.apps${sub(serves)})&${sub(SPACE_ABOUT)})`,
+      ], '|'))
+      let row = rows.find((r) => r.hostname?.name == name)
+      if (!row) return null
+      let host = hostOf(row)
+      let to = rows.find((r) => r.entity.eid == host.serves)
+      let app = to?.app ? appOf(to) : null
+      let space = app ? rows.find((r) => r.entity.eid == app.space) : to
+      let target =
+        space?.space && (!app || !host.space || host.space == app.space)
+          ? { space: spaceOf(space), app }
+          : null
+      return { host, target }
+    },
     serves: async (host: string) => {
-      let aimed = await self.hostname(host)
-      if (!aimed?.serves) return null
-      let at = await self.appAt(aimed.serves)
-      if (at) {
-        return aimed.space && aimed.space != at.space.eid
-          ? null
-          : { space: at.space, app: at.app as App | null, host: aimed }
-      }
-      let space = await self.at(aimed.serves)
-      return space ? { space, app: null, host: aimed } : null
+      let domain = await self.domain(host)
+      return domain?.target ? { host: domain.host, ...domain.target } : null
     },
     domainTransfersTo: (space: Space) =>
       query(

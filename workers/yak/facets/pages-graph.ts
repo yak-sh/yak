@@ -15,8 +15,8 @@
 // A release is the exception (T-124483). It purges its app's pages as it
 // raises its fence (tools.ts `released`), beside its own work rather than
 // after it, and while the fence is up Site keeps none of them (page-cache.ts
-// `keep`). So the commit that lowers the fence owes its app nothing, and
-// app_deploy answers once that first purge has.
+// `keep`). Save purges after its release commits, in the background. A
+// release's gallery card image also refreshes in the background.
 //
 // So is an app before its first release (T-143070). It answers nothing at its
 // address, so what Site kept there (the space's 404, or that nothing) still
@@ -53,6 +53,7 @@ import { hook, type HookContext } from '@yaks/graph/plugin'
 import { dead, TOMBSTONE } from '@yaks/graph/bundle'
 import { after } from '@yaks/fp'
 import type { Options } from './store.ts'
+import { background, caught } from '../defects.ts'
 import { APP_PARTS, idOf, publishingOf, SPACE_PARTS } from '../directory.ts'
 import { purge } from '@yaks/workerd/purge'
 import {
@@ -334,10 +335,16 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => {
       let { env, meta } = options.store
       if (!meta || !env.PURGER) return applied
       let still = context?.transaction && quiet.get(context.transaction)
-      await purge(
-        env.PURGER,
-        await owed(applied, async (eids) => await tx.get(eids), still),
-      )
+      let tags = await owed(applied, async (eids) => await tx.get(eids), still)
+      let cards = tags.filter((tag) => tag.startsWith('card:'))
+      if (cards.length) {
+        background(
+          purge(env.PURGER, cards).catch((e) =>
+            caught(e, { request: 'gallery card purge' })
+          ),
+        )
+      }
+      await purge(env.PURGER, tags.filter((tag) => !tag.startsWith('card:')))
       return applied
     },
     {

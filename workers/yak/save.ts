@@ -200,6 +200,7 @@ export let saved = async (
   if (!keys.length) return { version: app.version ?? null, keys }
   let { version } = await released(ctx, space, app, who, store, {
     message: saying(keys),
+    purgeInBackground: true,
     over: async (live) => {
       let { file } = await changedCopy(await textOf(live), sent)
       await roomFor(ctx, space, file)

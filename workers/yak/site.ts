@@ -105,7 +105,7 @@ let checksum = async (body: string) =>
 
 // A page at a custom domain's own address, as Site serves it (yak-front keys
 // it by the hostname the browser asked, front.ts `kept`): the domain read as
-// the gateway reads it (kernel.ts `settling`, `forwarded`, `aimed`), its
+// the gateway reads it (kernel.ts `domainRoute`), its
 // request carried to its place's own address, and what it keeps tagged with
 // the domain beside its app and space, so attaching, detaching or moving the
 // domain takes it out (facets/pages-graph.ts). A domain that isn't serving

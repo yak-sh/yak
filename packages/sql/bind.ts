@@ -2107,7 +2107,7 @@ let reverse = (
   name: string,
   a: Assoc,
   p: Pred,
-  target = ctx.d.ownerKey('entity'),
+  target = ctx.owner ?? ctx.d.ownerKey('entity'),
 ): Cond => {
   // Inside another reverse hop only a child filter is read, as the owners it
   // names (`semi`, below): a count or an EXISTS there would name the same
@@ -2158,7 +2158,7 @@ let reverse = (
   }
   let back = ctx.v.turn(rest)
   if (
-    rest.length &&
+    rest.length && !ctx.v.assoc(rest[0]) &&
     ctx.v.aim((back > 0 ? rest.slice(0, back) : rest).join('.'))
       .some((h) => h.comp == 'entity')
   ) {

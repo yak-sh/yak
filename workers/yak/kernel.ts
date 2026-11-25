@@ -16,7 +16,7 @@
 //
 // A write, or a request at a graph door, whose `Origin` names another
 // address is refused before it is served (@yaks/platform/routes `admitted`),
-// and asked before `aimed` rewrites a custom domain's address, while the
+// and asked before the router rewrites a custom domain's address, while the
 // hostname the browser addressed is still there to compare.
 //
 // There is no heartbeat: every store owes its own wakes and arms its own
@@ -162,12 +162,8 @@ let inSpace = async (req: Request, env: Env, space: string) => {
 }
 
 // A foreign host that has reached the Worker (@yaks/platform/routes origin, T-33036) but
-// has nothing ready to answer with: a domain mid-provisioning, or one
-// Cloudflare has stopped serving. `aimed` below is what routes an active
-// host to its app; this is what stands in front of it, because `aimed`
-// cannot tell a host that is not there yet apart from one it has simply
-// never heard of — both answer null, and both used to fall through to the
-// apex home page, which is the wrong thing on a stranger's domain.
+// has nothing ready to answer with: a domain mid-provisioning, one
+// Cloudflare has stopped serving, or a name the directory has never seen.
 //
 // The directory's cached `stage` (stamped by domain_attach and domain_status,
 // directory.ts `Host`) answers `active` for free, so a live domain pays no
@@ -180,29 +176,18 @@ let inSpace = async (req: Request, env: Env, space: string) => {
 // plain "still connecting" line rather than a 500 for every visitor of every
 // domain being set up; that is the one case this catches rather than lets
 // through, and it is a config gap, not a domain's own state.
-let settling = async (env: Env, host: string): Promise<Response | null> => {
-  if (!foreign(host, env)) return null
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let served = await dir.serves(host)
-  if (served?.host.trashed) {
-    return new Response(
-      'This domain is in the trash. Its owner can restore it.',
-      { status: 410 },
-    )
-  }
-  if (ready(served)) return null
-  if (!served && (await dir.hostname(host))?.space) {
-    return new Response('This domain is not attached to an app.', {
-      status: 404,
-    })
-  }
+let settling = async (
+  env: Env,
+  host: string,
+  attached?: dirPart.Host,
+): Promise<Response | null> => {
   let how: Step[] | null = null
-  let stage: 'pending' | 'active' | 'error' = served?.host.stage == 'error'
+  let stage: dirPart.HostStage = attached?.stage == 'error'
     ? 'error'
     : 'pending'
   try {
     let custom = await customOf(env, host)
-    if (served) ({ how, stage } = await refresh(env, served.host, custom))
+    if (attached) ({ how, stage } = await refresh(env, attached, custom))
   } catch (e) {
     // No CF_ZONE/CF_HOSTNAMES_TOKEN, or Cloudflare itself unreachable: the
     // cached stage above (or `pending`, where there is none at all) still
@@ -221,8 +206,7 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
 // Routing stays pure and synchronous; this is a directory read, so it happens
 // here, where the router already holds env — and only for a hostname that is
 // neither ours nor a dev host (@yaks/platform/routes `foreign`). A host the directory has
-// never been given answers null and keeps the route it already had, which is
-// the apex: every address that exists today is decided before this is asked.
+// never been given is answered by the provisioning page above.
 //
 // The request is carried to the address that place already has on our own zone
 // (@yaks/platform/routes `aimedAt`, which is the whole of the space/app difference), and
@@ -240,26 +224,39 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
 // on a domain would be a loop back to the address that arrived (T-33040). A
 // domain on a space sends no mount: nothing moved, so its apps are mounted
 // where their addresses say they are.
-let aimed = async (req: Request, env: Env, host: string) => {
+let domainRoute = async (req: Request, env: Env, host: string) => {
   if (!foreign(host, env)) return null
-  let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
-    .serves(host)
-  return at ? aim(req, host, at, env) : null
-}
-
-// A hostname that sends its visitors to another of its place's hostnames
-// (directory.ts `Host`): the bare domain to www, say, so the place answers at
-// one address whichever the visitor typed. The same permanent move a renamed
-// space makes (apps.ts `moved`), path and query kept. It is asked after
-// `settling`, so the hostname itself has its certificate and the move is
-// served over it.
-let forwarded = async (req: Request, env: Env, host: string) => {
-  if (!foreign(host, env)) return null
-  let at = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
-    .serves(host)
-  if (!at?.host.to) return null
-  let url = new URL(req.url)
-  return apps.moved(req, `https://${at.host.to}${url.pathname}${url.search}`)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let domain = await dir.domain(host)
+  if (domain?.target && domain.host.trashed) {
+    return new Response(
+      'This domain is in the trash. Its owner can restore it.',
+      { status: 410 },
+    )
+  }
+  if (domain?.host.space && !domain.target) {
+    return new Response('This domain is not attached to an app.', {
+      status: 404,
+    })
+  }
+  if (!domain?.target || !ready({ ...domain.target, host: domain.host })) {
+    let hold = await settling(
+      env,
+      host,
+      domain?.target ? domain.host : undefined,
+    )
+    if (hold) return hold
+    // Provisioning just changed. Route using the committed attachment.
+    domain = await dir.domain(host)
+  }
+  if (domain?.target && domain.host.to) {
+    let url = new URL(req.url)
+    return apps.moved(
+      req,
+      `https://${domain.host.to}${url.pathname}${url.search}`,
+    )
+  }
+  return domain?.target ?? null
 }
 
 // What our code threw, recorded where we read it: the platform tracker, always
@@ -322,7 +319,7 @@ let hosting = async (
       )
     }
     // Custom-domain sign-in lands here (identity.ts `handoff`): the one
-    // identity door a customer's own hostname answers, caught before `aimed`
+    // identity door a customer's own hostname answers, caught before `aim`
     // carries the request off to the app, so this hostname sets its own
     // host-only session cookie rather than the app store answering a sign-in
     // path. It is a foreign host by construction — a space's `.yaks.app`
@@ -338,23 +335,20 @@ let hosting = async (
       )
     }
     // A domain mid-provisioning, or one Cloudflare has stopped serving
-    // (`settling` above): answered before space isolation and `aimed`,
+    // (`settling` above): answered before space isolation and routing,
     // because there is nothing yet to isolate or route to — every path on
     // a host like this gets the same branded page, not just `/`.
-    let hold = await settling(env, host)
-    if (hold) return sealed(hold, env)
-    let sent = await forwarded(req, env, host)
-    if (sent) return sealed(sent, env)
-    // Space isolation (@yaks/platform/routes `admitted`), before `aimed`
+    let domain = await domainRoute(req, env, host)
+    if (domain instanceof Response) return sealed(domain, env)
+    // Space isolation (@yaks/platform/routes `admitted`), before `aim`
     // moves the address, since what must match is what the browser
     // addressed.
     let given = admitted(req, host, env)
     if ('answer' in given) return sealed(given.answer, env)
     req = given.req
-    let carried = r.space == null ? await aimed(req, env, host) : null
-    if (carried) {
-      req = carried
-      r = at(carried, env)
+    if (r.space == null && domain) {
+      req = aim(req, host, domain, env)
+      r = at(req, env)
     }
     let answer = await next(req)
     return sealed(given.anyone ? cors(answer) : answer, env)
