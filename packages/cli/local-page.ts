@@ -8,7 +8,7 @@ import { relative } from 'node:path'
 import {
   type Built,
   type Bundling,
-  CHUNKS,
+  CHUNK,
   compiled,
   finished,
   type Written,
@@ -92,7 +92,7 @@ export let split = async (
     splitting: true,
     outdir: out,
     entryNames: '[name]',
-    chunkNames: `${CHUNKS}/[name].[hash]`,
+    chunkNames: `${CHUNK}.[hash]`,
     publicPath: '/',
     ...BROWSER,
   })

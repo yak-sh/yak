@@ -1824,6 +1824,7 @@ test('a kernel upload uses its prepared bundle and retains source maps and modul
       directory: 'public',
       run_worker_first: [
         '/*',
+        '!/_yak/chunk.*.js',
         ...NAMED.map((file) =>
           `!/_yak/${file.replace(/(\.\w+)$/, '.5f546eb460$1')}`
         ),

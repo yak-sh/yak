@@ -267,6 +267,7 @@ export let split = async (
 
 /** Where split bundles keep their shared chunks, below the site's root. */
 export let CHUNKS = '_yak'
+export let CHUNK = `${CHUNKS}/chunk`
 
 /** The chunks a split module imports, by path from the site's root.
  *
@@ -277,5 +278,5 @@ export let CHUNKS = '_yak'
  */
 export let imports = (code: string): string[] =>
   [...code.matchAll(
-    new RegExp(`["']/(${CHUNKS}/chunk\\.[\\w-]+\\.js)["']`, 'g'),
+    new RegExp(`["']/(${CHUNK}\\.[\\w-]+\\.js)["']`, 'g'),
   )].map(([, chunk]) => chunk)

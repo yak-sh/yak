@@ -21,8 +21,8 @@ import { parse, stringify } from 'smol-toml'
 import { imaged } from './sandbox/base.ts'
 import { installed } from '@yaks/cli/dependencies'
 import { assets } from './asset-ready.ts'
-import { ASSETS, planned } from './assets.ts'
-import { chunksOf, reading } from '@yaks/web/assets'
+import { planned } from './assets.ts'
+import { CHUNK } from '@yaks/cli/page'
 import { once, sleep } from '@yaks/fp'
 import {
   command,
@@ -811,15 +811,14 @@ let bundleEntry = (output: string, meta: string, base: string): Bundle => {
   return { entry, output }
 }
 
-/** Every environment's assets answer this deploy's content-named files (its
- * named files and the chunks its split bundles share) without the Worker.
- * Exact names, because an excepted path that misses never reaches it, and a
- * page held from before a deploy names the sheet it replaced. */
+/** Serve named files and shared chunks straight from assets. Named files
+ * need exact rules so an older address can fall back to its source. Shared
+ * chunks have no source at a stable address and share a single rule. */
 export let direct = (
   config: Record<string, unknown>,
   names: string[],
 ) => {
-  let first = ['/*', ...names.map((name) => `!/${name}`)]
+  let first = ['/*', `!/${CHUNK}.*.js`, ...names.map((name) => `!/${name}`)]
   let environments = Object.values(config.env ?? {}) as typeof config[]
   for (let { assets } of [config, ...environments]) {
     if (assets) Object.assign(assets, { run_worker_first: first })
@@ -913,10 +912,7 @@ export let bundled = async (
       { entry: join(output, 'index.js'), output },
       root,
       (parsed) =>
-        direct(parsed, [
-          ...Object.values(planned(join(root, 'public')).names),
-          ...chunksOf(ASSETS, reading(join(root, 'public'))),
-        ]),
+        direct(parsed, Object.values(planned(join(root, 'public')).names)),
     )
     return { args: [...upload, '-c', config], output, remove }
   } catch (error) {

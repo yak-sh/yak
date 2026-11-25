@@ -220,12 +220,18 @@ test('sheets: a HEAD names the etag of the bytes a GET answers with', async () =
   assertEquals(head.headers.get('etag'), get.headers.get('etag'))
 })
 
-test('sheets: a deploy excepts exactly the files it holds, in every environment', () => {
+test('sheets: every environment serves the shared chunk namespace and current named files directly', () => {
   let config = direct(
     { assets: {}, env: { staging: { assets: {} }, bare: {} } },
     ['_yak/style.0123456789.css'],
   ) as { assets: unknown; env: { staging: { assets: unknown } } }
-  let first = { run_worker_first: ['/*', '!/_yak/style.0123456789.css'] }
+  let first = {
+    run_worker_first: [
+      '/*',
+      '!/_yak/chunk.*.js',
+      '!/_yak/style.0123456789.css',
+    ],
+  }
   assertEquals(config.assets, first)
   assertEquals(config.env.staging.assets, first)
 })
