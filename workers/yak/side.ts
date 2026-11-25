@@ -63,6 +63,7 @@ import { draftedApp, draftedRow } from '@yaks/platform/app-canvas'
 import { gauges } from '@yaks/platform/standing'
 import { budget, spent } from '@yaks/platform/meter'
 import type { Who } from './session.ts'
+import { grantRows, GRANTS } from '@yaks/platform/agents'
 
 // The apps of other people's spaces this person may open (T-124081): each app
 // of a space they hold a seat in and do not own, and each app they are a guest
@@ -182,6 +183,9 @@ export let personRows = async (
   if (line == SHARED_APPS) return sharedRows(person, await shared(dir, person))
   if (line == INVITE_PAGE) {
     return [inviteRow(person, await invitation(env, dir, person))]
+  }
+  if (line == GRANTS) {
+    return grantRows(person, (await dir.grants(person)).rows)
   }
   if (line == FRIENDS) {
     let all = await shared(dir, person)

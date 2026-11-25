@@ -4,24 +4,20 @@ import { Head } from '@yaks/ui/parts'
 // space never compiles them. Its sidebar is composed by desk-sidebar.ts.
 import { deskSide } from './desk-sidebar.ts'
 import { frame, FRAMED } from './frame.ts'
-import { agentSetup } from './signin-pages.ts'
 import { AGENT } from './docs.ts'
-import { Button, Card, Field, Form } from '@yaks/ui/parts'
+import { Button, Card, Field } from '@yaks/ui/parts'
 import { h } from 'preact'
 import {
   type ConnectionsView,
   connectionsView,
 } from '@yaks/platform/connections-view'
 import { pageOf } from '@yaks/platform/connections-page'
-import { agentList, agentLive } from './connected_ui.ts'
 import { markup, raw } from './html.ts'
 import { drawnRows } from '@yaks/platform/page-graph'
-import { agentsOf, listedOf } from '@yaks/platform/space-apps'
-import {
-  type AppsView,
-  appsView,
-  connectCard as connecting,
-} from '@yaks/platform/space-apps-view'
+import { listedOf } from '@yaks/platform/space-apps'
+import { agentsOf } from '@yaks/platform/agents'
+import { type AgentsView, agentsView } from '@yaks/platform/agents-view'
+import { type AppsView, appsView } from '@yaks/platform/space-apps-view'
 import { type FriendsView, friendsView } from '@yaks/platform/friends-view'
 import { type VisitsView, visitsView } from '@yaks/platform/visits-view'
 import { countsOf } from '@yaks/platform/visit-counts'
@@ -53,65 +49,14 @@ import {
 import { yak } from './mascot.ts'
 
 import {
-  copying,
   type DeskPage,
-  dropping,
-  dropZone,
-  firstAsk,
   heading,
   type Kids,
   labeled,
   page,
   type Picked,
   said,
-  state,
-  tabbing,
 } from './pages.ts'
-
-// The New app screen's own way to ask: the person's words, sent to their
-// Operator's door as a request for a new app (operator-channels.ts
-// `new_app`), which sends them on to that conversation, where the app opens
-// beside the chat as it is made. The dashboard's page is at the apex, as that
-// door is.
-let asking = (space: string) =>
-  h(
-    Card,
-    null,
-    heading('Ask your Operator'),
-    h(
-      Card.Sub,
-      null,
-      'Say what the app is for. Your Operator builds it in your conversation.',
-    ),
-    h(
-      'form',
-      {
-        class: 'Desk_Ask Page_Form',
-        method: 'post',
-        action: managePath('operator', space),
-        enctype: 'multipart/form-data',
-      },
-      h(Form.Hidden, {
-        name: 'page',
-        value: managePath('new', space),
-      }),
-      h(Form.Hidden, { name: 'new_app', value: '1' }),
-      h(
-        'p',
-        null,
-        h(Field, {
-          class: 'Desk_Words',
-          placeholder: 'Describe the app you need…',
-          lines: true,
-          name: 'say',
-          rows: 3,
-          required: true,
-          'aria-label': 'What do you want to build?',
-        }),
-      ),
-      h(Button, { mod: 'go', type: 'submit' }, 'Build it'),
-    ),
-  )
 
 let picked = (at: DeskPage) =>
   at.spaces?.find((s) => s.slug == at.space) ??
@@ -157,11 +102,6 @@ export let deskFrame = (
       }, at.content),
     ),
   })
-
-// Where a person who has not connected an agent is asked to
-// (@yaks/platform/space-apps-view `connectCard`).
-let connectCard = (at: DeskPage, env: Host) =>
-  connecting(at.agents?.length, url(env, AGENT.path))
 
 // Shared with you (Your account), drawn from the person's rows as the
 // browser draws it again (@yaks/platform/shared-view), which the page carries
@@ -209,8 +149,28 @@ export let library = (at: DeskPage, env: Host) => {
     { 'data-view': 'apps', 'data-apps-view': JSON.stringify(view) },
     appsView(view, {
       apps: listedOf(rows, view.space.eid, rows),
-      agents: agentsOf(rows),
+      agents: agentsOf(rows)?.length,
     }),
+    drawing(at),
+  )
+}
+
+// Agents (Your account) and a space's New app, drawn from the agents the
+// person connected as the browser draws them again
+// (@yaks/platform/agents-view), which the page carries for its first paint
+// (`data-view`).
+let agentsPage = (at: DeskPage, env: Host, page: 'agents' | 'new') => {
+  let view: AgentsView = {
+    person: at.person ?? '',
+    page,
+    env: { APEX: apex(env) },
+    agent: url(env, AGENT.path),
+    ...page == 'new' ? { space: at.space } : {},
+  }
+  return h(
+    'div',
+    { 'data-view': 'agents', 'data-agents-view': JSON.stringify(view) },
+    agentsView(view, agentsOf(at.drawn ?? [])),
     drawing(at),
   )
 }
@@ -449,37 +409,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   if (view == 'shared') body = sharedPage(at, env)
   if (view == 'space') body = newSpace(at, env)
   if (view == 'apps') body = library(at, env)
-  if (view == 'agents') {
-    body = [
-      agentSetup(at.agents ?? [], env, managePath('agents')),
-      copying(),
-      tabbing(),
-    ]
-  }
-  if (view == 'new') {
-    body = [
-      h(
-        Card,
-        { class: 'Desk_Start', ...state(true, at.agents?.length) },
-        heading('Ask your agent for a new yaks app'),
-        agentList(at.agents ?? [], 'links'),
-        h(Form.Field, null, h(Form.Label, { as: 'p' }, 'Try this'), firstAsk()),
-      ),
-      connectCard(at, env),
-      h(
-        'div',
-        { class: 'Desk_Options' },
-        asking(at.space),
-        h(
-          Card,
-          null,
-          heading('Upload your website'),
-          dropZone(undefined, `${site}/deploy`),
-        ),
-      ),
-      dropping(),
-    ]
-  }
+  if (view == 'agents' || view == 'new') body = agentsPage(at, env, view)
   if (view == 'visits') body = visitsPage(at, site)
   if (view == 'selling') body = payment(at, env, 'selling')
   if (view == 'settings' || view == 'domains' || view == 'trash') {
@@ -534,7 +464,5 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       ],
       content: [said(at.say, at.no), body],
     }),
-    view == 'new' ? copying() : null,
-    ['new', 'agents'].includes(view) ? agentLive('/oauth/agents') : null,
   )
 }

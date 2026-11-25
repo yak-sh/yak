@@ -19,8 +19,10 @@ import { parseHTML } from 'linkedom'
 import { equal, ok, test, until } from '@yaks/testing'
 import { challenge } from '@yaks/oauth'
 import {
+  agentsAt,
   allowed,
   connector,
+  disconnectAgent,
   fresh,
   type Kernel,
   kernel,
@@ -40,7 +42,7 @@ import { NO_MAILBOX, NOT_EMAIL } from './identity.ts'
 import { ours } from './asking.ts'
 import { managePath, REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { settingsEid as spaceEid } from '@yaks/platform/space-pages'
-import type { Agent } from './connected.ts'
+import { type Agent, AGENTS, agentsOf } from '@yaks/platform/agents'
 
 // Styling and attribute order do not change the sign-in form's contract.
 let emailCard = async (r: Response) => {
@@ -92,14 +94,7 @@ let agentGrants = await (async () => {
     path: string,
     headers: Record<string, string> = {},
   ) => k.at(host, path, { headers })
-  let snapshots = async (): Promise<Agent[]> => {
-    let res = await at('yaks.app', '/oauth/agents', {
-      cookie: owner.cookie,
-    })
-    assertEquals(res.status, 200)
-    assertEquals(res.headers.get('cache-control'), 'private, no-store')
-    return (await res.json()).agents
-  }
+  let snapshots = async (): Promise<Agent[]> => (await agentsAt(k, owner))!
   assertEquals(await snapshots(), [])
 
   let authorize = async (back: string, name: string) => {
@@ -167,32 +162,23 @@ test(
     let { k, owner, at, snapshots, authorize, chatgpt, claude, another } =
       agentGrants
     try {
-      let found = await snapshots()
-      assertEquals(found.map((c) => [c.id, c.name, c.brand]), [
-        ['chatgpt', 'ChatGPT', 'chatgpt'],
-        ['claude', 'Claude', 'claude'],
+      assertEquals(await snapshots(), [
+        { id: 'chatgpt', name: 'ChatGPT', brand: 'chatgpt' },
+        { id: 'claude', name: 'Claude', brand: 'claude' },
       ])
-      assert(
-        found.every((c) =>
-          c.connectedAt > 0 && c.connectedAt <= Date.now() / 1000
-        ),
-      )
 
+      // Only a signed-in browser reads them, never an agent's bearer.
       let credentials: Record<string, string>[] = [
         {},
         { authorization: `Bearer ${chatgpt.access_token}` },
       ]
       for (let headers of credentials) {
-        let res = await at('yaks.app', '/oauth/agents', headers)
+        let res = await at(k.host, `${REACH}/query?q=${AGENTS}`, headers)
+        await res.body?.cancel()
         assertEquals(res.status, 401)
-        assertEquals(res.headers.get('cache-control'), 'private, no-store')
-        assertEquals((await res.json()).agents, undefined)
       }
       let other = await signIn(k)
-      let own = await at('yaks.app', '/oauth/agents', {
-        cookie: other.cookie,
-      })
-      assertEquals(await own.json(), { agents: [] })
+      assertEquals(await agentsAt(k, other), [])
 
       // Revoking one installation leaves another; removing its last grant
       // removes the agent on the next read, with no cache of agents.
@@ -213,29 +199,18 @@ test(
         assertEquals((await snapshots()).map((c) => c.id), [...remaining])
       }
 
-      // Disconnecting is the signed-in person's: a bearer is sent to sign in
-      // and another person's cookie reaches only their own grants. The one
-      // chosen loses every installation, its tokens with them; the other
-      // agent keeps its own.
+      // Disconnecting is the signed-in person's: a bearer is refused and
+      // another person's press reaches only their own grants. The one chosen
+      // loses every installation, its tokens with them; the other agent keeps
+      // its own.
       let web = await authorize('https://claude.ai/cb', 'Claude on the web')
       let com = await authorize('https://claude.com/cb', 'Claude again')
       let kept = await authorize('https://chatgpt.com/cb', 'ChatGPT')
-      let disconnect = async (headers: Record<string, string>) => {
-        let res = await k.at('yaks.app', '/oauth/agents/disconnect', {
-          method: 'POST',
-          redirect: 'manual',
-          headers: {
-            'content-type': 'application/x-www-form-urlencoded',
-            ...headers,
-          },
-          body: new URLSearchParams({
-            agent: 'claude',
-            return: managePath('agents'),
-          }),
-        })
-        assertEquals(res.status, 303)
-        let to = new URL(res.headers.get('location')!, 'https://yaks.app')
-        return to.pathname + to.search
+      let disconnect = async (who: { person: string; cookie: string }) => {
+        let res = await disconnectAgent(k, who, 'claude')
+        assertEquals(res.status, 200)
+        let [said, ...rows] = await res.json()
+        return [said.disconnectAgent.said, agentsOf(rows)?.map((a) => a.id)]
       }
       let holds = async (token: string) => {
         let res = await at('yaks.app', '/oauth/me', {
@@ -244,19 +219,16 @@ test(
         await res.body?.cancel()
         return res.status == 200
       }
-      equal(
-        await disconnect({ authorization: `Bearer ${web.access_token}` }),
-        `/login?return=${encodeURIComponent(managePath('agents'))}`,
-      )
-      equal(
-        await disconnect({ cookie: other.cookie }),
-        managePath('agents'),
-      )
+      let bearer = await k.at(k.host, `${REACH}/apply`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${web.access_token}` },
+        body: JSON.stringify([{ disconnectAgent: { agent: 'claude' } }]),
+      })
+      await bearer.body?.cancel()
+      equal(bearer.status, 401)
+      equal(await disconnect(other), ['Disconnected.', []])
       equal((await snapshots()).map((c) => c.id), ['chatgpt', 'claude'])
-      equal(
-        await disconnect({ cookie: owner.cookie }),
-        managePath('agents'),
-      )
+      equal(await disconnect(owner), ['Disconnected.', ['chatgpt']])
       equal((await snapshots()).map((c) => c.id), ['chatgpt'])
       equal(
         await Promise.all([web, com, kept].map((c) => holds(c.access_token))),
@@ -388,7 +360,7 @@ let customHandoff = async (k: Kernel, person: string, full: string) => {
     headers: { cookie },
   })
   equal((await outside.json()).person, null)
-  await status(k.host, '/oauth/agents', cookie, 401)
+  await status(k.host, `${REACH}/query?q=${AGENTS}`, cookie, 401)
   await status(k.host, '/manage', cookie, 303)
   let denied = await connector(k, cookie).call('tools/call', {
     name: 'grant',
@@ -402,7 +374,7 @@ let customHandoff = async (k: Kernel, person: string, full: string) => {
   ok(outsideRead.isError)
   // Held full-account sessions retain the account and every existing seat.
   equal(await identity(`${other}.yaks.app`, them.cookie), [person, 'owner'])
-  await status(k.host, '/oauth/agents', them.cookie, 200)
+  await status(k.host, `${REACH}/query?q=${AGENTS}`, them.cookie, 200)
 }
 
 test('a person signs in by mail, and an agent by OAuth', async () => {

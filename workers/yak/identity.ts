@@ -196,7 +196,6 @@ import {
   OAUTH,
   onZone,
 } from '@yaks/platform/routes'
-import { telling } from '@yaks/platform/cookie'
 import { woken } from './build-door.ts'
 import { INVITE, LINK, SLUG } from '@yaks/platform/names'
 import {
@@ -355,19 +354,6 @@ let redirect = (to: string, set?: string, status = 302) =>
     headers: { location: to, ...(set ? { 'set-cookie': set } : {}) },
   })
 
-// Where a signed-in person lands: the page they came from, when it is on our
-// own zone — an off-zone address is ignored and never followed, the field
-// being a stranger's to fill in (@yaks/platform/routes `onZone`). Sent nowhere in
-// particular, they land on their dashboard, which shows their own space
-// (apps.ts `manage`).
-//
-// Several spaces, and the one they came in on wins — but that is the return
-// address doing it, not a rule of its own: a space's index sends someone here
-// with `return=https://<space>.yaks.app/` (apps.ts `signInAt`), and that
-// address is on our zone, so it is followed.
-let backTo = (back: string, env: Host) =>
-  (back && onZone(back, env)) || hostUrl(env, MANAGE)
-
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
 // The address on a person's row, which says whom a funnel step is for
@@ -434,6 +420,15 @@ let grants = (env: Env, dir = dirOf(env)) => {
  * when a page holds one, so they come in its trip. */
 export let agents = (env: Env, person: string, dir?: Directory) =>
   agentsOf(grants(env, dir), person)
+
+/** Disconnects the agent `agent` of `person` (connected.ts `disconnect`),
+ * revoking every grant it stands for. */
+export let disconnectAgent = (
+  env: Env,
+  person: string,
+  agent: string,
+  dir?: Directory,
+) => disconnect(grants(env, dir), person, agent)
 
 /** The outside services holding a grant from this person (connected.ts). */
 export let services = (env: Env, person: string, dir?: Directory) =>
@@ -1537,40 +1532,6 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     ? await req.formData().catch(() => new FormData())
     : new FormData()
   let field = (name: string) => String(form.get(name) ?? '')
-
-  if (path == '/oauth/agents' && req.method == 'GET') {
-    let person = await browser(env, req)
-    return Response.json(
-      person
-        ? { agents: await agents(env, person) }
-        : { error: 'not_signed_in' },
-      {
-        status: person ? 200 : 401,
-        headers: { 'cache-control': 'private, no-store' },
-      },
-    )
-  }
-
-  // A row's Disconnect button (connected_ui.ts): the person signed in on this
-  // browser revokes the grants of the one agent they chose. Only the session
-  // cookie is read, never a bearer, so no agent can be talked into
-  // disconnecting anyone; the Origin check every POST passes (@yaks/platform/routes
-  // `guarded`) keeps a sibling space's page from posting it.
-  if (path == '/oauth/agents/disconnect' && req.method == 'POST') {
-    let person = await browser(env, req)
-    let back = backTo(field('return'), env)
-    if (!person) {
-      let login = `/login?return=${encodeURIComponent(back)}`
-      return redirect(login, undefined, 303)
-    }
-    let agent = field('agent')
-    await disconnect(grants(env), person, agent)
-    return telling(
-      redirect(new URL(back, req.url).href, undefined, 303),
-      { say: 'Disconnected.' },
-      MANAGE,
-    )
-  }
 
   // An invitation's one click (invite.ts, T-37880): accepted for the person
   // it names, signed in on this browser, and anybody else shown the press.

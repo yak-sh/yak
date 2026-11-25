@@ -3,7 +3,7 @@
 // has them read from the provider's KV, which takes longer than the rest of
 // the page (T-149703, grant-rows.ts). So the page is drawn with them only
 // when they are in hand, and otherwise leaves what depends on them for its
-// script to settle (connected_ui.ts `agentLive`).
+// page graph to settle (@yaks/platform/agents).
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'

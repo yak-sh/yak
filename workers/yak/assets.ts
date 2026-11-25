@@ -97,6 +97,13 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // Agents and New app kept current (@yaks/platform/agents-browser).
+  {
+    name: '_agents.js',
+    bundle: of('@yaks/platform/agents-browser'),
+    external,
+    named: true,
+  },
   // A space's Connections kept current
   // (@yaks/platform/connections-browser).
   {

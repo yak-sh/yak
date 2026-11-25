@@ -22,7 +22,7 @@ import { INTEGRATIONS } from './integrations.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
 import { type Host, hosted, replyTo, spaceHost, url } from '@yaks/platform/host'
-import { PLATFORM } from '@yaks/platform/names'
+import { PITCH, PLATFORM } from '@yaks/platform/names'
 import { VERSION } from './running.ts'
 import { publicPage } from '@yaks/platform/kept'
 
@@ -54,7 +54,7 @@ export let connector = (env: Host = {}) => ({
   name: PLATFORM,
   title: PLATFORM,
   version: VERSION,
-  description: 'Build, host and share web apps.',
+  description: PITCH,
   websiteUrl: url(env),
   icons: [
     {
@@ -278,7 +278,7 @@ export let llms = (
   [
     '# yaks.app',
     '',
-    '> Build, host and share web apps.',
+    `> ${PITCH}`,
     '> Say what you need, or ask Claude or ChatGPT, and yaks.app builds the app',
     '> and keeps it online. Your Operator makes changes whenever you ask.',
     `> Your app lives at ${

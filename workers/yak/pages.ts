@@ -2,7 +2,7 @@ import type { Picked } from '@yaks/platform/side-rows'
 import type { Bundle } from '@yaks/graph'
 import {
   copyable,
-  fileDrop,
+  dropZone,
   firstAsk,
   heading,
   held,
@@ -14,6 +14,7 @@ import {
 import { howTo, keyBox, logo, signingIn } from '@yaks/platform/connect-parts'
 export {
   copyable,
+  dropZone,
   firstAsk,
   heading,
   held,
@@ -56,8 +57,6 @@ import {
 } from '@yaks/ui/parts'
 
 import { type ComponentChildren, h } from 'preact'
-
-import type { Agent } from './connected.ts'
 
 import type { Face } from '@yaks/platform/connections-page'
 
@@ -224,6 +223,10 @@ ${
   }${
     main.includes('data-apps-view=')
       ? `<script type="module" src="${file('_apps.js')}"></script>`
+      : ''
+  }${
+    main.includes('data-agents-view=')
+      ? `<script type="module" src="${file('_agents.js')}"></script>`
       : ''
   }${
     main.includes('data-people-view=')
@@ -482,45 +485,6 @@ export let spaceBinned = (at: {
   )
 }
 
-// Deploying by dropping a file (T-34230): the one door on this platform that
-// makes an app with no assistant in the room. A drop zone (`drop`) and the
-// name the app lives at — one plain form that POSTs to `/deploy` (drop.ts)
-// and needs no script at all. The script below only fills the name in from
-// the file's own; nothing it does is required for the form to work.
-//
-// `slug` given is an app's own page, where the name is not a question: the
-// drop goes to that app and nowhere else. `to` is the space's door, whole,
-// on a page that is not at the space's own address (the dashboard's).
-export let dropZone = (slug?: string, to = '/deploy') =>
-  h(
-    'form',
-    {
-      class: 'Deploy Page_Form',
-      method: 'post',
-      action: to,
-      enctype: 'multipart/form-data',
-    },
-    fileDrop({
-      name: 'file',
-      label: 'Website files',
-      hint: 'A .zip of your website files, or a single index.html',
-      required: true,
-    }),
-    slug ? held('slug', slug) : h(Field, {
-      name: 'slug',
-      maxlength: 63,
-      autocomplete: 'off',
-      spellcheck: 'false',
-      placeholder: 'e.g. oak-street-church',
-      'aria-label': 'Website name',
-    }),
-    h(
-      Button,
-      { mod: 'go', type: 'submit' },
-      slug ? 'Update app' : 'Upload website',
-    ),
-  )
-
 // Constant text, no interpolation, and every write to the page is a field's
 // value — the page never speaks HTML on a person's behalf (`inline` below
 // takes the same line). A drop says `change` too (public/drop.js).
@@ -687,9 +651,6 @@ export type DeskPage = {
   links?: { platform: string; integration: string; accounts: string[] }[]
   /** the session the asking browser holds, among `sessions` */
   session?: string
-  /** the person's connected agents; none while not yet known, which leaves
-   * what depends on them for the page's script to settle (`state`) */
-  agents?: Agent[]
   /** the days the Visits page counts */
   viewDays?: number
   /** the eid of the space the page is of, which its lines name */
@@ -1224,48 +1185,3 @@ export let closed = (env: Host = {}) =>
 // What a press answered, said back on the page it drew again.
 export let said = (say?: string, no?: boolean) =>
   say ? h(Notice, { mod: no && 'negative', role: 'status' }, say) : null
-
-// Connector forms do not ask the same questions. Keep each answer beside the
-// provider step that asks for it, so a person never has to work out whether a
-// field belongs to the form they are looking at.
-export let field = (label: string, value: Kids, what?: string) =>
-  h(
-    'div',
-    { class: 'Fields_Row' },
-    h('dt', { class: 'Fields_Label' }, label),
-    what == null
-      ? value
-      : h('dd', { class: 'Fields_Value' }, copyable(value, what)),
-  )
-
-export let fields = (...rows: Kids[]) => h('dl', { class: 'Fields' }, rows)
-
-export let b = (words: string) => h('b', null, words)
-
-export let code = (words: string) => h('code', null, words)
-
-// An address on this platform, written out for somebody to type or paste.
-export let at = (path: string, env: Host) => code(url(env, path))
-
-// The only script a tab needs, and it is not what switches one: the radios do
-// that with no script at all. This keeps the chosen one in the address, so a
-// link can name a tab and a reload comes back to it. Matched by value, never
-// built into a selector — a hash is whatever a stranger put in it.
-export let tabbing = () =>
-  run(`
-let tabs = document.querySelector('.Tabs')
-if (tabs) {
-  let all = [...tabs.querySelectorAll('input[name=agent]')]
-  let pick = () => {
-    let want = all.find((r) => r.value == decodeURIComponent(location.hash.slice(1)))
-    if (want) want.checked = true
-  }
-  pick()
-  addEventListener('hashchange', pick, { signal })
-  tabs.addEventListener('change', (e) => {
-    if (e.target.name == 'agent') {
-      history.replaceState(null, '', '#' + e.target.value)
-    }
-  }, { signal })
-}
-`)

@@ -56,7 +56,6 @@ import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
 import { writes } from '@yaks/member'
 import { TOOLS } from './tools.ts'
-import { caught } from './defects.ts'
 import { type Clock, clock } from './timing.ts'
 import { woken } from './build-door.ts'
 import { DAYS } from './views.ts'
@@ -73,7 +72,8 @@ import {
   visitsRows,
 } from './side.ts'
 import { listedRows } from '@yaks/platform/space-apps'
-import { agentsIn, brokenOf } from './apps-reads.ts'
+import { brokenOf } from './apps-reads.ts'
+import { agentsIn } from './agent-rows.ts'
 import {
   ACCOUNT,
   accountOf,
@@ -95,14 +95,6 @@ import { spaceHeld } from './space-pages.ts'
 // the service binding a split would give them — a `bound` with no namespace to
 // call. Nothing above the owner block below asks for it, so nothing else pays.
 let identity = () => import('./identity.ts')
-
-// The agents a person has connected (connected.ts `agentsOf`), asked in the
-// page's directory trip.
-let agentsOf = (
-  env: Env,
-  person: string,
-  dir: ReturnType<typeof directory>,
-) => identity().then((part) => part.agents(env, person, dir))
 
 // What a read has answered by now, or nothing while it is still out: a page
 // that shows it only when it is in hand never waits on it.
@@ -513,9 +505,9 @@ let rowsAhead = (
   // The person's own agents, which the page shows only if they are in hand
   // by the time it is drawn (`desk`), and who made and last deployed each app.
   if (view == 'apps') {
-    return [agentsOf(at.env, person, dir), dir.provenance(walk)]
+    return [agentsIn(at.env, dir, person), dir.provenance(walk)]
   }
-  if (view == 'new') return [agentsOf(at.env, person, dir)]
+  if (view == 'new') return [agentsIn(at.env, dir, person)]
   if (view == 'billing') return [dir.domainOrders(walk)]
   if (view == 'people') {
     return [dir.people(walk), dir.admits(walk), standingWith(dir, person)]
@@ -697,20 +689,15 @@ let desk = async (
   // Everything a page shows, asked at once: nothing here waits on anything but
   // the apps it says something about.
   let shelved = dir.apps(space).then((apps) => shelf(apps, space, who))
-  // Whether an agent is connected, for the pages that say how to make an app
-  // with one. They are drawn with it only if it is in hand once everything
-  // else is, since a person whose grants are not yet in the directory has
-  // them read from the provider's KV, which takes longer than the rest of
-  // the page (T-149703, grant-rows.ts), and the page's script
-  // settles what depends on it (pages.ts `state`). A read that fails is
-  // reported and left to the script too. The Apps page carries them as a row
-  // (apps-reads.ts), which its page graph asks for when it is not in hand.
-  let agentsRow = view == 'apps' ? agentsIn(env, dir, owner) : undefined
-  let agents = view == 'new'
-    ? agentsOf(env, owner, dir).catch((e) => {
-      caught(e, { request: 'read agents', space: space.slug })
-      return undefined
-    })
+  // The agents the person connected, for the pages that say how to make an
+  // app with one: Apps and New app. They are drawn with them only if their
+  // row is in hand once everything else is, since a person whose grants are
+  // not yet in the directory has them read from the provider's KV, which
+  // takes longer than the rest of the page (T-149703, grant-rows.ts); the
+  // page graph asks for the row when it is not (agent-rows.ts), and what
+  // depends on it waits unsettled (@yaks/platform/page-parts `state`).
+  let agentsRow = view == 'apps' || view == 'new'
+    ? agentsIn(env, dir, owner)
     : undefined
   let [
     { here, all },
@@ -731,7 +718,8 @@ let desk = async (
     // (side.ts `visitsRows`); People's lines, as its view watches them
     // (@yaks/platform/people-view); what Selling and Billing are drawn
     // from (@yaks/platform/payment-rows); and the row Connections is drawn
-    // from, as its address asks it (connections.ts `connectionsRow`).
+    // from, as its address asks it (connections.ts `connectionsRow`). New
+    // app is drawn from the agents alone (`agentsRow`).
     view == 'apps'
       ? Promise.all([
         listedApps(dir, space, who).then((apps) =>
@@ -757,6 +745,8 @@ let desk = async (
       ? paymentDrawn(env, dir, space, owner, view)
       : view == 'connections'
       ? connectionsRow(env, dir, who, space, askOf(q)).then((row) => [row])
+      : view == 'new'
+      ? []
       : undefined,
     // Every space this person may work in, which the side's selector offers.
     pickable(dir, owner),
@@ -779,11 +769,10 @@ let desk = async (
       ? billedDomains(env, dir, space, walkTo(space.slug, space.eid))
       : undefined,
   ])
-  let known = await inHand(agents)
   let connected = await inHand(agentsRow)
   let page = deskPage({
     person: who.person,
-    // The Apps page's rows carry the agents connected, where in hand; a
+    // Apps' and New app's rows carry the agents connected, where in hand; a
     // space's Settings, Domains and Trash carry each of their lines'.
     drawn: drawn ? [...drawn, ...connected ?? []] : held &&
       Object.values(held).flatMap((rows) => Array.isArray(rows) ? rows : []),
@@ -819,7 +808,6 @@ let desk = async (
       held,
     },
     renewals,
-    agents: known,
     spaces: picks.some((s) => s.slug == space.slug) ? picks : [
       {
         slug: space.slug,
@@ -895,7 +883,6 @@ let mine = async (
   let [
     picks,
     name,
-    agents,
     own,
     panes,
     provider,
@@ -904,7 +891,6 @@ let mine = async (
   ] = await Promise.all([
     pickable(dir, person),
     dir.nameAt(person),
-    view == 'agents' ? agentsOf(env, person, dir) : [],
     dir.own(person),
     dir.panes(person),
     payments(env),
@@ -913,10 +899,11 @@ let mine = async (
         .then(([c, rows]) => c.ownLinks(env, rows))
       : undefined,
     // The rows a page drawn from the page graph's reads is drawn from
-    // (@yaks/platform/account-rows), carried for its first paint.
-    DRAWN[view] &&
-    Promise.all(DRAWN[view].map((l) => personRows(dir, person, l, env)))
-      .then((rows) => rows.flat()),
+    // (@yaks/platform/account-rows), carried for its first paint, and the
+    // agents Agents lists (agent-rows.ts).
+    view == 'agents' ? agentsIn(env, dir, person) : DRAWN[view] &&
+      Promise.all(DRAWN[view].map((l) => personRows(dir, person, l, env)))
+        .then((rows) => rows.flat()),
   ])
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
@@ -930,7 +917,6 @@ let mine = async (
     friendList: drawn && friendsOf(drawn),
     drawn,
     allFriends: q.has('all'),
-    agents,
     links,
     session: who.session,
     shops: provider.shops.on(),

@@ -9,9 +9,8 @@
  * - `appBroken{space, app, errors}`: what is broken in each app, read from
  *   the space's tracker with what its Operator made of each break. No store
  *   holds it, so the page graph's door reads it as the page asks.
- * - `agentsConnected{count}`: how many agents the person connected, which the
- *   door reads from the OAuth provider as the page asks. Until it is in, what
- *   depends on it stays unsettled (./page-parts.ts `state`).
+ *
+ * Whether an agent is connected is the person's agents' row (./agents.ts).
  *
  * A row's eid is derived from the person and the app it shows, so two
  * people's rows never meet.
@@ -73,9 +72,6 @@ export let brokenApps = (eid: string): string => BROKEN + eid
 export let brokenSpace = (line: string): string | undefined =>
   line.startsWith(BROKEN) ? line.slice(BROKEN.length) : undefined
 
-/** How many agents the person connected. */
-export let AGENTS = '.agentsConnected'
-
 let strings = { type: 'string' }
 let stamp = {
   type: ['object', 'null'],
@@ -112,12 +108,6 @@ export let spaceAppsWords: VocabDoc = {
       },
       required: ['space', 'app', 'errors'],
     },
-    agentsConnected: {
-      component: true,
-      type: 'object',
-      properties: { count: { type: 'integer' } },
-      required: ['count'],
-    },
   },
 }
 
@@ -149,12 +139,6 @@ export let brokenRows = (
     entity: { eid: derivedEid(`app-broken|${person}|${app}`) },
     appBroken: { space, app, errors },
   }))
-
-/** How many agents `person` connected, as their row. */
-export let agentRows = (person: string, count: number): Bundle[] => [{
-  entity: { eid: derivedEid(`agents-connected|${person}`) },
-  agentsConnected: { count },
-}]
 
 /** The apps of `space` that `rows` hold, each with its open breaks from
  * `broken`. */
@@ -190,10 +174,3 @@ export let writersOf = (apps: Listed[]): Writers =>
       )
     ),
   )
-
-/** How many agents `rows` say the person connected, or undefined until the
- * row is in. */
-export let agentsOf = (rows: Bundle[]): number | undefined =>
-  (rows.find((r) => r.agentsConnected)?.agentsConnected as
-    | { count: number }
-    | undefined)?.count

@@ -2,7 +2,8 @@ import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import type { Client } from '@yaks/client'
 import { bindApps } from './space-apps-browser.ts'
-import { AGENTS, brokenApps, type Listed, spaceApps } from './space-apps.ts'
+import { brokenApps, type Listed, spaceApps } from './space-apps.ts'
+import { AGENTS } from './agents.ts'
 import { graph } from './page-graph_fixture_test.ts'
 import {
   apps,

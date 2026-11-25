@@ -14,9 +14,11 @@
 // visits (@yaks/platform/visit-counts) are in no store: they are read from
 // Cloudflare's analytics here, again each time the space's apps move.
 //
-// What no store holds, a space's Apps page's breaks, the person's agents
-// (apps-reads.ts) and a domain search's offers (space-pages.ts), is read as
-// the page asks, and a watch of it is answered once.
+// What no store holds, a space's Apps page's breaks (apps-reads.ts) and a
+// domain search's offers (space-pages.ts), is read as the page asks, and a
+// watch of it is answered once. The person's agents (agent-rows.ts) are read
+// from their grants, and again each time the directory says those moved
+// (@yaks/platform/agents `GRANTS`).
 //
 // A space's Settings, Domains and Trash pages (@yaks/platform/space-pages)
 // are reads of its owner the directory answers too.
@@ -65,8 +67,10 @@ import {
   pickOf,
 } from '@yaks/platform/operator-matches'
 import { matchesOf } from './matches.ts'
-import { AGENTS, brokenSpace } from '@yaks/platform/space-apps'
-import { agentsIn, brokenOf } from './apps-reads.ts'
+import { brokenSpace } from '@yaks/platform/space-apps'
+import { brokenOf } from './apps-reads.ts'
+import { AGENTS, disconnecting, GRANTS } from '@yaks/platform/agents'
+import { agentsIn, disconnected } from './agent-rows.ts'
 import { paymentPart, paymentWrite } from '@yaks/platform/payment-rows'
 import { ownedSpace, paymentApply, paymentRead } from './payment-reads.ts'
 import { makingApp } from '@yaks/platform/app-canvas'
@@ -175,14 +179,11 @@ export let reachDoor = async (
   }
   // What the door reads as the page asks, once: what no store holds.
   let once = (line: string) =>
-    line == AGENTS || brokenSpace(line) != undefined ||
-    offersQuery(line) != undefined
+    brokenSpace(line) != undefined || offersQuery(line) != undefined
   let readOnce = async (line: string): Promise<Bundle[]> => {
     let query = offersQuery(line)
     if (query != undefined) return await offersFor(env, query)
-    let space = brokenSpace(line)
-    if (space == undefined) return await agentsIn(env, dir, person)
-    let seat = await seatIn(space)
+    let seat = await seatIn(brokenSpace(line)!)
     return seat
       ? await brokenOf(env, dir, seat.space, {
         ...who,
@@ -234,6 +235,7 @@ export let reachDoor = async (
         )
       }
       if (once(line)) return Response.json(await readOnce(line))
+      if (line == AGENTS) return Response.json(await agentsIn(env, dir, person))
       let paid = paymentPart(line)
       if (paid && paid.part != 'allowances') {
         let space = await ownedSpace(dir, person, paid.space)
@@ -314,6 +316,12 @@ export let reachDoor = async (
     }
     if (door == '/apply' && req.method == 'POST') {
       let bundles = await req.json() as Bundle[]
+      let agent = disconnecting(bundles)
+      if (agent != undefined) {
+        return Response.json(
+          await disconnected(env, dir, person, bundles[0], agent),
+        )
+      }
       let drafted = operatorWrite(bundles)
       if (drafted) {
         let seat = await seatIn(drafted.space)
@@ -498,6 +506,15 @@ export let reachDoor = async (
               return () => {
                 closed = true
               }
+            }
+            // The person's agents, which no store holds: read again each
+            // time the directory says their grants moved.
+            if (line == AGENTS) {
+              return rereading(
+                () => agentsIn(env, dir, person),
+                (moved) => personal(moved, GRANTS),
+                sink,
+              )
             }
             // What an app beside the chat is made of, read again as it moves.
             let app = makingApp(line)

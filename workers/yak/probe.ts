@@ -16,6 +16,7 @@ import {
   type AccountWrite,
 } from '@yaks/platform/account-rows'
 import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
+import { AGENTS, agentsOf } from '@yaks/platform/agents'
 import type { PeopleAct } from '@yaks/platform/people-rows'
 import type { Load } from '@yaks/host'
 import type { Env, Vars } from './env.ts'
@@ -111,6 +112,29 @@ export let wrote = (
   p: Pick<Person, 'person' | 'cookie'>,
   bundles: Bundle[],
 ) => reach(k, p, '/apply', { method: 'POST', body: JSON.stringify(bundles) })
+
+/** The agents `p` connected, as their tab's page graph reads them
+ * (@yaks/platform/agents), or undefined when the door refuses. */
+export let agentsAt = async (
+  k: Pick<Kernel, 'at' | 'host'>,
+  p: Pick<Person, 'person' | 'cookie'>,
+) => {
+  let res = await reach(k, p, `/query?q=${encodeURIComponent(AGENTS)}`)
+  if (!res.ok) return void await res.body?.cancel()
+  return agentsOf(await res.json())
+}
+
+/** `p` pressing Disconnect on their agent `agent`, through their page graph:
+ * the press with what it came to, and their agents read again. */
+export let disconnectAgent = (
+  k: Pick<Kernel, 'at' | 'host'>,
+  p: Pick<Person, 'person' | 'cookie'>,
+  agent: string,
+) =>
+  wrote(k, p, [{
+    entity: { eid: crypto.randomUUID() },
+    disconnectAgent: { agent },
+  }])
 
 /** `p` pressing a button of the People page of their space `slug`: the act
  * `act` (@yaks/platform/people-rows) with `args`, written through their page

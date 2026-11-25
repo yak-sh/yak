@@ -4,7 +4,14 @@
 // whose grants were written before the rows is listed from KV once.
 import { equal, test } from '@yaks/testing'
 import { challenge } from '@yaks/oauth'
-import { allowed, fresh, signIn } from './probe.ts'
+import {
+  agentsAt,
+  allowed,
+  disconnectAgent,
+  fresh,
+  type Person,
+  signIn,
+} from './probe.ts'
 import { asking } from './asking.ts'
 import type { Env } from './env.ts'
 
@@ -40,10 +47,8 @@ let k = await fresh({}, (e) => {
 })
 addEventListener('unload', () => void k.stop())
 
-let agents = async (cookie: string): Promise<string[]> => {
-  let res = await k.at('yaks.app', '/oauth/agents', { headers: { cookie } })
-  return (await res.json()).agents.map((a: { name: string }) => a.name)
-}
+let agents = async (who: Person): Promise<string[]> =>
+  (await agentsAt(k, who))!.map((a) => a.name)
 
 // An agent connected by the person, the whole way: consent, then its code
 // exchanged.
@@ -97,20 +102,15 @@ let bearer = async (token: string) =>
     }),
   )).who?.person
 
-let disconnect = async (cookie: string, agent: string) => {
-  let res = await k.at('yaks.app', '/oauth/agents/disconnect', {
-    method: 'POST',
-    redirect: 'manual',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', cookie },
-    body: new URLSearchParams({ agent, return: '/connect' }).toString(),
-  })
+let disconnect = async (who: Person, agent: string) => {
+  let res = await disconnectAgent(k, who, agent)
   await res.body?.cancel()
 }
 
 // A person who has listed their agents once, so their rows are whole.
 let listedPerson = async () => {
   let them = await signIn(k)
-  await agents(them.cookie)
+  await agents(them)
   await k.settled()
   return them
 }
@@ -137,9 +137,9 @@ test('an agent is listed the moment it connects and gone the moment it is discon
   lagging = true
   try {
     let agent = await connect(lag.cookie, 'Lagging agent')
-    equal(await agents(lag.cookie), ['Lagging agent'])
-    await disconnect(lag.cookie, agent)
-    equal(await agents(lag.cookie), [])
+    equal(await agents(lag), ['Lagging agent'])
+    await disconnect(lag, agent)
+    equal(await agents(lag), [])
   } finally {
     lagging = false
   }
@@ -147,15 +147,15 @@ test('an agent is listed the moment it connects and gone the moment it is discon
 
 test("a person's agents are listed without reading KV", async () => {
   reads = 0
-  equal(await agents(quiet.cookie), ['Quiet agent'])
+  equal(await agents(quiet), ['Quiet agent'])
   equal(reads, 0)
 })
 
 test('grants from before the rows are listed from KV once, and then from the rows', async () => {
-  equal(await agents(before.cookie), ['Older agent'])
+  equal(await agents(before), ['Older agent'])
   await k.settled()
   reads = 0
-  equal(await agents(before.cookie), ['Older agent'])
+  equal(await agents(before), ['Older agent'])
   equal(reads, 0)
 })
 
@@ -165,7 +165,7 @@ test("a disconnected agent's token is refused at once, while KV still answers it
   equal(await bearer(token), lag.person)
   lagging = true
   try {
-    await disconnect(lag.cookie, agent)
+    await disconnect(lag, agent)
     equal(await bearer(token), undefined)
   } finally {
     lagging = false

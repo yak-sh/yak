@@ -17,13 +17,11 @@ import type {
   OAuthHelpers,
 } from '@cloudflare/workers-oauth-provider'
 
-export type Brand = 'chatgpt' | 'claude' | 'claude-code' | 'cursor'
-export type Agent = {
-  id: string
-  name: string
-  brand?: Brand
-  connectedAt: number
-}
+import type { Agent as Listed, Brand } from '@yaks/platform/agents'
+
+export type { Brand }
+/** An agent connected, as the pages list it, and when its first grant was. */
+export type Agent = Listed & { connectedAt: number }
 /** An outside service holding a grant, as the connections page lists it. */
 import type { Service } from '@yaks/platform/connections-page'
 

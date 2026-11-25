@@ -48,7 +48,8 @@ import { DRAWN, MARKDOWN } from './docs.ts'
 import { page as galleryPage } from './gallery.ts'
 import { INTEGRATIONS, page as integrationsPage } from './integrations.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { agentSetup, askEmail } from './signin-pages.ts'
+import { askEmail } from './signin-pages.ts'
+import { doors } from '@yaks/platform/agent-guide'
 import { paymentView } from '@yaks/platform/payment-view'
 import { Fragment, h } from 'preact'
 import { markup } from './html.ts'
@@ -1189,8 +1190,8 @@ let panel = (html: string, key: string) => {
   return found
 }
 
-// The Agents page's steps, for a person with none connected yet.
-let page = () => markup(agentSetup([], {}, '/manage'))
+// The Agents page's steps (@yaks/platform/agent-guide).
+let page = () => markup(doors({}))
 
 test('ChatGPT gets a downloadable icon within its upload limit', () => {
   let tab = panel(page(), 'chatgpt')

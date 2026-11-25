@@ -15,11 +15,11 @@
 import { type ComponentChildren, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import type { Client } from '@yaks/client'
+import { copying, shown } from '@yaks/ui/copy-browser'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
 import { pageGraph } from './page-graph.ts'
+import { AGENTS, agentsOf, agentsWords } from './agents.ts'
 import {
-  AGENTS,
-  agentsOf,
   brokenApps,
   listedOf,
   spaceApps,
@@ -51,25 +51,6 @@ let asked = (sift: AppsView['sift'], href: string) => {
   return to
 }
 
-// Put the words beside `go` on the clipboard, a check in its place for a
-// moment; where the clipboard is refused, select them, so the person's own
-// copy keystroke lands.
-let copy = async (go: HTMLElement) => {
-  let words = go.previousElementSibling!
-  let box = go.parentElement!
-  try {
-    await navigator.clipboard.writeText(words.textContent ?? '')
-    box.classList.add('Copy-copied')
-    setTimeout(() => box.classList.remove('Copy-copied'), 2000)
-  } catch {
-    let range = document.createRange()
-    range.selectNodeContents(words)
-    let picked = getSelection()
-    picked?.removeAllRanges()
-    picked?.addRange(range)
-  }
-}
-
 /** Keep the Apps view `root` drawn from `graph`. The answer lets go of it
  * all. */
 export let bindApps = (
@@ -93,17 +74,11 @@ export let bindApps = (
       root.ownerDocument,
       appsView(view, {
         apps: listedOf(watches.apps.value, space, watches.broken.value),
-        agents: agentsOf(watches.agents.value),
+        agents: agentsOf(watches.agents.value)?.length,
       }),
     ))
     morph(root, next, KEPT)
-    shown()
-  }
-  // The copy buttons this script works.
-  let shown = () => {
-    for (let go of root.querySelectorAll<HTMLElement>('.Copy_Go')) {
-      go.hidden = false
-    }
+    shown(root)
   }
   let sift = (e: Event) => {
     let form = (e.target as Element).closest<HTMLFormElement>(
@@ -121,21 +96,16 @@ export let bindApps = (
     )
     draw()
   }
-  let click = (e: Event) => {
-    let go = (e.target as Element).closest<HTMLElement>('.Copy_Go')
-    if (go) void copy(go)
-  }
   let all = Object.values(watches)
   let off = all.map((w) => w.subscribe(draw))
   root.addEventListener('input', sift)
   root.addEventListener('submit', sift)
-  root.addEventListener('click', click)
+  let uncopy = copying(root)
   draw()
-  shown()
   return () => {
     root.removeEventListener('input', sift)
     root.removeEventListener('submit', sift)
-    root.removeEventListener('click', click)
+    uncopy()
     for (let stop of off) stop()
     for (let w of all) w.close()
   }
@@ -148,7 +118,10 @@ let start = (doc: Document = document) => {
       if (bound.has(root)) continue
       bound.add(root)
       let { person } = JSON.parse(root.dataset.appsView!) as AppsView
-      let stop = bindApps(root, pageGraph([spaceAppsWords], person))
+      let stop = bindApps(
+        root,
+        pageGraph([spaceAppsWords, agentsWords], person),
+      )
       leaving(doc).addEventListener('abort', () => {
         bound.delete(root)
         stop()

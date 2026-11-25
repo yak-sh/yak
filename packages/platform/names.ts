@@ -6,6 +6,10 @@
  * host.ts `apex`); the product is always called this. */
 export let PLATFORM = 'yaks.app'
 
+/** What the platform is, in its own one line (M-37845): the home page's
+ * title, the share card's, the connector's. */
+export let PITCH = 'Build, host and share web apps.'
+
 /** The public repository the platform is built from (M-37867), whose web
  * pages a commit links into as `${REPO}/commit/<sha>`. */
 export let REPO = 'https://github.com/yak-sh/yak'

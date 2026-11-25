@@ -1,6 +1,12 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { allowed, authorizing, fresh, signIn } from './probe.ts'
+import {
+  allowed,
+  authorizing,
+  disconnectAgent,
+  fresh,
+  signIn,
+} from './probe.ts'
 import type { Kv } from './grants.ts'
 
 let kv: Kv
@@ -43,18 +49,9 @@ test('a nameless connector whose registration disappeared stays visible and can 
   let html = await page.text()
   assertStringIncludes(html, 'Other agent')
   assertStringIncludes(html, client.client_id)
-  let ended = await k.at('yaks.app', '/oauth/agents/disconnect', {
-    method: 'POST',
-    redirect: 'manual',
-    headers: {
-      cookie: person.cookie,
-      origin: 'https://yaks.app',
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({ agent: client.client_id }),
-  })
+  let ended = await disconnectAgent(k, person, client.client_id)
   await ended.body?.cancel()
-  assertEquals(ended.status, 303)
+  assertEquals(ended.status, 200)
   let after = await me()
   await after.body?.cancel()
   assertEquals(after.status, 401)

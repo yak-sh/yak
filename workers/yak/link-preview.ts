@@ -4,6 +4,7 @@ import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { type Host, url } from '@yaks/platform/host'
 import { managed, onZone, route, spaced } from '@yaks/platform/routes'
+import { PITCH } from '@yaks/platform/names'
 
 export type Preview = {
   title: string
@@ -14,7 +15,7 @@ export type Preview = {
 
 export let DEFAULT: Preview = {
   title: 'yaks.app',
-  description: 'Build, host and share web apps.',
+  description: PITCH,
 }
 
 export let fields = (env: Host, of: Preview) => {

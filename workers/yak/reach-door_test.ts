@@ -60,13 +60,8 @@ import {
   visitCounts,
   visitWords,
 } from '@yaks/platform/visit-counts'
-import {
-  AGENTS,
-  agentsOf,
-  brokenApps,
-  listedOf,
-  spaceApps,
-} from '@yaks/platform/space-apps'
+import { brokenApps, listedOf, spaceApps } from '@yaks/platform/space-apps'
+import { AGENTS, agentsOf, agentsWords } from '@yaks/platform/agents'
 import {
   allowancesLine,
   allowancesOf,
@@ -825,6 +820,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
         visitWords,
         spacePagesWords,
         appCanvasWords,
+        agentsWords,
       ]),
       [],
       {
@@ -1068,6 +1064,36 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       shared.close()
       invite.close()
 
+      // The agents the person connected, read again as a grant is made and
+      // revoked elsewhere.
+      await dir.stamp({
+        entities: [{
+          entity: { eid: ADA },
+          grants_listed: { at: new Date().toISOString() },
+        }],
+      })
+      let agents = page.watch(AGENTS)
+      await until(() => agentsOf(agents.value) != undefined)
+      equal(agentsOf(agents.value), [])
+      let grant = {
+        entity: { eid: crypto.randomUUID() },
+        oauth_grant: {
+          person: ADA,
+          id: crypto.randomUUID(),
+          client: crypto.randomUUID(),
+          created: Math.floor(Date.now() / 1000),
+          redirect: 'https://claude.ai/callback',
+        },
+      }
+      await dir.stamp({ entities: [grant] })
+      await until(() => agentsOf(agents.value)?.length == 1)
+      equal(agentsOf(agents.value), [
+        { id: 'claude', name: 'Claude', brand: 'claude' },
+      ])
+      await dir.stamp({ entities: [{ ...grant, cancelled: {} }] })
+      await until(() => agentsOf(agents.value)?.length == 0)
+      agents.close()
+
       // What an app beside the chat is made of, read again as its draft is
       // written, on a directory socket that stays admitted.
       let making = page.watch(appMaking(book))
@@ -1146,5 +1172,45 @@ test('an Apps page carries the rows it was drawn from and the script that draws 
   equal(await rowsOf(bea, spaceApps(space.eid)), [])
   equal(await rowsOf(ada, brokenApps(space.eid)), [])
   equal(await rowsOf(bea, brokenApps(space.eid)), [])
-  equal(agentsOf(await rowsOf(ada, AGENTS)), 0)
+  equal(agentsOf(await rowsOf(ada, AGENTS)), [])
+})
+
+test('Agents and New app carry the agents row and the script that draws them again, and Disconnect goes through the door', async () => {
+  let drawn = async (path: string) => {
+    let page = await k.at(k.host, path, { headers: { cookie: ada.cookie } })
+    equal(page.status, 200)
+    let { document } = parseHTML(await page.text())
+    let scripts = [...document.querySelectorAll('script[src]')]
+      .map((s) => s.getAttribute('src')!)
+    equal(scripts.some((src) => src.includes('/_agents.')), true)
+    let view = document.querySelector<HTMLElement>('[data-view=agents]')!
+    let rows = JSON.parse(
+      view.querySelector('script[data-page-graph]')!.textContent!,
+    ).rows as Bundle[]
+    return { view: JSON.parse(view.dataset.agentsView!), rows, at: view }
+  }
+  let agents = await drawn(managePath('agents'))
+  equal([agents.view.page, agents.view.space], ['agents', undefined])
+  equal(agentsOf(agents.rows), [])
+  equal(!!agents.at.querySelector('.Tabs_Panel-claude'), true)
+  let made = await drawn(managePath('new', 'adas'))
+  equal([made.view.page, made.view.space], ['new', 'adas'])
+  equal(agentsOf(made.rows), [])
+  equal(
+    made.at.querySelector('.Card-accent')?.hasAttribute('hidden'),
+    false,
+  )
+  // A press the door does as the person: what it came to, and their agents
+  // read again.
+  let res = await door(ada, '/apply', {
+    method: 'POST',
+    body: JSON.stringify([{
+      entity: { eid: crypto.randomUUID() },
+      disconnectAgent: { agent: 'claude' },
+    }]),
+  })
+  equal(res.status, 200)
+  let [said, ...rows] = await res.json() as Bundle[]
+  equal(said.disconnectAgent, { agent: 'claude', said: 'Disconnected.' })
+  equal(agentsOf(rows), [])
 })

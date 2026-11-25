@@ -12,17 +12,19 @@ import { managePath } from '@yaks/platform/routes'
 import { accountRow } from '@yaks/platform/account-rows'
 import { appRows, spaceRows } from '@yaks/platform/side-rows'
 import { countRows } from '@yaks/platform/visit-counts'
-import { agentRows, listedRows } from '@yaks/platform/space-apps'
+import { listedRows } from '@yaks/platform/space-apps'
+import { type Agent, agentsRow } from '@yaks/platform/agents'
 
 // The dashboard itself, drawn straight (pages.ts `desk` is pure): the order
 // it puts its blocks in, and what stands where the connect steps were. Every
 // state a person passes through is one call here — landed, connected,
 // something built — where reaching each through the kernel is a sign-in, an
 // OAuth grant and an app apiece (identity_test.ts holds those ends).
-// The Apps page is drawn from rows (@yaks/platform/space-apps): its apps,
-// and the agents connected where they are known.
+// The Apps, New app and Agents pages are drawn from rows
+// (@yaks/platform/space-apps, agents): the apps, and the agents connected
+// where they are known.
 let block = (
-  at: Partial<Parameters<typeof desk>[0]> = {},
+  at: Partial<Parameters<typeof desk>[0]> & { agents?: Agent[] } = {},
   env: Parameters<typeof desk>[1] = {},
 ) =>
   desk({
@@ -33,7 +35,7 @@ let block = (
     ...at,
     drawn: at.drawn ?? [
       ...listedRows('person-dana', 'space-dana', at.apps ?? []),
-      ...at.agents ? agentRows('person-dana', at.agents.length) : [],
+      ...at.agents ? [agentsRow('person-dana', at.agents)] : [],
     ],
   }, env).text()
 
@@ -360,7 +362,6 @@ test('connected empty library offers a copyable request', async () => {
       id: 'chatgpt',
       brand: 'chatgpt',
       name: 'ChatGPT',
-      connectedAt: 1,
     }],
   })
   assert(asks(page), page)
@@ -370,7 +371,6 @@ test('connected empty library offers a copyable request', async () => {
       id: 'chatgpt',
       brand: 'chatgpt',
       name: 'ChatGPT',
-      connectedAt: 1,
     }],
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
   })
@@ -391,7 +391,6 @@ test('connected pages show the named client and keep the way to connect another 
     id: 'chatgpt',
     brand: 'chatgpt' as const,
     name: 'ChatGPT',
-    connectedAt: 1,
   }]
   for (let view of ['new', 'agents'] as const) {
     let { document } = parseHTML(await block({ view, agents }))
@@ -426,7 +425,6 @@ test('new app tells an agent with no web link what to ask, not an empty list', a
       id: 'claude-code',
       brand: 'claude-code',
       name: 'Claude Code',
-      connectedAt: 1,
     }],
   })
   let { document } = parseHTML(page)

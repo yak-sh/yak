@@ -569,7 +569,7 @@
     }
   }
 
-  /* The agents a person connected, as rows (connected_ui.ts), or the ones
+  /* The agents a person connected, as rows (@yaks/platform/agents-view), or the ones
      with a web home as a line of links to open them. */
   .Agents-links {
     display: flex;

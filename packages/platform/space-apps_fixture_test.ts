@@ -3,10 +3,8 @@ import { renderToString } from 'preact-render-to-string'
 import { h } from 'preact'
 import { parseHTML } from 'linkedom'
 import { type AppsView, appsView } from './space-apps-view.ts'
+import { AGENTS, agentsOf, agentsRow } from './agents.ts'
 import {
-  agentRows,
-  AGENTS,
-  agentsOf,
   brokenApps,
   brokenRows,
   type Listed,
@@ -73,7 +71,18 @@ export let lines = (
 ): [string, Bundle[]][] => [
   [spaceApps(SPACE), listedRows(ADA, SPACE, listed)],
   [brokenApps(SPACE), brokenRows(ADA, SPACE, new Map(Object.entries(broken)))],
-  [AGENTS, agents == undefined ? [] : agentRows(ADA, agents)],
+  [
+    AGENTS,
+    agents == undefined ? [] : [
+      agentsRow(
+        ADA,
+        Array.from({ length: agents }, (_, i) => ({
+          id: `agent-${i}`,
+          name: `Agent ${i}`,
+        })),
+      ),
+    ],
+  ],
 ]
 
 /** The Apps view drawn from those rows as a server draws it. */
@@ -88,7 +97,7 @@ export let page = (
       { 'data-view': 'apps', 'data-apps-view': JSON.stringify(view) },
       appsView(view, {
         apps: listedOf(all, SPACE, all),
-        agents: agentsOf(all),
+        agents: agentsOf(all)?.length,
       }),
     ),
   )

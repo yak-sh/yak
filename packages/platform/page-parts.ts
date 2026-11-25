@@ -234,3 +234,61 @@ export let fileDrop = (o: {
     o.size ? h(Drop.Said, { role: 'status' }) : null,
     h(Drop.Chosen, { 'aria-live': 'polite' }),
   )
+
+/** Deploying by dropping a file (T-34230): the one door on this platform that
+ * makes an app with no assistant in the room. A drop zone (`fileDrop`) and
+ * the name the app lives at, one plain form that posts to `/deploy`
+ * (yaks.app's drop.ts) and needs no script at all. A page's script may fill
+ * the name in from the file's own (`nameFrom`); nothing it does is required
+ * for the form to work.
+ *
+ * `slug` given is an app's own page, where the name is not a question: the
+ * drop goes to that app and nowhere else. `to` is the space's door, whole,
+ * on a page that is not at the space's own address (the dashboard's). */
+export let dropZone = (slug?: string, to = '/deploy') =>
+  h(
+    'form',
+    {
+      class: 'Deploy Page_Form',
+      method: 'post',
+      action: to,
+      enctype: 'multipart/form-data',
+    },
+    fileDrop({
+      name: 'file',
+      label: 'Website files',
+      hint: 'A .zip of your website files, or a single index.html',
+      required: true,
+    }),
+    slug ? held('slug', slug) : h(Field, {
+      name: 'slug',
+      maxlength: 63,
+      autocomplete: 'off',
+      spellcheck: 'false',
+      placeholder: 'e.g. oak-street-church',
+      'aria-label': 'Website name',
+    }),
+    h(
+      Button,
+      { mod: 'go', type: 'submit' },
+      slug ? 'Update app' : 'Upload website',
+    ),
+  )
+
+/** What a dropped file named `file` says to call its app: recipes.zip is
+ * recipes. A bare index.html says nothing, so it is not asked.
+ *
+ * ```ts
+ * import { nameFrom } from '@yaks/platform/page-parts'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(nameFrom('My Recipes.zip'), 'my-recipes')
+ * equal(nameFrom('index.html'), '')
+ * ```
+ */
+export let nameFrom = (file: string): string => {
+  let stem = file.replace(/\.[a-z0-9]+$/i, '').toLowerCase()
+  return stem == 'index'
+    ? ''
+    : stem.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63)
+}
