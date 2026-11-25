@@ -422,6 +422,12 @@ type Held = {
   stop: AbortController
 }
 
+/** The mark on a link whose page is held before it is pressed: asked for
+ * ahead once the page it stands on is drawn (and its document loaded), one
+ * at a time, so a press draws it at once. For the few pages a person moves
+ * between most; a link to the page on screen holds it for coming back. */
+export let HOLD = 'data-hold'
+
 /** The mark on a link saying what the page it opens is called, and on a
  * page the title that says what the page is: a click waiting for its page
  * writes the one into the other at once (`going`). */
@@ -467,7 +473,10 @@ let going = (win: Browsing, link: Element, to: URL) => {
  * A held page older than `FRESH`, or one whose answer asked (`AGAIN`), is
  * asked for again once drawn, and laid over what was drawn where it
  * changed. A click on a page not held draws what it can of that page at
- * once, from what the page holds (`going`), and the rest when it comes. Sending a form lets go of every held page.
+ * once, from what the page holds (`going`), and the rest when it comes.
+ * The pages a page's links marked `HOLD` name are held before any press.
+ * Sending a form makes every held page old: still drawn at once, and asked
+ * for again.
  */
 export let start = (
   win: Browsing,
@@ -649,7 +658,31 @@ export let start = (
   win.addEventListener('focusin', ahead)
   win.addEventListener('mousedown', ahead)
   win.addEventListener('touchstart', ahead, { passive: true })
-  win.addEventListener('submit', () => pages.clear())
+  win.addEventListener('submit', () => {
+    for (let held of pages.values()) held.at = -Infinity
+  })
+  // The pages the page's `HOLD` links name and the tab does not hold, asked
+  // for one after another, and again for a page drawn meanwhile. A page
+  // holding a script that stays leaves by loading the next, so it holds none.
+  let holding = false, more = false
+  let hold = async () => {
+    if (holding) return void (more = true)
+    holding = true
+    do {
+      more = false
+      for (
+        let link of stays(doc) ? [] : doc.querySelectorAll(`a[${HOLD}][href]`)
+      ) {
+        let to = new URL(link.getAttribute('href')!, win.location.href)
+        if (to.origin != new URL(win.location.href).origin) continue
+        if (!pages.has(page(to))) await ask(to, true).answer
+      }
+    } while (more)
+    holding = false
+  }
+  doc.addEventListener(PAGE, () => void hold())
+  if (doc.readyState == 'complete') hold()
+  else win.addEventListener('load', () => void hold(), { once: true })
   win.addEventListener('click', (e: MouseEvent) => {
     let to = followed(e, win.location.href, here)
     if (!to) return

@@ -8,6 +8,7 @@ import {
   arrived,
   FRESH,
   GOING,
+  HOLD,
   LEAVE,
   leaving,
   morph,
@@ -478,12 +479,45 @@ test('a touch the browser takes for a scroll lets go of the page it looked ahead
   assertEquals(b.stopped, ['https://y.test/updates'])
 })
 
-test('sending a form lets go of every page held', async () => {
+test('sending a form makes every page held old: drawn at once, then asked for again', async () => {
   let b = browsing(site)
   b.press('mousedown', 'a[href="/updates"]')
+  await settled()
   b.press('submit', 'nav')
   await b.go(new URL('https://y.test/updates'))
-  assertEquals(b.drawn.map((d) => d.from), ['fetch'])
+  await settled()
+  assertEquals(b.drawn.map((d) => d.from), ['held'])
+  assertEquals(b.fetched, [
+    'https://y.test/updates prefetch',
+    'https://y.test/updates',
+  ])
+})
+
+test('the pages a page marks to hold are asked for once it loads, one at a time, and a press draws them at once', async () => {
+  let held = (here: string) =>
+    framed(here, `<h1>${here}</h1>`).replace(
+      /<a href="\/(apps|updates)"/g,
+      `<a ${HOLD} href="/$1"`,
+    )
+  let b = browsing({ '/apps': held('apps'), '/updates': held('updates') })
+  b.slow()
+  assertEquals(b.fetched, [], 'nothing before the document loads')
+  b.doc.dispatchEvent(
+    new (b.doc.defaultView as unknown as typeof globalThis).Event('load'),
+  )
+  assertEquals(b.fetched, ['https://y.test/apps prefetch'])
+  await b.answer()
+  assertEquals(b.fetched.at(-1), 'https://y.test/updates prefetch')
+  await b.answer()
+  b.click('a[href="/updates"]')
+  await settled()
+  b.click('a[href="/apps"]')
+  await settled()
+  assertEquals(b.drawn.map((d) => [d.from, d.phases.wait]), [
+    ['held', 0],
+    ['held', 0],
+  ])
+  assertEquals(b.fetched.length, 2, 'each asked for once')
 })
 
 test('a script binds what each page brings once, and lets go when its page leaves', () => {

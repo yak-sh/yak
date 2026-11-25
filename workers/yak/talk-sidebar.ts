@@ -70,6 +70,7 @@ export let talkSide = (
               href: chatPath(space.slug),
               // The conversation stays the page with an app open beside it.
               current: !reading,
+              hold: true,
               icon: icons['message-circle'],
               label: space.operator,
             },
@@ -79,6 +80,7 @@ export let talkSide = (
               icon: icons.bell,
               label: 'Updates',
               names: 'Updates',
+              hold: true,
               waiting: at.waiting,
             },
           ],

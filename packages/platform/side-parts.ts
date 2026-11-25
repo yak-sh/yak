@@ -29,7 +29,7 @@ import { Icon } from '@yaks/ui/Icon'
 import { Identity } from '@yaks/ui/Identity'
 import { Menu } from '@yaks/ui/Menu'
 import { SideNav } from '@yaks/ui/SideNav'
-import { NAMES } from '@yaks/ui/navigate'
+import { HOLD, NAMES } from '@yaks/ui/navigate'
 import {
   accountView,
   appMarkImage,
@@ -48,6 +48,9 @@ export type Item = {
    * page's title says it the moment the link is pressed (@yaks/ui/navigate
    * `NAMES`). */
   names?: string
+  /** One of the few pages a person moves between most, held before it is
+   * pressed so it draws at once (@yaks/ui/navigate `HOLD`). */
+  hold?: boolean
   icon: IconNode
   image?: ReturnType<typeof appMarkImage>
   current?: boolean
@@ -107,6 +110,7 @@ export let link = (at: Item) => {
       type: at.submit ? 'submit' : undefined,
       title: at.label,
       [NAMES]: at.names,
+      [HOLD]: at.hold ? '' : undefined,
       mod: at.current && 'on',
       'aria-current': at.current ? 'page' : at.beside ? 'true' : undefined,
       target: at.external ? '_blank' : undefined,
@@ -388,6 +392,7 @@ export let sideParts = (
             icon: Inbox,
             label: 'All updates',
             names: 'All updates',
+            hold: true,
             across: {
               count: counts && [...counts.values()].reduce((n, c) => n + c, 0),
             },
