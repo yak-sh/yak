@@ -8,9 +8,10 @@
  * - A page sends its snapshot as it is left or hidden (./keep.ts), and the
  *   picture of it is kept under its address, the newest `pages` of them.
  * - A file named by its bytes (`named`, a path prefix) never changes, so it
- *   is answered from what was kept, and kept as it first passes, the newest
- *   `files` of them: a picture drawn by an earlier release still has its
- *   sheet and fonts.
+ *   is answered from what was kept, and kept as it first passes; the newest
+ *   `files` of them stay, counted as a page is left rather than on each
+ *   file's way to a page that is loading: a picture drawn by an earlier
+ *   release still has its sheet and fonts.
  * - Visiting an address in `forget` (signing out, the sign-in page) forgets
  *   every kept page, any snapshot taken by a page loaded before it, and the
  *   databases its pages kept (`databases`).
@@ -162,6 +163,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       }),
     )
     await trim(pages, most.pages)
+    await trim(await caches.open(FILES), most.files)
   }
   let page = async (req: Request) => {
     let kept = await (await caches.open(PAGES)).match(pageKey(req.url))
@@ -187,10 +189,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     let kept = await files.match(req)
     if (kept) return kept
     let got = await scope.fetch(req)
-    if (got.ok) {
-      await files.put(req, got.clone())
-      await trim(files, most.files)
-    }
+    if (got.ok) await files.put(req, got.clone())
     return got
   }
   scope.addEventListener('fetch', (e) => {

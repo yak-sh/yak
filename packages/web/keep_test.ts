@@ -30,11 +30,14 @@ let tab = (html: string) => {
     document.dispatchEvent(new window.Event('visibilitychange'))
   }
   let leave = () => document.dispatchEvent(new window.Event(LEAVE))
-  return { sent, registered, hide, leave }
+  let load = () => window.dispatchEvent(new window.Event('load'))
+  return { sent, registered, hide, leave, load }
 }
 
-test('a page sends the worker what it shows as it is hidden or left in place', () => {
+test('a page registers its worker once loaded, and sends it what it shows as it is hidden or left in place', () => {
   let t = tab('<html><body><p>Seen last</p></body></html>')
+  assertEquals(t.registered, [])
+  t.load()
   assertEquals(t.registered, ['/worker.js'])
   t.hide()
   t.leave()
@@ -47,6 +50,7 @@ test('a page sends the worker what it shows as it is hidden or left in place', (
 
 test('a kept picture registers nothing and sends nothing', () => {
   let t = tab(`<html ${KEPT}="1"><body><p>Seen before</p></body></html>`)
+  t.load()
   t.hide()
   assertEquals([t.registered, t.sent], [[], []])
 })

@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type FetchLike, FILES, keeping, PAGES, type Scope } from './worker.ts'
+import { type FetchLike, FILES, keeping, type Scope } from './worker.ts'
 import { FRESH, KEPT } from './picture.ts'
 
 // The address a request names, a Request or a string.
@@ -139,12 +139,14 @@ test('signing out forgets every kept page and page graph, and a page loaded befo
   assertEquals((await w.open('/checks'))!.includes('the next person'), true)
 })
 
-test('a file named by its bytes is answered from what was kept, the newest few of them', async () => {
+test('a file named by its bytes is answered from what was kept, the newest few of them once a page is left', async () => {
   let w = worker(2)
   for (let n of [1, 2, 3]) w.site.set(`/_yak/f${n}.js`, `file ${n}`)
   for (let n of [1, 2, 3]) {
     assertEquals(await w.ask(`/_yak/f${n}.js`), `file ${n}`)
   }
+  // Counted as a page is left, not as a loading page asks for each.
+  await w.leave('/checks', page('seen'))
   w.site.clear()
   w.asked.length = 0
   assertEquals(await w.ask('/_yak/f3.js'), 'file 3')
@@ -153,5 +155,4 @@ test('a file named by its bytes is answered from what was kept, the newest few o
   assertEquals([...w.stores.get(FILES)!.keys()].length, 2)
   // Everything else is the network's alone.
   assertEquals(await w.ask('/api/query'), null)
-  assertEquals(w.stores.get(PAGES), undefined)
 })

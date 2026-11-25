@@ -1,6 +1,6 @@
 /**
- * A page's part in being kept (./worker.ts): it registers its site's worker,
- * and sends the worker a snapshot of itself as the person last saw it,
+ * A page's part in being kept (./worker.ts): it registers its site's worker
+ * once it has loaded, and sends the worker a snapshot of itself as the person last saw it,
  * whenever it is hidden, left for another page in place (`yak-leave`), or
  * unloaded. A picture already (./picture.ts) sends none: the page it becomes
  * sends its own.
@@ -13,9 +13,11 @@ import type { Snapshot } from './worker.ts'
 
 /** What `keep` needs of the window around the page. */
 export type Window = {
-  document: Pick<Document, 'documentElement' | 'visibilityState'> & {
-    addEventListener(type: string, hear: () => void): void
-  }
+  document:
+    & Pick<Document, 'documentElement' | 'visibilityState' | 'readyState'>
+    & {
+      addEventListener(type: string, hear: () => void): void
+    }
   location: { href: string }
   navigator: {
     serviceWorker?: Pick<ServiceWorkerContainer, 'register' | 'controller'>
@@ -37,7 +39,12 @@ export let snapshot = (win: Window): Snapshot => ({
 export let keep = (win: Window, worker: string): void => {
   let workers = win.navigator.serviceWorker
   if (!workers || win.document.documentElement.hasAttribute(KEPT)) return
-  workers.register(worker).catch((e) => win.reportError?.(e))
+  // Once the page has loaded: a worker starting meanwhile would hold up the
+  // files it is still asking for.
+  let register = () =>
+    workers.register(worker).catch((e) => win.reportError?.(e))
+  if (win.document.readyState == 'complete') register()
+  else win.addEventListener('load', register)
   // Taken and sent at once: a page being hidden may not run again.
   let send = () => {
     if (win.document.documentElement.hasAttribute(KEPT)) return
