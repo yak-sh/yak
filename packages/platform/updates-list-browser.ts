@@ -1,9 +1,9 @@
 /**
- * A space's Updates cards in the browser (D-475 step 4). The page is drawn
- * from the person's rows (./updates-view.ts `cardsView`), and here the cards
- * are drawn again from the tab's page graph as the rows move: an update the
- * Operator writes shows at once, and one answered or dismissed elsewhere
- * changes. A card keeps its actions' id and what its person opened, and an
+ * Updates cards in the browser (D-475 step 4), a space's or every space's
+ * together. The page is drawn from the person's rows (./updates-view.ts
+ * `cardsView`), and here the cards are drawn again from the tab's page graph
+ * as the rows move: an update an Operator writes shows at once, and one
+ * answered or dismissed elsewhere changes. A card keeps its actions' id and what its person opened, and an
  * update that was new when the page opened stays marked new while it is
  * open. Each redraw is said on the view (@yaks/inbox `REDRAWN`), so the
  * card actions paint again what they hold.
@@ -17,14 +17,9 @@ import { type ComponentChildren, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import type { Client } from '@yaks/client'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
-import {
-  updateCards,
-  updateOffers,
-  updatesIn,
-  updateWords,
-} from './update-rows.ts'
+import { updateCards, updateOffers, updateWords } from './update-rows.ts'
 import { appsOf, sideApps, sideWords } from './side-rows.ts'
-import { cardsView, type UpdatesView } from './updates-view.ts'
+import { cardsView, placedIn, type UpdatesView } from './updates-view.ts'
 import { pageGraph } from './page-graph.ts'
 import { REDRAWN } from '@yaks/inbox/actions-browser'
 
@@ -67,23 +62,33 @@ export let bindUpdates = (
   graph: Pick<Client, 'watch'>,
 ): () => void => {
   let view = JSON.parse(root.dataset.updatesView!) as UpdatesView
-  let space = view.space.eid
-  let cards = graph.watch(updateCards(space))
-  let offers = graph.watch(updateOffers(space))
-  let apps = graph.watch(sideApps(space))
-  let held = () => updatesIn([...cards.value, ...offers.value], space)
+  let lines = view.spaces.map(({ eid }) => ({
+    eid,
+    news: [graph.watch(updateCards(eid)), graph.watch(updateOffers(eid))],
+    apps: graph.watch(sideApps(eid)),
+  }))
+  let watched = lines.flatMap((l) => [...l.news, l.apps])
+  let held = () =>
+    placedIn(lines.flatMap((l) => l.news.flatMap((w) => w.value)), view.spaces)
   // New when the page opened, which opening it read.
   let fresh = new Set(held().filter((u) => u.unread).map((u) => u.eid))
   let draw = () => {
-    if (!cards.ready || !offers.ready) return
+    // Each line answered, or refused: a space whose Operator is away
+    // keeps what it last said.
+    if (!lines.every((l) => l.news.every((w) => w.ready || w.refused))) return
     let updates = held().map((u) =>
       fresh.has(u.eid) ? { ...u, unread: true } : u
     )
+    let apps = new Map(lines.map((l) => [l.eid, l.apps]))
     let next = root.cloneNode(false) as HTMLElement
     next.append(
       made(
         root.ownerDocument,
-        cardsView(view, updates, appsOf(apps.value, space)),
+        cardsView(
+          view,
+          updates,
+          (space) => appsOf(apps.get(space.eid)?.value ?? [], space.eid),
+        ),
       ),
     )
     keepIds(root, next)
@@ -91,7 +96,6 @@ export let bindUpdates = (
     let { Event } = root.ownerDocument.defaultView ?? globalThis
     root.dispatchEvent(new Event(REDRAWN, { bubbles: true }))
   }
-  let watched = [cards, offers, apps]
   let off = watched.map((w) => w.subscribe(draw))
   return () => {
     for (let stop of off) stop()

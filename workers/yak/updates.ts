@@ -5,7 +5,6 @@ import {
   messageUpdates,
   replyFriend,
 } from './friends.ts'
-import { Empty } from '@yaks/ui/parts'
 // Updates from the Operator (T-140508): what happened in a space, as messages
 // from its Operator a person can reply to, at `/<space>/updates`
 // (@yaks/platform/routes `talkPath('updates', …)`), beside the chat app's side
@@ -33,9 +32,11 @@ import {
   cardsView,
   chatAt,
   draftAt,
+  type Spot,
+  spotOf,
   type UpdatesView,
 } from '@yaks/platform/updates-view'
-import { offerRows, updateRows } from '@yaks/platform/update-rows'
+import { newsOrder, offerRows, updateRows } from '@yaks/platform/update-rows'
 import { appRows } from '@yaks/platform/side-rows'
 import type { MarkedApp } from '@yaks/platform/routes'
 import { drawnRows } from '@yaks/platform/page-graph'
@@ -123,9 +124,7 @@ export let updatesAcross = async (
       return { space, waiting: 0, updates: [], cards: [], offers: [] }
     }
   }))
-  let updates = read.flatMap((r) => r.updates).sort((a, b) =>
-    +b.needs - +a.needs || b.at.localeCompare(a.at)
-  )
+  let updates = read.flatMap((r) => r.updates).sort(newsOrder)
   return {
     updates,
     waiting: read.reduce((n, r) => n + r.waiting, 0),
@@ -135,21 +134,20 @@ export let updatesAcross = async (
   }
 }
 
-/** A person's Updates in one space, and what they came from: the
- * Operator's (`cards`) and the directory's (`offers`), each in its own
- * order. `seen` marks what they read now as read. */
+/** A person's Updates in one space, and what it read (`read`): the
+ * Operator's and the directory's. `seen` marks what they read now as read. */
 export let updatesOf = async (
   env: Env,
   space: Space,
   who: Who,
   seen = false,
-): Promise<Updates & Omit<Read, 'space' | 'waiting' | 'updates'>> => {
+): Promise<Updates & { read: Read[] }> => {
   let { updates, waiting, missed, read } = await updatesAcross(env, [{
     space,
     who,
   }], { seen })
   if (missed.length) throw missed[0].error
-  return { updates, waiting, cards: read[0].cards, offers: read[0].offers }
+  return { updates, waiting, read }
 }
 
 /** The notices a person dismissed in a space, newest first. */
@@ -295,11 +293,7 @@ export let lastDayLine = (
 export let updates = (
   env: Env,
   space: Space,
-  news:
-    & { updates: Update[]; waiting: number }
-    & Partial<
-      Pick<Read, 'cards' | 'offers'>
-    >,
+  news: Updates & { read?: Read[] },
   lists: ComponentChildren = null,
   apps: MarkedApp[] = [],
   views?: Map<string, number>,
@@ -307,25 +301,6 @@ export let updates = (
   person = '',
 ) => {
   let day = lastDayLine(apps, views)
-  let view: UpdatesView = {
-    person,
-    space: {
-      eid: space.eid,
-      slug: space.slug,
-      title: space.title,
-      operator: space.operator,
-    },
-    apex: apex(env),
-  }
-  // The rows the cards were drawn from, which the page graph starts with
-  // until its watches answer (updates-list-browser).
-  let rows = news.cards && news.offers
-    ? [
-      ...updateRows(person, space.eid, news.cards),
-      ...offerRows(person, space.eid, news.offers),
-      ...appRows(person, space.eid, apps),
-    ]
-    : undefined
   return h(
     Fragment,
     null,
@@ -351,22 +326,7 @@ export let updates = (
       )
       : null,
     lists,
-    h(
-      'div',
-      {
-        class: 'Update_List',
-        'data-view': 'updates',
-        'data-updates-view': JSON.stringify(view),
-      },
-      cardsView(view, news.updates, apps),
-      rows && person
-        ? h('script', {
-          type: 'application/json',
-          'data-page-graph': '',
-          dangerouslySetInnerHTML: { __html: drawnRows(person, rows) },
-        })
-        : null,
-    ),
+    listed(env, person, [space], news, () => apps),
     h(
       'p',
       { class: 'Update_Meta' },
@@ -382,14 +342,46 @@ export let updates = (
 /** The person's Updates from every space's Operator, at `/updates`. */
 export let ALL = talkPath('updates')
 
-// Which space and Operator an update came from, leading to that space's own
-// Updates.
-let whereFrom = (space: Space) =>
-  h(
-    'a',
-    { class: 'Update_Where', href: talkPath('updates', space.slug) },
-    `${space.title || space.slug} · ${space.operator}`,
+// The cards of `news` in `spaces`, as a view the browser draws again from
+// the page graph (@yaks/platform/updates-list-browser), carrying the rows
+// they were drawn from, which the page graph starts with until its watches
+// answer. `back` is the page of every space's Updates.
+let listed = (
+  env: Env,
+  person: string,
+  spaces: Space[],
+  { updates, read = [] }: Updates & { read?: Read[] },
+  apps: (space: Spot) => Apps,
+  back?: string,
+) => {
+  let view: UpdatesView = {
+    person,
+    spaces: spaces.map(spotOf),
+    apex: apex(env),
+    ...back ? { back } : {},
+  }
+  let rows = read.flatMap(({ space, cards, offers }) => [
+    ...updateRows(person, space.eid, cards),
+    ...offerRows(person, space.eid, offers),
+    ...appRows(person, space.eid, apps(space)),
+  ])
+  return h(
+    'div',
+    {
+      class: 'Update_List',
+      'data-view': 'updates',
+      'data-updates-view': JSON.stringify(view),
+    },
+    cardsView(view, updates, apps),
+    person && read.length
+      ? h('script', {
+        type: 'application/json',
+        'data-page-graph': '',
+        dangerouslySetInnerHTML: { __html: drawnRows(person, rows) },
+      })
+      : null,
   )
+}
 
 /** The person's Updates from every space's Operator together, newest first
  * with what needs them ahead: each card names the space and Operator it came
@@ -397,9 +389,10 @@ let whereFrom = (space: Space) =>
  * whose Operator did not answer says so. `apps` are each space's, by slug. */
 export let allUpdates = (
   env: Env,
-  { updates }: Updates,
+  news: Updates & { read: Read[] },
   apps: Map<string, Apps>,
   missed: Space[] = [],
+  person = '',
 ) =>
   h(
     Fragment,
@@ -418,25 +411,14 @@ export let allUpdates = (
         } could not be reached just now. Open this page again to try.`,
       )
     ),
-    updates.length
-      ? updates.map((u) =>
-        card(
-          { space: u.space, back: ALL, apex: apex(env) },
-          u,
-          apps.get(u.space.slug) ?? [],
-          whereFrom(u.space),
-        )
-      )
-      : h(
-        'div',
-        { class: 'Talk_Hello' },
-        h(Empty.Title, { mod: 'welcome' }, 'Nothing yet'),
-        h(
-          'p',
-          null,
-          'When an Operator finishes something, fixes an app, or someone joins one of your spaces, it shows here.',
-        ),
-      ),
+    listed(
+      env,
+      person,
+      news.read.map((r) => r.space),
+      news,
+      (space) => apps.get(space.slug) ?? [],
+      ALL,
+    ),
   )
 
 /** Commit the action where the card came from and return its receipt. */

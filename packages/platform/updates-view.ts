@@ -22,7 +22,14 @@ import { markdown } from '@yaks/session/conversation'
 import { actionKinds } from '@yaks/inbox/actions'
 import type { Choice } from '@yaks/task'
 import { chatPath, talkPath } from './routes.ts'
-import { type Shown, type Update, updateAnchor } from './update-rows.ts'
+import type { Bundle } from '@yaks/graph'
+import {
+  newsOrder,
+  type Shown,
+  type Update,
+  updateAnchor,
+  updatesIn,
+} from './update-rows.ts'
 
 /** The space a card is drawn in: what links into it, and its Operator's
  * name. */
@@ -481,19 +488,57 @@ export let bySha = (file: { address: string }) =>
 export let draftAt = (space: Pick<Spot, 'slug'>, draft: string) =>
   `${talkPath('updates', space.slug)}?draft=${encodeURIComponent(draft)}`
 
-/** What a space's Updates cards say about themselves beside the rows: whose
- * they are, their space, and the zone its apps answer under. */
-export type UpdatesView = { person: string; space: Spot; apex: string }
+/** What a list of Updates cards says about itself beside the rows: whose
+ * they are, the spaces they come from, and the zone apps answer under. With
+ * `back`, it is the page of every space's Updates together, where each card
+ * names the space it came from and comes back to `back`. */
+export type UpdatesView = {
+  person: string
+  spaces: Spot[]
+  apex: string
+  back?: string
+}
 
-/** The cards of the person's `updates` in a space, or that there are none
- * yet. */
+/** An update, and the space it came from. */
+export type Placed = Update & { space: Spot }
+
+/** The part of `space` a view carries. */
+export let spotOf = (
+  { eid, slug, title, operator }: Spot,
+): Spot => ({ eid, slug, title, operator })
+
+/** The updates `rows` hold for each of `spaces`, together in the order the
+ * page lists them. */
+export let placedIn = (rows: Bundle[], spaces: Spot[]): Placed[] =>
+  spaces.flatMap((space) =>
+    updatesIn(rows, space.eid).map((u) => ({ ...u, space }))
+  ).sort(newsOrder)
+
+// Which space and Operator an update came from, leading to that space's own
+// Updates.
+let whereFrom = (space: Spot) =>
+  h(
+    'a',
+    { class: 'Update_Where', href: talkPath('updates', space.slug) },
+    `${space.title || space.slug} · ${space.operator}`,
+  )
+
+/** The cards of the person's `updates`, each with the apps of its space
+ * (`apps`), or that there are none yet. */
 export let cardsView = (
   view: UpdatesView,
-  updates: Update[],
-  apps: Apps,
+  updates: Placed[],
+  apps: (space: Spot) => Apps,
 ): ComponentChildren =>
   updates.length
-    ? updates.map((u) => card({ space: view.space, apex: view.apex }, u, apps))
+    ? updates.map((u) =>
+      card(
+        { space: u.space, apex: view.apex, back: view.back },
+        u,
+        apps(u.space),
+        view.back ? whereFrom(u.space) : null,
+      )
+    )
     : h(
       'div',
       { class: 'Talk_Hello' },
@@ -501,6 +546,10 @@ export let cardsView = (
       h(
         'p',
         null,
-        `When ${view.space.operator} finishes something, fixes an app, or someone joins, it shows here.`,
+        view.back
+          ? 'When an Operator finishes something, fixes an app, or someone joins one of your spaces, it shows here.'
+          : `When ${
+            view.spaces[0]?.operator
+          } finishes something, fixes an app, or someone joins, it shows here.`,
       ),
     )

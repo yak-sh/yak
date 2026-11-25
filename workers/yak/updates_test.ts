@@ -77,9 +77,10 @@ test('the last day in a line: visits and the busiest app', () => {
 
 test('an update’s words, and a question that needs the person, are drawn from their Markdown', () => {
   let at = new Date().toISOString()
+  let space = { slug: 'told', operator: 'Elihu' } as Space
   let page = parseHTML(renderToString(updates(
     {} as Env,
-    { slug: 'told', operator: 'Elihu' } as Space,
+    space,
     {
       waiting: 1,
       updates: [
@@ -90,6 +91,7 @@ test('an update’s words, and a question that needs the person, are drawn from 
           dismissed: false,
           at,
           words: 'Fixed **Chores**:\n\n- `due` dates',
+          space,
         },
         {
           eid: 'd',
@@ -99,6 +101,7 @@ test('an update’s words, and a question that needs the person, are drawn from 
           at,
           words: 'Keep *both*?',
           choices: [],
+          space,
         },
       ],
     },

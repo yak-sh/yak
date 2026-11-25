@@ -134,7 +134,12 @@ export let updatesIn = (rows: Bundle[], space: string): Update[] =>
       let held = r[from] as Held | undefined
       return held?.space == space ? [held] : []
     })
-  ).sort((a, b) =>
-    +b.update.needs - +a.update.needs ||
-    b.update.at.localeCompare(a.update.at) || a.rank - b.rank
-  ).map((h) => h.update)
+  ).sort((a, b) => newsOrder(a.update, b.update) || a.rank - b.rank)
+    .map((h) => h.update)
+
+/** The order a page lists Updates in: what needs the person first, then the
+ * newest. */
+export let newsOrder = (
+  a: Pick<Update, 'needs' | 'at'>,
+  b: Pick<Update, 'needs' | 'at'>,
+): number => +b.needs - +a.needs || b.at.localeCompare(a.at)

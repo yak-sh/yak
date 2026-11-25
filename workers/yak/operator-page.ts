@@ -2665,7 +2665,13 @@ export let allUpdatesPage = async (
     main: h(
       'div',
       updateColumn(space, who),
-      allUpdates(env, news, shelves, news.missed.map((m) => m.space)),
+      allUpdates(
+        env,
+        news,
+        shelves,
+        news.missed.map((m) => m.space),
+        who.person ?? '',
+      ),
     ),
   })
 }

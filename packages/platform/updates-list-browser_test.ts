@@ -15,11 +15,10 @@ import { graph } from './page-graph_fixture_test.ts'
 
 let ADA = 'person-ada'
 let SPACE = 'space-home'
-let view: UpdatesView = {
-  person: ADA,
-  space: { eid: SPACE, slug: 'home', operator: 'Elihu' },
-  apex: 'yaks.app',
-}
+let CLUB = 'space-club'
+let home = { eid: SPACE, slug: 'home', operator: 'Elihu' }
+let club = { eid: CLUB, slug: 'club', operator: 'Iris' }
+let view: UpdatesView = { person: ADA, spaces: [home], apex: 'yaks.app' }
 let update = (eid: string, at: string, more: Partial<Update> = {}) => ({
   eid,
   at: `2026-11-${at}T00:00:00Z`,
@@ -30,13 +29,13 @@ let update = (eid: string, at: string, more: Partial<Update> = {}) => ({
   ...more,
 })
 
-// The cards view as the server draws it from `updates`.
-let page = (updates: Update[]) => {
+// The cards view as the server draws it from `updates`, in `at`.
+let page = (updates: Update[], at = view) => {
   let html = renderToString(
     h(
       'div',
-      { 'data-view': 'updates', 'data-updates-view': JSON.stringify(view) },
-      cardsView(view, updates, []),
+      { 'data-view': 'updates', 'data-updates-view': JSON.stringify(at) },
+      cardsView(at, updates.map((u) => ({ ...u, space: home })), () => []),
     ),
   )
   let { document } = parseHTML(`<html><body>${html}</body></html>`)
@@ -107,4 +106,29 @@ test('until every line has answered, the cards stay as the server drew them', ()
   bindUpdates(root, g)
   g.set(updateCards(SPACE), updateRows(ADA, SPACE, []))
   equal(root.innerHTML, before)
+})
+
+test('every space’s Updates together: each card names its space, and a space whose Operator refused keeps what it said', () => {
+  let across = { ...view, spaces: [home, club], back: '/updates' }
+  let root = page([], across)
+  let g = held([update('mine', '01')])
+  g.set(
+    updateCards(CLUB),
+    updateRows(ADA, CLUB, [update('theirs', '02', { needs: true })]),
+  )
+  let watch = g.watch
+  g.watch = (line) =>
+    line == updateOffers(CLUB)
+      ? Object.defineProperties(watch(line), {
+        ready: { value: false },
+        refused: { value: 'away' },
+      })
+      : watch(line)
+  bindUpdates(root, g)
+  g.set(updateOffers(SPACE), [])
+  equal(shown(root), ['theirs', 'mine'])
+  equal(
+    [...root.querySelectorAll('.Update_Where')].map((a) => a.textContent),
+    ['club · Iris', 'home · Elihu'],
+  )
 })

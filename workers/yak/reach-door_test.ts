@@ -37,6 +37,8 @@ import {
   updateOffers,
   updatesIn,
 } from '@yaks/platform/update-rows'
+import type { UpdatesView } from '@yaks/platform/updates-view'
+import { ALL } from './updates.ts'
 import { sessionRow } from './browser-sessions.ts'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
@@ -287,6 +289,14 @@ test('an Updates page loads the scripts that take its card actions and draw its 
     ),
   )
   equal(view.querySelectorAll('[data-key]').length, 1)
+
+  // Every space's Updates together are the same view, across her seats.
+  let all = parseHTML(
+    await (await k.at(k.host, ALL, { headers: { cookie: bea.cookie } })).text(),
+  ).document.querySelector<HTMLElement>('[data-view=updates]')!
+  let across = JSON.parse(all.dataset.updatesView!) as UpdatesView
+  equal([across.back, across.spaces.map((s) => s.eid)], [ALL, [own.eid]])
+  equal(all.querySelectorAll('[data-key] .Update_Where').length, 1)
 })
 
 // Connect only the transport that the in-process platform lacks, including
