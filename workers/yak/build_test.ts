@@ -512,6 +512,36 @@ test('an object takes the space and seat the kernel read, and reads them itself 
   ], [[200, 0], [403, 0], [200, 1]])
 })
 
+test('an Operator stops answering a person as soon as their seat is removed', async () => {
+  let o = await seeded()
+  let person = crypto.randomUUID(), seat = crypto.randomUUID()
+  let directory = dirOf(o.env)
+  let owner = { 'x-yak-person': ADA, 'x-yak-role': 'owner' }
+  await directory.apply({
+    entities: [
+      { entity: { eid: person }, person: {} },
+      {
+        entity: { eid: seat },
+        member: { space: o.space.eid, person, role: 'editor' },
+      },
+    ],
+  }, owner)
+  let ask = async () => {
+    let answer = await o.object.fetch(
+      new Request('https://builder/api/query?q=.draft', {
+        headers: { 'x-space-eid': o.space.eid, 'x-yak-person': person },
+      }),
+    )
+    await answer.body?.cancel()
+    return answer.status
+  }
+  assertEquals(await ask(), 200)
+  await directory.apply({
+    entities: [{ entity: { eid: seat }, $delete: true }],
+  }, owner)
+  assertEquals(await ask(), 403)
+})
+
 // The Operator page's own doors onto its store (operator-api.ts), through the
 // kernel as the person signed in: what one member writes there, another who
 // shares the space never reads.

@@ -13,8 +13,6 @@ import { Durable, type Spec } from '@yaks/durable-object/object'
 import { once } from '@yaks/fp'
 import { type Level, writes } from '@yaks/member'
 import { directory } from './directory.ts'
-import { system } from '@yaks/fp'
-import { seated } from './seated.ts'
 import { onceRead, restart, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
 import type { Settings } from './operator-settings.ts'
@@ -542,18 +540,15 @@ export class Builder extends Durable {
     return no(404, 'no route')
   }
 
-  // The space `eid` and `person`'s seat in it, as the directory has it now,
-  // kept a moment for every ask of it (seated.ts).
-  #seat = seated(
-    (eid: string, person: string, administrative: boolean) =>
-      `${eid} ${person} ${administrative}`,
-    (eid: string, person: string, administrative: boolean) =>
-      directory({
-        fetch: (req: Request) => dirPart.fetch(req, this.#env),
-      }).seat(eid, person, administrative),
-    (access) => !!access.space && !!(access.administrative || access.role),
-    () => this.#env.CLOCK ?? system,
-  )
+  // The directory batches concurrent reads, and a later check sees a seat
+  // removed before it was asked.
+  #seat(eid: string, person: string, administrative: boolean) {
+    return dirPart.directoryOf(this.#env.STORE).seat(
+      eid,
+      person,
+      administrative,
+    )
+  }
 
   // The level `person`'s seat in the space `eid` gives them now, an
   // administrator's read as an owner's, as `#operate` reads it: null for none.
