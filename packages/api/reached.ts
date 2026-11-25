@@ -209,7 +209,7 @@ export let reached = (opts: {
 export let computed = (
   graph: Graph,
   opts: Parameters<typeof reached>[0] & {
-    affects: (bundles: Bundle[], line: string) => boolean
+    affects: (bundles: Bundle[]) => Affected | Promise<Affected>
     hold?: (work: Promise<void>) => void
   },
 ): Reached => {
@@ -225,7 +225,13 @@ export let computed = (
     hooks: {
       effect: (bundles) => {
         if (queries.watching()) {
-          let work = queries.hear((line) => opts.affects(bundles, line))
+          let work = after(
+            opts.affects(bundles),
+            (only) =>
+              only
+                ? queries.hear(typeof only == 'function' ? only : undefined)
+                : Promise.resolve(),
+          )
             .catch((e) => fault(e, 'computed subscription', opts.tags))
           opts.hold?.(work)
         }
@@ -235,6 +241,8 @@ export let computed = (
   })
   return queries
 }
+
+type Affected = boolean | ((line: string) => boolean)
 
 /**
  * One registry of two: the lines `borrows` names asked of `lent`, and every

@@ -456,10 +456,11 @@ import {
   type Row as DirectoryRow,
 } from './directory.ts'
 import { UPDATE_WAITING } from '@yaks/platform/update-waiting'
-import { PAGE_PRESENCE, personLine } from '@yaks/platform/person-lines'
-import { draftedApp } from '@yaks/platform/app-canvas'
-import { movedSpace } from '@yaks/platform/connections-page'
-import { CONNECTION, USES } from '@yaks/connections'
+import {
+  PAGE_PRESENCE,
+  personChanges,
+  personLine,
+} from '@yaks/platform/person-lines'
 import { spaceLine } from '@yaks/platform/space-pages'
 import { FRIENDS } from '@yaks/platform/account-rows'
 import {
@@ -1022,24 +1023,6 @@ let refOf = (v: unknown): string | null =>
     : v && typeof v == 'object' && 'eid' in v
     ? String((v as { eid: unknown }).eid)
     : null
-
-// Whether `b` moves where the app `app`'s drafts stand
-// (@yaks/platform/app-canvas `appDrafted`): its row, one of its drafts, a
-// write into one, or a row gone.
-let draftMoved = (b: Bundle, app: string) => {
-  let draft = b.app_draft as { app?: string; previewed?: string } | undefined
-  return '$delete' in b || b.entity.eid == app ||
-    (b.written as { app?: string } | undefined)?.app == app ||
-    (draft?.app ? draft.app == app : !!draft?.previewed)
-}
-
-// Whether `b` may move a space's Connections page
-// (@yaks/platform/connections-page `connectionsMoved`): a connection, a link
-// an app calls out through, an MCP server, an app, or a row gone. A write
-// names only what changed, so which space it moves is not always on it, and
-// every open page reads itself again.
-let connectionsMoved = (b: Bundle) =>
-  ['$delete', CONNECTION, USES, 'mcp_server', 'app'].some((key) => key in b)
 
 export class Store extends Durable {
   #load: Load
@@ -2304,83 +2287,16 @@ export class Store extends Durable {
     let directory = branch == null && name == PLATFORM_STORE
     if (directory) {
       let pending = computed(g, {
-        // Where an app's drafts stand moves with that app alone
-        // (`draftMoved`); every other line with what the side draws.
-        affects: (bundles, line) =>
-          draftedApp(line) != undefined
-            ? bundles.some((b) => draftMoved(b, draftedApp(line)!))
-            : movedSpace(line) != undefined
-            ? bundles.some(connectionsMoved)
-            : bundles.some((b) =>
-              line == FRIENDS && 'whereabouts' in b ||
-              [
-                '$delete',
-                'member',
-                'space',
-                'app',
-                'trashed',
-                'app_transfer',
-                'app_transfer_answer',
-                'domain_transfer',
-                'domain_transfer_answer',
-                'relationship',
-                'edge',
-                'decided',
-                'proposed',
-                // What the side draws (./side.ts): names, logos and icons.
-                'doc',
-                'operator',
-                'space_logo',
-                'app_icon',
-                'email',
-                // The person's account, browsers and friends (account-rows).
-                'presence',
-                'grant',
-                // A browser signed in, and signed out: a write names only what
-                // changed, so its end is `cancelled` alone.
-                'browser_session',
-                'cancelled',
-                // A chat account they linked (account-rows `chatLink`).
-                'connection',
-                // An agent connected or disconnected (agents).
-                'oauth_grant',
-                // A friend's message, and its reading (update-rows).
-                'knock',
-                'opened',
-                // How they are told things away from the page, and the number
-                // they agreed to texts at (operator-settings).
-                'operator_alerts',
-                'push_subscription',
-                'sms_consent',
-                // Who last put an app live, which a space's Apps page says
-                // (space-apps); a deploy writes it beside the app.
-                'last_deploy',
-                // Who is in a space they own: an invitation, and another
-                // space's Operator let in and taken back out (people-rows).
-                'invite',
-                'operator_reach',
-                'tombstone',
-                // A space's plan, seller, credit and month (payment-rows).
-                'plan',
-                'seller',
-                'credit',
-                'comped',
-                'comp',
-                'fee',
-                'budget',
-                'starter',
-                'meter',
-                // A space's domains and phone numbers (space-pages).
-                'hostname',
-                'domain_order',
-                'phone_line',
-                // Their invite: its code, and each friend who signs up with
-                // it and builds (account-rows `invitePage`).
-                'referral_code',
-                'referral',
-                'rewarded',
-              ].some((key) => key in b)
-            ),
+        affects: (bundles) => {
+          let changes = personChanges(bundles)
+          let apps = changes.releases.length
+            ? g.get(changes.releases, ['app'])
+            : []
+          return after(apps, (rows) => {
+            let spaces = new Set(rows.map((b) => refOf((b.app as Comp)?.space)))
+            return (line) => changes.affects(line, spaces)
+          })
+        },
         clock: clockOf(this.#time),
         hold: (work) => this.#ctx.waitUntil?.(work),
         read: async (line, read) => {

@@ -192,7 +192,7 @@ let timedCopy = (copy: ServingCopyDoor): ServingCopyDoor => {
     ...settle && {
       settle: (at, committed) => timed(() => copy.settle!(at, committed)),
     },
-    begin: (at) => timed(() => copy.begin(at)),
+    begin: (at) => elapsed('copy_fence_wait', () => copy.begin(at)),
     finish: (at) => timed(() => copy.finish(at)),
     put: (at, key, body) => timed(() => copy.put(at, key, body)),
     get: (key) => timed(() => copy.get(key)),
@@ -284,7 +284,7 @@ export let fenced = async <T>(
   let failed = true
   let { ready, end } = nextTurn()
   try {
-    await ready
+    await elapsed('fence_turn_wait', () => ready)
     for (;; tries--) {
       raising++
       let revision: number
