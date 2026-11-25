@@ -10,9 +10,15 @@ export let signedIn =
   `<a class="Nav_Link Nav_Open" href="${MANAGE}">Open yaks.app</a>`
 
 /** The site's cached pages paint and warm the remembered link first. For a
- * newly recognized session, the check supplies the chat directly. */
+ * newly recognized session, the check supplies the chat directly. A Home
+ * that the browser prerenders waits for activation before starting either
+ * request, so it cannot compete with a conversation the person is opening. */
 export let island = (module: string) =>
-  `<script>(() => {
+  `<script>(open => {
+  if (document.prerendering) {
+    document.addEventListener('prerenderingchange', open, { once: true })
+  } else open()
+})(() => {
   let root = document.documentElement, key = 'yak:signed'
   let mark = (on) => root.toggleAttribute('data-signed', on)
   try { mark(!!localStorage.getItem(key)) } catch {}
@@ -61,4 +67,4 @@ export let island = (module: string) =>
       follow()
     }).finally(() => pressed = false)
   })
-})()</script>`
+})</script>`
