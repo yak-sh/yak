@@ -265,6 +265,10 @@ ${
       ? `<script type="module" src="${file('_operator-settings.js')}"></script>`
       : ''
   }${
+    main.includes('data-visits-view=')
+      ? `<script type="module" src="${file('_visits.js')}"></script>`
+      : ''
+  }${
     main.includes('data-domain-search=')
       ? `<script type="module" src="${file('_domains.js')}"></script>`
       : ''
@@ -678,20 +682,6 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
 }
 `)
 
-/** One app's numbers, as `spaceIndex` is handed them. */
-export type Visits = {
-  slug: string
-  title: string
-  stats: {
-    days: number
-    total: number
-    daily: { day: string; views: number }[]
-    pages: { name: string; views: number }[]
-    from: { name: string; views: number }[]
-    countries: { name: string; views: number }[]
-  }
-}
-
 // A space's front door shows the apps whoever is asking may open, and to
 // its owner the way to the dashboard; account controls never enter it. The
 // dashboard (`desk`) is the owner's alone, at the apex.
@@ -746,9 +736,10 @@ export type DeskPage = {
   /** the person's connected agents; none while not yet known, which leaves
    * what depends on them for the page's script to settle (`state`) */
   agents?: Agent[]
-  views?: Visits[] | null
+  /** the days the Visits page counts */
   viewDays?: number
-  viewsOff?: string
+  /** the eid of the space the page is of, which its lines name */
+  spaceEid?: string
   sell?: 'none' | 'setup' | 'ready'
   /** whether the space sells as the house, on the platform's own account,
    * which takes no fee (sell.ts, T-2983) */

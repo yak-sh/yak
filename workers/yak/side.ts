@@ -17,11 +17,15 @@ import type { Bundle } from '@yaks/graph'
 import { logoPath } from '@yaks/platform/routes'
 import {
   appRows,
+  appsOf,
   appsSpace,
   type Picked,
   SIDE_SPACES,
+  sideApps as appsLine,
   spaceRows,
 } from '@yaks/platform/side-rows'
+import type { Env } from './env.ts'
+import { visitRows } from './views.ts'
 import type { Directory, Space } from './directory.ts'
 import {
   ACCOUNT,
@@ -156,6 +160,21 @@ export let personRows = async (
     return friendRows(person, await friendList(dir, person, all))
   }
   return await sideRows(dir, person, line)
+}
+
+/** What the Visits page of the space `eid` is drawn from: its apps as the
+ * side lists them to `person`, and their views from Cloudflare's analytics
+ * (@yaks/platform/visit-counts), which no store holds. None for a space they
+ * hold no seat in that lets them change it. */
+export let visitsRows = async (
+  env: Env,
+  dir: Directory,
+  person: string,
+  eid: string,
+): Promise<{ apps: Bundle[]; counts: Bundle[] }> => {
+  let apps = await personRows(dir, person, appsLine(eid))
+  let counts = await visitRows(env, eid, appsOf(apps, eid).map((a) => a.eid))
+  return { apps, counts }
 }
 
 let sideRows = async (

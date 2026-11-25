@@ -89,6 +89,13 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // A space's Visits kept current (@yaks/platform/visits-browser).
+  {
+    name: '_visits.js',
+    bundle: of('@yaks/platform/visits-browser'),
+    external,
+    named: true,
+  },
   // A space's Updates cards kept current
   // (@yaks/platform/updates-list-browser).
   {

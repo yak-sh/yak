@@ -48,6 +48,12 @@ import {
   settingsOf,
 } from '@yaks/platform/operator-settings'
 import { draftEid } from '@yaks/draft'
+import {
+  countRows,
+  countsOf,
+  visitCounts,
+  visitWords,
+} from '@yaks/platform/visit-counts'
 import { ALL } from './updates.ts'
 import { sessionRow } from './browser-sessions.ts'
 import { client } from '@yaks/client'
@@ -229,6 +235,14 @@ test('a tab renames its space’s Operator and picks its voice through the door,
   )
   equal((await set(bea, { name: 'Mallory' })).status, 403)
   equal(await rowsOf(bea, operatorSettings(own)), [])
+})
+
+test('a tab reads its space’s visits, which no store holds, and none of a space it does not write in', async () => {
+  let adas = (await k.dir.seated(ada.person))
+    .find((s) => s.space.slug == 'adas')!.space.eid
+  // This platform has no analytics token: the page says it cannot count.
+  equal(await rowsOf(ada, visitCounts(adas)), countRows(adas, null))
+  equal(await rowsOf(bea, visitCounts(adas)), [])
 })
 
 test('a tab chooses how its person is told things away from the page', async () => {
@@ -531,25 +545,30 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
     let { document, window } = parseHTML(`<html><body>${pane}</body></html>`)
     let next = socket
     let time = clock(Date.now())
-    let page = client(loadVocab([waitingWords, sideWords, accountWords]), [], {
-      url: `https://yaks.app${REACH}`,
-      connect: () => {
-        let current = next
-        queueMicrotask(() => {
-          current.readyState = 1
-          current.emit('open')
-        })
-        return current
+    let page = client(
+      loadVocab([waitingWords, sideWords, accountWords, visitWords]),
+      [],
+      {
+        url: `https://yaks.app${REACH}`,
+        connect: () => {
+          let current = next
+          queueMicrotask(() => {
+            current.readyState = 1
+            current.emit('open')
+          })
+          return current
+        },
+        timer: (fn, ms) => void time.after(ms, fn),
+        time: time.now,
+        vault: false,
+        wireVault: false,
       },
-      timer: (fn, ms) => void time.after(ms, fn),
-      time: time.now,
-      vault: false,
-      wireVault: false,
-    })
+    )
     let stop = bindSide(document, () => page)
     let watch = page.watch(UPDATE_WAITING)
     let spaces = page.watch(SIDE_SPACES)
     let apps = page.watch(sideApps(home.eid))
+    let visits = page.watch(visitCounts(home.eid))
     let badge = (slug = '') =>
       document.querySelector(`[data-across="${slug}"]`)!
     let counts = () => Object.fromEntries(waitingCounts(watch.value))
@@ -567,7 +586,10 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       await until(() => watch.ready || watch.refused !== undefined)
       equal(watch.refused, undefined)
       equal(counts(), { ada: 1, club: 0 })
-      await until(() => spaces.ready && apps.ready)
+      await until(() => spaces.ready && apps.ready && visits.ready)
+      // Visits, which no store holds, read beside the apps' own socket.
+      equal(countsOf(visits.value, home.eid), null)
+      visits.close()
       await until(() => side().apps.length == 1)
       equal(side(), {
         spaces: ['ada', 'ada', 'club'],
@@ -622,6 +644,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
           PLATFORM_OBJECT,
           PLATFORM_OBJECT,
           PLATFORM_OBJECT,
+          PLATFORM_OBJECT,
           `builder ${home.eid}`,
           `builder ${club}`,
         ].sort(),
@@ -673,7 +696,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       document.dispatchEvent(new window.Event(PAGE))
       equal(badge().textContent, '3')
       equal(side().apps, ['Cookbook'])
-      equal(sources.length, 5)
+      equal(sources.length, 6)
 
       await dir.apply(
         { entities: [{ entity: { eid: seat }, $delete: true }] },
@@ -705,7 +728,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       await until(() => counts().ada == 1)
       await until(() => side().apps[0] == 'Recipes')
       equal(
-        sources.slice(5).sort(),
+        sources.slice(6).sort(),
         [
           PLATFORM_OBJECT,
           PLATFORM_OBJECT,

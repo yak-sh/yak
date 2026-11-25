@@ -23,7 +23,6 @@ import {
   Modal,
   More,
   Notice,
-  Report,
   Rows,
   Table,
   TabSet,
@@ -31,7 +30,7 @@ import {
 import type { Costs } from '@yaks/host/payments'
 import { kept, rate } from '@yaks/platform/fee'
 import { amount } from '@yaks/platform/price'
-import { h, type VNode } from 'preact'
+import { h } from 'preact'
 import type {
   Borrowed,
   Connections,
@@ -45,10 +44,12 @@ import type { Grantee, McpPage } from './connected-mcp.ts'
 import { about, connects, detail, links } from './integration-detail.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icons } from './icons.ts'
-import { day, fileDrop, markup, raw } from './html.ts'
+import { fileDrop, markup, raw } from './html.ts'
 import { LOGO_TYPES } from './logo.ts'
 import { drawnRows } from '@yaks/platform/page-graph'
 import { type FriendsView, friendsView } from '@yaks/platform/friends-view'
+import { type VisitsView, visitsView } from '@yaks/platform/visits-view'
+import { countsOf } from '@yaks/platform/visit-counts'
 import { empty, fieldsOf, option, saving } from '@yaks/platform/page-parts'
 import { holder, tile } from './render/mod.ts'
 import type { Person } from './people.ts'
@@ -64,10 +65,9 @@ import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { size } from '@yaks/fp'
 import { type ProfileView, profileView } from '@yaks/platform/profile-view'
 import { accountOf, signedInOf } from '@yaks/platform/account-rows'
-import { pickedOf } from '@yaks/platform/side-rows'
+import { appsOf, pickedOf } from '@yaks/platform/side-rows'
 import { type Ceiling, count, share } from '@yaks/platform/standing'
 import { PRICE, STARTER, WARN } from '@yaks/platform/plans'
-import { columns } from '@yaks/ui/chart'
 import { domainRenewals, domainsPage } from '@yaks/platform/domain-pages'
 
 import {
@@ -98,7 +98,6 @@ import {
   state,
   status,
   tabbing,
-  type Visits,
 } from './pages.ts'
 
 // The meter's prices are whole US dollars, as on the public pricing page.
@@ -155,92 +154,6 @@ let asking = (space: string) =>
       h(Button, { mod: 'go', type: 'submit' }, 'Build it'),
     ),
   )
-
-// Who visited, on the space page (views.ts, T-34497): a block per app, the
-// owner's alone. A bar per day for the window, then the three short lists —
-// the pages people opened, the sites that sent them, the countries they were
-// in — as tables, because a table reads on a phone and needs no script.
-//
-// Short enough for the ends of an axis: "7 Aug".
-let axisDay = (iso: string) => day(iso)
-
-let chart = (days: { day: string; views: number }[]) =>
-  h(
-    Report.Plot,
-    null,
-    columns(h as never, {
-      from: days[0]?.day ?? '',
-      values: days.map((d) => d.views),
-      noun: 'visit',
-    }) as VNode,
-    h(
-      Report.Span,
-      null,
-      h('span', null, axisDay(days[0]?.day ?? '')),
-      h('span', null, axisDay(days[days.length - 1]?.day ?? '')),
-    ),
-  )
-
-let column = (head: string, rows: { name: string; views: number }[]) =>
-  rows.length
-    ? h(
-      Report.Column,
-      null,
-      h(Report.Heading, null, head),
-      h(
-        Report.List,
-        null,
-        rows.map((r) =>
-          h(
-            Report.Item,
-            null,
-            h(Report.Label, { title: r.name }, r.name),
-            h(Report.Value, null, count(r.views)),
-          )
-        ),
-      ),
-    )
-    : null
-
-let visits = (v: Visits, site: string) =>
-  h(
-    Report,
-    { 'aria-labelledby': `visits-${v.slug}` },
-    h(
-      Card.Head,
-      null,
-      h(
-        Card.Title,
-        { id: `visits-${v.slug}` },
-        h(Card.Link, {
-          href: `${site}/${encodeURIComponent(v.slug)}/`,
-          target: '_blank',
-          rel: 'noopener',
-        }, v.title || v.slug),
-      ),
-      h(
-        Report.Total,
-        null,
-        `${count(v.stats.total)} `,
-        h(Report.Unit, null, v.stats.total == 1 ? 'visit' : 'visits'),
-      ),
-    ),
-    v.stats.total
-      ? [
-        chart(v.stats.daily),
-        h(
-          Report.Tops,
-          null,
-          column('Pages', v.stats.pages),
-          column('Came from', v.stats.from),
-          column('Countries', v.stats.countries),
-        ),
-      ]
-      : null,
-  )
-
-let visited = (apps: Visits[] | null, off: string, site: string) =>
-  apps == null ? h(Form.Hint, null, off) : apps.map((v) => visits(v, site))
 
 let picked = (at: DeskPage) =>
   at.spaces?.find((s) => s.slug == at.space) ??
@@ -504,6 +417,28 @@ let friendsPage = (at: DeskPage, env: Host) => {
     'div',
     { 'data-view': 'friends', 'data-friends-view': JSON.stringify(view) },
     friendsView(view, at.friendList ?? [], { hidden: !!at.presenceHidden }),
+    drawing(at),
+  )
+}
+
+// Visits (a space's), drawn from its apps and their views as the browser
+// draws it again (@yaks/platform/visits-view), which the page carries for its
+// first paint (`data-view`).
+let visitsPage = (at: DeskPage, site: string) => {
+  let view: VisitsView = {
+    person: at.person ?? '',
+    space: at.spaceEid ?? '',
+    site,
+  }
+  let rows = at.drawn ?? []
+  return h(
+    'div',
+    { 'data-view': 'visits', 'data-visits-view': JSON.stringify(view) },
+    visitsView(
+      view,
+      appsOf(rows, view.space),
+      countsOf(rows, view.space),
+    ),
     drawing(at),
   )
 }
@@ -2969,14 +2904,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       dropping(),
     ]
   }
-  if (view == 'visits') {
-    body = at.apps.length
-      ? visited(at.views ?? null, at.viewsOff ?? '', site)
-      : empty(
-        'No visits yet',
-        h('p', null, 'Your app visits will appear here once you have an app.'),
-      )
-  }
+  if (view == 'visits') body = visitsPage(at, site)
   if (view == 'selling') body = selling(at, env)
   if (view == 'settings') body = preferences(at, env)
   if (view == 'domains' && at.domains) {

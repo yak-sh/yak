@@ -58,6 +58,8 @@ import { elapsed } from './lib/hops.ts'
 import { failure, resent } from '@yaks/cloudflare/api'
 import { isView, pointOf, type Visited } from './view-point.ts'
 import { appTag, type Seen } from '@yaks/platform/kept'
+import { countRows, NOT_ON } from '@yaks/platform/visit-counts'
+import type { Bundle } from '@yaks/graph'
 import { type Space, storeName } from './directory.ts'
 export { classed } from './crawlers.ts'
 export { point, referred, type View } from './view-point.ts'
@@ -646,11 +648,31 @@ let askedOf = async (
 
 /**
  * What the page and the tool both say when the token is not set. Said once,
- * here, so the two doors cannot say different things.
+ * in @yaks/platform/visit-counts, so the doors cannot say different things.
  */
-export let NOT_ON =
-  'Visitor counts are not switched on for this platform yet, so there is ' +
-  'nothing to show.'
+export { NOT_ON }
+
+/**
+ * The views of each of `apps` in the space `space`, as its Visits page holds
+ * them (@yaks/platform/visit-counts): in the same four queries as
+ * {@link statsFor}, or that the platform cannot say, where analytics are not
+ * switched on or the read failed. A failure is reported, not thrown: the page
+ * does not go down because Cloudflare's analytics did.
+ */
+export let visitRows = async (
+  env: Env,
+  space: string,
+  apps: string[],
+): Promise<Bundle[]> => {
+  if (!apps.length) return countRows(space, new Map())
+  let asked = statsFor(env, apps)
+  try {
+    return countRows(space, asked && await asked)
+  } catch (e) {
+    caught(e, { request: 'views' })
+    return countRows(space, null)
+  }
+}
 
 // ---- the door and tool ----------------------------------------------------
 

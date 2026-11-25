@@ -8,7 +8,8 @@ import { spaceIndex } from './pages.ts'
 import { desk } from './desk-pages.ts'
 import { managePath } from '@yaks/platform/routes'
 import { accountRow } from '@yaks/platform/account-rows'
-import { spaceRows } from '@yaks/platform/side-rows'
+import { appRows, spaceRows } from '@yaks/platform/side-rows'
+import { countRows } from '@yaks/platform/visit-counts'
 
 // The dashboard itself, drawn straight (pages.ts `desk` is pure): the order
 // it puts its blocks in, and what stands where the connect steps were. Every
@@ -446,92 +447,38 @@ test('new app tells an agent with no web link what to ask, not an empty list', a
   assertStringIncludes(page, 'chat history')
 })
 
-// Who visited (views.ts, T-34497): the owner's block, drawn straight. What
-// matters here is that it is the owner's, that it draws itself without a
-// script, and that a platform with no analytics token says one sentence rather
-// than an empty chart.
-let VISITS = {
-  slug: 'recipes',
-  title: 'Recipes',
-  stats: {
+// Who visited (@yaks/platform/visits-view): the owner's page, drawn from the
+// rows it carries for the page graph, and nowhere on the front door.
+test('who visited is drawn from the rows the page carries, and only for the owner', async () => {
+  let space = 'b0a2c5e1-0000-4000-8000-0000000000a5'
+  let recipes = { eid: 'recipes', slug: 'recipes', title: 'Recipes' }
+  let counted = {
     days: 3,
     total: 9,
-    daily: [
-      { day: '2026-09-04', views: 2 },
-      { day: '2026-09-05', views: 0 },
-      { day: '2026-09-06', views: 7 },
+    daily: [{ day: '2026-09-06', views: 9 }],
+    pages: [{ name: '/dinner', views: 9 }],
+    from: [],
+    countries: [],
+  }
+  let page = await block({
+    view: 'visits',
+    person: 'dana',
+    spaceEid: space,
+    drawn: [
+      ...appRows('dana', space, [recipes]),
+      ...countRows(space, new Map([[recipes.eid, counted]])),
     ],
-    pages: [{ name: '/dinner', views: 6 }],
-    from: [{ name: 'news.example.com', views: 4 }],
-    countries: [{ name: 'US', views: 9 }],
-  },
-}
-
-test('who visited: a bar per day and three lists, no script', async () => {
-  let page = await block({
-    view: 'visits',
-    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
-    views: [VISITS],
-    viewDays: 3,
-  })
-  assertStringIncludes(page, '9 visits')
-  // One rect per day, the tallest full height and the empty day absent.
-  let bars = page.match(/class="Chart_Bar"/g)
-  assertEquals(bars?.length, 3)
-  assertStringIncludes(page, 'height="40.00"')
-  assertStringIncludes(page, 'height="0.00"')
-  // The three lists, and the ends of the axis.
-  assertStringIncludes(page, '/dinner')
-  assertStringIncludes(page, 'news.example.com')
-  assertStringIncludes(page, '>US<')
-  assertStringIncludes(page, 'Sep 4th, 2026')
-  assertStringIncludes(page, 'Sep 6th, 2026')
-  // Nothing here runs: the chart is markup, not a canvas somebody paints.
-  assertStringIncludes(page, 'class="Chart Chart-bars"')
-
-  // Not the owner's, not their business: the front door has no such block.
-  let theirs = await face({
-    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
-  })
-  assert(!parseHTML(theirs).document.querySelector('.Report'))
-})
-
-test('who visited: no token is one sentence, no chart', async () => {
-  let page = await block({
-    view: 'visits',
-    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
-    views: null,
-    viewsOff: 'Visitor counts are not switched on for this platform yet.',
-  })
-  assertStringIncludes(page, 'not switched on')
-  assert(
-    !page.includes('class="Chart Chart-bars"'),
-    'an empty chart is worse than a line',
-  )
-})
-
-test('who visited: an app nobody opened says so', async () => {
-  let page = await block({
-    view: 'visits',
-    apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
-    views: [{
-      ...VISITS,
-      stats: {
-        ...VISITS.stats,
-        total: 0,
-        daily: [],
-        pages: [],
-        from: [],
-        countries: [],
-      },
-    }],
   })
   let { document } = parseHTML(page)
+  let view = document.querySelector('[data-view="visits"]')!
+  assertEquals(view.querySelector('.Report_Total')?.textContent, '9 visits')
   assertEquals(
-    document.querySelector('.Report_Total')?.textContent,
-    '0 visits',
+    JSON.parse(view.getAttribute('data-visits-view')!).space,
+    space,
   )
-  assert(!page.includes('class="Chart Chart-bars"'), page)
+  assert(view.querySelector('script[data-page-graph]'), 'carries its rows')
+  let theirs = await face({ apps: [recipes] })
+  assert(!parseHTML(theirs).document.querySelector('.Report'))
 })
 
 test('trash has restore forms only on its own page', async () => {

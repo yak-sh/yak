@@ -1,0 +1,123 @@
+/**
+ * A space's Visits page (Manage, T-34497), drawn from rows: the space's apps
+ * (./side-rows.ts `appsOf`) and each one's views (./visit-counts.ts). A block
+ * an app: a bar per day for the window, then three short lists (the pages
+ * people opened, the sites that sent them, the countries they were in) as
+ * tables, because a table reads on a phone. The server draws it for the first
+ * paint, and the browser draws it again as the rows move
+ * (./visits-browser.ts).
+ *
+ * @module
+ */
+import { h, type VNode } from 'preact'
+import { Card } from '@yaks/ui/Card'
+import { Form } from '@yaks/ui/Form'
+import { Report } from '@yaks/ui/Report'
+import { columns } from '@yaks/ui/chart'
+import { day } from '@yaks/ui/relative'
+import type { MarkedApp } from './routes.ts'
+import { count } from './standing.ts'
+import { empty } from './page-parts.ts'
+import { type Counted, type Line, NOT_ON } from './visit-counts.ts'
+
+/** What the Visits page says about itself beside the rows: whose page it is,
+ * the space it counts (its eid), and where its apps are served. */
+export type VisitsView = { person: string; space: string; site: string }
+
+// Short enough for the ends of an axis.
+let axisDay = (iso: string) => day(iso, 'UTC')
+
+let chart = (days: Counted['daily']) =>
+  h(
+    Report.Plot,
+    null,
+    columns(h as never, {
+      from: days[0]?.day ?? '',
+      values: days.map((d) => d.views),
+      noun: 'visit',
+    }) as VNode,
+    h(
+      Report.Span,
+      null,
+      h('span', null, axisDay(days[0]?.day ?? '')),
+      h('span', null, axisDay(days[days.length - 1]?.day ?? '')),
+    ),
+  )
+
+let column = (head: string, rows: Line[]) =>
+  rows.length
+    ? h(
+      Report.Column,
+      null,
+      h(Report.Heading, null, head),
+      h(
+        Report.List,
+        null,
+        rows.map((r) =>
+          h(
+            Report.Item,
+            null,
+            h(Report.Label, { title: r.name }, r.name),
+            h(Report.Value, null, count(r.views)),
+          )
+        ),
+      ),
+    )
+    : null
+
+let report = (app: MarkedApp, c: Counted, site: string) =>
+  h(
+    Report,
+    { 'aria-labelledby': `visits-${app.slug}`, 'data-key': app.eid },
+    h(
+      Card.Head,
+      null,
+      h(
+        Card.Title,
+        { id: `visits-${app.slug}` },
+        h(Card.Link, {
+          href: `${site}/${encodeURIComponent(app.slug)}/`,
+          target: '_blank',
+          rel: 'noopener',
+        }, app.title || app.slug),
+      ),
+      h(
+        Report.Total,
+        null,
+        `${count(c.total)} `,
+        h(Report.Unit, null, c.total == 1 ? 'visit' : 'visits'),
+      ),
+    ),
+    c.total
+      ? [
+        chart(c.daily),
+        h(
+          Report.Tops,
+          null,
+          column('Pages', c.pages),
+          column('Came from', c.from),
+          column('Countries', c.countries),
+        ),
+      ]
+      : null,
+  )
+
+/** The Visits page: each of `apps` with its views in `counts`, an app not
+ * yet counted left out until it is; one sentence where the platform cannot
+ * count (`counts` null). */
+export let visitsView = (
+  view: VisitsView,
+  apps: MarkedApp[],
+  counts: Map<string, Counted> | null,
+) =>
+  !apps.length
+    ? empty(
+      'No visits yet',
+      h('p', null, 'Your app visits will appear here once you have an app.'),
+    )
+    : counts == null
+    ? h(Form.Hint, null, NOT_ON)
+    : apps.flatMap((a) => {
+      let c = counts.get(a.eid)
+      return c ? [report(a, c, view.site)] : []
+    })

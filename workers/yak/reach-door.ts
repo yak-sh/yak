@@ -10,7 +10,9 @@
 // reads of the person the directory answers, live on its `/person/ws`; their
 // Updates cards and drafts in a space (@yaks/platform/update-rows,
 // operator-drafts) are the space's Operator store's, live on its
-// `/api/waiting/ws`, and a write of drafts goes to that store.
+// `/api/waiting/ws`, and a write of drafts goes to that store. A space's
+// visits (@yaks/platform/visit-counts) are in no store: they are read from
+// Cloudflare's analytics here, again each time the space's apps move.
 //
 // Some writes are not rows: an Updates card's action (updates.ts `acting`),
 // and the person's own account, messages and friend asks
@@ -39,7 +41,9 @@ import {
 } from '@yaks/platform/operator-settings'
 import type { Update } from '@yaks/platform/update-rows'
 import { writes } from '@yaks/member'
-import { personRows } from './side.ts'
+import { personRows, visitsRows } from './side.ts'
+import { countsSpace } from '@yaks/platform/visit-counts'
+import { sideApps } from '@yaks/platform/side-rows'
 import { REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { whole } from '@yaks/query'
 import { CallError, refused as toolRefused } from '@yaks/tools/errors'
@@ -140,6 +144,12 @@ export let reachDoor = async (
           {},
         ) as { updates: Update[] }
         return Response.json(updateRows(person, cards, updates))
+      }
+      let counted = countsSpace(line)
+      if (counted != undefined) {
+        return Response.json(
+          (await visitsRows(env, dir, person, counted)).counts,
+        )
       }
       let named = settingsSpace(line)
       if (named != undefined) {
@@ -244,11 +254,11 @@ export let reachDoor = async (
         watched({
           watch: (line, sink) => {
             // A read of the person the directory answers live.
-            let personal = (emit: (frame: Kept) => void) =>
+            let personal = (emit: (frame: Kept) => void, of = line) =>
               watching(
                 meta(env).door ?? storeOf(env.STORE, PLATFORM_STORE),
                 'directory',
-                line,
+                of,
                 emit,
                 { ...vouched(who), ...KERNEL },
                 '/person/ws',
@@ -274,6 +284,26 @@ export let reachDoor = async (
                 },
                 sink,
               )
+            }
+            // Visits, which no store holds: read again whole each time the
+            // space's apps move, the latest read the one that stands.
+            let counted = countsSpace(line)
+            if (counted != undefined) {
+              let asked = 0
+              let stop = personal((frame) => {
+                if (frame.refused) return sink(frame)
+                let mine = ++asked
+                let latest = () => mine == asked
+                visitsRows(env, dir, person, counted).then(
+                  ({ counts }) =>
+                    latest() && sink({ bundles: counts, reset: true }),
+                  (refused) => latest() && sink({ refused }),
+                )
+              }, sideApps(counted))
+              return () => {
+                asked = NaN
+                stop()
+              }
             }
             // What the space's Operator store answers of the person.
             let operator = cardsSpace(line) ?? draftsSpace(line) ??

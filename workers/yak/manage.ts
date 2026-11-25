@@ -9,7 +9,6 @@ import { spaceHost, url as hostUrl } from '@yaks/platform/host'
 import { browserImmutable } from '@yaks/platform/kept'
 import { heard, type Said, telling, unsaid } from '@yaks/platform/cookie'
 import {
-  type App,
   daysLeft,
   directory,
   type Role,
@@ -51,7 +50,7 @@ import {
   refusedSell,
   selling,
 } from './sell.ts'
-import { type DeskPage, nothingHere, sentence, type Visits } from './pages.ts'
+import { type DeskPage, nothingHere, sentence } from './pages.ts'
 import { desk as deskPage } from './desk-pages.ts'
 import { logoed, logoImage, logoPosted } from './logo.ts'
 import { monogram } from '@yaks/platform/monogram'
@@ -96,12 +95,12 @@ import { woken } from './build-door.ts'
 import { invitation } from './referral.ts'
 import { budget, spent } from '@yaks/platform/meter'
 import { gauges } from '@yaks/platform/standing'
-import { DAYS, NOT_ON, statsFor } from './views.ts'
+import { DAYS } from './views.ts'
 import { admin, refuse } from './tool.ts'
 import { letIn, letOut, reachOf } from './operator-reach.ts'
 import { json } from '@yaks/platform/refused'
 import { moved, redirect, shelf } from './apps.ts'
-import { personRows, pickable, shared, sideApps } from './side.ts'
+import { personRows, pickable, shared, sideApps, visitsRows } from './side.ts'
 import {
   ACCOUNT,
   accountOf,
@@ -145,27 +144,6 @@ let agentsOf = (
 // What a read has answered by now, or nothing while it is still out: a page
 // that shows it only when it is in hand never waits on it.
 let inHand = <T>(read?: Promise<T>) => Promise.race([read, undefined])
-
-// Every app's visitors, for the owner's block: every app in the same four
-// queries (views.ts `statsFor`), each answer already cached for a few minutes
-// there — and a failure is `null` rather than a throw, because this is the
-// space's front door and it does not go down because Cloudflare's analytics
-// did.
-let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
-  let asked = statsFor(env, apps.map((a) => a.eid))
-  if (!asked) return null
-  try {
-    let all = await asked
-    return apps.map((a) => ({
-      slug: a.slug,
-      title: a.title,
-      stats: all.get(a.eid)!,
-    }))
-  } catch (e) {
-    caught(e, { request: 'views' })
-    return null
-  }
-}
 
 // What a press answered (@yaks/platform/cookie `Said`). A page's script
 // (@yaks/ux save-browser) asks for it as JSON and says it beside the button
@@ -809,7 +787,7 @@ let desk = async (
   let [
     { here, all },
     broken,
-    views,
+    drawn,
     fee,
     people,
     connections,
@@ -838,11 +816,14 @@ let desk = async (
           : undefined
       )
       : undefined,
-    // Who visited (views.ts, T-34497). `null` is the platform with no
-    // analytics token set, and a read that fails is `null` too: the page
-    // does not go down because Cloudflare's analytics did.
+    // The rows a page drawn from the page graph's reads is drawn from,
+    // carried for its first paint: Visits' apps and their views (side.ts
+    // `visitsRows`).
     view == 'visits'
-      ? shelved.then(({ all }) => all.length ? visits(env, all) : undefined)
+      ? visitsRows(env, dir, owner, space.eid).then((r) => [
+        ...r.apps,
+        ...r.counts,
+      ])
       : undefined,
     feeOf(dir),
     // Who is in the space and its apps (people.ts), read only for the page
@@ -929,10 +910,10 @@ let desk = async (
   let known = await inHand(agents)
   let page = deskPage({
     person: who.person,
-    views,
+    drawn,
     viewDays: DAYS,
-    viewsOff: NOT_ON,
     space: space.slug,
+    spaceEid: space.eid,
     view,
     apps: all.map((a) => ({
       eid: a.eid,
