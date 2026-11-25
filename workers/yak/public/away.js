@@ -49,6 +49,12 @@
     if (target == '_blank') away = true
   })
   document.addEventListener('visibilitychange', () => {
-    if (away && document.visibilityState == 'visible') location.reload()
+    if (!away || document.visibilityState != 'visible') return
+    try {
+      // Why it reloads, for the reloaded page's telemetry
+      // (@yaks/platform/interaction-browser `reloaded`).
+      sessionStorage.setItem('yak-reload', 'away')
+    } catch { /* counted without its cause */ }
+    location.reload()
   })
 }

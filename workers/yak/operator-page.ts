@@ -2646,7 +2646,7 @@ let unhear = conversation.hear((told) => {
 })
 // While the page graph's socket is closed the page reads its conversation
 // while it works; opening again may follow a deploy, which the page then
-// moves onto (public/deploy.js).
+// takes at its next link (public/deploy.js).
 let live = false, opened = false
 let polling = false
 let poll = async () => {

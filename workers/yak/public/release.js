@@ -11,7 +11,8 @@
 // a write of its views module so) and still reload if it cannot; else a
 // write of only stylesheets the page links swaps each in place, and any other
 // reloads the page, keeping the window's scroll and the values typed into its
-// fields. A framed page tells its frame each write first (`{"yak-draft":…}`),
+// fields. A socket that drops and comes back reloads nothing: the next write
+// draws the draft as it stands. A framed page tells its frame each write first (`{"yak-draft":…}`),
 // so a TV showing it (screen.ts) can say what just changed; to any origin,
 // since only the app's space and yaks.app may frame it (@yaks/platform/kept
 // `sealed`).
@@ -23,6 +24,13 @@
   // The app's own `api/`, under its mount unless the tag says it is elsewhere
   // (`data-yak-api`): the home app's at yaks.app, whose `/api/` is the
   // platform's.
+  // Why this page reloads itself, for the reloaded page's telemetry to count
+  // (@yaks/platform/interaction-browser `reloaded`).
+  let stamp = (cause) => {
+    try {
+      sessionStorage.setItem('yak-reload', cause)
+    } catch { /* a sandboxed page's reload is counted without its cause */ }
+  }
   let api = new URL(
     script.dataset.yakApi || script.dataset.yakAt,
     location.href,
@@ -67,6 +75,7 @@
         })
     }
     let reload = () => {
+      stamp('draft')
       put(JSON.stringify({
         x: scrollX,
         y: scrollY,
@@ -146,14 +155,9 @@
     let door = new URL('api/ws', api)
     door.protocol = door.protocol == 'https:' ? 'wss:' : 'ws:'
     let wait = 1000
-    let opened = false
     let connect = () => {
       let socket = new WebSocket(door)
       socket.addEventListener('open', () => {
-        // A socket that dropped may have missed a write; the page reloads
-        // to show the draft as it stands.
-        if (opened) reload()
-        opened = true
         wait = 1000
       })
       socket.addEventListener('message', ({ data }) => {
@@ -220,7 +224,13 @@
         b.addEventListener('click', press)
         return b
       }
-      box.append(words, button('Reload', () => location.reload()))
+      box.append(
+        words,
+        button('Reload', () => {
+          stamp('release')
+          location.reload()
+        }),
+      )
       if (reload == 'optional') {
         box.append(button('Dismiss', () => {
           try {

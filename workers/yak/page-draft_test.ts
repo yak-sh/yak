@@ -187,15 +187,14 @@ test("a release reloads the page to show what was released, and the next draft's
   equal([p.reloads(), sheets(p.document).length], [1, 2])
 })
 
-test('a socket that drops comes back and reloads the page, since it may have missed a write', () => {
+test('a socket that drops, as every deploy makes it, comes back without reloading the page', () => {
   let p = load('')
   p.socket.fire('open')
-  equal(p.reloads(), 0)
   p.socket.fire('close')
   p.timers[0]()
   equal(p.sockets(), 2)
   Socket.made[1].fire('open')
-  equal(p.reloads(), 1)
+  equal(p.reloads(), 0)
 })
 
 test('a released page opens no socket of its own and never follows a draft', () => {

@@ -95,3 +95,13 @@ test('unrecognized coordinates cannot put someone’s contents in the tracker', 
   equal(await send([point('my-password', 700)]), [])
   equal(await send([{ ...point('submit', 700), page: 'private-app-name' }]), [])
 })
+
+test('a reload is counted by its cause and files no bug, however long the page stood blank', async () => {
+  for (
+    let target of ['reload', 'reload-draft', 'reload-release', 'reload-away']
+  ) {
+    let [rows] = await send([point(target, 900)])
+    equal(rows.map((r) => [!!r.timing, !!r.error]), [[true, false]])
+  }
+  equal(await send([point('reload-whatever', 900)]), [])
+})

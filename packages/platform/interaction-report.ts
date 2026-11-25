@@ -11,7 +11,7 @@ import {
   SLOW,
 } from '@yaks/timing/interaction'
 import { capture, type Context, type Sink } from '@yaks/tracker/report'
-import { interactionPage, interactionTarget } from './interaction.ts'
+import { interactionPage, interactionTarget, reloading } from './interaction.ts'
 
 let MAX_BODY = 8192
 let OBJECT = (value: unknown): value is Record<string, unknown> =>
@@ -59,7 +59,9 @@ let rows = (
 ): Bundle[] => [
   ...interactionRows(seen, commit),
   ...seen.points.flatMap((p, i) => {
-    if (p.ms <= SLOW) return []
+    // A reload is counted, never a slow press: its time is the page
+    // standing blank until the new one paints.
+    if (p.ms <= SLOW || reloading(p.target)) return []
     let name = interactionName(p)
     return capture({
       name: 'Slow interaction',

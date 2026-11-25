@@ -129,7 +129,25 @@ let NATIVE = [
   'plans',
   'skip',
 ]
-let TARGETS = new Set([...Object.values(ACTIONS), ...NATIVE])
+/** Why a page reloaded itself, as the script that reloaded it stamps it in
+ * `sessionStorage` under `yak-reload` (workers/yak/public): following a
+ * preview's draft, the person pressing a release notice's Reload, or coming
+ * back from signing in elsewhere. */
+export let RELOAD_CAUSES = ['draft', 'release', 'away']
+/** The target a reloaded page is counted under: `reload-<cause>`, or `reload`
+ * where no script of ours did it (the person, or the browser bringing back a
+ * page it let go of). */
+export let reloadTarget = (cause: string | null): string =>
+  cause && RELOAD_CAUSES.includes(cause) ? `reload-${cause}` : 'reload'
+/** Whether a point is a page reloading rather than something pressed. */
+export let reloading = (target: string): boolean =>
+  target == 'reload' || target.startsWith('reload-')
+let TARGETS = new Set([
+  ...Object.values(ACTIONS),
+  ...NATIVE,
+  reloadTarget(null),
+  ...RELOAD_CAUSES.map(reloadTarget),
+])
 export let interactionTarget = (target: string): boolean =>
   TARGETS.has(target) ||
   target.startsWith('open-') && PAGES.has(target.slice(5))
