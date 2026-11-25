@@ -142,7 +142,9 @@ let screens = (
     choices.map((choice, i) =>
       h(
         Preview.Item,
-        {},
+        // Keyed, so a draft arriving beside the live screens leaves them
+        // loaded where they are (@yaks/ui/navigate `morph`).
+        { 'data-key': choice.id },
         choices.length > 1
           ? h(
             Preview.Choice,

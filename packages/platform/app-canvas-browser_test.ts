@@ -77,6 +77,17 @@ test('renamed or released elsewhere, the app redraws without a reload', () => {
   )
 })
 
+test('a draft arriving beside a live app leaves its live screens loaded', () => {
+  let c = bound(released(), made(['Recipe']))
+  let live = c.root.querySelector('[data-frame=live]')
+  c.making(made(['Recipe'], 'https://plum.yaks.app/recipes/~abcdefabcdef/'))
+  equal(c.root.querySelector('[data-frame=live]') === live, true)
+  equal(
+    [...c.root.querySelectorAll('iframe')].map((f) => f.dataset.frame),
+    ['draft', 'live'],
+  )
+})
+
 test('a page shown from Commands brings Screens and its frame forward', () => {
   let c = bound(released(), {
     ...made(['Recipe'], 'https://plum.yaks.app/recipes/~abcdefabcdef/'),
