@@ -419,8 +419,11 @@ export let prepare = async (
     format,
     find: (paths: string[]) => discover(paths, PAGES),
     chosen,
-    check: (changed: string[], snapshot?: Promise<Survey | undefined>) =>
-      check(changed, undefined, undefined, snapshot),
+    check: (
+      changed: string[],
+      snapshot?: Promise<Survey | undefined>,
+      bodiesOnly = false,
+    ) => check(changed, undefined, undefined, snapshot, bodiesOnly),
   },
   resolve = sourceSurvey,
 ) => {
@@ -453,8 +456,13 @@ export let prepare = async (
   }
   let ok = all
     ? Promise.resolve(true)
-    : effects.check(changedFiles, snapshot.promise)
-      .catch((e) => (console.error(e), false))
+    : Promise.resolve(edited).then((compared) =>
+      effects.check(
+        changedFiles,
+        snapshot.promise,
+        changedPaths.every((path) => compared?.[path]?.bodies),
+      )
+    ).catch((e) => (console.error(e), false))
   try {
     // Source files named are selected from as a change is, among every file;
     // the tests and pages named beside them are their own change, so each
@@ -478,7 +486,10 @@ export let prepare = async (
       : !paths.length && !all
       ? changedPaths
       : undefined
-    let declarations = await edited
+    let compared = await edited
+    let declarations = compared && Object.fromEntries(
+      Object.entries(compared).map(([path, { names }]) => [path, names]),
+    )
     let runtimeChanges = changed?.filter((path) =>
       !path.endsWith('.toml') || declarations?.[path]?.length !== 0
     )

@@ -86,10 +86,18 @@ export let check = async (
   typed = (
     changed: string[],
     snapshot?: Promise<Survey | undefined>,
-  ) => types(changed, (args) => run({ name: 'types', args }), snapshot),
+    bodiesOnly = false,
+  ) =>
+    types(
+      changed,
+      (args) => run({ name: 'types', args }),
+      snapshot,
+      bodiesOnly,
+    ),
   snapshot?: Promise<Survey | undefined>,
+  bodiesOnly = false,
 ) =>
   (await Promise.all([
     ...checks(changed).filter((c) => c.name != 'format').map((c) => run(c)),
-    typed(changed, snapshot),
+    typed(changed, snapshot, bodiesOnly),
   ])).every(Boolean)

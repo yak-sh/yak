@@ -419,6 +419,7 @@ let reached = async (
   changed: string[],
   on: Host[],
   snapshot?: Promise<Survey | undefined>,
+  bodiesOnly = false,
 ) => {
   let all = await every()
   let s = snapshot
@@ -430,7 +431,9 @@ let reached = async (
         '`deno task check:types --all` checks every module.',
     )
   }
-  let roots = scope(s, all, changed)
+  let roots = bodiesOnly
+    ? all.filter((path) => changed.includes(path))
+    : scope(s, all, changed)
   let hosted = await Promise.all(on.map(async (h) => {
     let entries = hostEntries(s, h.entries, changed, h.platform.name)
     return {
@@ -887,6 +890,7 @@ export let types = async (
   changed: string[],
   run: Run = spawn,
   snapshot?: Promise<Survey | undefined>,
+  bodiesOnly = false,
 ) => {
   let on = await hosts()
   let entry = (p: string) => on.some((h) => h.entries.includes(p))
@@ -895,7 +899,12 @@ export let types = async (
       checked(p) || entry(p) || /\/(browser|workers)\.json$/.test(p)
     )
   ) return true
-  let { roots, hosted, survey } = await reached(changed, on, snapshot)
+  let { roots, hosted, survey } = await reached(
+    changed,
+    on,
+    snapshot,
+    bodiesOnly,
+  )
   return await check(roots, hosted, run, survey)
 }
 

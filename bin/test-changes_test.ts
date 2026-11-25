@@ -62,45 +62,78 @@ test('a copied checkout uses the supplied base without consulting local refs', a
 })
 
 let before = "import { x } from './x.ts'\nexport let a = () => x\nlet b = 2"
-let edited = (after: string) =>
+let edited = (after: string, source = before) =>
   edits({
     run: ([arg]) =>
-      Promise.resolve(arg == 'diff' ? 'm.ts\0' : arg == 'show' ? before : ''),
+      Promise.resolve(arg == 'diff' ? 'm.ts\0' : arg == 'show' ? source : ''),
     at: 'HEAD',
     read: () => Promise.resolve(after),
   })
+let named = async (after: string) =>
+  Object.fromEntries(
+    Object.entries(await edited(after)).map((
+      [path, { names }],
+    ) => [path, names]),
+  )
 
 test('test selection names the declarations whose runtime code changed', async () => {
   equal(
-    await edited(
+    await named(
       "import {\n  type A,\n  x,\n} from './x.ts'\n/** docs */\n" +
         'export let a = () => x + 1\nlet b = 2',
     ),
     { 'm.ts': ['a'] },
   )
-  equal(await edited(before.replace('let b = 2', '')), { 'm.ts': ['b'] })
+  equal(await named(before.replace('let b = 2', '')), { 'm.ts': ['b'] })
 })
 
 test('an import edit changes what says the names it binds', async () => {
-  equal(await edited(before.replace('./x.ts', './y.ts')), { 'm.ts': ['a'] })
-  equal(await edited(before.replace('{ x }', '{ y as x }')), { 'm.ts': ['a'] })
-  equal(await edited("import { y } from './y.ts'\n" + before), { 'm.ts': [] })
-  equal(await edited(before + '\nconsole.log(x)'), { 'm.ts': ['*'] })
+  equal(await named(before.replace('./x.ts', './y.ts')), { 'm.ts': ['a'] })
+  equal(await named(before.replace('{ x }', '{ y as x }')), { 'm.ts': ['a'] })
+  equal(await named("import { y } from './y.ts'\n" + before), { 'm.ts': [] })
+  equal(await named(before + '\nconsole.log(x)'), { 'm.ts': ['*'] })
   equal(
-    await edited(before.replace('./x.ts', './y.ts') + '\nconsole.log(x)'),
+    await named(before.replace('./x.ts', './y.ts') + '\nconsole.log(x)'),
     { 'm.ts': ['*', 'a'] },
   )
 })
 
 test('a top-level call or an import for its effect changes the whole module', async () => {
-  equal(await edited(before + '\na()'), { 'm.ts': ['*'] })
-  equal(await edited("import './y.ts'\n" + before), { 'm.ts': ['*'] })
+  equal(await named(before + '\na()'), { 'm.ts': ['*'] })
+  equal(await named("import './y.ts'\n" + before), { 'm.ts': ['*'] })
 })
 
 test('a comment and a type-only edit leave runtime declarations alone', async () => {
   equal(
-    await edited("import type { T } from './t.ts'\n/** docs */\n" + before),
+    await named("import type { T } from './t.ts'\n/** docs */\n" + before),
     { 'm.ts': [] },
+  )
+})
+
+test('an edit confined to a typed function body preserves its callable type', async () => {
+  let typed = 'export let amount = (x: number): number => x'
+  equal((await edited(typed + ' + 1', typed))['m.ts'], {
+    names: ['amount'],
+    bodies: true,
+  })
+  equal(
+    (await edited(typed.replace('(x: number)', '(x: string)'), typed))['m.ts']
+      .bodies,
+    false,
+  )
+  equal(
+    (await edited(typed + ' as never\nexport type T = string', typed))['m.ts']
+      .bodies,
+    false,
+  )
+  equal(
+    (await edited(typed + " + (void import('./globals.ts'), 1)", typed))['m.ts']
+      .bodies,
+    false,
+  )
+  equal(
+    (await edited(before.replace('=> x', '=> x + 1')))['m.ts'].bodies,
+    false,
   )
 })
 
@@ -108,18 +141,14 @@ test('deployment comments leave the test bindings alone and binding edits reach 
   let path = 'workers/yak/wrangler.toml'
   let original =
     '[[ratelimits]]\nname = "SIGNIN_RATE"\nsimple = { limit = 5, period = 60 }'
-  let compared = (text: string) =>
-    edits({
+  let compared = async (text: string) =>
+    (await edits({
       paths: [path],
       at: 'HEAD',
       run: () => Promise.resolve(original),
       read: () => Promise.resolve(text),
-    })
-  equal(await compared('# A credential used by a deploy\n' + original), {
-    [path]: [],
-  })
-  equal(await compared(original.replace('limit = 5', 'limit = 2')), {
-    [path]: ['*'],
-  })
-  equal(await compared('[[ratelimits]'), { [path]: ['*'] })
+    }))[path].names
+  equal(await compared('# A credential used by a deploy\n' + original), [])
+  equal(await compared(original.replace('limit = 5', 'limit = 2')), ['*'])
+  equal(await compared('[[ratelimits]'), ['*'])
 })

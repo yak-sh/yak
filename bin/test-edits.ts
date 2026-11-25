@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { importing } from '@yaks/testing/deps'
 
 // A statement is a declaration (`names`), an import binding names (`binds`),
 // or other top-level code.
@@ -26,8 +27,7 @@ let bound = (s: ts.ImportDeclaration, file: ts.SourceFile): Statement[] => {
   ]
 }
 
-let statements = (path: string, text: string): Statement[] => {
-  let file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest)
+let statements = (file: ts.SourceFile): Statement[] => {
   return file.statements.flatMap((s): Statement[] => {
     if (
       ts.isInterfaceDeclaration(s) || ts.isTypeAliasDeclaration(s) ||
@@ -89,8 +89,8 @@ let saying = (names: Set<string>) => {
 /** Changed top-level declarations, with `*` for changes to the module's
  * other runtime statements or their order. An edited import changes what
  * says the names it binds: the declarations, or the top-level code. */
-export let declarations = (path: string, before: string, after: string) => {
-  let all = [statements(path, before), statements(path, after)]
+let declarations = (before: ts.SourceFile, after: ts.SourceFile) => {
+  let all = [statements(before), statements(after)]
   let [was, now] = all.map((a) => a.filter((s) => !s.binds))
   let [from, to] = all.map((a) => a.filter((s) => s.binds))
   let says = saying(rebound(from, to))
@@ -111,4 +111,40 @@ export let declarations = (path: string, before: string, after: string) => {
       ...rebinds.flatMap((s) => s.names ?? []),
     ]),
   ]
+}
+
+// A declared return type keeps a function body's inference local to the
+// function. Compare everything outside such bodies, including types,
+// imports, parameters and top-level assignments.
+let outsideBodies = (file: ts.SourceFile) => {
+  let bodies = file.statements.flatMap((s) => {
+    if (ts.isFunctionDeclaration(s) && s.type && s.body) return [s.body]
+    if (!ts.isVariableStatement(s)) return []
+    return s.declarationList.declarations.flatMap(({ initializer: fn }) =>
+      fn && ts.isArrowFunction(fn) && fn.type ? [fn.body] : []
+    )
+  })
+  let at = 0
+  return [
+    ...bodies.map((body) => {
+      let text = file.text.slice(at, body.getStart(file))
+      at = body.getEnd()
+      return text
+    }),
+    file.text.slice(at),
+  ]
+}
+
+/** What runtime names changed and whether the edit is confined to bodies
+ * whose callable types are declared outside the edited text. */
+export let compared = (path: string, was: string, now: string) => {
+  let before = ts.createSourceFile(path, was, ts.ScriptTarget.Latest)
+  let after = ts.createSourceFile(path, now, ts.ScriptTarget.Latest)
+  return {
+    names: declarations(before, after),
+    bodies: /\.[mc]?tsx?$/.test(path) && ts.isExternalModule(before) &&
+      ts.isExternalModule(after) && importing(was) == importing(now) &&
+      JSON.stringify(outsideBodies(before)) ==
+        JSON.stringify(outsideBodies(after)),
+  }
 }

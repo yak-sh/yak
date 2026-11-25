@@ -57,14 +57,14 @@ export let edits = async (
     paths?: string[]
     read?: (path: string) => Promise<string>
   } = {},
-): Promise<Record<string, string[]>> => {
+): Promise<Record<string, { names: string[]; bodies: boolean }>> => {
   let from = at ?? await base(run)
   let modules = (paths ?? await changes({ run, at: from })).filter((path) =>
     path == 'workers/yak/wrangler.toml' ||
     /\.[mc]?[jt]sx?$/.test(path) && !tested(path)
   )
   if (!modules.length) return {}
-  let { declarations } = await import('./test-edits.ts')
+  let { compared } = await import('./test-edits.ts')
   return Object.fromEntries(
     await Promise.all(modules.map(async (path) => {
       let [before, after] = await Promise.all([
@@ -74,10 +74,10 @@ export let edits = async (
       return [
         path,
         before == undefined || after == undefined
-          ? ['*']
+          ? { names: ['*'], bodies: false }
           : path.endsWith('.toml')
-          ? await configEdits(before, after)
-          : declarations(path, before, after),
+          ? { names: await configEdits(before, after), bodies: false }
+          : compared(path, before, after),
       ]
     })),
   )

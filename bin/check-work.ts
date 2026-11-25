@@ -38,11 +38,16 @@ export let onRunner = async (
   let { base } = await import('./test-changes.ts')
   let at: Promise<string> | undefined
   let from = () => at ??= base()
+  let whole = args.includes('--all')
   return await elsewhere(['deno', 'task', task, ...args], {
     from,
     env: { TASKS_TEST_BASE: 'HEAD', YAK_MACHINE: '', [REMOTE]: '1' },
     before: before && (async () => before(await from())),
-    limits: ['MemoryMax=6G', 'MemorySwapMax=0'],
-    whole: args.includes('--all'),
+    limits: [
+      'MemoryMax=6G',
+      'MemorySwapMax=0',
+      `CPUWeight=${whole ? 100 : 1000}`,
+    ],
+    whole,
   })
 }

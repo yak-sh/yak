@@ -142,7 +142,10 @@ on its own, run `deno run -A bin/publish.ts --dry-run --allow-dirty packages/<na
 Beside the tests it checks the types of source and doc comments the
 change reaches: each changed module, direct importers (including type-only
 imports), and transitive importers within its package, stopping at a module
-composing a whole platform. `deno task check:types` does the same alone, and
+composing a whole platform. When every edit is inside a function body with
+an explicit return type, the changed modules and host entries still get
+checked and their callers keep the same types. `deno task check:types` runs
+the source checks alone, and
 `deno task check:types <files>` checks what those files reach. That is the one
 type check: never run `deno check`, or `deno test` and `deno bench` without
 `--no-check`. Those run Deno's own checker, which took 115 s and 2.2 GB for six
@@ -163,9 +166,10 @@ On the box a run goes to yak-run-1, a GCE VM (the clone's `git config
 yak.machine`, bin/elsewhere.ts): your checkout as it stands is copied there, the
 run's output streams back, and its exit code is yours. Changed files are still
 formatted in your checkout. Scoped runs use the VM's measured memory headroom.
-Full runs also reserve room for recent starts. Where the VM cannot be reached
-the run goes on here, having said why. `YAK_MACHINE= deno task test` runs here
-on purpose.
+A scoped run can reuse one warm worktree under a lock held for the command's
+lifetime. A concurrent run gets its own worktree immediately. Full runs also
+reserve room for recent starts. Where the VM cannot be reached the run goes on
+here, having said why. `YAK_MACHINE= deno task test` runs here on purpose.
 
 While iterating, name a source file to run its tests and every test depending
 on it, selected as a no-path run selects from a change to it:

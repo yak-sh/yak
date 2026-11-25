@@ -6,7 +6,7 @@
 // bin/run-machine-setup: a bare clone of origin at ~/repo.git, and its runs
 // under ~/runs.
 //
-// A run there is this checkout as it stands: a fresh worktree at the commit
+// A run there is this checkout as it stands: a worktree reset to the commit
 // the work builds on, which the machine fetches from origin when it has not
 // got it, and every change since, committed, staged, unstaged or untracked,
 // sent as one binary diff and applied to the index. The command starts in its
@@ -120,6 +120,41 @@ let base64 = (bytes: Uint8Array) => {
 /** Where run `id` lives on its machine, and the clone its trees come from. */
 let place = (id: string) => `repo=$HOME/repo.git run=$HOME/runs/${id}`
 
+/** Transfer a patch before launching its run. */
+export let stage = (id: string, diff: Uint8Array) =>
+  `set -eu
+${place(id)}
+mkdir -p -- "$run"
+printf '%s' ${quote(base64(diff))} | base64 -d > "$run/work.diff"
+printf '%s' "$run"`
+
+let checkout = (from: string) =>
+  `{
+  flock 9
+  git -C "$repo" cat-file -e ${quote(from + '^{commit}')} 2>/dev/null ||
+    git -C "$repo" fetch -q origin
+  if test -f "$tree/.git"; then
+    reuse=1
+  else
+    reuse=0
+    git -C "$repo" worktree prune
+    git -C "$repo" worktree add -q --detach "$tree" ${quote(from)}
+  fi
+} 9>"$repo/runs.lock"
+cd "$tree"
+if test "$reuse" = 1; then
+  previous=$(git write-tree)
+  git checkout -q --force --detach ${quote(from)}
+  git clean -q -ffdx -e node_modules
+fi
+if test -s "$run/work.diff"; then git apply --index --binary "$run/work.diff"; fi
+if test "$reuse" = 1 &&
+   ! git diff --cached --quiet "$previous" -- package.json ':(glob)**/package.json' pnpm-workspace.yaml .npmrc patches; then
+  rm -f node_modules/.pnpm/lock.yaml
+fi
+bin/workspace-dependencies > "$run/dependencies.log" 2>&1 ||
+  { cat "$run/dependencies.log" >&2; exit 1; }`
+
 /**
  * The control script making run `id` ready on its machine: a worktree at
  * `from`, fetched from origin when the machine has not got it, with `diff`
@@ -129,22 +164,23 @@ let place = (id: string) => `repo=$HOME/repo.git run=$HOME/runs/${id}`
  * time.
  */
 export let prepare = (id: string, from: string, diff: Uint8Array) =>
+  `${stage(id, diff)} >/dev/null
+tree=$run/tree
+${checkout(from)}
+printf '%s' "$run"`
+
+/** Scoped checks can keep one checkout's compiler caches warm. Hold its
+ * flock for the command's lifetime. A second run starts in its own tree
+ * immediately. The Git base, applied work and untracked files are per run. */
+export let scoped = (id: string, from: string, cmd: string) =>
   `set -eu
 ${place(id)}
-mkdir -p -- "$run"
-{
-  flock 9
-  git -C "$repo" worktree prune
-  git -C "$repo" cat-file -e ${quote(from + '^{commit}')} 2>/dev/null ||
-    git -C "$repo" fetch -q origin
-  git -C "$repo" worktree add -q --detach "$run/tree" ${quote(from)}
-} 9>"$repo/runs.lock"
-cd "$run/tree"
-printf '%s' ${quote(base64(diff))} | base64 -d > "$run/work.diff"
-if test -s "$run/work.diff"; then git apply --index --binary "$run/work.diff"; fi
-bin/workspace-dependencies > "$run/dependencies.log" 2>&1 ||
-  { cat "$run/dependencies.log" >&2; exit 1; }
-printf '%s' "$run"`
+tree=$run/tree
+exec 8>"$HOME/runs/.scoped.lock"
+if flock -n 8; then tree=$HOME/runs/.scoped; else exec 8>&-; fi
+${checkout(from)}
+touch "$run/prepared"
+( ${cmd} )`
 
 /** The control script removing run `id` and its worktree, in the background:
  * a run's tree is hundreds of megabytes, and its caller need not wait. Deno
@@ -184,7 +220,7 @@ export let command = (argv: string[], env: Record<string, string> = {}) =>
  * run arriving with others in a burst sees held.
  */
 export let ROOM = `${SCRIPT}
-find "$HOME/runs" -mindepth 1 -maxdepth 1 -newermt "@$(($(date +%s) - ${
+find "$HOME/runs" -mindepth 1 -maxdepth 1 -type d ! -name .scoped -newermt "@$(($(date +%s) - ${
   NEED.settle / 1000
 }))" 2>/dev/null | wc -l`
 
@@ -281,7 +317,8 @@ export let elsewhere = async (
       await pause(interval)
       if (interrupted) return 130
     }
-    let dir = (await transport.execute(prepare(id, at, diff))).trim()
+    let staging = whole ? prepare(id, at, diff) : stage(id, diff)
+    let dir = (await transport.execute(staging)).trim()
     if (!dir.startsWith('/')) throw new Error('the machine named no run')
     let vocab = loadVocab([processDoc])
     let workspace = executionWorkspace(
@@ -289,18 +326,25 @@ export let elsewhere = async (
       transport,
       {
         workspace: id,
-        root: `${dir}/tree`,
+        root: whole ? `${dir}/tree` : dir,
         receipts: `${dir}/receipts`,
         limits,
       },
     )
     if (interrupted) return 130
-    let process = await workspace.start(command(argv, env))
+    let cmd = command(argv, env)
+    let process = await workspace.start(whole ? cmd : scoped(id, at, cmd))
     end = () => workspace.kill(process, 'SIGTERM').catch(() => {})
     if (interrupted) await end()
     let ended = await follow(workspace, process, write)
     let code = ended?.exit?.code
     if (interrupted) return 130
+    if (
+      !whole && code &&
+      (await workspace.stat(['prepared']))[0]?.kind == 'missing'
+    ) {
+      throw new Error('could not prepare the scoped checkout')
+    }
     if (code == null) {
       say(`elsewhere: ${address}: the run ended with no exit code`)
     }

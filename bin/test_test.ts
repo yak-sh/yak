@@ -56,7 +56,12 @@ let planned = async (
   let selected: { all: boolean; changed?: string[]; sources: string[] }[] = []
   let files = ['a_test.ts', 'a.ts']
   let plan = await prepare(args, '/sqlite.so', {
-    edits: () => Promise.resolve(edited),
+    edits: () =>
+      Promise.resolve(Object.fromEntries(
+        Object.entries(edited).map((
+          [path, names],
+        ) => [path, { names, bodies: false }]),
+      )),
     changes: () =>
       changes({
         run: (args) => {
@@ -203,9 +208,10 @@ test('selection failures settle source checks waiting for the shared graph', asy
 test('source planning and selection consume one command snapshot', async () => {
   let queried: string[][] = []
   let checked: unknown
+  let scopes: boolean[] = []
   let chosen: unknown
   let result = await prepare([], '/sqlite.so', {
-    edits: () => Promise.resolve({}),
+    edits: () => Promise.resolve({ 'a.ts': { names: ['a'], bodies: true } }),
     changes: () => Promise.resolve(['a.ts']),
     format: (paths) => Promise.resolve(paths),
     find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
@@ -221,7 +227,8 @@ test('source planning and selection consume one command snapshot', async () => {
         read: () => undefined,
       }
     },
-    check: async (_changed, snapshot) => {
+    check: async (_changed, snapshot, bodiesOnly) => {
+      scopes.push(bodiesOnly ?? false)
       checked = await snapshot
       return true
     },
@@ -230,6 +237,7 @@ test('source planning and selection consume one command snapshot', async () => {
     return Promise.resolve(graph)
   })
   equal(await result.ok, true)
+  equal(scopes, [true])
   equal(queried, [['a_test.ts', 'a.ts']])
   equal(chosen === graph && checked === graph, true)
 })

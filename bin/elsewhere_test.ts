@@ -11,6 +11,8 @@ import {
   machine,
   prepare,
   ROOM,
+  scoped,
+  stage,
   work,
 } from './elsewhere.ts'
 
@@ -101,6 +103,32 @@ test('making the run there leaves the checkout and its index as they were', asyn
 test('a commit the machine cannot fetch refuses the run', async () => {
   let missing = 'f'.repeat(40)
   await throws(() => machineHere.execute(prepare('r2', missing, diff)))
+})
+
+test('a scoped run reuses its checkout with a fresh patch and no leftover files', async () => {
+  let first = await machineHere.execute(stage('scoped-1', diff))
+  let warm = (await machineHere.execute(scoped('scoped-1', from, 'pwd'))).trim()
+  equal(await Deno.readTextFile(warm + '/kept.txt'), 'one\ntwo\n')
+  equal(await Deno.readTextFile(first + '/dependencies.log'), 'installed\n')
+  await put(warm + '/leftover.txt', 'scratch')
+
+  await machineHere.execute(stage('scoped-2', new Uint8Array()))
+  let reused = (await machineHere.execute(scoped('scoped-2', from, 'pwd')))
+    .trim()
+  equal(reused, warm)
+  equal(await Deno.readTextFile(reused + '/kept.txt'), 'one\n')
+  await throws(() => Deno.stat(reused + '/leftover.txt'))
+  await throws(() => Deno.stat(reused + '/untracked.bin'))
+})
+
+test('a scoped run with the shared checkout in use starts in its own tree', async () => {
+  let dir = await machineHere.execute(stage('scoped-elsewhere', diff))
+  let tree = await machineHere.execute(
+    'exec 7>"$HOME/runs/.scoped.lock"\nflock 7\n' +
+      scoped('scoped-elsewhere', from, 'pwd'),
+  )
+  equal(tree.trim(), dir + '/tree')
+  equal(await Deno.readTextFile(tree.trim() + '/kept.txt'), 'one\ntwo\n')
 })
 
 let config = (named?: string): Git => (args) =>

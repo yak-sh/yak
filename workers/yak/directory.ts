@@ -2066,7 +2066,8 @@ export let inTrash = (at?: string | null) => {
  * nothing, and whoever asks what it declares has its answer without waking
  * the store.
  */
-export let releaseOf = (app: App) => app.declaration ?? String(app.version ?? 0)
+export let releaseOf = (app: App): string =>
+  app.declaration ?? String(app.version ?? 0)
 
 /** Which store holds an app's rows and what it is told of the app on every
  * call: what {@link appStore} opens, for a caller that opens it elsewhere
