@@ -16,7 +16,7 @@ type Socket = {
 // A store whose every socket is kept, to answer and drop as a test says.
 let store = () => {
   let sockets: Socket[] = []
-  let door = (async () => {
+  let door = (() => {
     let heard: Record<string, ((e: { data?: unknown }) => void)[]> = {}
     let fire = (type: string, data?: unknown) =>
       (heard[type] ?? []).forEach((fn) => fn({ data }))
@@ -30,7 +30,7 @@ let store = () => {
       },
     }
     sockets.push(socket)
-    return Object.assign(new Response(null), {
+    return Promise.resolve(Object.assign(new Response(null), {
       webSocket: {
         accept: () => {},
         send: (text: string) => socket.said.push(JSON.parse(text)),
@@ -38,7 +38,7 @@ let store = () => {
         addEventListener: (type: string, fn: (e: { data?: unknown }) => void) =>
           (heard[type] ??= []).push(fn),
       },
-    })
+    }))
   }) as unknown as Door
   return { door, sockets }
 }
