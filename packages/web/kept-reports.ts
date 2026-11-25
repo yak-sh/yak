@@ -34,7 +34,7 @@ export let keptReports = (
       await box.delete(key)
     }
   }
-  let save = async (req: Pick<Request, 'text' | 'referrer'>, at: number) => {
+  let save = async (req: Request, at: number) => {
     let body = await req.text()
     if (body.length > 8192 || at < await forgotAt()) return
     let box = await kept()

@@ -842,23 +842,18 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
 }
 
 export let oops = (env: Host = {}, requestId?: string, filed = false) =>
-  page(
-    env,
-    {
-      title: 'Something went wrong.',
-      lead:
-        'Try again shortly. If the problem continues, ask your assistant to check the app.' +
-        (requestId ? ` Request ID: ${requestId}.` : ''),
-      status: 500,
-      headers: {
-        ...requestId ? { 'x-request-id': requestId } : {},
-        // Reported where it was caught (@yaks/api `FILED`).
-        ...filed ? { [FILED]: '1' } : {},
-      },
+  page(env, {
+    title: 'Something went wrong.',
+    lead:
+      'Try again shortly. If the problem continues, ask your assistant to check the app.' +
+      (requestId ? ` Request ID: ${requestId}.` : ''),
+    status: 500,
+    headers: {
+      ...requestId ? { 'x-request-id': requestId } : {},
+      // Reported where it was caught (@yaks/api `FILED`).
+      ...filed ? { [FILED]: '1' } : {},
     },
-    h('p', null, h('a', { href: '' }, 'Try again')),
-    home(env),
-  )
+  }, home(env))
 
 // A custom domain that reached the Worker before there was anything to
 // answer with (index.ts `settling`, T-33036): mid-provisioning, or one

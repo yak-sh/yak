@@ -1,12 +1,6 @@
-import { equal, test } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import {
-  type FetchLike,
-  FILES,
-  type Keeping,
-  keeping,
-  type Scope,
-} from './worker.ts'
+import { type FetchLike, FILES, keeping, type Scope } from './worker.ts'
 import { FRESH, KEPT, SHELL } from './picture.ts'
 
 // The address a request names, a Request or a string.
@@ -14,9 +8,8 @@ let key = (r: RequestInfo | URL) =>
   typeof r == 'object' && 'url' in r ? r.url : String(r)
 
 // A site's worker over caches held in memory, and a network that answers
-// each address with what `site` says of it now: a page, or an answer of its
-// own. `more` is what else the site keeps by.
-let worker = (files = 2, more: Partial<Keeping> = {}) => {
+// each address with what `site` says of it now.
+let worker = (files = 2) => {
   let stores = new Map<string, Map<string, Response>>()
   let cache = (name: string): Cache => {
     let held = stores.get(name) ?? new Map<string, Response>()
@@ -36,8 +29,7 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
     open: (name: string) => Promise.resolve(cache(name)),
     delete: (name: string) => Promise.resolve(stores.delete(name)),
   } as unknown as CacheStorage
-  let site = new Map<string, string | (() => Promise<Response>)>()
-  let navigator = { onLine: true }
+  let site = new Map<string, string>()
   let asked: string[] = []
   let hear = new Map<string, (e: unknown) => void>()
   let databases = ['yaks-page:ada', 'yaks', 'yaks-page:bo']
@@ -52,13 +44,11 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
       },
     },
     location: { origin: 'https://yaks.app' },
-    navigator,
     clients: { claim: () => Promise.resolve() },
     fetch: (r: RequestInfo | URL) => {
       let url = key(r)
       asked.push(new URL(url).pathname)
       let body = site.get(new URL(url).pathname)
-      if (typeof body == 'function') return body()
       return Promise.resolve(
         body == null ? new Response('gone', { status: 404 }) : new Response(
           body,
@@ -76,7 +66,6 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
     databases: 'yaks-page:',
     opens: (p) => (p as { url?: string }).url,
     shelled: (url) => new URL(url).pathname.startsWith('/manage'),
-    ...more,
   })
   let waiting: Promise<unknown>[] = []
   let settled = async () => {
@@ -136,7 +125,6 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
   }
   return {
     site,
-    navigator,
     asked,
     ask,
     open,
@@ -245,28 +233,4 @@ test('a picture that could not be replaced opens next from the network, once', a
   assertEquals(w.failed('/checks#row-1'), [true])
   assertEquals(await w.open('/checks'), page('now'))
   assertEquals((await w.open('/checks'))!.includes(KEPT), true)
-})
-
-test("an open the network cannot give is answered with the site's page saying why", async () => {
-  let w = worker(2, {
-    failed: (why) => `${why.state}: ${why.said}`,
-    drew: (html) => html.includes('ours'),
-    wait: 5,
-  })
-  let answer = (status: number, body: string) => () =>
-    Promise.resolve(new Response(body, { status }))
-  w.site.set('/fine', 'the page')
-  w.site.set('/down', () => Promise.reject(new TypeError('Load failed')))
-  w.site.set('/hung', () => new Promise(() => {}))
-  w.site.set('/broke', answer(502, 'Error 502'))
-  w.site.set('/oops', answer(500, 'ours: Something went wrong'))
-  w.site.set('/gone', answer(404, 'Not here'))
-  equal(await w.open('/fine'), 'the page')
-  equal(await w.open('/down'), 'unreachable: TypeError: Load failed')
-  equal(await w.open('/hung'), 'failed: No answer in 0.005 s')
-  equal(await w.open('/broke'), 'failed: The server answered 502')
-  equal(await w.open('/oops'), 'ours: Something went wrong')
-  equal(await w.open('/gone'), 'Not here')
-  w.navigator.onLine = false
-  equal(await w.open('/down'), 'offline: TypeError: Load failed')
 })

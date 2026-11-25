@@ -8,8 +8,6 @@ import { DATA_TIMING } from '@yaks/platform/ladder'
 import { INTERACTION_PATH, OPEN_PATH } from '@yaks/timing/interaction'
 import { EARLY_REPORT } from '@yaks/platform/early-report'
 import { openScript } from '@yaks/platform/open-script'
-import { opening } from '@yaks/platform/opening'
-import { openingHead } from '@yaks/web/opening'
 
 declare const YAK_NAMED: Record<string, string> | undefined
 
@@ -42,9 +40,7 @@ let FONT = 'nunito-latin.woff2'
 
 /** The head's links for one of the site's sheets, after the reporter
  * (page-report.ts), which runs before any of the page's own scripts so a
- * break in them reaches the tracker, and what the page shows while it opens
- * or when opening fails (@yaks/web/opening), inline before the sheet so it
- * works when no file of the page does, and the site's favicon, which every page
+ * break in them reaches the tracker, and the site's favicon, which every page
  * wears from here so none goes without it. A page that already wears the
  * reporter (`reported`) is given no second one, which would file each of
  * its breaks twice. */
@@ -60,18 +56,15 @@ export let links = (
   let reporter = `<script src="${at('report.js')}" defer data-yak-at="${
     url(env, '/')
   }"></script><script data-yak-early-report>${EARLY_REPORT}</script>\n`
-  let timed = base ? base + DATA_TIMING + '?open=1' : OPEN_PATH
+  let opening = base ? base + DATA_TIMING + '?open=1' : OPEN_PATH
   let icon = favicon
     ? `<link rel="icon" href="${
       at('favicon-32.png')
     }" type="image/png" sizes="32x32">`
     : ''
-  let opens = openingHead(
-    opening(at('apple-touch-icon.png'), url(env, '/api/report')),
-  )
   return `${
     reported ? '' : reporter
-  }${opens}<script data-yak-open="${timed}">${openScript()}</script>${
+  }<script data-yak-open="${opening}">${openScript()}</script>${
     interaction(env, names, base)
   }
 ${icon}
