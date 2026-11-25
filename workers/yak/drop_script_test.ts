@@ -4,7 +4,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
-import { fileDrop } from './html.ts'
+import { fileDrop } from '@yaks/platform/page-parts'
 
 let code = await Deno.readTextFile(
   new URL('./public/drop.js', import.meta.url),

@@ -1,6 +1,7 @@
 // The kernel and its network boundaries, driven in process. Each fixture
 // owns a synthetic origin; requests to it dispatch directly to its handler.
 import './runtime-resolve.ts'
+import { settingsEid as spaceEid } from '@yaks/platform/space-pages'
 import { apex } from '@yaks/platform/host'
 import { challenge } from '@yaks/oauth'
 import { cleanup, clock, kept, until } from '@yaks/testing'
@@ -144,6 +145,24 @@ export let saveAccount = async (
   return await wrote(k, p, [{
     entity: { eid: accountEid(p.person) },
     account: { ...row.account, ...change },
+  }])
+}
+
+/** `p` doing `act` to the space `space` through their page graph, as its
+ * Settings, Domains or Trash page does (@yaks/platform/space-pages): its
+ * `spaceSettings`, as Settings' Save bar writes them, or one of its acts. */
+export let spaceAct = (
+  k: Pick<Kernel, 'at' | 'host'>,
+  p: Pick<Person, 'person' | 'cookie'>,
+  space: string,
+  act: Record<string, Record<string, unknown>>,
+) => {
+  let [[word, value]] = Object.entries(act)
+  return wrote(k, p, [{
+    entity: {
+      eid: word == 'spaceSettings' ? spaceEid(space) : crypto.randomUUID(),
+    },
+    [word]: { space, ...value },
   }])
 }
 

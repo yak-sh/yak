@@ -10,7 +10,7 @@ import {
 } from '@std/assert'
 import { encodeBase64 } from '@std/encoding/base64'
 import { parseHTML } from 'linkedom'
-import { connector, fresh, kernel, signIn } from './probe.ts'
+import { connector, fresh, kernel, meta, signIn, spaceAct } from './probe.ts'
 import { logoUpload, managePath } from '@yaks/platform/routes'
 import { digest } from '@yaks/graph/sha256'
 import { logoAt } from './logo.ts'
@@ -55,13 +55,13 @@ test('a space wears the logo its owner chooses, and its letter without one', asy
     assertEquals((await tile()).tagName, 'SPAN')
     let page = await (await get(settings)).text()
     assertStringIncludes(page, 'enctype="multipart/form-data"')
-    assert(!page.includes('name="unlogo"'))
+    assert(!page.includes('data-unlogo'))
 
     let sent = await send(picture(PNG), logoUpload(slug))
     assertEquals(sent.status, 303)
     let at = `/manage/${slug}/logo/${await digest(PNG)}`
     assertEquals((await tile()).getAttribute('src'), at + '?size=avatar')
-    assertStringIncludes(await (await get(settings)).text(), 'name="unlogo"')
+    assertStringIncludes(await (await get(settings)).text(), 'data-unlogo')
 
     let served = await get(at)
     assertEquals(served.status, 200)
@@ -77,9 +77,12 @@ test('a space wears the logo its owner chooses, and its letter without one', asy
       assertEquals((await tile()).getAttribute('src'), at + '?size=avatar')
     }
 
-    let unlogo = new FormData()
-    unlogo.set('unlogo', '1')
-    assertEquals((await send(unlogo)).status, 303)
+    // Remove logo writes the space without one through its page graph.
+    let space = (await meta(k).query(`.space.slug=${slug}`))[0].entity.eid
+    let removed = await spaceAct(k, them, space, {
+      spaceSettings: { logo: null },
+    })
+    assertEquals(removed.status, 200, await removed.clone().text())
     assertEquals((await tile()).tagName, 'SPAN')
     assertEquals((await get(at)).status, 404)
   } finally {

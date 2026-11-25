@@ -52,7 +52,12 @@ export let settings = (root: Document = document) => {
     },
     save: async (form: HTMLFormElement, body: FormData) => {
       let through = (form as SavingForm)[SAVE_THROUGH]
-      if (through) return await through(body)
+      if (through) {
+        let out = await through(body)
+        if (typeof out != 'object') return out
+        if (out.to && out.to != location.pathname) destination = out.to
+        return out.say
+      }
       let response = await fetch(form.action, {
         method: 'POST',
         body,

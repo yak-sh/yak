@@ -22,6 +22,7 @@ import {
   seed,
   signedIn,
   signIn as browserSignIn,
+  spaceAct,
   unique,
 } from './probe.ts'
 import { endpoints } from './endpoints.ts'
@@ -261,7 +262,10 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     assertEquals(calls.at(-1), 'POST /calls/retired/actions/reject')
 
     // Restore keeps the number, assignment, verification and billing clock.
-    await post(trash, { restore_number: owned.eid })
+    let back = await spaceAct(k, { person, cookie }, space.eid, {
+      restoreBinned: { item: owned.eid },
+    })
+    assertEquals(back.status, 200, await back.clone().text())
     assertEquals((await k.dir.lines(space))[0], owned)
     assertEquals((await k.dir.lined(FREE))?.app.slug, 'members')
     assertStringIncludes(await readTrash(), 'Trash is empty')

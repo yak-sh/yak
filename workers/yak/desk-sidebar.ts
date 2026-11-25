@@ -43,9 +43,7 @@ export let deskSide = (at: DeskPage, view: Setting, env: Host) => {
     names: label,
     icon: glyphs[icons[key]],
     current: view == key || (view == 'new' && key == 'apps'),
-    count: key == 'trash'
-      ? ((at.trash?.length ?? 0) + (at.numbers?.length ?? 0)) || undefined
-      : undefined,
+    count: key == 'trash' ? at.binned || undefined : undefined,
   })
   let host = spaceHost(env, at.space)
   let side: SideView = { person: at.person ?? '', here, desk: { view } }

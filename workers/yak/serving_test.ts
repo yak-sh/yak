@@ -73,7 +73,7 @@ import { stores } from './app-store-probe.ts'
 import { sqliteApp } from './sqlite-app-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { addressed } from '@yaks/platform/versions'
-import { appMark } from '@yaks/platform/routes'
+import { appMark, REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { generatedIconKey } from '@yaks/platform/app-icon'
 import { digest } from '@yaks/graph/sha256'
 import { staged } from './release.ts'
@@ -1973,22 +1973,26 @@ test("a trashed front page is nobody's, and the owner restores it there", async 
   // in home_test.ts: reaching it through this stand-in would ask the OAuth
   // provider whether an agent has ever connected, and that is the whole kernel's.
   //
-  // The button itself is this door. One POST to the page it is on, and the
-  // app is back — front page and all, because the word was never taken off it.
+  // The button itself writes through the page graph's door: one write, and
+  // the app is back — front page and all, because the word was never taken
+  // off it.
   let cookie = await as(ADA)
   let back = await apps.fetch(
-    new Request('https://yaks.app/manage/ada/trash', {
+    new Request(`https://yaks.app${REACH}/apply`, {
       method: 'POST',
       headers: {
         cookie,
-        origin: 'https://yaks.app',
-        'content-type': 'application/x-www-form-urlencoded',
+        [TAB_PERSON]: ADA,
+        'content-type': 'application/json',
       },
-      body: new URLSearchParams({ restore: 'cookbook' }).toString(),
+      body: JSON.stringify([{
+        entity: { eid: crypto.randomUUID() },
+        restoreBinned: { space: k.space.eid, item: k.app.eid },
+      }]),
     }),
     k.env,
   )
-  assertEquals(back.status, 303)
+  assertEquals(back.status, 200, await back.clone().text())
   assertStringIncludes(await (await k.at('/')).text(), 'cookbook')
 })
 

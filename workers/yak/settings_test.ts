@@ -5,6 +5,7 @@ import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
 import { desk } from './desk-pages.ts'
 import { h } from 'preact'
+import { spacePageView } from '@yaks/platform/space-pages-view'
 import { operatorSettingsView } from '@yaks/platform/operator-settings-view'
 import { offered } from './speech.ts'
 import { KEY } from '@yaks/connections'
@@ -84,8 +85,26 @@ let profile = await desk({
   name: 'Ada',
   view: 'profile',
 }).text()
-let preferences = await desk({ space: 'ada', apps: [], view: 'settings' })
-  .text()
+let preferences = `<html><body>${
+  renderToString(h(
+    'div',
+    null,
+    spacePageView(
+      { person: 'ada', space: 'space-ada', page: 'settings', apex: 'yaks.app' },
+      {
+        settings: {
+          slug: 'ada',
+          title: 'Ada',
+          home: '',
+          byline: false,
+          paying: false,
+          included: false,
+        },
+        apps: [],
+      },
+    ),
+  ))
+}</body></html>`
 let operator = `<html><body>${
   renderToString(h(
     'div',

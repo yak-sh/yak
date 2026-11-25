@@ -20,6 +20,7 @@ import {
   owned,
   saveAccount,
   signIn,
+  spaceAct,
 } from './probe.ts'
 import {
   chatPath,
@@ -60,32 +61,6 @@ let post = (
 let at = (path: string) =>
   k.at(host, path, { headers: { cookie: them.cookie } })
 let to = (path: string) => `https://yaks.app${path}`
-// The page a plain form's press lands on, with what it carried in its
-// one-time cookie: what that page says, and whether it spent the cookie.
-let landed = async (res: Response) => {
-  let carried = res.headers.get('set-cookie')!.split(';')[0]
-  let page = await get(
-    new URL(res.headers.get('location')!).pathname,
-    `${them.cookie}; ${carried}`,
-  )
-  let said = /class="Notice"[^>]*>([^<]*)</.exec(await page.text())?.[1]
-  return [
-    said,
-    /yak_said=;.*Max-Age=0/.test(page.headers.get('set-cookie') ?? ''),
-  ]
-}
-// A press from the page's script (@yaks/ux save-browser): answered in a word.
-let scripted = (path: string, fields: Record<string, string>) =>
-  k.at('yaks.app', path, {
-    method: 'POST',
-    headers: {
-      cookie: them.cookie,
-      origin: 'https://yaks.app',
-      accept: 'application/json',
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams(fields),
-  })
 let title = async () => {
   let [person] = await dir.query(`.entity.eid=${them.person}&?doc`)
   return (person.doc as { title: string }).title
@@ -346,41 +321,45 @@ test('the aside is put away and opened again, and every page keeps it', async ()
 
 // The space's Settings: its address and homepage, its name, and the way to
 // delete it; none of it the person's own name.
-test('a space’s Settings save its address and its name', async () => {
+test('a space’s Settings save its address and its name through the page graph', async () => {
   let name = await title()
+  let space = (await dir.query(`.space.slug=${slug}`))[0].entity.eid
   let page = await (await get(settings)).text()
-  assertStringIncludes(page, `action="${settings}"`)
+  assertStringIncludes(page, `data-save="${settings}"`)
   assertStringIncludes(page, `href="https://yaks.app/space/${slug}/delete"`)
   assertStringIncludes(page, `href="${managePath('trash', slug)}"`)
-  let saved = await post(settings, { space: slug })
-  assertEquals(saved.status, 303)
-  assertEquals(saved.headers.get('location'), to(settings))
-  assertEquals(await landed(saved), ['Saved.', true])
-  let refused = await scripted(settings, { space: 'Not An Address' })
+  let save = (change: Record<string, unknown>) =>
+    spaceAct(k, them, space, { spaceSettings: change })
+  assertEquals((await save({ slug })).status, 200)
+  let refused = await save({ slug: 'Not An Address' })
   assertEquals(refused.status, 400)
-  assertStringIncludes((await refused.json()).say, 'lowercase letters')
-  await post(settings, { title: 'Peterson Reunion 2027', space: slug })
+  assertStringIncludes((await refused.json()).message, 'lowercase letters')
+  await save({ title: 'Peterson Reunion 2027', slug })
   assertStringIncludes(
     await (await get(settings)).text(),
     'name="title" maxlength="60" value="Peterson Reunion 2027"',
   )
   assertEquals(await title(), name)
+  // The posts the page no longer makes are no page's.
+  assertEquals((await post(settings, { title: 'Posted' })).status, 404)
 })
 
 test('a deleted app comes back from the Trash', async () => {
   let discarded = (await dir.query('.app.slug=discarded'))[0].entity.eid
+  let space = (await dir.query(`.space.slug=${slug}`))[0].entity.eid
   await agent.tool('app_delete', { space: slug, app: 'discarded' })
   let trash = managePath('trash', slug)
   assertStringIncludes(
     await (await get(trash)).text(),
-    `name="restore" value="${discarded}"`,
+    `data-restore="${discarded}"`,
   )
   await agent.tool('app_new', { space: slug, slug: 'discarded', title: 'New' })
-  let restored = await post(trash, { restore: discarded })
-  assertEquals(restored.status, 303)
-  assertEquals(restored.headers.get('location'), to(trash))
+  let restored = await spaceAct(k, them, space, {
+    restoreBinned: { item: discarded },
+  })
+  assertEquals(restored.status, 200)
   assertStringIncludes(
-    String((await landed(restored))[0]),
+    (await restored.json())[0].restoreBinned.said,
     'Its previous address was /discarded/; it is now /discarded-2/.',
   )
   assertStringIncludes(

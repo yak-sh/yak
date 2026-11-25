@@ -7,6 +7,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { spaceIndex } from './pages.ts'
 import { desk } from './desk-pages.ts'
+import { binnedRows, settingsRow } from '@yaks/platform/space-pages'
 import { managePath } from '@yaks/platform/routes'
 import { accountRow } from '@yaks/platform/account-rows'
 import { appRows, spaceRows } from '@yaks/platform/side-rows'
@@ -181,18 +182,6 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   assert(!page.includes('src="/api/build.js"'), page)
 })
 
-test("a space's Settings change only the space, and delete it", async () => {
-  let { document } = sides(await block({ view: 'settings' }))
-  let form = document.querySelector('#content [name=space]')!.closest('form')!
-  assertEquals(form.getAttribute('action'), managePath('settings', 'dana'))
-  assertEquals(form.querySelector('[name=name]'), null)
-  assert(form.querySelector('[name=space]'))
-  assertEquals(
-    document.querySelector('.Card-danger .Button')?.getAttribute('href'),
-    'https://yaks.app/space/dana/delete',
-  )
-})
-
 test('Profile holds the name, the email and the space opened first', async () => {
   let spaces = [
     { slug: 'dana', title: 'Dana', owner: true, own: true },
@@ -358,20 +347,6 @@ test('new app exposes separate Operator and upload forms below the agent route',
 // The value a page's input named `name` is drawn with, read off the markup
 // by where its quotes fall: parsing a whole page into a document takes half a
 // millisecond, and a regular expression's first match compiles it.
-let quoted = (text: string, from: string) => {
-  let at = text.indexOf(from) + from.length
-  return at < from.length ? undefined : text.slice(at, text.indexOf('"', at))
-}
-let field = (html: string, name: string) =>
-  quoted(
-    html.split('<input').slice(1).map((tag) => tag.slice(0, tag.indexOf('>')))
-      .find((tag) => tag.includes(` name="${name}"`)) ?? '',
-    ' value="',
-  )
-
-test('the app address can be changed from settings whatever the space holds', async () => {
-  assertEquals(field(await block({ view: 'settings' }), 'space'), 'dana')
-})
 
 // The copy buttons outside the connect card, which holds the link for an
 // agent and stays on the page, hidden, until a connection drops.
@@ -496,22 +471,45 @@ test('who visited is drawn from the rows the page carries, and only for the owne
   assert(!parseHTML(theirs).document.querySelector('.Report'))
 })
 
-test('trash has restore forms only on its own page', async () => {
-  let trash = [{
-    eid: '6abfba87-7e72-42d6-b954-73aa236acb14',
-    slug: 'notes',
-    title: 'Notes',
-    days: 12,
-  }]
-  let page = await block({ view: 'trash', trash })
-  assertStringIncludes(page, `action="${managePath('trash', 'dana')}"`)
-  assertStringIncludes(page, `name="restore" value="${trash[0].eid}"`)
+test('the trash is drawn from its rows, with Restore, on its own page alone', async () => {
+  let space = '6abfba87-7e72-42d6-b954-73aa236acb15'
+  let held = {
+    settings: [settingsRow(space, {
+      slug: 'dana',
+      title: 'Dana',
+      home: '',
+      byline: false,
+      paying: false,
+      included: false,
+    })],
+    apps: [],
+    page: binnedRows(space, [{
+      item: 'notes-eid',
+      kind: 'app',
+      name: 'Notes',
+    }]),
+  }
+  let spaceView = {
+    person: 'ada',
+    space,
+    page: 'trash' as const,
+    apex: 'yaks.app',
+  }
+  let page = await block({
+    view: 'trash',
+    person: 'ada',
+    spaceView,
+    held,
+    drawn: [...held.settings, ...held.page],
+  })
   let { document } = parseHTML(page)
-  let restore = document.querySelector('input[name=restore]')?.closest('form')
-  assertEquals(restore?.getAttribute('method'), 'post')
-  assertEquals(restore?.querySelector('button')?.getAttribute('type'), 'submit')
-  let other = await block({ trash })
-  assert(!other.includes('name="restore"'), other)
+  assertEquals(
+    document.querySelector('[data-restore]')?.getAttribute('data-restore'),
+    'notes-eid',
+  )
+  assertStringIncludes(page, 'data-page-graph')
+  let other = await block({ person: 'ada' })
+  assert(!other.includes('data-restore'), other)
   assert(!other.includes('Notes'), other)
 })
 

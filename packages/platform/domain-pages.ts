@@ -29,6 +29,23 @@ export type DomainOffer = {
 
 export type DomainApp = { eid: string; title: string; slug: string }
 
+/** What came of a press on the page, said where it was pressed. */
+export type Note = { words: string; refused?: boolean }
+
+/** What came of each press, by the form it was in: `point:<name>`,
+ * `transfer:<name>`, `choose:<name>`, and `search` for the search and its
+ * checkouts. */
+export type Notes = Record<string, Note>
+
+// Where a form says what came of it: hidden until something did.
+let noted = (note: Note | undefined, attr: string) =>
+  h(Notice, {
+    role: 'status',
+    [attr]: '',
+    hidden: !note,
+    mod: note?.refused ? 'negative' : undefined,
+  }, note?.words)
+
 let title = (name: string) => h(Card.Head, null, h(Card.Title, null, name))
 
 let hidden = (name: string, value: string | number) =>
@@ -97,7 +114,7 @@ export let offers = (
 let option = (id: string, name: string, current: string) =>
   h('option', { value: id, selected: id == current }, name)
 
-let transfer = (path: string, name: string) =>
+let transfer = (path: string, name: string, note?: Note) =>
   h(
     More,
     { mod: 'quiet' },
@@ -132,7 +149,7 @@ let transfer = (path: string, name: string) =>
             'An owner can accept in Updates. The domain and its renewal then move to their space.',
           ),
         ),
-        h(Notice, { role: 'status', 'data-domain-message': '', hidden: true }),
+        noted(note, 'data-domain-message'),
       ),
     ),
   )
@@ -142,6 +159,7 @@ export let ownedDomain = (
   domain: Domain,
   apps: DomainApp[],
   checkout = false,
+  notes: Notes = {},
 ) => {
   let app = apps.find((a) => a.eid == domain.destination)
   let destination = domain.destination == 'space'
@@ -168,7 +186,7 @@ export let ownedDomain = (
       domain.chosen && h(Rows.Meta, null, 'Included domain'),
       domain.canChoose && h(
         Rows.Form,
-        { method: 'post', action: path },
+        { method: 'post', action: path, 'data-domain-choose': '' },
         hidden('choose_domain', domain.name),
         h(
           Form.Line,
@@ -178,6 +196,7 @@ export let ownedDomain = (
             'aria-label': `Include renewal for ${domain.name}`,
           }, 'Make included domain'),
         ),
+        noted(notes[`choose:${domain.name}`], 'data-domain-message'),
       ),
       checkout && domain.payment && h(
         Rows.Form,
@@ -202,7 +221,9 @@ export let ownedDomain = (
           amount(domain.payment.cents + domain.payment.extra)
         } and automatically refunds ${amount(domain.payment.extra)}.`,
       ),
-      domain.canTransfer ? transfer(path, domain.name) : null,
+      domain.canTransfer
+        ? transfer(path, domain.name, notes[`transfer:${domain.name}`])
+        : null,
     ),
     domain.canPoint
       ? h(
@@ -230,7 +251,7 @@ export let ownedDomain = (
           type: 'submit',
           'aria-label': `Save destination for ${domain.name}`,
         }, 'Save'),
-        h(Notice, { role: 'status', 'data-domain-message': '', hidden: true }),
+        noted(notes[`point:${domain.name}`], 'data-domain-message'),
       )
       : null,
   )
@@ -245,6 +266,8 @@ export type DomainPage = {
   canBuy: boolean
   renewed?: string
   ordered?: string
+  /** What came of each press. */
+  notes?: Notes
 }
 
 export let domainsPage = (
@@ -274,7 +297,9 @@ export let domainsPage = (
         ? h(
           Rows,
           { as: 'ul' },
-          page.domains.map((d) => ownedDomain(path, d, apps, page.checkout)),
+          page.domains.map((d) =>
+            ownedDomain(path, d, apps, page.checkout, page.notes)
+          ),
         )
         : h(Card.Sub, null, 'This space has no domains yet.'),
     ),
@@ -326,7 +351,7 @@ export let domainsPage = (
           ),
         ),
       ),
-      h(Notice, { role: 'status', 'data-search-status': '', hidden: true }),
+      noted(page.notes?.search, 'data-search-status'),
       h(
         'div',
         { 'data-domain-results': '' },

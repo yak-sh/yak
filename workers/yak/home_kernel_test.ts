@@ -34,6 +34,7 @@ import {
   pressPeople,
   seed,
   signIn,
+  spaceAct,
   unique,
 } from './probe.ts'
 import { spaceRobots } from './seo.ts'
@@ -235,20 +236,20 @@ test("the New app screen's words open the person's conversation", async () => {
 })
 
 test('Settings chooses the homepage the way app_set home does', async () => {
-  let { k, at: { homing: slug }, them: { cookie } } = await world()
+  let { k, at: { homing: slug }, them } = await world()
   let at = managePath('settings', slug)
+  let space = (await k.dir.space(slug))!.eid
   let chosen = async () =>
-    parseHTML(await (await k.at(k.host, at, { headers: { cookie } })).text())
+    parseHTML(
+      await (await k.at(k.host, at, { headers: { cookie: them.cookie } }))
+        .text(),
+    )
       .document.querySelector('#your-home option[selected]')
       ?.getAttribute('value')
   let choose = (home: string) =>
-    k.at(k.host, at, {
-      method: 'POST',
-      headers: { cookie },
-      body: new URLSearchParams({ home }),
-    })
+    spaceAct(k, them, space, { spaceSettings: { home } })
   assertEquals(await chosen(), '')
-  assertEquals((await choose('garden')).status, 303)
+  assertEquals((await choose('garden')).status, 200)
   assertEquals(await chosen(), 'garden')
   await choose('site')
   assertEquals(await chosen(), 'site')

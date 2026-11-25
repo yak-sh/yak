@@ -70,6 +70,16 @@ import {
 } from '@yaks/platform/payment-rows'
 import type { AppsView } from '@yaks/platform/space-apps-view'
 import { managePath } from '@yaks/platform/routes'
+import {
+  binnedOf,
+  domainOffers,
+  settingsEid as spaceEid,
+  settingsOf as spaceOf,
+  spaceDomains,
+  spacePagesWords,
+  spaceSettings,
+  spaceTrash,
+} from '@yaks/platform/space-pages'
 import { ALL } from './updates.ts'
 import { sessionRow } from './browser-sessions.ts'
 import { client } from '@yaks/client'
@@ -82,7 +92,7 @@ import { manage } from './manage.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { SPACE } from './build-door.ts'
-import { kernel, pressPeople, seed, signIn } from './probe.ts'
+import { connector, kernel, pressPeople, seed, signIn } from './probe.ts'
 import {
   admitted,
   admittedOf,
@@ -279,6 +289,64 @@ test('a tab reads what an app it may open is made of, and nothing of one it may 
   equal([made?.made.kinds, made?.steps, made?.draft], [[], [], null])
   equal(await rowsOf(bea, line), [])
   equal(await rowsOf(ada, appMaking(crypto.randomUUID())), [])
+})
+
+test('a tab reads and changes its space’s Settings, Trash and Domains through the door, and a stranger nothing', async () => {
+  let space = ada.eids.adas
+  let now = async (who: Tab) => spaceOf(await rowsOf(who, spaceSettings(space)))
+  equal((await now(ada))?.slug, 'adas')
+  equal(await rowsOf(bea, spaceSettings(space)), [])
+  let set = (who: Tab, change: Record<string, unknown>) =>
+    wrote(who, [{
+      entity: { eid: spaceEid(space) },
+      spaceSettings: { space, ...change },
+    }])
+  let renamed = await set(ada, { title: 'Ada’s place', home: 'notes' })
+  equal(renamed.status, 200, JSON.stringify(renamed.body))
+  equal(
+    [spaceOf(renamed.body)?.title, spaceOf(renamed.body)?.home],
+    ['Ada’s place', 'notes'],
+  )
+  equal((await now(ada))?.home, 'notes')
+  equal((await set(bea, { title: 'Mallory' })).status, 403)
+  // An app in the trash comes back, saying where.
+  await connector(k, ada.cookie).answer('app_delete', {
+    space: 'adas',
+    app: 'lists',
+  })
+  let binned = binnedOf(await rowsOf(ada, spaceTrash(space)))
+  equal(binned.map((b) => [b.kind, b.name]), [['app', 'lists']])
+  equal(await rowsOf(bea, spaceTrash(space)), [])
+  let back = await wrote(ada, [{
+    entity: { eid: crypto.randomUUID() },
+    restoreBinned: { space, item: binned[0].item },
+  }])
+  equal(back.status, 200, JSON.stringify(back.body))
+  equal(back.body[0].restoreBinned.said, 'Restored at /lists/.')
+  equal(binnedOf(await rowsOf(ada, spaceTrash(space))), [])
+  let gone = await wrote(ada, [{
+    entity: { eid: crypto.randomUUID() },
+    restoreBinned: { space, item: binned[0].item },
+  }])
+  equal(gone.status, 404, JSON.stringify(gone.body))
+  // No domains yet, and a domain this space does not hold is refused.
+  equal(await rowsOf(ada, spaceDomains(space)), [])
+  let pointed = await wrote(ada, [{
+    entity: { eid: crypto.randomUUID() },
+    pointDomain: { space, name: 'nowhere.test', destination: '' },
+  }])
+  equal(
+    [pointed.status, pointed.body.message],
+    [400, 'This space does not hold that domain.'],
+  )
+})
+
+test('a tab’s domain search is answered once, by the registrar, with what it came to', async () => {
+  let [found] = await rowsOf(ada, domainOffers('oak meadow'))
+  equal(
+    (found.domainSearch as { query: string; error?: string }).query,
+    'oak meadow',
+  )
 })
 
 test('a tab chooses how its person is told things away from the page', async () => {
@@ -683,7 +751,13 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
     let next = socket
     let time = clock(Date.now())
     let page = client(
-      loadVocab([waitingWords, sideWords, accountWords, visitWords]),
+      loadVocab([
+        waitingWords,
+        sideWords,
+        accountWords,
+        visitWords,
+        spacePagesWords,
+      ]),
       [],
       {
         url: `https://yaks.app${REACH}`,
@@ -706,6 +780,8 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
     let spaces = page.watch(SIDE_SPACES)
     let apps = page.watch(sideApps(home.eid))
     let visits = page.watch(visitCounts(home.eid))
+    // The space's Trash page, which its owner has open.
+    let trash = page.watch(spaceTrash(home.eid))
     let badge = (slug = '') =>
       document.querySelector(`[data-across="${slug}"]`)!
     let counts = () => Object.fromEntries(waitingCounts(watch.value))
@@ -764,6 +840,8 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       }, ADA_OWNS)
       await until(() => side().apps.length == 1)
       equal(side().apps, ['Cookbook'])
+      await until(() => binnedOf(trash.value).length == 1)
+      equal(binnedOf(trash.value).map((b) => b.name), ['Jottings'])
       let initial = waits().at(-1)!.revision as Record<string, number>
       equal(
         Object.keys(initial).sort(),
@@ -778,6 +856,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       equal(
         sources.toSorted(),
         [
+          PLATFORM_OBJECT,
           PLATFORM_OBJECT,
           PLATFORM_OBJECT,
           PLATFORM_OBJECT,
@@ -833,7 +912,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       document.dispatchEvent(new window.Event(PAGE))
       equal(badge().textContent, '3')
       equal(side().apps, ['Cookbook'])
-      equal(sources.length, 6)
+      equal(sources.length, 7)
 
       await dir.apply(
         { entities: [{ entity: { eid: seat }, $delete: true }] },
@@ -865,8 +944,9 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       await until(() => counts().ada == 1)
       await until(() => side().apps[0] == 'Recipes')
       equal(
-        sources.slice(6).sort(),
+        sources.slice(7).sort(),
         [
+          PLATFORM_OBJECT,
           PLATFORM_OBJECT,
           PLATFORM_OBJECT,
           PLATFORM_OBJECT,

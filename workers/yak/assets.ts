@@ -51,11 +51,6 @@ export let ASSETS: Asset[] = [
   { name: '_page-client.js', bundle: of('@yaks/client'), named: true },
   { name: '_talk.js', bundle: here('./operator-rows.ts'), external },
   { name: '_settings.js', bundle: here('./settings.ts'), named: true },
-  {
-    name: '_domains.js',
-    bundle: of('@yaks/platform/domain-browser'),
-    named: true,
-  },
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
   // The service worker that shows pushed notifications, at the root it
   // serves, under the address the browsers that allowed it registered.
@@ -123,6 +118,14 @@ export let ASSETS: Asset[] = [
   {
     name: '_app-canvas.js',
     bundle: of('@yaks/platform/app-canvas-browser'),
+    external,
+    named: true,
+  },
+  // A space's Settings, Domains and Trash kept current
+  // (@yaks/platform/space-pages-browser).
+  {
+    name: '_space-pages.js',
+    bundle: of('@yaks/platform/space-pages-browser'),
     external,
     named: true,
   },

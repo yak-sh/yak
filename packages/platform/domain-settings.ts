@@ -43,11 +43,11 @@ export let renewal = (
   return date ? `${what} · due by ${date}` : what
 }
 
-/** Join each hostname to its order by name, keeping pending orders visible. */
+/** Join each hostname to its order by name, keeping pending orders visible,
+ * and a refused one until its refund lands. */
 export let listings = <H extends Hostname, O extends Order>(
   hosts: H[],
   orders: O[],
-  checkoutReturn?: string,
 ) => {
   let held = new Map(
     orders.filter((r) => r.registered).map((r) => [r.order.name, r]),
@@ -55,7 +55,7 @@ export let listings = <H extends Hostname, O extends Order>(
   for (let attempt of orders) {
     if (
       !held.has(attempt.order.name) &&
-      (!attempt.refused || attempt.order.name == checkoutReturn)
+      (!attempt.refused || !attempt.refunded)
     ) {
       held.set(attempt.order.name, attempt)
     }

@@ -2,6 +2,7 @@ import type { Picked } from '@yaks/platform/side-rows'
 import type { Bundle } from '@yaks/graph'
 import {
   copyable,
+  fileDrop,
   firstAsk,
   heading,
   labeled,
@@ -31,7 +32,6 @@ import { Time } from '@yaks/ui/parts'
 import { type Field as Fielded, KEY } from '@yaks/connections'
 
 import {
-  At,
   Button,
   Card,
   Chip,
@@ -51,7 +51,7 @@ import type { Agent } from './connected.ts'
 
 import type { Connections, Face } from './connections.ts'
 
-import { esc, fileDrop, markup, raw } from './html.ts'
+import { esc, markup, raw } from './html.ts'
 
 import type { Befriended } from './friends.ts'
 
@@ -86,7 +86,8 @@ import type { VocabDoc } from '@yaks/vocab'
 
 import { kinds } from '@yaks/data-editor'
 
-import type { Domain, DomainPage } from '@yaks/platform/domain-pages'
+import type { Domain } from '@yaks/platform/domain-pages'
+import type { Held, SpaceView } from '@yaks/platform/space-pages-view'
 import { importMap } from './page-imports.ts'
 
 export type Kids = ComponentChildren
@@ -236,8 +237,8 @@ ${
       ? `<script type="module" src="${file('_app-canvas.js')}"></script>`
       : ''
   }${
-    main.includes('data-domain-search=')
-      ? `<script type="module" src="${file('_domains.js')}"></script>`
+    main.includes('data-space-view=')
+      ? `<script type="module" src="${file('_space-pages.js')}"></script>`
       : ''
   }${
     main.includes('data-chart')
@@ -669,8 +670,6 @@ export type DeskPage = {
   /** what the apps page was asked to find and how to order it
    * (@yaks/platform/space-apps-view `sifted`) */
   sift?: { q: string; sort: string }
-  trash?: { eid: string; slug: string; title: string; days: number }[]
-  numbers?: { eid: string; number: string; monthly: string; days: number }[]
   name?: string
   email?: string
   sessions?: import('./browser-sessions.ts').BrowserSession[]
@@ -689,13 +688,9 @@ export type DeskPage = {
   /** whether the platform's payment provider takes sellers at all, which
    * puts Selling in the side on every manage page */
   shops?: boolean
-  domains?: DomainPage
   renewals?: Domain[]
   /** on a paid plan, which is what taking payments needs */
   paying?: boolean
-  /** whether its apps' pages say "Website by yaks.app" at their foot
-   * (`byline`), which Settings offers on a paid plan */
-  byline?: boolean
   say?: string
   no?: boolean
   view?: Setting
@@ -707,9 +702,6 @@ export type DeskPage = {
    * and whether it shows them all (`?all`) or the first few */
   friendList?: Befriended[]
   allFriends?: boolean
-  /** what was typed into the settings form, when a change was refused and
-   * the page is drawn again */
-  typed?: { title: string; space: string; home: string }
   /** what was typed into the new space form, when it was refused */
   made?: { title: string; slug: string }
   /** the apps of other people's spaces this person may open, each with the
@@ -718,6 +710,14 @@ export type DeskPage = {
   /** the rows a page drawn from the page graph's reads was drawn from, which
    * it carries for its first paint (@yaks/platform/page-graph `drawnRows`) */
   drawn?: Bundle[]
+  /** a space's Settings, Domains or Trash page: what it says beside its
+   * rows, and the rows each of its lines held
+   * (@yaks/platform/space-pages-view) */
+  spaceView?: SpaceView
+  held?: Held
+  /** how many apps and phone numbers the space's trash holds, which the
+   * side counts beside Trash */
+  binned?: number
   /** every space this person may work in, this one among them */
   spaces?: Picked[]
   /** the person's own invite to yaks.app (referral.ts `invitation`) */
@@ -1302,37 +1302,6 @@ export let closed = (env: Host = {}) =>
 // What a press answered, said back on the page it drew again.
 export let said = (say?: string, no?: boolean) =>
   say ? h(Notice, { mod: no && 'negative', role: 'status' }, say) : null
-
-export let addressBox = (
-  id: string,
-  name: string,
-  value: string,
-  env: Host,
-  more = {},
-) =>
-  h(
-    At,
-    null,
-    h(Field, {
-      id,
-      name,
-      maxlength: 63,
-      placeholder: 'e.g. oak-street',
-      autocomplete: 'off',
-      spellcheck: 'false',
-      ...more,
-      value,
-    }),
-    h(At.End, null, `.${apex(env)}`),
-  )
-
-// What changing an address does, said on both cards that change it: the
-// apps go along, and the old address redirects only until somebody else takes
-// the name, which is free the moment it is left (D-131924).
-export let MOVES =
-  'You can change it at any time. Every app moves with it, and ' +
-  'the old address sends people to the new one until someone else takes ' +
-  'that name.'
 
 // Connector forms do not ask the same questions. Keep each answer beside the
 // provider step that asks for it, so a person never has to work out whether a

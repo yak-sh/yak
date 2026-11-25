@@ -591,7 +591,6 @@ export let ownedDomains = async (
   dir: Directory,
   space: Space,
   apps: DomainApp[],
-  checkoutReturn?: string,
 ) => {
   let [hosts, orders] = await Promise.all([
     dir.hosts(space),
@@ -599,7 +598,7 @@ export let ownedDomains = async (
   ])
   let terms = await choiceOf(env, space, orders)
   return await Promise.all(
-    listings(hosts, orders, checkoutReturn)
+    listings(hosts, orders)
       .map(({ hostname, purchase }) =>
         asDomain(env, space, apps, hostname, purchase, terms)
       ),

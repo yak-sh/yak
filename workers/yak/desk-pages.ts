@@ -4,7 +4,7 @@ import { Head } from '@yaks/ui/parts'
 // space never compiles them. Its sidebar is composed by desk-sidebar.ts.
 import { deskSide } from './desk-sidebar.ts'
 import { frame, FRAMED } from './frame.ts'
-import { choice, spaceTile } from '@yaks/platform/side-parts'
+import { choice } from '@yaks/platform/side-parts'
 import { Time } from '@yaks/ui/parts'
 import { agentSetup } from './signin-pages.ts'
 import { AGENT } from './docs.ts'
@@ -40,8 +40,7 @@ import type { Grantee, McpPage } from './connected-mcp.ts'
 import { about, connects, detail, links } from './integration-detail.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icons } from './icons.ts'
-import { fileDrop, markup, raw } from './html.ts'
-import { LOGO_TYPES } from './logo.ts'
+import { markup, raw } from './html.ts'
 import { drawnRows } from '@yaks/platform/page-graph'
 import { agentsOf, listedOf } from '@yaks/platform/space-apps'
 import {
@@ -52,7 +51,8 @@ import {
 import { type FriendsView, friendsView } from '@yaks/platform/friends-view'
 import { type VisitsView, visitsView } from '@yaks/platform/visits-view'
 import { countsOf } from '@yaks/platform/visit-counts'
-import { empty, fieldsOf, option, saving } from '@yaks/platform/page-parts'
+import { addressBox, empty, fieldsOf, saving } from '@yaks/platform/page-parts'
+import { heldRows, spacePageView } from '@yaks/platform/space-pages-view'
 import { tile } from './render/mod.ts'
 import {
   peopleRows,
@@ -63,7 +63,6 @@ import { type Invitation, qr } from './referral.ts'
 import {
   accountView,
   enabling,
-  logoUpload,
   managePath,
   type Setting,
 } from '@yaks/platform/routes'
@@ -73,7 +72,7 @@ import { accountOf, signedInOf } from '@yaks/platform/account-rows'
 import { appsOf, pickedOf } from '@yaks/platform/side-rows'
 import { count } from '@yaks/platform/standing'
 import { STARTER } from '@yaks/platform/plans'
-import { domainRenewals, domainsPage } from '@yaks/platform/domain-pages'
+import { domainRenewals } from '@yaks/platform/domain-pages'
 import {
   paymentOf,
   type PaymentView,
@@ -82,7 +81,6 @@ import {
 import { yak } from './mascot.ts'
 
 import {
-  addressBox,
   copying,
   type DeskPage,
   dropping,
@@ -95,11 +93,9 @@ import {
   type Kids,
   labeled,
   logo,
-  MOVES,
   page,
   type Picked,
   said,
-  send,
   sentence,
   signingIn,
   state,
@@ -445,7 +441,7 @@ let newSpace = (at: DeskPage, env: Host) =>
         labeled(
           'space-slug',
           'Address',
-          addressBox('space-slug', 'slug', at.made?.slug ?? '', env, {
+          addressBox('space-slug', 'slug', at.made?.slug ?? '', apex(env), {
             required: true,
           }),
         ),
@@ -454,154 +450,18 @@ let newSpace = (at: DeskPage, env: Host) =>
     'Create space',
   )
 
-// A space's Settings: its name, its address and what it opens join the
-// page's Save bar. Deleting asks again on its own page (identity.ts
-// `closing`). A refusal draws the page again with what was typed still in
-// the fields (`at.typed`).
-
-// Settings' Logo: the space's picture, or its letter, beside a drop zone
-// that sends its own form as soon as a file is chosen, and Remove where there
-// is one to take off.
-let logoCard = (at: DeskPage) => {
-  let here = picked(at)
-  let action = managePath('settings', at.space)
+// A space's Settings, Domains and Trash, drawn from its rows as the browser
+// draws them again (@yaks/platform/space-pages-view), which the page carries
+// for its first paint (`data-view`).
+let spacePage = (at: DeskPage) => {
+  let view = at.spaceView!
+  let rows = heldRows(view, at.held ?? { settings: [], apps: [] })
   return h(
-    Card,
-    null,
-    heading('Logo'),
-    h(
-      Card.Sub,
-      null,
-      'Shown beside the space’s name. A square picture looks best.',
-    ),
-    h(
-      Form,
-      {
-        class: 'Desk_Logo Page_Form',
-        method: 'post',
-        action: logoUpload(at.space),
-        enctype: 'multipart/form-data',
-      },
-      spaceTile(here, 'large'),
-      fileDrop({
-        name: 'logo',
-        label: 'Logo',
-        hint: 'PNG, JPEG, WebP or GIF',
-        accept: LOGO_TYPES,
-        required: true,
-        sends: true,
-      }),
-      h('noscript', null, send('Upload')),
-    ),
-    here.logo
-      ? h(
-        'form',
-        { class: 'Page_Form', method: 'post', action },
-        h(
-          Button,
-          { type: 'submit', name: 'unlogo', value: '1' },
-          'Remove logo',
-        ),
-      )
-      : null,
+    'div',
+    { 'data-view': 'space-page', 'data-space-view': JSON.stringify(view) },
+    rows ? spacePageView(view, rows) : null,
+    drawing(at),
   )
-}
-
-// Settings' line at the foot of a paid space's pages (@yaks/platform/woven
-// `bylineOf`), space_set's `byline`. The hidden field says the box was on the
-// form, so leaving it unticked takes the line off.
-let bylineCheck = (at: DeskPage) =>
-  h(
-    Check,
-    null,
-    h('input', { type: 'hidden', name: 'byline', value: '' }),
-    h(Check.Input, {
-      type: 'checkbox',
-      name: 'byline',
-      value: 'on',
-      checked: !!at.byline,
-    }),
-    'Show “Website by yaks.app” at the foot of your site',
-    h(
-      Check.Note,
-      null,
-      ' A small line linking to yaks.app, for visitors who would like a site like yours.',
-    ),
-  )
-
-let preferences = (at: DeskPage, env: Host) => {
-  let home = at.apps.find((a) => a.home)
-  let was = at.typed ??
-    { title: named(picked(at)), space: at.space, home: home?.slug ?? '' }
-  let host = spaceHost(env, at.space)
-  return [
-    logoCard(at),
-    saving(
-      managePath('settings', at.space),
-      h(
-        Card,
-        null,
-        heading('General'),
-        fieldsOf(
-          labeled(
-            'space-title',
-            'Name',
-            h(Field, {
-              id: 'space-title',
-              placeholder: 'e.g. Oak Street Church',
-              name: 'title',
-              maxlength: 60,
-              value: was.title,
-            }),
-          ),
-          labeled(
-            'your-address',
-            'Address',
-            addressBox('your-address', 'space', was.space, env),
-            [
-              MOVES,
-              ' ',
-              h(
-                'a',
-                { href: managePath('domains', at.space) },
-                'Manage custom domains',
-              ),
-              '.',
-            ],
-          ),
-          at.apps.length
-            ? labeled(
-              'your-home',
-              `What ${host} opens`,
-              h(
-                Field,
-                { choose: true, id: 'your-home', name: 'home' },
-                option('', 'Your app library', !was.home),
-                at.apps.map((a) =>
-                  option(a.slug, a.title || a.slug, a.slug == was.home)
-                ),
-              ),
-            )
-            : h('p', null, `${host} opens its app library.`),
-          at.paying ? bylineCheck(at) : null,
-        ),
-      ),
-    ),
-    h(
-      Card,
-      { mod: 'danger' },
-      heading('Delete this space', {
-        actions: h(Button, {
-          href: url(env, `/space/${encodeURIComponent(at.space)}/delete`),
-        }, 'Delete space…'),
-      }),
-      h(
-        Card.Sub,
-        null,
-        'Its apps, people and data stay recoverable in the trash.',
-      ),
-    ),
-  ]
 }
 
 // Selling and Billing, drawn from the space's rows as the browser draws them
@@ -624,82 +484,6 @@ let payment = (at: DeskPage, env: Host, view: 'selling' | 'billing') => {
     drawing(at),
   )
 }
-
-let trash = (at: DeskPage, env: Host) => {
-  let apps = at.trash ?? []
-  let numbers = at.numbers ?? []
-  if (!apps.length && !numbers.length) {
-    return empty(
-      'Trash is empty',
-      h(
-        'p',
-        null,
-        'Deleted apps and released phone numbers stay here until restored or you confirm permanent erasure.',
-      ),
-    )
-  }
-  return h(
-    Card,
-    null,
-    heading('Trash'),
-    h(
-      Card.Sub,
-      null,
-      'Apps and phone numbers stay recoverable until restored or you confirm permanent erasure. Numbers stop taking calls and texts, and still cost their monthly price until returned to the phone company. Restoring a number brings back its assignment.',
-    ),
-    h(
-      Rows,
-      { as: 'ul' },
-      ...apps.map((a) =>
-        trashRow(at, a.eid, a.title || a.slug, a.days, 'restore')
-      ),
-      ...numbers.map((l) =>
-        trashRow(
-          at,
-          l.eid,
-          l.number,
-          l.days,
-          'restore_number',
-          `${l.monthly} a month`,
-          `https://${apex(env)}/space/${at.space}/confirm/numbererase/${l.eid}`,
-        )
-      ),
-    ),
-  )
-}
-
-let trashRow = (
-  at: DeskPage,
-  eid: string,
-  name: string,
-  _days: number,
-  field: string,
-  price = '',
-  erase?: string,
-) =>
-  h(
-    Rows.Item,
-    { as: 'li' },
-    h(
-      Rows.Main,
-      null,
-      h(Rows.Name, { as: 'span' }, name),
-      h(
-        Rows.Meta,
-        null,
-        `Kept until restored or purged${price ? ` · ${price}` : ''}`,
-      ),
-    ),
-    h(
-      Rows.Actions,
-      { as: 'form', method: 'post', action: managePath('trash', at.space) },
-      held(field, eid),
-      h(Button, { type: 'submit' }, 'Restore'),
-      erase
-        ? h(Button, { as: 'a', href: erase, quiet: true }, 'Return forever…')
-        : null,
-    ),
-  )
 
 // How a connection stands, as its head says it.
 let STATUS = {
@@ -2298,9 +2082,8 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   }
   if (view == 'visits') body = visitsPage(at, site)
   if (view == 'selling') body = payment(at, env, 'selling')
-  if (view == 'settings') body = preferences(at, env)
-  if (view == 'domains' && at.domains) {
-    body = domainsPage(at.space, at.apps, at.domains)
+  if (view == 'settings' || view == 'domains' || view == 'trash') {
+    body = spacePage(at)
   }
   if (view == 'billing') {
     body = [
@@ -2308,7 +2091,6 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       domainRenewals(at.space, at.renewals ?? []),
     ]
   }
-  if (view == 'trash') body = trash(at, env)
   if (view == 'connections') body = connections(at, env)
   if (view == 'people') body = peoplePage(at)
   // The Operator's page is drawn by operator-page.ts, as markup.

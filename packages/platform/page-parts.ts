@@ -8,10 +8,13 @@
  * @module
  */
 import { type ComponentChildren as Kids, h } from 'preact'
+import { At } from '@yaks/ui/At'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Copy } from '@yaks/ui/Copy'
+import { Drop } from '@yaks/ui/Drop'
 import { Empty } from '@yaks/ui/Empty'
+import { Field } from '@yaks/ui/Field'
 import { Form } from '@yaks/ui/Form'
 import { State } from '@yaks/ui/State'
 
@@ -130,10 +133,85 @@ export let saving = (action: string, card: Kids, label = 'Save') =>
 /** What a settings form saves through in place of posting, set on the form by
  * the script that draws its page from the page graph (./account-browser.ts)
  * and called by the page's Save bar (yaks.app's settings.ts) with what the
- * form holds. What it resolves to is what the bar says. */
+ * form holds. What it resolves to is what the bar says, or that and the
+ * address the page moves to once saved (`Saved`). */
 export let SAVE_THROUGH = Symbol.for('@yaks/platform/save-through')
+
+/** What a save came to: what the bar says, and where the page moves. */
+export type Saved = { say?: string; to?: string }
 
 /** A form that may say what it saves through. */
 export type SavingForm = HTMLFormElement & {
-  [SAVE_THROUGH]?: (body: FormData) => Promise<string | undefined>
+  [SAVE_THROUGH]?: (body: FormData) => Promise<string | Saved | undefined>
 }
+
+/** A space's address: its slug in a field, the platform's apex after it. */
+export let addressBox = (
+  id: string,
+  name: string,
+  value: string,
+  apex: string,
+  more = {},
+) =>
+  h(
+    At,
+    null,
+    h(Field, {
+      id,
+      name,
+      maxlength: 63,
+      placeholder: 'e.g. oak-street',
+      autocomplete: 'off',
+      spellcheck: 'false',
+      ...more,
+      value,
+    }),
+    h(At.End, null, `.${apex}`),
+  )
+
+/** What changing an address does, said on both cards that change it: the
+ * apps go along, and the old address redirects only until somebody else
+ * takes the name, which is free the moment it is left (D-131924). */
+export let MOVES = 'You can change it at any time. Every app moves with it, ' +
+  'and the old address sends people to the new one until someone else ' +
+  'takes that name.'
+
+/** A file field people drop files on or choose them with; `sends` sends its
+ * form as soon as one is chosen. */
+export let fileDrop = (o: {
+  name: string
+  label: string
+  hint?: string
+  multiple?: boolean
+  required?: boolean
+  accept?: string
+  size?: number
+  sends?: boolean
+}) =>
+  h(
+    Drop,
+    null,
+    h(
+      Drop.Zone,
+      null,
+      h(Drop.File, {
+        type: 'file',
+        name: o.name,
+        'aria-label': o.label,
+        multiple: o.multiple,
+        required: o.required,
+        accept: o.accept,
+        'data-size': o.size,
+        'data-sends': o.sends ? '' : undefined,
+      }),
+      h(
+        Drop.Say,
+        null,
+        h(Drop.Choose, null, `Choose ${o.multiple ? 'files' : 'a file'}`),
+        ` or drop ${o.multiple ? 'them' : 'it'} here`,
+      ),
+      o.hint ? h(Drop.Hint, null, o.hint) : null,
+    ),
+    o.size ? h(Drop.Said, { role: 'status' }) : null,
+    h(Drop.Chosen, { 'aria-live': 'polite' }),
+  )

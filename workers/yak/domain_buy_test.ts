@@ -12,13 +12,17 @@ import {
   connector,
   fresh,
   onPlus,
+  reach,
   registered,
   seed,
+  spaceAct,
   tagged,
   WEBHOOK_SECRET,
   zoneRecords,
 } from './probe.ts'
 import { stamp } from './directory.ts'
+import { domainOffers, offersOf } from '@yaks/platform/space-pages'
+import type { DomainOffer } from '@yaks/platform/domain-pages'
 import type { Env } from './env.ts'
 import { stub } from '@std/testing/mock'
 
@@ -185,13 +189,14 @@ test('Domains quotes checkout, changes the destination, and transfers ownership 
     CF_REGISTRAR_TOKEN: 'a-token',
     STRIPE_KEY: 'sk_test_probe',
   })
-  let { cookie, eids } = await seed(k, [{
+  let owner = await seed(k, [{
     slug: 'studio',
     apps: ['one', 'two'],
   }, {
     slug: 'other-studio',
     apps: ['elsewhere'],
   }])
+  let { cookie, eids } = owner
   let space = (await k.dir.at(eids.studio))!
   let [one, two] = (await k.dir.apps(space)).sort((a, b) =>
     a.slug.localeCompare(b.slug)
@@ -211,20 +216,36 @@ test('Domains quotes checkout, changes the destination, and transfers ownership 
       },
       body: new URLSearchParams(body),
     })
-  let search = (q: string) => read(path + '?search=' + encodeURIComponent(q))
+  // What the registrar offers for `q`, as the page's search watches it.
+  let search = async (q: string) =>
+    offersOf(
+      await (await reach(
+        k,
+        owner,
+        `/query?q=${encodeURIComponent(domainOffers(q))}`,
+      )).json(),
+    )!.found
+  let none = (found: DomainOffer[]) => found.every((o) => !o.first)
 
   let start = await read(path)
   ok(start.includes('This space has no domains yet.'), start)
   ok((await read('/manage/studio/settings')).includes('Manage custom domains'))
   let results = await search('studio books')
-  ok(results.includes('studiobooks.com'), results)
-  ok(results.includes('studiobooks.org'), results)
-  ok(results.includes('$10.44 first year · $10.44 per year to renew'), results)
+  let quoted = (name: string) => {
+    let o = results.find((o) => o.name == name)
+    return o && [o.first, o.renewal]
+  }
+  equal(
+    [quoted('studiobooks.com'), quoted('studiobooks.org')],
+    [['$10.44', '$10.44'], ['$10.44', '$10.44']],
+  )
   let taken = await search('taken.com')
-  ok(taken.includes('Taken.'), taken)
-  ok(taken.includes('No available domains'), taken)
-  ok(!taken.includes('data-domain-buy'), taken)
-  ok((await search('!!!')).includes('No available domains'))
+  ok(taken.some((o) => o.unavailable == 'Taken.'))
+  ok(none(taken))
+  ok(none(await search('!!!')))
+  // A search in the page's address is drawn on its first paint.
+  let first = await read(path + '?q=' + encodeURIComponent('studio books'))
+  ok(first.includes('$10.44 first year · $10.44 per year to renew'), first)
 
   let name = 'studiobooks.com'
   let quote = { billing: 'domain', domain: name, cents: '1044', renews: '1044' }
@@ -269,7 +290,8 @@ test('Domains quotes checkout, changes the destination, and transfers ownership 
   ok(listing.includes('Certificate'), listing)
   ok(listing.includes('$10.44 to renew at the registrar'), listing)
   equal(await k.dir.serves(name), null)
-  let point = (destination: string) => post({ point_domain: name, destination })
+  let point = (destination: string) =>
+    spaceAct(k, owner, space.eid, { pointDomain: { name, destination } })
   equal((await point(other.eid)).status, 400)
   equal((await point(one.eid)).status, 200)
   equal((await k.dir.serves(name))?.app?.eid, one.eid)
@@ -287,9 +309,12 @@ test('Domains quotes checkout, changes the destination, and transfers ownership 
   let recipient = await seed(k, [{ slug: 'receiving', apps: [] }])
   let target = (await k.dir.at(recipient.eids.receiving))!
   equal((await point(one.eid)).status, 200)
-  let offer = { transfer_domain: name, receiving_space: target.slug }
-  equal((await post(offer)).status, 200)
-  equal((await post(offer)).status, 200)
+  let offer = () =>
+    spaceAct(k, owner, space.eid, {
+      offerDomain: { name, to: target.slug },
+    })
+  equal((await offer()).status, 200)
+  equal((await offer()).status, 200)
   equal((await k.dir.serves(name))?.space.eid, space.eid)
 
   let updates = '/receiving/updates'
@@ -390,7 +415,8 @@ for (
         env = e
       },
     )
-    let { eids, cookie } = await seed(k, [{ slug: 'renewals', apps: [] }])
+    let owner = await seed(k, [{ slug: 'renewals', apps: [] }])
+    let { eids, cookie } = owner
     let space = eids.renewals
     let plan = (tier: string) =>
       stamp(env, {
@@ -429,8 +455,10 @@ for (
       [first]: { auto_renew: true },
       [second]: { auto_renew: false },
     })
-    let picked = await post({ choose_domain: second })
-    equal(picked.status, 303)
+    let choose = (name: string) =>
+      spaceAct(k, owner, space, { chooseDomain: { name } })
+    let picked = await choose(second)
+    equal(picked.status, 200, await picked.clone().text())
     let owned = await k.dir.domainOrders((await k.dir.at(space))!)
     equal(
       (await k.dir.at(space))?.domainChoice,
@@ -478,7 +506,7 @@ for (
       refunds.map((r) => r.amount),
       charged > debit ? [charged - debit] : [],
     )
-    equal((await post({ choose_domain: first })).status, 303)
+    equal((await choose(first)).status, 200)
     await k.settled()
     let other = (await page()).getElementById(first)!
     ok(other.textContent!.includes('$10.44 to renew at the registrar'))

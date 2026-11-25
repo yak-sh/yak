@@ -30,6 +30,8 @@
     "./Empty": "./Empty.ts",
     "./Field": "./Field.ts",
     "./Button": "./Button.ts",
+    "./At": "./At.ts",
+    "./Drop": "./Drop.ts",
     "./contributions": "./contributions.ts",
     "./guide": "./guide.ts",
     "./history": "./history.ts",

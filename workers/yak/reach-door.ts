@@ -14,9 +14,12 @@
 // visits (@yaks/platform/visit-counts) are in no store: they are read from
 // Cloudflare's analytics here, again each time the space's apps move.
 //
-// What no store holds, a space's Apps page's breaks and the person's agents
-// (apps-reads.ts), is read as the page asks, and a watch of it is answered
-// once.
+// What no store holds, a space's Apps page's breaks, the person's agents
+// (apps-reads.ts) and a domain search's offers (space-pages.ts), is read as
+// the page asks, and a watch of it is answered once.
+//
+// A space's Settings, Domains and Trash pages (@yaks/platform/space-pages)
+// are reads of its owner the directory answers too.
 //
 // A space's plan card, where it stands with selling and whom it is billed to
 // (@yaks/platform/payment-rows) no store holds: each is read of the space and
@@ -30,8 +33,10 @@
 //
 // Some writes are not rows: an Updates card's action (updates.ts `acting`),
 // the person's own account, messages and friend asks (account-writes.ts),
-// and who is in a space they own (people-writes.ts), are done here and answered with what they came to,
-// the way the page graph shows each at once and the server confirms it.
+// who is in a space they own (people-writes.ts), and what they change of a
+// space they own (space-pages.ts), are done here and answered with what they
+// came to, the way the page graph shows each at once and the server confirms
+// it.
 import { attach } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
 import { type Kept, watched } from '@yaks/api/reached'
@@ -64,6 +69,8 @@ import { writes } from '@yaks/member'
 import { personRows, visitsRows } from './side.ts'
 import { countsSpace } from '@yaks/platform/visit-counts'
 import { sideApps } from '@yaks/platform/side-rows'
+import { offersQuery, spaceLine, spaceWrite } from '@yaks/platform/space-pages'
+import { offersFor, spaceApply, spaceRows } from './space-pages.ts'
 import { REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { whole } from '@yaks/query'
 import { CallError, refused as toolRefused } from '@yaks/tools/errors'
@@ -151,8 +158,12 @@ export let reachDoor = async (
     return settingsRow(seat.space.eid, wearing(now))
   }
   // What the door reads as the page asks, once: what no store holds.
-  let once = (line: string) => line == AGENTS || brokenSpace(line) != undefined
+  let once = (line: string) =>
+    line == AGENTS || brokenSpace(line) != undefined ||
+    offersQuery(line) != undefined
   let readOnce = async (line: string): Promise<Bundle[]> => {
+    let query = offersQuery(line)
+    if (query != undefined) return await offersFor(env, query)
     let space = brokenSpace(line)
     if (space == undefined) return await agentsIn(env, dir, person)
     let seat = await seatIn(space)
@@ -204,6 +215,9 @@ export let reachDoor = async (
         let seat = await seatIn(named)
         if (!seat) return Response.json([])
         return Response.json([await settingsOf(seat)])
+      }
+      if (spaceLine(line)) {
+        return Response.json(await spaceRows(env, dir, person, line))
       }
       if (line != UPDATE_WAITING && personLine(line)) {
         return Response.json(await personRows(dir, person, line))
@@ -285,6 +299,12 @@ export let reachDoor = async (
           )
         }
         return Response.json([await settingsOf(seat, checked(setting.set))])
+      }
+      let space = spaceWrite(bundles)
+      if (space) {
+        return Response.json(
+          await spaceApply(bundles, env, dir, who, person, space),
+        )
       }
       if (reachedWrites(bundles)) {
         return Response.json(

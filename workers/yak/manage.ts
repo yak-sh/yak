@@ -2,26 +2,19 @@
 // and their forms saved. apps.ts serves a space's pages and loads this on the
 // first request to `/manage`, so an isolate that only serves pages never
 // compiles it (T-148886).
-import { chooseDomain } from './domain-renewal.ts'
 import { copyOf } from './directory-copy.ts'
 import { AGAIN, lookingAhead } from '@yaks/ui/navigate'
-import { spaceHost, url as hostUrl } from '@yaks/platform/host'
+import { apex, spaceHost, url as hostUrl } from '@yaks/platform/host'
 import { browserImmutable } from '@yaks/platform/kept'
 import { heard, type Said, telling, unsaid } from '@yaks/platform/cookie'
-import {
-  daysLeft,
-  directory,
-  type Seat,
-  type Space,
-  walkTo,
-} from './directory.ts'
+import { directory, type Seat, type Space, walkTo } from './directory.ts'
 import { paid } from '@yaks/platform/plans'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import type { Beside } from './operator-page.ts'
 import { pilled, standing } from './gallery-row.ts'
 import { buyDomain, renewDomain } from './billing.ts'
-import { payments, plans } from './payments.ts'
+import { payments } from './payments.ts'
 import {
   chatRows,
   connecting,
@@ -38,10 +31,6 @@ import { monogram } from '@yaks/platform/monogram'
 import type { LogoSize } from '@yaks/platform/space-logo'
 import { peopleLines } from '@yaks/platform/people-view'
 import { CallError } from '@yaks/tools/errors'
-import { restoredAddress, untrash } from './erase.ts'
-import { restoredNumber } from './number-trash.ts'
-import { dollars } from './numbers.ts'
-import { shown } from '@yaks/phone'
 import {
   type AccountView,
   accountView,
@@ -95,21 +84,9 @@ import {
   SIGNED_IN,
 } from '@yaks/platform/account-rows'
 import { SIDE_SPACES, sideApps as sideAppsLine } from '@yaks/platform/side-rows'
-import {
-  billedDomains,
-  domainOffers,
-  included,
-  ownedDomains,
-  pointDomain,
-} from './domains.ts'
-import {
-  type DomainOffer,
-  offers,
-  ownedDomain,
-} from '@yaks/platform/domain-pages'
-import { markup } from './html.ts'
-import { Refused, Stale } from '@yaks/graph/errors'
-import { offerDomain } from './app-transfer.ts'
+import { billedDomains } from './domains.ts'
+import type { SpacePage } from '@yaks/platform/space-pages-view'
+import { spaceHeld } from './space-pages.ts'
 
 // The identity part, asked for at request time rather than imported at the
 // top: it carries the OAuth provider, whose `cloudflare:` modules exist only
@@ -202,8 +179,7 @@ export let manage = async (
       )
       page.catch(() => {})
       if (reads && !at.door) {
-        let drawn = !at.open && !at.logo && !at.manifest &&
-          !(at.view == 'domains' && url.searchParams.has('search'))
+        let drawn = !at.open && !at.logo && !at.manifest
         let chat = !!at.open && !url.searchParams.has('attachment')
         foresee(
           dir,
@@ -363,8 +339,7 @@ export let manage = async (
   let asks = view == 'updates' || view == 'matches' ||
     view == 'operator' && (at.open || at.door)
   if (
-    reading && !asks && writes(who.role) && !administrative && !space.trashed &&
-    !(view == 'domains' && url.searchParams.has('search'))
+    reading && !asks && writes(who.role) && !administrative && !space.trashed
   ) {
     woken(env, space.eid)
   }
@@ -445,20 +420,6 @@ export let manage = async (
   }
   if (req.method == 'POST') return saved(req, env, dir, space, who, view)
   if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
-  if (view == 'domains' && url.searchParams.has('search')) {
-    let { found, error } = await searched(env, url.searchParams.get('search')!)
-    let checkout = included(space) && who.role == 'owner' &&
-      (await plans(env)).on()
-    return new Response(
-      markup(offers(managePath('domains', space.slug), found, checkout, error)),
-      {
-        headers: {
-          'content-type': 'text/html; charset=utf-8',
-          'cache-control': 'private, no-store',
-        },
-      },
-    )
-  }
   if (view == 'billing' && url.searchParams.has('domain')) {
     return redirect(
       hostUrl(env, managePath('domains', space.slug)) + url.search,
@@ -705,21 +666,6 @@ let beside = async (
   }
 }
 
-let searched = async (
-  env: Env,
-  query: string,
-): Promise<{ found: DomainOffer[]; error?: string }> => {
-  try {
-    return { found: await domainOffers(env, query) }
-  } catch (e) {
-    if (!(e instanceof CallError)) caught(e, { request: 'search for domains' })
-    return {
-      found: [],
-      error: 'Domain search is unavailable right now. Try again shortly.',
-    }
-  }
-}
-
 // One page of a space's (pages.ts `desk`), for its owner, or its Operator for
 // a member who may change it.
 let desk = async (
@@ -730,7 +676,6 @@ let desk = async (
   who: Owner,
   view: Exclude<SpaceView, Talk>,
   said?: Said,
-  typed?: Pick<DeskPage, 'typed'>,
 ): Promise<Response> => {
   let owner = who.person
   let q = new URL(req.url).searchParams
@@ -777,8 +722,7 @@ let desk = async (
     provider,
     panes,
     lines,
-    domains,
-    searchedFor,
+    held,
     renewals,
   ] = await Promise.all([
     shelved,
@@ -857,12 +801,11 @@ let desk = async (
     // How the person keeps the panes (directory.ts `Panes`).
     dir.panes(owner),
     dir.lines(walkTo(space.slug, space.eid)),
-    view == 'domains'
-      ? shelved.then(({ all }) =>
-        ownedDomains(env, dir, space, all, q.get('domain') ?? undefined)
-      )
+    // The rows a page drawn from the page graph's reads is drawn from
+    // (@yaks/platform/space-pages-view), carried for its first paint.
+    view == 'settings' || view == 'domains' || view == 'trash'
+      ? spaceHeld(env, dir, owner, space.eid, view, q.get('q') ?? '')
       : undefined,
-    view == 'domains' && q.get('q') ? searched(env, q.get('q')!) : undefined,
     // As the page asked them ahead (`rowsAhead`), by its walk.
     view == 'billing'
       ? billedDomains(env, dir, space, walkTo(space.slug, space.eid))
@@ -872,8 +815,10 @@ let desk = async (
   let connected = await inHand(agentsRow)
   let page = deskPage({
     person: who.person,
-    // The Apps page's rows carry the agents connected, where in hand.
-    drawn: drawn && [...drawn, ...connected ?? []],
+    // The Apps page's rows carry the agents connected, where in hand; a
+    // space's Settings, Domains and Trash carry each of their lines'.
+    drawn: drawn ? [...drawn, ...connected ?? []] : held &&
+      Object.values(held).flatMap((rows) => Array.isArray(rows) ? rows : []),
     viewDays: DAYS,
     space: space.slug,
     spaceEid: space.eid,
@@ -889,29 +834,21 @@ let desk = async (
       gallery: pilled(standing(a)),
     })),
     sift: { q: q.get('q') ?? '', sort: q.get('sort') ?? '' },
-    trash: here.filter((a) => a.trashed).map((a) => ({
-      eid: a.eid,
-      slug: a.slug,
-      title: a.title,
-      days: daysLeft(a.trashed!),
-    })),
-    numbers: lines.filter((l) => l.trashed).map((l) => ({
-      eid: l.eid,
-      number: shown(l.number),
-      monthly: dollars(l.monthly),
-      days: daysLeft(l.trashed!),
-    })),
+    binned: here.filter((a) => a.trashed).length +
+      lines.filter((l) => l.trashed).length,
     shops: provider.shops.on(),
     paying: paid(space.tier),
-    byline: !!space.byline,
-    domains: domains && {
-      domains,
-      search: q.get('q') ?? undefined,
-      ...searchedFor,
-      checkout: provider.plans.on(),
-      canBuy: included(space),
-      renewed: q.get('renewed') ?? undefined,
-      ordered: q.get('domain') ?? undefined,
+    ...held && {
+      spaceView: {
+        person: owner,
+        space: space.eid,
+        page: view as SpacePage,
+        apex: apex(env),
+        checkout: provider.plans.on(),
+        renewed: q.get('renewed') ?? undefined,
+        ordered: q.get('domain') ?? undefined,
+      },
+      held,
     },
     renewals,
     agents: known,
@@ -930,7 +867,6 @@ let desk = async (
     operator,
     member: who.role != 'owner',
     panes,
-    ...typed,
     say: saying(req, said)?.say ?? '',
     no: saying(req, said)?.no,
   }, env)
@@ -976,7 +912,7 @@ let mine = async (
   who: Owner,
   view: AccountView,
   said?: Said,
-  typed?: Pick<DeskPage, 'typed' | 'made'>,
+  typed?: Pick<DeskPage, 'made'>,
 ): Promise<Response> => {
   let person = who.person
   let q = new URL(req.url).searchParams
@@ -1206,12 +1142,8 @@ let saved = async (
   who: Owner,
   view: Exclude<SpaceView, Talk>,
 ): Promise<Response> => {
-  let refused = (
-    view: Exclude<SpaceView, Talk>,
-    said: Said,
-    typed?: Pick<DeskPage, 'typed'>,
-  ) =>
-    refusal(req, said, () => desk(req, env, dir, space, who, view, said, typed))
+  let refused = (view: Exclude<SpaceView, Talk>, said: Said) =>
+    refusal(req, said, () => desk(req, env, dir, space, who, view, said))
   // The Logo form streams its picture to its own address (`logoUpload`):
   // Settings' Save posts a multipart form here too, and is read whole below.
   if (view == 'settings' && new URL(req.url).searchParams.has('logo')) {
@@ -1261,147 +1193,7 @@ let saved = async (
       no: true,
     })
   }
-  if (view == 'domains' && form.has('choose_domain')) {
-    try {
-      await chooseDomain(dir, space, who, String(form.get('choose_domain')))
-      return answered(req, env, { say: 'Included domain saved.' })
-    } catch (e) {
-      if (!(e instanceof CallError) && !(e instanceof Stale)) throw e
-      return refused('domains', { say: e.message, no: true })
-    }
-  }
-  if (view == 'domains' && form.has('transfer_domain')) {
-    try {
-      let say = await offerDomain(
-        dir,
-        space,
-        who,
-        String(form.get('transfer_domain')),
-        String(form.get('receiving_space') ?? '').trim().toLowerCase(),
-      )
-      return answered(req, env, { say })
-    } catch (e) {
-      if (!(e instanceof CallError) && !(e instanceof Refused)) throw e
-      return refused('domains', { say: sentence(e.message), no: true })
-    }
-  }
-  if (view == 'domains' && form.has('point_domain')) {
-    try {
-      let { domain, apps } = await pointDomain(
-        env,
-        dir,
-        space,
-        who,
-        String(form.get('point_domain')),
-        String(form.get('destination') ?? ''),
-      )
-      if (scripted(req)) {
-        let path = managePath('domains', space.slug)
-        return Response.json({
-          row: markup(ownedDomain(path, domain, apps, (await plans(env)).on())),
-        })
-      }
-      return answered(req, env, { say: 'Saved.' })
-    } catch (e) {
-      if (!(e instanceof CallError) && !(e instanceof Stale)) throw e
-      return refused('domains', {
-        say: e instanceof Stale
-          ? 'This domain changed. Reload the page and try again.'
-          : sentence(e.message),
-        no: true,
-      })
-    }
-  }
-  // The other button on this page: one app out of the trash (erase.ts,
-  // T-34430). Its own form, so it is its own POST — a plain button and no
-  // script, the way the drop zone and the settings form are — and it lands
-  // back on this page with the app in the listing again.
-  let back = String(form.get('restore') ?? '').trim()
-  if (back) {
-    let app = await dir.binned(space, back)
-    if (!app?.trashed) return redirect(sentFrom(req, env).href, 303)
-    let restored = await untrash(env, dir, space, app, who)
-    return answered(req, env, {
-      say: `Restored at /${restored.slug}/.` +
-        restoredAddress(app.slug, restored.slug),
-    })
-  }
-  let number = String(form.get('restore_number') ?? '').trim()
-  if (number) {
-    if (who.role != 'owner') return nothingHere(env)
-    let line = (await dir.lines(space)).find((l) => l.eid == number)
-    if (line?.trashed) await restoredNumber(env, dir, line, who)
-    return redirect(sentFrom(req, env).href, 303)
-  }
-  // Remove submits a plain field. The upload is handled before formData.
-  if (form.has('unlogo')) {
-    await logoed(env, dir, space, null, vouched(who))
-    return answered(req, env, { say: 'Saved.' })
-  }
-  if (form.has('logo')) {
-    return refused('settings', {
-      say: 'choose a picture for the logo',
-      no: true,
-    })
-  }
-  // Settings: the space's name, homepage and address, one form and one Save. A
-  // refusal draws the page again with everything typed still in the fields,
-  // and the address goes last because moving renames the space the homepage
-  // is written against.
-  if (view != 'settings') return nothingHere(env)
-  let typed = {
-    title: String(form.get('title') ?? '').trim(),
-    space: String(form.get('space') ?? '').trim().toLowerCase(),
-    home: String(form.get('home') ?? '').trim(),
-  }
-  let kept = (said: Said) => refused('settings', said, { typed })
-  // The name is space_set's `title`, as the assistant asks it; a blank one
-  // leaves the name as it was. The move below reads the space as renamed, so
-  // a new name saved with a new address stays.
-  if (typed.title && typed.title != space.title) {
-    let { said } = await pressed(env, dir, who, 'space_set', {
-      space: space.slug,
-      title: typed.title,
-    })
-    if (said) return kept(said)
-    space = (await dir.at(space.eid)) ?? space
-  }
-  // The homepage is app_set's `home`, as the assistant asks it. The library is
-  // no app at all, so choosing it takes the word off the app that has it.
-  if (form.has('home')) {
-    let now = await dir.home(space)
-    let { said } = typed.home == (now?.slug ?? '')
-      ? {}
-      : await pressed(env, dir, who, 'app_set', {
-        space: space.slug,
-        app: typed.home || now!.slug,
-        home: !!typed.home,
-      })
-    if (said) return kept(said)
-  }
-  // The line at the foot of its pages is space_set's `byline`: the box is on
-  // the form only on a paid plan (desk-pages.ts `bylineCheck`).
-  if (form.has('byline')) {
-    let on = form.getAll('byline').includes('on')
-    let { said } = on == !!space.byline
-      ? {}
-      : await pressed(env, dir, who, 'space_set', {
-        space: space.slug,
-        byline: on,
-      })
-    if (said) return kept(said)
-  }
-  let moving = typed.space && typed.space != space.slug
-    ? await (await identity()).choose(env, who.person, typed.space, space)
-    : null
-  if (moving?.error) return kept({ say: moving.error, no: true })
-  // The page names the space by its new address.
-  return answered(
-    req,
-    env,
-    { say: 'Saved.' },
-    hostUrl(env, managePath('settings', moving?.slug ?? space.slug)),
-  )
+  return nothingHere(env)
 }
 
 // Both the original and its display sizes are private to the space.

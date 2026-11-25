@@ -449,6 +449,7 @@ import {
 } from './directory.ts'
 import { UPDATE_WAITING } from '@yaks/platform/update-waiting'
 import { personLine } from '@yaks/platform/person-lines'
+import { spaceLine } from '@yaks/platform/space-pages'
 import { SEEN_EVERY } from '@yaks/platform/account-rows'
 import {
   isRetired,
@@ -2324,6 +2325,10 @@ export class Store extends Durable {
               'budget',
               'starter',
               'meter',
+              // A space's domains and phone numbers (space-pages).
+              'hostname',
+              'domain_order',
+              'phone_line',
             ].some((key) => key in b)
           ),
         // Where friends are moves with time and with writes this read does
@@ -2344,6 +2349,10 @@ export class Store extends Durable {
             },
             apply: async (rows) => await g.apply(rows, { trusted: true }),
           })
+          if (spaceLine(line)) {
+            let { spaceRows } = await import('./space-pages.ts')
+            return await spaceRows(this.#bind as Env, dir, read.person, line)
+          }
           if (line != UPDATE_WAITING) {
             let { personRows } = await import('./side.ts')
             return await personRows(dir, read.person, line)

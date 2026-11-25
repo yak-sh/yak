@@ -2,7 +2,7 @@
 // (@yaks/platform/woven `bylineOf`): off unless its owner turns it on, with
 // space_set or on the Settings page.
 import { equal, ok, test } from '@yaks/testing'
-import { connector, fresh, seed } from './probe.ts'
+import { connector, fresh, seed, spaceAct } from './probe.ts'
 import { stamp } from './directory.ts'
 import type { Env } from './env.ts'
 import { managePath } from '@yaks/platform/routes'
@@ -13,16 +13,9 @@ let them = await seed(k, [{ slug: 'oak-church', apps: ['site'] }])
 let eid = them.eids['oak-church']
 let agent = connector(k, them.cookie)
 let on = async () => !!(await k.dir.at(eid))!.byline
-let settings = (body?: string[][]) =>
+let settings = () =>
   k.at(k.host, managePath('settings', 'oak-church'), {
-    redirect: 'manual',
-    headers: {
-      cookie: them.cookie,
-      ...body ? { 'content-type': 'application/x-www-form-urlencoded' } : {},
-    },
-    ...body
-      ? { method: 'POST', body: new URLSearchParams(body).toString() }
-      : {},
+    headers: { cookie: them.cookie },
   })
 
 test('an owner turns the line on with space_set or in Settings, which offers it on a paid plan alone', async () => {
@@ -38,19 +31,15 @@ test('an owner turns the line on with space_set or in Settings, which offers it 
   let page = await (await settings()).text()
   ok(page.includes('Website by yaks.app'))
   ok(/name="byline" value="on" checked/.test(page))
-  // The page sends the hidden field, and the box beside it when ticked.
-  // Unticked, the line comes off; ticked, back on; saved again unchanged, it
-  // stays. Each save goes back to the page.
-  let save = async (body: string[][], after: boolean) => {
-    let saved = await settings(body)
-    await saved.body?.cancel()
-    equal(saved.status, 303)
+  // Settings' Save bar writes the box as ticked or not: unticked, the line
+  // comes off; ticked, back on; saved again unchanged, it stays.
+  let save = async (set: Record<string, unknown>, after: boolean) => {
+    let saved = await spaceAct(k, them, eid, { spaceSettings: set })
+    equal(saved.status, 200, await saved.text())
     equal(await on(), after)
   }
-  let box = (ticked: boolean) =>
-    ticked ? [['byline', ''], ['byline', 'on']] : [['byline', '']]
-  await save([['title', 'Oak Church'], ...box(false)], false)
-  await save([['title', 'Oak Church'], ...box(false)], false)
-  await save(box(true), true)
-  await save([['title', 'Oak Church'], ...box(true)], true)
+  await save({ title: 'Oak Church', byline: false }, false)
+  await save({ title: 'Oak Church', byline: false }, false)
+  await save({ byline: true }, true)
+  await save({ title: 'Oak Church', byline: true }, true)
 })
