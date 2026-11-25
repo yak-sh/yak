@@ -1596,7 +1596,7 @@ export class Store extends Durable {
     return stands(this.#get('fitted'), this.#fit(shape))
   }
 
-  #build() {
+  #build(teachUnknown?: string) {
     let rebinding = !!this.#subs
     let ctx = this.#ctx
     this.#people.clear()
@@ -1972,7 +1972,8 @@ export class Store extends Durable {
           report: (error, { phase, plugin }) =>
             defect(error, { request: `${plugin} ${phase}`, store: name }),
           ...(own ? {} : {
-            teach: () => teach(this.#bind, undefined, this.#released()),
+            teach: teachUnknown ??
+              (() => teach(this.#bind, undefined, this.#released())),
           }),
           plugins: [
             ...(meta && this.#bind.SERVING_COPY
@@ -6519,12 +6520,12 @@ export class Store extends Durable {
   // Check a draft seed with its candidate vocabulary and hold it for the
   // release switch. The trial's schema and rows roll back together.
   async #seedDoor(request: Request): Promise<Response> {
-    let release = request.headers.get('x-yak-release')
-    if (
-      request.method != 'POST' ||
-      !request.headers.has('x-yak-base-release') ||
-      !release || !/^[a-z0-9-]+$/.test(release)
-    ) return json({ error: 'NotFound', message: 'no route' }, 404)
+    let release = this.#candidate(request)
+    if (request.method != 'POST' || !release) {
+      return json({ error: 'NotFound', message: 'no route' }, 404)
+    }
+    let params = new URL(request.url).searchParams
+    let file = params.get('vocab')
     try {
       let bundles = JSON.parse(await readBody(request)) as Bundle[]
       if (!Array.isArray(bundles)) {
@@ -6537,7 +6538,7 @@ export class Store extends Durable {
           let next = this.#get(`vocab:${release}`)
           if (!next) throw new Refused('candidate vocabulary is not staged')
           this.#put('vocab', this.#prepared(next))
-          this.#build()
+          this.#build(file ? ` — missing from the draft's ${file}` : undefined)
           this.#providing()
           let result = this.#graph.apply(
             signed(this.#unseeded(bundles), actor),
@@ -6557,8 +6558,8 @@ export class Store extends Durable {
         this.#boot()
       }
       if (this.#refused) return this.#stalled()
-      if (new URL(request.url).searchParams.get('check') != '1') {
-        let from = new URL(request.url).searchParams.get('from')
+      if (params.get('check') != '1') {
+        let from = params.get('from')
         this.#put(`seed:${release}`, JSON.stringify({ bundles, actor, from }))
       }
       return Response.json({ ok: true })

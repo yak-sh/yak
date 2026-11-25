@@ -198,6 +198,10 @@ let unknown = (token: string) =>
 // property is queried by. A comma splits the line before a token reaches
 // here, so it holds one.
 let braced = (token: string, comp: string, rest: string): string => {
+  let contains = rest.match(/^\{\s*([\w$]+)\s*~=?\s*(.*?)\s*\}$/s)
+  if (contains) {
+    throw spelled(token, `.${comp}.${contains[1]}~=${contains[2]}`)
+  }
   let [, prop, value] =
     rest.match(/^\{\s*([\w$]+)(?:\s*[:=]\s*(.+?))?\s*\}$/s) ??
       []
@@ -598,6 +602,12 @@ export let parseDot = (token: string): Clause[] | null => {
 export let bareLine = (line: string): string =>
   line.replace(/^\?(?![A-Za-z_])/, '').replace(/^&+/, '')
 
+// Keep the quoted value of a misspelled contains predicate together so the
+// parser can show the corrected clause.
+let SHORT_CONTAINS = new RegExp(
+  `(?:^|[(&|\\s])\\.?${WORD}(?:\\{[\\w$]+)?~$`,
+)
+
 // The token split: whitespace and `&` both end a token; a quoted run is one
 // token even across them, and so is a bracket on a path. A quote opens only at
 // a token's start or immediately after an operator, so an apostrophe inside a
@@ -622,14 +632,20 @@ export let tokens = (q: string): string[] => {
       if (c == '\\' && i + 1 < q.length) cur += q[++i]
       else if (c == quote) quote = ''
     } else if (depth) {
-      if ((c == '"' || c == "'") && /[=<>,(\s&|]$|\.\.$/.test(cur)) quote = c
+      if (
+        (c == '"' || c == "'") &&
+        (/[=<>,(\s&|]$|\.\.$/.test(cur) || SHORT_CONTAINS.test(cur))
+      ) quote = c
       else if (c == '(') depth++
       else if (c == ')') depth--
       cur += c
     } else if (bracket) {
       cur += c
       if (c == ']') bracket = false
-    } else if ((c == '"' || c == "'") && /^$|[=<>,]$|\.\.$/.test(cur)) {
+    } else if (
+      (c == '"' || c == "'") &&
+      (/^$|[=<>,]$|\.\.$/.test(cur) || SHORT_CONTAINS.test(cur))
+    ) {
       quote = c
       cur += c
     } else if (c == '(' && !cur) {

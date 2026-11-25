@@ -319,7 +319,7 @@ import { foreign, manageAt, pageAt, planSettings } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { globs, platformPath } from './router.ts'
 import { vocabAt } from './reach.ts'
-import { applying, seeding } from './release-seed.ts'
+import { applying, seeding, seedPath } from './release-seed.ts'
 import { sampled, unsampled } from './sample.ts'
 import { acting, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
@@ -1963,11 +1963,11 @@ let published = async (
   let seedTook = c.since()
   if (willSeed) {
     let head = await byCaller(ctx, who)
-    let apply = applying(draft, head, '/seed')
+    let apply = applying(draft, head, seedPath(vocabFile))
     if (Object.keys(uses).length) {
       await declare
       let named = { space, app: { ...app, declaration: pointer }, who }
-      apply = seeding(ctx.env, named, draft, staged, head)
+      apply = seeding(ctx.env, named, draft, staged, head, vocabFile)
     }
     sowed = await sow(
       await texts(blobs, prefix, own(keys).filter(seedy)),

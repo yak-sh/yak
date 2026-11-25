@@ -21,12 +21,16 @@ export let applying =
       head,
     )
 
+export let seedPath = (file: string, from?: string) =>
+  '/seed?' + new URLSearchParams({ vocab: file, ...from ? { from } : {} })
+
 export let seeding = (
   env: Env,
   named: Reach,
   draft: Door,
   homes: { app: App; release: string }[],
   head: Record<string, string>,
+  file: string,
 ): Applying => {
   let doors = new Map(homes.map(({ app, release }) => [
     app.eid,
@@ -47,7 +51,7 @@ export let seeding = (
       applying(
         doors.get(r.app.eid)!,
         head,
-        `/seed?from=${named.app.eid}`,
+        seedPath(file, named.app.eid),
       )(entities, check)
     ))
     return answers.find((no) => no != null) ?? null

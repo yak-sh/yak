@@ -467,6 +467,7 @@ for (
   let [token, meant] of [
     ['.web.url~cloudflare', '.web.url~=cloudflare'],
     ['doc.title~copy', '.doc.title~=copy'],
+    ['.deploy{message~"Saved a minute"}', '.deploy.message~="Saved a minute"'],
   ]
 ) {
   test(`${token} is refused with ${meant}`, () => {

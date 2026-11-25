@@ -490,7 +490,7 @@ let membersOf = (
   let members = order.map((r) => memberOf(env, r, headers))
   let i = named ? order.indexOf(named) : -1
   let one = named && (i >= 0 ? members[i] : memberOf(env, named, headers))
-  return { members, named: one }
+  return { members, named: one, order }
 }
 
 /** The read, whole (@yaks/reach `read`): one store's own answer, or every
@@ -564,8 +564,8 @@ export let routed = async (
   bundles: Bundle[],
   key?: string,
 ) => {
-  let { members, named: one } = membersOf(env, reach, named)
-  let stores = new Map(members.map((m, i) => [m, reach[i]]))
+  let { members, named: one, order } = membersOf(env, reach, named)
+  let stores = new Map(members.map((m, i) => [m, order[i]]))
   if (one && named) stores.set(one, named)
   let { parts, aliases } = await fan().routed(members, one, bundles, key)
   return {
