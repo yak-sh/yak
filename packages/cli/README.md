@@ -685,24 +685,29 @@ independent workers do the duties; its monitor starts one if needed. Config
 `stop()` winds a host down with the graph still open: it aborts `host.stopping`,
 so the duties stop, a server takes no new request and a transcript starts no new
 step, and it leaves the pool, claiming no new run. `close()` does the same,
-closes the duty thread, waits for every effect the host started to finish, for
-as long as each takes, and after thirty seconds says in the log which ones it is
-waiting on, repeating every thirty seconds ([`drain.ts`](./drain.ts)); then it
-ends every call its runner is still running as `interrupted{code}`, releases
-leases, records the process exit, and closes SQLite. A graph-only CLI writer
-neither starts nor drains an effects pool; it records owed effects for a worker.
-A prompt drain prints nothing. What a run left owed is the next worker's. Plugin
-timers and loops should listen to `host.stopping` or the signal passed to
-`service`.
+closes the duty thread, waits for every effect the host started to finish, and
+after thirty seconds says in the log which ones it is waiting on, repeating
+every thirty seconds ([`drain.ts`](./drain.ts)); then it ends every call its
+runner is still running as `interrupted{code}`, releases leases, records the
+process exit, and closes SQLite. A graph-only CLI writer neither starts nor
+drains an effects pool; it records owed effects for a worker. A prompt drain
+prints nothing. What a run left owed is the next worker's. Plugin timers and
+loops should listen to `host.stopping` or the signal passed to `service`.
 
 An interrupt winds a command down (`@yaks/process/wind`, wired in
 [`yak.ts`](./yak.ts)): a SIGTERM, SIGINT or SIGHUP, or Ctrl-C in a terminal app.
 The first stops every graph the command opened, so `yak serve` stops taking
 requests, answers the ones in flight and returns, and the command closes the way
 it always does once its effects have finished. Nothing here puts a deadline on
-that; only the work knows how long it needs. A second interrupt ends the duty
-thread where it stands, closes with the interrupt's code (143, 130, 129) and
-exits.
+that for interactive commands. A second interrupt ends their duty thread where
+it stands, closes with the interrupt's code (143, 130, 129) and exits.
+
+`yak work` gives in-flight session steps ten seconds to finish after shutdown
+starts. A step still waiting hands its admitted request back with its recorded
+output. After 55 seconds the worker fences any remaining effect claims and hands
+them back for recovery at the 60-second deadline. It exits with a failure if the
+drain reaches that point, even if the handoff write is blocked. The replacement
+can recover the durable claims when their leases expire.
 
 ## Shared command grammar
 

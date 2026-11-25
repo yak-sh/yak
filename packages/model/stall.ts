@@ -105,14 +105,14 @@ export let watchdog = (
 // runs from each read asked for to the chunk that answers it, and a reader
 // slow to ask again is not a stalled server. A trip fails the read in progress
 // with Stalled, a relayed stop with its reason, and either cancels the source.
-let guard = (
-  body: ReadableStream<Uint8Array>,
+let guard = <Bytes extends Uint8Array>(
+  body: ReadableStream<Bytes>,
   dog: Watchdog,
-): ReadableStream<Uint8Array> => {
+): ReadableStream<Bytes> => {
   let signal = dog.signal!
   let reader = body.getReader()
   let end = () => {}
-  return new ReadableStream<Uint8Array>({
+  return new ReadableStream<Bytes>({
     start(controller) {
       let fail = () => {
         controller.error(signal.reason)
@@ -128,7 +128,7 @@ let guard = (
     },
     async pull(controller) {
       dog.kick()
-      let part: ReadableStreamReadResult<Uint8Array>
+      let part: ReadableStreamReadResult<Bytes>
       try {
         part = await reader.read()
       } catch (error) {
@@ -156,12 +156,12 @@ let guard = (
 
 /** `body`, failing with {@link Stalled} once a read waits `ms` on it, or with
  * `stop`'s reason when it aborts. `ms` 0 and no `stop` leave it as it is. */
-export let watchedBody = (
-  body: ReadableStream<Uint8Array>,
+export let watchedBody = <Bytes extends Uint8Array>(
+  body: ReadableStream<Bytes>,
   ms: number,
   clock: Clock = system,
   stop?: AbortSignal,
-): ReadableStream<Uint8Array> => {
+): ReadableStream<Bytes> => {
   let dog = watchdog(ms, clock, stop)
   return dog.signal ? guard(body, dog) : body
 }

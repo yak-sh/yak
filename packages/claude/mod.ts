@@ -1,6 +1,10 @@
 import { trash } from '@yaks/process/trash'
 import * as io from '@yaks/file/io'
-import { command as processCommand } from '@yaks/process/command'
+import {
+  type ChildProcess,
+  command,
+  type CommandOptions,
+} from '@yaks/process/command'
 import { claudeDoc } from './vocab.ts'
 /**
  * Claude Code as a one-turn @yaks/model implementation. The MCP server it
@@ -23,6 +27,7 @@ import {
   type Usage,
 } from '@yaks/model'
 import { metered } from './limits.ts'
+import { stallMs, watchdog, watchedBody } from '@yaks/model/stall'
 import { mark } from './mark.ts'
 import { offer } from './offer.ts'
 
@@ -33,6 +38,8 @@ export type Options = {
   /** the account the CLI signs in with (@yaks/model `accountEid`), whose
    * plan the limits a reply carries are of */
   account?: string
+  clock?: Parameters<typeof watchdog>[1]
+  spawn?: (program: string, options: CommandOptions) => Child
 }
 
 /** CLI aliases are resolved by the installed Claude Code, not pinned releases. */
@@ -310,13 +317,25 @@ export let opening = (req: Request): string =>
     },
   }) + '\n'
 
-type Child = ReturnType<ReturnType<typeof processCommand>['spawn']>
+type Child = Pick<
+  ChildProcess,
+  | 'started'
+  | 'status'
+  | 'stdin'
+  | 'stdout'
+  | 'stderr'
+  | 'ref'
+  | 'unref'
+  | 'kill'
+>
+let spawn = (program: string, options: CommandOptions) =>
+  command(program, options).spawn()
 /** A started CLI process and its empty working directory. */
 type Proc = { child: Child; cwd: string; ended: boolean }
 
 let start = async (opts: Options, model: string, effort?: string) => {
   let cwd = await io.makeTempDir({ prefix: 'yak-claude-' })
-  let child = processCommand(opts.command ?? 'claude', {
+  let child = (opts.spawn ?? spawn)(opts.command ?? 'claude', {
     args: [...opts.args ?? [], ...argv(model, effort)],
     cwd,
     stdin: 'piped',
@@ -326,7 +345,7 @@ let start = async (opts: Options, model: string, effort?: string) => {
       CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
     },
-  }).spawn()
+  })
   let proc: Proc = { child, cwd, ended: false }
   let ended = () => {
     proc.ended = true
@@ -415,25 +434,32 @@ export let claude = (opts: Options = {}): Model & AsyncDisposable => {
     let tools = offer(req.tools)
     let proc: Proc | undefined
     let kill = () => proc?.child.kill('SIGKILL')
+    let dog = watchdog(stallMs(req), opts.clock, req.signal)
+    let signal = dog.signal
     let stderr: Promise<string> | undefined
     try {
       await submitted(req)
-      req.signal?.throwIfAborted()
+      signal?.throwIfAborted()
       proc = await take(req)
       let child = proc.child
       child.ref()
-      req.signal?.addEventListener('abort', kill, { once: true })
+      signal?.addEventListener('abort', kill, { once: true })
+      signal?.throwIfAborted()
       // Drain stderr concurrently to avoid a full pipe blocking stdout.
-      stderr = new Response(child.stderr).text().then((s) => s.slice(-8192))
+      stderr = new Response(watchedBody(child.stderr, 0, undefined, signal))
+        .text().then((s) => s.slice(-8192))
+      stderr.catch(() => {})
       let writer = child.stdin.getWriter()
       let send = (line: string) => writer.write(new TextEncoder().encode(line))
       await send(opening(req) + input(req))
       spare(req)
-      let reader = lines(child.stdout).getReader()
+      let reader = lines(watchedBody(child.stdout, 0, undefined, signal))
+        .getReader()
       // The turn's frames; the control channel is answered here.
       let frames = async function* (): AsyncGenerator<Frame> {
         try {
           while (true) {
+            dog.kick()
             let { value, done } = await reader.read()
             if (done) return
             let frame: Frame = JSON.parse(value!)
@@ -444,6 +470,7 @@ export let claude = (opts: Options = {}): Model & AsyncDisposable => {
               continue
             }
             if (frame.type != 'control_request') {
+              dog.rest()
               yield frame
               continue
             }
@@ -471,13 +498,14 @@ export let claude = (opts: Options = {}): Model & AsyncDisposable => {
             )
           }
         } finally {
-          await reader.cancel()
+          void reader.cancel().catch(() => {})
           reader.releaseLock()
         }
       }
       let { reply, session, terminal, limits } = await read(req, frames())
       kill()
-      req.signal?.throwIfAborted()
+      dog.kick()
+      signal?.throwIfAborted()
       if (!reply || (!terminal && !reply.items.some((i) => i.kind == 'call'))) {
         throw new ModelError(
           'claude_exit',
@@ -490,6 +518,14 @@ export let claude = (opts: Options = {}): Model & AsyncDisposable => {
       })
     } catch (error) {
       kill()
+      if (dog.stalled()) {
+        throw new ModelError(
+          'stalled',
+          `Claude Code stalled — ${signal?.reason}`,
+          {},
+        )
+      }
+      signal?.throwIfAborted()
       if (error instanceof ModelError && error.limits) {
         error.limits = accounted(error.limits)
       }
@@ -502,9 +538,14 @@ export let claude = (opts: Options = {}): Model & AsyncDisposable => {
       }
       throw error
     } finally {
-      req.signal?.removeEventListener('abort', kill)
-      if (proc) await end(proc)
-      await stderr?.catch(() => {})
+      try {
+        dog.kick()
+        if (proc) await end(proc)
+        await stderr?.catch(() => {})
+      } finally {
+        signal?.removeEventListener('abort', kill)
+        dog.close()
+      }
     }
   }, {
     list: () => Promise.resolve(listing()),

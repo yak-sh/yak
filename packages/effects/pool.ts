@@ -364,6 +364,9 @@ export type Pool = {
   /** Leave the pool: claim nothing more — what this process commits from
    * now on is left for the others — and settle what was started. */
   stop: () => Promise<void>
+  /** Set the earliest takeover of unfinished claims before a forced process
+   * exit. The caller must have stopped admission and exit before `at`. */
+  handoff: (at: number) => Promise<void>
   /** The runs going in this process, oldest first. */
   running: () => Run[]
   /** When the soonest run this process can take falls due (ms, the pool's
@@ -826,6 +829,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       let s = handled(String(row.handler))
       if (!s || running.has(eid)) return
       if (!eligible(row)) return
+      // A due time on a held claim is a deliberate handoff. Check that the
+      // retiring process has actually exited, even if its timer ran late.
+      if (
+        row.next && row.lease_owner && opts.gone &&
+        !await opts.gone(String(row.lease_owner))
+      ) return
       let attempts = Number(row.attempts ?? 0)
       // Claimed and no `next`: interrupted, not reported, so how far it got
       // is unknown — and a second run is not the same as a first. Started
@@ -1394,6 +1403,26 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     stop: () => {
       member = false
       return idle()
+    },
+    handoff: async (at) => {
+      if (!graph || opts.singleOwner) return
+      let g = graph
+      let due = stamp(at)
+      await Promise.all([...running.values()].map((held) =>
+        swap(g, held.eid, {
+          lease_token: held.token,
+          attempts: held.attempts,
+        }, {
+          // Fence the old attempt's completion and lease renewal.
+          lease_token: mint(),
+          lease_expiry: due,
+          // A deliberate handover doesn't spend a try. Unsafe work stays
+          // interrupted for the replacement's normal recovery.
+          ...safe(handled(held.handler))
+            ? { attempts: Math.max(0, held.attempts - 1), next: due }
+            : {},
+        })
+      ))
     },
     running: () =>
       [...running.values()]

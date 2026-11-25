@@ -59,6 +59,7 @@ import { help } from './help.ts'
 import { HELPING } from './routine.ts'
 import { completeCompact } from './compact_ask.ts'
 import { attemptState } from './attempt.ts'
+import { draining } from './draining.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
  * bound on children, and who is running it. */
@@ -340,9 +341,11 @@ let step = async (
     )
   let tick = setInterval(look, r.look ?? 1000)
   looking(g).set(session, look)
+  let drained = draining(r.stopping, stop, r.clock)
   try {
     return await react(g, session, { ...r, owner: r.holder, signal }, read)
   } finally {
+    drained()
     clearInterval(tick)
     if (looking(g).get(session) == look) looking(g).delete(session)
   }

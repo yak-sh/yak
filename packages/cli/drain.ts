@@ -1,10 +1,8 @@
-// A host's effects, drained: it leaves the pool, claiming nothing more, and
-// waits for every run it started to finish, however long each one takes
-// (@yaks/effects `stop`). While it waits it says which runs it is waiting on,
-// only after half a minute and every half minute after, so a stop that takes
-// minutes says why in the log instead of looking hung.
+// A host leaving the effects pool reports which runs are keeping it open.
+// A supervised worker also sets a deadline for handing back those claims.
 
 import type { Effects, Run } from '@yaks/effects'
+import { type Clock, system } from '@yaks/fp'
 
 /** How often a drain says what it is still waiting on (ms). */
 export let EVERY = 30_000
@@ -64,5 +62,54 @@ export let drain = async (
     await stopped
   } finally {
     clearInterval(timer)
+  }
+}
+
+// Reserve five seconds of the worker's shutdown budget to write the handoff.
+// Systemd's stop hook reports a forced exit with the diagnostic below.
+export let bound = (
+  fx: Pick<Effects, 'handoff' | 'running'>,
+  stopping: AbortSignal,
+  exit: () => void,
+  say: (line: string, error?: unknown) => void,
+  clock: Clock = system,
+): () => void => {
+  let deadline = () => {}, handoff = () => {}
+  let closed = false
+  let force = () => {
+    if (closed) return
+    closed = true
+    deadline()
+    exit()
+  }
+  let give = async (due: number) => {
+    let active = fx.running()
+    say('yak work shutdown did not drain within 55s')
+    if (active.length) {
+      say(
+        waiting(active, (eid) => eid, clock.now()) +
+          ` [runs: ${active.map((r) => r.eid).join(', ')}]`,
+      )
+    }
+    try {
+      await fx.handoff(due)
+    } catch (error) {
+      say('yak work could not hand off its claims', error)
+    } finally {
+      force()
+    }
+  }
+  let limit = () => {
+    let due = clock.now() + 60_000
+    deadline = clock.after(60_000, force)
+    handoff = clock.after(55_000, () => void give(due))
+  }
+  stopping.addEventListener('abort', limit, { once: true })
+  if (stopping.aborted) limit()
+  return () => {
+    closed = true
+    stopping.removeEventListener('abort', limit)
+    deadline()
+    handoff()
   }
 }

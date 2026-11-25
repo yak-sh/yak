@@ -247,6 +247,9 @@ export type Effects = Plugin & {
    * on is left for the others, and settle what it started. What a process
    * does on its way out. */
   stop: () => Promise<void>
+  /** On forced exit, leave unfinished claims due for the next worker at
+   * `at`. The retiring worker must exit before they become due. */
+  handoff: (at: number) => Promise<void>
   /** The runs going in this process, oldest first: what a process winding
    * down is waiting on. */
   running: () => Run[]
@@ -1015,6 +1018,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     wake: () => pooled?.wake(),
     idle: () => pooled?.idle() ?? Promise.resolve(),
     stop: () => pooled?.stop() ?? Promise.resolve(),
+    handoff: (at) => pooled?.handoff(at) ?? Promise.resolve(),
     running: () => pooled?.running() ?? [],
     next: (g, now) => pooled?.next(g, now) ?? Promise.resolve(null),
   }

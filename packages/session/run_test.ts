@@ -42,7 +42,7 @@ import { answers } from './providers.ts'
 import { replyOf } from './answer.ts'
 import { sessionTools } from './children.ts'
 import { RUN, type Runner, running, settle } from './run.ts'
-import { match, test, until } from '@yaks/testing'
+import { clock, match, test, until } from '@yaks/testing'
 
 // What the workers' entities carry, standing in for their process rows.
 let stand: VocabDoc = {
@@ -1013,6 +1013,45 @@ test('graceful stop after ask persistence drains the admitted dispatch', async (
   assertEquals(asked.length, 1)
   assertEquals(await kinds(p, 's1'), ['input', 'ask', 'output'])
   assertEquals(statusOf(await transcript(p.g, 's1')), 'settled')
+})
+
+test('a quiet provider yields its admitted step to the replacement worker', async () => {
+  let s = store(), time = clock(), stop = new AbortController()
+  let sent = Promise.withResolvers<AbortSignal>()
+  let pending = Promise.withResolvers<Reply>()
+  let a = proc(s, 'w1', (req) => {
+    let signal = req.signal!
+    signal.addEventListener('abort', () => pending.reject(signal.reason), {
+      once: true,
+    })
+    req.onText?.({ index: 0, id: 'partial', text: 'partial reply' })
+    sent.resolve(signal)
+    return pending.promise
+  }, { clock: time, stopping: stop.signal, streaming: true })
+  let { model, asked } = fake()
+  let b = proc(s, 'w2', model, { streaming: true })
+  await a.g.apply(ask('s1'))
+  let working = a.fx.work(a.g, stop.signal)
+  let signal = await sent.promise
+  try {
+    stop.abort()
+    await time.advance(9_999)
+    assertEquals(signal.aborted, false)
+    await time.advance(1)
+    assert(signal.aborted)
+  } finally {
+    stop.abort()
+    pending.resolve({ id: 'cleanup', model: 'fake-1', items: done })
+    await working
+    await a.fx.idle()
+  }
+  await b.fx.work(b.g)
+  let entries = await transcript(b.g, 's1')
+  let interrupted = entries.find((entry) => entry.interrupted)
+  assertEquals((interrupted?.interrupted as Comp)?.code, 'restart')
+  assert(entries.some((entry) => textOf(entry) == 'partial reply'))
+  assertEquals(statusOf(entries), 'settled')
+  assertEquals(asked.length, 1)
 })
 
 // Build and seed the two graphs before timing; both workers still start,

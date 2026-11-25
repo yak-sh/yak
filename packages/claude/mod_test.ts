@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from '@std/assert'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { ModelError } from '@yaks/model'
 import type { Reply, Request, TextDelta } from '@yaks/model'
 import { execPath } from 'node:process'
@@ -116,6 +116,54 @@ test('an already cancelled request never submits', async () => {
     DOMException,
   )
   assertEquals(submitted, false)
+})
+
+test('a quiet Claude pipe ends its request and child at the stall deadline', async () => {
+  let time = clock()
+  let sent = Promise.withResolvers<void>()
+  let killed = 0
+  await using model = claude({
+    clock: time,
+    spawn: () => {
+      let status = Promise.withResolvers<{
+        success: boolean
+        code: number
+        signal: 'SIGKILL'
+      }>()
+      return {
+        started: Promise.resolve(),
+        status: status.promise,
+        stdin: new WritableStream({ write: () => sent.resolve() }),
+        stdout: new ReadableStream({}),
+        stderr: new ReadableStream({}),
+        ref: () => {},
+        unref: () => {},
+        kill: () => {
+          killed++
+          status.resolve({ success: false, code: 137, signal: 'SIGKILL' })
+        },
+      }
+    },
+  })
+  let stop = new AbortController()
+  let reading = model({ ...req, signal: stop.signal, stallTimeout: 2 })
+  reading.catch(() => {})
+  try {
+    await sent.promise
+    await time.advance(1999)
+    assertEquals(killed, 0)
+    await time.advance(1)
+    assertEquals(killed > 0, true)
+    let error = await assertRejects(
+      () => reading,
+      ModelError,
+      'Claude Code stalled',
+    )
+    assertEquals(error.code, 'stalled')
+  } finally {
+    stop.abort()
+    await reading.catch(() => {})
+  }
 })
 
 /** A model answered by cli_fixture.ts, and the pids of the processes it has

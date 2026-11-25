@@ -1,6 +1,58 @@
 // A shutdown reports its in-memory blockers without waiting on graph reads.
 import { assert, assertEquals } from '@std/assert'
-import { drain } from './drain.ts'
+import { clock } from '@yaks/testing'
+import { bound, drain } from './drain.ts'
+
+Deno.test('a worker hands claims back and exits within its shutdown budget', async () => {
+  let time = clock(), stop = new AbortController()
+  let due: number[] = [], exits: number[] = []
+  let close = bound(
+    {
+      running: () => [],
+      handoff: (at) => {
+        due.push(at)
+        return Promise.resolve()
+      },
+    },
+    stop.signal,
+    () => exits.push(time.now()),
+    () => {},
+    time,
+  )
+  stop.abort()
+  await time.advance(54_999)
+  assertEquals([due, exits], [[], []])
+  await time.advance(1)
+  await time.advance(5_000)
+  assertEquals([due, exits], [[60_000], [55_000]])
+  close()
+})
+
+Deno.test('a blocked handoff write cannot hold the worker open', async () => {
+  let time = clock(), stop = new AbortController()
+  let pending = Promise.withResolvers<void>()
+  let exits: number[] = []
+  let close = bound(
+    {
+      running: () => [],
+      handoff: () => pending.promise,
+    },
+    stop.signal,
+    () => exits.push(time.now()),
+    () => {},
+    time,
+  )
+  try {
+    stop.abort()
+    await time.advance(59_999)
+    assertEquals(exits, [])
+    await time.advance(1)
+    assertEquals(exits, [60_000])
+  } finally {
+    close()
+    pending.resolve()
+  }
+})
 
 Deno.test('drain reports full targets and effect ids until the pool stops', async () => {
   let stopped = Promise.withResolvers<void>()

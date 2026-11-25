@@ -68,6 +68,7 @@ import { during, peek } from '@yaks/trace'
 import { dutyRoles, rolesOf, workerRoles } from './roles.ts'
 import { declarations } from './declarations.ts'
 import { lifetime } from './lifetime.ts'
+import { bound } from './drain.ts'
 export { rolesOf } from './roles.ts'
 
 /** The duty roles of a config's graph that a process serving `mine` does not
@@ -298,6 +299,12 @@ export let work = async (
   )
   hosts.set(key, opening)
   let host = await opening
+  let unbound = bound(
+    host.fx,
+    host.stopping,
+    () => system.exit(1),
+    console.error,
+  )
   // A worker's thread is watched as a web's is, once its reader has started:
   // a stall says what held it. A reader that cannot start is reported, and
   // its callers hear the failure without falling back to blocking SQL here.
@@ -307,6 +314,14 @@ export let work = async (
   watched(host, started).catch((error) =>
     host.report?.(error, { tags: { step: 'main thread sampling' } })
   )
+  let close = host.close
+  host.close = async (code) => {
+    try {
+      await close(code)
+    } finally {
+      unbound()
+    }
+  }
   await host.bury()
   let { reconcile } = await import('@yaks/tools')
   let timer = setInterval(() => {

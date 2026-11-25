@@ -769,6 +769,43 @@ test('a worker told to stop claims nothing more, and keeps what it is running un
   assertEquals(await run(server.g, 'post_note'), undefined)
 })
 
+test('forced handoff preserves the attempt and waits for the worker to exit', async () => {
+  let s = store()
+  let now = 0, exited = false
+  let clock = { ...system, now: () => now }
+  let a = proc(s, { owner: 'old', clock, tries: 1 })
+  let started = Promise.withResolvers<void>()
+  let finish = Promise.withResolvers<void>()
+  a.fx.handle({
+    post_note: () => {
+      started.resolve()
+      return finish.promise
+    },
+  })
+  await a.fx.work(a.g, undefined, 0)
+  await a.g.apply([post('p1')])
+  await started.promise
+  let draining = a.fx.stop()
+  try {
+    await a.fx.handoff(60_000)
+    let next = proc(s, { owner: 'new', clock, tries: 1, gone: () => exited })
+    next.fx.handle({ post_note: next.note })
+    now = 60_000
+    await next.fx.work(next.g)
+    assertEquals(next.ran, [])
+    // An ending from the old attempt cannot remove the handed-off run.
+    finish.resolve()
+    await draining
+    exited = true
+    await next.fx.work(next.g)
+    assertEquals(next.ran, ['created p1'])
+    assertEquals(await owed(next.g), [])
+  } finally {
+    finish.resolve()
+    await draining
+  }
+})
+
 test("a run's write owes a generation on, and the chain stops at depth", async () => {
   let a = proc(store())
   a.fx.handle({

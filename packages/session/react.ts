@@ -138,6 +138,7 @@ import {
 } from './task-context.ts'
 import { attemptState } from './attempt.ts'
 import type { Attempt } from '@yaks/effects'
+import { StepHandoff } from './draining.ts'
 
 /** The caller, supplied by react rather than by model arguments, and a
  * signal that aborts when the process running the transcript is leaving: a
@@ -2429,6 +2430,13 @@ export let react = async (
           }
         }
       }
+    }
+    if (deps.signal?.reason instanceof StepHandoff) {
+      // Retain the admitted ask so the next step can check for a stored
+      // result before recovering it. Already visible text stays with it.
+      let state = await current()
+      await kept(state)
+      return state
     }
     // A step withdrawn (a Stop, a cancel) aborts its request: the withdrawal
     // is the line that says so, so its ask ends interrupted with no failure

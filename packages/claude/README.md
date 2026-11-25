@@ -63,6 +63,11 @@ never reaches another's reply. A waiting process doesn't hold its host open
 190 MB while it waits, one for each model and effort asked for. The model is
 `AsyncDisposable`, which ends the waiting ones.
 
+The CLI pipes use the same idle watchdog as HTTP model streams. A gap in
+progress ends the child process and reports a retryable `stalled` model error.
+The default is five minutes, and `provider{stall_timeout}` sets the provider's
+own limit in seconds.
+
 Through `/model/step` on this box, one-word `haiku` steps 3 s apart reached
 first text in 612–2015 ms (median 876) this way, and 858–2949 ms (median 1145)
 with a process started per step. workers/yak/README.md has the rest of an
