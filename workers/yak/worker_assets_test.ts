@@ -27,6 +27,10 @@ let worker = 'data:text/javascript,' + encodeURIComponent(`export default {
       return text('<base href="' + mount + 'styles/">' +
         '<link rel="stylesheet" href="studio.css">', 'text/html')
     }
+    if (path == '/home-page') {
+      let icon = new URL(mount + 'icon.svg', url)
+      return text('<link rel="icon" href="' + icon.href + '">', 'text/html')
+    }
     if (path == '/public-files') {
       return text('<link rel="stylesheet" href="theme/kit.css">' +
         '<link rel="stylesheet" href="owner.css">', 'text/html')
@@ -196,6 +200,15 @@ test("a home app's mounted icon and stylesheet lead to their fingerprints", asyn
     let location = alias.headers.get('location')!
     assertMatch(location, /^\/api\/assets\/[a-f0-9]{64}\//)
     equal(await (await at(location)).text(), body)
+  }
+})
+
+test('the home worker links from the root at both of its page addresses', async () => {
+  let icon = /href="(\/api\/assets\/[a-f0-9]{64}\/icon\.svg)"/
+  for (let path of ['/home-page', '/front/home-page']) {
+    let page = await at(path)
+    equal(page.status, 200)
+    assertMatch(await page.text(), icon)
   }
 })
 

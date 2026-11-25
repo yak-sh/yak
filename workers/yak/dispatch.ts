@@ -474,6 +474,15 @@ let handed = async (
     publicUrl.search = url.search
     url = publicUrl
   }
+  // A space's home app is mounted at the root, including requests that
+  // arrived through its prefixed alias.
+  if (!mount && app.home) {
+    mount = '/'
+    let prefix = '/' + app.slug
+    if (url.pathname.startsWith(prefix + '/')) {
+      url.pathname = url.pathname.slice(prefix.length)
+    }
+  }
   for (let h of [...VOUCH, GRANT, SELF, ADDRESS]) headers.delete(h)
   uncredited(headers)
   headers.set('x-yak-app', app.slug)
