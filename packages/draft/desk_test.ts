@@ -275,6 +275,24 @@ test('a send the store refuses leaves its draft', async () => {
   assertEquals([a.text('p'), open(s).text('p')], ['looks good', 'looks good'])
 })
 
+test('retrying a refused send clears an already saved draft', async () => {
+  let d = desk(shared, { by: () => jo, writer: mint() })
+  let place = 'retry-send', text = 'These words were already saved'
+  try {
+    d.type(place, text)
+    await Promise.resolve()
+    assertEquals(
+      await d.spend(place, [{ entity: { eid: mint() }, nope: {} }]),
+      false,
+    )
+    assertEquals(d.text(place), text)
+    assertEquals(await d.spend(place), true)
+    assertEquals(d.text(place), '')
+  } finally {
+    d.close()
+  }
+})
+
 test('a discard keeps what another interface typed meanwhile', async () => {
   let s = store()
   let [a, b] = [open(s), open(s)]

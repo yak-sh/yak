@@ -50,6 +50,7 @@ export const OWNED: [string, string, string?][] = [
   ['context_output', 'reader'],
   ['deliver', 'to'],
   ['draft', 'by'],
+  ['draft_writer', 'by'],
   ...ASSIGNED.map((
     name,
   ): [string, string, string] => [name, 'assignee', 'filed']),

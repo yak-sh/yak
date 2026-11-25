@@ -60,7 +60,9 @@ export let operatorWrite = (
 }
 
 /** The Operator store of the space `space`, as a draft desk asks of a store
- * (@yaks/draft `Store`), through the page graph `graph`, for `person`. */
+ * (@yaks/draft `Store`), through the page graph `graph`, for `person`. The
+ * desk shows typing immediately. Send the entire write to the store for
+ * merging, including the `typed` event that a local commit would consume. */
 export let draftStore = (
   graph: Pick<Client, 'mutate' | 'watch'>,
   space: string,
@@ -68,7 +70,9 @@ export let draftStore = (
 ): Store => ({
   me: () => Promise.resolve({ person }),
   apply: async (bundles) => ({
-    bundles: await graph.mutate(draftRows(space, bundles)),
+    bundles: await graph.mutate(draftRows(space, bundles), {
+      optimistic: false,
+    }),
   }),
   subscribe: (query, hear) => {
     let watch = graph.watch(query)

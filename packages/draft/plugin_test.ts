@@ -2,7 +2,7 @@
 // lasting writer work, while returning the same merge and refusals as a write.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { graph, Stale, token } from '@yaks/graph'
+import { graph, mint, Stale, token } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { draftDoc } from './vocab.ts'
@@ -73,4 +73,27 @@ test('peer admission through a draft-enabled graph writes nothing', async () => 
   assertEquals(await g.admit([peer]), [peer])
   assertEquals(await g.get(['d']), before)
   assertEquals(writes, 0)
+})
+
+test('a spend uses the saved words and keeps the other desk’s unsent addition', async () => {
+  let entity = { eid: mint() }, writer = mint()
+  let save = {
+    entity,
+    draft: { text: 'Save my seat' },
+    typed: { over: '', writer, order: 1 },
+  }
+  await g.apply([save])
+  await g.apply([{
+    entity,
+    draft: { text: 'Save my seat by the window' },
+    typed: { over: 'Save my seat' },
+  }])
+  await g.apply([{
+    entity,
+    draft: { text: '' },
+    typed: { over: '', writer, order: 2, confirmed: 0 },
+  }])
+  await g.apply([save])
+  let [row] = await g.get([entity.eid])
+  assertEquals(row.draft, { text: ' by the window', rev: 3 })
 })

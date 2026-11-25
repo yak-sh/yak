@@ -1869,16 +1869,34 @@ let placeOf = (b: Bundle) => {
   return /^operator(:|$)/.test(place) ? place : 'operator'
 }
 let drafts = (bundles: Bundle[], person: string) =>
-  bundles.filter((b) => b.draft).map((b) => ({
-    entity: { eid: draftEid(person, placeOf(b)) },
-    draft: {
-      by: person,
-      place: placeOf(b),
-      text: String((b.draft as { text?: string })?.text ?? ''),
-    },
-    typed: { over: String((b.typed as { over?: string })?.over ?? '') },
-    $actor: { by: person },
-  }))
+  bundles.filter((b) => b.draft).map((b) => {
+    let typed = b.typed as {
+      over?: string
+      writer?: string
+      order?: number
+      confirmed?: number
+    } | undefined
+    let { writer, order, confirmed } = typed ?? {}
+    return {
+      entity: { eid: draftEid(person, placeOf(b)) },
+      draft: {
+        by: person,
+        place: placeOf(b),
+        text: String((b.draft as { text?: string })?.text ?? ''),
+      },
+      typed: {
+        over: String(typed?.over ?? ''),
+        ...(typeof writer == 'string' && Number.isSafeInteger(order)
+          ? {
+            writer,
+            order,
+            ...Number.isSafeInteger(confirmed) ? { confirmed } : {},
+          }
+          : {}),
+      },
+      $actor: { by: person },
+    }
+  })
 
 /**
  * A reply to a letter or text the Operator sent for a person, brought by the

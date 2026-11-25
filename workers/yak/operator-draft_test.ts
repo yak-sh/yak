@@ -424,6 +424,11 @@ let load = async (
     }
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
     if (init?.method == 'POST') posted.push(url)
+    let delayed = door?.[1] == 'reach' && door[2] == 'apply' && delayDraft
+    if (delayed) {
+      delayed.started = true
+      await delayed.release.promise
+    }
     if (refused && init?.method == 'POST' && new URL(url, base).href == base) {
       return new Response('Bad Gateway', { status: 502 })
     }
@@ -434,6 +439,10 @@ let load = async (
       return new Response('Bad Gateway', { status: 502 })
     }
     let answer = await serve(url, init, as)
+    if (delayed) delayed.landed = answer
+    if (init?.body instanceof FormData && delayDraft) {
+      delayDraft.sent = answer.clone()
+    }
     if (left) return new Promise<Response>(() => {})
     return url.includes('?talk=') ? conversation(answer) : answer
   }
@@ -606,6 +615,10 @@ let load = async (
       clearTimeout: cancel,
       ...held ? { performance: { now: () => now } } : {},
       FormData: FormOf,
+      DataTransfer: class {
+        files: File[] = []
+        items = { add: (file: File) => this.files.push(file) }
+      },
       Event,
       scrollTo: () => {},
       addEventListener: windowEvents.addEventListener.bind(windowEvents),
@@ -761,6 +774,8 @@ let load = async (
       say.value = text
       say.dispatchEvent(new Event('input'))
     },
+    enter: () =>
+      say.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Enter' })),
     send: () => {
       let form = document.querySelector('#ask')!
       form.dispatchEvent(new Event('submit', { cancelable: true }))
@@ -775,6 +790,12 @@ let slow: Promise<void> | undefined
 // a page posted to, in order.
 let refused = false
 let posted: string[] = []
+let delayDraft: {
+  started?: boolean
+  release: PromiseWithResolvers<void>
+  landed?: Response
+  sent?: Response
+} | undefined
 let stored = async (place = 'operator:new') =>
   ((await (await serve(`${base}/query?q=.draft`)).json()) as {
     draft: { place: string; text: string }
@@ -1055,6 +1076,52 @@ test('words the door does not take stay in the box, and it says so', async () =>
   assertEquals(page.say.value, 'Ask for the pavilion keys')
   assertStringIncludes(page.status(), 'Your words are kept')
   page.leave()
+})
+
+test('sending before the draft save lands spends the words in every tab', async () => {
+  let stash = storage()
+  let here = await load(stash, false, park)
+  let there = await load(storage(), false, park)
+  await Promise.all([here.heard(), there.heard()])
+  try {
+    let delayed: NonNullable<typeof delayDraft> = delayDraft = {
+      release: Promise.withResolvers<void>(),
+    }
+    here.type('Ask about the park entrance')
+    await until(() => delayed.started, { label: 'an in-flight autosave' })
+    here.type('Ask about the park entrance and parking')
+    here.enter()
+    let sent = await until(() => delayed.sent, { label: 'the message receipt' })
+    assertEquals(sent.status, 200)
+    await until(() => !here.status().includes('Sending'))
+    delayed.release.resolve()
+    let landed = await until(() => delayed.landed, {
+      label: 'the late autosave receipt',
+    })
+    assertEquals(landed.status, 200)
+    let reloaded = await load(stash, false, park)
+    await reloaded.heard()
+    assertEquals(
+      [
+        await stored('operator:' + park),
+        here.say.value,
+        there.say.value,
+        reloaded.say.value,
+      ],
+      ['', '', '', ''],
+      here.status(),
+    )
+    let { request } = await sent.json() as { request: string }
+    let query = new URLSearchParams({ q: `.entity.eid=${request}&*` })
+    let [row] = await (await serve(`${base}/query?${query}`)).json()
+    assertEquals(row?.doc.body, 'Ask about the park entrance and parking')
+    reloaded.leave()
+  } finally {
+    delayDraft?.release.resolve()
+    delayDraft = undefined
+    here.leave()
+    there.leave()
+  }
 })
 
 test('Stop in the box stops the conversation it shows', async () => {

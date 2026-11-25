@@ -88,6 +88,8 @@ export type DeskOpts = {
   /** the line the store answers `by`'s drafts on (default `.draft.by=<by>`),
    * where it names them otherwise, as a page graph of several stores does */
   line?: (by: string) => string
+  /** Identify this desk's writes when saves and spends use separate doors. */
+  writer?: string
 }
 
 // The store's text, and which revision of it.
@@ -98,6 +100,7 @@ type Held = {
   /** the store's text as last heard, and its rev */
   base: string
   rev: number
+  confirmed?: number
   /** what is typed here */
   local: string
   /** the write the store has not answered: its number and its text */
@@ -128,7 +131,7 @@ let heard = (h: Held, w: Word): Held =>
 // An answer to a write since overtaken is only a text heard.
 let answered = (h: Held, n: number, w: Word): Held => {
   if (h.flying != n) return heard(h, w)
-  let next = landed(h)
+  let next = { ...landed(h), confirmed: n }
   if (w.rev > h.rev) {
     next = { ...next, base: w.text, rev: w.rev }
     next.local = merge(h.sent ?? h.base, h.local, w.text)
@@ -257,7 +260,14 @@ export let desk = (
       h = { ...h, local: '', stuck: false }
     }
     let eid = by ? draftEid(by, place) : undefined
-    let over = h.flying != null ? h.sent ?? h.base : h.base
+    let typed = opts.writer
+      ? {
+        over: h.base,
+        writer: opts.writer,
+        order: n,
+        ...spent == null ? {} : { confirmed: h.confirmed ?? 0 },
+      }
+      : { over: h.flying != null ? h.sent ?? h.base : h.base }
     hold(place, { ...h, flying: n, sent: h.local, left: Date.now() })
     let fail = (err: unknown) => {
       opts.report?.(err)
@@ -269,6 +279,7 @@ export let desk = (
         // Recovered sends are insertions: a newer empty watched draft must
         // never read them as text another interface deleted.
         base: text == null ? h.base : '',
+        confirmed: text == null ? h.confirmed : undefined,
         local: text == null ? h.local : merge('', text, h.local),
       }))
       return false
@@ -280,7 +291,7 @@ export let desk = (
           ? [{
             entity: { eid },
             draft: { by, place, text: h.local },
-            typed: { over },
+            typed,
           }]
           : [],
       ])).then((applied) => {

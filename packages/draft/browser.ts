@@ -13,15 +13,17 @@ export type Store = {
   me: () => Promise<{ person: string | null }>
   subscribe: (query: string, hear: (rows: Bundle[]) => void) => () => void
 }
-export type BrowserOpts = Pick<DeskOpts, 'pace' | 'report' | 'line'> & {
-  /** Supply identity when the page already knows it; otherwise ask me(). */
-  by?: string
-  /** Earlier principals vouched by this host, such as this browser's guest
-   * instrument after sign-in. Their pending text moves before it is removed. */
-  recover?: string[]
-  /** A recovery copy, not the source of truth. false disables it. */
-  stash?: Stash | false
-}
+export type BrowserOpts =
+  & Pick<DeskOpts, 'pace' | 'report' | 'line' | 'writer'>
+  & {
+    /** Supply identity when the page already knows it; otherwise ask me(). */
+    by?: string
+    /** Earlier principals vouched by this host, such as this browser's guest
+     * instrument after sign-in. Their pending text moves before it is removed. */
+    recover?: string[]
+    /** A recovery copy, not the source of truth. false disables it. */
+    stash?: Stash | false
+  }
 
 /** Whose recovery copy a visitor nobody knows types into. */
 export let GUEST = 'guest'
@@ -209,7 +211,14 @@ export let browserDrafts = (
           close,
         }
       },
-    }, { by: () => by, stash, pace: opts.pace, report, line: opts.line })
+    }, {
+      by: () => by,
+      stash,
+      pace: opts.pace,
+      report,
+      line: opts.line,
+      writer: opts.writer,
+    })
   }
   // Never open another person's recovery copy. A bound field is briefly
   // read-only until me answers, not an editable field whose first keystrokes

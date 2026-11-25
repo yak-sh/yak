@@ -847,19 +847,19 @@ The complete list of reserved names:
     document_text domain_choice domain_courtesy domain_credit_used
     domain_order domain_refunded domain_refused domain_registered
     domain_renewal domain_renewal_paid domain_renewals_due domain_transfer
-    domain_transfer_answer draft draft_rows durable_retirement edge effect
-    email entity entry error event exception execution failed favorite
-    featured fee feed feedback file file_retirement filed finding fired form
-    form_guest form_mail form_phone form_post former free_spaces gallery
-    gitobj grant grants_listed handoff_spent heard heard_turn hearing held
-    home hook hostname image inference install installed integration
-    integration_install interrupted invite inviting key knock last_deploy
-    lease lent lines located mail mail_answered mail_dismissed mail_domain
-    mail_post mail_task mcp_list mcp_server member memory mentions meter
-    miss model model_estimate model_reservation model_result newcomer
-    newcomer_builds notice notice_confirmed notice_letter notice_posted
-    notice_subscription notified notify_deaths notify_trash oauth_grant
-    occupancy occurrence offer openai opened openrouter operator
+    domain_transfer_answer draft draft_rows draft_writer durable_retirement
+    edge effect email entity entry error event exception execution failed
+    favorite featured fee feed feedback file file_retirement filed finding
+    fired form form_guest form_mail form_phone form_post former free_spaces
+    gallery gitobj grant grants_listed handoff_spent heard heard_turn
+    hearing held home hook hostname image inference install installed
+    integration integration_install interrupted invite inviting key knock
+    last_deploy lease lent lines located mail mail_answered mail_dismissed
+    mail_domain mail_post mail_task mcp_list mcp_server member memory
+    mentions meter miss model model_estimate model_reservation model_result
+    newcomer newcomer_builds notice notice_confirmed notice_letter
+    notice_posted notice_subscription notified notify_deaths notify_trash
+    oauth_grant occupancy occurrence offer openai opened openrouter operator
     operator_alerts operator_reach order output output_of outreach_batch
     outreach_letter outreach_read outreach_trial outreach_write
     outreach_written own_number parent pending person person_name persona

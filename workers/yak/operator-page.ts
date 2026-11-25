@@ -1952,7 +1952,9 @@ let submission
 let draftClient = {
   ...page.store,
   apply: async (bundles) => {
-    if (!submission) return page.store.apply(bundles).catch(() => { throw new Error('Your draft could not sync. A recovery copy is kept on this device.') })
+    if (!submission || !bundles.some((row) => row.entity.eid == submission.get('request'))) {
+      return page.store.apply(bundles).catch(() => { throw new Error('Your draft could not sync. A recovery copy is kept on this device.') })
+    }
     let sent = submission; submission = undefined
     sent.set('draft', JSON.stringify(bundles))
     let response = await fetch('${at}', { method: 'POST', body: sent })
@@ -1960,7 +1962,7 @@ let draftClient = {
     return response.json()
   },
 }
-let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: said, line: page.line })
+let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: said, line: page.line, writer: crypto.randomUUID() })
 signal.addEventListener('abort', unheard, { once: true })
 // The box (operator-box.ts), mounted over what the server drew: what is sent
 // goes to this page's door, and Stop to its \`?stop=1\`; Newest, over it, takes

@@ -12,11 +12,26 @@
 // write lands on.
 
 import type { Bundle, Hook, Plugin } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { after } from '@yaks/fp'
 import { draftDoc } from './vocab.ts'
 import { merge } from './merge.ts'
 
-type Draft = { text?: string | null; rev?: number }
+type Draft = { by?: string; text?: string | null; rev?: number }
+type Writer = { saved?: number; text?: string; spent?: number }
+
+let orderOf = (b: Bundle) => {
+  let typed = b.typed as
+    | { over?: string; writer?: string; order?: number; confirmed?: number }
+    | undefined
+  let { writer, order } = typed ?? {}
+  if (writer == null || order == null) return
+  return {
+    eid: derivedEid(`draft writer|${b.entity.eid}|${writer}`),
+    order,
+    confirmed: typed?.confirmed,
+  }
+}
 
 /**
  * The hook: each draft whose text is written is merged over what the store
@@ -45,19 +60,49 @@ export let merging: Hook = (bundles, tx) => {
     typeof (b.draft as Draft | null)?.text == 'string'
   )
   if (!written.length) return bundles
-  return after(tx.get(written.map((b) => b.entity.eid), ['draft']), (found) => {
+  let orders = new Map(written.map((b) => [b, orderOf(b)]))
+  let eids = written.flatMap((b) => {
+    let writer = orders.get(b)
+    return writer ? [b.entity.eid, writer.eid] : [b.entity.eid]
+  })
+  return after(tx.get(eids, ['draft', 'draft_writer']), (found) => {
     let held = new Map(
       found.map((b) => [b.entity.eid, (b.draft ?? {}) as Draft]),
     )
-    return bundles.map((b): Bundle => {
+    let writers = new Map(
+      found.map((b) => [b.entity.eid, b.draft_writer as Writer]),
+    )
+    return bundles.flatMap((b): Bundle[] => {
       let d = b.draft as Draft | null | undefined
-      if (typeof d?.text != 'string') return b
+      if (typeof d?.text != 'string') return [b]
       let now = held.get(b.entity.eid) ?? {}
       let over = (b.typed as { over?: string } | undefined)?.over
+      let order = orders.get(b)
+      let advanced: Bundle[] = []
+      if (order) {
+        let { eid, order: n, confirmed } = order
+        let last = writers.get(eid) ?? {}
+        let saved = last.saved ?? 0, spent = last.spent ?? 0
+        if (n <= spent || (confirmed == null && n <= saved)) {
+          return [{ ...b, draft: now }]
+        }
+        if (confirmed != null && saved > confirmed && saved < n) {
+          over = last.text
+        }
+        let next = confirmed == null
+          ? { ...last, saved: n, text: d.text }
+          : { ...last, spent: n, ...(saved < n ? { text: '' } : {}) }
+        writers.set(eid, next)
+        advanced.push({
+          entity: { eid },
+          draft_writer: { ...next, draft: b.entity.eid, by: d.by },
+          $actor: b.$actor,
+        })
+      }
       let text = over == null ? d.text : merge(over, d.text, now.text ?? '')
       let next = { ...d, text, rev: (now.rev ?? 0) + 1 }
       held.set(b.entity.eid, next)
-      return { ...b, draft: next }
+      return [{ ...b, draft: next }, ...advanced]
     })
   })
 }

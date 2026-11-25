@@ -48,7 +48,36 @@
         "over": {
           "type": "string",
           "description": "the text the writer last heard from the store"
+        },
+        "writer": {
+          "type": "string",
+          "description": "the UUID of the desk issuing ordered saves and spends"
+        },
+        "order": {
+          "type": "integer",
+          "description": "the order in which that desk issued this write"
+        },
+        "confirmed": {
+          "type": "integer",
+          "description": "on a spend, the last write this desk heard back from the store before sending"
         }
+      }
+    },
+    "draft_writer": {
+      "component": true,
+      "type": "object",
+      "journal": false,
+      "wire": false,
+      "sync": "none",
+      "embed": false,
+      "personal": "by",
+      "description": "a desk's last saved text and spend order, used to absorb delayed autosaves",
+      "properties": {
+        "draft": { "type": "string", "ref": "entity", "death": "cascade" },
+        "by": { "type": "string", "ref": "entity", "death": "keep" },
+        "saved": { "type": "integer", "stamped": true },
+        "text": { "type": "string", "stamped": true },
+        "spent": { "type": "integer", "stamped": true }
       }
     }
   }
