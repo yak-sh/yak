@@ -20,7 +20,7 @@ let run = async (
 ) => {
   let objects = new Set(kept)
   let drawn: string[] = [], recorded: unknown[] = []
-  await ensureSplash({
+  let said = await ensureSplash({
     live: () =>
       Promise.resolve({ space, app: { eid: 'e', slug: 'box', splash } }),
     inputs: () => Promise.resolve({ icon: ICON, palette: WHITE }),
@@ -31,14 +31,15 @@ let run = async (
     list: (p) => Promise.resolve([...objects].filter((k) => k.startsWith(p))),
     delete: (ks) => (ks.forEach((k) => objects.delete(k)), Promise.resolve()),
   })
-  return { objects: [...objects], drawn: drawn.length, recorded }
+  return { objects: [...objects], drawn: drawn.length, recorded, said }
 }
 
 let key = await splashKey(ICON, WHITE)
 let sets = splashPrefix(space, { eid: 'e', slug: 'box' })
 
 test('a new set is drawn whole, recorded, and the older set swept', async () => {
-  let { objects, drawn, recorded } = await run([`${sets}0000/1x1.png`])
+  let { objects, drawn, recorded, said } = await run([`${sets}0000/1x1.png`])
+  assertEquals(said, 'drawn')
   assertEquals(drawn, splashes(WHITE).length + 1)
   assertEquals(recorded, [{ key, dark: false }])
   assertEquals(objects.includes(`${sets}${key}/done`), true)
@@ -47,9 +48,9 @@ test('a new set is drawn whole, recorded, and the older set swept', async () => 
 
 test('a kept set is recorded without drawing, and a recorded one is left', async () => {
   let kept = await run([`${sets}${key}/done`])
-  assertEquals([kept.drawn, kept.recorded.length], [0, 1])
+  assertEquals([kept.drawn, kept.recorded.length, kept.said], [0, 1, 'kept'])
   let held = await run([], { key, dark: false })
-  assertEquals([held.drawn, held.recorded.length], [0, 0])
+  assertEquals([held.drawn, held.recorded.length, held.said], [0, 0, 'current'])
 })
 
 test('a background is read from the root, the body or --bg, in each scheme', () => {

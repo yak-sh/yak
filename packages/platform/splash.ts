@@ -219,8 +219,10 @@ type SplashTarget = {
 }
 
 /** Draw the live release's set unless it is drawn, record it, and delete
- * the app's other sets. A set already kept, from an interrupted run, is
- * recorded without drawing again. Its images are drawn one at a time: the
+ * the app's other sets, and say which happened: `gone` where there is no
+ * released app, `current` where its set is the one recorded, `kept` for a set
+ * already kept by an interrupted run, recorded without drawing again, and
+ * `drawn`. Its images are drawn one at a time: the
  * caller's other work shares its connections, and a set is only wanted by
  * the next install. */
 export let ensureSplash = async <T extends SplashTarget>(io: {
@@ -232,16 +234,17 @@ export let ensureSplash = async <T extends SplashTarget>(io: {
   record: (drawn: Drawn) => Promise<unknown>
   list: (prefix: string) => Promise<string[]>
   delete: (keys: string[]) => Promise<void>
-}): Promise<void> => {
+}): Promise<'gone' | 'current' | 'kept' | 'drawn'> => {
   let at = await io.live()
-  if (!at) return
+  if (!at) return 'gone'
   let { icon, palette } = await io.inputs(at)
   let key = await splashKey(icon, palette)
   let drawn = { key, dark: !!palette.dark }
-  if (at.app.splash?.key == key) return
+  if (at.app.splash?.key == key) return 'current'
   let sets = splashPrefix(at.space, at.app)
   let prefix = `${sets}${key}/`
-  if (!await io.has(prefix + DONE)) {
+  let kept = await io.has(prefix + DONE)
+  if (!kept) {
     let mark = `data:image/png;base64,${base64(icon)}`
     for (let s of splashes(palette)) {
       await io.put(
@@ -258,6 +261,7 @@ export let ensureSplash = async <T extends SplashTarget>(io: {
   await io.record(drawn)
   let old = (await io.list(sets)).filter((k) => !k.startsWith(prefix))
   if (old.length) await io.delete(old)
+  return kept ? 'kept' : 'drawn'
 }
 
 let base64 = (bytes: Uint8Array) => {
