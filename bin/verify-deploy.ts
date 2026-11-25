@@ -4,7 +4,7 @@
 //
 // Three questions, in the order a break would show up:
 //
-//   1. do public pages answer 200 and /connect preserve its sign-in destination
+//   1. do public pages answer 200 and /connect lead to Agents after sign-in
 //   2. does the connector door still list its one public tool
 //   3. does three minutes of live traffic carry a 5xx or an exception
 //
@@ -27,6 +27,7 @@
 // version went live, nor holds the token the tail needs.
 
 import { PRICE } from '@yaks/platform/plans'
+import { managePath, signInAt } from '@yaks/platform/routes'
 
 export let SITE = 'https://yaks.app'
 
@@ -55,23 +56,38 @@ export let PRICING = {
 
 export type Fetch = typeof fetch
 
+let visit = (get: Fetch, site: string, path: string) =>
+  get(site + path, { redirect: 'manual' }).catch((e: Error) => e)
+
+let redirectDoor = async (
+  get: Fetch,
+  site: string,
+  path: string,
+  status: number,
+  to: string,
+) => {
+  let res = await visit(get, site, path)
+  if (res instanceof Error) return `${path}: ${res.message}`
+  await res.body?.cancel()
+  let location = res.headers.get('location')
+  return res.status == status && location == to
+    ? null
+    : `${path}: ${res.status} ${
+      location ?? '(no location)'
+    }, want ${status} ${to}`
+}
+
 // One door, one verdict. `null` is fine; a string is what to print.
 export let door = async (get: Fetch, site: string, path: string) => {
-  let res = await get(site + path, { redirect: 'manual' })
-    .catch((e: Error) => e)
+  if (path == '/connect') {
+    let agents = managePath('agents')
+    let login = signInAt(site + agents, { APEX: new URL(site).host })
+    return await redirectDoor(get, site, path, 302, agents) ??
+      await redirectDoor(get, site, agents, 303, login)
+  }
+  let res = await visit(get, site, path)
   if (res instanceof Error) return `${path}: ${res.message}`
   let body = await res.text()
-  // identity.ts `theirs` sends an anonymous visitor through sign-in while
-  // preserving the setup destination. A different redirect is a broken door.
-  if (path == '/connect') {
-    let want = '/login?return=%2Fconnect'
-    let location = res.headers.get('location')
-    return res.status == 303 && location == want
-      ? null
-      : `${path}: ${res.status} ${
-        location ?? '(no location)'
-      }, want 303 ${want}`
-  }
   if (res.status != 200) return `${path}: ${res.status}, want 200`
   if (path != '/pricing') return null
   if (!body.includes(PRICING.has)) {

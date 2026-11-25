@@ -36,24 +36,30 @@ let fake = (table: Record<string, Reply>) =>
   }) as typeof fetch
 
 let TOOLS = JSON.stringify({ result: { tools: [{ name: 'about' }] } })
+let AGENTS = '/manage/account/agents'
+let login = (site = SITE, back = site + AGENTS) =>
+  `${site}/login?return=${encodeURIComponent(back)}`
 
-let healthy = () => {
+let healthy = (site = SITE) => {
   let table: Record<string, Reply> = { 'POST /mcp?auth=mixed': [200, TOOLS] }
   for (let path of DOORS) table[path] = [200, PRICING.has]
-  table['/connect'] = [303, '', '/login?return=%2Fconnect']
+  table['/connect'] = [302, '', AGENTS]
+  table[AGENTS] = [303, '', login(site)]
   return table
 }
 
-test('verify: public pages, connect sign-in, and about listed is silence', async () => {
+test('verify: public pages, Agents after sign-in, and about listed is silence', async () => {
   assertEquals(await verify(fake(healthy()), SITE), [])
 })
 
 test('verify: staging probes its own doors and tails its own worker', async () => {
   for (let staging of [false, true]) {
+    let site = staging ? 'https://yaks.fyi' : SITE
+    let fetchDoor = fake(healthy(site))
     let seen: string[] = []
     let get = ((url, init) => {
       seen.push(new URL(String(url)).origin)
-      return fake(healthy())(url, init)
+      return fetchDoor(url, init)
     }) as typeof fetch
     let tailed = false
     let follow = (secs: number, environment = false) => {
@@ -70,10 +76,7 @@ test('verify: staging probes its own doors and tails its own worker', async () =
       0,
     )
     assertEquals(tailed, true)
-    assertEquals(
-      seen,
-      Array(DOORS.length + 1).fill(staging ? 'https://yaks.fyi' : SITE),
-    )
+    assertEquals(seen, Array(DOORS.length + 2).fill(site))
   }
 })
 
@@ -87,28 +90,47 @@ test('verify: a door that vanished is a 404, not a crash', async () => {
   let table = healthy()
   delete table['/connect']
   assertEquals(await verify(fake(table), SITE), [
-    '/connect: 404 (no location), want 303 /login?return=%2Fconnect',
+    `/connect: 404 (no location), want 302 ${AGENTS}`,
   ])
 })
 
-test('verify: connect requires its precise anonymous sign-in redirect', async () => {
+test('connect: the first redirect must lead to Agents', async () => {
   for (
     let [status, location] of [
       [200, undefined],
-      [302, '/login?return=%2Fconnect'],
-      [303, undefined],
-      [303, '/login'],
-      [303, '/login?return=%2Fother'],
-      [303, 'https://foreign.test/login?return=%2Fconnect'],
+      [302, undefined],
+      [302, 'https://foreign.test' + AGENTS],
+      [303, AGENTS],
+      [303, '/login?return=%2Fconnect'],
     ] as const
   ) {
     let table = healthy()
     table['/connect'] = [status, '', location]
     assertEquals(
       await door(fake(table), SITE, '/connect'),
-      `/connect: ${status} ${
+      `/connect: ${status} ${location ?? '(no location)'}, want 302 ${AGENTS}`,
+    )
+  }
+})
+
+test('connect: Agents must send a stranger to sign in with Agents as the return URL', async () => {
+  for (
+    let [status, location] of [
+      [200, undefined],
+      [302, login()],
+      [303, '/login'],
+      [303, login(SITE, SITE + '/connect')],
+      [303, login(SITE, 'https://foreign.test' + AGENTS)],
+      [303, login('https://foreign.test', SITE + AGENTS)],
+    ] as const
+  ) {
+    let table = healthy()
+    table[AGENTS] = [status, '', location]
+    assertEquals(
+      await door(fake(table), SITE, '/connect'),
+      `${AGENTS}: ${status} ${
         location ?? '(no location)'
-      }, want 303 /login?return=%2Fconnect`,
+      }, want 303 ${login()}`,
     )
   }
 })
