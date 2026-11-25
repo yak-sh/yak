@@ -4464,6 +4464,7 @@
             "npm:@yaks/session@0.2.33",
             "npm:@yaks/sqlite@0.2.30",
             "npm:@yaks/sync@0.2.24",
+            "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/text@0.2.24",
             "npm:@yaks/timing@0.2.23",

@@ -5,7 +5,7 @@ import {
   messageUpdates,
   replyFriend,
 } from './friends.ts'
-import { Empty, Form } from '@yaks/ui/parts'
+import { Empty } from '@yaks/ui/parts'
 // Updates from the Operator (T-140508): what happened in a space, as messages
 // from its Operator a person can reply to, at `/<space>/updates`
 // (@yaks/platform/routes `talkPath('updates', …)`), beside the chat app's side
@@ -16,26 +16,38 @@ import { Empty, Form } from '@yaks/ui/parts'
 // opens. Every space's together are at `/updates` (`allUpdates`), the
 // same read across the spaces a person talks with an Operator in
 // (`updatesAcross`).
-import { Time } from '@yaks/ui/parts'
 import { bound, type Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
-import { cloneElement, type ComponentChildren, Fragment, h } from 'preact'
-import { Button, Card, Field, More, Preview, State } from '@yaks/ui/parts'
+import { type ComponentChildren, Fragment, h } from 'preact'
+import { Card } from '@yaks/ui/parts'
 import { operatorDoor } from './build-door.ts'
 import { backTo, chatPath, talkPath } from '@yaks/platform/routes'
-import { spaceHost } from '@yaks/platform/host'
+import { apex } from '@yaks/platform/host'
 import { browserImmutable } from '@yaks/platform/kept'
-import type { Shown, Update } from './operator-updates.ts'
+import type { Update } from './operator-updates.ts'
+import {
+  type Apps,
+  bySha,
+  card,
+  cardsView,
+  chatAt,
+  draftAt,
+  type UpdatesView,
+} from '@yaks/platform/updates-view'
+import { offerRows, updateRows } from '@yaks/platform/update-rows'
+import { appRows } from '@yaks/platform/side-rows'
+import type { MarkedApp } from '@yaks/platform/routes'
+import { drawnRows } from '@yaks/platform/page-graph'
+
+export { type Apps, bySha, chatAt, draftAt }
 import { lastDay } from './views.ts'
-import { markdown, PICTURES } from '@yaks/session/conversation'
+import { PICTURES } from '@yaks/session/conversation'
 import { caught } from './defects.ts'
-import type { Choice } from '@yaks/task'
 import { attachmentKey } from './attachments.ts'
 import { type Directory, directory, directoryOf, fetch } from './directory.ts'
 import { EID, inApp } from './tool.ts'
 import { linkOf } from './preview.ts'
-import { updateAnchor } from './operator-lists.ts'
 import { draftsOf, theirs } from './written.ts'
 import { CallError, refused as toolRefused } from '@yaks/tools/errors'
 import { refusal } from '@yaks/api/refuse'
@@ -61,6 +73,14 @@ export type Placed = Update & { space: Space }
  * <Operator>" and the Operator switcher beside each space. */
 export type Updates = { updates: Placed[]; waiting: number }
 
+/** One space's Updates as read: the Operator's (`cards`) and what the
+ * directory holds (`offers`), and all of them placed in the space. */
+export type Read = Updates & {
+  space: Space
+  cards: Update[]
+  offers: Update[]
+}
+
 /** A space whose Operator did not answer, and how it failed. */
 export type Missed = { space: Space; error: unknown }
 
@@ -79,7 +99,7 @@ export let updatesAcross = async (
   seats: Seat[],
   { seen = false, dismissed = false }: Asking = {},
 ): Promise<
-  Updates & { by: Map<string, number>; missed: Missed[] }
+  Updates & { by: Map<string, number>; missed: Missed[]; read: Read[] }
 > => {
   let args = dismissed ? { dismissed } : seen ? { seen } : {}
   let missed: Missed[] = []
@@ -95,10 +115,12 @@ export let updatesAcross = async (
         space,
         waiting: waiting + offers.filter((u) => u.needs).length,
         updates: [...updates, ...offers].map((u) => ({ ...u, space })),
+        cards: updates,
+        offers,
       }
     } catch (error) {
       missed.push({ space, error })
-      return { space, waiting: 0, updates: [] }
+      return { space, waiting: 0, updates: [], cards: [], offers: [] }
     }
   }))
   let updates = read.flatMap((r) => r.updates).sort((a, b) =>
@@ -109,23 +131,25 @@ export let updatesAcross = async (
     waiting: read.reduce((n, r) => n + r.waiting, 0),
     by: new Map(read.map((r) => [r.space.slug, r.waiting])),
     missed,
+    read,
   }
 }
 
-/** A person's Updates in one space. `seen` marks what they read now as
- * read. */
+/** A person's Updates in one space, and what they came from: the
+ * Operator's (`cards`) and the directory's (`offers`), each in its own
+ * order. `seen` marks what they read now as read. */
 export let updatesOf = async (
   env: Env,
   space: Space,
   who: Who,
   seen = false,
-): Promise<Updates> => {
-  let { updates, waiting, missed } = await updatesAcross(env, [{
+): Promise<Updates & Omit<Read, 'space' | 'waiting' | 'updates'>> => {
+  let { updates, waiting, missed, read } = await updatesAcross(env, [{
     space,
     who,
   }], { seen })
   if (missed.length) throw missed[0].error
-  return { updates, waiting }
+  return { updates, waiting, cards: read[0].cards, offers: read[0].offers }
 }
 
 /** The notices a person dismissed in a space, newest first. */
@@ -141,39 +165,6 @@ export let dismissedOf = async (
   if (missed.length) throw missed[0].error
   return { updates, waiting }
 }
-
-/** The apps an update can be about, by eid, where they open. */
-export type Apps = { eid: string; slug: string; title: string }[]
-
-// Where an update leads: the chat it came from (the person's own
-// conversation where it names none), and the app it is about.
-let leads = (env: Env, space: Space, u: Update, apps: Apps) => {
-  let chat = seeing(space, u)
-  let app = apps.find((a) => a.eid == u.about)
-  return [chat, ...app ? [' · ', opening(env, space, app)] : []]
-}
-
-/** Where an update opens its chat: the conversation it came from, at the
- * entry it was written from, drawn from just before that entry so an old
- * one is on the page (operator-page.ts `chatPage`, `from`), and named in the
- * address the page scrolls to and marks (`row-<entry>`). */
-export let chatAt = (space: Space, u: Pick<Update, 'from'>) => {
-  let at = chatPath(space.slug, u.from?.chat)
-  let { entry, seq } = u.from ?? {}
-  return entry ? `${at}${seq ? `?from=${seq - 1}` : ''}#row-${entry}` : at
-}
-
-// The link to the chat an update came from.
-let seeing = (space: Space, u: Update) =>
-  h('a', { href: chatAt(space, u) }, 'See the chat')
-
-// A link opening one of the space's apps.
-let opening = (env: Env, space: Space, app: Apps[number]) =>
-  h('a', {
-    href: `https://${spaceHost(env, space.slug)}/${app.slug}/`,
-    target: '_blank',
-    rel: 'noopener',
-  }, `Open ${app.title || app.slug}`)
 
 // What the directory holds for a person beside their Operator's
 // Updates: apps offered to the space, friend requests and suggestions, and
@@ -203,415 +194,22 @@ export let waitingSeats = async (dir: Directory, person: string) =>
       }),
   )
 
-let offersOf = async (env: Env, space: Space, who: Who, seen = false) =>
+let offersOf = (env: Env, space: Space, who: Who, seen = false) =>
+  offersIn(directory(bound(env.DIRECTORY, fetch, env)), space, who, seen)
+
+/** What the directory holds for a person beside their Operator's Updates
+ * in a space (`requestsOf`), and their friends' messages, which reading
+ * (`seen`) marks read. */
+export let offersIn = async (
+  dir: Directory,
+  space: Space,
+  who: Who,
+  seen = false,
+) =>
   (await Promise.all([
-    requestsOf(directory(bound(env.DIRECTORY, fetch, env)), space, who),
-    messageUpdates(env, space, who, seen),
+    requestsOf(dir, space, who),
+    messageUpdates(dir, space, who, seen),
   ])).flat()
-
-/** Where an update's card is drawn: its space, and the page it is on where
- * that is not the space's own Updates (`back`), which a choice or a
- * dismissal returns to. */
-type At = { space: Space; back?: string }
-
-// A reply carries a request id so sending it twice sends it once.
-let form = (
-  { space, back }: At,
-  fields: [string, string][],
-  ...inner: ComponentChildren[]
-) =>
-  h(
-    'form',
-    {
-      class: 'Update_Form Page_Form',
-      method: 'post',
-      action: talkPath('updates', space.slug),
-      ...actionKinds.some((kind) => kind == fields[0]?.[0])
-        ? {
-          'data-inbox-action': fields[0][0],
-          'data-inbox-space': space.eid,
-        }
-        : {},
-    },
-    [
-      ...fields,
-      ...back ? [['back', back] as [string, string]] : [],
-      ['id', crypto.randomUUID()],
-    ].map(([name, value]) => h(Form.Hidden, { name, value })),
-    ...inner,
-  )
-
-// What an update says, in the Markdown the Operator writes it in.
-let words = (text: string) =>
-  h('div', { class: 'Update_Words' }, markdown(text))
-
-// When it happened, said the human way.
-let stamp = (u: Update) => h(Time, { at: u.at, class: 'Update_When' })
-
-let head = (
-  u: Update,
-  title: ComponentChildren,
-  where: ComponentChildren,
-  ...actions: ComponentChildren[]
-) =>
-  h(
-    Card.Head,
-    { class: 'Update_Head' },
-    title,
-    h('div', { class: 'Update_Byline' }, where, stamp(u), ...actions),
-  )
-
-let subject = (u: Update) =>
-  u.subject ? h(Card.Title, { class: 'Update_Subject' }, u.subject) : null
-
-// Where what a choice shows is read: a file kept in the space, through the
-// question that shows it, or an app's draft, at the reader's own preview
-// link (`shownAnswer`).
-let shownAt = (space: Space, u: Update, s: Shown) =>
-  s.artifact
-    ? `${talkPath('updates', space.slug)}?shown=${
-      encodeURIComponent(u.eid)
-    }&eid=${encodeURIComponent(s.eid)}${bySha(s.artifact)}`
-    : draftAt(space, s.eid)
-
-// What a choice shows, drawn by its components: a picture, a file to open,
-// prose, or else an app, its draft in a frame.
-let showing = (space: Space, u: Update, s: Shown) => {
-  let at = shownAt(space, u, s)
-  if (s.artifact) {
-    return s.artifact.media_type.startsWith('image/')
-      ? h('img', { class: 'Update_Picture', src: at, alt: s.choice })
-      : h('a', { href: at, target: '_blank', rel: 'noopener' }, 'Open file')
-  }
-  if (s.doc) {
-    return h(
-      'div',
-      { class: 'Update_Prose' },
-      s.doc.title ? h('b', null, s.doc.title) : null,
-      s.doc.body ? markdown(s.doc.body) : null,
-    )
-  }
-  return h(
-    Preview,
-    { class: 'Update_Draft' },
-    h(
-      Preview.Address,
-      { href: at, target: '_blank', rel: 'noopener' },
-      'Open the draft',
-    ),
-    h(Preview.Frame, {
-      mod: 'flat',
-      src: at,
-      loading: 'lazy',
-      title: `${s.choice}, the draft`,
-    }),
-  )
-}
-
-// Choices that show something: each a column with what it shows, its words
-// and its button under them, side by side where there is room and one above
-// the next on a phone.
-let shownChoices = (at: At, u: Update, choices: Choice[]) =>
-  form(
-    at,
-    [['choose', u.eid]],
-    h(
-      'ul',
-      { class: 'Update_Choices Update_Choices-shown' },
-      choices.map((c, i) =>
-        h(
-          'li',
-          { class: 'Update_Choice' },
-          (u.shown ?? []).filter((s) => s.choice == c.label)
-            .map((s) => showing(at.space, u, s)),
-          h('p', null, h('b', null, c.label), `: ${c.description}`),
-          h(
-            Button,
-            { mod: !i && 'go', name: 'choice', value: c.label },
-            c.label,
-          ),
-        )
-      ),
-    ),
-  )
-
-// What needs a person: the Operator's question, its choices, a button for
-// each (the one it recommends first and filled), "Other" for an answer in
-// their own words, and below them a way to ask
-// about it, opened in place. Choices that show something are drawn with it.
-let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
-  let { space } = at
-  let choices = [...u.choices ?? []].sort((a, b) =>
-    +(b.label == u.recommended) - +(a.label == u.recommended)
-  )
-  let header = head(
-    u,
-    h(State, {
-      class: 'Update_Needs',
-      mod: 'negative',
-      'data-inbox-pending': '',
-    }, 'Needs you'),
-    where,
-    h('span', { class: 'Update_Meta' }, seeing(space, u)),
-  )
-  if (u.shown?.length) {
-    return h(
-      Card,
-      { class: 'Update Update-needs', id: updateAnchor(u.eid) },
-      header,
-      words(u.words),
-      shownChoices(at, u, choices),
-      other(at, u),
-      replying(at, u),
-    )
-  }
-  return h(
-    Card,
-    { class: 'Update Update-needs', id: updateAnchor(u.eid) },
-    header,
-    words(u.words),
-    choices.length
-      ? h(
-        Fragment,
-        null,
-        h(
-          'ul',
-          { class: 'Update_Choices' },
-          choices.map((c) =>
-            h('li', null, h('b', null, c.label), `: ${c.description}`)
-          ),
-        ),
-        form(
-          at,
-          [['choose', u.eid]],
-          h(
-            Card.Actions,
-            null,
-            choices.map((c, i) =>
-              h(
-                Button,
-                { mod: !i && 'go', name: 'choice', value: c.label },
-                c.label,
-              )
-            ),
-          ),
-        ),
-      )
-      : null,
-    other(at, u),
-    replying(at, u),
-  )
-}
-
-// The last choice, always there: "Other", opened in place, a box for the
-// person's own words, which answer the question as theirs and reach the
-// Operator as the answer. A question with no choices asks for their words
-// alone, so its box is open.
-let other = (at: At, u: Update) => {
-  let box = form(
-    at,
-    [['choose', u.eid]],
-    h(Field, {
-      class: 'Update_Input',
-      lines: true,
-      name: 'choice',
-      required: true,
-      placeholder: 'Your own answer…',
-      'aria-label': 'Your own answer',
-    }),
-    h(Button, { mod: 'go', type: 'submit' }, 'Answer'),
-  )
-  return u.choices?.length
-    ? h(
-      More,
-      { class: 'Update_Other', 'data-inbox-pending': '' },
-      h(More.Summary, {}, 'Other'),
-      h(More.Body, {}, box),
-    )
-    : box
-}
-
-// A way to send the Operator words about an update, opened in place.
-let replying = (at: At, u: Update) =>
-  h(
-    More,
-    { mod: 'quiet', class: 'Update_Reply' },
-    h(More.Summary, {}, `Ask ${at.space.operator} about it`),
-    h(
-      More.Body,
-      {},
-      form(
-        at,
-        [['reply', u.eid]],
-        h(Field, {
-          class: 'Update_Input',
-          lines: true,
-          name: 'say',
-          required: true,
-          'aria-label': `Your words to ${at.space.operator}`,
-          placeholder: 'Write a follow-up…',
-        }),
-        h(Button, { mod: 'go', type: 'submit' }, 'Send'),
-      ),
-    ),
-  )
-
-// A notice put away: it leaves their Updates until something happens on it.
-let dismissing = (at: At, u: Update) =>
-  form(
-    at,
-    [['dismiss', u.eid]],
-    h(Button, { mod: 'quiet', type: 'submit' }, 'Dismiss'),
-  )
-
-// An answer a card's button sends: its value and its label.
-type Answer = [string, string]
-
-// Something the directory holds for a person to answer (an app offered to
-// them, a friend request): its subject, its words, and a button for each
-// answer while it needs them, the first filled.
-let offerCard = (
-  at: At,
-  u: Update,
-  where: ComponentChildren,
-  field: [string, string],
-  answers: Answer[],
-  prompt?: string,
-) =>
-  h(
-    Card,
-    { class: 'Update', id: updateAnchor(u.eid) },
-    head(u, subject(u), where),
-    h(
-      'p',
-      { class: 'Update_Words' },
-      u.words,
-      prompt ? h('span', { 'data-inbox-pending': '' }, ` ${prompt}`) : null,
-    ),
-    u.needs
-      ? form(
-        at,
-        [field],
-        h(
-          Card.Actions,
-          null,
-          answers.map(([value, label], i) =>
-            h(Button, { mod: !i && 'go', name: 'answer', value }, label)
-          ),
-        ),
-      )
-      : null,
-  )
-
-// A friend's message: who it is from, their words, when, and a box to
-// reply to them.
-let messageCard = (
-  at: At,
-  u: Update,
-  where: ComponentChildren,
-  { friend, name }: NonNullable<Update['message']>,
-) =>
-  h(
-    Card,
-    { class: 'Update', id: updateAnchor(u.eid) },
-    head(
-      u,
-      subject(u),
-      where,
-      u.unread ? h(State, { mod: 'positive' }, 'New') : null,
-    ),
-    h('p', { class: 'Update_Words' }, u.words),
-    form(
-      at,
-      [['message', friend]],
-      h(Field, {
-        class: 'Update_Input',
-        lines: true,
-        name: 'say',
-        required: true,
-        maxlength: 4000,
-        'aria-label': `Your reply to ${name}`,
-        placeholder: `Reply to ${name}…`,
-      }),
-      h(Button, { mod: 'go', type: 'submit' }, 'Send'),
-    ),
-  )
-
-// A notice: its subject and a way to put it away, its words, when it came
-// and where it came from, and a way to ask about it.
-let drawCard = (
-  env: Env,
-  at: At,
-  u: Update,
-  apps: Apps,
-  where: ComponentChildren = null,
-) => {
-  let { space } = at
-  if (u.transfer) {
-    return offerCard(at, u, where, ['transfer', u.eid], [
-      ['accept', u.transfer.kind == 'domain' ? 'Accept domain' : 'Accept app'],
-      ...u.transfer.editor
-        ? [['accept-with-editor', 'Accept and keep editor'] as Answer]
-        : [],
-      ['decline', 'Decline'],
-    ])
-  }
-  if (u.message) return messageCard(at, u, where, u.message)
-  if (u.friend) {
-    return offerCard(
-      at,
-      u,
-      where,
-      ['friend', u.friend.person],
-      [['approved', 'Add friend'], ['declined', 'Not now']],
-      u.friend.suggested
-        ? 'Add them as a friend? They see a request only if you do.'
-        : undefined,
-    )
-  }
-  if (u.needs) return needsCard(at, u, where)
-  let away = u.dismissed ? null : h(Card.Actions, null, dismissing(at, u))
-  return h(
-    Card,
-    {
-      class: u.unread ? 'Update Update-new' : 'Update',
-      id: updateAnchor(u.eid),
-    },
-    head(u, subject(u), where, away),
-    words(u.words),
-    h(
-      'p',
-      { class: 'Update_Meta' },
-      leads(env, space, u, apps),
-      u.unread ? [' · ', h(State, { mod: 'positive' }, 'New')] : null,
-    ),
-    replying(at, u),
-  )
-}
-
-let card = (
-  env: Env,
-  at: At,
-  u: Update,
-  apps: Apps,
-  where: ComponentChildren = null,
-) => {
-  let drawn = drawCard(env, at, u, apps, where)
-  return cloneElement(
-    drawn,
-    {
-      'data-inbox-card': crypto.randomUUID(),
-      'data-inbox-waits': u.needs ? at.space.slug : undefined,
-    },
-    drawn.props.children,
-    h('output', {
-      class: 'Update_Status',
-      'data-inbox-status': '',
-      tabindex: -1,
-      hidden: true,
-    }),
-  )
-}
 
 /** The notices a person dismissed, newest first, and the way back to the
  * rest. */
@@ -631,7 +229,7 @@ export let dismissedUpdates = (
       h('a', { href: talkPath('updates', space.slug) }, 'Back to Updates'),
     ),
     updates.length
-      ? updates.map((u) => card(env, { space }, u, apps))
+      ? updates.map((u) => card({ space, apex: apex(env) }, u, apps))
       : h('p', { class: 'Update_Meta' }, 'Nothing dismissed.'),
   )
 
@@ -697,13 +295,37 @@ export let lastDayLine = (
 export let updates = (
   env: Env,
   space: Space,
-  { updates }: { updates: Update[]; waiting: number },
+  news:
+    & { updates: Update[]; waiting: number }
+    & Partial<
+      Pick<Read, 'cards' | 'offers'>
+    >,
   lists: ComponentChildren = null,
-  apps: Apps = [],
+  apps: MarkedApp[] = [],
   views?: Map<string, number>,
   friends?: string,
+  person = '',
 ) => {
   let day = lastDayLine(apps, views)
+  let view: UpdatesView = {
+    person,
+    space: {
+      eid: space.eid,
+      slug: space.slug,
+      title: space.title,
+      operator: space.operator,
+    },
+    apex: apex(env),
+  }
+  // The rows the cards were drawn from, which the page graph starts with
+  // until its watches answer (updates-list-browser).
+  let rows = news.cards && news.offers
+    ? [
+      ...updateRows(person, space.eid, news.cards),
+      ...offerRows(person, space.eid, news.offers),
+      ...appRows(person, space.eid, apps),
+    ]
+    : undefined
   return h(
     Fragment,
     null,
@@ -729,15 +351,21 @@ export let updates = (
       )
       : null,
     lists,
-    updates.length ? updates.map((u) => card(env, { space }, u, apps)) : h(
+    h(
       'div',
-      { class: 'Talk_Hello' },
-      h(Empty.Title, { mod: 'welcome' }, 'Nothing yet'),
-      h(
-        'p',
-        null,
-        `When ${space.operator} finishes something, fixes an app, or someone joins, it shows here.`,
-      ),
+      {
+        class: 'Update_List',
+        'data-view': 'updates',
+        'data-updates-view': JSON.stringify(view),
+      },
+      cardsView(view, news.updates, apps),
+      rows && person
+        ? h('script', {
+          type: 'application/json',
+          'data-page-graph': '',
+          dangerouslySetInnerHTML: { __html: drawnRows(person, rows) },
+        })
+        : null,
     ),
     h(
       'p',
@@ -793,8 +421,7 @@ export let allUpdates = (
     updates.length
       ? updates.map((u) =>
         card(
-          env,
-          { space: u.space, back: ALL },
+          { space: u.space, back: ALL, apex: apex(env) },
           u,
           apps.get(u.space.slug) ?? [],
           whereFrom(u.space),
@@ -993,17 +620,8 @@ export let fileAnswer = async (
   })
 }
 
-/** A kept file's address said by its bytes (`?sha=`, `shownAt`): asked for
- * by it, the browser keeps it for good, since those bytes never change. */
-export let bySha = (file: { address: string }) =>
-  `&sha=${encodeURIComponent(file.address)}`
 let named = (req: Request | undefined, file: { address: string }) =>
   !!req && new URL(req.url).searchParams.get('sha') == file.address
-
-/** Where a draft of one of the space's apps is read in a page's frame: the
- * reader's own preview link of it (`shownAnswer`). */
-export let draftAt = (space: Space, draft: string) =>
-  `${talkPath('updates', space.slug)}?draft=${encodeURIComponent(draft)}`
 
 /** What a choice of a person's question shows, read from their Updates
  * (`?shown=<question>&eid=<file>`): a file kept in the space, a picture

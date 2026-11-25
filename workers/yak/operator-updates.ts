@@ -23,6 +23,9 @@ import { readInbox } from '@yaks/inbox/read'
 import type { Thread } from '@yaks/inbox'
 import { markAttention } from '@yaks/notify/attention'
 import { type Choice, showing, shown as shownBy } from '@yaks/task'
+import type { Place, Shown, Update } from '@yaks/platform/update-rows'
+
+export type { Place, Shown, Update }
 import { refuse } from './tool.ts'
 import type { OperatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
@@ -37,45 +40,6 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 /** The lanes a person's Updates show: what needs them, then what happened. */
 export let LANES = ['Needs you', 'Updates']
-
-/** One item of a person's Updates, as their page draws it. */
-export type Update = {
-  eid: string
-  /** It asks them something (Needs you). */
-  needs: boolean
-  at: string
-  unread: boolean
-  /** Its words: what happened, or the question. */
-  words: string
-  /** A notice's line naming the app and what happened. */
-  subject?: string
-  /** What it tells of: an app, the space, or a task of the Operator's. */
-  about?: string
-  /** Where it came from: its conversation, opened in the chat at the entry
-   * it was written from. */
-  from?: Place
-  /** They dismissed it, and nothing has happened on it since. */
-  dismissed: boolean
-  transfer?: { editor: boolean; kind?: 'domain' }
-  /** A friend request or suggestion from this person (friends.ts). */
-  friend?: { person: string; suggested: boolean }
-  /** A message from a friend, answered by a reply to them (friends.ts). */
-  message?: { friend: string; name: string }
-  choices?: Choice[]
-  recommended?: string
-  /** What its choices show, in the order they show it. */
-  shown?: Shown[]
-}
-
-/** An entity a choice shows, with the components it is drawn by: an image
- * or file kept in the space (`artifact`), prose (`doc`), or neither, an app,
- * whose draft is drawn. */
-export type Shown = {
-  choice: string
-  eid: string
-  artifact?: { address: string; media_type: string }
-  doc?: { title?: string; body?: string }
-}
 
 /** Something to tell a space's people, shown alone in their Updates and
  * read later, out of any conversation. `to` is a person, or the space for
@@ -272,10 +236,6 @@ let aboutsOf = async (store: Store, rows: (Bundle | undefined)[]) => {
   return new Map(held.flatMap((b) => b ? [[b.entity.eid, b]] : []))
 }
 
-/** Where an update came from: the conversation it opens, the entry there
- * the page scrolls to, and that entry's place in it. */
-export type Place = { chat: string; entry?: string; seq?: number }
-
 /** An entry's place: its session and seq, standing for the call it answers
  * where it is a result, which the chat draws as that call's line. */
 export let placed = async (store: Store, b: Bundle | undefined) => {
@@ -369,7 +329,7 @@ export let updatesOf = async (
   most = 50,
   dismissed = false,
   now = Date.now(),
-): Promise<{ updates: Update[]; waiting: number }> => {
+): Promise<{ updates: Update[]; waiting: number; expires: number }> => {
   let { kept, abouts } = await keptOf(store, person, space, dismissed, now)
   let shown = kept.slice(0, most)
   let held = shown.map((s) => s.row)
@@ -384,6 +344,7 @@ export let updatesOf = async (
       updateOf(t, row, shows.get(t.eid), places[i])
     ),
     waiting: dismissed ? 0 : waitingIn(kept),
+    expires: expiresIn(kept),
   }
 }
 
@@ -458,13 +419,17 @@ export let waitingUntil = async (
   now: number,
 ) => {
   let { kept } = await keptOf(store, person, space, false, now)
-  let expires = kept.reduce((next, { row, t }) => {
+  return { count: waitingIn(kept), expires: expiresIn(kept) }
+}
+
+// When the next approval waiting on the person lapses, which moves what
+// waits on them without a write: Infinity for none.
+let expiresIn = (kept: { t: Thread; row: Bundle | undefined }[]) =>
+  kept.reduce((next, { row, t }) => {
     if (row?.decided || (!t.unread && t.lane != 'Needs you')) return next
     let at = Date.parse(String(comp(row, 'operator_approval')?.expires))
     return Number.isFinite(at) ? Math.min(next, at + 1) : next
   }, Infinity)
-  return { count: waitingIn(kept), expires }
-}
 
 // One of the person's Updates, dismissed or not, or a refusal: nobody acts
 // on another's.

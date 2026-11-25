@@ -2298,6 +2298,9 @@ export class Store extends Durable {
               // changed, so its end is `cancelled` alone.
               'browser_session',
               'cancelled',
+              // A friend's message, and its reading (update-rows).
+              'knock',
+              'opened',
             ].some((key) => key in b)
           ),
         // Where friends are moves with time and with writes this read does

@@ -16,14 +16,15 @@ import { api, type Handler, subscriptions } from '@yaks/api'
 import { beside, computed } from '@yaks/api/reached'
 import { type Hibernation, sockets } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
-import type { Graph } from '@yaks/graph'
 import { type Level, writes } from '@yaks/member'
 import { UPDATE_WAITING, waitingBundle } from '@yaks/platform/update-waiting'
+import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
+import type { Bundle, Graph } from '@yaks/graph'
 import { mayWrite, sight } from './operator-access.ts'
 import { spaceOf } from './operator-root.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { paged } from './build-door.ts'
-import { waitingUntil } from './operator-updates.ts'
+import { updatesOf, waitingUntil } from './operator-updates.ts'
 
 /** Who a request is from, as the kernel said: a person who writes in a
  * space (build.ts `#operate`). */
@@ -66,6 +67,18 @@ let inputs = [
   'operator_approval',
 ]
 
+// `rows`, the first saying when the answer next moves without a write
+// (`at`, Infinity for never).
+let expiring = (rows: Bundle[], at: number): Bundle[] =>
+  rows.length && Number.isFinite(at)
+    ? [{ ...rows[0], $expires: { at } }, ...rows.slice(1)]
+    : rows
+
+/** Whether the person's live read answers `line`: their Updates count, or
+ * their Updates cards in the space. */
+let personal = (line: string) =>
+  line == UPDATE_WAITING || cardsSpace(line) != undefined
+
 /** @yaks/api over `store`, its sockets among the object's (`ctx`). */
 export let operatorApi = (
   store: OperatorStore,
@@ -77,31 +90,44 @@ export let operatorApi = (
     affects: (bundles) => bundles.some((b) => inputs.some((key) => key in b)),
     hold,
     clock,
-    read: async (_, read) => {
+    read: async (line, read) => {
       let person = read?.person, space = await spaceOf(store)
       if (!person || !space) return []
+      let asked = cardsSpace(line)
+      if (asked != undefined) {
+        if (asked != space) return []
+        let { updates, expires } = await updatesOf(
+          store,
+          person,
+          space,
+          50,
+          false,
+          clock.now(),
+        )
+        return expiring(updateRows(person, space, updates), expires)
+      }
       let { count, expires } = await waitingUntil(
         store,
         person,
         space,
         clock.now(),
       )
-      return [{
-        ...waitingBundle(person, { space, slug: '', count }),
-        ...Number.isFinite(expires) ? { $expires: { at: expires } } : {},
-      }]
+      return expiring(
+        [waitingBundle(person, { space, slug: '', count })],
+        expires,
+      )
     },
     renew: (answer) =>
       Array.isArray(answer)
         ? (answer[0]?.$expires as { at: number } | undefined)?.at
         : undefined,
-    tags: { request: 'Operator Updates count' },
+    tags: { request: 'Operator Updates' },
   })
   // Whether each person holds a seat, as the directory last said for their
   // socket: what it is read with.
   let members = new Map<string, boolean>()
   let live = sockets(
-    beside(subs, waiting, (line) => line == UPDATE_WAITING),
+    beside(subs, waiting, personal),
     {
       acceptWebSocket: (ws) => ctx.acceptWebSocket(ws),
       getWebSockets: () =>

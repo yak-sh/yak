@@ -24,6 +24,8 @@ import {
   signedInRows,
 } from '@yaks/platform/account-rows'
 import { friendList } from './friends.ts'
+import { offerRows, offersSpace } from '@yaks/platform/update-rows'
+import { offersIn } from './updates.ts'
 import { shelf } from './apps.ts'
 import { kernels } from '@yaks/platform/ladder'
 import type { Who } from './session.ts'
@@ -104,8 +106,9 @@ export let sideApps = async (dir: Directory, space: Space, who: Who) =>
     { eid, slug, title, source, generatedIcon },
   ) => ({ eid, slug, title, source, generatedIcon }))
 
-/** The rows `line` asks of the person: their account, browsers, friends, or the
- * side's, none for a space they hold no seat in that lets them change it. */
+/** The rows `line` asks of the person: their account, browsers, friends,
+ * what the directory holds for them in a space, or the side's; none for a
+ * space they hold no seat in that lets them change it. */
 export let personRows = async (
   dir: Directory,
   person: string,
@@ -139,12 +142,17 @@ let sideRows = async (
   line: string,
 ): Promise<Bundle[]> => {
   if (line == SIDE_SPACES) return spaceRows(person, await pickable(dir, person))
-  let eid = appsSpace(line)
+  let apps = appsSpace(line)
+  let offers = offersSpace(line)
+  let eid = apps ?? offers
   if (!eid) return []
   let seat = (await dir.seated(person)).find((s) =>
     s.space.eid == eid && !s.space.trashed && writes(s.role)
   )
   if (!seat) return []
   let { space, role } = seat
-  return appRows(person, eid, await sideApps(dir, space, { person, role }))
+  let who = { person, role }
+  return apps
+    ? appRows(person, eid, await sideApps(dir, space, who))
+    : offerRows(person, eid, await offersIn(dir, space, who))
 }

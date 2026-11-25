@@ -5,6 +5,7 @@
 // conversations. A socket stands by its person's seat as it is now.
 import { clock, equal, test, until } from '@yaks/testing'
 import { UPDATE_WAITING, waitingFrom } from '@yaks/platform/update-waiting'
+import { updateCards, updatesIn } from '@yaks/platform/update-rows'
 import type { Level } from '@yaks/member'
 import { type Bundle, transient } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
@@ -165,6 +166,51 @@ test('an expired approval leaves a live Updates count without another write', as
     await time.advance(6)
     await until(() => seen.length == 2)
     equal(counts(), [1, 0])
+  } finally {
+    await host.close(seen.ws)
+  }
+})
+
+test('a person’s Updates cards are live: a notice shows as it is written, and an approval that lapses leaves', async () => {
+  let time = clock(Date.now())
+  let store = operatorMemory()
+  await store.g.apply([
+    { entity: { eid: id() }, session: {}, operator_session: ada },
+    {
+      entity: { eid: id() },
+      task: {},
+      decision: { question: 'Send the invitation?' },
+      filed: { project: space, assignee: ada.person },
+      operator_approval: { expires: new Date(time.now() + 5).toISOString() },
+    },
+  ], { trusted: true })
+  let host = operatorApi(store, state(), {
+    seat: () => Promise.resolve('owner'),
+    clock: time,
+  })
+  let seen = await socket(ada, updateCards(space), host)
+  // What the last frame left on the page, as its words.
+  let held = new Map<string, Bundle>()
+  let shown = () => {
+    for (let f of seen.splice(0)) {
+      if (f.reset) held.clear()
+      for (let b of (f.bundles ?? []) as Bundle[]) held.set(b.entity.eid, b)
+      for (let gone of (f.removed ?? []) as string[]) held.delete(gone)
+    }
+    return updatesIn([...held.values()], space).map((u) => u.words)
+  }
+  try {
+    equal(shown(), ['Send the invitation?'])
+    await store.g.apply([{
+      entity: { eid: id() },
+      notification: { to: ada.person },
+      doc: { body: 'Recipes prints again.' },
+    }], { trusted: true })
+    await until(() => seen.length > 0)
+    equal(shown(), ['Send the invitation?', 'Recipes prints again.'])
+    await time.advance(6)
+    await until(() => seen.length > 0)
+    equal(shown(), ['Recipes prints again.'])
   } finally {
     await host.close(seen.ws)
   }

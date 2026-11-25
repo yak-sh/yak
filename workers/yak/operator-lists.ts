@@ -296,7 +296,7 @@ export let askAnchor = (eid: string) => `ask-${eid}`
 
 /** Where one of a person's Updates is on their Updates page, which an
  * alert of it opens at. */
-export let updateAnchor = (eid: string) => `u-${eid}`
+export { updateAnchor } from '@yaks/platform/update-rows'
 
 /** How many rows of `lists` wait on the person: those of the lists that
  * wait, on the side's one bell beside their Updates. */

@@ -7,7 +7,9 @@
 // socket.
 //
 // The person's side (@yaks/platform/side-rows) and their Updates badges are
-// reads of the person the directory answers, live on its `/person/ws`.
+// reads of the person the directory answers, live on its `/person/ws`; their
+// Updates cards in a space (@yaks/platform/update-rows) are the space's
+// Operator store's, live on its `/api/waiting/ws`.
 //
 // Some writes are not rows: an Updates card's action (updates.ts `acting`),
 // and the person's own account, messages and friend asks
@@ -26,6 +28,9 @@ import {
 } from '@yaks/platform/update-waiting'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { personLine } from '@yaks/platform/person-lines'
+import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
+import type { Update } from '@yaks/platform/update-rows'
+import { writes } from '@yaks/member'
 import { personRows } from './side.ts'
 import { REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { whole } from '@yaks/query'
@@ -89,10 +94,29 @@ export let reachDoor = async (
       ...r,
       who: { ...r.who, ...who.via ? { via: who.via } : {} },
     }))
+  // The person's seat in the space a cards line asks about, when it lets
+  // them write there: none, and the line is answered with nothing.
+  let seatIn = async (eid: string) =>
+    (await dir.seated(person)).find((s) =>
+      s.space.eid == eid && !s.space.trashed && writes(s.role)
+    )
   try {
     if (door == '/query' && req.method == 'GET') {
       let q = new URL(req.url).searchParams
       let line = q.get('q') ?? ''
+      let cards = cardsSpace(line)
+      if (cards != undefined) {
+        let seat = await seatIn(cards)
+        if (!seat) return Response.json([])
+        let { updates } = await operatorDoor(
+          env,
+          seat.space,
+          { ...who, role: seat.role },
+          'updates',
+          {},
+        ) as { updates: Update[] }
+        return Response.json(updateRows(person, cards, updates))
+      }
       if (line != UPDATE_WAITING && personLine(line)) {
         return Response.json(await personRows(dir, person, line))
       }
@@ -183,6 +207,28 @@ export let reachDoor = async (
                 },
                 sink,
               )
+            }
+            let cards = cardsSpace(line)
+            if (cards != undefined) {
+              let closed = false
+              let stop: (() => void) | undefined
+              seatIn(cards).then((seat) => {
+                if (closed) return
+                if (!seat) return sink({ bundles: [], reset: true })
+                let ask = builderOf(env, cards)
+                stop = watching(
+                  doorOf((req) => ask(() => req)),
+                  seat.space.slug,
+                  line,
+                  sink,
+                  { ...vouched(who), [SPACE]: cards },
+                  '/api/waiting/ws',
+                )
+              }, (error) => closed || sink({ refused: error }))
+              return () => {
+                closed = true
+                stop?.()
+              }
             }
             let closed = false
             let stop: (() => void) | undefined

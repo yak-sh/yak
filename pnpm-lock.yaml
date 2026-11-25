@@ -4062,6 +4062,9 @@ importers:
       '@yaks/sync':
         specifier: 0.2.24
         version: link:../sync
+      '@yaks/task':
+        specifier: 0.2.23
+        version: link:../task
       '@yaks/text':
         specifier: 0.2.24
         version: link:../text

@@ -847,6 +847,12 @@
     align-content: start;
     gap: .75rem;
   }
+  /* The cards themselves, drawn again from the page graph
+     (updates-list-browser). */
+  .Update_List {
+    display: grid;
+    gap: .75rem;
+  }
   .Update_Head {
     column-gap: .75rem;
     row-gap: .125rem;

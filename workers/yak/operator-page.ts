@@ -2624,6 +2624,7 @@ export let updatesPage = async (
         beside.apps,
         views,
         friends,
+        who.person ?? '',
       ),
     ),
   })

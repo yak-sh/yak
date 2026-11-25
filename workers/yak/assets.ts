@@ -81,6 +81,14 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // A space's Updates cards kept current
+  // (@yaks/platform/updates-list-browser).
+  {
+    name: '_updates.js',
+    bundle: of('@yaks/platform/updates-list-browser'),
+    external,
+    named: true,
+  },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
   { name: '_fit-list.js', bundle: of('@yaks/ux/fit-list'), named: true },
   // A form the browser sends shows it is sending (pages.ts `documented`).

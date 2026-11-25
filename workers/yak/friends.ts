@@ -501,13 +501,12 @@ let sent = async (
 /** A person's messages from friends, as Updates in their own space, with a
  * reply box each; reading them (`seen`) marks them read. */
 export let messageUpdates = async (
-  env: Env,
+  dir: Directory,
   space: Space,
   who: Who,
   seen = false,
 ): Promise<Update[]> => {
   if (!who.person || who.role != 'owner') return []
-  let dir = open(env)
   let [seats, messages] = await Promise.all([
     dir.seats(who.person, 'owner'),
     messagesOf(dir, who.person),

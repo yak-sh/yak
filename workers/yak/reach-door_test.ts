@@ -32,6 +32,11 @@ import {
   SIGNED_IN,
   signedInOf,
 } from '@yaks/platform/account-rows'
+import {
+  updateCards,
+  updateOffers,
+  updatesIn,
+} from '@yaks/platform/update-rows'
 import { sessionRow } from './browser-sessions.ts'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
@@ -127,6 +132,50 @@ test('a tab reads its person’s account and friends, and a friend who says yes 
   equal(await rowsOf(ada, FRIENDS), [])
 })
 
+// The Operator of the space `space` tells `to` of something, in their
+// Updates.
+let tellIn = async (space: string, to: string) => {
+  let res = await k.builder(space).fetch(
+    new Request('https://builder/operator/tell', {
+      method: 'POST',
+      headers: {
+        ...KERNEL,
+        [SPACE]: space,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ to, words: 'An update' }),
+    }),
+  )
+  equal(res.ok, true, await res.text())
+}
+
+test('a tab reads its person’s Updates in a space: a friend’s request from the directory, and the Operator’s, in nobody else’s', async () => {
+  let cy = await signIn(k)
+  let own = (await k.dir.seated(ada.person)).find((s) => s.own)!.space.eid
+  let offered = async (who: Tab) =>
+    updatesIn(await rowsOf(who, updateOffers(own)), own)
+      .map((u) => u.friend?.person)
+  equal(await offered(ada), [])
+  // Cy asks Ada: their side is yes, Ada's not yet written.
+  await k.dir.stamp({
+    entities: [
+      friendSide(cy.person, ada.person, { decided: { verdict: 'approved' } }),
+    ],
+  })
+  equal(await offered(ada), [cy.person])
+  equal(await offered(bea), [], 'a space they hold no seat in')
+  await tellIn(own, ada.person)
+  let told = updatesIn(await rowsOf(ada, updateCards(own)), own)
+  equal(told.map((u) => u.words), ['An update'])
+  equal(await rowsOf(bea, updateCards(own)), [])
+  await k.dir.stamp({
+    entities: [{
+      entity: { eid: friendSide(cy.person, ada.person).entity.eid },
+      $delete: true,
+    }],
+  })
+})
+
 test('a tab writes its person’s account, messages and asks through the door, and only theirs', async () => {
   let hidden = await wrote(ada, [{
     entity: { eid: accountEid(ada.person) },
@@ -209,16 +258,35 @@ test('a tab opens first only a space its person owns, and signs out only their b
   )
 })
 
-test('an Updates page loads the script that takes its card actions', async () => {
-  let page = await k.at(
-    k.host,
-    `/${await k.dir.own(bea.person).then((s) => s.slug)}/updates`,
-    {
-      headers: { cookie: bea.cookie },
-    },
-  )
+test('an Updates page loads the scripts that take its card actions and draw its cards again, with the rows it was drawn from', async () => {
+  let own = await k.dir.own(bea.person)
+  await tellIn(own.eid, bea.person)
+  let page = await k.at(k.host, `/${own.slug}/updates`, {
+    headers: { cookie: bea.cookie },
+  })
   let html = await page.text()
-  equal(/<script[^>]*_inbox-actions[^>]*>/.test(html), true)
+  let { document } = parseHTML(html)
+  let scripts = [...document.querySelectorAll('script[src]')]
+    .map((s) => s.getAttribute('src')!)
+  equal(
+    ['_inbox-actions', '_updates'].map((name) =>
+      scripts.some((src) => src.includes(`/${name}.`))
+    ),
+    [true, true],
+  )
+  let view = document.querySelector<HTMLElement>('[data-view=updates]')!
+  equal(JSON.parse(view.dataset.updatesView!).person, bea.person)
+  let drawn = JSON.parse(
+    view.querySelector('script[data-page-graph]')!.textContent!,
+  ) as { person: string; rows: Bundle[] }
+  equal(drawn.person, bea.person)
+  equal(
+    updatesIn(drawn.rows, own.eid).map((u) => u.eid),
+    [...view.querySelectorAll<HTMLElement>('[data-key]')].map((c) =>
+      c.dataset.key
+    ),
+  )
+  equal(view.querySelectorAll('[data-key]').length, 1)
 })
 
 // Connect only the transport that the in-process platform lacks, including

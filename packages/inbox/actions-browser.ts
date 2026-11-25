@@ -15,6 +15,11 @@ export let actionWords: VocabDoc[] = [front as VocabDoc]
 let FORM = 'form[data-inbox-action]'
 let CARD = '[data-inbox-card]'
 
+/** Said, bubbling, by a view that drew its cards again in place: each card
+ * keeps its `data-inbox-card`, and the actions paint what they hold on it
+ * again. */
+export let REDRAWN = 'inbox:redrawn'
+
 let paint = (card: HTMLElement, page: Client, eid: string) => {
   let row = page.ent(eid)
   let action = row?.inboxAction as InboxAction | undefined
@@ -67,6 +72,12 @@ export let bindActions = (
   lifetime: AbortSignal,
 ): void => {
   let held = new Set<string>()
+  root.addEventListener(REDRAWN, () => {
+    for (let eid of held) {
+      let card = root.querySelector<HTMLElement>(`[data-inbox-card="${eid}"]`)
+      if (card) paint(card, page, eid)
+    }
+  }, { signal: lifetime })
   root.addEventListener('submit', (event) => {
     let form = event.target as HTMLFormElement | null
     if (!form?.matches(FORM)) return
