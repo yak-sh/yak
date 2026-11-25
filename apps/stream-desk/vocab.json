@@ -74,7 +74,9 @@
         },
         "seen": {
           "type": "string",
-          "description": "When the desk last wrote it, as ISO text."
+          "title": "Last heard from OBS",
+          "description": "When the OBS desk last reported its status, as an ISO timestamp.",
+          "readOnly": true
         }
       }
     }

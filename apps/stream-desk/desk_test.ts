@@ -117,6 +117,28 @@ test('the desk plays each pressed cue into OBS and marks it', async () => {
   equal(await client.closed, 'OBS closed the connection (1005)')
 })
 
+test('the desk heartbeat survives a store round trip', async () => {
+  let { p, apply, query } = await opened()
+  await using _ = p
+  await using obs = mockObs()
+  let client = await connect(obs.url, 'desk')
+  let d = await desk({
+    query,
+    apply,
+    obs: client,
+    relay: (status: Comp) => apply({ entity: { eid: DESK }, desk: status }),
+  })
+  try {
+    let status = present(await query('.desk'), Date.now())
+    equal(status?.scene, 'Projector')
+    equal(status?.scenes, ['Projector', 'Camera', 'PIP'])
+  } finally {
+    d.stop()
+    client.close()
+    await client.closed
+  }
+})
+
 test('OBS refuses a wrong password', async () => {
   await using obs = mockObs()
   await assertRejects(
