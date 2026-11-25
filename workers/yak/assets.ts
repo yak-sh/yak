@@ -256,10 +256,13 @@ export let ASSETS: Asset[] = [
  * them in `dir`. */
 export let planned = (dir: string) => plan(ASSETS, reading(dir), halved)
 
-/** The chat's static module graph, requested together by its document. */
+/** The static chunks for the Operator and the Updates views it holds. */
 export let chatChunks = (dir: string) =>
   chunksOf(
-    ASSETS.filter(({ name }) => name == '_talk.js'),
+    ASSETS.filter(({ name }) =>
+      ['_talk.js', '_talk-views.js', '_updates.js', '_inbox-actions.js']
+        .includes(name)
+    ),
     reading(dir),
     (code) =>
       parse(code)[0].flatMap(({ d, n }) =>

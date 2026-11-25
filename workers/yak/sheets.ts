@@ -28,9 +28,17 @@ export let asset = (
 /** Start the chat's modules before the parser reaches its transcript. */
 export let chatPreloads = (env: Host): string => {
   let chunks = typeof YAK_CHAT_CHUNKS == 'undefined' ? [] : YAK_CHAT_CHUNKS
-  return ['_talk.js', '_words.js', '_page-client.js', ...chunks].map((name) =>
-    `<link rel="modulepreload" href="${asset(env, name)}">`
-  ).join('\n')
+  return [
+    '_talk.js',
+    '_words.js',
+    '_page-client.js',
+    'follow.js',
+    'frames.js',
+    'voice.js',
+    ...chunks,
+  ].map((name) => `<link rel="modulepreload" href="${asset(env, name)}">`).join(
+    '\n',
+  )
 }
 
 /** The store client's content-made name below an app's `api/` (apps.ts

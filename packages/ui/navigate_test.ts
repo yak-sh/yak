@@ -6,8 +6,10 @@ import {
   AGAIN,
   AHEAD,
   arrived,
+  type Browsing,
   DRAW,
   type Drawing,
+  type Entering,
   FRESH,
   GOING,
   HOLD,
@@ -150,7 +152,8 @@ let settled = () => new Promise((done) => setTimeout(done, 0))
 let browsing = (
   pages: Record<string, string>,
   path = '/apps',
-  enter?: (html: string) => void,
+  enter?: Browsing['enter'],
+  prepare?: Browsing['prepare'],
 ) => {
   let { document } = parseHTML(pages[new URL(path, 'https://y.test').pathname])
   let doc = document as unknown as Document
@@ -224,6 +227,7 @@ let browsing = (
     requestIdleCallback: (fn: () => void) => setTimeout(fn, 0),
     DOMParser,
     enter,
+    prepare,
   } as unknown as Parameters<typeof start>[0]
   let history = {
     read: () => ({ path: at.pathname, state: null }),
@@ -294,9 +298,11 @@ let site = {
   '/home': '<html><body>the home page</body></html>',
 }
 
-test('a ready link can open its held HTML as a document', async () => {
+test('a ready link prepares its document before the click and opens it without fetching again', async () => {
   let chat = framed('chat', '<textarea></textarea>')
   let entered: string[] = []
+  let prepared: string[][] = []
+  let openings: Entering[] = []
   let b = browsing(
     {
       '/':
@@ -304,14 +310,20 @@ test('a ready link can open its held HTML as a document', async () => {
       '/chat': chat,
     },
     '/',
-    (html) => entered.push(html),
+    (html, opening) => {
+      entered.push(html)
+      openings.push(opening)
+    },
+    (page, at) => prepared.push([page.title, at.href]),
   )
   await settled()
   assertEquals(b.fetched, ['https://y.test/chat prefetch'])
+  assertEquals(prepared, [['chat', 'https://y.test/chat']])
   assertEquals(b.click('a[href="/help"]'), false)
   assert(b.click('#chat'))
   await settled()
   assertEquals(entered, [chat])
+  assertEquals(openings.map(({ from, wait }) => [from, wait]), [['held', 0]])
   assertEquals(b.fetched, ['https://y.test/chat prefetch'])
   assertEquals(b.entries.map((e) => e.path), ['/chat'])
   assertEquals(b.loaded, [])

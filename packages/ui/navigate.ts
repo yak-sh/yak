@@ -330,10 +330,21 @@ export type Browsing =
   & Partial<Pick<Window, 'requestIdleCallback'>>
   & {
     DOMParser: typeof DOMParser
+    /** Prepare the files of a held document while its link is on screen. */
+    prepare?: (page: Document, at: URL) => void
     /** Open a READY page as a document when the current page has its own
      * scripts and styles. The address has already moved to the answer. */
-    enter?: (html: string, drawn?: () => void) => void
+    enter?: (html: string, opening: Entering) => void
   }
+
+/** What a ready document knows about the press that opens it. */
+export type Entering = {
+  url: string
+  from: 'held' | 'fetch'
+  began: number
+  wait: number
+  drawn?: () => void
+}
 
 /** Where a click's time went, in milliseconds: waiting for the page whole
  * and parsed (nothing, for one already held), and laying it over the page. */
@@ -557,7 +568,12 @@ export let start = (
   history: HistoryPort,
   now: Clock['now'] = () => performance.now(),
   after: Clock['after'] = system.after,
-): (to: URL, pop?: boolean, pressed?: Result) => Promise<void> => {
+): (
+  to: URL,
+  pop?: boolean,
+  pressed?: Result,
+  began?: number,
+) => Promise<void> => {
   let doc = win.document
   let ran = sources(doc, win.location.href)
   let here = page(win.location)
@@ -606,7 +622,22 @@ export let start = (
     let received = now()
     let page = new win.DOMParser().parseFromString(text, 'text/html')
     let again = answer.headers.has(AGAIN)
-    return { text, page, url: url.href, again, status: answer.status, received }
+    let held = {
+      text,
+      page,
+      url: url.href,
+      again,
+      status: answer.status,
+      received,
+    }
+    if (!signal.aborted && win.prepare && enterable(held)) {
+      try {
+        win.prepare(page, url)
+      } catch (error) {
+        globalThis.reportError?.(error)
+      }
+    }
+    return held
   }
   let keep = (key: string, held: Held) => {
     pages.delete(key)
@@ -748,6 +779,7 @@ export let start = (
     to: URL,
     pop = false,
     pressed?: Result,
+    began = now(),
     own = drawing(to),
   ) => {
     if (stays(doc)) {
@@ -755,7 +787,6 @@ export let start = (
       return load(to, pop)
     }
     let mine = ++turn
-    let began = now()
     if (
       own &&
       land(new URL(to), own.change, 'drawn', began, 0, pop, own.focusAfterPaint)
@@ -767,7 +798,7 @@ export let start = (
       pressed?.leaving()
       return load(to, pop)
     }
-    let from: From = held?.received ? 'held' : 'fetch'
+    let from: Entering['from'] = held?.received ? 'held' : 'fetch'
     let using = held ?? ask(to)
     using.used = true
     let answer = await using.answer
@@ -780,7 +811,13 @@ export let start = (
       try {
         closed = true
         stopRefresh?.()
-        return win.enter(answer.text, pressed && (() => pressed.drawn(wait)))
+        return win.enter(answer.text, {
+          url: at.href,
+          from,
+          began,
+          wait,
+          drawn: pressed && (() => pressed.drawn(wait)),
+        })
       } catch (error) {
         globalThis.reportError?.(error)
         pressed?.leaving()
@@ -923,6 +960,7 @@ export let start = (
     for (let held of pages.values()) held.at = -Infinity
   })
   win.addEventListener('click', (e: MouseEvent) => {
+    let began = Math.min(now(), e.timeStamp)
     let to = followed(e, win.location.href, here, !!win.enter)
     if (!to) return
     let pressed = result(doc, e)
@@ -930,9 +968,9 @@ export let start = (
     let own = drawing(to)
     if (!own && !pages.get(page(to))?.received) {
       going(win, (e.target as Element).closest('a[href]')!, to)
-      tell(doc, GOING, { began: now() })
+      tell(doc, GOING, { began })
     }
-    go(to, false, pressed, own)
+    go(to, false, pressed, began, own)
   })
   if (!win.enter) {
     history.listen(({ path }) => {
