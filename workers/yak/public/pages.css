@@ -786,7 +786,6 @@
     flex: none;
     height: 0;
     overflow: hidden;
-    visibility: hidden;
     content-visibility: hidden;
   }
   .Frame_Aside[hidden],
