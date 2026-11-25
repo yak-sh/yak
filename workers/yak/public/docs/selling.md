@@ -10,7 +10,9 @@ guide:
     ./api/pay/checkout endpoint a page posts a cart to and what it returns, why
     a page never posts a price, the order row and the buyer's confirmation
     email written when the payment completes, refunds and disputes, who can
-    read an order, test mode, and why a card number never reaches your app.
+    read an order, donations to a fund (one-time or monthly, cover-the-fee,
+    receipts, year-end statements, cancelling), test mode, and why a card
+    number never reaches your app.
 ---
 
 # Payments
@@ -329,6 +331,74 @@ Refunds made in the seller's provider dashboard also update the order and
 reconcile that fee. A provider failure remains recorded and is reported to the
 platform tracker.
 
+## Donations: the `fund` and `gift` components
+
+A space that sells can also take gifts, through the same connected Stripe
+account. yaks.app takes no fee on a gift: the donor's money goes to the space's
+own Stripe balance less Stripe's processing fee, which the donor may choose to
+cover.
+
+A fund is a row with the platform's own `fund` component:
+
+    fund { holder, amounts_cents, statement }
+
+    { "entity": { "eid": "$roof" },
+      "alias": { "name": "fund:roof" },
+      "doc": { "title": "The Roof Fund" },
+      "fund": { "holder": "Grace Hall Inc.",
+                "amounts_cents": "2500, 5000, 10000, 25000" } }
+
+`doc.title` is the name the donor sees first. `holder` is the legal name the
+receipt says received the gift. `amounts_cents` lists the suggested amounts for
+the page to offer, in cents. `statement` replaces the receipt's default "No
+goods or services were provided in exchange for this gift." when that is not the
+case.
+
+A page posts the donor's choice:
+
+    POST ./api/pay/give
+    { "fund": "<fund eid>", "cents": 5000, "monthly": true, "cover": true,
+      "email": "ana@example.com", "success": "?thanks=1", "cancel": "" }
+
+    → 200 { "url": "https://checkout.stripe.com/c/pay/cs_test_…" }
+
+`cents` is the gift itself. With `cover: true` the checkout adds the least
+amount that leaves the space the whole gift after Stripe's card fee: at 2.9% +
+30¢, $50.00 adds $1.80. A page shows the donor that exact amount before they pay
+by asking for it:
+
+    GET ./api/pay/give?cents=5000  →  { "cents": 5000, "covered": 180, "total": 5180 }
+
+`monthly: true` charges the same amount every month until the donor cancels.
+`success`, `cancel` and `email` work as they do for a cart. A gift below
+Stripe's minimum (50¢) or above $10,000 is refused. Stripe's page offers Apple
+Pay and Google Pay on devices that have them.
+
+Every payment writes one `gift` row into the app's store: a one-time gift when
+its checkout completes, and a monthly gift once for each month's paid invoice.
+
+    gift { fund, total_cents, covered_cents, email, name, per, at,
+           session, invoice, subscription, payer, account }
+
+Like orders, gifts are private to the app's editors and owners, and only the
+platform writes them. `total_cents` is what was paid, of which `covered_cents`
+the donor added for the fee. `per` is `month` for a monthly gift. The owner's
+totals are a query, `.gift`, summed on the page.
+
+Each gift sends the donor a receipt from the app's address: the holder's name,
+the amount, the date, and the statement. A monthly gift's receipt carries a link
+to Stripe's customer portal on the space's account, where the donor changes
+their card or cancels. The link stays good for as long as the gift does.
+
+Year-end statements go out when the seller asks for them, from a page an editor
+uses (`pay('statements', { year: 2026 })`) or the app's worker through
+`env.APP`:
+
+    POST /pay/statements  { "year": 2026 }  →  { "year": 2026, "letters": 12 }
+
+Each donor gets one letter per fund listing that year's gifts and their total.
+Asking again sends nobody a second letter.
+
 ## Testing with Stripe test mode
 
 Stripe's test mode is separate from live mode: the seller onboards a test
@@ -355,6 +425,6 @@ reference.
 
 ## Not supported
 
-Subscriptions and recurring charges, discount codes, and automatic shipping rate
-or tax calculation. Physical services supply provider-confirmed shipping and tax
-in their immutable quote.
+Subscriptions and recurring charges other than monthly gifts, discount codes,
+and automatic shipping rate or tax calculation. Physical services supply
+provider-confirmed shipping and tax in their immutable quote.

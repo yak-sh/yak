@@ -207,6 +207,50 @@ export let appsDoc: VocabDoc = {
         image: { type: 'string', format: 'uri' },
       },
     },
+    // What a space takes gifts for (sell.ts `giving`, T-3630): `doc.title` is
+    // the fund's name the donor reads first, `holder` the legal name a
+    // receipt says received the gift, `amounts_cents` the suggested amounts,
+    // comma-separated, and `statement` what a receipt says was given in
+    // return, where the default ("no goods or services") is not the case.
+    // Platform's for the reason `product` is: the giving door reads it.
+    fund: {
+      component: true,
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {
+        holder: text,
+        amounts_cents: text,
+        statement: text,
+      },
+    },
+    // A gift received (sell.ts `gave`): one row per payment, a one-time
+    // gift's checkout or one month of a monthly gift's invoice, written by
+    // the shops webhook as `order` is. `total_cents` is what was paid, of
+    // which `covered_cents` the donor added to cover the provider's fee.
+    // `payer` and `subscription` are the provider's, and name what the
+    // receipt's cancel link opens the portal for.
+    gift: {
+      component: true,
+      type: 'object',
+      kind: true,
+      readers: 'editor',
+      before: ['doc'],
+      properties: {
+        fund: owned(ref('keep')),
+        session: owned(text),
+        invoice: owned(text),
+        subscription: owned(text),
+        payer: owned(text),
+        account: owned(text),
+        total_cents: owned(num),
+        covered_cents: owned(num),
+        email: owned(text),
+        name: owned(text),
+        per: owned({ type: 'string', enum: ['month'] }),
+        at: owned(time),
+      },
+    },
     // Something sold (sell.ts, T-34526): one row per completed checkout at the
     // payment provider, written into the app's own store by its shops
     // webhook, as

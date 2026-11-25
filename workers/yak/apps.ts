@@ -94,7 +94,7 @@ import {
 import { bound, type Env } from './env.ts'
 import { warmable, warmApp } from './app-warm.ts'
 import { pilled, standing } from './gallery-row.ts'
-import { buying } from './sell.ts'
+import { buying, covered, giving } from './sell.ts'
 import {
   addressed,
   bodyOf,
@@ -1881,6 +1881,22 @@ let appDoor = async (
   // The price comes off the app's own rows, never off the request, so what a
   // who can do here is buy what the seller put on the shelf at the price
   // the seller wrote.
+  // Giving (sell.ts `giving`, T-3630) is a checkout too, under the same rule:
+  // the fund comes off the app's own row and the amount is the donor's.
+  if (path == '/pay/give') {
+    if (!mayUse) return refuse('not_a_reader')
+    if (req.method == 'GET') {
+      return await covered(env, new URL(req.url).searchParams.get('cents'))
+    }
+    if (req.method != 'POST') return json(405, 'method_not_allowed')
+    return giving(env, {
+      space,
+      app: app.slug,
+      root: urlOf(space, app),
+      buyer: who.service?.person ?? who.person,
+      via: who.via,
+    }, await req.json().catch(() => null))
+  }
   if (path == '/pay/checkout') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayUse) return refuse('not_a_reader')
@@ -3332,6 +3348,7 @@ let served = async (
         '/storage',
         '/choose',
         '/pay/checkout',
+        '/pay/give',
       ].includes(apiPath) ||
         apiPath.startsWith('/blob') || apiPath.startsWith('/files/') ||
         apiPath.startsWith('/save'))

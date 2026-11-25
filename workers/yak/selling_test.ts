@@ -710,3 +710,202 @@ test('the house sells on the platform’s own account and hears its sales there'
     'not a house sale',
   )
 })
+
+// ---- gifts (T-3630) --------------------------------------------------------
+
+// A donor gives to a fund on the space's own account, once and monthly, with
+// the fee covered: the checkout takes no platform fee, each payment is one
+// gift row and one receipt, a monthly receipt opens the portal on the
+// seller's account, and a year's statement goes to each donor once.
+test('a gift is given, received, receipted, cancellable and stated', async () => {
+  await using k = await shopping()
+  await k.deploy()
+  await stamp(k.env, {
+    entities: [{
+      entity: { eid: k.space.eid },
+      seller: { via: 'stripe', account: 'acct_shop', ready: true },
+    }],
+  })
+  let store = metaOf(appStore(k.env.STORE, k.space, k.app, k.env), {
+    ...KERNEL,
+    'x-yak-person': k.app.eid,
+    'x-yak-role': 'editor',
+  })
+  let FUND = '44444444-4444-4444-8444-444444444444'
+  await store.apply([{
+    entity: { eid: FUND },
+    doc: { title: 'The Roof' },
+    fund: { holder: 'Grace Hall Inc.', amounts_cents: '2500,10000' },
+  }])
+
+  let real = globalThis.fetch
+  let asked: { path: string; on: string | null; body: string }[] = []
+  let answers: unknown[] = []
+  using _ = stub(globalThis, 'fetch', (url, init) => {
+    if (!String(url).startsWith('https://api.stripe.com/')) {
+      return real(url, init)
+    }
+    let at = new URL(String(url))
+    asked.push({
+      path: at.pathname + at.search,
+      on: new Headers(init?.headers).get('stripe-account'),
+      body: decodeURIComponent(String(init?.body ?? '')),
+    })
+    return Promise.resolve(
+      Response.json(
+        answers.shift() ?? { url: 'https://checkout.stripe.com/c' },
+      ),
+    )
+  })
+  let space = { ...(await k.dir.space('ada'))!, tier: 'plus' as const }
+  let env = { ...k.env, STRIPE_KEY: 'sk_probe' }
+  let give = async (body: Record<string, unknown>) => {
+    let res = await sell.giving(env, {
+      space,
+      app: 'shop',
+      root: 'https://ada.yaks.app/shop/',
+    }, { fund: FUND, ...body })
+    return { status: res.status, body: await res.json() }
+  }
+  assertEquals(
+    (await give({ cents: 10 })).body.error.message,
+    'a gift is at least $0.50',
+  )
+  assertEquals((await give({ fund: 'nope', cents: 2500 })).status, 404)
+  assertEquals(asked.length, 0)
+
+  assertEquals((await give({ cents: 10000, cover: true })).status, 200)
+  let once = asked.at(-1)!
+  assertEquals(once.on, 'acct_shop')
+  assertStringIncludes(once.body, 'mode=payment')
+  assertStringIncludes(once.body, '[unit_amount]=10330')
+  assertStringIncludes(once.body, '[name]=Gift+to+The+Roof')
+  assertStringIncludes(once.body, 'metadata[covered]=330')
+  assert(!once.body.includes('application_fee'))
+
+  assertEquals((await give({ cents: 2500, monthly: true })).status, 200)
+  let monthly = asked.at(-1)!
+  assertStringIncludes(monthly.body, 'mode=subscription')
+  assertStringIncludes(monthly.body, '[recurring][interval]=month')
+  assertStringIncludes(
+    monthly.body,
+    'subscription_data[metadata][fund]=' + FUND,
+  )
+  assert(!monthly.body.includes('application_fee'))
+
+  let heard = (type: string, object: Record<string, unknown>) =>
+    connected({ ...env, STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })(
+      type,
+      object,
+      'acct_shop',
+    )
+  let tags = { space: k.space.eid, app: 'shop', fund: FUND }
+  let paid = {
+    id: 'cs_gift',
+    payment_intent: 'pi_gift',
+    payment_status: 'paid',
+    amount_total: 10330,
+    customer_details: { email: 'ana@example.com', name: 'Ana' },
+    metadata: { ...tags, covered: '330' },
+  }
+  assertEquals(
+    await heard('checkout.session.completed', paid),
+    'shop: gift 10330',
+  )
+  assertEquals(await heard('checkout.session.completed', paid), 'unchanged')
+  assertEquals(
+    await heard('checkout.session.completed', {
+      ...paid,
+      id: 'cs_monthly',
+      subscription: 'sub_1',
+    }),
+    'a monthly gift is recorded by its invoices',
+  )
+  let invoice = {
+    id: 'in_1',
+    customer: 'cus_1',
+    customer_email: 'ana@example.com',
+    amount_paid: 2500,
+    status_transitions: { paid_at: Date.parse('2026-02-01') / 1000 },
+    parent: {
+      subscription_details: {
+        subscription: 'sub_1',
+        metadata: { ...tags, covered: '0' },
+      },
+    },
+  }
+  assertEquals(await heard('invoice.paid', invoice), 'shop: gift 2500')
+
+  let gifts = await store.query(line`.gift`) as {
+    entity: { eid: string }
+    gift: Record<string, unknown>
+  }[]
+  assertEquals(
+    gifts.map((g) => [g.gift.total_cents, g.gift.covered_cents, g.gift.per])
+      .sort(),
+    [[10330, 330, undefined], [2500, 0, 'month']],
+  )
+  let letters = (await store.query(line`.mail&?doc`) as unknown as {
+    doc: { title: string; body: string }
+  }[]).map((l) => l.doc)
+  let [one, month] = ['$103.30', '$25.00'].map((m) =>
+    letters.find((l) => l.body.includes(m))!
+  )
+  assertEquals(one.title, 'Your gift to The Roof')
+  assertStringIncludes(one.body, 'Grace Hall Inc. received your gift of')
+  assertStringIncludes(
+    one.body,
+    'It includes $3.30 you added to cover the fee.',
+  )
+  assertStringIncludes(one.body, 'No goods or services were provided')
+  assert(!one.body.includes('cancel'))
+
+  // The monthly receipt's link opens the portal for its payer, on the
+  // seller's account, and nothing for another gift.
+  let link = new URL(/\((https:[^)]+)\)/.exec(month.body)![1])
+  let id = link.pathname.split('/').at(-1)!
+  let ticket = link.searchParams.get('ticket')!
+  let at = { space, app: k.app }
+  let other = gifts.find((g) => g.entity.eid != id)!.entity.eid
+  assertEquals((await sell.giftPortal(env, at, other, ticket)).status, 404)
+  answers.push({ data: [] }, { id: 'bpc_1' }, {
+    url: 'https://billing.stripe.com/p/session/1',
+  })
+  let portal = await sell.giftPortal(env, at, id, ticket)
+  assertEquals(portal.status, 303)
+  assertEquals(
+    portal.headers.get('location'),
+    'https://billing.stripe.com/p/session/1',
+  )
+  let [, made, session] = asked.slice(-3)
+  assertEquals(made.path, '/v1/billing_portal/configurations')
+  assertStringIncludes(session.body, 'customer=cus_1')
+  assertStringIncludes(session.body, 'configuration=bpc_1')
+  assertEquals(session.on, 'acct_shop')
+
+  // One statement per donor and year, sent once.
+  let stated = async (year: number) =>
+    await (await sell.statements(env, at, { year })).json()
+  assertEquals(await stated(2026), { year: 2026, letters: 1 })
+  assertEquals(await stated(2026), { year: 2026, letters: 0 })
+  let statement = (await store.query(line`.mail&?doc`) as unknown as {
+    doc: { title: string; body: string }
+  }[]).find((l) => l.doc.title.startsWith('Your 2026'))!
+  assertStringIncludes(statement.doc.body, 'February 1, 2026: $25.00')
+  assertStringIncludes(statement.doc.body, '**Total for 2026: $128.30**')
+})
+
+test('a page reads what covering the fee adds before the donor chooses', async () => {
+  let at = async (cents: string) =>
+    await (await sell.covered(
+      { STRIPE_KEY: 'sk_probe' } as unknown as Env,
+      cents,
+    )).json()
+  assertEquals(await at('5000'), { cents: 5000, covered: 180, total: 5180 })
+  assertEquals(await at('x'), {
+    error: {
+      code: 'refused',
+      message: 'cents: the gift in whole cents, such as 2500 for $25',
+    },
+  })
+})

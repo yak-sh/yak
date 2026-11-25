@@ -31,7 +31,7 @@ import type {
   Subscription,
   Tags,
 } from '@yaks/host/payments'
-import { ask, found, idOf, type Keyed, list } from './mod.ts'
+import { ask, found, idOf, type Keyed, list, minimum } from './mod.ts'
 import { checkout } from './checkout.ts'
 import { refund } from './refunds.ts'
 
@@ -383,7 +383,7 @@ export let plans = (options: Options): Plans => {
         at: when(made.created) ?? new Date(now()).toISOString(),
       }
     },
-    minimum: (currency) => currency.toUpperCase() == 'USD' ? 50 : 0,
+    minimum,
     // Payment mode under Managed Payments, the price made inline with its
     // tax code and tax included, as every price here is: no dashboard price
     // to keep in step. The tags ride the session's own metadata, which the

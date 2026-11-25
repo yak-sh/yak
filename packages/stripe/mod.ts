@@ -51,6 +51,11 @@ export class StripeError extends Error {
   }
 }
 
+/** The least Stripe charges in a currency, in its smallest unit; 0 where
+ * none is known here. */
+export let minimum = (currency: string): number =>
+  currency.toUpperCase() == 'USD' ? 50 : 0
+
 /** The id of an object Stripe names by id or expanded whole. */
 export let idOf = (
   v: string | { id?: string } | null | undefined,

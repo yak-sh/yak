@@ -60,8 +60,17 @@ import {
   type Seller,
   type Space,
   stamp,
+  url as appUrl,
 } from './directory.ts'
 import { paid } from '@yaks/platform/plans'
+import {
+  charge,
+  type Fund,
+  fundOf,
+  receipt as giftReceipt,
+  statement,
+} from '@yaks/platform/giving'
+import { opened, seal } from './lib/token.ts'
 import { bound, type Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { type Door, MANAGE, manageAt } from '@yaks/platform/routes'
@@ -551,6 +560,32 @@ export let sale = (at: {
   },
 })
 
+/** Why a space cannot take money right now, as the refusal a page shows, or
+ * null where it can: selling is switched off here, the space's plan does not
+ * sell, or its account is not connected or not finished. That last is the one
+ * a page meets: a seller deploys their shop before they finish the
+ * provider's form nearly every time. */
+let closed = async (env: Env, space: Space) => {
+  let { name, shops: lent } = await payments(env)
+  if (!lent.on()) {
+    return json(503, 'no_selling', 'selling is not switched on here')
+  }
+  let upgrade = refusedSell(space, env)
+  if (upgrade) return json(403, 'plus_required', upgrade)
+  let where = selling(space)
+  if (where == 'ready') return null
+  return json(
+    409,
+    'not_selling',
+    where == 'none'
+      ? `${space.slug} has not connected a ${name} account — ask ` +
+        'whoever runs this space to start selling, and nothing here can ' +
+        'charge anybody until they have'
+      : `${space.slug} has connected ${name} but has not finished ` +
+        `setting up — ${name} has not said they may take payments yet`,
+  )
+}
+
 /**
  * The door itself (apps.ts routes `/<app>/api/pay/checkout` here).
  *
@@ -577,27 +612,9 @@ export let buying = async (
   },
   body: unknown,
 ) => {
-  let no = (status: number, code: string, message: string) =>
-    Response.json({ error: { code, message } }, { status })
-  let { name, shops: lent } = await payments(env)
-  if (!lent.on()) {
-    return no(503, 'no_selling', 'selling is not switched on here')
-  }
-  let upgrade = refusedSell(at.space, env)
-  if (upgrade) return no(403, 'plus_required', upgrade)
-  let where = selling(at.space)
-  if (where != 'ready') {
-    return no(
-      409,
-      'not_selling',
-      where == 'none'
-        ? `${at.space.slug} has not connected a ${name} account — ask ` +
-          'whoever runs this space to start selling, and nothing here can ' +
-          'charge anybody until they have'
-        : `${at.space.slug} has connected ${name} but has not finished ` +
-          `setting up — ${name} has not said they may take payments yet`,
-    )
-  }
+  let shut = await closed(env, at.space)
+  if (shut) return shut
+  let lent = await shops(env)
   let items: Item[]
   let quote: Quote | undefined
   let store: ReturnType<typeof asApp> | undefined
@@ -649,7 +666,7 @@ export let buying = async (
     success = backAt(at.root, asked.success)
     cancel = backAt(at.root, asked.cancel)
   } catch (e) {
-    return no(
+    return json(
       refusing(e, { request: 'POST /api/pay/checkout', app: at.app }),
       'refused',
       e instanceof Error ? e.message : String(e),
@@ -702,7 +719,7 @@ export let buying = async (
     })
   } catch (e) {
     defect(e, { request: `POST /${at.app}/api/pay/checkout` })
-    return no(
+    return json(
       502,
       'checkout_failed',
       "we couldn't start that — it's been logged, try again in a minute",
@@ -915,6 +932,14 @@ export let apply = async (env: Env, heard: Shopped): Promise<string> => {
     return `${space.slug} disconnected`
   }
   if (heard.about == 'sale') return await sold(env, space, on, heard.sale)
+  let bill = heard.about == 'term' ? heard.invoice : undefined
+  if (bill?.tags.fund) {
+    return await gave(env, space, on, {
+      ...bill,
+      key: bill.id,
+      invoice: bill.id,
+    })
+  }
   if (heard.about == 'refund') {
     let refund = heard.refund
     let app = await inApp(env, space, String(refund.tags.app ?? ''))
@@ -995,6 +1020,20 @@ let asApp = (env: Env, space: Space, app: App) => {
  */
 let sold = async (env: Env, space: Space, account: string, o: Paid) => {
   if (!o.paid) return `not paid yet (${o.status})`
+  if (o.tags.fund) {
+    // A monthly gift's first month is its first invoice, heard on its own.
+    return o.subscription
+      ? 'a monthly gift is recorded by its invoices'
+      : await gave(env, space, account, {
+        key: o.checkout,
+        session: o.checkout,
+        total: o.total,
+        email: o.email,
+        ...(o.name ? { name: o.name } : {}),
+        at: new Date().toISOString(),
+        tags: o.tags,
+      })
+  }
   let slug = String(o.tags.app ?? '')
   let app = await inApp(env, space, slug)
   if (!app) return `no app ${slug || '?'} in ${space.slug}`
@@ -1119,6 +1158,312 @@ let settled = async (
     order: { status, ...(refundMoved ? { refunded_cents: refunded } : {}) },
   }])
   return `${app.slug}: ${status}`
+}
+
+// ---- gifts (T-3630) --------------------------------------------------------
+//
+// A gift is a sale of nothing: the donor gives to one of the app's `fund`
+// rows, on the space's own account like any sale, with no platform fee. A
+// one-time gift is a payment-mode checkout; a monthly one a subscription,
+// each month of which arrives as a paid invoice. Each payment is one `gift`
+// row and one receipt letter, written when the provider says it was paid
+// (`gave`), and a monthly gift's receipt links to the provider's portal on the
+// space's account, where the donor changes or cancels it (`giftPortal`).
+
+/**
+ * The giving door (apps.ts routes `/<app>/api/pay/give` here): `{fund, cents,
+ * monthly, cover, email, success, cancel}`, answered with the provider's
+ * checkout address. The fund is read off the app's own row and the amount is
+ * the donor's own, so nothing here takes a price from a page that it should
+ * not: what a donor may change is what they give.
+ */
+export let giving = async (
+  env: Env,
+  at: {
+    space: Space
+    app: string
+    root: string
+    buyer?: string | null
+    via?: string | null
+  },
+  body: unknown,
+) => {
+  let shut = await closed(env, at.space)
+  if (shut) return shut
+  let lent = await shops(env)
+  let made: Sale
+  try {
+    let app = await inApp(env, at.space, at.app)
+    if (!app) throw refuse('missing', 'app not found')
+    let asked = (body ?? {}) as Record<string, unknown>
+    let id = String(asked.fund ?? '')
+    let [row] = /^[0-9a-f-]{36}$/i.test(id)
+      ? await asApp(env, at.space, app).query(line`.entity.eid=${id}`)
+      : []
+    if (!row?.fund) throw refuse('missing', `no fund ${id || '?'} in this app`)
+    let fund = fundOf(row as Parameters<typeof fundOf>[0])
+    let priced = charge(asked, lent.costs.card, lent.minimum('usd'))
+    if ('refused' in priced) throw refuse('arguments', priced.refused)
+    let email = String(asked.email ?? '').trim()
+    made = {
+      lines: [{
+        name: `${
+          priced.asked.monthly ? 'Monthly gift' : 'Gift'
+        } to ${fund.title}`,
+        cents: priced.charge.total,
+        qty: 1,
+      }],
+      currency: 'usd',
+      ...(priced.asked.monthly ? { per: 'month' as const } : {}),
+      bps: 0,
+      ...(email ? { email } : {}),
+      descriptor: at.space.title || at.space.slug,
+      done: backAt(at.root, asked.success),
+      cancel: backAt(at.root, asked.cancel),
+      tags: {
+        space: at.space.eid,
+        app: at.app,
+        fund: id,
+        covered: String(priced.charge.covered),
+        ...(at.buyer ? { buyer: at.buyer } : {}),
+        ...(at.via ? { via: at.via } : {}),
+      },
+    }
+  } catch (e) {
+    return json(
+      refusing(e, { request: 'POST /api/pay/give', app: at.app }),
+      'refused',
+      e instanceof Error ? e.message : String(e),
+    )
+  }
+  try {
+    return Response.json({
+      url: await lent.checkout(at.space.seller!.account, made),
+    })
+  } catch (e) {
+    defect(e, { request: `POST /${at.app}/api/pay/give` })
+    return json(
+      502,
+      'checkout_failed',
+      "we couldn't start that — it's been logged, try again in a minute",
+    )
+  }
+}
+
+/** What a gift of `cents` charges with the fee covered, as the giving door
+ * would charge it (`GET /api/pay/give?cents=`), so the page shows the donor
+ * the exact amount before they choose. */
+export let covered = async (env: Env, cents: unknown) => {
+  let lent = await shops(env)
+  let priced = charge(
+    { cents: Number(cents), cover: true },
+    lent.costs.card,
+    lent.minimum('usd'),
+  )
+  return 'refused' in priced
+    ? json(400, 'refused', priced.refused)
+    : Response.json(priced.charge)
+}
+
+/** One payment of a gift, as the provider said it was paid. */
+type Given = {
+  /** the provider's id for this payment: the checkout or the invoice */
+  key: string
+  session?: string
+  invoice?: string
+  subscription?: string
+  payer?: string
+  total: number
+  email: string
+  name?: string
+  at: string
+  tags: Record<string, string>
+}
+
+/** The gift row's eid, derived from the payment, so a redelivery writes the
+ * same row and moves nothing. */
+export let giftEid = (key: string) => derivedEid(`gift\x00${key}`)
+
+/**
+ * A gift paid, as one batch into the app's store, as `sold` writes an order:
+ * the `gift` row and the receipt to the donor. A monthly gift's receipt
+ * carries a sealed link to its portal (`giftPortal`), good for as long as the
+ * gift is, since a donor finds it months later.
+ */
+let gave = async (env: Env, space: Space, account: string, g: Given) => {
+  if (!(g.total > 0)) return 'a gift of nothing'
+  let slug = String(g.tags.app ?? '')
+  let app = await inApp(env, space, slug)
+  if (!app) return `no app ${slug || '?'} in ${space.slug}`
+  let store = asApp(env, space, app)
+  let eid = giftEid(g.key)
+  let [existing] = await store.query(line`.entity.eid=${eid}`)
+  if (existing?.gift) return 'unchanged'
+  let [row] = await store.query(line`.entity.eid=${g.tags.fund}`)
+  let fund = fundOf((row ?? {}) as Parameters<typeof fundOf>[0])
+  let monthly = !!g.subscription
+  let covered = Math.min(g.total, Math.max(0, Number(g.tags.covered) || 0))
+  let cancel = monthly && env.SESSION_SECRET
+    ? `${appUrl(space, app, env)}api/pay/gifts/${eid}?ticket=${await seal(
+      'gift',
+      { app: app.eid, gift: eid },
+      env.SESSION_SECRET,
+    )}`
+    : undefined
+  let letter = giftReceipt(
+    fund,
+    { total: g.total, covered, at: g.at, monthly },
+    cancel,
+  )
+  await store.apply(protectedSale([
+    {
+      entity: { eid },
+      doc: { title: letter.title },
+      gift: {
+        ...(row ? { fund: g.tags.fund } : {}),
+        ...(g.session ? { session: g.session } : {}),
+        ...(g.invoice ? { invoice: g.invoice } : {}),
+        ...(g.subscription ? { subscription: g.subscription } : {}),
+        ...(g.payer ? { payer: g.payer } : {}),
+        account,
+        total_cents: g.total,
+        covered_cents: covered,
+        email: g.email,
+        ...(g.name ? { name: g.name } : {}),
+        ...(monthly ? { per: 'month' } : {}),
+        at: g.at,
+      },
+      $was: { gift: { at: null } },
+    },
+    ...(g.email ? letterTo(g.email, derivedEid(`${eid}-letter`), letter) : []),
+  ], { buyer: g.tags.buyer, via: g.tags.via }))
+  return `${app.slug}: gift ${g.total}`
+}
+
+// A letter and the address it goes to, as an app's mailbox keeps them
+// (docs/mail.md).
+let letterTo = (
+  address: string,
+  eid: string,
+  letter: { title: string; body: string },
+  them = `$${eid}`,
+) => [
+  { entity: { eid: them }, email: { address } },
+  { entity: { eid }, doc: letter, mail: {}, deliver: { to: them } },
+]
+
+/** A gift row as the store answers it. */
+type GiftRow = {
+  entity: { eid: string }
+  gift?: {
+    fund?: string
+    payer?: string
+    account?: string
+    email?: string
+    total_cents?: number
+    covered_cents?: number
+    per?: string
+    at?: string
+  }
+}
+
+/**
+ * The portal on the space's account where a monthly gift's donor changes or
+ * cancels it: the receipt's link, its ticket sealed for this gift in this app,
+ * answered with a redirect to the provider's page, which hands them back to
+ * the app. A ticket for another gift, or none, finds nothing.
+ */
+export let giftPortal = async (
+  env: Env,
+  at: { space: Space; app: App },
+  gift: string,
+  ticket: string,
+) => {
+  let sealed = env.SESSION_SECRET
+    ? await opened<{ app: string; gift: string }>(
+      'gift',
+      ticket,
+      env.SESSION_SECRET,
+    )
+    : null
+  if (sealed?.app != at.app.eid || sealed.gift != gift) {
+    return json(404, 'not_found', 'no gift here by that link')
+  }
+  let [row] = await asApp(env, at.space, at.app).query(
+    line`.entity.eid=${gift}`,
+  ) as GiftRow[]
+  let { payer, account } = row?.gift ?? {}
+  if (!payer || !account) {
+    return json(404, 'not_found', 'that gift does not repeat')
+  }
+  try {
+    let lent = await shops(env)
+    return Response.redirect(
+      await lent.portal(account, payer, appUrl(at.space, at.app, env)),
+      303,
+    )
+  } catch (e) {
+    defect(e, { request: `GET /${at.app.slug}/api/pay/gifts` })
+    return json(
+      502,
+      'portal_failed',
+      "we couldn't open that — it's been logged, try again in a minute",
+    )
+  }
+}
+
+/**
+ * Year-end statements (`POST /pay/statements {year}`, the seller's): one
+ * letter per donor and fund listing that calendar year's gifts and their
+ * total. Each letter's eid is derived from the year, the fund and the
+ * address, so asking again sends nobody a second one.
+ */
+export let statements = async (
+  env: Env,
+  at: { space: Space; app: App },
+  body: unknown,
+) => {
+  let year = Number((body as { year?: unknown } | null)?.year)
+  if (!Number.isInteger(year) || year < 2000 || year > 9999) {
+    return json(400, 'refused', 'year: the calendar year, such as 2026')
+  }
+  let store = asApp(env, at.space, at.app)
+  let gifts = (await store.query(line`.gift`) as GiftRow[])
+    .filter((r) => r.gift?.email && r.gift.at?.startsWith(`${year}-`))
+  let by = Map.groupBy(
+    gifts,
+    (r) => `${r.gift!.fund ?? ''}\x00${r.gift!.email}`,
+  )
+  let funds = new Map<string, Fund>()
+  for (let id of new Set(gifts.map((r) => r.gift!.fund).filter(Boolean))) {
+    let [row] = await store.query(line`.entity.eid=${id!}`)
+    funds.set(id!, fundOf((row ?? {}) as Parameters<typeof fundOf>[0]))
+  }
+  let eid = (key: string) => derivedEid(`statement\x00${year}\x00${key}`)
+  let sent = new Set(
+    by.size
+      ? (await store.query(line`.entity.eid=${[...by.keys()].map(eid)}`))
+        .map((r) => r.entity.eid)
+      : [],
+  )
+  let rows = [...by].filter(([key]) => !sent.has(eid(key))).flatMap(
+    ([key, mine]) => {
+      let { fund, email } = mine[0].gift!
+      let letter = statement(
+        funds.get(fund ?? '') ?? fundOf({}),
+        year,
+        mine.map((r) => ({
+          total: r.gift!.total_cents ?? 0,
+          covered: r.gift!.covered_cents ?? 0,
+          at: r.gift!.at!,
+          monthly: r.gift!.per == 'month',
+        })),
+      )
+      return letterTo(email!, eid(key), letter)
+    },
+  )
+  if (rows.length) await store.apply(protectedSale(rows, {}))
+  return Response.json({ year, letters: rows.length / 2 })
 }
 
 // ---- the owner's door (T-34554) --------------------------------------------

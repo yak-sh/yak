@@ -42,6 +42,7 @@
 // and a dashboard ticking the other, which is a webhook that silently does
 // nothing.
 import type {
+  Billed,
   Costs,
   Paid,
   Sale,
@@ -52,7 +53,7 @@ import type {
   Tags,
   Term,
 } from '@yaks/host/payments'
-import { ask, found, idOf, type Keyed } from './mod.ts'
+import { ask, found, idOf, type Keyed, minimum } from './mod.ts'
 import { refund, refundedOf } from './refunds.ts'
 import {
   ending,
@@ -107,7 +108,7 @@ export type Session = {
   amount_total?: number
   currency?: string
   customer_email?: string | null
-  customer_details?: { email?: string | null }
+  customer_details?: { email?: string | null; name?: string | null }
   metadata?: Record<string, string>
   /** the one it started, in subscription mode */
   subscription?: string | { id?: string } | null
@@ -235,6 +236,16 @@ export let COSTS: Costs = {
   payout: { days: 2, first: 7 },
   country: 'US',
   pricing: 'https://stripe.com/pricing',
+}
+
+/** The portal a connected account is given when it has none of its own:
+ * a payer cancels at once or changes their card, and reads their invoices. */
+export let PORTAL = {
+  features: {
+    subscription_cancel: { enabled: true, mode: 'immediately' },
+    payment_method_update: { enabled: true },
+    invoice_history: { enabled: true },
+  },
 }
 
 /** The longest metadata value Stripe keeps, in characters: the most one
@@ -383,6 +394,7 @@ export let paidOf = (o: Session): Paid => ({
   ...(idOf(o.subscription) ? { subscription: idOf(o.subscription) } : {}),
   total: Math.max(0, Math.floor(Number(o.amount_total ?? 0))),
   email: String(o.customer_details?.email || o.customer_email || ''),
+  ...(o.customer_details?.name ? { name: o.customer_details.name } : {}),
   tags: { ...o.metadata },
 })
 
@@ -459,6 +471,7 @@ export let shops = (options: Options): Shops => {
   return {
     on: () => !!options.key,
     costs: COSTS,
+    minimum,
     tag: TAG,
     open: async (who) => {
       let a = await ask(options, '/v1/accounts', account(who)) as Account
@@ -530,6 +543,34 @@ export let shops = (options: Options): Shops => {
         ) as Sub,
       ),
     refund: (on, request) => refund(options, on, request),
+    // A connected account has no portal configuration until its owner saves
+    // one in their dashboard, and Stripe refuses a session without one, so
+    // the account's first is made here when it has none: cancelling and
+    // changing the card, and the invoices paid.
+    portal: async (on, payer, back) => {
+      let held = await ask(
+        options,
+        '/v1/billing_portal/configurations?active=true&limit=1',
+        undefined,
+        on,
+      ) as { data?: { id?: string }[] }
+      let configuration = held.data?.[0]?.id ||
+        String(
+          (await ask(
+            options,
+            '/v1/billing_portal/configurations',
+            PORTAL,
+            on,
+            'POST',
+            `portal:${on}`,
+          )).id ?? '',
+        )
+      return await made('a portal session', '/v1/billing_portal/sessions', {
+        customer: payer,
+        return_url: back,
+        configuration,
+      }, on)
+    },
     refundFee: async (id, refunded, total) => {
       if (!total || !refunded) return
       let fee = await ask(
@@ -590,6 +631,39 @@ let subscribedBy = (type: string, o: Record<string, unknown>) => {
   )
 }
 
+/** The slice of a paid invoice read here. */
+export type Invoice = {
+  id?: string
+  customer?: string | { id?: string }
+  customer_email?: string | null
+  customer_name?: string | null
+  amount_paid?: number
+  created?: number
+  status_transitions?: { paid_at?: number | null }
+  parent?: { subscription_details?: { metadata?: Tags | null } }
+  subscription_details?: { metadata?: Tags | null }
+}
+
+/// billedOf({ id: 'in_1', customer: 'cus_1', amount_paid: 2500, created: 0, parent: { subscription_details: { metadata: { a: 'b' } } } }, 'sub_1') -> { id: 'in_1', subscription: 'sub_1', payer: 'cus_1', total: 2500, at: '1970-01-01T00:00:00.000Z', email: '', tags: { a: 'b' } }
+/** A paid invoice as the period it paid. The subscription's metadata rides
+ * the invoice under `parent` since API 2025-03-31.basil, and at its top
+ * level before; the time is when it was paid, else when it was made. */
+export let billedOf = (o: Invoice, subscription: string): Billed => ({
+  id: String(o.id ?? ''),
+  subscription,
+  payer: idOf(o.customer),
+  total: Number(o.amount_paid ?? 0),
+  at: new Date(
+    (o.status_transitions?.paid_at ?? o.created ?? 0) * 1000,
+  ).toISOString(),
+  email: o.customer_email ?? '',
+  ...(o.customer_name ? { name: o.customer_name } : {}),
+  tags: {
+    ...(o.parent?.subscription_details?.metadata ??
+      o.subscription_details?.metadata ?? {}),
+  },
+})
+
 /** Whether a verified event Stripe posted about the platform's own account is
  * about a house sale, which `shopped` reads, rather than about the platform's
  * plans, which ./plans.ts `changed` reads: a checkout carrying the house's
@@ -624,11 +698,15 @@ export let shopped = (options: Keyed) => (event: unknown): Shopped => {
   }
   let renewed = subscribedBy(type, o)
   if (renewed != null) {
+    let invoice = type == 'invoice.paid' && renewed
+      ? billedOf(o as Invoice, renewed)
+      : undefined
     return {
       account,
       about: 'term',
       term: async () =>
         renewed ? await termAt(options, account, renewed) : null,
+      ...(invoice ? { invoice } : {}),
     }
   }
   if (

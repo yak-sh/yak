@@ -10,7 +10,7 @@ import { blobBytes } from './files.ts'
 import { uploaded } from './uploads.ts'
 import { Untaken, useOf } from '@yaks/blob/upload'
 import { bodyOf } from '@yaks/blob'
-import { quoteDoor, refundDoor } from './sell.ts'
+import { giftPortal, quoteDoor, refundDoor, statements } from './sell.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import {
   ARTIFACT_LIFE,
@@ -322,6 +322,26 @@ export let saleDoor: Answer = async (at) => {
   if (refund) {
     return editor(at)
       ? refundDoor(at.req, at.env, { space: at.space, app: at.app }, refund[1])
+      : at.json(403, 'not_an_editor')
+  }
+  let gift = /^\/pay\/gifts\/([0-9a-f-]{36})$/.exec(at.path)
+  if (gift) {
+    if (at.req.method != 'GET') return at.json(405, 'method_not_allowed')
+    return giftPortal(
+      at.env,
+      { space: at.space, app: at.app },
+      gift[1],
+      new URL(at.req.url).searchParams.get('ticket') ?? '',
+    )
+  }
+  if (at.path == '/pay/statements') {
+    if (at.req.method != 'POST') return at.json(405, 'method_not_allowed')
+    return editor(at)
+      ? statements(
+        at.env,
+        { space: at.space, app: at.app },
+        await at.req.json().catch(() => null),
+      )
       : at.json(403, 'not_an_editor')
   }
   if (at.path == '/pay/artifacts') {

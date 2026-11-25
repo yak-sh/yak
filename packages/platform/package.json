@@ -159,6 +159,7 @@
     "./plans": "./plans.ts",
     "./price": "./price.ts",
     "./fee": "./fee.ts",
+    "./giving": "./giving.ts",
     "./meter": "./meter.ts",
     "./numbers": "./numbers.ts",
     "./standing": "./standing.ts",

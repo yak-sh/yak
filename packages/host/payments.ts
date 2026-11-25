@@ -341,6 +341,8 @@ export type Paid = {
   total: number
   /** the address the buyer gave, else the one the checkout started with */
   email: string
+  /** the name the buyer gave, where the checkout asked for one */
+  name?: string
   /** what the checkout carried ({@link Sale.tags}) */
   tags: Tags
 }
@@ -400,6 +402,21 @@ export type Term = {
   tags: Tags
 }
 
+/** One period of a subscription on a seller's account, paid: the invoice,
+ * the subscription and the payer it billed, what was paid in the currency's
+ * smallest unit, when, the address and name it was billed to, and the tags
+ * the checkout that started the subscription carried ({@link Sale.tags}). */
+export type Billed = {
+  id: string
+  subscription: string
+  payer: string
+  total: number
+  at: string
+  email: string
+  name?: string
+  tags: Tags
+}
+
 /** One verified event a seller's account posted, read, with the account it
  * happened on ('' where it names none, as an event about a house sale on the
  * host's own account does, whose tags say whose sale it was): the seller's account changed, or it
@@ -426,6 +443,8 @@ export type Shopped =
        * delivered out of order still leave the latest word; null where the
        * event names none, or the provider holds none by that name */
       term: () => Promise<Term | null>
+      /** the period's invoice, where the event is one paid */
+      invoice?: Billed
     }
     | { about: 'other' }
   )
@@ -469,6 +488,26 @@ export let charged = (
   cents: number,
 ): number => Math.min(cents, Math.round(cents * card.bps / 10_000) + card.cents)
 
+/** What a payer adds to `cents` so that what the provider keeps of the whole
+ * ({@link charged}) leaves the seller `cents`: the least that does.
+ *
+ * ```ts
+ * import { charged, covering } from '@yaks/host/payments'
+ * import { equal } from '@yaks/testing'
+ * let card = { bps: 290, cents: 30 }
+ * equal(covering(card, 10000), 330)
+ * equal(10330 - charged(card, 10330) >= 10000, true)
+ * equal(10329 - charged(card, 10329) < 10000, true)
+ * equal(covering(card, 2500), 106)
+ * ```
+ */
+export let covering = (card: Costs['card'], cents: number): number => {
+  let whole = Math.ceil((cents + card.cents) / (1 - card.bps / 10_000)) - 1
+  while (whole - charged(card, whole) < cents) whole++
+  while (whole > cents && whole - 1 - charged(card, whole - 1) >= cents) whole--
+  return whole - cents
+}
+
 /** What a provider lends a party selling on an account of its own: the
  * account opened once and finished through the provider's onboarding, or one
  * the seller already had and connected at the provider's own page, and
@@ -480,6 +519,8 @@ export type Shops = {
   on: () => boolean
   /** what selling through it costs a seller */
   costs: Costs
+  /** the least one payment may be in a currency, in its smallest unit */
+  minimum: (currency: string) => number
   /** the most characters one tag's value carries ({@link Sale.tags}): a
    * longer one the provider refuses or cuts short */
   tag: number
@@ -512,6 +553,10 @@ export type Shops = {
   /** Refund on the merchant's account, returning the application fee in
    * proportion. An identical key and request must never refund twice. */
   refund: (account: string, request: Refund) => Promise<Refunded>
+  /** the address of the provider's hosted portal on a seller's account,
+   * where its payer manages and cancels what it pays, handing them back to
+   * `back` */
+  portal: (account: string, payer: string, back: string) => Promise<string>
   /** Reconcile a dashboard refund's cumulative application-fee reversal. */
   refundFee: (fee: string, refunded: number, total: number) => Promise<void>
 }
