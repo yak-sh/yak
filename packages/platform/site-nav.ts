@@ -18,6 +18,7 @@ export let island = (module: string) =>
   try { mark(!!localStorage.getItem(key)) } catch {}
   let remembered = root.hasAttribute('data-signed')
   let checking = fetch('${WHO}?${CHAT}').then((r) => r.ok ? r.json() : null, () => null)
+  let linkToOpen = () => document.querySelector('.Nav_Open')
   let who
   checking.then((answer) => {
     who = answer
@@ -26,7 +27,7 @@ export let island = (module: string) =>
     try {
       who.signedIn ? localStorage.setItem(key, '1') : localStorage.removeItem(key)
     } catch {}
-    if (!who.signedIn) document.querySelector('.Nav_Open')?.removeAttribute('${READY}')
+    if (!who.signedIn) linkToOpen()?.removeAttribute('${READY}')
   }).catch((error) => globalThis.reportError?.(error))
   let warm = async () => {
     let to = remembered ? '${MANAGE}' : (await checking)?.chat
@@ -36,12 +37,26 @@ export let island = (module: string) =>
       credentials: 'same-origin',
     }).catch(() => null)
     let { ready } = await import(${JSON.stringify(module)})
-    let link = document.querySelector('.Nav_Open')
+    let link = linkToOpen()
     if (!link && document.readyState == 'loading') {
       await new Promise((done) => document.addEventListener('DOMContentLoaded', done, { once: true }))
-      link = document.querySelector('.Nav_Open')
+      link = linkToOpen()
     }
-    if (link && who?.signedIn !== false) ready(link, to, first)
+    if (link && who?.signedIn !== false) return ready(link, to, first)
   }
-  warm().catch((error) => globalThis.reportError?.(error))
+  let warming = warm().catch((error) => globalThis.reportError?.(error))
+  let pressed = false
+  document.addEventListener('click', (e) => {
+    let link = e.target?.closest?.('.Nav_Open')
+    if (!link || link.hasAttribute('${READY}') || e.defaultPrevented ||
+        e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    e.preventDefault()
+    if (pressed) return
+    pressed = true
+    let follow = () => location.assign(link.href)
+    warming.then((open) => open ? open(e) : follow()).catch((error) => {
+      globalThis.reportError?.(error)
+      follow()
+    }).finally(() => pressed = false)
+  })
 })()</script>`

@@ -332,7 +332,7 @@ export type Browsing =
     DOMParser: typeof DOMParser
     /** Open a READY page as a document when the current page has its own
      * scripts and styles. The address has already moved to the answer. */
-    enter?: (html: string) => void
+    enter?: (html: string, drawn?: () => void) => void
   }
 
 /** Where a click's time went, in milliseconds: waiting for the page whole
@@ -557,7 +557,7 @@ export let start = (
   history: HistoryPort,
   now: Clock['now'] = () => performance.now(),
   after: Clock['after'] = system.after,
-): (to: URL, pop?: boolean) => Promise<void> => {
+): (to: URL, pop?: boolean, pressed?: Result) => Promise<void> => {
   let doc = win.document
   let ran = sources(doc, win.location.href)
   let here = page(win.location)
@@ -772,21 +772,21 @@ export let start = (
     using.used = true
     let answer = await using.answer
     if (mine != turn) return pressed?.cancel()
+    let wait = answer ? Math.max(0, answer.received - began) : 0
     if (win.enter && answer && enterable(answer)) {
       let at = new URL(answer.url)
       at.hash = to.hash
       history.write({ path: page(at) + at.hash, state: null })
-      pressed?.leaving()
       try {
         closed = true
         stopRefresh?.()
-        return win.enter(answer.text)
+        return win.enter(answer.text, pressed && (() => pressed.drawn(wait)))
       } catch (error) {
         globalThis.reportError?.(error)
+        pressed?.leaving()
         return load(at, true)
       }
     }
-    let wait = answer ? Math.max(0, answer.received - began) : 0
     if (
       win.enter || !answer ||
       !draw(to, answer, from, began, wait, pop)
@@ -804,28 +804,26 @@ export let start = (
     }
   }
   let readyLinks = () => {
+    let linked = (mark: string) =>
+      [...doc.querySelectorAll<HTMLAnchorElement>(`a[${mark}][href]`)]
+        .filter((link) => !link.closest('[hidden]'))
     let targets = new Map<string, URL>()
     let add = (mark: string, most: number) => {
-      for (
-        let link of doc.querySelectorAll<HTMLAnchorElement>(`a[${mark}][href]`)
-      ) {
+      for (let link of linked(mark)) {
         if (most <= 0) break
-        if (link.closest('[hidden]')) continue
-        let marked = link.hasAttribute(WARM)
-        if (marked) {
-          warmLink(link)
-          most--
-        }
         let to = destination(link, win.location.href, here)
         if (!to) continue
         let key = page(to)
         if (key == here || targets.has(key) || drawing(to)) continue
         targets.set(key, to)
-        if (!marked) most--
+        most--
       }
     }
     add(READY, Infinity)
-    if (!win.enter) add(HOLD, HOLDS)
+    if (!win.enter) {
+      add(HOLD, HOLDS)
+      for (let link of linked(WARM).slice(0, HOLDS)) warmLink(link)
+    }
     return targets
   }
   let closed = false, warming = false
@@ -838,6 +836,7 @@ export let start = (
       if (closed || stays(doc) || !visible()) break
       for (let [key, to] of readyLinks()) {
         if (closed || from != here || stays(doc) || !visible()) break
+        if (drawing(to)) continue
         let held = pages.get(key)
         if (!held || (win.enter && held.received && !fresh(held))) {
           await ask(to, true, held).answer
@@ -867,7 +866,12 @@ export let start = (
   win.addEventListener('pageshow', (e: PageTransitionEvent) => {
     if (e.persisted) readying()
   })
-  readying()
+  if (win.enter || doc.readyState == 'complete') readying()
+  else {
+    // The page's other modules register its in-place views as it loads.
+    doc.addEventListener('DOMContentLoaded', readying, { once: true })
+    win.addEventListener('load', readying, { once: true })
+  }
   // The one page being looked ahead at, which a pointer moving on, or
   // another look ahead, lets go of unless a click took it up.
   let looking: { key: string; held: Held } | undefined

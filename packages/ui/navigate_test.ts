@@ -154,6 +154,7 @@ let browsing = (
 ) => {
   let { document } = parseHTML(pages[new URL(path, 'https://y.test').pathname])
   let doc = document as unknown as Document
+  Object.defineProperty(doc, 'readyState', { value: 'complete' })
   let at = new URL(path, 'https://y.test')
   let loaded: string[] = []
   let fetched: string[] = []
@@ -362,7 +363,7 @@ test('a failed refresh leaves the ready document available until a usable answer
 test('a link can warm a worker while keeping the browser in charge of opening it', async () => {
   let b = browsing({
     '/': `<a id="app" href="https://space.y.test/box/" target="_blank"
-      ${HOLD} ${WARM}="https://space.y.test/box/_web/warm">Box</a>`,
+      ${WARM}="https://space.y.test/box/_web/warm">Box</a>`,
   }, '/')
   await settled()
   assertEquals(b.fetched, ['https://space.y.test/box/_web/warm'])

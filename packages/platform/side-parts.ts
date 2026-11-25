@@ -115,7 +115,7 @@ export let link = (at: Item) => {
       title: at.label,
       [NAMES]: at.names,
       [READY]: at.ready || undefined,
-      [HOLD]: !(at.submit || at.external) || undefined,
+      [HOLD]: !(at.submit || at.external || at.app) || undefined,
       [WARM]: at.warm,
       'data-side-app': at.app ? JSON.stringify(at.app) : undefined,
       mod: at.current && 'on',
