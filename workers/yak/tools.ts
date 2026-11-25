@@ -4404,16 +4404,23 @@ let OURS: Row[] = [
       // copy's publisher in another space released, or a file no member
       // wrote (`strangers`); a copy's release words, or a given app's from
       // before it came; any file the admin reads in a space they hold no
-      // seat in. Its members' files are its own.
-      let outside = async (files: Files, said: Version[] = []) => {
-        let of = app.installed?.of
-        let [members, rows, given, source, theirs] = await Promise.all([
+      // seat in. Its members' files are its own. What it reads of the
+      // directory waits on no file, so a read starts it (`around`) beside its
+      // own reads, and answering costs no round trip of its own; a read
+      // that ends before answering leaves its failure unheard.
+      let of = app.installed?.of
+      let facts = () =>
+        Promise.all([
           ctx.dir.members(space),
           writes(),
           ctx.dir.given(app),
           of ? ctx.dir.appAt(of) : null,
           of ? ctx.dir.deploys({ eid: of }) : [],
         ])
+      let facing: ReturnType<typeof facts> | undefined
+      let around = () => facing ??= facts()
+      let outside = async (files: Files, said: Version[] = []) => {
+        let [members, rows, given, source, theirs] = await around()
         let ours = new Set([...members, ctx.person])
         let from = source?.space.eid != space.eid ? theirs : []
         let copied = from.length > 0 || !!given
@@ -4503,6 +4510,7 @@ let OURS: Row[] = [
         }
       }
       if (op == 'list') {
+        around().catch(() => {})
         let [d, all, rows] = await Promise.all([
           draft(),
           versions(ctx.dir, app),
@@ -4630,6 +4638,7 @@ let OURS: Row[] = [
       // rides in the value too, for a program: the words can carry more than
       // the file (the unseen block), and `yak admin push` merges copy.json.
       if (op == 'read' && args.path != null && args.paths == null) {
+        around().catch(() => {})
         let d = await draft()
         let path = named(text(args.path, 'path'))
         let bytes = await d.view.read(at(d, path))
@@ -4664,6 +4673,7 @@ let OURS: Row[] = [
       // The releases' own words come with it: what the agents before this one
       // changed and why, so it builds on them rather than over them.
       if (op == 'read') {
+        around().catch(() => {})
         let [d, all] = await Promise.all([draft(), versions(ctx.dir, app)])
         let asked = [...list(args.path, 'path'), ...list(args.paths, 'paths')]
           .map(named)
