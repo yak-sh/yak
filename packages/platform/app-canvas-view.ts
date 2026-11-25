@@ -23,6 +23,7 @@ import {
   Empty,
   Icon,
   Identity,
+  layer,
   Notice,
   Preview,
   TabSet,
@@ -169,6 +170,10 @@ let screens = (
   )
 }
 
+// On a phone the app takes the screen as a layer, in from the right, the
+// way the bar's button to it points.
+let Slides = layer('section', 'right')
+
 /** The app beside the chat, drawn from the side's row of it and, once in,
  * what it is made of, wearing `attrs` (`canvasAttrs`). Each part the browser
  * puts in place again as the Operator works is named by `data-part`. */
@@ -212,6 +217,7 @@ export let appCanvas = (
   return h(
     Preview,
     {
+      as: Slides,
       mod: 'pane',
       class: 'Talk_App',
       id: 'app',

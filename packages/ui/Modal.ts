@@ -4,6 +4,7 @@ import { h } from 'preact'
 import { block, type Part } from './el.ts'
 import { Card } from './Card.ts'
 import { Button } from './Button.ts'
+import { layer } from './Layer.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 /** A dialog's frame, its card, and the backdrop that closes it. Under the
@@ -15,11 +16,12 @@ import type { Colors, Specimen } from './theme.ts'
  * A page with no script of its own opens one as a popover: the frame given
  * `as: 'div'` and `popover`, a button naming it in `popovertarget` opens it,
  * and its backdrop and close are buttons naming it with
- * `popovertargetaction: 'hide'`. Escape closes it as well. */
+ * `popovertargetaction: 'hide'`. Escape closes it as well. At a phone's width
+ * it is a `Layer`, sliding up from the foot as it opens. */
 export let Modal:
   & Part
   & Record<'Body' | 'Backdrop' | 'Main' | 'Actions', Part> = block(
-    'dialog',
+    layer('dialog'),
     'Modal',
     { Body: Card, Backdrop: 'a', Main: 'div', Actions: 'aside' },
   )

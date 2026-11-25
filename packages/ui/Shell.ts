@@ -14,7 +14,8 @@
  * scrolls apart from the page, so the page centers in the width left beside
  * it. `Shell-shut` hides it and the page centers in the whole width. Narrower
  * than a laptop it stands only while it is the address's target, over the
- * page from the right, and so does a shut one opened that way.
+ * page from the right, and so does a shut one opened that way: a `Layer`,
+ * which slides in at a phone's width.
  *
  * A phone-width window folds the sidebar away: `Menu` shows, and `Shell-open`
  * slides the sidebar over the page with a `Shade` behind it that a press on
@@ -29,6 +30,7 @@ import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { block, type Part } from './el.ts'
 import { Field } from './Field.ts'
+import { layer } from './Layer.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 /** The frame. */
@@ -70,7 +72,7 @@ export let Shell:
     Tools: 'div',
     Body: 'div',
     Content: 'div',
-    Aside: 'aside',
+    Aside: layer('aside', 'right'),
   })
 
 /** What it is, in a line. */

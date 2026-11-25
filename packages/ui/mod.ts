@@ -9,7 +9,7 @@
  * - `Dot`, `Id`, `Stamp`, `Time`, `Tabs`, `Menu`, `Tip`, `Field`, `At`, `Check`,
  *   `Form`, `Drop`, `Notice`, `More`, `Choices`, `Button`,
  *   `Chip`, `Match`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
- *   `Turns`, `Passage`, `Body`, `Doc`, `Quote`, `Edit`, `Prop`, `Overlay`, `Peek`, `Table`, `Pager`, `Shell`,
+ *   `Turns`, `Passage`, `Body`, `Doc`, `Quote`, `Edit`, `Prop`, `Overlay`, `Layer`, `Peek`, `Table`, `Pager`, `Shell`,
  *   `Panes`, `Head`, `Metrics`, `Spark`, `Notes`,
  *   `Chips`, `Address`, `Icon`, `Logo`, `Copy`, `Card`, `Report`, `Group`, `Empty`,
  *   `State`, `Loading`, `Sparkline`, `Columns`,

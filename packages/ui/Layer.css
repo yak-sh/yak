@@ -1,0 +1,30 @@
+/* What a page opens over itself, sliding in from its edge at a phone's
+   width: up from the foot, or in from the left or right. Shut, it rests off
+   that edge; it moves there and back on the compositor (translate alone),
+   quick and easing out as it opens, easing in as it leaves, so closing plays
+   the opening backwards. Its display (and a dialog's place on the top layer)
+   holds until it has left. A page that lays it over itself does so at least
+   at this width, by its own position, and shows it while it is open. */
+@media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
+  .Layer {
+    --layer-off: 0 100%;
+    transition: translate .24s cubic-bezier(.2, .8, .2, 1),
+      display .24s allow-discrete, overlay .24s allow-discrete;
+  }
+  .Layer-left {
+    --layer-off: -100% 0;
+  }
+  .Layer-right {
+    --layer-off: 100% 0;
+  }
+  .Layer:not(:target, :has(:target), [open], :popover-open) {
+    translate: var(--layer-off);
+    transition-duration: .2s;
+    transition-timing-function: cubic-bezier(.8, 0, .8, .2);
+  }
+  @starting-style {
+    .Layer {
+      translate: var(--layer-off);
+    }
+  }
+}

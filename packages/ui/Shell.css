@@ -227,11 +227,7 @@
   display: none;
 }
 @media (max-width: 68.75rem) {
-  .Shell_Aside:not(:target, :has(:target)) {
-    display: none;
-  }
-  .Shell_Aside:is(:target, :has(:target)):not([hidden]) {
-    display: flex;
+  .Shell_Aside {
     position: fixed;
     inset: 0 0 0 auto;
     z-index: 10;
@@ -239,5 +235,11 @@
     height: auto;
     box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
       transparent);
+  }
+  .Shell_Aside:not(:target, :has(:target)) {
+    display: none;
+  }
+  .Shell_Aside:is(:target, :has(:target)):not([hidden]) {
+    display: flex;
   }
 }

@@ -25,6 +25,7 @@ export let WORN = [
   'Address',
   'Rows',
   'Card',
+  'Layer',
   'Modal',
   'Dot',
   'State',

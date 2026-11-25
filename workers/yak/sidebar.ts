@@ -1,6 +1,6 @@
 // yaks.app's sidebar: one frame and navigation tree, specialized by data.
 import { type ComponentChildren, h } from 'preact'
-import { Button, Form, Icon, SideNav } from '@yaks/ui/parts'
+import { Button, Form, Icon, layer, SideNav } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { Idle } from './mascot.ts'
 import { managePath } from '@yaks/platform/routes'
@@ -65,11 +65,15 @@ let fold = (at: NonNullable<Sidebar['fold']>) => {
   )
 }
 
+// At a phone's width the side is a layer over the page, from the left.
+let Slides = layer('aside', 'left')
+
 export let Sidebar = (at: Sidebar) => {
   let draw = (s: Section) => section(s, !!at.fold?.collapsed)
   return h(
     SideNav.Edge,
     {
+      as: Slides,
       class: at.fold?.collapsed ? 'Sidebar Sidebar-rail' : 'Sidebar',
       id: 'menu',
       'aria-label': at.label,

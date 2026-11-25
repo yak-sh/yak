@@ -396,9 +396,10 @@
     .Frame:has(.Frame_Aside:is(:target, :has(:target))) .Frame_Bar {
       z-index: 11;
     }
-    .Frame_Aside:is(:target, :has(:target)) {
+    /* Laid over the page whether open or shut, so it slides out where it
+       stood (@yaks/ui Layer); only its display waits on the address. */
+    .Frame_Aside {
       --frame-aside-top: calc(4rem + env(safe-area-inset-top, 0px));
-      display: flex;
       position: fixed;
       inset: var(--frame-aside-top) 0 0 auto;
       top: anchor(--frame-bar bottom, var(--frame-aside-top));
@@ -407,6 +408,9 @@
       height: auto;
       box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
         transparent);
+    }
+    .Frame_Aside:is(:target, :has(:target)) {
+      display: flex;
     }
     .Frame_AsideBody {
       padding-top: 1rem;
@@ -1121,14 +1125,14 @@
       margin-left: 0;
     }
     .Talk_App {
-      display: none;
-    }
-    .Talk_App:target {
       position: fixed;
       inset: 0;
       z-index: 3;
-      display: grid;
+      display: none;
       height: auto;
+    }
+    .Talk_App:target {
+      display: grid;
     }
     .Talk_Back {
       display: inline-flex;
@@ -1378,14 +1382,14 @@
   }
   @media (max-width: 700px) {
     .Sidebar {
-      display: none;
-    }
-    .Sidebar:target {
       position: fixed;
       inset: 0;
       z-index: 3;
-      display: flex;
+      display: none;
       height: auto;
+    }
+    .Sidebar:target {
+      display: flex;
     }
     .Sidebar .Sidebar_Nav {
       display: grid;

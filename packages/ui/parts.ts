@@ -49,6 +49,7 @@ export { Head } from './Head.ts'
 export { Index } from './Index.ts'
 export { marked, Match } from './Match.ts'
 export { Notes } from './Notes.ts'
+export { Layer, layer } from './Layer.ts'
 export { Overlay } from './Overlay.ts'
 export {
   Float,
