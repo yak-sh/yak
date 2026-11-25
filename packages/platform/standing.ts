@@ -279,9 +279,18 @@ export let count = (n: number): string =>
     : n.toLocaleString('en-US')
 
 /** Dollars as a person reads them: cents, and two figures of a cent where a
- * month has spent less than one. */
+ * month has spent less than one.
+ *
+ * ```ts
+ * import { dollars } from '@yaks/platform/standing'
+ * import { equal } from '@yaks/testing'
+ * equal(dollars(-52.02), '−$52.02')
+ * ```
+ */
 export let dollars = (n: number): string =>
-  n >= 0.01 || n <= 0
+  n < 0
+    ? `−${dollars(-n)}`
+    : n >= 0.01 || n == 0
     ? `$${n.toFixed(2)}`
     : `$${n.toFixed(1 - Math.floor(Math.log10(n))).replace(/0+$/, '')}`
 

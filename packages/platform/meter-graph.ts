@@ -1,21 +1,71 @@
 // The yak/meter graph facet: a space's spends added to its month in the
 // write's own transaction, and the platform's hourly meter and each held
 // number's month asked of the host (./lent.ts `job`).
-import type { Bound, Plugin } from '@yaks/graph'
+import { after, each } from '@yaks/fp'
+import { type Bound, hook, type Plugin, type Tx } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
+import { line } from '@yaks/query'
 import type { Options } from './lent.ts'
 import {
   added,
   credited,
   meteredOf,
   type MeteredRow,
+  meterOf,
   trended,
+  used,
 } from './meter.ts'
 import { paid } from './plans.ts'
-import { unaffordable } from './standing.ts'
+import { dollars, unaffordable } from './standing.ts'
 
 let props = (c: unknown): Record<string, unknown> =>
   c && typeof c == 'object' ? Object.fromEntries(Object.entries(c)) : {}
+
+// A hold can be released and an estimate can be replaced by a lower cost.
+// Read both in the refund's transaction so neither is refunded as usage.
+let refundable = (tx: Tx, eid: string, month: string) =>
+  after(tx.get([eid], ['meter']), ([row]) => {
+    let meter = row && meterOf(row as unknown as MeteredRow)
+    if (!meter || meter.month != month) return 0
+    return after(
+      tx.read(
+        line`(.model_reservation.space=${eid}&.model_reservation.month=${month})|(.model_estimate.space=${eid}&.model_estimate.month=${month}&.cost.dollars>0)`,
+        {},
+        ['model_reservation', 'cost'],
+      ),
+      (rows) =>
+        Math.max(
+          0,
+          rows.reduce(
+            (left, r) =>
+              left - Number(
+                props(r.model_reservation ?? r.cost).dollars ?? 0,
+              ),
+            used(meter, 'models'),
+          ),
+        ),
+    )
+  })
+
+let refunds = hook(
+  ['spend'],
+  (bundles, tx) =>
+    each(bundles, bundles, (same, { entity: { eid }, spend }) => {
+      let { month, refunded } = props(spend)
+      if (typeof refunded != 'number' || refunded <= 0) return same
+      return after(refundable(tx, eid, String(month)), (available) => {
+        if (refunded > available + 1e-9) {
+          throw new Refused(
+            `Only ${
+              dollars(available)
+            } of settled usage is available to refund this month.`,
+            { eid, comp: 'spend', prop: 'refunded' },
+          )
+        }
+        return same
+      })
+    }),
+)
 
 // A spend added to its month, refused first where it is held and does not
 // fit what is left (./standing.ts `unaffordable`). A block bought is credit,
@@ -69,6 +119,7 @@ let spending = (row: Bound) => {
 export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
   name: 'yak/meter',
   admission: () => true,
+  hooks: { precondition: refunds },
   rules: [{
     // The hourly meter, fired by its wake row: the platform's job `meter`
     // (@yaks/platform/lent `job`).

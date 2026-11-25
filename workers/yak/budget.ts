@@ -16,7 +16,7 @@ import * as dirPart from './directory.ts'
 import { directory, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { adminWho } from './asking.ts'
-import { added, budget, monthOf, starterOf } from '@yaks/platform/meter'
+import { budget, monthOf, starterOf } from '@yaks/platform/meter'
 import type { SpaceBudget } from '@yaks/platform/budget'
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
@@ -79,20 +79,19 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   let given = String(said('refund'))
   let why = String(said('why') ?? '').trim()
-  let spent = budget(space).spent
-  if (!DOLLARS.test(given) || !Number(given)) {
+  let refunded = Number(given)
+  if (!DOLLARS.test(given) || !Number.isFinite(refunded) || refunded <= 0) {
     return json(400, 'bad_refund', `not a number of dollars: ${given}`)
   }
-  if (Number(given) > spent) {
-    return json(
-      400,
-      'bad_refund',
-      `${space.slug} has spent $${spent} this month, less than $${given}`,
-    )
-  }
   if (!why) return json(400, 'no_why', 'say why it is refunded')
-  let spend = { month: monthOf(new Date()), refunded: Number(given), why }
-  await write({ spend })
-  let meter = { ...space.meter, ...added(space.meter ?? undefined, spend) }
-  return shown({ ...space, meter } as Space)
+  try {
+    await write({ spend: { month: monthOf(new Date()), refunded, why } })
+  } catch (err) {
+    let no = err as Error & { comp?: string; prop?: string }
+    if (no.name != 'Refused' || no.comp != 'spend' || no.prop != 'refunded') {
+      throw err
+    }
+    return json(400, 'bad_refund', no.message)
+  }
+  return shown((await dir.at(space.eid))!)
 }
