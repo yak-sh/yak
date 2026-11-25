@@ -193,11 +193,12 @@ svg { width: 18px; height: 18px }
   }
   let mode = null
   let close = () => {
-    mode?.stop()
+    closing = mode?.stop()
     mode = null
     kept(false)
     pencil.setAttribute('aria-pressed', 'false')
   }
+  let closing
   let start = async () => {
     pencil.disabled = true
     try {
@@ -205,6 +206,7 @@ svg { width: 18px; height: 18px }
         import(api + 'api/client.js'),
         import(api + 'api/_edit.js'),
       ])
+      await closing
       mode = edit.editMode(document, client.drafts(), {
         panel,
         at: api,

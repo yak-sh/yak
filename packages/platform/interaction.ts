@@ -179,8 +179,8 @@ export let unexpected = (target: string): string | null => {
 }
 /** The points that are an answer behind what the page already shows, not a
  * press's frame, each with how long it may take before it is slow: an
- * on-page save shows at once and is confirmed behind (workers/yak
- * edit-mode.ts `savePoint`). */
+ * on-page save shows at once and is confirmed behind (edit-mode.ts
+ * `savePoint`). */
 export let ANSWERS: Record<string, number> = { saved: 3000 }
 /** How long a point may take before it is a slow interaction. */
 export let budgetOf = (target: string): number =>

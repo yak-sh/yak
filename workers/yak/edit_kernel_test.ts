@@ -4,7 +4,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { connector, kernel, seed, unique } from './probe.ts'
 import { draftEid } from '@yaks/draft'
-import { placeOf } from './edit-mode.ts'
+import { placeOf } from '@yaks/platform/edit-mode'
 
 let k = await kernel()
 let space = unique('edit')

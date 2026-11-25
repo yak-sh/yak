@@ -64,6 +64,7 @@
     "./app-canvas": "./app-canvas.ts",
     "./app-canvas-view": "./app-canvas-view.ts",
     "./app-canvas-browser": "./app-canvas-browser.ts",
+    "./edit-mode": "./edit-mode.ts",
     "./updates-day": "./updates-day.ts",
     "./updates-view": "./updates-view.ts",
     "./updates-list-browser": "./updates-list-browser.ts",

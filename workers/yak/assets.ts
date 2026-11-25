@@ -52,7 +52,7 @@ export let ASSETS: Asset[] = [
   { name: 'data.js', bundle: of('@yaks/data-editor/editor') },
   { name: '_dates.js', bundle: here('./dates-browser.ts'), named: true },
   // Edit mode on an app's page, loaded by its pencil (public/edit.js).
-  { name: '_edit.js', bundle: here('./edit-mode.ts') },
+  { name: '_edit.js', bundle: of('@yaks/platform/edit-mode') },
   // The Operator chat's conversation (operator-rows.ts), for its page alone.
   { name: '_page-client.js', bundle: of('@yaks/client'), named: true },
   {

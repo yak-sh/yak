@@ -312,7 +312,7 @@ test('a save that fails after showing puts the page back, keeps the draft, and s
     '1 change · Save · Discard · Not saved: the app is busy. ' +
       'Your changes are kept. · Done',
   )
-  equal(p.timed, [])
+  equal(p.timed.map((t) => t.points[0].target), ['saved'])
   p.mode.stop()
   equal(p.q('button').textContent, 'Start')
 })
@@ -333,6 +333,45 @@ test('a Save pressed while one is on its way goes after it', async () => {
     { copy: { 'hero.title': 'Build it by asking' } },
   ])
   p.mode.stop()
+})
+
+test('Undo after a queued save returns to the last confirmed words', async () => {
+  let first = later()
+  let answers: Record<string, Answer | Promise<Answer>> = {
+    save: first.held,
+    'save/undo': OK({ version: 3 }),
+  }
+  let p = await load(BODY, answers)
+  let place = placeOf('cta')
+  p.heard(place, 'Start cooking')
+  p.press(p.button('save'))
+  await p.settled()
+  p.heard(place, 'Start baking')
+  p.press(p.button('save'))
+  answers.save = OK({ version: 4, keys: ['cta'] })
+  first.answer({ status: 503, body: null })
+  await p.settled()
+  equal(p.q('button').textContent, 'Start baking')
+  p.press(p.button('undo'))
+  await p.settled()
+  equal(p.drafts.text(place), 'Start baking')
+  await p.mode.stop()
+  equal(p.q('button').textContent, 'Start')
+})
+
+test('a save that fails after Done restores the page and keeps the draft', async () => {
+  let { held, answer } = later()
+  let p = await load(BODY, { save: held })
+  let place = placeOf('cta')
+  p.heard(place, 'Start cooking')
+  p.press(p.button('save'))
+  let stopped = p.mode.stop()
+  equal(p.q('button').textContent, 'Start cooking')
+  answer({ status: 503, body: { error: { message: 'the app is busy' } } })
+  await stopped
+  equal(p.q('button').textContent, 'Start')
+  equal(p.drafts.text(place), 'Start cooking')
+  equal(p.shown(), 'Not saved: the app is busy. Your changes are kept.')
 })
 
 test('a refused save keeps every draft, and says why', async () => {

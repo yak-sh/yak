@@ -18,7 +18,8 @@
 // Save is pressed, and the panel says so; the drafts are spent only once the
 // save answers, so a save refused or failed puts the page's words back,
 // leaves every draft as it was and says why. A Save pressed while one is on
-// its way goes after it. Once a save answers, the panel says which version
+// its way goes after it. Done returns the page to browsing while waiting.
+// Once a save answers, the panel says which version
 // it made and offers Undo (`api/save/undo`), which takes that release back
 // and makes the changes drafts again, as they were before Save. How long the
 // answer took is timed as a press is (@yaks/timing), at `report`.
@@ -170,10 +171,11 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
   for (let el of marked) held.set(el, { was: [...el.childNodes], value: '' })
   for (let [el, h] of held) h.value = valueOf(el)
   let keyOf = (el: Element) => el.getAttribute(names.text)!
-  // The page's own words for a key: the first element showing it.
-  let own = (key: string) =>
+  let confirmed = (key: string) =>
     held.get(marked.find((el) => keyOf(el) == key)!)?.value ?? ''
-  // A key's own words are now `value`: what Save released, or Undo put back.
+  // A key can have several submitted values, in request order.
+  let pending = new Map<string, string[]>()
+  let own = (key: string) => pending.get(key)?.at(-1) ?? confirmed(key)
   let becomes = (key: string, value: string) => {
     for (let [el, h] of held) {
       if (keyOf(el) == key) Object.assign(h, { was: null, value })
@@ -185,9 +187,6 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     let text = drafts.text(place)
     return !!text && text != own(place.slice(PLACE.length))
   }
-  // How many saves on their way hold each key's draft, which is spent only
-  // once they have answered.
-  let sending = new Map<string, number>()
 
   let sheet = style(doc)
   doc.documentElement.setAttribute(EDITING, '')
@@ -206,7 +205,7 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     let key = keyOf(el), place = placeOf(key)
     // Typed back to the page's own words, it is no change, unless a save on
     // its way made them those words.
-    if (drafts.text(place) && valueOf(el) == own(key) && !sending.has(key)) {
+    if (drafts.text(place) && valueOf(el) == own(key) && !pending.has(key)) {
       drafts.spend(place)
     }
   }
@@ -277,7 +276,7 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
   let mine = () => drafts.places().filter((p) => p.startsWith(PLACE))
   let discard = button('Discard', () => {
     for (let place of mine()) {
-      if (!sending.has(place.slice(PLACE.length))) drafts.spend(place)
+      if (!pending.has(place.slice(PLACE.length))) drafts.spend(place)
     }
   })
   discard.dataset.discard = ''
@@ -335,44 +334,55 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     }
     let keys = Object.keys(sent)
     if (!keys.length) return
-    let before: Record<string, string> = {}
     for (let key of keys) {
-      before[key] = own(key)
-      becomes(key, sent[key])
-      sending.set(key, (sending.get(key) ?? 0) + 1)
+      let values = pending.get(key)
+      if (!values) pending.set(key, values = [])
+      values.push(sent[key])
     }
     let n = ++saves
     said.textContent = SAVED
     undo.hidden = true
     redraw()
     turn = turn.then(async () => {
+      let before = Object.fromEntries(keys.map((key) => [key, confirmed(key)]))
       let asked = perf.now()
       try {
         let { version, keys: made } = await post('save', { copy: sent })
-        let now = perf.now()
-        timed(now - began, now - asked)
         for (let key of keys) {
-          // A draft typed on since it was sent is still a change.
-          if (drafts.text(placeOf(key)) == sent[key]) drafts.spend(placeOf(key))
+          becomes(key, sent[key])
+          // Spend only the last submission for this key and only its text.
+          if (
+            pending.get(key)?.length == 1 &&
+            drafts.text(placeOf(key)) == sent[key]
+          ) drafts.spend(placeOf(key))
         }
         if (n != saves) return
-        last = made.length ? { version, sent, before } : null
+        last = made.length
+          ? {
+            version,
+            sent: Object.fromEntries(
+              made.map((key: string) => [key, sent[key]]),
+            ),
+            before,
+          }
+          : null
         said.textContent = savedAs(version)
         undo.hidden = !last
       } catch (e) {
-        // The page's words go back where a later save has not changed them.
-        for (let key of keys) {
-          if (own(key) == sent[key]) becomes(key, before[key])
-        }
         if (n == saves) last = null
         said.textContent = `Not saved: ${(e as Error).message}. ` +
           'Your changes are kept.'
+        if (closed && !panel.childNodes.length) panel.append(said)
       } finally {
         for (let key of keys) {
-          let left = sending.get(key)! - 1
-          left ? sending.set(key, left) : sending.delete(key)
+          let values = pending.get(key)!
+          values.shift()
+          if (!values.length) pending.delete(key)
         }
-        redraw()
+        if (closed) restorePage()
+        else redraw()
+        let now = perf.now()
+        timed(now - began, now - asked)
       }
     })
   })
@@ -387,7 +397,8 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
         await post('save/undo', { version: was.version })
         for (let [key, text] of Object.entries(was.sent)) {
           becomes(key, was.before[key])
-          drafts.type(placeOf(key), text)
+          let place = placeOf(key)
+          if (!drafts.text(place)) drafts.type(place, text)
         }
         undo.hidden = true
         said.textContent = `Version ${was.version} is taken back. ` +
@@ -395,9 +406,11 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
       } catch (e) {
         last = was
         said.textContent = `Not taken back: ${(e as Error).message}`
+        if (closed && !panel.childNodes.length) panel.append(said)
       } finally {
         undo.disabled = false
-        redraw()
+        if (closed) restorePage()
+        else redraw()
       }
     })
   })
@@ -433,6 +446,15 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
       if (valueOf(el) != value) draw(el, value)
     }
   }
+  let restorePage = () => {
+    if (doc.documentElement.hasAttribute(EDITING)) return
+    for (let [el, h] of held) {
+      el.removeAttribute(CHANGED)
+      let key = keyOf(el), value = own(key)
+      if (h.was && !pending.has(key)) el.replaceChildren(...h.was)
+      else if (valueOf(el) != value) draw(el, value)
+    }
+  }
   let stop = () => {}
   drafts.ready.then(() => {
     if (closed) return
@@ -450,15 +472,11 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
       for (let type of PRESSES) win.removeEventListener(type, pressed, true)
       for (let type of KEYS) win.removeEventListener(type, typed, true)
       doc.removeEventListener('focusout', left, true)
-      // The page goes back to its own words; the drafts stay drafts.
-      for (let [el, h] of held) {
-        el.removeAttribute(CHANGED)
-        if (h.was) el.replaceChildren(...h.was)
-        else draw(el, h.value)
-      }
       doc.documentElement.removeAttribute(EDITING)
+      restorePage()
       sheet()
       panel.replaceChildren()
+      return turn
     },
   }
 }
