@@ -1,0 +1,57 @@
+{
+  "$defs": {
+    "shot": {
+      "description": "A button the crew presses: an OBS scene, a camera preset, or both. Its label is doc.title.",
+      "properties": {
+        "scene": {
+          "type": "string",
+          "description": "The OBS scene to put on air, by its name in OBS."
+        },
+        "preset": {
+          "type": "string",
+          "description": "The camera preset to recall, by its id in obs-ptz."
+        },
+        "n": {
+          "type": "integer",
+          "description": "Where the button comes on the page, from 1."
+        }
+      }
+    },
+    "cue": {
+      "description": "One press, from anyone's phone or the Operator: a shot to take, or a zoom step. The desk plays cues in the order they were written.",
+      "properties": {
+        "shot": {
+          "type": "string",
+          "ref": "shot",
+          "death": "cascade",
+          "index": true
+        },
+        "zoom": {
+          "type": "integer",
+          "description": "A short zoom: 1 in, -1 out."
+        }
+      }
+    },
+    "aired": {
+      "description": "On a cue: the desk played it into OBS.",
+      "properties": {
+        "at": { "type": "string", "description": "When, as ISO text." }
+      }
+    },
+    "missed": {
+      "description": "On a cue: the desk could not play it, and why.",
+      "properties": {
+        "reason": { "type": "string" }
+      }
+    },
+    "desk": {
+      "description": "What the desk, the page on the computer running OBS, sees: the scene on air and the scenes OBS has. It goes away when that page closes.",
+      "sync": "peers",
+      "durable": "connection",
+      "properties": {
+        "scene": { "type": "string" },
+        "scenes": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

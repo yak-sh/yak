@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Stream Desk</title>
+  <link rel="stylesheet" href="style.css">
+  <main>
+    <header>
+      <h1>Stream Desk</h1>
+      <p id="status" aria-live="polite"></p>
+    </header>
+    <section id="shots" aria-label="Shots"></section>
+    <section class="zoom" aria-label="Zoom">
+      <button data-zoom="-1">Zoom out</button>
+      <button data-zoom="1">Zoom in</button>
+    </section>
+    <h2>Recent</h2>
+    <ol id="log"></ol>
+    <details>
+      <summary>This computer runs OBS</summary>
+      <p class="soft">Connect here and leave this page open during the stream.
+        It plays every phone's presses into OBS. Turn on OBS's WebSocket server
+        under Tools, and add the camera in the PTZ Controls dock (obs-ptz).</p>
+      <form id="connect">
+        <label>OBS address
+          <input name="url" value="ws://localhost:4455" required></label>
+        <label>Password <input name="password" type="password"></label>
+        <button>Connect</button>
+        <button type="button" id="leave" hidden>Disconnect</button>
+      </form>
+    </details>
+    <details>
+      <summary>Add a shot</summary>
+      <form id="shot">
+        <label>Name <input name="title" required maxlength="40"></label>
+        <label>OBS scene <input name="scene" list="scenes"></label>
+        <label>Camera preset <input name="preset" inputmode="numeric"></label>
+        <button>Add</button>
+      </form>
+      <datalist id="scenes"></datalist>
+    </details>
+  </main>
+  <script type="module" src="main.js"></script>
+</html>

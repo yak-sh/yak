@@ -1,0 +1,26 @@
+[
+  {
+    "entity": { "eid": "b7d64f0e-3c2a-4f8e-9d17-5e0c4a9b2f61" },
+    "doc": { "title": "The desk" }
+  },
+  {
+    "entity": { "eid": "5d0c1f9e-7a43-4b8e-9a51-0b6f2a7c8e01" },
+    "doc": { "title": "Projector" },
+    "shot": { "scene": "Projector", "n": 1 }
+  },
+  {
+    "entity": { "eid": "5d0c1f9e-7a43-4b8e-9a51-0b6f2a7c8e02" },
+    "doc": { "title": "Stage wide" },
+    "shot": { "scene": "Camera", "preset": "1", "n": 2 }
+  },
+  {
+    "entity": { "eid": "5d0c1f9e-7a43-4b8e-9a51-0b6f2a7c8e03" },
+    "doc": { "title": "Pulpit" },
+    "shot": { "scene": "Camera", "preset": "2", "n": 3 }
+  },
+  {
+    "entity": { "eid": "5d0c1f9e-7a43-4b8e-9a51-0b6f2a7c8e04" },
+    "doc": { "title": "Picture in picture" },
+    "shot": { "scene": "PIP", "preset": "2", "n": 4 }
+  }
+]

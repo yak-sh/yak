@@ -1,0 +1,88 @@
+:root {
+  color-scheme: light dark;
+  font: 16px/1.5 system-ui, sans-serif;
+  --line: color-mix(in srgb, currentColor 18%, transparent);
+  --soft: color-mix(in srgb, currentColor 65%, transparent);
+  --live: #d93025;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+h1 {
+  margin: 0;
+}
+h2 {
+  margin: 1.5rem 0 .5rem;
+  font-size: 1.1rem;
+}
+.soft {
+  color: var(--soft);
+}
+.missed {
+  color: var(--live);
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  background: none;
+  color: inherit;
+  padding: .5rem .75rem;
+  cursor: pointer;
+}
+#shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: .5rem;
+  margin: 1rem 0 .5rem;
+}
+#shots button {
+  display: grid;
+  min-height: 5rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+#shots small {
+  font-size: .8rem;
+  font-weight: 400;
+  color: var(--soft);
+}
+#shots button[aria-pressed="true"] {
+  border: 2px solid var(--live);
+}
+.zoom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+}
+.zoom button {
+  min-height: 3.5rem;
+}
+#log {
+  padding-left: 1.25rem;
+}
+details {
+  margin: 1rem 0;
+  border-top: 1px solid var(--line);
+  padding-top: .75rem;
+}
+summary {
+  cursor: pointer;
+}
+form {
+  display: grid;
+  gap: .5rem;
+  margin: .75rem 0;
+}
+label {
+  display: grid;
+  gap: .25rem;
+}
