@@ -429,6 +429,7 @@
 
   :root[data-signed] .Nav_Open {
     display: revert;
+    touch-action: manipulation;
   }
 
   /* The reading column, and the two slots beside it. The column says how

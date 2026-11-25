@@ -267,6 +267,16 @@ test('a conversation that is no view of its page is watched until it is closed',
 
 test('the prepared Operator watches its conversation only while its frame shows', () => {
   let doc = page()
+  let win = doc.defaultView!
+  let frames: FrameRequestCallback[] = []
+  Object.defineProperty(doc, 'defaultView', {
+    value: {
+      Event: win.Event,
+      requestAnimationFrame: (frame: FrameRequestCallback) =>
+        frames.push(frame),
+      setTimeout: (work: () => void) => work(),
+    },
+  })
   let frame = doc.createElement('div')
   frame.setAttribute('data-site-frame', '')
   frame.setAttribute('inert', '')
@@ -279,10 +289,13 @@ test('the prepared Operator watches its conversation only while its frame shows'
   })
   equal(g.open, [])
   frame.removeAttribute('inert')
-  frame.dispatchEvent(new doc.defaultView!.Event(VIEWED))
+  frame.dispatchEvent(new win.Event(VIEWED))
+  frames.shift()!(0)
+  equal(g.open, [], 'the prepared conversation can paint first')
+  frames.shift()!(16)
   equal(g.open, [operatorTalk('club', 'chat')])
   frame.setAttribute('inert', '')
-  frame.dispatchEvent(new doc.defaultView!.Event(VIEWED))
+  frame.dispatchEvent(new win.Event(VIEWED))
   equal(g.open, [])
   talk.close()
 })

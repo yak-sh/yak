@@ -323,6 +323,16 @@
   [data-site-home] {
     isolation: isolate;
   }
+  /* On touch screens stop painting the Home scene behind the Operator.
+     Home stays laid out so Back keeps its scroll. */
+  @media (pointer: coarse) {
+    [data-site-views] [data-site-home] {
+      will-change: opacity;
+    }
+    [data-site-views] [data-site-home][inert] {
+      opacity: 0;
+    }
+  }
   /* What the column holds is sized to it: the yak beside the Operator's
      box (operator-page.ts `composer`), and what its bar opens. */
   .Frame_Column {

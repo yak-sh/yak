@@ -61,11 +61,12 @@ export let pageTalk = (
       })
     }
   }
-  // An already mounted conversation can paint before its live watch opens.
+  // Let the mounted conversation reach the screen before asking for its
+  // live frame. The socket can have a reply ready before that first paint.
   let activated = () => {
     let win = doc?.defaultView
     if (!frame?.hasAttribute('inert') && win?.requestAnimationFrame) {
-      win.requestAnimationFrame(() => win.setTimeout(showing, 0))
+      win.requestAnimationFrame(() => win.requestAnimationFrame(showing))
     } else showing()
   }
   view?.addEventListener(VIEWED, showing)
