@@ -6,6 +6,7 @@
 // keeps its words to itself, and it keeps a page's storage.
 import { test } from '@yaks/testing'
 import { talkPath } from '@yaks/platform/routes'
+import { parseHTML } from 'linkedom'
 import {
   assert,
   assertEquals,
@@ -410,12 +411,16 @@ test("a stranger's unreviewed release installs sandboxed, a reviewed one does no
     )
     // Its owner hears of it in their Updates, once however often it is asked.
     await installer.tool('app_update', { app: 'kept' })
-    let updates = await (await k.at(
-      'yaks.app',
-      talkPath('updates', space),
-      { headers: { cookie: them.cookie } },
-    )).text()
-    assertEquals(updates.split('v2 waits for review').length - 1, 1, updates)
+    let { document } = parseHTML(
+      await (await k.at(
+        'yaks.app',
+        talkPath('updates', space),
+        { headers: { cookie: them.cookie } },
+      )).text(),
+    )
+    let cards = [...document.querySelectorAll('[data-key]')]
+      .filter((c) => c.textContent?.includes('v2 waits for review'))
+    assertEquals(cards.length, 1)
     assertStringIncludes(
       await installer.tool('app_update', { app: 'raw' }),
       'from v1 to v2',
