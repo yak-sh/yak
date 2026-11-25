@@ -31,12 +31,14 @@ import {
   type Space,
   stamp,
   type Walk,
+  walkTo,
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { meta } from './meta.ts'
 import { nothingHere, page } from './pages.ts'
 import { plans } from './payments.ts'
 import { sessionAt } from './session.ts'
+import { nameOf } from './names.ts'
 
 export let todayOf = (env: Env) => dayOf(env.CLOCK?.now() ?? Date.now())
 
@@ -47,12 +49,17 @@ export let supportFor = async (
 ) => {
   let support = await oneContract(
     dir.read,
-    'path' in space ? space : space.eid,
+    'path' in space ? space : walkTo(space.slug, space.eid),
     todayOf(env),
   )
   if (!support) return null
-  let name = await dir.nameAt(support.contract.provider)
-  return { ...support, providerName: name || 'your support provider' }
+  let { provider, ...details } = support
+  let row = provider as {
+    doc?: { title?: string }
+    email?: { address?: string }
+  } | undefined
+  let name = nameOf(row?.doc?.title, row?.email?.address ?? '')
+  return { ...details, providerName: name || 'your support provider' }
 }
 
 export let allSupport = (env: Env) =>

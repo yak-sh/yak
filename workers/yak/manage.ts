@@ -585,6 +585,7 @@ let rowsAhead = (
   }
   if (view == 'operator') {
     return [
+      supportFor(at.env, walk, dir),
       reachOf(dir, walk, person),
       chatRows(dir, walk),
       dir.texting(person),

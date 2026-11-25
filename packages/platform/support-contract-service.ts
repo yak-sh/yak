@@ -16,19 +16,15 @@ import {
 export type To = { email: string; name: string }
 export type Setup = { terms: Contract; bill: boolean; to?: To }
 
-export let current = (space: string | { path: Built }) =>
-  typeof space == 'string'
-    ? line`.entity.eid=${
-      contractEid(space)
-    }&?support_contract&?support_contract_billing&?support_contract_pending`
-    : line`.support_contract.space${sub(space.path)}&?support_contract_billing`
+export let current = (space: string) =>
+  line`.entity.eid=${
+    contractEid(space)
+  }&?support_contract&?support_contract_billing&?support_contract_pending`
 let contracts = line`.support_contract&?support_contract_billing`
-let work = (today: string, contract?: string) =>
+let work = (today: string) =>
   line`.support_contract_time.day>=${
     today.slice(0, 7) + '-01'
-  }&.support_contract_time.day<=${today}${
-    sub(contract ? line`&.support_contract_time.contract=${contract}` : line``)
-  }`
+  }&.support_contract_time.day<=${today}`
 
 export let contractOf = (row?: Bundle) =>
   row?.support_contract as Contract | undefined
@@ -154,19 +150,29 @@ type Read = (query: Built) => Promise<Bundle[]>
 
 export let oneContract = async (
   read: Read,
-  space: string | { path: Built },
+  space: { path: Built },
   today: string,
 ) => {
-  let [row] = await read(current(space))
-  let contract = contractOf(row)
-  if (!contract) return null
-  let eid = row.entity.eid
-  let time = await read(work(today, eid))
+  let contractPath = line`.support_contract.space${sub(space.path)}`
+  // Start every arm with the space walk so a page can ask ahead by slug.
+  let rows = await read(
+    line`(${
+      sub(contractPath)
+    }&?support_contract_billing)|(.support_contract_time.contract${
+      sub(contractPath)
+    }&${sub(work(today))})|(.support_contracts_provider${
+      sub(contractPath)
+    }&.person&?doc&?email)`,
+  )
+  let row = rows.find((r) => r.support_contract)
+  if (!row) return null
+  let contract = contractOf(row)!
   return {
-    eid,
+    eid: row.entity.eid,
     contract,
     billing: billingOf(row),
-    ...hoursOf(contract, time, today),
+    provider: rows.find((r) => r.entity.eid == contract.provider),
+    ...hoursOf(contract, rows.filter((r) => r.support_contract_time), today),
   }
 }
 

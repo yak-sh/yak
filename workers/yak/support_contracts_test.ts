@@ -132,12 +132,27 @@ test('support billing uses the space plan, and members ask Jeff privately', asyn
   let read = async (cookie: string, url: string) =>
     (await k.at(k.host, url, { headers: { cookie, accept: 'text/html' } }))
       .text()
+  let readBilling = async (cookie: string, slug: string) => {
+    await k.settled()
+    let page = await k.at(k.host, managePath('billing', slug), {
+      headers: { cookie, accept: 'text/html' },
+    })
+    let html = await page.text()
+    assertEquals(page.status, 200)
+    assertEquals(
+      /hops;dur=(\d+)/.exec(page.headers.get('server-timing') ?? '')?.[1],
+      '1',
+    )
+    return html
+  }
   let denied = await post(guest.cookie, terms)
   assertEquals(denied.status, 404)
   await denied.body?.cancel()
   for (let _ of [0, 1]) {
     let posted = await post(k.owner.cookie, terms)
-    assertEquals(await posted.json().then((r) => r.billing), {
+    let result = await posted.json()
+    assertEquals(posted.status, 200, JSON.stringify(result))
+    assertEquals(result.billing, {
       subscription: 'sub_checks',
       invoice: 'in_checks',
     })
@@ -157,7 +172,7 @@ test('support billing uses the space plan, and members ask Jeff privately', asyn
   let billing = managePath('billing', space.slug)
   let privatePage = await read(guest.cookie, billing)
   assertEquals(privatePage.includes('mailto:jeff@example.com'), false)
-  let page = await read(checks.cookie, billing)
+  let page = await readBilling(checks.cookie, space.slug)
   assertStringIncludes(page, '1.25 hours used · 2.25 hours left this month')
   assertStringIncludes(page, 'mailto:jeff@example.com')
   assertStringIncludes(page, 'tel:+12695550100')
@@ -217,11 +232,15 @@ test('support billing uses the space plan, and members ask Jeff privately', asyn
   })
   assertEquals(work.status, 303)
   await work.body?.cancel()
-  let clientView = await read(guest.cookie, managePath('billing', client.slug))
+  let clientView = await readBilling(guest.cookie, client.slug)
   assertStringIncludes(
     clientView,
     `Contact ${await k.dir.nameAt(checks.person)}`,
   )
   assertStringIncludes(clientView, '0.5 hours used · 3 hours left this month')
+  assertStringIncludes(
+    await readBilling(checks.cookie, client.slug),
+    'Log time',
+  )
   assertEquals(seen.length, before)
 })
