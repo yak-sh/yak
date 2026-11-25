@@ -27,6 +27,7 @@ export let WORN = [
   'Card',
   'Layer',
   'Modal',
+  'Dock',
   'Dot',
   'State',
   'Badge',

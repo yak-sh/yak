@@ -5,7 +5,7 @@
 import { bindSave, type SaveBinding } from '@yaks/ux/save'
 import { tips } from '@yaks/ui/parts'
 import { CallError } from '@yaks/tools/errors'
-import { settingsDrafts } from './settings-draft-browser.ts'
+import { settingsDrafts } from '@yaks/platform/settings-drafts-browser'
 import { LEAVE, PAGE } from '@yaks/ui/navigate'
 import { SAVE_THROUGH, type SavingForm } from '@yaks/platform/page-parts'
 

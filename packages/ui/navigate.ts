@@ -24,6 +24,11 @@
  * - A script marked `data-stays` holds its page (a socket, a mounted app)
  *   and cannot be taken back: a page holding one is left by loading the next.
  *
+ * A region a script draws for the whole tab rather than for one page (an
+ * overlay over every page) is marked `data-kept` (`KEPT`): where the next page
+ * has it too, by its id, a swap leaves it as it stands, open, typed in and
+ * drawn, and its script goes on drawing it.
+ *
  * @module
  */
 
@@ -37,6 +42,9 @@ export type Tally = { kept: number; made: number; dropped: number }
 /** The mark on the script that loads the navigator: a page wearing it
  * takes part. */
 export let TAKES = 'data-navigate'
+/** The mark on a region a script draws across pages, which a swap leaves
+ * as it is where the next page has it too. */
+export let KEPT = 'data-kept'
 /** Heard on the document before a swap, by the page it takes away. */
 export let LEAVE = 'yak-leave'
 /** Heard on the document after a swap, by the page it brought. */
@@ -196,8 +204,15 @@ let children = (was: Node, next: Node, o: Morphing, tally: Tally) => {
     tally.dropped += size(n)
     n.parentNode?.removeChild(n)
   }
-  for (let [a, b] of pairs) morph(a, b, o, tally)
+  for (let [a, b] of pairs) {
+    if (kept(a, b)) tally.kept += size(a)
+    else morph(a, b, o, tally)
+  }
 }
+
+// A region both pages mark as a script's own: left as it stands.
+let kept = (a: Node, b: Node) =>
+  !!el(a)?.hasAttribute(KEPT) && !!el(b)?.hasAttribute(KEPT)
 
 // What a head keeps of the page before: what a script or the browser put
 // there and a later page has no word on.

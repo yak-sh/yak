@@ -41,6 +41,12 @@
 .Transcript_Entry-theirs > .Transcript_Meta {
   justify-content: end;
 }
+/* Said by the other person, in a conversation between people: their bubble
+   at the left, on the sheet behind. */
+.Transcript_Entry-other > .Transcript_Bubble {
+  margin: 0 auto 0 0;
+  background: var(--surface);
+}
 .Transcript_Entry-hidden {
   opacity: .5;
 }

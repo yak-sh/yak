@@ -58,6 +58,7 @@ import * as notes from './Notes.ts'
 import * as notice from './Notice.ts'
 import * as palette from './Palette.ts'
 import * as layer from './Layer.ts'
+import * as dock from './Dock.ts'
 import * as overlay from './Overlay.ts'
 import * as pager from './Pager.ts'
 import * as pairs from './Pairs.ts'
@@ -191,6 +192,7 @@ let modules = {
     Group: group,
     Panes: panes,
     Layer: layer,
+    Dock: dock,
     Overlay: overlay,
     Peek: peek,
     Palette: palette,

@@ -2376,7 +2376,7 @@ export class Store extends Durable {
             ),
         // Where friends are moves with time and with writes this read does
         // not watch: a friends answer is read again as often as an open
-        // Friends page says where it is (friends-browser `EVERY`).
+        // tab says where it is (friends-dock-browser `EVERY`).
         renew: (answer) =>
           Array.isArray(answer) && answer.some((b) => b.befriended)
             ? this.#now() + SEEN_EVERY

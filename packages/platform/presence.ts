@@ -1,8 +1,7 @@
 /**
- * A friend's presence as a list of friends shows it (yaks.app's Friends
- * page): online now, with a green dot, or "Active 3 hours ago", online
- * friends first. The server draws the list with it and the page's script
- * (./friends-browser.ts) paints it again with it, so both say the same.
+ * A friend's presence as a list of friends shows it (yaks.app's friends
+ * dock, ./friends-dock-view.ts): online now, with a green dot, or "Active 3
+ * hours ago", online friends first.
  *
  * ```ts
  * import { ordered, seenWords } from '@yaks/platform/presence'

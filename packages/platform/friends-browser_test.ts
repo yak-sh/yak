@@ -2,128 +2,39 @@ import { equal, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
 import { h } from 'preact'
 import { parseHTML } from 'linkedom'
-import { WriteRefused } from '@yaks/client'
 import { graph } from './page-graph_fixture_test.ts'
 import { bindFriends } from './friends-browser.ts'
 import { type FriendsView, friendsView } from './friends-view.ts'
-import {
-  ACCOUNT,
-  accountRow,
-  type Befriended,
-  friendRows,
-  FRIENDS,
-} from './account-rows.ts'
+import { ACCOUNT, accountRow } from './account-rows.ts'
+import { PANEL } from './friends-dock-view.ts'
 
 let ADA = 'person-ada'
-let view: FriendsView = { person: ADA, apex: 'yaks.app', all: false }
-let friend = (name: string, seen?: Befriended['seen']): Befriended => ({
-  person: `person-${name}`,
-  name,
-  seen,
-  shared: [],
-})
-let online = { state: 'online' as const, spaces: [], apps: [] }
+let view: FriendsView = { person: ADA }
 
-// The Friends view as the server draws it from `friends`.
-let page = (friends: Befriended[]) => {
+let page = () => {
   let html = renderToString(
     h(
       'div',
       { 'data-view': 'friends', 'data-friends-view': JSON.stringify(view) },
-      friendsView(view, friends, { hidden: false }),
+      friendsView(view, { hidden: false }),
     ),
   )
-  let { document, window } = parseHTML(`<html><body>${html}</body></html>`)
-  return {
-    document,
-    window,
-    root: document.querySelector<HTMLElement>('[data-view]')!,
-  }
+  let { document } = parseHTML(`<html><body>${html}</body></html>`)
+  return document.querySelector<HTMLElement>('[data-view]')!
 }
 
-let names = (root: Element) =>
-  [...root.querySelectorAll('[data-friend]')].map((r) =>
-    [
-      r.querySelector('.Identity_Name')?.textContent,
-      r.querySelector('[data-friend-dot]')?.hasAttribute('hidden') ? '' : '●',
-    ].join('')
-  )
+let chosen = (root: Element) =>
+  root.querySelector('#presence-friends option[selected]')?.textContent
 
-let held = (friends: Befriended[], hidden = false) => {
+test('the Friends page holds its setting as the account row moves, and opens friends', () => {
+  let root = page()
   let g = graph((b) => Promise.resolve(b))
-  g.set(ACCOUNT, [accountRow(ADA, { name: 'Ada', email: 'a@x', hidden })])
-  g.set(FRIENDS, friendRows(ADA, friends))
-  return g
-}
-
-let flush = () => new Promise((r) => setTimeout(r, 0))
-
-test('the Friends page draws its rows again as they move, a fold held open staying open', () => {
-  let { root } = page([friend('ann'), friend('bo')])
-  let g = held([friend('ann'), friend('bo')])
   bindFriends(root, g)
-  let bo = root.querySelector('[data-friend="person-bo"] details')!
-  bo.setAttribute('open', '')
-  g.set(FRIENDS, friendRows(ADA, [friend('bo', online), friend('ann')]))
-  equal(names(root), ['bo●', 'ann'])
-  equal(root.querySelector('[data-friend="person-bo"] details'), bo)
-  equal(bo.hasAttribute('open'), true)
-  g.set(FRIENDS, friendRows(ADA, [friend('ann'), friend('cy')]))
-  equal(names(root), ['ann', 'cy'])
-})
-
-test('until its rows are in, the Friends page stays as the server drew it', () => {
-  let { root } = page([friend('ann')])
-  let before = root.innerHTML
-  bindFriends(root, graph((b) => Promise.resolve(b)))
-  equal(root.innerHTML, before)
-})
-
-test('a message is written through the page graph, and its form says it went', async () => {
-  let { root, window } = page([friend('ann')])
-  let g = held([friend('ann')])
-  bindFriends(root, g)
-  let form = root.querySelector<HTMLFormElement>('[data-friend-message]')!
-  let say = form.querySelector<HTMLTextAreaElement>('[name=say]')!
-  say.value = 'Hello'
-  form.dispatchEvent(
-    new window.Event('submit', { bubbles: true, cancelable: true }),
-  )
-  await flush()
+  equal(chosen(root), 'Yes')
+  g.set(ACCOUNT, [accountRow(ADA, { name: 'Ada', email: 'a@x', hidden: true })])
+  equal(chosen(root), 'No')
   equal(
-    g.wrote.map((b) => b[0].friendMessage),
-    [{ to: 'person-ann', words: 'Hello' }],
+    root.querySelector(`[popovertarget="${PANEL}"]`)?.textContent,
+    'Open friends',
   )
-  equal(say.value, '')
-  equal(
-    form.querySelector('[data-said]')?.textContent,
-    'Sent. It is in their Updates.',
-  )
-})
-
-test('a friend asked who is refused says why, and keeps what was typed', async () => {
-  let { root, window } = page([])
-  let g = graph(() =>
-    Promise.reject(
-      new WriteRefused([], {
-        error: 'arguments',
-        message: 'Nobody signs in with that.',
-      }),
-    )
-  )
-  g.set(ACCOUNT, [
-    accountRow(ADA, { name: 'Ada', email: 'a@x', hidden: false }),
-  ])
-  bindFriends(root, g)
-  let form = root.querySelector<HTMLFormElement>('[data-friend-ask]')!
-  let email = form.querySelector<HTMLInputElement>('[name=email]')!
-  email.value = 'nobody@example.com'
-  form.dispatchEvent(
-    new window.Event('submit', { bubbles: true, cancelable: true }),
-  )
-  await flush()
-  equal(g.wrote.map((b) => b[0].friendAsk), [{ email: 'nobody@example.com' }])
-  equal(email.value, 'nobody@example.com')
-  let said = form.querySelector<HTMLElement>('[data-said]')!
-  equal([said.textContent, said.hidden], ['Nobody signs in with that.', false])
 })

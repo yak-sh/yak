@@ -420,15 +420,17 @@ export type Message = {
 // who sent it, with its words.
 let LIMIT = 40
 
-/** A person's messages with their confirmed friends, newest first: each sent
- * to them or by them, as `knock{target, from}` + `doc{body}` rows. */
+/** A person's messages with their confirmed friends, the newest `limit`,
+ * newest first: each sent to them or by them, as `knock{target, from}` +
+ * `doc{body}` rows. */
 export let messagesOf = async (
   dir: Directory,
   person: string,
+  limit = LIMIT,
 ): Promise<Message[]> => {
   let [rows, friends] = await Promise.all([
     dir.read(
-      line`(.knock.target=${person}|.knock.from=${person})&.knock.from&.doc&?opened&?created&.order=-created.at&.limit=${LIMIT}`,
+      line`(.knock.target=${person}|.knock.from=${person})&.knock.from&.doc&?opened&?created&.order=-created.at&.limit=${limit}`,
     ),
     friendsOf(dir, person),
   ])
@@ -458,12 +460,18 @@ export let messagesOf = async (
 let idOf = (v: unknown) =>
   typeof v == 'string' ? v : String((v as { eid?: string })?.eid ?? '')
 
-// Sends `words` from one friend to another: refused unless they are
-// confirmed friends, and kept to the length of a message.
+// Sends `words` from one friend to another, as the message `eid` where the
+// page chose it: refused unless they are confirmed friends, kept to the
+// length of a message, and sent once however often it is asked.
 let sent = async (
   dir: Directory,
   who: Who,
-  { from, to, words }: { from: string; to: string; words: string },
+  { from, to, words, eid = crypto.randomUUID() }: {
+    from: string
+    to: string
+    words: string
+    eid?: string
+  },
 ) => {
   let friend = EID.test(to)
     ? (await friendsOf(dir, from)).find((f) => f.person == to)
@@ -475,14 +483,43 @@ let sent = async (
   if (!body || body.length > 4000) {
     throw refuse('arguments', 'Write a message of up to 4,000 characters.')
   }
+  if (!EID.test(eid)) throw refuse('arguments', 'Name the message by a UUID.')
+  let [was] = await dir.read(line`.entity.eid=${eid}&?knock&?doc`)
+  if (was) {
+    let knock = was.knock as { target?: unknown; from?: unknown } | undefined
+    if (idOf(knock?.from) == from && idOf(knock?.target) == to) return friend
+    throw refuse('arguments', 'Name the message by a UUID of its own.')
+  }
   await dir.stamp({
-    entities: [{
-      entity: { eid: crypto.randomUUID() },
-      knock: { target: to, from },
-      doc: { body },
-    }],
+    entities: [{ entity: { eid }, knock: { target: to, from }, doc: { body } }],
   }, vouched(who))
   return friend
+}
+
+/** A message from the person's page: `words` to the friend `to`, as the
+ * message `eid` the page shows it as. */
+export let sendFriend = (
+  dir: Directory,
+  who: Who & { person: string },
+  message: { eid: string; to: string; words: string },
+) => sent(dir, who, { from: who.person, ...message })
+
+/** The person's messages from `friend` read: each marked `opened`, for
+ * every interface that shows them. One that is not to them is left. */
+export let readFriend = async (
+  dir: Directory,
+  who: Who & { person: string },
+  eids: string[],
+) => {
+  let mine = (await Promise.all(
+    eids.filter((e) => EID.test(e)).map((eid) =>
+      dir.read(line`.entity.eid=${eid}&.knock.target=${who.person}&?opened`)
+    ),
+  )).flat().filter((r) => !r.opened)
+  if (!mine.length) return
+  await dir.stamp({
+    entities: mine.map((r) => ({ entity: { eid: r.entity.eid }, opened: {} })),
+  }, vouched(who))
 }
 
 /** A person's messages from friends, as Updates in their own space, with a

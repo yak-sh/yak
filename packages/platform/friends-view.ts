@@ -1,39 +1,25 @@
 /**
- * The Friends page (Your account), drawn from the person's rows
- * (./account-rows.ts): who's online now and when the rest last were, online
- * first, the first few unless the person asked for all; a message to each and
- * the apps of theirs they let the person into; adding a friend; and "Show
- * when I'm online". The server draws it for the first paint, and the browser
- * draws it again as the rows move (./friends-browser.ts).
+ * The Friends page (Your account): what the person sets about friends,
+ * "Show when I'm online", saved as it changes. Their friends and messages
+ * are over every page, one press away (./friends-dock-view.ts), which this
+ * page opens too. The server draws it from the person's account row
+ * (./account-rows.ts), and the browser draws it again as the row moves
+ * (./friends-browser.ts).
  *
  * @module
  */
 import { h } from 'preact'
+import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
-import { Dot } from '@yaks/ui/Dot'
 import { Field } from '@yaks/ui/Field'
 import { Form } from '@yaks/ui/Form'
-import { Identity } from '@yaks/ui/Identity'
-import { Rows } from '@yaks/ui/Rows'
-import { Time } from '@yaks/ui/Time'
-import type { Account, Befriended } from './account-rows.ts'
-import { appTile } from './app-tile.ts'
-import {
-  empty,
-  fieldsOf,
-  heading,
-  labeled,
-  option,
-  said,
-  saving,
-  send,
-} from './page-parts.ts'
-import { online, seenWords } from './presence.ts'
+import type { Account } from './account-rows.ts'
+import { PANEL } from './friends-dock-view.ts'
+import { fieldsOf, heading, labeled, option, saving } from './page-parts.ts'
 import { managePath } from './routes.ts'
 
-/** What the Friends page says about itself beside the rows: whose it is,
- * the zone its spaces answer under, and whether it shows every friend. */
-export type FriendsView = { person: string; apex: string; all: boolean }
+/** What the Friends page says about itself beside the rows: whose it is. */
+export type FriendsView = { person: string }
 
 // "Show when I'm online": the person's `presence{hidden}`, the same one
 // choice Profile has, saved as it changes.
@@ -52,185 +38,32 @@ export let showing = (hidden: boolean, page: 'friends' | 'profile') =>
       : 'Your friends see when you’re on yaks.app or when you last were, and which of your apps they could open themselves. Nobody else does.',
   )
 
-// How many friends the list shows before "Show all": every one online, then
-// the most recently active up to this many (pages.css `.Friends`).
-let FEW = 6
-
-// One friend: their initial and a green dot while they are online, "Online
-// now" or "Active 3 hours ago" under their name, kept current by
-// @yaks/platform/friends-browser. Pressed, it opens what friends can do: send
-// them a message, which lands in their Updates, and open the apps of theirs
-// they let this person into.
-let friendRow = (f: Befriended, apex: string, now: number) => {
-  let here = online(f.seen)
-  let words = seenWords(f.seen, now)
-  return h(
-    Rows.Item,
-    {
-      as: 'li',
-      class: here ? 'Friend Friend-here' : 'Friend',
-      'data-friend': f.person,
-      'data-key': f.person,
-    },
-    h(
-      'details',
-      { class: 'Friend_Fold' },
-      h(
-        'summary',
-        { class: 'Friend_Summary' },
-        h(
-          Identity,
-          { as: 'span' },
-          h(
-            Identity.Avatar,
-            { class: 'Friend_Avatar' },
-            (f.name.trim()[0] ?? '?').toUpperCase(),
-            h(Dot, {
-              mod: 'positive',
-              class: 'Friend_Dot',
-              'data-friend-dot': '',
-              hidden: !here,
-              role: 'img',
-              'aria-label': 'Online',
-            }),
-          ),
-          h(
-            Identity.Text,
-            null,
-            h(Identity.Name, null, f.name),
-            h(
-              Identity.Note,
-              { 'data-friend-seen': '', hidden: !words },
-              !here && f.seen?.last
-                ? ['Active ', h(Time, { at: f.seen.last, now })]
-                : words,
-            ),
-          ),
-        ),
-      ),
-      h(
-        'div',
-        { class: 'Friend_Body' },
-        h(
-          Form,
-          {
-            class: 'Page_Form',
-            method: 'post',
-            action: managePath('friends'),
-            'data-friend-message': f.person,
-          },
-          labeled(
-            `friend-say-${f.person}`,
-            `Message ${f.name}`,
-            h(Field, {
-              lines: true,
-              id: `friend-say-${f.person}`,
-              name: 'say',
-              rows: 2,
-              maxlength: 4000,
-              required: true,
-              placeholder: 'Write a message…',
-            }),
-            'It lands in their Updates, where they can reply.',
-          ),
-          h(Form.Actions, null, send('Send')),
-          said(),
-        ),
-        h(Form.Label, { as: 'p' }, 'Shared with you'),
-        f.shared.length
-          ? h(
-            Rows,
-            { as: 'ul' },
-            f.shared.map((a) => {
-              let host = `${a.space}.${apex}`
-              return appTile(
-                { eid: a.eid, slug: a.slug, title: a.title },
-                { at: `https://${host}`, host, editor: true },
-              )
-            }),
-          )
-          : h(Form.Hint, { as: 'p' }, `Nothing of ${f.name}’s yet.`),
-      ),
-    ),
-  )
-}
-
-// Friends (Your account): who's online now and when the rest last were,
-// online first, the first few unless the person asked for all; adding a
-// friend; and "Show when I'm online".
+/** Friends (Your account): where friends are, and "Show when I'm online". */
 export let friendsView = (
-  view: FriendsView,
-  all: Befriended[],
+  _view: FriendsView,
   account: Pick<Account, 'hidden'>,
-  now = Date.now(),
-) => {
-  let more = all.length -
-    Math.max(FEW, all.filter((f) => online(f.seen)).length)
-  return [
+) => [
+  h(
+    Card,
+    null,
+    heading('Friends'),
     h(
-      Card,
+      Form.Hint,
+      { as: 'p' },
+      'Your friends and your messages with them are on every page, under Friends.',
+    ),
+    h(
+      'div',
       null,
-      heading('Friends'),
-      all.length
-        ? [
-          h(
-            Rows,
-            {
-              as: 'ul',
-              class: view.all ? 'Friends Friends-all' : 'Friends',
-              'data-friends': managePath('friends'),
-            },
-            all.map((f) => friendRow(f, view.apex, now)),
-          ),
-          more > 0 && !view.all
-            ? h(
-              Rows.Note,
-              null,
-              h(
-                'a',
-                { href: `${managePath('friends')}?all` },
-                `Show all ${all.length} friends`,
-              ),
-            )
-            : null,
-        ]
-        : empty(
-          'No friends here yet',
-          h(
-            'p',
-            null,
-            'Add someone by their yaks.app sign-in email, or say yes to a request in your Updates.',
-          ),
-        ),
       h(
-        Form,
-        {
-          class: 'Page_Form',
-          method: 'post',
-          action: managePath('friends'),
-          'data-friend-ask': '',
-        },
-        labeled(
-          'friend-email',
-          'Add a friend',
-          h(Field, {
-            id: 'friend-email',
-            name: 'email',
-            type: 'email',
-            required: true,
-            autocomplete: 'off',
-            spellcheck: 'false',
-            placeholder: 'friend@example.com',
-          }),
-          'They become your friend once they say yes in their Updates.',
-        ),
-        h(Form.Actions, null, send('Ask')),
-        said(),
+        Button,
+        { type: 'button', popovertarget: PANEL },
+        'Open friends',
       ),
     ),
-    saving(
-      managePath('friends'),
-      h(Card, null, fieldsOf(showing(account.hidden, 'friends'))),
-    ),
-  ]
-}
+  ),
+  saving(
+    managePath('friends'),
+    h(Card, null, fieldsOf(showing(account.hidden, 'friends'))),
+  ),
+]

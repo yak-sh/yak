@@ -78,8 +78,6 @@ import {
   ACCOUNT,
   accountOf,
   CHAT_LINKS,
-  FRIENDS,
-  friendsOf,
   INVITE_PAGE,
   SHARED_APPS,
   SIGNED_IN,
@@ -856,7 +854,7 @@ let paymentDrawn = async (
 // (@yaks/platform/account-rows, side-rows).
 let DRAWN: Partial<Record<AccountView, string[]>> = {
   profile: [ACCOUNT, SIDE_SPACES, SIGNED_IN, CHAT_LINKS],
-  friends: [ACCOUNT, FRIENDS],
+  friends: [ACCOUNT],
   invite: [INVITE_PAGE, SIDE_SPACES],
   shared: [SHARED_APPS],
 }
@@ -915,9 +913,7 @@ let mine = async (
     apps: [],
     name: name ?? '',
     presenceHidden: drawn && accountOf(drawn)?.hidden,
-    friendList: drawn && friendsOf(drawn),
     drawn,
-    allFriends: q.has('all'),
     session: who.session,
     shops: provider.shops.on(),
     spaces: picks.some((s) => s.slug == own.slug) ? picks : [
@@ -1031,8 +1027,8 @@ let account = async (
   return nothingHere(env)
 }
 
-// The Friends page saying where the person is
-// (@yaks/platform/friends-browser `present`), which its friends see; their
+// A signed-in tab saying where the person is
+// (@yaks/platform/friends-dock-browser `present`), which its friends see; their
 // own whereabouts come to the page through its graph. None for anything else.
 let befriending = async (
   env: Env,

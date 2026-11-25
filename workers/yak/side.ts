@@ -36,17 +36,20 @@ import {
   accountRow,
   CHAT_LINKS,
   chatLinkRows,
+  FRIEND_MESSAGES,
   friendRows,
   FRIENDS,
+  HELD_MESSAGES,
   INVITE_PAGE,
   inviteRow,
+  messageRows,
   SHARED_APPS,
   sharedRows,
   SIGNED_IN,
   signedInRows,
 } from '@yaks/platform/account-rows'
 import { invitation } from './referral.ts'
-import { friendList, friendsOf } from './friends.ts'
+import { friendList, friendsOf, messagesOf } from './friends.ts'
 import {
   admittedRows,
   admittedSpace,
@@ -146,7 +149,7 @@ export let sideApps = async (dir: Directory, space: Space, who: Who) =>
   ) => ({ eid, slug, title, source, generatedIcon }))
 
 /** The rows `line` asks of the person: their account, browsers, linked chat
- * accounts (whose platforms `env`'s vault says), friends,
+ * accounts (whose platforms `env`'s vault says), friends, messages with them,
  * what others shared with them, their invite (which says the number `env`
  * texts from), what the directory holds for them in a space, or the side's;
  * none for a space they hold no seat in that lets them change it. */
@@ -202,6 +205,19 @@ export let personRows = async (
   if (line == FRIENDS) {
     let all = await shared(dir, person)
     return friendRows(person, await friendList(dir, person, all))
+  }
+  if (line == FRIEND_MESSAGES) {
+    return messageRows(
+      (await messagesOf(dir, person, HELD_MESSAGES)).map((m) => ({
+        eid: m.eid,
+        from: m.outgoing ? person : m.friend,
+        to: m.outgoing ? m.friend : person,
+        words: m.words,
+        at: m.at,
+        read: m.read,
+        operator: m.operator,
+      })),
+    )
   }
   if (line == INVITABLE) {
     return invitableRows(

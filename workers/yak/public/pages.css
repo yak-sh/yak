@@ -1539,23 +1539,71 @@
   display: contents;
 }
 
-/* Friends (desk-pages.ts `friendsView`): each friend a fold, pressed open for
-   a message box and what they share, their initial wearing a green dot while
-   they are online. Past the first six (`FEW`), only those online show until
-   the person asks for all. */
+/* Friends over every page (@yaks/platform/friends-dock-view): each friend a
+   row pressed to open their conversation, their initial wearing a green dot
+   while they are online and their unread count at the right; a conversation
+   of bubbles, theirs at the left; and a line to write on, its button beside
+   it. */
 @layer sections {
-  .Friends:not(.Friends-all) > .Friend:nth-child(n + 7):not(.Friend-here) {
-    display: none;
+  .Dock_Friends {
+    gap: 0;
   }
-  .Friend_Summary {
-    list-style: none;
+  .Dock_Friend {
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    width: 100%;
+    margin: 0;
+    padding: .5rem;
+    border: 0;
+    border-radius: calc(var(--radius) * 2);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     cursor: pointer;
   }
-  .Friend_Summary::-webkit-details-marker {
-    display: none;
+  @media (hover: hover) and (pointer: fine) {
+    .Dock_Friend:hover {
+      background: var(--surface);
+    }
   }
-  .Friend_Summary > .Identity {
-    padding-inline: 0;
+  .Dock_Friend:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .Dock_Who {
+    padding: 0;
+  }
+  .Dock_Title > .Identity_Note {
+    margin: 0;
+  }
+  .Dock_Quiet {
+    margin: auto 0;
+    text-align: center;
+  }
+  .Dock_Shared > summary {
+    color: var(--muted);
+    font-size: var(--small);
+    cursor: pointer;
+  }
+  .Dock_Ask {
+    display: grid;
+    gap: .35rem;
+  }
+  .Dock_Line,
+  .Dock_Say {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: .5rem;
+  }
+  .Dock_Say > .Form_Hint {
+    grid-column: 1 / -1;
+  }
+  .Dock_Say textarea {
+    min-height: var(--control-height, 2.25rem);
+    max-height: 8rem;
+    field-sizing: content;
+    resize: none;
   }
   .Friend_Avatar {
     position: relative;
@@ -1565,14 +1613,6 @@
     right: -.3rem;
     bottom: -.3rem;
     font-size: .95rem;
-    box-shadow: 0 0 0 .15rem var(--surface, var(--bg));
-  }
-  .Friend_Dot[hidden] {
-    display: none;
-  }
-  .Friend_Body {
-    display: grid;
-    gap: var(--half-gap);
-    padding-block: 0 var(--half-gap);
+    box-shadow: 0 0 0 .15rem var(--card);
   }
 }

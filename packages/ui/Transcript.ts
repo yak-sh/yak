@@ -3,7 +3,13 @@ import { native as pairs } from './Pairs.ts'
 import { native as attachments } from './Attachments.ts'
 import { native as notice } from './Notice.ts'
 import { native as body } from './Body.ts'
-/** Messages, their replies and the marks describing each entry. @module */
+/**
+ * Messages, their replies and the marks describing each entry. A message's
+ * bubble stands at the right; one said by the other person in a
+ * conversation between people (`Transcript_Entry-other`) at the left.
+ *
+ * @module
+ */
 import type { Sheet } from '@yaks/tui/theme'
 import { type FunctionComponent, h } from 'preact'
 import { block, type Part } from './el.ts'
@@ -114,6 +120,11 @@ export let specimens = (): Specimen[] => [
           h(Transcript.Meta, {}, 'Read the recipes app'),
         ),
         h(Transcript.Reply, {}, 'Yes. What would you like to do?'),
+        h(
+          Transcript.Entry,
+          { mod: 'other' },
+          h(Transcript.Bubble, {}, 'Lunch at noon?'),
+        ),
         h(Transcript.Error, {}, 'The recipes app did not answer.'),
       ),
     ),

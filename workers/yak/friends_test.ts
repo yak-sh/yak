@@ -1,7 +1,12 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { suggestion } from '@yaks/platform/friends'
-import { FRIENDS, friendsOf } from '@yaks/platform/account-rows'
+import {
+  FRIEND_MESSAGES,
+  FRIENDS,
+  friendsOf,
+  messagesOf,
+} from '@yaks/platform/account-rows'
 import { noted } from '@yaks/notify/whereabouts'
 import { connector, kernel, pressPeople, saveAccount, signIn } from './probe.ts'
 import { managePath, REACH, TAB_PERSON, talkPath } from '@yaks/platform/routes'
@@ -313,32 +318,41 @@ let live = async (p: typeof ann, tab = 'here') => {
     ]),
   )
 }
-let message = (from: typeof ann, to: typeof ann, words: string) =>
+let message = (
+  from: typeof ann,
+  to: typeof ann,
+  words: string,
+  eid: string = crypto.randomUUID(),
+) =>
   door(from, '/apply', {
     method: 'POST',
     body: JSON.stringify([{
-      entity: { eid: crypto.randomUUID() },
+      entity: { eid },
       friendMessage: { to: to.person, words },
     }]),
   })
+let said = async (p: typeof ann) =>
+  messagesOf(await (await door(p, `/query?q=${FRIEND_MESSAGES}`)).json())
 
-test('the Friends page lists friends online first with a green dot, and their shared apps', async () => {
+test('a friend’s row holds the apps they let you into, and every page holds friends over it', async () => {
   let page = await friendsPage(eve)
-  assertStringIncludes(page, `data-friend="${fay.person}"`)
-  assertStringIncludes(page, 'Building now')
+  assertStringIncludes(page, 'data-friends-dock=')
+  assertStringIncludes(page, '_dock.js')
   assertStringIncludes(page, 'Show when I’m online')
-  assertStringIncludes(page, '_friends.js')
-  assertStringIncludes(page, 'data-page-graph')
-  assertEquals(page.includes(`data-friend="${ann.person}"`), false)
   await k.dir.apply({
     entities: [{
       entity: { eid: crypto.randomUUID() },
       grant: { app: gift!.eid, person: fay.person, access: 'editor' },
     }],
   })
-  let fays = await friendsPage(fay)
-  assertStringIncludes(fays, `data-friend="${eve.person}"`)
-  assertStringIncludes(fays, '>Gift<')
+  let rows = friendsOf(await (await door(fay, `/query?q=${FRIENDS}`)).json())
+  assertEquals(rows.map((f) => f.person), [eve.person])
+  assertEquals(rows[0].shared.map((a) => a.title), ['Gift'])
+  let talk = await (await k.at(k.host, `/${faySpace.slug}`, {
+    headers: { cookie: fay.cookie },
+  })).text()
+  assertStringIncludes(talk, 'data-friends-dock=')
+  assertStringIncludes(talk, 'data-dock-bar')
 })
 
 test('the open page says its tab and hears where each friend is, as it changes', async () => {
@@ -348,7 +362,6 @@ test('the open page says its tab and hears where each friend is, as it changes',
   let away = (await live(fay))[eve.person]
   assertEquals(away.state, 'away')
   assertEquals(typeof away.last, 'string')
-  assertStringIncludes(await friendsPage(fay), 'Active ')
 })
 
 test('someone who hides their status is seen by no friend and sees none', async () => {
@@ -356,19 +369,41 @@ test('someone who hides their status is seen by no friend and sees none', async 
   assertEquals(hid.status, 200, await hid.text())
   assertEquals((await live(eve))[fay.person], {})
   assertEquals((await live(fay))[eve.person], {})
-  assertEquals((await friendsPage(eve)).includes('Building now'), false)
   await saveAccount(k, fay, { hidden: false })
   assertEquals((await live(eve))[fay.person].state, 'building')
 })
 
-test('a message sent from the Friends page lands in the friend’s Updates', async () => {
-  let sent = await message(eve, fay, 'Lunch?')
+test('a message is the row its page named, to both friends, read once its reader opens it', async () => {
+  let eid = crypto.randomUUID()
+  let sent = await message(eve, fay, 'Lunch?', eid)
   assertEquals(sent.status, 200, await sent.text())
+  assertEquals((await message(eve, fay, 'Lunch?', eid)).status, 200)
+  let mine = (await said(eve)).filter((m) => m.eid == eid)
+  let theirs = (await said(fay)).filter((m) => m.eid == eid)
+  assertEquals(mine.map((m) => [m.from, m.to, m.words]), [
+    [eve.person, fay.person, 'Lunch?'],
+  ])
+  assertEquals(theirs.map((m) => m.read), [false])
   assertStringIncludes(
     await (await updates(fay, faySpace.slug)).text(),
     'Lunch?',
   )
+  let read = await door(fay, '/apply', {
+    method: 'POST',
+    body: JSON.stringify([{ entity: { eid }, friendMessage: { read: true } }]),
+  })
+  assertEquals(read.status, 200, await read.text())
+  assertEquals(
+    (await said(fay)).find((m) => m.eid == eid)?.read,
+    true,
+  )
+})
+
+test('a message to someone not a friend, or named as another thing, is refused', async () => {
   let refused = await message(eve, ann, 'Hi')
   assertEquals(refused.status, 400)
   assertStringIncludes(await refused.text(), 'friend list')
+  let taken = await message(eve, fay, 'Hi', gift!.eid)
+  assertEquals(taken.status, 400)
+  assertStringIncludes(await taken.text(), 'of its own')
 })

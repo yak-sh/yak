@@ -6,16 +6,20 @@
  * eid, slug, title, space}`, and their invite to yaks.app, `invitePage{said,
  * text, mail, address, joined, built}`, and each chat platform whose bot
  * yaks.app keeps, with the accounts they linked there, `chatLink{rank,
- * platform, integration, accounts}`. The directory answers each as a read
+ * platform, integration, accounts}`, and each message between them and a
+ * confirmed friend, `friendMessage{from, to, words, at, read, operator}`, the
+ * newest {@link HELD_MESSAGES}. The directory answers each as a read
  * of the person (graph.ts `/person/ws`), and the tab's page graph watches them through
  * its door (reach-door.ts), as it does the side's (./side-rows.ts).
  *
  * The person changes them through the page graph: an `account` row written
  * with a new name, `hidden` or `first` (the slug of a space they own, which
  * `/manage` opens) is that change; a `signOut{session}` row signs out one
- * browser, or with `session: 'all'` every one; and a `friendMessage{to,
- * words}` or `friendAsk{email}` row is a message sent or a friend asked. The door does
- * each as the person (account-writes.ts) and answers what it made.
+ * browser, or with `session: 'all'` every one; a `friendMessage{to, words}`
+ * row is a message sent, its eid the message's own, so the row it shows as
+ * at once is the one the directory answers; the same row written `read` is
+ * the message read; and a `friendAsk{email}` row is a friend asked. The door
+ * does each as the person (account-writes.ts) and answers what it made.
  *
  * @module
  */
@@ -40,6 +44,12 @@ export let INVITE_PAGE = '.invitePage'
 
 /** The chat platforms the person links their own account on. */
 export let CHAT_LINKS = '.chatLink'
+
+/** The person's messages with their confirmed friends, newest first. */
+export let FRIEND_MESSAGES = '.friendMessage'
+
+/** How many of the newest messages with friends a tab holds. */
+export let HELD_MESSAGES = 200
 
 /** How often where a friend is is read again while it is watched. */
 export let SEEN_EVERY = 30_000
@@ -94,6 +104,18 @@ export type Befriended = {
   name: string
   seen?: Seen
   shared: Shared[]
+}
+
+/** One message between the person and a friend: who it is from and to,
+ * its words, when it was sent, whether its reader read it, and whether the
+ * sender's Operator wrote it for them. */
+export type FriendMessage = {
+  from: string
+  to: string
+  words: string
+  at: string
+  read: boolean
+  operator: boolean
 }
 
 let strings = { type: 'string' }
@@ -208,7 +230,14 @@ export let accountWords: VocabDoc = {
     friendMessage: {
       component: true,
       type: 'object',
-      properties: { to: strings, words: strings },
+      properties: {
+        from: strings,
+        to: strings,
+        words: strings,
+        at: strings,
+        read: { type: 'boolean' },
+        operator: { type: 'boolean' },
+      },
       required: ['to', 'words'],
     },
     friendAsk: {
@@ -266,6 +295,22 @@ export let friendsOf = (rows: Bundle[]): Befriended[] =>
     .sort((a, b) => a.rank - b.rank)
     .map(({ rank: _, ...f }) => f)
 
+/** Messages with friends as rows, each under its own eid. */
+export let messageRows = (
+  messages: (FriendMessage & { eid: string })[],
+): Bundle[] =>
+  messages.map(({ eid, ...m }) => ({ entity: { eid }, friendMessage: m }))
+
+/** The messages `rows` hold, oldest first, each with its eid. */
+export let messagesOf = (
+  rows: Bundle[],
+): (FriendMessage & { eid: string })[] =>
+  rows.flatMap((r) =>
+    r.friendMessage
+      ? [{ eid: r.entity.eid, ...r.friendMessage as FriendMessage }]
+      : []
+  ).sort((a, b) => a.at.localeCompare(b.at) || a.eid.localeCompare(b.eid))
+
 /** The apps `shared` with `person` as rows, in their page's order. */
 export let sharedRows = (person: string, shared: Shared[]): Bundle[] =>
   shared.map((a, rank) => ({
@@ -310,4 +355,5 @@ export let chatLinksOf = (rows: Bundle[]): ChatLink[] =>
 /** Whether the directory answers `line` as a read of the person. */
 export let accountLine = (line: string): boolean =>
   line == ACCOUNT || line == FRIENDS || line == SIGNED_IN ||
-  line == SHARED_APPS || line == INVITE_PAGE || line == CHAT_LINKS
+  line == SHARED_APPS || line == INVITE_PAGE || line == CHAT_LINKS ||
+  line == FRIEND_MESSAGES

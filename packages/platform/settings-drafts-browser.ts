@@ -1,4 +1,6 @@
-// The site's settings lend @yaks/draft its authenticated text-only door.
+// The person's own pages (their settings, the friends dock) lend @yaks/draft
+// yaks.app's authenticated text-only door (workers/yak settings-draft.ts),
+// each under a scope of its own.
 import {
   type BrowserDrafts,
   browserDrafts,

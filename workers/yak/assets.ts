@@ -86,6 +86,13 @@ export let ASSETS: Asset[] = [
     ...paged,
     named: true,
   },
+  // Friends over every signed-in page (@yaks/platform/friends-dock-browser).
+  {
+    name: '_dock.js',
+    bundle: of('@yaks/platform/friends-dock-browser'),
+    ...paged,
+    named: true,
+  },
   // The Profile page kept current (@yaks/platform/profile-browser).
   {
     name: '_profile.js',

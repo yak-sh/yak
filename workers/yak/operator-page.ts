@@ -31,7 +31,7 @@ import { asset } from './sheets.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { type Ways, Ways as Reaching } from './operator-ways.ts'
 import { frame, FRAMED } from './frame.ts'
-import { spaceHost, url } from '@yaks/platform/host'
+import { apex, spaceHost, url } from '@yaks/platform/host'
 import {
   backTo,
   chatPath,
@@ -1361,6 +1361,9 @@ let talkPage = (
     null,
     page.status,
     html(frame({
+      friends: who.person && !who.visit
+        ? { person: who.person, apex: apex(env) }
+        : undefined,
       side: talkSide(env, space, who, beside, {
         waiting,
         current: page.current,

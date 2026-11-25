@@ -1,11 +1,13 @@
 // What the person writes to their own pages through the tab's page graph
 // (@yaks/platform/account-rows), done here as the person: their account's
 // name, whether friends see when they are online and the space `/manage`
-// opens first, a browser signed out, a message to a friend, and a friend
-// asked by their sign-in email. The page shows each at once and
-// this answers what it came to, or refuses it, which takes it back off the
-// page. Messages and asks are the tools the person's assistant calls, called
-// as them, so the page and the assistant do each one way.
+// opens first, a browser signed out, a message to a friend or one read, and a
+// friend asked by their sign-in email. The page shows each at once and this
+// answers what it came to, or refuses it, which takes it back off the page. A
+// message is sent as the one the page names (friends.ts `sendFriend`), the
+// way the assistant's friend_message sends it, and an ask is the tool the
+// assistant calls, called as them, so the page and the assistant do each one
+// way.
 import type { Bundle } from '@yaks/graph'
 import {
   ACCOUNT,
@@ -16,7 +18,7 @@ import { CallError } from '@yaks/tools/errors'
 import { browsers, end, endAll } from './browser-sessions.ts'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
-import { hidePresence } from './friends.ts'
+import { hidePresence, readFriend, sendFriend } from './friends.ts'
 import { meta } from './meta.ts'
 import { chose, keepName } from './names.ts'
 import { personRows } from './side.ts'
@@ -68,8 +70,15 @@ export let accountApply = async (
       }
       answered.push(b)
     } else if (b.friendMessage) {
-      let { to, words } = b.friendMessage as { to: string; words: string }
-      await tool('friend_message', { friend: to, words })
+      let m = b.friendMessage as { to?: string; words?: string; read?: boolean }
+      let as = { person, role: null }
+      if (m.words !== undefined) {
+        await sendFriend(dir, as, {
+          eid: b.entity.eid,
+          to: String(m.to ?? ''),
+          words: m.words,
+        })
+      } else if (m.read) await readFriend(dir, as, [b.entity.eid])
       answered.push(b)
     } else if (b.friendAsk) {
       await tool('friend_add', {

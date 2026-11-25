@@ -50,6 +50,7 @@ export { Index } from './Index.ts'
 export { marked, Match } from './Match.ts'
 export { Notes } from './Notes.ts'
 export { Layer, layer } from './Layer.ts'
+export { Dock } from './Dock.ts'
 export { Overlay } from './Overlay.ts'
 export {
   Float,

@@ -84,9 +84,13 @@ export let deskFrame = (
     content: Kids
     class?: string
     person?: string
+    apex?: string
   },
 ) =>
   frame({
+    friends: at.person && at.apex
+      ? { person: at.person, apex: at.apex }
+      : undefined,
     side: at.sidebar,
     title: at.title,
     sub: at.sub,
@@ -239,19 +243,16 @@ let connectionsPage = (at: DeskPage, env: Host) => {
   )
 }
 
-// Friends (Your account), drawn from the person's rows as the browser draws
-// it again (@yaks/platform/friends-view), which the page carries for its
-// first paint (`data-view`).
-let friendsPage = (at: DeskPage, env: Host) => {
-  let view: FriendsView = {
-    person: at.person ?? '',
-    apex: apex(env),
-    all: !!at.allFriends,
-  }
+// Friends (Your account): what the person sets about friends, drawn from
+// their account row as the browser draws it again
+// (@yaks/platform/friends-view), which the page carries for its first paint
+// (`data-view`). Friends themselves are over every page (frame.ts).
+let friendsPage = (at: DeskPage) => {
+  let view: FriendsView = { person: at.person ?? '' }
   return h(
     'div',
     { 'data-view': 'friends', 'data-friends-view': JSON.stringify(view) },
-    friendsView(view, at.friendList ?? [], { hidden: !!at.presenceHidden }),
+    friendsView(view, { hidden: !!at.presenceHidden }),
     drawing(at),
   )
 }
@@ -405,7 +406,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let whose = space ? named(space) : 'Your account'
   let body: Kids = null
   if (view == 'profile') body = profile(at, env)
-  if (view == 'friends') body = friendsPage(at, env)
+  if (view == 'friends') body = friendsPage(at)
   if (view == 'invite') body = invitePage(at, env)
   if (view == 'shared') body = sharedPage(at, env)
   if (view == 'space') body = newSpace(at, env)
@@ -443,6 +444,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     deskFrame({
       sidebar: deskSide(at, view, env),
       person: at.person,
+      apex: apex(env),
       title: titles[view],
       sub: whose,
       head: [

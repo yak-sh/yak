@@ -1,0 +1,156 @@
+/* What stays one press away over every page: the launcher pinned to the
+   window's foot at its right, a quiet toast above it, and the panel it opens
+   floating over the page's corner, a card wide, above the launcher. At a
+   phone's width the panel takes the screen (a Layer, sliding up from the
+   foot) and the launcher rides the page's bar instead (Launcher-bar). */
+.Dock {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 60;
+  display: grid;
+  justify-items: end;
+  gap: .5rem;
+  pointer-events: none;
+}
+.Dock > * {
+  pointer-events: auto;
+}
+.Dock_Launcher {
+  gap: .5rem;
+  border-radius: 99px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.Dock_Launcher-bar {
+  position: relative;
+  background: none;
+  box-shadow: none;
+}
+/* A launcher in a bar says someone is in with a dot on its glyph. */
+.Dock_Launcher-bar > .Dock_Here {
+  position: absolute;
+  left: 1.55rem;
+  top: .35rem;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.Dock_Faces {
+  display: inline-flex;
+}
+.Dock_Faces:empty {
+  display: none;
+}
+.Dock_Face {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: .75rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--positive);
+}
+.Dock_Face + .Dock_Face {
+  margin-left: -.35rem;
+}
+.Dock_Word {
+  white-space: nowrap;
+}
+/* It stands where it opens while shut too, so it leaves from there; only its
+   display waits on its being open. */
+.Dock_Panel {
+  position: fixed;
+  inset: auto 1rem 4.25rem auto;
+  box-sizing: border-box;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(23rem, 100vw - 2rem);
+  height: min(38rem, 100dvh - 6rem);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border2);
+  border-radius: calc(var(--radius) * 3);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.Dock_Panel:popover-open {
+  display: grid;
+}
+.Dock_Head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+  padding: .5rem .5rem .5rem .75rem;
+  border-bottom: 1px solid var(--border2);
+}
+.Dock_Title {
+  flex: 1;
+  min-width: 0;
+}
+.Dock_Body {
+  display: grid;
+  align-content: start;
+  gap: .75rem;
+  padding: .75rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.Dock_Foot {
+  display: grid;
+  gap: .5rem;
+  padding: .5rem .75rem .75rem;
+  border-top: 1px solid var(--border2);
+}
+.Dock_Foot:empty {
+  display: none;
+}
+.Dock_Toast {
+  display: block;
+  max-width: min(20rem, 100vw - 2rem);
+  padding: .5rem .75rem;
+  border: 1px solid var(--border2);
+  border-radius: calc(var(--radius) * 3);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.Dock_Toast[hidden] {
+  display: none;
+}
+@media (min-width: 701px) {
+  .Dock_Launcher-bar {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .Dock {
+    right: .75rem;
+    left: .75rem;
+    top: calc(3.5rem + env(safe-area-inset-top));
+    bottom: auto;
+    justify-items: stretch;
+  }
+  .Dock > .Dock_Launcher {
+    display: none;
+  }
+  .Dock_Toast {
+    max-width: none;
+  }
+  .Dock_Panel {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+}

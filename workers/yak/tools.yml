@@ -1455,7 +1455,7 @@ friend_list:
     or online now, with the spaces and apps they have open that the person
     can open too, or away, with when they were last active (last). A friend
     who hides it has none, and so does every friend while the person hides
-    their own. Their Friends page (/manage/account/friends) shows the same.
+    their own. Friends, on every yaks.app page, shows the same.
 friend_message:
   title: Message a friend
   step:
@@ -1463,7 +1463,8 @@ friend_message:
     done: 'Messaged a friend'
   description: >-
     Send a message to one of the person's confirmed friends (friend, their
-    person id from friend_list). It lands in the friend's Updates, where they
+    person id from friend_list). It shows in their conversation under
+    Friends, on every yaks.app page, and in the friend's Updates, where they
     reply, and their own Operator reads it with friend_messages. Use it when
     the person asks you to tell or ask a friend something, including asking
     for help building: a friend who is a member of the space, or holds a grant

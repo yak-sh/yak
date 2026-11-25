@@ -62,8 +62,6 @@ import type { Face } from '@yaks/platform/connections-page'
 
 import { esc, markup, raw } from './html.ts'
 
-import type { Befriended } from './friends.ts'
-
 import type { Panes, Role } from './directory.ts'
 
 import { qr } from './referral.ts'
@@ -211,6 +209,10 @@ ${
   }${
     main.includes('data-friends-view=')
       ? `<script type="module" src="${file('_friends.js')}"></script>`
+      : ''
+  }${
+    main.includes('data-friends-dock=')
+      ? `<script type="module" src="${file('_dock.js')}"></script>`
       : ''
   }${
     main.includes('data-profile-view=')
@@ -677,10 +679,6 @@ export type DeskPage = {
   /** whether the person hides their presence from their friends
    * (`presence{hidden}`), on their profile */
   presenceHidden?: boolean
-  /** the person's confirmed friends on their Friends page, online first,
-   * and whether it shows them all (`?all`) or the first few */
-  friendList?: Befriended[]
-  allFriends?: boolean
   /** what was typed into the new space form, when it was refused */
   made?: { title: string; slug: string }
   /** the rows a page drawn from the page graph's reads was drawn from, which

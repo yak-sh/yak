@@ -17,11 +17,20 @@
 //
 // What differs between pages is handed in: the side's title and Back
 // are its own (sidebar.ts `Sidebar`), and the panes beside are the page's.
+//
+// A signed-in person's page holds their friends one press away over it
+// (@yaks/platform/friends-dock-view): the dock at the window's corner, and on
+// a phone its launcher in the bar, both drawn from the tab's page graph.
 import { type ComponentChildren as Kids, h } from 'preact'
 import { Button, Form, Icon, Layer, Shell, Skip, Toolbar } from '@yaks/ui/parts'
 import { managePath } from '@yaks/platform/routes'
 import { TITLE } from '@yaks/ui/navigate'
 import { icons } from './icons.ts'
+import {
+  barLauncher,
+  dock,
+  type DockView,
+} from '@yaks/platform/friends-dock-view'
 import { waitingBadge } from './sidebar.ts'
 
 /** Where the aside is, which the bar's button opens where it has no room. */
@@ -157,6 +166,8 @@ export let frame = (at: {
   class?: string
   // where the skip link goes, and what it says
   skip?: [string, string]
+  // whose friends the page holds over it, for a signed-in person's page
+  friends?: DockView
 }) => {
   let [to, said] = at.skip ?? ['#content', 'Skip to content']
   return [
@@ -196,6 +207,7 @@ export let frame = (at: {
             at.sub ? h(Toolbar.Sub, {}, at.sub) : null,
           ),
           at.tools,
+          at.friends ? barLauncher() : null,
           at.aside ? asideTools(at.aside) : null,
         ),
         h(
@@ -219,5 +231,6 @@ export let frame = (at: {
         : null,
       at.beside,
     ),
+    at.friends ? dock(at.friends) : null,
   ]
 }

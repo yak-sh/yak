@@ -10,6 +10,7 @@ import {
   type Drawing,
   FRESH,
   GOING,
+  KEPT,
   LEAVE,
   leaving,
   morph,
@@ -69,6 +70,32 @@ test('keyed nodes keep their own node when the list around them moves', () => {
   let now = [...doc.querySelectorAll('li')]
   assertEquals(now.map((li) => li.textContent), ['C!', 'new', 'A'])
   assert(now[0] == c && now[2] == a && !now.includes(b))
+})
+
+test('a region a script keeps stays as it stands where the next page has it too', () => {
+  let doc = parse(
+    `<main><p>one</p><div id="dock" ${KEPT}><textarea>x</textarea><b>3</b></div></main>`,
+  )
+  let dock = doc.getElementById('dock')!
+  let field = doc.querySelector('textarea') as HTMLTextAreaElement
+  field.value = 'typed'
+  dock.setAttribute('data-open', '')
+  morph(
+    doc.querySelector('main')!,
+    parse(
+      `<main><p>two</p><div id="dock" ${KEPT}><textarea></textarea></div></main>`,
+    )
+      .querySelector('main')!,
+  )
+  assertEquals(doc.querySelector('p')?.textContent, 'two')
+  assert(doc.getElementById('dock') == dock)
+  assertEquals([field.value, dock.hasAttribute('data-open')], ['typed', true])
+  assertEquals(dock.querySelector('b')?.textContent, '3')
+  morph(
+    doc.querySelector('main')!,
+    parse('<main><p>three</p></main>').querySelector('main')!,
+  )
+  assertEquals(doc.getElementById('dock'), null)
 })
 
 test('a form control shows the value its new page says', () => {
