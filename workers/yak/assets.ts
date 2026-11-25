@@ -99,6 +99,13 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // A space's Matches kept current (@yaks/platform/operator-matches-browser).
+  {
+    name: '_matches.js',
+    bundle: of('@yaks/platform/operator-matches-browser'),
+    external,
+    named: true,
+  },
   // A space's People page kept current (@yaks/platform/people-browser).
   {
     name: '_people.js',

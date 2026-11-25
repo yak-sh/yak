@@ -86,6 +86,11 @@ import {
   connectionsPage,
   pageOf,
 } from '@yaks/platform/connections-page'
+import {
+  matchesOf,
+  matchesPage,
+  matchesRow,
+} from '@yaks/platform/operator-matches'
 import { ALL } from './updates.ts'
 import { sessionRow } from './browser-sessions.ts'
 import { client } from '@yaks/client'
@@ -275,6 +280,22 @@ test('a tab renames its space’s Operator and picks its voice through the door,
   )
   equal((await set(bea, { name: 'Mallory' })).status, 403)
   equal(await rowsOf(bea, operatorSettings(own)), [])
+})
+
+test('a tab reads its space’s Matches and picks through the door, and in no space it does not write in', async () => {
+  let own = (await k.dir.seated(ada.person)).find((s) => s.own)!.space.eid
+  equal(await rowsOf(ada, matchesPage(own)), [
+    matchesRow(own, '', { rounds: [] }),
+  ])
+  equal(matchesOf(await rowsOf(bea, matchesPage(own))), undefined)
+  let pick = (who: Tab) =>
+    wrote(who, [{
+      entity: { eid: crypto.randomUUID() },
+      pickMatch: { space: own, round: 'covers', pair: 1, chose: 'first' },
+    }])
+  let none = await pick(ada)
+  equal([none.status, none.body.message], [400, 'no round is named covers'])
+  equal((await pick(bea)).status, 403)
 })
 
 test('a tab reads its space’s visits, which no store holds, and none of a space it does not write in', async () => {

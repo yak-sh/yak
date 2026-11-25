@@ -22,6 +22,12 @@ import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
 import { draftRows, draftsSpace } from '@yaks/platform/operator-drafts'
 import { settingsRow, settingsSpace } from '@yaks/platform/operator-settings'
 import { settingsIn } from './operator-persona.ts'
+import {
+  type Matches,
+  matchesAsked,
+  matchesRow,
+} from '@yaks/platform/operator-matches'
+import { trialDoc } from '@yaks/trial/vocab'
 import { line } from '@yaks/query'
 import type { Bundle, Graph } from '@yaks/graph'
 import { mayWrite, sight } from './operator-access.ts'
@@ -155,18 +161,44 @@ export let operatorApi = (
     },
     tags: { request: 'Operator settings' },
   })
+  // The rounds a person picks in, or one round as they tap through it, as
+  // the Matches page draws them (@yaks/platform/operator-matches): read again
+  // when a trial's rows move, a pick in the chat or the page among them.
+  let trials = ['$delete', ...Object.keys(trialDoc.$defs ?? {})]
+  let matches = computed(store.g, {
+    affects: (bundles) => bundles.some((b) => trials.some((key) => key in b)),
+    hold,
+    clock,
+    read: async (asked, read) => {
+      let person = read?.person, space = await spaceOf(store)
+      let page = matchesAsked(asked)
+      if (!person || !space || page?.space != space) return []
+      let { matching } = await import('./operator-trials.ts')
+      let got = await matching(
+        store,
+        person,
+        page.round ? { round: page.round } : {},
+      )
+      return [matchesRow(space, page.round, got as Matches)]
+    },
+    tags: { request: 'Operator matches' },
+  })
   // Whether each person holds a seat, as the directory last said for their
   // socket: what it is read with.
   let members = new Map<string, boolean>()
   let live = sockets(
     beside(
       beside(
-        beside(subs, waiting, personal),
-        drafts,
-        (asked) => draftsSpace(asked) != undefined,
+        beside(
+          beside(subs, waiting, personal),
+          drafts,
+          (asked) => draftsSpace(asked) != undefined,
+        ),
+        settings,
+        (asked) => settingsSpace(asked) != undefined,
       ),
-      settings,
-      (asked) => settingsSpace(asked) != undefined,
+      matches,
+      (asked) => matchesAsked(asked) != undefined,
     ),
     {
       acceptWebSocket: (ws) => ctx.acceptWebSocket(ws),

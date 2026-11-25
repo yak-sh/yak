@@ -13,8 +13,9 @@ import { operators } from './operator-service-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { operatorMemory } from './operator-testing.ts'
-import { matching, seeing, type Tapping } from './operator-trials.ts'
-import { matches } from './matches.ts'
+import { matching, seeing } from './operator-trials.ts'
+import type { Tapping } from '@yaks/platform/operator-matches'
+import { matchesView } from '@yaks/platform/operator-matches-view'
 
 let runtime = platform(SECRET, { BUILDER: operators })
 let { env } = { ...runtime, ...lifecycleStores(runtime.env) }
@@ -36,6 +37,13 @@ let warm = await drafted('Warm')
 let plain = await drafted('Plain', 'new')
 
 // The space's Operator store, which names its space by its sessions.
+// The page as the server draws it for Ada.
+let matches = (s: typeof space, read: Tapping) =>
+  matchesView(
+    { person: ADA, space: { ...s, operator: 'Elihu' }, round: read.round },
+    read,
+  )
+
 let store = operatorMemory()
 await store.g.apply([{
   entity: { eid: mint() },

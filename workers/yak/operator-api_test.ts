@@ -9,6 +9,13 @@ import { updateCards, updatesIn } from '@yaks/platform/update-rows'
 import { operatorDrafts } from '@yaks/platform/operator-drafts'
 import { operatorSettings } from '@yaks/platform/operator-settings'
 import { personaFor } from './operator-persona.ts'
+import {
+  matchesOf,
+  matchesPage,
+  type Tapping,
+} from '@yaks/platform/operator-matches'
+import { matched } from '@yaks/trial/match'
+import { matching } from './operator-trials.ts'
 import type { Level } from '@yaks/member'
 import { type Bundle, transient } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
@@ -274,6 +281,40 @@ test('the Operator’s settings are live on its settings page’s line: a name i
     )
   } finally {
     await door.close(page.ws)
+  }
+})
+
+test('the Matches page’s lines are live: a round planned and a pick made in the chat are heard at once', async () => {
+  let [rounds, round] = [
+    await socket(ada, matchesPage(space)),
+    await socket(ada, matchesPage(space, 'covers')),
+  ]
+  let last = (page: typeof rounds) =>
+    matchesOf(page.flatMap((f) => (f.bundles ?? []) as Bundle[]).slice(-1))
+  let tapped = () => last(round) as Tapping | undefined
+  try {
+    await until(() => last(rounds) != undefined)
+    equal(last(rounds), { rounds: [] })
+    await write(
+      matched({ key: 'covers', title: 'Covers', sides: [id(), id()] }),
+    )
+    await until(() => JSON.stringify(last(rounds)).includes('Covers'))
+    equal(
+      (last(rounds) as { rounds: { title: string; left: number }[] }).rounds
+        .map((r) => [r.title, r.left]),
+      [['Covers', 1]],
+    )
+    await until(() => tapped()?.left == 1)
+    await matching(store, ada.person, {
+      round: 'covers',
+      pair: 1,
+      chose: 'first',
+    })
+    await until(() => tapped()?.left == 0)
+    equal([tapped()?.picked, tapped()?.card], [1, undefined])
+  } finally {
+    await door.close(rounds.ws)
+    await door.close(round.ws)
   }
 })
 

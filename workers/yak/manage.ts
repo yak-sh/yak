@@ -367,9 +367,8 @@ export let manage = async (
   }
   // Its Matches are its members' to pick in (matches.ts).
   if (view == 'matches' && writes(who.role) && !space.trashed) {
-    let { matchesAnswer, sideAnswer } = await import('./matches.ts')
-    if (req.method == 'POST') return matchesAnswer(req, env, space, who)
     if (!reading) return nothingHere(env)
+    let { sideAnswer } = await import('./matches.ts')
     let side = await sideAnswer(req, env, space, who)
     if (side) return side
     let { matchesPage } = await import('./operator-page.ts')

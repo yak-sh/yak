@@ -59,6 +59,12 @@ import {
   settingsWrite,
 } from '@yaks/platform/operator-settings'
 import type { Update } from '@yaks/platform/update-rows'
+import {
+  matchesAsked,
+  matchesRow,
+  pickOf,
+} from '@yaks/platform/operator-matches'
+import { matchesOf } from './matches.ts'
 import { AGENTS, brokenSpace } from '@yaks/platform/space-apps'
 import { agentsIn, brokenOf } from './apps-reads.ts'
 import { paymentPart, paymentWrite } from '@yaks/platform/payment-rows'
@@ -245,6 +251,24 @@ export let reachDoor = async (
         if (!seat) return Response.json([])
         return Response.json(await connectionsAt(seat, page.ask))
       }
+      let matching = matchesAsked(line)
+      if (matching) {
+        let seat = await seatIn(matching.space)
+        if (!seat) return Response.json([])
+        let { round } = matching
+        return Response.json([
+          matchesRow(
+            seat.space.eid,
+            round,
+            await matchesOf(
+              env,
+              seat.space,
+              { ...who, role: seat.role },
+              round ? { round } : {},
+            ),
+          ),
+        ])
+      }
       let named = settingsSpace(line)
       if (named != undefined) {
         let seat = await seatIn(named)
@@ -334,6 +358,26 @@ export let reachDoor = async (
           )
         }
         return Response.json([await settingsOf(seat, checked(setting.set))])
+      }
+      // A pick on the Matches page, made as the person, answered with the
+      // round as it then stands.
+      let picked = pickOf(bundles)
+      if (picked) {
+        let seat = await seatIn(picked.space)
+        if (!seat) {
+          return Response.json(
+            { error: 'Forbidden', message: 'You do not write in that space.' },
+            { status: 403 },
+          )
+        }
+        let { space: _, ...pick } = picked
+        return Response.json([
+          matchesRow(
+            seat.space.eid,
+            pick.round,
+            await matchesOf(env, seat.space, { ...who, role: seat.role }, pick),
+          ),
+        ])
       }
       let space = spaceWrite(bundles)
       if (space) {
@@ -534,7 +578,7 @@ export let reachDoor = async (
             }
             // What the space's Operator store answers of the person.
             let operator = cardsSpace(line) ?? draftsSpace(line) ??
-              settingsSpace(line)
+              settingsSpace(line) ?? matchesAsked(line)?.space
             if (operator != undefined) {
               let closed = false
               let stop: (() => void) | undefined

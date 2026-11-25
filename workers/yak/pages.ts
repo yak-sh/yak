@@ -226,6 +226,10 @@ ${
       ? `<script type="module" src="${file('_operator-settings.js')}"></script>`
       : ''
   }${
+    main.includes('data-matches-view=')
+      ? `<script type="module" src="${file('_matches.js')}"></script>`
+      : ''
+  }${
     main.includes('data-visits-view=')
       ? `<script type="module" src="${file('_visits.js')}"></script>`
       : ''

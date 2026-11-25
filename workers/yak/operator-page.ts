@@ -63,6 +63,12 @@ import {
 } from '@yaks/platform/operator-settings-view'
 import { ACCOUNT, accountOf } from '@yaks/platform/account-rows'
 import { drawnRows } from '@yaks/platform/page-graph'
+import { matchesRow } from '@yaks/platform/operator-matches'
+import {
+  matchesAt,
+  type MatchesView,
+  matchesView,
+} from '@yaks/platform/operator-matches-view'
 import { personRows } from './side.ts'
 import { wearing } from './operator-persona.ts'
 import { alertsRow, declinedRow, pushRow, vapidOf } from './operator-alerts.ts'
@@ -1828,8 +1834,10 @@ export let allUpdatesPage = async (
   })
 }
 
-/** A space's Matches (matches.ts), beside the chat app's side: the rounds
- * to pick in, or with `?round=` one round's next pair. */
+/** A space's Matches (@yaks/platform/operator-matches-view), beside the
+ * chat app's side: the rounds to pick in, or with `?round=` one round's next
+ * pair. The view is drawn from the row the Operator's store answers, which
+ * the page carries for the browser to draw again as it moves. */
 export let matchesPage = async (
   req: Request,
   env: Env,
@@ -1837,27 +1845,46 @@ export let matchesPage = async (
   who: Who,
   beside: Beside = {},
 ) => {
-  let { matches, matchesOf } = await import('./matches.ts')
-  let round = new URL(req.url).searchParams.get('round')
+  let { matchesOf } = await import('./matches.ts')
+  let round = new URL(req.url).searchParams.get('round') ?? ''
   let lists = reading(env, space, who)
   let [read, news] = await Promise.all([
     matchesOf(env, space, who, round ? { round } : {}),
     updatesOf(env, space, who),
     lists.listing,
   ])
+  let person = who.person ?? ''
+  let view: MatchesView = {
+    person,
+    space: { eid: space.eid, slug: space.slug, operator: space.operator },
+    round,
+  }
   return talkPage(env, space, who, beside, {
     title: 'Pick between drafts',
     status: 200,
     waiting: news.updates.filter((u) => u.needs).length,
     listed: await lists.drawn(),
     current: ['updates'],
-    here: talkPath('matches', space.slug) +
-      (round ? `?round=${encodeURIComponent(round)}` : ''),
+    here: matchesAt(space, round),
     skip: ['#content', 'Skip to content'],
     main: h(
       'div',
       { class: 'Talk_Column Updates' },
-      matches(space, read as Parameters<typeof matches>[1]),
+      h(
+        'div',
+        {
+          'data-view': 'matches',
+          'data-matches-view': JSON.stringify(view),
+        },
+        matchesView(view, read),
+        h('script', {
+          type: 'application/json',
+          'data-page-graph': '',
+          dangerouslySetInnerHTML: {
+            __html: drawnRows(person, [matchesRow(space.eid, round, read)]),
+          },
+        }),
+      ),
     ),
   })
 }

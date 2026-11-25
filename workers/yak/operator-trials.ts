@@ -39,6 +39,7 @@ import { running } from '@yaks/trial/effects'
 import { measured, places } from '@yaks/trial/match'
 import { r2RawObjects } from './lib/objects.ts'
 import { talkPath } from '@yaks/platform/routes'
+import type { Tapped, Tapping } from '@yaks/platform/operator-matches'
 import { url as hostUrl } from '@yaks/platform/host'
 import type { Directory } from './directory.ts'
 import { directoryOf } from './directory.ts'
@@ -353,30 +354,6 @@ export let pickTools = (
       return { text: `Recorded: ${args.chose} in pair ${args.pair}.`, with: {} }
     },
   }]
-}
-
-/** One side as the Matches page draws it: what the deck shows of it (an
- * attempt's parts, an image, a document), or only its eid, a draft of one of
- * the space's apps. */
-export type Tapped = Card['first']['shown']
-
-/** A round as a person taps through it: the pair to pick in next, numbered
- * as `trial_pairs` numbers it, how many pairs are left worth picking in and
- * how many they picked in, and where each side stands so far, with what was
- * measured of it. */
-export type Tapping = {
-  round: string
-  title: string
-  parts: string[]
-  card?: {
-    n: number
-    question?: string
-    first: Tapped & { label: string }
-    second: Tapped & { label: string }
-  }
-  left: number
-  picked: number
-  places: { eid: string; label: string; shown: Tapped; measured: string }[]
 }
 
 /**
