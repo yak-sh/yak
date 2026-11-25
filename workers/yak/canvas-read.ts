@@ -3,13 +3,13 @@
 // what its draft declares and the pages it holds, read from the draft as it
 // stands (written.ts `drafting`), its workflow in its live store, and its
 // draft's preview link. No store holds this, so it is read whole, and read
-// again whenever what it is read from moves: the app's row, its drafts and
-// their writes in the directory, and its builders and their edges in its own
-// store.
+// again whenever what it is read from moves: where its drafts stand, which
+// the directory answers as a read of the person (@yaks/platform/app-canvas
+// `appDrafted`), and its builders and their edges in its own store.
 import type { Bundle } from '@yaks/graph'
 import { type Built, line } from '@yaks/query'
 import { workflow } from '@yaks/builders/workflow'
-import { type Making, makingRow } from '@yaks/platform/app-canvas'
+import { appDrafted, type Making, makingRow } from '@yaks/platform/app-canvas'
 import { madeOf, pagesOf } from '@yaks/platform/app-made'
 import { VOCABS } from '@yaks/platform/manifest'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -17,7 +17,7 @@ import { CallError } from '@yaks/tools/errors'
 import type { Kept } from '@yaks/api/reached'
 import type { Frame } from '@yaks/reach'
 import { caught } from './defects.ts'
-import type { App, Directory, Space } from './directory.ts'
+import type { Directory, Space } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -125,11 +125,6 @@ export let making = async (
   return [makingRow(who.person!, eid, now)]
 }
 
-// The directory's rows of the app `app` that move what it is made of: its
-// own row, its drafts and every file written into them.
-let moving = (app: App) =>
-  `.entity.eid=${app.eid} | .app_draft.app=${app.eid} | .written.app=${app.eid}`
-
 /** The app `eid` being made, live: `sink` hears its row now and each time
  * what it is read from moves, each frame the whole answer, until what this
  * returns is called. One read runs at a time, and moves while it runs are
@@ -174,9 +169,10 @@ export let watchMaking = (
       watching(
         meta(env).door ?? storeOf(env.STORE, PLATFORM_STORE),
         'directory',
-        moving(app),
+        appDrafted(eid),
         moved(),
-        KERNEL,
+        { ...vouched(who), ...KERNEL },
+        '/person/ws',
       ),
       watching(
         store,

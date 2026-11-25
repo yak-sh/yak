@@ -9,7 +9,11 @@
  *   from its draft as it stands, its workflow, and its draft's preview link.
  *   No store holds this: yaks.app's page graph door answers the line
  *   `appMaking(app)` by reading it, and reads it again as the app's draft,
- *   its row or its workflow moves.
+ *   its row or its workflow moves;
+ * - `appDrafted{app, write, drafts, source}`: the app's newest write, its open
+ *   drafts and its release, which the directory answers as a read of the
+ *   person (./person-lines.ts), again on each commit that touches the app:
+ *   how the door knows its draft moved.
  *
  * @module
  */
@@ -39,7 +43,35 @@ export let appMaking = (eid: string): string => MAKING + eid
 export let makingApp = (line: string): string | undefined =>
   line.startsWith(MAKING) ? line.slice(MAKING.length) : undefined
 
+let DRAFTED = '.appDrafted.app='
+
+/** The line of where the app `eid`'s drafts stand. */
+export let appDrafted = (eid: string): string => DRAFTED + eid
+
+/** The app an `appDrafted` line asks about, or undefined for another line. */
+export let draftedApp = (line: string): string | undefined =>
+  line.startsWith(DRAFTED) ? line.slice(DRAFTED.length) : undefined
+
+/** Where an app's drafts stand: the eid of its newest write, its open
+ * drafts' eids, and its release. */
+export type Drafted = {
+  write: string | null
+  drafts: string[]
+  source: string | null
+}
+
+/** Where the app `app`'s drafts stand, as `person`'s row. */
+export let draftedRow = (
+  person: string,
+  app: string,
+  drafted: Drafted,
+): Bundle => ({
+  entity: { eid: derivedEid(`app-drafted|${person}|${app}`) },
+  appDrafted: { app, ...drafted },
+})
+
 let list = { type: 'array' }
+let nullable = { type: ['string', 'null'] }
 
 export let appCanvasWords: VocabDoc = {
   $defs: {
@@ -51,9 +83,20 @@ export let appCanvasWords: VocabDoc = {
         made: { type: 'object' },
         pages: list,
         steps: list,
-        draft: { type: ['string', 'null'] },
+        draft: nullable,
       },
       required: ['app', 'made', 'pages', 'steps'],
+    },
+    appDrafted: {
+      component: true,
+      type: 'object',
+      properties: {
+        app: { type: 'string' },
+        write: nullable,
+        drafts: list,
+        source: nullable,
+      },
+      required: ['app', 'drafts'],
     },
   },
 }

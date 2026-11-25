@@ -54,6 +54,7 @@ import { offersIn } from './updates.ts'
 import { shelf } from './apps.ts'
 import { kernels } from '@yaks/platform/ladder'
 import { allowancesRow, paymentPart } from '@yaks/platform/payment-rows'
+import { draftedApp, draftedRow } from '@yaks/platform/app-canvas'
 import { gauges } from '@yaks/platform/standing'
 import { budget, spent } from '@yaks/platform/meter'
 import type { Who } from './session.ts'
@@ -279,6 +280,8 @@ let sideRows = async (
   line: string,
 ): Promise<Bundle[]> => {
   if (line == SIDE_SPACES) return spaceRows(person, await pickable(dir, person))
+  let drafted = draftedApp(line)
+  if (drafted) return await draftedRows(dir, person, drafted)
   let paid = paymentPart(line)
   if (paid) return await paymentRows(dir, person, paid)
   let apps = appsSpace(line)
@@ -296,6 +299,31 @@ let sideRows = async (
   return apps
     ? appRows(person, eid, await sideApps(dir, space, who))
     : offerRows(person, eid, await offersIn(dir, space, who))
+}
+
+// Where an app's drafts stand, to a person seated in its space: what the
+// page graph's door reads the app beside the chat again on (canvas-read.ts).
+let draftedRows = async (
+  dir: Directory,
+  person: string,
+  eid: string,
+): Promise<Bundle[]> => {
+  let at = await dir.appAt(eid)
+  if (!at) return []
+  let seated = (await dir.seated(person)).some((s) =>
+    s.space.eid == at.space.eid && !s.space.trashed
+  )
+  if (!seated) return []
+  let { app } = at
+  let [write, drafts] = await Promise.all([
+    dir.newestWrite(app),
+    dir.drafts(app),
+  ])
+  return [draftedRow(person, eid, {
+    write,
+    drafts: drafts.map((d) => d.eid),
+    source: app.source ?? null,
+  })]
 }
 
 // A space's payments, to its owner. The allowances are the page's rows, the

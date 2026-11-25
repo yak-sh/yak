@@ -35,9 +35,9 @@ export type Reached = {
   resume: () => void
   close: (sink: Sink, id: string) => void
   drop: (sink: Sink) => void
-  /** A member's graph moved: every line is asked again, settled when each
-   * answer is. */
-  hear: () => Promise<void>
+  /** A member's graph moved: every line `only` names (every line, without
+   * it) is asked again, settled when each answer is. */
+  hear: (only?: (line: string) => boolean) => Promise<void>
   /** Whether any line is watched. */
   watching: () => boolean
 }
@@ -172,21 +172,24 @@ export let reached = (opts: {
       for (let watch of held.get(sink)?.values() ?? []) watch.cancel?.()
       held.delete(sink)
     },
-    hear: async () => {
+    hear: async (only) => {
       let asked: Promise<void>[] = []
       for (let [sink, mine] of held) {
-        for (let [id, watch] of mine) asked.push(ask(sink, id, watch))
+        for (let [id, watch] of mine) {
+          if (!only || only(watch.line)) asked.push(ask(sink, id, watch))
+        }
       }
       await Promise.all(asked)
     },
   }
 }
 
-/** A derived read that changes with committed inputs in a local graph. */
+/** A derived read that changes with committed inputs in a local graph: each
+ * commit asks again the lines `affects` says it moves. */
 export let computed = (
   graph: Graph,
   opts: Parameters<typeof reached>[0] & {
-    affects: (bundles: Bundle[]) => boolean
+    affects: (bundles: Bundle[], line: string) => boolean
     hold?: (work: Promise<void>) => void
   },
 ): Reached => {
@@ -201,10 +204,9 @@ export let computed = (
     name: '@yaks/api/computed',
     hooks: {
       effect: (bundles) => {
-        if (queries.watching() && opts.affects(bundles)) {
-          let work = queries.hear().catch((e) =>
-            fault(e, 'computed subscription', opts.tags)
-          )
+        if (queries.watching()) {
+          let work = queries.hear((line) => opts.affects(bundles, line))
+            .catch((e) => fault(e, 'computed subscription', opts.tags))
           opts.hold?.(work)
         }
         return bundles

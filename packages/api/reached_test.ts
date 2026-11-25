@@ -52,6 +52,17 @@ test('a line is answered whole, again when a member speaks and the answer moved'
   ])
 })
 
+test('a change that names its lines asks only those again', async () => {
+  let r = reach([book('dune')])
+  r.subs.open(r.sink, 'all', '.book')
+  r.subs.open(r.sink, 'n', '.book.count')
+  await tick()
+  r.taken()
+  r.state.answer = [book('dune'), book('emma')]
+  await r.subs.hear((line) => line == '.book.count')
+  equal([r.taken(), r.state.reads], [[{ id: 'n', count: 2 }], 3])
+})
+
 test('a refusal is said under its id, told once, and the next change asks again', async () => {
   let r = reach(new Refused('unknown prop: .loan'))
   r.subs.open(r.sink, 'all', '.book')

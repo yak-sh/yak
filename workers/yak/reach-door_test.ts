@@ -47,7 +47,8 @@ import {
   settingsEid,
   settingsOf,
 } from '@yaks/platform/operator-settings'
-import { appMaking, makingOf } from '@yaks/platform/app-canvas'
+import { appCanvasWords, appMaking, makingOf } from '@yaks/platform/app-canvas'
+import { TOOLS } from './tools.ts'
 import { draftEid } from '@yaks/draft'
 import {
   countRows,
@@ -797,6 +798,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
         accountWords,
         visitWords,
         spacePagesWords,
+        appCanvasWords,
       ]),
       [],
       {
@@ -1012,6 +1014,29 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       await dir.stamp({ entities: [{ ...session, cancelled: {} }] })
       await until(() => !listed())
       browsers.close()
+
+      // What an app beside the chat is made of, read again as its draft is
+      // written, on a directory socket that stays admitted.
+      let making = page.watch(appMaking(book))
+      await until(() => making.ready || making.refused !== undefined)
+      equal(makingOf(making.value, book)?.made.kinds, [])
+      await TOOLS.find((t) => t.name == 'app_files')!.run(
+        { env, dir, person: ADA },
+        {
+          app: 'cookbook',
+          files: [{
+            path: 'vocab.json',
+            content: JSON.stringify({
+              $defs: { recipe: { properties: { serves: { type: 'number' } } } },
+            }),
+          }],
+        },
+      )
+      await until(() => makingOf(making.value, book)?.made.kinds.length == 1)
+      equal(makingOf(making.value, book)?.made.kinds.map((k) => k.name), [
+        'Recipe',
+      ])
+      making.close()
 
       let updates = await manage(
         new Request('https://yaks.app/ada/updates', {

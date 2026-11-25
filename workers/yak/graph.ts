@@ -449,6 +449,7 @@ import {
 } from './directory.ts'
 import { UPDATE_WAITING } from '@yaks/platform/update-waiting'
 import { personLine } from '@yaks/platform/person-lines'
+import { draftedApp } from '@yaks/platform/app-canvas'
 import { spaceLine } from '@yaks/platform/space-pages'
 import { SEEN_EVERY } from '@yaks/platform/account-rows'
 import {
@@ -1008,6 +1009,14 @@ let refOf = (v: unknown): string | null =>
     : v && typeof v == 'object' && 'eid' in v
     ? String((v as { eid: unknown }).eid)
     : null
+
+// Whether `b` moves where the app `app`'s drafts stand
+// (@yaks/platform/app-canvas `appDrafted`): its row, one of its drafts, a
+// write into one, or a row gone.
+let draftMoved = (b: Bundle, app: string) =>
+  '$delete' in b || b.entity.eid == app ||
+  (b.written as { app?: string } | undefined)?.app == app ||
+  (b.app_draft as { app?: string } | undefined)?.app == app
 
 export class Store extends Durable {
   #load: Load
@@ -2270,67 +2279,71 @@ export class Store extends Durable {
     let directory = branch == null && name == PLATFORM_STORE
     if (directory) {
       let pending = computed(g, {
-        affects: (bundles) =>
-          bundles.some((b) =>
-            [
-              '$delete',
-              'member',
-              'space',
-              'app',
-              'trashed',
-              'app_transfer',
-              'app_transfer_answer',
-              'domain_transfer',
-              'domain_transfer_answer',
-              'relationship',
-              'edge',
-              'decided',
-              'proposed',
-              // What the side draws (./side.ts): names, logos and icons.
-              'doc',
-              'operator',
-              'space_logo',
-              'app_icon',
-              'email',
-              // The person's account, browsers and friends (account-rows).
-              'presence',
-              'grant',
-              // A browser signed in, and signed out: a write names only what
-              // changed, so its end is `cancelled` alone.
-              'browser_session',
-              'cancelled',
-              // A friend's message, and its reading (update-rows).
-              'knock',
-              'opened',
-              // How they are told things away from the page, and the number
-              // they agreed to texts at (operator-settings).
-              'operator_alerts',
-              'push_subscription',
-              'sms_consent',
-              // Who last put an app live, which a space's Apps page says
-              // (space-apps); a deploy writes it beside the app.
-              'last_deploy',
-              // Who is in a space they own: an invitation, and another
-              // space's Operator let in and taken back out (people-rows).
-              'invite',
-              'operator_reach',
-              'tombstone',
-              // A space's plan, seller, credit and month (payment-rows).
-              'plan',
-              'seller',
-              'credit',
-              'comped',
-              'comp',
-              'fee',
-              'budget',
-              'starter',
-              'meter',
-              // A space's domains and phone numbers (space-pages).
-              'hostname',
-              'domain_order',
-              'phone_line',
-            ].some((key) => key in b)
-          ),
+        // Where an app's drafts stand moves with that app alone
+        // (`draftMoved`); every other line with what the side draws.
+        affects: (bundles, line) =>
+          draftedApp(line) != undefined
+            ? bundles.some((b) => draftMoved(b, draftedApp(line)!))
+            : bundles.some((b) =>
+              [
+                '$delete',
+                'member',
+                'space',
+                'app',
+                'trashed',
+                'app_transfer',
+                'app_transfer_answer',
+                'domain_transfer',
+                'domain_transfer_answer',
+                'relationship',
+                'edge',
+                'decided',
+                'proposed',
+                // What the side draws (./side.ts): names, logos and icons.
+                'doc',
+                'operator',
+                'space_logo',
+                'app_icon',
+                'email',
+                // The person's account, browsers and friends (account-rows).
+                'presence',
+                'grant',
+                // A browser signed in, and signed out: a write names only what
+                // changed, so its end is `cancelled` alone.
+                'browser_session',
+                'cancelled',
+                // A friend's message, and its reading (update-rows).
+                'knock',
+                'opened',
+                // How they are told things away from the page, and the number
+                // they agreed to texts at (operator-settings).
+                'operator_alerts',
+                'push_subscription',
+                'sms_consent',
+                // Who last put an app live, which a space's Apps page says
+                // (space-apps); a deploy writes it beside the app.
+                'last_deploy',
+                // Who is in a space they own: an invitation, and another
+                // space's Operator let in and taken back out (people-rows).
+                'invite',
+                'operator_reach',
+                'tombstone',
+                // A space's plan, seller, credit and month (payment-rows).
+                'plan',
+                'seller',
+                'credit',
+                'comped',
+                'comp',
+                'fee',
+                'budget',
+                'starter',
+                'meter',
+                // A space's domains and phone numbers (space-pages).
+                'hostname',
+                'domain_order',
+                'phone_line',
+              ].some((key) => key in b)
+            ),
         // Where friends are moves with time and with writes this read does
         // not watch: a friends answer is read again as often as an open
         // Friends page says where it is (friends-browser `EVERY`).
