@@ -152,6 +152,7 @@ import {
   url,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
+import { isFleetAddress } from '@yaks/platform/bots'
 import { HELD, previewing } from './newcomer.ts'
 import { latestSpeaks, ownSpeaks } from '@yaks/platform/lenses'
 import {
@@ -2088,20 +2089,20 @@ let published = async (
       app: app.slug,
     }),
   )
-  // The space's people hear who changed which app, in their Updates
-  // (operator-updates.ts); whoever did it knows. A release nobody made (a
-  // script that failed to load put back, the live version compiled again)
-  // tells nobody, and a run of deploys in an hour is one change.
-  let person = who.person
-  if (person && !recompile && !repair) {
-    let title = app.title || app.slug
+  // One Update per app, person and hour, with the release's own description.
+  let { person, agent, actor } = who
+  let summary = message?.split(/\r?\n\s*\r?\n/, 1)[0].replace(/\s+/g, ' ')
+    .trim()
+  if (
+    summary && person && !agent && (!actor || actor == person) && !target &&
+    !recompile && !repair
+  ) {
     background(after(async () => {
-      let name = await ctx.dir.nameAt(person) ?? 'Someone'
+      if (isFleetAddress(await ctx.dir.emailAt(person) ?? '')) return
       await tell(ctx.env, space, {
         to: space.eid,
-        words: target
-          ? `${name} put ${title} back to an earlier version.`
-          : `${name} changed ${title}.`,
+        subject: app.title || app.slug,
+        words: summary,
         about: app.eid,
         by: person,
         id: `changed|${app.eid}|${person}|${

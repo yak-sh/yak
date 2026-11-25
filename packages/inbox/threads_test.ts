@@ -106,6 +106,25 @@ test('watched updates are state changes and landings, not progress chatter or ed
   assertEquals(threads(all, { ...reader, muting: new Set(['watched']) }), [])
 })
 
+test('an archived notification leaves Updates and keeps each reader’s opened mark', () => {
+  let notice = row('notice', {
+    notification: { to: 'space' },
+    archived: { at: at(5) },
+  })
+  let reader = { ...who, scope: 'space' }
+  let opened = row('attention', { opened: { at: at(3) } })
+  let read = { ...reader, attention: new Map([[notice.eid, opened]]) }
+  for (let [person, unread] of [[reader, true], [read, false]] as const) {
+    assertEquals(threads([notice], person), [])
+    let [archived] = threads([notice], person, { all: true })
+    assertEquals([archived.lane, archived.archived, archived.unread], [
+      'Updates',
+      true,
+      unread,
+    ])
+  }
+})
+
 test('search separates said from received and can find archived conversations', () => {
   let all = [
     row('thread', { task: {} }),

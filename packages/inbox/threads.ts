@@ -202,7 +202,8 @@ export let threads = <R extends Row>(
     let at = newest(...activity.map(activityAt))
     let personal = who.attention?.get(eid)?.comps ?? {}
     let away = str(personal.archived?.at)
-    let archived = !!personal.archived && (!away || at <= away)
+    let archived = !!(root.comps.notification && root.comps.archived) ||
+      !!personal.archived && (!away || at <= away)
     if (!search.all && archived) continue
     // A decision's question and answer can have different authors. Treat the
     // answer as its own words rather than attributing the whole root to them.
