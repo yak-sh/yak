@@ -25,6 +25,9 @@
  * - A picture that cannot be replaced by its page sends its address
  *   (`NETWORK`) before it loads again, and that next open of it comes from
  *   the network; one the worker cannot draw does too.
+ * - A page the network cannot give (`failed`) is answered with the site's
+ *   page saying so: the browser offline, the site unreachable, or an error
+ *   page the site did not draw (`drew`). One that is only slow is waited for.
  *
  * Every other request goes to the network as if there were no worker.
  *
@@ -32,6 +35,7 @@
  */
 import { FRESH, FRESH_URL, FRESH_WAIT, NETWORK, picture } from './picture.ts'
 import { keptReports } from './kept-reports.ts'
+import type { Failure } from './opening.ts'
 
 /** The caches this worker keeps pages and files in. */
 export let PAGES = 'yak-pages'
@@ -44,7 +48,10 @@ export let FILES = 'yak-files'
  * notification opens from what was pushed. `shelled` says whether the
  * site's shell stands for a page at an address. `broke` is the door a
  * picture reports at when it falls back to the network
- * (@yaks/tracker/report), and `pictures: false` draws none. */
+ * (@yaks/tracker/report), and `pictures: false` draws none. `failed` is the
+ * page that says why an open could not be had (./opening.ts `failurePage`),
+ * and `drew` whether an error page the server answered is the site's own,
+ * which says so itself. */
 export type Keeping = {
   forget: string[]
   named?: string
@@ -58,6 +65,8 @@ export type Keeping = {
   report?: string
   broke?: string
   pictures?: boolean
+  failed?: (why: Failure) => string
+  drew?: (html: string) => boolean
 }
 
 /** What a page sends its worker as it is left (./keep.ts): its address, its
@@ -118,7 +127,7 @@ export let pageKey = (url: string): string => {
 
 // Where the time the pages were last forgotten is kept, beside them, and
 // the shell.
-let FORGOT = '/.forgot'
+export let FORGOT = '/.forgot'
 let SHELL = '/.shell'
 
 /** What a service worker needs of its global scope. */
@@ -133,6 +142,7 @@ export type Scope = {
     ): Promise<{ url: string; navigate?(url: string): Promise<unknown> }[]>
   }
   indexedDB?: Pick<IDBFactory, 'databases' | 'deleteDatabase'>
+  navigator?: { onLine: boolean }
   addEventListener(
     type: 'fetch',
     hear: (e: FetchLike) => void,
@@ -302,14 +312,40 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     return await pages.match(key) ??
       (shell ? await pages.match(location.origin + SHELL) : undefined)
   }
+  // The page from the network, however long it takes, or the site's page
+  // saying why it can't be had. A slow answer is never given up on: the
+  // site is slow, and asking again would only add to its load.
+  let reached = async (req: Request) => {
+    let { failed } = opts
+    if (!failed) return scope.fetch(req)
+    let said = (why: Failure) =>
+      new Response(failed(why), {
+        status: 503,
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'no-store',
+        },
+      })
+    let got: Response
+    try {
+      got = await scope.fetch(req)
+    } catch (e) {
+      return said({
+        state: scope.navigator?.onLine == false ? 'offline' : 'unreachable',
+        said: String(e),
+      })
+    }
+    if (got.status < 500 || opts.drew?.(await got.clone().text())) return got
+    return said({ state: 'failed', said: `The server answered ${got.status}` })
+  }
   let page = async (req: Request) => {
     let key = keyOf(req.url)
-    if (unpictured.delete(key)) return scope.fetch(req)
+    if (unpictured.delete(key)) return reached(req)
     let drawn = await kept(req, key).catch((e) => {
       tell(e)
       return undefined
     })
-    if (!drawn) return scope.fetch(req)
+    if (!drawn) return reached(req)
     let now = timed(
       scope.fetch(key, {
         credentials: 'same-origin',
