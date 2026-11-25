@@ -4,7 +4,46 @@
    quick and easing out as it opens, easing in as it leaves, so closing plays
    the opening backwards. Its display (and a dialog's place on the top layer)
    holds until it has left. A page that lays it over itself does so at least
-   at this width, by its own position, and shows it while it is open. */
+   at this width, by its own position, and shows it while it is open.
+   A side layer's edge toward the page casts a soft shadow, and nothing dims
+   the page behind it.
+   Layer-under turns the motion around: the layer stands still at the left,
+   under the page, and the page (Layer_Cover, after it) slides right by
+   --layer-width to uncover it, then back over it. The cover comes after the
+   layer, so it paints over it, and needs a background of its own. Its edge
+   casts the shadow, and a press on what still shows of it (Layer_Shut)
+   closes the layer. */
+.Layer_Shut {
+  display: none;
+}
+@media (max-width: 700px) {
+  .Layer,
+  .Layer_Cover {
+    --layer-shadow: 1.5rem color-mix(in srgb, var(--text) 18%, transparent);
+  }
+  .Layer-left {
+    box-shadow: .25rem 0 var(--layer-shadow);
+  }
+  .Layer-right {
+    box-shadow: -.25rem 0 var(--layer-shadow);
+  }
+  .Layer-under {
+    box-shadow: none;
+  }
+  .Layer-under ~ .Layer_Cover {
+    position: relative;
+    box-shadow: -.25rem 0 var(--layer-shadow);
+  }
+  .Layer-under:is(:target, :has(:target)) ~ .Layer_Cover {
+    translate: var(--layer-width) 0;
+  }
+  .Layer-under:is(:target, :has(:target)) ~ .Layer_Cover .Layer_Shut {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+  }
+}
 @media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
   .Layer {
     --layer-off: 0 100%;
@@ -17,6 +56,9 @@
   .Layer-right {
     --layer-off: 100% 0;
   }
+  .Layer-under {
+    --layer-off: none;
+  }
   .Layer:not(:target, :has(:target), [open], :popover-open) {
     translate: var(--layer-off);
     transition-duration: .2s;
@@ -26,5 +68,11 @@
     .Layer {
       translate: var(--layer-off);
     }
+  }
+  .Layer-under ~ .Layer_Cover {
+    transition: translate .2s cubic-bezier(.8, 0, .8, .2);
+  }
+  .Layer-under:is(:target, :has(:target)) ~ .Layer_Cover {
+    transition: translate .24s cubic-bezier(.2, .8, .2, 1);
   }
 }

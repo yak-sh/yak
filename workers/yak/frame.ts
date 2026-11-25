@@ -18,7 +18,7 @@
 // What differs between pages is handed in: the side's title and Back
 // are its own (sidebar.ts `Sidebar`), and the panes beside are the page's.
 import { type ComponentChildren as Kids, h } from 'preact'
-import { Button, Form, Icon, Shell, Skip, Toolbar } from '@yaks/ui/parts'
+import { Button, Form, Icon, Layer, Shell, Skip, Toolbar } from '@yaks/ui/parts'
 import { managePath } from '@yaks/platform/routes'
 import { TITLE } from '@yaks/ui/navigate'
 import { icons } from './icons.ts'
@@ -171,7 +171,15 @@ export let frame = (at: {
       at.side,
       h(
         Shell.Main,
-        { class: 'Frame_Column' },
+        { as: Layer.Cover, class: 'Frame_Column' },
+        // On a phone the column slides aside to show the side under it, and
+        // a press on what still shows of it closes the side.
+        h(Layer.Shut, {
+          href: '#',
+          'data-pane': '',
+          tabindex: -1,
+          'aria-hidden': 'true',
+        }),
         h(
           Toolbar,
           { class: 'Frame_Bar' },

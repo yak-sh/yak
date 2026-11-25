@@ -404,9 +404,6 @@
     .Frame:has(.Frame_Aside:is(:target, :has(:target))) .Frame_AsideClose {
       display: inline-flex;
     }
-    .Frame:has(.Frame_Aside:is(:target, :has(:target))) .Frame_Bar {
-      z-index: 11;
-    }
     /* Laid over the page whether open or shut, so it slides out where it
        stood (@yaks/ui Layer); only its display waits on the address. */
     .Frame_Aside {
@@ -417,7 +414,7 @@
       z-index: 10;
       width: min(26rem, 100vw);
       height: auto;
-      box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
+      box-shadow: -.25rem 0 1.5rem color-mix(in srgb, var(--text) 18%,
         transparent);
     }
     .Frame_Aside:is(:target, :has(:target)) {
@@ -1416,12 +1413,22 @@
       max-width: 26rem;
     }
   }
+  /* On a phone the side stands still under the page, at the left, and the
+     page slides aside by its width to uncover it (@yaks/ui Layer-under),
+     leaving a strip of itself that closes the side when pressed. */
   @media (max-width: 700px) {
+    .Frame {
+      --layer-width: min(20rem, 100vw - 4rem);
+    }
+    .Frame_Column {
+      background: var(--floor);
+    }
     .Sidebar {
       position: fixed;
-      inset: 0;
-      z-index: 3;
+      inset: 0 auto 0 0;
+      z-index: 0;
       display: none;
+      width: var(--layer-width);
       height: auto;
     }
     .Sidebar:target {

@@ -65,8 +65,9 @@ let fold = (at: NonNullable<Sidebar['fold']>) => {
   )
 }
 
-// At a phone's width the side is a layer over the page, from the left.
-let Slides = layer('aside', 'left')
+// At a phone's width the side is a layer under the page, at the left, which
+// the page (frame.ts) slides aside to uncover.
+let Slides = layer('aside', 'left', 'under')
 
 export let Sidebar = (at: Sidebar) => {
   let draw = (s: Section) => section(s, !!at.fold?.collapsed)

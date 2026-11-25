@@ -7,9 +7,11 @@
  *
  * A sidebar is a `Layer-left` or `Layer-right` with an id and `data-swipe`,
  * opened by the address as its link opens it (`#menu`, replacing the
- * fragment, so no history entry). It is one a swipe may open only while the
- * page shows a link to it: where the page lays it beside itself, or has
- * nothing in it, it has none to show.
+ * fragment, so no history entry). One that stands under the page
+ * (`Layer-under`) stays still, and the page over it (its `Layer_Cover`)
+ * follows the finger instead, uncovering it. It is one a swipe may open
+ * only while the page shows a link to it: where the page lays it beside
+ * itself, or has nothing in it, it has none to show.
  *
  * The gesture leaves alone what is not its own:
  * - its axis is locked once the finger has moved `SLOP`, and a mostly
@@ -120,6 +122,13 @@ export type Window = Pick<typeof globalThis, 'getComputedStyle'> & {
 
 type Sidebar = { el: HTMLElement; edge: Edge; open: boolean }
 
+// What covers a layer under the page: the cover after it.
+let cover = (el: Element) => {
+  let at = el.nextElementSibling
+  while (at && !at.classList.contains('Layer_Cover')) at = at.nextElementSibling
+  return at as HTMLElement | null
+}
+
 let EDITABLE = 'input, textarea, select, [contenteditable]'
 
 // The page's sidebars a swipe may move now, or none while another layer is
@@ -146,7 +155,15 @@ let sidebars = (doc: Document, win: Window): Sidebar[] => {
 /** Open and close `doc`'s sidebars by a finger's swipe. */
 export let swipe = (doc: Document, win: Window): () => void => {
   type Touch = { x: number; y: number; target: Element | null }
-  type Drag = Sidebar & { width: number; at: number; recent: number[][] }
+  // `moved` follows the finger: the sidebar, or the page over one under it,
+  // which stands `width` further right than the sidebar would.
+  type Drag = Sidebar & {
+    moved: HTMLElement
+    under: boolean
+    width: number
+    at: number
+    recent: number[][]
+  }
   let touch: Touch | undefined
   let drag: Drag | undefined
 
@@ -164,12 +181,25 @@ export let swipe = (doc: Document, win: Window): () => void => {
     let s = moves(sidebars(doc, win), dx)
     if (!s || kept(touch!.target, dx, win.getComputedStyle)) return
     let { el, edge, open } = s
-    el.style.transition = 'none'
-    el.style.translate = open ? '0 0' : edge == 'left' ? '-100% 0' : '100% 0'
-    if (!open) win.location.replace(`#${el.id}`)
+    let under = el.classList.contains('Layer-under')
+    let moved = under ? cover(el) : el
+    if (!moved) return
+    // Held where it stands, so the address opening it moves nothing yet.
+    moved.style.transition = 'none'
+    if (!open) {
+      moved.style.translate = under
+        ? '0px 0'
+        : `${edge == 'left' ? -100 : 100}% 0`
+      win.location.replace(`#${el.id}`)
+    }
     let width = el.getBoundingClientRect().width
-    return { ...s, width, at: 0, recent: [] }
+    let at = open ? 0 : edge == 'left' ? -width : width
+    let drag = { ...s, moved, under, width, at, recent: [] }
+    put(drag)
+    return drag
   }
+  let put = (d: Drag) =>
+    d.moved.style.translate = `${d.under ? d.at + d.width : d.at}px 0`
   let move = (e: TouchEvent) => {
     if (!touch) return
     let p = point(e)
@@ -182,7 +212,7 @@ export let swipe = (doc: Document, win: Window): () => void => {
     }
     if (e.cancelable) e.preventDefault()
     drag.at = placed(drag.edge, drag.width, drag.open, dx)
-    drag.el.style.translate = `${drag.at}px 0`
+    put(drag)
     drag.recent = [...drag.recent, [e.timeStamp, p.clientX]]
       .filter(([t]) => t >= e.timeStamp - RECENT)
   }
@@ -195,8 +225,8 @@ export let swipe = (doc: Document, win: Window): () => void => {
     let speed = took ? (last![1] - first[1]) / took : 0
     let open = settles(d.edge, d.width, d.at, speed)
     // Handed back to its own motion, which carries it on from the finger.
-    d.el.style.removeProperty('translate')
-    d.el.style.removeProperty('transition')
+    d.moved.style.removeProperty('translate')
+    d.moved.style.removeProperty('transition')
     if (!open) win.location.replace('#')
   }
 

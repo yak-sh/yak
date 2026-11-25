@@ -3,12 +3,14 @@ import { test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { kept, moves, swipe } from './swipe.ts'
 
-// A phone's page, 390 wide, with a menu from the left, a panel from the
-// right and their links, and a strip that scrolls sideways.
-let page = (hash = '', html = '') => {
+// A phone's page, 390 wide, with a menu from the left (`menu` its ways), the
+// page's column over it, a panel from the right and their links, and a strip
+// that scrolls sideways.
+let page = (hash = '', html = '', menu = 'Layer-left') => {
   let { document } = parseHTML(`<html><body>
     <a href="#menu">Menu</a><a href="#aside">Reach</a>
-    <nav id="menu" class="Layer Layer-left" data-swipe></nav>
+    <nav id="menu" class="Layer ${menu}" data-swipe></nav>
+    <main id="column" class="Layer_Cover"></main>
     <aside id="aside" class="Layer Layer-right" data-swipe></aside>
     <section id="app" class="Layer Layer-right"></section>
     <div id="strip"><p id="in">wide</p></div>${html}
@@ -60,10 +62,12 @@ let page = (hash = '', html = '') => {
         opt.on,
       )
     })
-    let menu = document.getElementById('menu')!
-    let mid = menu.style.translate
+    let [menu, column] = ['menu', 'column'].map((id) =>
+      document.getElementById(id)!
+    )
+    let mid = [menu.style.translate, column.style.translate]
     touch('touchend', to, 400, ms, opt.on)
-    return { moved, mid, menu }
+    return { moved, mid, menu, column }
   }
   return { document, location, drag }
 }
@@ -72,9 +76,21 @@ test('a slow swipe right past the middle opens the menu, following the finger as
   let p = page()
   let { moved, mid, menu } = p.drag(100, 300)
   assertEquals(p.location.hash, '#menu')
-  assertEquals(mid, '-100px 0')
+  assertEquals(mid, ['-100px 0', ''])
   assertEquals(moved.at(-1)!.defaultPrevented, true)
   assertEquals(menu.getAttribute('style') ?? '', '')
+})
+
+test('a menu under the page stays still, and the page over it follows the finger', () => {
+  let p = page('', '', 'Layer-left Layer-under')
+  let { mid, column } = p.drag(100, 300)
+  assertEquals([p.location.hash, mid], ['#menu', ['', '200px 0']])
+  assertEquals(column.getAttribute('style') ?? '', '')
+  // Open, a swipe back carries the page back over it.
+  assertEquals(p.drag(300, 220, { ms: 600 }).mid, ['', '220px 0'])
+  assertEquals(p.location.hash, '#menu')
+  p.drag(300, 100)
+  assertEquals(p.location.hash, '')
 })
 
 test('a short slow swipe leaves the menu shut, and a short quick one opens it', () => {
