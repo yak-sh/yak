@@ -209,8 +209,8 @@
         'padding:.7rem 1rem;box-sizing:border-box;' +
         "font:500 .95rem/1.5 'Nunito',system-ui,sans-serif;" +
         (dark
-          ? 'background:#2a1f1b;color:#f7ebdc'
-          : 'background:#fff8ee;color:#45291c')
+          ? 'background:#2b231f;color:#f1e6d8'
+          : 'background:#fdf7ee;color:#523828')
       let words = document.createElement('span')
       words.textContent = reload == 'required'
         ? 'This app has changed. Reload to keep using it'

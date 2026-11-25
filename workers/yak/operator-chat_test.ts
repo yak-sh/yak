@@ -334,8 +334,8 @@ test("the chat app installs to a home screen as its Operator's web app", () => {
     [...document.querySelectorAll('meta[name=theme-color]')]
       .map((m) => [m.getAttribute('media'), m.getAttribute('content')]),
     [
-      ['(prefers-color-scheme: light)', '#fff8ee'],
-      ['(prefers-color-scheme: dark)', '#2a1f1b'],
+      ['(prefers-color-scheme: light)', '#fdf7ee'],
+      ['(prefers-color-scheme: dark)', '#2b231f'],
     ],
   )
   assertEquals(
@@ -357,9 +357,9 @@ test("the chat app installs to a home screen as its Operator's web app", () => {
     start_url: chatPath('clerk'),
     scope: '/',
     display: 'standalone',
-    background_color: '#fff8ee',
-    theme_color: '#fff8ee',
-    color_scheme_dark: { background_color: '#2a1f1b', theme_color: '#2a1f1b' },
+    background_color: '#fdf7ee',
+    theme_color: '#fdf7ee',
+    color_scheme_dark: { background_color: '#2b231f', theme_color: '#2b231f' },
     icons: [{ src: '/connector-512.png', type: 'image/png', sizes: '512x512' }],
   })
 })

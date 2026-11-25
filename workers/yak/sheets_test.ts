@@ -55,8 +55,8 @@ for (let root of ['style.css', 'pages.css']) {
 
   test(`sheets: ${root} says every light-dark() pair again in halves`, () => {
     let css = sheet(root)
-    assertStringIncludes(css, '--mine: #ffe2c6;')
-    assertStringIncludes(css, '--accent: #ff9a4d;')
+    assertStringIncludes(css, '--mine: #f8e0c8;')
+    assertStringIncludes(css, '--accent: #a7c080;')
     assertEquals(halved(css), css)
   })
 

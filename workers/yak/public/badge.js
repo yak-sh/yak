@@ -76,9 +76,9 @@ a {
   padding: 5px 9px;
   border: 1px solid #e3d3bf;
   border-radius: 999px;
-  background: #fffcf6;
-  color: #45291c;
-  box-shadow: 0 1px 3px rgb(69 41 28 / 0.18);
+  background: #fffbf5;
+  color: #523828;
+  box-shadow: 0 1px 3px rgb(82 56 40 / 0.18);
   font: 500 11px/1.2 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   letter-spacing: 0.01em;
   text-decoration: none;
@@ -88,9 +88,9 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 @media (hover: hover) and (pointer: fine) {
-  a:hover { border-color: #d1b49c }
+  a:hover { border-color: #c9b19c }
 }
-a:focus-visible { outline: 2px solid #b54a12; outline-offset: 2px }
+a:focus-visible { outline: 2px solid #4c773e; outline-offset: 2px }
 b { font-weight: 800 }
 :host([at=foot]) a {
   display: inline;
@@ -107,15 +107,15 @@ b { font-weight: 800 }
 :host([at=foot]) b { font-weight: 600 }
 @media (prefers-color-scheme: dark) {
   a {
-    border-color: #4f3c32;
-    background: #2a1f1b;
-    color: #f7ebdc;
+    border-color: #4d3d34;
+    background: #2b231f;
+    color: #f1e6d8;
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
   }
   @media (hover: hover) and (pointer: fine) {
-    a:hover { border-color: #7a6151 }
+    a:hover { border-color: #785b47 }
   }
-  a:focus-visible { outline-color: #ff9a4d }
+  a:focus-visible { outline-color: #a7c080 }
 }`
   // What a person presses or types into, as markup says it; a `cursor:
   // pointer` the app set says the same of anything else.

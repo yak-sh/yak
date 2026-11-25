@@ -14,7 +14,7 @@
   --phone-height: clamp(6rem, 18dvh, 8.5rem);
   --story-gap: clamp(2rem, 5vw, 7rem);
   --sky-ink: light-dark(#374450, #e0e6f2);
-  --sky-accent: light-dark(#0a5755, #7fe0d6); /* the theme's teal, deep enough for the sky */
+  --sky-accent: light-dark(#315342, #b8dbad);
   --hill-green: light-dark(#a0ac73, #566d47);
   --hill-earth: light-dark(#d6c1ac, #544138);
 }

@@ -53,13 +53,13 @@
   padding: 8px 10px;
   border: 1px solid #e3d3bf;
   border-radius: 12px;
-  background: #fffcf6;
-  color: #45291c;
-  box-shadow: 0 2px 8px rgb(69 41 28 / 0.2);
+  background: #fffbf5;
+  color: #523828;
+  box-shadow: 0 2px 8px rgb(82 56 40 / 0.2);
 }
 .panel:empty { display: none }
 .panel p { margin: 0; flex: 1 1 100% }
-.panel a { color: #0b6f6c; font-weight: 600 }
+.panel a { color: #4c773e; font-weight: 600 }
 button {
   font: inherit;
   color: inherit;
@@ -81,21 +81,21 @@ button {
   padding: 0;
   border: 1px solid #e3d3bf;
   border-radius: 50%;
-  background: #fffcf6;
-  box-shadow: 0 1px 3px rgb(69 41 28 / 0.22);
+  background: #fffbf5;
+  box-shadow: 0 1px 3px rgb(82 56 40 / 0.22);
 }
-.pencil[aria-pressed=true] { background: #b54a12; color: #fff; border-color: #b54a12 }
+.pencil[aria-pressed=true] { background: #4c773e; color: #fff; border-color: #4c773e }
 .pencil:disabled { opacity: 0.6; cursor: progress }
-button:focus-visible, a:focus-visible { outline: 2px solid #b54a12; outline-offset: 2px }
+button:focus-visible, a:focus-visible { outline: 2px solid #4c773e; outline-offset: 2px }
 svg { width: 18px; height: 18px }
 .stack { display: flex; flex-direction: column; align-items: flex-end; gap: 6px }
 @media (prefers-color-scheme: dark) {
   .panel, .pencil, .panel button {
-    border-color: #4f3c32;
-    background: #2a1f1b;
-    color: #f7ebdc;
+    border-color: #4d3d34;
+    background: #2b231f;
+    color: #f1e6d8;
   }
-  .panel a { color: #4fd1c5 }
+  .panel a { color: #a7c080 }
 }`
   let PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +

@@ -9,46 +9,43 @@ import { beside, type Theme } from './theme.ts'
 
 let at = beside(import.meta.url)
 
-let amber = '#ff9a4d'
-let teal = '#4fd1c5'
-let green = '#6edc7e'
-let saffron = '#ffc23d'
-let red = '#ff7272'
-let plum = '#e6a3dc'
-let rose = '#ff8fb1'
-let oat = '#f7ebdc'
-let taupe = '#d6b9a0'
+let moss = '#a7c080'
+let rose = '#e67e80'
+let sky = '#e5eef5'
+let blush = '#f8e0c8'
+let oat = '#f1e6d8'
+let taupe = '#c9b19c'
 
 /** Linen: yaks.app's warm sheet in light, the same room at night in dark. */
 export let linen: Theme = {
   css: at('./linen.css'),
   colors: {
-    bg: '#2a1f1b',
-    surface: '#382a24',
-    card: '#35271f',
-    border: '#4f3c32',
-    border2: '#7a6151',
+    bg: '#2b231f',
+    surface: '#392d27',
+    card: '#372c26',
+    border: '#4d3d34',
+    border2: '#756255',
     text: oat,
     muted: taupe,
-    dim: '#7a6151',
-    accent: amber,
-    link: teal,
+    dim: '#785b47',
+    accent: moss,
+    link: moss,
     heading: oat,
-    info: plum,
-    active: amber,
-    positive: green,
-    negative: red,
-    caution: saffron,
-    special: plum,
-    number: saffron,
-    literal: red,
-    time: plum,
-    who: teal,
-    keyword: red,
-    string: green,
-    fn: teal,
-    type: plum,
-    attr: saffron,
-    hues: [amber, teal, green, plum, rose, saffron],
+    info: sky,
+    active: blush,
+    positive: moss,
+    negative: rose,
+    caution: rose,
+    special: taupe,
+    number: blush,
+    literal: rose,
+    time: sky,
+    who: moss,
+    keyword: rose,
+    string: moss,
+    fn: '#fffbf5',
+    type: blush,
+    attr: taupe,
+    hues: [moss, blush, sky, rose, taupe, oat],
   },
 }

@@ -53,8 +53,8 @@
     /* Paints of yaks.app's own pages: the person's bubble and the
        assistant's, and the ground of an embedded app's preview, which
        matches the app in either scheme. */
-    --mine: light-dark(#ffe2c6, #5c3520); /* apricot; ember */
-    --theirs: light-dark(#dcf1ec, #1f403d); /* mint; deep teal */
+    --mine: light-dark(#f8e0c8, #4e3b32); /* blush; ember */
+    --theirs: light-dark(#e5eef5, #34404a); /* sky; dusk */
     --preview: #33493c; /* forest */
 
     /* Type, beside the theme's --size and --small. */

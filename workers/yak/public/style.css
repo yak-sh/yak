@@ -36,7 +36,7 @@
   }
 
   a {
-    color: var(--link);
+    color: var(--accent);
     text-underline-offset: 0.18em;
     text-decoration-thickness: 0.08em;
   }
@@ -331,7 +331,7 @@
   }
 
   .Prose_Link {
-    color: var(--link);
+    color: var(--accent);
   }
 
   .Prose_Address {

@@ -23,8 +23,8 @@ p {
   padding: 6px calc(12px + env(safe-area-inset-right, 0px)) 6px
     calc(12px + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid #e3d3bf;
-  background: #fffcf6;
-  color: #45291c;
+  background: #fffbf5;
+  color: #523828;
   font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   text-align: center;
 }
@@ -34,23 +34,23 @@ a {
   margin-left: 6px;
   padding: 2px 10px;
   border-radius: 999px;
-  background: #b54a12;
+  background: #4c773e;
   color: #fff;
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
 @media (hover: hover) and (pointer: fine) {
-  a:hover { background: #9a3e0e }
+  a:hover { background: #3d6232 }
 }
-a:focus-visible { outline: 2px solid #b54a12; outline-offset: 2px }
+a:focus-visible { outline: 2px solid #4c773e; outline-offset: 2px }
 @media (prefers-color-scheme: dark) {
-  p { border-color: #4f3c32; background: #2a1f1b; color: #f7ebdc }
-  a { background: #ff9a4d; color: #1d1a17 }
+  p { border-color: #4d3d34; background: #2b231f; color: #f1e6d8 }
+  a { background: #a7c080; color: #1d1a17 }
   @media (hover: hover) and (pointer: fine) {
-    a:hover { background: #ffb071 }
+    a:hover { background: #bcd298 }
   }
-  a:focus-visible { outline-color: #ff9a4d }
+  a:focus-visible { outline-color: #a7c080 }
 }`
   // Read while this script runs: afterwards there is no current script.
   let data = document.currentScript?.dataset
