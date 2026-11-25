@@ -16,10 +16,15 @@ export DENO_INSTALL DENO_DIR
 if ! command -v deno >/dev/null 2>&1; then
   # -y answers the prompts; --no-modify-path keeps it out of the image's shell
   # rc files, which nothing in a build container ever sources anyway. The PATH
-  # this build needs is the line below, not a login shell's.
+  # this build needs is the line below, not a login shell's. The installer
+  # finishes by running jsr:@deno/installer-shell-setup, which would read the
+  # repo's deno.json and refuse its frozen lockfile, so it runs from npm's
+  # cache, outside the repo.
   if [ ! -x "$DENO_INSTALL/bin/deno" ]; then
     echo "--- installing deno (not on the Workers Builds image)"
-    curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path
+    mkdir -p "$cache"
+    (cd "$cache" &&
+      curl -fsSL https://deno.land/install.sh | sh -s -- -y --no-modify-path)
   fi
   PATH="$DENO_INSTALL/bin:$PATH"
   export PATH
