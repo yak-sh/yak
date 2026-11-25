@@ -743,29 +743,70 @@ export let openOf = async (g: Graph, session: Eid): Promise<Bundle[]> =>
   (await named(await chain(g, session, { comps: [ENTRY, CALL] }), {}))
     .filter((b) => b.call)
 
-// Whether someone else's words steer the turn (./answer.ts `steered`) is
-// decided over every line since the person's newest words, however far below
-// the rows those lie: the words, the line before the notices that lead up to
-// them (a room's other speakers), and each line `heard` between that and the
-// rows. Where the rows hold that line, nothing more is read; else at most
-// three lookups, each by seq on a segment's own lines.
-let hearing = async (r: Read, rows: Bundle[]): Promise<Bundle[]> => {
+// An open call's ask says what it had read. Where the page only has words
+// that landed later, look up the newest words as of `ask.through`, so the
+// call still knows whose turn it was (./answer.ts `askedFor`).
+let callWords = async (
+  r: Read,
+  entries: Bundle[],
+  visible: Bundle[],
+  latest: Bundle | undefined,
+  input: Built,
+): Promise<{ words: Bundle[]; through: Bundle[] }> => {
+  let byId = new Map(entries.map((b) => [b.entity.eid, b]))
+  let ids = new Set(
+    openCalls(entries).flatMap((call) => {
+      let source = comp(call, CALL)?.source
+      let through = comp(byId.get(String(source)), ASK)?.through
+      return typeof through == 'string' ? [through] : []
+    }),
+  )
+  let through = await fetch(
+    { ...r, names: [ENTRY] },
+    [...ids].filter((eid) => !byId.has(eid)),
+  )
+  for (let b of through) byId.set(b.entity.eid, b)
+  let ends = [...ids].flatMap((eid) => byId.get(eid) ?? [])
+  let words = await Promise.all(ends.map((end) => {
+    let seq = seqOf(end)
+    if (latest && seqOf(latest) <= seq) return latest
+    return visible.findLast((b) => seqOf(b) <= seq) ??
+      newest(r, line`${sub(input)}&.entry.seq<=${seq}`)
+  }))
+  return { words: words.filter((b) => b != null), through }
+}
+
+// Steering reads the words that began the turn, the notices leading up to
+// them, and each `heard` line since. Read below the page by seq only where
+// those words or the start of their notices lie there.
+let hearing = async (
+  r: Read,
+  rows: Bundle[],
+  entries: Bundle[],
+): Promise<Bundle[]> => {
   let { g } = r
   if (!g.vocab.comp('heard')) return []
-  let at = rows.findLastIndex(given)
-  let start = at
-  while (start > 0 && rows[start - 1].notice) start--
-  if (start > 0) return []
-  let words = at >= 0 ? rows[at] : await newest(
-    r,
-    line`&.${CONTENT}${sub(without(g, OUTPUT, 'notice', ...kinded()))}`,
+  let input = line`&.${CONTENT}${
+    sub(without(g, OUTPUT, 'notice', ...kinded()))
+  }`
+  let page = rows.filter(given)
+  let latest = page.at(-1) ?? await newest(r, input)
+  let { words, through } = await callWords(r, entries, page, latest, input)
+  if (latest) words.push(latest)
+  let starts = [...new Set(words)].filter((b) => {
+    let start = rows.indexOf(b)
+    while (start > 0 && rows[start - 1].notice) start--
+    return start <= 0
+  })
+  if (latest && !starts.length) return through
+  let before = await Promise.all(
+    starts.map((b) =>
+      newest(r, line`&.entry.seq<${seqOf(b)}${sub(without(g, 'notice'))}`)
+    ),
   )
-  let before = words &&
-    await newest(
-      r,
-      line`&.entry.seq<${seqOf(words)}${sub(without(g, 'notice'))}`,
-    )
-  let from = before ? seqOf(before) : -Infinity
+  let from = before.length
+    ? Math.min(...before.map((b) => b ? seqOf(b) : -Infinity))
+    : -Infinity
   let under = rows.length ? seqOf(rows[0]) : Infinity
   let heard = await every(
     r,
@@ -775,8 +816,9 @@ let hearing = async (r: Read, rows: Bundle[]): Promise<Bundle[]> => {
       }&.heard`,
   )
   return [
-    ...words && at < 0 ? [words] : [],
-    ...before ? [before] : [],
+    ...through,
+    ...starts.filter((b) => seqOf(b) < under),
+    ...before.filter((b) => b != null),
     ...heard,
   ]
 }
@@ -1001,8 +1043,8 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
     held.push(
       ...await aspect(r, USING, rows),
       ...await aspect(r, SENDING, rows),
-      ...await hearing(r, rows),
     )
+    held.push(...await hearing(r, rows, await gather()))
     held.push(
       ...await fetch({ ...r, names: [SENDING] }, unsent(await gather())),
     )

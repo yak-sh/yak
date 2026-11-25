@@ -14,6 +14,7 @@ import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { effectDoc } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
+import { provenanceDoc } from '@yaks/provenance'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { contextDoc } from '@yaks/context'
 import { attemptComputed } from './attempt.ts'
@@ -21,7 +22,7 @@ import { sessionDoc } from './comp.ts'
 import { askingOf, context, lines, recent } from './compact.ts'
 import { sessions } from './plugin.ts'
 import { openOf, reach, usingOf } from './reach.ts'
-import { steered } from './answer.ts'
+import { askedFor, steered } from './answer.ts'
 import { transcript } from './react.ts'
 import { counting, filler } from './testing.ts'
 import {
@@ -41,6 +42,7 @@ let vocab = loadVocab(
     toolsDoc,
     modelDoc,
     contextDoc,
+    provenanceDoc,
   ],
   [kernelKeywords],
 )
@@ -753,7 +755,7 @@ for (let [landed, lines] of landing) {
 // result, and the privileged call still open.
 let hearsay = (
   n: number,
-  o: { heard?: 'read' | 'lead'; summary?: boolean },
+  o: { heard?: 'read' | 'lead'; summary?: boolean; room?: boolean },
 ) => {
   let out: Bundle[] = [{ entity: { eid: 'h' }, session: {} }]
   let seq = 0
@@ -786,6 +788,7 @@ let hearsay = (
   let last = line({
     content: { body: 'Sort out my mail' },
     using: { model: M },
+    ...o.room ? { created: { by: 'ann' } } : {},
   })
   last = called(ask(last), o.heard == 'read')
   if (o.summary) {
@@ -796,9 +799,28 @@ let hearsay = (
     })
   }
   for (let i = 0; i < n; i++) last = called(ask(last))
-  line({ call: { to: T, id: 'add', source: ask(last) } })
+  let source = ask(last)
+  if (o.room) {
+    line({ content: { body: 'Hi all' }, created: { by: 'bo' } })
+  }
+  line({ call: { to: T, id: 'add', source } })
   return out
 }
+
+for (let heard of [undefined, 'read'] as const) {
+  let g = await world(hearsay(60, { heard, room: true }))
+  let whole = await transcript(g, 'h')
+  let entry = whole.at(-1)!
+  let reached = await reach(g, 'h', { call: true })
+  test(`a stranger's line on the call step's page keeps the member's long turn (heard: ${!!heard})`, () => {
+    assertEquals(askedFor(whole, entry), 'ann')
+    assertEquals(steered(whole, 'ann'), !!heard)
+    assertEquals(steered(reached, 'ann'), !!heard)
+    assertEquals(askedFor(reached, entry), 'ann')
+    assertEquals(steered(reached, 'bo'), false)
+  })
+}
+
 for (let n of [5, 60, 150]) {
   for (let heard of [undefined, 'read', 'lead'] as const) {
     for (let summary of [false, true]) {
