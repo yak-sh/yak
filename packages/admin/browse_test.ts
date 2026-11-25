@@ -212,6 +212,69 @@ test('a complete result publishes its files while the HTTP body is still open', 
     equal(cancelled, true)
   }))
 
+test('an interactive visit can receive its result or failure after a gap in progress', () =>
+  inDir(async (dir) => {
+    let reset = header({ kind: 'reset' } satisfies BrowseFrame)
+    let failure = header(
+      {
+        kind: 'result',
+        result: {
+          failed: 'The browser session closed while taking step 1',
+          duration: 17_000,
+        },
+      } satisfies BrowseFrame,
+    )
+    for (
+      let { reply, expected } of [
+        {
+          reply: [shot('end', 1), new Uint8Array([7]), end],
+          expected: 'Seen',
+        },
+        {
+          reply: [failure],
+          expected: 'The browser session closed while taking step 1',
+        },
+      ]
+    ) {
+      let time = clock()
+      let waiting = Promise.withResolvers<void>()
+      let ready = Promise.withResolvers<void>()
+      let calls = 0
+      let send: typeof fetch = () => {
+        calls++
+        return Promise.resolve(
+          new Response(
+            streamed((async function* () {
+              yield reset
+              waiting.resolve()
+              await ready.promise
+              yield* reply
+            })()),
+            { headers: { 'content-type': WIRE, [PROGRESS]: '1' } },
+          ),
+        )
+      }
+      let result = visit(
+        'session',
+        { ...asked, steps: [{ tap: 'button' }] },
+        dir,
+        undefined,
+        send,
+        undefined,
+        time,
+      ).catch((e: Error) => e)
+      await waiting.promise
+      await time.advance(17_000)
+      ready.resolve()
+      let got = await result
+      equal(calls, 1)
+      equal(got instanceof Error ? got.message : got.text, expected)
+      if (!(got instanceof Error)) {
+        equal(await fs.readFile(got.files[0]), new Uint8Array([7]))
+      }
+    }
+  }))
+
 test('a silent stream retries a read-only visit and describes the last phase', () =>
   inDir(async (dir) => {
     let time = clock()

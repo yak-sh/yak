@@ -118,9 +118,10 @@ let attempt = async (
   let signal = stop.signal
   let start = time.now()
   let stage = 'waiting for browse response headers'
+  let replay = replayBrowse(asked)
   let cancel = time.after(
     waitFor(asked),
-    () => stop.abort(new Error('browse deadline expired')),
+    () => stop.abort(new Error('browse reply deadline expired')),
   )
   let idle = () => {}
   let heard = () => {
@@ -138,12 +139,15 @@ let attempt = async (
     response = await browse(session, asked, file, signal, fetch)
     await browseAnswer(response)
     stage = 'waiting for the first browse frame'
-    let pulsed = response.headers.get(PROGRESS) == '1'
-    if (pulsed) heard()
+    // A gap in progress is enough to try a read on a new connection.
+    // Give actions the full deadline so a delayed stream can still deliver
+    // their only result.
+    let retryOnIdle = replay && response.headers.get(PROGRESS) == '1'
+    if (retryOnIdle) heard()
     let source = response.body?.pipeThrough(
       new TransformStream<Uint8Array, Uint8Array>({
         transform(chunk, controller) {
-          if (pulsed) heard()
+          if (retryOnIdle) heard()
           controller.enqueue(chunk)
         },
       }),
@@ -168,7 +172,7 @@ let attempt = async (
     throw Object.assign(
       new IncompleteBrowse(
         `${loss}: ${detail}. ${
-          replayBrowse(asked)
+          replay
             ? 'Try the visit again.'
             : 'The browser may have taken the requested steps. Check the page before retrying.'
         }`,
