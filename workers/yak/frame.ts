@@ -25,6 +25,7 @@ import { type ComponentChildren as Kids, h } from 'preact'
 import { Button, Form, Icon, Layer, Shell, Skip, Toolbar } from '@yaks/ui/parts'
 import { managePath } from '@yaks/platform/routes'
 import { TITLE } from '@yaks/ui/navigate'
+import { SCROLL } from '@yaks/web/picture'
 import { icons } from './icons.ts'
 import {
   barLauncher,
@@ -158,6 +159,7 @@ export let frame = (at: {
   // the page lies on a sheet, a card, rather than the floor
   sheet?: boolean
   content: Kids
+  contentScroll?: 'end'
   // what the page keeps at its right, beside the column
   aside?: Aside
   // panes beside the column, after the aside
@@ -212,7 +214,12 @@ export let frame = (at: {
         ),
         h(
           Shell.Body,
-          { class: 'Frame_Body', id: 'content', tabindex: '-1' },
+          {
+            class: 'Frame_Body',
+            id: 'content',
+            tabindex: '-1',
+            [SCROLL]: at.contentScroll ?? '0',
+          },
           at.content,
         ),
       ),

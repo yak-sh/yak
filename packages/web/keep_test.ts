@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { keep, type Window } from './keep.ts'
-import { KEPT } from './picture.ts'
+import { KEPT, picture, SCROLL } from './picture.ts'
 import { LEAVE } from '@yaks/ui/navigate'
 
 // A page in a browser with a worker, and what it sent the worker.
@@ -31,7 +31,7 @@ let tab = (html: string) => {
   }
   let leave = () => document.dispatchEvent(new window.Event(LEAVE))
   let load = () => window.dispatchEvent(new window.Event('load'))
-  return { sent, registered, hide, leave, load }
+  return { document, sent, registered, hide, leave, load }
 }
 
 test('a page registers its worker once loaded, and sends it what it shows as it is hidden or left in place, without what it does not', () => {
@@ -58,4 +58,34 @@ test('a kept picture registers nothing and sends nothing', () => {
   t.load()
   t.hide()
   assertEquals([t.registered, t.sent], [[], []])
+})
+
+let transcript =
+  `<html><head></head><body><main ${SCROLL}="end"><p id="row-a">First</p><p>Newest</p></main></body></html>`
+
+let scrolls = (html: string, hash = '') => {
+  let { document } = parseHTML(picture(html, 1))
+  let pane = document.querySelector('main')!
+  let row = document.getElementById('row-a')!
+  Object.assign(pane, { scrollHeight: 900, scrollTop: 0, clientHeight: 400 })
+  row.scrollIntoView = (opts) => {
+    assertEquals(opts, { block: 'center' })
+    pane.scrollTop = 80
+  }
+  let scroller = [...document.querySelectorAll('script')].at(-1)!.textContent
+  new Function('document', 'location', scroller)(document, { hash })
+  return pane.scrollTop
+}
+
+test('the kept picture of a scrolled conversation restores the saved pane position', () => {
+  let t = tab(transcript)
+  let pane = t.document.querySelector('main')!
+  Object.assign(pane, { scrollTop: 150, scrollHeight: 900, clientHeight: 400 })
+  t.hide()
+  assertEquals(scrolls(t.sent[0].html), 150)
+})
+
+test('a fresh picture starts at the newest line or centers the line its link opens', () => {
+  assertEquals(scrolls(transcript), 900)
+  assertEquals(scrolls(transcript, '#row-a'), 80)
 })

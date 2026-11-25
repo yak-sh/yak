@@ -1376,6 +1376,7 @@ let talkPage = (
       waiting,
       tools: page.app ? showing(page.app) : null,
       content,
+      contentScroll: page.chat ? 'end' : undefined,
       aside: aside
         ? {
           label: 'conversation panel',

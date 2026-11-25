@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { KEPT } from './picture.ts'
+import { KEPT, SCROLL } from './picture.ts'
 import { LEAVE } from '@yaks/ui/navigate'
 import type { Snapshot } from './worker.ts'
 
@@ -16,6 +16,7 @@ export type Window = {
   document:
     & Pick<Document, 'documentElement' | 'visibilityState' | 'readyState'>
     & {
+      scrollingElement?: Element | null
       addEventListener(type: string, hear: () => void): void
     }
   location: { href: string }
@@ -31,10 +32,22 @@ export type Window = {
 // to draw, and its scripts never run in one (./picture.ts).
 let UNSEEN = 'script, template, [hidden], dialog:not([open])'
 
+let scroll = (pane: Element) =>
+  pane.scrollTop > 0 &&
+    pane.scrollHeight - pane.clientHeight - pane.scrollTop <= 2
+    ? 'end'
+    : String(Math.max(0, pane.scrollTop || 0))
+
 /** The snapshot of the page in `win` as it shows now, without what is not
  * shown. */
 export let snapshot = (win: Window): Snapshot => {
-  let shown = win.document.documentElement.cloneNode(true) as Element
+  let { documentElement: root, scrollingElement: page } = win.document
+  let shown = root.cloneNode(true) as Element
+  if (page?.scrollTop) shown.setAttribute(SCROLL, scroll(page))
+  let panes = root.querySelectorAll(`[${SCROLL}]`)
+  for (let [i, copy] of [...shown.querySelectorAll(`[${SCROLL}]`)].entries()) {
+    copy.setAttribute(SCROLL, scroll(panes[i]))
+  }
   for (let e of shown.querySelectorAll(UNSEEN)) e.remove()
   return {
     keep: win.location.href,

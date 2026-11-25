@@ -18,6 +18,9 @@
 /** The attribute a picture's root wears, saying when it was taken. */
 export let KEPT = 'data-kept'
 
+/** A pane's starting scroll position in a picture, in pixels or at its end. */
+export let SCROLL = 'data-kept-scroll'
+
 /** The header the bootstrap's fetch carries, which a service worker may
  * answer with the page it already asked the network for (`@yaks/web/worker`). */
 export let FRESH = 'x-yak-fresh'
@@ -87,6 +90,21 @@ let STATUS =
 let SCRIPT = /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi
 let FRAME_SRC = /(<iframe\b[^>]*?\s)src(\s*=)/gi
 
+// This runs at the end of the picture's markup. Its styles are in before
+// this classic script reads the layout.
+let SCROLLING = `(() => {
+  let anchor
+  try { anchor = document.getElementById(decodeURIComponent(location.hash.slice(1))) }
+  catch { /* a malformed fragment names no target */ }
+  if (anchor?.closest('[hidden]')) anchor = null
+  for (let pane of document.querySelectorAll('[${SCROLL}]')) {
+    if (anchor && pane.contains(anchor)) continue
+    let at = pane.getAttribute('${SCROLL}')
+    pane.scrollTop = at == 'end' ? pane.scrollHeight : Number(at) || 0
+  }
+  if (anchor?.id.startsWith('row-')) anchor.scrollIntoView({ block: 'center' })
+})()`
+
 /**
  * The picture of `snapshot`, taken at `at` (milliseconds since the epoch):
  * its scripts gone, its frames empty, its root marked kept, its status line
@@ -112,7 +130,13 @@ export let picture = (snapshot: string, at: number, opening?: string): string =>
     .replace(FRAME_SRC, '$1data-kept-src$2')
     .replace(/<html\b/i, `<html ${KEPT}="${at}"`)
     .replace(/<body\b[^>]*>/i, (body) => body + STATUS)
-    // Last: what the bootstrap says is no part of the page to change.
+    .replace(
+      /<\/body\s*>/i,
+      (body) =>
+        snapshot.includes(SCROLL)
+          ? `<script>${SCROLLING}</script>${body}`
+          : body,
+    )
     .replace(
       /<head\b[^>]*>/i,
       (head) => `${head}<script>${boot(opening)}</script>`,
