@@ -6,10 +6,10 @@
 // which depends on it.
 
 // The platform's own page background and ink in its two linen schemes.
-export let PLATFORM_BACKGROUND = '#fdf7ee'
-export let PLATFORM_DARK_BACKGROUND = '#2b231f'
-let INK = '#523828'
-let DARK_INK = '#f1e6d8'
+export let PLATFORM_BACKGROUND = '#fff8ee'
+export let PLATFORM_DARK_BACKGROUND = '#2a1f1b'
+let INK = '#45291c'
+let DARK_INK = '#f7ebdc'
 
 /** Where the opening screen draws its mark, in CSS pixels: its size and
  * corner (@yaks/web/opening's `.YakOpening img`), and how far above the

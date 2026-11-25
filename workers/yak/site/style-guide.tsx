@@ -32,7 +32,7 @@ let say = (key: string, slots?: Slots) => text(`style-guide.${key}`, slots)
 
 // What an app's preview shows, inside its window.
 let PREVIEW =
-  `<!doctype html><html lang='en'><meta name='color-scheme' content='dark'><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#33493c;color:#f1e6d8;font:600 1rem/1.5 system-ui,sans-serif}p{padding:2rem;text-align:center}</style><body><p>${
+  `<!doctype html><html lang='en'><meta name='color-scheme' content='dark'><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#33493c;color:#f7ebdc;font:600 1rem/1.5 system-ui,sans-serif}p{padding:2rem;text-align:center}</style><body><p>${
     said('style-guide.components.window.preview')
   }</p></body></html>`
 
@@ -236,7 +236,7 @@ export let StyleGuide = () => (
         at='how-to'
         rules={{
           existing: {},
-          roles: code({ role: 'var(--text)', colour: '#523828' }),
+          roles: code({ role: 'var(--text)', colour: '#45291c' }),
           variants: code({ variant: '.Chip-quiet', fill: '--chip-fill' }),
           layers: {},
         }}

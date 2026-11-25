@@ -1,66 +1,72 @@
 /* Linen: yaks.app's colours. Light is a warm sheet of linen under cream
-   cards, written in coffee, never black, with meadow green for what is lit
-   and brick for a fault. Dark is the same room at night: a night-brown
-   ground, cocoa cards, oat ink, moss for what is lit and rose for a fault.
-   linen.ts holds the dark colours for a terminal.
+   cards, written in coffee, never black. Dark is the same room at night: a
+   night-brown ground, cocoa cards and oat ink. The neutrals stay warm and
+   quiet so the paints on them can be bright. linen.ts holds the dark colours
+   for a terminal.
 
-   Its paints are named for what they look like (linen, cream, coffee,
-   clay, taupe, shell, bark, cocoa, night, meadow, moss, brick, rose, dusk,
-   sky, ember, blush, forest, oat), and a theme has more roles than a
-   palette has hues, so roles share them: meadow is what is
-   lit, what went well and who; brick a fault and the language's words;
-   dusk something to know and a moment. yaks.app's own pages wear this
-   theme (workers/yak/public). */
+   Each paint has one job, in a deeper shade on linen and a brighter one at
+   night, so every one reads as text at WCAG AA in both:
+   - amber, the yak's own fur, is the primary action, the selection and what
+     is under way;
+   - teal is a link and who did it;
+   - green is what went well, and who is online;
+   - saffron is what needs watching, a number, and who is away (a brighter
+     yellow for the dot, which is never text);
+   - red is a fault, and a literal;
+   - plum is something to know, set apart, or a moment;
+   - rose only tells a chip apart.
+   A theme has more roles than a palette has hues, so the code roles borrow
+   them. yaks.app's own pages wear this theme (workers/yak/public). */
 :root {
   color-scheme: light dark;
   --gap: 1rem;
   --radius: 4px;
   --measure: 38rem;
-  --shadow: 0 12px 32px -16px light-dark(#5238283d, #1d1714b3);
+  --shadow: 0 12px 32px -16px light-dark(#45291c3d, #1d1714b3);
 
   --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --size: 1.0625rem;
   --small: 0.9375rem;
 
-  --bg: light-dark(#fdf7ee, #2b231f); /* linen; night */
-  --surface: light-dark(#f7efe3, #392d27); /* a sheet behind the one in front */
-  --card: light-dark(#fffbf5, #372c26); /* cream; cocoa */
-  --border: light-dark(#efe3d2, #4d3d34); /* shell; bark */
-  --border2: light-dark(#c9b7a6, #756255); /* the hairline, gone toward clay */
+  --bg: light-dark(#fff8ee, #2a1f1b); /* linen; night */
+  --surface: light-dark(#faeedd, #382a24); /* a sheet behind the one in front */
+  --card: light-dark(#fffcf6, #35271f); /* cream; cocoa */
+  --border: light-dark(#f2e2cc, #4f3c32); /* shell; bark */
+  --border2: light-dark(#d1b49c, #7a6151); /* the hairline, gone toward clay */
 
-  --text: light-dark(#523828, #f1e6d8); /* coffee; oat */
-  --muted: light-dark(#785b47, #c9b19c); /* clay; taupe */
-  --dim: light-dark(#c9b19c, #785b47); /* taupe; clay */
+  --text: light-dark(#45291c, #f7ebdc); /* coffee; oat */
+  --muted: light-dark(#7a4e36, #d6b9a0); /* clay; taupe */
+  --dim: light-dark(#d1b49c, #7a6151); /* taupe; clay */
 
-  --accent: light-dark(#4c773e, #a7c080); /* meadow; moss */
-  --link: light-dark(#4c773e, #a7c080);
-  --heading: light-dark(#523828, #f1e6d8); /* the text's own ink */
+  --accent: light-dark(#b54a12, #ff9a4d); /* amber */
+  --link: light-dark(#0b6f6c, #4fd1c5); /* teal */
+  --heading: light-dark(#45291c, #f7ebdc); /* the text's own ink */
 
-  --info: light-dark(#34404a, #e5eef5); /* dusk; sky */
-  --active: light-dark(#785b47, #f8e0c8); /* clay; blush */
-  --positive: light-dark(#4c773e, #a7c080); /* meadow; moss */
-  --negative: light-dark(#a8503f, #e67e80); /* brick; rose */
-  --caution: light-dark(#a8503f, #e67e80); /* brick; rose */
-  --presence-away: light-dark(#997000, #e8bb54); /* gold */
-  --presence-offline: light-dark(#747170, #a4a09e); /* gray */
-  --special: light-dark(#785b47, #c9b19c); /* clay; taupe */
+  --info: light-dark(#8a2f7e, #e6a3dc); /* plum */
+  --active: light-dark(#b54a12, #ff9a4d); /* amber */
+  --positive: light-dark(#1f7a35, #6edc7e); /* green */
+  --negative: light-dark(#c62828, #ff7272); /* red */
+  --caution: light-dark(#965400, #ffc23d); /* saffron */
+  --presence-away: light-dark(#efb300, #ffcc33); /* yellow */
+  --presence-offline: light-dark(#8c8682, #8f8985); /* grey */
+  --special: light-dark(#8a2f7e, #e6a3dc); /* plum */
 
-  --number: light-dark(#4e3b32, #f8e0c8); /* ember; blush */
-  --literal: light-dark(#a8503f, #e67e80); /* brick; rose */
-  --time: light-dark(#34404a, #e5eef5); /* dusk; sky */
-  --who: light-dark(#4c773e, #a7c080); /* meadow; moss */
+  --number: light-dark(#965400, #ffc23d); /* saffron */
+  --literal: light-dark(#c62828, #ff7272); /* red */
+  --time: light-dark(#8a2f7e, #e6a3dc); /* plum */
+  --who: light-dark(#0b6f6c, #4fd1c5); /* teal */
 
-  --keyword: light-dark(#a8503f, #e67e80); /* brick; rose */
-  --string: light-dark(#4c773e, #a7c080); /* meadow; moss */
-  --fn: light-dark(#34404a, #fffbf5); /* dusk; cream */
-  --type: light-dark(#4e3b32, #f8e0c8); /* ember; blush */
-  --attr: light-dark(#785b47, #c9b19c); /* clay; taupe */
+  --keyword: light-dark(#c62828, #ff7272); /* red */
+  --string: light-dark(#1f7a35, #6edc7e); /* green */
+  --fn: light-dark(#0b6f6c, #4fd1c5); /* teal */
+  --type: light-dark(#8a2f7e, #e6a3dc); /* plum */
+  --attr: light-dark(#965400, #ffc23d); /* saffron */
 
-  --hue-0: light-dark(#4c773e, #a7c080); /* meadow; moss */
-  --hue-1: light-dark(#4e3b32, #f8e0c8); /* ember; blush */
-  --hue-2: light-dark(#34404a, #e5eef5); /* dusk; sky */
-  --hue-3: light-dark(#a8503f, #e67e80); /* brick; rose */
-  --hue-4: light-dark(#785b47, #c9b19c); /* clay; taupe */
-  --hue-5: light-dark(#33493c, #f1e6d8); /* forest; oat */
+  --hue-0: light-dark(#b54a12, #ff9a4d); /* amber */
+  --hue-1: light-dark(#0b6f6c, #4fd1c5); /* teal */
+  --hue-2: light-dark(#1f7a35, #6edc7e); /* green */
+  --hue-3: light-dark(#8a2f7e, #e6a3dc); /* plum */
+  --hue-4: light-dark(#b0305c, #ff8fb1); /* rose */
+  --hue-5: light-dark(#965400, #ffc23d); /* saffron */
 }

@@ -53,7 +53,7 @@ export let specimens = (): Specimen[] => [
         { 'aria-hidden': true },
         h(Image, {
           src: 'data:image/svg+xml,' + encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="8" fill="#a7c080"/></svg>',
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="8" fill="#ff9a4d"/></svg>',
           ),
           alt: '',
         }),

@@ -48,7 +48,7 @@
     color-mix(in srgb, var(--card), var(--bg) 65%)
   );
   --shade: light-dark(
-    color-mix(in srgb, #523828 24%, transparent),
+    color-mix(in srgb, #45291c 24%, transparent),
     color-mix(in srgb, #1d1714 70%, transparent)
   ); /* coffee; soot: what a well's hollow is */
   --hollow: inset 0 2px 4px var(--shade); /* how deep a well sits */

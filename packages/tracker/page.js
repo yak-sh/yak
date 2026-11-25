@@ -496,8 +496,8 @@
           "font:600 1.05rem/1.6 'Nunito',system-ui,-apple-system,'Segoe UI'," +
           'Roboto,sans-serif;' +
           (dark()
-            ? 'background:#2b231f;color:#f1e6d8'
-            : 'background:#fdf7ee;color:#523828')
+            ? 'background:#2a1f1b;color:#f7ebdc'
+            : 'background:#fff8ee;color:#45291c')
         ;(document.body || document.documentElement).append(box)
       } catch { /* a reporter that throws is worse than one that misses */ }
     })
@@ -527,8 +527,8 @@
         "font:600 .9rem/1.4 'Nunito',system-ui,-apple-system,'Segoe UI'," +
         'Roboto,sans-serif;' +
         (dark()
-          ? 'background:#2b231f;color:#f1e6d8'
-          : 'background:#fdf7ee;color:#523828;box-shadow:0 1px 4px #5238283d')
+          ? 'background:#2a1f1b;color:#f7ebdc'
+          : 'background:#fff8ee;color:#45291c;box-shadow:0 1px 4px #45291c3d')
       ;(document.body || document.documentElement).append(line)
     } catch { /* a reporter that throws is worse than one that misses */ }
   })

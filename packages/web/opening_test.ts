@@ -9,9 +9,9 @@ import {
 
 let site: Opening = {
   name: 'yaks.app',
-  background: '#fdf7ee',
-  ink: '#523828',
-  dark: { background: '#2b231f', ink: '#f1e6d8' },
+  background: '#fff8ee',
+  ink: '#45291c',
+  dark: { background: '#2a1f1b', ink: '#f7ebdc' },
   mark: '/mark.png',
   report: '/api/report',
 }

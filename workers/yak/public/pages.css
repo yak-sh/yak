@@ -41,7 +41,7 @@
     margin: 0 0 1rem;
   }
   a {
-    color: var(--accent);
+    color: var(--link);
     text-underline-offset: .18em;
   }
   :focus-visible {
