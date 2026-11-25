@@ -179,6 +179,14 @@ export let evicted = (e: unknown): boolean =>
   e instanceof Error &&
   (('retryable' in e && e.retryable === true) || says(e, RESETS))
 
+/** A request dropped by an overloaded object before it could serve it. */
+export let overloaded = (e: unknown): e is Error =>
+  e instanceof Error &&
+  (('overloaded' in e && e.overloaded === true) ||
+    e.message.includes(
+      'Durable Object is overloaded. Requests queued for too long.',
+    ))
+
 /**
  * The runtime killed the object for its limits. Its own code never sees the
  * kill, and the retry may well answer, so whoever sees these words reports

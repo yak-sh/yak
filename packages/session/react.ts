@@ -305,6 +305,13 @@ export type Deps = {
    * ask again after its backoff, unless this attempt is the run's last. A step
    * taken outside the pool has nobody to ask again, so such a failure stands. */
   attempt?: Attempt
+  /** Classify a transient host failure before a tool or model was dispatched.
+   * The pool keeps the step pending and retries it with its usual backoff. */
+  retry?: (
+    error: unknown,
+    session: Eid,
+    phase: string,
+  ) => ModelError | undefined
   /** The share of its model's context window a transcript fills before it
    * is compacted, the same for every model (./compact.ts `SHARE` where
    * absent). The window is the model row's `model.context`, else its
@@ -723,6 +730,16 @@ let transportFailure = (e: unknown): e is ModelError =>
 // The error a step throws for the pool to ask again: one that says so.
 let again = (e: ModelError) =>
   e.retry ? e : new ModelError(e.code, e.message, {}, e.response)
+
+export let retryingStep = (
+  deps: Deps,
+  error: unknown,
+  session: Eid,
+  phase: string,
+): ModelError | undefined =>
+  deps.attempt && !deps.attempt.last() && !deps.signal?.aborted
+    ? deps.retry?.(error, session, phase)
+    : undefined
 
 // The context window a model holds, in tokens: its row's, else that of the
 // provider named, else CONTEXT.
@@ -1577,6 +1594,8 @@ export let react = async (
     }
   } catch (error) {
     if (error instanceof Stale) throw error
+    let retry = retryingStep(deps, error, session, 'tools')
+    if (retry) throw retry
     if (error instanceof Refused || error instanceof CallError) {
       let code = error instanceof CallError ? error.code : 'tools'
       return append([line({ [REFUSAL]: { code } }, error.message)])
@@ -2015,6 +2034,8 @@ export let react = async (
       )
   } catch (error) {
     if (error instanceof Stale) throw error
+    let retry = retryingStep(deps, error, session, 'context')
+    if (retry) throw retry
     // A host refusing to prepare context cannot be fixed by asking again.
     // Record it before returning, so its queued continuation sees an ended
     // transcript and the runner delivers it and releases its child place.
@@ -2403,6 +2424,12 @@ export let react = async (
     }
   }
   req.call = ask.entity.eid
+  let submitted = false
+  if (deps.retry) {
+    let started = () => void (submitted = true)
+    req.onSubmit = req.onAck = () => Promise.resolve(started())
+    req.onFirst = started
+  }
   let reply: Reply
   let requestedAt: number | undefined
   try {
@@ -2441,9 +2468,11 @@ export let react = async (
       for (let active of stream.values()) active.writer.discard()
       throw error
     }
-    let e = error
     let phase = 'model'
     await ending()
+    let e = !submitted && !stream.size
+      ? retryingStep(deps, error, session, phase) ?? error
+      : error
     // Text streamed before the failure stays, unless recovery took the
     // attempt from this worker.
     let kept = async (failed: Step | undefined) => {

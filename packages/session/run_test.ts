@@ -305,9 +305,9 @@ test('a step answers the wake its own reply owes', () => {
 })
 
 // A process working the pool on a clock the test moves, with `s1` asked.
-let clocked = async (model: Model) => {
+let clocked = async (model: Model, more: Partial<Runner> = {}) => {
   let clock = { t: 0 }
-  let p = proc(store(), 'w1', model, {}, () => clock.t)
+  let p = proc(store(), 'w1', model, more, () => clock.t)
   await p.fx.work(p.g)
   await p.g.apply(ask('s1'))
   await p.fx.idle()
@@ -921,6 +921,40 @@ test('a request the provider failed is asked again once the wait it named is up'
   assertEquals(asks(), 1)
   await at(5_000)
   assertEquals([asks(), await status()], [2, 'settled'])
+})
+
+test('a transient failure preparing a tool offer waits before asking the model', async () => {
+  let failure = new Error('store overloaded')
+  let { model, asks } = script(() => done)
+  let prepared = 0
+  let { at, status } = await clocked(model, {
+    toolSnapshot: () => {
+      if (++prepared == 1) return Promise.reject(failure)
+      return Promise.resolve([])
+    },
+    retry: (error) =>
+      error == failure
+        ? new ModelError('platform_overload', failure.message, { after: 1500 })
+        : undefined,
+  })
+  assertEquals([asks(), await status()], [0, 'pending'])
+  await at(1499)
+  assertEquals(asks(), 0)
+  await at(1500)
+  assertEquals([asks(), await status()], [1, 'settled'])
+})
+
+test('an overloaded host does not replay a dispatched model request', async () => {
+  let asks = 0
+  let { at, status } = await clocked(async (request) => {
+    asks++
+    await request.onSubmit?.()
+    throw new Error('store overloaded')
+  }, {
+    retry: () => new ModelError('platform_overload', 'store overloaded', {}),
+  })
+  await at(10_000)
+  assertEquals([asks, await status()], [1, 'failed'])
 })
 
 test('failures in a row wait longer each time, and the last one stands', async () => {

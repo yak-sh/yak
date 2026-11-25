@@ -59,6 +59,7 @@ import {
   type Request as Step,
 } from '@yaks/model'
 import { forwarding, PATH } from '@yaks/model/step'
+import { overloaded } from '@yaks/durable-object/resets'
 import { AWAY, falling, MACHINE, namesFor } from './operator-machine.ts'
 import type { Calling } from '@yaks/tunnel/hosted'
 import { platform, ready, served } from './providers.ts'
@@ -3255,6 +3256,13 @@ export let operating = (
   // run of their own, which does not wait.
   fx.handle(stepwise(running(g, {
     ...runner,
+    retry: (error, session, phase) => {
+      if (!overloaded(error)) return
+      caught(error, { request: `operator ${phase}`, session })
+      return new ModelError('platform_overload', error.message, {
+        after: 1000 + Math.random() * 1000,
+      })
+    },
     // Its answer goes back the way the words it answers came, however its
     // turn ended: a reply, a failure, or a stop.
     ended: async (session) => {

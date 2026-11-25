@@ -38,6 +38,7 @@ import {
   react,
   type Reading,
   reading,
+  retryingStep,
   type Step,
 } from './react.ts'
 import { hasAsk, openOf, usingOf } from './reach.ts'
@@ -272,6 +273,8 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
     }], { trusted: true })
     return true
   } catch (err) {
+    let retry = retryingStep(r, err, session, 'prepare')
+    if (retry) throw retry
     if (actionable(String(exceptionOf(err).value))) {
       r.report?.(err, session, 'prepare')
     }
