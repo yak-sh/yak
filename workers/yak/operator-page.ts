@@ -27,7 +27,7 @@ import {
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, page as drawn, type Picked, run, script, shell } from './pages.ts'
-import { asset } from './sheets.ts'
+import { asset, chatPreloads } from './sheets.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { type Ways, Ways as Reaching } from './operator-ways.ts'
 import { frame, FRAMED } from './frame.ts'
@@ -1445,7 +1445,7 @@ let talkPage = (
       )),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     FRAMED,
-    installable(space),
+    installable(space) + (page.chat ? chatPreloads(env) : ''),
   )
 }
 

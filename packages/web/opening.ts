@@ -81,7 +81,7 @@ let SCRIPT = `(o, pages, forgot) => {
   let early = Symbol.for('yaks.early-report')
   let checked = navigator.webdriver ||
     new URLSearchParams(location.search).get('utm_source') == 'agent-check'
-  let parsed = document.readyState != 'loading'
+  let parsed = () => document.readyState != 'loading'
   let timing = window.PerformanceObserver?.supportedEntryTypes?.includes('paint')
   let painted = () => !!performance.getEntriesByName('first-contentful-paint').length
   let SAY = {
@@ -155,11 +155,11 @@ let SCRIPT = `(o, pages, forgot) => {
     return
   }
   // Painted nothing yet, so far as the browser can say.
-  let blank = () => timing ? !painted() : !parsed
+  let blank = () => timing ? !painted() : !parsed()
   // The page in whole: parsed, and every stylesheet in. A loading or slow
   // screen leaves then, by itself, so it never stands over a page that came,
   // however late.
-  let whole = () => parsed && [...document.querySelectorAll('link[rel=stylesheet]')].every((l) => l.sheet)
+  let whole = () => parsed() && [...document.querySelectorAll('link[rel=stylesheet]')].every((l) => l.sheet)
   let settle = () => {
     if (!whole()) return
     clearTimeout(cue)
@@ -169,14 +169,11 @@ let SCRIPT = `(o, pages, forgot) => {
       box = shown = undefined
     }
   }
-  let cue = setTimeout(() => { if (!parsed && blank()) draw('loading') }, ${CUE})
+  let cue = setTimeout(() => { if (!whole() && blank()) draw('loading') }, ${CUE})
   let slow = setTimeout(() => {
     if (!whole() && (shown == 'loading' || blank())) draw('slow')
   }, ${SLOW})
-  document.addEventListener('DOMContentLoaded', () => {
-    parsed = true
-    settle()
-  }, { once: true })
+  document.addEventListener('readystatechange', settle)
   // Each stylesheet as it comes in, and the page's own load.
   addEventListener('load', settle, true)
   // The site's own script or stylesheet that failed before the page loaded.
@@ -194,6 +191,7 @@ let SCRIPT = `(o, pages, forgot) => {
   }
   addEventListener('error', heard, true)
   let judge = () => {
+    document.removeEventListener('readystatechange', settle)
     removeEventListener('error', heard, true)
     removeEventListener('load', settle, true)
     if (!broke) return

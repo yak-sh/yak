@@ -12,6 +12,7 @@ import { opening } from '@yaks/platform/opening'
 import { openingHead } from '@yaks/web/opening'
 
 declare const YAK_NAMED: Record<string, string> | undefined
+declare const YAK_CHAT_CHUNKS: string[] | undefined
 
 let NAMES = typeof YAK_NAMED == 'undefined' ? {} : YAK_NAMED
 
@@ -23,6 +24,14 @@ export let asset = (
   names = NAMES,
   base = url(env, '/'),
 ) => base + (names[name] ?? name)
+
+/** Start the chat's modules before the parser reaches its transcript. */
+export let chatPreloads = (env: Host): string => {
+  let chunks = typeof YAK_CHAT_CHUNKS == 'undefined' ? [] : YAK_CHAT_CHUNKS
+  return ['_talk.js', '_words.js', '_page-client.js', ...chunks].map((name) =>
+    `<link rel="modulepreload" href="${asset(env, name)}">`
+  ).join('\n')
+}
 
 /** The store client's content-made name below an app's `api/` (apps.ts
  * `api`), or null where none was made. */

@@ -10,7 +10,7 @@ import { rollup } from 'rollup'
 import { dirname, join, resolve } from 'node:path'
 import { builtinModules } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { planned } from './assets.ts'
+import { chatChunks, planned } from './assets.ts'
 
 /** The entry's static imports, leaving every dynamic door unopened. */
 export let closure = (meta: Metafile, entry: string): Set<string> => {
@@ -94,6 +94,7 @@ let native = (name: string) =>
 export let options = (
   root: string,
   named: Record<string, string> = {},
+  chat: string[] = [],
 ): BuildOptions => ({
   absWorkingDir: root,
   entryPoints: ['index.ts'],
@@ -122,6 +123,7 @@ export let options = (
   define: {
     'process.env.NODE_ENV': '"production"',
     YAK_NAMED: JSON.stringify(named),
+    YAK_CHAT_CHUNKS: JSON.stringify(chat),
   },
 })
 
@@ -133,8 +135,12 @@ export let bundle = async (root: string, output: string, meta: string) => {
     prefix: '.modules-',
   })
   try {
-    let names = planned(join(root, 'public')).names
-    let built = await build({ ...options(root, names), outdir: scratch })
+    let publicDir = join(root, 'public')
+    let names = planned(publicDir).names
+    let built = await build({
+      ...options(root, names, chatChunks(publicDir)),
+      outdir: scratch,
+    })
     let source = built.metafile!
     operatorRead(source)
     let entry = Object.keys(source.outputs).find((file) =>

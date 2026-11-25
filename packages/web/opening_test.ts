@@ -115,7 +115,7 @@ let opening = (
       // As the parser does: after what is there already.
       if (body != null) document.body.insertAdjacentHTML('beforeend', body)
       state = 'interactive'
-      document.dispatchEvent(new window.Event('DOMContentLoaded'))
+      document.dispatchEvent(new window.Event('readystatechange'))
     },
     loaded: () => {
       fire('load')

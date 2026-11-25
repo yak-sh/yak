@@ -185,10 +185,14 @@ export let plan = (
  * )
  * ```
  */
-export let chunksOf = (assets: Asset[], read: Read): string[] => {
+export let chunksOf = (
+  assets: Asset[],
+  read: Read,
+  imported = imports,
+): string[] => {
   let found = new Set<string>()
   let walk = (name: string) => {
-    for (let chunk of imports(new TextDecoder().decode(read(name)))) {
+    for (let chunk of imported(new TextDecoder().decode(read(name)))) {
       if (found.has(chunk)) continue
       found.add(chunk)
       walk(chunk)

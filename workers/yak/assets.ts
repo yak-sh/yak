@@ -18,7 +18,9 @@
 // again in halves (@yaks/ui `halved`); what a sheet points at (the pencil,
 // the paper, the fonts); and the scripts and icons the pages name. Each
 // keeps answering at its own address too, as pages already shipped name it.
-import { type Asset, plan, reading, write } from '@yaks/web/assets'
+import { type Asset, chunksOf, plan, reading, write } from '@yaks/web/assets'
+import { CHUNK } from '@yaks/cli/page'
+import { parse } from 'es-module-lexer/js'
 import { halved } from '@yaks/ui'
 import {
   homeFigures,
@@ -248,6 +250,17 @@ export let ASSETS: Asset[] = [
 /** Each named file's address of its bytes, and the bytes, as the build left
  * them in `dir`. */
 export let planned = (dir: string) => plan(ASSETS, reading(dir), halved)
+
+/** The chat's static module graph, requested together by its document. */
+export let chatChunks = (dir: string) =>
+  chunksOf(
+    ASSETS.filter(({ name }) => name == '_talk.js'),
+    reading(dir),
+    (code) =>
+      parse(code)[0].flatMap(({ d, n }) =>
+        d < 0 && n?.startsWith('/' + CHUNK + '.') ? [n.slice(1)] : []
+      ),
+  )
 
 /** What the build draws: the Operator store's words as its chat page's
  * graph holds them, the site's pages and the kit's sheet. */
