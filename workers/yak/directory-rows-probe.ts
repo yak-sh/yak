@@ -18,6 +18,7 @@ import { posts } from './config.ts'
 import { cleanup } from '@yaks/testing'
 import { plugins as trash } from '@yaks/platform/trash-graph'
 import { plugins as meter } from '@yaks/platform/meter-graph'
+import { pageWhereabouts } from '@yaks/notify/whereabouts'
 import { plugins as signin } from './facets/signin-graph.ts'
 import { plugins as owning } from './facets/directory-graph.ts'
 import { vaultOf } from './vault.ts'
@@ -116,6 +117,21 @@ export let rows = (
     try {
       if (url.pathname == '/trash' || url.pathname.startsWith('/trash/')) {
         return trashDoor(req, g, true)
+      }
+      if (url.pathname == '/whereabouts') {
+        assertEquals(req.method, 'POST')
+        assertEquals(req.headers.get('x-yak-kernel'), '1')
+        let people = await req.json() as string[]
+        let history = await dir.whereabouts(people)
+        let now = env.CLOCK?.now() ?? Date.now()
+        return Response.json(people.flatMap((person) =>
+          pageWhereabouts(
+            history.filter((row) => row.whereabouts?.person == person),
+            person,
+            [],
+            now,
+          )
+        ))
       }
       if (url.pathname == '/used') {
         assertEquals(req.method, 'POST')
