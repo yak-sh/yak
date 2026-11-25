@@ -36,7 +36,7 @@ import * as system from '@yaks/process/system'
 // `brief`) unless `--verbose`. The exit code is 1 when a test failed.
 import { choose } from './choose.ts'
 import { drive } from './drive.ts'
-import { note, proof, remember, survey, tally } from './deps.ts'
+import { FACTS, note, proof, remember, survey, tally } from './deps.ts'
 import { discover, tested } from './find.ts'
 import { examples } from './load.ts'
 import { observe } from './reads.ts'
@@ -168,9 +168,13 @@ tally(took)
 let seen = observation.reads()
 observation.close()
 let read = (p: string) => seen && (seen.get(p) ?? [])
-let s = await survey([
-  ...new Set(passing.flatMap((p) => read(p) ?? []).filter(code)),
-])
+let s = await survey(
+  [
+    ...new Set(passing.flatMap((p) => read(p) ?? []).filter(code)),
+  ],
+  undefined,
+  FACTS,
+)
 let remembered: Record<string, string> = s
   ? Object.fromEntries(
     await Promise.all(

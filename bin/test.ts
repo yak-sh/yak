@@ -340,10 +340,10 @@ export let RUNS = [
   rel(new URL('../workers/yak/runtime-resolve.ts', import.meta.url)),
 ]
 
-/** What a change's own run may expect its tests to take, in milliseconds,
- * loading included: with choosing and starting them, under the ten seconds an
- * agent may wait. The rest of its consumers run in main's CI after the push. */
-export let SECONDS = 6_000
+/** The test time available after checkout setup, selection and startup,
+ * in milliseconds, including test loading. Required files can exceed this
+ * budget. The rest of the change's consumers run in main's CI. */
+export let SECONDS = 4_000
 
 /// expected({ 'a_test.ts': { x: 100, y: 5 } })('a_test.ts') -> 125
 /// expected({})('a_test.ts') -> 20

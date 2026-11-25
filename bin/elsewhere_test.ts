@@ -7,6 +7,7 @@ import {
   elsewhere,
   type Git,
   git,
+  hasRoom,
   machine,
   prepare,
   ROOM,
@@ -113,6 +114,21 @@ test('YAK_MACHINE names the machine, even as here, before the clone does', async
   equal(await machine(config('ssh://a'), env('ssh://b')), 'ssh://b')
   equal(await machine(config('ssh://a'), env('')), undefined)
   equal(await machine(config(), env()), undefined)
+})
+
+test('scoped work can start beside recent runs while measured memory has room', async () => {
+  let memory = 'MemAvailable: 9437184 kB\nsome avg10=0.00\n'
+  let counts = (reading: string) => ({
+    execute: (script: string) =>
+      Promise.resolve(reading + (script == ROOM ? '2\n' : '')),
+  })
+  equal(await hasRoom(counts(memory), true), false)
+  equal(await hasRoom(counts(memory), false), true)
+  equal(
+    await hasRoom(counts(memory.replace('9437184', '3145728')), false),
+    false,
+  )
+  equal(await hasRoom(counts(memory.replace('0.00', '25.00')), false), false)
 })
 
 // Anything short of a started run is said once, and leaves the run here. The

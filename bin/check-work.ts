@@ -43,5 +43,6 @@ export let onRunner = async (
     env: { TASKS_TEST_BASE: 'HEAD', YAK_MACHINE: '', [REMOTE]: '1' },
     before: before && (async () => before(await from())),
     limits: ['MemoryMax=6G', 'MemorySwapMax=0'],
+    whole: args.includes('--all'),
   })
 }

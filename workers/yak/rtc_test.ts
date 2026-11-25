@@ -7,25 +7,28 @@ import { assert, assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { monthlyBudget, STARTER } from '@yaks/platform/plans'
 import { monthOf } from '@yaks/platform/meter'
-import {
-  cloudflare,
-  connector,
-  kernel,
-  meta,
-  seed,
-  type Track,
-} from './probe.ts'
+import { cloudflare, type Track } from './probe.ts'
+import { fetch as appFetch } from './apps.ts'
+import { appStore } from './directory.ts'
+import { KERNEL } from './meta.ts'
+import { ADA, as, SECRET, seeded, visit } from './serving-data-probe.ts'
+import { platform as directory } from './directory-rows-probe.ts'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { platform } from './testing.ts'
 import { meta as platformMeta } from './meta.ts'
 
 test("an app's voice door calls for its members, and for visitors where it opens voice", async () => {
-  let k = await kernel()
+  let cf = cloudflare()
   try {
-    let slug = `v${crypto.randomUUID().slice(0, 6)}`
-    let { cookie, eids } = await seed(k, [{ slug, apps: ['room'] }])
-    let agent = connector(k, cookie)
-    await agent.tool('app_set', { space: slug, app: 'room', access: 'open' })
-    let owner = { cookie }
+    await using p = directory(SECRET, {
+      REALTIME_APP: 'app',
+      REALTIME_TOKEN: 'a-token',
+      REALTIME_API: cf.url,
+    })
+    let { env } = p
+    lifecycleStores(env)
+    let { space, app, dir } = await seeded(env, 'open', p.dir)
+    let owner = { cookie: await as(ADA) }
     let stranger = { 'cf-connecting-ip': '198.18.7.7' }
     let ask = async (
       who: Record<string, string>,
@@ -33,11 +36,14 @@ test("an app's voice door calls for its members, and for visitors where it opens
       body?: unknown,
       key = '',
     ) => {
-      let r = await k.at(`${slug}.yaks.app`, `/room/api/rtc/${path}`, {
-        method: body === undefined ? 'GET' : 'POST',
-        headers: { ...who, ...(key ? { 'x-yak-rtc-key': key } : {}) },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      })
+      let r = await appFetch(
+        visit(`/cookbook/api/rtc/${path}`, {
+          method: body === undefined ? 'GET' : 'POST',
+          headers: { ...who, ...(key ? { 'x-yak-rtc-key': key } : {}) },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        }),
+        env,
+      )
       return { status: r.status, said: await r.json() }
     }
     let code = async (...a: Parameters<typeof ask>) => {
@@ -52,14 +58,11 @@ test("an app's voice door calls for its members, and for visitors where it opens
       'not_a_writer',
     ])
 
-    await agent.tool('app_files', {
-      space: slug,
-      app: 'room',
-      op: 'write',
-      path: 'vocab.json',
-      content: JSON.stringify({ rtc: 'open', $defs: {} }),
-    })
-    await agent.tool('app_deploy', { space: slug, app: 'room' })
+    let opened = await appStore(env.STORE, space, app, env)('/vocab', {
+      method: 'POST',
+      body: JSON.stringify({ rtc: 'open', $defs: {} }),
+    }, KERNEL)
+    assertEquals(opened.status, 200, await opened.text())
     let b = (await ask(stranger, 'sessions/new', {})).said
     assert(b.sessionId && b.key)
 
@@ -98,20 +101,19 @@ test("an app's voice door calls for its members, and for visitors where it opens
       (await ask(owner, `sessions/${a.sessionId}/renew`, {}, a.key)).status,
       200,
     )
-    let [row] = await meta(k).query(`.space.slug=${slug}&?meter`) as {
-      meter?: { realtime?: number }
-    }[]
-    assert((row.meter?.realtime ?? 0) > 0)
+    assert(((await dir.at(space.eid))?.meter?.realtime ?? 0) > 0)
 
     // Models and voice spend one account budget: spent on models, no new call.
     let month = monthOf(new Date())
-    await meta(k).apply([{
-      entity: { eid: eids[slug] },
-      meter: { month, models: monthlyBudget('free', month) + STARTER },
-    }])
+    await dir.stamp({
+      entities: [{
+        entity: { eid: space.eid },
+        meter: { month, models: monthlyBudget('free', month) + STARTER },
+      }],
+    })
     assertEquals(await code(owner, 'sessions/new', {}), [429, 'limit'])
   } finally {
-    await k.stop()
+    await cf.stop()
   }
 })
 

@@ -188,6 +188,36 @@ test('a remembered graph asks deno again only of the modules whose imports chang
   equal(asked.length, 2)
 })
 
+test('worktrees with different member configurations can each reuse their graph', async () => {
+  let seed = at('graph-seed.json')
+  let root = 'member/file.ts'
+  let module = { specifier: location().url(root) }
+  let asked: string[] = []
+  let inspect = (name: string, config: string) =>
+    remembered(
+      () => {
+        asked.push(name)
+        return Promise.resolve({ modules: [module], redirects: {} })
+      },
+      at(name + '.json'),
+      seed,
+    )(
+      [root],
+      (path) => Promise.resolve(path == 'member/package.json' ? config : ''),
+    )
+  for (
+    let [name, config] of [
+      ['first', 'before'],
+      ['second', 'after'],
+      ['third', 'before'],
+      ['fourth', 'after'],
+    ]
+  ) {
+    equal((await inspect(name, config))?.modules, [module])
+  }
+  equal(asked, ['first', 'second'])
+})
+
 test('a remembered resolver retains compiler metadata and returns only the requested module closure', async () => {
   let roots = ['first', 'second'].map((n) => at(`g/${n}.ts`))
   let info: Info = {

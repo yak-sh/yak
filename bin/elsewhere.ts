@@ -14,8 +14,8 @@
 // run that grows past its cap is the one ended. What it prints comes back as
 // it prints it, and its exit code is the caller's.
 //
-// A run waits there while the machine has no room for one more, by the
-// machine's own reading (@yaks/machine/room) and the runs just begun there.
+// A run waits for the machine's measured headroom (@yaks/machine/room).
+// Full runs also reserve room for workloads that have only just started.
 //
 // A run goes elsewhere when it can, and that is never why it fails: with no
 // machine named, or one that cannot be reached or cannot take the change, the
@@ -32,7 +32,7 @@ import {
   sshConnector,
 } from '@yaks/machine/connectors'
 import { executionWorkspace } from '@yaks/machine/execution'
-import { fits, NEED, roomOf, SCRIPT } from '@yaks/machine/room'
+import { fits, NEED, room, roomOf, SCRIPT } from '@yaks/machine/room'
 import { sleep } from '@yaks/fp'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -195,6 +195,11 @@ find "$HOME/runs" -mindepth 1 -maxdepth 1 -newermt "@$(($(date +%s) - ${
 export let roomy = (out: string) =>
   fits(roomOf(out), NEED, Number(out.trim().split('\n').at(-1)))
 
+/** Scoped work uses the machine's measured headroom. Full runs can grow for
+ * minutes, so their admission still accounts for recently started runs. */
+export let hasRoom = async (transport: ComputerTransport, whole: boolean) =>
+  whole ? roomy(await transport.execute(ROOM)) : fits(await room(transport))
+
 /** The connectors a clone's machine may be reached by. Their options come
  * from the box's ssh configuration, never from the address. */
 let reach = (address: string) =>
@@ -216,6 +221,8 @@ export type Options = {
   env?: Record<string, string>
   /** the command's systemd scope properties, such as `MemoryMax=6G` */
   limits?: string[]
+  /** Whether to reserve headroom for other starts that are still growing. */
+  whole?: boolean
   run?: Git
   connect?: (address: string) => Promise<ComputerTransport>
   write?: (bytes: Uint8Array) => Promise<void>
@@ -237,6 +244,7 @@ export let elsewhere = async (
     from,
     env = {},
     limits = [],
+    whole = true,
     run = git,
     connect = reach,
     write = stdout,
@@ -265,9 +273,12 @@ export let elsewhere = async (
     let diff = await work(at, run)
     // A run waits for room there, as an agent waits for room here: the
     // machine slows down rather than falls over.
-    for (let n = 0; !roomy(await transport.execute(ROOM)); n++) {
-      if (n % 12 == 0) say(`elsewhere: ${address} has no room yet; waiting`)
-      await pause(5_000)
+    let interval = whole ? 5_000 : 500
+    for (let n = 0; !await hasRoom(transport, whole); n++) {
+      if (n * interval % 60_000 == 0) {
+        say(`elsewhere: ${address} has no room yet; waiting`)
+      }
+      await pause(interval)
       if (interrupted) return 130
     }
     let dir = (await transport.execute(prepare(id, at, diff))).trim()

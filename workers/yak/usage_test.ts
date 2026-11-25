@@ -47,9 +47,9 @@ import {
 import { holding } from './held.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { platform } from './testing.ts'
+import { platform } from './directory-rows-probe.ts'
 import { meta } from './meta.ts'
-import type { Env } from './env.ts'
+import type { Vars } from './env.ts'
 import type { Host } from '@yaks/platform/host'
 import { counted, countedRealtime, countedSpend, weighed } from './meter.ts'
 import { size } from '@yaks/fp'
@@ -543,7 +543,7 @@ test('a refusal names the ceiling and where the plans are written', () => {
 
 // The directory that count is written to, in memory, holding one space `jeff`
 // with the meter given, and that space as the directory has it now.
-let counting = async (meter?: Partial<Meter>, vars: Partial<Env> = {}) => {
+let counting = async (meter?: Partial<Meter>, vars: Vars = {}) => {
   let { env } = platform('counting', vars)
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
   await dir.apply({

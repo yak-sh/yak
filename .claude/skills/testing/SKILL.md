@@ -162,8 +162,10 @@ Cached passing dependencies can narrow execution further.
 On the box a run goes to yak-run-1, a GCE VM (the clone's `git config
 yak.machine`, bin/elsewhere.ts): your checkout as it stands is copied there, the
 run's output streams back, and its exit code is yours. Changed files are still
-formatted in your checkout. Where the VM cannot be reached the run goes on here,
-having said why; `YAK_MACHINE= deno task test` runs here on purpose.
+formatted in your checkout. Scoped runs use the VM's measured memory headroom.
+Full runs also reserve room for recent starts. Where the VM cannot be reached
+the run goes on here, having said why. `YAK_MACHINE= deno task test` runs here
+on purpose.
 
 While iterating, name a source file to run its tests and every test depending
 on it, selected as a no-path run selects from a change to it:

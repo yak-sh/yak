@@ -13,6 +13,7 @@ import { commandWorker, granted } from './dispatch.ts'
 import { Store } from './graph.ts'
 import { parseTools } from '@yaks/tools/declared'
 import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
+import { hosting } from './directory-rows-probe.ts'
 import type { Dispatch } from './door.ts'
 import { vouched } from './session.ts'
 import { BEAT } from './running.ts'
@@ -25,9 +26,9 @@ test('a companion works off-page across pause, restart and retry', async () => {
   // The kernel's clock, which only this test moves: its Stores' wakes, writes
   // and effects keep it.
   let time = clock(Date.parse('2026-09-28T00:00:00.000Z'))
-  let p = platform({ CLOCK: time })
+  let p = hosting(platform({ CLOCK: time }))
   try {
-    let k = await seeded(p.env)
+    let k = await seeded(p.env, 'public', p.dir)
     let name = storeName(k.space, k.app)
     let door = appStore(p.env.STORE, k.space, k.app)
     let write = async (path: string, body: unknown, status = 200) => {
@@ -41,40 +42,35 @@ test('a companion works off-page across pause, restart and retry', async () => {
       assertEquals(res.status, status, answer)
       return JSON.parse(answer)
     }
-    let words = JSON.parse(Deno.readTextFileSync(
+    let vale = JSON.parse(Deno.readTextFileSync(
       new URL('../../apps/vale/vocab.json', import.meta.url),
     ))
+    let used = [
+      'building_design',
+      'companion',
+      'companion_tick',
+      'directive',
+      'gather_wood',
+      'gathered',
+      'item',
+      'place',
+      'player',
+      'position',
+      'theme_design',
+      'upgraded',
+    ]
+    let words = {
+      $defs: Object.fromEntries(used.map((name) => [name, vale.$defs[name]])),
+    }
     await write('/vocab', words)
     let components = Object.entries(words.$defs)
       .filter(([, value]) => (value as { component?: boolean }).component)
       .map(([key]) => key)
-    await write(
-      '/tools',
-      parseTools(words, [
-        ...components,
-        'session',
-        'call',
-        'wake',
-        'entry',
-        'content',
-        'using',
-        'questions',
-        'notice',
-      ]),
-    )
+    let tools = parseTools(words, [...components, 'session', 'call', 'wake'])
+    await write('/tools', tools)
     await keepDeclaration(p.env, k.space, k.app, releaseOf(k.app), {
       vocab: words,
-      tools: parseTools(words, [
-        ...components,
-        'session',
-        'call',
-        'wake',
-        'entry',
-        'content',
-        'using',
-        'questions',
-        'notice',
-      ]),
+      tools,
     })
     // The region themes the app's seed gives its store, which its worker reads
     // before any terrain it grows.

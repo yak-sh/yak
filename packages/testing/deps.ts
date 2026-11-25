@@ -166,6 +166,28 @@ type Kept = {
   npmPackages: NonNullable<Info['npmPackages']>
 }
 
+let empty = (): Kept => ({
+  version: VERSION,
+  deno: system.runtimeVersion,
+  configs: {},
+  modules: {},
+  redirects: {},
+  npmPackages: {},
+})
+
+let configuration = async (kept: Kept, bytes: Bytes) =>
+  (await Promise.all(
+    Object.entries(kept.configs).sort().map(
+      async ([path, was]) => {
+        let now = await bytes(path)
+        return now == was ? [] : [[path, now]]
+      },
+    ),
+  )).flat()
+
+let current = (kept: Kept) =>
+  kept.version == VERSION && kept.deno == system.runtimeVersion
+
 let slim = (m: Module): Module => ({
   specifier: m.specifier,
   ...m.local && { local: m.local },
@@ -244,34 +266,42 @@ async (roots: string[], bytes: Bytes = said): Promise<Info | undefined> => {
   let { cwd, base, url, rel } = location()
   return await refresh(`${base} ${url(store)}`, async () => {
     let here = `${cwd}/`, pid = `.${system.pid}.example.`
-    let kept: Kept = {
-      version: 0,
-      deno: '',
-      configs: {},
-      modules: {},
-      redirects: {},
-      npmPackages: {},
-    }
-    for (let from of [store, seed]) {
-      if (!from) continue
+    let load = (from: string): Kept | undefined => {
       try {
-        kept = {
-          ...kept,
-          ...JSON.parse(
-            io.readTextFileSync(from).replaceAll('<checkout>/', here)
-              .replaceAll('.<pid>.example.', pid),
-          ),
-        }
-        break
+        return JSON.parse(
+          io.readTextFileSync(from).replaceAll('<checkout>/', here)
+            .replaceAll('.<pid>.example.', pid),
+        )
       } catch { /* none kept */ }
     }
+    let saved = load(store)
+    let whole = !saved || !current(saved) ||
+      (await configuration(saved, bytes)).length > 0
+    let shared = seed
+    if (whole && seed) {
+      let base = load(seed)
+      if (base && current(base)) {
+        let changes = await configuration(base, bytes)
+        // Two worktrees can share lockfiles while a member's package.json
+        // differs. Share each resolution separately so they keep their graphs.
+        if (changes.length) {
+          shared = `${seed}.${hex(JSON.stringify(changes)).slice(0, 16)}.json`
+          saved = load(shared)
+          whole = !saved || !current(saved) ||
+            (await configuration(saved, bytes)).length > 0
+        } else {
+          saved = base
+          whole = false
+        }
+      }
+    } else if (!whole) {
+      // A warm checkout can update its own graph without replacing a shared
+      // graph built under another checkout's configuration.
+      shared = undefined
+    }
+    let kept = saved ?? empty()
     let file = (s: string) => s.startsWith('file:')
     let now = (s: string) => file(s) ? bytes(rel(s)) : Promise.resolve('')
-    let held = await Promise.all(
-      Object.entries(kept.configs).map(async ([c, d]) => await bytes(c) == d),
-    )
-    let whole = kept.version != VERSION || kept.deno != system.runtimeVersion ||
-      !held.every(Boolean)
     let at = (s: string) => kept.redirects[s] ?? s
     // Walked a wave at a time, each wave's bytes read together.
     let reached = new Map<string, Module>()
@@ -299,14 +329,7 @@ async (roots: string[], bytes: Bytes = said): Promise<Info | undefined> => {
       wave = next
     }
     if (whole) {
-      kept = {
-        version: VERSION,
-        deno: system.runtimeVersion,
-        configs: {},
-        modules: {},
-        redirects: {},
-        npmPackages: {},
-      }
+      kept = empty()
       stale = new Set(roots)
     }
     if (stale.size) {
@@ -327,7 +350,7 @@ async (roots: string[], bytes: Bytes = said): Promise<Info | undefined> => {
       for (let [i, c] of unseen.entries()) kept.configs[c] = found[i]
       let text = JSON.stringify(kept).replaceAll(here, '<checkout>/')
         .replaceAll(pid, '.<pid>.example.')
-      put(text, store, seed)
+      put(text, store, shared)
     }
     let modules = new Map<string, Module>()
     let visit = roots.map((r) => at(url(r)))
@@ -642,7 +665,7 @@ export let survey = async (
     }
     return [...paths].flatMap((p) => [p, at(url(p))])
   }
-  known.save()
+  known.save((path) => !facts.has(path))
   let mine = (n: string) => own.get(n) ?? n
   let seals = seal(next, mine)
   let executed = seal(
