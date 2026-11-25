@@ -324,13 +324,14 @@ export let manage = async (
   // opens the files sent in it where it stands (operator-view.ts `attached`).
   // Its Updates open in the chat app too.
   let reading = req.method == 'GET' || req.method == 'HEAD'
-  // Any other page of the space wakes its Operator for a member who talks to
-  // it, so the chat they open next finds it up (build-door.ts `woken`); the
-  // chat and Updates ask it themselves.
-  let asks = view == 'updates' || view == 'matches' ||
-    view == 'operator' && (at.open || at.door)
+  // A page of the space wakes its Operator for a member who talks to it as
+  // soon as the space is known (build-door.ts `woken`): one that reads it (its
+  // chat, Updates, Matches) finds it starting while the directory is read,
+  // and any other leaves it up for the chat opened next. A store's door asks
+  // it at once.
   if (
-    reading && !asks && writes(who.role) && !administrative && !space.trashed
+    reading && !at.door && writes(who.role) && !administrative &&
+    !space.trashed
   ) {
     woken(env, space.eid)
   }
@@ -583,6 +584,8 @@ let everyUpdate = async (
     space,
     who: { person, role, until } satisfies Owner,
   }))
+  // Each Operator starts while the side is read, before Updates asks it.
+  for (let { space } of held) woken(env, space.eid)
   let into = url.searchParams.get('in')
   let home = held.find((s) => s.space.slug == into) ?? held[0]
   if (!home) return redirect(hostUrl(env, MANAGE), 303)
