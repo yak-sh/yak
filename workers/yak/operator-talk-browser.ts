@@ -19,7 +19,8 @@ import {
   TAKE,
 } from '@yaks/ux/conversation'
 import { Button, Notice } from '@yaks/ui/parts'
-import { opening } from '@yaks/session/conversation'
+import { opening, unsaid } from '@yaks/session/conversation'
+import { inputOf } from '@yaks/session/intake'
 import { drawLines, type Lines } from './operator-draw.ts'
 import {
   heard,
@@ -160,6 +161,20 @@ export let mountTalk = (
       })
       return { id: line.id, node: drawn?.node ?? null }
     })
+  // The person's words this page sent, drawn at once as the line the store
+  // gives them (@yaks/session `inputOf` of the request the page chose) until
+  // a step or a read brings that line, or the send fails (`sent`).
+  let going: string[] = []
+  let sending = (talk: Held): Held => {
+    let ids = new Set(talk.lines.map((l) => l.id))
+    going = going.filter((id) => !ids.has(id))
+    if (!going.length) return talk
+    return {
+      ...talk,
+      lines: [...talk.lines, ...going.map((id) => ({ id, uses: [id] }))],
+      ...talk.now ? {} : { now: 'Sending…', pending: true },
+    }
+  }
   let tree = (talk: Held) =>
     h(
       Host.Provider,
@@ -179,9 +194,9 @@ export let mountTalk = (
   let draw = (fresh = false) => {
     if (!held) return
     if (fresh) render(null, box), box.replaceChildren(), mounted = false
-    if (mounted) return render(tree(held), box)
+    if (mounted) return render(tree(sending(held)), box)
     mounted = true
-    ;(box.firstChild ? hydrate : render)(tree(held), box)
+    ;(box.firstChild ? hydrate : render)(tree(sending(held)), box)
   }
   draw()
   // A lazy fold opened in a line held as the server drew it, which holds
@@ -321,6 +336,30 @@ export let mountTalk = (
       if (!held || !ids.length) return
       held = removed(held, ids)
       draw()
+    },
+    /** the person's words sent under `request`, with the names of the files
+     * sent beside them, drawn at once; what it answers takes them back, should
+     * the send fail */
+    sent: (request: string, text: string, files: string[] = []) => {
+      if (!held) return () => {}
+      let eid = inputOf(request), back = false
+      put([{
+        entity: { eid },
+        entry: { session: held.task },
+        created: { at: clock() },
+        content: {
+          body: text || unsaid(files.map((name) => ({ name }))),
+        },
+      }], () => {
+        if (back) return
+        going = [...going.filter((id) => id != eid), eid]
+        draw()
+      })
+      return () => {
+        back = true
+        going = going.filter((id) => id != eid)
+        draw()
+      }
     },
     /** Stop pressed, which takes effect here at once; what it answers puts
      * it back, should the stop fail */

@@ -1075,19 +1075,23 @@ test('a way to start fills the box with its words, for the person to finish', ()
   page.leave()
 })
 
-test('words the door does not take stay in the box, and it says so', async () => {
+test('words sent show at once; those the door does not take come off and are back in the box, and it says so', async () => {
   let page = await load(storage(), false, park)
   await page.heard()
+  let said = () =>
+    [...page.document.querySelectorAll('.Transcript_Bubble')]
+      .filter((b) => b.textContent == 'Ask for the pavilion keys').length
   page.type('Ask for the pavilion keys')
   refused = true
   try {
     page.send()
-    await until(() => page.status().includes('Your words are kept'))
+    assertEquals(said(), 1)
+    await until(() => page.status().includes('back in the box'))
   } finally {
     refused = false
   }
-  assertEquals(page.say.value, 'Ask for the pavilion keys')
-  assertStringIncludes(page.status(), 'Your words are kept')
+  assertEquals([said(), page.say.value], [0, 'Ask for the pavilion keys'])
+  assertStringIncludes(page.status(), 'Your message was not sent')
   page.leave()
 })
 

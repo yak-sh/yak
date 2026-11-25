@@ -4,6 +4,7 @@
 import { present } from './whereabouts.ts'
 import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { derivedEid } from '@yaks/graph/identity'
 import { connector, kernel, seed, unique } from './probe.ts'
@@ -376,6 +377,79 @@ test("the corner's note is yaks.app's page, quoting the passage, and sends as th
   let forged = await noted(form, { origin: `https://${slug}.yaks.app` })
   await forged.body?.cancel()
   assertEquals(forged.status, 403)
+})
+
+// The corner's note as its page runs it, its door answered by `door`: what
+// shows the moment Send is pressed, and once the door answers.
+let notePress = async (door: (body: FormData) => Promise<Response>) => {
+  let shown = await k.at(
+    'yaks.app',
+    `/manage/${slug}/operator?note=township&about=${
+      encodeURIComponent(JSON.stringify(ABOUT))
+    }`,
+    { headers: { cookie } },
+  )
+  let { document, Event } = parseHTML(await shown.text())
+  let form = document.querySelector('form[data-note-form]')!
+  let sent = document.querySelector('[data-note-sent]') as HTMLElement
+  ;(form.querySelector('[name=say]') as HTMLTextAreaElement).value =
+    'Make it June.'
+  let went = Promise.withResolvers<string>()
+  let answered = Promise.withResolvers<void>()
+  class FormOf extends FormData {
+    constructor(of: Element) {
+      super()
+      for (let f of of.querySelectorAll('[name]')) {
+        let { name, value } = f as HTMLInputElement
+        this.set(name, value)
+      }
+    }
+  }
+  let code = [...document.querySelectorAll('script')]
+    .map((s) => s.textContent ?? '')
+    .find((c) => c.includes('data-note-form'))!
+  new Function('document', 'fetch', 'location', 'FormData', code)(
+    document,
+    (_: string, init: RequestInit) =>
+      door(init.body as FormData).finally(() =>
+        setTimeout(() => answered.resolve())
+      ),
+    { replace: (to: string) => went.resolve(to) },
+    FormOf,
+  )
+  form.dispatchEvent(new Event('submit', { cancelable: true }))
+  let now = [
+    sent.hidden,
+    sent.querySelector('.Transcript_Bubble')?.textContent,
+    sent.querySelector('[role=status]')?.textContent,
+  ]
+  await answered.promise
+  return { now, form: form as HTMLFormElement, sent, went: went.promise }
+}
+
+test("the corner's note shows the moment it is sent, then opens the conversation it went to", async () => {
+  let request = ''
+  let p = await notePress((body) => {
+    request = String(body.get('request'))
+    return noted(body, { accept: 'application/json' })
+  })
+  assertEquals(p.now, [false, 'Make it June.', 'Sending…'])
+  assertStringIncludes(await p.went, `/${slug}/${request}`)
+})
+
+test('a note its door did not take is back in its box, and says why', async () => {
+  let p = await notePress(() =>
+    Promise.resolve(new Response('Bad Gateway', { status: 502 }))
+  )
+  assertEquals([p.form.hidden, p.sent.hidden], [false, true])
+  assertStringIncludes(
+    p.form.querySelector('[data-note-said]')!.textContent!,
+    'Your words are kept',
+  )
+  assertEquals(
+    (p.form.querySelector('[name=say]') as HTMLTextAreaElement).value,
+    'Make it June.',
+  )
 })
 
 test('a send is refused to a reader who does not write the space, and says something', async () => {

@@ -400,6 +400,7 @@ export let notePage = (
           method: 'post',
           action: managePath('operator', space.slug),
           enctype: 'multipart/form-data',
+          'data-note-form': '',
         },
         h(Form.Hidden, { name: 'request', value: crypto.randomUUID() }),
         SLUG.test(app) ? h(Form.Hidden, { name: 'app', value: app }) : null,
@@ -426,10 +427,45 @@ export let notePage = (
           }),
         ),
         h(Button, { mod: 'go', type: 'submit' }, 'Send'),
+        h('p', { role: 'status', 'data-note-said': '' }),
+      ),
+      h(
+        'div',
+        { 'data-note-sent': '', hidden: true },
+        h(Transcript.Bubble, {}),
+        h('p', { role: 'status' }),
       ),
     ),
+    run(NOTE_SENDS),
   )
 }
+
+// The note sent shows at once, as the words of theirs it is, while its door
+// takes it in; then the window goes on to their conversation. A note the door
+// did not take is back in its box, and the page says why.
+let NOTE_SENDS = `
+let form = document.querySelector('form[data-note-form]')
+let sent = document.querySelector('[data-note-sent]')
+form?.addEventListener('submit', async (e) => {
+  e.preventDefault()
+  let body = new FormData(form)
+  let said = sent.querySelector('[role=status]')
+  sent.querySelector('.Transcript_Bubble').textContent = String(body.get('say'))
+  said.textContent = 'Sending…'
+  form.hidden = true, sent.hidden = false
+  try {
+    let response = await fetch(form.action, { method: 'POST', body, headers: { accept: 'application/json' }, signal })
+    let answer = await response.json().catch(() => null)
+    if (!response.ok) throw new Error((answer?.error?.message ?? answer?.message ?? 'Your note was not sent.') + ' Your words are kept; send them again.')
+    said.textContent = 'Sent.'
+    location.replace(answer.to)
+  } catch (error) {
+    if (signal.aborted) return
+    form.hidden = false, sent.hidden = true
+    form.querySelector('[data-note-said]').textContent = error.message
+  }
+}, { signal })
+`
 
 // What the Operator's requests are answered: an attachment, a texts choice,
 // a draft, Stop, a request sent, and its conversations read again. A plain
@@ -798,6 +834,11 @@ export let operatorAnswer = async (
         : {}),
     })
     if (form.has('draft')) return Response.json(received)
+    // The corner's note sent by its script (`NOTE_SENDS`), which goes on to
+    // the conversation once its words are in.
+    if (req.headers.get('accept')?.includes('application/json')) {
+      return Response.json({ request, to: chatPath(space.slug, request) })
+    }
     return new Response(null, {
       status: 303,
       headers: { location: chatPath(space.slug, request) },
@@ -2214,7 +2255,11 @@ let draftClient = {
     let sent = submission; submission = undefined
     sent.set('draft', JSON.stringify(bundles))
     let response = await fetch('${at}', { method: 'POST', body: sent })
-    if (!response.ok) throw new Error('Your draft could not sync. A recovery copy is kept on this device.')
+    if (!response.ok) {
+      let answer = await response.json().catch(() => null)
+      let refused = answer?.error?.message ?? answer?.message
+      throw new Error((refused ? refused + ' ' : 'Your message was not sent. ') + 'Your words are back in the box; send them again.')
+    }
     return response.json()
   },
 }
@@ -2680,36 +2725,46 @@ let unlive = conversation.connected((open) => {
   opened = true
 })
 known = true
-// Words sent from the box go to this page's door with the rest of its form,
-// the files held with them, in the request that spends their draft, so the
-// draft is spent only once the door has taken them in; words it did not take
-// stay in the box.
+// Words sent from the box are drawn in the conversation at once, under the
+// id the box chose for them (\`talk.sent\`), and go to this page's door with
+// the rest of its form, the files held with them, in the request that spends
+// their draft, so the draft is spent only once the door has taken them in.
+// Words it did not take come off the conversation and are back in the box,
+// with their files, and the page says why. Words for the person's
+// conversation sent from another page open it once the door has them.
 let send = async (b) => {
-  boxed.set({ sending: true, said: 'Sending…' })
+  let request = b.entity.eid
+  submission = new FormData(form)
+  submission.set('request', request)
+  // The tab of the app beside the chat in front of them, and which preview.
+  let made = document.querySelector('input[name=made]:checked')
+  let preview = document.querySelector('input[name=preview]:checked')?.value ??
+    document.querySelector('[data-frame]')?.dataset.frame
+  if (made) submission.set('made', made.value)
+  if (preview) submission.set('preview', preview)
+  submission.set('say', b.content.body)
+  let files = submission.getAll('file').filter((f) => f.name)
+  let here = talk.task() == root
+  let back = here && talk.sent(request, b.content.body, files.map((f) => f.name))
+  if (here) boxed.hold([]), talk.newest()
+  boxed.set({ sending: true, said: here ? '' : 'Sending…' })
   try {
-    let request = b.entity.eid
-    submission = new FormData(form)
-    submission.set('request', request)
-    // The tab of the app beside the chat in front of them, and which preview.
-    let made = document.querySelector('input[name=made]:checked')
-    let preview = document.querySelector('input[name=preview]:checked')?.value ??
-      document.querySelector('[data-frame]')?.dataset.frame
-    if (made) submission.set('made', made.value)
-    if (preview) submission.set('preview', preview)
-    submission.set('say', b.content.body)
     let saved = await drafts.spend(place, [{ entity: { eid: request } }])
     if (signal.aborted) return
-    if (!saved) throw new Error('Your message could not be confirmed. Your words are kept; try sending again.')
+    if (!saved) {
+      if (back) back(), boxed.hold(files)
+      if (!boxed.said() || boxed.said() == 'Sending…') said(new Error('Your message was not sent. Your words are back in the box; send them again.'))
+      return
+    }
     boxed.hold([])
     boxed.set({ request: crypto.randomUUID(), said: '' })
-    talk.newest()
-    // Words go to the person's conversation, which opens to show them when
-    // another page sent them.
+    if (here) return void (read().catch(said), poll())
     let app = canvas()
-    if (talk.task() != root) return void location.assign(chats + request + (app ? '?app=' + encodeURIComponent(app.dataset.app) : ''))
-    await read(); poll()
-  } catch (error) { said(error) }
-  finally { if (!signal.aborted) boxed.set({ sending: false }) }
+    location.assign(chats + request + (app ? '?app=' + encodeURIComponent(app.dataset.app) : ''))
+  } catch (error) {
+    if (back) back(), boxed.hold(files)
+    said(error)
+  } finally { if (!signal.aborted) boxed.set({ sending: false }) }
 }
 signal.addEventListener('abort', () => {
   clearInterval(datesBeat)

@@ -7,6 +7,7 @@ import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
 import { namer } from '@yaks/session/conversation'
+import { inputOf } from '@yaks/session/intake'
 import { TAKE } from '@yaks/ux/conversation'
 import { frame, talk } from './operator-view.ts'
 import { mountTalk, type Talking } from './operator-talk-browser.ts'
@@ -160,6 +161,30 @@ test('Stop takes effect at once, and is put back when it fails', () => {
   equal(p.box.querySelector('[data-pending]'), null)
   undo()
   equal(p.box.querySelector('[data-pending]') != null, true)
+})
+
+test("the person's words are drawn the moment they are sent, until the store's line for them comes", () => {
+  using p = page([asked, answer])
+  p.talk.sent('request-1', 'And the bread?')
+  let mine = entry(inputOf('request-1'), 5, {
+    content: { body: 'And the bread?' },
+  })
+  equal(p.rows(), rowsOf(talk(task, [asked, answer, mine], names)))
+  equal(p.box.querySelector('[data-now]')?.textContent, 'Sending…')
+  equal(p.talk.read(talk(task, [asked, answer], names)), [])
+  equal(p.rows().length, 3)
+  p.talk.heard(frame('task-1', [asked, answer, mine], names, 2).operator)
+  equal(p.rows(), rowsOf(talk(task, [asked, answer, mine], names)))
+  equal(p.box.querySelector('[data-now]')?.textContent, 'Thinking…')
+})
+
+test('a send that failed takes its words back off', () => {
+  using p = page([asked, answer])
+  let back = p.talk.sent('request-1', '', ['soup.pdf'])
+  equal(p.rows().length, 3)
+  equal(p.rows()[2].includes('Attached: soup.pdf'), true)
+  back()
+  equal(p.rows(), rowsOf(talk(task, [asked, answer], names)))
 })
 
 test("a whole read keeps the person's words the page showed, and says it left them out", () => {
