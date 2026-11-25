@@ -3,14 +3,14 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { gathered, type Objects } from '@yaks/blob'
-import { filesAt, releaseFiles, staged } from './release.ts'
+import { assetsIn, filesAt, releaseFiles, staged } from './release.ts'
 import { fileBytes } from './files.ts'
 import { bucket } from './binding-probe.ts'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { holding } from './written.ts'
 import type { App, Directory } from './directory.ts'
-import { addressed } from '@yaks/platform/versions'
+import { addressed, BUILT } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
 
 let memory = () => {
@@ -116,6 +116,29 @@ test('an erasure asked again counts a release it already swept as empty', async 
   let swept = memory().files
   assertEquals(await holding(swept, dir, app), [])
   await assertRejects(() => filesAt(swept, source), Error, 'has no index')
+})
+
+// The platform's compiled packages are anyone's to load, a private app's
+// too, so no request for one waits on the app's worker (T-3334). The app's
+// own files stay its own, one at a package's path included.
+test("a release's compiled packages are public, and its own files are not", async () => {
+  let { files } = memory()
+  let source = 'alice/.releases/app/kit'
+  let stage = staged(files, {}, source)
+  for (
+    let [at, body] of [
+      [`${BUILT}__packages/@yaks/ui/Skip.css`, '.Skip {}'],
+      ['__packages/@yaks/ui/Skip.css', '.mine {}'],
+      ['__packages/own.css', '.own {}'],
+      ['look.css', '.look {}'],
+    ]
+  ) await stage.files.put(`${source}/${at}`, bytes(body))
+  await stage.finish()
+  let assets = await assetsIn(files, source)
+  let open = Object.keys(assets).filter((path) => assets[path].public)
+  assertEquals(open, ['__packages/@yaks/ui/Skip.css'])
+  let skip = assets['__packages/@yaks/ui/Skip.css'].sha
+  assertEquals(text(await files.read(addressed(skip))), '.Skip {}')
 })
 
 // An idle app's first view comes to an isolate holding no index of its

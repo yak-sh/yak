@@ -7,6 +7,7 @@ import {
   type Asset,
   type Assets,
   fingerprints,
+  PACKAGES,
 } from '@yaks/platform/fingerprint'
 import { rootOf, type Serving } from '@yaks/platform/files'
 import { elapsed } from './lib/hops.ts'
@@ -129,13 +130,22 @@ export let filesIn = async (
   return index && filesOf(index)
 }
 
+// A release's assets by served path. The platform's compiled packages are
+// anyone's in every release, those made before that was said too.
 let assetsByIndex = new WeakMap<Index, Assets>()
 let assetsOf = (index: Index): Assets => {
   let found = assetsByIndex.get(index)
   if (found) return found
   let assets = Object.fromEntries(
-    Object.values(index).flatMap(({ asset }) =>
-      asset ? [[asset.path, asset]] : []
+    Object.entries(index).flatMap(([key, { asset }]) =>
+      asset
+        ? [[
+          asset.path,
+          key.startsWith(PACKAGES)
+            ? { ...asset, public: true as const }
+            : asset,
+        ]]
+        : []
     ),
   )
   assetsByIndex.set(index, assets)

@@ -24,6 +24,12 @@ export type Assets = Record<string, Asset>
 export let encoded = (path: string) =>
   path.split('/').map(encodeURIComponent).join('/')
 
+/** Where a release keeps the platform's compiled packages: the toolkit's
+ * files (`__packages/@yaks/ui/Button.css`) and npm packages' modules. They
+ * are the same public code in every app, so anyone may load them, whatever
+ * the app's access, and no app's worker is asked first. */
+export let PACKAGES = BUILT + '__packages/'
+
 let scripts = /^(?:text|application)\/javascript\b/
 export let moduleAsset = (asset: Asset) => scripts.test(asset.type)
 
@@ -32,14 +38,16 @@ export let moduleAsset = (asset: Asset) => scripts.test(asset.type)
 let browserFiles = (files: Files, config: Serving) => {
   let root = rootOf('', config).slice(1)
   let folder = root ? root + '/' : ''
-  let modules = BUILT + '__packages/'
   let keys = new Map<string, Asset>()
   for (let [key, sha] of Object.entries(files)) {
-    let resource = key.startsWith(modules)
+    let resource = key.startsWith(PACKAGES)
     let path = resource ? key.slice(BUILT.length) : key.slice(folder.length)
+    // At a package's path the compiler's file is served, never the app's.
+    let shadowed = !resource && (BUILT + path).startsWith(PACKAGES) &&
+      Object.hasOwn(files, BUILT + path)
     if (
       !resource && (!key.startsWith(folder) || key.startsWith(BUILT)) ||
-      key == (config.main ?? WORKER) || inside('/' + path) ||
+      shadowed || key == (config.main ?? WORKER) || inside('/' + path) ||
       path.startsWith('api/') || decoded('/' + encoded(path)) == null
     ) continue
     let built = !resource && script.test(path) && files[BUILT + key]

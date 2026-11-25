@@ -108,9 +108,11 @@ theme can link the following files.
 
 Link the stylesheets for the parts the page uses. For a page on a nested route,
 build the stylesheet URLs from the app's mount. The platform rewrites these
-links to immutable release asset URLs. If a private app's Worker serves the page
-to visitors, pass the stylesheet requests through to `env.FILES` along with the
-page's other visitor-facing assets.
+links to immutable release asset URLs. The kit stylesheets are served to every
+visitor, a private app's too, without reaching the app's Worker. If a private
+app's Worker serves the page to visitors, pass its own stylesheet requests
+through to `env.FILES` along with the page's other visitor-facing assets, or
+list them in `assets.public` ([Files and Uploads](files.md)).
 
 ## Colours and type
 

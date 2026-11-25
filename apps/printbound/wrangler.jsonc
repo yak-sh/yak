@@ -3,7 +3,6 @@
   "assets": {
     "not_found_handling": "none",
     "public": [
-      "__packages/@yaks/ui/",
       "favicon.svg",
       "fonts/",
       "img/",

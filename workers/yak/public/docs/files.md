@@ -286,9 +286,11 @@ the server, including a request for an older release.
 A private app can serve selected release assets to everyone through
 `assets.public` in its Wrangler config. List paths relative to the served
 folder. A path ending in `/` includes the directory's fingerprinted assets. For
-example, `"public": ["favicon.svg", "__packages/@yaks/ui/"]` serves the favicon
-and the kit files directly from the release. The app's own pages, worker routes
-and store keep their access rules.
+example, `"public": ["favicon.svg", "fonts/"]` serves the favicon and the fonts
+directly from the release. The app's own pages, worker routes and store keep
+their access rules. The platform's compiled packages under `__packages/`, such
+as the kit stylesheets, are always served to everyone without asking the Worker,
+so they need no entry.
 
 ## Page URLs and 404 handling
 
