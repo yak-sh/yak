@@ -3,9 +3,9 @@
  * its `/person/ws` (graph.ts): the sidebar's (./side-rows.ts), their account
  * and friends (./account-rows.ts), the Updates waiting on them
  * (./update-waiting.ts), what it holds for them in a space
- * (./update-rows.ts `updateOffers`), and how they are told things away from
- * the page (./operator-settings.ts), and the apps a space's Apps page lists
- * (./space-apps.ts).
+ * (./update-rows.ts `updateOffers`), how they are told things away from
+ * the page (./operator-settings.ts), the apps a space's Apps page lists
+ * (./space-apps.ts), and who is in a space they own (./people-rows.ts).
  *
  * @module
  */
@@ -15,9 +15,10 @@ import { UPDATE_WAITING } from './update-waiting.ts'
 import { offersSpace } from './update-rows.ts'
 import { reachedLine } from './operator-settings.ts'
 import { listedSpace } from './space-apps.ts'
+import { peopleLine } from './people-rows.ts'
 
 /** Whether the directory answers `line` as a read of the person. */
 export let personLine = (line: string): boolean =>
   line == UPDATE_WAITING || sideLine(line) || accountLine(line) ||
   offersSpace(line) != undefined || reachedLine(line) ||
-  listedSpace(line) != undefined
+  listedSpace(line) != undefined || peopleLine(line)

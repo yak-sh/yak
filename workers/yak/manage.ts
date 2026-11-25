@@ -11,7 +11,6 @@ import { heard, type Said, telling, unsaid } from '@yaks/platform/cookie'
 import {
   daysLeft,
   directory,
-  type Role,
   type Seat,
   type Space,
   walkTo,
@@ -55,9 +54,7 @@ import { desk as deskPage } from './desk-pages.ts'
 import { logoed, logoImage, logoPosted } from './logo.ts'
 import { monogram } from '@yaks/platform/monogram'
 import type { LogoSize } from '@yaks/platform/space-logo'
-import { again } from './invite.ts'
-import { peopleIn } from './people.ts'
-import { friendsOf as standingWith } from './friends.ts'
+import { peopleLines } from '@yaks/platform/people-view'
 import { CallError } from '@yaks/tools/errors'
 import { restoredAddress, untrash } from './erase.ts'
 import { restoredNumber } from './number-trash.ts'
@@ -95,8 +92,9 @@ import { invitation } from './referral.ts'
 import { budget, spent } from '@yaks/platform/meter'
 import { gauges } from '@yaks/platform/standing'
 import { DAYS } from './views.ts'
-import { admin, refuse } from './tool.ts'
-import { letIn, letOut, reachOf } from './operator-reach.ts'
+import { admin } from './tool.ts'
+import { reachOf } from './operator-reach.ts'
+import { friendsOf as standingWith } from './friends.ts'
 import { json } from '@yaks/platform/refused'
 import { moved, redirect, shelf } from './apps.ts'
 import {
@@ -753,7 +751,7 @@ let desk = async (
   who: Owner,
   view: Exclude<SpaceView, Talk>,
   said?: Said,
-  typed?: Pick<DeskPage, 'invite' | 'typed'>,
+  typed?: Pick<DeskPage, 'typed'>,
 ): Promise<Response> => {
   let owner = who.person
   let q = new URL(req.url).searchParams
@@ -795,7 +793,6 @@ let desk = async (
     { here, all },
     drawn,
     fee,
-    people,
     connections,
     picks,
     operator,
@@ -812,7 +809,8 @@ let desk = async (
     // carried for its first paint: Apps' apps, as the directory answers them
     // live, and what is broken in each, one read of the space's tracker, no
     // app's store woken (apps-reads.ts); Visits' apps and their views
-    // (side.ts `visitsRows`).
+    // (side.ts `visitsRows`); and People's lines, as its view watches them
+    // (@yaks/platform/people-view).
     view == 'apps'
       ? Promise.all([
         listedApps(dir, space, who).then((apps) =>
@@ -825,17 +823,17 @@ let desk = async (
         ...r.apps,
         ...r.counts,
       ])
+      : view == 'people'
+      ? Promise.all(
+        Object.values(
+          peopleLines({
+            person: owner,
+            space: { eid: space.eid, slug: space.slug },
+          }),
+        ).map((l) => personRows(dir, owner, l)),
+      ).then((all) => all.flat())
       : undefined,
     feeOf(dir),
-    // Who is in the space and its apps (people.ts), read only for the page
-    // that shows it.
-    view == 'people'
-      ? Promise.all([
-        shelved.then(({ all }) => peopleIn(dir, space, all)),
-        dir.admits(walkTo(space.slug, space.eid)),
-        standingWith(dir, owner),
-      ])
-      : undefined,
     // What this space calls out through (connections.ts), read only for the
     // page that shows it; on the person's own space (`member.own`), what they
     // connected for themselves and the services holding a grant from them.
@@ -968,14 +966,6 @@ let desk = async (
       : undefined,
     fee,
     agents: known,
-    people: people?.[0],
-    friends: people?.[2].filter((f) => f.standing == 'friend'),
-    operators: people?.[1].map((r) => ({
-      eid: r.space.eid,
-      slug: r.space.slug,
-      title: r.space.title,
-      role: r.role,
-    })),
     connections,
     spaces: picks.some((s) => s.slug == space.slug) ? picks : [
       {
@@ -1233,13 +1223,6 @@ let pressed = async (
   }
 }
 
-// A seat lowered or removed takes out the Operators it let in
-// (operator-reach.ts `leftWith`), which the owner never named: the page says
-// which, in the tool's own words, rather than a bare "saved".
-let unreached = (out?: { value?: unknown }) =>
-  !!(out?.value as { unreached?: string[] } | undefined)?.unreached?.length
-let told = (out: { text: string }) => ({ say: sentence(out.text), no: false })
-
 // A space's forms return to the page that submitted them. Every space's page
 // shares the cookie's site, so ownership alone is
 // insufficient: a page at another address never gets here (@yaks/platform/routes
@@ -1255,7 +1238,7 @@ let saved = async (
   let refused = (
     view: Exclude<SpaceView, Talk>,
     said: Said,
-    typed?: Pick<DeskPage, 'invite' | 'typed'>,
+    typed?: Pick<DeskPage, 'typed'>,
   ) =>
     refusal(req, said, () => desk(req, env, dir, space, who, view, said, typed))
   // The Logo form streams its picture to its own address (`logoUpload`):
@@ -1283,73 +1266,6 @@ let saved = async (
       : said.no
       ? refused('connections', said)
       : answered(req, env, said)
-  }
-  // The People page's button: another letter for an invitation not yet
-  // accepted, exactly as asking member_add again sends one (invite.ts).
-  if (form.has('again')) {
-    let said = await again(env, dir, space, who, String(form.get('again')))
-    if (said) return refused('people', said)
-    return answered(req, env, { say: 'Sent again.' })
-  }
-  // The People page's invitation: member_add, as the assistant asks it. A
-  // refusal draws the page again with what was typed still in the form.
-  if (form.has('invite')) {
-    let asked = {
-      friend: String(form.get('friend') ?? '').trim(),
-      email: String(form.get('invite') ?? '').trim(),
-      app: String(form.get('app') ?? '').trim(),
-      role: String(form.get('role') ?? '').trim(),
-      note: String(form.get('note') ?? '').trim(),
-    }
-    let { out, said } = await pressed(env, dir, who, 'member_add', {
-      space: space.slug,
-      ...asked.friend ? { friend: asked.friend } : { email: asked.email },
-      ...asked.app ? { app: asked.app } : {},
-      ...asked.role ? { role: asked.role } : {},
-      ...asked.note ? { note: asked.note } : {},
-    })
-    if (said) return refused('people', said, { invite: asked })
-    if (unreached(out)) return answered(req, env, told(out!))
-    return answered(req, env, {
-      say: out?.value?.invited ? 'Invitation sent.' : 'Saved.',
-    })
-  }
-  // The People page's Operators (operator-reach.ts): one of the owner's
-  // other spaces whose Operator they let work here, or take back out. Only a
-  // space they sit in is offered, and only such a one is let in.
-  if (form.has('operator') || form.has('unreach')) {
-    try {
-      if (form.has('operator')) {
-        let slug = String(form.get('operator')).trim()
-        let other = await dir.space(slug)
-        if (!other || !await dir.role(other, who.person)) {
-          throw refuse('missing', `you are in no space ${slug}`)
-        }
-        let role = String(form.get('role') ?? 'editor') as Role
-        await letIn(dir, space, other, role, who.person, vouched(who))
-      } else {
-        await letOut(dir, space, String(form.get('unreach')), vouched(who))
-      }
-    } catch (e) {
-      if (!(e instanceof CallError)) throw e
-      return refused('people', { say: sentence(e.message), no: true })
-    }
-    return answered(req, env, {
-      say: form.has('operator') ? 'Saved.' : 'Removed.',
-    })
-  }
-  // A People row's Remove, or Withdraw for an invitation: member_remove, as
-  // the assistant asks it.
-  if (form.has('remove')) {
-    let app = String(form.get('app') ?? '').trim()
-    let { said, out } = await pressed(env, dir, who, 'member_remove', {
-      space: space.slug,
-      email: String(form.get('remove')).trim(),
-      ...app ? { app } : {},
-    })
-    if (said) return refused('people', said)
-    if (unreached(out)) return answered(req, env, told(out!))
-    return answered(req, env, { say: 'Removed.' })
   }
   if (form.get('billing') == 'checkout') {
     return checkout(env, req, space, wanted(form))

@@ -15,6 +15,7 @@ import {
   type AccountWrite,
 } from '@yaks/platform/account-rows'
 import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
+import type { PeopleAct } from '@yaks/platform/people-rows'
 import type { Load } from '@yaks/host'
 import type { Env, Vars } from './env.ts'
 import type { Purgers } from '@yaks/workerd/purge'
@@ -109,6 +110,28 @@ export let wrote = (
   p: Pick<Person, 'person' | 'cookie'>,
   bundles: Bundle[],
 ) => reach(k, p, '/apply', { method: 'POST', body: JSON.stringify(bundles) })
+
+/** `p` pressing a button of the People page of their space `slug`: the act
+ * `act` (@yaks/platform/people-rows) with `args`, written through their page
+ * graph. The answer is the act with what it came to in `said`, or a refusal. */
+export let pressPeople = async (
+  k: Pick<Kernel, 'at' | 'host' | 'dir'>,
+  p: Pick<Person, 'person' | 'cookie'>,
+  slug: string,
+  act: PeopleAct,
+  args: Record<string, string> = {},
+) => {
+  let space = (await k.dir.space(slug))!
+  let res = await wrote(k, p, [{
+    entity: { eid: crypto.randomUUID() },
+    [act]: { space: space.eid, ...args },
+  }])
+  let body = await res.json()
+  return {
+    status: res.status,
+    said: (body[0]?.[act]?.said ?? body.message) as string,
+  }
+}
 
 /** `p` changing their account as their Profile's Save bar does: the account
  * row they hold, with `change`, written through their page graph. */

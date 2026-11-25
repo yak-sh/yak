@@ -27,7 +27,15 @@ import {
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { chatPath, managePath } from '@yaks/platform/routes'
-import { accepted, connector, kernel, seed, signIn, unique } from './probe.ts'
+import {
+  accepted,
+  connector,
+  kernel,
+  pressPeople,
+  seed,
+  signIn,
+  unique,
+} from './probe.ts'
 import { spaceRobots } from './seo.ts'
 
 // What the cases read, made once for the file by the first that asks: one
@@ -434,8 +442,8 @@ test("a space whose apps have no robots file answers the platform's", async () =
 })
 
 test('a dashboard page reads the directory in one trip', async () => {
-  let { k, at: { trips: slug, reached: other }, them: { cookie }, agent } =
-    await world()
+  let { k, at: { trips: slug, reached: other }, them, agent } = await world()
+  let { cookie } = them
   // Somebody else invited to the space and to an app, and another space's
   // Operator let in, so the People page and the Operator's settings have rows
   // of their own to name.
@@ -446,17 +454,11 @@ test('a dashboard page reads the directory in one trip', async () => {
     email: guest.email,
     app: 'one',
   })
-  let let_in = await k.at('yaks.app', managePath('people', slug), {
-    method: 'POST',
-    redirect: 'manual',
-    headers: {
-      cookie,
-      origin: 'https://yaks.app',
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({ operator: other, role: 'viewer' }),
+  let let_in = await pressPeople(k, them, slug, 'operatorAdmit', {
+    operator: (await k.dir.space(other))!.eid,
+    role: 'viewer',
   })
-  assertEquals(let_in.status, 303)
+  assertEquals(let_in, { status: 200, said: 'Saved.' })
   let timing = async (path: string) => {
     await k.settled()
     let page = await k.at('yaks.app', path, { headers: { cookie } })

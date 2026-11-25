@@ -5,6 +5,7 @@ import { test } from '@yaks/testing'
 import { possessive } from '@yaks/text'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { handler } from './kernel.ts'
+import { REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { platform } from './deploy-probe.ts'
 import { as, SECRET } from './serving-data-probe.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
@@ -77,6 +78,30 @@ let page = (path: string, fields?: Record<string, string>) =>
     env,
   )
 let people = `/manage/${books}/people`
+// A button of the books' People page, pressed: its act written through Ada's
+// page graph (@yaks/platform/people-rows), answered with what it came to.
+let press = async (act: string, args: Record<string, string>) => {
+  let res = await handler.fetch(
+    new Request(new URL(`${REACH}/apply`, 'https://yaks.app'), {
+      method: 'POST',
+      headers: {
+        cookie,
+        [TAB_PERSON]: ada.person,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify([{
+        entity: { eid: crypto.randomUUID() },
+        [act]: { space: (await dir.space(books))!.eid, ...args },
+      }]),
+    }),
+    env,
+  )
+  let body = await res.json()
+  return {
+    status: res.status,
+    said: String(body[0]?.[act]?.said ?? body.message),
+  }
+}
 
 // Bea writes in the shop too and sits nowhere else.
 let bea = crypto.randomUUID()
@@ -103,7 +128,10 @@ let reach = async (person = bea) => {
 
 let before = await reach()
 let offered = await (await page(people)).text()
-let letIn = await page(people, { operator: shop, role: 'viewer' })
+let letIn = await press('operatorAdmit', {
+  operator: shopSpace.eid,
+  role: 'viewer',
+})
 let listed = await (await page(people)).text()
 let during = await reach()
 // Within one request, the spaces the Operator reaches come with their apps:
@@ -168,9 +196,12 @@ test('a personal Operator receives the space it just created', async () => {
 
 // Someone with no seat in the shop, talking with its Operator.
 let outsider = await reach(crypto.randomUUID())
-let stranger = await page(people, { operator: 'nobody-here', role: 'editor' })
+let stranger = await press('operatorAdmit', {
+  operator: 'nobody-here',
+  role: 'editor',
+})
 let { eid } = shopSpace
-let out = await page(people, { unreach: eid })
+let out = await press('operatorOut', { operator: eid })
 let after = await reach()
 
 // Mal co-owns the books and writes alone in `mine` and `solo`, and with Carl
@@ -220,29 +251,19 @@ let lowered = await call({ env, dir, person: ada.person }, 'member_add', {
   role: 'editor',
 })
 let editing = await reached()
-let removed = await page(people, { remove: mal.email })
+let removed = await press('memberRemove', { email: mal.email })
 let gone = await reached()
 
-test("a lowered or removed owner's Operators keep no reach beyond their seat", async () => {
+test("a lowered or removed owner's Operators keep no reach beyond their seat", () => {
   assertEquals(owning, { mine: 'editor', solo: 'editor', ours: 'editor' })
   assertStringIncludes(
     lowered.text,
     "(was owner); mine's Operator no longer works there",
   )
   assertEquals(editing, { mine: null, solo: 'editor', ours: 'editor' })
-  // Said on the page the press lands on, carried in its one-time cookie.
-  assertEquals(removed.status, 303)
-  let said = removed.headers.get('set-cookie')!.split(';')[0]
-  let landed = await handler.fetch(
-    new Request(removed.headers.get('location')!, {
-      headers: { cookie: `${cookie}; ${said}` },
-    }),
-    env,
-  )
-  assertStringIncludes(
-    await landed.text(),
-    "solo's Operator no longer works there",
-  )
+  // Said where the button was pressed.
+  assertEquals(removed.status, 200)
+  assertStringIncludes(removed.said, "solo's Operator no longer works there")
   assertEquals(gone, { mine: null, solo: null, ours: 'editor' })
 })
 
@@ -250,11 +271,11 @@ test("a space's Operator reaches no other space until that space lets it in", ()
   assertEquals(before.there, null)
   assertEquals(before.apps, [])
   assertStringIncludes(offered, "Let this space's Operator work here")
-  assertStringIncludes(offered, `value="${shop}"`)
+  assertStringIncludes(offered, `value="${shopSpace.eid}"`)
 })
 
 test('let in from the People page, it works there with the role given, for a writer at home with no seat there', () => {
-  assertEquals(letIn.status, 303)
+  assertEquals(letIn, { status: 200, said: 'Saved.' })
   assertStringIncludes(listed, `${possessive(shop)} Operator · only looks`)
   assertEquals(during.there, books)
   assertEquals(during.role, 'viewer')
@@ -275,8 +296,8 @@ test('someone with no seat at home reaches nothing the Operator was let into', (
   assertStringIncludes(outsider.writes, 'does not open that space')
 })
 
-test('only a space its owner sits in is let in, and Remove takes it back out', async () => {
-  assertStringIncludes(await stranger.text(), 'You are in no space nobody-here')
-  assertEquals(out.status, 303)
+test('only a space its owner sits in is let in, and Remove takes it back out', () => {
+  assertEquals(stranger, { status: 404, said: 'You are in no such space.' })
+  assertEquals(out, { status: 200, said: 'Removed.' })
   assertEquals(after.there, null)
 })

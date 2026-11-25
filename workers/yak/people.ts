@@ -50,6 +50,21 @@ export let peopleIn = async (
   return people
 }
 
+/** Every place held or offered, each with what to call its person, in the
+ * order the People page lists them: owners first, then whoever writes, then
+ * whoever reads, each by name. */
+export let ranked = (
+  { held, persons }: Pick<Listing, 'held' | 'persons'>,
+): Person[] =>
+  held.map((h): Person => ({
+    ...h,
+    name: persons.get(h.person)?.name ?? '',
+    email: persons.get(h.person)?.email ?? null,
+  })).sort((a, b) =>
+    RANK.indexOf(a.role) - RANK.indexOf(b.role) ||
+    a.name.localeCompare(b.name)
+  )
+
 /** Who is in these spaces and in their apps among `apps`, out of every place
  * held or offered there and what to call each person (directory.ts
  * `Listing`). */
@@ -58,14 +73,7 @@ export let peopleOf = (
   spaces: Space[],
   apps: App[],
 ): People[] => {
-  let people = held.map((h): Person => ({
-    ...h,
-    name: persons.get(h.person)?.name ?? '',
-    email: persons.get(h.person)?.email ?? null,
-  })).sort((a, b) =>
-    RANK.indexOf(a.role) - RANK.indexOf(b.role) ||
-    a.name.localeCompare(b.name)
-  )
+  let people = ranked({ held, persons })
   let at = (on: string, held: Held['held']) =>
     people.filter((p) => p.on == on && p.held == held)
   return spaces.map((space) => ({

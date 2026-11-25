@@ -38,7 +38,16 @@ import {
   SIGNED_IN,
   signedInRows,
 } from '@yaks/platform/account-rows'
-import { friendList } from './friends.ts'
+import { friendList, friendsOf } from './friends.ts'
+import {
+  admittedRows,
+  admittedSpace,
+  holderRows,
+  holdersSpace,
+  INVITABLE,
+  invitableRows,
+} from '@yaks/platform/people-rows'
+import { ranked } from './people.ts'
 import { offerRows, offersSpace } from '@yaks/platform/update-rows'
 import { offersIn } from './updates.ts'
 import { shelf } from './apps.ts'
@@ -162,6 +171,15 @@ export let personRows = async (
     let all = await shared(dir, person)
     return friendRows(person, await friendList(dir, person, all))
   }
+  if (line == INVITABLE) {
+    return invitableRows(
+      person,
+      (await friendsOf(dir, person)).filter((f) => f.standing == 'friend')
+        .map(({ person, name }) => ({ person, name })),
+    )
+  }
+  let people = holdersSpace(line) ?? admittedSpace(line)
+  if (people) return await peopleRows(dir, person, line, people)
   return await sideRows(dir, person, line)
 }
 
@@ -209,6 +227,46 @@ export let listedApps = async (
     made: named(made.of.get(a.eid)?.made),
     deployed: named(made.of.get(a.eid)?.deployed),
   }))
+}
+
+/** The space `eid` when `person` owns it, out of the trash. */
+export let ownedBy = async (dir: Directory, person: string, eid: string) =>
+  (await dir.seated(person)).find((s) =>
+    s.space.eid == eid && s.role == 'owner' && !s.space.trashed
+  )?.space
+
+// Who is in a space and the Operators let into it (People page,
+// @yaks/platform/people-rows), by the walk to its address, which the page
+// asked ahead (manage.ts `rowsAhead`); none but to its owner.
+let peopleRows = async (
+  dir: Directory,
+  person: string,
+  line: string,
+  eid: string,
+): Promise<Bundle[]> => {
+  let space = await ownedBy(dir, person, eid)
+  if (!space) return []
+  let walk = walkTo(space.slug, space.eid)
+  if (holdersSpace(line)) {
+    return holderRows(
+      person,
+      eid,
+      ranked(await dir.people(walk)).map(({ eid: place, ...p }) => ({
+        place,
+        ...p,
+      })),
+    )
+  }
+  return admittedRows(
+    person,
+    eid,
+    (await dir.admits(walk)).map((r) => ({
+      operator: r.space.eid,
+      slug: r.space.slug,
+      title: r.space.title,
+      role: r.role,
+    })),
+  )
 }
 
 let sideRows = async (

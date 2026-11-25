@@ -2309,6 +2309,11 @@ export class Store extends Durable {
               // Who last put an app live, which a space's Apps page says
               // (space-apps); a deploy writes it beside the app.
               'last_deploy',
+              // Who is in a space they own: an invitation, and another
+              // space's Operator let in and taken back out (people-rows).
+              'invite',
+              'operator_reach',
+              'tombstone',
             ].some((key) => key in b)
           ),
         // Where friends are moves with time and with writes this read does

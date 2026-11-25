@@ -9,7 +9,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cleanup, test } from '@yaks/testing'
 import type { Tool } from '@yaks/graph'
-import { authorizing, fresh, letters, mailed } from './probe.ts'
+import { authorizing, fresh, letters, mailed, pressPeople } from './probe.ts'
 import type { Env } from './env.ts'
 import {
   atCeiling,
@@ -118,16 +118,13 @@ let afterLanding = {
   newcomer: await k.dir.newcomer(owner),
   budget: (await k.dir.at(space.eid))?.budget,
 }
-let forbidden = await k.at('yaks.app', `/manage/${space.slug}/people`, {
-  method: 'POST',
-  headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' },
-  body: new URLSearchParams({
-    invite: 'unasked@example.net',
-    role: 'owner',
-    note: 'Unasked note',
-  }),
-})
-let forbiddenSaid = await forbidden.text()
+let forbiddenSaid = (await pressPeople(
+  k,
+  { person: owner, cookie },
+  space.slug,
+  'memberAdd',
+  { email: 'unasked@example.net', role: 'owner', note: 'Unasked note' },
+)).said
 let unasked = letters(k, 'unasked@example.net')
 let legacyInvite = crypto.randomUUID()
 await k.dir.stamp({

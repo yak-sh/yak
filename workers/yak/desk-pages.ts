@@ -1,4 +1,3 @@
-import { possessive } from '@yaks/text'
 import { contents, Shell } from '@yaks/ui/parts'
 import { Head } from '@yaks/ui/parts'
 // The dashboard's pages, apart from pages.ts so a page that only serves a
@@ -58,8 +57,12 @@ import { type FriendsView, friendsView } from '@yaks/platform/friends-view'
 import { type VisitsView, visitsView } from '@yaks/platform/visits-view'
 import { countsOf } from '@yaks/platform/visit-counts'
 import { empty, fieldsOf, option, saving } from '@yaks/platform/page-parts'
-import { holder, tile } from './render/mod.ts'
-import type { Person } from './people.ts'
+import { tile } from './render/mod.ts'
+import {
+  peopleRows,
+  type PeopleView,
+  peopleView,
+} from '@yaks/platform/people-view'
 import { type Invitation, qr } from './referral.ts'
 import {
   accountView,
@@ -2487,241 +2490,31 @@ let connections = (at: DeskPage, env: Host) => {
   ]
 }
 
-// Inviting someone (apps.ts `saved`, which asks member_add): their address,
-// the whole space or one app, what they may do there, and a note for the
-// letter if the owner wants one.
-let inviting = (at: DeskPage) => {
-  let was = at.invite ?? { email: '', app: '', role: '', note: '' }
-  let friends = at.friends ?? []
-  return h(
-    Card,
-    null,
-    heading('Invite someone'),
-    // A seat is no referral (referral.ts `credit` reads only the person's own
-    // code), so the month an invite gives is offered where it is earned.
-    h(
-      Card.Sub,
-      null,
-      'To bring a friend to yaks.app itself, use ',
-      h('a', { href: managePath('invite') }, 'Invite a friend'),
-      ': each friend who signs up from it and builds their first app gives ' +
-        'your own space one more free month of the Plus plan.',
-    ),
-    h(
-      Form,
-      {
-        class: 'Page_Form',
-        method: 'post',
-        action: managePath('people', at.space),
-      },
-      friends.length
-        ? labeled(
-          'invite-friend',
-          'A friend',
-          h(
-            Field,
-            { choose: true, id: 'invite-friend', name: 'friend' },
-            option('', 'Someone else, by email', !was.friend),
-            friends.map((f) =>
-              option(f.person, f.name, was.friend == f.person)
-            ),
-          ),
-        )
-        : null,
-      labeled(
-        'invite-email',
-        friends.length ? 'Or their email address' : 'Email address',
-        h(Field, {
-          id: 'invite-email',
-          name: 'invite',
-          type: 'email',
-          required: !friends.length,
-          autocomplete: 'off',
-          spellcheck: 'false',
-          placeholder: 'friend@example.com',
-          value: was.email,
-        }),
-      ),
-      labeled(
-        'invite-app',
-        'Invite them to',
-        h(
-          Field,
-          { choose: true, id: 'invite-app', name: 'app' },
-          option('', 'Every app here', !was.app),
-          at.apps.map((a) =>
-            option(a.slug, a.title || a.slug, was.app == a.slug)
-          ),
-        ),
-        'Invited to one app, they can open that app and nothing else here.',
-      ),
-      labeled(
-        'invite-role',
-        'They can',
-        h(
-          Field,
-          { choose: true, id: 'invite-role', name: 'role' },
-          option('editor', 'Change things', was.role != 'viewer'),
-          option('viewer', 'Only look', was.role == 'viewer'),
-        ),
-      ),
-      labeled(
-        'invite-note',
-        optional('A note for the email'),
-        h(Field, {
-          lines: true,
-          id: 'invite-note',
-          placeholder: 'Tell them why you’re inviting them…',
-          name: 'note',
-          rows: 2,
-          maxlength: 500,
-          value: was.note,
-        }),
-      ),
-      h(Form.Actions, null, send('Send invitation')),
-    ),
-  )
-}
-
-// The Operators of other spaces working here (operator-reach.ts, T-136179):
-// each with what it may do and a Remove, then the owner's other spaces whose
-// Operator they may let in, as apps.ts `saved` takes it.
-let operating = (at: DeskPage) => {
-  let ins = at.operators ?? []
-  let offered = (at.spaces ?? []).filter((s) =>
-    s.slug != at.space && !ins.some((o) => o.slug == s.slug)
-  )
-  let action = managePath('people', at.space)
-  let rows = ins.map((o) =>
-    h(
-      Rows.Item,
-      { as: 'li' },
-      h(
-        'span',
-        null,
-        `${possessive(named(o))} Operator · ${
-          o.role == 'viewer' ? 'only looks' : 'changes things'
-        }`,
-      ),
-      h(
-        Rows.Actions,
-        null,
-        h(
-          'form',
-          { class: 'Page_Form Rows_Form', method: 'post', action },
-          held('unreach', o.eid),
-          h(Button, {
-            type: 'submit',
-            'aria-label': `Remove ${possessive(named(o))} Operator`,
-          }, 'Remove'),
-        ),
-      ),
-    )
-  )
-  let form = offered.length
-    ? h(
-      Form,
-      { class: 'Page_Form', method: 'post', action },
-      labeled(
-        'operator-space',
-        "Let this space's Operator work here",
-        h(
-          Field,
-          { choose: true, id: 'operator-space', name: 'operator' },
-          offered.map((s, i) => option(s.slug, named(s), i == 0)),
-        ),
-        'Whoever may ask that Operator can have it work here.',
-      ),
-      labeled(
-        'operator-role',
-        'It can',
-        h(
-          Field,
-          { choose: true, id: 'operator-role', name: 'role' },
-          option('editor', 'Change things', true),
-          option('viewer', 'Only look', false),
-        ),
-      ),
-      h(Form.Actions, null, send('Let it in')),
-    )
-    : null
-  return rows.length || form
-    ? h(
-      Card,
-      null,
-      heading('Operators from other spaces'),
-      rows.length ? h(Rows, { as: 'ul' }, rows) : null,
-      form,
-    )
-    : null
-}
-
-// Who is in the space and in each of its apps, and who has yet to accept
-// (people.ts): the way to invite someone, then a list for the space and one
-// for each app anybody is a guest of or invited to, each row drawn by its
-// renderer (render/held.ts) beside what the owner may do to it (apps.ts
-// `saved`): send an invitation's letter again, and take anyone but an owner
-// off, which for an invitation withdraws it (member_remove).
-export let people = (at: DeskPage) => {
-  let r = at.people
-  if (!r) return null
-  let act = (fields: Kids, label: string, aria: string) =>
-    h(
-      'form',
-      {
-        class: 'Page_Form Rows_Form',
-        method: 'post',
-        action: managePath('people', at.space),
-      },
-      fields,
-      h(Button, { type: 'submit', 'aria-label': aria }, label),
-    )
-  let actions = (p: Person, app?: string) => {
-    let them = p.email ?? p.name
-    let waits = p.held == 'invite'
-    let again = waits
-      ? act(
-        held('again', p.eid),
-        'Send again',
-        `Send the invitation to ${them} again`,
-      )
-      : null
-    let off = p.email && (p.held != 'seat' || p.role != 'owner')
-      ? act(
-        [held('remove', p.email), held('app', app)],
-        waits ? 'Withdraw' : 'Remove',
-        waits ? `Withdraw the invitation to ${them}` : `Remove ${them}`,
-      )
-      : null
-    return again || off ? h(Rows.Actions, null, again, off) : null
+// Who is in the space and its apps, drawn from the owner's rows as the
+// browser draws it again (@yaks/platform/people-view), which the page carries
+// for its first paint (`data-view`).
+let peoplePage = (at: DeskPage) => {
+  if (!at.person || !at.spaceEid || !at.drawn) return null
+  let view: PeopleView = {
+    person: at.person,
+    space: { eid: at.spaceEid, slug: at.space },
   }
-  let list = (title: string, all: Person[], app?: string) =>
-    all.length
-      ? h(
-        Card,
-        null,
-        heading(title),
-        h(
-          Rows,
-          { as: 'ul' },
-          all.map((p) =>
-            h(Rows.Item, { as: 'li' }, holder(p), actions(p, app))
-          ),
-        ),
-      )
-      : null
-  return [
-    inviting(at),
-    list('Members · every app', [...r.members, ...r.invited]),
-    operating(at),
-    r.apps.map((a) =>
-      list(
-        `${a.app.title} · this app only`,
-        [...a.guests, ...a.invited],
-        a.app.slug,
-      )
+  let rows = at.drawn
+  return h(
+    'div',
+    { 'data-view': 'people', 'data-people-view': JSON.stringify(view) },
+    peopleView(
+      view,
+      peopleRows(view, {
+        holders: rows,
+        admitted: rows,
+        apps: rows,
+        spaces: rows,
+        friends: rows,
+      }),
     ),
-  ]
+    drawing(at),
+  )
 }
 
 // The dashboard's page for one space, at the apex (apps.ts `manage`). What
@@ -2826,7 +2619,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   }
   if (view == 'trash') body = trash(at, env)
   if (view == 'connections') body = connections(at, env)
-  if (view == 'people') body = people(at)
+  if (view == 'people') body = peoplePage(at)
   // The Operator's page is drawn by operator-page.ts, as markup.
   if (view == 'operator') body = at.operator ? raw(at.operator) : null
   return page(

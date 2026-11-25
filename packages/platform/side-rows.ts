@@ -123,10 +123,10 @@ let ranked = <T extends { rank: number }>(rows: Bundle[], comp: string) =>
   rows.flatMap((r) => r[comp] ? [r[comp] as T] : [])
     .sort((a, b) => a.rank - b.rank)
 
-/** The spaces `rows` hold, in the selector's order. */
-export let pickedOf = (rows: Bundle[]): Picked[] =>
+/** The spaces `rows` hold, in the selector's order, each with its eid. */
+export let pickedOf = (rows: Bundle[]): (Picked & { eid: string })[] =>
   ranked<Picked & { space: string; rank: number }>(rows, 'sideSpace')
-    .map(({ space: _, rank: _r, ...s }) => s)
+    .map(({ space, rank: _r, ...s }) => ({ eid: space, ...s }))
 
 /** The apps of `space` that `rows` hold, in the side's order. */
 export let appsOf = (rows: Bundle[], space: string): MarkedApp[] =>

@@ -3,7 +3,7 @@ import { test } from '@yaks/testing'
 import { suggestion } from '@yaks/platform/friends'
 import { FRIENDS, friendsOf } from '@yaks/platform/account-rows'
 import { noted } from '@yaks/notify/whereabouts'
-import { connector, kernel, saveAccount, signIn } from './probe.ts'
+import { connector, kernel, pressPeople, saveAccount, signIn } from './probe.ts'
 import { managePath, REACH, TAB_PERSON, talkPath } from '@yaks/platform/routes'
 
 let k = await kernel()
@@ -145,17 +145,11 @@ test('an owner invites a friend by picking them, never typing their email', asyn
     headers: { cookie: eve.cookie },
   })).text()
   assertStringIncludes(page, `value="${fay.person}"`)
-  let sent = await k.at(k.host, `/manage/${eveSpace.slug}/people`, {
-    method: 'POST',
-    redirect: 'manual',
-    headers: {
-      cookie: eve.cookie,
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({ friend: fay.person, invite: '', app: 'gift' })
-      .toString(),
+  let sent = await pressPeople(k, eve, eveSpace.slug, 'memberAdd', {
+    friend: fay.person,
+    app: 'gift',
   })
-  assertEquals(sent.status, 303, await sent.text())
+  assertEquals(sent, { status: 200, said: 'Invitation sent.' })
   assertEquals(
     !!await k.dir.invite((await k.dir.app(eveSpace, 'gift'))!.eid, fay.person),
     true,

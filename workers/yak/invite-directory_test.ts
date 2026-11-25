@@ -19,10 +19,8 @@ import {
 } from './invite.ts'
 import { invitedHere, refusedSaid, shut, waiting } from './apps.ts'
 import { shared } from './side.ts'
-import { markup } from './html.ts'
 import { type Offer } from './pages.ts'
 import { invited as invitationPage } from './signin-pages.ts'
-import { people } from './desk-pages.ts'
 import { aloud, peopleOwned, type Person, shown } from './people.ts'
 import {
   type App,
@@ -254,12 +252,6 @@ let ownedApps = [diary]
 let namedRoster = peopleOwned(roster, ownerSeats, ownedApps).get(
   space.eid,
 )!
-let pageRoster = peopleOwned(roster, ownerSeats, ownedApps).get(
-  space.eid,
-)!
-let rosterPage = { space: 'jeff', apps: [], people: pageRoster }
-// The registry composes its vocabulary and compiles render queries once.
-people(rosterPage)
 test('the owner and their assistant see who is in and who has not accepted', () => {
   let here = peopleOwned(roster, ownerSeats, ownedApps)
     .get(space.eid)!
@@ -280,13 +272,6 @@ test('asked by name, the assistant lists every member and app guest', () => {
   let named = aloud(namedRoster, JEFF, {}, true).join('\n')
   assertStringIncludes(named, `${bo} (editor)`)
   assertStringIncludes(named, `Guests of Diary: ${ana} (editor)`)
-})
-
-test('the People page lists members and offers to resend a pending invitation', () => {
-  let page = markup(people(rosterPage))
-  for (let them of [ana, bo, cy]) assertStringIncludes(page, them)
-  assertStringIncludes(page, 'not accepted yet')
-  assertStringIncludes(page, 'name="again" value="cy/sp"')
 })
 
 test('a member is not shown who else is in the space', () => {

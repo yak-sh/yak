@@ -14,8 +14,10 @@ import {
   letter,
   letters,
   meta,
+  pressPeople,
   signIn,
 } from './probe.ts'
+import type { PeopleAct } from '@yaks/platform/people-rows'
 import { HELLO } from './mcp-probe.ts'
 import { managePath } from '@yaks/platform/routes'
 
@@ -136,19 +138,6 @@ test('an invitation reaches nobody until its person accepts it', async () => {
   }
 })
 
-// A dashboard form, posted the way its browser posts it.
-let post = (
-  k: Kernel,
-  cookie: string,
-  path: string,
-  fields: Record<string, string>,
-) =>
-  k.at(k.host, path, {
-    method: 'POST',
-    headers: { cookie },
-    body: new URLSearchParams(fields),
-  })
-
 test('the People page invites and takes people off the way member_add and member_remove do', async () => {
   let k = await kernel()
   try {
@@ -157,68 +146,49 @@ test('the People page invites and takes people off the way member_add and member
       slug: 'notes',
       title: 'Notes',
     })
-    let roster = managePath('people', jeff.email.split('@')[0])
+    let mine = jeff.email.split('@')[0]
+    let roster = managePath('people', mine)
     let page = () =>
       k.at(k.host, roster, { headers: { cookie: jeff.cookie } })
         .then((r) => r.text())
-    // The page a press lands on, with what it said in its one-time cookie.
-    let landed = (res: Response) =>
-      k.at(k.host, new URL(res.headers.get('location')!).pathname, {
-        headers: {
-          cookie: `${jeff.cookie}; ${
-            res.headers.get('set-cookie')!.split(';')[0]
-          }`,
-        },
-      }).then((r) => r.text())
+    let press = (act: PeopleAct, args: Record<string, string>) =>
+      pressPeople(k, jeff, mine, act, args)
     assertStringIncludes(await page(), 'Send invitation')
 
     let ana = await signIn(k)
-    let sent = await post(k, jeff.cookie, roster, {
-      invite: ana.email,
+    let sent = await press('memberAdd', {
+      email: ana.email,
       app: 'notes',
       role: 'viewer',
       note: 'have a look',
     })
-    assertEquals(sent.status, 303)
-    assertEquals(new URL(sent.headers.get('location')!).pathname, roster)
+    assertEquals(sent, { status: 200, said: 'Invitation sent.' })
     let l = await letter(k, ana.email, '/invite?t=')
     assertStringIncludes(l.body, '> have a look')
-    let listed = await landed(sent)
-    assertStringIncludes(listed, 'Invitation sent.')
+    let listed = await page()
     assertStringIncludes(listed, 'Notes · this app only')
     assertStringIncludes(listed, `${ana.email} · viewer · `)
 
     // Withdrawn from its row, the invitation is gone from the page.
-    let gone = await post(k, jeff.cookie, roster, {
-      remove: ana.email,
-      app: 'notes',
-    })
-    assertEquals(gone.status, 303)
-    let after = await landed(gone)
-    assertStringIncludes(after, 'Removed.')
-    assert(!after.includes(ana.email))
+    let gone = await press('memberRemove', { email: ana.email, app: 'notes' })
+    assertEquals(gone, { status: 200, said: 'Removed.' })
+    assert(!(await page()).includes(ana.email))
 
     // A member who accepted is taken off the same way.
     let bo = await signIn(k)
-    await post(k, jeff.cookie, roster, { invite: bo.email })
+    await press('memberAdd', { email: bo.email })
     await accepted(k, bo.email, bo.cookie)
     assertStringIncludes(await page(), `aria-label="Remove ${bo.email}"`)
-    await post(k, jeff.cookie, roster, { remove: bo.email })
+    await press('memberRemove', { email: bo.email })
     assert(!(await page()).includes(bo.email))
     assert(
       !(await connector(k, bo.cookie).tool('app_list')).includes('notes'),
     )
 
-    // Refused, the page says why and the address is still in the field.
-    let refused = await post(k, jeff.cookie, roster, {
-      invite: jeff.email,
-      note: 'me again',
-    })
+    // Refused, the answer says why.
+    let refused = await press('memberAdd', { email: jeff.email })
     assertEquals(refused.status, 400)
-    let said = await refused.text()
-    assertStringIncludes(said, `${jeff.email} is you`)
-    assertStringIncludes(said, `value="${jeff.email}"`)
-    assertStringIncludes(said, 'me again</textarea>')
+    assertStringIncludes(refused.said, `${jeff.email} is you`)
   } finally {
     await k.stop()
   }

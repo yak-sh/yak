@@ -19,8 +19,8 @@
 // once.
 //
 // Some writes are not rows: an Updates card's action (updates.ts `acting`),
-// and the person's own account, messages and friend asks
-// (account-writes.ts), are done here and answered with what they came to,
+// the person's own account, messages and friend asks (account-writes.ts),
+// and who is in a space they own (people-writes.ts), are done here and answered with what they came to,
 // the way the page graph shows each at once and the server confirms it.
 import { attach } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
@@ -70,6 +70,8 @@ import type { Clock } from './timing.ts'
 import { acting, updatesApply, waitingSeats } from './updates.ts'
 import { accountApply, accountWrites } from './account-writes.ts'
 import { reachedApply } from './reached-writes.ts'
+import { peopleWrites } from '@yaks/platform/people-rows'
+import { peopleApply } from './people-writes.ts'
 
 let TAGS = { request: 'reach door' }
 
@@ -249,6 +251,11 @@ export let reachDoor = async (
       if (reachedWrites(bundles)) {
         return Response.json(
           await reachedApply(bundles, env, dir, who, person),
+        )
+      }
+      if (peopleWrites(bundles)) {
+        return Response.json(
+          await peopleApply(bundles, env, dir, { ...who, person }),
         )
       }
       if (acting(bundles)) {

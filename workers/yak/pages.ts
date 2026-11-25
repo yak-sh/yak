@@ -54,7 +54,6 @@ import type { Connections, Face } from './connections.ts'
 
 import { day, esc, fileDrop, markup, raw } from './html.ts'
 
-import type { People } from './people.ts'
 import type { Befriended } from './friends.ts'
 
 import type { Panes, Role } from './directory.ts'
@@ -257,6 +256,10 @@ ${
   }${
     main.includes('data-apps-view=')
       ? `<script type="module" src="${file('_apps.js')}"></script>`
+      : ''
+  }${
+    main.includes('data-people-view=')
+      ? `<script type="module" src="${file('_people.js')}"></script>`
       : ''
   }${
     main.includes('data-operator-view=')
@@ -756,19 +759,6 @@ export type DeskPage = {
   no?: boolean
   view?: Setting
   connections?: Connections
-  /** who is in the space and its apps, and who has yet to accept */
-  people?: People
-  /** the other spaces whose Operator works here, and its role (`operator_reach`) */
-  operators?: { eid: string; slug: string; title: string; role: string }[]
-  /** what was typed into the invitation form, when the invitation was
-   * refused and the page is drawn again */
-  invite?: {
-    friend?: string
-    email: string
-    app: string
-    role: string
-    note: string
-  }
   /** whether the person hides their presence from their friends
    * (`presence{hidden}`), on their profile */
   presenceHidden?: boolean
@@ -776,9 +766,6 @@ export type DeskPage = {
    * and whether it shows them all (`?all`) or the first few */
   friendList?: Befriended[]
   allFriends?: boolean
-  /** the owner's confirmed friends, offered before the invitation's email
-   * box (friends.ts) */
-  friends?: { person: string; name: string }[]
   /** what was typed into the settings form, when a change was refused and
    * the page is drawn again */
   typed?: { title: string; space: string; home: string }

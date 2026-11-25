@@ -75,7 +75,15 @@ import { manage } from './manage.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { SPACE } from './build-door.ts'
-import { kernel, seed, signIn } from './probe.ts'
+import { kernel, pressPeople, seed, signIn } from './probe.ts'
+import {
+  admitted,
+  admittedOf,
+  holders,
+  holdersOf,
+  INVITABLE,
+  type PeopleAct,
+} from '@yaks/platform/people-rows'
 
 let k = await kernel()
 let ada = await seed(k, [{ slug: 'adas', apps: ['notes', 'lists'] }])
@@ -349,6 +357,70 @@ test('a tab opens first only a space its person owns, and signs out only their b
       .filter((s) => s == 401).length,
     1,
   )
+})
+
+// Ada pressing a button of her People page in `slug`: the act, answered
+// with what it came to, or refused.
+let pressIn = (who: Tab, slug: string, act: PeopleAct, args = {}) =>
+  pressPeople(k, who, slug, act, args)
+
+test('a tab reads who is in a space its person owns, and invites and takes people off through the door, in no space they do not own', async () => {
+  let adas = (await k.dir.space('adas'))!
+  let people = async (who: Tab) =>
+    holdersOf(await rowsOf(who, holders(adas.eid)))
+      .map((p) => `${p.email} ${p.held} ${p.role}`)
+  equal(await people(ada), [`${ada.email} seat owner`])
+  equal(await people(bea), [])
+  equal(await rowsOf(bea, admitted(adas.eid)), [])
+
+  let cy = await signIn(k)
+  equal(await pressIn(ada, 'adas', 'memberAdd', { email: cy.email }), {
+    status: 200,
+    said: 'Invitation sent.',
+  })
+  equal(await people(ada), [
+    `${ada.email} seat owner`,
+    `${cy.email} invite editor`,
+  ])
+  let invite = holdersOf(await rowsOf(ada, holders(adas.eid)))[1].place
+  equal(
+    await pressIn(ada, 'adas', 'inviteAgain', { invite }),
+    { status: 200, said: 'Sent again.' },
+  )
+  // Bea owns nothing here: she invites no one, and takes no one off.
+  equal(
+    (await pressIn(bea, 'adas', 'memberAdd', { email: bea.email })).status,
+    403,
+  )
+  equal(
+    (await pressIn(bea, 'adas', 'memberRemove', { email: cy.email })).status,
+    403,
+  )
+  equal(
+    await pressIn(ada, 'adas', 'memberRemove', { email: cy.email }),
+    { status: 200, said: 'Removed.' },
+  )
+  equal(await people(ada), [`${ada.email} seat owner`])
+
+  // Her own space's Operator let in to work here, and taken back out.
+  let own = await k.dir.own(ada.person)
+  let operators = async () =>
+    admittedOf(await rowsOf(ada, admitted(adas.eid)))
+      .map((o) => `${o.slug} ${o.role}`)
+  equal(
+    await pressIn(ada, 'adas', 'operatorAdmit', {
+      operator: own.eid,
+      role: 'viewer',
+    }),
+    { status: 200, said: 'Saved.' },
+  )
+  equal(await operators(), [`${own.slug} viewer`])
+  equal(
+    await pressIn(ada, 'adas', 'operatorOut', { operator: own.eid }),
+    { status: 200, said: 'Removed.' },
+  )
+  equal(await operators(), [])
+  equal(await rowsOf(ada, INVITABLE), [])
 })
 
 test('an Updates page loads the scripts that take its card actions and draw its cards again, with the rows it was drawn from', async () => {

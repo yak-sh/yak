@@ -5,17 +5,14 @@
 
 import type { Stamp, Writers } from '@yaks/platform/app-tile'
 import { render as markup } from '@yaks/html'
-import { render } from '@yaks/preact'
 import { type Bundle, type Context, define } from '@yaks/render'
 import type { SpacePage } from '../pages.ts'
-import type { Person } from '../people.ts'
 import { platformVocab } from '../vocab.ts'
 import { once } from '@yaks/fp'
 import { app, appTile } from '@yaks/platform/app-tile'
 import { directory } from './directory.ts'
-import { guest, invitation, seat } from './held.ts'
 
-export let registry = define([app, seat, guest, invitation])
+export let registry = define([app])
 let rows = define(directory)
 // The directory's words, composed when a page first draws a row.
 export let vocab = once(platformVocab)
@@ -40,19 +37,3 @@ export type Around = {
 
 export let tile = (a: SpacePage['apps'][number], around: Around = {}) =>
   appTile(a, { gallery: a.gallery, ...around })
-
-// The row itself, as the directory keeps it, and who it is for beside it.
-let comps = {
-  seat: (p: Person) => ({ member: { role: p.role } }),
-  grant: (p: Person) => ({ grant: { access: p.role } }),
-  invite: (p: Person) => ({ invite: { role: p.role, sent: p.sent } }),
-}
-
-export let holder = (p: Person) =>
-  render(
-    registry,
-    { entity: { eid: p.eid }, ...comps[p.held](p) },
-    'List.Tile',
-    vocab(),
-    { name: p.name, email: p.email },
-  )
