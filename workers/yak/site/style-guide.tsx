@@ -13,6 +13,7 @@ import {
 } from '@yaks/ui'
 import type { ComponentChildren } from 'preact'
 import { WORN } from '../sheet-assets.ts'
+import { UI_GUIDE } from '../kept-page.ts'
 import { attr, said, type Slots, text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'
 
@@ -522,7 +523,12 @@ export let StyleGuide = () => (
       </Card>
     </Part>
     <Part id='kit'>
-      <p class='Note' {...say('kit.note')} />
+      <p
+        class='Note'
+        {...say('kit.note', {
+          all: <a href={UI_GUIDE} {...say('kit.all')} />,
+        })}
+      />
       <Worn parts={PARTS} composition={drawn} />
     </Part>
     <Part id='sections'>

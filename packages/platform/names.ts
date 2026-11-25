@@ -130,6 +130,7 @@ export let ROOT: Set<string> = new Set([
   'space',
   'spaces',
   'start',
+  'style-guide',
   'technical',
   'townships',
   'tv',

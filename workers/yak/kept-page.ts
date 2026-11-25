@@ -206,6 +206,10 @@ export let PICTURES = '/gallery/image/'
  * `stranger`). */
 export let LOGIN = '/login'
 
+/** Where @yaks/ui's own guide stands at the apex (ui-guide.ts), beside the
+ * site's style guide, as the box serves it at `/ui`. */
+export let UI_GUIDE = '/style-guide/ui'
+
 /** Whether Site keeps this apex path: a listing, a picture one shows, a
  * static page, or the stranger's sign-in card. */
 export let isListing = (path: string) =>

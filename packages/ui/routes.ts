@@ -1,5 +1,7 @@
 /** The static guide composes the installed ./ui facets. Query links select
- * theme, skin and colour scheme without loading any client script. */
+ * theme, skin and colour scheme without loading any client script. A host
+ * that reads no files (a Worker) draws the same page with sheets it built
+ * (`Dress`). */
 import type { Route } from '@yaks/api'
 import { bytes } from '@yaks/api/asset'
 import { h } from 'preact'
@@ -9,7 +11,7 @@ import { kits, skins, stylesheet, themes } from './kit.ts'
 import { Pairs } from './Pairs.ts'
 import { Panes } from './Panes.ts'
 import { Tabs } from './Tabs.ts'
-import type { Composition, Contributions } from './theme.ts'
+import type { Composition, Contributions, Skin, Theme } from './theme.ts'
 
 let schemes = ['system', 'light', 'dark']
 let base: Contributions = { kits, themes, skins }
@@ -27,12 +29,18 @@ let tabs = (all: string[], on: string, href: (pick: string) => string) =>
   )
 
 /** What a query names: a theme and a skin among those installed, the
- * defaults where it names none. */
-let dressed = (
+ * defaults where it names none, and every theme and skin it could name. */
+export let dressed = (
   theme: string = Object.keys(themes)[0],
   skin: string = Object.keys(skins)[0],
   contributed: Contributions = base,
-) => {
+): {
+  c: Composition
+  t: string
+  k: string
+  allThemes: Record<string, Theme>
+  allSkins: Record<string, Skin>
+} => {
   let available = {
     kits: { ...kits, ...contributed.kits },
     themes: { ...themes, ...contributed.themes },
@@ -60,12 +68,32 @@ let TYPES: Record<string, string> = {
   woff2: 'font/woff2',
 }
 
+/** What puts composition `c`, the theme and skin named `theme` and `skin`,
+ * into the guide's head: a `<style>` or the `<link>`s of sheets built ahead. */
+export type Dress = (
+  c: Composition,
+  theme: string,
+  skin: string,
+) => string | Promise<string>
+
+/** The whole sheet inline, the files it points at asked of the guide beside
+ * the page (`/ui/file`). */
+let inline: Dress = async (c, theme, skin) =>
+  `<style>${
+    (await stylesheet(c)).replace(
+      FILED,
+      (_, at, fragment = '') =>
+        `url("ui/file?${new URLSearchParams({ theme, skin, at })}${fragment}")`,
+    )
+  }</style>`
+
 /** The guide's page, using contributions gathered by the page's host. */
 export let page = async (
   theme?: string,
   scheme = 'system',
   skin?: string,
   contributed: Contributions = base,
+  dress: Dress = inline,
 ): Promise<string> => {
   let { c, t, k, allThemes, allSkins } = dressed(theme, skin, contributed)
   let s = schemes.includes(scheme) ? scheme : 'system'
@@ -116,18 +144,9 @@ export let page = async (
     ),
   )
   let forced = s == 'system' ? '' : ` style="color-scheme: ${s}"`
-  let css = (await stylesheet(c)).replace(
-    FILED,
-    (_, at, fragment = '') =>
-      `url("ui/file?${new URLSearchParams({
-        theme: t,
-        skin: k,
-        at,
-      })}${fragment}")`,
-  )
   return `<!doctype html><html${forced}><head><meta charset="utf-8">` +
     '<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">' +
-    `<title>${title}</title><style>${css}</style></head>` +
+    `<title>${title}</title>${await dress(c, t, k)}</head>` +
     `<body>${renderToString(shell)}</body></html>`
 }
 

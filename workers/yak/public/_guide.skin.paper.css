@@ -1,0 +1,5229 @@
+/* The document's defaults: what an element looks like before any component
+   says otherwise. Everything here is :where(), zero specificity, so any
+   component rule wins. What every theme derives (the half gap, the type
+   scale, the touch floor) is derived.css, dressed with the theme whatever
+   the skin. */
+
+/* Border-box everywhere: a width is the box you see. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:where(body) {
+  margin: 0;
+  font: var(--size)/1.5 var(--font);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Anchors wear the theme's link colour, visited or not: one look for a
+   link, whatever part it is in. */
+:where(a) {
+  color: var(--link);
+}
+
+/* A control is pressed, not read: clicking or tapping one never selects its
+   words. */
+:where(button, summary, label, select, [role='button'], [role='tab'], [role='menuitem'], .Button) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Where the keyboard is: vim's cursor (@yaks/ux/keys marks the item it
+   stands on) and whatever a key gave the focus wear the theme's accent ring,
+   plain to see in every theme. A part that rings its own focus says so and
+   wins. */
+:where([data-cursor], :focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Prose, wherever it lands: documents, comments and messages all speak the
+   same HTML (marked, GFM). */
+:where(p, ul, ol, pre, blockquote) {
+  margin: 0 0 var(--gap);
+}
+:where(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+  max-width: var(--measure);
+}
+:where(h1, h2, h3, h4, h5, h6) {
+  margin: var(--gap) 0 var(--half-gap);
+  line-height: 1.25;
+}
+:where(h1) {
+  font-size: var(--h1);
+}
+:where(h2) {
+  font-size: var(--h2);
+}
+:where(h3) {
+  font-size: var(--h3);
+}
+:where(h4, h5, h6) {
+  font-size: var(--size);
+}
+:where(small) {
+  font-size: var(--small);
+}
+:where(p, ul, ol, pre, blockquote, table, h1, h2, h3):first-child,
+:where(h4, h5, h6):first-child {
+  margin-top: 0;
+}
+:where(p, ul, ol, pre, blockquote, table, h1, h2, h3):last-child,
+:where(h4, h5, h6):last-child {
+  margin-bottom: 0;
+}
+:where(code, pre, kbd) {
+  font-family: var(--mono);
+}
+:where(code) {
+  background: var(--soft);
+  padding: 0 3px;
+  border-radius: calc(var(--radius) / 2);
+}
+:where(pre code) {
+  display: block;
+  padding: var(--half-gap);
+  overflow: auto;
+}
+:where(table) {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: inherit;
+}
+:where(th, td) {
+  border: 1px solid var(--border2);
+  padding: 2px 8px;
+  text-align: left;
+}
+:where(th) {
+  background: var(--soft);
+}
+:where(blockquote) {
+  padding-left: var(--half-gap);
+  border-left: 2px solid var(--border2);
+  color: var(--muted);
+}
+
+/* Syntax, as highlight.js names it. */
+:where(.hljs-keyword, .hljs-selector-tag) {
+  color: var(--keyword);
+}
+:where(.hljs-number) {
+  color: var(--number);
+}
+:where(.hljs-literal) {
+  color: var(--literal);
+}
+:where(.hljs-string) {
+  color: var(--string);
+}
+:where(.hljs-title) {
+  color: var(--fn);
+}
+:where(.hljs-section) {
+  color: var(--heading);
+  font-weight: 700;
+}
+:where(.hljs-built_in, .hljs-type) {
+  color: var(--type);
+}
+:where(.hljs-attr, .hljs-variable) {
+  color: var(--attr);
+}
+:where(.hljs-addition) {
+  color: var(--positive);
+}
+:where(.hljs-comment, .hljs-meta) {
+  color: var(--muted);
+}
+:where(.hljs-comment) {
+  font-style: italic;
+}
+:where(.hljs-deletion) {
+  color: var(--negative);
+}
+
+/* A textarea fills its available width and grows with its text, then
+   scrolls once it reaches its height limit. */
+:where(textarea) {
+  field-sizing: content;
+  width: 100%;
+  max-block-size: 60vh;
+  overflow-y: auto;
+}
+
+/* In-place editing: the same node and the same look, plus a caret and a
+   seam around the text. */
+[contenteditable='plaintext-only'] {
+  user-select: text;
+  display: inline-block; /* one rectangle, so the outline hugs the edit */
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+  caret-color: var(--accent);
+  cursor: text;
+  white-space: pre-wrap; /* a multiline source keeps its newlines */
+}
+
+/* Always-visible scrollbars: thin, square, two-tone. Setting
+   scrollbar-width or scrollbar-color would make Chrome ignore these and draw
+   its auto-hiding overlay bars instead. */
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: var(--surface);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border: 1px solid var(--bg); /* a seam of floor around the thumb */
+}
+@media (hover: hover) and (pointer: fine) {
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+  }
+}
+
+/* The grain: one tile of paper, speckled in ink and cream, over the whole
+   page and scrolling with it. It is drawn above everything, faint enough to
+   read through, and never takes a press. The tile is --grain, at
+   --grain-opacity: each skin that lays this names its own (paper/base.css,
+   pencil/base.css). */
+:where(html) {
+  position: relative;
+  min-height: 100%;
+}
+:where(html)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2147483647;
+  background: var(--grain) 0 0 / 256px;
+  opacity: var(--grain-opacity);
+  pointer-events: none;
+}
+
+/* Paper, the default skin: what yak.sh's sheet is besides its colours, laid
+   over the kit's own document defaults (base.css) rather than in place of
+   them. Everything here is :where(), so any part's rule still wins. Its
+   grain is grain.css, which pencil shares. */
+/* The grain's tile (grain.css): yak.sh's cotton, inline so the skin paints
+   the same wherever its sheet is served. */
+:where(:root) {
+  --grain: url("data:image/webp;base64,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");
+  --grain-opacity: .08;
+}
+
+/* A link is underlined finely, clear of its letters, and lights on the
+   pointer. */
+:where(a) {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(a:hover) {
+    color: var(--accent);
+  }
+}
+
+/* Headings are set in the face's medium weight, drawn in tight. */
+:where(h1, h2, h3) {
+  font-weight: 500;
+  letter-spacing: -.02em;
+}
+
+/* Shared paint. Existing class names are aliases for string-rendered pages;
+   new parts compose Surface. Skins change tokens, never this list of parts. */
+:where(.Surface, .Surface_Raised, .Surface_Press, .Card, .Button, .Menu, .Menu_Summary, .Empty, .Drop_Zone, a.Chip) {
+  --pencil: initial;
+  --pencil-style: initial;
+  position: relative;
+}
+:where(.Surface, .Surface_Raised, .Surface_Press, .Card, .Button, .Menu, .Menu_Summary, .Empty, .Drop_Zone, a.Chip)::after {
+  content: var(--surface-outline, none);
+  position: absolute;
+  inset: -1px;
+  border: var(--edge-width) var(--pencil-style, solid) var(--pencil,
+    var(--edge-color));
+  border-radius: inherit;
+  filter: var(--edge-filter);
+  pointer-events: none;
+}
+:is(.Surface, .Surface_Raised, .Surface_Press, .Card, .Button, .Menu)::after {
+  content: '';
+}
+:is(.Surface, .Surface_Raised, .Surface_Press) {
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+}
+:is(.Surface_Raised, .Surface_Press, .Menu, .Menu_Summary, .Button, .Card-button) {
+  --lift: var(--raised-lift);
+}
+:is(.Surface_Raised, .Surface_Press) {
+  box-shadow: var(--raised-shadow);
+}
+/* What it is raised off: a copy of its own shape --lift down and right,
+   seen only past its edge. That is a hard box-shadow, which a browser draws
+   outside the box's own corners whatever their radius (a pill, a circle),
+   inked in --raised-ink and seen through --raised-hatch's lines. The hatch
+   is laid from where the shadow is, so it stays put as --lift changes. */
+:is(.Surface_Raised, .Surface_Press, .Menu, .Menu_Summary, .Button, .Card-button)::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: var(--lift) var(--lift) 0 var(--raised-ink);
+  mask: var(--raised-hatch) var(--lift) var(--lift) no-clip;
+  pointer-events: none;
+}
+:is(.Surface_Press) {
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(.Surface_Press, .Button, .Card-button, .Menu_Summary):hover:not(:disabled, [aria-pressed='true']) {
+    --lift: var(--raised-hover-lift, var(--raised-lift));
+    transform: var(--press-shift);
+    background: color-mix(in srgb, var(--button-fill, var(--card)),
+      var(--press-wash) var(--press-wash-weight));
+  }
+}
+:where(.Surface_Press, .Button, .Card-button, .Menu_Summary):active:not(:disabled),
+:is(.Surface_Press, .Button)[aria-pressed='true'],
+:is(.Menu_Fold)[open] > :is(.Menu_Summary) {
+  --lift: var(--raised-down-lift, var(--raised-lift));
+  transform: var(--press-down);
+}
+:is(.Surface_Press, .Button):disabled {
+  --lift: 0px;
+  opacity: .55;
+  cursor: not-allowed;
+}
+:where(.Surface_Well, .Field) {
+  border: var(--edge-width) solid var(--edge-color);
+  border-radius: var(--radius);
+  background: var(--well);
+  box-shadow: var(--hollow);
+  color: var(--text);
+  font: inherit;
+  filter: var(--edge-filter);
+}
+:where(.Surface_Well, .Field):focus-visible {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent), var(--hollow);
+}
+
+/* The text of a thing: the ink at a reading measure, its paragraphs and
+   quotes as the base sets prose. A short one is the gist: muted, smaller. */
+.Body {
+  min-width: 0;
+  max-width: var(--measure);
+  color: var(--text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.Body-short {
+  color: var(--muted);
+  font-size: var(--small);
+}
+/* A text a press types into: the pointer says so, a text cursor over a
+   faint wash. */
+.Body-typed {
+  cursor: text;
+  border-radius: var(--radius);
+}
+@media (hover: hover) and (pointer: fine) {
+  .Body-typed:hover {
+    background: var(--soft);
+  }
+}
+/* A document's source: its lines kept and wrapped at the measure, every
+   character where it stands, smaller, in the face of what is typed. */
+.Body-source > .Body_Source {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--small);
+  line-height: 1.5;
+}
+
+.Body_Source-detail {
+  margin: .4rem 0 0;
+  padding: .6rem .8rem;
+  background: var(--card);
+  font-size: var(--small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.Body-flow :is(.Body_Paragraph, .Body_Unordered, .Body_Ordered, .Body_Heading) {
+  margin: 0 0 .75rem;
+  color: inherit;
+}
+.Body-flow > :last-child {
+  margin-bottom: 0;
+}
+.Body-flow .Body_Source {
+  padding: .6rem .8rem;
+  background: var(--card);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Body-flow .Body_Table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* A document: its title over its text, a half gap between. Typed into, the
+   title takes a text cursor over a faint wash under the pointer, as a typed
+   Body does, and an empty one says where a title goes until it has the
+   keyboard. */
+.Doc {
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Doc_Title {
+  margin: 0;
+  font-size: var(--h3);
+  font-weight: 600;
+  color: var(--heading);
+  overflow-wrap: anywhere;
+}
+.Doc-typed > .Doc_Title {
+  cursor: text;
+  border-radius: var(--radius);
+}
+@media (hover: hover) and (pointer: fine) {
+  .Doc-typed > .Doc_Title:hover {
+    background: var(--soft);
+  }
+}
+.Doc-typed > .Doc_Title:not(:focus-within):has(> .Edit:empty)::before {
+  content: 'Untitled';
+  color: var(--dim);
+}
+
+/* Words somebody said: the words under a bar in the accent, then who, when
+   and where, small and dim; a note on them dimmer still, never read as the
+   words. */
+.Quote {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: var(--measure);
+}
+.Quote_Text {
+  margin: 0;
+  padding: 2px 0 2px var(--gap);
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Quote_By {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--half-gap);
+  padding-left: calc(var(--gap) + 3px);
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Quote_Sep {
+  color: var(--dim);
+}
+.Quote_Note {
+  margin: 0;
+  padding-left: calc(var(--gap) + 3px);
+  font-size: var(--small);
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* A pip: a disc whose shape says a state and whose tone colours it. Shape
+   and tone are separate variants, so a state is at most one of each. The
+   glyphs are pseudo-elements drawn in floor ink, so they read as cutouts. */
+.Dot {
+  --dot: var(--dim);
+  display: inline-block;
+  position: relative;
+  flex: none;
+  width: 0.72em; /* em: the pip rides its line's font */
+  height: 0.72em;
+  border-radius: 50%;
+  border: max(1px, 0.09em) solid var(--dot);
+  background: var(--dot);
+}
+.Dot::before,
+.Dot::after {
+  position: absolute;
+}
+
+/* The shapes. */
+.Dot-ring {
+  background: transparent;
+}
+.Dot-dashed {
+  background: transparent;
+  border-style: dashed;
+}
+.Dot-half {
+  background: linear-gradient(90deg, var(--dot) 50%, transparent 0);
+}
+/* Something happening right now: the full disc breathes. */
+.Dot-pulse {
+  animation: DotPulse 2.2s ease-out infinite;
+}
+@keyframes DotPulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dot) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0.45em color-mix(in srgb, var(--dot) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Dot {
+    animation: none; /* the full disc still says it; only the breath goes */
+  }
+}
+.Dot-check::after {
+  content: '';
+  left: 50%;
+  top: 50%;
+  width: 0.3em;
+  height: 0.16em;
+  border-left: 0.09em solid var(--bg);
+  border-bottom: 0.09em solid var(--bg);
+  transform: translate(-50%, -65%) rotate(-45deg);
+}
+.Dot-cross::before,
+.Dot-cross::after {
+  content: '';
+  left: 50%;
+  top: 50%;
+  width: 0.09em;
+  height: 0.38em;
+  border-radius: 0.04em;
+  background: var(--bg);
+}
+.Dot-cross::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.Dot-cross::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+.Dot-alert::before {
+  content: '';
+  left: 50%;
+  top: 0.1em;
+  width: 0.09em;
+  height: 0.24em;
+  border-radius: 0.04em;
+  translate: -50%;
+  background: var(--bg);
+}
+.Dot-alert::after {
+  content: '';
+  left: 50%;
+  bottom: 0.08em;
+  width: 0.1em;
+  height: 0.1em;
+  border-radius: 50%;
+  translate: -50%;
+  background: var(--bg);
+}
+
+/* The tones. */
+.Dot-info {
+  --dot: var(--info);
+}
+.Dot-active {
+  --dot: var(--active);
+}
+.Dot-positive {
+  --dot: var(--positive);
+}
+.Dot-negative {
+  --dot: var(--negative);
+}
+.Dot-caution {
+  --dot: var(--caution);
+}
+.Dot-accent {
+  --dot: var(--accent);
+}
+.Dot-special {
+  --dot: var(--special);
+}
+
+/* How something stands: a word beside a dot. The word describes, so it is
+   small and muted; the dot's tone says the state. */
+.State {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.3;
+}
+
+/* How many wait: a number on a pill in the colour of what needs the person,
+   as tall as the line it sits in. */
+.Badge {
+  display: inline-block;
+  min-width: 1.3em;
+  padding: 0 .35em;
+  border-radius: 99px;
+  background: var(--negative);
+  color: var(--bg);
+  font-size: var(--small);
+  font-weight: 800;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* Pressed, it opens what waits. */
+:is(button, a).Badge {
+  border: 0;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  :is(button, a).Badge:hover {
+    background: color-mix(in srgb, var(--negative), var(--text) 18%);
+  }
+}
+:is(button, a).Badge:focus-visible {
+  outline: 2px solid var(--negative);
+  outline-offset: 2px;
+}
+.Badge[hidden] {
+  display: none;
+}
+/* How many there are: the number alone, in the muted colour, no pill. */
+.Badge-quiet {
+  background: none;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* An identifier (T-123): mono, since it is copied and typed; small and
+   muted; never wrapped. As a link it underlines only under the pointer. */
+.Id {
+  font-family: var(--mono);
+  font-size: var(--small);
+  white-space: nowrap;
+  color: var(--muted);
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Id:hover {
+    text-decoration: underline;
+    color: var(--text);
+  }
+}
+.Id-hover {
+  text-decoration: underline;
+  color: var(--text);
+}
+/* what it names is out of service: present, struck, half there */
+.Id-retired {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Id-retired:hover {
+    text-decoration: line-through underline;
+  }
+}
+
+/* A moment, said the human way (5 minutes ago): small and muted, out of the
+   way, in the face the words around it are in. Its parts run in a row. */
+.Stamp {
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  display: inline-flex;
+  gap: var(--half-gap);
+  white-space: nowrap;
+}
+
+/* A name as a token: mono, small, in its hue, on a faint wash of it. The hue
+   rides --hue, so a variant only re-points it at one of the theme's six. */
+.Chip {
+  --hue: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--small);
+  white-space: nowrap;
+  color: var(--hue);
+  background: color-mix(in srgb, var(--hue) 12%, transparent);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 0 4px;
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  a.Chip:hover,
+  .Chip[data-href]:hover {
+    text-decoration: underline;
+  }
+}
+.Chip-0 {
+  --hue: var(--hue-0);
+}
+.Chip-1 {
+  --hue: var(--hue-1);
+}
+.Chip-2 {
+  --hue: var(--hue-2);
+}
+.Chip-3 {
+  --hue: var(--hue-3);
+}
+.Chip-4 {
+  --hue: var(--hue-4);
+}
+.Chip-5 {
+  --hue: var(--hue-5);
+}
+/* only a possibility: absent, or not added yet */
+.Chip-ghost {
+  --hue: var(--dim);
+  background: none;
+  outline: 1px dashed var(--border2);
+  outline-offset: -1px;
+}
+/* a label that steps back, in the words around it */
+.Chip-quiet {
+  --hue: var(--muted);
+  font-family: inherit;
+  background: none;
+}
+/* a label in the accent, on a place the accent tints */
+.Chip-accent {
+  --hue: var(--accent);
+}
+/* words to copy */
+.Chip-code {
+  --hue: var(--text);
+}
+/* what the name is a kind of, after it */
+.Chip_Tag {
+  margin-left: var(--half-gap);
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+/* A row of chips, wrapping, a half gap apart; a list of them loses its
+   markers and its indent. */
+.Chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--half-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* An address: muted, the name in it the text's own ink and weighted. */
+.Address {
+  color: var(--muted);
+  font-weight: normal;
+}
+.Address_Name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* A glyph in lines: the words' height and a little more, sat on their
+   baseline, stroked in their colour. */
+.Icon {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  flex: none;
+  vertical-align: -.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* An integration's name with its logo: the logo a little taller than the
+   words, centred on them, a narrow gap between. Alone, a logo takes the size
+   its place gives it (a card's mark) or its own 24 pixels. */
+.Logo {
+  display: inline-flex;
+  align-items: center;
+  gap: .35em;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+.Logo_Mark {
+  flex: none;
+  object-fit: contain;
+}
+.Logo > .Logo_Mark {
+  width: 1.25em;
+  height: 1.25em;
+}
+/* Where there is no logo, a plug on a soft rounded square. */
+.Logo_Mark-none {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: var(--radius);
+  background: var(--soft);
+  color: var(--muted);
+}
+.Logo_Mark-none .Icon {
+  width: 60%;
+  height: 60%;
+}
+
+/* Words that match what was sought: a wash of the accent behind them, the
+   words keeping their own ink. */
+.Match {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: inherit;
+  border-radius: 2px;
+}
+
+/* A stored value, coloured by its shape. Stored bytes show as stored: a
+   string keeps its newlines, and an unbroken token breaks anywhere. */
+.Value {
+  color: var(--text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.Value-num {
+  color: var(--number);
+  font-variant-numeric: tabular-nums;
+}
+.Value-bool {
+  color: var(--literal);
+}
+.Value-id,
+.Value-time,
+.Value-json {
+  font-family: var(--mono);
+  font-size: var(--small);
+}
+.Value-id {
+  color: var(--muted);
+}
+.Value-time {
+  color: var(--time);
+}
+.Value-json {
+  color: var(--muted);
+}
+.Value-nil {
+  color: var(--dim);
+  font-style: italic;
+}
+
+/* A bar in characters: one cell per character, so it reads the same in a
+   terminal. */
+.Meter {
+  font-family: var(--mono);
+  white-space: pre;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.Meter_Fill {
+  color: var(--accent);
+}
+.Meter_Fill-over {
+  color: var(--caution);
+}
+.Meter_Mark {
+  color: var(--text);
+  font-weight: bold;
+}
+.Meter_Rest {
+  color: var(--dim);
+}
+
+/* A series in characters: one cell per value, so it reads the same in a
+   terminal. */
+.Spark {
+  font-family: var(--mono);
+  white-space: pre;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.Spark_Bar {
+  color: var(--accent);
+}
+.Spark_Floor {
+  color: var(--dim);
+}
+
+/* A chart's marks. A number's words keep the page's ink; the marks are drawn
+   in the theme's roles. */
+.Chart {
+  position: relative;
+  touch-action: pan-y;
+}
+/* The point a pointer, a finger or an arrow key is on (the page's listener
+   sets data-on and --at), and the tip that says it, floating clear of
+   whatever clips the chart. */
+.Chart[data-on]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--at);
+  width: 1px;
+  background: var(--muted);
+  pointer-events: none;
+}
+.Chart-line {
+  display: inline-block;
+  vertical-align: middle;
+}
+.Chart-bars {
+  display: block;
+  height: 5rem;
+  border-bottom: 1px solid var(--border2);
+}
+.Chart-bars .Chart_Plot {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.Chart_Line {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.Chart_End,
+.Chart_Bar {
+  fill: var(--accent);
+}
+.Chart_Tip {
+  position: fixed;
+  z-index: 200;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius);
+  background: var(--text);
+  color: var(--card);
+  font-size: var(--small);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* A tooltip: small text on a raised chip. It never takes the
+   pointer; where it floats is its host's business. */
+.Tip {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: min(36rem, calc(100vw - 12px));
+  font: var(--small) var(--font);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 1px 6px;
+  pointer-events: none;
+}
+.Tip[popover] {
+  inset: auto;
+  margin: 0;
+}
+
+/* Dates inherit the line they describe. */
+.Time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A press: a small bordered word in the accent. The variants re-point its
+   colour and its border, never its size. */
+.Button {
+  --ink: var(--accent);
+  --line: var(--border2);
+  --pencil: var(--line);
+  --raised-shadow: none;
+  font: inherit;
+  font-size: var(--small);
+  color: var(--ink);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 2px var(--half-gap);
+  cursor: pointer;
+  min-height: var(--tap);
+  white-space: nowrap;
+}
+/* an icon sits a little apart from its words */
+.Button:has(> .Icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: .35em;
+}
+.Button[hidden] {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Button:hover {
+    background: var(--soft);
+  }
+}
+.Button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* sent, and waiting on its answer */
+.Button[aria-busy='true'] {
+  opacity: 0.6;
+  cursor: progress;
+  pointer-events: none;
+}
+/* offers what is not there yet */
+.Button-add {
+  --ink: var(--muted);
+  --pencil-style: dashed;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Button-add:hover {
+    --ink: var(--text);
+  }
+}
+.Button-danger {
+  --ink: var(--negative);
+}
+/* the one to press, where a sheet offers one */
+.Button-go {
+  --ink: var(--bg);
+  --line: var(--accent);
+  background: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .Button-go:hover {
+    background: color-mix(in srgb, var(--accent) 85%, var(--text));
+  }
+}
+/* a glyph that waits for the pointer */
+.Button-quiet {
+  --ink: var(--muted);
+  --pencil: transparent;
+  padding: 0 4px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Button-quiet:hover {
+    --ink: var(--text);
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .Button-quiet.Button-danger:hover {
+    --ink: var(--negative);
+  }
+}
+
+/* Words to copy, in the mono face on a faint wash, selected whole at a
+   press, and the button beside them, its own width, drawn as a copy glyph
+   that turns to a check once they are copied. */
+.Copy {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Copy_Text {
+  flex: 1;
+  min-width: 0;
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  background: var(--soft);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.Copy_Go {
+  flex: none;
+}
+.Copy:not(.Copy-copied) .Copy_Icon-done,
+.Copy-copied .Copy_Icon:not(.Copy_Icon-done) {
+  display: none;
+}
+
+/* A field has a visible edge before focus, so an empty placeholder is still
+   recognizably a control. Bare fields belong inside an already framed part. */
+.Field {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: 0;
+  padding: 4px var(--half-gap);
+  resize: none;
+  cursor: text;
+  user-select: text;
+}
+/* A field picked in is pressed, not typed in. */
+select.Field {
+  cursor: pointer;
+}
+.Field::placeholder {
+  color: var(--muted);
+}
+.Field:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.Field-bare,
+.Field-bare:focus {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  filter: none;
+  outline: 0;
+  padding: 0;
+}
+
+.Field {
+  text-align: left;
+}
+
+/* A field with a fixed ending beside it: the field takes the room, the
+   ending keeps its width. */
+.At {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--half-gap) / 2);
+  min-width: 0;
+}
+.At > .Field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.At_End {
+  flex: none;
+  color: var(--muted);
+}
+
+/* A box or a radio and its words, a little apart on one line, the box in
+   the accent once checked. Pressing the words presses the box. */
+.Check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--half-gap);
+  min-height: var(--tap);
+  cursor: pointer;
+}
+.Check_Input {
+  font: inherit;
+  flex: none;
+  margin: 0;
+  /* Half the first line minus half the control, whatever its native size. */
+  transform: translateY(calc(.5lh - 50%));
+  accent-color: var(--accent);
+  cursor: inherit;
+}
+.Check:has(.Check_Input:disabled) {
+  opacity: .55;
+  cursor: not-allowed;
+}
+/* What choosing it means, beside its words. */
+.Check_Note {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+/* A form: every field its label over its control over its hint, on one left
+   edge and one width at most the measure, and what sends it at the end. One
+   field and its button share a line while they fit. */
+.Form {
+  display: grid;
+  gap: var(--gap);
+  margin: 0;
+}
+.Form_Field {
+  display: grid;
+  gap: calc(var(--half-gap) / 2);
+  min-width: 0;
+  max-width: var(--measure);
+}
+.Form_Label {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--small);
+  font-weight: 700;
+}
+.Form_Optional {
+  color: var(--muted);
+  font-weight: 400;
+}
+.Form_Field > .Field {
+  box-sizing: border-box;
+  width: 100%;
+}
+.Form_Hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+/* A value shown where its control would be, which nobody changes here: its
+   words as they are, every line and long word kept inside the field. */
+.Form_Value {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Form_Value-none {
+  color: var(--dim);
+}
+/* A field people never see, which only a bot fills in: off the page and
+   taking no room in it. */
+.Form_Trap {
+  position: absolute;
+  left: -100vw;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.Form_Line,
+.Form_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+  margin: 0;
+}
+.Form_Line > .Field,
+.Form_Line > .At {
+  flex: 1 1 12rem;
+}
+
+.Form > .Button {
+  justify-self: start;
+}
+
+/* A drop zone: a dashed place to drop files on or press, centred words in
+   it, and under it what is chosen, one file a line on a well. The input is
+   unseen, so the zone wears its focus. A gathering part holds its files as
+   chips along its top, each taken back by the press in its corner. */
+.Drop {
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Drop_Zone {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: calc(var(--half-gap) / 2);
+  min-height: 6rem;
+  padding: var(--gap);
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  background: var(--bg);
+  text-align: center;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Drop_Zone:hover {
+    border-color: var(--accent);
+  }
+}
+.Drop_Zone:has(.Drop_File:focus-visible) {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.Drop_Zone-over {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--card);
+}
+.Drop_Zone:has(.Drop_File:disabled) {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.Drop_File {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.Drop_Say {
+  color: var(--text);
+}
+.Drop_Choose {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: .2em;
+}
+.Drop_Hint,
+.Drop_Size,
+.Drop_Said,
+.Drop_Note {
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Drop_Chosen {
+  display: grid;
+  gap: calc(var(--half-gap) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.Drop_Item {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+  padding: 4px var(--half-gap);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.Drop_Picture {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius);
+  object-fit: cover;
+}
+.Drop_Name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Drop_Size,
+.Drop_Item > .Button {
+  flex: none;
+}
+.Drop_Said {
+  margin: 0;
+}
+.Drop_Note {
+  flex-basis: 100%;
+}
+.Drop_Item-unread {
+  flex-wrap: wrap;
+}
+.Drop-gather {
+  position: relative;
+}
+.Drop-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+/* What is empty takes no room, chips or not. */
+.Drop_Chosen:empty,
+.Drop_Said:empty {
+  display: none;
+}
+
+/* A line said back, small and muted; a refusal in the negative. Empty, it
+   takes no room. */
+.Notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Notice:empty {
+  display: none;
+}
+.Notice-negative {
+  color: var(--negative);
+}
+
+.Notice-fine {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Notice-fine {
+  font-size: var(--fine, var(--small));
+}
+
+/* A list of choices: a raised box of rows, each a word in the code face and a
+   muted note after it, the picked one lit. Where it floats is its host's. */
+.Choices {
+  min-width: min(18rem, 80vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  box-shadow: var(--shadow);
+}
+.Choices_Item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  cursor: pointer;
+  white-space: nowrap;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Choices_Item:hover {
+    background: color-mix(in srgb, var(--soft) 50%, transparent);
+  }
+}
+.Choices_Item-hover {
+  background: color-mix(in srgb, var(--soft) 50%, transparent);
+}
+.Choices_Item-on {
+  background: var(--soft);
+}
+.Choices_Text {
+  font-family: var(--mono);
+  font-size: var(--small);
+}
+.Choices_Note {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+/* A value where it can be changed. The span is the value itself, typed over
+   where it stands (base.css dresses it while it is contenteditable), so it
+   is exactly the text around it. A control that reads as the value it holds
+   has a hairline under it to say it can be changed, and the border's colour
+   once it has the keyboard. */
+.Edit {
+  font: inherit;
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+:is(input, select).Edit {
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--border2);
+  border-radius: 0;
+  outline: 0;
+  padding: 1px 0;
+  width: 100%;
+  max-width: 40em;
+}
+:is(input, select).Edit:focus {
+  border-bottom: 1px solid var(--accent);
+}
+:is(input, select).Edit-fit {
+  width: auto;
+}
+.Edit_Option {
+  background: var(--card);
+  color: var(--text);
+}
+
+/* One line to send something on: what is typed runs as wide as it can, the
+   button after it. */
+.Say {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  margin: 0;
+  min-width: 0;
+}
+.Say > .Field {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom-color: var(--border);
+}
+
+/* The pending changes stay within the viewport, above its safe area. */
+.Save {
+  position: fixed;
+  z-index: 110;
+  inset-inline: var(--gap);
+  bottom: calc(var(--gap) + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap) var(--gap);
+  width: fit-content;
+  max-width: calc(100% - 2 * var(--gap));
+  margin-inline: auto;
+  padding: var(--half-gap) var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface, var(--card));
+  color: var(--text);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--text) 15%, transparent);
+}
+.Save-sample {
+  position: static;
+}
+.Save_Count {
+  flex: 1 1 auto;
+}
+.Save_Actions {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+.Save_Field {
+  min-width: 0;
+}
+.Save_Field > :is(.Form_Label, .Save_Label)::after {
+  content: '';
+  display: inline-block;
+  width: .45em;
+  height: .45em;
+  margin-inline-start: .55em;
+  vertical-align: .1em;
+  border-radius: 50%;
+  background: var(--accent);
+  filter: var(--drawn, none);
+  opacity: 0;
+}
+.Save_Field-changed > :is(.Form_Label, .Save_Label)::after {
+  opacity: 1;
+}
+.Save_Notice {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--negative);
+  overflow-wrap: anywhere;
+}
+/* A save that worked says so, then fades before the bar goes. */
+.Save-done {
+  animation: Save-fade 2.5s ease-in forwards;
+}
+.Save-done .Save_Count {
+  color: var(--positive, var(--text));
+}
+@keyframes Save-fade {
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Save-done {
+    animation: none;
+  }
+}
+body:has(.Save:not(.Save-sample)) {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* One menu surface and its scrollable list, whether opened from a summary
+   or placed beside a trigger. The skin draws it; its host sizes and places it. */
+.Menu {
+  position: relative;
+  min-width: 10rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  box-shadow: var(--raised-shadow);
+}
+.Menu_List {
+  position: relative;
+  display: grid;
+  max-height: min(34rem, 70vh);
+  padding: .35rem 0;
+  border-radius: inherit;
+  background: var(--card-fill, var(--card));
+  overflow-y: auto;
+}
+.Menu_Item {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  margin: 0 .35rem;
+  padding: .55rem .65rem;
+  min-height: var(--tap);
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Menu_Item:hover {
+    background: var(--hover, var(--soft));
+  }
+}
+.Menu_Item-hover,
+.Menu_Item:focus-visible {
+  background: var(--hover, var(--soft));
+}
+.Menu_Item[aria-current='true'] {
+  background: var(--hover, var(--soft));
+}
+.Menu_Item-danger {
+  color: var(--negative);
+}
+.Menu_Rule {
+  width: 100%;
+  margin: .35rem 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.Menu_Ask {
+  margin: 0;
+  padding: .5rem 1rem .6rem;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Menu_Footer {
+  display: grid;
+}
+.Menu_Fold {
+  position: relative;
+}
+.Menu_Fold[open] {
+  z-index: var(--float, 100);
+}
+.Menu_Summary {
+  position: relative;
+  padding: var(--half-gap) var(--gap);
+  border: 1px solid var(--surface-border, var(--border2));
+  border-radius: var(--radius);
+  background: var(--card-fill, var(--card));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  list-style: none;
+}
+.Menu_Summary::-webkit-details-marker {
+  display: none;
+}
+.Menu[hidden] {
+  display: none;
+}
+.Menu-below {
+  position: absolute;
+  top: calc(100% + .6rem);
+  left: 0;
+  width: max-content;
+  min-width: max(100%, 18rem);
+  max-width: 26rem;
+}
+.Menu-float {
+  position: fixed;
+  z-index: 100;
+  max-width: calc(100vw - 12px);
+}
+.Menu-float .Menu_List {
+  max-height: calc(100dvh - 12px);
+}
+.Menu_Trigger {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  background: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.Menu_Fold[open] .Identity_Action {
+  color: var(--muted);
+}
+/* A menu opened from a trigger at the far side of what it acts on runs back
+   from that side, so it stays on the page. */
+.Menu-end {
+  left: auto;
+  right: 0;
+  min-width: 12rem;
+}
+/* A trigger that is a glyph alone (⋯): quiet and square, with no outline or
+   hatch, washed when the pointer finds it or its menu is open. */
+.Menu_Summary.Menu_Summary-icon {
+  display: grid;
+  place-items: center;
+  width: var(--control-height, 2rem);
+  height: var(--control-height, 2rem);
+  padding: 0;
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+  transform: none;
+}
+.Menu_Summary.Menu_Summary-icon::before,
+.Menu_Summary.Menu_Summary-icon::after {
+  content: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Menu_Fold > .Menu_Summary.Menu_Summary-icon:hover {
+    background: var(--hover, var(--soft));
+    color: var(--text);
+    transform: none;
+  }
+}
+.Menu_Fold[open] > .Menu_Summary.Menu_Summary-icon {
+  background: var(--hover, var(--soft));
+  color: var(--text);
+  transform: none;
+}
+.Menu_Summary.Menu_Summary-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* A value that knows how to be changed. The value never moves: an inline
+   editor takes its place at its metrics, and a popout anchors beside it. */
+.Prop {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+/* The face's seam is a border, so the value typed over in its place wears
+   the same one and the line keeps its height. */
+.Prop-live > :is(.Prop_Val, .Edit) {
+  border-bottom: 1px dashed transparent;
+}
+.Prop-live > .Prop_Val {
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Prop-live > .Prop_Val:hover {
+    border-bottom-color: var(--dim);
+  }
+}
+.Prop_Val-nil {
+  color: var(--dim);
+}
+/* A link-faced value keeps navigation on its face and editing on a quiet
+   handle beside it. */
+.Prop_Hand {
+  white-space: nowrap;
+  font-size: var(--small);
+  font-family: inherit;
+  color: var(--muted);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Prop_Hand:hover {
+    color: var(--text);
+  }
+}
+.Prop_Hand-empty {
+  opacity: 0.6;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Prop_Hand-empty:hover {
+    opacity: 1;
+  }
+}
+.Prop_Pop {
+  /* floated in an Overlay: a box only, no positioning */
+  display: flex;
+  gap: 2px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
+  white-space: nowrap;
+}
+.Prop_Pop-list {
+  flex-direction: column;
+  min-width: 12rem;
+}
+.Prop_Tab {
+  display: inline-flex; /* a tab seats a dot beside its word */
+  align-items: center;
+  gap: calc(var(--half-gap) / 2);
+  font: inherit;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  cursor: pointer;
+  min-height: var(--tap);
+}
+@media (hover: hover) and (pointer: fine) {
+  .Prop_Tab:hover {
+    background: var(--soft);
+    color: var(--text);
+  }
+}
+.Prop_Tab-on {
+  background: var(--soft);
+  color: var(--text);
+}
+.Prop_Row {
+  padding: 2px var(--half-gap);
+  cursor: pointer;
+  border-radius: var(--radius);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Prop_Row:hover {
+    background: var(--soft);
+  }
+}
+.Prop_Row-none {
+  color: var(--muted);
+}
+.Prop_Find {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  outline: none;
+  padding: 2px var(--half-gap);
+}
+.Prop_Query {
+  display: inline-flex;
+  min-width: min(24rem, 60vw); /* a query is a line, not a word */
+}
+.Prop_Query > .Field {
+  flex: 1;
+}
+
+/* A row of tabs: chips that read as controls, gapless (a tab's padding is
+   the spacing), the one showing lit. A badge says what waits behind a tab
+   without opening it: raised beside the face, a gap from it, never over
+   it, so the tab is as wide as both. Tabs that don't fit wrap to another
+   line, each kept whole, as pencil's do. */
+.Tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.Tabs_Tab {
+  font: inherit;
+  -webkit-user-select: none; /* pressed, not read, even where it links */
+  user-select: none;
+  color: var(--muted);
+  text-decoration: none; /* a tab that links reads as a tab */
+  background: none;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  padding: 3px 4px;
+  cursor: pointer;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  display: flex;
+  align-items: center; /* the face stays centred as the floor grows */
+  justify-content: center;
+  gap: 3px;
+  overflow-wrap: normal;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Tabs_Tab:hover {
+    color: var(--text); /* the face alone answers the pointer: no fill */
+  }
+}
+.Tabs_Tab-hover {
+  color: var(--text); /* the face alone answers the pointer: no fill */
+}
+.Tabs_Tab-on,
+.Tabs_Input:checked ~ .Tabs_Tab {
+  color: var(--text);
+  background: var(--soft);
+  border-color: var(--border2);
+}
+/* Raised like a superscript; the shift is paint only, so the line keeps
+   its height. */
+.Tabs_Badge {
+  position: relative;
+  top: -0.5em;
+  min-width: 1.1em;
+  padding: 0 0.25em;
+  border-radius: 1em;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 0.65em;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* A set (`TabSet`): the fieldset's own frame gone, its legend over the row,
+   each item's radio unseen but kept, so the keyboard and a form still have
+   it, and its focus ringed on its tab. Every panel wraps to a line of its
+   own under the tabs, and only the checked one's shows: a panel keeps its
+   own display, so a card stays a card. */
+.Tabs:has(> .Tabs_Item) {
+  flex-wrap: wrap;
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.Tabs_Legend {
+  margin-bottom: var(--half-gap);
+  padding: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+.Tabs_Item {
+  display: contents;
+}
+.Tabs_Input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.Tabs_Input:focus-visible ~ .Tabs_Tab {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.Tabs_Panel {
+  order: 1;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.Tabs_Input:not(:checked) ~ .Tabs_Panel {
+  display: none;
+}
+
+/* A side navigation: links one to a line, quiet until under the pointer,
+   the page you are on lit as a tab is. A rule parts groups of links. With
+   no room beside the page the column becomes a row that wraps. */
+.SideNav {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+.SideNav_Link {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-height: var(--tap);
+  padding: var(--half-gap) var(--gap);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-decoration: none;
+  -webkit-user-select: none; /* pressed, not read */
+  user-select: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .SideNav_Link:hover {
+    color: var(--text); /* the words alone answer the pointer */
+  }
+}
+.SideNav_Link-hover {
+  color: var(--text); /* the words alone answer the pointer */
+}
+.SideNav_Link-on {
+  color: var(--text);
+  background: var(--soft);
+  border-color: var(--border2);
+  font-weight: 600;
+}
+.SideNav_Rule {
+  margin: var(--half-gap) var(--gap);
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 700px) {
+  .SideNav {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+/* The column collapsed to a rail of its icons: each link a square around
+   its icon, its label kept for a screen reader and said by its title. A
+   phone's row has its words, whatever the rail. */
+@media (min-width: 701px) {
+  .SideNav-rail .SideNav_Link {
+    position: relative;
+    justify-content: center;
+    padding-inline: var(--half-gap);
+  }
+  .SideNav-rail .SideNav_Label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* What is on this page. Beside the page, a column that stays in sight as the
+   page scrolls under it: its label, then a link a line, quiet until it is the
+   section in view, which a bar beside it marks. On a phone, one "On this
+   page" line that opens the same list. Which of the two shows is the width
+   the contents itself has: the container it sits in is the page's to size. */
+.Contents {
+  container-type: inline-size;
+  position: sticky;
+  top: var(--gap);
+  align-self: start;
+  font-size: var(--small);
+}
+.Contents[hidden] {
+  display: none;
+}
+.Contents_Label {
+  margin: 0 0 var(--half-gap);
+  font-weight: 700;
+}
+.Contents_List {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.Contents_Item-sub {
+  padding-inline-start: var(--gap);
+}
+.Contents_Link {
+  display: block;
+  padding: 3px 0 3px var(--half-gap);
+  border-inline-start: 2px solid var(--border);
+  color: var(--muted);
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Contents_Link:hover {
+    color: var(--text);
+  }
+}
+.Contents_Link-on {
+  border-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+.Contents_Menu {
+  display: none;
+}
+.Contents_Summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-height: var(--tap);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.Contents_Summary::-webkit-details-marker {
+  display: none;
+}
+.Contents_Summary::after {
+  content: '';
+  width: .4em;
+  height: .4em;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  transition: transform .15s;
+}
+.Contents_Menu[open] > .Contents_Summary::after {
+  transform: rotate(225deg);
+}
+.Contents_Menu > .Contents_List {
+  margin-top: var(--half-gap);
+}
+/* Wider than a column: the contents is across the top of the page, a phone's
+   menu. */
+@container (min-width: 20rem) {
+  .Contents_Label,
+  .Contents > .Contents_List {
+    display: none;
+  }
+  .Contents_Menu {
+    display: block;
+  }
+}
+
+/* An index: each group a head, its entries under it, one line each and cut
+   short. Where you are is lit in the accent. Given the room (a
+   phone's whole width, where a nav stacks over the page) the groups flow
+   into columns, so the page is not a long scroll away. */
+.Index {
+  columns: 9rem;
+  column-gap: var(--gap);
+  min-width: 0;
+}
+.Index_Group {
+  display: grid;
+  min-width: 0;
+  break-inside: avoid;
+  padding-bottom: var(--half-gap);
+}
+.Index_Head,
+.Index_Item {
+  display: block;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: calc(var(--radius) / 2);
+  padding: 0 4px;
+  min-height: var(--tap);
+  align-content: center; /* the words sit in the middle of a fat target */
+}
+.Index_Head {
+  font-weight: 600;
+  color: var(--heading);
+}
+.Index_Item {
+  color: var(--muted);
+  padding-left: var(--gap);
+}
+@media (hover: hover) and (pointer: fine) {
+  .Index_Head:hover,
+  .Index_Item:hover {
+    background: var(--soft);
+    color: var(--text);
+  }
+}
+.Index_Item-hover {
+  background: var(--soft);
+  color: var(--text);
+}
+.Index_Head-on,
+.Index_Item-on {
+  background: var(--soft);
+  color: var(--accent);
+}
+
+/* A row holds an entry beside a control or a count, without stacking them. */
+.Index_Row {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Index_Item {
+  flex: 1;
+  min-width: 0;
+}
+.Index_Head {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+}
+
+/* Which rows show, then a step each way: small, mono, out of the way of the
+   rows above it, each step a link to another page, in the link colour. */
+.Pager {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  font-size: var(--small);
+  color: var(--muted);
+  padding: 4px var(--half-gap);
+}
+.Pager_Span {
+  font-variant-numeric: tabular-nums;
+}
+.Pager_Step {
+  font: inherit;
+  color: var(--link);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  min-height: var(--tap);
+}
+@media (hover: hover) and (pointer: fine) {
+  .Pager_Step:hover {
+    text-decoration: underline;
+  }
+}
+.Pager_Step:disabled {
+  color: var(--dim);
+  opacity: 0.5;
+  cursor: default;
+  text-decoration: none;
+}
+
+/* One thing in a list. Its title line: id and kind small and muted, the title
+   taking the room and cut short before it wraps, a note after it, a count at
+   the end. With an icon, a sub or an end, the row is the icon, the words (the
+   title line over the sub) and the end side by side; the row never wraps, so
+   the icon keeps its title's line. As a link or a button, the whole row is
+   the target; the one picked is lit. */
+.Tile {
+  --padding: 1px 0;
+  --end-align: center;
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+  padding: var(--padding);
+  min-height: var(--tap);
+}
+/* A button's reset weighs no more than a class, so the states after it show
+   on a button too. */
+:where(button).Tile {
+  width: 100%;
+  font: inherit;
+  text-align: start;
+  background-color: transparent;
+  border: 0;
+  border-radius: calc(var(--radius) / 2);
+  padding: 1px var(--half-gap);
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  a.Tile:hover,
+  .Tile[data-href]:hover {
+    background-color: var(--soft);
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(button.Tile):hover {
+    background-color: color-mix(in srgb, var(--soft) 50%, transparent);
+  }
+}
+.Tile-hover {
+  background-color: color-mix(in srgb, var(--soft) 50%, transparent);
+}
+.Tile-on {
+  background-color: var(--soft);
+}
+.Tile-dim :is(.Tile_Icon, .Tile_Title) {
+  opacity: 0.55;
+}
+.Tile_Icon,
+.Tile_End {
+  flex: none;
+  align-self: var(--end-align);
+  display: inline-flex;
+  align-items: center;
+}
+.Tile_Text {
+  flex: 1 1 auto;
+  align-self: center;
+  display: grid;
+  min-width: 0;
+}
+.Tile_Line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Tile_Id,
+.Tile_Kind {
+  font-size: var(--small);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.Tile_Id {
+  font-family: var(--mono);
+}
+.Tile_Title {
+  --white-space: nowrap;
+  --weight: inherit;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: var(--white-space);
+  font-weight: var(--weight);
+}
+.Tile_Title-wrap {
+  --white-space: normal;
+  --weight: 600;
+}
+.Tile_Note {
+  color: var(--muted);
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.Tile_Count {
+  margin-left: auto;
+  font-size: var(--small);
+  color: var(--number);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.Tile_Sub {
+  --white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: var(--white-space);
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Tile_Sub-wrap {
+  --white-space: normal;
+}
+.Tile_Sub-negative,
+.Tile_End-negative {
+  color: var(--negative);
+}
+/* A tile heading the thing's own page: its title larger, and its end, what
+   can be done with it, under its words where there is no room beside them. */
+.Tile-head {
+  flex-wrap: wrap;
+}
+.Tile-head > .Tile_Text {
+  flex-basis: 12rem;
+}
+.Tile-head > .Tile_End {
+  margin-left: auto;
+}
+.Tile-head .Tile_Title {
+  --white-space: nowrap;
+  --weight: inherit;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+.Tile_Icon-info {
+  color: var(--info);
+}
+.Tile_Icon-active {
+  color: var(--active);
+}
+.Tile_Icon-positive {
+  color: var(--positive);
+}
+.Tile_Icon-negative {
+  color: var(--negative);
+}
+.Tile_Icon-caution {
+  color: var(--caution);
+}
+.Tile_Icon-accent {
+  color: var(--accent);
+}
+.Tile_Icon-special {
+  color: var(--special);
+}
+
+.Tile-detail {
+  --padding: var(--half-gap) 0;
+  --end-align: start;
+}
+
+/* A list of rows, close together. A nested list hangs off a rule. */
+.Rows {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.Rows-nested {
+  margin-left: var(--half-gap);
+  padding-left: var(--half-gap);
+  border-left: 1px solid var(--border2);
+}
+.Rows_Item {
+  min-width: 0;
+}
+.Rows_More {
+  font-size: var(--small);
+  color: var(--muted);
+}
+
+/* What is kept but no longer live: every word in it muted, links too. */
+.Rows-quiet {
+  --text: var(--muted);
+  --link: var(--muted);
+}
+.Rows-quiet,
+.Rows-quiet :is(.Rows_Link, .Tile_Title, .Body) {
+  color: var(--muted);
+}
+
+/* A feed of unlike things: each entry has its own edge and breathing room. */
+.Rows-ruled > .Rows_Item {
+  padding: var(--half-gap) 0;
+  border-bottom: 1px solid var(--border2);
+}
+.Rows_Kind {
+  font-size: var(--small);
+  color: var(--muted);
+}
+
+/* An entry's whole surface opens it, including a renderer's secondary text. */
+.Rows_Link {
+  display: block;
+  color: var(--text);
+  text-decoration: none;
+  min-width: 0;
+  border-radius: var(--radius);
+}
+@media (hover: hover) and (pointer: fine) {
+  .Rows_Link:hover {
+    background: var(--soft);
+  }
+}
+.Rows_Link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A row that opens its page: the whole of it lit under the pointer, and
+   what folds under it at the end of its second line, across the row once
+   open. */
+.Rows > .Rows_Item:has(> .Rows_Link) {
+  display: grid;
+  padding-block: 0;
+}
+.Rows_Item > .Rows_Link {
+  grid-area: 1 / 1;
+  display: grid;
+  gap: 2px;
+  margin-inline: -.6rem;
+  padding: .5rem .6rem;
+}
+.Rows_Link:has(+ .More) > .Rows_Meta {
+  padding-right: 4rem;
+}
+.Rows_Item > .Rows_Link + .More {
+  grid-area: 1 / 1;
+  justify-self: end;
+  align-self: end;
+  padding-bottom: .5rem;
+}
+.Rows_Item > .Rows_Link + .More[open] {
+  grid-area: 2 / 1;
+  justify-self: stretch;
+}
+
+/* A list put in order by dragging its rows. A row that can be picked up says
+   so under the pointer, and a line says where a dragged one would land. */
+.Rows-ordered > .Rows_Item[draggable='true'] {
+  cursor: grab;
+}
+.Rows_Item-before {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+.Rows_Item-after {
+  box-shadow: 0 2px 0 var(--accent);
+}
+
+/* A row that opens in place: a glyph pressed beside what it says, and, while
+   open, what it opens, beneath it, hung off a rule. */
+.Rows_Line {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Rows_Line > :last-child {
+  flex: 1;
+  min-width: 0;
+}
+.Rows_Toggle {
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0 4px;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Rows_Toggle:hover {
+    color: var(--text);
+    background: var(--soft);
+  }
+}
+.Rows_Toggle:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.Rows_Toggle:disabled {
+  visibility: hidden;
+}
+.Rows_Detail {
+  display: grid;
+  gap: var(--half-gap);
+  margin: var(--half-gap) 0 var(--gap) var(--gap);
+  padding-left: var(--gap);
+  border-left: 1px solid var(--border2);
+  min-width: 0;
+}
+
+/* A row of like things: a thing's name over what describes it, and what
+   acts on it at the far side, under it where there is no room beside. */
+.Rows_Item:where(:has(> .Rows_Main)) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap) var(--gap);
+}
+.Rows_Main {
+  display: grid;
+  flex: 1 1 12rem;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.Rows_Name {
+  color: var(--text);
+  font-weight: 700;
+}
+/* A name or what describes it kept to one line, cut short where it runs
+   past. */
+.Rows_Name-line,
+.Rows_Meta-line {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.Rows_Meta {
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Rows_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap);
+  margin-left: auto;
+}
+.Rows_Form {
+  display: contents;
+}
+
+/* A row with an action at the end and an optional full-width detail. */
+.Rows_Item.Rows_Item-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0;
+  padding: 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
+}
+.Rows_Detail-inset {
+  display: block;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--gap);
+  border: 0;
+  background: var(--card);
+}
+.Rows_Note {
+  color: var(--muted);
+  margin: 0;
+  padding-block: var(--half-gap);
+  font-size: inherit;
+  font-weight: normal;
+}
+
+/* A row that opens its thing: its picture before its name, and its name a
+   link whose target is the whole row, lit under the pointer. What acts on it
+   sits above that target, so each action is pressed on its own. */
+.Rows_Item:has(.Rows_Open) {
+  position: relative;
+  flex-wrap: nowrap;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Rows_Item:has(.Rows_Open):hover {
+    background: var(--hover, var(--soft));
+  }
+}
+.Rows_Open {
+  color: inherit;
+  text-decoration: none;
+}
+.Rows_Open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.Rows_Open:focus-visible {
+  outline: none;
+}
+.Rows_Open:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.Rows_Item:has(.Rows_Open) .Rows_Actions {
+  position: relative;
+  flex-wrap: nowrap;
+}
+.Rows_Mark {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: calc(var(--radius) + 2px);
+  object-fit: cover;
+}
+.Rows_Item[hidden] {
+  display: none;
+}
+
+/* Keys beside their values: the keys a column as wide as the widest, small
+   and muted so the value reads first, the values the rest of the row. */
+.Pairs {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px var(--gap);
+  align-items: baseline;
+  margin: 0;
+}
+.Pairs_Key {
+  font-size: var(--small);
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+}
+.Pairs_Value {
+  margin: 0;
+  min-width: 0;
+}
+
+.Pairs-nested {
+  grid-template-columns: minmax(0, 1fr);
+  display: grid;
+  gap: .2rem;
+  margin: 0;
+}
+.Pairs_Row {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: .6rem;
+}
+.Pairs_Key {
+  color: var(--muted);
+}
+.Pairs_Value {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Pairs-nested .Pairs-nested > .Pairs_Row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+@media (max-width: 700px) {
+  .Pairs_Row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+/* The scrollport holds table content only. Decorative borders belong to
+   the surface outside it, so their paint cannot create or be clipped by overflow. */
+.Table_Scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* Things in rows, as a grid: every row a subgrid of it, so the cells line
+   up; hairlines between the rows, headings small and muted. A column is as wide
+   as its widest cell where there is room, and they share the room when there
+   is not; what is left over runs past the last. Each cell is one line, cut
+   short with an ellipsis, whatever it holds; a number is never cut and sets
+   right, and prose wraps. A row a press picks lights under the pointer; the
+   picked one is raised, with the accent at its edge.
+
+   Table.ts names each column's track in --cols, by what the column holds:
+   --col for text, --col-<variant> for the rest. */
+.Table {
+  --col: minmax(0, max-content);
+  --col-num: max-content;
+  --col-prose: minmax(12em, max-content);
+  display: grid;
+  grid-template-columns: var(--cols) 1fr;
+  min-width: 0;
+}
+.Table_Head,
+.Table_Body,
+.Table_Row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+.Table_Row {
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+}
+.Table_Head > .Table_Row {
+  border-bottom-color: var(--border2);
+}
+.Table_Heading,
+.Table_Cell {
+  min-width: 0;
+  padding: 2px var(--half-gap);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* What a cell holds keeps to the cell's line, whatever it would do on its
+   own (a stored value keeps its newlines). */
+.Table_Cell * {
+  white-space: inherit;
+}
+.Table_Heading {
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Table_Heading-sorts {
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Table_Heading-sorts:hover {
+    color: var(--text);
+  }
+}
+.Table_Heading-asc,
+.Table_Heading-desc {
+  color: var(--accent);
+}
+.Table_Heading-num {
+  text-align: right;
+}
+.Table_Cell-prose {
+  white-space: normal;
+  color: var(--muted);
+}
+.Table_Cell-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--number);
+}
+.Table_Cell-key {
+  font-family: var(--mono);
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Table_Row-picks {
+  cursor: pointer;
+}
+/* A row telling of the rest, not naming a thing: its words muted. */
+.Table_Row-quiet {
+  color: var(--muted);
+}
+@media (hover: hover) and (pointer: fine) {
+  .Table_Row-picks:hover {
+    background: var(--soft);
+  }
+}
+.Table_Row-hover {
+  background: var(--soft);
+}
+.Table_Row-picks:focus-visible,
+.Table_Row-focus {
+  outline: none;
+  background: var(--card);
+  box-shadow: inset 2px 0 var(--accent);
+}
+/* A tree's rows: a toggle where a row holds rows, pointing down while they
+   show; an indent as wide as a toggle for each row a row is under, and in
+   place of the toggle where it holds none, so the words line up. */
+.Table_Toggle,
+.Table_Indent {
+  display: inline-block;
+  width: 1.25em;
+}
+.Table_Toggle {
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.Table_Toggle::before {
+  content: '▸';
+}
+.Table_Toggle-open::before {
+  content: '▾';
+}
+@media (hover: hover) and (pointer: fine) {
+  .Table_Toggle:hover {
+    color: var(--text);
+  }
+}
+
+.Table_Sort {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.Table_Sort:focus-visible {
+  outline: 1px solid var(--accent);
+}
+
+/* Moments down a rule: each a line of when and who, what it was under it. */
+.Timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--half-gap);
+  border-left: 1px solid var(--border2);
+  display: grid;
+  gap: var(--half-gap);
+}
+.Timeline_Item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--half-gap);
+  min-width: 0;
+}
+.Timeline_When,
+.Timeline_Who {
+  font-size: var(--small);
+  white-space: nowrap;
+}
+.Timeline_When {
+  color: var(--muted);
+}
+.Timeline_Who {
+  color: var(--who);
+}
+.Timeline_What {
+  flex-basis: 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* A stretch of a conversation: who in a narrow column, what they said beside
+   it. The turn the page is about is lit by a bar in the accent; a quiet one
+   (a tool call, its answer) is small and muted. */
+.Turns {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: var(--measure);
+}
+.Turns_Turn {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: var(--half-gap);
+  align-items: baseline;
+  padding: 2px var(--half-gap);
+  border-left: 3px solid transparent;
+  min-width: 0;
+}
+.Turns_Turn-on {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.Turns_Turn-quiet {
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Turns_Who {
+  font-size: var(--small);
+  color: var(--who);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: hover) and (pointer: fine) {
+  a.Turns_Who:hover {
+    text-decoration: underline;
+  }
+}
+.Turns_Text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.Turns_More {
+  padding-left: calc(var(--half-gap) + 3px);
+  font-size: var(--small);
+  color: var(--muted);
+}
+
+/* A passage of a longer text, as one row of a list: a line saying whose words
+   they are, when and where, small and muted and cut short before it wraps,
+   then the words, cut to two lines. As a link, the whole row is the target. */
+.Passage {
+  --lines: 2;
+  margin: 0;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 2px 0;
+  color: var(--text);
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  a.Passage:hover,
+  .Passage[data-href]:hover {
+    background-color: var(--soft);
+  }
+}
+.Passage_By {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--small);
+  color: var(--muted);
+}
+/* Who and when keep their room; a title and where give theirs up first. */
+.Passage_By > * {
+  flex: none;
+}
+.Passage_By > :is(.Passage_Title, :last-child) {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Passage_Title {
+  font-size: var(--size);
+  color: var(--text);
+}
+.Passage_Who {
+  color: var(--who);
+}
+.Passage_Sep {
+  color: var(--dim);
+}
+.Passage_Text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--lines);
+  line-clamp: var(--lines);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Notes under a heading: its words on a line of their own, who and when on
+   another, small; one seen to steps back to muted, its bar to the border. */
+.Notes {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.Notes_Item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--half-gap);
+  min-width: 0;
+  padding-left: var(--half-gap);
+  border-left: 2px solid var(--active);
+}
+.Notes_Item-done {
+  border-left-color: var(--border2);
+  color: var(--muted);
+}
+.Notes_Text,
+.Notes_Item > .Say,
+.Notes_Item > .Choices {
+  flex: 1 0 100%;
+  min-width: 0;
+}
+.Notes_Text {
+  overflow-wrap: anywhere;
+}
+.Notes_Who,
+.Notes_When {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Notes_Who {
+  color: var(--who);
+}
+.Notes_When {
+  color: var(--muted);
+}
+
+.Notes_Children {
+  --branch: var(--border2);
+  margin-left: var(--gap);
+  padding-left: var(--half-gap);
+  border-left: 1px solid var(--branch);
+  min-width: 0;
+}
+
+.Identity {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.Identity {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: .6rem;
+  padding: .55rem .7rem;
+  list-style: none;
+}
+.Identity.Menu_Summary {
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+}
+.Identity_Avatar {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius);
+  background: var(--avatar, var(--accent));
+  color: var(--bg);
+  font-weight: 800;
+}
+img.Identity_Avatar {
+  object-fit: cover;
+  background: none;
+}
+.Identity_Avatar-tone-0 {
+  --avatar: light-dark(#495d89, #a8bde5);
+}
+@supports not (color: light-dark(#000, #fff)) {
+  .Identity_Avatar-tone-0 {
+    --avatar: #495d89;
+  }
+  @media (prefers-color-scheme: dark) {
+    .Identity_Avatar-tone-0 {
+      --avatar: #a8bde5;
+    }
+  }
+}
+.Identity_Avatar-tone-1 {
+  --avatar: light-dark(#6a5085, #c7afe2);
+}
+@supports not (color: light-dark(#000, #fff)) {
+  .Identity_Avatar-tone-1 {
+    --avatar: #6a5085;
+  }
+  @media (prefers-color-scheme: dark) {
+    .Identity_Avatar-tone-1 {
+      --avatar: #c7afe2;
+    }
+  }
+}
+.Identity_Avatar-tone-2 {
+  --avatar: light-dark(#894964, #dea5bd);
+}
+@supports not (color: light-dark(#000, #fff)) {
+  .Identity_Avatar-tone-2 {
+    --avatar: #894964;
+  }
+  @media (prefers-color-scheme: dark) {
+    .Identity_Avatar-tone-2 {
+      --avatar: #dea5bd;
+    }
+  }
+}
+.Identity_Avatar-tone-3 {
+  --avatar: light-dark(#914a42, #e3a79d);
+}
+@supports not (color: light-dark(#000, #fff)) {
+  .Identity_Avatar-tone-3 {
+    --avatar: #914a42;
+  }
+  @media (prefers-color-scheme: dark) {
+    .Identity_Avatar-tone-3 {
+      --avatar: #e3a79d;
+    }
+  }
+}
+.Identity_Avatar-tone-4 {
+  --avatar: light-dark(#465f6b, #a2c3d0);
+}
+@supports not (color: light-dark(#000, #fff)) {
+  .Identity_Avatar-tone-4 {
+    --avatar: #465f6b;
+  }
+  @media (prefers-color-scheme: dark) {
+    .Identity_Avatar-tone-4 {
+      --avatar: #a2c3d0;
+    }
+  }
+}
+.Identity_Avatar-tone-5 {
+  --avatar: light-dark(#71564a, #cfad9f);
+}
+@supports not (color: light-dark(#000, #fff)) {
+  .Identity_Avatar-tone-5 {
+    --avatar: #71564a;
+  }
+  @media (prefers-color-scheme: dark) {
+    .Identity_Avatar-tone-5 {
+      --avatar: #cfad9f;
+    }
+  }
+}
+.Identity_Text {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  line-height: 1.25;
+}
+.Identity_Name {
+  overflow-wrap: anywhere;
+}
+.Identity_Name,
+.Identity_Note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.Identity_Note {
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Identity_Action {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  font-size: var(--fine, var(--small));
+  font-weight: 700;
+}
+.Identity_Mark {
+  color: var(--accent);
+  font-weight: 800;
+}
+.Identity_Add {
+  padding: .5rem .7rem;
+  color: var(--accent);
+  font-size: var(--fine, var(--small));
+  font-weight: 700;
+  text-decoration: none;
+}
+.Identity_Name,
+.Identity_Note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.Identity_Image {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: .35rem;
+  object-fit: cover;
+}
+
+.Identity_Avatar-large {
+  width: 4rem;
+  height: 4rem;
+  font-size: 1.75rem;
+}
+
+.Toolbar_Label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Toolbar_Text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.2;
+}
+.Toolbar_Sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+  overflow-wrap: anywhere;
+}
+.Toolbar_Title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.Toolbar {
+  --toolbar-padding-block: .75rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  min-width: 0;
+  padding: var(--toolbar-padding-block) 1.25rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border2);
+}
+@media (max-width:700px) {
+  .Toolbar {
+    --toolbar-padding-block: .5rem;
+    padding-inline: 1rem;
+  }
+}
+.Toolbar-compact {
+  gap: .6rem;
+  padding: .6rem 1rem;
+  background: none;
+  border: 0;
+}
+.Toolbar-narrow {
+  padding: .6rem 1rem;
+}
+
+.Toolbar-plain {
+  flex-wrap: wrap;
+  gap: var(--gap);
+  padding: var(--half-gap) 0;
+  border: 0;
+  background: none;
+}
+
+.Transcript,
+.Transcript_Lines {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+.Transcript_Lines > * {
+  min-width: 0;
+}
+.Transcript_Bubble {
+  width: fit-content;
+  max-width: 85%;
+  margin: 0 0 0 auto;
+  padding: .6rem 1rem;
+  border-radius: 1.1rem;
+  background: var(--mine, var(--surface));
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.Transcript_Via {
+  margin-right: .4em;
+  color: var(--muted);
+}
+.Transcript_Via .Icon {
+  width: .95em;
+  height: .95em;
+  vertical-align: -.1em;
+}
+.Transcript_Meta {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin-top: .25rem;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Transcript_Meta > .Transcript_Via {
+  margin-right: 0;
+}
+.Transcript_Entry-theirs > .Transcript_Meta {
+  justify-content: end;
+}
+/* Said by the other person, in a conversation between people: their bubble
+   at the left, on the sheet behind. */
+.Transcript_Entry-other > .Transcript_Bubble {
+  margin: 0 auto 0 0;
+  background: var(--surface);
+}
+.Transcript_Entry-hidden {
+  opacity: .5;
+}
+.Transcript_Reply {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.Transcript_Lines[data-rows] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .35rem .9rem;
+}
+/* A closed step flows beside the steps around it; anything else, and a step
+   opened, takes the row. */
+.Transcript_Lines[data-rows] > :not(:has(> .Transcript_Entry-step)),
+.Transcript_Lines[data-rows] > :has(> .Transcript_Entry-step [open]) {
+  flex-basis: 100%;
+  margin-block: .325rem;
+}
+.Transcript_Lines[data-rows] > :first-child {
+  margin-top: 0;
+}
+.Transcript_Lines[data-rows] > :last-child {
+  margin-bottom: 0;
+}
+.Transcript_Status {
+  margin: .5rem 0 0;
+  color: var(--muted);
+  font-size: .875rem;
+}
+.Transcript_Status:empty {
+  display: none;
+}
+.Transcript_Error {
+  display: grid;
+  gap: var(--half-gap);
+}
+.Transcript_When {
+  white-space: nowrap;
+}
+
+.Attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 0;
+  font-size: var(--small);
+}
+/* A person's own, on their side. */
+.Attachments-end {
+  justify-content: flex-end;
+  width: fit-content;
+  max-width: 85%;
+  margin-left: auto;
+}
+.Attachments_Link {
+  overflow-wrap: anywhere;
+}
+.Attachments_Image {
+  display: block;
+  width: auto;
+  max-width: min(100%, 16rem);
+  max-height: 12rem;
+  border-radius: .75rem;
+  object-fit: cover;
+}
+.Attachments_File {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  max-width: 16rem;
+  padding: .35rem .75rem .35rem .35rem;
+  border-radius: .75rem;
+  background: var(--mine, var(--surface));
+  color: var(--text);
+  text-decoration: none;
+}
+.Attachments_Kind {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding-inline: .3rem;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+  font-weight: 700;
+}
+.Attachments_Name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Attachments_Size,
+.Attachments_Note {
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Attachments_Size {
+  flex: none;
+}
+.Attachments_Note {
+  flex-basis: 100%;
+}
+/* Files held to send, along a message box's top: small, each with a way to
+   take it back at its corner. */
+.Attachments-held .Attachments_Picture,
+.Attachments-held .Attachments_File {
+  position: relative;
+  flex-wrap: wrap;
+}
+.Attachments-held .Attachments_File {
+  padding-right: 2rem;
+}
+.Attachments-held .Attachments_Image {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+.Attachments_Remove {
+  position: absolute;
+  top: .2rem;
+  right: .2rem;
+  --control-height: 1.6rem;
+  --control-pad-inline: .45rem;
+}
+.Attachments:empty {
+  display: none;
+}
+/* A file of words shown as it is, under the line that names it: its own
+   page (`framed`), which takes this page's color scheme and shows through
+   to its background. */
+.Attachments_Frame {
+  display: block;
+  width: 100%;
+  height: min(20rem, 60vh);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+}
+
+.Annotated {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6.5rem;
+  align-items: start;
+  gap: 1rem;
+}
+.Annotated_Content {
+  min-width: 0;
+}
+.Annotated_Margin {
+  display: grid;
+  justify-items: end;
+  gap: .2rem;
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}
+
+.Preview_Address {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: .25rem .5rem;
+  overflow: auto;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: var(--small);
+  color: var(--text);
+  user-select: all;
+}
+.Preview_Frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: .75rem;
+  background: white;
+  color-scheme: normal;
+  box-shadow: 0 0 0 1px var(--border2);
+}
+
+.Preview-pane {
+  border-left: 1px solid var(--border2);
+  background: var(--surface);
+}
+
+.Preview_Frame-flat {
+  box-shadow: none;
+  border-radius: calc(var(--radius) - .25rem);
+}
+
+.Preview_Choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.25rem;
+  min-height: 0;
+  height: 100%;
+  align-content: start;
+}
+.Preview_Item {
+  display: contents;
+}
+.Preview_Choice {
+  order: 0;
+  --control-height: 2rem;
+  padding: 0 .5rem;
+}
+.Preview_View {
+  order: 1;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 100%;
+  height: 100%;
+}
+.Preview_Choices:has(.Preview_Choice) > .Preview_Item > .Preview_View {
+  height: calc(100% - 2rem);
+}
+.Preview_Item:has(.Preview_Choice) > .Preview_View {
+  display: none;
+}
+.Preview_Item:has(.Check_Input:checked) > .Preview_View {
+  display: flex;
+}
+.Preview_View > .Preview_Frame {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.Preview_View > .Notice {
+  padding: .25rem .5rem 0;
+}
+
+/* A page at a width of its own, its height following its shape, for a frame
+   in a flowing page rather than a pane: a desktop's 16:10, a phone's 9:16. */
+.Preview_Frame-desktop,
+.Preview_View > .Preview_Frame-desktop {
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+.Preview_Frame-phone,
+.Preview_View > .Preview_Frame-phone {
+  width: min(100%, 24rem);
+  height: auto;
+  aspect-ratio: 9 / 16;
+  margin-inline: auto;
+}
+
+.Composer {
+  position: relative;
+}
+.Composer_Figure {
+  position: absolute;
+  bottom: calc(100% - .2rem);
+  left: .75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+  pointer-events: none;
+}
+.Composer {
+  display: grid;
+  gap: .5rem;
+  padding: .5rem;
+  border: 1px solid var(--border2);
+  border-radius: 1rem;
+  background: var(--card);
+}
+.Composer_Field {
+  width: 100%;
+  min-height: calc(var(--control-height, 2rem) * 1.5);
+  max-height: calc(var(--viewport-height, 100dvh) * .4);
+  resize: none;
+}
+/* iOS zooms the page into a field whose words are under 16px. */
+@media (pointer: coarse) {
+  .Composer_Field {
+    font-size: max(1rem, 1em);
+  }
+}
+.Composer_Tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+.Composer_Attach {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .35em;
+  color: var(--muted);
+  font-size: var(--small);
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Composer_Attach:hover {
+    color: var(--text);
+  }
+}
+.Composer_File {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.Composer_Attach:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.Composer_Tools .Drop_Said {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.Composer_Stop,
+.Composer_Send {
+  margin-left: auto;
+}
+.Composer_Stop {
+  display: none;
+}
+.Composer_Voice[hidden] {
+  display: none;
+}
+.Composer_Voice[data-listening] {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: Composer_Listening 1.6s ease-in-out infinite alternate;
+}
+@keyframes Composer_Listening {
+  to {
+    box-shadow: 0 0 0 .45rem color-mix(in srgb, var(--accent) 8%,
+      transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Composer_Voice[data-listening] {
+    animation: none;
+  }
+}
+.Composer_Status {
+  margin: .3rem 0 0;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Composer_Status:empty {
+  display: none;
+}
+/* Who the words go to, where it isn't the conversation shown, along the
+   field's top. */
+.Composer_To {
+  margin: 0;
+  padding-inline: .25rem;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Composer_To:empty {
+  display: none;
+}
+
+.Composer[data-busy] .Composer_Stop {
+  display: inline-flex;
+}
+.Composer[data-busy] .Composer_Send {
+  margin-left: 0;
+}
+
+.Composer_Form {
+  gap: .75rem;
+  background: linear-gradient(transparent, var(--bg) 1rem);
+}
+.Composer_Form-inline {
+  background: none;
+}
+
+@container workspace (min-width:54rem) {
+  .Composer_Figure {
+    right: calc(100% + .75rem);
+    bottom: 0;
+    left: auto;
+    width: 4rem;
+    height: 4rem;
+  }
+}
+
+.Popover_Trigger {
+  gap: .3rem;
+  font-variant-numeric: tabular-nums;
+}
+.Popover_Trigger .Dot {
+  width: .55rem;
+  height: .55rem;
+}
+.Popover_Count {
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+  font-weight: 700;
+}
+.Popover_Line {
+  margin: 0;
+}
+
+.Popover[hidden],
+.Popover [hidden] {
+  display: none;
+}
+.Popover_Body {
+  display: none;
+  gap: .75rem;
+  padding: var(--popover-padding, .5rem);
+  background: var(--popover-background, var(--bg));
+  border: var(--popover-border, 1px solid var(--border2));
+  border-radius: var(--radius);
+  box-shadow: var(--popover-shadow, 0 .5rem 1.5rem color-mix(in srgb,
+    var(--text) 12%, transparent));
+}
+.Popover[data-open] .Popover_Body {
+  display: grid;
+}
+
+@container workspace (min-width:76rem) {
+  .Popover-responsive .Popover_Trigger {
+    display: none;
+  }
+  .Popover-responsive .Popover_Body {
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+  }
+}
+
+.Skip {
+  position: absolute;
+  top: -5rem;
+  left: 1rem;
+  padding: .6rem 1rem;
+  background: var(--card);
+  z-index: 1;
+}
+.Skip:focus {
+  top: 1rem;
+}
+
+.Loading {
+  color: var(--muted);
+  padding: var(--half-gap);
+}
+/* What is at work, before the words that say it, on their line. */
+.Loading_Mark {
+  display: inline-block;
+  margin-inline-end: var(--half-gap);
+  vertical-align: middle;
+}
+.Loading_Image {
+  display: block;
+}
+
+/* Nothing here yet: a dashed edge around what will be and how to start, its
+   heading in the text's ink and the rest muted, centred. */
+.Empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--half-gap);
+  padding: calc(2 * var(--gap)) var(--gap);
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-align: center;
+}
+.Empty > * {
+  max-width: var(--measure);
+  margin: 0;
+}
+.Empty_Title {
+  color: var(--text);
+  font-size: var(--h3);
+  font-weight: 700;
+}
+
+.Empty_Title-welcome {
+  margin: 0 0 .5rem;
+  font-size: 1.5rem;
+}
+
+.Empty-welcome {
+  border: 0;
+  padding: 0;
+  text-align: center;
+}
+
+/* An app's frame: the sidebar on the surface at the left, the page on the
+   floor beside it. Search is a box at its top, the field bare inside it. A
+   place is a line you can press, its icon then its name in the body's type;
+   where you are is lit. The page's bar is one quiet line,
+   its title in the text's ink then the page's tools; the body under it
+   scrolls on its own.
+   Narrower than a tablet, the sidebar folds away behind the bar's menu and
+   slides over the page when opened, a shade behind it.
+   --floor is the paper the page lies on, the floor itself or, in
+   Shell-sheet, a sheet on it. --floor-fill is that colour under the skin's
+   --texture: the body and the aside paint it, and a sidebar's tab that opens
+   into the page fills with it, so the two are the one paper.
+   It is as tall as what a person sees, --viewport-height where a page
+   holds it (@yaks/ux's Conversation does), so a phone's keyboard shortens
+   it and its body rather than scrolling the page. */
+.Shell {
+  --floor: var(--bg);
+  --floor-fill: var(--texture, none), var(--floor);
+  display: flex;
+  height: var(--viewport-height, 100dvh);
+  min-height: 0;
+  background: var(--floor);
+}
+.Shell-sheet {
+  --floor: var(--card);
+  --floor-fill: var(--texture, none), var(--floor);
+}
+
+.Shell_Side {
+  flex: 0 0 15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(var(--gap) + env(safe-area-inset-top, 0px)) var(--half-gap)
+    var(--gap);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.Shell_Brand {
+  padding: 2px 10px var(--gap);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+.Shell_Find {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: max(2rem, var(--tap));
+  margin: 0 0 var(--gap);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--bg);
+}
+.Shell_Find:focus-within {
+  border-color: var(--accent);
+}
+.Shell_Find > :not(.Shell_Icon) {
+  flex: 1;
+  min-width: 0;
+}
+.Shell_Item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: max(2rem, var(--tap));
+  padding: 0 10px;
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--text);
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Shell_Item:hover {
+    background: var(--soft);
+  }
+}
+.Shell_Item-on {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  font-weight: 600;
+}
+.Shell_Icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--muted);
+}
+.Shell_Glyph {
+  width: 16px;
+  height: 16px;
+}
+.Shell_Item-on .Shell_Icon {
+  color: var(--accent);
+}
+.Shell_Label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Shell_Count {
+  flex: none;
+  font-size: var(--small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.Shell_Main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.Shell_Bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 3rem;
+  padding: calc(var(--half-gap) + env(safe-area-inset-top, 0px))
+    calc(var(--gap) + env(safe-area-inset-right, 0px)) var(--half-gap)
+    calc(var(--gap) + env(safe-area-inset-left, 0px));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.Shell_Menu {
+  display: none;
+}
+.Shell_Title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.Shell_Tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+}
+.Shell_Tools:empty {
+  display: none;
+}
+.Shell_Body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column; /* a page that fills the floor takes flex: 1 */
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--floor-fill);
+}
+.Shell_Shade {
+  display: none;
+}
+
+@media (max-width: 44rem) {
+  .Shell_Side {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 10;
+    width: min(85vw, 18rem);
+    transform: translateX(-100%);
+    transition: transform 0.18s ease-out;
+    border-right: 0;
+  }
+  .Shell-open .Shell_Side {
+    transform: none;
+    box-shadow: var(--shadow);
+  }
+  .Shell-open .Shell_Shade {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    padding: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--text) 25%, transparent);
+  }
+  .Shell_Menu {
+    display: inline-flex;
+    margin-left: calc(var(--half-gap) * -1);
+  }
+  .Shell_Bar {
+    flex-wrap: wrap;
+    row-gap: var(--half-gap);
+  }
+  .Shell_Tools {
+    flex: 1 0 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+}
+
+.Shell_Content {
+  font-size: var(--small);
+}
+
+/* What sits at the page's right: a pane the window's height that scrolls
+   apart from the page, so the page centers in the width left beside it.
+   Shut, it leaves the full width to the page. Narrower than a laptop it
+   stands only while it is the address's target, over the page from the right,
+   its edge casting a shadow on the page. */
+.Shell_Aside {
+  flex: 0 0 var(--shell-aside, 20rem);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: var(--viewport-height, 100dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid var(--border);
+  background: var(--floor-fill);
+}
+.Shell_Aside[hidden],
+.Shell-shut .Shell_Aside {
+  display: none;
+}
+@media (max-width: 68.75rem) {
+  .Shell_Aside {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 10;
+    width: min(26rem, 100vw);
+    height: auto;
+    box-shadow: -.25rem 0 1.5rem color-mix(in srgb, var(--text) 18%,
+      transparent);
+  }
+  .Shell_Aside:not(:target, :has(:target)) {
+    display: none;
+  }
+  .Shell_Aside:is(:target, :has(:target)):not([hidden]) {
+    display: flex;
+  }
+}
+
+/* The top of a page: the title large and ink, with its id and kind small
+   beside it; what it is under it, muted; then the facts, small and muted,
+   dotted apart. Whatever follows it starts a gap below. */
+.Head {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.Head + * {
+  margin-top: var(--gap);
+}
+.Head_Title {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--half-gap);
+  min-width: 0;
+  font-size: var(--h1);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+a.Head_Title,
+.Head_Link {
+  color: inherit;
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  a.Head_Title:hover,
+  .Head_Link:hover {
+    text-decoration: underline;
+  }
+}
+.Head_Id,
+.Head_Kind {
+  font-size: var(--small);
+  font-weight: normal;
+  color: var(--muted);
+}
+.Head_Id {
+  font-family: var(--mono);
+}
+.Head_Sub {
+  margin: 0;
+  color: var(--muted);
+  max-width: var(--measure);
+}
+.Head_Sub-refused {
+  color: var(--negative);
+}
+.Head_Facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--half-gap);
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Head_Sep {
+  color: var(--dim);
+}
+
+.Head_Eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Head_Title-page {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin: .15rem 0 0;
+}
+.Head_Period {
+  margin: .25rem 0 0;
+  font-size: var(--small);
+}
+.Head_Address {
+  font-size: var(--fine, var(--small));
+  text-decoration: none;
+  color: var(--muted);
+}
+@media (max-width: 700px) {
+  .Head_Title-page {
+    font-size: 1.5rem;
+  }
+}
+
+.Head_Title-page {
+  font-weight: 800;
+}
+
+/* The few numbers a page is about: tiles side by side, as many to a line as
+   fit, each its number large over the words saying what it counts. The
+   number keeps its digits in columns, so a value that moves does not shift. */
+.Metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--gap);
+}
+.Metrics_Item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--gap);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.Metrics_Value {
+  font-size: var(--h1);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Metrics_Value-caution {
+  color: var(--caution);
+}
+.Metrics_Value-negative {
+  color: var(--negative);
+}
+.Metrics_Label {
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Metrics_Note {
+  margin-top: 4px;
+  font-size: var(--small);
+  color: var(--muted);
+  overflow: hidden;
+}
+
+/* A titled section: a title line (words, count, note), what it is about,
+   then its body. Sections stack with a gap between them; the page decides
+   the rest. */
+.Section {
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Section + .Section {
+  margin-top: calc(var(--gap) * 2);
+}
+.Section_Title {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  min-width: 0;
+  font-size: var(--h2);
+  font-weight: 600;
+  color: var(--heading);
+}
+.Section_Count,
+.Section_Note {
+  font-weight: normal;
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Section_Count {
+  font-variant-numeric: tabular-nums;
+}
+.Section_Note-refused {
+  color: var(--negative);
+}
+.Section_Sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  max-width: var(--measure);
+}
+
+.Section-compact {
+  display: block;
+}
+.Section-compact + .Section-compact {
+  margin-top: 0;
+}
+.Section_Title-compact {
+  display: block;
+  font-size: 16px;
+  font-weight: bold;
+  padding-block: var(--gap) var(--half-gap);
+}
+
+/* A fold: its line in the accent, a chevron before it that turns as it
+   opens, and what it holds a gap under it. */
+.More_Summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--half-gap);
+  color: var(--accent);
+  font-size: var(--small);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.More_Summary::-webkit-details-marker {
+  display: none;
+}
+.More_Summary::before {
+  content: '';
+  flex: none;
+  width: .4em;
+  height: .4em;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+  transition: transform .15s;
+}
+.More[open] > .More_Summary::before {
+  transform: rotate(45deg);
+}
+.More_Body {
+  display: grid;
+  gap: var(--half-gap);
+  margin-top: var(--half-gap);
+}
+.More_Body > * {
+  margin: 0;
+}
+.More_Label {
+  font-weight: 700;
+}
+.More_Value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A step: a muted line with `›` after it that turns as it opens, accent
+   while it runs and negative once it did not work, and what it holds under a
+   rule at the size it is drawn. */
+.More-quiet > .More_Summary {
+  align-items: baseline;
+  gap: .4rem;
+  color: var(--muted);
+  font-weight: normal;
+}
+.More-quiet > .More_Summary::before {
+  content: none;
+}
+.More-quiet > .More_Summary::after {
+  content: '›';
+  transition: transform .15s;
+}
+.More-quiet[open] > .More_Summary::after {
+  transform: rotate(90deg);
+}
+.More-on > .More_Summary {
+  color: var(--accent);
+}
+.More-no > .More_Summary {
+  color: var(--negative);
+}
+.More-quiet > .More_Body {
+  gap: .6rem;
+  margin-top: .4rem;
+  padding: .6rem .8rem;
+  border-left: 2px solid var(--border2);
+}
+
+/* A second way to open a fold, drawn outside it: a bare button, muted, in
+   the accent while the fold it opens is open. */
+.More_Mark {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.More_Mark:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.More_Mark[aria-expanded='true'] {
+  color: var(--accent);
+}
+
+/* A card: one surface holding related things, flat on the page on a
+   hairline. What it holds stacks a gap apart, never by margins of its own,
+   and its head, when it has one, runs edge to edge across the top, ruled
+   off under it: what it is on the left, its actions on the right. */
+.Card {
+  --card-pad: var(--gap);
+  --card-gap: var(--half-gap);
+  display: grid;
+  align-content: start;
+  gap: var(--card-gap);
+  min-width: 0;
+  padding: var(--card-pad);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--card-fill, var(--card));
+  overflow-wrap: break-word;
+}
+.Card > * {
+  min-width: 0;
+  margin: 0;
+}
+/* A narrow head wraps rather than squeezing its title: how it stands goes
+   under the title, and the actions under that, still at the right. */
+.Card_Head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap);
+  margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)) 0;
+  padding: var(--half-gap) var(--card-pad);
+  border-bottom: 1px solid var(--border2);
+}
+.Card_Head:last-child {
+  margin-bottom: calc(-1 * var(--card-pad));
+  border-bottom: 0;
+}
+.Card_Title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  margin: 0;
+  color: var(--heading);
+  font-size: var(--size);
+  font-weight: 700;
+  line-height: 1.3;
+}
+.Card_Link {
+  color: inherit;
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Card_Link:hover {
+    color: var(--link);
+    text-decoration: underline;
+  }
+}
+.Card_Mark {
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+  text-align: center;
+  object-fit: contain;
+}
+.Card_Actions {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--half-gap);
+  margin-left: auto;
+}
+.Card_Form {
+  display: contents;
+}
+.Card_Sub {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+/* Rows in a card run to its edges. */
+.Card > .Rows {
+  margin-inline: calc(-1 * var(--card-pad));
+}
+.Card > .Rows > .Rows_Item {
+  padding-inline: var(--card-pad);
+}
+
+/* A whole card can be pressed: its mark above its name and summary. */
+.Card-button {
+  --card-pad: var(--half-gap);
+  justify-items: center;
+  text-align: center;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Card-button:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+}
+.Card-button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.Card-button .Card_Sub {
+  line-height: 1.35;
+}
+.Card-button .Card_Mark {
+  width: 3rem;
+  height: 3rem;
+  object-fit: contain;
+}
+
+.Card-danger .Card_Title {
+  color: var(--negative);
+}
+.Card-accent {
+  border-color: var(--accent);
+}
+
+.Card[data-compact] {
+  --pad-block: .5rem;
+  --pad-inline: .5rem;
+}
+
+/* A pressable card that holds a control of its own is pressed through its
+   title's link, which covers the card; the control sits above it. */
+.Card-button:has(.Card_Link) {
+  position: relative;
+}
+.Card-button .Card_Link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Card-button .Card_Link:hover {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+.Card-button .Card_Form > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* The frame owns scrolling, so a long card fits a phone and its backdrop
+   stays behind it. The open attribute also works before script runs. */
+.Modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: var(--gap);
+  border: 0;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  color: var(--text);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.Modal[open],
+.Modal:popover-open {
+  display: grid;
+  align-items: start;
+  justify-items: center;
+}
+.Modal::backdrop {
+  background: transparent;
+}
+.Modal_Backdrop {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.Modal_Body {
+  position: relative;
+  box-sizing: border-box;
+  width: min(100%, 42rem);
+  margin-block: auto;
+}
+/* A body kept in the dialog while another is shown. */
+.Modal_Body[hidden] {
+  display: none;
+}
+/* The pane under the card's head flows, so the small card of actions floats
+   at its top right and what the dialog says wraps beside and under it. */
+.Modal_Main {
+  display: flow-root;
+}
+.Modal_Main > * {
+  margin: 0;
+}
+.Modal_Main > * + * {
+  margin-top: var(--card-gap);
+}
+.Modal_Actions {
+  float: right;
+  display: grid;
+  gap: var(--half-gap);
+  justify-items: stretch;
+  width: min(100%, 12rem);
+  box-sizing: border-box;
+  margin: 0 0 var(--half-gap) var(--gap);
+  padding: var(--half-gap);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font-size: var(--small);
+}
+.Modal_Main > .Modal_Actions + * {
+  margin-top: 0;
+}
+.Modal_Actions .Button {
+  justify-content: center;
+}
+@media (max-width: 40rem) {
+  .Modal_Actions {
+    float: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    width: auto;
+    margin: 0 0 var(--card-gap);
+  }
+}
+
+/* A report: a card whose head says the total where its actions would sit,
+   then a chart of the days, its first and last day under it, and short
+   lists side by side, each name cut short before it would push its count
+   out of its column. */
+.Report {
+  gap: 1.25rem;
+}
+.Report_Total {
+  flex: none;
+  margin: 0 0 0 auto;
+  color: var(--text);
+  font-size: var(--h3);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.Report_Unit {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 400;
+}
+.Report_Plot {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+.Report_Span {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: var(--small);
+}
+.Report_Tops {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+.Report_Heading {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+}
+/* One column as wide as the list's own, so a long name is cut short with
+   an ellipsis rather than widening the row past its column and over the
+   next one; the count beside it keeps its whole width and one line. */
+.Report_List {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--small);
+}
+.Report_Item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.Report_Label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Report_Value {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .Report_Tops {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+}
+
+/* A heading over a run of cards: what they share, small and muted, so the
+   cards' own titles lead. */
+.Group {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+/* The window in columns: a narrow nav on the surface, the page on the floor
+   beside it (or whatever column follows), a hairline
+   between each two. Each pane keeps its top where it is and scrolls its
+   body. A phone-width window stacks them, and the page scrolls as one; a
+   nav that is an aside goes after the page there. Set on an app's floor (a
+   column that scrolls, such as a Shell's body) the columns fill the floor
+   rather than the window. */
+.Panes {
+  display: flex;
+  flex: 1;
+  height: var(--viewport-height, 100dvh);
+  min-height: 0;
+}
+.Panes_Pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.Panes > * + * {
+  border-left: 1px solid var(--border);
+}
+.Panes_Pane-nav {
+  flex: 0 0 15rem;
+  background: var(--surface);
+}
+.Panes_Pane-main {
+  flex: 1 1 0;
+}
+/* What sits beside the page, as wide as a chat beside a page is. */
+.Panes_Pane-side {
+  flex: 0 1 var(--side);
+  min-width: var(--side-min);
+}
+.Panes_Top {
+  padding: var(--half-gap) var(--gap);
+  border-bottom: 1px solid var(--border);
+}
+.Panes_Body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--gap);
+}
+@media (max-width: 56rem) {
+  .Panes {
+    flex: none;
+    flex-direction: column;
+    height: auto;
+  }
+  .Panes > * + * {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .Panes > .Panes_Pane-aside {
+    order: 1;
+    border-top: 1px solid var(--border);
+  }
+  .Panes > .Panes_Pane-aside + * {
+    border-top: 0;
+  }
+  .Panes > .Panes_Pane {
+    flex: none;
+  }
+  .Panes_Body {
+    overflow: visible;
+  }
+}
+
+/* What a page opens over itself, sliding in from its edge at a phone's
+   width: up from the foot, or in from the left or right. Shut, it rests off
+   that edge; it moves there and back on the compositor (translate alone),
+   quick and easing out as it opens, easing in as it leaves, so closing plays
+   the opening backwards. Its display (and a dialog's place on the top layer)
+   holds until it has left. A page that lays it over itself does so at least
+   at this width, by its own position, and shows it while it is open.
+   A side layer's edge toward the page casts a soft shadow, and nothing dims
+   the page behind it.
+   Layer-under turns the motion around: the layer stands still at the left,
+   under the page, and the page (Layer_Cover, after it) slides right by
+   --layer-width to uncover it, then back over it. The cover comes after the
+   layer, so it paints over it, and needs a background of its own. Its edge
+   casts the shadow, and a press on what still shows of it (Layer_Shut)
+   closes the layer. */
+.Layer_Shut {
+  display: none;
+}
+@media (max-width: 700px) {
+  .Layer,
+  .Layer_Cover {
+    --layer-shadow: 1.5rem color-mix(in srgb, var(--text) 18%, transparent);
+  }
+  .Layer-left {
+    box-shadow: .25rem 0 var(--layer-shadow);
+  }
+  .Layer-right {
+    box-shadow: -.25rem 0 var(--layer-shadow);
+  }
+  .Layer[data-swipe],
+  .Layer_Shut {
+    touch-action: pan-y pinch-zoom;
+  }
+  .Layer-under {
+    box-shadow: none;
+  }
+  .Layer-under ~ .Layer_Cover {
+    position: relative;
+    box-shadow: -.25rem 0 var(--layer-shadow);
+  }
+  .Layer-under:is(:target, :has(:target)) ~ .Layer_Cover {
+    translate: var(--layer-width) 0;
+  }
+  .Layer-under:is(:target, :has(:target)) ~ .Layer_Cover .Layer_Shut {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+  }
+}
+@media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
+  .Layer {
+    --layer-off: 0 100%;
+    transition: translate .24s cubic-bezier(.2, .8, .2, 1),
+      display .24s allow-discrete, overlay .24s allow-discrete;
+  }
+  .Layer-left {
+    --layer-off: -100% 0;
+  }
+  .Layer-right {
+    --layer-off: 100% 0;
+  }
+  .Layer-under {
+    --layer-off: none;
+  }
+  .Layer:not(:target, :has(:target), [open], :popover-open) {
+    translate: var(--layer-off);
+    transition-duration: .2s;
+    transition-timing-function: cubic-bezier(.8, 0, .8, .2);
+  }
+  @starting-style {
+    .Layer {
+      translate: var(--layer-off);
+    }
+  }
+  .Layer-under ~ .Layer_Cover {
+    transition: translate .2s cubic-bezier(.8, 0, .8, .2);
+  }
+  .Layer-under:is(:target, :has(:target)) ~ .Layer_Cover {
+    transition: translate .24s cubic-bezier(.2, .8, .2, 1);
+  }
+}
+
+/* What stays one press away over every page: the launcher pinned to the
+   window's foot at its right, a quiet toast above it, and the panel it opens
+   floating over the page's corner, a card wide, above the launcher. At a
+   phone's width the panel takes the screen (a Layer, sliding up from the
+   foot), as tall as what a person sees, and the launcher rides the page's bar instead (Launcher-bar). */
+.Dock {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 60;
+  display: grid;
+  justify-items: end;
+  gap: .5rem;
+  pointer-events: none;
+}
+.Dock > * {
+  pointer-events: auto;
+}
+.Dock_Launcher {
+  gap: .5rem;
+  border-radius: 99px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.Dock_Launcher-bar {
+  position: relative;
+  background: none;
+  box-shadow: none;
+}
+/* A launcher in a bar says someone is in with a dot on its glyph. */
+.Dock_Launcher-bar > .Dock_Here {
+  position: absolute;
+  left: 1.55rem;
+  top: .35rem;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.Dock_Presence.Dot-caution {
+  --dot: var(--presence-away, var(--caution));
+}
+.Dock_Presence.Dot-offline {
+  --dot: var(--presence-offline, var(--dim));
+}
+.Dock_Faces {
+  display: inline-flex;
+}
+.Dock_Faces:empty {
+  display: none;
+}
+.Dock_Face.Identity_Avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  font-size: .75rem;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.Dock_Face + .Dock_Face {
+  margin-left: -.35rem;
+}
+.Dock_Word {
+  white-space: nowrap;
+}
+/* It stands where it opens while shut too, so it leaves from there; only its
+   display waits on its being open. */
+.Dock_Panel {
+  position: fixed;
+  inset: auto 1rem 4.25rem auto;
+  box-sizing: border-box;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(23rem, 100vw - 2rem);
+  height: min(38rem, 100dvh - 6rem);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border2);
+  border-radius: calc(var(--radius) * 3);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.Dock_Panel:popover-open {
+  display: grid;
+}
+.Dock_Head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+  padding: .5rem .5rem .5rem .75rem;
+  border-bottom: 1px solid var(--border2);
+}
+.Dock_Title {
+  flex: 1;
+  min-width: 0;
+}
+.Dock_Body {
+  display: grid;
+  align-content: start;
+  gap: .75rem;
+  padding: .75rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.Dock_Foot {
+  display: grid;
+  gap: .5rem;
+  padding: .5rem .75rem .75rem;
+  border-top: 1px solid var(--border2);
+}
+.Dock_Foot:empty {
+  display: none;
+}
+.Dock_Toast {
+  display: block;
+  max-width: min(20rem, 100vw - 2rem);
+  padding: .5rem .75rem;
+  border: 1px solid var(--border2);
+  border-radius: calc(var(--radius) * 3);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.Dock_Toast[hidden] {
+  display: none;
+}
+@media (min-width: 701px) {
+  .Dock_Launcher-bar {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .Dock {
+    right: .75rem;
+    left: .75rem;
+    top: calc(3.5rem + env(safe-area-inset-top));
+    bottom: auto;
+    justify-items: stretch;
+  }
+  .Dock > .Dock_Launcher {
+    display: none;
+  }
+  .Dock_Toast {
+    max-width: none;
+  }
+  /* As tall as what a person sees: --viewport-height while a phone's
+     keyboard is up (@yaks/ux's fit holds it), so the box sits on the
+     keyboard, which also covers the home bar's inset. */
+  .Dock_Panel {
+    inset: 0 0 auto;
+    width: 100%;
+    height: var(--viewport-height, 100dvh);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  .Dock_Panel:has(:is(input, textarea):focus) {
+    padding-bottom: 0;
+  }
+}
+
+/* Fixed to the viewport at the rect of what it springs from, placed by
+   script, above every card, so a picker clears what it springs from. */
+.Overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 200;
+}
+
+/* A card floating over the page, fixed to the viewport where its caller puts
+   it (left and top), under every popover and menu so what opens from inside
+   it clears it. It keeps one width as what it shows changes, and grows
+   to most of the viewport's height; past that its body scrolls, and a wheel
+   over it never moves the page beneath. Sized by hand, it keeps the size
+   it was given. */
+.Peek {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: min(44rem, calc(100vw - 2 * var(--gap)));
+  max-height: min(75dvh, 52rem);
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.Peek-sized {
+  min-width: 16rem;
+  max-width: none;
+  max-height: none;
+}
+/* The line it is held by: what it shows on one side, its presses on the
+   other, on the surface like a bar. */
+.Peek_Head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--half-gap);
+  padding: 2px var(--half-gap) 2px var(--gap);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  font-size: var(--small);
+  color: var(--muted);
+  cursor: grab;
+  user-select: none;
+}
+.Peek_Body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--gap) calc(var(--gap) * 1.5) calc(var(--gap) * 1.5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* The corner it is sized by: a quiet mark until the pointer finds it. */
+.Peek_Grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  background: linear-gradient(
+    135deg,
+    transparent 55%,
+    var(--dim) 55%,
+    var(--dim) 62%,
+    transparent 62%,
+    transparent 75%,
+    var(--dim) 75%,
+    var(--dim) 82%,
+    transparent 82%
+  );
+  opacity: 0.5;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Peek_Grip:hover {
+    opacity: 1;
+  }
+}
+
+.Palette {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+.Palette_Box {
+  width: min(600px, 92vw);
+  max-height: 76dvh;
+  margin: 12vh auto 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 45%, transparent);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+.Palette_Line {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding-left: var(--gap);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted); /* the glyph; the input restores its own ink */
+}
+.Palette_Line > .Field {
+  flex: 1;
+}
+/* The board chip mid-flight: the veil stops catching pointers so the
+   drop hit-tests through to the canvas, and fades to show the target. */
+.Palette-drag {
+  pointer-events: none;
+  opacity: 0.15;
+}
+.Palette_Page {
+  display: flex;
+  align-items: center;
+  padding: var(--half-gap);
+  margin-right: var(--half-gap);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: grab;
+}
+@media (hover: hover) and (pointer: fine) {
+  .Palette_Page:hover {
+    color: var(--text);
+    background: var(--soft);
+  }
+}
+/* A kind's section label. The demoted variant (mail, comment) carries a
+   divider so the navigational sections read as the palette's top. */
+.Palette_Head {
+  padding: var(--half-gap) var(--gap) 2px;
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Palette_Head-demoted {
+  margin-top: var(--half-gap);
+  border-top: 1px solid var(--border);
+}
+.Palette_Hit {
+  padding: 2px var(--gap);
+  cursor: pointer;
+}
+.Palette_Hit-sel {
+  background: var(--soft);
+}
+.Palette_Message {
+  display: block;
+  font-size: var(--small);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: var(--half-gap) var(--gap);
+}
+
+/* Things to browse, in groups. A group's heading is small, spaced capitals
+   over a rule; an entry's title is large and ink, what it is muted under it,
+   then what it shows. Entries stand well apart and groups further, so the
+   eye finds each at a glance; a wide window gets a wider margin. The entry
+   a link jumped to lights its title. */
+.Catalog {
+  display: grid;
+  gap: calc(var(--gap) * 4);
+  min-width: 0;
+}
+@media (min-width: 56rem) {
+  .Catalog {
+    padding: var(--gap) calc(var(--gap) * 2);
+  }
+}
+.Catalog_Group {
+  display: grid;
+  gap: calc(var(--gap) * 2.5);
+  min-width: 0;
+  scroll-margin-top: var(--gap);
+}
+.Catalog_Heading {
+  margin: 0;
+  max-width: none;
+  padding-bottom: var(--half-gap);
+  border-bottom: 1px solid var(--border2);
+  font-size: var(--small);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--heading);
+}
+.Catalog_Entry {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  scroll-margin-top: var(--gap);
+}
+.Catalog_Title {
+  margin: 0;
+  font-size: var(--h3);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+.Catalog_Entry:target > .Catalog_Title {
+  color: var(--accent);
+}
+.Catalog_Sub {
+  margin: 0 0 var(--gap);
+  max-width: var(--measure);
+  color: var(--muted);
+}
+
+/* Things side by side: as many figures to a line as fit, each as wide as
+   what it shows asks, and no wider than the line. A figure is its caption,
+   small and mono, over a stage: a raised panel with room all round, where
+   what is shown sits as it would anywhere else. */
+.Gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  min-width: 0;
+}
+.Gallery_Figure {
+  flex: 0 1 max-content;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.Gallery_Caption {
+  padding: 0 2px;
+  font-family: var(--mono);
+  font-size: var(--small);
+  line-height: 1.4;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.Gallery_Stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Roomy, and less so on a phone, where the room is the line's. */
+  padding: clamp(var(--gap), 4vw, calc(var(--gap) * 1.75));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto; /* what is wider than the line scrolls within its stage */
+}
+
+/* Even: figures share the line alike, as many as fit at 16rem or more, so
+   two to four choices sit side by side and a phone stacks them. */
+.Gallery-even > .Gallery_Figure {
+  flex: 1 1 16rem;
+}
+
+/* Like things in equal columns, as many as fit at a card's least width, each
+   row as tall as its tallest cell; one column on a phone. A cell fills its
+   column, so cards side by side line up. */
+.Cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: var(--gap);
+  min-width: 0;
+}
+.Cards > * {
+  min-width: 0;
+}
+
+.Cards-compact {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+}
+
+/* Like things in equal columns, as many as fit at a card's least width, each
+   row as tall as its tallest cell; one column on a phone. A cell fills its
+   column, so cards side by side line up. */
+.Cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: var(--gap);
+  min-width: 0;
+}
+.Cards > * {
+  min-width: 0;
+}
+
+.Cards-compact {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+}

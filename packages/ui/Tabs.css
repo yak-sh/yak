@@ -1,9 +1,11 @@
 /* A row of tabs: chips that read as controls, gapless (a tab's padding is
    the spacing), the one showing lit. A badge says what waits behind a tab
    without opening it: raised beside the face, a gap from it, never over
-   it, so the tab is as wide as both. */
+   it, so the tab is as wide as both. Tabs that don't fit wrap to another
+   line, each kept whole, as pencil's do. */
 .Tabs {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
 }
 .Tabs_Tab {
@@ -23,6 +25,7 @@
   align-items: center; /* the face stays centred as the floor grows */
   justify-content: center;
   gap: 3px;
+  overflow-wrap: normal;
 }
 @media (hover: hover) and (pointer: fine) {
   .Tabs_Tab:hover {

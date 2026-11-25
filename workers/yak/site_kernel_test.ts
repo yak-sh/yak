@@ -11,6 +11,8 @@ import { ADDRESSES } from './seo.ts'
 import type { Env } from './env.ts'
 import * as site from './site.ts'
 import { OPERATOR } from './variant.ts'
+import { UI_GUIDE } from './kept-page.ts'
+import { SHEETS } from './ui-guide.ts'
 
 // The generated addresses, through the kernel, at the apex and not on a space's
 // hostname — where robots.txt is the customer's own file (@yaks/platform/routes) and always
@@ -365,4 +367,54 @@ test("Site keeps the stranger's sign-in card, with its validator", async () => {
   assertEquals(form.querySelector('[name=return]'), null)
   let again = await ask(card.headers.get('etag')!)
   assertEquals(again.status, 304)
+})
+
+// Both style guides are public: the site's own, and the kit's whole guide
+// beside it (ui-guide.ts), each kept from search. A visitor signed out reads
+// them, never the sign-in card a space's address would send them to.
+test('a visitor signed out reads both style guides', async () => {
+  let k = await kernel()
+  try {
+    let own = await k.at('yaks.app', '/style-guide', { redirect: 'manual' })
+    assertEquals(own.status, 200)
+    let { document } = parseHTML(await own.text())
+    assertEquals(
+      document.querySelector('meta[name="robots"]')?.getAttribute('content'),
+      'noindex, follow',
+    )
+    assert(document.querySelector(`a[href="${UI_GUIDE}"]`))
+
+    let at = (query = '') =>
+      k.at('yaks.app', UI_GUIDE + query, { redirect: 'manual' })
+    let kit = await at()
+    assertEquals(kit.status, 200)
+    assertEquals(kit.headers.get('x-robots-tag'), 'noindex, follow')
+    let guide = parseHTML(await kit.text()).document
+    let groups = [...guide.querySelectorAll('.Catalog_Heading')]
+      .map((h) => h.textContent)
+    for (let group of ['Controls', 'Lists', 'UX base']) {
+      assert(groups.includes(group), `no ${group} in ${groups}`)
+    }
+    let sheets = (doc: Document) =>
+      [...doc.querySelectorAll('link[rel="stylesheet"]')]
+        .map((l) => new URL(l.getAttribute('href')!).pathname)
+
+    // Each theme and skin a tab offers dresses the page in its own sheets,
+    // and every one answers.
+    let dressed = parseHTML(
+      await (await at('?theme=rosepine&skin=paper'))
+        .text(),
+    ).document
+    assertEquals(sheets(dressed), [
+      '/_guide.theme.rosepine.css',
+      '/_guide.skin.paper.css',
+    ])
+    for (let sheet of SHEETS) {
+      let css = await k.at('yaks.app', `/${sheet}`)
+      assertEquals(css.status, 200, sheet)
+      assert((await css.text()).length > 1000, sheet)
+    }
+  } finally {
+    await k.stop()
+  }
 })

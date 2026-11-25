@@ -1623,7 +1623,8 @@
     },
     "kit": {
       "title": "The kit's parts",
-      "note": "Every @yaks/ui part these pages wear, in every variant, as the linen theme and the pencil skin draw it. The examples are the kit's own."
+      "note": "Every @yaks/ui part these pages wear, in every variant, as the linen theme and the pencil skin draw it. The examples are the kit's own. %{all}.",
+      "all": "See every kit, theme and skin in the kit's own guide"
     },
     "sections": {
       "title": "Page-specific sections",

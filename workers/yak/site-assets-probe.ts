@@ -41,10 +41,11 @@ export let readAsset = async (path: string) => {
     let name = path.slice(1)
     return Object.hasOwn(PAGES, name) ? encoded(page(name)) : null
   }
-  let asset = sources.get(path) ??
-    (path == '/_ui.css' || path.startsWith('/_ui/')
-      ? (await sheets()).get(path)
-      : undefined)
+  // The kit's sheets, its guide's (named among the sources, made by `kit`),
+  // and what they point at.
+  let asset = /^\/(_ui\.css$|_ui\/|_guide\.)/.test(path)
+    ? (await sheets()).get(path)
+    : sources.get(path)
   if (asset?.file) return await file(asset.file)
   if (asset?.body) {
     let body = await asset.body()

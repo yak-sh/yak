@@ -29,6 +29,7 @@ import {
   skyScript,
 } from '@yaks/platform/home/assets'
 import { kit } from './sheet-assets.ts'
+import { SHEETS } from './ui-guide.ts'
 import { pageDocs } from './operator-words.ts'
 import { SHARED } from './page-imports.ts'
 
@@ -228,6 +229,8 @@ export let ASSETS: Asset[] = [
   ...homeFigures,
   { name: 'sky.js', file: skyScript, named: true },
   ...['style.css', 'pages.css'].map((name) => ({ name, named: true })),
+  // The kit's own guide's sheets, drawn with the kit's (sheet-assets.ts).
+  ...SHEETS.map((name) => ({ name, named: true })),
   ...[
     'report.js',
     'deploy.js',

@@ -18,7 +18,7 @@ import * as skillPage from './skill-page.ts'
 import * as install from './install.ts'
 import * as appPage from './app-page.ts'
 import * as publisherPage from './publisher-page.ts'
-import { isListing } from './kept-page.ts'
+import { isListing, UI_GUIDE } from './kept-page.ts'
 import { sprite } from './icons.ts'
 import { lost } from './pages.ts'
 import { callback } from './connections.ts'
@@ -283,6 +283,10 @@ let atApex = async (req: Request, env: Env, path: string) => {
     let { call } = await import('./tools.ts')
     let shown = await gallery.answer(req, env, path, dir, call)
     if (shown) return shown
+  }
+  // @yaks/ui's own guide, public like the site's style guide beside it.
+  if (path == UI_GUIDE && (req.method == 'GET' || req.method == 'HEAD')) {
+    return (await import('./ui-guide.ts')).answer(req, env)
   }
   // The platform admin's directory, signed in and uncached like the review.
   if (path == ADMIN || path.startsWith(ADMIN + '/')) {

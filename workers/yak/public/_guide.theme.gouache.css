@@ -1,0 +1,191 @@
+/* Gouache, the default theme: the colours of yak.sh's painted yak. Light is
+   the sheet it is painted on: cotton paper, Payne's grey ink, slate lines,
+   the teal in its mane for what is lit, burnt sienna for a fault, umber and
+   bone from its coat. Dark is yak.sh's terminal windows: their slate ground,
+   their cream ink, and the teal's pale pigment where it sits on them. A page
+   that paints a dark window on a light sheet gives the window
+   `color-scheme: dark`, and every name below turns in it. gouache.ts holds
+   the dark colours for a terminal.
+
+   The palette has five pigments and a theme has more roles than that, so
+   roles share them: teal is what is lit, what went well and who; sienna a
+   fault and the language's words; slate a link, something to know, and a
+   moment. yak.sh's own stylesheet wears this theme (apps/yak-sh/style.css). */
+:root {
+  color-scheme: light dark;
+  --gap: 0.75rem;
+  --radius: 8px;
+  --measure: 90ch;
+  --shadow: 0 12px 32px -16px light-dark(rgba(43, 43, 51, .4), rgba(0, 0, 0, .6));
+
+  --font: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --bg: light-dark(#f6f1e7, #272b35); /* paper; the window's ground */
+  --surface: light-dark(#ece3d3, #33363f);
+  --card: light-dark(#fcf9f3, #3b3e45);
+  --border: light-dark(#d7d6ce, #434856); /* slate at a sixth, on paper */
+  --border2: light-dark(#34474d, #5e5f62); /* slate, the lines drawn */
+
+  --text: light-dark(#2b2b33, #ece4d4); /* Payne's grey; cream */
+  --muted: light-dark(#605a55, #cbc4b6);
+  --dim: light-dark(#96918a, #96918a);
+
+  --accent: light-dark(#1a6f7b, #8cc5c3); /* teal */
+  --link: light-dark(#34474d, #8cc5c3); /* slate; teal */
+  --heading: light-dark(#2b2b33, #ece4d4); /* the text's own ink */
+
+  --info: light-dark(#34474d, #a19b90); /* slate */
+  --active: light-dark(#c4a070, #c4a070); /* bone */
+  --positive: light-dark(#1a6f7b, #8cc5c3); /* teal */
+  --negative: light-dark(#9a4f30, #e5a888); /* sienna */
+  --caution: light-dark(#7a5634, #e5a888); /* umber; sienna */
+  --special: light-dark(#605a55, #cbc4b6);
+
+  --number: light-dark(#7a5634, #c4a070); /* umber; bone */
+  --literal: light-dark(#9a4f30, #e5a888); /* sienna */
+  --time: light-dark(#34474d, #a19b90); /* slate */
+  --who: light-dark(#1a6f7b, #8cc5c3); /* teal */
+
+  --keyword: light-dark(#9a4f30, #e5a888); /* sienna */
+  --string: light-dark(#1a6f7b, #8cc5c3); /* teal */
+  --fn: light-dark(#34474d, #faf6ee); /* slate; the window's brightest ink */
+  --type: light-dark(#7a5634, #c4a070); /* umber; bone */
+  --attr: light-dark(#605a55, #cbc4b6);
+
+  --hue-0: light-dark(#1a6f7b, #8cc5c3); /* teal */
+  --hue-1: light-dark(#7a5634, #c4a070); /* umber; bone */
+  --hue-2: light-dark(#34474d, #a19b90); /* slate */
+  --hue-3: light-dark(#9a4f30, #e5a888); /* sienna */
+  --hue-4: light-dark(#c4a070, #cbc4b6); /* bone */
+  --hue-5: light-dark(#605a55, #faf6ee);
+}
+@supports not (color: light-dark(#000, #fff)) {
+  :root {
+    --shadow: 0 12px 32px -16px rgba(43, 43, 51, .4);
+    --bg: #f6f1e7;
+    --surface: #ece3d3;
+    --card: #fcf9f3;
+    --border: #d7d6ce;
+    --border2: #34474d;
+    --text: #2b2b33;
+    --muted: #605a55;
+    --dim: #96918a;
+    --accent: #1a6f7b;
+    --link: #34474d;
+    --heading: #2b2b33;
+    --info: #34474d;
+    --active: #c4a070;
+    --positive: #1a6f7b;
+    --negative: #9a4f30;
+    --caution: #7a5634;
+    --special: #605a55;
+    --number: #7a5634;
+    --literal: #9a4f30;
+    --time: #34474d;
+    --who: #1a6f7b;
+    --keyword: #9a4f30;
+    --string: #1a6f7b;
+    --fn: #34474d;
+    --type: #7a5634;
+    --attr: #605a55;
+    --hue-0: #1a6f7b;
+    --hue-1: #7a5634;
+    --hue-2: #34474d;
+    --hue-3: #9a4f30;
+    --hue-4: #c4a070;
+    --hue-5: #605a55;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --shadow: 0 12px 32px -16px rgba(0, 0, 0, .6);
+      --bg: #272b35;
+      --surface: #33363f;
+      --card: #3b3e45;
+      --border: #434856;
+      --border2: #5e5f62;
+      --text: #ece4d4;
+      --muted: #cbc4b6;
+      --dim: #96918a;
+      --accent: #8cc5c3;
+      --link: #8cc5c3;
+      --heading: #ece4d4;
+      --info: #a19b90;
+      --active: #c4a070;
+      --positive: #8cc5c3;
+      --negative: #e5a888;
+      --caution: #e5a888;
+      --special: #cbc4b6;
+      --number: #c4a070;
+      --literal: #e5a888;
+      --time: #a19b90;
+      --who: #8cc5c3;
+      --keyword: #e5a888;
+      --string: #8cc5c3;
+      --fn: #faf6ee;
+      --type: #c4a070;
+      --attr: #cbc4b6;
+      --hue-0: #8cc5c3;
+      --hue-1: #c4a070;
+      --hue-2: #a19b90;
+      --hue-3: #e5a888;
+      --hue-4: #cbc4b6;
+      --hue-5: #faf6ee;
+    }
+  }
+}
+
+/* What every theme derives the same way: half its gap, a faint wash of its
+   text, and the touch-target floor, which grows under a coarse pointer (fat
+   fingers get fat targets, and only there).
+
+   And the type every part reads, which a theme may set: --size for what a
+   thing says, --small for the line that describes it, and nothing smaller.
+   Headings climb from --size by one ratio, --scale, a step each: --h3, --h2,
+   --h1. Every heading reads them, prose or part, so a page's h1 is the same
+   size wherever it is drawn.
+   Text comes in three inks. --text is what a thing says; --muted is what
+   describes it (a key, a heading over a column, a fact, a stamp, an id, a
+   count), and reads on every floor; --dim is only for what is not there (a
+   nil, a ghost, a placeholder, a disabled step). The mono face is for what a
+   person would copy or type (an id, a sha, code, a raw stored value), never
+   for a label, a moment said the human way, or a count. A part that steps
+   back is muted, small or both; never mono to look quiet, and never dim.
+   And the width of what sits beside a page (a chat, what an agent gets):
+   --side, never narrower than --side-min. */
+:where(:root) {
+  --half-gap: calc(var(--gap) / 2);
+  --soft: color-mix(in srgb, var(--text) 6%, transparent);
+  --tap: 0px;
+  --size: 14px;
+  --small: 12px;
+  --scale: 1.2;
+  --h3: calc(var(--size) * var(--scale));
+  --h2: calc(var(--h3) * var(--scale));
+  --h1: calc(var(--h2) * var(--scale));
+  --side: 26rem;
+  --side-min: 18rem;
+}
+@media (pointer: coarse) {
+  :where(:root) {
+    --tap: 2.5rem;
+  }
+}
+
+/* The shared surface paint; a skin supplies its own values. */
+:where(:root) {
+  --edge-width: 1px;
+  --edge-color: var(--border2);
+  --edge-filter: none;
+  --raised-shadow: var(--shadow);
+  --raised-hatch: none;
+  --raised-ink: transparent;
+  --raised-lift: 0px;
+  --press-wash: var(--soft);
+  --press-wash-weight: 100%;
+  --press-shift: none;
+  --press-down: none;
+  --hover: var(--soft);
+  --well: var(--surface);
+  --hollow: none;
+}
