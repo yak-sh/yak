@@ -56,10 +56,6 @@ node_modules
 /workers/yak/front/public/
 /workers/yak/public/_compiler/
 
-# The browser client as one module, bundled from @yaks/platform/client
-# (workers/yak/assets.ts).
-/workers/yak/public/_client.js
-
 # The kit's share of yaks.app's stylesheets, composed from @yaks/ui, and
 # what it points at (workers/yak/sheet-assets.ts).
 /workers/yak/public/_ui.css
@@ -68,43 +64,9 @@ node_modules
 # The site's own pages, drawn from the kit's parts (workers/yak/site/).
 /workers/yak/public/*.html
 
-# Browser draft helper, generated from @yaks/draft.
-/workers/yak/public/_draft.js
-
-# Browser write outbox, generated from @yaks/sync.
-/workers/yak/public/_outbox.js
-
-# Browser binary wire codec, generated from @yaks/vocab.
-/workers/yak/public/_wire.js
-
-# Edit mode on an app's page, generated from workers/yak/edit-mode.ts.
-/workers/yak/public/_edit.js
-
-# The Operator chat's conversation, generated from workers/yak/operator-rows.ts,
-# and its graph's words (operator-words.ts).
-/workers/yak/public/_talk.js
-/workers/yak/public/_words.js
-/workers/yak/public/_settings.js
-/workers/yak/public/_alerts.js
+# Every browser script the deploy builds (workers/yak/assets.ts).
+/workers/yak/public/_*.js
 /workers/yak/public/push.js
-/workers/yak/public/_sort.js
-/workers/yak/public/_inbox-actions.js
-/workers/yak/public/_friends.js
-/workers/yak/public/_profile.js
-/workers/yak/public/_updates.js
-/workers/yak/public/_operator-settings.js
-/workers/yak/public/_visits.js
-/workers/yak/public/_apps.js
-/workers/yak/public/_payment.js
-/workers/yak/public/_app-canvas.js
-/workers/yak/public/_page-client.js
-/workers/yak/public/_invite.js
-/workers/yak/public/_shared.js
-/workers/yak/public/_agents.js
-/workers/yak/public/_connections.js
-/workers/yak/public/_matches.js
-/workers/yak/public/_people.js
-/workers/yak/public/_space-pages.js
 
 # Temporary standalone platform compiler configs.
 .platform-*.json
