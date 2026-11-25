@@ -67,6 +67,7 @@ node_modules
 # Every browser script the deploy builds (workers/yak/assets.ts).
 /workers/yak/public/_*.js
 /workers/yak/public/push.js
+/workers/yak/public/worker.js
 
 # Temporary standalone platform compiler configs.
 .platform-*.json

@@ -10,7 +10,10 @@
     "./canvas": "./canvas.ts",
     "./page": "./page.ts",
     "./assets": "./assets.ts",
-    "./navigate": "./navigate.ts"
+    "./navigate": "./navigate.ts",
+    "./picture": "./picture.ts",
+    "./worker": "./worker.ts",
+    "./keep": "./keep.ts"
   },
   "license": "Apache-2.0",
   "description": "The browser door: serves configured applications contributed through their web facet, with page, bundles, styles and assets over @yaks/api.",

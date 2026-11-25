@@ -63,9 +63,13 @@ export let ASSETS: Asset[] = [
   { name: '_words.js', named: true },
   { name: '_settings.js', bundle: here('./settings.ts'), named: true },
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
-  // The service worker that shows pushed notifications, at the root it
-  // serves, under the address the browsers that allowed it registered.
-  { name: 'push.js', file: of('@yaks/push/worker') },
+  // The service worker (./service-worker.ts), at the root it serves, and
+  // again at the address browsers that allowed notifications registered.
+  { name: 'worker.js', bundle: here('./service-worker.ts') },
+  { name: 'push.js', bundle: here('./service-worker.ts') },
+  // A signed-in page kept by that worker (@yaks/web/keep), loaded beside
+  // the navigator (pages.ts `documented`).
+  { name: '_keep.js', bundle: here('./keep-browser.ts'), named: true },
   { name: '_sort.js', bundle: here('./sort.ts'), ...paged },
   {
     name: '_inbox-actions.js',

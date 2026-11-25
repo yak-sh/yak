@@ -70,6 +70,22 @@ more-specific routes.
 | `./outlived` | whether a page outlived the bundle it runs                |
 | `./assets`   | an asset build said as data, to serve or to write to disk |
 | `./navigate` | the browser entry that starts `@yaks/ui/navigate`         |
+| `./picture`  | a kept page's picture, made from a snapshot of it         |
+| `./worker`   | a service worker keeping pages and files named by bytes   |
+| `./keep`     | a page registering that worker and sending it snapshots   |
+
+A **kept page** is drawn at once when its person opens it again, before the
+network answers. A **snapshot** is a page's whole document as its person last
+saw it, which the page (`keep`) sends its site's service worker as it is hidden,
+left in place or unloaded. The worker (`keeping`) keeps the **picture** of each
+(`picture`): a snapshot whose scripts and frames never run and which says it is
+kept, `data-kept` on its root and a status line over it. Opening the page again
+answers the picture at once while the worker asks for the page as it is now, and
+the picture's one script writes that page over it when it comes, whose scripts
+then run once as on any load; a page that cannot be had leaves the picture,
+saying it is offline. The worker also answers files named by their bytes from
+what it kept. Visiting an address it is told to forget at (signing out) forgets
+every kept page.
 
 An **asset** (`Asset`) is one file a browser loads: its `name`, how it is made
 (a browser module bundled with all it imports, a body made in the process, a

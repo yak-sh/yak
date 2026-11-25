@@ -26,7 +26,7 @@ let refusal = async (response: Response, otherwise: string) => {
 
 /** Allows notifications on this browser: subscribes it with yaks.app's
  * public VAPID `key` (@yaks/push/browser `subscribe`, the worker at
- * /push.js) and keeps the subscription at `at` (operator-page.ts `?push`).
+ * /worker.js) and keeps the subscription at `at` (operator-page.ts `?push`).
  * Call it from the press itself: a browser asks only then. While the push
  * service refuses, it tries again later, calling `waiting` once. */
 export let allow = async (
@@ -34,11 +34,13 @@ export let allow = async (
   at: string,
   waiting?: () => void,
 ) => {
-  let sub = await subscribe(key, { waiting }).catch((error) => {
-    throw error instanceof Unallowed
-      ? new CallError('arguments', error.message)
-      : error
-  })
+  let sub = await subscribe(key, { worker: '/worker.js', waiting }).catch(
+    (error) => {
+      throw error instanceof Unallowed
+        ? new CallError('arguments', error.message)
+        : error
+    },
+  )
   let response = await fetch(at, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
