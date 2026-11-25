@@ -738,14 +738,7 @@ export class Builder extends Durable {
               import('@yaks/durable-object/alarm'),
               import('./operator-host.ts'),
             ]))
-        // A write that owes work starts it now, beside a step in flight, so a
-        // person's words reach the session they are for at once, within a
-        // slice; the alarm is there for what this wake leaves. The work goes on
-        // after the write answers, held by the object (`waitUntil`), once the
-        // Operator whose handlers do it is made. The pool runs apart from the
-        // request that wrote (operator-store.ts `apart`).
-        let nudge = () => {
-          this.#arming = this.clock.arm(Date.now())
+        let drive = () => {
           if (!this.#draining && Date.now() >= this.#until) {
             this.#until = Date.now() + SLICE
           }
@@ -757,6 +750,18 @@ export class Builder extends Durable {
             )
               .catch((e) => caught(e, { request: 'operator effects' })),
           )
+        }
+        // A running Operator takes new words beside its step. When a cold
+        // write starts the Operator, the caller wakes it after receiving the
+        // receipt. Keep a durable alarm in case that caller disappears.
+        let nudge = () => {
+          if (!this.#operator && this.#asked) {
+            this.#arming = this.clock.arm(Date.now() + SLICE)
+            this.#owed = drive
+          } else {
+            this.#arming = this.clock.arm(Date.now())
+            drive()
+          }
         }
         let post = once(async () => {
           let { operatorPost } = await import('./metered.ts')
@@ -861,7 +866,10 @@ export class Builder extends Durable {
         // build-door.ts `builderOf`), rather than whenever the person next says
         // something. Worked, not only armed: an alarm the reset cut off can hold
         // the next one back for minutes.
-        this.#owed = nudge
+        this.#owed = () => {
+          this.#arming = this.clock.arm(Date.now())
+          drive()
+        }
         hop('operator_boot_wait', Date.now() - starting)
         return {
           store,

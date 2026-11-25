@@ -773,3 +773,115 @@ The cold visits overlapped a Builder wake and a conversation read. Their
 directory and Builder waits varied. These samples measure what the page waited
 for, and the Deno replay isolates the change in module loading. The deployed
 `/updates` page also returned HTTP 200 with 455 ms of server time.
+
+## Operator and admin cold-browser opens (T-3644)
+
+November 25, 2026. Desktop opens used a fresh browser cache and service worker
+state at 1280 × 800. The Operator paths used the checks account and admin used
+the platform admin bot. The probe alternated `/updates`, `/checks/updates`,
+`/checks` and `/admin/people`. The `cold` Server-Timing marker identifies the
+subset that also started a gateway isolate. On the new code, the presence of
+`operator_boot_wait` identifies a page request that started a Builder store.
+
+| Route                            | Successful opens, before → after | Gateway median, ms | Browser wait median, ms | First contentful paint median, ms |
+| -------------------------------- | -------------------------------: | -----------------: | ----------------------: | --------------------------------: |
+| All Updates, `/updates`          |                          12 → 12 |          616 → 568 |               808 → 839 |                     1,490 → 1,386 |
+| Space Updates, `/checks/updates` |                          12 → 12 |          776 → 532 |             1,026 → 787 |                     1,430 → 1,196 |
+| Operator chat, `/checks`         |                          11 → 12 |          481 → 390 |               705 → 602 |                     1,388 → 1,216 |
+| Admin People, `/admin/people`    |                          12 → 12 |          209 → 200 |               440 → 430 |                         784 → 810 |
+
+One baseline chat returned HTTP 500 and is excluded from the successful-open
+medians. The after series includes kernel `24aab372f8` with the server change
+and `125a09ee24` with both changes. Other changes deployed during the series.
+The after series includes two gateway-cold All Updates opens and one each for
+Space Updates, chat and Admin People. Two after requests started a Builder
+store. The samples characterize cold browser opens and give a smaller subset for
+cold gateway and Builder behavior.
+
+### Server
+
+The slowest baseline space Updates open measured 4,210 ms at the gateway. Its
+Builder Updates fetch took 2,736 ms and its conversation fetch took 3,947 ms
+while they overlapped. Its Builder wake began 51 ms before the Updates fetch.
+The wake first entered the object's handler about 613 ms after the caller sent
+it. Cloudflare attributed 1,751 ms of CPU to the conversation invocation. This
+was also a directory stall window. The admin open in that round spent 3,290 ms
+at the gateway, with sequential directory waits near one second each.
+
+Several baseline traces also showed up to eight speculative app store wakes
+starting at the same time as the Builder wake. The page now sends the needed
+Operator read alongside the sidebar. This read opens the Builder and its answer
+allows the Builder to resume owed work. The app named in the chat URL starts
+alongside the read. The roster starts once the page has been drawn. Updates
+still includes the adjacent chat and shares its listings read. The admin and
+Operator paths load their page modules at their own routes.
+
+The page's Server-Timing names its module load, directory waits, sidebar,
+render, and, on a Builder boot, the Builder's store modules and store open. The
+Worker clock advances on I/O. Pure JavaScript and synchronous SQLite work can
+therefore show 0 ms. Pair the caller's fetch span with the first child
+invocation to estimate pre-handler time including transport and queueing.
+Cloudflare reports invocation CPU as a whole. Its spans cannot identify the
+exact breakdown between isolate startup, module evaluation and SQLite CPU. The
+waits of calls made in parallel overlap.
+
+After the change, median directory wait was 249 ms for All Updates, 110 ms for
+Space Updates, 58 ms for chat, and 170 ms for Admin People. The Admin People
+census read took a median of 184 ms. The Builder's module and store-open marks
+both read 0 ms on the two confirmed Builder boots. The gateway's render marks
+also read 0 ms.
+
+Four after opens through the `/admin` redirect painted in 872–1,968 ms. The
+original admin report, `1250404f81`, recorded 625 ms from request to first byte
+within 2,756 ms to paint. Its record lacks timings for the browser resources and
+rendering that followed. The report stays open because the historical cause has
+yet to be verified.
+
+### Phone
+
+Phone probes use 390 × 844, 4× CPU throttling and the browser's fast 4G preset.
+The baseline chat loaded 39 JavaScript files, with median 335 KB transferred. In
+two instrumented replays of the live checks HTML, the span from the first script
+request to the last script response was 1,847 and 2,559 ms. Scripts reported in
+long animation frames accounted for 496 and 845 ms. In the replay with app phase
+marks, the transcript mounted in 131 ms, the composer mounted in 28 ms and the
+draft setup took 14 ms. Those mounts are part of the script work, and the script
+fetch span includes overlapping transfers. Startup trace entries and first-paint
+marks can include the loading screen.
+
+The chat document preloads the main script, its words, the shared page client
+and nine static chunks. The loading screen releases once the HTML is parsed and
+the stylesheets are present. The chat continues to mark itself usable after the
+composer and transcript are mounted.
+
+| Phone chat, ten per build | Before, median ms | After, median ms |
+| ------------------------- | ----------------: | ---------------: |
+| Browser wait              |               577 |              392 |
+| Stylesheet finished       |               979 |              924 |
+| Last JavaScript response  |             2,737 |            2,222 |
+| First contentful paint    |             1,790 |            1,430 |
+| Chat usable               |             3,532 |            2,485 |
+
+In two paired client replays of the deployed chat HTML, the control restored the
+old loading screen and removed the module preloads. Median script fetch span
+fell from 3,431 to 1,611 ms and median time to styled content visible from 683
+to 441 ms. Live after paint ranged from 1,056 to 1,928 ms, below the unchanged
+2,200 ms budget. This verified the fix for `0bbca111f4`. The chat and Space
+Updates still switched in place without a fetch.
+
+### Send confirmation
+
+A browser posted the chat form directly as the checks account, without first
+opening a chat page. The form used the draft-aware send and each response
+confirmed the submitted id. Three sends before the send change took a median of
+168 ms at the gateway. The one confirmed Builder boot took 279 ms at the gateway
+and 232 ms at the Builder door. The child invocation reported 142 ms of CPU,
+compared with 29 and 30 ms on the two warm requests.
+
+A chat's intake commits the request and draft changes together and registers the
+owed effect before the Operator's model and tools are loaded. Its commit used to
+start loading them in the same invocation that confirmed the send. Cold sends
+now retain an alarm and let the caller wake the Operator as soon as the caller
+has the receipt. A running Operator still takes a new send beside its current
+step. The Builder also reports intake and alarm arming waits on the send
+response.

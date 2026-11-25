@@ -446,7 +446,7 @@ test('a wake is the kernel’s alone', async () => {
 
 // Its first request, before anything has made the Operator: the write owes
 // the Operator's run all the same.
-test('a request a new incarnation receives before it has made its Operator is carried out', async () => {
+test('a cold send confirms its request before the caller wakes the Operator', async () => {
   let o = await seeded([{ text: 'Done.' }])
   let model = o.env.AI as unknown as ReturnType<typeof ai>
   let r = await o.object.fetch(
@@ -456,8 +456,14 @@ test('a request a new incarnation receives before it has made its Operator is ca
       body: JSON.stringify({ say: 'hello', request: { channel: 'web' } }),
     }),
   )
-  assertEquals(r.status, 202)
+  assertEquals([r.status, r.headers.has(OWED), model.asked.length], [
+    202,
+    true,
+    0,
+  ])
   await r.body?.cancel()
+  assertEquals(await armed(o), true)
+  assertEquals((await posted(o, WAKE)).status, 204)
   while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
   assertEquals(model.asked.length, 1)
 })

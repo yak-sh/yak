@@ -1,5 +1,6 @@
 import { type Built, type Line, line as q, sub } from '@yaks/query'
 import { openedIn, updatesOf, updating } from './operator-updates.ts'
+import { elapsed } from './lib/hops.ts'
 import {
   addressed,
   type Bundle,
@@ -2223,8 +2224,11 @@ export let operatorRequest = async (
       }
     }
     let { receive } = await channels()
-    let id = await receive(store, intake, String(args.say ?? ''), options)
-    await armed()
+    let id = await elapsed(
+      'operator_intake_wait',
+      () => receive(store, intake, String(args.say ?? ''), options),
+    )
+    await elapsed('operator_arm_wait', async () => await armed())
     return Response.json({
       request: id,
       ...(options?.also
