@@ -3,11 +3,15 @@ export let actionKinds = [
   'dismiss',
   'friend',
   'transfer',
+  'seen',
 ] as const
 
 export type ActionKind = typeof actionKinds[number]
 
-/** A card action and the answer its host has committed. */
+/** A card action and the answer its host has committed. `seen` is the
+ * person opening a space's Updates where no page was asked for (a view
+ * shown in place): what it shows is read, as opening the page reads it. Its
+ * target is the space. */
 export type InboxAction = {
   space: string
   kind: ActionKind
@@ -27,6 +31,8 @@ export let actionLabel = ({ kind, answer }: InboxAction): string => {
       return 'Dismissed'
     case 'transfer':
       return answer == 'decline' ? 'Declining…' : 'Accepting…'
+    case 'seen':
+      return 'Read'
   }
 }
 

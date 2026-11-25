@@ -772,6 +772,16 @@
     min-width: 0;
     max-width: 50%;
   }
+  /* An Operator page's views (talk-views.ts): the one shown lays out as the
+     body's own, the others stand hidden. */
+  .Talk_View {
+    display: contents;
+  }
+  .Talk_View[hidden],
+  .Frame_Aside[hidden],
+  .Frame_AsideTools[hidden] {
+    display: none;
+  }
   /* The conversation, at a reading width in the middle of the page. */
   .Talk_Column,
   .Talk_Keep,

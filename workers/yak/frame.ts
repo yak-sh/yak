@@ -30,7 +30,8 @@ export let ASIDE = 'aside'
 /** What a page keeps at its right: what it is called, what the bar's button
  * to it wears (its icon unless the page says more) and is called (its
  * `label` unless the page says), what it holds, whether the person keeps it
- * put away, and the page a press on its toggle comes back to. */
+ * put away, the page a press on its toggle comes back to, and whether it
+ * stands hidden, for a view of the page shown later (talk-views.ts). */
 export type Aside = {
   label: string
   mark?: Kids
@@ -38,6 +39,7 @@ export type Aside = {
   content: Kids
   shut?: boolean
   back: string
+  hidden?: boolean
 }
 
 /** The layout (pages.ts `shell`) of a page drawn in the frame. */
@@ -96,7 +98,7 @@ let toggle = (at: Aside) => {
 let asideTools = (at: Aside) =>
   h(
     'div',
-    { class: 'Frame_AsideTools' },
+    { class: 'Frame_AsideTools', hidden: at.hidden || undefined },
     h(
       Button,
       {
@@ -197,6 +199,7 @@ export let frame = (at: {
             class: 'Frame_Aside',
             'aria-label': at.aside.label,
             'data-swipe': '',
+            hidden: at.aside.hidden || undefined,
           },
           h('div', { class: 'Frame_AsideBody' }, at.aside.content),
         )

@@ -16,7 +16,8 @@ import { line } from '@yaks/query'
 import { notification, type Update, updating } from './operator-updates.ts'
 import { parseHTML } from 'linkedom'
 import { chatPage, updatesPage } from './operator-page.ts'
-import { chatAt, shownAnswer, updatesAnswer } from './updates.ts'
+import { chatAt, shownAnswer, updatesAnswer, updatesApply } from './updates.ts'
+import { clock } from './timing.ts'
 import { attachmentKey } from './attachments.ts'
 import { spaced, talkPath } from '@yaks/platform/routes'
 import { present } from './whereabouts.ts'
@@ -713,4 +714,50 @@ test('dismissing from every space’s Updates comes back there, and never off ya
     await dismiss('https://elsewhere.example/'),
     talkPath('updates', 'club'),
   )
+})
+
+test('the chat and its Updates are one page’s views: the one opened shown, the other hidden, each with its own script', async () => {
+  let space = (await directoryOf(p.env.STORE).at(eid))!
+  let who = { person: ada, role: 'owner' as const, space: eid }
+  let views = async (r: Promise<Response>) =>
+    [
+      ...parseHTML(await (await r).text()).document.querySelectorAll(
+        '[data-talk-view]',
+      ),
+    ].map((v) => [
+      JSON.parse(v.getAttribute('data-talk-view')!).here,
+      v.hasAttribute('hidden') ? 'hidden' : 'shown',
+      v.querySelector('[data-operator-chat]') ? 'chat' : 'news',
+    ])
+  assertEquals(await views(chatPage(p.env, space, who, 'new')), [
+    ['/club', 'shown', 'chat'],
+    ['/club/updates', 'hidden', 'news'],
+  ])
+  assertEquals(await views(updatesPage(p.env, space, who)), [
+    ['/club/updates', 'shown', 'news'],
+    ['/club', 'hidden', 'chat'],
+  ])
+})
+
+test('Updates shown in place are read, as opening their page reads them', async () => {
+  await store.g.apply([
+    notification({ to: eid, words: 'Cy joined Book club.', by: bo, id: 'cy' }),
+  ], { trusted: true })
+  let unread = async () =>
+    (await read(ada)).updates.filter((u) => u.unread && !u.needs).length
+  assertEquals(await unread() > 0, true)
+  let entity = { eid: crypto.randomUUID() }
+  let seen = await updatesApply(
+    [{
+      entity,
+      inboxAction: { space: eid, kind: 'seen', target: eid, answer: '' },
+    }],
+    p.env,
+    directoryOf(p.env.STORE),
+    ada,
+    undefined,
+    clock(),
+  )
+  assertEquals(await seen.json(), [{ entity, inboxReceipt: { label: 'Read' } }])
+  assertEquals(await unread(), 0)
 })

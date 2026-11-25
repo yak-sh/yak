@@ -173,6 +173,13 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // An Operator page's views shown in place (@yaks/platform/talk-views).
+  {
+    name: '_talk-views.js',
+    bundle: of('@yaks/platform/talk-views-browser'),
+    external,
+    named: true,
+  },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
   { name: '_fit-list.js', bundle: of('@yaks/ux/fit-list'), named: true },
   // A swipe sideways on a phone opens the page's sidebar (pages.ts).

@@ -6,9 +6,10 @@ import {
   AGAIN,
   AHEAD,
   arrived,
+  DRAW,
+  type Drawing,
   FRESH,
   GOING,
-  HOLD,
   LEAVE,
   leaving,
   morph,
@@ -493,31 +494,33 @@ test('sending a form makes every page held old: drawn at once, then asked for ag
   ])
 })
 
-test('the pages a page marks to hold are asked for once it loads, one at a time, and a press draws them at once', async () => {
-  let held = (here: string) =>
-    framed(here, `<h1>${here}</h1>`).replace(
-      /<a href="\/(apps|updates)"/g,
-      `<a ${HOLD} href="/$1"`,
-    )
-  let b = browsing({ '/apps': held('apps'), '/updates': held('updates') })
-  b.slow()
-  assertEquals(b.fetched, [], 'nothing before the document loads')
-  b.doc.dispatchEvent(
-    new (b.doc.defaultView as unknown as typeof globalThis).Event('load'),
-  )
-  assertEquals(b.fetched, ['https://y.test/apps prefetch'])
-  await b.answer()
-  assertEquals(b.fetched.at(-1), 'https://y.test/updates prefetch')
-  await b.answer()
+test('a page that draws the address itself is drawn in place: nothing fetched, its scripts run again, the address moved', async () => {
+  let b = browsing({
+    '/apps': framed('apps', '<h1>Apps</h1><script>go()</script>'),
+  })
+  let written = b.doc.querySelector('script:not([src])')
+  let left = b.left()
+  b.doc.addEventListener(DRAW, (e) => {
+    let asked = (e as CustomEvent<Drawing>).detail
+    if (asked.to.pathname != '/updates') return
+    asked.draw = () => b.doc.querySelector('h1')!.textContent = 'Updates'
+  })
   b.click('a[href="/updates"]')
   await settled()
-  b.click('a[href="/apps"]')
+  assertEquals(b.fetched, [])
+  assertEquals(b.doc.querySelector('h1')?.textContent, 'Updates')
+  assert(!written?.isConnected, 'the written script is run again, anew')
+  assertEquals(b.doc.querySelector('script:not([src])')?.textContent, 'go()')
+  assertEquals(b.left(), left + 1, 'the page before heard it leave')
+  assertEquals(b.entries.map((e) => e.path), ['/updates'])
+  assertEquals(b.drawn.map((d) => [d.from, d.phases.wait]), [['drawn', 0]])
+  b.back('/apps')
   await settled()
-  assertEquals(b.drawn.map((d) => [d.from, d.phases.wait]), [
-    ['held', 0],
-    ['held', 0],
-  ])
-  assertEquals(b.fetched.length, 2, 'each asked for once')
+  assertEquals(
+    b.fetched,
+    ['https://y.test/apps'],
+    'Back to a page it does not draw',
+  )
 })
 
 test('a script binds what each page brings once, and lets go when its page leaves', () => {

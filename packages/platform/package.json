@@ -65,6 +65,8 @@
     "./app-canvas-browser": "./app-canvas-browser.ts",
     "./updates-view": "./updates-view.ts",
     "./updates-list-browser": "./updates-list-browser.ts",
+    "./talk-views": "./talk-views.ts",
+    "./talk-views-browser": "./talk-views-browser.ts",
     "./profile-view": "./profile-view.ts",
     "./profile-browser": "./profile-browser.ts",
     "./invite-view": "./invite-view.ts",

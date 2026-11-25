@@ -116,9 +116,11 @@ import {
   type Updates,
   updates,
   updatesAcross,
+  updatesLater,
   updatesOf,
   visitsOf,
 } from './updates.ts'
+import { type TalkView, viewAttrs } from '@yaks/platform/talk-views'
 import { friendsHere } from './friends.ts'
 import {
   answered,
@@ -1230,54 +1232,92 @@ export let installing = (space: Space) => {
 // do not wait on the person (`column`, talk-beside.ts), where the page has
 // them; and the app open beside them all. The side's Updates is the page's one bell: what
 // waits on the person there and in their servers' lists, counted once.
+/** What a page of the chat app draws (`talkPage`). */
+type TalkPage = {
+  title: string
+  status: number
+  // how many Updates wait on the person (updates.ts `updatesOf`)
+  waiting: number
+  // the person's servers' lists, or null where they were not in when the
+  // page was drawn, which its script reads after (`lateScript`)
+  listed: Listed[] | null
+  current: string[]
+  // this page's address, where the side's fold draws it again
+  here: string
+  main: Node
+  // where the skip link goes, and what it says
+  skip: [string, string]
+  script?: string
+  // the app open beside it, and its canvas (@yaks/platform/app-canvas-view)
+  app?: MarkedApp
+  canvas?: Node
+  // what it is doing now, at the top of the aside (operator-aside.ts), and
+  // the summary of it the bar's button to the aside wears, and what that
+  // button is then called
+  aside?: Node
+  mark?: Node
+  said?: string
+  // whether the lists that do not wait on the person stand beside it
+  column?: boolean
+  // on a page zoomed in on part of a conversation (a helper's), the way
+  // back out, before its title in the bar, which then names it alone
+  back?: Node
+  // the title as the bar draws it, where it is more than its words
+  heading?: Node
+  // how it is shown as one of the page's views, where it is one
+  // (@yaks/platform/talk-views)
+  view?: TalkView
+}
+
+// A page of the chat app, in the frame (frame.ts): the side
+// (talk-sidebar.ts), and beside it the bar naming the page and whose Operator
+// it is, over `main`; at its right the frame's aside, holding what the
+// conversation is doing now (`aside`, operator-aside.ts) over the lists that
+// do not wait on the person (`column`, talk-beside.ts), where the page has
+// them; and the app open beside them all. The side's Updates is the page's one bell: what
+// waits on the person there and in their servers' lists, counted once.
+//
+// A page that is one of the page's views (`view`) holds the `others` too,
+// hidden, each shown in place by a press on the side's link to it
+// (@yaks/platform/talk-views): each view's script is its own and stands in
+// it, and the aside is the conversation's, standing hidden where another
+// view is open.
 let talkPage = (
   env: Env,
   space: Space,
   who: Who,
   beside: Beside,
-  page: {
-    title: string
-    status: number
-    // how many Updates wait on the person (updates.ts `updatesOf`)
-    waiting: number
-    // the person's servers' lists, or null where they were not in when the
-    // page was drawn, which its script reads after (`lateScript`)
-    listed: Listed[] | null
-    current: string[]
-    // this page's address, where the side's fold draws it again
-    here: string
-    main: Node
-    // where the skip link goes, and what it says
-    skip: [string, string]
-    script?: string
-    // the app open beside it, and its canvas (@yaks/platform/app-canvas-view)
-    app?: MarkedApp
-    canvas?: Node
-    // what it is doing now, at the top of the aside (operator-aside.ts), and
-    // the summary of it the bar's button to the aside wears, and what that
-    // button is then called
-    aside?: Node
-    mark?: Node
-    said?: string
-    // whether the lists that do not wait on the person stand beside it
-    column?: boolean
-    // on a page zoomed in on part of a conversation (a helper's), the way
-    // back out, before its title in the bar, which then names it alone
-    back?: Node
-    // the title as the bar draws it, where it is more than its words
-    heading?: Node
-  },
+  page: TalkPage,
+  others: TalkPage[] = [],
 ) => {
   let at = managePath('operator', space.slug)
   let { listed } = page
   let waiting = page.waiting + (listed ? waitsOf(listed) : 0)
+  let views = page.view ? [page, ...others.filter((o) => o.view)] : [page]
   // The column stands, hidden, around a slot for lists not in yet, and shows
   // once one of them has something in it.
-  let lists = !page.column
+  let asided = views.find((v) => v.column || v.aside)
+  let lists = !asided?.column
     ? []
     : listed
-    ? besides(listed, at, page.here, false)
+    ? besides(listed, at, asided.here, false)
     : [later('other')]
+  let aside = asided && (asided.aside || lists.length) ? asided : undefined
+  let content = page.view
+    ? views.map((v) =>
+      h(
+        'section',
+        {
+          class: 'Talk_View',
+          ...viewAttrs({ ...v.view!, aside: v == aside }, v == page),
+        },
+        v.main,
+        v.script
+          ? h('div', { dangerouslySetInnerHTML: { __html: v.script } })
+          : null,
+      )
+    )
+    : page.main
   return shell(
     env,
     `${esc(page.title)} · ${esc(space.operator)}`,
@@ -1295,18 +1335,19 @@ let talkPage = (
       sub: page.back ? null : whoseOf(space),
       waiting,
       tools: page.app ? showing(page.app) : null,
-      content: page.main,
-      aside: page.aside || lists.length
+      content,
+      aside: aside
         ? {
           label: 'What is happening',
-          mark: page.mark,
-          said: page.said,
+          mark: aside.mark,
+          said: aside.said,
           content: [
-            page.aside,
+            aside.aside,
             lists.length ? talkBeside(lists, !!listed) : null,
           ],
           shut: beside.panes?.shut,
           back: page.here,
+          hidden: aside != page,
         }
         : undefined,
       beside: page.canvas ?? null,
@@ -1316,7 +1357,7 @@ let talkPage = (
         page.back && 'Talk-zoomed',
       ].filter(Boolean).join(' '),
       skip: page.skip,
-    })) + (page.script ?? '') +
+    })) + (page.view ? '' : page.script ?? '') +
       (listed ? '' : lateScript(
         `${at}?${new URLSearchParams({ lists: '1', back: page.here })}`,
       )),
@@ -1339,7 +1380,7 @@ let UNREAD = html(
 // page's icon.
 let lateScript = (from: string) =>
   html(run(`
-fetch(${
+if (document.querySelector('[data-later]')) fetch(${
     JSON.stringify(from)
   }, { signal }).then((r) => r.ok ? r.json() : null).catch(() => null).then((got) => {
 if (signal.aborted) return
@@ -1491,6 +1532,26 @@ export let chatPage = async (
   chosen?: string | null,
   from?: number,
 ) => {
+  let chat = await chatParts(env, space, who, open, beside, chosen, from)
+  if (chat instanceof Response) return chat
+  // A plain chat holds the space's Updates beside it, shown in place.
+  let others = chat.view ? [updatesBeside(env, space, who, chat.listed)] : []
+  return talkPage(env, space, who, beside, chat, others)
+}
+
+// What a chat draws, or where its address sends the person: the conversation
+// as its page holds it, and its view (@yaks/platform/talk-views) where it is
+// a plain chat, with no app open beside it and no helper zoomed in on, which
+// other views of the page come back to in place.
+let chatParts = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  open: string,
+  beside: Beside = {},
+  chosen?: string | null,
+  from?: number,
+): Promise<Response | TalkPage> => {
   let at = managePath('operator', space.slug)
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
@@ -1570,9 +1631,13 @@ export let chatPage = async (
   let place = 'operator:' + (talked.begun || open)
   let reach = !talked.helper && !!beside.ways
   let happening = talked.aside ?? { turn: null, helpers: [] }
-  return talkPage(env, space, who, beside, {
+  let title = fresh ? `Message ${operator}` : talked.title || 'Not here'
+  let skip: [string, string] = fresh || talked.title
+    ? ['#ask', 'Skip to the message box']
+    : ['#content', 'Skip to content']
+  let page: TalkPage = {
     // The chat is the Operator's, an app open beside it or not.
-    title: fresh ? `Message ${operator}` : talked.title || 'Not here',
+    title,
     ...talked.helper
       ? {
         back: backOut({
@@ -1590,9 +1655,7 @@ export let chatPage = async (
     here,
     listed,
     column: true,
-    skip: fresh || talked.title
-      ? ['#ask', 'Skip to the message box']
-      : ['#content', 'Skip to content'],
+    skip,
     main: [
       // The conversation is drawn by the Builder object (operator-view.ts
       // `talk`).
@@ -1662,7 +1725,20 @@ export let chatPage = async (
     canvas: app && who.person
       ? canvasOf(env, space, who.person, beside, app)
       : undefined,
-  })
+  }
+  let plain = !talked.helper && !app && (fresh || !!talked.title)
+  if (plain) {
+    page.view = {
+      here,
+      link: chatPath(space.slug),
+      title,
+      page: `${title} · ${operator} · yaks.app`,
+      skip,
+      aside: false,
+      all: false,
+    }
+  }
+  return page
 }
 
 // The app beside the chat as its view draws it (@yaks/platform/app-canvas-view):
@@ -1715,7 +1791,7 @@ export let updatesPage = async (
   // rows of their servers' lists that wait on them are here too, before
   // their Updates.
   let lists = reading(env, space, who)
-  let [news, views, , put, friends] = await Promise.all([
+  let [news, views, , put, friends, chat] = await Promise.all([
     updatesOf(env, space, who, opened && !dismissed),
     visitsOf(env, beside.apps ?? []),
     lists.listing,
@@ -1724,6 +1800,7 @@ export let updatesPage = async (
       caught(e, { request: 'friends here', space: space.slug })
       return undefined
     }),
+    dismissed ? undefined : chatBeside(env, space, who, beside),
   ])
   if (put) {
     return talkPage(env, space, who, beside, {
@@ -1752,6 +1829,7 @@ export let updatesPage = async (
     current: ['updates'],
     here,
     skip: ['#content', 'Skip to content'],
+    view: updatesView(space, here, 'Updates'),
     main: h(
       'div',
       updateColumn(space, who),
@@ -1766,7 +1844,73 @@ export let updatesPage = async (
         who.person ?? '',
       ),
     ),
+  }, chat ? [chat] : [])
+}
+
+// How Updates are shown as one of their page's views
+// (@yaks/platform/talk-views): `title` names them, at `here`.
+let updatesView = (
+  space: Space,
+  here: string,
+  title: string,
+  all = false,
+): TalkView => ({
+  here,
+  link: here,
+  title,
+  page: `${title} · ${space.operator} · yaks.app`,
+  skip: ['#content', 'Skip to content'],
+  aside: false,
+  all,
+})
+
+// The space's Updates as a view of a page opened at another of its views:
+// their cards drawn in the browser from the tab's page graph (updates.ts
+// `updatesLater`), their lists put in their slot with the page's.
+let updatesBeside = (
+  env: Env,
+  space: Space,
+  who: Who,
+  listed: Listed[] | null,
+): TalkPage => {
+  let at = managePath('operator', space.slug)
+  let here = talkPath('updates', space.slug)
+  return {
+    title: 'Updates',
+    status: 200,
+    waiting: 0,
+    listed,
+    current: ['updates'],
+    here,
+    skip: ['#content', 'Skip to content'],
+    view: updatesView(space, here, 'Updates'),
+    main: h(
+      'div',
+      updateColumn(space, who),
+      updatesLater(
+        env,
+        space,
+        listed ? besides(listed, at, here, true) : later('waits'),
+        who.person ?? '',
+      ),
+    ),
+  }
+}
+
+// The space's conversation as a view of a page opened at another of its
+// views, where it is a plain chat; none where it could not be read, which
+// leaves the page as it was.
+let chatBeside = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  beside: Beside,
+): Promise<TalkPage | undefined> => {
+  let chat = await chatParts(env, space, who, 'new', beside).catch((e) => {
+    caught(e, { request: 'chat beside', space: space.slug })
+    return undefined
   })
+  return chat instanceof Response || !chat?.view ? undefined : chat
 }
 
 /** The person's Updates from every space's Operator together
@@ -1784,23 +1928,27 @@ export let allUpdatesPage = async (
 ) => {
   let { space, who } = home
   let lists = reading(env, space, who)
-  let [news, shelves] = await Promise.all([
+  let [news, shelves, , chat] = await Promise.all([
     updatesAcross(env, seats, { seen: opened }),
     apps,
     lists.listing,
+    chatBeside(env, space, who, beside),
   ])
   for (let { space, error } of news.missed) {
     caught(error, { request: 'all updates', space: space.slug })
   }
+  let listed = await lists.drawn()
+  let here = `${ALL}?in=${encodeURIComponent(space.slug)}`
   return talkPage(env, space, who, beside, {
     title: 'All updates',
     status: 200,
     waiting: news.updates.filter((u) => u.needs && u.space.eid == space.eid)
       .length,
-    listed: await lists.drawn(),
+    listed,
     current: ['all'],
-    here: `${ALL}?in=${encodeURIComponent(space.slug)}`,
+    here,
     skip: ['#content', 'Skip to content'],
+    view: updatesView(space, here, 'All updates', true),
     main: h(
       'div',
       updateColumn(space, who),
@@ -1812,7 +1960,10 @@ export let allUpdatesPage = async (
         who.person ?? '',
       ),
     ),
-  })
+  }, [
+    ...chat ? [chat] : [],
+    updatesBeside(env, space, who, listed),
+  ])
 }
 
 /** A space's Matches (@yaks/platform/operator-matches-view), beside the
@@ -1897,8 +2048,10 @@ import { frames } from '/frames.js'
 import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, selfHtml, showing, sleep, turnHtml } from '/_talk.js'
 import words from '/_words.js'
 import { voice } from '/voice.js'
-// Imports may arrive after a second navigation has already replaced this page.
-if (document.querySelector('script[data-operator-chat="${visit}"]')) {
+// Imports may arrive after a second navigation has already replaced this page,
+// and a conversation standing hidden as one of its page's views starts when
+// a press shows it (@yaks/platform/talk-views).
+if (document.querySelector('script[data-operator-chat="${visit}"]:not([hidden] *)')) {
 let signal = leaving(document)
 let timers = new Set()
 let cancel = (id) => { clearTimeout(id); timers.delete(id) }

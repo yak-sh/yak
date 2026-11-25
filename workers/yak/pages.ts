@@ -221,6 +221,10 @@ ${
       ? `<script type="module" src="${file('_updates.js')}"></script>`
       : ''
   }${
+    main.includes(' data-talk-view=')
+      ? `<script type="module" src="${file('_talk-views.js')}"></script>`
+      : ''
+  }${
     main.includes('data-apps-view=')
       ? `<script type="module" src="${file('_apps.js')}"></script>`
       : ''

@@ -304,11 +304,7 @@ export let updates = (
   return h(
     Fragment,
     null,
-    h(
-      'p',
-      { class: 'Note Update_About' },
-      `${space.operator} writes here when something happens in your apps, and asks here when something needs you. Ask about any of it, and the chat opens.`,
-    ),
+    about(space),
     day
       ? h(
         Card,
@@ -327,17 +323,48 @@ export let updates = (
       : null,
     lists,
     listed(env, person, [space], news, () => apps),
-    h(
-      'p',
-      { class: 'Update_Meta' },
-      h(
-        'a',
-        { href: talkPath('updates', space.slug) + '?dismissed' },
-        'See what you dismissed',
-      ),
-    ),
+    dismissedLink(space),
   )
 }
+
+let about = (space: Space) =>
+  h(
+    'p',
+    { class: 'Note Update_About' },
+    `${space.operator} writes here when something happens in your apps, and asks here when something needs you. Ask about any of it, and the chat opens.`,
+  )
+
+let dismissedLink = (space: Space) =>
+  h(
+    'p',
+    { class: 'Update_Meta' },
+    h(
+      'a',
+      { href: talkPath('updates', space.slug) + '?dismissed' },
+      'See what you dismissed',
+    ),
+  )
+
+/** The Updates page's view on a page opened at another of its views
+ * (@yaks/platform/talk-views): its cards are drawn in the browser from the
+ * tab's page graph as its watches answer, and the last day's word is left
+ * to the page itself. */
+export let updatesLater = (
+  env: Env,
+  space: Space,
+  lists: ComponentChildren,
+  person: string,
+) =>
+  h(
+    Fragment,
+    null,
+    about(space),
+    lists,
+    listed(env, person, [space], { updates: [], waiting: 0 }, () => [], {
+      drawn: false,
+    }),
+    dismissedLink(space),
+  )
 
 /** The person's Updates from every space's Operator, at `/updates`. */
 export let ALL = talkPath('updates')
@@ -345,14 +372,15 @@ export let ALL = talkPath('updates')
 // The cards of `news` in `spaces`, as a view the browser draws again from
 // the page graph (@yaks/platform/updates-list-browser), carrying the rows
 // they were drawn from, which the page graph starts with until its watches
-// answer. `back` is the page of every space's Updates.
+// answer. `back` is the page of every space's Updates. Where `drawn` is
+// false the browser draws them all, and the server none.
 let listed = (
   env: Env,
   person: string,
   spaces: Space[],
   { updates, read = [] }: Updates & { read?: Read[] },
   apps: (space: Spot) => Apps,
-  back?: string,
+  { back, drawn = true }: { back?: string; drawn?: boolean } = {},
 ) => {
   let view: UpdatesView = {
     person,
@@ -372,7 +400,7 @@ let listed = (
       'data-view': 'updates',
       'data-updates-view': JSON.stringify(view),
     },
-    cardsView(view, updates, apps),
+    drawn ? cardsView(view, updates, apps) : null,
     person && read.length
       ? h('script', {
         type: 'application/json',
@@ -417,7 +445,7 @@ export let allUpdates = (
       news.read.map((r) => r.space),
       news,
       (space) => apps.get(space.slug) ?? [],
-      ALL,
+      { back: ALL },
     ),
   )
 
@@ -459,6 +487,9 @@ let commitAction = async (
         choice: answer,
       })
       return { label: 'Answer sent' }
+    case 'seen':
+      await updatesOf(env, space, who, true)
+      return { label: 'Read' }
   }
 }
 

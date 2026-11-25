@@ -317,9 +317,21 @@ export type Browsing =
 export type Phases = { wait: number; swap: number }
 
 /** Where the page a swap drew came from: fetched on the click (`fetch`),
- * held already, fetched ahead or opened before (`held`), or the answer
- * asked for after drawing a held one, laid over it (`fresh`). */
-export type From = 'fetch' | 'held' | 'fresh'
+ * held already, fetched ahead or opened before (`held`), the answer
+ * asked for after drawing a held one, laid over it (`fresh`), or drawn in
+ * place by the page on screen from what the tab holds (`drawn`, `DRAW`). */
+export type From = 'fetch' | 'held' | 'fresh' | 'drawn'
+
+/** Heard on the document before a press or Back fetches anything, its detail
+ * a `Drawing`: a page that can show `to` itself, from what the tab holds,
+ * sets `draw` to do so. The navigator then lands it as it would a page it
+ * fetched (`LEAVE`, the page's written scripts run again, the address,
+ * `PAGE`), and fetches nothing. */
+export let DRAW = 'yak-draw'
+
+/** The detail of `DRAW`: where the press leads, and how the page on screen
+ * draws it, where it can. `draw` changes the document in place, at once. */
+export type Drawing = { to: URL; draw?: () => void }
 
 /** What a swap said once done: when the click was (`began`, on the clock
  * `start` was given), how long it took to the new page, in milliseconds,
@@ -422,12 +434,6 @@ type Held = {
   stop: AbortController
 }
 
-/** The mark on a link whose page is held before it is pressed: asked for
- * ahead once the page it stands on is drawn (and its document loaded), one
- * at a time, so a press draws it at once. For the few pages a person moves
- * between most; a link to the page on screen holds it for coming back. */
-export let HOLD = 'data-hold'
-
 /** The mark on a link saying what the page it opens is called, and on a
  * page the title that says what the page is: a click waiting for its page
  * writes the one into the other at once (`going`). */
@@ -474,9 +480,9 @@ let going = (win: Browsing, link: Element, to: URL) => {
  * asked for again once drawn, and laid over what was drawn where it
  * changed. A click on a page not held draws what it can of that page at
  * once, from what the page holds (`going`), and the rest when it comes.
- * The pages a page's links marked `HOLD` name are held before any press.
- * Sending a form makes every held page old: still drawn at once, and asked
- * for again.
+ * A page that draws the address itself (`DRAW`) is drawn in place, with no
+ * fetch. Sending a form makes every held page old: still drawn at once, and
+ * asked for again.
  */
 export let start = (
   win: Browsing,
@@ -532,24 +538,23 @@ export let start = (
   }
   let fresh = (held: Held | undefined): held is Held =>
     !!held && now() - held.at < FRESH
-  // Draw `answer` as the page at `to`; false where it cannot be.
-  let draw = (
-    to: URL,
-    answer: Answer,
+  // Put the page at `at` on screen by `change`, as a new document comes: the
+  // page leaving hears it, the address moves, the content starts at its top
+  // and takes the focus, and the page that came hears it; false where it
+  // cannot be.
+  let land = (
+    at: URL,
+    change: () => Tally,
     from: From,
     began: number,
     wait: number,
     pop: boolean,
   ) => {
     let lap = now()
-    let next = answer.page
-    if (!next.querySelector(`script[${TAKES}]`)) return false
-    let at = new URL(answer.url)
-    at.hash = to.hash
     let tally: Tally
     try {
       tell(doc, LEAVE)
-      tally = swap(doc, next, ran, rerun, at.href)
+      tally = change()
     } catch (error) {
       // A page half laid over is no page: the next loads as a document, and
       // the reporter hears why (M-37965).
@@ -590,13 +595,48 @@ export let start = (
     tell(doc, PAGE, detail)
     return true
   }
-  let go = async (to: URL, pop = false, pressed?: Result) => {
+  // Draw `answer` as the page at `to`; false where it cannot be.
+  let draw = (
+    to: URL,
+    answer: Answer,
+    from: From,
+    began: number,
+    wait: number,
+    pop: boolean,
+  ) => {
+    if (!answer.page.querySelector(`script[${TAKES}]`)) return false
+    let at = new URL(answer.url)
+    at.hash = to.hash
+    let change = () => swap(doc, answer.page, ran, rerun, at.href)
+    return land(at, change, from, began, wait, pop)
+  }
+  // How the page on screen draws `to` itself, where it can (`DRAW`): its
+  // change, then its written scripts run again, as a swap runs them.
+  let drawing = (to: URL) => {
+    let asked: Drawing = { to }
+    tell(doc, DRAW, asked)
+    let own = asked.draw
+    return own && (() => {
+      own()
+      for (let s of scripts(doc)) if (!s.hasAttribute('src')) rerun(s)
+      return { kept: 0, made: 0, dropped: 0 }
+    })
+  }
+  let go = async (
+    to: URL,
+    pop = false,
+    pressed?: Result,
+    own = drawing(to),
+  ) => {
     if (stays(doc)) {
       pressed?.leaving()
       return load(to, pop)
     }
     let mine = ++turn
     let began = now()
+    if (own && land(new URL(to), own, 'drawn', began, 0, pop)) {
+      return pressed?.drawn(0)
+    }
     let held = pages.get(page(to))
     let from: From = held ? 'held' : 'fetch'
     let using = held ?? ask(to)
@@ -661,38 +701,17 @@ export let start = (
   win.addEventListener('submit', () => {
     for (let held of pages.values()) held.at = -Infinity
   })
-  // The pages the page's `HOLD` links name and the tab does not hold, asked
-  // for one after another, and again for a page drawn meanwhile. A page
-  // holding a script that stays leaves by loading the next, so it holds none.
-  let holding = false, more = false
-  let hold = async () => {
-    if (holding) return void (more = true)
-    holding = true
-    do {
-      more = false
-      for (
-        let link of stays(doc) ? [] : doc.querySelectorAll(`a[${HOLD}][href]`)
-      ) {
-        let to = new URL(link.getAttribute('href')!, win.location.href)
-        if (to.origin != new URL(win.location.href).origin) continue
-        if (!pages.has(page(to))) await ask(to, true).answer
-      }
-    } while (more)
-    holding = false
-  }
-  doc.addEventListener(PAGE, () => void hold())
-  if (doc.readyState == 'complete') hold()
-  else win.addEventListener('load', () => void hold(), { once: true })
   win.addEventListener('click', (e: MouseEvent) => {
     let to = followed(e, win.location.href, here)
     if (!to) return
     let pressed = result(doc, e)
     e.preventDefault()
-    if (!pages.has(page(to)) || looking?.key == page(to)) {
+    let own = drawing(to)
+    if (!own && (!pages.has(page(to)) || looking?.key == page(to))) {
       going(win, (e.target as Element).closest('a[href]')!, to)
       tell(doc, GOING, { began: now() })
     }
-    go(to, false, pressed)
+    go(to, false, pressed, own)
   })
   history.listen(({ path }) => {
     let to = new URL(path, win.location.href)
