@@ -304,12 +304,14 @@ export let leaving = (doc: Document = document): AbortSignal => {
   return leave.signal
 }
 
-/** What `start` needs of the window around it. */
+/** What `start` needs of the window around it: the idle callback where the
+ * browser has one, else a timer stands for it. */
 export type Browsing =
   & Pick<
     Window,
     'document' | 'location' | 'addEventListener' | 'fetch' | 'scrollTo'
   >
+  & Partial<Pick<Window, 'requestIdleCallback'>>
   & { DOMParser: typeof DOMParser }
 
 /** Where a click's time went, in milliseconds: waiting for the page whole
@@ -377,6 +379,12 @@ export let FRESH = 10_000
 export let HELD = 24
 /** How long a pointer stays over a link before its page is asked for. */
 export let INTENT = 60
+/** The mark on a link whose page is kept ready: asked for ahead (`AHEAD`) as
+ * soon as the page holding the link is drawn and the browser is idle, and
+ * held, so a press on it draws at once and asks for it again after. For a
+ * page its server is slow to answer, where a finger's touch gives too little
+ * head start. */
+export let READY = 'data-ready'
 /** The header on an answer to a look ahead (`AHEAD`) that left out what
  * opening the page does (marking what it shows read): the page is asked for
  * again once it is opened. */
@@ -490,6 +498,7 @@ let going = (win: Browsing, link: Element, to: URL) => {
  * asked for again once drawn, and laid over what was drawn where it
  * changed. A click on a page not held draws what it can of that page at
  * once, from what the page holds (`going`), and the rest when it comes.
+ * A link marked `READY` is asked for ahead once each page holding it is drawn.
  * A page that draws the address itself (`DRAW`) is drawn in place, with no
  * fetch. Sending a form makes every held page old: still drawn at once, and
  * asked for again.
@@ -621,6 +630,7 @@ export let start = (
       url: at.href,
     }
     tell(doc, fetched ? PAGE : SHOWN, detail)
+    readying()
     return true
   }
   // Draw `answer` as the page at `to`; false where it cannot be.
@@ -685,6 +695,25 @@ export let start = (
       load(new URL(newer.url), true)
     }
   }
+  // Each page a link marked `READY` leads to that is not held, asked for
+  // ahead once the browser is idle: not one the page shows itself, nor one
+  // a page that is left by loading the next (`stays`) could draw.
+  let readying = () => {
+    let idle = win.requestIdleCallback?.bind(win) ??
+      ((fn: () => void) => setTimeout(fn))
+    idle(() => {
+      if (stays(doc)) return
+      for (let link of doc.querySelectorAll(`a[${READY}][href]`)) {
+        let to = new URL(link.getAttribute('href')!, win.location.href)
+        let key = page(to)
+        if (
+          to.origin == win.location.origin && key != here &&
+          !pages.has(key) && !drawing(to)
+        ) ask(to, true)
+      }
+    })
+  }
+  readying()
   // The one page being looked ahead at, which a pointer moving on, or
   // another look ahead, lets go of unless a click took it up.
   let looking: { key: string; held: Held } | undefined

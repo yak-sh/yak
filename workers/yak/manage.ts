@@ -904,6 +904,10 @@ let mine = async (
   ])
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
+  // The Operator of the space the side holds wakes, as every page of a space
+  // wakes it (`woken`), so its settings and chat, a press away, find it up.
+  let side = picks.find((s) => s.slug == space)
+  if (side && req.method == 'GET') woken(env, side.eid)
   let page = deskPage({
     person: who.person,
     space,

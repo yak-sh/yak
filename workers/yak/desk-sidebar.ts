@@ -44,6 +44,9 @@ export let deskSide = (at: DeskPage, view: Setting, env: Host) => {
     icon: glyphs[icons[key]],
     current: view == key || (view == 'new' && key == 'apps'),
     count: key == 'trash' ? at.binned || undefined : undefined,
+    // The Operator's settings wait on its store, which a cold Operator takes
+    // a second to open: kept ready.
+    ready: key == 'operator' || undefined,
   })
   let host = spaceHost(env, at.space)
   let side: SideView = { person: at.person ?? '', here, desk: { view } }

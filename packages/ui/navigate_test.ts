@@ -15,6 +15,7 @@ import {
   morph,
   NAMES,
   PAGE,
+  READY,
   SHOWN,
   start,
   swap,
@@ -391,6 +392,26 @@ test('pressing a link to a page held long ago draws it at once, and asks for it 
   assertEquals(b.drawn.at(-1)!.from, 'held')
   assertEquals(b.drawn.at(-1)!.phases.wait, 0)
   assertEquals(b.fetched.length, 3)
+})
+
+test('a page a link marked ready leads to is held once its page is drawn, and a press draws it at once', async () => {
+  let ready = (here: string, content: string) =>
+    framed(here, content).replace(
+      '<a href="/updates"',
+      `<a ${READY} href="/updates"`,
+    )
+  let pages = { ...site, '/apps': ready('apps', '<h1>Apps</h1>') }
+  let b = browsing(pages)
+  await settled()
+  assertEquals(b.fetched, ['https://y.test/updates prefetch'])
+  b.tick(FRESH)
+  b.click('a[href="/updates"]')
+  await settled()
+  assertEquals(b.drawn.map((d) => [d.from, d.phases.wait]), [['held', 0]])
+  assertEquals(b.fetched.length, 2, 'asked again once drawn, being old')
+  await b.go(new URL('https://y.test/apps'))
+  await settled()
+  assertEquals(b.fetched.length, 3, 'held already: not asked again')
 })
 
 test('a pointer that moves on before its page comes lets it go, and one look ahead stands at a time', async () => {

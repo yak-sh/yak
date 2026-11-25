@@ -94,6 +94,9 @@ export let talkSide = (
             icon: icons['sliders-horizontal'],
             label: 'Manage',
             names: owner ? 'Apps' : 'Operator',
+            // The Operator's settings, kept ready as Manage's side keeps
+            // them (desk-sidebar.ts).
+            ready: !owner || undefined,
           }],
         },
       ],

@@ -29,7 +29,7 @@ import { Icon } from '@yaks/ui/Icon'
 import { Identity } from '@yaks/ui/Identity'
 import { Menu } from '@yaks/ui/Menu'
 import { SideNav } from '@yaks/ui/SideNav'
-import { NAMES } from '@yaks/ui/navigate'
+import { NAMES, READY } from '@yaks/ui/navigate'
 import {
   accountView,
   appMarkImage,
@@ -48,6 +48,9 @@ export type Item = {
    * page's title says it the moment the link is pressed (@yaks/ui/navigate
    * `NAMES`). */
   names?: string
+  /** Whether its page is kept ready, fetched ahead once the page is drawn
+   * (@yaks/ui/navigate `READY`): one its server is slow to answer. */
+  ready?: boolean
   icon: IconNode
   image?: ReturnType<typeof appMarkImage>
   current?: boolean
@@ -109,6 +112,7 @@ export let link = (at: Item) => {
       type: at.submit ? 'submit' : undefined,
       title: at.label,
       [NAMES]: at.names,
+      [READY]: at.ready || undefined,
       'data-side-app': at.app ? JSON.stringify(at.app) : undefined,
       mod: at.current && 'on',
       'aria-current': at.current ? 'page' : at.beside ? 'true' : undefined,
