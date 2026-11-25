@@ -27,12 +27,25 @@ export let shuffled = <T>(items: T[], last?: T, random = Math.random) => {
 export let loopOf = (src: string, loop: string) =>
   src.replace(/yak(-\d+)?\.webp$/, (_, w = '') => `yak-${loop}${w}.webp`)
 
+/** Restore the painting's source attributes after a loop, if it has one. */
+export let resting = (img: HTMLImageElement) => {
+  let sources = {
+    src: img.getAttribute('src'),
+    srcset: img.getAttribute('srcset'),
+  }
+  if (!sources.src?.trim() && !sources.srcset?.trim()) return
+  return () => {
+    for (let [attr, value] of Object.entries(sources)) {
+      if (value?.trim()) img.setAttribute(attr, value)
+      else img.removeAttribute(attr)
+    }
+  }
+}
+
 /** Idle `img` until the returned function stops it. */
 let idle = (img: HTMLImageElement, still: MediaQueryList) => {
-  let rest = {
-    src: img.getAttribute('src')!,
-    srcset: img.getAttribute('srcset')!,
-  }
+  let restore = resting(img)
+  if (!restore) return
   let order: string[] = [], last: string | undefined
   let next = () => {
     if (!order.length) order = shuffled(Object.keys(IDLE), last)
@@ -41,7 +54,9 @@ let idle = (img: HTMLImageElement, still: MediaQueryList) => {
   let blobs = new Map<string, Promise<Blob>>()
   let fetched = (loop: string) => {
     if (!blobs.has(loop)) {
-      let file = loopOf(img.currentSrc || img.src, loop)
+      let src = img.currentSrc || img.src
+      let file = loopOf(src, loop)
+      if (file == src) return
       blobs.set(
         loop,
         fetch(file).then((r) => {
@@ -60,14 +75,16 @@ let idle = (img: HTMLImageElement, still: MediaQueryList) => {
   let wait = () => {
     timer = setTimeout(play, 5000 + Math.random() * 4000)
     let loop = coming
-    if (!still.matches) fetched(loop).catch(() => blobs.delete(loop))
+    if (!still.matches) fetched(loop)?.catch(() => blobs.delete(loop))
   }
   let play = async () => {
     let loop = coming
     coming = next()
     if (still.matches) return wait()
+    let loaded = fetched(loop)
+    if (!loaded) return wait()
     try {
-      url = URL.createObjectURL(await fetched(loop))
+      url = URL.createObjectURL(await loaded)
       let frames = new Image()
       frames.src = url
       await frames.decode()
@@ -81,8 +98,7 @@ let idle = (img: HTMLImageElement, still: MediaQueryList) => {
     img.removeAttribute('srcset')
     img.src = url
     timer = setTimeout(() => {
-      img.src = rest.src
-      img.srcset = rest.srcset
+      restore()
       URL.revokeObjectURL(url)
       wait()
     }, IDLE[loop])
@@ -91,7 +107,7 @@ let idle = (img: HTMLImageElement, still: MediaQueryList) => {
   return () => {
     stopped = true
     clearTimeout(timer)
-    if (img.src == url) Object.assign(img, rest)
+    if (img.src == url) restore()
     URL.revokeObjectURL(url)
   }
 }
@@ -111,13 +127,13 @@ export let Logo = (
     let img = ref.current
     let still = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')
     if (!img || !still) return
-    let stop = () => {}
+    let stop: (() => void) | undefined
     let begin = () => stop = idle(img, still)
     if (img.complete) begin()
     else img.addEventListener('load', begin, { once: true })
     return () => {
       img.removeEventListener('load', begin)
-      stop()
+      stop?.()
     }
   }, [])
   return h('img', { ref, src: painted(), srcset: LOGO, alt: '', ...props })
