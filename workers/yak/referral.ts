@@ -1,8 +1,11 @@
 // A person's own invite (D-136811 'Invites', T-138777): a QR code a friend
 // scans to open a text to yaks.app's number, or a letter to its sign-up
-// address, with the words already written. The words carry the person's code
-// (`referral_code{code}` on their row in the directory), and that code in a
-// first message is how a sign-up is traced back to whoever invited them.
+// address, with the words already written, and a link a friend opens on the
+// web (`yaks.app/i/<code>`, T-3445). The words and the link carry the
+// person's code (`referral_code{code}` on their row in the directory), and
+// that code, in a first message or kept from the link on the browser that
+// signs up (arrival.ts), is how a sign-up is traced back to whoever invited
+// them.
 //
 // Not a seat: invite.ts offers a seat in a space to an address, and this
 // offers yaks.app itself to whoever is standing in front of you.
@@ -10,7 +13,8 @@ import { identityEid } from '@yaks/graph/identity'
 import { caught } from './defects.ts'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
-import { signupAddress } from '@yaks/platform/host'
+import { type Host, signupAddress, url } from '@yaks/platform/host'
+import { INVITED } from '@yaks/platform/names'
 import type { Invitation } from '@yaks/platform/account-rows'
 import { phoneOf, textable } from './phones.ts'
 export { qr } from '@yaks/platform/qr'
@@ -48,6 +52,11 @@ export let words = (name: string, code: string) =>
 export let codeIn = (said: string) =>
   /\(\s*invite from [^()]*,\s*([a-z0-9]{4,12})\s*\)/i.exec(said)?.[1]
     .toLowerCase() ?? null
+
+/// linkOf({ APEX: 'yaks.app' }, 'k7q2m') -> 'https://yaks.app/i/k7q2m'
+/** The link a friend opens on the web to be invited by whoever holds
+ * `code`. */
+export let linkOf = (env: Host, code: string) => url(env, `${INVITED}${code}`)
 
 /// texted('+18885550100', 'Hi') -> 'sms:+18885550100?&body=Hi'
 /** The `sms:` link that opens a text to `number` holding `said`. `?&body=`
@@ -124,6 +133,7 @@ export let invitation = async (
   let address = signupAddress(env)
   return {
     said,
+    link: linkOf(env, code),
     text: number ? texted(number, said) : null,
     mail: mailed(address, said),
     address,
@@ -137,24 +147,29 @@ export let invitation = async (
 export let referralEid = (invitee: string) => identityEid('referral', [invitee])
 
 /**
- * Who invited `invitee`, read from the code in what their first message said:
- * their referral, written for the month it gives once they build an app.
- * Nothing is refused, and nothing is written where the words carry no code
- * anybody holds, the code is their own, an invite already brought them in, or
- * they had built an app before, which makes this no sign-up of theirs.
- * Answers the inviter, or null.
+ * Who invited `invitee`, by the `code` they signed up with: the one in their
+ * first message's words (`codeIn`), or the one their browser kept from an
+ * invite link (arrival.ts). Their referral is written for the month it gives
+ * once they build an app. Nothing is refused, and nothing is written where
+ * there is no code anybody holds, the code is their own, an invite already
+ * brought them in, or they had built an app before, which makes this no
+ * sign-up of theirs. What a newcomer built in the home page's box before
+ * giving an address is this sign-up's own, not before it. Answers the
+ * inviter, or null.
  */
 export let credit = async (
-  dir: Pick<Directory, 'referrer' | 'referral' | 'built' | 'stamp'>,
+  dir: Pick<
+    Directory,
+    'referrer' | 'referral' | 'built' | 'signingUp' | 'stamp'
+  >,
   invitee: string,
-  said: string,
+  code: string | null | undefined,
 ): Promise<string | null> => {
-  let code = codeIn(said)
   if (!code) return null
   let [inviter, had, built] = await Promise.all([
     dir.referrer(code),
     dir.referral(invitee),
-    dir.built(invitee),
+    dir.signingUp(invitee).then((now) => !now && dir.built(invitee)),
   ])
   if (!inviter || inviter == invitee || had || built) return null
   await dir.stamp({

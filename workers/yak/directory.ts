@@ -4358,6 +4358,11 @@ export let directoryRows = (rows: {
     // Whether this person is a newcomer (`newcomerIs`).
     newcomer: async (person: string) =>
       newcomerIs(await one(line`.entity.eid=${person}`)),
+    // Whether this person still wears a newcomer's mark: a newcomer, or one
+    // signing up this moment, their address given and what their box built
+    // not yet kept (newcomer.ts `keep` lifts the mark).
+    signingUp: async (person: string) =>
+      !!(await one(line`.entity.eid=${person}`))?.newcomer,
     // Whether this person is nobody's (`testIs`): what a failure, an app's
     // error or a funnel step of theirs is tagged with.
     tested: async (person: string) =>

@@ -8,7 +8,7 @@ import { rows } from './directory-rows-probe.ts'
 import type { Env } from './env.ts'
 import { effects } from './facets/directory-effects.ts'
 import type { Options } from './facets/store.ts'
-import { codeOf, credit, invitation, words } from './referral.ts'
+import { codeOf, credit, invitation } from './referral.ts'
 import { monthOn } from './reward.ts'
 
 let NOW = Date.now()
@@ -77,7 +77,7 @@ let build = (space: string, copy = false) =>
 let invited = async (by: { person: string }, name: string) => {
   let them = await someone(name)
   let code = await codeOf(dir, by.person)
-  await credit(dir, them.person, words('Jeff', code))
+  await credit(dir, them.person, code)
   return them
 }
 
@@ -114,13 +114,13 @@ fetch.restore()
 let fay = await someone('Fay')
 let gus = await someone('Gus')
 await build(gus.space)
-let mine = words('Fay', await codeOf(dir, fay.person))
+let mine = await codeOf(dir, fay.person)
 let credited = [
   await credit(dir, fay.person, mine),
   await credit(dir, eve.person, mine),
   await credit(dir, gus.person, mine),
-  await credit(dir, fay.person, 'Hi yaks.app, sign me up!'),
-  await credit(dir, gus.person, words('Ana', 'nobody')),
+  await credit(dir, fay.person, null),
+  await credit(dir, gus.person, 'nobody'),
 ]
 
 test("each friend who builds their first app gives the inviter's free space one more month of the Plus plan", () => {

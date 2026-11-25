@@ -59,11 +59,12 @@ export type SignedIn = { agent: string; place?: string; at?: string }
 export type Shared = { eid: string; slug: string; title: string; space: string }
 
 /** What a person's invite page draws: the words carrying their code, the
- * links that open them as a text (where there is a number to text) and as a
- * letter to `address`, and how many people signed up through it and how many
- * of them built an app. */
+ * link a friend opens on the web, the links that open the words as a text
+ * (where there is a number to text) and as a letter to `address`, and how
+ * many people signed up through it and how many of them built an app. */
 export type Invitation = {
   said: string
+  link: string
   text: string | null
   mail: string
   address: string
@@ -176,13 +177,22 @@ export let accountWords: VocabDoc = {
       type: 'object',
       properties: {
         said: strings,
+        link: strings,
         text: { type: ['string', 'null'] },
         mail: strings,
         address: strings,
         joined: { type: 'integer' },
         built: { type: 'integer' },
       },
-      required: ['said', 'text', 'mail', 'address', 'joined', 'built'],
+      required: [
+        'said',
+        'link',
+        'text',
+        'mail',
+        'address',
+        'joined',
+        'built',
+      ],
     },
     chatLink: {
       component: true,

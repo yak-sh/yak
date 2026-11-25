@@ -64,6 +64,9 @@ export let STEPS = [
   // space's line "Website by yaks.app" (view-point.ts `badgeFollowed`), which
   // names the app; `badges` reads it by space.
   { name: 'badge', say: 'Badges and "Website by yaks.app" lines followed' },
+  // A person's invite link opened (referral.ts `linkOf`, identity.ts), for a
+  // code somebody holds.
+  { name: 'invite', say: 'Invite links opened' },
   { name: 'home', say: 'Home page visits' },
   {
     name: 'home_loaded',

@@ -204,6 +204,16 @@
   .Invite_Way {
     text-align: center;
   }
+  /* The link beside the codes: to copy, and to share where the browser
+     can (@yaks/platform/invite-browser). */
+  .Invite_Link {
+    display: grid;
+    gap: .75rem;
+    justify-items: start;
+  }
+  .Invite_Link .Copy {
+    max-width: 100%;
+  }
   .Invite_Lead {
     margin: 0 0 .75rem;
     color: var(--text);

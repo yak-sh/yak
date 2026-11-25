@@ -1,23 +1,25 @@
 /**
  * The Invite page (Your account), drawn from the person's invite
  * (./account-rows.ts `invitePage`) and their spaces (./side-rows.ts): their
- * own QR code, shown to a friend on their phone, so it is the code first and
- * large. Scanning it opens a text to yaks.app with the words written, or,
- * under Email, a letter to the sign-up address; sending is signing up, so
- * what sending agrees to is said beside the code, where the friend reads it.
- * The two ways are radios, which switch with no script. Under them, how many
- * signed up and built, which moves as they do. The server draws it for the
- * first paint, and the browser draws it again as the rows move
- * (./invite-browser.ts).
+ * own link, to copy or share with a friend who is not in the room, and their
+ * own QR code, shown to a friend on their phone, so it is large. Scanning it
+ * opens a text to yaks.app with the words written, or, under Email, a letter
+ * to the sign-up address; sending is signing up, so what sending agrees to is
+ * said beside the code, where the friend reads it. The two ways are radios,
+ * which switch with no script. Under them, how many signed up and built,
+ * which moves as they do. The server draws it for the first paint, and the
+ * browser draws it again as the rows move (./invite-browser.ts), showing the
+ * copy button and, where the browser can share, the share button.
  *
  * @module
  */
 import { type ComponentChildren as Kids, h } from 'preact'
+import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { TabSet } from '@yaks/ui/Tabs'
 import type { Invitation } from './account-rows.ts'
 import { url } from './host.ts'
-import { heading } from './page-parts.ts'
+import { copyable, heading } from './page-parts.ts'
 import { STARTER } from './plans.ts'
 import { qr } from './qr.ts'
 import type { Picked } from './side-rows.ts'
@@ -67,7 +69,19 @@ export let inviteView = (
     h(
       'p',
       { class: 'Invite_Head' },
-      `Show this to a friend. They scan it with their phone’s camera and send what opens: that signs them up, with their own space ready, $${STARTER} of building credit and its Operator writing back.`,
+      `Send a friend your link, or show them your code. They get their own space, free, with $${STARTER} of building credit.`,
+    ),
+    h(
+      Card,
+      { class: 'Invite_Link' },
+      heading('Your link'),
+      copyable(invite.link, 'your invite link'),
+      h(Button, {
+        type: 'button',
+        class: 'Invite_Share',
+        hidden: true,
+        'data-share': invite.link,
+      }, 'Share'),
     ),
     h(
       TabSet,

@@ -31,6 +31,10 @@ export let LINK = '/login/link'
 /** Where an invitation is accepted, on the platform's own host. */
 export let INVITE = '/invite'
 
+/** Where a person's own invite link opens, before its code: short, so the
+ * link can be said aloud (`yaks.app/i/k7q2m`). */
+export let INVITED = '/i/'
+
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` they would read as the platform speaking (T-37886): a
 // sign-in page at `login.yaks.app`, a letter from `security@yaks.app`. The

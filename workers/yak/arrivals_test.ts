@@ -1,8 +1,11 @@
 // Where each person came from when they signed up (T-154825), through the
 // whole kernel: a home page with a campaign's link, an app's badge, an
 // assistant's connector, an invitation, a letter and the home page's box,
-// then one read listing them since a time.
-import { cleanup, equal, test } from '@yaks/testing'
+// and a person's invite link (T-3445) followed to the sign-in page and to the
+// box, then one read listing them since a time.
+import { cleanup, equal, ok, test } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
+import { managePath } from '@yaks/platform/routes'
 import {
   authorizing,
   connector,
@@ -16,6 +19,8 @@ import { arrivals } from './arrivals.ts'
 import { COOKIE as CAME } from './arrival.ts'
 import { COOKIE } from './lib/token.ts'
 import { START } from './newcomer.ts'
+import { meta } from './meta.ts'
+import type { Row } from './directory.ts'
 
 let env!: Env
 let k = await fresh({}, (e) => {
@@ -81,10 +86,34 @@ let { joined } = await import('./identity.ts')
 await joined(env, 'eve@example.com', 'Eve', 'Hello')
 let church = await opened('/churches')
 let built = await post(START, { say: 'A sign-up sheet' }, church)
-console.log('BUILT', built.status, built.headers.getSetCookie(), church)
 await built.body?.cancel()
 await signUp('fay@example.com', [church, cookieIn(built, COOKIE)].join('; '))
+
+// The owner's invite link, from their invite page; Gil follows it to the
+// sign-in page, and Hal to the box, which builds his first app before he
+// signs up.
+let page = (path: string, cookie = '') =>
+  k.at(k.host, path, {
+    headers: { 'user-agent': BROWSER, ...cookie ? { cookie } : {} },
+  })
+let mine = parseHTML(
+  await (await page(managePath('invite'), owner.cookie)).text(),
+).document
+let link = new URL(mine.querySelector('.Invite_Link .Copy_Text')!.textContent!)
+let landing = await page(link.pathname)
+let kept = cookieIn(landing, CAME)
+let card = parseHTML(await landing.text()).document
+await signUp('gil@example.com', kept)
+let boxed = await post(START, { say: 'A chore chart' }, kept)
+await boxed.body?.cancel()
+let hal = [kept, cookieIn(boxed, COOKIE)].join('; ')
+await connector(k, cookieIn(boxed, COOKIE)).answer('app_new', {
+  slug: 'chores',
+  title: 'Chores',
+})
+await signUp('hal@example.com', hal)
 await k.deliveries()
+let referrals = await meta(env).query('.referral ?rewarded') as Row[]
 
 test('one read lists each new person since a time and where they came from', async () => {
   let read = (await arrivals(env, since)).map(
@@ -110,7 +139,21 @@ test('one read lists each new person since a time and where they came from', asy
     { who: 'di@example.com', door: 'invitation', invited: 'owner@example.com' },
     { who: 'eve@example.com', door: 'email' },
     { who: 'fay@example.com', door: 'box', page: 'church' },
+    { who: 'gil@example.com', door: 'login', invited: 'owner@example.com' },
+    { who: 'hal@example.com', door: 'box', invited: 'owner@example.com' },
   ])
+})
+
+test("a person's invite link says who invited them and what they get, over the sign-in form", () => {
+  equal(link.pathname.length, '/i/'.length + 5)
+  equal(card.querySelector('h1')?.textContent, 'owner invited you to yaks.app')
+  ok(card.querySelector('h1 + p')?.textContent?.includes('a space of your own'))
+  ok(card.querySelector('form[action="/login"] [name=address]'))
+})
+
+test("a sign-up on a browser that opened an invite link is credited, by whichever door, and the box's first app gives the month", () => {
+  equal(referrals.length, 2)
+  equal(referrals.filter((r) => r.rewarded).length, 1)
 })
 
 test('a sign-up before the time is not listed', async () => {

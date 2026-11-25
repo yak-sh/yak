@@ -14,11 +14,12 @@
 // directory's `arrived`), so where somebody came from outlives the cookie.
 // The funnel counts its steps by the campaign and the home page (funnel.ts),
 // and an ad network is told of a visit its click brought (conversions.ts).
-// Nothing here imports past @yaks/platform/cookie, crawlers.ts and
-// variant.ts, so yak-front (front/) holds it.
+// Nothing here imports past @yaks/platform/cookie, @yaks/platform/names,
+// crawlers.ts and variant.ts, so yak-front (front/) holds it.
 import { isPerson } from './crawlers.ts'
 import { shown, VARIANTS } from './variant.ts'
 import { cookieValue } from '@yaks/platform/cookie'
+import { INVITED } from '@yaks/platform/names'
 
 /** The cookie an arrival is kept in, apart from the session's. */
 export let COOKIE = 'yak_came'
@@ -33,13 +34,15 @@ let CLICK = /^[a-z]{1,8}clid$/
 let CAP = 200
 
 /** An arrival: the tags and click ids its link carried, when, in ms, the
- * name of the home page its visitor opened last, if any, and the app whose
- * badge the link was, if it was one. */
+ * name of the home page its visitor opened last, if any, the app whose
+ * badge the link was, if it was one, and the code of the invite link that
+ * brought them, if one did. */
 export type Came = {
   at: number
   said: Record<string, string>
   page?: string
   app?: string
+  invite?: string
 }
 
 let EID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -47,6 +50,23 @@ let appIn = (q: URLSearchParams) => {
   let app = q.get('app')?.toLowerCase()
   return app && EID.test(app) ? app : undefined
 }
+
+let CODE = /^[a-z0-9]{4,12}$/
+let codeOf = (code?: string | null) => {
+  let c = code?.toLowerCase()
+  return c && CODE.test(c) ? c : undefined
+}
+
+/// inviteAt('/i/K7q2m') -> 'k7q2m'
+/// inviteAt('/i/k7q2m/') -> 'k7q2m'
+/// inviteAt('/i/') -> undefined
+/// inviteAt('/login') -> undefined
+/** The code a person's invite link carries in its path, or undefined for any
+ * other path. */
+export let inviteAt = (path: string) =>
+  path.startsWith(INVITED)
+    ? codeOf(path.slice(INVITED.length).replace(/\/$/, ''))
+    : undefined
 
 /**
  * What an address says of where it came from, or null when it says nothing.
@@ -66,6 +86,11 @@ let appIn = (q: URLSearchParams) => {
  *   app,
  * })
  * assertEquals(cameFrom(new URL('https://yaks.app/?app=recipes')), null)
+ * assertEquals(cameFrom(new URL('https://yaks.app/i/k7q2m?utm_source=agent-check'), 5), {
+ *   at: 5,
+ *   said: { utm_source: 'agent-check' },
+ *   invite: 'k7q2m',
+ * })
  * ```
  */
 export let cameFrom = (url: URL, now = Date.now()): Came | null => {
@@ -74,18 +99,22 @@ export let cameFrom = (url: URL, now = Date.now()): Came | null => {
     if ((TAG.test(k) || CLICK.test(k)) && v) said[k] = v.slice(0, CAP)
   }
   let app = appIn(url.searchParams)
-  return Object.keys(said).length || app
-    ? came(now, said, undefined, app)
+  let invite = inviteAt(url.pathname)
+  return Object.keys(said).length || app || invite
+    ? came(now, said, undefined, app, invite)
     : null
 }
 
 let read = (value: string): Came | null => {
   let q = new URLSearchParams(value), at = Number(q.get('at'))
   let page = VARIANTS.find((v) => v.name == q.get('page'))?.name
-  q.delete('at'), q.delete('page')
+  let invite = codeOf(q.get('invite'))
+  q.delete('at'), q.delete('page'), q.delete('invite')
   let link = cameFrom(new URL(`https://x/?${q}`), at)
   if (!Number.isFinite(at) || at <= 0) return null
-  return page || link ? came(at, link?.said ?? {}, page, link?.app) : null
+  return page || link || invite
+    ? came(at, link?.said ?? {}, page, link?.app, invite)
+    : null
 }
 
 let came = (
@@ -93,7 +122,14 @@ let came = (
   said: Record<string, string>,
   page?: string,
   app?: string,
-): Came => ({ at, said, ...page ? { page } : {}, ...app ? { app } : {} })
+  invite?: string,
+): Came => ({
+  at,
+  said,
+  ...page ? { page } : {},
+  ...app ? { app } : {},
+  ...invite ? { invite } : {},
+})
 
 let held = (req: Request) => {
   let cookie = cookieValue(req.headers.get('cookie'), COOKIE)
@@ -121,6 +157,7 @@ let landing = (req: Request) => {
  * assertEquals(arrival(at('/login', 'yak_came=page=church&at=5'))?.page, 'church')
  * assertEquals(arrival(at('/login?utm_source=x', 'yak_came=page=church&at=5'))?.page, undefined)
  * assertEquals(arrival(at('/login')), null)
+ * assertEquals(arrival(at('/', 'yak_came=invite=k7q2m&at=5'))?.invite, 'k7q2m')
  * ```
  */
 export let arrival = (req: Request): Came | null => {
@@ -128,7 +165,13 @@ export let arrival = (req: Request): Came | null => {
   let page = shown(req)?.name ?? kept?.page
   let from = link ?? kept
   return from || page
-    ? came(from?.at ?? Date.now(), from?.said ?? {}, page, from?.app)
+    ? came(
+      from?.at ?? Date.now(),
+      from?.said ?? {},
+      page,
+      from?.app,
+      from?.invite,
+    )
     : null
 }
 
@@ -139,6 +182,7 @@ let valued = (came: Came) =>
       at: String(came.at),
       ...came.page ? { page: came.page } : {},
       ...came.app ? { app: came.app } : {},
+      ...came.invite ? { invite: came.invite } : {},
     }),
   )
 

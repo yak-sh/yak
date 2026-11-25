@@ -109,6 +109,11 @@ let copying = (copy: Copy) => ({
 // their email reads nothing about texts; without script it stays.
 //
 // `copy` is the published app `back` installs, when it is one (`copying`).
+//
+// `by` names whoever's invite link a stranger opened (referral.ts `linkOf`):
+// the card says who invited them and what their own space starts with, and
+// the code is kept on their browser (arrival.ts), so signing up here, in the
+// home page's box or by a copy of an app credits that person.
 export let askEmail = (at: {
   q?: string | null
   back?: string | null
@@ -119,15 +124,18 @@ export let askEmail = (at: {
   preview?: Preview
   copy?: Copy
   providers?: Offered[]
+  by?: string
 }, env: Host = {}) => {
   let copy = at.copy && copying(at.copy)
+  let invite = at.by == null ? null : inviteCard(at.by)
   return page(
     env,
     {
-      title: copy?.title ?? 'Sign in or sign up',
+      title: invite?.title ?? copy?.title ?? 'Sign in or sign up',
       preview: at.preview ??
         destination(at.back ?? (at.q ? '/oauth/authorize' : null), env),
-      lead: at.why ?? copy?.lead ?? welcome(at.back ?? null, env),
+      lead: at.why ?? invite?.lead ?? copy?.lead ??
+        welcome(at.back ?? null, env),
       status: at.status ?? 200,
     },
     copy?.picture,
@@ -151,8 +159,9 @@ export let askEmail = (at: {
           : '',
         // Where a person decides to sign up: what their first space starts
         // with (@yaks/platform/plans `STARTER`). An agent asking to be let
-        // in is someone already deciding something else.
-        at.who
+        // in is someone already deciding something else, and an invite's
+        // lead has already said it.
+        at.who || invite
           ? ''
           : ` Signing up is free, with $${STARTER} of building credit.`,
       ),
@@ -211,9 +220,25 @@ export let askEmail = (at: {
         ),
       ]
       : null,
-    home(env),
+    invite
+      ? h(
+        'p',
+        { class: 'Note' },
+        'Or ',
+        h('a', { href: url(env, '/') }, 'start building on the home page'),
+        '.',
+      )
+      : home(env),
   )
 }
+
+// What an invite link's card says (`askEmail`'s `by`): who invited them, and
+// that the space is theirs, free, with its building credit.
+let inviteCard = (by: string) => ({
+  title: `${by || 'A friend'} invited you to yaks.app`,
+  lead: 'Build, host and share web apps in a space of your own. ' +
+    `It's free, with $${STARTER} of building credit.`,
+})
 
 // Ask for the code just sent, and nothing else (T-34236). Signing up is two
 // steps and both are the address: give it, then prove it. What a person is

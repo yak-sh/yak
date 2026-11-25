@@ -35,7 +35,8 @@ export type FunnelApart = { client: string; step: string; n: number }
  * (`door`: `box`, `login`, `connector`, `invitation`, `email` or `text`); the
  * home page they opened last and the campaign their link named; the app whose
  * badge they followed (`slug`); the assistant whose connector they came by;
- * who invited them (`invited`), or whose invite code they sent (`referrer`). */
+ * who invited them (`invited`): the invitation's sender, or whoever's invite,
+ * a texted code or a link, they signed up by. */
 export type FunnelPerson = {
   at: string
   who: string
@@ -45,7 +46,6 @@ export type FunnelPerson = {
   slug?: string
   assistant?: string
   invited?: string
-  referrer?: string
 }
 
 /**
@@ -73,7 +73,6 @@ export let cameLine = (p: FunnelPerson): string => {
     p.slug && `badge of ${p.slug}`,
     p.assistant && `assistant ${p.assistant}`,
     p.invited && `invited by ${p.invited}`,
-    p.referrer && `invite code of ${p.referrer}`,
   ].filter(Boolean)
   return `  ${p.at.slice(0, 16).replace('T', ' ')} ${p.who}: ${said.join(', ')}`
 }

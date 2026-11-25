@@ -244,14 +244,14 @@ import { WHO } from './signed.ts'
 import { versionOf } from './running.ts'
 import { background, caught, defect, failing, refusing } from './defects.ts'
 import { step } from './funnel.ts'
-import { arrival, arrivedOf, campaign, type Door } from './arrival.ts'
+import { arrival, arrivedOf, campaign, type Door, inviteAt } from './arrival.ts'
 import { welcomed } from './arrivals.ts'
 import { classed } from './crawlers.ts'
 import { CHECK } from '@yaks/platform/bots'
 import * as ads from './ads.ts'
 import { Blocked, consentEid, shown } from '@yaks/phone'
 import { sendable, Undeliverable } from '@yaks/mail'
-import { credit } from './referral.ts'
+import { codeIn, credit } from './referral.ts'
 import { unauthorized, withAuth } from './asking.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import * as oidc from './oidc.ts'
@@ -791,15 +791,38 @@ let founding = async (env: Env, person: string) => {
   }
 }
 
-// Whoever's invite the words a person signed up with carry is credited with
-// them (referral.ts `credit`), for the month it gives once they build an app.
-// A failure there is reported, and the sign-up stands.
-let invitedBy = async (env: Env, person: string, said: string) => {
+// Whoever's invite `code` is, from the words a person signed up with or the
+// link their browser kept, is credited with them (referral.ts `credit`), for
+// the month it gives once they build an app. A failure there is reported,
+// and the sign-up stands. Answers the inviter, or null.
+let invitedBy = async (
+  env: Env,
+  person: string,
+  code: string | null | undefined,
+) => {
   try {
-    await credit(dirOf(env), person, said)
+    return await credit(dirOf(env), person, code)
   } catch (e) {
     caught(e, { request: 'invite credit' })
+    return null
   }
+}
+
+// The month owed at once to whoever invited `person`, for one who signed up
+// having built already: a newcomer whose box built their first app before
+// they gave an address, which no app made later will owe (reward.ts).
+let owed = async (env: Env, person: string) => {
+  let dir = dirOf(env)
+  let [referral, built] = await Promise.all([
+    dir.referral(person),
+    dir.built(person),
+  ])
+  if (!referral || !built) return
+  let [{ reward }, { plans }] = await Promise.all([
+    import('./reward.ts'),
+    import('./payments.ts'),
+  ])
+  await reward(dir, await plans(env), referral)
 }
 
 // Whether the person at an address already has a space of their own, which
@@ -926,7 +949,7 @@ export let joined = async (
     name,
     name ? 'email' : 'fallback',
   )
-  await invitedBy(env, person, said)
+  await invitedBy(env, person, codeIn(said))
   // Somebody with a space of their own is writing in, not signing up.
   if (!back) await arrivedBy(env, person, 'email')
   return { person, space: await settle(env, person) }
@@ -967,7 +990,7 @@ export let textedIn = async (
       sms_consent: { person, consent, at },
     },
   ], KERNEL)
-  await invitedBy(env, person, consent)
+  await invitedBy(env, person, codeIn(consent))
   await arrivedBy(env, person, 'text')
   return { person, space: await settle(env, person) }
 }
@@ -1000,12 +1023,28 @@ let landed = async (
   c: Clock = clock(),
 ) => {
   let dir = dirOf(env)
+  // A first sign-in on a browser that kept an invite link's code (arrival.ts)
+  // is credited to whoever holds it, as a texted code is, before a newcomer's
+  // work is handed over, so what the box built is this sign-up's own; the
+  // month it owes for that is given once it is theirs.
+  let code = proved?.first ? arrival(req)?.invite : undefined
+  let credited = code
+    ? await c.time('invite', () => invitedBy(env, person, code))
+    : null
   await c.time(
     'keep',
     async () =>
       proved?.address &&
       keep(env, dir, newcomer ?? await browser(env, req), person),
   )
+  if (credited) {
+    background(
+      apart(() => owed(env, person)).then(
+        () => {},
+        (e) => caught(e, { request: 'invite month' }),
+      ),
+    )
+  }
   // Their space, and the platform for the first person ever, are settled
   // behind the answer (T-148852). One sent nowhere in particular lands
   // straight on their own (T-149706), where /manage was one more trip for the
@@ -1612,6 +1651,19 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     }, {
       headers: { 'cache-control': 'private, no-store' },
     })
+  }
+
+  // A person's invite link (referral.ts `linkOf`): the sign-in card, saying
+  // who invited them and what they get. The code is kept on the browser
+  // (arrival.ts), so whichever door it signs up by credits that person
+  // (`landed`). A code nobody holds is the plain card, and opens nothing.
+  let invite = inviteAt(path)
+  if (invite && (req.method == 'GET' || req.method == 'HEAD')) {
+    let dir = dirOf(env)
+    let inviter = await dir.referrer(invite)
+    if (!inviter) return signCard(env)
+    if (req.method == 'GET') step(env, 'invite', req)
+    return signCard(env, { by: await dir.nameAt(inviter) ?? '' })
   }
 
   if (path == '/login' && req.method == 'GET') {

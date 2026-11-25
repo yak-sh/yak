@@ -35,14 +35,14 @@ export let welcomed = async (env: Env, person: string, arrived: Arrived) => {
 
 /** One person who signed up, where they came from, and who they are: their
  * address or number, and, for the app and the inviter that brought them, the
- * app's slug and the inviter's address. `referrer` is whoever's invite code
- * they sent (referral.ts). */
+ * app's slug and the inviter's address. The inviter is whoever sent the
+ * invitation they came in by, else whoever's invite, a texted code or a link,
+ * they were credited to (referral.ts). */
 export type SignUp = Arrived & {
   person: string
   who: string
   slug?: string
   invited?: string
-  referrer?: string
 }
 
 let whoOf = (r?: Row) =>
@@ -88,8 +88,8 @@ export let arrivals = async (env: Env, since: string): Promise<SignUp[]> => {
   )
   return people
     .map((r): SignUp => {
-      let { app, inviter, ...arrived } = r.arrived!
-      let by = referrer.get(r.entity.eid)
+      let { app, inviter: sent, ...arrived } = r.arrived!
+      let inviter = sent ?? referrer.get(r.entity.eid)
       return {
         ...arrived as Arrived,
         person: r.entity.eid,
@@ -106,7 +106,6 @@ export let arrivals = async (env: Env, since: string): Promise<SignUp[]> => {
             invited: whoOf(named.get(idOf(inviter))),
           }
           : {},
-        ...by ? { referrer: whoOf(named.get(by)) } : {},
       }
     })
     .sort((a, b) => a.at.localeCompare(b.at))

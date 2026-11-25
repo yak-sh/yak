@@ -39,6 +39,7 @@ let signupOff = await invitation(
 )
 test("a person's invite carries their own code, the same every time, and the code finds them", async () => {
   equal(first.said, `Hi yaks.app, sign me up! (invite from Jeff, ${code})`)
+  equal(first.link, `https://yaks.app/i/${code}`)
   equal(again.said, first.said)
   equal(await dir.referrer(code), jeff)
 })
