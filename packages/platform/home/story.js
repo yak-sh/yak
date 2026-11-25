@@ -273,7 +273,8 @@ let mount = (root) => {
     )
     pause.firstElementChild.textContent = playing ? 'Ⅱ' : '▶'
     if (
-      playing && !document.hidden && !hovered && !demo.matches(':focus-within')
+      playing && !document.hidden && !hovered &&
+      !demo.contains(document.activeElement)
     ) {
       timer = setTimeout(
         () => (pick((i + 1) % logs.length, false), wait()),
