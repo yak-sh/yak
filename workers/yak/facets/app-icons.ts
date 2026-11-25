@@ -123,12 +123,16 @@ export let appIcons = async (
         : app.generatedIcon && await raw.has(generatedIconKey(space, app))
         ? 'generated'
         : 'missing'
-      return { eid: app.eid, space: space.slug, app: app.slug, icon } as const
+      let splash = !!app.splash
+      return { eid: app.eid, space: space.slug, app: app.slug, icon, splash }
     }),
   )
+  // An app drawn an icon is drawn its splash after it, so only an app whose
+  // icon stands is asked for its splash here.
   let missing = page.filter((app) => app.icon == 'missing')
+  let bare = page.filter((app) => app.icon != 'missing' && !app.splash)
   let queued = 0
-  if (req.method == 'POST' && missing.length) {
+  if (req.method == 'POST' && (missing.length || bare.length)) {
     if (!env.RASTER) {
       return Response.json({ message: 'Icon drawing is unavailable' }, {
         status: 503,
@@ -140,12 +144,18 @@ export let appIcons = async (
     })
     let requested = new Date(env.CLOCK?.now() ?? Date.now()).toISOString()
     await stamp(env, {
-      entities: missing.map(({ eid }) => ({
-        entity: { eid },
-        app_icon: { requested },
-      })),
+      entities: [
+        ...missing.map(({ eid }) => ({
+          entity: { eid },
+          app_icon: { requested },
+        })),
+        ...bare.map(({ eid }) => ({
+          entity: { eid },
+          app_splash: { requested },
+        })),
+      ],
     })
-    queued = missing.length
+    queued = missing.length + bare.length
   }
   return Response.json(
     {

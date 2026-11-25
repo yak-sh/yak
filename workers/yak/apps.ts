@@ -43,6 +43,7 @@ import { previewed } from './preview-html.ts'
 import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { generatedIconKey } from '@yaks/platform/app-icon'
+import { splashAsked, splashPrefix } from '@yaks/platform/splash'
 import { monogram } from '@yaks/platform/monogram'
 import { forwarded, NOBODY, NOT_A_WRITER } from './build-door.ts'
 import { client } from './sheets.ts'
@@ -829,7 +830,9 @@ export let unwritten = async (
   if (path != `/${MANIFEST}`) return null
   let icon = await iconAddress(env, space, app, at)
   let painted = paintedColors(new URL(req.url))
-  let name = publicWorker ? { slug: app.slug, theme: app.theme } : app
+  let name = publicWorker
+    ? { slug: app.slug, theme: app.theme, splash: app.splash }
+    : app
   return new Response(
     req.method == 'HEAD'
       ? null
@@ -1557,13 +1560,14 @@ let flooding = (space: Space, app: App) => over(`${space.eid}/${app.eid}`)
 
 /** Whether a request reads one of the app's files by its address: an upload
  * (`/api/blob/<sha>` or `/api/blob/<sha>/<representation>`), a release's
- * asset (`/api/assets/<release>/<path>`) or a platform module its pages
- * import (@yaks/platform/kept `fixed`). Bytes, not the app's data. */
+ * asset (`/api/assets/<release>/<path>`), a platform module its pages
+ * import (@yaks/platform/kept `fixed`) or an image of its splash, which an
+ * iPhone asks for a few dozen of at once. Bytes, not the app's data. */
 let fileRead = (req: Request, path: string) =>
   (req.method == 'GET' || req.method == 'HEAD') &&
   (path.startsWith('/api/blob/')
     ? !!addressed(path.slice('/api/blob/'.length))
-    : fixed(path))
+    : fixed(path) || !!splashAsked(path.slice('/api'.length)))
 
 /** Whether the API door admits a request before any store traffic. Addressed
  * files are static reads, even when this stranger has exhausted API_RATE. */
@@ -1758,6 +1762,25 @@ let appDoor = async (
     let asked = new URL(req.headers.get(ADDRESS) ?? req.url).pathname
     let mount = asked.slice(0, asked.indexOf('/api/assets/') + 1)
     return versionedAsset(req, env, app, source, versioned.path, c, mount)
+  }
+  // An image of the app's splash (@yaks/platform/splash), named by its set's
+  // key, which is what it was drawn from: kept for good. It is the app's icon
+  // on its background and nothing else, so it is anyone's who holds its
+  // address, as a storefront's visitor installing a private app must.
+  let splash = splashAsked(path)
+  if (splash) {
+    if (req.method != 'GET' && req.method != 'HEAD') {
+      return json(405, 'method_not_allowed')
+    }
+    let object = await r2RawObjects(env.BLOBS).open(
+      `${splashPrefix(space, app)}${splash.key}/${splash.name}.png`,
+    )
+    if (!object) return json(404, 'no_such_file')
+    return rangedOpen(object, req, {
+      'content-type': 'image/png',
+      'cache-control': immutable['cache-control'],
+      etag: etagOf(splash.key),
+    })
   }
   if (path == '/release') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')

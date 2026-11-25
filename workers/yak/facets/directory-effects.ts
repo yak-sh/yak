@@ -24,6 +24,7 @@ import type { Env } from '../env.ts'
 import { retired } from '../file-retirement.ts'
 import { r2RawObjects } from '../lib/objects.ts'
 import { drawingIcons } from './app-icons.ts'
+import { drawingSplashes } from './app-splash.ts'
 import {
   type Retirement,
   retireOrphans,
@@ -84,6 +85,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
   let dir = () => inStore(at)
   return {
     ...drawingIcons(at, dir()),
+    ...drawingSplashes(at, dir()),
     delete_retired_files: async (event, _tx, _write, attempt) => {
       if (!at.env.BLOBS) return
       await retired(

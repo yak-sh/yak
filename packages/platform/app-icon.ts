@@ -19,6 +19,8 @@ export type IconPage = {
     space: string
     app: string
     icon: 'authored' | 'generated' | 'missing'
+    // Whether its splash images are drawn (./splash.ts).
+    splash: boolean
   }[]
   next: string | null
   queued: number

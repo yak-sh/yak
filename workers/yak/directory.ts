@@ -129,6 +129,7 @@ import { type Id, idOf, unnamed } from '@yaks/platform/listing'
 import { type AppDraft, withLegacy } from '@yaks/platform/draft-choice'
 import { sharing } from './lib/shared.ts'
 import type { BrowserSession } from './browser-sessions.ts'
+import type { Drawn } from '@yaks/platform/splash'
 
 // The slugs no space or app may take (@yaks/platform/names `RESERVED`), and
 // the payment provider's name beside them: its doors' prefix (config.ts
@@ -354,6 +355,8 @@ export type AppInfo = {
   // The app's uploaded image chosen by its owner for listings.
   screenshot: string | null
   generatedIcon?: string
+  // The splash images drawn for it, by their set's key (@yaks/platform/splash).
+  splash?: Drawn
   // The site somebody else may own that this app was rebuilt from
   // (newcomer.ts `previewing`): until its domain is verified here the app is
   // that site's private preview. Null for every other app.
@@ -774,6 +777,7 @@ export type Row = MeteredRow & {
   featured?: { at?: string | null }
   screenshot?: { blob?: string | null }
   app_icon?: { drawn?: string | null; requested?: string | null }
+  app_splash?: { key?: string | null; dark?: boolean | null }
   seeded?: { at?: string | null; version?: number | null }
   demo?: {
     store?: string | null
@@ -1385,6 +1389,7 @@ export let APP_PARTS = [
   'featured',
   'screenshot',
   'app_icon',
+  'app_splash',
   'preview',
   'seeded',
   'demo',
@@ -1743,6 +1748,9 @@ export let appAbout = (r: Row): AppInfo => ({
   featured: !!r.featured,
   screenshot: r.screenshot?.blob ?? null,
   ...r.app_icon?.drawn ? { generatedIcon: r.app_icon.drawn } : {},
+  ...r.app_splash?.key
+    ? { splash: { key: r.app_splash.key, dark: !!r.app_splash.dark } }
+    : {},
   preview: previewOf(r),
   seeded: r.seeded
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }

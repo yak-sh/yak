@@ -56,3 +56,17 @@ test('an SVG that cannot be drawn as an icon is refused with the reason', async 
   }
   assertEquals((await posted(icon(''), '?size=0')).status, 400)
 })
+
+test('a picture comes back the size asked, with the PNG it embeds drawn', async () => {
+  let png = new Uint8Array(await (await tiny()).arrayBuffer())
+  let mark = 'data:image/png;base64,' + btoa(String.fromCharCode(...png))
+  let svg = (h: number) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="${h}">` +
+    `<rect width="30" height="${h}" fill="#fbf4e4"/>` +
+    `<image x="7" y="7" width="16" height="16" href="${mark}"/></svg>`
+  let r = await posted(svg(60), '?width=30&height=60')
+  assertEquals(sizeOf(new Uint8Array(await r.arrayBuffer())), { w: 30, h: 60 })
+  let wrong = await posted(svg(50), '?width=30&height=60')
+  assertEquals(wrong.status, 422)
+  assertStringIncludes(await wrong.text(), 'not 30×60')
+})

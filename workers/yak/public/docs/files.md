@@ -569,6 +569,16 @@ computed background and theme supply the generated manifest's colours for the
 active scheme. The page can declare its theme with `<meta name="theme-color">`
 or the `--theme-color` CSS custom property.
 
+While an installed app opens, it shows a splash: its icon centred on its
+background. Android draws it from the manifest. For iOS, each release whose icon
+or background changed is drawn a splash for every iPhone and iPad screen, and
+its pages name them with `<link rel="apple-touch-startup-image">`. The
+background is the app's saved `background_color`, else its own manifest's, else
+what `index.html` and the stylesheets it links set on `html`, `body` or `--bg`;
+where they set a different one under `@media (prefers-color-scheme: dark)` or
+with `light-dark()`, a dark splash is drawn too. An app that names its own
+`apple-touch-startup-image` links keeps them and is given none.
+
 **The app's own links and files take precedence.** Each link is added only where
 the page has none, so an app that writes its own `apple-touch-icon` keeps it and
 still gets the manifest link. If the default link points to an app's own

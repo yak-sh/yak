@@ -489,8 +489,8 @@
       "tool": true,
       "noun": "admin",
       "verb": "app-icons",
-      "title": "Read released app icons or queue artwork for missing ones",
-      "description": "Read a page of released apps and whether their icons are authored, generated or missing. Pass queue to request artwork for the missing apps on this page. Continue with next as after until next is null. The platform pays for generation. Requires a platform owner.",
+      "title": "Read released app icons and splashes, or queue artwork for missing ones",
+      "description": "Read a page of released apps, whether their icons are authored, generated or missing, and whether their splash images are drawn. Pass queue to request artwork for the missing icons and splashes on this page. Continue with next as after until next is null. The platform pays for generation. Requires a platform owner.",
       "input": {
         "after": {
           "type": "string",
@@ -498,7 +498,7 @@
         },
         "queue": {
           "type": "boolean",
-          "description": "queue artwork for missing icons"
+          "description": "queue artwork for missing icons and splashes"
         },
         "owner_of": {
           "type": "string",

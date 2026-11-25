@@ -202,7 +202,8 @@
     "./interaction-report": "./interaction-report.ts",
     "./open-script": "./open-script.ts",
     "./early-report": "./early-report.ts",
-    "./opening": "./opening.ts"
+    "./opening": "./opening.ts",
+    "./splash": "./splash.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",

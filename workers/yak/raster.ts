@@ -32,21 +32,40 @@ export let drawn = async (
 ): Promise<Uint8Array<ArrayBuffer> | string | null> => {
   if (!env.RASTER) return null
   try {
-    let r = await env.RASTER.fetch(
-      new Request(`https://raster.invalid/?size=${SIZE}`, {
-        method: 'POST',
-        body: svg,
-      }),
-    )
+    let r = await rastered(env, `size=${SIZE}`, svg)
     if (r.status == REFUSED) return await r.text()
-    if (!r.ok) {
-      throw new Error(
-        `yak-raster ${r.status}: ${(await r.text()).slice(0, 400)}`,
-      )
-    }
-    return new Uint8Array(await r.arrayBuffer())
+    return await pngOf(r)
   } catch (e) {
     caught(e, { request: 'raster', app })
     return null
   }
+}
+
+/** The PNG yak-raster draws of `svg` at `width` by `height` pixels, an
+ * app's splash (@yaks/platform/splash). Its SVG is the platform's, so a
+ * refusal is ours, and thrown like any failure for the effect drawing it to
+ * report and retry. */
+export let pictured = async (
+  env: Env,
+  svg: string,
+  width: number,
+  height: number,
+): Promise<Uint8Array<ArrayBuffer>> => {
+  if (!env.RASTER) throw new Error('yak-raster is not bound')
+  return pngOf(await rastered(env, `width=${width}&height=${height}`, svg))
+}
+
+let rastered = (env: Env, query: string, svg: string) =>
+  env.RASTER!.fetch(
+    new Request(`https://raster.invalid/?${query}`, {
+      method: 'POST',
+      body: svg,
+    }),
+  )
+
+let pngOf = async (r: Response) => {
+  if (!r.ok) {
+    throw new Error(`yak-raster ${r.status}: ${(await r.text()).slice(0, 400)}`)
+  }
+  return new Uint8Array(await r.arrayBuffer())
 }

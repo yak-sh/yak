@@ -10,6 +10,7 @@ import { esc } from './escape.ts'
 import { type Host, url } from './host.ts'
 import { free, type Metered } from './meter.ts'
 import { MANIFEST, pageAt } from './routes.ts'
+import { type Drawn, ICON_512, splashAt, startupLinks } from './splash.ts'
 
 /** Where a page resolves its relative URLs from, as anywhere on the web: its
  * own folder under the mount `at`, so about/index.html's `../style.css` is the
@@ -83,8 +84,9 @@ export type Theme = {
   themeColor: string | null
   backgroundColor: string | null
 }
-/** An app as its colours are read off it. */
-export type Themed = { theme?: Theme | null }
+/** An app as its colours are read off it, and the splash images drawn from
+ * them and its icon (./splash.ts), where they have been. */
+export type Themed = { theme?: Theme | null; splash?: Drawn | null }
 
 // Stored colours also arrive through graph_apply. Only insert values safe
 // for both CSS and an HTML attribute.
@@ -186,7 +188,10 @@ let pinTags = (
       : '<meta name="apple-mobile-web-app-capable" content="yes">') +
     (has('meta', 'name', 'apple-mobile-web-app-status-bar-style')
       ? ''
-      : '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">')
+      : '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">') +
+    (!app.splash || has('link', 'rel', 'apple-touch-startup-image')
+      ? ''
+      : startupLinks(at, app.splash))
 }
 
 // A browser fetches the manifest a page links without the person's cookies
@@ -218,7 +223,8 @@ let credentialed = (page: string, cookies: boolean) =>
 /** What an app's manifest says when the app wrote none: its name, its own
  * root as the scope a standalone window stays inside, the icon at the two
  * sizes an installer looks for, and the colours saved by the app or read
- * from its page. The same icon file at both sizes. */
+ * from its page. The icon at 512 is the one drawn at that size with its
+ * splash, which Android's splash is made from, else the same file at both. */
 export let manifesting = (
   app: Themed & { title?: string | null; slug: string },
   at: string,
@@ -232,7 +238,9 @@ export let manifesting = (
   display: 'standalone',
   ...manifestColors(app, painted),
   icons: ['512x512', '192x192'].map((sizes) => ({
-    src: icon,
+    src: sizes == '512x512' && app.splash
+      ? splashAt(at, app.splash.key, ICON_512)
+      : icon,
     type: 'image/png',
     sizes,
   })),

@@ -14,6 +14,7 @@ import {
   pinned,
   type Theme,
 } from './woven.ts'
+import { splashes } from './splash.ts'
 
 let ICON = '<link rel="apple-touch-icon" href="/cookbook/icon.png">'
 let MANIFEST = '<link rel="manifest" href="/cookbook/manifest.webmanifest" ' +
@@ -174,4 +175,23 @@ test('an app with no title is named by its slug', () => {
   let m = manifesting(app(''), '/')
   assertEquals(m.name, 'cookbook')
   assertEquals(m.icons[0].src, '/icon.png')
+})
+
+test('an app with a drawn splash names it on every screen, unless its page names its own', () => {
+  let splash = { key: '0123456789abcdef', dark: true }
+  let drawn = { ...app('Cookbook'), splash }
+  let links = (html: string) =>
+    html.match(/rel="apple-touch-startup-image"/g)?.length ?? 0
+  let out = pinned('/cookbook/', page(''), drawn)
+  assertEquals(links(out), splashes({ light: '', dark: '-' }).length)
+  assert(out.includes(
+    'href="/cookbook/api/splash/0123456789abcdef/1320x2868-dark.png"',
+  ))
+  let own = '<link rel="apple-touch-startup-image" href="/mine.png">'
+  assertEquals(links(pinned('/cookbook/', page(own), drawn)), 1)
+  assertEquals(links(pinned('/cookbook/', page(''), app('Cookbook'))), 0)
+  assertEquals(
+    manifesting(drawn, '/cookbook/').icons[0].src,
+    '/cookbook/api/splash/0123456789abcdef/icon-512.png',
+  )
 })

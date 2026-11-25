@@ -11,6 +11,12 @@ export let PLATFORM_DARK_BACKGROUND = '#2b231f'
 let INK = '#523828'
 let DARK_INK = '#f1e6d8'
 
+/** Where the opening screen draws its mark, in CSS pixels: its size and
+ * corner (@yaks/web/opening's `.YakOpening img`), and how far above the
+ * middle it sits, which is half of the gap and the bar below it. An app's
+ * splash (./splash.ts) draws its icon here, so the two meet without a jump. */
+export let MARK = { size: 88, radius: 20, lift: 10 }
+
 /** yaks.app's opening, its mark at `mark` and its report door at `report`. */
 export let opening = (mark: string, report: string) => ({
   name: 'yaks.app',

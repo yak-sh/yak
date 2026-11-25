@@ -27,6 +27,33 @@ export let directoryDoc: VocabDoc = {
       description:
         'Draw an icon for a released app without artwork of its own.',
     },
+    app_splash: {
+      description: 'The splash images drawn for an app, by the key of the ' +
+        'set its pages name (@yaks/platform/splash): its icon on its ' +
+        'background, for every iPhone and iPad screen, dark too where the ' +
+        'app has a dark background. requested asks for the set again.',
+      component: true,
+      type: 'object',
+      properties: {
+        key: owned(text),
+        dark: owned(bool),
+        requested: owned(time),
+      },
+    },
+    app_splash_draw: {
+      effect: true,
+      created: ['app_icon', 'untrashed', 'theme'],
+      changed: [
+        'app.source',
+        'app.space',
+        'theme',
+        'app_icon.drawn',
+        'app_splash.requested',
+      ],
+      target: '.app.version>0&!trashed',
+      description:
+        "Draw a released app's splash images from its icon and background.",
+    },
     person_name: {
       description: "Where a person's doc{title} came from.",
       component: true,

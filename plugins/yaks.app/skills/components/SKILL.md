@@ -835,12 +835,12 @@ The complete list of reserved names:
 
     _change _pace _privacy _tx about access account_alert account_usage
     acts_for admin_action agent_step alias answer app app_draft app_icon
-    app_icon_draw app_transfer app_transfer_answer archetype archived
-    arrived artifact ask attachment attempt attribute_writes authorship
-    belief binding blob bounced browser browser_session budget build
-    build_of builder builder_answer builder_dep builder_edit
-    builder_model_answer builder_open builder_ring built byline call
-    call_ready call_woken called calls cancel cancelled chat_account
+    app_icon_draw app_splash app_splash_draw app_transfer
+    app_transfer_answer archetype archived arrived artifact ask attachment
+    attempt attribute_writes authorship belief binding blob bounced browser
+    browser_session budget build build_of builder builder_answer builder_dep
+    builder_edit builder_model_answer builder_open builder_ring built byline
+    call call_ready call_woken called calls cancel cancelled chat_account
     chat_hears chat_message chat_post chat_private chat_room chat_serves
     checkout chosen cites cli_grant code_review comment commit comp compat
     completed connection contains content conversation cost counted created
