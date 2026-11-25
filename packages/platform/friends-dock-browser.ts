@@ -15,10 +15,6 @@
  * conversation is not on screen raises a quiet toast and the launcher's
  * count, never a dialog.
  *
- * While the tab is open it says where the person is, every {@link EVERY} and
- * on coming back to it, so friends see them on yaks.app; closing it says
- * they left.
- *
  * @module
  */
 import { type ComponentChildren, Fragment, h } from 'preact'
@@ -45,11 +41,7 @@ import {
   unread,
 } from './friends-dock-view.ts'
 import { pageGraph } from './page-graph.ts'
-import { managePath } from './routes.ts'
 import { settingsDrafts } from './settings-drafts-browser.ts'
-
-/** How often an open tab says where the person is. */
-export let EVERY = 30_000
 
 /** How long a toast stays. */
 export let TOAST = 6_000
@@ -284,39 +276,7 @@ export let bindDock = (root: HTMLElement, o: Docking): () => void => {
   }
 }
 
-/** Say where the person is from this tab until `signal` ends it: every
- * {@link EVERY} while it shows, on coming back to it, and that they left as
- * it closes. */
-export let present = (
-  doc: Document = document,
-  signal?: AbortSignal,
-): void => {
-  let address = managePath('friends')
-  let tab = () =>
-    doc.visibilityState != 'visible'
-      ? 'background'
-      : doc.hasFocus()
-      ? 'here'
-      : 'background'
-  let say = (state = tab()) =>
-    void fetch(address, {
-      method: 'POST',
-      credentials: 'same-origin',
-      body: new URLSearchParams({ tab: state }),
-    }).catch(() => {})
-  let timer = setInterval(() => !doc.hidden && say(), EVERY)
-  let window = doc.defaultView!
-  doc.addEventListener('visibilitychange', () => say(), { signal })
-  window.addEventListener('focus', () => say(), { signal })
-  window.addEventListener('pagehide', () => {
-    navigator.sendBeacon(address, new URLSearchParams({ tab: 'away' }))
-  }, { signal })
-  signal?.addEventListener('abort', () => clearInterval(timer), { once: true })
-  say()
-}
-
-// The dock on screen bound, let go once a page without it took its place;
-// the tab says where the person is from the first one on.
+// The dock on screen bound, let go once a page without it took its place.
 let start = (doc: Document = document) => {
   let held: { root: Element; stop: () => void } | undefined
   let drafts: Typed | undefined
@@ -336,10 +296,7 @@ let start = (doc: Document = document) => {
           drafts ??= settingsDrafts({ scope: 'friends', by: person }),
       }),
     }
-    if (!saying) present(doc)
-    saying = true
   }
-  let saying = false
   each()
   doc.addEventListener(PAGE, each)
 }

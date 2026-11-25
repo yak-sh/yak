@@ -286,19 +286,7 @@ let friendsPage = async (p: typeof ann, query = '') =>
   await (await k.at(k.host, managePath('friends') + query, {
     headers: { cookie: p.cookie },
   })).text()
-let post = (p: typeof ann, fields: Record<string, string>, accept?: string) =>
-  k.at(k.host, managePath('friends'), {
-    method: 'POST',
-    redirect: 'manual',
-    headers: {
-      cookie: p.cookie,
-      'content-type': 'application/x-www-form-urlencoded',
-      ...accept ? { accept } : {},
-    },
-    body: new URLSearchParams(fields).toString(),
-  })
-// The page's tab said, then where each friend is as its page graph reads
-// it through its door (@yaks/platform/account-rows `FRIENDS`).
+// The friends and messages as the page graph reads them through its door.
 let door = (p: typeof ann, path: string, init: RequestInit = {}) =>
   k.at(k.host, `${REACH}${path}`, {
     ...init,
@@ -308,8 +296,7 @@ let door = (p: typeof ann, path: string, init: RequestInit = {}) =>
       'content-type': 'application/json',
     },
   })
-let live = async (p: typeof ann, tab = 'here') => {
-  assertEquals((await post(p, { tab })).status, 204)
+let live = async (p: typeof ann) => {
   let rows = await (await door(p, `/query?q=${FRIENDS}`)).json()
   return Object.fromEntries(
     friendsOf(rows).map((f) => [
@@ -353,15 +340,6 @@ test('a friend’s row holds the apps they let you into, and every page holds fr
   })).text()
   assertStringIncludes(talk, 'data-friends-dock=')
   assertStringIncludes(talk, 'data-dock-bar')
-})
-
-test('the open page says its tab and hears where each friend is, as it changes', async () => {
-  assertEquals((await live(eve))[fay.person].state, 'building')
-  assertEquals((await live(fay))[eve.person].state, 'online')
-  await post(eve, { tab: 'away' })
-  let away = (await live(fay))[eve.person]
-  assertEquals(away.state, 'away')
-  assertEquals(typeof away.last, 'string')
 })
 
 test('someone who hides their status is seen by no friend and sees none', async () => {

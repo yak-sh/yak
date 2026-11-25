@@ -66,7 +66,7 @@ export type Wire = {
  */
 export type Hibernation = {
   /** hand a socket to the runtime, so it outlives this object's memory */
-  acceptWebSocket(ws: Wire): void
+  acceptWebSocket(ws: Wire, tags?: string[]): void
   /** every socket this object is serving, hibernated or not */
   getWebSockets(): Wire[]
   /** the object's storage, used only when subscription queries exceed 2 KB */
@@ -76,7 +76,12 @@ export type Hibernation = {
 /** The plumbing an object wires its handlers to. */
 export type Sockets = {
   /** answer a `/ws` request: accept the socket for hibernation, return the 101 */
-  accept(request: Request, opts?: ReadOpts, writer?: PeerWriter): Response
+  accept(
+    request: Request,
+    opts?: ReadOpts,
+    writer?: PeerWriter,
+    socket?: { tags: string[]; opened: (ws: Wire) => void },
+  ): Response
   /** a frame arrived — the object's `webSocketMessage` */
   message(
     ws: Wire,
@@ -703,7 +708,7 @@ export let sockets = (
   }
 
   let adapter: LiveSockets = {
-    accept: (request, opts, writer) => {
+    accept: (request, opts, writer, socket) => {
       if ((request.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
         return json(
           { error: 'NotAllowed', message: 'this is a WebSocket endpoint' },
@@ -717,8 +722,9 @@ export let sockets = (
       if (opts || writer) {
         pair[1].serializeAttachment({ read: opts, writer })
       }
-      ctx.acceptWebSocket(pair[1])
+      ctx.acceptWebSocket(pair[1], socket?.tags)
       accepted.add(pair[1])
+      socket?.opened(pair[1])
       // The 101 carries the other end; `webSocket` is the runtime's own
       // ResponseInit field, which no standard declares.
       return new Response(

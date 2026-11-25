@@ -223,7 +223,6 @@ import {
   type Hibernation,
   opaque,
   profile,
-  socketRenewals,
   type Sockets,
   sockets,
   type Wire,
@@ -360,7 +359,14 @@ import { heldBy, mailTags, outgoing, platformPost } from './post.ts'
 import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
-import { type Tab, tabSaid, tabsState } from '@yaks/notify/whereabouts'
+import {
+  pageWhereabouts,
+  pageWord,
+  type Row as WhereaboutsRow,
+  type Tab,
+  tabSaid,
+  tabsState,
+} from '@yaks/notify/whereabouts'
 import { conditionalWakes } from './conditional-wakes.ts'
 import { refusals, resumed } from './wake.ts'
 import { ledger } from './ledger.ts'
@@ -449,12 +455,12 @@ import {
   type Row as DirectoryRow,
 } from './directory.ts'
 import { UPDATE_WAITING } from '@yaks/platform/update-waiting'
-import { personLine } from '@yaks/platform/person-lines'
+import { PAGE_PRESENCE, personLine } from '@yaks/platform/person-lines'
 import { draftedApp } from '@yaks/platform/app-canvas'
 import { movedSpace } from '@yaks/platform/connections-page'
 import { CONNECTION, USES } from '@yaks/connections'
 import { spaceLine } from '@yaks/platform/space-pages'
-import { SEEN_EVERY } from '@yaks/platform/account-rows'
+import { FRIENDS } from '@yaks/platform/account-rows'
 import {
   isRetired,
   RECEIPTS,
@@ -636,7 +642,9 @@ type Pages = {
 
 // What a page's socket holds that its store reads: who opened it (`sockets`'
 // `read`), and what it last said of its tab (`#framed`).
-type Paging = { read?: ReadOpts; tab?: Tab }
+type Paging = { read?: ReadOpts; tab?: Tab; page?: true }
+
+let pageTag = (person: string) => `page:${person}`
 
 // The tag a branch's sockets are held under (`State`), and the word its
 // declaration is kept under (`Word`).
@@ -2290,12 +2298,6 @@ export class Store extends Durable {
       (line) => borrows(line, this.#uses()),
     )
     let directory = branch == null && name == PLATFORM_STORE
-    let renewals = directory
-      ? socketRenewals(this.clock.arm, {
-        now: this.#now,
-        keep: (work) => this.#ctx.waitUntil?.(work),
-      })
-      : undefined
     if (directory) {
       let pending = computed(g, {
         // Where an app's drafts stand moves with that app alone
@@ -2306,6 +2308,7 @@ export class Store extends Durable {
             : movedSpace(line) != undefined
             ? bundles.some(connectionsMoved)
             : bundles.some((b) =>
+              line == FRIENDS && 'whereabouts' in b ||
               [
                 '$delete',
                 'member',
@@ -2374,15 +2377,7 @@ export class Store extends Durable {
                 'rewarded',
               ].some((key) => key in b)
             ),
-        // Where friends are moves with time and with writes this read does
-        // not watch: a friends answer is read again as often as an open
-        // tab says where it is (friends-dock-browser `EVERY`).
-        renew: (answer) =>
-          Array.isArray(answer) && answer.some((b) => b.befriended)
-            ? this.#now() + SEEN_EVERY
-            : undefined,
         clock: clockOf(this.#time),
-        renewAt: renewals?.at,
         hold: (work) => this.#ctx.waitUntil?.(work),
         read: async (line, read) => {
           if (!read?.person) return []
@@ -2393,6 +2388,7 @@ export class Store extends Durable {
               return rows.map((row) => ({ ...row, policy: { revision } }))
             },
             apply: async (rows) => await g.apply(rows, { trusted: true }),
+            whereabouts: (people) => this.#pageWhereabouts(g, people),
           })
           if (spaceLine(line)) {
             let { spaceRows } = await import('./space-pages.ts')
@@ -2425,7 +2421,6 @@ export class Store extends Durable {
       at,
       (error) => defect(error, { request: 'socket restore', store: name }),
       {
-        renewals,
         deferStatic: true,
         // A socket a newer deploy opened, refused what its code may not know
         // yet: the object restarts onto that deploy, as for a refused request.
@@ -2479,11 +2474,11 @@ export class Store extends Durable {
     let ctx = this.#ctx
     return {
       storage: ctx.storage,
-      acceptWebSocket: (ws) => {
-        if (id == null) return ctx.acceptWebSocket(ws)
+      acceptWebSocket: (ws, tags) => {
+        if (id == null) return ctx.acceptWebSocket(ws, tags)
         let held = ws.deserializeAttachment() as object | null
         ws.serializeAttachment({ ...held, branch: id })
-        ctx.acceptWebSocket(ws, [tagOf(id)])
+        ctx.acceptWebSocket(ws, [...tags ?? [], tagOf(id)])
       },
       getWebSockets: () =>
         id == null
@@ -3557,7 +3552,9 @@ export class Store extends Durable {
     let message = 'value' in input ? input.value : null
     let tab = tabSaid(message)
     if (tab) {
-      ws.serializeAttachment({ ...ws.deserializeAttachment() as object, tab })
+      let held = ws.deserializeAttachment() as Paging | null
+      ws.serializeAttachment({ ...held, tab })
+      if (held?.page) return
       return await this.#whereabouts(ws)
     }
     if (!await take()) return
@@ -3581,6 +3578,12 @@ export class Store extends Durable {
   #whereabouts = async (ws: Wire, closing = false) => {
     let held = ws.deserializeAttachment() as Paging | null
     let person = held?.read?.person
+    if (closing && held?.page && person) {
+      ws.serializeAttachment({ ...held, page: undefined })
+      await this.#ensureStarted()
+      await this.#live.wake()
+      return await this.#pageChanged(person, false)
+    }
     if (
       !held?.tab || !person || held.read?.administrative || !this.#bind.STORE
     ) return
@@ -3601,6 +3604,41 @@ export class Store extends Durable {
       ...app && storeKind(this.#name() ?? '') == 'app' ? { place: app } : {},
       state: tabsState(tabs),
     })
+  }
+
+  #pageTabs(person: string, except?: Wire): Tab[] {
+    return this.#ctx.getWebSockets(pageTag(person)).flatMap((ws) => {
+      if (ws == except || ws.readyState != 1) return []
+      let held = ws.deserializeAttachment() as Paging | null
+      return held?.page ? [held.tab ?? { visible: false, focused: false }] : []
+    })
+  }
+
+  async #pageWhereabouts(
+    g: Graph,
+    people: string[],
+  ): Promise<WhereaboutsRow[]> {
+    if (!people.length) return []
+    let rows = await g.read(
+      line`.whereabouts.person=${people}&*`,
+    ) as WhereaboutsRow[]
+    return people.flatMap((person) =>
+      pageWhereabouts(
+        rows.filter((row) => row.whereabouts?.person == person),
+        person,
+        this.#pageTabs(person),
+        this.#now(),
+      )
+    )
+  }
+
+  // Keep last activity and wake friends' computed reads on the first open
+  // or last close. Their answers use the sockets that the runtime still holds.
+  async #pageChanged(person: string, open: boolean, except?: Wire) {
+    if (this.#pageTabs(person, except).length) return
+    await this.#asIs([
+      pageWord(person, open ? 'open' : 'away', this.#now()),
+    ], { stamp: false })
   }
 
   // A work of the store's own: worked once it is awake and started, inside
@@ -3666,11 +3704,6 @@ export class Store extends Durable {
       let fired = await this.#fire(now)
       return earliest(await soonest(this.#graph, now), this.#again(fired, now))
     }),
-    sockets: this.#own(
-      () => this.#live.renew(),
-      () =>
-        !this.#dormant && !this.#refused && this.#get('name') == PLATFORM_STORE,
-    ),
     // The runs pending as the pool takes its batch, and the minute a run in
     // flight holds (`#holding`).
     effects: this.#own(async () => {
@@ -5517,7 +5550,38 @@ export class Store extends Durable {
       return subscription(request, this.#stored(this.#graph))
     }
     if (path == '/person/ws' && kernel && this.#name() == PLATFORM_STORE) {
-      return this.#live.accept(request, this.#callerRead(request))
+      let read = this.#callerRead(request)
+      let person = read.person
+      return this.#live.accept(
+        request,
+        read,
+        undefined,
+        person && request.headers.get(PAGE_PRESENCE) == '1'
+          ? {
+            tags: [pageTag(person)],
+            opened: (ws) => {
+              ws.serializeAttachment({
+                ...ws.deserializeAttachment() as object,
+                page: true,
+              })
+              let work = this.#pageChanged(person, true, ws).catch((error) =>
+                defect(error, {
+                  request: 'page presence open',
+                  store: PLATFORM_STORE,
+                })
+              )
+              this.#ctx.waitUntil?.(work)
+            },
+          }
+          : undefined,
+      )
+    }
+    if (
+      path == '/whereabouts' && kernel && this.#name() == PLATFORM_STORE &&
+      request.method == 'POST'
+    ) {
+      let people = await request.json() as string[]
+      return Response.json(await this.#pageWhereabouts(this.#graph, people))
     }
     if (path.startsWith('/branches') && kernel) {
       return this.#branching(request, path)

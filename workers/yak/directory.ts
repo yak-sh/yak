@@ -12,6 +12,7 @@ import {
   whole,
 } from '@yaks/query'
 import { after, together } from '@yaks/fp'
+import type { Row as WhereaboutsRow } from '@yaks/notify/whereabouts'
 import { christened, pick } from '@yaks/persona'
 import { calledOf } from './operator-name.ts'
 import type { Door as Entry } from './arrival.ts'
@@ -1233,6 +1234,15 @@ export let over = (store: Meta) => {
   let door = part(store)
   return async (req: Request): Promise<Response> => {
     let url = new URL(req.url)
+    if (
+      url.pathname == '/whereabouts' && req.method == 'POST' &&
+      req.headers.get('x-yak-kernel') == '1' && store.door
+    ) {
+      return store.door('/whereabouts', {
+        method: 'POST',
+        body: req.body,
+      }, KERNEL)
+    }
     if (req.method == 'GET' && req.headers.has(EPOCH) && store.door) {
       return store.door(url.pathname + url.search, {}, {
         ...req.headers.has(STATIC_QUERY) ? { [STATIC_QUERY]: '1' } : {},
@@ -2161,6 +2171,18 @@ export let kept = (
 export type Directory = ReturnType<typeof directory>
 
 let remote = (via: Fetcher) => ({
+  whereabouts: async (people: string[]): Promise<WhereaboutsRow[]> => {
+    if (!people.length) return []
+    let r = await via.fetch(
+      new Request('http://directory/whereabouts', {
+        method: 'POST',
+        body: JSON.stringify(people),
+        headers: KERNEL,
+      }),
+    )
+    if (!r.ok) throw await answered(r)
+    return await r.json() as WhereaboutsRow[]
+  },
   trash: async (eids?: string[], page?: TrashPage): Promise<Trash[]> => {
     if (eids && !eids.length) return []
     let r = await via.fetch(
@@ -2522,6 +2544,7 @@ export let directory = (
   return directoryRows({
     query,
     apply: door.apply,
+    whereabouts: door.whereabouts,
     trash: door.trash,
     restoreTrash: door.restoreTrash,
     purgeTrash: door.purgeTrash,
@@ -2717,6 +2740,7 @@ export let directoryRows = (rows: {
   ) => Promise<Restored>
   purgeTrash?: (id: string, eids: string[]) => Promise<void>
   purgeTrashEntities?: (eids: string[]) => Promise<void>
+  whereabouts?: (people: string[]) => Promise<WhereaboutsRow[]>
   query: (q: Line) => Promise<ReadRow[]>
   apply: (
     entities: Bundle[],
@@ -2860,6 +2884,11 @@ export let directoryRows = (rows: {
     read: async <Q extends string>(asked: Q & Asked<Q>): Promise<Bundle[]> =>
       unnamed((await query(asked as Line)).map(({ policy: _, ...row }) => row))
         .map((row) => row as Bundle),
+    whereabouts: (people: string[]): Promise<WhereaboutsRow[]> =>
+      rows.whereabouts?.(people) ??
+        (people.length
+          ? self.read(line`.whereabouts.person=${people}&*`)
+          : Promise.resolve([])),
     // A credential's row and its person's row, in one read: whether the
     // person still stands, and the row whose `cancelled` mark ends the
     // credential (browser-sessions.ts, grants.ts `shelf`, identity.ts

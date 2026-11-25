@@ -9,32 +9,37 @@ import type { Bundle } from '@yaks/graph'
 import { line } from '@yaks/query'
 import {
   ago,
-  type Channel,
-  FADE,
+  fresh,
   type Glance,
   glance,
   noted,
   reachBy,
+  type Row,
   type Said,
   whereaboutsEid,
   whereaboutsLine,
 } from '@yaks/notify/whereabouts'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
-import { type Directory, url } from './directory.ts'
+import { type Directory, directory, fetch, url } from './directory.ts'
 import type { Host as HostEnv } from '@yaks/platform/host'
 
 /** The directory as whereabouts reads and writes it. */
 export type Kept = {
   read: (q: string) => Bundle[] | Promise<Bundle[]>
   apply: (bundles: Bundle[]) => unknown
+  whereabouts?: (people: string[]) => Promise<Bundle[]>
 }
 
 /** The directory, read and written as the kernel. */
 export let kept = async (env: Pick<Env, 'STORE'>): Promise<Kept> => {
   let { ctxOf } = await import('./connections.ts')
   let { graph } = ctxOf(env)
-  return { read: (q) => graph.read(q as never), apply: graph.apply }
+  return {
+    read: (q) => graph.read(q as never),
+    apply: graph.apply,
+    whereabouts: directory({ fetch: (req) => fetch(req, env) }).whereabouts,
+  }
 }
 
 /** Keep what a channel said of a person, if it is news. */
@@ -58,7 +63,8 @@ export let whereaboutsOf = async (
   dir?: Kept,
 ): Promise<Bundle[]> => {
   dir ??= await kept(env)
-  return await dir.read(line`.whereabouts.person=${person}&*`)
+  return await (dir.whereabouts?.([person]) ??
+    dir.read(line`.whereabouts.person=${person}&*`))
 }
 
 /** What a person's own Operator (of space `place`) sees of them, none for
@@ -131,18 +137,20 @@ export let whereaboutsShow = (
       let now = Date.now()
       let rows = await whereaboutsOf(env, person)
       let g = glance(rows, { place: space, now })
-      let channels = await Promise.all(rows.map(async ({ whereabouts: p }) => {
-        let at = (p as { at?: string })?.at
-        if (!p || !at) return []
-        let { channel, place, state } = p as Record<string, string>
-        return [{
-          channel,
-          ...await placed(channel, place),
-          state,
-          ago: ago(at, now),
-          faded: !(now - Date.parse(at) < FADE[channel as Channel]),
-        }]
-      }))
+      let channels = await Promise.all(
+        (rows as Row[]).map(async ({ whereabouts: p }) => {
+          let at = (p as { at?: string })?.at
+          if (!p || !at) return []
+          let { channel, place, state } = p as Record<string, string>
+          return [{
+            channel,
+            ...await placed(channel, place),
+            state,
+            ago: ago(at, now),
+            faded: !fresh(p, now),
+          }]
+        }),
+      )
       return JSON.stringify({
         line: whereaboutsLine('They', g),
         reach: reachBy(g),

@@ -52,7 +52,7 @@ export type Said = {
 /** A `whereabouts` row as a host reads it. */
 export type Row = {
   entity: { eid: string }
-  whereabouts?: Partial<Said> & { at?: string }
+  whereabouts?: Partial<Said> & { at?: string; live?: boolean }
 }
 
 let MINUTE = 60_000
@@ -137,6 +137,43 @@ export let tabsState = (tabs: Tab[]): State =>
     ? 'background'
     : 'away'
 
+/** The durable timestamp of when a person's first page opened or last page closed. */
+export let pageWord = (person: string, state: State, now: number): Row => ({
+  entity: { eid: whereaboutsEid(person, 'apps') },
+  whereabouts: {
+    person,
+    channel: 'apps',
+    state,
+    at: new Date(now).toISOString(),
+  },
+})
+
+/** Read the unplaced page's history with the tabs that are still connected.
+ * A disconnected page's timestamp still stands, even when its close was lost. */
+export let pageWhereabouts = (
+  history: Row[],
+  person: string,
+  tabs: Tab[],
+  now: number,
+): Row[] => {
+  let eid = whereaboutsEid(person, 'apps')
+  let past = history.find((row) => row.entity.eid == eid)
+  if (!past && !tabs.length) return history
+  let state = tabsState(tabs)
+  let page = past ?? pageWord(person, state, now)
+  return [
+    ...history.filter((row) => row.entity.eid != eid),
+    {
+      ...page,
+      whereabouts: { ...page.whereabouts, state, live: !!tabs.length },
+    },
+  ]
+}
+
+/** Whether a channel's last word still stands. A live page follows its socket. */
+export let fresh = (p: NonNullable<Row['whereabouts']>, now: number): boolean =>
+  !!p.live || now - Date.parse(p.at ?? '') < (FADE[p.channel as Channel] ?? 0)
+
 /** Where a person is, at a glance, as one Operator (of `place`) sees it. */
 export type Glance = {
   /** this Operator's page: focused, or open in a background tab */
@@ -160,7 +197,7 @@ export let glance = (
   for (let { whereabouts: p } of rows) {
     if (!p?.channel || !p.state || !p.at) continue
     let channel = p.channel as Channel
-    if (!(now - Date.parse(p.at) < (FADE[channel] ?? 0))) continue
+    if (!fresh(p, now)) continue
     if (channel == 'operator' && p.place == place) {
       if (p.state == 'here' || p.state == 'background') {
         seen.tab = seen.tab == 'here' ? 'here' : p.state
@@ -197,7 +234,7 @@ export let presence = (
     let channel = p?.channel
     if (channel != 'operator' && channel != 'apps') continue
     if (!p?.state || gone(p.state) || !p.at) continue
-    if (!(now - Date.parse(p.at) < FADE[channel])) continue
+    if (!fresh(p, now)) continue
     open = true
     if (p.place) (channel == 'operator' ? spaces : apps).add(p.place)
   }

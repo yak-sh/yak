@@ -999,10 +999,6 @@ let account = async (
       made.slug,
     )
   }
-  if (view == 'friends') {
-    let done = await befriending(env, who, form)
-    if (done) return done
-  }
   if (view != 'profile' && view != 'friends') return nothingHere(env)
   // The side's fold (sidebar.ts `fold`) and the aside's (frame.ts `toggle`),
   // pressed on any page: kept on the person's row, then that page again, or
@@ -1025,25 +1021,6 @@ let account = async (
     )
   }
   return nothingHere(env)
-}
-
-// A signed-in tab saying where the person is
-// (@yaks/platform/friends-dock-browser `present`), which its friends see; their
-// own whereabouts come to the page through its graph. None for anything else.
-let befriending = async (
-  env: Env,
-  who: Owner,
-  form: FormData,
-): Promise<Response | undefined> => {
-  if (!form.has('tab')) return
-  let state = String(form.get('tab'))
-  let { present } = await import('./whereabouts.ts')
-  await present(env, {
-    person: who.person,
-    channel: 'apps',
-    state: state == 'here' || state == 'background' ? state : 'away',
-  })
-  return new Response(null, { status: 204 })
 }
 
 // A dashboard control is the tool the person's assistant would call, called

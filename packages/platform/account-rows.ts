@@ -51,9 +51,6 @@ export let FRIEND_MESSAGES = '.friendMessage'
 /** How many of the newest messages with friends a tab holds. */
 export let HELD_MESSAGES = 200
 
-/** How often where a friend is is read again while it is watched. */
-export let SEEN_EVERY = 30_000
-
 /** The person's account as their pages say it. */
 export type Account = { name: string; email: string; hidden: boolean }
 

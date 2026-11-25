@@ -672,6 +672,115 @@ let linked = (
   return Object.assign(client, { close: end })
 }
 
+test('a page socket pushes presence to confirmed friends through hibernation and the last tab closing', async () => {
+  await using runtime = platform()
+  let { env } = runtime
+  let { dir } = await seeded(env)
+  let friend = crypto.randomUUID(), stranger = crypto.randomUUID()
+  let yes = { decided: { verdict: 'approved' } }
+  await dir.stamp({
+    entities: [
+      { entity: { eid: friend }, person: {} },
+      { entity: { eid: stranger }, person: {} },
+      friendSide(ADA, friend, yes),
+      friendSide(friend, ADA, yes),
+      friendSide(ADA, stranger, yes),
+    ],
+  })
+  let undo = installPair()
+  let store = env.STORE
+  let used = new Set<Pair[1]>()
+  env.STORE = {
+    idFromName: store.idFromName,
+    get: (id, options) => ({
+      fetch: async (req) => {
+        let res = await store.get(id, options).fetch(req)
+        if (res.status != 101) return res
+        let pair = made.find((p) =>
+          runtime.sockets.get(String(id))?.includes(p[1]) && !used.has(p[1])
+        )!
+        let ws = pair[1]
+        used.add(ws)
+        return Object.assign(res, {
+          webSocket: linked(
+            pair,
+            (data) =>
+              void runtime.object(String(id)).webSocketMessage(ws, data),
+            () => {
+              ws.readyState = 3
+              void runtime.object(String(id)).webSocketClose(ws)
+            },
+          ),
+        })
+      },
+    }),
+  }
+  let pages: ReturnType<typeof linked>[] = []
+  let open = async (person: string) => {
+    let res = await manage(
+      new Request(`https://yaks.app${REACH}/ws?${TAB_PERSON}=${person}`, {
+        headers: { cookie: await as(person), upgrade: 'websocket' },
+      }),
+      env,
+    )
+    equal(res.status, 101)
+    let ws = linked(made.at(-1)!)
+    pages.push(ws)
+    let send = (frame: unknown) => ws.send(JSON.stringify(frame))
+    let rows: Bundle[][] = []
+    ws.addEventListener('message', ({ data }) => {
+      let frame = JSON.parse(String(data)) as Frame
+      if (frame.id == 'friends' && frame.bundles) rows.push(frame.bundles)
+    })
+    send({ subscribe: FRIENDS, id: 'friends' })
+    await until(() => rows.length)
+    return {
+      rows: () => friendsOf(rows.at(-1)!),
+      tab: (visible: boolean) => send({ tab: { visible, focused: visible } }),
+      close: () => ws.close(),
+    }
+  }
+  try {
+    let watching = await open(friend)
+    let outsiders = await open(stranger)
+    let seen = () => watching.rows().find((f) => f.person == ADA)?.seen
+    equal(seen(), undefined)
+    let first = await open(ADA)
+    await until(() => seen()?.state == 'online')
+    equal(outsiders.rows(), [])
+    first.tab(true)
+    let second = await open(ADA)
+    second.tab(false)
+    first.close()
+    await runtime.settled()
+    equal(seen()?.state, 'online')
+
+    runtime.evict(PLATFORM_OBJECT)
+    let [where] = await dir.whereabouts([ADA])
+    equal(where.whereabouts?.state, 'background')
+    equal(where.whereabouts?.live, true)
+
+    let hide = (person: string, hidden: boolean) =>
+      dir.stamp({
+        entities: [{ entity: { eid: person }, presence: { hidden } }],
+      })
+    for (let person of [ADA, friend]) {
+      await hide(person, true)
+      await until(() => seen() === undefined)
+      await hide(person, false)
+      await until(() => seen()?.state == 'online')
+    }
+    runtime.evict(PLATFORM_OBJECT)
+    second.close()
+    await until(() => seen()?.state == 'away')
+    equal(typeof seen()?.last, 'string')
+    equal(outsiders.rows(), [])
+  } finally {
+    for (let ws of pages) ws.close()
+    undo()
+  }
+})
+
 // The Operator's side of `view` as the server draws it before the page
 // graph has said anything: no badges, no Updates across spaces.
 let sideOf = (view: SideView) => {

@@ -27,6 +27,9 @@ import { draftedApp } from './app-canvas.ts'
 import { GRANTS } from './agents.ts'
 import { movedSpace } from './connections-page.ts'
 
+/** A directory socket following the lifetime of a signed-in page. */
+export let PAGE_PRESENCE = 'x-yak-page-presence'
+
 /** Whether the directory answers `line` as a read of the person. */
 export let personLine = (line: string): boolean =>
   line == UPDATE_WAITING || sideLine(line) || accountLine(line) ||

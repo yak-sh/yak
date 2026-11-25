@@ -14,7 +14,7 @@ import {
   type Verdict,
 } from '@yaks/platform/friends'
 import { sendable } from '@yaks/mail'
-import { lastSeen, presence } from '@yaks/notify/whereabouts'
+import { lastSeen, presence, type Row } from '@yaks/notify/whereabouts'
 import { line } from '@yaks/query'
 import { ordered } from '@yaks/platform/presence'
 import { friendsLine } from '@yaks/platform/updates-day'
@@ -80,23 +80,28 @@ export let presencesOf = async (
   now: number = Date.now(),
 ): Promise<Map<string, Seen>> => {
   if (!friends.length || await dir.presenceHidden(reader)) return new Map()
+  let hidden = await Promise.all(friends.map((f) => dir.presenceHidden(f)))
+  let visible = friends.filter((_, i) => !hidden[i])
+  let rows = await dir.whereabouts(visible)
   let seen = await Promise.all(
-    friends.map((f) => presenceOf(dir, reader, f, now)),
+    visible.map((f) =>
+      presenceOf(
+        dir,
+        reader,
+        rows.filter((r) => r.whereabouts?.person == f),
+        now,
+      )
+    ),
   )
-  return new Map(friends.flatMap((f, i) => seen[i] ? [[f, seen[i]]] : []))
+  return new Map(visible.flatMap((f, i) => seen[i] ? [[f, seen[i]]] : []))
 }
 
 let presenceOf = async (
   dir: Directory,
   reader: string,
-  friend: string,
+  rows: Row[],
   now: number,
 ): Promise<Seen | undefined> => {
-  let [rows, hidden] = await Promise.all([
-    dir.read(line`.whereabouts.person=${friend}&*`),
-    dir.presenceHidden(friend),
-  ])
-  if (hidden) return
   let said = presence(rows, now), last = lastSeen(rows)
   if (!said) {
     return last ? { state: 'away', last, spaces: [], apps: [] } : undefined

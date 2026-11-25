@@ -53,7 +53,8 @@ import {
   watchWaiting,
 } from '@yaks/platform/update-waiting'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { personLine } from '@yaks/platform/person-lines'
+import { PAGE_PRESENCE, personLine } from '@yaks/platform/person-lines'
+import { FRIENDS } from '@yaks/platform/account-rows'
 import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
 import { draftsSpace, operatorWrite } from '@yaks/platform/operator-drafts'
 import { talkAsked } from '@yaks/platform/operator-talk'
@@ -508,6 +509,19 @@ export let reachDoor = async (
         sayers.add(say)
         return () => void sayers.delete(say)
       }
+      // The friends watch is on every framed page. Its directory socket
+      // follows that page and carries only visibility or focus changes.
+      let sayPresence = (say: (frame: unknown) => void) => {
+        let last: Tab | undefined
+        return sayTab((frame) => {
+          let next = tabSaid(frame)!
+          if (next.visible == last?.visible && next.focused == last.focused) {
+            return
+          }
+          last = next
+          say(frame)
+        })
+      }
       attach(
         watched({
           watch: (line, sink) => {
@@ -518,8 +532,13 @@ export let reachDoor = async (
                 'directory',
                 of,
                 emit,
-                { ...vouched(who), ...KERNEL },
+                {
+                  ...vouched(who),
+                  ...KERNEL,
+                  ...of == FRIENDS ? { [PAGE_PRESENCE]: '1' } : {},
+                },
                 '/person/ws',
+                of == FRIENDS ? sayPresence : undefined,
               )
             // What no store holds of a space's payments, read again each
             // time the directory says its row moved.
