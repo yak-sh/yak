@@ -6,6 +6,54 @@
 // ws://localhost:4455 with the password "desk".
 import { secret } from './obs.js'
 
+// A PNG of one colour, made here so no picture is kept in git: what the
+// mock answers for a still of a scene.
+let crcs = Array.from({ length: 256 }, (_, n) => {
+  let c = n
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+  return c >>> 0
+})
+let crc = (bytes: Uint8Array) => {
+  let c = 0xffffffff
+  for (let b of bytes) c = crcs[(c ^ b) & 0xff] ^ (c >>> 8)
+  return (c ^ 0xffffffff) >>> 0
+}
+let chunk = (type: string, data: Uint8Array) => {
+  let out = new Uint8Array(12 + data.length)
+  let view = new DataView(out.buffer)
+  view.setUint32(0, data.length)
+  out.set(new TextEncoder().encode(type), 4)
+  out.set(data, 8)
+  view.setUint32(8 + data.length, crc(out.subarray(4, 8 + data.length)))
+  return out
+}
+let deflate = async (bytes: Uint8Array<ArrayBuffer>) =>
+  new Uint8Array(
+    await new Response(
+      new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate')),
+    ).arrayBuffer(),
+  )
+export let png = async (w: number, h: number, [r, g, b]: number[]) => {
+  let head = new Uint8Array(13)
+  let view = new DataView(head.buffer)
+  view.setUint32(0, w)
+  view.setUint32(4, h)
+  head.set([8, 2, 0, 0, 0], 8)
+  let rows = new Uint8Array(h * (1 + w * 3))
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) rows.set([r, g, b], y * (1 + w * 3) + 1 + x * 3)
+  }
+  let parts = [
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', head),
+    chunk('IDAT', await deflate(rows)),
+    chunk('IEND', new Uint8Array()),
+  ]
+  let bytes = new Uint8Array(await new Blob(parts).arrayBuffer())
+  return `data:image/png;base64,${btoa(String.fromCharCode(...bytes))}`
+}
+let COLOURS = [[40, 70, 160], [170, 120, 60], [60, 140, 80], [120, 60, 120]]
+
 export type Camera = { preset: string | null; zoom: number; moves: number[] }
 
 let refuse = (code: number, comment: string) => ({
@@ -51,7 +99,26 @@ export let mockObs = (
     } else return refuse(204, `Unknown obs-ptz request ${type}.`)
     return { result: true, code: 100 }
   }
-  let answer = (type: string, data: Record<string, unknown>) => {
+  let answer = async (type: string, data: Record<string, unknown>) => {
+    if (type == 'GetSourceScreenshot') {
+      let name = String(data.sourceName)
+      let at = scenes.indexOf(name)
+      if (at < 0) {
+        return {
+          status: refuse(
+            600,
+            `No source was found by the name of \`${name}\`.`,
+          ),
+        }
+      }
+      let w = Number(data.imageWidth ?? 64)
+      return {
+        status: { result: true, code: 100 },
+        data: {
+          imageData: await png(w, Math.round(w * 9 / 16), COLOURS[at % 4]),
+        },
+      }
+    }
     if (type == 'GetSceneList') {
       return {
         status: { result: true, code: 100 },
@@ -126,7 +193,7 @@ export let mockObs = (
             ? d.requestData.requestType
             : d.requestType,
         )
-        let { status, data } = answer(d.requestType, d.requestData ?? {})
+        let { status, data } = await answer(d.requestType, d.requestData ?? {})
         socket.send(JSON.stringify({
           op: 7,
           d: {

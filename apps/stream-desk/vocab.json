@@ -37,6 +37,17 @@
         }
       }
     },
+    "suggested": {
+      "component": true,
+      "type": "object",
+      "description": "On a cue: the Operator suggested it from what the desk saw and heard, and why. The desk plays it only once a person takes it, which clears this.",
+      "properties": {
+        "why": {
+          "type": "string",
+          "description": "The Operator's reason, in a few words."
+        }
+      }
+    },
     "aired": {
       "component": true,
       "type": "object",

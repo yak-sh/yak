@@ -2,13 +2,14 @@
 // seed.json, against a mock OBS with a mock obs-ptz camera: phones write cues,
 // the desk plays them into OBS in order and marks each aired or missed.
 import { equal, test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { appStore } from '../../workers/yak/directory.ts'
 import { ADA_OWNS, platform, seeded } from '../../workers/yak/serving-probe.ts'
 import { connect } from './obs.js'
 import { desk } from './desk.js'
-import { AWAY, DESK, due, onAir, present, STALE } from './model.js'
+import { AWAY, DESK, due, onAir, present, shots, STALE } from './model.js'
+import { look, proposal } from './watch.js'
 import { mockObs } from './mock_obs.ts'
 
 let read = (path: string) =>
@@ -178,4 +179,98 @@ test('a desk not heard from for a while is away', () => {
   equal(present(desk(now - AWAY), now)?.scene, 'Camera')
   equal(present(desk(now - AWAY - 1), now), null)
   equal(present([], now), null)
+})
+
+test('the Operator looks at each scene, hears the last minute, and proposes a shot nobody plays until it is taken', async () => {
+  let { p, apply, query, press } = await opened()
+  await using _ = p
+  await using obs = mockObs()
+  let client = await connect(obs.url, 'desk')
+  let d = await desk({
+    query,
+    apply,
+    obs: client,
+    relay: () => {},
+    wait: () => Promise.resolve(),
+  })
+  await press({ shot: SHOT.projector })
+  await d.kick()
+  let asked: Comp[] = []
+  let see = (request: Comp) => {
+    asked.push(request)
+    return Promise.resolve({
+      response: 'Sure. {"shot": "pulpit", "why": "A speaker is at the pulpit"}',
+      usage: { prompt_tokens: 900, completion_tokens: 20 },
+    })
+  }
+  let turns = [
+    { text: 'Let us sing.', from: 0, to: 2 },
+    { text: 'Please be seated. Our reading today', from: 70, to: 74 },
+  ]
+  let all = shots(await query('.shot&?doc'))
+  let cues = await query('.cue&?aired&?created')
+  let once = () =>
+    query('.cue&.suggested&?created').then((suggested) =>
+      look({
+        obs: client,
+        see,
+        apply,
+        shots: all,
+        lit: onAir(cues, all, d.scene()),
+        turns,
+        suggested,
+        now: 80,
+      })
+    )
+  let { usage, next } = await once()
+  equal(usage, { prompt_tokens: 900, completion_tokens: 20 })
+  equal(next, { shot: SHOT.pulpit, why: 'A speaker is at the pulpit' })
+  let [content] = (asked[0].input as Comp).messages as Comp[]
+  let parts = content.content as Comp[]
+  equal(parts.map((x) => x.type), [
+    'text',
+    'image_url',
+    'image_url',
+    'image_url',
+  ])
+  let text = String(parts[0].text)
+  assert(text.includes('On air: Projector.'))
+  assert(text.includes('Please be seated. Our reading today'))
+  assert(!text.includes('Let us sing.'))
+  assert(
+    String((parts[1].image_url as Comp).url).startsWith('data:image/png'),
+  )
+
+  // Proposed again, it is not written twice; and the desk leaves it alone.
+  await once()
+  let [offer, ...more] = await query('.cue&.suggested')
+  equal(more, [])
+  await d.kick()
+  equal(obs.state.program, 'Projector')
+
+  // Taken, it plays like any press.
+  await apply({ entity: offer.entity, suggested: null })
+  await d.kick()
+  equal(obs.state.program, 'Camera')
+  equal(obs.state.camera.preset, '2')
+  d.stop()
+  client.close()
+  await client.closed
+})
+
+test('a model answer becomes a proposal only when it names another shot', () => {
+  let all = [
+    { entity: { eid: 'a' }, doc: { title: 'Projector' }, shot: {} },
+    { entity: { eid: 'b' }, doc: { title: 'Pulpit' }, shot: {} },
+  ]
+  let said = (text: string, lit = 'a') => proposal(text, all, lit)
+  equal(said('{"shot": "PULPIT", "why": "sermon"}'), {
+    shot: 'b',
+    why: 'sermon',
+  })
+  equal(said('{"shot": "Projector"}'), null)
+  equal(said('{"shot": null}'), null)
+  equal(said('{"shot": "Balcony"}'), null)
+  equal(said('no json here'), null)
+  equal(said('{"shot": '), null)
 })

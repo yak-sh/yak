@@ -10,6 +10,7 @@
       <h1>Stream Desk</h1>
       <p id="status" aria-live="polite"></p>
     </header>
+    <section id="suggest" aria-live="polite"></section>
     <section id="shots" aria-label="Shots"></section>
     <section class="zoom" aria-label="Zoom">
       <button data-zoom="-1">Zoom out</button>
@@ -26,9 +27,15 @@
         <label>OBS address
           <input name="url" value="ws://localhost:4455" required></label>
         <label>Password <input name="password" type="password"></label>
+        <label class="check"><input name="watch" type="checkbox" checked> The
+          Operator watches OBS and suggests shots</label>
+        <label class="check"><input name="listen" type="checkbox"> and listens
+          to this computer's sound input (choose the mixer's interface as the
+          Mac's input)</label>
         <button>Connect</button>
         <button type="button" id="leave" hidden>Disconnect</button>
       </form>
+      <p id="looked" class="soft"></p>
     </details>
     <details>
       <summary>Add a shot</summary>

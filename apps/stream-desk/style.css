@@ -86,3 +86,20 @@ label {
   display: grid;
   gap: .25rem;
 }
+#suggest:not(:empty) {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1rem 0 0;
+  padding: .75rem;
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+}
+#suggest button {
+  flex: none;
+  font-weight: 600;
+}
+label.check {
+  display: block;
+}

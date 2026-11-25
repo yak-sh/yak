@@ -12,7 +12,7 @@ export let tend = async (
   { query, apply, obs, scene, now = Date.now(), wait = sleep },
 ) => {
   let { play, stale } = due(
-    await query('.cue&!aired&!missed&?created'),
+    await query('.cue&!aired&!missed&!suggested&?created'),
     now,
   )
   let all = shots(await query('.shot&?doc'))
