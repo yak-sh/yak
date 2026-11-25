@@ -75,6 +75,11 @@ let cases: [string, string, string][] = [
     '<p data-copy="cost.gone">No link now.</p>',
   ],
   [
+    'a slot child the snippet no longer names goes, its own snippet too',
+    '<p data-copy="cost.gone">See <b data-copy-slot="x" data-copy="cost.plans">x</b></p>',
+    '<p data-copy="cost.gone">No link now.</p>',
+  ],
+  [
     'what follows a filled element is left alone',
     '<div><p data-copy="cost.limits"><a data-copy-slot="plans">x</a></p> after <b>it</b></div>',
     '<div><p data-copy="cost.limits">Tax is included. <a data-copy-slot="plans">x</a>.</p> after <b>it</b></div>',

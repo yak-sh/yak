@@ -87,15 +87,20 @@ let shown = (parts: Array<string | Slot>) =>
   parts.map((p) => typeof p == 'string' ? p : `%{${p.slot}}`).join('')
 
 // A child filling slot `name`: the snippet's text up to it goes before it.
-// One whose slot is not ahead in the snippet has no place in it.
+// One whose slot is not ahead in the snippet has no place in it, and is
+// removed: answers whether it stays.
 let place = (frame: Frame, name: string, el: Element) => {
   let next = frame.parts.findIndex((p, i) =>
     i >= frame.at && typeof p != 'string' && p.slot == name
   )
-  if (next < 0) return el.remove()
+  if (next < 0) {
+    el.remove()
+    return false
+  }
   let text = shown(frame.parts.slice(frame.at, next))
   if (text) el.before(text)
   frame.at = next + 1
+  return true
 }
 
 // An element showing a list: its items' snippets, how many of its children
@@ -166,11 +171,11 @@ export let filled = (page: Response, copy: Copy | null): Response => {
           return
         }
         let m = marks(Object.fromEntries(el.attributes))
-        if (outer?.depth == 0) {
-          if (m.slot == null) el.remove()
-          else place(outer, m.slot, el)
-        }
         if (outer && ends) outer.depth++
+        // A child removed is not filled: content set on it would show.
+        if (outer && outer.depth == (ends ? 1 : 0)) {
+          if (m.slot == null || !place(outer, m.slot, el)) return el.remove()
+        }
         for (let [name, key] of Object.entries(m.attrs)) {
           let value = read(copy, key)
           if (value != null) el.setAttribute(name, said(value))
