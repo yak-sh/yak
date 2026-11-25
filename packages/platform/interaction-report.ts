@@ -13,10 +13,11 @@ import {
   openMilestones,
   openName,
   type Point,
-  SLOW,
 } from '@yaks/timing/interaction'
 import { capture, type Context, type Sink } from '@yaks/tracker/report'
 import {
+  ANSWERS,
+  budgetOf,
   interactionPage,
   interactionTarget,
   reloading,
@@ -155,16 +156,19 @@ let rows = (
     let { sink, commit, environment } = reporting
     let name = interactionName(p)
     let cause = unexpected(p.target)
+    let budget = budgetOf(p.target)
     // A reload is counted, never a slow press: its time is the page
     // standing blank until the new one paints. One nobody chose is a bug.
-    if (!cause && (p.ms <= SLOW || reloading(p.target))) return []
+    if (!cause && (p.ms <= budget || reloading(p.target))) return []
     return capture({
       name: cause ? 'Unexpected reload' : 'Slow interaction',
       message: cause
         ? `${p.page} reloaded under the person (${cause}), blank ${
           Math.round(p.ms)
         } ms`
-        : `${name} took ${Math.round(p.ms)} ms`,
+        : `${name} took ${Math.round(p.ms)} ms${
+          Object.hasOwn(ANSWERS, p.target) ? ` (budget ${budget} ms)` : ''
+        }`,
     }, {
       sink,
       commit,

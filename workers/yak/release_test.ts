@@ -3,7 +3,13 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { gathered, type Objects } from '@yaks/blob'
-import { assetsIn, filesAt, releaseFiles, staged } from './release.ts'
+import {
+  assetsIn,
+  filesAt,
+  keptAsset,
+  releaseFiles,
+  staged,
+} from './release.ts'
 import { fileBytes } from './files.ts'
 import { bucket } from './binding-probe.ts'
 import type { Env } from './env.ts'
@@ -139,6 +145,52 @@ test("a release's compiled packages are public, and its own files are not", asyn
   assertEquals(open, ['__packages/@yaks/ui/Skip.css'])
   let skip = assets['__packages/@yaks/ui/Skip.css'].sha
   assertEquals(text(await files.read(addressed(skip))), '.Skip {}')
+})
+
+// An open page asks for an asset by its hash, which the live release serves,
+// or a pointer kept for one the live release no longer has. A release keeps
+// a pointer only for what leaves: one per image of an app on every release
+// was nine seconds of an on-page Save (T-3600).
+test('a release keeps a pointer only for the assets leaving the release before it', async () => {
+  let { files, held } = memory()
+  let root = 'alice/.releases/app/'
+  let images = Object.fromEntries(
+    await Promise.all(
+      [...Array(40).keys()].map(async (i) => {
+        let body = bytes(`<svg>${i}</svg>`)
+        await files.put(addressed(await digest(body)), body)
+        return [`images/${i}.svg`, await digest(body)]
+      }),
+    ),
+  )
+  let pointers = () =>
+    [...held.keys()].filter((key) => key.startsWith(`${root}.assets/`))
+  let release = async (
+    name: string,
+    made: Record<string, string>,
+    previous?: string,
+  ) => {
+    let stage = staged(files, made, root + name)
+    await stage.finish({}, previous && root + previous)
+  }
+  await release('one', images)
+  assertEquals(pointers(), [])
+  let changed = bytes('<svg>changed</svg>')
+  await files.put(addressed(await digest(changed)), changed)
+  await release(
+    'two',
+    { ...images, 'images/0.svg': await digest(changed) },
+    'one',
+  )
+  let gone = images['images/0.svg']
+  assertEquals(pointers(), [`${root}.assets/${gone}/images/0.svg`])
+  assertEquals(
+    (await keptAsset(files, root, 'images/0.svg', gone))?.source,
+    `${root}one`,
+  )
+  // Put back, the first release leaves the changed image behind it.
+  await release('three', images, 'two')
+  assertEquals(pointers().length, 2)
 })
 
 // An idle app's first view comes to an isolate holding no index of its

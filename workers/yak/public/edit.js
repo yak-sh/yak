@@ -22,9 +22,9 @@
 // redrawing its body leaves standing. Where the badge shows in the same
 // corner, the pencil rides above it. Its tag says where the Operator's chat
 // for this app is (`data-yak-edit`), where its note is (`data-yak-note`),
-// and where the app's own `api/` is when it
-// is not under the mount (`data-yak-api`): the home app's at yaks.app, whose
-// `/api/` is the platform's.
+// where a save's time is sent (`data-yak-interaction`), and where the app's
+// own `api/` is when it is not under the mount (`data-yak-api`): the home
+// app's at yaks.app, whose `/api/` is the platform's.
 ;(() => {
   let CSS = `
 :host {
@@ -209,6 +209,7 @@ svg { width: 18px; height: 18px }
         panel,
         at: api,
         ask,
+        report: script?.dataset.yakInteraction,
         done: close,
       })
       kept(true)

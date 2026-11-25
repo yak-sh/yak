@@ -14,7 +14,11 @@ import { mcpConnect, mcpRemove } from './connected-mcp.ts'
 import { libraryTools } from './library-tools.ts'
 import { numberTools } from './numbers.ts'
 import { searchConsoleTools } from './search-console.ts'
-import { ownedPrefix, rootedPrefix } from '@yaks/platform/file-root'
+import {
+  ownedPrefix,
+  releasesPrefix,
+  rootedPrefix,
+} from '@yaks/platform/file-root'
 // The connector's platform tools (D-32318 §Code, build, deploy): the least
 // that makes an app. The generic graph tier is no longer here — @yaks/mcp
 // brings graph_apply, graph_query, graph_show, graph_schema and search over
@@ -70,7 +74,7 @@ import {
 } from '@yaks/blob'
 import { blobPrefix, shaOf } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { filesAt, staged, viewOf } from './release.ts'
+import { assetsIn, departed, filesAt, staged, viewOf } from './release.ts'
 import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
 import { CallError } from '@yaks/tools'
@@ -1650,10 +1654,12 @@ let published = async (
   if (unloaded.length) throw refuse('arguments', unfoundSaid(unloaded))
   // The release's index is complete once the compile has written into it, and
   // nothing selects it until `record` moves the pointers, so it goes to the
-  // bucket now, beside everything below rather than after it (T-124005).
+  // bucket now, beside everything below rather than after it (T-124005). The
+  // release it replaces is the one serving now, whose assets it no longer
+  // serves are kept for the pages open on it (release.ts `departed`).
   let snapshot = c.time(
     'snapshot',
-    () => files.finish(parsed.config, app.source),
+    () => files.finish(parsed.config, standing.source),
   )
   snapshot.catch(() => {})
   let [[all, { file: vocabFile, source, pkg }], [stored, serving]] =
@@ -2426,11 +2432,21 @@ export let released = async (
     // kept no release names the shas its manifest does: neither reads or
     // copies a byte to make the release. The fence above holds edits off, so
     // the draft read here is the one this release takes.
+    // A version put back already has its index; what it no longer serves
+    // of the release it replaces is kept for the pages open on that one.
     let files = kept
       ? {
         files: r2Objects(ctx.env.BLOBS),
         manifest: () => kept.files,
-        finish: () => Promise.resolve(kept.files),
+        finish: async (_config?: unknown, previous?: string | null) => {
+          await departed(
+            blobs,
+            releasesPrefix(space, standing),
+            previous,
+            await assetsIn(blobs, kept.source!),
+          )
+          return kept.files
+        },
       }
       : staged(
         blobs,

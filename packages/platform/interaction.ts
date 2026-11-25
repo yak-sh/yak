@@ -2,6 +2,7 @@
 // ids, space names, app names, search terms or an arbitrary element selector.
 import { managed, spaced } from './routes.ts'
 import { SECTIONS } from './home/parts.ts'
+import { SLOW } from '@yaks/timing/interaction'
 
 let MARKETING = [
   'home',
@@ -176,8 +177,17 @@ export let unexpected = (target: string): string | null => {
   let cause = target.slice('reload-'.length)
   return reloading(target) && UNEXPECTED_RELOADS.includes(cause) ? cause : null
 }
+/** The points that are an answer behind what the page already shows, not a
+ * press's frame, each with how long it may take before it is slow: an
+ * on-page save shows at once and is confirmed behind (workers/yak
+ * edit-mode.ts `savePoint`). */
+export let ANSWERS: Record<string, number> = { saved: 3000 }
+/** How long a point may take before it is a slow interaction. */
+export let budgetOf = (target: string): number =>
+  Object.hasOwn(ANSWERS, target) ? ANSWERS[target] : SLOW
 let TARGETS = new Set([
   ...Object.values(ACTIONS),
+  ...Object.keys(ANSWERS),
   ...NATIVE,
   ...HOME_TARGETS,
   reloadTarget(null),

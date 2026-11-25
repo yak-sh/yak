@@ -14,14 +14,18 @@
 // The panel beside the pencil counts the person's changes to this app and
 // discards them, which empties each draft (the journal keeps what it held).
 // Save sends them to the app's `api/save` (save.ts), which sets them in its
-// copy.json and releases it; once it answers, the page's own words are the
-// saved ones and the drafts are spent. A save refused or failed leaves every
-// draft as it was. The panel then says which version was saved and offers
-// Undo (`api/save/undo`), which takes that release back and makes the
-// changes drafts again, as they were before Save.
+// copy.json and releases it. The page takes them as its own words the moment
+// Save is pressed, and the panel says so; the drafts are spent only once the
+// save answers, so a save refused or failed puts the page's words back,
+// leaves every draft as it was and says why. A Save pressed while one is on
+// its way goes after it. Once a save answers, the panel says which version
+// it made and offers Undo (`api/save/undo`), which takes that release back
+// and makes the changes drafts again, as they were before Save. How long the
+// answer took is timed as a press is (@yaks/timing), at `report`.
 // A page with nothing marked says so, and offers the Operator's chat with the
 // ask to mark this page already typed.
 import { fill, join, names } from '@yaks/copy'
+import { phases } from '@yaks/timing/interaction'
 
 /** What edit mode needs of the person's drafts: the desk client.js gives
  * (`drafts()`, @yaks/draft/browser). */
@@ -39,10 +43,14 @@ export type Opts = {
   panel: HTMLElement
   /** The app's address, whose `api/save` Save sends to (`/cookbook/`). */
   at: string
-  /** How Save reaches it; the page's own fetch where left out. */
+  /** How Save, and a save's time, reach it; the page's own fetch (and
+   * beacon) where left out. */
   fetch?: typeof fetch
   /** The Operator's chat for this app (`/manage/<space>?app=<slug>`). */
   ask: string
+  /** Where a save's time is sent, as a press's is (page-report.ts
+   * `interactions`); none sends nothing. */
+  report?: string
   /** Edit mode is over: the person pressed Done. */
   done: () => void
 }
@@ -68,8 +76,21 @@ export let pressWord = (win: Pick<Window, 'matchMedia'>) =>
 export let hint = (win: Pick<Window, 'matchMedia'>) =>
   `${pressWord(win)} any outlined words to change them.`
 
+/** What the panel says once Save is pressed, before it has answered. */
+export let SAVED = 'Saved'
+
 /** What the panel says once Save has answered. */
 export let savedAs = (version: number) => `Saved as version ${version}`
+
+/** The point a save's answer is counted as: from the press until it
+ * answered, `server` of it the request's own round trip and the rest its
+ * wait behind a save before it. */
+export let savePoint = (ms: number, server: number) => ({
+  page: 'app',
+  target: 'saved',
+  ms,
+  ...phases(ms, 0, server, 0),
+})
 
 let EDITING = 'data-yak-editing'
 let CHANGED = 'data-yak-changed'
@@ -159,6 +180,14 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     }
   }
   let shows = (key: string) => drafts.text(placeOf(key)) || own(key)
+  // A draft is a change while it differs from the page's own words.
+  let changed = (place: string) => {
+    let text = drafts.text(place)
+    return !!text && text != own(place.slice(PLACE.length))
+  }
+  // How many saves on their way hold each key's draft, which is spent only
+  // once they have answered.
+  let sending = new Map<string, number>()
 
   let sheet = style(doc)
   doc.documentElement.setAttribute(EDITING, '')
@@ -174,9 +203,10 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     el.removeAttribute('contenteditable')
     for (let child of locked) child.removeAttribute('contenteditable')
     locked = []
-    let place = placeOf(keyOf(el))
-    // Typed back to the page's own words, it is no change.
-    if (drafts.text(place) && valueOf(el) == own(keyOf(el))) {
+    let key = keyOf(el), place = placeOf(key)
+    // Typed back to the page's own words, it is no change, unless a save on
+    // its way made them those words.
+    if (drafts.text(place) && valueOf(el) == own(key) && !sending.has(key)) {
       drafts.spend(place)
     }
   }
@@ -246,20 +276,27 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
   let done = button('Done', () => opts.done())
   let mine = () => drafts.places().filter((p) => p.startsWith(PLACE))
   let discard = button('Discard', () => {
-    for (let place of mine()) drafts.spend(place)
+    for (let place of mine()) {
+      if (!sending.has(place.slice(PLACE.length))) drafts.spend(place)
+    }
   })
   discard.dataset.discard = ''
   let count = doc.createElement('span')
   count.setAttribute('aria-live', 'polite')
   let said = doc.createElement('span')
   said.setAttribute('aria-live', 'polite')
+  let send = opts.fetch ?? win.fetch.bind(win)
   let post = async (path: string, body: unknown) => {
     let to = new URL(`api/${path}`, new URL(opts.at, win.location.href))
-    let res = await (opts.fetch ?? win.fetch.bind(win))(to, {
+    let sent = JSON.stringify(body)
+    let res = await send(to, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+      body: sent,
+      // A save already shown goes on if the page is closed under it; the
+      // browser carries no more than 64 KB that way.
+      keepalive: sent.length < 60_000,
     })
     let out = await res.json().catch(() => null)
     if (!res.ok) {
@@ -274,58 +311,95 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     sent: Record<string, string>
     before: Record<string, string>
   } | null = null
-  let busy = false
-  let save = button('Save', async () => {
-    if (busy) return
+  let perf = win.performance
+  let timed = (ms: number, server: number) => {
+    if (!opts.report) return
+    let body = JSON.stringify({
+      id: win.crypto.randomUUID(),
+      at: Math.floor(perf.timeOrigin + perf.now()),
+      points: [savePoint(ms, server)],
+    })
+    if (!opts.fetch && win.navigator.sendBeacon?.(opts.report, body)) return
+    void send(opts.report, { method: 'POST', body, keepalive: true })
+      .catch(() => {/* a time can be lost with the page */})
+  }
+  // Saves and Undo go one after another, each after the one before answered.
+  let turn = Promise.resolve()
+  let saves = 0
+  let save = button('Save', () => {
+    let began = perf.now()
     finish()
     let sent: Record<string, string> = {}
     for (let place of mine()) {
-      let text = drafts.text(place)
-      if (text) sent[place.slice(PLACE.length)] = text
+      if (changed(place)) sent[place.slice(PLACE.length)] = drafts.text(place)
     }
-    if (!Object.keys(sent).length) return
-    busy = save.disabled = true
-    said.textContent = 'Saving…'
+    let keys = Object.keys(sent)
+    if (!keys.length) return
+    let before: Record<string, string> = {}
+    for (let key of keys) {
+      before[key] = own(key)
+      becomes(key, sent[key])
+      sending.set(key, (sending.get(key) ?? 0) + 1)
+    }
+    let n = ++saves
+    said.textContent = SAVED
     undo.hidden = true
-    try {
-      let { version, keys } = await post('save', { copy: sent })
-      let before: Record<string, string> = {}
-      for (let [key, text] of Object.entries(sent)) {
-        before[key] = own(key)
-        becomes(key, text)
-        // A draft typed on since it was sent is still a change.
-        if (drafts.text(placeOf(key)) == text) drafts.spend(placeOf(key))
+    redraw()
+    turn = turn.then(async () => {
+      let asked = perf.now()
+      try {
+        let { version, keys: made } = await post('save', { copy: sent })
+        let now = perf.now()
+        timed(now - began, now - asked)
+        for (let key of keys) {
+          // A draft typed on since it was sent is still a change.
+          if (drafts.text(placeOf(key)) == sent[key]) drafts.spend(placeOf(key))
+        }
+        if (n != saves) return
+        last = made.length ? { version, sent, before } : null
+        said.textContent = savedAs(version)
+        undo.hidden = !last
+      } catch (e) {
+        // The page's words go back where a later save has not changed them.
+        for (let key of keys) {
+          if (own(key) == sent[key]) becomes(key, before[key])
+        }
+        if (n == saves) last = null
+        said.textContent = `Not saved: ${(e as Error).message}. ` +
+          'Your changes are kept.'
+      } finally {
+        for (let key of keys) {
+          let left = sending.get(key)! - 1
+          left ? sending.set(key, left) : sending.delete(key)
+        }
+        redraw()
       }
-      last = keys.length ? { version, sent, before } : null
-      said.textContent = savedAs(version)
-      undo.hidden = !last
-    } catch (e) {
-      said.textContent = `Not saved: ${(e as Error).message}. ` +
-        'Your changes are kept.'
-    } finally {
-      busy = save.disabled = false
-    }
+    })
   })
   save.dataset.save = ''
-  let undo = button('Undo', async () => {
+  let undo = button('Undo', () => {
     let was = last
-    if (busy || !was) return
-    busy = undo.disabled = true
-    try {
-      await post('save/undo', { version: was.version })
-      for (let [key, text] of Object.entries(was.sent)) {
-        becomes(key, was.before[key])
-        drafts.type(placeOf(key), text)
+    if (!was) return
+    last = null
+    undo.disabled = true
+    turn = turn.then(async () => {
+      try {
+        await post('save/undo', { version: was.version })
+        for (let [key, text] of Object.entries(was.sent)) {
+          becomes(key, was.before[key])
+          drafts.type(placeOf(key), text)
+        }
+        undo.hidden = true
+        said.textContent = `Version ${was.version} is taken back. ` +
+          'Your changes are drafts again.'
+      } catch (e) {
+        last = was
+        said.textContent = `Not taken back: ${(e as Error).message}`
+      } finally {
+        undo.disabled = false
+        redraw()
       }
-      last = null
-      undo.hidden = true
-      said.textContent = `Version ${was.version} is taken back. ` +
-        'Your changes are drafts again.'
-    } catch (e) {
-      said.textContent = `Not taken back: ${(e as Error).message}`
-    } finally {
-      busy = undo.disabled = false
-    }
+    })
   })
   undo.dataset.undo = ''
   undo.hidden = true
@@ -348,20 +422,22 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
   // Every element shows its key's draft, or the page's words where it has
   // none, drawn again as a draft changes here or on another device. The one
   // being typed in is left alone while it already shows its draft.
+  let redraw = () => {
+    if (!ready || closed) return
+    let changes = mine().filter(changed).length
+    count.textContent = changes ? counted(changes) : hint(win)
+    save.hidden = discard.hidden = !changes
+    for (let el of marked) {
+      let key = keyOf(el), value = shows(key)
+      el.toggleAttribute(CHANGED, changed(placeOf(key)))
+      if (valueOf(el) != value) draw(el, value)
+    }
+  }
   let stop = () => {}
   drafts.ready.then(() => {
     if (closed) return
     ready = true
-    stop = drafts.follow(() => {
-      let changes = mine().length
-      count.textContent = changes ? counted(changes) : hint(win)
-      save.hidden = discard.hidden = !changes
-      for (let el of marked) {
-        let key = keyOf(el), value = shows(key)
-        el.toggleAttribute(CHANGED, !!drafts.text(placeOf(key)))
-        if (valueOf(el) != value) draw(el, value)
-      }
-    })
+    stop = drafts.follow(redraw)
   }, () => {
     count.textContent = 'Your changes could not be read. Try again.'
   })

@@ -5,7 +5,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { browserDrafts } from '@yaks/draft/browser'
 import type { Bundle } from '@yaks/graph'
-import { editMode, hint, placeOf } from './edit-mode.ts'
+import { editMode, hint, placeOf, SAVED } from './edit-mode.ts'
 
 let BODY = `
 <h1 data-copy="hero.title">Build your ideas</h1>
@@ -13,11 +13,21 @@ let BODY = `
 <button data-copy="cta">Start</button>
 <footer><span data-copy="hero.title">Build your ideas</span></footer>`
 
-// What the app's save door answers, by path, and what it was sent.
+// What the app's save door answers, by path, and what it was sent. An answer
+// given as a promise arrives when the test settles it.
 type Answer = { status: number; body: unknown }
 let OK = (body: unknown): Answer => ({ status: 200, body })
+let REPORT = 'https://ada.yaks.app/cookbook/_web/assets/interaction'
+let later = () => {
+  let answer!: (a: Answer) => void
+  let held = new Promise<Answer>((go) => answer = go)
+  return { held, answer }
+}
 
-let load = async (body = BODY, answers: Record<string, Answer> = {}) => {
+let load = async (
+  body = BODY,
+  answers: Record<string, Answer | Promise<Answer>> = {},
+) => {
   let win = parseHTML(
     `<html><head></head><body>${body}</body></html>`,
   ) as unknown as Window & typeof globalThis
@@ -57,16 +67,23 @@ let load = async (body = BODY, answers: Record<string, Answer> = {}) => {
   let panel = doc.createElement('div')
   let done = 0
   let sent: { url: string; body: unknown }[] = []
+  let timed: { points: { page: string; target: string; ms: number }[] }[] = []
   let mode = editMode(doc, drafts, {
     panel,
     at: '/cookbook/',
-    fetch: (url, init) => {
-      sent.push({ url: String(url), body: JSON.parse(String(init?.body)) })
+    fetch: async (url, init) => {
+      let body = JSON.parse(String(init?.body))
+      if (String(url) == REPORT) {
+        timed.push(body)
+        return new Response(null, { status: 204 })
+      }
+      sent.push({ url: String(url), body })
       let path = String(url).split('/api/')[1]
-      let { status, body } = answers[path] ?? { status: 404, body: null }
-      return Promise.resolve(Response.json(body, { status }))
+      let answer = await (answers[path] ?? { status: 404, body: null })
+      return Response.json(answer.body, { status: answer.status })
     },
     ask: 'https://yaks.app/manage/ada?app=cookbook',
+    report: REPORT,
     done: () => done++,
   })
   await drafts.ready
@@ -93,6 +110,7 @@ let load = async (body = BODY, answers: Record<string, Answer> = {}) => {
     button,
     settled,
     sent,
+    timed,
     doc,
     q,
     press,
@@ -248,6 +266,73 @@ test('Save sends the drafts, and the page then shows the saved words as its own'
   )
   p.mode.stop()
   equal(p.q('footer span').textContent, 'Build it by asking')
+})
+
+test('Save shows the words saved at once, and spends the drafts only once it answers', async () => {
+  let { held, answer } = later()
+  let p = await load(BODY, { save: held })
+  p.heard(placeOf('hero.title'), 'Build it by asking')
+  p.press(p.button('save'))
+  equal(p.q('h1').textContent, 'Build it by asking')
+  ok(!p.q('h1').hasAttribute('data-yak-changed'))
+  equal(
+    p.shown(),
+    `Click any outlined words to change them. · ${SAVED} · Done`,
+  )
+  equal(p.drafts.text(placeOf('hero.title')), 'Build it by asking')
+  answer(OK({ version: 4, keys: ['hero.title'] }))
+  await p.settled()
+  equal(p.drafts.places(), [])
+  equal(
+    p.shown(),
+    'Click any outlined words to change them. · Saved as version 4 · Undo · Done',
+  )
+  equal(
+    p.timed.map((t) => t.points.map(({ page, target }) => [page, target])),
+    [[['app', 'saved']]],
+  )
+  p.mode.stop()
+})
+
+test('a save that fails after showing puts the page back, keeps the draft, and says why', async () => {
+  let { held, answer } = later()
+  let p = await load(BODY, { save: held })
+  p.heard(placeOf('cta'), 'Start cooking')
+  p.press(p.button('save'))
+  equal(p.q('button').textContent, 'Start cooking')
+  // Pressed into and left while on its way, the draft stays.
+  p.press(p.q('button'), 'pointerdown')
+  p.press(p.q('h1'), 'pointerdown')
+  answer({ status: 503, body: { error: { message: 'the app is busy' } } })
+  await p.settled()
+  equal(p.drafts.text(placeOf('cta')), 'Start cooking')
+  ok(p.q('button').hasAttribute('data-yak-changed'))
+  equal(
+    p.shown(),
+    '1 change · Save · Discard · Not saved: the app is busy. ' +
+      'Your changes are kept. · Done',
+  )
+  equal(p.timed, [])
+  p.mode.stop()
+  equal(p.q('button').textContent, 'Start')
+})
+
+test('a Save pressed while one is on its way goes after it', async () => {
+  let first = later()
+  let p = await load(BODY, { save: first.held })
+  p.heard(placeOf('cta'), 'Start cooking')
+  p.press(p.button('save'))
+  p.heard(placeOf('hero.title'), 'Build it by asking')
+  p.press(p.button('save'))
+  await p.settled()
+  equal(p.sent.length, 1)
+  first.answer(OK({ version: 4, keys: ['cta'] }))
+  await p.settled()
+  equal(p.sent.map((s) => s.body), [
+    { copy: { cta: 'Start cooking' } },
+    { copy: { 'hero.title': 'Build it by asking' } },
+  ])
+  p.mode.stop()
 })
 
 test('a refused save keeps every draft, and says why', async () => {

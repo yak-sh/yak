@@ -116,3 +116,15 @@ test('a reload nobody chose is filed to the tracker with its cause', async () =>
     )
   }
 })
+
+test('a save behind what the page shows is counted, and filed only past its budget', async () => {
+  let saved = (ms: number) => ({ ...point('saved', ms), page: 'app' })
+  let [rows] = await send([saved(1200)])
+  equal(rows.map((r) => [!!r.timing, !!r.error]), [[true, false]])
+  let [late] = await send([saved(3400)])
+  let [error] = late.flatMap((r) => r.error ? [r.error as Comp] : [])
+  equal(
+    error.message,
+    'Slow interaction: app → saved took 3400 ms (budget 3000 ms)',
+  )
+})

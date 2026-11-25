@@ -165,6 +165,35 @@ export let atRelease = (raw: Objects, source: string) =>
 export let assetKey = (root: string, path: string, sha: string) =>
   `${root}.assets/${sha}/${path}`
 
+/**
+ * The assets of `previous`, the release leaving, that `assets` no longer
+ * serves, kept under `root` (the app's releases, `releasesPrefix`) for the
+ * pages already open on it: each a pointer naming that release, which
+ * `keptAsset` reads. What both releases serve is still the live release's,
+ * so a release writes only what changed, never a pointer per asset: one of
+ * every image the app holds was a put each, nine seconds of an on-page Save
+ * (T-3600). A release from before assets were indexed has none to keep: its
+ * pages never asked for one by its hash.
+ */
+export let departed = async (
+  raw: Objects,
+  root: string,
+  previous: string | null | undefined,
+  assets: Assets,
+) => {
+  if (!previous || !release(previous + '/')) return
+  let prior = await assetsIn(raw, previous)
+  let gone = Object.entries(prior).filter(([path, asset]) =>
+    assets[path]?.sha != asset.sha
+  )
+  await lanes(16)(gone, async ([path, { public: _, ...asset }]) => {
+    await raw.put(
+      assetKey(root, path, asset.sha),
+      new TextEncoder().encode(JSON.stringify({ ...asset, source: previous })),
+    )
+  })
+}
+
 export let keptAsset = async (
   raw: Objects,
   root: string,
@@ -192,33 +221,31 @@ let withAssets = async (
 ): Promise<Index> => {
   let write = async (text: string) =>
     (await stored(prefixed(raw, SHA), new TextEncoder().encode(text))).sha
-  let [assets, prior] = await Promise.all([
-    fingerprints(files, config, (sha) => sourceText(raw, sha), write),
-    previous && release(previous + '/')
-      ? assetsIn(raw, previous)
-      : {} as Assets,
-  ])
-  let root = source.slice(0, source.lastIndexOf('/') + 1)
+  let assets = await fingerprints(
+    files,
+    config,
+    (sha) => sourceText(raw, sha),
+    write,
+  )
   let folder = rootOf('', config)
   let index: Index = Object.fromEntries(
     Object.entries(files).map((
       [path, sha],
     ) => [path, { key: addressed(sha), sha }]),
   )
-  // A shared pointer can be written again after an interrupted deploy.
-  // An unchanged pointer the previous release published is already there.
-  await lanes(16)(Object.entries(assets), async ([path, asset]) => {
+  for (let [path, asset] of Object.entries(assets)) {
     let key =
       path.startsWith('__packages/') && Object.hasOwn(files, BUILT + path)
         ? BUILT + path
         : `${folder}/${path}`.slice(1)
     index[key].asset = { ...asset, path }
-    if (prior[path]?.sha == asset.sha) return
-    await raw.put(
-      assetKey(root, path, asset.sha),
-      new TextEncoder().encode(JSON.stringify({ ...asset, source })),
-    )
-  })
+  }
+  await departed(
+    raw,
+    source.slice(0, source.lastIndexOf('/') + 1),
+    previous,
+    assets,
+  )
   return index
 }
 

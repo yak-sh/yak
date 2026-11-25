@@ -25,7 +25,7 @@ import { caught } from './defects.ts'
 import type { Bar } from '@yaks/platform/visits'
 import { sharing } from './lib/shared.ts'
 import { inline, type Script, tagged } from '@yaks/platform/woven'
-import { OPEN_PATH } from '@yaks/timing/interaction'
+import { INTERACTION_PATH } from '@yaks/timing/interaction'
 import { openScript } from '@yaks/platform/open-script'
 
 type Assets = { fetch: (req: Request) => Promise<Response> }
@@ -102,12 +102,12 @@ export let pageScript = async (
       ])
     }
     let doors: Record<string, string> = api ? { 'data-yak-api': api } : {}
+    // Where the page's timings go: its opens, and the pencil's saves.
+    let timings = api
+      ? INTERACTION_PATH
+      : `${at.replace(/\/$/, '')}/_web/assets/interaction`
     let worn: [Script, Record<string, string>][] = [
-      [report, {
-        'data-yak-open': api
-          ? OPEN_PATH
-          : `${at.replace(/\/$/, '')}/_web/assets/interaction?open=1`,
-      }],
+      [report, { 'data-yak-open': `${timings}?open=1` }],
       [release, doors],
       [location, {}],
       [install, {}],
@@ -122,6 +122,7 @@ export let pageScript = async (
     if (edit) {
       worn.push([pencil, {
         'data-yak-edit': edit,
+        'data-yak-interaction': timings,
         ...note ? { 'data-yak-note': note } : {},
         ...doors,
       }])

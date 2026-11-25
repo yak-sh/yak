@@ -110,6 +110,9 @@ let scriptUrls = (code: string, refs: Link[], move: (ref: string) => string) =>
 
 /** Name the browser's files bottom-up. Only CSS and JS need to be read.
  * Cycles and scripts that resolve paths at runtime keep the release tree. */
+// How many reads go ahead of the walk: as many as a Worker keeps open at once.
+let AHEAD = 6
+
 export let fingerprints = async (
   files: Files,
   config: Serving,
@@ -117,6 +120,34 @@ export let fingerprints = async (
   write: (text: string) => Promise<string>,
 ): Promise<Assets> => {
   let candidates = browserFiles(files, config)
+  let rewritten = (file: Asset) =>
+    file.type.startsWith('text/css') || moduleAsset(file)
+  // Each stylesheet and module is read for what it links, in the order the
+  // walk below asks for them, a few ahead of it: read one after another,
+  // each was a trip to the bucket in turn on every release (T-3600).
+  let order = [
+    ...new Set([...candidates.values()].filter(rewritten).map((f) => f.sha)),
+  ]
+  let ahead = new Map<string, Promise<string | null>>()
+  let taken = new Set<string>()
+  let next = 0
+  let fill = () => {
+    for (; next < order.length && ahead.size < AHEAD; next++) {
+      let sha = order[next]
+      if (taken.has(sha)) continue
+      let reading = read(sha)
+      reading.catch(() => {})
+      ahead.set(sha, reading)
+    }
+  }
+  let sourceOf = (sha: string) => {
+    let held = ahead.get(sha)
+    ahead.delete(sha)
+    taken.add(sha)
+    fill()
+    return held ?? read(sha)
+  }
+  fill()
   let settled = new Map<string, Asset | null>()
   let pending = new Set<string>()
   let follow = async (path: string): Promise<Asset | null> => {
@@ -135,8 +166,8 @@ export let fingerprints = async (
     follow: (path: string) => Promise<Asset | null>,
   ): Promise<Asset | null> => {
     let css = file.type.startsWith('text/css')
-    if (!css && !moduleAsset(file)) return file
-    let source = await read(file.sha)
+    if (!rewritten(file)) return file
+    let source = await sourceOf(file.sha)
     if (source == null) return null
     let refs = css ? [] : links(source)
     if (refs == null) return null
