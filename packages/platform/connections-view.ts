@@ -1141,7 +1141,7 @@ export let holds = (c: Connections, opened: string): boolean =>
 export let connectionsView = (
   view: ConnectionsView,
   c: Connections,
-  opened = c.open ?? c.asked?.name,
+  opened: string | null = c.open ?? c.asked?.name ?? null,
 ) => {
   let { env } = view
   let at = { space: view.space.slug, spaces: view.spaces }

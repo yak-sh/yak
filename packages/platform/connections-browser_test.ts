@@ -182,3 +182,19 @@ test('a kind of service, the search and the trash ask the row again', () => {
   click(root.querySelector('.Chip[href*="q=crm"]')!)
   equal(asked.at(-1), connectionsPage(SPACE, 'q=crm'))
 })
+
+test('a service the row was read for closes, and stays closed as the row moves', () => {
+  let b = bound({ at: '#hubspot' })
+  let hubspot = { ...offered('hubspot'), face: face('hubspot', 'HubSpot') }
+  let read = connections({ open: 'hubspot', asked: hubspot })
+  b.held('detail=hubspot', read)
+  equal(b.shownBody(), 'Connect HubSpot')
+  b.click(
+    b.root.querySelector(
+      'dialog .Modal_Body:not([hidden]) [data-modal-close]',
+    )!,
+  )
+  equal(b.shownBody(), null)
+  b.held('detail=hubspot', { ...read, list: [] })
+  equal(b.shownBody(), null)
+})

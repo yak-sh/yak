@@ -90,7 +90,7 @@ export let drawConnections = (
   root: HTMLElement,
   view: ConnectionsView,
   c: Connections,
-  opened?: string,
+  opened: string | null,
 ): void => {
   let doc = root.ownerDocument
   let dialog = root.querySelector<HTMLDialogElement>('dialog')
@@ -143,7 +143,10 @@ export let bindConnections = (
     let c = watch && pageOf(watch.value)
     if (c) held = c
     if (!held) return
-    let key = openedIn(win.location.hash) ?? held.open
+    // The address alone says what is open: its hash, or the `detail` the
+    // server drew it opened on.
+    let key = openedIn(win.location.hash) ??
+      new URLSearchParams(win.location.search).get('detail') ?? undefined
     // One the row was not read for is asked of the server, drawn loading
     // until it answers.
     if (key && !holds(held, key)) {
@@ -151,7 +154,7 @@ export let bindConnections = (
       asked.set('detail', key)
       asking(askOf(asked))
     }
-    drawConnections(root, view, held, key)
+    drawConnections(root, view, held, key ?? null)
     // A form the page's Save bar sends presses through the graph too.
     for (let form of root.querySelectorAll<SavingForm>('form[data-save]')) {
       form[SAVE_THROUGH] = press
