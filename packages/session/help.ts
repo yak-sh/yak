@@ -231,7 +231,8 @@ let brief = (g: G, home: Bundle, owed: Owed[]): string => {
     'each as the operator would and record what you did in the graph, where ' +
     "the work lives. Hand up only what needs the operator's judgment or a " +
     'person, as one short line about the entity it concerns, with ' +
-    '`session_handup`.',
+    '`session_handup`. When handing up a scheduled wake, carry forward its ' +
+    'firing date and the conditions in its note.',
     ...owed.map((o) => o.line),
   ].join('\n\n')
 }

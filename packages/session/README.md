@@ -1175,9 +1175,9 @@ the sender's number in `knock.from`, so a person's text is never a helper's.
 
 A standing duty is a wake aimed at who is to do it (@yaks/wake's
 `wake{every, target, note}`, written by `wake_new`). Each time the box's clock
-fires it, `session_woken` knocks once with the note. Nothing starts a session,
-and the duty's work is the woken session's to do
-([`woken_test.ts`](./woken_test.ts)).
+fires it, `session_woken` knocks once with the note
+([`woken_test.ts`](./woken_test.ts)). For a cron schedule, the knock includes
+the weekday and date of the firing in the schedule's time zone.
 
 - **Aimed at a persona**, it knocks the persona's operator, else its project,
   where the knock waits for the next session at work. TaskMaster's morning

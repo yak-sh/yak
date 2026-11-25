@@ -20,8 +20,8 @@ import { projectDoc } from '@yaks/project/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { goalDoc } from '@yaks/goal'
 import { topicDoc } from '@yaks/topic/vocab'
-import { tick, wakeDoc } from '@yaks/wake'
-import { equal, test } from '@yaks/testing'
+import { tick, wakeDoc, wakeOf } from '@yaks/wake'
+import { clock, equal, test } from '@yaks/testing'
 import { sessionDoc } from './comp.ts'
 import { statusComputed } from './state.ts'
 import { running } from './run.ts'
@@ -105,13 +105,13 @@ let box = async (...sessions: [string, object][]) => {
       },
     })),
   ], { trusted: true })
-  return g
+  return { g, fx }
 }
 
 // Fire what is due at `now`, and the knocks standing after it.
-let fire = async (g: Awaited<ReturnType<typeof box>>, now: number) => {
+let fire = async ({ g, fx }: Awaited<ReturnType<typeof box>>, now: number) => {
   await tick(g, now)
-  await new Promise((r) => setTimeout(r, 0))
+  await fx.idle()
   return (await g.read('.knock ?doc')).map((b) => ({
     target: (b.knock as { target: string }).target,
     body: (b.doc as { body: string }).body,
@@ -134,8 +134,11 @@ let cases: [string, [string, object][], string][] = [
 ]
 for (let [who, sessions, target] of cases) {
   test(`a persona's morning knocks ${who}`, async () => {
-    let g = await box(...sessions)
-    equal(await fire(g, SAT), [{ target, body: NOTE }])
+    let b = await box(...sessions)
+    equal(await fire(b, SAT), [{
+      target,
+      body: `Fired on Saturday, November 7, 2026. ${NOTE}`,
+    }])
   })
 }
 
@@ -182,17 +185,18 @@ let attended: [string, [string, object][], string[], Bundle[]?][] = [
 ]
 for (let [who, sessions, heard, lines = []] of attended) {
   test(`a goal's wake knocks ${who}`, async () => {
-    let g = await box(...sessions)
-    await g.apply(lines, { trusted: true })
+    let b = await box(...sessions)
+    await b.g.apply(lines, { trusted: true })
+    let body = `Fired on Saturday, November 7, 2026. ${WEIGH}`
     equal(
-      (await fire(g, SAT)).filter((k) => k.body == WEIGH),
-      heard.map((target) => ({ target, body: WEIGH })),
+      (await fire(b, SAT)).filter((k) => k.body == body),
+      heard.map((target) => ({ target, body })),
     )
   })
 }
 
 test('a wake still to fire names the session it reaches as awaited', async () => {
-  let g = await box(['head', on], ['asked', on], ['worker', {}])
+  let { g } = await box(['head', on], ['asked', on], ['worker', {}])
   equal([...await awaited(g)], ['head'])
   await g.apply(refused('head'), { trusted: true })
   equal([...await awaited(g)], ['head'])
@@ -203,11 +207,11 @@ test('a wake still to fire names the session it reaches as awaited', async () =>
 })
 
 test('each morning knocks once, however often the clock ticks', async () => {
-  let g = await box(['operator', { operator: true }])
-  await fire(g, SAT)
-  await fire(g, SAT + 60_000)
-  equal((await fire(g, SUN)).length, 2)
-  equal((await g.get(['standup'], ['wake']))[0].wake, {
+  let b = await box(['operator', { operator: true }])
+  await fire(b, SAT)
+  await fire(b, SAT + 60_000)
+  equal((await fire(b, SUN)).length, 2)
+  equal((await b.g.get(['standup'], ['wake']))[0].wake, {
     every: MORNING,
     at: '2026-11-09T12:00:00.000Z',
     target: 'taskmaster',
@@ -215,17 +219,42 @@ test('each morning knocks once, however often the clock ticks', async () => {
   })
 })
 
+let standup = await box(['operator', { operator: true }])
+let standupNote =
+  "Morning: plan the day, then compose and send Jeff's standup. " +
+  'On Tuesdays add the retrospective, meta-analysis and weekly update and plan.'
+await standup.g.apply([{
+  entity: { eid: 'standup' },
+  wake: { at: '2026-11-24T12:00:00Z', note: standupNote },
+}], { trusted: true })
+
+test('the standup knock dates each firing in Detroit', async () => {
+  // A delayed Tuesday firing arrives at 21:00 Detroit time, Wednesday in UTC.
+  let time = clock(Date.parse('2026-11-25T02:00:00Z'))
+  equal(await fire(standup, time.now()), [{
+    target: 'operator',
+    body: `Fired on Tuesday, November 24, 2026. ${standupNote}`,
+  }])
+  await time.advance(10 * HOUR)
+  equal((await fire(standup, time.now())).map((k) => k.body).sort(), [
+    `Fired on Tuesday, November 24, 2026. ${standupNote}`,
+    `Fired on Wednesday, November 25, 2026. ${standupNote}`,
+  ])
+  let [source] = await standup.g.get(['standup'], ['wake'])
+  equal(wakeOf(source)?.note, standupNote)
+})
+
 test('a wake that watches a query knocks only for a change, with what changed', async () => {
-  let g = await box(['operator', { operator: true }])
-  await g.apply([{
+  let b = await box(['operator', { operator: true }])
+  await b.g.apply([{
     entity: { eid: 'standup' },
     watch: { query: '.goal', seen: {} },
   }], { trusted: true })
   let heard = async (now: number) =>
-    (await fire(g, now)).filter((k) => k.target == 'operator')
+    (await fire(b, now)).filter((k) => k.target == 'operator')
   let [first] = await heard(SAT)
   equal(first.body.split('\n\n').map((p) => p.split('\n')[0]), [
-    NOTE,
+    `Fired on Saturday, November 7, 2026. ${NOTE}`,
     'What changed (1 new):',
   ])
   equal((await heard(SUN)).length, 1)

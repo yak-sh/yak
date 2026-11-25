@@ -1,9 +1,8 @@
 // A standing duty is a wake aimed at who is to do it (@yaks/wake's
 // `wake{every, target, note}`, read by name). Each time the box's clock fires
-// it, `session_woken` knocks once with the wake's note, the way a text that
-// arrived does (./texted.ts); one that watches a query (`watch`) fires only
-// when its rows changed, and says what changed. Nothing starts a session, and
-// what the duty asks for is the woken session's to do.
+// it, `session_woken` knocks once with the wake's note. A cron wake includes
+// its firing date in the schedule's time zone. One that watches a query
+// (`watch`) fires only when its rows changed, and says what changed.
 //
 // Aimed at a persona, it knocks the persona's operator: TaskMaster's morning
 // standup is `0 7 * * * America/Detroit`, the owner's morning in his time
@@ -25,6 +24,7 @@
 import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
+import { calendarDate } from '@yaks/wake'
 import { SESSION } from './comp.ts'
 import { ends } from './listen.ts'
 import { targets } from './watch.ts'
@@ -34,6 +34,13 @@ type G = Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
+
+let message = (wake: Comp, at: string): string => {
+  let note = str(wake.note)
+  if (!note) return `a wake fired at ${at}`
+  let day = calendarDate(str(wake.every), Date.parse(at))
+  return day ? `Fired on ${day}. ${note}` : note
+}
 
 /** The session a wake aimed at `topic` reaches: the one opened on it that
  * has not ended or stopped, the one opened first where several have not. */
@@ -79,7 +86,8 @@ export let woken = async (g: G, eid: Eid): Promise<Bundle[]> => {
     [eid],
     ['wake', 'fired', ...g.vocab.comp('watch') ? ['watch'] : []],
   )
-  let target = str(comp(row, 'wake').target)
+  let wake = comp(row, 'wake')
+  let target = str(wake.target)
   let at = str(comp(row, 'fired').at)
   if (!target || !at) return []
   let knock = derivedEid(`session woken ${eid} ${at}`)
@@ -97,7 +105,7 @@ export let woken = async (g: G, eid: Eid): Promise<Bundle[]> => {
     // says what changed after the note.
     doc: {
       body: [
-        str(comp(row, 'wake').note) || `a wake fired at ${at}`,
+        message(wake, at),
         str(comp(row, 'watch').changes),
       ].filter(Boolean).join('\n\n'),
     },

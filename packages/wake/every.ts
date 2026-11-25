@@ -64,10 +64,8 @@ let DURATION = /^(?:every\s+)?(\d+)?\s*([a-z]+)$/
 // Parsing belongs to the schedule, rather than to every alarm that reads it.
 // Between a searched instant and its next occurrence, later readers have the
 // same answer. Rewinding the input still asks the calendar afresh.
-let calendars = new Map<
-  string,
-  { cron: Cron | null; from?: number; next?: number | null }
->()
+type Calendar = { cron: Cron | null; from?: number; next?: number | null }
+let calendars = new Map<string, Calendar>()
 
 /**
  * A recurrence parsed as a fixed length of time, in milliseconds — `null` when
@@ -133,6 +131,32 @@ let cron = (every: string, tz: string): Cron | null => {
   }
 }
 
+let calendarOf = (every: string, tz: string): Calendar => {
+  let key = JSON.stringify([every, tz])
+  let calendar = calendars.get(key)
+  if (!calendar) {
+    calendar = { cron: cron(every, tz) }
+    if (calendars.size == 64) calendars.delete(calendars.keys().next().value!)
+    calendars.set(key, calendar)
+  }
+  return calendar
+}
+
+/** The weekday and date of `at` in a cron recurrence's time zone.
+ * A cron line without a zone uses UTC. Durations have no calendar date. */
+export let calendarDate = (every: string, at: number): string | undefined => {
+  let { cron } = calendarOf(every, 'UTC')
+  if (!cron || !Number.isFinite(at)) return
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'full',
+      timeZone: cron.options.timezone ?? 'UTC',
+    }).format(at)
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+  }
+}
+
 /**
  * The first instant a recurrence lands on strictly after `now`, counting a
  * duration from `from`.
@@ -184,13 +208,7 @@ export let recur = (
     return Number.isNaN(new Date(at).getTime()) ? null : at
   }
   try {
-    let key = JSON.stringify([every, tz])
-    let calendar = calendars.get(key)
-    if (!calendar) {
-      calendar = { cron: cron(every, tz) }
-      if (calendars.size == 64) calendars.delete(calendars.keys().next().value!)
-      calendars.set(key, calendar)
-    }
+    let calendar = calendarOf(every, tz)
     if (
       calendar.from != null && now >= calendar.from &&
       calendar.next != null && now < calendar.next

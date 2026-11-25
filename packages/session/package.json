@@ -55,6 +55,7 @@
     "@yaks/ui": "0.2.30",
     "@yaks/ux": "0.2.23",
     "@yaks/vocab": "0.2.32",
+    "@yaks/wake": "0.2.24",
     "preact": "10.29.7"
   },
   "devDependencies": {
@@ -76,7 +77,6 @@
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30",
     "@yaks/topic": "0.2.23",
-    "@yaks/wake": "0.2.24",
     "preact-render-to-string": "6.7.0"
   }
 }
