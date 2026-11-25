@@ -1,6 +1,6 @@
 // A push through a platform that keeps apps in memory: after it, the app holds
 // exactly the directory's files and has been released once.
-import { test } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Ask,
@@ -10,6 +10,7 @@ import {
   push,
   type PushProgress,
   read,
+  sentTexts,
   versions,
 } from './push.ts'
 
@@ -940,4 +941,77 @@ test('a release without a common ancestor keeps the live file', async () => {
   let r = await fixed({ [path]: content }, {}, { [path]: '<p>Git page</p>' })
   assertEquals(r.wrote, [{ path, content }])
   assertEquals(await r.read(path), content)
+})
+
+// One app's vocab.json as git committed it, pushed from a checkout and the
+// release of main, both on one box: `push(text)` sends the checkout's text and
+// `release(text)` main's, each answering what it handed git.
+let box = async () => {
+  let committed = json({ cue: { at: 'string' } })
+  let path = 'vocab.json'
+  let p = platform({ app: new Map([[path, { path, content: committed }]]) })
+  let home = await Deno.makeTempDir()
+  let sent = sentTexts(home)
+  let sending = (review: boolean) => async (content: string) => {
+    let wrote: string[] = []
+    await push(p.ask, [{ path, content }], { app: 'app' }, {
+      sent,
+      review,
+      checkout: {
+        earlier: async function* () {
+          yield committed
+        },
+        write: (files) =>
+          Promise.resolve(void wrote.push(...files.map((f) => f.content))),
+      },
+    })
+    return wrote
+  }
+  let live = async () =>
+    ((await p.ask('tools/call', {
+      name: 'app_files',
+      arguments: { app: 'app', op: 'read', path },
+    })) as { content: { text: string }[] }).content[0].text
+  let operator = (content: string) =>
+    p.ask('tools/call', {
+      name: 'app_files',
+      arguments: { app: 'app', files: [{ path, content }] },
+    })
+  return {
+    push: sending(true),
+    release: sending(false),
+    live,
+    operator,
+    [Symbol.asyncDispose]: () => Deno.remove(home, { recursive: true }),
+  }
+}
+let json = (value: unknown) => JSON.stringify(value, null, 2) + '\n'
+
+test('bytes a push sent from an uncommitted checkout are its own to the next push', async () => {
+  await using app = await box()
+  equal(await app.push(json({ cue: { at: 'string', why: 'string' } })), [])
+  let edited = json({ cue: { at: 'number', take: 'boolean' } })
+  equal(await app.push(edited), [])
+  equal(await app.live(), edited)
+})
+
+test('bytes a push sent from unlanded work are not carried into main by its release', async () => {
+  await using app = await box()
+  await app.push(json({ cue: { at: 'string', why: 'string' } }))
+  let main = json({ cue: { at: 'string' }, shot: { scene: 'string' } })
+  equal(await app.release(main), [])
+  equal(await app.live(), main)
+})
+
+test('a platform change to bytes a push sent merges against them, key by key', async () => {
+  await using app = await box()
+  await app.push(json({ cue: { at: 'string', why: 'string' } }))
+  await app.operator(
+    json({ cue: { at: 'string', why: 'string', take: 'boolean' } }),
+  )
+  let merged = json({ cue: { at: 'number', why: 'string', take: 'boolean' } })
+  equal(await app.push(json({ cue: { at: 'number', why: 'string' } })), [
+    merged,
+  ])
+  equal(await app.live(), merged)
 })

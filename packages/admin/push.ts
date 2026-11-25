@@ -6,15 +6,18 @@
 //
 // A change made on the platform is carried into git, never pushed over: the
 // space's Operator fixing the app, or its copy edited on the app's page
-// (@yaks/copy). A file the app holds that matches no text git has of it is
-// such a change. The push merges it over the checkout's file, against the
-// newest text git has that the app held too: copy.json by key (@yaks/copy
-// `merge`, where a key edited on the page keeps the page's text), every other
-// file by line. A Git checkout commits the merge and the release uses the
-// committed bytes. Where git and the platform changed the same source lines,
-// the platform's lines win and git keeps its version in history. A conflict
-// in the app's generated lock clears it from the draft so the release compiler
-// regenerates it from the merged package.json.
+// (@yaks/copy). A file the app holds that matches no text git has of it, and
+// no text a push from this box sent (`sentTexts`), is such a change: bytes a
+// manual push sent from an uncommitted or unlanded checkout are the app's own
+// source, not the platform's. The push merges the change over the checkout's
+// file, against the newest text the app held that git has or a push sent
+// (./merge.ts): copy.json by key, where a key edited on the page keeps the
+// page's text, any other JSON file key by key, so no key is written twice,
+// every other file by line. A Git checkout commits the merge and the release
+// uses the committed bytes. Where git and the platform changed the same part,
+// the platform's wins and git keeps its version in history. A generated lock
+// both changed is cleared from the draft so the release compiler regenerates
+// it from the merged package.json.
 //
 // A file is sent as text when its bytes are UTF-8 and as base64 when they are
 // not (an icon, a .wasm). Dotfiles are left out: nothing the platform serves
@@ -35,10 +38,9 @@ import * as fs from '@yaks/file/io'
 import * as systemProcess from '@yaks/process/system'
 import { dirname } from 'node:path'
 
-import { merge as byKey } from '@yaks/copy'
-import { diffIndices } from 'node-diff3'
 import { CallError } from '@yaks/tools/errors'
 import { type Reply, saidBy, valueOf } from './api.ts'
+import { merge } from './merge.ts'
 
 /** One file as app_files takes it. */
 export type File = { path: string; content: string } | {
@@ -116,6 +118,9 @@ export type PushOptions = {
   review?: boolean
   /** Files maintained in the app and carried into each release. */
   keep?: string[]
+  /** The texts pushes from this box sent: the app's own source, never a
+   * platform change, whatever checkout or account sent them. */
+  sent?: Sent
   remember?: (version: number) => void | Promise<void>
   wait?: number
   poll?: number
@@ -303,49 +308,10 @@ let listed = async (
   }
 }
 
-let COPY = 'copy.json'
-
-let lines = (text: string) => text.split(/(?<=\n)/).filter(Boolean)
-
-let edits = (base: string[], text: string) =>
-  diffIndices(base, lines(text)).map(({
-    buffer1: [start, length],
-    buffer2Content,
-  }) => ({ start, end: start + length, text: buffer2Content.join('') }))
-
-type Edit = ReturnType<typeof edits>[number]
-
-let overlaps = (a: Edit, b: Edit) =>
-  a.start < b.end && b.start < a.end ||
-  a.start == b.start && a.end == b.end
-
-// Two insertions at the same point overlap. A change ending where another
-// begins still fits beside it.
-let mergeLines = (ours: string, live: string, base: string) => {
-  let before = lines(base)
-  let incoming = edits(before, live)
-  let conflict = false
-  let kept = edits(before, ours).filter((edit) => {
-    let other = incoming.find((other) => overlaps(edit, other))
-    if (!other) return true
-    conflict ||= edit.start != other.start || edit.end != other.end ||
-      edit.text != other.text
-    return false
-  })
-  let at = 0
-  let merged = [...incoming, ...kept]
-    .sort((a, b) => a.start - b.start || a.end - b.end)
-    .map(({ start, end, text }) => {
-      let unchanged = before.slice(at, start).join('')
-      at = end
-      return unchanged + text
-    })
-  return { content: merged.join('') + before.slice(at).join(''), conflict }
-}
-
 // The file at `path` the app holds as `sha`, as the platform changed it and
 // merged over the checkout's (`ours`, empty where git no longer has it), or
-// nothing when the app holds a text git has had.
+// nothing when the app holds a text git has had or a push from this box sent.
+// The merge's base is the newest text the app held that either knows.
 let carried = async (
   ask: Ask,
   at: Record<string, string>,
@@ -353,7 +319,9 @@ let carried = async (
   sha: string,
   ours: string,
   checkout: Checkout,
+  sent?: Sent,
 ) => {
+  if (await sent?.text(sha) != null) return
   let texts = [ours]
   for await (let prior of checkout.earlier(path)) {
     if (typeof prior == 'string') texts.push(prior)
@@ -369,11 +337,16 @@ let carried = async (
   if (!Array.isArray(past?.replaced)) {
     throw new Error(`app_files answered no ${path} history`)
   }
-  let held = new Set(past.replaced.map((w) => (w as { sha?: unknown }).sha))
-  let base = texts[shas.findIndex((s) => held.has(s))] ?? ''
-  return path == COPY
-    ? { content: byKey(ours, live.content, base), conflict: false }
-    : mergeLines(ours, live.content, base)
+  let base = ''
+  for (let { sha } of past.replaced as { sha?: unknown }[]) {
+    let i = shas.indexOf(String(sha))
+    let text = i < 0 ? await sent?.text(String(sha)) : texts[i]
+    if (text != null) {
+      base = text
+      break
+    }
+  }
+  return merge(path, ours, live.content, base)
 }
 
 // Each file the app holds as the platform changed it, merged over the
@@ -386,7 +359,7 @@ let changes = async (
   hashes: string[],
   held: Map<string, string>,
   checkout: Checkout,
-  kept: string[] = [],
+  { keep: kept = [], sent }: Pick<PushOptions, 'keep' | 'sent'>,
 ) => {
   let keep = new Set([...local.map((f) => f.path), ...kept])
   let ours = new Map(local.map((f, i) => [f.path, { f, sha: hashes[i] }]))
@@ -401,7 +374,7 @@ let changes = async (
         : keep.has(path) || pinned(path, keep) || asset(path)
     ) continue
     let text = mine && 'content' in mine.f ? mine.f.content : ''
-    let merged = await carried(ask, at, path, sha, text, checkout)
+    let merged = await carried(ask, at, path, sha, text, checkout, sent)
     if (path == LOCK && compiled && merged?.conflict) {
       relock = true
     } else if (merged && merged.content != text) {
@@ -508,7 +481,7 @@ let pushing = async (
   let hashes = await Promise.all(local.map(shaOf))
   let checkout = opts.checkout
   let { carry, relock } = checkout
-    ? await changes(ask, at, local, hashes, held.held, checkout, opts.keep)
+    ? await changes(ask, at, local, hashes, held.held, checkout, opts)
     : { carry: [], relock: false }
   if (carry.length) {
     let saved = (await checkout?.write?.(carry) ?? carry)
@@ -543,6 +516,11 @@ let pushing = async (
     changed: changed.length,
     removed: gone.length,
   })
+  // Recorded before any is written, so a push that stops part way still
+  // knows the bytes it left as its own.
+  await opts.sent?.keep(
+    changed.flatMap((f) => 'content' in f ? [f.content] : []),
+  )
   let done = 0
   for (let batch of batches(changed)) {
     opts.progress?.({
@@ -666,6 +644,64 @@ export let versions = async (
       } catch (e) {
         await fs.remove(temporary)
         throw e
+      }
+    },
+  }
+}
+
+/** Texts by their sha256: one a push sent, or nothing. */
+export type Sent = {
+  text: (sha: string) => Promise<string | undefined>
+  keep: (texts: string[]) => Promise<void>
+}
+
+/** How long a sent text is kept since a push last sent it: as long as the
+ * platform keeps a file's history (workers/yak written.ts `AGE`). */
+let SENT_AGE = 30 * 24 * 60 * 60_000
+
+/** The texts any push from this box sent, beside its push bases. A text the
+ * app holds that one of them sent is the app's own source, whichever checkout,
+ * account or release of main sent it, so no push carries it into git as a
+ * change made on the platform: a manual push of uncommitted or unlanded work
+ * is not merged back by the next push, nor by the deploy catch-up. A text
+ * sent again is kept again, and one not sent for {@link SENT_AGE} is let go. */
+export let sentTexts = (home: string): Sent => {
+  let dir = `${home}/push/sent`
+  return {
+    text: async (sha) => {
+      if (!/^[0-9a-f]{64}$/.test(sha)) return
+      try {
+        return await fs.readTextFile(`${dir}/${sha}`)
+      } catch (e) {
+        if (!fs.isNotFound(e)) throw e
+      }
+    },
+    keep: async (texts) => {
+      if (!texts.length) return
+      await fs.mkdir(dir, { recursive: true })
+      for (let content of texts) {
+        let path = `${dir}/${await shaOf({ path: '', content })}`
+        let temporary = await fs.makeTempFile({ dir, prefix: '.sending' })
+        try {
+          await fs.writeTextFile(temporary, content)
+          await fs.rename(temporary, path)
+        } catch (e) {
+          await fs.remove(temporary)
+          throw e
+        }
+      }
+      let old = Date.now() - SENT_AGE
+      for await (let entry of fs.readDir(dir)) {
+        let path = `${dir}/${entry.name}`
+        let info = await fs.stat(path).catch((e) => {
+          if (fs.isNotFound(e)) return
+          throw e
+        })
+        if (info?.mtime && info.mtime.getTime() < old) {
+          await fs.remove(path).catch((e) => {
+            if (!fs.isNotFound(e)) throw e
+          })
+        }
       }
     },
   }

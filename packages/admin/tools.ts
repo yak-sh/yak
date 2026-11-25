@@ -89,6 +89,7 @@ import {
   push,
   type PushProgress,
   read,
+  sentTexts,
   type Target,
   versions,
 } from './push.ts'
@@ -959,6 +960,7 @@ export let runs = (
               source,
             ),
         },
+        sent: sentTexts(homeOf(host.config.db)),
         confirm: a.confirm === true,
         progress: pushNote,
       })

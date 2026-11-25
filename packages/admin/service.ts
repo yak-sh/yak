@@ -35,7 +35,7 @@
 import { checkout } from './checkout.ts'
 import { account } from './account.ts'
 import { rpc, zone } from './api.ts'
-import { homeOf, push, type Target, versions } from './push.ts'
+import { homeOf, push, sentTexts, type Target, versions } from './push.ts'
 import {
   blobs,
   carrying,
@@ -445,6 +445,7 @@ export let box = (
         ...await versions(homeOf(host.config.db), key),
         review: false,
         keep: to.keep,
+        sent: sentTexts(homeOf(host.config.db)),
         checkout: {
           earlier: (path) =>
             fileHistory(
