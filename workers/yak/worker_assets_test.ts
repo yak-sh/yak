@@ -44,7 +44,9 @@ let worker = 'data:text/javascript,' + encodeURIComponent(`export default {
       headers: { 'content-type': 'text/css', 'cache-control': 'private, no-store' },
     })
     if (path == '/styles/studio.css') return env.FILES.fetch(path)
-    if (path.startsWith('/fonts/') || path == '/icon.svg') return env.FILES.fetch(path)
+    if (path.startsWith('/fonts/') || path == '/icon.svg' || path == '/icon.png') {
+      return env.FILES.fetch(path)
+    }
     if (path == '/drawn.png') {
       return new Response('drawn', {
         headers: { 'content-type': 'image/png', 'cache-control': 'max-age=300' },
@@ -53,6 +55,9 @@ let worker = 'data:text/javascript,' + encodeURIComponent(`export default {
     return new Response(null, { status: 404 })
   },
 }`)
+// A 1×1 picture, as an app's icon.png must decode.
+let PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 let k = await workerKernel(new URL(worker))
 cleanup(() => k.stop())
 
@@ -97,6 +102,7 @@ await agent.tool('app_files', {
     { path: 'wrangler.jsonc', content: '{"assets":{"public":["theme/"]}}' },
     { path: 'theme/kit.css', content: '.kit{}' },
     { path: 'owner.css', content: '.owner{}' },
+    { path: 'icon.png', base64: PNG },
     { path: 'fonts/f.ttf', content: 'gated font' },
     {
       path: 'styles/studio.css',
@@ -304,6 +310,26 @@ test('a file a page loads at an address the browser asks again is reported, once
   let paths = k.reported.slice(before).filter((row) => row.error)
     .map((row) => (row.error as { tags: Record<string, string> }).tags.path)
   equal(paths, ['/made/drawn.png'])
+})
+
+// However a page names the icon, it is loaded by the address that names its
+// version, and kept there, even when the worker is what hands it out
+// (T-3334).
+test("a private app's worker hands a stranger its icon at the address a browser keeps", async () => {
+  let image = { headers: { 'sec-fetch-dest': 'image' } }
+  let named = ''
+  for (let asked of ['/gated/icon.png', '/gated/icon.png?v=old']) {
+    let moved = await at(asked, image)
+    equal(moved.status, 307)
+    named = moved.headers.get('location')!
+    assertMatch(named, /^\/gated\/icon\.png\?v=[^&]+$/)
+  }
+  let icon = await at(named, image)
+  equal(btoa(String.fromCharCode(...await icon.bytes())), PNG)
+  equal(
+    icon.headers.get('cache-control'),
+    'private, max-age=31536000, immutable',
+  )
 })
 
 test("a private app's worker hands a stranger its release's file, kept privately", async () => {

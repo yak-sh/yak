@@ -687,6 +687,26 @@ let caching = async (
     : keeping(app)
 }
 
+// What an image load of the icon names: whether its address names the
+// current version (or there is none to name yet), where it is named, and,
+// for a worker handing over the release's own icon.png, that file's tag and
+// how long it is kept.
+let iconAsked = async (req: Request, env: Env, space: Space, app: App) => {
+  let q = new URL(req.url).searchParams
+  let display = q.has('display')
+  let version = await iconNamed(env, space, app, display)
+  let own = releaseAsset(await releaseAssets(env, app.source), '/icon.png')
+  return {
+    named: version == null || q.get('v') == version,
+    at: (mount: string) =>
+      `${mount}icon.png?${display ? 'display&' : ''}v=${
+        encodeURIComponent(version ?? '')
+      }`,
+    etag: own ? etagOf(own.original.slice(0, 24)) : null,
+    cache: await caching(req, env, space, app, '/icon.png'),
+  }
+}
+
 // The tag for a file's bytes, whose version arrives from files.ts (`VERSION`).
 let etagOf = (version: string) => `"${version}"`
 
@@ -3260,6 +3280,18 @@ let served = async (
     if (found) return json(found, 'not_found')
   }
   let mayRead = to.seen == 'page'
+  // An icon loaded by an address that names no version, or an old one (an
+  // older page, a manifest, a list drawn from a row without its release),
+  // moves to the address the browser keeps, whoever wrote the link, before
+  // any worker is asked.
+  let icon = !itself && path == '/icon.png' && loadsAsset(req) &&
+      ['GET', 'HEAD'].includes(req.method)
+    ? await iconAsked(req, env, space, app)
+    : null
+  if (icon && !icon.named) {
+    let page = reporting(redirect(icon.at(at), 307), req, at, app)
+    return edge ? marked(keep(page, space, app, [307])) : wall(page)
+  }
   // A release can give its static files to everyone while its worker and
   // store keep their own access rules. Old page links move to the same bytes,
   // where the worker would be asked for them or the visitor refused; the
@@ -3348,21 +3380,14 @@ let served = async (
   // the release (`kept`); a worker's stylesheet and its other files are
   // kept the same way.
   let worker = page == own
-  // An icon loaded by an address that names no version, or an old one (an
-  // older page, a manifest, a list drawn from a row without its release),
-  // moves to the address the browser keeps, whoever wrote the link.
-  if (!worker && path == '/icon.png' && page.status == 200 && loadsAsset(req)) {
-    let display = url.searchParams.has('display')
-    let version = await iconNamed(env, space, app, display)
-    if (version != null && url.searchParams.get('v') != version) {
-      await page.body?.cancel()
-      page = redirect(
-        `${at}icon.png?${display ? 'display&' : ''}v=${
-          encodeURIComponent(version)
-        }`,
-        307,
-      )
-    }
+  // A worker handing over the release's own icon at its named address gives
+  // the bytes that name stands for, kept as the platform keeps its own.
+  if (
+    worker && icon?.named && page.status == 200 &&
+    page.headers.get('etag') == icon.etag
+  ) {
+    page = new Response(page.body, page)
+    page.headers.set('cache-control', icon.cache)
   }
   // The Files validator identifies the release's original bytes before
   // kept() rewrites CSS and gives it a validator of its own.
