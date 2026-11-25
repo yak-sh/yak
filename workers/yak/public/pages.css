@@ -1015,7 +1015,7 @@
       opacity: 0;
     }
   }
-  /* An app open beside the chat (operator-page.ts `canvas`): a third column
+  /* An app open beside the chat (@yaks/platform/app-canvas-view): a third column
      the height of the window, held in place while the chat scrolls, the app
      itself filling it under its name. */
   @media (min-width: 701px) {

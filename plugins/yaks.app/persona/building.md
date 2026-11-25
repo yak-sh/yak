@@ -1,6 +1,6 @@
 ---
 # How the Operator writes a new app so the column beside the chat
-# (workers/yak/made.ts) shows it being made in order and in plain words. One
+# (packages/platform/app-made.ts) shows it being made in order and in plain words. One
 # write more than writing the whole app at once costs a build about a cent:
 # the step reads the conversation from the cache ($0.10 a million tokens on
 # GPT-6.2 Sol), against the $5 a newcomer's build may spend (newcomer.ts

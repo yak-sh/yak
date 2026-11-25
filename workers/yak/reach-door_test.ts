@@ -47,6 +47,7 @@ import {
   settingsEid,
   settingsOf,
 } from '@yaks/platform/operator-settings'
+import { appMaking, makingOf } from '@yaks/platform/app-canvas'
 import { draftEid } from '@yaks/draft'
 import {
   countRows,
@@ -266,6 +267,18 @@ test('a tab reads its space’s visits, which no store holds, and none of a spac
   // This platform has no analytics token: the page says it cannot count.
   equal(await rowsOf(ada, visitCounts(adas)), countRows(adas, null))
   equal(await rowsOf(bea, visitCounts(adas)), [])
+})
+
+test('a tab reads what an app it may open is made of, and nothing of one it may not', async () => {
+  let space =
+    (await k.dir.seated(ada.person)).find((s) => s.space.slug == 'adas')!
+      .space
+  let notes = (await k.dir.apps(space)).find((a) => a.slug == 'notes')!
+  let line = appMaking(notes.eid)
+  let made = makingOf(await rowsOf(ada, line), notes.eid)
+  equal([made?.made.kinds, made?.steps, made?.draft], [[], [], null])
+  equal(await rowsOf(bea, line), [])
+  equal(await rowsOf(ada, appMaking(crypto.randomUUID())), [])
 })
 
 test('a tab chooses how its person is told things away from the page', async () => {

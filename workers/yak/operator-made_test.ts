@@ -2,7 +2,10 @@
 // their address names opens beside the conversation, with Data, Commands,
 // Workflow when it has one, and Screens, the newest stage open. Its
 // screens are the draft until it is released, then the app itself. An
-// address naming no app opens none, whatever the chat has made.
+// address naming no app opens none, whatever the chat has made. The page
+// draws the app from the side's row of it, and what it is made of from the
+// page graph's read of it (canvas-read.ts), as the browser draws it
+// (@yaks/platform/app-canvas-browser).
 
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
@@ -13,6 +16,9 @@ import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { chatPage } from './operator-page.ts'
+import { making } from './canvas-read.ts'
+import { drawCanvas } from '@yaks/platform/app-canvas-browser'
+import { DRAWN } from '@yaks/platform/page-graph'
 
 let p = platform('operator-made')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -70,11 +76,20 @@ let at = (chosen: string | null) => async (...steps: Item[]) => {
     eid: a.eid,
     slug: a.slug,
     title: a.title,
+    source: a.source,
   }))
   let { document } = parseHTML(
     await (await chatPage(p.env, space, who, 'new', { apps }, chosen))
       .text(),
   )
+  let canvas = document.querySelector<HTMLElement>('[data-canvas-view]')
+  if (canvas) {
+    let app = apps.find((a) => a.slug == chosen)!
+    drawCanvas(canvas, {
+      apps: JSON.parse(document.querySelector(DRAWN)!.textContent!).rows,
+      making: await making(p.env, dir, who, app.eid),
+    })
+  }
   let part = (id: string) => document.querySelector(`[data-part=${id}]`)
   let names = (id: string) =>
     [...part(id)?.querySelectorAll('.Rows_Name') ?? []].map((e) =>

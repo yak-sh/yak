@@ -1,12 +1,15 @@
-import { Notice } from '@yaks/ui/parts'
-// What an app is made of, in the words of somebody who has never seen a
-// vocab.json (D-146737): the kinds of things it keeps, each with what it
-// keeps of one, and what it can do, its commands. The chat draws both beside
-// the conversation while the Operator builds the app (operator-page.ts
-// `canvas`), read from the app's draft as each write lands. Pure: the page
-// reads the file and hands its text here.
+/**
+ * What an app is made of, in the words of somebody who has never seen a
+ * vocab.json (D-146737): the kinds of things it keeps, each with what it
+ * keeps of one, and what it can do, its commands. The chat draws both beside
+ * the conversation while the Operator builds the app (./app-canvas-view.ts),
+ * read from the app's draft as each write lands. Pure: the server reads the
+ * file and hands its text here.
+ *
+ * @module
+ */
 import { type ComponentChildren as Node, h } from 'preact'
-import { Button, Empty, Rows } from '@yaks/ui/parts'
+import { Button, Empty, Notice, Rows } from '@yaks/ui/parts'
 import { read } from '@yaks/yaml'
 import { readOnly, titleOf } from '@yaks/data-editor'
 import type { Step } from '@yaks/builders/workflow'
@@ -58,7 +61,7 @@ let sentence = (text: unknown) => {
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { madeOf } from './made.ts'
+ * import { madeOf } from '@yaks/platform/app-made'
  * equal(madeOf(JSON.stringify({ $defs: {
  *   recipe: { properties: { serves: {}, photo_url: {} } },
  *   starred: { kind: false, properties: {} },
@@ -132,7 +135,7 @@ let text = (html: string) =>
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { pagesOf } from './made.ts'
+ * import { pagesOf } from '@yaks/platform/app-made'
  * equal(pagesOf([
  *   ['about.html', '<h1>About <em>us</em></h1>'],
  *   ['index.html', '<title>Recipes &amp; more</title>'],
@@ -200,8 +203,8 @@ export let keeps = (made: Made, { app, operator }: Whose): Node =>
       `The kinds of things ${app} keeps show here as ${operator} decides them.`,
     )
 
-/** Where an app's pages open: the screens frame they go to (operator-page.ts
- * `screens`), and the address under which they are served there. */
+/** Where an app's pages open: the screens frame they go to
+ * (./app-canvas-view.ts `screens`), and the address under which they are served there. */
 export type Shows = { frame: 'draft' | 'live'; at: string }
 
 /** What an app can do: its own commands, then adding and finding what it

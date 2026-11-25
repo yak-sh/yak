@@ -1,20 +1,11 @@
 import { possessive } from '@yaks/text'
-import { Identity, Notice, Preview, Toolbar, Transcript } from '@yaks/ui/parts'
+import { Notice, Transcript } from '@yaks/ui/parts'
 import { BEAT } from '@yaks/notify/whereabouts'
 import { wordsPage } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import {
-  Button,
-  Card,
-  Check,
-  Empty,
-  Field,
-  Form,
-  Icon,
-  TabSet,
-} from '@yaks/ui/parts'
+import { Button, Card, Empty, Field, Form, Icon } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
 import { directoryOf, type Panes, type Space, walkTo } from './directory.ts'
 import { chatRows } from './connections.ts'
@@ -45,7 +36,6 @@ import {
   type StoreDoor,
   talkPath,
 } from '@yaks/platform/routes'
-import { iconAddress } from './apps.ts'
 import { SLUG } from '@yaks/platform/names'
 import { CONTEXT } from './app-operator.ts'
 import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
@@ -56,7 +46,7 @@ import { subdomainMail } from './space-mail.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
 import { fromChunks, holding } from '@yaks/blob'
-import { inApp, refuse } from './tool.ts'
+import { refuse } from './tool.ts'
 import { MOVES } from './mascot.ts'
 import { Ask, type Asking } from './operator-box.ts'
 import {
@@ -108,23 +98,6 @@ import {
   row,
 } from './operator-draw.ts'
 import { PICTURES, reply, textual, trouble } from '@yaks/session/conversation'
-import {
-  does,
-  keeps,
-  type Made,
-  madeOf,
-  type Page,
-  pagesOf,
-  runs,
-} from './made.ts'
-import { type Step, workflow } from '@yaks/builders/workflow'
-import { metaOf } from './meta.ts'
-import type { Door } from '@yaks/durable-object/door'
-import { type Built, line } from '@yaks/query'
-import { drafting, draftsOf, theirs } from './written.ts'
-import { r2RawObjects } from './lib/objects.ts'
-import { linkOf } from './preview.ts'
-import { VOCABS } from '@yaks/platform/manifest'
 import { DOCUMENTS } from '@yaks/platform/documents'
 import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
@@ -151,6 +124,13 @@ import {
   waitsOf,
 } from './operator-lists.ts'
 import { talkBeside } from './talk-beside.ts'
+import {
+  appCanvas,
+  canvasAttrs,
+  type CanvasRoot,
+  showing,
+} from '@yaks/platform/app-canvas-view'
+import { appRows } from '@yaks/platform/side-rows'
 
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
@@ -883,20 +863,6 @@ export let operatorAnswer = async (
       waiting: waitsOf(listed),
     }, { headers: { 'cache-control': 'private, no-store' } })
   }
-  // An app beside the chat drawn again as the Operator works on it, and the
-  // bar's way to it on a phone, for a page that has none yet.
-  if (q.has('made') && req.method == 'GET') {
-    let making = await makingOf(env, space, who, q.get('made')!)
-    if (!making) {
-      return Response.json({ message: 'That app is missing.' }, {
-        status: 404,
-      })
-    }
-    return Response.json({
-      canvas: html(canvas(env, space, making, space.operator)),
-      show: html(showing(making)),
-    }, { headers: { 'cache-control': 'private, no-store' } })
-  }
 }
 
 // A socket, carried to the Builder object with the kernel's vouch on it and
@@ -1208,302 +1174,6 @@ export type Beside = {
 
 export { aboutPath }
 
-/** An app as the chat shows it. */
-type Shown = { slug: string; title: string }
-
-/** An app beside the chat as it is being made: what it is made of, and
- * where its screens are, if anywhere yet: the app itself once released, and
- * its draft's preview link (preview.ts), which follows the draft write by
- * write (public/release.js), while the draft holds a page that is not live:
- * before the first release, and while changes wait for the next. */
-type Making = Shown & {
-  icon: string
-  made: Made
-  pages: Page[]
-  steps: Step[][]
-  live: string | null
-  draft: string | null
-}
-
-// An app beside the chat as the person may see it, with the tools' own
-// access (tool.ts `inApp`), from its draft as it stands (written.ts
-// `drafting`); null for one they may not open, or one gone.
-let makingOf = async (
-  env: Env,
-  space: Space,
-  who: Who,
-  slug: string,
-): Promise<Making | null> => {
-  let ctx = { env, dir: directoryOf(env.STORE), person: who.person ?? '' }
-  let found = await inApp(ctx, { space: space.slug, app: slug }, true)
-    .catch((e) => e instanceof CallError ? null : Promise.reject(e))
-  if (!found) return null
-  let { app } = found
-  // The draft the person and their Operator write in (written.ts `theirs`).
-  let draft = await drafting(
-    r2RawObjects(env.BLOBS),
-    ctx.dir,
-    app,
-    theirs(await draftsOf(ctx.dir, app), found.who),
-  )
-  let file = VOCABS.find((p) => p in draft.files)
-  let words = file ? await draft.view.read(`${draft.root}/${file}`) : null
-  let decoded = (bytes: Uint8Array | null) =>
-    bytes ? new TextDecoder().decode(bytes) : ''
-  let pages = pagesOf(
-    await Promise.all(
-      Object.keys(draft.files).filter((p) => p.endsWith('.html')).map(
-        async (p) =>
-          [p, decoded(await draft.view.read(`${draft.root}/${p}`))] as [
-            string,
-            string,
-          ],
-      ),
-    ),
-  )
-  let pending = !!pages.length && draft.unreleased && !!env.SESSION_SECRET
-  let at = `https://${spaceHost(env, space.slug)}/${app.slug}/`
-  return {
-    slug: app.slug,
-    title: app.title || app.slug,
-    icon: await iconAddress(env, space, app, at),
-    made: madeOf(words && decoded(words), file),
-    pages,
-    steps: await stepsOf(found.store, found.who, space, app.slug),
-    live: app.source ? at : null,
-    draft: pending && draft.of
-      ? (await linkOf(ctx, space, app, found.who, draft.of)).at
-      : null,
-  }
-}
-
-// The workflow the app's live store holds: its builders and the `requires`
-// edges between them, as the person may read them. A store that cannot be
-// read draws no steps, and the failure is reported.
-let stepsOf = async (store: Door, who: Who, space: Space, app: string) => {
-  let read = (q: Built) =>
-    metaOf(store, { ...vouched(who), 'x-yak-observe': '1' }).query(q)
-  try {
-    let [builders, edges] = await Promise.all([
-      read(line`.builder&*`),
-      read(line`.requires&*`),
-    ])
-    return workflow([...builders, ...edges])
-  } catch (error) {
-    caught(error, { request: 'app workflow', space: space.slug, app })
-    return []
-  }
-}
-
-// Which of the canvas's tabs opens: the newest stage of making it reached,
-// screens once there are any.
-let stageOf = ({ made, live, draft }: Making) =>
-  live || draft
-    ? 'screens'
-    : !made.kinds.length && made.acts.length
-    ? 'does'
-    : 'keeps'
-
-// Its screens: the draft while it differs from what is live, and the app
-// itself once released, each in a frame, the one on screen said. While both
-// are there a pair of radios switches them (pages.css shows the frame of the
-// checked one, and the other loads once shown), the draft first, since it
-// is what is changing.
-let screens = (app: Making, operator: string) => {
-  let { live, draft } = app
-  let frame = (which: 'draft' | 'live', at: string) => [
-    h(Preview.Address, {
-      href: at,
-      target: '_blank',
-      rel: 'noopener',
-      title: 'Preview address, opens in a new tab',
-      'data-address': which,
-      'data-screen': which,
-    }, at),
-    h(Preview.Frame, {
-      mod: 'flat',
-      src: at,
-      title: `${app.title}, ${which == 'draft' ? 'the draft' : 'live'}`,
-      name: `screen-${which}`,
-      'data-frame': which,
-      'data-screen': which,
-      ...which == 'live' && draft ? { loading: 'lazy' } : {},
-    }),
-  ]
-  let note = (which: string, said: string) =>
-    h(Notice, { mod: 'fine', 'data-screen': which }, said)
-  if (!live && !draft) {
-    return h(
-      Empty,
-      null,
-      h(
-        'p',
-        null,
-        `${app.title}’s screens show here as ${operator} draws them.`,
-      ),
-    )
-  }
-  let choices = [
-    draft &&
-    {
-      id: 'draft',
-      title: 'Draft',
-      at: draft,
-      note: live
-        ? `${operator}’s changes, not live yet, over the live rows; what it writes stays in the draft.`
-        : `A draft over the live rows, changing as ${operator} works on it; what it writes stays in the draft.`,
-    },
-    live &&
-    {
-      id: 'live',
-      title: 'Live',
-      at: live,
-      note: draft
-        ? 'What people see now. The draft’s changes show here once released.'
-        : '',
-    },
-  ].filter((x) => !!x)
-  return h(
-    Preview.Choices,
-    { role: 'radiogroup', 'aria-label': 'Which screens' },
-    choices.map((choice, i) =>
-      h(
-        Preview.Item,
-        {},
-        choices.length > 1
-          ? h(
-            Preview.Choice,
-            {},
-            h(Check.Input, {
-              type: 'radio',
-              name: 'screen',
-              value: choice.id,
-              checked: i == 0,
-            }),
-            choice.title,
-          )
-          : null,
-        h(
-          Preview.View,
-          {},
-          choice.note ? note(choice.id, choice.note) : null,
-          frame(choice.id as 'draft' | 'live', choice.at),
-        ),
-      )
-    ),
-  )
-}
-
-// The app open beside the chat (T-140509), and the one the Operator is
-// making in it (D-146737, `following`): its icon, its name and where it
-// lives, a way to open it in a tab of its own, and under them what it is
-// made of: Data, Commands, Workflow when it has one, and Screens, with the
-// newest stage of making it open. Its screens
-// are the app itself, live, which the page reloads when the Operator changes
-// it, or before it is released its draft, which follows each write
-// (`chatScript`). The app's host lets the platform frame it
-// (@yaks/platform/kept `sealed`). On a phone it takes the screen in the
-// chat's place while chosen (`#app`), and Chat goes back. Each part the page puts in place again as
-// the Operator works is named by `data-part`.
-let canvas = (env: Env, space: Space, app: Making, operator: string) => {
-  let host = `${spaceHost(env, space.slug)}/${app.slug}`
-  let title = app.title || app.slug
-  let whose = { app: title, operator }
-  let stage = stageOf(app)
-  // Open starts at the frame on screen; location reports keep it current.
-  let away = app.draft ?? app.live
-  let tab = (id: string, name: string, ...inside: Node[]) =>
-    h(
-      TabSet.Item,
-      null,
-      h(TabSet.Input, {
-        type: 'radio',
-        name: 'made',
-        id: `made-${id}`,
-        value: id,
-        checked: id == stage,
-      }),
-      h(TabSet.Tab, { for: `made-${id}` }, name),
-      h(
-        TabSet.Panel,
-        {
-          as: Card,
-          class: `Talk_Part Talk_Part-${id}`,
-          'data-part': id,
-          'data-compact': id == 'screens' ? '' : undefined,
-        },
-        h('div', { class: 'Talk_Sheet' }, ...inside),
-      ),
-    )
-  return h(
-    Preview,
-    {
-      mod: 'pane',
-      class: 'Talk_App',
-      id: 'app',
-      'aria-label': title,
-      'data-app': app.slug,
-      'data-stage': stage,
-    },
-    h(
-      Toolbar,
-      { mod: 'compact', 'data-part': 'head' },
-      h(
-        Button,
-        { href: '#', class: 'Talk_Back', 'data-pane': '' },
-        h(Icon, { of: icons['arrow-left'] }),
-        'Chat',
-      ),
-      h(Identity.Image, {
-        src: app.icon,
-        width: 24,
-        height: 24,
-        alt: '',
-      }),
-      h(
-        Identity.Text,
-        {},
-        h(Identity.Name, {}, title),
-        h(Identity.Note, {}, host),
-      ),
-      away
-        ? h(
-          Button,
-          { href: away, target: '_blank', rel: 'noopener', 'data-open': '' },
-          h(Icon, { of: icons['external-link'] }),
-          'Open',
-        )
-        : null,
-    ),
-    h(
-      'div',
-      { class: 'Talk_Stage' },
-      h(
-        TabSet,
-        { class: 'Talk_Made', 'aria-label': `What ${title} is made of` },
-        tab('keeps', 'Data', keeps(app.made, whose)),
-        tab(
-          'does',
-          'Commands',
-          does(
-            app.made,
-            whose,
-            !!app.live,
-            app.pages,
-            app.draft
-              ? { frame: 'draft', at: app.draft }
-              : app.live
-              ? { frame: 'live', at: app.live }
-              : null,
-          ),
-        ),
-        app.steps.length ? tab('runs', 'Workflow', runs(app.steps)) : null,
-        tab('screens', 'Screens', screens(app, operator)),
-      ),
-    ),
-  )
-}
-
 /** Which apps the page goes to as the Operator works on them, with none
  * open (D-146737): for a newcomer any it works on, since their space holds
  * only what it builds them; for anyone else one it starts while they watch
@@ -1513,15 +1183,6 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
 type Follows = 'worked' | 'started' | null
 let following = (newcomer: boolean, chosen?: string | null): Follows =>
   chosen ? null : newcomer ? 'worked' : 'started'
-
-// The bar's way to the app on a phone, named for it in one line, cut short
-// where the bar is narrow (pages.css).
-let showing = (app: Shown) =>
-  h(
-    Button,
-    { href: '#app', class: 'Talk_Show', 'data-pane': '' },
-    h(Toolbar.Label, {}, app.title || app.slug),
-  )
 
 // The Operator page installs to a home screen as a web app (D-136811): each
 // space's own manifest (`installing`), named for its Operator and opening its
@@ -1602,7 +1263,9 @@ let talkPage = (
     // where the skip link goes, and what it says
     skip: [string, string]
     script?: string
-    app?: Making
+    // the app open beside it, and its canvas (@yaks/platform/app-canvas-view)
+    app?: MarkedApp
+    canvas?: Node
     // what it is doing now, at the top of the aside (operator-aside.ts), and
     // the summary of it the bar's button to the aside wears, and what that
     // button is then called
@@ -1659,7 +1322,7 @@ let talkPage = (
           back: page.here,
         }
         : undefined,
-      beside: page.app ? canvas(env, space, page.app, space.operator) : null,
+      beside: page.canvas ?? null,
       class: [
         'Talk',
         page.app && 'Talk-app',
@@ -1880,8 +1543,7 @@ export let chatPage = async (
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
   let follows = following(!!newcomer, chosen)
-  let named = chosen ? beside.apps?.find((a) => a.slug == chosen) : undefined
-  let app = named && await makingOf(env, space, who, named.slug) || undefined
+  let app = chosen ? beside.apps?.find((a) => a.slug == chosen) : undefined
   // This page's address, which the words written on it name.
   let shown = open == root ? 'new' : open
   let here = app
@@ -2010,7 +1672,38 @@ export let chatPage = async (
       mentions,
     ),
     app,
+    canvas: app && who.person
+      ? canvasOf(env, space, who.person, beside, app)
+      : undefined,
   })
+}
+
+// The app beside the chat as its view draws it (@yaks/platform/app-canvas-view):
+// its head and live screens from the side's row of it, which the page carries,
+// and what it is made of once the page graph's read of it is in.
+let canvasOf = (
+  env: Env,
+  space: Space,
+  person: string,
+  beside: Beside,
+  app: MarkedApp,
+) => {
+  let view: CanvasRoot = {
+    at: `https://${spaceHost(env, space.slug)}`,
+    operator: space.operator,
+    app,
+    person,
+    space: space.eid,
+  }
+  let rows = appRows(person, space.eid, beside.apps ?? [])
+  return [
+    appCanvas(view, undefined, canvasAttrs(view)),
+    h('script', {
+      type: 'application/json',
+      'data-page-graph': '',
+      dangerouslySetInnerHTML: { __html: drawnRows(person, rows) },
+    }),
+  ]
 }
 
 let updateColumn = (space: Space, who: Who) => ({
@@ -2292,103 +1985,27 @@ let talk = mountTalk({
   },
 })
 let heading = document.querySelector('[data-title]')
-// The app open beside the chat (T-140509) is loaded again when the Operator
-// changes it, and what it is made of drawn again as the Operator works on it
-// (\`canvas\`). With none open, the page goes to the one the Operator is
-// making, by its address (D-146737): any it works on for a newcomer, else
-// one it starts while they watch (\`following\`), each a frame's list.
+// The app open beside the chat (T-140509) is drawn again from the page graph
+// as the Operator works on it (@yaks/platform/app-canvas-browser), and its
+// live screens loaded again when the Operator changes it. With none open, the
+// page goes to the one the Operator is making, by its address (D-146737): any
+// it works on for a newcomer, else one it starts while they watch
+// (\`following\`), each a frame's list.
 let here = ${JSON.stringify(space.slug)}
 let follows = ${JSON.stringify(follows)}
 let canvas = () => document.querySelector('[data-app]')
-let painted = new WeakMap()
-let remember = (app) => {
-  for (let part of app?.querySelectorAll('[data-part]') ?? []) painted.set(part, part.outerHTML)
-}
-remember(canvas())
-let refreshFrames = frames(globalThis, document, signal)
+frames(globalThis, document, signal)
 let ours = (apps = []) => apps.filter((c) => !c.space || c.space == here).map((c) => c.app)
 let changing = (o) => {
   let app = canvas(), shown = app?.querySelector('[data-frame=live]')
   if (shown && ours(o.changed).includes(app.dataset.app)) shown.src = shown.getAttribute('src')
-  if (app) return void (ours(o.worked).includes(app.dataset.app) && remake(app.dataset.app))
+  if (app) return
   let opening = follows ? ours(o[follows]) : []
   if (opening.length) {
     let to = new URL(location.href)
     to.searchParams.set('app', opening.at(-1))
     location.assign(to)
   }
-}
-// It comes drawn whole, and only the parts of it that changed are put in
-// place, so the screens load again only when where they are changes; its
-// newest stage opens as it is reached, and the person's own pick stays until
-// then.
-let put = (drawn) => {
-  let made = document.createElement('template')
-  made.innerHTML = drawn.canvas
-  let next = made.content.firstElementChild
-  let was = canvas()
-  if (!was) {
-    let page = document.querySelector('.Talk')
-    page.classList.add('Talk-app')
-    page.append(next)
-    remember(next)
-    refreshFrames()
-    made.innerHTML = drawn.show
-    let bar = document.querySelector('.Frame_Bar')
-    bar.insertBefore(made.content.firstElementChild, bar.querySelector('.Frame_AsideTools'))
-    return
-  }
-  if (was.dataset.app != next.dataset.app) return
-  for (let part of next.querySelectorAll('[data-part]')) {
-    let at = was.querySelector('[data-part="' + part.dataset.part + '"]')
-    if (at && painted.get(at) != part.outerHTML) {
-      painted.set(part, part.outerHTML)
-      at.replaceWith(part)
-    }
-  }
-  refreshFrames()
-  if (next.dataset.stage == was.dataset.stage) return
-  was.dataset.stage = next.dataset.stage
-  let tab = was.querySelector('[name=made][value="' + next.dataset.stage + '"]')
-  if (tab) tab.checked = true
-}
-// A page chosen in Commands opens in its frame by itself (its
-// link's target); Screens, and that frame among them, come forward with it.
-document.addEventListener('click', (e) => {
-  let shows = e.target.closest?.('[data-shows]')
-  if (!shows) return
-  let app = canvas()
-  let tab = app?.querySelector('[name=made][value=screens]')
-  if (tab) tab.checked = true
-  let frame = app?.querySelector('[name=screen][value="' + shows.dataset.shows + '"]')
-  if (frame) frame.checked = true
-  refreshFrames()
-}, { signal })
-// One read of it at a time; one asked for meanwhile follows it. An app the
-// conversation made may since have been deleted: the door answers it missing,
-// and it is not asked for again.
-let remaking = false, wanted, gone = new Set()
-let remake = async (slug) => {
-  if (gone.has(slug)) return
-  wanted = slug
-  if (remaking) return
-  remaking = true
-  try {
-    while (wanted) {
-      let asked = wanted
-      wanted = undefined
-      let response = await ask('${at}?made=' + encodeURIComponent(asked))
-      if (response.status == 404) {
-        response.body?.cancel()
-        gone.add(asked)
-        continue
-      }
-      if (!response.ok) throw new Error('What is being made could not be brought up to date. Reload to try again.')
-      let drawn = await response.json()
-      if (signal.aborted) return
-      put(drawn)
-    }
-  } catch (e) { said(e) } finally { remaking = false }
 }
 // Approve or Decline on an approval's card acts in place: the card says what
 // came of it at once, and is drawn again as its row now stands.
@@ -2745,8 +2362,6 @@ let listen = () => {
   socket.onopen = () => {
     cancel(opening); live = true
     sayTab()
-    let app = canvas()
-    if (app) remake(app.dataset.app)
     if (opened) dispatchEvent(new Event('yak-reconnect'))
     opened = true
   }

@@ -3993,6 +3993,9 @@ importers:
       '@yaks/code':
         specifier: 0.2.23
         version: link:../code
+      '@yaks/data-editor':
+        specifier: 0.2.23
+        version: link:../data-editor
       '@yaks/draft':
         specifier: 0.2.24
         version: link:../draft

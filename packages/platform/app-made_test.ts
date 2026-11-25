@@ -5,8 +5,7 @@ import { equal, test } from '@yaks/testing'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
-import { does, keeps, madeOf, pagesOf } from './made.ts'
-import { appVocab } from './vocab.ts'
+import { does, keeps, madeOf, pagesOf } from './app-made.ts'
 
 let whose = { app: 'Recipe box', operator: 'Otto' }
 // What a panel says: each row's name and what describes it, or its one line
@@ -80,8 +79,6 @@ test('what a kind keeps leaves out what the app keeps for itself', () => {
     },
   }
   equal(kept(household), ['Family: Street and address line 2'])
-  // A deploy takes these words as written.
-  appVocab(household)
 })
 
 test('what an app can do: its own commands, then adding and finding what it keeps', () => {

@@ -146,8 +146,9 @@ let six = [
     eid: `app${i}`,
     slug: `app${i}`,
     title,
-    source: i == 0
-      ? 'clerk/.releases/app0/0b6b4f8c-fdcc-4a38-bcbd-15bad97cee69'
+    // Recipe box and Holdfast, which the directory holds released, are live.
+    source: i < 2
+      ? `clerk/.releases/app${i}/0b6b4f8c-fdcc-4a38-bcbd-15bad97cee69`
       : null,
   }))
 let beside = { name: '  Ada Lovelace ', apps: six }

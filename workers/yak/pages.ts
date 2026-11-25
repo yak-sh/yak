@@ -232,6 +232,10 @@ ${
       ? `<script type="module" src="${file('_payment.js')}"></script>`
       : ''
   }${
+    main.includes('data-canvas-view=')
+      ? `<script type="module" src="${file('_app-canvas.js')}"></script>`
+      : ''
+  }${
     main.includes('data-domain-search=')
       ? `<script type="module" src="${file('_domains.js')}"></script>`
       : ''

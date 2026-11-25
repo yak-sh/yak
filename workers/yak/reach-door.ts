@@ -24,6 +24,10 @@
 // directory says the space's row moved. Its owner's acts on them are done
 // here as them.
 //
+// What an app beside the chat is made of (@yaks/platform/app-canvas) is no
+// store's: it is read here (canvas-read.ts), and read again as the rows it is
+// read from move.
+//
 // Some writes are not rows: an Updates card's action (updates.ts `acting`),
 // the person's own account, messages and friend asks (account-writes.ts),
 // and who is in a space they own (people-writes.ts), are done here and answered with what they came to,
@@ -54,6 +58,8 @@ import { AGENTS, brokenSpace } from '@yaks/platform/space-apps'
 import { agentsIn, brokenOf } from './apps-reads.ts'
 import { paymentPart, paymentWrite } from '@yaks/platform/payment-rows'
 import { ownedSpace, paymentApply, paymentRead } from './payment-reads.ts'
+import { makingApp } from '@yaks/platform/app-canvas'
+import { making, watchMaking } from './canvas-read.ts'
 import { writes } from '@yaks/member'
 import { personRows, visitsRows } from './side.ts'
 import { countsSpace } from '@yaks/platform/visit-counts'
@@ -188,6 +194,10 @@ export let reachDoor = async (
         return Response.json(
           space ? await paymentRead(env, dir, space, paid.part) : [],
         )
+      }
+      let app = makingApp(line)
+      if (app != undefined) {
+        return Response.json(await making(env, dir, who, app))
       }
       let named = settingsSpace(line)
       if (named != undefined) {
@@ -355,6 +365,9 @@ export let reachDoor = async (
                 closed = true
               }
             }
+            // What an app beside the chat is made of, read again as it moves.
+            let app = makingApp(line)
+            if (app != undefined) return watchMaking(env, dir, who, app, sink)
             if (line == UPDATE_WAITING) {
               let headers = vouched(who)
               return watchWaiting(

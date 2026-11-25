@@ -696,9 +696,12 @@ let stored = async (place = 'operator:new') =>
     draft: { place: string; text: string }
   }[]).find((b) => b.draft.place == place)?.draft.text ?? ''
 
+// The side's apps as the directory holds them: Notes released.
+let notes = (await directoryOf(p.env.STORE).apps(space))
+  .find((a) => a.slug == 'notes')!
 let apps = {
   apps: [
-    { eid: 'notes', slug: 'notes', title: 'Notes' },
+    { eid: notes.eid, slug: 'notes', title: 'Notes', source: notes.source },
     { eid: 'club', slug: 'club', title: 'Club' },
   ],
 }
@@ -996,73 +999,6 @@ let files = (person: string, app: string, ...written: [string, unknown][]) =>
       })),
     },
   )
-// What the app beside a page says it keeps, and which of its tabs is open.
-let made = (document: Document) => ({
-  keeps: [...document.querySelectorAll('[data-part=keeps] .Rows_Name')]
-    .map((e) => e.textContent),
-  open: [...document.querySelectorAll('[name=made]')]
-    .filter((r) => r.hasAttribute('checked') || (r as HTMLInputElement).checked)
-    .map((r) => r.getAttribute('value')),
-})
-
-test('what the app beside the chat is made of is drawn again as the Operator works on it, its screens left loaded', async () => {
-  let page = await load(storage(), false, 'new', apps, 'notes')
-  let { document } = page
-  let frames = () =>
-    [...document.querySelectorAll('[data-frame]')].map((f) =>
-      f.getAttribute('data-frame')
-    )
-  assertEquals(made(document), { keeps: [], open: ['screens'] })
-  assertEquals(frames(), ['live'])
-  let wrote = async (properties: object) => {
-    await files(person, 'notes', [
-      'vocab.json',
-      { $defs: { notice: { properties } } },
-    ])
-    page.hear(working({ space: 'mill', app: 'notes' }))
-    page.hear(working({ space: '', app: 'notes' }))
-  }
-  // The first change to the live app puts its draft beside it.
-  await wrote({ posted: { type: 'string' } })
-  assert(await until(() => made(document).keeps.length > 0))
-  assertEquals(made(document), { keeps: ['Notice'], open: ['screens'] })
-  assertEquals(frames(), ['draft', 'live'])
-  // The next leaves both frames as they are.
-  let screens = document.querySelector('[data-frame]')
-  let address = document.querySelector('[data-address=draft]')!
-  let navigated = address.getAttribute('href')! + 'notices?q=tea#today'
-  address.setAttribute('href', navigated)
-  address.textContent = navigated
-  await wrote({ posted: { type: 'string' }, title: { type: 'string' } })
-  await until(
-    () =>
-      document.querySelector('[data-part=keeps] .Rows_Meta')?.textContent ==
-        'Posted and title',
-    { timeout: 10_000, label: 'the app’s updated fields' },
-  )
-  assert(document.querySelector('[data-frame]') === screens)
-  assertEquals(document.querySelector('[data-address=draft]'), address)
-  assertEquals(address.getAttribute('href'), navigated)
-  assertEquals(address.textContent, navigated)
-  assertEquals(
-    document.querySelector('[data-open]')?.getAttribute('href'),
-    navigated,
-  )
-  assertEquals(page.loads, { app: 0, page: 0 })
-  page.leave()
-})
-
-test('choosing a page in Commands opens it in Screens', async () => {
-  let page = await load(storage(), false, 'new', apps, 'notes')
-  let screens = page.document.querySelector(
-    '[name=made][value=screens]',
-  ) as HTMLInputElement
-  // Another tab picked, as linkedom's radios do not uncheck each other.
-  screens.checked = false
-  page.press(page.document.querySelector('[data-shows]')!)
-  assertEquals(screens.checked, true)
-  page.leave()
-})
 
 // A newcomer (newcomer.ts), whose Operator is making them an app.
 let newcomer = crypto.randomUUID()
@@ -1087,7 +1023,7 @@ await TOOLS.find((t) => t.name == 'app_new')!.run(
 // What is open beside the chat is what its address names, and only that:
 // the page goes to an app the Operator is making by its address, so a
 // reload, Back or a shared link all agree with it.
-test("a newcomer's chat goes to the app their Operator is making, by its address, and draws what it is made of there", async () => {
+test("a newcomer's chat goes to the app their Operator is making, by its address, and opens it there", async () => {
   let as = { person: newcomer, role: 'owner' as const }
   let page = await load(storage(), false, 'new', {}, undefined, undefined, as)
   assertEquals(page.document.querySelector('[data-app]'), null)
@@ -1110,17 +1046,12 @@ test("a newcomer's chat goes to the app their Operator is making, by its address
     as,
   )
   let { document } = there
-  assertEquals(made(document), { keeps: ['Recipe'], open: ['keeps'] })
-  assert(document.querySelector('.Talk')!.classList.contains('Talk-app'))
-  // The first page drawn opens its screens: the draft, as it stands.
-  await files(newcomer, 'recipes', ['index.html', '<h1>Recipes</h1>'])
-  there.hear(working({ space: '', app: 'recipes' }))
-  assert(await until(() => !!document.querySelector('[data-frame]')))
-  assertEquals(made(document).open.at(-1), 'screens')
-  assertStringIncludes(
-    document.querySelector('[data-frame]')!.getAttribute('src')!,
-    'https://clerk.yaks.app/recipes/~',
+  // What it is made of is the page graph's (operator-made_test.ts).
+  assertEquals(
+    document.querySelector('[data-app]')?.getAttribute('data-app'),
+    'recipes',
   )
+  assert(document.querySelector('.Talk')!.classList.contains('Talk-app'))
   there.leave()
 })
 

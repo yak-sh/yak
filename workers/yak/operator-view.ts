@@ -55,7 +55,7 @@ export let onPage = (page: string, app?: string, pane?: string) =>
     app ? `, with the app ${app} open beside it${tabOf(pane)}` : ''
   }: `
 
-// The app column's tabs (operator-page.ts `canvas`), by the id each sends.
+// The app column's tabs (@yaks/platform/app-canvas-view), by the id each sends.
 let TABS: Record<string, string> = {
   keeps: 'Data',
   does: 'Commands',
@@ -496,7 +496,7 @@ export let changed = apps(CHANGES)
 
 /** The apps these lines worked on, oldest first: those they changed, and
  * those whose draft they read or wrote, which the chat draws beside the
- * conversation as each step lands (operator-page.ts `canvas`). */
+ * conversation as each step lands (@yaks/platform/app-canvas-view). */
 export let worked = apps(WORKS)
 
 /** The apps these lines started, oldest first, which open beside the
