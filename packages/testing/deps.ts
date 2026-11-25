@@ -20,6 +20,8 @@ import { type Info, modules } from '@yaks/process/modules'
 // count in another, and what each file read as it last passed in a file
 // beside it.
 import { createHash } from 'node:crypto'
+import { dirname, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { written } from './find.ts'
 import {
   append,
@@ -149,7 +151,7 @@ export let graphSeed = (cwd: string = system.cwd()): string =>
 
 /** Where what each file of the checkout held, as last read, is kept by the
  * file's status (`survey`). */
-export let FACTS: string = `${stores()}/facts-v2.json`
+export let FACTS: string = `${stores()}/facts-v3.json`
 
 // What the store keeps of a module: what `Info` reads, without the source
 // spans and sizes deno says beside it, by what decides its imports (`said`).
@@ -355,18 +357,31 @@ async (roots: string[], bytes: Bytes = said): Promise<Info | undefined> => {
 /// named("new URL('../', import.meta.url)", 'x/y/t_test.ts') -> ['x']
 /// named("new URL('../..', import.meta.url)", 'x/y/t_test.ts') -> ['.']
 /// named("// new URL('./a.json', import.meta.url)", 'x/t_test.ts') -> []
-/** What a module names beside itself: `new URL(literal, import.meta.url)`,
- * outside a comment. */
+/// named("Deno.readTextFileSync('fixtures/a.json')", 'x/t_test.ts') -> ['fixtures/a.json']
+/** Files a module names with a module-relative URL or a literal Deno read
+ * path. Computed paths are observed in the runtime. */
 export let named = (
   source: string,
   path: string,
-  { url, rel }: Location = location(),
-): string[] =>
-  [
-    ...source.replace(/^\s*(\/\/|\/\*|\*).*$/gm, '').matchAll(
-      /new URL\(\s*(['"])([^'"]+)\1,\s*import\.meta\.url\s*\)/g,
-    ),
-  ].map((m) => rel(new URL(m[2], url(path)).href).replace(/\/$/, '') || '.')
+  { cwd, url, rel }: Location = location(),
+): string[] => {
+  let text = source.replace(/^\s*(\/\/|\/\*|\*).*$/gm, '')
+  let urls = text.matchAll(
+    /new URL\(\s*(['"])([^'"]+)\1,\s*import\.meta\.url\s*\)/g,
+  )
+  let reads = text.matchAll(
+    /\bDeno\.(?:read(?:Text)?File|open)(?:Sync)?\(\s*(['"])([^'"\\\n]+)\1\s*[,)]/g,
+  )
+  return [
+    ...new Set([
+      ...Array.from(urls, ([, , name]) => new URL(name, url(path)).href),
+      ...Array.from(
+        reads,
+        ([, , name]) => pathToFileURL(resolve(cwd, name)).href,
+      ),
+    ].map((at) => rel(at).replace(/\/$/, '') || '.')),
+  ]
+}
 
 /** What a path holds now: a file's bytes, a directory's listing (each entry's
  * name, a directory's ending in `/`, but for what the runner writes beside a
@@ -521,10 +536,23 @@ export let survey = async (
 ): Promise<Survey | undefined> => {
   let where = location(), { url, rel } = where
   let known = byStatus<Fact>(store)
+  let aliases = new Map<string, string[]>()
+  let link = (path: string) => {
+    let target = rel(
+      pathToFileURL(resolve(dirname(path), io.readLinkSync(path))).href,
+    )
+    let names = aliases.get(target) ?? []
+    names.push(path)
+    aliases.set(target, names)
+  }
   let look = (path: string): Promise<Fact> => {
     let s
     try {
-      s = io.statSync(path)
+      s = io.lstatSync(path)
+      if (s.isSymlink) {
+        link(path)
+        s = io.statSync(path)
+      }
     } catch {
       return Promise.resolve({ digest: 'absent', names: [], imports: 'absent' })
     }
@@ -605,6 +633,14 @@ export let survey = async (
   }
   for (let targets of [...next.values()]) {
     for (let t of targets) if (!next.has(t)) next.set(t, [])
+  }
+  // Reads and imports may name a symlink while Git names the changed target.
+  let changedNodes = (changed: string[]) => {
+    let paths = new Set(changed)
+    for (let p of paths) {
+      for (let alias of aliases.get(p) ?? []) paths.add(alias)
+    }
+    return [...paths].flatMap((p) => [p, at(url(p))])
   }
   known.save()
   let mine = (n: string) => own.get(n) ?? n
@@ -716,7 +752,7 @@ export let survey = async (
       if (!closures.has(cache)) {
         let edges = incoming(loaded ? still : run ? runtime : next)
         let seen = new Set<string>()
-        let visit = changed.flatMap((p) => [p, at(url(p))])
+        let visit = changedNodes(changed)
         while (visit.length) {
           let node = visit.pop()!
           if (seen.has(node)) continue
@@ -732,7 +768,7 @@ export let survey = async (
       let deps = run ? runtime : next, edges = incoming(deps)
       let walk = (paths: string[]) => {
         let far = new Map<string, number>()
-        for (let p of paths) far.set(p, 0).set(at(url(p)), 0)
+        for (let p of changedNodes(paths)) far.set(p, 0)
         for (let node of far.keys()) {
           let d = far.get(node)!
           if (d && wide(node, run)) continue

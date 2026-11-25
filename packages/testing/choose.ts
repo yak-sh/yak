@@ -1,4 +1,5 @@
 import * as io from '@yaks/file/io'
+import { dirname } from 'node:path'
 // Which of its files a run runs: each test module and example page is keyed
 // by what it depends on (./deps.ts), and one whose pass is kept is left out,
 // unless the run asks for all. A page is keyed by a module importing what its
@@ -70,16 +71,13 @@ export let within = (
  * (./deps.ts `shared`); when a run is `observed` its runtimes see what each
  * file reads (./reads.ts), and a pass is kept by that too. `changed` first
  * narrows the files to those reached by these paths, even with no cache.
- * A narrowed run with a `budget` keeps changed files, files importing an
- * edited declaration, including through re-exports, and the direct runtime
- * consumers of a changed module the change's `edits` do not place inside its
- * declarations. The rest compete for what remains by expected `cost`
- * (`within`):
- * first the files naming a declaration the change `edits`, or one naming it,
- * the fewest steps from it first (./names.ts `naming`, reading each file's
- * `source`), then the nearest to the change (./deps.ts `distance`), and only
- * those a distance reaches unless none is, and counts the rest `beyond`: a
- * run elsewhere with all of its files covers those. Given each path's package
+ * A narrowed run with a `budget` keeps changed files, files naming edited
+ * code directly or through re-exports, direct consumers of other runtime
+ * changes, and files that read the changed file or list its directory.
+ * The rest compete for what remains by
+ * expected `cost` (`within`), first those naming edited code through another
+ * module's declarations (./names.ts `naming`), then nearest first (./deps.ts `distance`).
+ * Main's full run covers the files left `beyond` the budget. Given each path's package
  * (`owner`), the files of a changed package its distance reaches come first,
  * followed by those importing it.
  * When deno cannot say what a module imports, a narrowed run reports that
@@ -223,18 +221,22 @@ export let choose = async (
       let direct = s.distance(
         changed.filter((p) => !edits?.[p] || edits[p].includes('*')),
       )
+      let dependency = s.distance(changed)
       let far = s.distance(changed, owner)
       let touched = new Set(changed)
+      let directories = new Set(changed.map((file) => dirname(file)))
       let required = new Set(
         run.filter((f) =>
           touched.has(f) || direct(root(f)) <= 1 || named.get(f) == 0 ||
-          reads(f)?.some((path) => touched.has(path))
+          reads(f)?.some((p) => dependency(p) == 0 || directories.has(p))
         ),
       )
       let rank = (f: string) =>
-        named.has(f) ? -1 / (1 + named.get(f)!) : Math.min(far(f), far(root(f)))
-      let near = run.filter((f) => rank(f) < Infinity)
-      let rest = (near.length ? near : run).filter((f) => !required.has(f))
+        named.has(f) ? -1 / (1 + named.get(f)!) : (reads(f) ?? []).reduce(
+          (nearest, path) => Math.min(nearest, dependency(path)),
+          Math.min(far(f), far(root(f))),
+        )
+      let rest = run.filter((f) => !required.has(f))
       let spent = [...required].reduce((sum, f) => sum + cost(f), 0)
       let fits = new Set(within(rest, rank, cost, Math.max(0, budget - spent)))
       kept = run.filter((f) => required.has(f) || fits.has(f))
@@ -278,5 +280,17 @@ export let affected = (
 ): boolean =>
   s.reaches(roots, changed, false, runtime) ||
   s.reaches(runner, changed, true) ||
-  observed.reaches(reads, changed, false, runtime) ||
-  reads.some((path) => changed.some((file) => file.startsWith(`${path}/`)))
+  readChange(observed, reads, changed, runtime)
+
+let inDir = (dir: string, file: string) =>
+  dir == '.' ? !file.includes('/') : file.startsWith(`${dir}/`)
+
+let readChange = (
+  s: Survey,
+  reads: string[],
+  changed: string[],
+  runtime: boolean,
+): boolean =>
+  reads.length > 0 &&
+  (s.reaches(reads, changed, false, runtime) ||
+    reads.some((path) => changed.some((file) => inDir(path, file))))

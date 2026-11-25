@@ -22,8 +22,9 @@ export let imported = (dependencies: string[]): void => {
 export let importing = (
   specifier: string,
   dependencies: string[] = [specifier],
+  options?: ImportCallOptions,
   // deno-lint-ignore no-explicit-any -- a computed module has no static export shape
 ): Promise<any> => {
   imported(dependencies)
-  return import(specifier)
+  return import(specifier, options)
 }

@@ -63,8 +63,8 @@ export let imported = (text: string): Imported[] =>
     },
   )
 
-/** How many declarations a name is followed through: a test calling what
- * calls what calls an edited function is as far as it goes. */
+/** How many modules can relay an edited declaration through their own
+ * declarations. Local helpers and re-exports keep the same distance. */
 export const STEPS = 2
 
 /**
@@ -127,7 +127,7 @@ export let naming = (
   let roots = new Map(files.map((f) => [url(root(f)), f]))
   let near = new Map<string, number>()
   let seen = new Map<string, number>()
-  // Breadth first, so each declaration is reached at its fewest steps.
+  // Revisit a declaration only when reached by a shorter path.
   let go = Object.entries(edited).flatMap(([m, names]) =>
     names.map((n) => ({ m: url(m), n, step: 0 }))
   )
@@ -135,13 +135,13 @@ export let naming = (
     let { m, n, step } = go[at]
     if ((seen.get(`${m}#${n}`) ?? Infinity) <= step) continue
     seen.set(`${m}#${n}`, step)
-    let next = (module: string, word: string) => {
-      if (step >= steps) return
+    let next = (module: string, word: string, distance: number) => {
+      if (distance > steps) return
       for (let d of saying(module, word)) {
-        if (d != n || module != m) go.push({ m: module, n: d, step: step + 1 })
+        if (d != n || module != m) go.push({ m: module, n: d, step: distance })
       }
     }
-    if (n != '*') next(m, n)
+    if (n != '*') next(m, n, step)
     for (let e of importers.get(m) ?? []) {
       for (let i of of(e)) {
         if (resolved.get(e)?.get(i.from) != m) continue
@@ -164,7 +164,7 @@ export let naming = (
         if (!words.length) continue
         let f = roots.get(e)
         if (f != undefined) near.set(f, Math.min(near.get(f) ?? Infinity, step))
-        for (let w of words) next(e, w)
+        for (let w of words) next(e, w, step + 1)
       }
     }
   }

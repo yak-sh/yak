@@ -153,6 +153,55 @@ test('a test of code calling an edited declaration comes before cheaper farther 
   equal((await chosen({ 'a.ts': ['render'] })).run, ['page_test.ts'])
 })
 
+test('a test importing a declaration that calls an edited local helper runs past the budget', async () => {
+  let files = ['page_test.ts', 'other_test.ts']
+  let s = await importing(files)
+  let texts: Record<string, string> = {
+    'a.ts': 'let links = () => []\nexport let page = () => links()',
+    'page_test.ts': "import { page } from './a.ts'",
+    'other_test.ts': "import { other } from './a.ts'",
+  }
+  let selected = await choose(files, {
+    changed: ['a.ts'],
+    all: true,
+    budget: 0,
+    cost: () => 1,
+    edits: { 'a.ts': ['links'] },
+    source: (f) => texts[f],
+    inspect: () => Promise.resolve(s),
+  })
+  equal(selected.run, ['page_test.ts'])
+  equal(selected.beyond, 1)
+})
+
+test('directory reads stay in the run and computed imports compete by distance', async () => {
+  let files = ['other_test.ts', 'loader_test.ts', 'listing_test.ts']
+  let s = await importing([...files, 'loaded.ts'], files)
+  let dir = await Deno.makeTempDir()
+  try {
+    let reads = `${dir}/reads.json`
+    note(
+      { 'loader_test.ts': ['loaded.ts'], 'listing_test.ts': ['fixtures'] },
+      reads,
+    )
+    let pick = (budget: number) =>
+      choose(files, {
+        changed: ['a.ts', 'fixtures/new.json'],
+        all: true,
+        observed: true,
+        reads,
+        budget,
+        cost: () => 1,
+        edits: { 'a.ts': ['links'] },
+        inspect: () => Promise.resolve(s),
+      })
+    equal((await pick(0)).run, ['listing_test.ts'])
+    equal((await pick(2)).run, ['loader_test.ts', 'listing_test.ts'])
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
 test('an edit inside one declaration of a shared module keeps only the direct tests naming it', async () => {
   let files = ['page_test.ts', 'other_test.ts']
   let s = await importing(files)

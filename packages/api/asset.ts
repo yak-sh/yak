@@ -7,9 +7,13 @@
 // offline. The workspace runs with Deno's `raw-imports`, which these need.
 // A browser has no text or bytes imports, so a page reads a web address with
 // `fetch`, which its own cache serves: the kit's stylesheets on an app page.
+import { importing } from '@yaks/fp/imports'
 
 let fetched = (url: URL) =>
   !('Deno' in globalThis) && /^https?:$/.test(url.protocol)
+
+let raw = async (url: URL, type: 'text' | 'bytes') =>
+  (await importing(url.href, undefined, { with: { type } })).default
 
 /** The text of the file at `url`.
  *
@@ -19,9 +23,7 @@ let fetched = (url: URL) =>
  * ```
  */
 export let text = async (url: URL): Promise<string> =>
-  fetched(url)
-    ? await (await answered(url)).text()
-    : (await import(url.href, { with: { type: 'text' } })).default
+  fetched(url) ? await (await answered(url)).text() : await raw(url, 'text')
 
 /** The bytes of the file at `url`.
  *
@@ -34,7 +36,7 @@ export let bytes = async (url: URL): Promise<Uint8Array<ArrayBuffer>> =>
   new Uint8Array(
     fetched(url)
       ? await (await answered(url)).arrayBuffer()
-      : (await import(url.href, { with: { type: 'bytes' } })).default,
+      : await raw(url, 'bytes'),
   )
 
 // A page's fetch of a file it ships, refused rather than read as its error page.

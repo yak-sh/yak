@@ -35,12 +35,12 @@ suite('sum', ({ it, equal }) => {
 ```
 
 From this repository, `deno task test` selects tests through the dependency
-graph, including consumers and examples, those naming what the change edits
-first, then the nearest to it, as many as about six seconds hold. The rest of
-its consumers run in main CI after the push, and the closing line counts them.
-It applies formatting to changed files, lints changed code, checks the public
-API of each changed package for slow types, and checks the types of the modules
-a change reaches, those changed, those importing one, and those of their package
+graph and recorded reads. It keeps changed tests and their closest consumers,
+then uses what remains of the six-second budget for farther consumers. Main's CI
+runs the full suite after the push. The closing line counts deferred files. It
+applies formatting to changed files, lints changed code, checks the public API
+of each changed package for slow types, and checks the types of the modules a
+change reaches, those changed, those importing one, and those of their package
 importing one however far, with their doc comment examples
 (`deno task check:types` alone); main CI checks every module after the push
 (`--all`). Paths and tags narrow a run while iterating; the finished change uses
@@ -329,10 +329,9 @@ in a worker or in Deno's blocking I/O threads does not count; a test that does
 its work there is timed by its wall time.
 
 A file whose tests all passed is skipped while its dependencies are unchanged.
-Its **key** holds what it depends on before it runs: its module dependencies
-resolved by `deno info`, files named with a literal
-`new URL('./fixture.json', import.meta.url)`, the runner (by what loads with it,
-not a module it imports only when a run asks for it), config, lock, Deno version
+Its **key** includes module dependencies resolved by `deno info`, files named
+with a literal `new URL('./fixture.json', import.meta.url)` or a literal path in
+a Deno file read, the runner's unconditional imports, config, lock, Deno version
 and paths supplied by `--also`. A directory named this way is a place, not its
 contents, and a directory's listing leaves out what the runner writes beside a
 page while it runs. The runner also observes Deno file reads: a directory it
@@ -353,8 +352,8 @@ imports, in `graph.json` by the module's import lines (`importing`) and the
 configs and lock that resolve it (`remembered`), so a survey asks `deno info`
 only of modules whose imports changed since, a new checkout starting from the
 one any checkout under the same deno.json, deno.lock, package.json and pnpm lock
-wrote last (`yak/graphs/`, `graphSeed`); what each file surveyed held, in
-`facts-v2.json`, and what each page's examples are, in `pages.json`
+wrote last (`yak/graphs/`, `graphSeed`); what each file surveyed held, in the
+file facts cache, and what each page's examples are, in `pages.json`
 (`discover`'s `store`), each by the file's inode, size and times (`byStatus`),
 so a file unchanged is not read again. What each file took to load and run in
 `tests-took.json` (`took`, `tally`), which a caller can hand `choose` as a
@@ -363,24 +362,20 @@ passes. `--keys` names a JSON file holding the key of each file given, from a
 caller that chose them already (`choose` from `@yaks/testing/choose`): every
 file given runs.
 
-`choose` given a `budget` and what each file is expected to `cost` keeps a
-narrowed run to it. A file the change edits always runs, whatever it costs, and
-the rest fill what it leaves of the budget. Given what the change `edits` (the
-top-level declaration holding each edited line, `declared`), the files naming
-one come first: those importing it by name, directly or from a module
-re-exporting it, then those naming a declaration whose body names it, up to
-`STEPS` such steps (./names.ts `naming`). A kernel test reaching an edited page
-only through the platform it composes names nothing, so a test calling the
-edited function runs before it. Every other file's rank is its **distance**:
-imports from a changed module to the file, never through a module that loads
-more than `WIDE` others. Such a module composes a platform, so nearly every
-change reaches its importers and that path says nothing about them. Given each
-path's package (`owner`), the files of a changed package a distance reaches, its
-README examples among them, come first. The files importing a changed package
-from another, and a changed package's files reached only through a wide module,
-come next; the rest run nearest and cheapest first. A file with no distance runs
-only when no file has one (a change to the lock, say). What does not run is
-counted as `beyond`.
+`choose` always keeps changed files, tests importing edited declarations, direct
+consumers of other changes, and tests that read the changed file or list its
+directory. An edit to a local helper counts for each declaration using that
+helper. Files importing a declaration through another module's code rank next,
+up to `STEPS` such steps (`naming` in `names.ts`). Other files rank by
+**distance**, the number of imports from a changed module to the file or a
+recorded read. Distance stops at a module that loads more than `WIDE` others.
+Such a module composes a platform, so nearly every change reaches its importers
+and that path says nothing about them. Given each path's package (`owner`), the
+files of a changed package a distance reaches, its README examples among them,
+come first. The files importing a changed package from another, and a changed
+package's files reached only through a wide module, come next. The rest run
+nearest and cheapest first, followed by files with no distance if budget
+remains. The runner counts deferred files as `beyond`.
 
 In this repository, `deno task test` chooses what runs before it starts
 anything, then starts one runner runtime for each platform holding a file that

@@ -1,9 +1,10 @@
 // Tests run on Deno, with a separate document for the terminal UI. Page
 // behavior runs in process on linkedom. With no paths, the dependency graph
-// selects tests reached by branch and working changes. Tests the change edits,
-// tests importing an edited declaration and direct consumers of a module
-// edited beyond its declarations stay in the run. What remains of the budget goes to nearby consumers; main's CI runs
-// the rest after the push. Cached passes leave out tests already passed unchanged.
+// selects tests reached by branch and working changes. Changed tests, tests
+// naming edited code, direct consumers of other changes, and tests whose
+// recorded reads reach the change stay in the run. Nearby consumers share
+// the rest of the budget, and main's CI runs the full suite after the push.
+// Cached passes leave out tests already passed unchanged.
 // Paths narrow an explicit run.
 // There are no browser or workerd tests. A run whose files reach the Worker's
 // generated files and npm tree makes them current first (`READIES`).

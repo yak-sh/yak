@@ -285,6 +285,20 @@ test('relevance follows transitive imports and named data, with an empty pass ca
   equal(affected(alone, [at('a_test.ts')], [], []), false)
 })
 
+test('an observed read through a symlink reaches its target even after deletion', async () => {
+  let target = at('target.txt'), alias = at('alias.txt')
+  write('target.txt', 'before')
+  Deno.symlinkSync('target.txt', alias)
+  let read = async () => (await survey([alias]))!
+  let before = await read()
+  Deno.removeSync(target)
+  let after = await read()
+  equal(affected(before, [], [], [target], [alias]), true)
+  equal(affected(after, [], [], [target], [alias]), true)
+  equal(after.distance([target])(alias), 0)
+  ok(await proof(before, 'key', [alias]) != await proof(after, 'key', [alias]))
+})
+
 test('shared runners reach unconditional code, while observed modules reach their own imports', () => {
   equal(
     affected(alone, [at('c_test.ts')], [at('runner.ts')], [at('helper.ts')]),

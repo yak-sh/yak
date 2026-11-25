@@ -1,5 +1,6 @@
 // A browser reads a package's file with fetch: its loader imports neither text
 // nor bytes, so @yaks/ui's sheets would never load on a page.
+import { watchImports } from '@yaks/fp/imports'
 import { equal, test } from '@yaks/testing'
 import { bytes, text } from './asset.ts'
 
@@ -47,3 +48,20 @@ test('a file the page cannot fetch is a failure, not its error page', async () =
     got: `${at.href} answered 404`,
     asked: [at.href],
   }))
+
+test('text and bytes reads report the asset path even after it is cached', async () => {
+  let asset = new URL('./README.md', import.meta.url)
+  let read: string[] = []
+  let close = watchImports((specifier) => {
+    if (specifier == asset.href) read.push(specifier)
+  })
+  try {
+    let content = await text(asset)
+    equal(content, await Deno.readTextFile(asset))
+    equal(await text(asset), content)
+    equal(new TextDecoder().decode(await bytes(asset)), content)
+    equal(read, [asset.href, asset.href, asset.href])
+  } finally {
+    close()
+  }
+})
