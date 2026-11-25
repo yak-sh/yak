@@ -41,15 +41,19 @@ export let isAlias = (eid: Eid): boolean => eid.startsWith('$')
  */
 export type Derive = (comp: Comp, bundle: Bundle) => Eid
 
+type References = Pick<Vocab, 'def'>
+
+let reference = (vocab: References, name: string, prop: string) =>
+  vocab.def(name)?.properties?.[prop]?.ref != null
+
 // The aliases a bundle references, through its reference properties.
 let pointsAt = (
   b: Bundle,
-  vocab: Vocab,
+  vocab: References,
 ): Eid[] =>
   comps(b).flatMap(([name, comp]) =>
     Object.entries(comp ?? {}).flatMap(([prop, val]) =>
-      typeof val == 'string' && isAlias(val) &&
-        vocab.prop(name, prop)?.category == 'ref'
+      typeof val == 'string' && isAlias(val) && reference(vocab, name, prop)
         ? [val]
         : []
     )
@@ -61,7 +65,7 @@ let pointsAt = (
 // simply left alone.
 let rewrite = (
   b: Bundle,
-  vocab: Vocab,
+  vocab: References,
   at: Map<Eid, Eid>,
   strict: boolean,
   actors = true,
@@ -86,7 +90,7 @@ let rewrite = (
     let props: Comp | undefined
     for (let [prop, val] of Object.entries(comp)) {
       if (
-        typeof val != 'string' || vocab.prop(name, prop)?.category != 'ref'
+        typeof val != 'string' || !reference(vocab, name, prop)
       ) continue
       let eid = at.get(val)
       if (!eid) {
@@ -119,7 +123,7 @@ let rewrite = (
  */
 export let substitute = (
   bundles: Bundle[],
-  vocab: Vocab,
+  vocab: References,
   at: Map<Eid, Eid>,
 ): Bundle[] =>
   at.size

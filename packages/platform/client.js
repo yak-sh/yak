@@ -1,6 +1,6 @@
 import { comps } from '@yaks/graph/bundle'
 import { decode, stringify, unpack } from '@yaks/vocab/wire'
-import { loadVocab, paced } from '@yaks/vocab'
+import { paced } from '@yaks/vocab'
 import { browserDrafts, draftEid } from '@yaks/draft/browser'
 import { durableOutbox } from '@yaks/sync/outbox'
 import { pacer, saying } from '@yaks/sync'
@@ -477,13 +477,12 @@ export let store = (base, {
     init ? once(path, init) : again(clock, () => once(path), read)
   // The store's words: each component it declares, by name, its documents
   // (`vocab.json`) merged. Asked once, and again after a failure.
-  let vocabulary, documents, definitions, compiled
+  let vocabulary, definitions
   let words = () =>
     vocabulary ??= rawAsk('vocab.json', undefined, {
       when: unanswered,
       tries: Infinity,
     }).then((docs) => {
-      documents = docs
       let defs = {}
       for (let doc of docs) {
         for (let [name, def] of Object.entries(doc.$defs ?? {})) {
@@ -499,14 +498,14 @@ export let store = (base, {
       vocabulary = undefined
       throw error
     })
-  let vocab = () => compiled ??= loadVocab(documents)
+  let vocab = { def: (name) => definitions?.[name] }
   let pacing = { comp: (name) => ({ pace: paced(definitions?.[name]?.pace) }) }
   let readWire = async (value, payload) => {
     // No extra request for a page whose answers contain no byte tags. Only
     // the vocabulary, never a global JSON reviver, gives the tag meaning.
     if (!payload && !JSON.stringify(value).includes('"$bytes"')) return value
-    let defs = await words()
-    return decode({ def: (name) => defs[name] }, value, payload)
+    await words()
+    return decode(vocab, value, payload)
   }
   // A payment door (`pay/checkout`, `pay/refunds`, `pay/orders/<eid>`): a
   // body is posted as JSON, none reads; a refusal throws with its message.

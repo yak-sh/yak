@@ -35,7 +35,7 @@ export let relayed = (relay, receipt, unnamed, vocab) => {
   for (let { entity: { eid } } of relay) {
     if (isAlias(eid) && !at.has(eid)) at.set(eid, mint())
   }
-  let sent = substitute(relay, at.size ? vocab() : null, at)
+  let sent = substitute(relay, vocab, at)
   let aliases = Object.fromEntries([...at].filter(([id]) => !unnamed.has(id)))
   let rows = new Map(receipt.bundles.map(({ $alias, ...row }) => [
     row.entity.eid,
