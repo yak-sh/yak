@@ -31,7 +31,7 @@ import { OWNERS } from '@yaks/platform/operator-owner'
 import { MEMORY_OWNERS } from '@yaks/platform/operator-memory'
 import { due, soonest, tick } from '@yaks/wake'
 import type { Watching } from './operator-schedules.ts'
-import { WAKES, wakesMoved } from './wake-move.ts'
+import { HEARD_WAKES, WAKES, wakesJudged, wakesMoved } from './wake-move.ts'
 import { TOLD } from './instructions-move.ts'
 import { LINES } from './line-move.ts'
 import { caught } from './defects.ts'
@@ -210,12 +210,14 @@ export let operatorStore = async (
       void watchEmbedding(statements(sql), meant)
       if (!left.length) marks.set(FITTED, print)
       // A new file holds nothing written before the rule that keeps owners,
-      // nor any wake in the Operator's old words.
+      // nor any wake in the Operator's old words, nor one set before a
+      // steered turn's wakes kept its mark.
       if (born) marks.set(OWNERS, 'done')
       if (born) marks.set(MEMORY_OWNERS, 'done')
       if (born) marks.set(ORACLES, 'done')
       if (born) marks.set(PROJECTS, 'done')
       if (born) marks.set(WAKES, 'done')
+      if (born) marks.set(HEARD_WAKES, 'done')
       // Nor anything kept before it numbered what it keeps.
       if (born) marks.set(NUMBERED, 'done')
       if (born) marks.set(LINES, 'done')
@@ -429,8 +431,10 @@ export let drain = async (
   await channeled(g, marks)
   // A firing is the store's own write, as every other write the Operator
   // keeps of itself is. None fires until the store's wakes are in their
-  // package's words (wake-move.ts), so none fires in words nothing runs.
-  let moved = wakesMoved(marks)
+  // package's words (wake-move.ts), so none fires in words nothing runs,
+  // nor until each set before steered turns marked theirs is judged
+  // (heard-wake-move.ts), so none a stranger set runs unasked.
+  let moved = wakesMoved(marks) && wakesJudged(marks)
   let { refused } = moved
     ? await tick(
       {

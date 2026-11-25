@@ -1032,6 +1032,21 @@ export class Builder extends Durable {
             let { wakeBackfill } = await import('./wake-move.ts')
             return backfill(wakeBackfill(store))
           },
+          // Each wake set before a steered turn's wakes kept its mark,
+          // judged by the turn that set it, before `drain` fires any
+          // (heard-wake-move.ts).
+          heardWakes: async () => {
+            let { heardWakes } = await import('./heard-wake-move.ts')
+            let judged = await heardWakes(store)
+            if (judged) {
+              let { spaceOf } = await import('./operator-root.ts')
+              console.info('yak operator heard wakes', {
+                space: await spaceOf(store),
+                ...judged,
+              })
+            }
+            return null
+          },
           // Subscriptions kept before they were live, given up their
           // cadence and read once, so each app they read tells them of its
           // commits from then on (operator-schedules.ts).

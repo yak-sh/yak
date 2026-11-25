@@ -23,6 +23,15 @@ import { caught } from './defects.ts'
  * while it goes on, `done` once it has. A store made new is born done. */
 export let WAKES = 'operator:wakes'
 
+/** Where a store says each wake set before a steered turn's wakes kept its
+ * mark was judged (heard-wake-move.ts): `done` once they were. A store made
+ * new is born done. */
+export let HEARD_WAKES = 'operator:heard-wakes'
+
+/** Whether a store's wakes were judged: always for a store kept nowhere. */
+export let wakesJudged = (marks?: Pick<Meta, 'get'>) =>
+  !marks || marks.get(HEARD_WAKES) == 'done'
+
 /** How many rows one batch moves. */
 export let BATCH = 50
 
