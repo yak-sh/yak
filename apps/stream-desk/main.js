@@ -245,15 +245,15 @@ subscribe('.cue&?aired&?missed&?suggested&?created&limit=50', (rows) => {
 })
 // A desk that stopped writing is away; the status is read again each beat.
 let deskRows = []
-let look = () => {
+let recheck = () => {
   state.desk = present(deskRows, Date.now())
   draw()
 }
 subscribe('.desk', (rows) => {
   deskRows = rows
-  look()
+  recheck()
 })
-setInterval(look, 15_000)
+setInterval(recheck, 15_000)
 let saved = JSON.parse(localStorage.getItem(SAVED) ?? 'null')
 if (saved) run(saved)
 draw()
