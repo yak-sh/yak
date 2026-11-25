@@ -590,8 +590,8 @@ let TAKES: Record<string, string> = {
   fetch: 'path and url',
   delete: 'path',
   history: 'path',
-  restore: 'path with sha or at, or nothing to undo the last write',
-  discard: 'draft',
+  restore: 'path with optional sha or at, or no path to undo the last write',
+  discard: 'draft when several drafts are open',
 }
 let OPS = Object.keys(TAKES)
 
@@ -616,7 +616,8 @@ let FILES_INPUT: Shape = {
         'Use new to read or list live files, or to start a separate draft from them on a write.',
     ),
     path: str(
-      'path relative to the app root, e.g. index.html. For restore, ' +
+      'File path relative to the app root, such as index.html. Required ' +
+        'for fetch, delete, history, a one-file write, and a patch without edits. For restore, ' +
         'leaving path, sha and at out goes back one write: every file ' +
         "the app's newest write changed returns to what it replaced",
     ),
@@ -711,6 +712,16 @@ let FILES_INPUT: Shape = {
 // tool has no use for, since a caller that left the op out has often guessed
 // a name too (`contents` for `content`).
 let opless = (args: Args) => {
+  let meant = args.edits != null || args.find != null || args.replace != null
+    ? 'patch'
+    : args.url != null
+    ? 'fetch'
+    : args.paths != null
+    ? 'read'
+    : args.sha != null || args.at != null
+    ? 'restore'
+    : null
+  if (meant) return `Set op: '${meant}'. ${meant} takes ${TAKES[meant]}.`
   let stray = Object.keys(args).filter((k) => !(k in FILES_INPUT.properties))
   return 'no op, and no content, base64 or files to write. op is one of ' +
     OPS.map((op) => `${op} (${TAKES[op]})`).join('; ') +
@@ -835,6 +846,14 @@ let list = (v: unknown, what: string) =>
 let decoder = new TextDecoder()
 let decoded = (bytes?: Uint8Array) => decoder.decode(bytes)
 
+let filePath = (value: unknown, field = 'path') => {
+  if (typeof value == 'string' && value) return value
+  throw refuse(
+    'arguments',
+    `${field} is required. Set ${field} to a file path relative to the app root, such as 'index.html'.`,
+  )
+}
+
 // The many-file form of a write: `files: [{path, content}]`, so an app is one
 // call and not one call per file (C-32624 item 5). Each refusal says which
 // entry was wrong, since the model sent them all at once.
@@ -852,7 +871,7 @@ let files = (
     }
     let f = one as Record<string, unknown>
     return {
-      path: text(f.path, `${name}[${i}].path`),
+      path: filePath(f.path, `${name}[${i}].path`),
       bytes: bytesOf(f, `${name}[${i}].`),
     }
   })
@@ -3381,7 +3400,7 @@ export let edits = (args: Record<string, unknown>): Edit[] => {
       )
     }
     return {
-      path: text(f.path, `${at}path`).replace(/^\/+/, ''),
+      path: filePath(f.path, `${at}path`).replace(/^\/+/, ''),
       find: text(f.find, `${at}find`),
       replace: f.replace,
       ...f.all != null ? { all: flag(f.all, `${at}all`) } : {},
@@ -4649,7 +4668,7 @@ let OURS: Row[] = [
       if (op == 'read' && args.path != null && args.paths == null) {
         around().catch(() => {})
         let d = await draft()
-        let path = named(text(args.path, 'path'))
+        let path = named(filePath(args.path))
         let bytes = await d.view.read(at(d, path))
         if (!bytes) {
           let draft = selectedDraft(d)
@@ -4713,7 +4732,7 @@ let OURS: Row[] = [
         }
       }
       if (op == 'delete') {
-        let path = named(text(args.path, 'path'))
+        let path = named(filePath(args.path))
         // A delete takes bytes away like a write does, so it keeps them the
         // same way: the file's last write stays in its history the moment it
         // stops being a file, and op restore brings it back (T-34508). One
@@ -4743,7 +4762,7 @@ let OURS: Row[] = [
       // stored. `now` is at the top because "what is there this second" is
       // half of what somebody reading a history is trying to work out.
       if (op == 'history') {
-        let path = named(text(args.path, 'path'))
+        let path = named(filePath(args.path))
         let [d, all] = await Promise.all([
           draft(),
           history(ctx.dir, app, path),
@@ -4837,7 +4856,7 @@ let OURS: Row[] = [
         }
       }
       if (op == 'restore') {
-        let path = named(text(args.path, 'path'))
+        let path = named(filePath(args.path))
         let [d, all] = await Promise.all([
           draft(),
           history(ctx.dir, app, path),
@@ -4976,7 +4995,7 @@ let OURS: Row[] = [
       }
       // A library vendored, rather than a minified file transcribed by hand.
       if (op == 'fetch') {
-        let path = text(args.path, 'path')
+        let path = filePath(args.path)
         let got = await c.time('fetch', () => fetched(text(args.url, 'url')))
         let bytes = await heldUpTo(got.body, PIECE)
         let pinned = bytes instanceof Uint8Array ? null : await c.time(
@@ -5026,7 +5045,7 @@ let OURS: Row[] = [
         }
       }
       let single = () => ({
-        path: text(args.path, 'path'),
+        path: filePath(args.path),
         bytes: bytesOf(args),
       })
       let shared = batch.length || args.path == null ? batch : [single()]

@@ -409,7 +409,7 @@ test('a plain write answers as it did, in the one draft it opened', async () => 
   // A refused argument ends with the whole shape its op takes.
   await throws(
     () => run('app_files', { app, content: 'x' }),
-    'path is required — write takes path and content',
+    "path is required. Set path to a file path relative to the app root, such as 'index.html'. — write takes path and content",
   )
 })
 

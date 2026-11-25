@@ -753,6 +753,27 @@ test(
         'app_files takes no contents',
       )
       await assertRejects(
+        () =>
+          agent.tool('app_files', {
+            ...app,
+            path: 'index.html',
+            find: 'before',
+            replace: 'after',
+          }),
+        Error,
+        "Set op: 'patch'.",
+      )
+      await assertRejects(
+        () => agent.tool('app_files', { ...app, op: 'get' }),
+        Error,
+        'op: wants one of "list", "read"',
+      )
+      await assertRejects(
+        () => agent.tool('app_files', { ...app, op: 'history' }),
+        Error,
+        'Set path to a file path relative to the app root',
+      )
+      await assertRejects(
         () => agent.tool('app_files', { ...app, files: [{ path: 'x.js' }] }),
         Error,
         'files[0].content is required',
@@ -1649,11 +1670,13 @@ test(
         'is already in the trash',
       )
       // Any other door's refusal names the apps the space does hold.
+      let missing = await assertRejects(
+        () => agent.tool('app_files', { ...scratch, op: 'list' }),
+        Error,
+        'app slug from app_list',
+      )
       assertMatch(
-        await agent.tool('app_files', { ...scratch, op: 'list' }).then(
-          () => '',
-          (e: Error) => e.message,
-        ),
+        missing.message,
         new RegExp(`^no app scratch in ${jeff54} — its apps are \\w`),
       )
       // The Operator's store, named after its page, is told its doors.
