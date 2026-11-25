@@ -198,6 +198,7 @@ import {
   loadsAsset,
   NAMED_CLIENT,
   passed,
+  recordsUse,
   staticCaching,
   uploaded,
 } from '@yaks/platform/kept'
@@ -2700,8 +2701,9 @@ let served = async (
 ): Promise<Response> => {
   let url = new URL(req.url)
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
+  let serving = copyOf(env)
   let dir = view ?? directory(direct, {
-    copy: copyOf(env),
+    copy: serving,
     time: env.CLOCK,
     public: edge,
     used: copied,
@@ -2748,7 +2750,11 @@ let served = async (
     // one of them, and asking each in turn was a round trip apiece.
     page: async (space, app) => {
       let { person } = await identity()
-      let read = c.time('route', () => dir.page(space, app, person))
+      let route = (req.method == 'GET' || req.method == 'HEAD') &&
+          uploaded(url.pathname)
+        ? directory(direct, { copy: serving, time: env.CLOCK, copyFirst: true })
+        : dir
+      let read = c.time('route', () => route.page(space, app, person))
       let credential = sessionReading(req, env, dir)
       // The name `/who` tells a person beside their standing (api `/who`, and
       // `/me`, its shipped name), asked with the route so a page's first
@@ -3353,6 +3359,7 @@ let served = async (
     }
     if (
       (answer.ok || answer.status == 101) && !who.administrative &&
+      recordsUse(req) &&
       ([
         '/query',
         '/apply',

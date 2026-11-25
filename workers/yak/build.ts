@@ -8,7 +8,7 @@ import type { Press } from './operator-approvals.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Hibernation, Wire } from '@yaks/durable-object'
 import { type DurableStorage, freely } from '@yaks/durable-object/sql'
-import type { Alarms } from '@yaks/durable-object/alarm'
+import { type Alarms, RETRY } from '@yaks/durable-object/alarm'
 import { Durable, type Spec } from '@yaks/durable-object/object'
 import { once } from '@yaks/fp'
 import { type Level, writes } from '@yaks/member'
@@ -936,15 +936,23 @@ export class Builder extends Durable {
   }
 
   override async alarm(): Promise<void> {
-    let eid = this.ctx.id?.name
-    if (!eid) {
-      if (this.ceiling.stopped(true)) return await super.alarm()
-      // An older alarm can arrive without the object's name.
-      let { spaceOf } = await import('./operator-root.ts')
-      eid = await spaceOf((await this.#stored()).store)
-    }
+    if (this.ceiling.stopped(true)) return await super.alarm()
     let revivals = this.#revivals
-    let space = eid ? await dirPart.directoryOf(this.#env.STORE).at(eid) : null
+    let space: dirPart.Space | null
+    try {
+      let eid = this.ctx.id?.name
+      if (!eid) {
+        // An older alarm can arrive without the object's name.
+        let { spaceOf } = await import('./operator-root.ts')
+        eid = await spaceOf((await this.#stored()).store)
+      }
+      space = eid ? await dirPart.directoryOf(this.#env.STORE).at(eid) : null
+    } catch (error) {
+      caught(error, { request: 'operator alarm admission' })
+      let wait = stopped(error) ? error.retry.after : RETRY
+      await this.clock.arm(Date.now() + wait)
+      return
+    }
     if (space && !space.trashed) return await super.alarm()
     // Leave a restore's alarm in place if it overtook the directory read.
     if (revivals == this.#revivals) await this.#ctx.storage.deleteAlarm?.()
@@ -966,9 +974,10 @@ export class Builder extends Durable {
       return {
         serve: (request) => this.fetch(request),
         works: {
-          // What the incarnation owes.
+          // The alarm drains owed work in this slice. A wake's extra arm is
+          // for the caller that starts work outside an alarm.
           owed: () => {
-            this.#resume()
+            this.#owed = undefined
             return null
           },
           sockets: async () => (await this.#stored()).door.renew(),

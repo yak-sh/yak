@@ -432,6 +432,11 @@ export let uploaded = (path: string): boolean => {
   return !!blob && !!addressed(blob)?.eid
 }
 
+/** Loading a page's media shares the page's activity receipt. A direct
+ * download or an API client reading an upload records its own use. */
+export let recordsUse = (req: Request): boolean =>
+  !loadsAsset(req) || !uploaded(new URL(req.url).pathname)
+
 /** Whether a request could be answered by a kept page: a read with nothing
  * that requires the gateway (a grant, a bearer, a byte range), and not an
  * app's `/api/` (but for its `fixed` bytes and `uploaded` representations), a sandboxed page's token path
@@ -547,7 +552,8 @@ export type Keepable = {
  * ```
  */
 export let keepable = (app: Keepable, path?: string): boolean =>
-  !sandboxed(app) && app.worker === '' &&
+  !sandboxed(app) &&
+  (app.worker === '' || !!path && uploaded(path)) &&
   (mode(app.access) != 'private' ||
     offered(app) && (path == null || fixed(path)))
 

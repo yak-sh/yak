@@ -10,8 +10,16 @@ import {
 } from '@std/assert'
 import * as apps from './apps.ts'
 import { Builder } from './build.ts'
-import { builderOf, type Held, NOBODY, OWED, seated } from './build-door.ts'
-import { WAKE } from './door.ts'
+import {
+  builderOf,
+  type Held,
+  NOBODY,
+  OWED,
+  seated,
+  woken,
+} from './build-door.ts'
+import { PLATFORM_OBJECT, WAKE } from './door.ts'
+import { RETRY } from '@yaks/durable-object/alarm'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
@@ -322,6 +330,25 @@ test('an alarm delivered after a space is erased does not open the Builder store
   )
 })
 
+test('a directory failure leaves a delayed alarm for the Operator', async () => {
+  let { env } = platform(SECRET)
+  let get = env.STORE.get.bind(env.STORE)
+  env.STORE.get = (id) =>
+    String(id) == PLATFORM_OBJECT
+      ? {
+        fetch: () => Promise.reject(new Error('Durable Object is overloaded')),
+      }
+      : get(id)
+  let ctx = Object.assign(state('', false), {
+    id: { name: crypto.randomUUID() },
+  })
+  using storage = ctx.storage
+  let object = new Builder(ctx, env)
+  let now = Date.now()
+  await object.alarm()
+  assert((await storage.getAlarm())! >= now + RETRY)
+})
+
 // What the wiped incarnation opened knew the file before it was emptied, so
 // the object restarts rather than read tables that are gone (T-222): once
 // the kernel has its answer, never under the wipe that asked, and what the
@@ -435,6 +462,40 @@ test('the door wakes a space’s object behind an answer that says it owes work'
   let ctx = [...o.states].find(([name]) => name.startsWith('builder '))![1]
   await Promise.all(ctx.pending)
   assertEquals(await armed({ ctx }), true)
+})
+
+test('speculative wakes share a space window, and owed work still gets its wake', async () => {
+  let { env } = platform(SECRET)
+  let one = crypto.randomUUID(), two = crypto.randomUUID()
+  let wakes: string[] = [], pending: Promise<void>[] = []
+  env.BUILDER = {
+    idFromName: (name) => name,
+    get: (id) => ({
+      fetch: (req) => {
+        if (new URL(req.url).pathname == WAKE) {
+          wakes.push(String(id))
+          return Promise.resolve(new Response(null, { status: 204 }))
+        }
+        return Promise.resolve(new Response('ok', { headers: { [OWED]: '1' } }))
+      },
+    }),
+  }
+  await within(
+    {},
+    {},
+    async () => {
+      for (let n = 0; n < 20; n++) woken(env, one)
+      woken(env, two)
+      let answer = await builderOf(env, one)(() =>
+        new Request('https://builder/operator/conversation')
+      )
+      await answer.body?.cancel()
+    },
+    undefined,
+    { retain: (work) => pending.push(work) },
+  )
+  await Promise.all(pending)
+  assertEquals(wakes, [one, two, one])
 })
 
 test('a wake is the kernel’s alone', async () => {

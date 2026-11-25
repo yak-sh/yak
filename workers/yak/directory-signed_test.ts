@@ -12,6 +12,7 @@ import {
   FENCE_WAIT,
   MEND,
   type ServingCopyDoor,
+  servingDirectory,
   signedDirectory,
   STALL,
 } from './directory-copy.ts'
@@ -140,6 +141,38 @@ await proof(
       equal(stored, { revision: 0, body: 'current' })
       equal(f.publications.length, 2)
       equal(next.status, 200)
+    }
+  },
+)
+
+await proof(
+  'blob routing uses a current copy and goes to the directory while fenced',
+  async () => {
+    let f = independent(), time = clock(), reads = 0
+    let transport = servingDirectory({
+      fetch: () => {
+        reads++
+        return Promise.resolve(
+          new Response('private', {
+            headers: { [EPOCH]: String(f.core().revision) },
+          }),
+        )
+      },
+    }, { copy: f.door, time, copyFirst: true })
+    f.core().publish(0, 'route', 'public')
+    let answers = await Promise.all(
+      Array.from(
+        { length: 20 },
+        () => transport.fetch(query('route')).then((r) => r.text()),
+      ),
+    )
+    let warmReads = reads
+    f.core().begin()
+    let current = await (await transport.fetch(query('route'))).text()
+    return () => {
+      equal(answers, Array(20).fill('public'))
+      equal(warmReads, 0)
+      equal([current, reads], ['private', 1])
     }
   },
 )

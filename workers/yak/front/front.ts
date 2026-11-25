@@ -24,7 +24,14 @@ import {
   remember,
   type Timer,
 } from '../kept-page.ts'
-import { opens, scope, sealed, stranger, UNKEPT_AT } from '@yaks/platform/kept'
+import {
+  opens,
+  recordsUse,
+  scope,
+  sealed,
+  stranger,
+  UNKEPT_AT,
+} from '@yaks/platform/kept'
 import { cookieValue } from '@yaks/platform/cookie'
 import {
   badgeFollowed,
@@ -234,7 +241,7 @@ export let kept = (
     if (env.VIEWS && isView(answer)) {
       env.VIEWS.writeDataPoint(pointOf(req as Visited, answer, at))
     }
-    if (answer.status < 400 && !remembered(at.app)) {
+    if (answer.status < 400 && recordsUse(req) && !remembered(at.app)) {
       ctx.waitUntil(
         Promise.resolve(env.USES.used(at.app)).catch((e) =>
           report(e, env, ctx, 'front used', req)

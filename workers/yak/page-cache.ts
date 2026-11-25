@@ -36,6 +36,7 @@ import {
   type Alone,
   keep as keeping,
   opens,
+  recordsUse,
   scope,
   type Seen,
   UNKEPT_AT,
@@ -130,7 +131,7 @@ export let asked = (
       c,
       (answer, at) => {
         shown(env, req, answer, at)
-        if (answer.status < 400) scheduleUse(env, at.app)
+        if (answer.status < 400 && recordsUse(req)) scheduleUse(env, at.app)
       },
       session,
     )

@@ -12,6 +12,7 @@ import { url } from '@yaks/platform/host'
 import { chatPath, managePath } from '@yaks/platform/routes'
 import { answered } from './meta.ts'
 import { type Call, type Door, finite } from '@yaks/durable-object/door'
+import { system } from '@yaks/fp'
 
 /** What a socket remembers about itself across a hibernation: who is on the
  * other end, and which space they opened it in. The attachment is the only
@@ -103,18 +104,18 @@ export let builderOf = (env: Env, space: string) => {
     let live = !answer.body || answer.status == 101 ||
       /ndjson|event-stream/.test(answer.headers.get('content-type') ?? '')
     if (live) {
-      woken(env, space)
+      wake(env, space)
       return answer
     }
     if (finite(answer)) {
       let had = new Response(await answer.arrayBuffer(), answer)
-      woken(env, space)
+      wake(env, space)
       return had
     }
     // A file has arrived once its last byte has passed.
     return new Response(
       answer.body!.pipeThrough(
-        new TransformStream({ flush: () => woken(env, space) }),
+        new TransformStream({ flush: () => wake(env, space) }),
       ),
       answer,
     )
@@ -131,11 +132,7 @@ let signal = (env: Wiring, space: string, path: string) =>
     })
   )
 
-/** Wake the space's object (door.ts `WAKE`), ahead of what a person will ask
- * its Operator or behind an answer that says it owes work: it comes up as any
- * request brings it, makes what a read of the Operator needs, and takes up
- * what its incarnation owes, since nobody waits on this answer. */
-export let woken = (
+let wake = (
   env: Env,
   space: string,
   retain?: (work: Promise<void>) => void,
@@ -145,6 +142,24 @@ export let woken = (
     { request: 'operator wake', space },
     retain,
   )
+
+let WARM = 10_000
+let warmed = new Map<string, number>()
+
+/** Start a space's Operator ahead of a visit once per isolate per warm window.
+ * The wake behind an answer that owes work always goes through `wake`. */
+export let woken = (
+  env: Env,
+  space: string,
+  retain?: (work: Promise<void>) => void,
+): void => {
+  let now = (env.CLOCK ?? system).now()
+  if (now - (warmed.get(space) ?? -Infinity) < WARM) return
+  warmed.delete(space)
+  warmed.set(space, now)
+  if (warmed.size > 1024) warmed.delete(warmed.keys().next().value!)
+  wake(env, space, retain)
+}
 
 /** An app the space's Operator watches committed (graph.ts `#herald`): its
  * subscriptions over the space look again a beat later (build.ts `HEARD`).

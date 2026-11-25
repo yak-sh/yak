@@ -12,7 +12,7 @@ import type { Env } from './env.ts'
 import { background, defect, invocationKey } from './defects.ts'
 import { apart, elapsed, spanned } from './lib/hops.ts'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object/resets'
-import { type Clock, system } from '@yaks/fp'
+import { type Clock, system, within } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
 import { RETIRED } from './serving-copy.ts'
 
@@ -480,6 +480,7 @@ export type ServingDirectoryOptions = {
   time?: Clock
   public?: boolean
   used?: () => void
+  copyFirst?: boolean
 }
 
 /** The transport every directory client uses. Revisions travel with direct
@@ -497,6 +498,9 @@ export let servingDirectory = (
     },
   }
   if (!options.copy) return gathered(direct)
+  if (options.copyFirst) {
+    return signedDirectory(direct, options.copy, options.time, true)
+  }
   return options.public
     ? publicDirectory(direct, options.copy, options.time, options.used)
     : signedDirectory(direct, options.copy, options.time)
@@ -604,6 +608,7 @@ export let signedDirectory = (
   via: Fetcher,
   copy: ServingCopyDoor | undefined,
   time: Clock = system,
+  copyFirst = false,
 ): Fetcher => {
   if (!copy) return via
   let reads = gathered(via)
@@ -655,9 +660,19 @@ export let signedDirectory = (
     await published([revision, key, body])
   }
   return {
-    fetch: (req) => {
+    fetch: async (req) => {
       if (req.method !== 'GET') return via.fetch(req)
       let key = new URL(req.url).searchParams.get('q') ?? ''
+      // A copy read observes its revision and fence together. Many blobs
+      // share the same routing row and need the directory on a miss.
+      if (copyFirst && copy.read) {
+        let answer = await within(copy.read(key), STALL, time).catch(() => null)
+        if (answer) {
+          return new Response(answer.body, {
+            headers: { [EPOCH]: String(answer.revision) },
+          })
+        }
+      }
       return new Promise<Response>((resolve) => {
         let settled = false
         let done = (answer: Response) => {

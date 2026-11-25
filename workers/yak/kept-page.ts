@@ -19,6 +19,7 @@ import {
   shareable,
   TAGS,
   UNKEPT,
+  uploaded,
 } from '@yaks/platform/kept'
 import type { Fetcher } from './env.ts'
 import { PATHS } from './variant.ts'
@@ -80,7 +81,14 @@ export let asked = async (
   // front page, whose mount is the whole hostname.
   let first = /^\/[^/]+\//.exec(path)?.[0]
   let mounts = [mount ?? '/', ...first && !mount ? [first] : []]
-  if (passes(site, [key, ...mounts.map((at) => scope(host, mount, at))])) {
+  // A worker's pages may go straight to the gateway while the platform's
+  // upload door is still served by Site.
+  if (
+    passes(site, [
+      key,
+      ...uploaded(path) ? [] : mounts.map((at) => scope(host, mount, at)),
+    ])
+  ) {
     return null
   }
   let pick = req.headers.get(PICK)
