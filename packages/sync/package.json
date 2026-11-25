@@ -8,6 +8,7 @@
     "./socket": "./socket.ts",
     "./outbox": "./outbox.ts"
   },
+  "sideEffects": false,
   "license": "Apache-2.0",
   "description": "Synchronizes a client graph with a server, applies live query updates, and reconciles optimistic writes or reverts them when refused.",
   "dependencies": {

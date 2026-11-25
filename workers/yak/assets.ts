@@ -34,7 +34,11 @@ let here = (path: string) => new URL(path, import.meta.url)
 let of = (specifier: string) => new URL(import.meta.resolve(specifier))
 
 // What the page scripts leave to the page to load once (./page-imports.ts).
+// They are made together, and what two of them import is one chunk a page
+// runs once (@yaks/web/assets `split`): Preact, the graph, sync and the
+// views' parts load once whichever of them a page holds.
 let external = Object.keys(SHARED)
+let paged = { external, split: true }
 
 /** The files of the site but those it draws (`drawn`). */
 export let ASSETS: Asset[] = [
@@ -52,7 +56,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_talk.js',
     bundle: here('./operator-rows.ts'),
-    external,
+    ...paged,
     named: true,
   },
   // Drawn (`drawn`), and named by its bytes here once it is written.
@@ -62,53 +66,53 @@ export let ASSETS: Asset[] = [
   // The service worker that shows pushed notifications, at the root it
   // serves, under the address the browsers that allowed it registered.
   { name: 'push.js', file: of('@yaks/push/worker') },
-  { name: '_sort.js', bundle: here('./sort.ts'), external },
+  { name: '_sort.js', bundle: here('./sort.ts'), ...paged },
   {
     name: '_inbox-actions.js',
     bundle: of('@yaks/platform/updates-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // The Friends page kept current (@yaks/platform/friends-browser).
   {
     name: '_friends.js',
     bundle: of('@yaks/platform/friends-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // The Profile page kept current (@yaks/platform/profile-browser).
   {
     name: '_profile.js',
     bundle: of('@yaks/platform/profile-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // The Invite page kept current (@yaks/platform/invite-browser).
   {
     name: '_invite.js',
     bundle: of('@yaks/platform/invite-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // The Shared with you page kept current (@yaks/platform/shared-browser).
   {
     name: '_shared.js',
     bundle: of('@yaks/platform/shared-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // A space's Apps page kept current (@yaks/platform/space-apps-browser).
   {
     name: '_apps.js',
     bundle: of('@yaks/platform/space-apps-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // Agents and New app kept current (@yaks/platform/agents-browser).
   {
     name: '_agents.js',
     bundle: of('@yaks/platform/agents-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // A space's Connections kept current
@@ -116,7 +120,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_connections.js',
     bundle: of('@yaks/platform/connections-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // A space's Operator settings kept current
@@ -124,28 +128,28 @@ export let ASSETS: Asset[] = [
   {
     name: '_operator-settings.js',
     bundle: of('@yaks/platform/operator-settings-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // A space's Matches kept current (@yaks/platform/operator-matches-browser).
   {
     name: '_matches.js',
     bundle: of('@yaks/platform/operator-matches-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // A space's People page kept current (@yaks/platform/people-browser).
   {
     name: '_people.js',
     bundle: of('@yaks/platform/people-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // A space's Visits kept current (@yaks/platform/visits-browser).
   {
     name: '_visits.js',
     bundle: of('@yaks/platform/visits-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // A space's Selling and Billing kept current
@@ -153,7 +157,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_payment.js',
     bundle: of('@yaks/platform/payment-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // A space's Settings, Domains and Trash kept current
@@ -161,7 +165,7 @@ export let ASSETS: Asset[] = [
   {
     name: '_space-pages.js',
     bundle: of('@yaks/platform/space-pages-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // A space's Updates cards kept current
@@ -169,14 +173,14 @@ export let ASSETS: Asset[] = [
   {
     name: '_updates.js',
     bundle: of('@yaks/platform/updates-list-browser'),
-    external,
+    ...paged,
     named: true,
   },
   // An Operator page's views shown in place (@yaks/platform/talk-views).
   {
     name: '_talk-views.js',
     bundle: of('@yaks/platform/talk-views-browser'),
-    external,
+    ...paged,
     named: true,
   },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },

@@ -14,11 +14,23 @@
 // named stylesheet is written with its `@import`s in place, so a page waits
 // on one fetch instead of a chain, and what it points at is named by its
 // bytes too.
+//
+// The bundles marked `split` are made in one build (@yaks/cli/page `split`):
+// what two of them import is written once, in a chunk under `_yak/` named by
+// its bytes, which each imports from the site's root. A page that loads
+// several runs each shared module once.
 
 import * as io from '@yaks/file/io'
 import { bytes } from '@yaks/api/asset'
 import type { Route } from '@yaks/api/routed'
-import { type Body, bundle, kept, type Written } from '@yaks/cli/page'
+import {
+  type Body,
+  bundle,
+  imports,
+  kept,
+  split,
+  type Written,
+} from '@yaks/cli/page'
 import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 
@@ -33,6 +45,9 @@ export type Asset = {
   body?: (signal?: AbortSignal) => Body | Promise<Body>
   file?: URL
   named?: boolean
+  /** made with the other split bundles, sharing their chunks; on its own
+   * (`make`, `served`) it is made whole */
+  split?: boolean
 }
 
 /** Where a named asset is written, below the directory the rest are. */
@@ -150,6 +165,36 @@ export let plan = (
   return { files, names }
 }
 
+/** The chunks the split bundles among `assets` import, and those chunks
+ * import, by path, read through `read`: what the build wrote beside them.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let files: Record<string, string> = {
+ *   '_a.js': 'import{a}from"/_yak/chunk.A1.js";a()',
+ *   '_yak/chunk.A1.js': 'import"/_yak/chunk.B2.js";export let a=()=>{}',
+ *   '_yak/chunk.B2.js': '',
+ * }
+ * let read = (name: string) => new TextEncoder().encode(files[name])
+ * assertEquals(
+ *   chunksOf([{ name: '_a.js', split: true, bundle: new URL('file:///a.ts') }], read),
+ *   ['_yak/chunk.A1.js', '_yak/chunk.B2.js'],
+ * )
+ * ```
+ */
+export let chunksOf = (assets: Asset[], read: Read): string[] => {
+  let found = new Set<string>()
+  let walk = (name: string) => {
+    for (let chunk of imports(new TextDecoder().decode(read(name)))) {
+      if (found.has(chunk)) continue
+      found.add(chunk)
+      walk(chunk)
+    }
+  }
+  for (let asset of assets) if (asset.split && asset.bundle) walk(asset.name)
+  return [...found]
+}
+
 let gone = (error: unknown) => {
   if (!(error instanceof io.errors.NotFound)) throw error
 }
@@ -170,14 +215,34 @@ export let write = async (
   }
   let encoded = (body: Body) =>
     typeof body == 'string' ? new TextEncoder().encode(body) : body
+  let splits = assets.filter((asset) => asset.split && asset.bundle)
+  let together = splits.length
+    ? await split(
+      Object.fromEntries(
+        splits.map((asset) => [asset.name, asset.bundle as URL]),
+      ),
+      undefined,
+      { external: [...new Set(splits.flatMap((a) => a.external ?? []))] },
+    )
+    : { entries: {}, chunks: {} }
   let bodies = new Map(
     await Promise.all(
-      assets.filter(made).map(async (asset) =>
-        [asset.name, encoded(await make(asset))] as const
+      assets.filter((asset) => made(asset) && !splits.includes(asset)).map(
+        async (asset) => [asset.name, encoded(await make(asset))] as const,
       ),
     ),
   )
-  let files = [...bodies, ...plan(assets, reading(to, bodies), sheet).files]
+  for (let [name, code] of Object.entries(together.entries)) {
+    bodies.set(name, encoded(code))
+  }
+  let chunks = Object.entries(together.chunks).map((
+    [at, code],
+  ) => [at, encoded(code)] as const)
+  let files = [
+    ...bodies,
+    ...chunks,
+    ...plan(assets, reading(to, bodies), sheet).files,
+  ]
   await Promise.all(files.map(async ([at, bytes]) => {
     await io.mkdir(dirname(join(to, at)), { recursive: true })
     await io.writeFile(join(to, at), bytes)

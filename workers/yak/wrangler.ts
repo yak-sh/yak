@@ -21,7 +21,8 @@ import { parse, stringify } from 'smol-toml'
 import { imaged } from './sandbox/base.ts'
 import { installed } from '@yaks/cli/dependencies'
 import { assets } from './asset-ready.ts'
-import { planned } from './assets.ts'
+import { ASSETS, planned } from './assets.ts'
+import { chunksOf, reading } from '@yaks/web/assets'
 import { once, sleep } from '@yaks/fp'
 import {
   command,
@@ -810,14 +811,15 @@ let bundleEntry = (output: string, meta: string, base: string): Bundle => {
   return { entry, output }
 }
 
-/** Every environment's assets answer this deploy's content-named files without
- * the Worker. Exact names, because an excepted path that misses never reaches
- * it, and a page held from before a deploy names the sheet it replaced. */
+/** Every environment's assets answer this deploy's content-named files (its
+ * named files and the chunks its split bundles share) without the Worker.
+ * Exact names, because an excepted path that misses never reaches it, and a
+ * page held from before a deploy names the sheet it replaced. */
 export let direct = (
   config: Record<string, unknown>,
-  names: Record<string, string>,
+  names: string[],
 ) => {
-  let first = ['/*', ...Object.values(names).map((name) => `!/${name}`)]
+  let first = ['/*', ...names.map((name) => `!/${name}`)]
   let environments = Object.values(config.env ?? {}) as typeof config[]
   for (let { assets } of [config, ...environments]) {
     if (assets) Object.assign(assets, { run_worker_first: first })
@@ -910,7 +912,11 @@ export let bundled = async (
       'wrangler.toml',
       { entry: join(output, 'index.js'), output },
       root,
-      (parsed) => direct(parsed, planned(join(root, 'public')).names),
+      (parsed) =>
+        direct(parsed, [
+          ...Object.values(planned(join(root, 'public')).names),
+          ...chunksOf(ASSETS, reading(join(root, 'public'))),
+        ]),
     )
     return { args: [...upload, '-c', config], output, remove }
   } catch (error) {

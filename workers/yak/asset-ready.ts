@@ -8,7 +8,7 @@ import { Buffer } from 'node:buffer'
 import { join, relative } from 'node:path'
 import { type Read, sources } from '@yaks/esbuild'
 import { strip } from '@yaks/esbuild/strip'
-import { made } from '@yaks/web/assets'
+import { chunksOf, made, reading } from '@yaks/web/assets'
 import { ASSETS, drawn, planned } from './assets.ts'
 
 let hash = (bytes: Uint8Array) =>
@@ -123,6 +123,7 @@ let outputs = async (root: string) => {
       '_compiler/toolkit.json',
       ...[...ASSETS, ...await drawn()].filter(made).map(({ name }) => name),
       ...Object.values(planned(publicDir).names),
+      ...chunksOf(ASSETS, reading(publicDir)),
     ]
       .map((name) => join(publicDir, name)),
   ]

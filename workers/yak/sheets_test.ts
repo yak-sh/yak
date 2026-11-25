@@ -223,7 +223,7 @@ test('sheets: a HEAD names the etag of the bytes a GET answers with', async () =
 test('sheets: a deploy excepts exactly the files it holds, in every environment', () => {
   let config = direct(
     { assets: {}, env: { staging: { assets: {} }, bare: {} } },
-    { 'style.css': '_yak/style.0123456789.css' },
+    ['_yak/style.0123456789.css'],
   ) as { assets: unknown; env: { staging: { assets: unknown } } }
   let first = { run_worker_first: ['/*', '!/_yak/style.0123456789.css'] }
   assertEquals(config.assets, first)

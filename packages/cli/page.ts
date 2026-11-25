@@ -171,7 +171,7 @@ export type Written = { code: string; at: URL }
 
 /** What a build made: its output, and what it read where it says. */
 export type Built = {
-  outputFiles?: { text: string }[]
+  outputFiles?: { path: string; text: string }[]
   metafile?: { inputs: { [path: string]: unknown } }
 }
 
@@ -182,12 +182,12 @@ export type Build = {
   dispose: () => Promise<void>
 }
 
-/** Finish or cancel one build, always releasing its context. */
-export let compiled = async (
+/** Finish or cancel one build, always releasing its context: what it
+ * made. */
+export let finished = async (
   build: Build,
   signal?: AbortSignal,
-  done: (built: Built) => void = () => {},
-): Promise<string> => {
+): Promise<Built> => {
   let cancel = () => {
     void build.cancel()
   }
@@ -196,12 +196,23 @@ export let compiled = async (
     if (signal?.aborted) throw new Error('browser bundle was stopped')
     let result = await build.rebuild()
     if (signal?.aborted) throw new Error('browser bundle was stopped')
-    done(result)
-    return result.outputFiles![0].text
+    return result
   } finally {
     signal?.removeEventListener('abort', cancel)
     await build.dispose()
   }
+}
+
+/** Finish or cancel one build of one module, always releasing its context:
+ * the module it made. */
+export let compiled = async (
+  build: Build,
+  signal?: AbortSignal,
+  done: (built: Built) => void = () => {},
+): Promise<string> => {
+  let result = await finished(build, signal)
+  done(result)
+  return result.outputFiles![0].text
 }
 
 /** How one browser module is bundled: the bare specifiers it leaves to the
@@ -233,3 +244,38 @@ export let bundle = async (
   let bundler: { bundle: typeof bundle } = await importing(from.href)
   return bundler.bundle(entry, signal, opts)
 }
+
+/** Browser modules bundled together, from a checkout: each entry's module by
+ * its name, and the modules two or more of them import once, in chunks named
+ * by their bytes (`chunks`, by path), which every entry imports from the
+ * site's `/${CHUNKS}/`. A page loading several of them runs each shared
+ * module once, and a browser keeps the chunks for good. */
+export let split = async (
+  entries: Record<string, URL>,
+  signal?: AbortSignal,
+  opts: Bundling = {},
+): Promise<
+  { entries: Record<string, string>; chunks: Record<string, string> }
+> => {
+  if (signal?.aborted) throw new Error('browser bundle was stopped')
+  if (Object.values(entries).some((at) => at.protocol != 'file:')) {
+    throw new Error('only modules in a checkout are bundled together')
+  }
+  let bundler: { split: typeof split } = await importing(bundlers.local.href)
+  return bundler.split(entries, signal, opts)
+}
+
+/** Where split bundles keep their shared chunks, below the site's root. */
+export let CHUNKS = '_yak'
+
+/** The chunks a split module imports, by path from the site's root.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(imports('import{a}from"/_yak/chunk.A.js";import"/_yak/chunk.B.js"'), ['_yak/chunk.A.js', '_yak/chunk.B.js'])
+ * ```
+ */
+export let imports = (code: string): string[] =>
+  [...code.matchAll(
+    new RegExp(`["']/(${CHUNKS}/chunk\\.[\\w-]+\\.js)["']`, 'g'),
+  )].map(([, chunk]) => chunk)

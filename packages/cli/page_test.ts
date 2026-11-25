@@ -4,10 +4,13 @@ import {
   ahead,
   type Body,
   type Build,
+  type Built,
   bundle,
   compiled,
+  imports,
   keep,
   kept,
+  split,
 } from './page.ts'
 import { close } from './held.ts'
 
@@ -145,7 +148,7 @@ let compiling = (rebuild: Build['rebuild']) => {
 test('a completed build releases its context and ignores later cancellation', async () => {
   let stop = new AbortController()
   let { seen, build } = compiling(() =>
-    Promise.resolve({ outputFiles: [{ text: 'built' }] })
+    Promise.resolve({ outputFiles: [{ path: '/built.js', text: 'built' }] })
   )
   assertEquals(await compiled(build, stop.signal), 'built')
   stop.abort()
@@ -154,7 +157,7 @@ test('a completed build releases its context and ignores later cancellation', as
 
 test('a cancelled build releases its context without returning its output', async () => {
   let stop = new AbortController()
-  let done!: (value: { outputFiles: { text: string }[] }) => void
+  let done!: (value: Built) => void
   let { seen, build } = compiling(() =>
     new Promise((resolve) => {
       done = resolve
@@ -162,7 +165,7 @@ test('a cancelled build releases its context without returning its output', asyn
   )
   let answer = compiled(build, stop.signal).catch((e) => e.message)
   stop.abort()
-  done({ outputFiles: [{ text: 'incomplete' }] })
+  done({ outputFiles: [{ path: '/built.js', text: 'incomplete' }] })
   assertEquals(await answer, 'browser bundle was stopped')
   assertEquals(seen, { cancelled: 1, disposed: 1 })
 })
@@ -186,6 +189,38 @@ test('a bundled page compiles its JSX against Preact', async () => {
     assertEquals(code.includes('hi'), true)
   } finally {
     await Deno.remove(path)
+  }
+})
+
+test('pages bundled together run what they share from one chunk at the site root', async () => {
+  let dir = await Deno.makeTempDir({
+    dir: new URL('./', import.meta.url).pathname,
+    prefix: '.split-',
+  })
+  try {
+    let file = async (name: string, code: string) => {
+      await Deno.writeTextFile(`${dir}/${name}`, code)
+      return new URL(`file://${dir}/${name}`)
+    }
+    await file('shared.ts', `export let shared = () => 'one copy'\n`)
+    let made = await split({
+      '_a.js': await file(
+        'a.ts',
+        `import { shared } from './shared.ts'\nconsole.log('a', shared())\n`,
+      ),
+      '_b.js': await file(
+        'b.ts',
+        `import { shared } from './shared.ts'\nconsole.log('b', shared())\n`,
+      ),
+    })
+    let [chunk, ...more] = Object.keys(made.chunks)
+    assertEquals(more, [])
+    assertEquals(imports(made.entries['_a.js']), [chunk])
+    assertEquals(imports(made.entries['_b.js']), [chunk])
+    assertEquals(made.chunks[chunk].includes('one copy'), true)
+    assertEquals(made.entries['_a.js'].includes('one copy'), false)
+  } finally {
+    await Deno.remove(dir, { recursive: true })
   }
 })
 

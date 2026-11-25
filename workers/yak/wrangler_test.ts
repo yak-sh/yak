@@ -1777,8 +1777,9 @@ let kernelRoot = Deno.makeTempDirSync()
 Deno.mkdirSync(join(kernelRoot, 'public'))
 // Every file named by its bytes, in the order they are named.
 let NAMED = ASSETS.filter((a) => a.named).map((a) => a.name)
-for (let file of NAMED) {
-  Deno.writeTextFileSync(join(kernelRoot, 'public', file), 'a{}')
+// And the split bundles, which share no chunk here.
+for (let { name } of ASSETS.filter((a) => a.named || a.split)) {
+  Deno.writeTextFileSync(join(kernelRoot, 'public', name), 'a{}')
 }
 Deno.writeTextFileSync(
   join(kernelRoot, 'wrangler.toml'),
