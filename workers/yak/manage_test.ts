@@ -31,6 +31,7 @@ import {
 } from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
 import { CHAT, WHO } from '@yaks/platform/site-nav'
+import { system } from '@yaks/fp'
 import { parseHTML } from 'linkedom'
 
 // One space, built as the file loads: a homepage app, a private one, one to
@@ -147,56 +148,70 @@ test('the apex opens a chat with the space’s Operator, whose Manage opens its 
   await login.body?.cancel()
 })
 
-// The chat asks the space's Operator before anything, so the page that sends
-// a person there wakes it as it answers, as does every other page of the
-// space they may open the chat from (build-door.ts `woken`).
-test('the apex and a space’s pages wake its Operator for the chat opened next', async () => {
-  let builder = k.builder((await k.dir.space(slug))!.eid)
-  let woke = 0
-  let fetch = builder.fetch.bind(builder)
-  builder.fetch = (r) => (new URL(r.url).pathname == WAKE && woke++, fetch(r))
-  let woken = async (path: string, cookie?: string) => {
-    let before = woke
-    await (await get(path, cookie)).body?.cancel()
-    await k.settled()
-    return woke - before
-  }
-  assertEquals(
-    [await woken(MANAGE), await woken(apps), await woken(MANAGE, '')],
-    [1, 1, 0],
-  )
-})
-
-test('the home sign-in check opts into waking only the signed-in Operator', async () => {
-  let builder = k.builder((await k.dir.space(slug))!.eid)
+let wakeProbe = async () => {
+  let now = Date.now()
+  let site = await fresh({}, (env) => {
+    env.CLOCK = { ...system, now: () => now }
+  })
+  let person = await signIn(site)
+  let slug = person.email.split('@')[0]
+  let builder = site.builder((await site.dir.space(slug))!.eid)
+  await site.settled()
   let wakes = 0
   let fetch = builder.fetch.bind(builder)
   builder.fetch = (r) => (new URL(r.url).pathname == WAKE && wakes++, fetch(r))
-  try {
-    let who = async (path: string, cookie: string) => {
-      let answer = await (await get(path, cookie)).json()
-      await k.settled()
-      return { signedIn: answer.signedIn, chat: answer.chat, wakes }
-    }
-    let opening = `${WHO}?${CHAT}`
-    assertEquals(await who(opening, ''), {
-      signedIn: false,
-      chat: undefined,
-      wakes: 0,
-    })
-    assertEquals(await who(WHO, them.cookie), {
-      signedIn: true,
-      chat: undefined,
-      wakes: 0,
-    })
-    assertEquals(await who(opening, them.cookie), {
-      signedIn: true,
-      chat: chatPath(slug),
-      wakes: 1,
-    })
-  } finally {
-    builder.fetch = fetch
+  let cool = () => void (now += 10_000)
+  cool() // Let the sign-in redirect's wake expire.
+  return {
+    slug,
+    cool,
+    wakes: () => wakes,
+    ask: async (path: string, cookie = person.cookie) => {
+      let answer = await site.at('yaks.app', path, {
+        redirect: 'manual',
+        headers: { cookie },
+      })
+      await site.settled()
+      return answer
+    },
   }
+}
+
+test('the apex and a space’s pages share a speculative Operator wake', async () => {
+  let { slug, ask, cool, wakes } = await wakeProbe()
+  let apps = managePath('apps', slug)
+  await (await ask(MANAGE)).body?.cancel()
+  await (await ask(apps)).body?.cancel()
+  assertEquals(wakes(), 1)
+  cool()
+  await (await ask(MANAGE, '')).body?.cancel()
+  assertEquals(wakes(), 1)
+  await (await ask(apps)).body?.cancel()
+  assertEquals(wakes(), 2)
+})
+
+test('the home sign-in check opts into waking only the signed-in Operator', async () => {
+  let { slug, ask, wakes } = await wakeProbe()
+  let who = async (path: string, cookie?: string) => {
+    let { signedIn, chat } = await (await ask(path, cookie)).json()
+    return { signedIn, chat, wakes: wakes() }
+  }
+  let opening = `${WHO}?${CHAT}`
+  assertEquals(await who(opening, ''), {
+    signedIn: false,
+    chat: undefined,
+    wakes: 0,
+  })
+  assertEquals(await who(WHO), {
+    signedIn: true,
+    chat: undefined,
+    wakes: 0,
+  })
+  assertEquals(await who(opening), {
+    signedIn: true,
+    chat: chatPath(slug),
+    wakes: 1,
+  })
 })
 
 // Where the dashboard was, letters and answers still send people: each page
