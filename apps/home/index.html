@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <base href="https://yaks.app/">
-    <meta name="yak-drawing" content="1b35a878bc">
+    <meta name="yak-drawing" content="a61a9a7f08">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title
@@ -163,6 +163,7 @@
         <div class="Sky_Twilight"></div>
       </div>
       <div class="Sky_SunSlot" data-sun-at></div>
+      <canvas class="Sky_Trails"></canvas>
       <svg class="Sky_Far" viewBox="-3000 -800 6000 860" focusable="false">
         <defs>
           <linearGradient id="Sky-hill-Farthest" x2="0" y2="1">
@@ -704,9 +705,9 @@
         <g class="Sky_Night Sky_Luna">
           <circle class="Sky_Halo" fill="url(#Sky-halo)" cx="520" cy="-188"
             r="80"></circle>
-          <g transform="translate(520 -188) rotate(-28)">
+          <g transform="translate(520 -188) rotate(-150)">
             <path class="Sky_Moon"
-              d="M0 24C-32 24 -32 -24 0 -24C-13.3 -24 -13.3 24 0 24Z"></path>
+              d="M0 24A24 24 0 0 1 0 -24A10 24 0 0 0 0 24Z"></path>
           </g>
         </g>
         <g class="Sky_Hills">

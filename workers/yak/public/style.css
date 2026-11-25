@@ -911,9 +911,21 @@
     }
   }
   /* While the sky turns, both scenes are drawn, each as clear as the hour
-     makes it. */
+     makes it, and the stars ride the wheel on a canvas of their own under
+     the scene (sky.js `wheel`). */
   .Sky[data-turn] :is(.Sky_Day, .Sky_Night) {
     display: revert;
+  }
+  .Sky_Trails {
+    display: none;
+    top: 0;
+    left: 0;
+  }
+  .Sky[data-turn='wheel'] .Sky_Trails {
+    display: block;
+  }
+  .Sky[data-turn='wheel'] .Sky_Stars {
+    visibility: hidden;
   }
 
   /* A touch on the sky (sky.js): the sun's glow and the moon's halo swell

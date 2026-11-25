@@ -33,7 +33,8 @@ test('the homepage foreground hill fades into the page color in both themes', ()
 // moon high in the middle, the sun low and a little to the right
 let MOON_AT = [720, 20], SUN_AT = [800, 180]
 
-let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
+// `top` is where his slot starts in the window
+let sky = ({ dark = false, calm = false, path = '/', top = 150 } = {}) => {
   let { document, window } = parseHTML(home(file(path)))
   let on: Record<string, (e: unknown) => void> = {}
   // every animation played, by the class of what it moves
@@ -44,7 +45,7 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   window.HTMLElement.prototype.getBoundingClientRect = rect({ top: 0, left: 0 })
   document.querySelector('.Hello_Yak')!.getBoundingClientRect = rect({
     left: 100,
-    top: 150,
+    top,
     width: 128,
     height: 128,
   })
@@ -88,14 +89,45 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     return run as unknown as Animation
   }
   let reads = 0
+  // what the stars' canvas is drawn with: each frame the stars, and their
+  // tails each as [x, y] of where it ends and of the star
+  type Pt = [number, number]
+  let drawn: { stars: Pt[]; tails: Pt[][] }[] = [], m = [1, 0, 0, 1, 0, 0]
+  let pen = {
+    fillStyle: '',
+    globalAlpha: 1,
+    setTransform: (...to: number[]) => m = to,
+    clearRect: () => drawn.push({ stars: [], tails: [] }),
+    beginPath() {},
+    moveTo() {},
+    fill() {},
+    arc: (x: number, y: number) => drawn.at(-1)!.stars.push([x, y]),
+    drawImage: () => {
+      let [a, b, c, d, e, f] = m, end: Pt = [e + 8 * c, f + 8 * d]
+      drawn.at(-1)!.tails.push([end, [end[0] + 256 * a, end[1] + 256 * b]])
+    },
+  }
+  // and whatever else a canvas is drawn with
+  let sketch = new Proxy({}, {
+    get: () => () => ({ addColorStop() {} }),
+    set: () => true,
+  })
+  window.HTMLCanvasElement.prototype.getContext = function (this: Element) {
+    return this.matches('.Sky_Trails') ? pen : sketch
+  } as never
   // a turn's animations are staged ahead and played on a touch
   class Effect {
     constructor(public target: Element, public frames: Keyframe[]) {}
   }
   class Staged {
     onfinish: null | (() => void) = null
+    start = 0
     constructor(public effect: Effect) {}
+    get currentTime() {
+      return now - this.start
+    }
     play() {
+      this.start = now
       let { target, frames } = this.effect
       played.push({
         of: target.getAttribute('class') ?? target.tagName,
@@ -136,6 +168,8 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     },
     innerWidth: 1440,
     innerHeight: 860,
+    devicePixelRatio: 1,
+    Path2D: class {},
     scrollX: 0,
     scrollY: 0,
   }
@@ -194,6 +228,7 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     sat,
     on,
     scope,
+    drawn,
   }
 }
 
@@ -522,4 +557,67 @@ test('he lowers the button as he gets up, and it is gone once he is home', () =>
   assertEquals(Object.keys(sign.dataset), ['away'])
   on.home({})
   assertEquals(Object.keys(sign.dataset), [])
+})
+
+test('the stars ride round with the sky as it turns, streaked while it is fast', () => {
+  // with the line he sits on where the far scene is laid out from
+  let { touchMoon, played, watch, drawn, scope, all } = sky({
+    dark: true,
+    top: 800 + SINK - 128 * .89,
+  })
+  // a window large enough to show every star
+  scope.innerWidth = scope.innerHeight = 1e5
+  touchMoon()
+  for (let i = 0; i < 80; i++) watch(1)
+  played[0].done()
+  type Pt = number[]
+  let home = all('.Sky_Star').map((s) =>
+    ['cx', 'cy'].map((a) => Number(s.getAttribute(a)))
+  ).map(([x, y]) => [x + 3000, y + 800])
+  let mean = (ps: Pt[]) =>
+    [0, 1].map((i) => ps.reduce((sum, p) => sum + p[i], 0) / ps.length)
+  let apart = ([x, y]: Pt, [x2, y2]: Pt) => Math.hypot(x2 - x, y2 - y)
+  let rounded = (ps: Pt[]) => ps.map((p) => p.map((v) => v.toFixed(1)) + '')
+  // how far each is from the middle of them all
+  let spread = (ps: Pt[]) =>
+    ps.map((p) => apart(p, mean(ps))).sort((a, b) => a - b).map((d) =>
+      d.toFixed(1)
+    )
+  // they start and end where the page drew them, as points
+  for (let { stars, tails } of [drawn[0], drawn.at(-1)!]) {
+    assertEquals(rounded(stars).sort(), rounded(home).sort())
+    assertEquals(tails, [])
+  }
+  // and between they are turned together, as one sky, each going under
+  // the line he sits on and coming back up over it
+  let moved = drawn.map(({ stars }) =>
+    stars.length == home.length ? apart(mean(stars), mean(home)) : 0
+  )
+  let i = moved.indexOf(Math.max(...moved)), mid = drawn[i].stars
+  assert(moved[i] > 50, 'the stars stayed where they were')
+  assertEquals(spread(mid), spread(home))
+  assert(drawn.some(({ stars }) => !stars.length), 'none went under')
+  // each streaked, the more the faster the sky turns
+  let longest = (n: number) =>
+    Math.max(...drawn[n].tails.map(([end, star]) => apart(end, star)))
+  assert(longest(i) > longest(drawn.length - 8), `${longest(i)}`)
+  // back the way it came
+  assertEquals(
+    rounded(drawn[i].tails.map(([, star]) => star)).sort(),
+    rounded(mid).sort(),
+  )
+  let back = mean(drawn[i].tails.map(([end, star]) => [
+    star[0] - end[0],
+    star[1] - end[1],
+  ]))
+  let [was, will] = [i, i + 1].map((n) => mean(drawn[n].stars))
+  assert(back[0] * (will[0] - was[0]) + back[1] * (will[1] - was[1]) > 0)
+})
+
+test('for less motion the stars stay where they are as the sky fades', () => {
+  let { touchMoon, watch, drawn, el } = sky({ dark: true, calm: true })
+  touchMoon()
+  watch(10)
+  assertEquals(drawn, [])
+  assertEquals((el('.Sky') as HTMLElement).dataset.turn, '')
 })

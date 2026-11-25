@@ -104,12 +104,12 @@ let wisp = (x: number, y: number, w: number, h: number, far = false) => (
   />
 )
 
-/** The moon's lit shape, 24 across its middle, its terminator `edge` from
- * its middle: -24 is a new moon, 0 a half and 24 a full one. */
-export let moon = (edge: number) => {
-  let c = n1(edge * 4 / 3)
-  return `M0 24C-32 24 -32 -24 0 -24C${c} -24 ${c} 24 0 24Z`
-}
+/** The moon's lit shape, 24 from its middle to its edge and lit to its left:
+ * the half of its rim on that side, and back along its terminator, the half
+ * of an ellipse through the same two points `edge` across, so the horns
+ * taper to points. -24 is a new moon, 0 a half and 24 a full one. */
+export let moon = (edge: number) =>
+  `M0 24A24 24 0 0 1 0 -24A${Math.abs(edge)} 24 0 0 ${edge > 0 ? 1 : 0} 0 24Z`
 
 /** The moon's terminator: a crescent. */
 export const PHASE = -10
@@ -183,7 +183,7 @@ let Luna = () => (
       cy={MOON.y}
       r='80'
     />
-    <g transform={`translate(${MOON.x} ${MOON.y}) rotate(-28)`}>
+    <g transform={`translate(${MOON.x} ${MOON.y}) rotate(-150)`}>
       <path class='Sky_Moon' d={moon(PHASE)} />
     </g>
   </>
@@ -285,6 +285,7 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
         <div class='Sky_Twilight' />
       </div>
       {landscape && <div class='Sky_SunSlot' data-sun-at='' />}
+      <canvas class='Sky_Trails' />
       <svg class='Sky_Far' viewBox='-3000 -800 6000 860' focusable='false'>
         <defs>
           {landscape && <HillPaints />}

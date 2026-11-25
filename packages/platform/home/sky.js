@@ -85,7 +85,8 @@
   // (and whether it is in the sky) `s` of a turn on from the sun's spot: the
   // moon's is at `m`, and the way comes into the sky at -`e` and goes out at
   // `d`. Each light is in the sky for under half a turn, so the two are
-  // never in it at once.
+  // never in it at once. While one is in the sky it goes round the `hub` at
+  // `rate`, in turns of its angle (up and to the right) to the wheel's.
   let arcOf = (moon, sun, line, under) => {
     let h = ([, y]) => line - y
     let c = (moon[0] ** 2 + h(moon) ** 2 - sun[0] ** 2 - h(sun) ** 2) /
@@ -115,7 +116,14 @@
         : rise
       return [c + r * Math.cos(a), line - r * Math.sin(a), shown]
     }
-    return { e, d, m: -seen * between, point }
+    return {
+      e,
+      d,
+      m: -seen * between,
+      point,
+      hub: [c, line],
+      rate: dir * span / seen,
+    }
   }
   // where a light stands on the page: its spot in the page's words, or its
   // circle in the sky
@@ -181,6 +189,7 @@
     arc = sunSlot && moonSlot && sunGroup && moonGroup
       ? arcOf(spot(moonSlot), spot(sunSlot), feet, 90 * u)
       : null
+    face()
     scroll()
     ready = null
     later()
@@ -404,6 +413,8 @@
     [...el.childNodes].some((n) => n.nodeType == 3 && n.data.trim())
   let page = (el) => !el || el.closest?.(CONTROLS) || worded(el)
 
+  // a shooting star's tail, back from its head at the origin
+  const STREAK = 'M0 -1.3L-130 0L0 1.3Z'
   // A shooting star from one point to another, in his units: its head runs
   // the way, its tail growing behind it and drawn back in as it burns out.
   // It is drawn into the night sky, so as far up as the sky has sunk.
@@ -422,7 +433,7 @@
     let tail = draw('path', {
       class: 'Sky_Tail',
       fill: 'url(#Sky-tail)',
-      d: 'M0 -1.3L-130 0L0 1.3Z',
+      d: STREAK,
     }, run)
     draw('circle', { class: 'Sky_Flare', fill: 'url(#Sky-halo)', r: 8 }, run)
     draw('circle', { class: 'Sky_Head', r: 1.5 }, run)
@@ -487,10 +498,9 @@
   // the other scheme's colors as the night comes (or the day, from the
   // night). Every move is drawn ahead as `STEPS` frames the browser plays,
   // and all but the lights' once the page is idle (`prepare`), so a touch
-  // turns the sky at once. The stars stay where they are: turning all of
-  // them redraws them every frame, which a phone cannot keep up with. For
-  // anyone who asks for less motion nothing moves: the scene fades to the
-  // other and back.
+  // turns the sky at once. The stars ride the wheel too, streaked while it
+  // is fast (`wheel`). For anyone who asks for less motion nothing moves:
+  // the scene fades to the other and back.
   const TURN = 3800, FADE = 1600, STEPS = 72, RAMP = .2
   // what the light falls on, and what of it is painted otherwise in the other
   // scheme
@@ -541,7 +551,8 @@
     let [t0, v0] = keys[i - 1], [t1, v1] = keys[i]
     return v0 + (v1 - v0) * smooth(t0, t1, at)
   }
-  // the turn gathers speed over its first fifth and loses it over its last
+  // the turn gathers speed over its first fifth and loses it over its last,
+  // and `pace` is how fast it goes, in turns to the turn
   let ease = (s) => {
     let v = 1 / (1 - RAMP)
     return s < RAMP
@@ -550,6 +561,7 @@
       ? 1 - v * (1 - s) ** 2 / (2 * RAMP)
       : v * (s - RAMP / 2)
   }
+  let pace = (s) => Math.min(1, s / RAMP, (1 - s) / RAMP) / (1 - RAMP)
   // the way across the sky where the sun and the moon stand now
   let across = () => {
     let [, line, k] = at(0, 0)
@@ -557,6 +569,18 @@
       arcOf(spot(null, halo), spot(null, sun), line + scrollY, 90 * k)
   }
   let glow = sky?.querySelector('.Sky_Glow')
+  // The moon is a crescent whose lit side faces where the sun went under
+  // the line (sky.tsx `moon`, lit to its left).
+  let face = () => {
+    let g = moon?.parentNode, { point, m, d } = across()
+    let [mx, my] = point(m), [sx, sy] = point(d)
+    let turn = n1(Math.atan2(my - sy, mx - sx) * 180 / Math.PI)
+    g?.setAttribute(
+      'transform',
+      g.getAttribute('transform').replace(/rotate\([^)]*\)/, `rotate(${turn})`),
+    )
+  }
+  let stars = [...(sky?.querySelectorAll('.Sky_Star') ?? [])]
 
   // A turn, drawn for the scene the sky shows and staged to play: the light
   // and its colors (`scene`), the lights from where they stand (`rides`,
@@ -600,6 +624,7 @@
     play(what('.Sky_Day'), (f) => ({ opacity: f.l }))
     play(what('.Sky_Night'), (f) => ({ opacity: 1 - f.l }))
     play([sky.querySelector('.Sky_Dark')], (f) => ({ opacity: 1 - f.l }))
+    if (!still) play([trails], (f) => ({ opacity: 1 - f.l }))
     play(
       [sky.querySelector('.Sky_Twilight')],
       (f) => ({ opacity: .9 * f.dusk }),
@@ -653,6 +678,136 @@
       ...ride([moon.parentNode, halo], moonQ, moonQ + (day ? .5 : 0)),
     ]
   }
+  // The stars on the wheel: they go round its hub at the lights' rate and
+  // are where the page drew them as the night is deepest, so they set and
+  // rise as the lights do. While the sky turns they are drawn on a canvas
+  // of their own under the scene (`trails`, the size of the window), as
+  // turning them in the scene would draw all of it again every frame,
+  // which a phone cannot keep up with. Each is streaked back along its way
+  // as far as it went in the last `BLUR` seconds, up to `LONG` times as
+  // long as it is wide, with a shooting star's tail (`STREAK`, drawn once
+  // and laid along each), so the streaks grow as the turn gathers speed and
+  // draw back into points as it slows. The stars are drawn in `GLOWS` sets, each as bright as its
+  // stars are on average. `wheel` is what draws the turn `s` of the way
+  // round.
+  const BLUR = 1 / 60, LONG = 8, GLOWS = 3
+  let trails = sky?.querySelector('.Sky_Trails')
+  // the tail drawn 256 by 16, its end at the left and the star at the right
+  let tailed = () => {
+    let el = document.createElement('canvas'), pen = el.getContext('2d')
+    el.width = 256, el.height = 16
+    let fade = (into, el) => {
+      let css = getComputedStyle(el)
+      into.addColorStop(
+        Number(el.getAttribute('offset') ?? 0),
+        css.stopColor,
+      )
+      return Number(css.stopOpacity ?? 1)
+    }
+    let paint = pen.createLinearGradient(-130, 0, 0, 0)
+    let [from, to] = ['.Sky_Tail0', '.Sky_Tail1'].map((c) =>
+      fade(paint, sky.querySelector(c))
+    )
+    pen.setTransform(256 / 130, 0, 0, 8 / 1.3, 256, 8)
+    pen.fillStyle = paint
+    pen.fill(new Path2D(STREAK))
+    // and as clear as the tail is along its way
+    let clear = pen.createLinearGradient(0, 0, 256, 0)
+    clear.addColorStop(0, `rgba(0,0,0,${from})`)
+    clear.addColorStop(1, `rgba(0,0,0,${to})`)
+    pen.setTransform(1, 0, 0, 1, 0, 0)
+    pen.globalCompositeOperation = 'destination-in'
+    pen.fillStyle = clear
+    pen.fillRect(0, 0, 256, 16)
+    return el
+  }
+  let wheel = (day) => {
+    let pen = trails?.getContext?.('2d')
+    if (!pen || !stars.length) return
+    let { hub: [hx, hy], rate } = across()
+    let b = far.getBoundingClientRect(), k = b.width / 6000
+    let ox = b.left + scrollX + 3000 * k, oy = b.top + scrollY + 800 * k
+    let depth = Number(deep.dataset.depth)
+    // each star where the page draws it with the sky unsunk, and its size,
+    // in sets by how bright they are
+    let all = stars.map((s) =>
+      ['cx', 'cy', 'r', 'opacity'].map((a) => Number(s.getAttribute(a)))
+    )
+    let [lo, hi] = [Math.min, Math.max].map((f) => f(...all.map((s) => s[3])))
+    let sets = Array.from({ length: GLOWS }, () => [])
+    for (let [x, y, r, o] of all) {
+      let i = Math.round((GLOWS - 1) * (o - lo) / (hi - lo || 1))
+      sets[i].push([ox + x * k, oy + y * k, r * k, o])
+    }
+    sets = sets.filter((set) => set.length).map((set) => ({
+      stars: set,
+      glow: set.reduce((sum, s) => sum + s[3], 0) / set.length,
+    }))
+    let light = getComputedStyle(stars[0]).fill, tail = tailed()
+    let home = day ? .5 : 0, spun = Math.sign(rate)
+    let w = 0, h = 0, x0, y0, px = devicePixelRatio > 1 ? 2 : 1
+    let seen = []
+    return (s) => {
+      if (w != innerWidth || h != innerHeight) {
+        w = innerWidth, h = innerHeight
+        trails.width = w * px, trails.height = h * px
+        trails.style.width = w + 'px', trails.style.height = h + 'px'
+      }
+      if (x0 != scrollX || y0 != scrollY) {
+        x0 = scrollX, y0 = scrollY
+        trails.style.translate = `${x0}px ${y0}px`
+      }
+      let sunk = depth * y0
+      pen.setTransform(px, 0, 0, px, 0, 0)
+      pen.clearRect(0, 0, w, h)
+      // how far round the stars are, and were BLUR seconds ago, the turn
+      // half a wheel from the deepest night drawn the other way round, at
+      // the height of the day, when none show
+      let at = rate * (((ease(s) - home) % 1 + 1.5) % 1 - .5)
+      let back = at - spun *
+          Math.min(.5, Math.abs(rate) * pace(s) * BLUR * 1000 / TURN)
+      let [c, n, cb, nb] = [at, back].flatMap((a) => [Math.cos(a), Math.sin(a)])
+      for (let { stars, glow } of sets) {
+        pen.globalAlpha = glow
+        // each tail, from where its star was to where it is
+        seen.length = 0
+        for (let [x, y, r] of stars) {
+          // none under the line or out of the window is seen
+          let dx = x - hx, dy = hy - y - sunk, up = dx * n + dy * c
+          let ex = hx + dx * c - dy * n - x0, ey = hy - up - y0
+          if (up < 0 || ex < -r - 60 || ex > w + 60 || ey < -60) continue
+          seen.push(ex, ey, r)
+          let tx = hx + dx * cb - dy * nb - x0, ty = hy - dx * nb - dy * cb - y0
+          let long = Math.hypot(ex - tx, ey - ty)
+          if (long <= 2 * r) continue
+          if (long > 2 * LONG * r) {
+            let cut = 2 * LONG * r / long
+            tx = ex + (tx - ex) * cut, ty = ey + (ty - ey) * cut, long *= cut
+          }
+          let side = px * r / 8 / long
+          pen.setTransform(
+            px * (ex - tx) / 256,
+            px * (ey - ty) / 256,
+            (ty - ey) * side,
+            (ex - tx) * side,
+            px * tx - 8 * (ty - ey) * side,
+            px * ty - 8 * (ex - tx) * side,
+          )
+          pen.drawImage(tail, 0, 0)
+        }
+        // and the stars over them
+        pen.setTransform(px, 0, 0, px, 0, 0)
+        pen.fillStyle = light
+        pen.beginPath()
+        for (let i = 0; i < seen.length; i += 3) {
+          let [ex, ey, r] = [seen[i], seen[i + 1], seen[i + 2]]
+          pen.moveTo(ex + r, ey)
+          pen.arc(ex, ey, r, 0, 2 * Math.PI)
+        }
+        pen.fill()
+      }
+    }
+  }
   let ready, soon
   let prepare = () => {
     soon = null
@@ -661,6 +816,7 @@
     if (ready.hour !== hour) {
       ready.hour = hour
       ready.rides = still ? [] : rides(day)
+      ready.wheel = still ? null : wheel(day)
     }
     return ready
   }
@@ -678,13 +834,20 @@
   let turning
   let spin = () => {
     if (turning) return
-    let { runs, rides, shots } = prepare()
+    let { runs, rides, shots, wheel } = prepare()
     runs = [...runs, ...rides]
     for (let run of runs) run.play()
     for (let f of shots) setTimeout(star, f.s * TURN)
     delete sky.dataset.over
-    sky.dataset.turn = ''
+    sky.dataset.turn = wheel ? 'wheel' : ''
     turning = true
+    // the stars drawn where the turn has brought them, frame by frame
+    let orbit = () => {
+      if (!turning) return
+      wheel(Math.min(1, (runs[0].currentTime ?? 0) / TURN))
+      requestAnimationFrame(orbit)
+    }
+    if (wheel) orbit()
     runs[0].onfinish = () => {
       for (let run of runs) run.cancel()
       delete sky.dataset.turn
@@ -694,7 +857,6 @@
   }
 
   // the stars a pointer passes brighten, and dim again once it has gone
-  let stars = [...(sky?.querySelectorAll('.Sky_Star') ?? [])]
   let lit = new Map()
   let pass = (px, py) => {
     let now = performance.now()
