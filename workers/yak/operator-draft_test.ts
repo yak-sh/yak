@@ -99,7 +99,22 @@ p.env.BUILDER = {
       let [client, server] = [pair[0], pair[1]]
       let object = p.builder(String(id))
       client.send = (data) => void object.webSocketMessage(server, data)
-      server.send = (data) => client.emit('message', data)
+      // What the object says reaches the client half once it is accepted,
+      // as the runtime holds a socket's messages until then: first what the
+      // object said as it took the socket.
+      let held: string[] | undefined = server.taken().map((f) =>
+        JSON.stringify(f)
+      )
+      server.send = (data) =>
+        held ? void held.push(data) : client.emit('message', data)
+      let accept = client.accept.bind(client)
+      client.accept = () => {
+        accept()
+        queueMicrotask(() => {
+          for (let data of held?.splice(0) ?? []) client.emit('message', data)
+          held = undefined
+        })
+      }
       client.close = () => {
         if (client.readyState == 3) return
         client.readyState = 3
@@ -660,8 +675,8 @@ let load = async (
   }
 }
 // The runtime's socket factory, one upgrade at a time: the Builder's half of
-// a socket a page opened, carried to it as the edge does, its frames sent on
-// to `hear`.
+// a socket a page opened, carried to it as the edge does, its frames heard on
+// the page's half and sent on to `hear`.
 let upgrading = Promise.resolve()
 let upgrade = (url: string, as: Who, hear: (data: string) => void) => {
   let made = upgrading.then(async () => {
@@ -669,10 +684,8 @@ let upgrade = (url: string, as: Who, hear: (data: string) => void) => {
     let res = await serve(to, { headers: { upgrade: 'websocket' } }, as)
     let { pair } = res as Response & { pair?: Pair }
     if (!pair) throw new Error(`${to}: no socket (${res.status})`)
-    // What the Builder says on it goes to the page: first what it said as
-    // it took the socket, before anything was listening.
-    for (let said of pair[1].taken()) hear(JSON.stringify(said))
-    pair[1].send = hear
+    pair[0].addEventListener('message', (e) => hear(String(e.data)))
+    pair[0].accept()
     return pair[1] as unknown as Wire
   })
   upgrading = made.then(() => {}, () => {})

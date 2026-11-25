@@ -98,6 +98,13 @@ node_modules
 /workers/yak/public/_payment.js
 /workers/yak/public/_app-canvas.js
 /workers/yak/public/_page-client.js
+/workers/yak/public/_invite.js
+/workers/yak/public/_shared.js
+/workers/yak/public/_agents.js
+/workers/yak/public/_connections.js
+/workers/yak/public/_matches.js
+/workers/yak/public/_people.js
+/workers/yak/public/_space-pages.js
 
 # Temporary standalone platform compiler configs.
 .platform-*.json
