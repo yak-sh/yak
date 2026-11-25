@@ -925,11 +925,12 @@ export let ceiling = async (
   let alive = apps.filter((a) => !a.trashed).length
   let now = new Date()
   if (level(space, alive, now) == 'ok') return ''
+  let paying = await dirPart.directoryOf(env.STORE).withBudget(space)
   await stamp(env, {
     entities: [{ entity: { eid: space.eid }, notified: {} }],
   })
   return [
-    `\n\n## ceiling\n${space.slug}: ${gauged(space, alive, now, env)}`,
+    `\n\n## ceiling\n${space.slug}: ${gauged(paying, alive, now, env)}`,
     ...divided(space, alive, holding(space, apps), now),
   ].join('\n')
 }

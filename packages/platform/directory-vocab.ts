@@ -736,6 +736,13 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { dollars: owned(num), newcomer: owned(bool) },
     },
+    free_ai_budget: {
+      description:
+        'The Free plan’s monthly AI allowance in dollars, on the platform’s space.',
+      component: true,
+      type: 'object',
+      properties: { dollars: owned(num) },
+    },
     // The dollars a space holds once, before its monthly budget, where it
     // holds other than plans.ts `STARTER`: none on a person's later spaces
     // (directory.ts `mint`). Stamped, for the reason the budget is.

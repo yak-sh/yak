@@ -176,7 +176,8 @@ let boundLegacy = async (env: Env, line: PhoneLine, voice: Voice) => {
 /** Apply an owner departure to every line in that space. The hourly meter
  * also converges any provider call that could not finish here. */
 export let ownersLeft = async (env: Env, space: string, seats: string[]) => {
-  let home = await directoryOf(env.STORE).at(space)
+  let dir = directoryOf(env.STORE)
+  let home = await dir.at(space)
   // Permanent erasure leaves the carrier release job in charge of this line.
   if (!home) return
   let rows = await read(
@@ -184,13 +185,14 @@ export let ownersLeft = async (env: Env, space: string, seats: string[]) => {
     q`.phone_line.space=${space}&!phone_line.returned&?trashed`,
   )
   if (!rows.length) return
+  let paying = await dir.withBudget(home)
   for (let row of rows) {
     let l = row.phone_line as Row['phone_line']
     if (!l) continue
     await syncVoice(
       env,
       { ...l, eid: row.entity.eid, space: idOf(l.space) },
-      voiceOf(!!row.trashed, home, new Date()),
+      voiceOf(!!row.trashed, paying, new Date()),
       seats,
     ).catch((e) => caught(e, { request: 'revoke softphone sign-in', space }))
   }

@@ -12,8 +12,8 @@ import { type Options, read } from '@yaks/tracker/routes'
 import { bugsIn, everywhere } from '@yaks/tracker/everywhere'
 import { type Directory, META } from './directory.ts'
 import type { Env } from './env.ts'
-import { standing } from './budget.ts'
-import { budgetLines } from '@yaks/platform/budget'
+import { freePlan, standing } from './budget.ts'
+import { budgetLines, freeBudgetLine } from '@yaks/platform/budget'
 import { rate } from '@yaks/platform/fee'
 import { refuse } from './tool.ts'
 
@@ -155,23 +155,30 @@ export let adminTools = (env: Env, dir: Directory): Tool[] => [
   },
   {
     name: 'admin_budget',
-    title: "Read a space's budget",
-    step: { doing: "Reading a space's budget…", done: "Read a space's budget" },
+    title: 'Read an AI budget',
+    step: { doing: 'Reading an AI budget…', done: 'Read an AI budget' },
     description:
-      "Any space's monthly dollar budget for models and voice: the limit it answers to and whether its plan or the platform set it, what it spent this month, and what was left of its starter as the month began.",
+      "Read the Free plan's monthly AI allowance or a space's AI budget, this month's spending, and the building credit it began the month with.",
     parameters: {
       type: 'object',
       properties: {
         space: { type: 'string', description: 'The space, by its subdomain.' },
+        tier: { type: 'string', enum: ['free'], description: 'The Free plan.' },
       },
-      required: ['space'],
     },
     readOnly: true,
     run: async (args) => {
       let slug = text(args.space)
+      let tier = text(args.tier)
+      if (tier) {
+        if (tier != 'free' || slug) {
+          throw refuse('arguments', 'choose a space or the Free plan')
+        }
+        return freeBudgetLine(freePlan(await dir.freeBudget()))
+      }
       let space = slug ? await dir.space(slug) : null
       if (!space) throw refuse('missing', `no space is called "${slug}"`)
-      return budgetLines(standing(space)).join('\n')
+      return budgetLines(await standing(dir, space)).join('\n')
     },
   },
   {

@@ -12,6 +12,7 @@ import type { Space } from './directory.ts'
 import {
   budget,
   type Meter,
+  monthOf,
   none,
   requestUnits,
   spent,
@@ -23,6 +24,7 @@ import {
   FILES,
   FREE,
   LETTERS,
+  monthlyBudget,
   PLUS,
   type Spend,
   STARTER,
@@ -374,6 +376,7 @@ test('bytes read as a person says them', () => {
 
 // The ceilings, at the seam every door reads (T-32758).
 let NOW = new Date('2026-09-15T12:00:00Z')
+let FREE_MONTH = monthlyBudget('free', monthOf(NOW))
 
 let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
   eid: 'e1',
@@ -881,7 +884,7 @@ test("each space answers to its own allowances and budget, never its owner's oth
   let b = as('b', { emails: 99, seconds: 3_000 })
   let full = as('full', {
     emails: 100,
-    models: BUDGET.free + STARTER,
+    models: FREE_MONTH + STARTER,
   })
   let paid = {
     ...as('paid', { emails: 900, models: BUDGET.plus }, 'plus'),
@@ -895,9 +898,9 @@ test("each space answers to its own allowances and budget, never its owner's oth
   // Pending compute time is added to the reading.
   assertEquals(refusedSpend(b, 'seconds', {}, 599, NOW), null)
   assert(refusedSpend(b, 'seconds', {}, 600, NOW))
-  assertEquals(budget(a, NOW), { spent: 0.125, limit: BUDGET.free })
-  assertEquals(refusedSpend(a, 'models', {}, BUDGET.free - 0.25, NOW), null)
-  assert(refusedSpend(a, 'models', {}, BUDGET.free - 0.125, NOW))
+  assertEquals(budget(a, NOW), { spent: 0.125, limit: FREE_MONTH })
+  assertEquals(refusedSpend(a, 'models', {}, FREE_MONTH - 0.25, NOW), null)
+  assert(refusedSpend(a, 'models', {}, FREE_MONTH - 0.125, NOW))
   assert(refusedSpend(full, 'realtime', {}, 0, NOW))
   // The Plus plan space is held to its own plan's figures.
   assert(refusedSpend(paid, 'models', {}, 0.075, NOW))
@@ -911,23 +914,23 @@ test("each space answers to its own allowances and budget, never its owner's oth
 test('a space draws its starter once, before its months', () => {
   let limit = (meter: Partial<Meter>, starter?: number) =>
     budget({ ...space(meter), starter }, NOW).limit
-  assertEquals(limit({}), STARTER + BUDGET.free)
+  assertEquals(limit({}), STARTER + FREE_MONTH)
   // What earlier months drew comes off the starter; this month's does not.
-  assertEquals(limit({ models: 30, drawn: 40 }), STARTER - 10 + BUDGET.free)
-  assertEquals(limit({ drawn: 500 }), BUDGET.free)
+  assertEquals(limit({ models: 30, drawn: 40 }), STARTER - 10 + FREE_MONTH)
+  assertEquals(limit({ drawn: 500 }), FREE_MONTH)
   // A month behind is all drawn before this one.
   assertEquals(
     limit({ month: '2026-08', models: 15, drawn: 15 }),
-    STARTER - 15 + BUDGET.free,
+    STARTER - 15 + FREE_MONTH,
   )
   // A person's later space holds none.
-  assertEquals(limit({}, 0), BUDGET.free)
+  assertEquals(limit({}, 0), FREE_MONTH)
   // A first subscription's credit comes on top of what is left, whatever
   // was drawn before it.
   let given = (meter: Partial<Meter>, starter?: number) =>
     limit(meter, topUp({ ...space(meter), starter }, SUBSCRIBED, NOW))
-  assertEquals(given({}), STARTER + SUBSCRIBED + BUDGET.free)
-  assertEquals(given({ drawn: 500 }, 0), SUBSCRIBED + BUDGET.free)
+  assertEquals(given({}), STARTER + SUBSCRIBED + FREE_MONTH)
+  assertEquals(given({ drawn: 500 }, 0), SUBSCRIBED + FREE_MONTH)
 })
 
 test('paid AI budgets change at month end and building credit carries over', () => {
@@ -1028,7 +1031,7 @@ test('a spend lands on its day, and a letter costs no day', async () => {
 })
 
 test('models and voice spend one space budget, each counted apart', async () => {
-  let half = BUDGET.free / 2
+  let half = FREE_MONTH / 2
   let both = space({ models: half, realtime: half })
   assert(refusedSpend(both, 'models', {}, 0, NOW))
   assert(refusedSpend(both, 'realtime', {}, 0, NOW))

@@ -55,6 +55,7 @@ import {
 } from './directory.ts'
 import { paid } from '@yaks/platform/plans'
 import { budget, monthOf, starterOf } from '@yaks/platform/meter'
+import { freeBudgetOf } from '@yaks/platform/budget'
 import { DAILY, opened, PER_BUILD, PER_SOURCE } from './newcomer.ts'
 import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
@@ -248,15 +249,22 @@ type Reading = {
   tests: boolean
 }
 
-export let read = (env: Host, census: Census, tests: boolean): Reading => ({
-  env,
-  census,
-  uses: uses(census),
-  writers: writers([...census.people, ...census.agents]),
-  spaces: new Map(census.spaces.map((r) => [r.entity.eid, spaceOf(r)])),
-  apps: new Map(census.apps.map((r) => [r.entity.eid, r])),
-  tests,
-})
+export let read = (env: Host, census: Census, tests: boolean): Reading => {
+  let freeMonthly = freeBudgetOf(
+    census.spaces.find((r) => r.space?.slug == META.space),
+  )
+  return {
+    env,
+    census,
+    uses: uses(census),
+    writers: writers([...census.people, ...census.agents]),
+    spaces: new Map(
+      census.spaces.map((r) => [r.entity.eid, { ...spaceOf(r), freeMonthly }]),
+    ),
+    apps: new Map(census.apps.map((r) => [r.entity.eid, r])),
+    tests,
+  }
+}
 
 let slugOf = (d: Reading, space: string) => d.spaces.get(space)?.slug ?? ''
 let refOf = (d: Reading, r: Row): Ref => ({

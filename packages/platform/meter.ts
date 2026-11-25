@@ -88,6 +88,8 @@ export type Metered = {
   // platform's owner set one (workers/yak budget.ts), in place of its plan's
   // (`BUDGET`). Null on every space nobody has given one, which is almost all.
   budget: number | null
+  // The platform's monthly Free plan allowance, where the owner set one.
+  freeMonthly?: number | null
   // Whether that budget is a newcomer's one build (newcomer.ts `oneBuild`):
   // what lifts it is keeping the app, so its refusals ask for their email
   // rather than offering a plan (./standing.ts `UNKEPT`).
@@ -257,6 +259,10 @@ export let used = (m: Meter, what: Spend): number =>
  * (`tierOf` reads a comp as the Plus plan). */
 export let free = (space: Pick<Metered, 'tier'>): boolean => !paid(space.tier)
 
+/** Whether a space draws from the platform's Free plan allowance. */
+export let usesFreeBudget = (space: Metered): boolean =>
+  free(space) && space.budget == null
+
 /** Whether a space is at an allowance this month; `more` is what the caller
  * holds that is not counted yet — the dollars and seconds of a build still
  * going. */
@@ -309,7 +315,7 @@ export let topUp = (
  * credit: the month the platform's owner set on it (budget.ts), else its
  * plan's, and what is left of its starter. */
 export let budgetOf = (space: Metered, now: Date = new Date()): number =>
-  (space.budget ?? monthlyBudget(space.tier, monthOf(now))) +
+  (space.budget ?? monthlyBudget(space.tier, monthOf(now), space.freeMonthly)) +
   starterOf(space, now)
 
 /** The dollars a space's models and voice may spend this month: its budget,

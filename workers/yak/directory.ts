@@ -53,6 +53,7 @@ import type { Trash, TrashPage } from '@yaks/graph/trash'
 import { type Restored, trashPage, trashSearch } from './trash-wire.ts'
 import type { Reload } from '@yaks/platform'
 import type { Comp } from '@yaks/platform/comp'
+import { FREE_BUDGET_QUERY, freeBudgetOf } from '@yaks/platform/budget'
 import {
   free,
   type Meter,
@@ -61,6 +62,7 @@ import {
   type MeteredRow,
   meterOf,
   topUp,
+  usesFreeBudget,
 } from '@yaks/platform/meter'
 import {
   type Allowance,
@@ -679,6 +681,7 @@ export let walkTo = (slug: string, eid: string | Promise<string>): Walk => ({
  * each optional, since a row is whichever of them it wears, a space's plan
  * and meter among them (@yaks/platform/meter `MeteredRow`). */
 export type Row = MeteredRow & {
+  free_ai_budget?: { dollars?: number | null }
   app_transfer?: TransferOffer
   app_transfer_answer?: { answer: TransferAnswer; at: string; slugs?: string }
   policy?: { revision: number }
@@ -2436,6 +2439,7 @@ let personsOf = (rows: ReadRow[]): Map<string, Known> =>
  * in the space or its apps, and what to call each of them (people.ts). */
 export type Listing = {
   fee?: number
+  freeMonthly: number | null
   seats: Seat[]
   apps: App[]
   drafts: Map<string, string[]>
@@ -2484,6 +2488,7 @@ let listed = (rows: ReadRow[], person: string): Listing => {
   let platform = rows.find((row) => row.space?.slug == META.space)
   return {
     ...platform ? { fee: platform.fee?.bps ?? 0 } : {},
+    freeMonthly: freeBudgetOf(platform),
     seats,
     apps,
     drafts: openDraftIds(
@@ -2510,7 +2515,7 @@ export let listingOf = async (
   let apps = await dir.apps(seats.map((s) => s.space))
   let owned = seats.filter((s) => s.role == 'owner').map((s) => s.space.eid)
   let unreleased = apps.filter((app) => !app.version)
-  let [details, { held, persons }] = await Promise.all([
+  let [details, { held, persons }, freeMonthly] = await Promise.all([
     apps.length
       ? dir.read(chain([
         line`.binding.app=${apps.map((a) => a.eid)}`,
@@ -2520,8 +2525,10 @@ export let listingOf = async (
       ], '|'))
       : [],
     dir.people(owned),
+    dir.freeBudget(),
   ])
   return {
+    freeMonthly,
     seats,
     apps,
     drafts: openDraftIds(unreleased, draftRowsByApp(details as Row[])),
@@ -2965,6 +2972,11 @@ export let directoryRows = (rows: {
     stamp: (mutation: { entities: Bundle[] }, headers = {}) =>
       write(mutation, { ...headers, 'x-yak-kernel': '1' }),
     space: async (slug: string) => await decided.space(slug),
+    freeBudget: async () => freeBudgetOf(await one(FREE_BUDGET_QUERY)),
+    withBudget: async (space: Space): Promise<Space> =>
+      usesFreeBudget(space)
+        ? { ...space, freeMonthly: await self.freeBudget() }
+        : space,
     // A page needs the space, its two possible apps and the seat of whoever
     // is asking, together. Filtering through app.space and member.space
     // avoids an earlier trip just to learn the space eid; the same
@@ -3154,7 +3166,7 @@ export let directoryRows = (rows: {
       let rows = await query(
         chain([
           line`(.member.person=${person})`,
-          line`(.space.slug=${META.space}&?fee)`,
+          line`(${sub(FREE_BUDGET_QUERY)}&?fee)`,
           line`(.space&.${sub(mine)}&${sub(SPACE_ABOUT)})`,
           line`(.app.space.${sub(mine)}&${sub(ABOUT)})`,
           line`(.app_draft.app.app.space.${sub(mine)})`,
@@ -4070,9 +4082,9 @@ export let directoryRows = (rows: {
           // A row's days ride only here: every other read of a row does
           // without.
           query(
-            line`.space&${sub(SPACE_ABOUT)}&?trend&?visitor_build&${
-              sub(stamps)
-            }`,
+            line`.space&${
+              sub(SPACE_ABOUT)
+            }&?trend&?visitor_build&?free_ai_budget&${sub(stamps)}`,
           ),
           query(
             line`.app&${sub(ABOUT)}&?trend&${

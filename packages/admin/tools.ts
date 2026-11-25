@@ -19,7 +19,7 @@ import { given, read as configAt, used } from '@yaks/cli/config'
 import type { Options as TrackerOptions } from '@yaks/tracker/routes'
 import { type Account, account } from './account.ts'
 import { ADMIN, isTestAddress } from '@yaks/platform/bots'
-import { budgetLines } from '@yaks/platform/budget'
+import { budgetLines, freeBudgetLine } from '@yaks/platform/budget'
 import { funnelLines } from '@yaks/platform/funnel'
 import { cameFrom, firstApps, firstsLines, weekly } from '@yaks/platform/firsts'
 import { duration } from '@yaks/tracker/errors'
@@ -39,6 +39,7 @@ import {
   doomedIn,
   feeNow,
   firstsNow,
+  freeBudgetNow,
   freeSpacesNow,
   funnelNow,
   gravesIn,
@@ -56,6 +57,7 @@ import {
   setBudget,
   setComp,
   setFee,
+  setFreeBudget,
   setFreeSpaces,
   setHouse,
   setTunnel,
@@ -591,15 +593,31 @@ export let runs = (
 
     admin_budget: verb(async (call) => {
       let a = argsOf(call)
-      let space = String(a.space)
+      let space = word(a, 'space')
+      let tier = word(a, 'tier')
       let dollars = word(a, 'dollars')
+      if (tier ? tier != 'free' || space : !space) {
+        throw new CallError('budget', 'choose a space or the Free plan')
+      }
       if (dollars != null && !/^(\d+(\.\d+)?|plan)$/.test(dollars)) {
         throw new CallError('dollars', `not a number of dollars: ${dollars}`)
       }
+      if (tier && dollars == 'plan') {
+        throw new CallError(
+          'dollars',
+          'give the monthly Free plan budget in dollars',
+        )
+      }
       let at = await acting(a)
+      if (tier) {
+        let now = dollars == null
+          ? await freeBudgetNow(at.bearer)
+          : await setFreeBudget(at.bearer, dollars)
+        return [said(call, freeBudgetLine(now))]
+      }
       let now = dollars == null
-        ? await budgetNow(at.bearer, space)
-        : await setBudget(at.bearer, space, dollars == 'plan' ? '' : dollars)
+        ? await budgetNow(at.bearer, space!)
+        : await setBudget(at.bearer, space!, dollars == 'plan' ? '' : dollars)
       return [said(call, budgetLines(now))]
     }),
 

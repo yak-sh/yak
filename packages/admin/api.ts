@@ -453,7 +453,7 @@ export let setHouse = (
 
 /** A space's monthly model and voice budget (workers/yak/budget.ts). */
 export type { SpaceBudget } from '@yaks/platform/budget'
-import type { SpaceBudget } from '@yaks/platform/budget'
+import type { FreeBudget, SpaceBudget } from '@yaks/platform/budget'
 
 export let BUDGET = '/api/budget'
 
@@ -468,6 +468,15 @@ export let setBudget = (
   dollars: string,
 ): Promise<SpaceBudget> =>
   said(posted(apex(BUDGET), { space, dollars }, session))
+
+export let freeBudgetNow = (session: string): Promise<FreeBudget> =>
+  said(sent(apex(`${BUDGET}?tier=free`), session))
+
+export let setFreeBudget = (
+  session: string,
+  dollars: string,
+): Promise<FreeBudget> =>
+  said(posted(apex(BUDGET), { tier: 'free', dollars }, session))
 
 /** A platform comp is separate from a space's subscription. */
 import type { SpaceComp } from '@yaks/platform/comp'

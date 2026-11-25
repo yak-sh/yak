@@ -5,6 +5,7 @@ import { after, each } from '@yaks/fp'
 import { type Bound, hook, type Plugin, type Tx } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { line } from '@yaks/query'
+import { FREE_BUDGET_QUERY, freeBudgetOf } from './budget.ts'
 import type { Options } from './lent.ts'
 import {
   added,
@@ -14,6 +15,7 @@ import {
   meterOf,
   trended,
   used,
+  usesFreeBudget,
 } from './meter.ts'
 import { paid } from './plans.ts'
 import { dollars, unaffordable } from './standing.ts'
@@ -72,11 +74,21 @@ let refunds = hook(
 // not a month's spend (./meter.ts `credited`), and a space holding credit
 // draws on it for what the month spends past its budget.
 let spending = (row: Bound) => {
+  let space = row.space ? meteredOf(row as unknown as MeteredRow) : null
+  if (
+    !space || !usesFreeBudget(space) || !props(row.spend).held && !row.credit
+  ) {
+    return spend(row, space)
+  }
+  let read = row.FreeBudget as () => number | null | Promise<number | null>
+  return after(read(), (freeMonthly) => spend(row, { ...space, freeMonthly }))
+}
+
+let spend = (row: Bound, space: ReturnType<typeof meteredOf> | null) => {
   let { meter, trend, spend, Now } = row
   let said = props(spend)
   let now = new Date(Now.at)
   let r = row as unknown as MeteredRow
-  let space = r.space ? meteredOf(r) : null
   if (said.held) {
     if (!space) throw new Refused('The paying space is missing')
     let what: 'models' | 'realtime' | 'texts' =
@@ -119,6 +131,18 @@ let spending = (row: Bound) => {
 export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
   name: 'yak/meter',
   admission: () => true,
+  resources: {
+    FreeBudget: ({ tx }) => {
+      let reading: number | null | Promise<number | null> | undefined
+      return () =>
+        reading === undefined
+          ? reading = after(
+            tx.read(FREE_BUDGET_QUERY),
+            ([row]) => freeBudgetOf(row),
+          )
+          : reading
+    },
+  },
   hooks: { precondition: refunds },
   rules: [{
     // The hourly meter, fired by its wake row: the platform's job `meter`
@@ -152,7 +176,7 @@ export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
     // The space's plan and budget are read from its view, never named in the
     // match: a `+` there would give a space that has none an empty one. A
     // space with credit is the rule below's, which writes it too.
-    match: '+meter, +trend, *spend, !credit, #Now',
+    match: '+meter, +trend, *spend, !credit, #Now, #FreeBudget',
     run: spending,
   }, {
     // The same spend on a space holding credit (D-134567): what the month now
@@ -160,7 +184,7 @@ export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
     // transaction, and a block bought added to it (./meter.ts `credited`).
     name: 'spend-credit',
     phase: 'rules',
-    match: '+meter, +trend, *credit, *spend, #Now',
+    match: '+meter, +trend, *credit, *spend, #Now, #FreeBudget',
     run: spending,
   }],
 }]

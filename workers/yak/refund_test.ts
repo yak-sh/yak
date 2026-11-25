@@ -6,7 +6,7 @@ import { fresh, seed } from './probe.ts'
 import { stamp } from './directory.ts'
 import { monthOf, starterOf } from '@yaks/platform/meter'
 import type { Env } from './env.ts'
-import { BUDGET, STARTER } from '@yaks/platform/plans'
+import { monthlyBudget, STARTER } from '@yaks/platform/plans'
 import { reserved } from './model-spend.ts'
 
 test('a refund corrects the meter, and the budget and starter stay as they were', async () => {
@@ -39,7 +39,7 @@ test('a refund corrects the meter, and the budget and starter stay as they were'
     equal(now, {
       space: 'refunded',
       dollars: null,
-      limit: BUDGET.free + STARTER,
+      limit: monthlyBudget('free', month) + STARTER,
       spent: 0,
       starter: STARTER,
     })

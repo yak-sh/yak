@@ -10,7 +10,13 @@ import { derivedEid } from '@yaks/graph/identity'
 import { ModelError } from '@yaks/model'
 import { left, monthOf } from '@yaks/platform/meter'
 import { tooManyCalls, unaffordable } from '@yaks/platform/standing'
-import { type Row, type Space, spaceOf, stamp } from './directory.ts'
+import {
+  directoryOf,
+  type Row,
+  type Space,
+  spaceOf,
+  stamp,
+} from './directory.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import { meta } from './meta.ts'
 
@@ -236,7 +242,7 @@ export let reserved = async <T extends { dollars: number }>(
 > => {
   let eid = receiptEid(call)
   let month = monthOf(now)
-  let reading = space
+  let reading = await directoryOf(env.STORE).withBudget(space)
   for (let attempt = 0;; attempt++) {
     let tally = visitor && what == 'models'
       ? await tallied(env, space.eid, visitor, now)
@@ -358,6 +364,7 @@ export let tabbed = async <T extends { dollars: number }>(
     release(): Promise<boolean>
   }
 > => {
+  space = await directoryOf(env.STORE).withBudget(space)
   let { what = 'models', source, visitor, now = new Date() } = paying
   let month = monthOf(now)
   let key = [space.eid, month, what, source ?? ''].join('|')
@@ -445,7 +452,7 @@ let HOLDS = 3
 export let spaceNow = async (env: Env, eid: string) => {
   let row = await read(env, eid)
   if (!row?.space) throw new Error('The paying space is missing')
-  return spaceOf(row as unknown as Row)
+  return directoryOf(env.STORE).withBudget(spaceOf(row as unknown as Row))
 }
 
 // A hold the directory refused for the budget (@yaks/platform/meter-graph

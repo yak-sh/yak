@@ -6686,7 +6686,17 @@ let OURS: Row[] = [
             (role == 'owner' ? ` ${sells(space, cut)}` : ''),
           // Where the space stands this month (T-32758), so the agent knows
           // before it makes the sixth app, not when the door says no.
-          ...alive ? [gauged(space, alive, now, ctx.env, hold)] : [],
+          ...alive
+            ? [
+              gauged(
+                { ...space, freeMonthly: listing.freeMonthly },
+                alive,
+                now,
+                ctx.env,
+                hold,
+              ),
+            ]
+            : [],
           ...listed.flatMap((a, i) => [
             `- ${a.title}: ${a.url} — ${
               [

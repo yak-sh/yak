@@ -82,7 +82,8 @@ export let asking = async (asked: Asked, address: unknown) => {
   }
   let why = await paused(env)
   if (why) return json(503, 'speech_off', why)
-  let short = unaffordable(space, 'models', heard(hear, guessed(head.size)))
+  let paying = await directoryOf(env.STORE).withBudget(space)
+  let short = unaffordable(paying, 'models', heard(hear, guessed(head.size)))
   if (short) return json(402, 'limit', short)
   try {
     await graph.apply([{

@@ -104,7 +104,7 @@ export let voice: Answer = async (asked) => {
   }
   // Read past the directory's cache, so a refusal reads the spend before it.
   let dir = directoryOf(env.STORE)
-  let fresh = async () => await dir.space(space.slug) ?? space
+  let fresh = async () => dir.withBudget(await dir.space(space.slug) ?? space)
   return answer({
     req,
     path: path.slice('/rtc'.length),

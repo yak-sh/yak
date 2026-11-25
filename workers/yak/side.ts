@@ -417,7 +417,7 @@ let paymentRows = async (
     let { all } = shelf(await dir.apps(space), space, { person, role: 'owner' })
     return [allowancesRow(eid, {
       limits: gauges(space, all.length),
-      budget: budget(space),
+      budget: budget(await dir.withBudget(space)),
       read: spent(space).at || null,
     })]
   }

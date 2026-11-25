@@ -126,25 +126,31 @@ export let LETTERS: Record<Tier, number> = {
 
 export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 
-// Each space's models and voice spend its one monthly dollar budget, and a
-// person's first space draws on {@link STARTER} before it. The free month is
-// sized so a year of free spaces spends the model credits we hold rather than
-// saving them (T-138720): a free person talks with their Operator and never
-// meets a figure.
+// Each space spends from one monthly AI budget after its building credit.
 export let BUDGET: Record<Tier, number> = {
-  free: 20,
+  free: 10,
   plus: 8,
   pro: 35,
 }
+
+export let FREE_BUDGET_FROM: string = '2026-12'
 
 let MONTHLY: Record<string, Partial<Record<Tier, number>>> = {
   '2026-11': { plus: 30, pro: 100 },
 }
 
-/** Included AI use for a UTC month. The paid plans keep their November
- * allowances through month end so usage already covered stays covered. */
-export let monthlyBudget = (tier: Tier | null, month: string): number =>
-  MONTHLY[month]?.[tier ?? 'free'] ?? BUDGET[tier ?? 'free']
+/** Included AI use for a UTC month. November's allowances stay in effect
+ * through month end. From December on the platform can set Free's amount. */
+export let monthlyBudget = (
+  tier: Tier | null,
+  month: string,
+  freeMonthly?: number | null,
+): number => {
+  let plan = tier ?? 'free'
+  return plan == 'free'
+    ? month < FREE_BUDGET_FROM ? 20 : freeMonthly ?? BUDGET.free
+    : MONTHLY[month]?.[plan] ?? BUDGET[plan]
+}
 
 // The building credit given once, spent before a space's monthly budget.
 // Signing up free gives {@link STARTER} on the person's first space. A first
