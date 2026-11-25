@@ -105,3 +105,14 @@ test('a reload is counted by its cause and files no bug, however long the page s
   }
   equal(await send([point('reload-whatever', 900)]), [])
 })
+
+test('a reload nobody chose is filed to the tracker with its cause', async () => {
+  for (let cause of ['discarded', 'unknown']) {
+    let [rows] = await send([point(`reload-${cause}`, 40)])
+    let [error] = rows.flatMap((r) => r.error ? [r.error as Comp] : [])
+    equal(
+      error.message,
+      `Unexpected reload: home reloaded under the person (${cause}), blank 40 ms`,
+    )
+  }
+})

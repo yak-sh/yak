@@ -915,13 +915,19 @@ let TV = `(() => {
   let awake = () => navigator.wakeLock?.request('screen').catch(() => {})
   awake()
   document.addEventListener('visibilitychange', awake)
-  if (page.dataset.until) setTimeout(() => location.reload(), Number(page.dataset.until))
+  // Why it reloads, for the reloaded page's telemetry
+  // (@yaks/platform/interaction-browser \`reloaded\`).
+  let reload = () => {
+    try { sessionStorage.setItem('yak-reload', 'tv') } catch {}
+    location.reload()
+  }
+  if (page.dataset.until) setTimeout(reload, Number(page.dataset.until))
   let look = async () => {
     let now = await fetch('/tv/now', { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
     let frame = page.querySelector('iframe')
     let url = now?.paired ? now.showing?.url ?? '' : null
-    if (now && (url == null) != !!page.dataset.code) return location.reload()
-    if (now && url != null && url != (frame?.getAttribute('src') ?? '')) return location.reload()
+    if (now && (url == null) != !!page.dataset.code) return reload()
+    if (now && url != null && url != (frame?.getAttribute('src') ?? '')) return reload()
     setTimeout(look, ask)
   }
   setTimeout(look, ask)

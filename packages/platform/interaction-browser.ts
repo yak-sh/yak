@@ -5,18 +5,34 @@ import { pageKind, reloadTarget, targetKind } from './interaction.ts'
 
 type Browser = Window & typeof globalThis
 
+// The tab's mark that a page of it is open: set as one shows, taken away as
+// it leaves. A reload that finds it still set follows a page that never left.
+let HERE = 'yak-here'
+
 /**
  * The point a reloaded document is counted as, once it first paints: its
- * page, why it reloaded (`reloadTarget`, from the cause the reloading script
- * stamped), and how long the person looked at nothing in between, from the
- * reload to the new page's first paint. Null for a document that was not
- * reloaded. The stamp is taken either way, so a stale one counts nothing.
+ * page, why it reloaded (`reloadTarget`), and how long the person looked at
+ * nothing in between, from the reload to the new page's first paint. The
+ * cause is the one the reloading script stamped (`yak-reload`), else
+ * `discarded` where the page before never left (the browser or the phone let
+ * go of it and brought it back), else none: the person reloaded it. Null for
+ * a document that was not reloaded. Both marks are taken either way, so a
+ * stale one counts nothing.
  */
 export let reloaded = (win: Browser, page: string): Promise<Point | null> => {
   let cause: string | null = null
+  let { sessionStorage: kept } = win
   try {
-    cause = win.sessionStorage.getItem('yak-reload')
-    win.sessionStorage.removeItem('yak-reload')
+    let stamped = kept.getItem('yak-reload')
+    let stayed = kept.getItem(HERE) != null
+    kept.removeItem('yak-reload')
+    kept.setItem(HERE, '')
+    cause = stamped ?? (stayed ? 'discarded' : null)
+    win.addEventListener('pagehide', () => kept.removeItem(HERE))
+    win.addEventListener(
+      'pageshow',
+      (e) => e.persisted && kept.setItem(HERE, ''),
+    )
   } catch { /* a sandboxed page is counted without its cause */ }
   let nav = win.performance.getEntriesByType?.('navigation')[0] as
     | PerformanceNavigationTiming

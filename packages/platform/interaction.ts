@@ -130,23 +130,40 @@ let NATIVE = [
   'skip',
 ]
 /** Why a page reloaded itself, as the script that reloaded it stamps it in
- * `sessionStorage` under `yak-reload` (workers/yak/public): following a
- * preview's draft, the person pressing a release notice's Reload, or coming
- * back from signing in elsewhere. */
-export let RELOAD_CAUSES = ['draft', 'release', 'away']
-/** The target a reloaded page is counted under: `reload-<cause>`, or `reload`
- * where no script of ours did it (the person, or the browser bringing back a
- * page it let go of). */
+ * `sessionStorage` under `yak-reload` (workers/yak/public, pages.ts): following
+ * a preview's draft, the person pressing a release notice's Reload, coming
+ * back from signing in elsewhere, or a TV moving to what it shows. Each is a
+ * reload someone chose. */
+export let RELOAD_CAUSES = ['draft', 'release', 'away', 'tv']
+/** The reloads nobody chose: the page before it never left (`discarded`: the
+ * browser or the phone let go of it, or it crashed, and brought it back), or a
+ * script stamped a cause not in {@link RELOAD_CAUSES} (`unknown`). Each is
+ * sent to the tracker as well as counted. */
+export let UNEXPECTED_RELOADS = ['discarded', 'unknown']
+/** The target a reloaded page is counted under: `reload` where nothing
+ * stamped a cause (the person reloading it), else `reload-<cause>`, any cause
+ * not known being `reload-unknown`. */
 export let reloadTarget = (cause: string | null): string =>
-  cause && RELOAD_CAUSES.includes(cause) ? `reload-${cause}` : 'reload'
+  cause == null
+    ? 'reload'
+    : `reload-${
+      [...RELOAD_CAUSES, ...UNEXPECTED_RELOADS].includes(cause)
+        ? cause
+        : 'unknown'
+    }`
 /** Whether a point is a page reloading rather than something pressed. */
 export let reloading = (target: string): boolean =>
   target == 'reload' || target.startsWith('reload-')
+/** The cause of a reload nobody chose, or null for any other point. */
+export let unexpected = (target: string): string | null => {
+  let cause = target.slice('reload-'.length)
+  return reloading(target) && UNEXPECTED_RELOADS.includes(cause) ? cause : null
+}
 let TARGETS = new Set([
   ...Object.values(ACTIONS),
   ...NATIVE,
   reloadTarget(null),
-  ...RELOAD_CAUSES.map(reloadTarget),
+  ...[...RELOAD_CAUSES, ...UNEXPECTED_RELOADS].map(reloadTarget),
 ])
 export let interactionTarget = (target: string): boolean =>
   TARGETS.has(target) ||

@@ -11,7 +11,12 @@ import {
   SLOW,
 } from '@yaks/timing/interaction'
 import { capture, type Context, type Sink } from '@yaks/tracker/report'
-import { interactionPage, interactionTarget, reloading } from './interaction.ts'
+import {
+  interactionPage,
+  interactionTarget,
+  reloading,
+  unexpected,
+} from './interaction.ts'
 
 let MAX_BODY = 8192
 let OBJECT = (value: unknown): value is Record<string, unknown> =>
@@ -59,13 +64,18 @@ let rows = (
 ): Bundle[] => [
   ...interactionRows(seen, commit),
   ...seen.points.flatMap((p, i) => {
-    // A reload is counted, never a slow press: its time is the page
-    // standing blank until the new one paints.
-    if (p.ms <= SLOW || reloading(p.target)) return []
     let name = interactionName(p)
+    let cause = unexpected(p.target)
+    // A reload is counted, never a slow press: its time is the page
+    // standing blank until the new one paints. One nobody chose is a bug.
+    if (!cause && (p.ms <= SLOW || reloading(p.target))) return []
     return capture({
-      name: 'Slow interaction',
-      message: `${name} took ${Math.round(p.ms)} ms`,
+      name: cause ? 'Unexpected reload' : 'Slow interaction',
+      message: cause
+        ? `${p.page} reloaded under the person (${cause}), blank ${
+          Math.round(p.ms)
+        } ms`
+        : `${name} took ${Math.round(p.ms)} ms`,
     }, {
       sink,
       commit,
