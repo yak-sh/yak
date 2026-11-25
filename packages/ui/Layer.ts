@@ -52,9 +52,34 @@ export let description =
 /** A terminal lays the page out whole: a layer stays in the flow. */
 export let sheet = (_c: Colors): Sheet => ({})
 
-/** One from each edge, shown in place. */
-export let specimens = (): Specimen[] =>
-  [undefined, 'left', 'right'].map((edge) => [
-    edge ? `Layer-${edge}` : 'Layer',
-    h(Layer, { mod: edge }, edge ? `from the ${edge}` : 'up from the foot'),
-  ])
+/** One from each edge, and a menu revealed by sliding its page aside. */
+export let specimens = (): Specimen[] => [
+  ['Layer', h(Layer, {}, 'up from the foot')],
+  ['Layer-left', h(Layer, { mod: 'left' }, 'from the left')],
+  ['Layer-right', h(Layer, { mod: 'right' }, 'from the right')],
+  [
+    'Layer-under, Cover, Shut',
+    h(
+      'div',
+      {
+        id: 'layer-example',
+        style: {
+          position: 'relative',
+          overflow: 'clip',
+          '--layer-width': '6rem',
+        },
+      },
+      h(Layer, {
+        id: 'layer-example-menu',
+        mod: ['left', 'under'],
+        style: { position: 'absolute', inset: '0 auto 0 0' },
+      }, 'Menu'),
+      h(
+        Layer.Cover,
+        { style: { position: 'relative', background: 'var(--bg)' } },
+        h('a', { href: '#layer-example-menu' }, 'Open menu'),
+        h(Layer.Shut, { href: '#layer-example', 'aria-label': 'Close menu' }),
+      ),
+    ),
+  ],
+]
