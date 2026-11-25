@@ -30,6 +30,7 @@ import {
   META,
   type Space,
   stamp,
+  type Walk,
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { meta } from './meta.ts'
@@ -39,10 +40,18 @@ import { sessionAt } from './session.ts'
 
 export let todayOf = (env: Env) => dayOf(env.CLOCK?.now() ?? Date.now())
 
-export let supportFor = async (env: Env, space: Space) => {
-  let support = await oneContract(meta(env).query, space.eid, todayOf(env))
+export let supportFor = async (
+  env: Env,
+  space: Space | Walk,
+  dir = directoryOf(env.STORE),
+) => {
+  let support = await oneContract(
+    dir.read,
+    'path' in space ? space : space.eid,
+    todayOf(env),
+  )
   if (!support) return null
-  let name = await directoryOf(env.STORE).nameAt(support.contract.provider)
+  let name = await dir.nameAt(support.contract.provider)
   return { ...support, providerName: name || 'your support provider' }
 }
 

@@ -435,7 +435,7 @@ export let manage = async (
     reading && view == 'billing' && role && !space.trashed &&
     who.role != 'owner'
   ) {
-    let support = await supportFor(env, space)
+    let support = await supportFor(env, walkTo(space.slug, space.eid), dir)
     if (support) {
       return deskPage({
         person,
@@ -573,7 +573,13 @@ let rowsAhead = (
     return [agentsIn(at.env, dir, person), dir.provenance(walk)]
   }
   if (view == 'new') return [agentsIn(at.env, dir, person)]
-  if (view == 'billing') return [dir.domainOrders(walk), dir.freeBudget()]
+  if (view == 'billing') {
+    return [
+      dir.domainOrders(walk),
+      dir.freeBudget(),
+      supportFor(at.env, walk, dir),
+    ]
+  }
   if (view == 'people') {
     return [dir.people(walk), dir.admits(walk), standingWith(dir, person)]
   }
@@ -788,6 +794,7 @@ let desk = async (
     lines,
     held,
     renewals,
+    support,
   ] = await Promise.all([
     shelved,
     // The rows a page drawn from the page graph's reads is drawn from,
@@ -847,11 +854,11 @@ let desk = async (
     view == 'billing'
       ? billedDomains(env, dir, space, walkTo(space.slug, space.eid))
       : undefined,
+    view == 'billing' || view == 'operator' && who.role != 'owner'
+      ? supportFor(env, walkTo(space.slug, space.eid), dir)
+      : null,
   ])
   let connected = await inHand(agentsRow)
-  let support = view == 'billing' || view == 'operator' && who.role != 'owner'
-    ? await supportFor(env, space)
-    : null
   let page = deskPage({
     person: who.person,
     // Apps' and New app's rows carry the agents connected, where in hand; a

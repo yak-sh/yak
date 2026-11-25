@@ -16,10 +16,12 @@ import {
 export type To = { email: string; name: string }
 export type Setup = { terms: Contract; bill: boolean; to?: To }
 
-export let current = (space: string) =>
-  line`.entity.eid=${
-    contractEid(space)
-  }&?support_contract&?support_contract_billing&?support_contract_pending`
+export let current = (space: string | { path: Built }) =>
+  typeof space == 'string'
+    ? line`.entity.eid=${
+      contractEid(space)
+    }&?support_contract&?support_contract_billing&?support_contract_pending`
+    : line`.support_contract.space${sub(space.path)}&?support_contract_billing`
 let contracts = line`.support_contract&?support_contract_billing`
 let work = (today: string, contract?: string) =>
   line`.support_contract_time.day>=${
@@ -150,7 +152,11 @@ let invoiceContract = async (
 
 type Read = (query: Built) => Promise<Bundle[]>
 
-export let oneContract = async (read: Read, space: string, today: string) => {
+export let oneContract = async (
+  read: Read,
+  space: string | { path: Built },
+  today: string,
+) => {
   let [row] = await read(current(space))
   let contract = contractOf(row)
   if (!contract) return null
