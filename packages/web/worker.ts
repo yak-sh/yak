@@ -50,6 +50,7 @@ export type Keeping = {
   opening?: (source: 'picture' | 'shell' | 'push') => string
   address?: (url: string) => string
   report?: string
+  pictures?: boolean
 }
 
 /** What a page sends its worker as it is left (./keep.ts): its address, its
@@ -118,7 +119,12 @@ export type Scope = {
   caches: CacheStorage
   fetch: typeof fetch
   location: { origin: string }
-  clients: { claim(): Promise<void> }
+  clients: {
+    claim(): Promise<void>
+    matchAll?(
+      o: { type: 'window' },
+    ): Promise<{ url: string; navigate?(url: string): Promise<unknown> }[]>
+  }
   indexedDB?: Pick<IDBFactory, 'databases' | 'deleteDatabase'>
   addEventListener(
     type: 'fetch',
@@ -157,8 +163,20 @@ let PUSHED = 10_000
 /** Keep `scope`'s pages and files (see the module), now and as it runs. A
  * page open as the worker starts is its at once, so the page can be kept. */
 export let keeping = (scope: Scope, opts: Keeping): void => {
-  scope.addEventListener('activate', (e) => e.waitUntil(scope.clients.claim()))
   let { caches, location } = scope
+  // Pictures off: every page goes to the network, and what was kept is
+  // dropped as this worker takes over. Windows open while pictures were on
+  // load again from the network once, since one may be a picture stuck.
+  let pictures = opts.pictures ?? true
+  let unpicture = async () => {
+    if (!await caches.delete(PAGES)) return
+    let open = await scope.clients.matchAll?.({ type: 'window' }) ?? []
+    await Promise.all(open.map((w) => w.navigate?.(w.url).catch(() => {})))
+  }
+  scope.addEventListener('activate', (e) =>
+    e.waitUntil(
+      scope.clients.claim().then(() => pictures ? undefined : unpicture()),
+    ))
   let address = opts.address ?? ((url: string) => url)
   let keyOf = (url: string) => pageKey(address(url))
   let most = { pages: opts.pages ?? 24, files: opts.files ?? 400 }
@@ -200,6 +218,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     { keep: url, html, shell, at, since }: Snapshot,
     source: 'picture' | 'push' = 'picture',
   ) => {
+    if (!pictures) return
     if (new URL(url).origin != location.origin) return
     if (since < await forgotAt()) return
     let pages = await caches.open(PAGES)
@@ -234,6 +253,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   // A page's own picture, else the shell where it stands for the page: never
   // in a frame, whose page is another's.
   let kept = async (req: Request, key: string) => {
+    if (!pictures) return undefined
     let pages = await caches.open(PAGES)
     let shell = (req.destination || 'document') == 'document' &&
       opts.shelled?.(key)

@@ -23,4 +23,6 @@ keeping(globalThis as unknown as Scope, {
   shelled: (url) => framed(new URL(url).pathname),
   opening: (source) => openScript(OPEN_PATH, source),
   report: OPEN_PATH,
+  // T-3584: pictures stuck an iPhone PWA on a blank page; off until fixed.
+  pictures: false,
 })
