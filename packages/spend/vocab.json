@@ -176,6 +176,10 @@
         "plans": {
           "type": "boolean",
           "description": "true reports only each plan limit against its pace, one line each, as the Spend page shows first"
+        },
+        "done": {
+          "type": "boolean",
+          "description": "true reports only the cost per completed task in each UTC week (Monday to Sunday) from since's: the dollars charged to the tasks completed that week over those of them charged any, as cash and as usage at list price, by the tasks split (an estimate)"
         }
       },
       "readOnly": true,

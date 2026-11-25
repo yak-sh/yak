@@ -47,6 +47,20 @@ export let dayOf = (at: number | string): string =>
   new Date(at).toISOString().slice(0, 10)
 
 /** The row a day's tally is kept on. */
+/**
+ * The Monday (UTC) that begins the week a day falls in.
+ *
+ * ```ts
+ * import { mondayOf } from './window.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal([mondayOf('2026-11-09'), mondayOf('2026-11-15'), mondayOf('2026-11-25')],
+ *   ['2026-11-09', '2026-11-09', '2026-11-23'])
+ * ```
+ */
+export let mondayOf = (day: string): string =>
+  after(day, -((new Date(midnight(day)).getUTCDay() + 6) % 7))
+
 export let dayEid = (day: string): Eid => identityEid('spend', [day])
 
 /**

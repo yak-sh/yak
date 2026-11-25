@@ -99,6 +99,11 @@ request arriving during the tally marks the day again.
 - `yak spend show [since] [--until day] [--top n]` reports a span of days, by
   default the Claude plan's week. A day is written in the time grammar
   (@yaks/vocab `timeSpan`): `2026-10-13`, `yesterday`, `3 days ago`.
+- `yak spend show [since] --done` reports only the cost per completed task in
+  each UTC week (Monday to Sunday) from the one `since` falls in: the dollars
+  every tally charged the tasks completed that week, over those of them charged
+  any, as cash and as usage at list price, never one total. The charge is the
+  `tasks` split above, so it is an estimate; decisions are not counted.
 - `yak spend tally [since]` tallies each day since a day (default today) again
   from the requests the graph holds, in a few seconds a day: a changed price or
   plan shows without waiting for the duty's next pass.

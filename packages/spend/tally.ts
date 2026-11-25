@@ -372,3 +372,53 @@ export let spendOf = (b: Bundle | undefined): Spend | undefined => {
   let s = b?.spend as Partial<Spend> | undefined
   return s?.day ? { ...empty(s.day), ...s } as Spend : undefined
 }
+
+/** A week's completed tasks and what was charged to them. */
+export type Done = {
+  /** the Monday the week began */
+  week: string
+  /** the tasks completed that week */
+  tasks: number
+  /** how many of them were charged no dollars */
+  unpaid: number
+  /** dollars paid by the token */
+  cash: number
+  /** dollars billed against a plan: usage at list price, not cash */
+  usage: number
+}
+
+/**
+ * The tasks completed each week and the dollars a tally charged them, as cash
+ * (paid by the token) and usage at list price (billed against a plan). The
+ * dollars are the tally's `tasks` split, an estimate: a session divided evenly
+ * across the tasks it worked on. `finished` is each task and the week it was
+ * completed in.
+ *
+ * ```ts
+ * import { done, empty } from './tally.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let s = { ...empty('2026-11-09'), tasks: { a: [0, 5], b: [0, 1] },
+ *   plans: { c: { dollars: 4, parts: {}, sessions: {}, tasks: { a: 4 }, models: {}, entries: {} } } }
+ * equal(done(s, [['a', '2026-11-09'], ['b', '2026-11-09'], ['z', '2026-11-16']]), [
+ *   { week: '2026-11-09', tasks: 2, unpaid: 0, cash: 2, usage: 4 },
+ *   { week: '2026-11-16', tasks: 1, unpaid: 1, cash: 0, usage: 0 },
+ * ])
+ * ```
+ */
+export let done = (s: Spend, finished: [Eid, string][]): Done[] => {
+  let weeks = new Map<string, Done>()
+  let plans = Object.values(s.plans ?? {})
+  for (let [task, week] of finished) {
+    let w = weeks.get(week) ??
+      weeks.set(week, { week, tasks: 0, unpaid: 0, cash: 0, usage: 0 })
+        .get(week)!
+    let all = s.tasks[task]?.[1] ?? 0
+    let usage = sum(plans.map((p) => p.tasks?.[task] ?? 0))
+    w.tasks++
+    if (!all) w.unpaid++
+    w.usage += usage
+    w.cash += Math.max(0, all - usage)
+  }
+  return [...weeks.values()].sort((a, b) => a.week < b.week ? -1 : 1)
+}

@@ -175,3 +175,49 @@ test('the report says each share in a line, and nothing of shares where none is 
   equal(await shared(graph, now), [])
   equal((await report(graph, { now })).includes('Shares'), false)
 })
+
+test('the cost per completed task is a line a week, cash beside usage, over the tasks charged any', async () => {
+  let task = (eid: string, at: string, more = {}) => ({
+    entity: { eid },
+    task: {},
+    doc: { title: eid },
+    completed: { at },
+    ...more,
+  })
+  await graph.apply([
+    task('paid', '2026-11-12T09:00:00Z'),
+    task('free', '2026-11-13T09:00:00Z'),
+    task('asked', '2026-11-12T09:00:00Z', {
+      decision: {
+        question: 'q',
+        choices: ['a', 'b'].map((label) => ({ label, description: label })),
+        recommended: 'a',
+      },
+    }),
+    task('early', '2026-11-08T09:00:00Z'),
+    {
+      entity: { eid: dayEid('2026-11-09') },
+      spend: {
+        ...empty('2026-11-09'),
+        tasks: { paid: [0, 10], asked: [0, 5], early: [0, 1] },
+        plans: {
+          [plans.a]: {
+            dollars: 0,
+            parts: {},
+            sessions: {},
+            tasks: { paid: 6 },
+            models: {},
+            entries: {},
+          },
+        },
+      },
+    },
+  ], { trusted: true })
+  equal(
+    (await report(graph, { done: true, since: '2026-11-10', now }))
+      .split('\n').slice(1),
+    [
+      '  week of 2026-11-09 (to 2026-11-14): $4.00 cash and $6.00 usage at list price a task, over 1 of 2 completed (1 charged nothing); in all $4.00 cash, $6.00 usage',
+    ],
+  )
+})

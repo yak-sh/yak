@@ -15,7 +15,7 @@ import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { shares } from '@yaks/topic/share'
 import { lineage, recompute } from './day.ts'
-import { merged, ranked, type Spend, spendOf } from './tally.ts'
+import { done, merged, ranked, type Spend, spendOf } from './tally.ts'
 import { type Line, said, type Use, uses } from './use.ts'
 import {
   accountNames,
@@ -24,6 +24,8 @@ import {
   dayOf,
   type Limit,
   limitsOf,
+  midnight,
+  mondayOf,
   paceOf,
   rates,
   span,
@@ -140,6 +142,45 @@ let named = async (g: Graph, eids: Eid[]) => {
   )
 }
 
+/** The cost per completed task in each UTC week (Monday to Sunday) from the
+ * one `since` falls in to `until`'s: the dollars every tally to `until`
+ * charged the tasks completed that week, over those of them charged any, as
+ * cash and as usage at list price, never one total. Decisions are not counted.
+ * The charge is the tally's `tasks` split, an estimate. */
+export let perTask = async (
+  g: Graph,
+  since: string,
+  until: string,
+): Promise<string> => {
+  let from = mondayOf(since)
+  let days = (await g.read(line`.spend .spend.day<=${until} *`))
+    .map(spendOf).filter((s): s is Spend => !!s)
+  let finished = (await g.read(
+    line`.task !decision .completed .completed.at>=${
+      midnight(from)
+    } .completed.at<${midnight(after(until))} .fields=completed.at`,
+  )).map((b): [Eid, string] => [
+    b.entity.eid,
+    mondayOf(dayOf(String((b.completed as { at: string }).at))),
+  ])
+  let each = (n: number, of: number) => dollars(of ? n / of : 0)
+  return [
+    'Cost per completed task (the tasks split, an estimate: each session ' +
+    'divided evenly across the tasks it worked on; a task charged nothing ' +
+    'is left out of the divisor):',
+    ...done(merged(days), finished).map((w) => {
+      let paid = w.tasks - w.unpaid
+      return `  week of ${w.week}${
+        after(w.week, 6) > until ? ` (to ${until})` : ''
+      }: ${each(w.cash, paid)} cash and ${
+        each(w.usage, paid)
+      } usage at list price a task, over ${paid} of ${w.tasks} completed (${w.unpaid} charged nothing); in all ${
+        dollars(w.cash)
+      } cash, ${dollars(w.usage)} usage`
+    }),
+  ].join('\n')
+}
+
 /** A span's report, as text. */
 export let report = async (
   g: Graph,
@@ -149,8 +190,14 @@ export let report = async (
     top?: number
     now?: number
     plans?: boolean
+    done?: boolean
   } = {},
 ): Promise<string> => {
+  if (o.done) {
+    let { limits } = await plans(g)
+    let [from, to] = span(limits, o.now ?? Date.now(), o.since, o.until)
+    return perTask(g, from, to)
+  }
   let { spend: s, limits, rate, accounts, from, to } = await read(
     g,
     o.since,
@@ -288,6 +335,7 @@ export let runs = (host?: { config?: { person?: string } }): Runs => ({
         until: dayArg(a.until),
         top: a.top == null ? undefined : Number(a.top),
         plans: a.plans === true,
+        done: a.done === true,
       }),
     )
   },
