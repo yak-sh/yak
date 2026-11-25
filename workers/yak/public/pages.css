@@ -1079,6 +1079,13 @@
     .Talk-app .Frame_Column {
       min-width: 20rem;
     }
+    /* The app owns its whole pane, including its bottom-right controls. */
+    .Talk-app .Dock_Launcher-bar {
+      display: inline-flex;
+    }
+    .Talk-app + .Dock > .Dock_Launcher {
+      display: none;
+    }
   }
   .Talk_App {
     flex: 1.4 1 0;
