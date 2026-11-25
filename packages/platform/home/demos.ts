@@ -63,7 +63,7 @@ export const DEMOS: Demo[] = [
     (a) => [
       [
         you(
-          'Make me a menu for my market stall, with prices and a photo of each bake',
+          'Make me a menu for my farmer’s market bakery, with prices and a photo of each bake',
         ),
         built('Here’s your menu.', a),
       ],

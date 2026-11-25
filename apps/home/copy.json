@@ -34,7 +34,7 @@
     "hello": {
       "kicker": "Build, host and share web apps",
       "title": "Build your ideas by asking.",
-      "hint": "Type what you need, like “Make me a menu for my market stall”",
+      "hint": "Type what you need, like “Make me a menu for my farmer’s market bakery”",
       "go": "Build it",
       "note": "Free, no card: 5 apps and $20 of building credit for the AI. The Plus plan is %{price}.",
       "price": "$12 a month",
