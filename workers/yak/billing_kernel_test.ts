@@ -16,7 +16,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { managePath } from '@yaks/platform/routes'
+import { managePath, REACH, TAB_PERSON } from '@yaks/platform/routes'
 import {
   apexPost,
   fresh,
@@ -340,8 +340,10 @@ test('an invoiced plan starts when its invoice is paid, and stops past due', asy
     let url = String(input instanceof Request ? input.url : input)
     if (!url.startsWith('https://api.stripe.com')) return real(input, init)
     let path = new URL(url).pathname
+    // A call may reach fetch as a Request, carrying its own method.
+    let method = input instanceof Request ? input.method : init?.method
     return Promise.resolve(Response.json(
-      path == '/v1/subscriptions' && (init?.method ?? 'GET') == 'GET'
+      path == '/v1/subscriptions' && (method ?? 'GET') == 'GET'
         ? { data: [stands], has_more: false }
         : path.startsWith('/v1/subscriptions')
         ? stands
@@ -363,20 +365,24 @@ test('an invoiced plan starts when its invoice is paid, and stops past due', asy
       ((await meta(k).query(`id=${space}`))[0] as {
         plan?: Record<string, string>
       }).plan
+    // The Billing page's invoice form, as it writes through the page graph's
+    // door (reach-door.ts).
     let ask = () =>
-      k.at('yaks.app', managePath('billing', slug), {
+      k.at('yaks.app', `${REACH}/apply`, {
         method: 'POST',
-        redirect: 'manual',
         headers: {
           cookie: them.cookie,
-          origin: 'https://yaks.app',
-          'content-type': 'application/x-www-form-urlencoded',
+          [TAB_PERSON]: them.person,
+          'content-type': 'application/json',
         },
-        body: new URLSearchParams({
-          billing: 'invoice',
-          email: 'clerk@township.test',
-          name: 'Hollow Township',
-        }),
+        body: JSON.stringify([{
+          entity: { eid: crypto.randomUUID() },
+          invoiceAsk: {
+            space,
+            email: 'clerk@township.test',
+            name: 'Hollow Township',
+          },
+        }]),
       })
     let post = async (type: string, object: unknown, at: number) =>
       (JSON.parse(
@@ -392,7 +398,7 @@ test('an invoiced plan starts when its invoice is paid, and stops past due', asy
       ) as { did: string }).did
 
     let asked = await ask()
-    assertEquals(asked.status, 303)
+    assertEquals(asked.status, 200, await asked.clone().text())
     await asked.body?.cancel()
     let waiting = await plan()
     // A row with no tier is the free plan: nothing about it moved.

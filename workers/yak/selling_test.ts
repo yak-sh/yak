@@ -19,6 +19,7 @@ import { added, asked } from './examples/shop/cart.js'
 import { delivered } from '@yaks/stripe/testing'
 import { paymentDoor } from './payment-doors.ts'
 import * as sell from './sell.ts'
+import { REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { packed } from '@yaks/host/payments'
 import { call, type Ctx } from './tools.ts'
 import {
@@ -217,22 +218,29 @@ let sold = async (env: Env) =>
   (await directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
     .space('ada'))?.seller
 
-// The button on that page, as its form posts it. The page it is on is drawn in
-// mcp_load_test.ts; the POST is apps.ts `saved` and reaches nothing that needs
-// the kernel whole.
-let pressed = async (env: Env, sell: string) =>
+// A button on that page, as it writes `act` through the page graph's door
+// (reach-door.ts), which reaches nothing that needs the kernel whole.
+let pressed = async (env: Env, act: Record<string, unknown>) =>
   await apps.fetch(
-    new Request('https://yaks.app/manage/ada/selling', {
+    new Request(`https://yaks.app${REACH}/apply`, {
       method: 'POST',
       headers: {
         cookie: await as(ADA),
-        origin: 'https://yaks.app',
-        'content-type': 'application/x-www-form-urlencoded',
+        [TAB_PERSON]: ADA,
+        'content-type': 'application/json',
       },
-      body: `sell=${sell}`,
+      body: JSON.stringify([{ entity: { eid: crypto.randomUUID() }, ...act }]),
     }),
     env,
   )
+
+// Where a button that leaves for the provider's page sends them.
+let leaving = async (env: Env, space: string, door: string) => {
+  let res = await pressed(env, { leave: { space, door } })
+  assertEquals(res.status, 200)
+  let [left] = await res.json() as { leave: { url: string } }[]
+  return new URL(left.leave.url)
+}
 
 let WHSEC = 'whsec_a_connect_probe_secret'
 
@@ -279,7 +287,9 @@ test('a seller is updated by its events and stopped by its button', async () => 
   assertEquals(await updated(true), 'ada can sell')
   assertEquals(await sold(env), { ...seller, ready: true })
   assertEquals(await updated(true), 'unchanged')
-  assertEquals((await pressed(env, 'stop')).status, 303)
+  let stopped = await pressed(env, { sellStop: { space: space.eid } })
+  assertEquals(stopped.status, 200)
+  await stopped.body?.cancel()
   assertEquals(await sold(env), null)
   assertEquals(await updated(true), 'no space sells through that account')
 })
@@ -497,12 +507,10 @@ test('an account its owner already has is connected instead of a new one', async
     env,
   )).text()
   assertStringIncludes(page, 'Create a Stripe account')
-  assertStringIncludes(page, 'value="link"')
+  assertStringIncludes(page, 'data-door="link"')
   // Pressing it sends them to Stripe's own page, which hands them back to
   // the callback with the state it was sent with.
-  let sent = await pressed(env, 'link')
-  assertEquals(sent.status, 303)
-  let to = new URL(sent.headers.get('location')!)
+  let to = await leaving(env, space.eid, 'link')
   assertEquals(
     to.origin + to.pathname,
     'https://connect.stripe.com/oauth/authorize',
@@ -525,8 +533,9 @@ test('an account its owner already has is connected instead of a new one', async
   assertEquals(s.asked, [])
   // Begun again and finished by its owner, the account is the space's seller,
   // ready as Stripe says, and nothing new was opened at Stripe.
-  let again = new URL((await pressed(env, 'link')).headers.get('location')!)
-    .searchParams.get('state')!
+  let again = (await leaving(env, space.eid, 'link')).searchParams.get(
+    'state',
+  )!
   let back = await returned(env, `scope=read_write&code=ac_2&state=${again}`)
   assertEquals(back.status, 303)
   assertEquals(back.headers.get('location'), sell.backTo(space, env))
@@ -559,7 +568,11 @@ test('an account its owner already has is connected instead of a new one', async
     'https://yaks.app/manage',
   )
   // A space already taking payments is not offered a second account.
-  assertEquals((await pressed(env, 'link')).status, 400)
+  let twice = await pressed(env, { leave: { space: space.eid, door: 'link' } })
+  assertEquals(
+    [twice.status, (await twice.json()).message],
+    [409, 'ada is already taking payments'],
+  )
   assertEquals(
     await sell.linkable(env, (await scenario.dir.space('ada'))!),
     false,
