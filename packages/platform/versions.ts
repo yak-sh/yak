@@ -95,8 +95,9 @@ export let noFile = (
   there: string[],
   tree?: string,
   listing?: { space: string; app: string; draft?: string },
+  where = path,
 ) => {
-  let missed = `no file ${path}${tree ? ` in ${tree}` : ''}`
+  let missed = `no file ${where}${tree ? ` in ${tree}` : ''}`
   let names = [...there].sort().slice(0, 40)
   let more = there.length - names.length
   let held = names.length

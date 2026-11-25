@@ -326,6 +326,7 @@ import { type Clock, clock } from './timing.ts'
 import { addressee, canon } from './signin.ts'
 import { nameOf } from './names.ts'
 import { ACCEPTED } from './door.ts'
+import { type Edit, patching } from '@yaks/platform/app-patch'
 import { type Door } from '@yaks/durable-object/door'
 import {
   asked,
@@ -721,8 +722,12 @@ let shaped = <T extends Pick<Tool, 'run'>>(tool: T): T => ({
       let batch = [args.files, args.drafts].some(Array.isArray) ? 1 : 0
       let op = opOf(args, batch)
       if (!(e instanceof CallError) || e.code != 'arguments') throw e
-      if (!OPS.includes(op) || e.message.includes(TAKES[op])) throw e
-      throw refuse('arguments', `${e.message} — ${op} takes ${TAKES[op]}`)
+      if (!OPS.includes(op) || e.summary.includes(TAKES[op])) throw e
+      throw new CallError(
+        'arguments',
+        `${e.summary} — ${op} takes ${TAKES[op]}`,
+        e.detail,
+      )
     }
   },
 })
@@ -3355,38 +3360,6 @@ export let parses = (path: string, bytes: Uint8Array) => {
 }
 
 /**
- * A find-and-replace over one file's text: exact, and exactly once. Two
- * matches would edit a place nobody looked at and none would answer "wrote"
- * having changed nothing, so both refuse saying how many there were — which
- * is the number that tells the caller what to do next. The split-and-join is
- * not `String.replace`: a `$&` in the replacement is text here, not a
- * back-reference.
- */
-export let patched = (
-  was: string,
-  find: string,
-  replace: string,
-  path: string,
-) => {
-  let parts = was.split(find)
-  if (parts.length == 2) return parts.join(replace)
-  let hits = parts.length - 1
-  throw refuse(
-    'arguments',
-    `find matched ${hits} times in ${path} — a patch replaces exactly one` +
-      (hits
-        ? ': lengthen find until it names one place'
-        : ': read the file back and copy the text exactly'),
-  )
-}
-
-/**
- * One `find` and `replace` in one file: what `op: patch` does, once or as a
- * list (T-134951), so ten edits across an app are one call and one approval.
- */
-export type Edit = { path: string; find: string; replace: string }
-
-/**
  * A patch's edits, from either form of the call: `edits: [{path, find,
  * replace}]`, or the lone `path`, `find` and `replace` it has always taken.
  * Empty is a legal replacement — it is how a line is removed — so `replace`
@@ -3416,28 +3389,6 @@ export let edits = (args: Record<string, unknown>): Edit[] => {
     }
     return one(f as Record<string, unknown>, `edits[${i}].`)
   })
-}
-
-/**
- * Every edit of a patch applied in order to the files' texts, or none: one
- * that refuses refuses the call, naming the edit, before anything is written.
- * Edits to one file see the ones before them. Each answers the line its
- * replacement starts on, the place to read back.
- */
-export let patching = (
-  texts: Record<string, string>,
-  list: Edit[],
-  missing = (path: string) => noFile(path, Object.keys(texts)),
-) => {
-  let now = { ...texts }
-  let lines = list.map(({ path, find, replace }, i) => {
-    let was = now[path]
-    let at = list.length > 1 ? `${path} (edits[${i}])` : path
-    if (was == null) throw refuse('missing', missing(at))
-    now[path] = patched(was, find, replace, at)
-    return was.slice(0, was.indexOf(find)).split('\n').length
-  })
-  return { texts: now, lines }
 }
 
 /**
@@ -4512,7 +4463,7 @@ let OURS: Row[] = [
         )
       let at = (d: Draft, path: string) => `${d.root}/${path}`
       let selectedDraft = (d: Draft) => d.of?.eid ?? (id == NEW ? id : null)
-      let missing = (d: Draft, path: string) => {
+      let missing = (d: Draft, path: string, where?: string) => {
         let tree = d.of
           ? `draft ${d.of.eid}`
           : app.version
@@ -4524,6 +4475,7 @@ let OURS: Row[] = [
           own(Object.keys(d.files)),
           tree,
           { space: space.slug, app: app.slug, ...draft ? { draft } : {} },
+          where,
         )
       }
       if (op == 'discard') {
@@ -4947,12 +4899,16 @@ let OURS: Row[] = [
         // The draft its edits were read from is the one they land in.
         let held = heldBy(d.of)
         let paths = [...new Set(list.map((e) => e.path))]
-        let texts: Record<string, string> = {}
+        let texts: Record<string, string> = Object.create(null)
         await Promise.all(paths.map(async (p) => {
           let was = await d.view.read(at(d, p))
           if (was) texts[p] = decoded(was)
         }))
-        let done = patching(texts, list, (path) => missing(d, path))
+        let done = patching(
+          texts,
+          list,
+          (path, where) => missing(d, path, where),
+        )
         let sent = paths.map((path) => ({
           path,
           bytes: new TextEncoder().encode(done.texts[path]),

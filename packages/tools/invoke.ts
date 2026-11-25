@@ -57,7 +57,10 @@ export let refusalOf = (error: unknown): Refusal | undefined => {
     ? (error as Error).name
     : undefined
   if (code == undefined) return undefined
-  return { code, said: (error as Error).message || String(error) }
+  let said = (error as Error).message || String(error)
+  return error instanceof CallError && error.detail
+    ? { code, said, summary: error.summary }
+    : { code, said }
 }
 
 /** Tell whoever hears refusals of one, reporting a hearer that fails rather

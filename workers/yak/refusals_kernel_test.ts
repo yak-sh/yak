@@ -19,6 +19,24 @@ let missing = await agent.call('tools/call', {
   name: 'app_files',
   arguments: { space, app: unique('gone'), op: 'list' },
 })
+let ambiguous = await (async () => {
+  let app = { space, app: 'notes' }
+  await agent.tool('app_files', {
+    ...app,
+    path: 'notes.txt',
+    content: 'first private line\nsecond private line',
+  })
+  return await agent.call('tools/call', {
+    name: 'app_files',
+    arguments: {
+      ...app,
+      op: 'patch',
+      path: 'notes.txt',
+      find: 'private',
+      replace: 'public',
+    },
+  })
+})()
 await k.settled()
 type Row = {
   tool_refusal: { tool: string; space?: string; session?: string }
@@ -41,7 +59,7 @@ test('a tool nobody offers is kept as one occurrence', async () => {
 test('a refusal inside a space keeps the space and never reaches the tracker', async () => {
   equal(missing.isError, true)
   let rows = (await heard('app_files')).filter((r) =>
-    r.tool_refusal.space == them.eids[space]
+    r.tool_refusal.space == them.eids[space] && r.refusal.code == 'missing'
   )
   equal(rows.length, 1)
   ok(rows[0].refusal.code)
@@ -49,6 +67,19 @@ test('a refusal inside a space keeps the space and never reaches the tracker', a
     k.reported.filter((r) => JSON.stringify(r).includes('app_files')).length,
     0,
   )
+})
+
+test('patch context reaches its caller and is absent from refusal reports', async () => {
+  equal(ambiguous.isError, true)
+  let answer = JSON.stringify(ambiguous)
+  ok(answer.includes('line 1: first private line'))
+  ok(answer.includes('line 2: second private line'))
+  let rows = (await heard('app_files')).filter((r) =>
+    r.tool_refusal.space == them.eids[space] && r.refusal.code == 'arguments'
+  )
+  equal(rows.length, 1)
+  ok(rows[0].content.body.includes('find matched <n> times in notes.txt'))
+  ok(!rows[0].content.body.includes('private line'))
 })
 
 test('the hourly wake sends TaskMaster what it counted', async () => {

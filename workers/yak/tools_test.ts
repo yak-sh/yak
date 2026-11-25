@@ -22,13 +22,12 @@ import {
   opOf,
   type Out,
   parses,
-  patched,
-  patching,
   pinning,
   sri,
   stored,
   TOOLS,
 } from './tools.ts'
+import { patching } from '@yaks/platform/app-patch'
 import { digest } from '@yaks/graph/sha256'
 import { owned } from './directory-fixture.ts'
 import { platform as rows } from './directory-rows-probe.ts'
@@ -342,31 +341,54 @@ test('a write answers what it stored, and json answers whether it parses', () =>
 
 test('a patch replaces exactly one match, or refuses saying how many', () => {
   let page = '<h1>Old</h1>\n<p>Old news</p>\n'
+  let patch = (was: string, find: string, replace: string) =>
+    patching({ 'index.html': was }, [{ path: 'index.html', find, replace }])
+      .texts['index.html']
   assertEquals(
-    patched(page, '<h1>Old</h1>', '<h1>New</h1>', 'index.html'),
+    patch(page, '<h1>Old</h1>', '<h1>New</h1>'),
     '<h1>New</h1>\n<p>Old news</p>\n',
   )
   // Empty removes, which is how a line goes away.
   assertEquals(
-    patched(page, '<p>Old news</p>\n', '', 'index.html'),
+    patch(page, '<p>Old news</p>\n', ''),
     '<h1>Old</h1>\n',
   )
   // A replacement is text: `$&` is two characters, not a back-reference.
-  assertEquals(patched('a b', 'b', '$& $`', 'x.js'), 'a $& $`')
-  // Two matches would edit a place nobody looked at; none would answer
-  // "patched" having changed nothing. Both say the count, which is what
-  // tells the caller what to do next.
+  assertEquals(patch('a b', 'b', '$& $`'), 'a $& $`')
   assertStringIncludes(
-    assertThrows(() => patched(page, 'Old', 'New', 'index.html'), Error)
-      .message,
-    'find matched 2 times in index.html — a patch replaces exactly one: ' +
-      'lengthen find',
-  )
-  assertStringIncludes(
-    assertThrows(() => patched(page, 'Nowhere', 'x', 'index.html'), Error)
-      .message,
+    assertThrows(() => patch(page, 'Nowhere', 'x'), Error).message,
     'find matched 0 times in index.html — a patch replaces exactly one: ' +
       'read the file back',
+  )
+})
+
+test('an ambiguous patch gives the count and the starting line of each match', () => {
+  let page = 'before Old\r\ntext\r\n\r\nafter Old\r\ntext'
+  let why = assertThrows(() =>
+    patching({ 'index.html': page }, [{
+      path: 'index.html',
+      find: 'Old\r\ntext',
+      replace: 'New',
+    }]), Error).message
+  assertStringIncludes(why, 'find matched 2 times in index.html')
+  assertStringIncludes(why, 'Add surrounding text to find')
+  assertStringIncludes(why, '\nline 1: before Old\nline 4: after Old')
+})
+
+test('an ambiguous patch gives context for each match even across many lines', () => {
+  let page = Array.from({ length: 12 }, (_, i) => `Item ${i + 1}`).join('\n')
+  let { message } = assertThrows(
+    () =>
+      patching({ 'items.txt': page }, [{
+        path: 'items.txt',
+        find: 'Item',
+        replace: 'Entry',
+      }]),
+    Error,
+  )
+  assertEquals(
+    message.split('\n').slice(1),
+    page.split('\n').map((item, i) => `line ${i + 1}: ${item}`),
   )
 })
 

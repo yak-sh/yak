@@ -96,7 +96,7 @@ import { type Registry, registryOf } from './registry.ts'
 let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
 
 /** A refusal as its answer says it: the code that classes it and its words. */
-export type Refusal = { code: string; said: string }
+export type Refusal = { code: string; said: string; summary?: string }
 
 /** What hears a refusal: the refusal, the call it answered and the tool. */
 export type Refused = (

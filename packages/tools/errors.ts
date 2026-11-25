@@ -4,8 +4,12 @@ import type { Eid } from '@yaks/graph/bundle'
 import { status, unheard } from '@yaks/graph/errors'
 
 export class CallError extends Error {
-  constructor(public code: string, message: string) {
-    super(message)
+  constructor(
+    public code: string,
+    public summary: string,
+    public detail?: string,
+  ) {
+    super(detail ? `${summary}\n${detail}` : summary)
     this.name = 'CallError'
   }
 }

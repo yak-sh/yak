@@ -109,7 +109,7 @@ async (
 
 /** One occurrence as the platform store keeps it. */
 export let occurrence = (
-  refusal: { code: string; said: string },
+  refusal: Parameters<Refused>[0],
   call: Bundle,
   tool: string | undefined,
   where: Where,
@@ -125,7 +125,7 @@ export let occurrence = (
     at,
   },
   refusal: { code: refusal.code },
-  content: { body: cause(refusal.said) },
+  content: { body: cause(refusal.summary ?? refusal.said) },
 })
 
 /** What hears a boundary's refusals: each one written to the platform

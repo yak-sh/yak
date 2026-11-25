@@ -184,6 +184,7 @@
     "./client-routes": "./client-routes.ts",
     "./page-wire": "./page-wire.ts",
     "./app-commands": "./app-commands.ts",
+    "./app-patch": "./app-patch.ts",
     "./app-command": "./app-command.ts",
     "./app-worker": "./app-worker.ts",
     "./app-effects": "./app-effects.ts",
