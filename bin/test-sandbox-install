@@ -1,0 +1,33 @@
+#!/bin/sh
+# Exercise Deno's sandbox dependency setup in a clean checkout of this commit.
+set -eu
+root=$(git rev-parse --show-toplevel)
+mkdir -p "$root/.scratch"
+scratch=$(mktemp -d "$root/.scratch/sandbox-install.XXXXXX")
+tree="$scratch/tree"
+cleanup() {
+  cd "$root"
+  if [ -d "$tree" ]; then git worktree remove --force "$tree"; fi
+  rmdir "$scratch"
+}
+trap cleanup EXIT
+git -c core.hooksPath=/dev/null worktree add --quiet --detach "$tree" HEAD
+cd "$tree"
+test ! -e node_modules
+
+# Populate the cache from the committed lock and verify it covers a full install.
+deno install --node-modules-dir=none --frozen --quiet
+git diff --exit-code -- deno.lock
+
+# Leave the package resolutions in place but make the workspace metadata stale.
+deno eval --no-lock '
+  let path = "deno.lock"
+  let lock = JSON.parse(Deno.readTextFileSync(path))
+  delete lock.workspace
+  Deno.writeTextFileSync(path, JSON.stringify(lock))
+'
+deno task deps:install --node-modules-dir=none --cached-only --quiet
+git diff --exit-code -- deno.lock
+deno task deps:install --cached-only --quiet
+test -d node_modules/.deno
+git diff --exit-code -- deno.lock

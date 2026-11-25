@@ -258,8 +258,8 @@ on where it works. An exposed fixer gets no host checkout. The plugin's
       },
       "source": "/home/yaks/code/tasks",
       "setup": {
-        "install": "deno install --cached-only --quiet",
-        "warm": "deno install --node-modules-dir=none --quiet"
+        "install": "deno task deps:install --cached-only --quiet",
+        "warm": "deno task deps:install --node-modules-dir=none --quiet"
       },
       "tools": ["graph_show", "graph_query", "search", "session_handup"]
     }
@@ -285,7 +285,10 @@ read-only:
 If `install` fails, the host runs `warm` against the same committed manifests
 and cache, then retries `install`. The Deno example downloads workspace
 dependencies into `DENO_DIR` during `warm` and builds `node_modules` during the
-offline `install`.
+offline `install`. This repository's `deps:install` task uses
+`deno install --frozen=false` so these explicit installs can update the
+snapshot's private lockfile. Run `deno task test:sandbox-install` to check the
+committed lockfile and the install in a fresh worktree.
 
 The commit is the host's own code, and nothing a sandbox writes reaches the
 host. A layer no sandbox was made from for a day is removed. Without `dir`,
