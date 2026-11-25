@@ -38,7 +38,7 @@ for (let app of cases) {
   await agent.tool('app_new', {
     space: 'home',
     slug: app,
-    title: app,
+    title: app == 'resume' ? 'web resume' : app,
     access: 'private',
   })
   await agent.tool('app_files', {
@@ -103,7 +103,11 @@ for (let app of cases) {
         decision: 'approve',
       })
     } else {
-      let mail = await letter(k, 'hello@yaks.app', app)
+      let mail = await letter(
+        k,
+        'hello@yaks.app',
+        `https://home.yaks.app/${app}/`,
+      )
       let yes =
         mail.body.match(/https:\/\/yaks\.app\/gallery\/review\?t=([^\s]+)/)![1]
       let response = await k.at('yaks.app', '/gallery/review', {
