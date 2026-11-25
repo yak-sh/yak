@@ -2,7 +2,7 @@ import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { DRAW, type Drawing } from '@yaks/ui/navigate'
 import { switching } from './talk-views-browser.ts'
-import { type TalkView, VIEW } from './talk-views.ts'
+import { PART, type TalkView, VIEW } from './talk-views.ts'
 import { type Heard, pageTalk } from './operator-talk-browser.ts'
 import { operatorTalk } from './operator-talk.ts'
 import { graph } from './page-graph_fixture_test.ts'
@@ -20,6 +20,7 @@ let view = (here: string, title: string, more: Partial<TalkView> = {}) =>
       skip: ['#content', 'Skip to content'],
       aside: false,
       all: false,
+      marks: [],
       ...more,
     } satisfies TalkView,
   ).replaceAll('"', '&quot;')
@@ -170,6 +171,52 @@ test('opening an app shows its shell before mounting its frame and keeps the cha
   press(doc, '/club')
   equal(doc.querySelector('[data-conversation]') === conversation, true)
   equal(text.value, 'Keep my draft')
+})
+
+// An Operator page opened at a helper's conversation, the bar's title
+// wearing how the helper stands; its Updates hidden.
+let beside = () => {
+  let { document } = parseHTML(`<html><head><title>Helper · Otto</title></head>
+<body><a class="Skip" href="#ask">Skip to the message box</a>
+<aside id="menu" data-side-view="{&quot;talk&quot;:{&quot;all&quot;:false}}">
+<a class="SideNav_Link" href="/club/updates">Updates</a></aside>
+<div class="Frame Talk Talk-zoomed">
+<a class="Talk_Out" ${PART}="/club/h" href="/club">Back</a>
+<b data-title><i data-mark>working</i> Helper</b>
+<div id="content">
+<section ${VIEW}="${
+    view('/club/h', 'Helper', {
+      marks: ['Talk-zoomed'],
+    })
+  }"><p>helper</p></section>
+<section ${VIEW}="${
+    view('/club/updates', 'Updates')
+  }" hidden><p>news</p></section>
+</div></div></body></html>`)
+  let doc = document as unknown as Document
+  switching(doc)
+  return doc
+}
+
+test('a view shown in place takes the frame as its own: its marks, its parts, its title as it was drawn', () => {
+  let doc = beside()
+  let frame = () => ({
+    marks: doc.querySelector('.Frame')!.className,
+    parts: [...doc.querySelectorAll<HTMLElement>(`[${PART}]`)].map((e) =>
+      e.hidden
+    ),
+    bar: doc.querySelector('[data-title]')!.innerHTML,
+  })
+  let was = frame()
+  press(doc, '/club/updates')
+  equal(frame(), {
+    marks: 'Frame Talk',
+    parts: [true],
+    bar: 'Updates',
+  })
+  press(doc, '/club/h')
+  equal(frame(), was)
+  equal(was.parts, [false])
 })
 
 test('the conversation is watched only while it shows: while Updates shows, the tab is not on its Operator, and shown again it hears it', () => {

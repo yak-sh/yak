@@ -716,7 +716,7 @@ test('dismissing from every space’s Updates comes back there, and never off ya
   )
 })
 
-test('the chat, its Updates and every space’s are one page’s views: the one opened shown, the others hidden, each with its own script', async () => {
+test('every Operator page holds the chat, its Updates and every space’s as views: the one opened shown, the others hidden, each with its own script', async () => {
   let space = (await directoryOf(p.env.STORE).at(eid))!
   let who = { person: ada, role: 'owner' as const, space: eid }
   let other = crypto.randomUUID()
@@ -745,6 +745,12 @@ test('the chat, its Updates and every space’s are one page’s views: the one 
   assertEquals(await views(updatesPage(p.env, space, who, beside)), [
     ['/club/updates', 'shown', 'news'],
     ['/club', 'hidden', 'chat'],
+    ['/updates?in=club', 'hidden', 'news'],
+  ])
+  // A page that is none of them holds them too.
+  assertEquals(await views(updatesPage(p.env, space, who, beside, true)), [
+    ['/club/updates?dismissed', 'shown', 'news'],
+    ['/club/updates', 'hidden', 'news'],
     ['/updates?in=club', 'hidden', 'news'],
   ])
   // Every space's cards are drawn in the browser, from each one the side

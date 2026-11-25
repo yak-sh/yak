@@ -877,6 +877,9 @@
   .Talk_Out {
     flex: none;
   }
+  .Talk-zoomed .Frame_Bar .Toolbar_Sub {
+    display: none;
+  }
   @media (prefers-reduced-motion: no-preference) {
     .Talk-zoomed .Talk_Column {
       transform-origin: 50% 0;

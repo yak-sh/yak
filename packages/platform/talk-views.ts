@@ -1,6 +1,7 @@
 /**
- * The views of an Operator page (D-475 step 4): the conversation, the
- * space's Updates, and every space's Updates where the page opened there.
+ * The views of an Operator page (D-475 step 4): the page the address names
+ * (the conversation, a helper's, Matches, the dismissed Updates), the
+ * space's Updates, and every space's Updates, each page holding them all.
  * The server draws them all in one document, the one the address names shown
  * and the others hidden, and a press on the side's link to another of them
  * shows it in place (./talk-views-browser.ts): no page is fetched and no node
@@ -18,8 +19,9 @@
 
 /** How a view is shown: the address it stands for, the side's link lit while
  * it shows, the bar's title, the document's title, where the skip link goes
- * and what it says, whether the frame's aside stands beside it, and whether
- * it is every space's Updates (`all`), which the side lights apart. */
+ * and what it says, whether the frame's aside stands beside it, whether it
+ * is every space's Updates (`all`), which the side lights apart, and the
+ * frame's own classes while it shows (`marks`). */
 export type TalkView = {
   here: string
   link: string
@@ -28,10 +30,15 @@ export type TalkView = {
   skip: [string, string]
   aside: boolean
   all: boolean
+  marks: string[]
 }
 
 /** The attribute on each view's element, holding its `TalkView`. */
 export let VIEW = 'data-talk-view'
+
+/** The attribute on a part of the frame that stands only while one view
+ * shows (a helper's way back out), holding that view's address. */
+export let PART = 'data-talk-part'
 
 /** The event a view's element hears as it is shown or hidden. */
 export let VIEWED = 'yak-viewed'

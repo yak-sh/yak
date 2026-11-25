@@ -971,7 +971,12 @@ test('a helper’s page is zoomed in: one line in the bar, the way back out, its
     [out.getAttribute('href'), out.getAttribute('aria-label')],
     [theirs, 'Back to your conversation'],
   )
-  assertEquals(bar.querySelector('.Toolbar_Sub'), null)
+  // Whose it is stands in the bar for the page's other views, put by while
+  // the helper is zoomed in (pages.css).
+  assertEquals(
+    bar.querySelector('.Toolbar_Sub')?.closest('.Talk-zoomed') != null,
+    true,
+  )
   assertEquals(
     bar.querySelector('[data-title] .Dot')?.getAttribute('aria-label'),
     'Running',

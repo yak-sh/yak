@@ -3,10 +3,12 @@
  * side's link to another view of the page, or Back to one, is drawn by
  * showing it (@yaks/ui/navigate `DRAW`), with nothing fetched. Showing a
  * view hides the others, names the page, lights the side's link to it,
- * stands the aside beside it or not, points the page's back fields at it,
- * and puts back where it was scrolled: at its foot where it was left at its
- * foot, as a conversation never shown opens at its newest line. Each view
- * shown or hidden hears `VIEWED`.
+ * stands the aside and the frame's parts that are its own (`PART`) beside it
+ * or not, marks the frame as it, points the page's back fields at it, and
+ * puts back where it was scrolled: at its foot where it was left at its
+ * foot, as a conversation never shown opens at its newest line. The bar's
+ * title it wore comes back with it, as it was drawn. Each view shown or
+ * hidden hears `VIEWED`.
  *
  * Every view keeps running while hidden, save the conversation's watch,
  * which says the tab is on its Operator (./operator-talk-browser.ts); one
@@ -24,7 +26,7 @@ import { pageGraph } from './page-graph.ts'
 import { SIDE } from './side-browser.ts'
 import { canvasAt, canvases, chooseCanvas } from './app-canvas-browser.ts'
 import { type CanvasSlot, SLOT } from './app-canvas-view.ts'
-import { type TalkView, VIEW, viewAt, VIEWED } from './talk-views.ts'
+import { PART, type TalkView, VIEW, viewAt, VIEWED } from './talk-views.ts'
 
 let ON = 'SideNav_Link-on'
 
@@ -32,6 +34,19 @@ let ON = 'SideNav_Link-on'
 export let STARTED = 'data-started'
 
 let said = (el: Element) => JSON.parse(el.getAttribute(VIEW)!) as TalkView
+
+// The bar's title each view wore as it was hidden, as drawn (a helper's
+// wears how it stands), and the title it said then.
+let worn = new WeakMap<Element, { nodes: Node[]; title: string }>()
+
+// The bar titled for `next`, after `was`: as it was left, where its title is
+// the same since, else in words.
+let title = (bar: Element, was: Element | undefined, next: Element) => {
+  if (was) worn.set(was, { nodes: [...bar.childNodes], title: said(was).title })
+  let { title } = said(next), kept = worn.get(next)
+  if (kept?.title == title) bar.replaceChildren(...kept.nodes)
+  else bar.textContent = title
+}
 
 // The side lit for `view`: its link the page's, and every space's Updates
 // lit where it is that, which the side's redraw reads (./side-browser.ts).
@@ -78,6 +93,14 @@ export let show = (
   let view = said(next)
   let body = doc.getElementById('content')
   let was = views.find((v) => !v.hidden)
+  let frame = doc.querySelector('.Frame')
+  if (frame) {
+    if (was) frame.classList.remove(...said(was).marks)
+    frame.classList.add(...view.marks)
+  }
+  for (let part of doc.querySelectorAll<HTMLElement>(`[${PART}]`)) {
+    part.hidden = part.getAttribute(PART) != view.here
+  }
   // Where the view left was scrolled: its foot, where it was at its end,
   // so what came while it stood hidden is in sight when it shows again.
   if (body && was) {
@@ -98,8 +121,8 @@ export let show = (
     if (s.getAttribute('type') == 'module') rerun(s)
   }
   doc.title = view.page
-  let title = doc.querySelector('[data-title]')
-  if (title) title.textContent = view.title
+  let bar = doc.querySelector('[data-title]')
+  if (bar) title(bar, was, next)
   let skip = doc.querySelector('a.Skip')
   if (skip) {
     skip.setAttribute('href', view.skip[0])
