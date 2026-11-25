@@ -4,7 +4,7 @@ import { Button, Card, Field, Form } from '@yaks/ui'
 import { Plan, Story, StoryFooter } from '@yaks/platform/home'
 import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
-import { attr, COPY, said, type Slots, text } from './copy.ts'
+import { attr, COPY, said, type Slots, text, voiced } from './copy.ts'
 import { Idle } from '../mascot.ts'
 import { Sky, Walk } from '@yaks/platform/home/sky'
 import { BUILD, DEMO_AT, type Example, HOME } from '../demos.ts'
@@ -353,11 +353,6 @@ export let DESCRIBE: Pitch = {
 let WORK = ['signup', 'hold', 'friday', 'minutes']
 let MADE = ['us', 'fixed', 'yours']
 
-// The key of the snippet a pitch shows at `rest`: its own, else the home
-// page's.
-let worded = ({ copy }: Pitch) => (rest: string) =>
-  read(COPY, `${copy}.${rest}`) == null ? `home.${rest}` : `${copy}.${rest}`
-
 let yak = () => (
   <div class='Hello_Yak' data-wander=''>
     <Idle class='Wander_Image' base='.' />
@@ -399,7 +394,7 @@ export let StoryHome = () => (
 )
 
 export let Home = ({ pitch }: { pitch: Pitch }) => {
-  let key = worded(pitch), yours = { yours: <Yours /> }
+  let own = voiced(pitch.copy), yours = { yours: <Yours /> }
   return (
     <Page
       copy={pitch.copy}
@@ -418,12 +413,12 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
       <section class='Hello' aria-labelledby='hello'>
         <div class='Hello_Copy'>
           {yak()}
-          <p class='Hello_Kicker' {...text(key('hello.kicker'))} />
+          <p class='Hello_Kicker' {...own.text('home.hello.kicker')} />
           <h1 class='Title Title-hero' id='hello'>
-            <label for='say' {...text(key('hello.title'))} />
+            <label for='say' {...own.text('home.hello.title')} />
           </h1>
-          {read(COPY, key('hello.lead')) != null && (
-            <p class='Note' {...text(key('hello.lead'))} />
+          {read(COPY, own.key('home.hello.lead')) != null && (
+            <p class='Note' {...own.text('home.hello.lead')} />
           )}
           <form class='Hello_Ask' method='post' action={START}>
             <Field
@@ -433,24 +428,24 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
               name='say'
               required
               maxLength={4000}
-              {...attr('placeholder', key('hello.hint'))}
+              {...own.attr('placeholder', 'home.hello.hint')}
             />
             <Button
               mod='go'
               type='submit'
               data-cta='start'
-              {...text(key('hello.go'))}
+              {...own.text('home.hello.go')}
             />
           </form>
           <p
             class='Note Note-small'
-            {...text(key('hello.note'), {
-              price: <a href='#cost' {...text(key('hello.price'))} />,
+            {...own.text('home.hello.note', {
+              price: <a href='#cost' {...own.text('home.hello.price')} />,
               examples: (
                 <a
                   href='#examples'
                   data-cta='examples'
-                  {...text(key('hello.examples'))}
+                  {...own.text('home.hello.examples')}
                 />
               ),
             })}
@@ -458,21 +453,23 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
         </div>
         <Examples
           apps={pitch.apps}
-          note={key('examples.note')}
+          note={own.key('home.examples.note')}
           slots={{
-            gallery: <a href='/gallery' {...text(key('examples.gallery'))} />,
+            gallery: (
+              <a href='/gallery' {...own.text('home.examples.gallery')} />
+            ),
           }}
         />
       </section>
       <section class='Yours' aria-labelledby='does'>
-        <h2 class='Title' id='does' {...text(key('does.title'))} />
+        <h2 class='Title' id='does' {...own.text('home.does.title')} />
         <dl class='Yours_List'>
           {pitch.does.map((item) => (
             <div>
-              <dt class='Yours_Term' {...text(key(`does.${item}.term`))} />
+              <dt class='Yours_Term' {...own.text(`home.does.${item}.term`)} />
               <dd
                 class='Yours_Detail'
-                {...text(key(`does.${item}.detail`), yours)}
+                {...own.text(`home.does.${item}.detail`, yours)}
               />
             </div>
           ))}
@@ -491,19 +488,19 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
         </dl>
       </section>
       <section class='How' aria-labelledby='how'>
-        <h2 class='Title' id='how' {...text(key('how.title'))} />
+        <h2 class='Title' id='how' {...own.text('home.how.title')} />
         <ol class='Steps'>
           {pitch.steps.map((step) => (
             <li class='Steps_Item'>
-              <h3 class='Step_Name' {...text(key(`how.${step}.name`))} />
-              <p class='Note' {...text(key(`how.${step}.detail`), yours)} />
+              <h3 class='Step_Name' {...own.text(`home.how.${step}.name`)} />
+              <p class='Note' {...own.text(`home.how.${step}.detail`, yours)} />
             </li>
           ))}
         </ol>
         <p
           class='Note Note-small'
-          {...text(key('how.agent'), {
-            agent: <a href='/agent' {...text(key('how.address'))} />,
+          {...own.text('home.how.agent', {
+            agent: <a href='/agent' {...own.text('home.how.address')} />,
           })}
         />
       </section>
@@ -530,16 +527,16 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
         </dl>
       </section>
       <Card class='Join' aria-labelledby='join'>
-        <h2 class='Title' id='join' {...text(key('join.title'))} />
+        <h2 class='Title' id='join' {...own.text('home.join.title')} />
         <p class='Join_Doors'>
           <Button
             mod='go'
             href='#say'
             data-cta='join'
-            {...text(key('join.go'))}
+            {...own.text('home.join.go')}
           />
         </p>
-        <p class='Note Note-small' {...text(key('join.note'))} />
+        <p class='Note Note-small' {...own.text('home.join.note')} />
       </Card>
     </Page>
   )

@@ -69,3 +69,32 @@ export let attr = <Name extends string>(name: Name, key: string) =>
     [name]: said(key),
     [names.attr(name)]: key,
   }) as Record<Name, string>
+
+/**
+ * The words of a page drawn from the home page's parts, which name the home
+ * page's keys: each snippet under `home.` is the page's own, the same key
+ * under `page`, where the page has words there, and the home page's where it
+ * has none. The element names the key it shows, so editing it on the page
+ * edits that one.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let { key } = voiced('build')
+ * assertEquals(key('home.hello.title'), 'build.hello.title')
+ * assertEquals(key('home.work.title'), 'home.work.title')
+ * ```
+ */
+export let voiced = (page: string) => {
+  let own = (key: string) => {
+    let rest = key.startsWith('home.') ? key.slice('home.'.length) : null
+    return rest != null && read(COPY, `${page}.${rest}`) != null
+      ? `${page}.${rest}`
+      : key
+  }
+  return {
+    key: own,
+    text: (key: string, slots?: Slots) => text(own(key), slots),
+    attr: <Name extends string>(name: Name, key: string) =>
+      attr(name, own(key)),
+  }
+}

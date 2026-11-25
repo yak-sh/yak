@@ -1,13 +1,22 @@
 /** @jsxImportSource preact */
 import { Button, Card, Chip, Chips } from '@yaks/ui'
-import { SECTIONS } from './parts.ts'
+import { type Feature, FEATURES } from './parts.ts'
 import { ServiceLogo } from './scenes.tsx'
-import { type Demo, DEMOS, type Line, TURNS } from './demos.ts'
+import type { Demo, Line, Scene } from './demos.ts'
+
+/** What the phone plays: a page's features in order, its demos, each a turn
+ * for each feature, and each demo's pictures by its slug. */
+export type Told = {
+  features: readonly Feature[]
+  demos: readonly Demo[]
+  scenes: Record<string, Scene>
+}
 
 let Message = (
-  { line, turn, at, count, logo }: {
+  { line, turn, section, at, count, logo }: {
     line: Line
     turn: number
+    section: string
     at: number
     count: number
     logo?: string
@@ -21,7 +30,7 @@ let Message = (
     hidden={turn != 0}
   >
     <div class={`Chat_Bubble Chat_Bubble-${line.who}`}>
-      <a class='Home_MessageLink' href={`#${SECTIONS[turn]}`}>
+      <a class='Home_MessageLink' href={`#${section}`}>
         {logo && <ServiceLogo slug={logo} />}
         {line.text}
       </a>
@@ -48,16 +57,17 @@ let Message = (
   </li>
 )
 
-let CONNECTED: Record<string, string> = {
-  menu: 'google-sheet',
-  directory: 'google-calendar',
-  bookclub: 'zoom',
-  guestbook: 'google-drive',
-  trip: 'google-sheet',
-  recipes: 'notion',
-}
+// The service whose logo a reply in a feature's turn wears.
+let logoOf = (feature: Feature, scene?: Scene) =>
+  feature == 'connect'
+    ? scene?.connects
+    : feature == 'sell'
+    ? 'stripe'
+    : undefined
 
-let Conversation = ({ demo, first }: { demo: Demo; first: boolean }) => (
+let Conversation = (
+  { demo, first, told }: { demo: Demo; first: boolean; told: Told },
+) => (
   <div
     class='Home_Track'
     data-conversation={demo.slug}
@@ -66,29 +76,29 @@ let Conversation = ({ demo, first }: { demo: Demo; first: boolean }) => (
     aria-label='Example messages'
   >
     <ol class='Home_Messages'>
-      {demo.turn.flatMap((lines, turn) =>
-        lines.map((line, at) => (
+      {demo.turn.flatMap((lines, turn) => {
+        let feature = told.features[turn]
+        return lines.map((line, at) => (
           <Message
             line={line}
             turn={turn}
+            section={FEATURES[feature].section}
             at={at}
             count={lines.length}
-            logo={line.who == 'them' && TURNS[turn] == 'connect'
-              ? CONNECTED[demo.slug]
-              : line.who == 'them' && TURNS[turn] == 'sell'
-              ? 'stripe'
+            logo={line.who == 'them'
+              ? logoOf(feature, told.scenes[demo.slug])
               : undefined}
           />
         ))
-      )}
+      })}
     </ol>
   </div>
 )
 
 /** A demo stays openable after its first reply scrolls out of the phone. */
-export let DemoLinks = () => (
+export let DemoLinks = ({ demos }: { demos: readonly Demo[] }) => (
   <div class='Home_DemoLinks'>
-    {DEMOS.map(({ slug, turn }, i) => {
+    {demos.map(({ slug, turn }, i) => {
       let link = turn[0].find((line) => line.link)?.link
       return link && (
         <a href={link.href} data-demo-scene={slug} hidden={i != 0}>
@@ -99,7 +109,7 @@ export let DemoLinks = () => (
   </div>
 )
 
-export let Picks = () => (
+export let Picks = ({ demos }: { demos: readonly Demo[] }) => (
   <Chips
     class='Home_Picks'
     role='group'
@@ -107,7 +117,7 @@ export let Picks = () => (
     data-picks=''
     hidden
   >
-    {DEMOS.map(({ slug, name }, i) => (
+    {demos.map(({ slug, name }, i) => (
       <Chip
         as='button'
         class='Home_Pick'
@@ -131,11 +141,11 @@ export let Picks = () => (
   </Chips>
 )
 
-export let Phone = () => (
+export let Phone = ({ told }: { told: Told }) => (
   <Card class='Home_Phone'>
     <div class='Home_Log' data-log=''>
-      {DEMOS.map((demo, i) => (
-        <Conversation key={demo.slug} demo={demo} first={i == 0} />
+      {told.demos.map((demo, i) => (
+        <Conversation key={demo.slug} demo={demo} first={i == 0} told={told} />
       ))}
     </div>
   </Card>

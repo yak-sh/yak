@@ -325,16 +325,19 @@ export const DEMOS: Demo[] = [
 
 /** What each demo's pictures beside the words show: the service it connects,
  * the letter it sends, the mail it takes in, what it sells and what a
- * visitor asks its helper. */
+ * visitor asks its helper. A page that doesn't tell a feature needs none of
+ * its picture. */
 export type Scene = {
-  domain: string
-  letter: [string, string]
-  mail: [string, string]
-  sale: [string, number]
-  ask: [string, string]
+  connects?: string
+  domain?: string
+  letter?: [string, string]
+  mail?: [string, string]
+  sale?: [string, number]
+  ask?: [string, string]
 }
 export const SCENES: Record<string, Scene> = {
   menu: {
+    connects: 'google-sheet',
     domain: 'wrensbakery.example',
     letter: [
       'Back in stock: rye sourdough',
@@ -348,6 +351,7 @@ export const SCENES: Record<string, Scene> = {
     ],
   },
   directory: {
+    connects: 'google-calendar',
     domain: 'fairview.example.org',
     letter: [
       'This week’s birthdays',
@@ -361,6 +365,7 @@ export const SCENES: Record<string, Scene> = {
     ],
   },
   bookclub: {
+    connects: 'zoom',
     domain: 'ourbookclub.example',
     letter: [
       'Book club on Thursday',
@@ -374,6 +379,7 @@ export const SCENES: Record<string, Scene> = {
     ],
   },
   guestbook: {
+    connects: 'google-drive',
     domain: 'margaretturns70.example',
     letter: [
       'Thank you for coming!',
@@ -387,6 +393,7 @@ export const SCENES: Record<string, Scene> = {
     ],
   },
   trip: {
+    connects: 'google-sheet',
     domain: 'reyesinlisbon.example',
     letter: [
       'Tomorrow: Sintra',
@@ -400,6 +407,7 @@ export const SCENES: Record<string, Scene> = {
     ],
   },
   recipes: {
+    connects: 'notion',
     domain: 'grandmaskitchen.example',
     letter: [
       'Sunday’s recipe: pierogi',

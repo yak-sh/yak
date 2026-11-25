@@ -3,25 +3,35 @@ import type { ComponentChildren, VNode } from 'preact'
 import { Button, Card, Copy as Copyable, Field, Icon } from '@yaks/ui'
 import type { Tier } from '../plans.ts'
 import { GET_PLAN } from '../routes.ts'
-import { TURNS } from './demos.ts'
+import { DEMOS, SCENES, TURNS } from './demos.ts'
 import { gift, ICONS, priceTag } from './icons.ts'
-import { DemoLinks, Phone, Picks } from './phone.tsx'
-import { POSES, RUN, SECTIONS } from './parts.ts'
-import { Change, People, Scene, Services } from './scenes.tsx'
+import { DemoLinks, Phone, Picks, type Told } from './phone.tsx'
+import { FEATURES, RUN } from './parts.ts'
+import { Change, People, type Pictures, Scene, Services } from './scenes.tsx'
 import type { Copy } from './words.ts'
 
-let [, ...FEATURE_TURNS] = TURNS
+/**
+ * What a landing page's story tells: its features in order, `build` first
+ * as the hero (parts.ts `FEATURES`), the demos its phone plays, a turn of
+ * each for each feature, each demo's pictures by its slug, and the
+ * questions it answers, each by its name under `home.story.faq`. The words
+ * are the copy's the page is drawn with, so a page with words of its own
+ * says them in the home page's parts.
+ */
+export type Landing = Told & { questions: readonly string[] }
 
-let POINTS = {
-  change: [2, 3],
-  connect: [1, 2, 3],
-  email: [1, 2, 3],
-  sell: [1, 2, 3],
-  helper: [1, 2, 3],
-  team: [1, 3],
-  domain: [1, 2],
-} as const
-let SCENES = ['email', 'sell', 'helper', 'domain'] as const
+/** The home page's story. */
+export const HOMEPAGE: Landing = {
+  features: TURNS,
+  demos: DEMOS,
+  scenes: SCENES,
+  questions: ['code', 'access', 'limits', 'leave', 'data'],
+}
+
+// The features with a picture of each demo's.
+let PICTURED: Pictures[] = ['email', 'sell', 'helper', 'domain']
+let pictured = (feature: string): feature is Pictures =>
+  PICTURED.some((id) => id == feature)
 
 let Ask = (
   { copy, action, id, cta, children }: {
@@ -88,7 +98,12 @@ let YakRun = ({ copy }: { copy: Copy }) => (
 )
 
 let Hero = (
-  { copy, action, yak }: { copy: Copy; action: string; yak: ComponentChildren },
+  { copy, action, yak, works }: {
+    copy: Copy
+    action: string
+    yak: ComponentChildren
+    works: boolean
+  },
 ) => (
   <section class='Hello Story_Hero' aria-labelledby='hello' data-story-step='0'>
     <div class='Hello_Copy Home_Words'>
@@ -111,11 +126,13 @@ let Hero = (
           price: <a href='#cost' {...copy.text('home.hello.price')} />,
         })}
       />
-      <div class='Home_Works'>
-        <span {...copy.text('home.story.works')} />
-        <Services short />
-        <a href='#integrations' {...copy.text('home.story.more')} />
-      </div>
+      {works && (
+        <div class='Home_Works'>
+          <span {...copy.text('home.story.works')} />
+          <Services short />
+          <a href='#integrations' {...copy.text('home.story.more')} />
+        </div>
+      )}
       {yak}
       <YakRun copy={copy} />
       <div class='Sky_End' aria-hidden='true' />
@@ -123,19 +140,19 @@ let Hero = (
   </section>
 )
 
-let NAV = [...TURNS, 'pricing'] as const
-
-let FeatureNav = ({ copy }: { copy: Copy }) => (
+let FeatureNav = (
+  { copy, landing }: { copy: Copy; landing: Landing },
+) => (
   <nav
     class='Home_Contents'
     {...copy.attr('aria-label', 'home.story.features')}
   >
     <ul class='Home_Jumps' data-feature-nav=''>
-      {NAV.map((turn, i) => (
+      {[...landing.features, 'pricing' as const].map((turn, i) => (
         <li class='Home_Jump'>
           <a
             class='Home_JumpLink'
-            href={`#${turn == 'pricing' ? 'cost' : SECTIONS[i]}`}
+            href={`#${turn == 'pricing' ? 'cost' : FEATURES[turn].section}`}
             data-feature-link={i}
             aria-current={i == 0 ? 'location' : undefined}
           >
@@ -148,22 +165,21 @@ let FeatureNav = ({ copy }: { copy: Copy }) => (
   </nav>
 )
 
-let Features = ({ copy }: { copy: Copy }) => (
+let Features = (
+  { copy, landing }: { copy: Copy; landing: Landing },
+) => (
   <div class='Home_Features' id='examples'>
-    {FEATURE_TURNS.map((turn, j) => {
+    {landing.features.slice(1).map((turn, j) => {
       let i = j + 1, key = `home.story.turn.${turn}`
-      let scene = SCENES.find((id) =>
-        id == turn
-      )
-      let points = POINTS[turn as keyof typeof POINTS]
+      let { section, poses, points } = FEATURES[turn]
       let title = turn == 'email' ? 'email-in' : `title-${turn}`
       return (
         <section
           class='Home_Feature'
-          id={SECTIONS[i]}
+          id={section}
           aria-labelledby={title}
           data-story-step={i}
-          data-story-pose={POSES[turn].join(' ')}
+          data-story-pose={poses.join(' ')}
         >
           <h2 class='Title Home_FeatureTitle' id={title}>
             <span class='Home_Icon'>
@@ -182,7 +198,7 @@ let Features = ({ copy }: { copy: Copy }) => (
           </h2>
           <div class='Home_FeatureWords'>
             <p class='Note' {...copy.text(`${key}.body`)} />
-            {points && (
+            {points.length > 0 && (
               <ul class='Home_FeatureList'>
                 {points.map((n) => (
                   <li key={n} {...copy.text(`${key}.point${n}`)} />
@@ -201,14 +217,18 @@ let Features = ({ copy }: { copy: Copy }) => (
               />
             </div>
           )}
-          {scene && <Scene id={scene} />}
+          {pictured(turn) && (
+            <Scene id={turn} demos={landing.demos} scenes={landing.scenes} />
+          )}
         </section>
       )
     })}
   </div>
 )
 
-let Details = ({ copy }: { copy: Copy }) => (
+let Details = (
+  { copy, questions }: { copy: Copy; questions: readonly string[] },
+) => (
   <div class='Home_Details'>
     <section class='Home_Detail' aria-labelledby='assistant'>
       <h2
@@ -233,7 +253,7 @@ let Details = ({ copy }: { copy: Copy }) => (
     </section>
     <section class='Home_Detail' aria-labelledby='questions'>
       <h2 class='Title' id='questions' {...copy.text('home.story.faq.title')} />
-      {['code', 'access', 'limits', 'leave', 'data'].map((topic) => (
+      {questions.map((topic) => (
         <Card as='details' class='Home_Question'>
           <summary
             class='Home_Summary'
@@ -255,13 +275,15 @@ let Details = ({ copy }: { copy: Copy }) => (
   </div>
 )
 
-/** The public homepage's conversation and the feature sections it illustrates. */
+/** A landing page's conversation and the feature sections it illustrates,
+ * the home page's unless the page tells its own. */
 export let Story = (
-  { copy, action, yak, plans }: {
+  { copy, action, yak, plans, landing = HOMEPAGE }: {
     copy: Copy
     action: string
     yak: ComponentChildren
     plans: ComponentChildren
+    landing?: Landing
   },
 ) => (
   <div class='Home_Story' data-story=''>
@@ -269,8 +291,13 @@ export let Story = (
       <span class='Home_MoonSlot' data-moon-at='' />
     </div>
     <div class='Home_Desk'>
-      <Hero copy={copy} action={action} yak={yak} />
-      <FeatureNav copy={copy} />
+      <Hero
+        copy={copy}
+        action={action}
+        yak={yak}
+        works={landing.features.includes('connect')}
+      />
+      <FeatureNav copy={copy} landing={landing} />
       <aside
         class='Home_Demo'
         aria-labelledby='example-title'
@@ -282,13 +309,13 @@ export let Story = (
             id='example-title'
             {...copy.text('home.story.example')}
           />
-          <DemoLinks />
+          <DemoLinks demos={landing.demos} />
         </header>
-        <Phone />
-        <Picks />
+        <Phone told={landing} />
+        <Picks demos={landing.demos} />
         <Ask copy={copy} action={action} id='example-say' cta='walk' />
       </aside>
-      <Features copy={copy} />
+      <Features copy={copy} landing={landing} />
     </div>
     <div class='Home_After'>
       <div class='Home_Pricing' data-story-step=''>
@@ -301,7 +328,7 @@ export let Story = (
           </div>
         </Card>
       </div>
-      <Details copy={copy} />
+      <Details copy={copy} questions={landing.questions} />
     </div>
   </div>
 )

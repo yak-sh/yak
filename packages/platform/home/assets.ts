@@ -5,7 +5,7 @@ export const homeScript: URL = new URL('./story.js', import.meta.url)
 export const skyScript: URL = new URL('./sky.js', import.meta.url)
 
 export const homeFigures: { name: string; file: URL }[] = [
-  ...Object.values(POSES).flat().map((name) => ({
+  ...POSES.map((name) => ({
     name: `home-mascot/${name}.webp`,
     file: new URL(`./mascot/${name}.webp`, import.meta.url),
   })),
