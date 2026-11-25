@@ -567,7 +567,7 @@ let rowsAhead = (
     return [agentsIn(at.env, dir, person), dir.provenance(walk)]
   }
   if (view == 'new') return [agentsIn(at.env, dir, person)]
-  if (view == 'billing') return [dir.domainOrders(walk)]
+  if (view == 'billing') return [dir.domainOrders(walk), dir.freeBudget()]
   if (view == 'people') {
     return [dir.people(walk), dir.admits(walk), standingWith(dir, person)]
   }

@@ -12,8 +12,6 @@ import { test, until } from '@yaks/testing'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
-import { BUDGET } from '@yaks/platform/plans'
-import { monthOf } from '@yaks/platform/meter'
 import { weigh } from '@yaks/model'
 import { embeds, modelPage, platform } from './testing.ts'
 import creatures from '../../apps/vale/data/creatures/01.json' with {
@@ -28,7 +26,7 @@ let MODEL = '@cf/deepseek-ai/deepseek-v4.1-flash-1017'
 let PRICE = { input: 0.15, output: 0.5 }
 
 let app = async (
-  models = 0,
+  budget: number | null = null,
   access = 'private',
   chain = false,
   answer?: unknown[],
@@ -68,7 +66,7 @@ let app = async (
         entity: { eid: '$space' },
         space: { slug: 'builder-test', store: 'builder-test' },
         starter: { dollars: 0 },
-        ...(models ? { meter: { month: monthOf(new Date()), models } } : {}),
+        ...(budget == null ? {} : { budget: { dollars: budget } }),
       },
       {
         entity: { eid: '$seat' },
@@ -188,7 +186,7 @@ let creature = async (sounds?: Comp, hp = 36, step = true) => {
       },
     })),
   ]
-  let v = await app(0, 'private', false, outputs)
+  let v = await app(null, 'private', false, outputs)
   let names = ['beast_design', 'combat', 'loot', 'sounds', 'spawned', 'sfx']
   let words = valeWords.$defs as Record<string, unknown>
   assertEquals(
@@ -379,7 +377,7 @@ test('builder_build tries a staged builder on the rows it names, as the caller',
 })
 
 test('a hosted builder cannot spend beyond the account budget', async () => {
-  let v = await app(BUDGET.free)
+  await using v = await app(0)
   assertEquals((await start(v)).status, 200)
   let [run] = await until(async () => {
     let rows = await v.read('.build&*')
@@ -400,7 +398,7 @@ test('a hosted builder cannot spend beyond the account budget', async () => {
 })
 
 test('an open app cannot let a visitor start a builder at its account expense', async () => {
-  let v = await app(0, 'open')
+  let v = await app(null, 'open')
   let refused = await v.send('/apply', [
     {
       entity: { eid: BUILDER },
@@ -418,7 +416,7 @@ test('an open app cannot let a visitor start a builder at its account expense', 
 })
 
 test('a hosted generated row starts the next immediate builder', async () => {
-  let v = await app(0, 'private', true)
+  let v = await app(null, 'private', true)
   let next = crypto.randomUUID()
   assertEquals(
     (await v.send('/apply', [{
@@ -446,7 +444,7 @@ test('a hosted generated row starts the next immediate builder', async () => {
 })
 
 test('shadow outputs do not start downstream immediate builders', async () => {
-  let v = await app(0, 'private', true)
+  let v = await app(null, 'private', true)
   let next = crypto.randomUUID()
   assertEquals(
     (await v.send('/apply', [{
