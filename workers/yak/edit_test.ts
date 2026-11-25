@@ -7,6 +7,7 @@ import { aloneOf, cornerOf, editOf } from './apps.ts'
 import type { App, Space } from './directory.ts'
 import { pageScript } from './page-script.ts'
 import { assets } from './binding-probe.ts'
+import { chatPath } from '@yaks/platform/routes'
 
 let ASSETS = assets()
 let code = await Deno.readTextFile(
@@ -14,7 +15,7 @@ let code = await Deno.readTextFile(
 )
 let space = { slug: 'ada' } as Space
 let app = { slug: 'cookbook' } as App
-let CHAT = 'https://yaks.app/ada?app=cookbook'
+let CHAT = `https://yaks.app${chatPath('ada')}?app=cookbook`
 let NOTE = 'https://yaks.app/manage/ada/operator?note=cookbook'
 
 test('the pencil is sent to whoever the file door lets write the app', () => {
