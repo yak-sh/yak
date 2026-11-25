@@ -667,6 +667,7 @@ export let signedDirectory = (
           }
           settled = true
           cancel()
+          cancelDeadline()
           resolve(answer)
         }
         let fallback = async () => {
@@ -687,7 +688,11 @@ export let signedDirectory = (
         })
         let headers = new Headers(req.headers)
         headers.set(EPOCH, '1')
-        let from = time.now()
+        let last = 'the directory read is still pending'
+        let cancelDeadline = time.after(
+          FENCE_WAIT,
+          () => done(unavailable(last)),
+        )
         // One read of the directory: an answer that stands, a refusal
         // included, or why nothing can be confirmed yet.
         let look = async (): Promise<Response | string> => {
@@ -729,9 +734,7 @@ export let signedDirectory = (
             let answer = await look()
             if (settled) return
             if (typeof answer != 'string') return done(answer)
-            if (time.now() - from >= FENCE_WAIT) {
-              return done(unavailable(answer))
-            }
+            last = answer
             await new Promise<void>((resume) => time.after(pause, resume))
           }
         })().catch((e) => {

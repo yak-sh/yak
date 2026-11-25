@@ -9,6 +9,7 @@ import * as dirPart from './directory.ts'
 import {
   COPY,
   EPOCH,
+  FENCE_WAIT,
   MEND,
   type ServingCopyDoor,
   signedDirectory,
@@ -238,7 +239,7 @@ let moving = () => Promise.reject(new Error('Network connection lost.'))
 for (
   let [what, fetch, why] of [
     [
-      'a directory that never answers',
+      'a directory call that keeps throwing',
       moving,
       'the directory did not answer: Network connection lost.',
     ],
@@ -263,6 +264,27 @@ for (
     return () => equal(said, [503, `Serving authority unavailable: ${why}`])
   })
 }
+
+await proof(
+  'a pending directory call cannot outlast the serving deadline',
+  async () => {
+    let f = independent(), time = clock()
+    let transport = signedDirectory(
+      { fetch: () => new Promise(() => {}) },
+      f.door,
+      time,
+    )
+    let answer = observing(transport.fetch(query('page')))
+    await time.advance(FENCE_WAIT)
+    let out = answer.answer()
+    let said = [out.status, await out.text()]
+    return () =>
+      equal(said, [
+        503,
+        'Serving authority unavailable: the directory read is still pending',
+      ])
+  },
+)
 
 // Each look fails once the way a moving object fails it, then answers.
 let blip = async (at: string) => {

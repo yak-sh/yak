@@ -7,7 +7,7 @@
 // version its caller runs (door.ts `doorOf` for a store, `fetchOf` for the
 // Wire and the Builder), so an object knows when a newer caller reaches it.
 // A store answers that caller on the code it has, which keeps every call of
-// the deploy before working, and restarts itself only when that code refused
+// the deploy before working. An app store may restart when that code refused
 // the caller (`owed`), since what it refused may be a door or a word only the
 // caller's deploy has; the caller's retry of the evicted request
 // (@yaks/durable-object `evicted`) meets whatever code the runtime starts it
@@ -16,7 +16,9 @@
 // moves an object, and a restart does neither (T-1887, T-2011). A restart is not
 // free: twice on 2026-11-07 the instance after one waited 21 and 32 s to run
 // its first line, where Cloudflare's own moves started in under a second
-// (T-150897). The Wire uses `Durable.behind` when idle. The Builder lets the
+// (T-150897). The directory leaves updates to the runtime, because its
+// restart interrupts every page's reads and live watches. The Wire uses
+// `Durable.behind` when idle. The Builder lets the
 // runtime update it so a newer caller cannot cut an Operator step (T-2212). A store
 // still behind its caller after its restart answers a refusal as a
 // failure the caller sends again (`skewed`, T-140262): a store cannot tell a

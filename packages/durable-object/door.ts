@@ -278,7 +278,12 @@ export let coalesced = (
       return await apart(() => door(path, init, headers, options))
     }
     return await doorOf(async (request) => {
-      if (request.headers.has('upgrade') || !reads(request)) {
+      // An upgrade starts an independent stream. It cannot answer a batch,
+      // and it need not release every batched read during a reconnect.
+      if (request.headers.has('upgrade')) {
+        return await door(path, init, headers, options)
+      }
+      if (!reads(request)) {
         return await apart(() => door(path, init, headers, options))
       }
       let key = JSON.stringify([

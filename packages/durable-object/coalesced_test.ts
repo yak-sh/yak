@@ -150,6 +150,29 @@ test('a read that fails still sends the one waiting behind it', async () => {
   equal(await (await later).text(), 'again')
 })
 
+test('socket upgrades leave reads queued behind a read in flight', async () => {
+  let f = fixture()
+  let first = f.door('/query')
+  f.flush()
+  let later = f.door('/query')
+  let upgrades = Array.from(
+    { length: 20 },
+    () => f.door('/person/ws', { headers: { upgrade: 'websocket' } }),
+  )
+  f.flush()
+  equal(f.calls.length, 21)
+  upgrades.forEach((_, n) =>
+    f.answers[n + 1](new Response(null, { status: 204 }))
+  )
+  await Promise.all(upgrades)
+  f.answer(0, 'first')
+  equal(await (await first).text(), 'first')
+  f.flush()
+  equal(f.calls.length, 22)
+  f.answer(21, 'next')
+  equal(await (await later).text(), 'next')
+})
+
 test('a completed write separates reads begun while it was running', async () => {
   let f = fixture()
   let write = f.door('/apply', { method: 'POST' })

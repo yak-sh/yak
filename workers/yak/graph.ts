@@ -4978,12 +4978,10 @@ export class Store extends Durable {
     let waking = this.#started.holds, woke = this.#now()
     let named = request.headers.get('x-store')
     if (waking && named) this.#prepare(named).catch(() => {})
-    // A caller on a later deploy is answered on the code this object has,
-    // and Cloudflare moves the object onto the new code itself. Only a
-    // refusal restarts it, since what it refused may be a door or a word only
-    // the caller's deploy has: the request fails as evicted and its door sends
-    // it again to the new code (running.ts `owed`, T-150897).
-    let restart = owed(
+    // The directory serves every page and its sockets feed every space's
+    // Operator watches. One version-skew refusal used to abort all of them.
+    // Its HTTP refusals still retry through #unskewed while Cloudflare moves it.
+    let restart = (named ?? this.#name()) == PLATFORM_STORE ? null : owed(
       request.headers,
       this.#bind.CF_VERSION_METADATA,
       this.#ctx,

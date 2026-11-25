@@ -335,9 +335,8 @@ let directoryBehind = async (
 }
 
 test('an older directory’s query refusal is returned without retrying when the current vocabulary confirms it', async () => {
-  let ctx = state()
-  await ctx.storage.put('restarted for', { id: B.id, at: B.timestamp })
-  let old = new Store(ctx as never, { CF_VERSION_METADATA: A })
+  let o = object()
+  let old = older(o)
   for (
     let [query, code, words] of [
       ['.comped&.order=comped', 'Unsupported', '.order=comped.until'],
@@ -351,6 +350,7 @@ test('an older directory’s query refusal is returned without retrying when the
     assertEquals([sends, status, body.error, reports], [1, 400, code, []])
     assert(body.message.includes(words), body.message)
   }
+  assertEquals(o.restarts, [])
 })
 
 test('a projection fixed in the newer query compiler still retries across deploys', async () => {
@@ -377,38 +377,34 @@ test('a projection fixed in the newer query compiler still retries across deploy
   }], []])
 })
 
-// A socket's refusals come in frames, after its handshake was answered: a
-// store on an older deploy restarts on one refused on a newer caller's socket,
-// as on a refused request, and on no other (T-3072).
-test("a store on an older deploy restarts when a newer caller's socket is refused a subscription", async () => {
+test("a refused subscription on a newer caller's directory socket leaves the socket and the directory running", async () => {
   let undo = installPair()
   try {
-    for (let [v, restarts] of [[A, 0], [B, 1]] as const) {
-      let o = object()
-      let store = older(o)
-      made.length = 0
-      let upgraded = await store.fetch(
-        new Request('http://store/person/ws', {
-          headers: {
-            ...Object.fromEntries(from(v)),
-            ...KERNEL,
-            'x-store': PLATFORM_STORE,
-            'x-yak-person': crypto.randomUUID(),
-            upgrade: 'websocket',
-          },
-        }),
-      )
-      equal(upgraded.status, 101, await upgraded.text())
-      let ws = made[0][1]
-      equal(o.restarts, [])
-      await store.webSocketMessage(
-        ws,
-        JSON.stringify({ subscribe: '.unheard_of', id: 'u' }),
-      )
-      await until(() => ws.sent.some((f) => f.refused), { label: 'refused' })
-      await until(() => o.restarts.length == restarts)
-      equal(o.restarts.length, restarts)
-    }
+    let o = object(), time = clock()
+    let store = older(o, time)
+    made.length = 0
+    let upgraded = await store.fetch(
+      new Request('http://store/person/ws', {
+        headers: {
+          ...Object.fromEntries(from(B)),
+          ...KERNEL,
+          'x-store': PLATFORM_STORE,
+          'x-yak-person': crypto.randomUUID(),
+          upgrade: 'websocket',
+        },
+      }),
+    )
+    equal(upgraded.status, 101, await upgraded.text())
+    let ws = made[0][1]
+    await store.webSocketMessage(
+      ws,
+      JSON.stringify({ subscribe: '.unheard_of', id: 'u' }),
+    )
+    await until(() => ws.sent.some((f) => f.refused), { label: 'refused' })
+    let read = await store.fetch(asked('/query?q=.space'))
+    equal(read.status, 200, await read.text())
+    await time.advance(60_000)
+    equal(o.restarts, [])
   } finally {
     undo()
   }
