@@ -1,16 +1,19 @@
 /* Linen: yaks.app's colours. Light is a warm sheet of linen under cream
    cards, written in coffee, never black, with meadow green for what is lit
-   and brick for a fault. Dark is the same room at night: a night-brown
-   ground, cocoa cards, oat ink, moss for what is lit and rose for a fault.
+   and red for a fault. Dark is the same room at night: a night-brown
+   ground, cocoa cards, oat ink, moss for what is lit and coral for a fault.
    linen.ts holds the dark colours for a terminal.
 
-   Its paints are named for what they look like (linen, cream, coffee,
-   clay, taupe, shell, bark, cocoa, night, meadow, moss, brick, rose, dusk,
-   sky, ember, blush, forest, oat), and a theme has more roles than a
-   palette has hues, so roles share them: meadow is what is
-   lit, what went well and who; brick a fault and the language's words;
-   dusk something to know and a moment. yaks.app's own pages wear this
-   theme (workers/yak/public). */
+   The neutrals and the greens are named for what they look like (linen,
+   cream, coffee, clay, taupe, shell, bark, cocoa, night, meadow, moss,
+   forest, oat). The other paints are clear, saturated hues, deep enough on
+   linen and bright enough at night to read as text at WCAG AA: red, orange,
+   blue and raspberry, and a yellow and a grey for presence dots, which are
+   never text. A theme has more roles than a palette has hues, so roles
+   share them: meadow is what is lit, what went well and who; red a fault
+   and the language's words; orange what is under way and a number; blue
+   something to know and a moment; raspberry what is set apart. yaks.app's
+   own pages wear this theme (workers/yak/public). */
 :root {
   color-scheme: light dark;
   --gap: 1rem;
@@ -37,30 +40,30 @@
   --link: light-dark(#4c773e, #a7c080);
   --heading: light-dark(#523828, #f1e6d8); /* the text's own ink */
 
-  --info: light-dark(#34404a, #e5eef5); /* dusk; sky */
-  --active: light-dark(#785b47, #f8e0c8); /* clay; blush */
+  --info: light-dark(#1f5fbf, #8cc0ff); /* blue */
+  --active: light-dark(#b84a00, #ffa057); /* orange */
   --positive: light-dark(#4c773e, #a7c080); /* meadow; moss */
-  --negative: light-dark(#a8503f, #e67e80); /* brick; rose */
-  --caution: light-dark(#a8503f, #e67e80); /* brick; rose */
-  --presence-away: light-dark(#997000, #e8bb54); /* gold */
-  --presence-offline: light-dark(#747170, #a4a09e); /* gray */
-  --special: light-dark(#785b47, #c9b19c); /* clay; taupe */
+  --negative: light-dark(#c4231c, #ff6b5e); /* red */
+  --caution: light-dark(#c4231c, #ff6b5e); /* red */
+  --presence-away: light-dark(#f5b800, #ffcc33); /* yellow */
+  --presence-offline: light-dark(#747170, #a4a09e); /* grey */
+  --special: light-dark(#b52a6a, #ff8cc0); /* raspberry */
 
-  --number: light-dark(#4e3b32, #f8e0c8); /* ember; blush */
-  --literal: light-dark(#a8503f, #e67e80); /* brick; rose */
-  --time: light-dark(#34404a, #e5eef5); /* dusk; sky */
+  --number: light-dark(#b84a00, #ffa057); /* orange */
+  --literal: light-dark(#c4231c, #ff6b5e); /* red */
+  --time: light-dark(#1f5fbf, #8cc0ff); /* blue */
   --who: light-dark(#4c773e, #a7c080); /* meadow; moss */
 
-  --keyword: light-dark(#a8503f, #e67e80); /* brick; rose */
+  --keyword: light-dark(#c4231c, #ff6b5e); /* red */
   --string: light-dark(#4c773e, #a7c080); /* meadow; moss */
-  --fn: light-dark(#34404a, #fffbf5); /* dusk; cream */
-  --type: light-dark(#4e3b32, #f8e0c8); /* ember; blush */
-  --attr: light-dark(#785b47, #c9b19c); /* clay; taupe */
+  --fn: light-dark(#1f5fbf, #fffbf5); /* blue; cream */
+  --type: light-dark(#b84a00, #ffa057); /* orange */
+  --attr: light-dark(#b52a6a, #ff8cc0); /* raspberry */
 
   --hue-0: light-dark(#4c773e, #a7c080); /* meadow; moss */
-  --hue-1: light-dark(#4e3b32, #f8e0c8); /* ember; blush */
-  --hue-2: light-dark(#34404a, #e5eef5); /* dusk; sky */
-  --hue-3: light-dark(#a8503f, #e67e80); /* brick; rose */
-  --hue-4: light-dark(#785b47, #c9b19c); /* clay; taupe */
+  --hue-1: light-dark(#b84a00, #ffa057); /* orange */
+  --hue-2: light-dark(#1f5fbf, #8cc0ff); /* blue */
+  --hue-3: light-dark(#c4231c, #ff6b5e); /* red */
+  --hue-4: light-dark(#b52a6a, #ff8cc0); /* raspberry */
   --hue-5: light-dark(#33493c, #f1e6d8); /* forest; oat */
 }
