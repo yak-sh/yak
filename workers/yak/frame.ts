@@ -200,17 +200,17 @@ export let frame = (at: {
           at.back,
           h(
             Toolbar.Text,
-            {},
+            { class: 'Frame_Heading' },
             h(
               Toolbar.Title,
               { as: at.headed ? 'span' : undefined, [TITLE]: '' },
               at.title,
             ),
-            at.sub ? h(Toolbar.Sub, {}, at.sub) : null,
+            at.sub ? h(Toolbar.Sub, { class: 'Frame_Sub' }, at.sub) : null,
           ),
           at.tools,
-          at.friends ? barLauncher() : null,
           at.aside ? asideTools(at.aside) : null,
+          at.friends ? barLauncher() : null,
         ),
         h(
           Shell.Body,

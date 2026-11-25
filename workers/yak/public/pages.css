@@ -329,6 +329,9 @@
     padding-inline: max(var(--frame-bar-gutter), env(safe-area-inset-left, 0px))
       max(var(--frame-bar-gutter), env(safe-area-inset-right, 0px));
   }
+  .Frame_Heading {
+    flex: auto;
+  }
   .Frame_Menu {
     display: none;
   }
@@ -366,7 +369,6 @@
   }
   .Frame_AsideTools {
     flex: none;
-    margin-inline-start: auto;
   }
   /* The toggle posts its form, which lays out as the button alone, so the
      bar stands a button tall rather than a page's form tall. */
@@ -439,6 +441,11 @@
   @media (max-width: 700px) {
     .Frame_Bar {
       --frame-bar-gutter: 1rem;
+    }
+    .Frame_Sub {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .Frame_Menu {
       display: inline-flex;
@@ -1182,10 +1189,6 @@
        bar (`#app`), and Chat goes back. */
     .Talk-app .Talk_Show {
       display: inline-flex;
-      margin-left: auto;
-    }
-    .Talk-app .Talk_Show + .Frame_AsideTools {
-      margin-left: 0;
     }
     .Talk_App {
       position: fixed;

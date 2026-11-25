@@ -327,7 +327,7 @@ export let chooseCanvas = (
     let bar = frame.querySelector('.Frame_Bar')
     bar?.insertBefore(
       element(doc, showing(choice.app)),
-      bar.querySelector('.Frame_AsideTools'),
+      bar.querySelector('.Frame_AsideTools, [data-dock-bar]'),
     )
     choice.link.setAttribute('aria-current', 'true')
     choice.link.append(element(doc, besideMark()))
