@@ -160,6 +160,7 @@ let shownOf = async (store: Store, rows: (Bundle | undefined)[]) => {
 // nothing else; how a task stands is the chat's. Their chats land in
 // Replies, which is the chat app's, so they are never read here.
 let WITHIN = ['decision', 'notification']
+let MOST = 50
 
 // Their threads in Updates, the dismissed among them where `all`.
 let threadsOf = async (
@@ -240,7 +241,7 @@ let aboutsOf = async (store: Store, rows: (Bundle | undefined)[]) => {
  * where it is a result, which the chat draws as that call's line. */
 export let placed = async (store: Store, b: Bundle | undefined) => {
   let call = comp(b, 'result')?.call
-  if (call) [b] = await store.g.get([String(call)])
+  if (call) [b] = await store.g.get([String(call)], ['entry'])
   let entry = comp(b, 'entry')
   return entry
     ? {
@@ -251,11 +252,13 @@ export let placed = async (store: Store, b: Bundle | undefined) => {
     : undefined
 }
 
+let PLACE_FIELDS = ['entry.session', 'entry.seq', 'created.at', 'result.call']
+
 // The newest entry of `session` at or before `seq`, by its (session, seq)
 // index, one row read.
 let before = async (store: Store, session: string, seq: number) =>
   (await store.g.read(
-    line`.entry.session=${session}&.entry.seq<=${seq}&.order=-entry.seq&.limit=1&*`,
+    line`.entry.session=${session}&.entry.seq<=${seq}&.order=-entry.seq&.limit=1&.fields=${PLACE_FIELDS}`,
   ))[0] as Bundle | undefined
 
 // The entry of `session` written last at or before `at`: a search by seq,
@@ -285,32 +288,63 @@ let entryAt = async (store: Store, session: string, at: string) => {
 // it tells of where that is a session or a task, else the entry written
 // beside it in the person's own conversation (`root`) where one was, as an
 // app's word is. None opens their own conversation.
-let placesOf = (
+let placesOf = async (
   store: Store,
   rows: (Bundle | undefined)[],
   abouts: Map<string, Bundle>,
   root: string,
-): Promise<(Place | undefined)[]> =>
-  Promise.all(rows.map(async (b) => {
-    let from = comp(b, 'notification')?.from
-    let via = comp(b, 'created')?.via
-    let at = String(comp(b, 'created')?.at ?? '')
-    if (from) {
-      let [said] = await store.g.get([String(from)])
-      let place = await placed(store, said)
-      if (place) return place
-    }
-    if (via) {
-      return await placed(store, await entryAt(store, String(via), at)) ??
-        { chat: String(via) }
-    }
+): Promise<(Place | undefined)[]> => {
+  let fromOf = (b: Bundle | undefined) =>
+    String(comp(b, 'notification')?.from ?? '')
+  let viaOf = (b: Bundle | undefined) => String(comp(b, 'created')?.via ?? '')
+  let atOf = (b: Bundle | undefined) => String(comp(b, 'created')?.at ?? '')
+  let sources = [...new Set(rows.map(fromOf).filter(Boolean))]
+  let bySource = new Map(
+    (await store.g.get(sources, ['entry', 'result']))
+      .filter(Boolean).map((b) => [b.entity.eid, b]),
+  )
+  let beside = (b: Bundle | undefined) => {
     let about = abouts.get(String(comp(b, 'notification')?.about))
-    if (about?.session || about?.task) return { chat: about.entity.eid }
-    let beside = at ? await entryAt(store, root, at) : undefined
-    return comp(beside, 'created')?.at == at
-      ? await placed(store, beside)
-      : undefined
+    return about?.session || about?.task ? about : undefined
+  }
+  // An old notice with no run only links to an entry written in the same
+  // transaction. Seek all its exact timestamps through created.at at once.
+  let times = [
+    ...new Set(
+      rows.flatMap((b) => viaOf(b) || beside(b) ? [] : [atOf(b)]).filter(
+        Boolean,
+      ),
+    ),
+  ]
+  let byTime = new Map<string, Bundle>()
+  if (times.length) {
+    let entries = await store.g.read(
+      line`.created.at=${times}&.entry&.fields=${PLACE_FIELDS}`,
+    )
+    for (let row of entries) {
+      let entry = comp(row, 'entry')
+      if (entry?.session != root) continue
+      let at = atOf(row)
+      if (
+        Number(entry.seq) >
+          Number(comp(byTime.get(at), 'entry')?.seq ?? -Infinity)
+      ) {
+        byTime.set(at, row)
+      }
+    }
+  }
+  return Promise.all(rows.map(async (b) => {
+    let source = await placed(store, bySource.get(fromOf(b)))
+    if (source) return source
+    let via = viaOf(b), at = atOf(b)
+    if (via) {
+      return await placed(store, await entryAt(store, via, at)) ?? { chat: via }
+    }
+    let about = beside(b)
+    if (about) return { chat: about.entity.eid }
+    return await placed(store, byTime.get(at))
   }))
+}
 
 // An approval nobody answered before it expired: it asks nothing now.
 let lapsed = (row: Bundle | undefined, now: number) => {
@@ -326,7 +360,7 @@ export let updatesOf = async (
   store: Store,
   person: string,
   space: string,
-  most = 50,
+  most = MOST,
   dismissed = false,
   now = Date.now(),
 ): Promise<{ updates: Update[]; waiting: number; expires: number }> => {
@@ -449,6 +483,40 @@ let opening = async (store: Store, person: string, eid: string) =>
   (await markAttention(store.g, person, eid, 'opened'))
     .map((b) => ({ ...b, $actor: { by: person } }))
 
+let acknowledge = async (store: Store, person: string, seen: string[]) => {
+  if (seen.length) {
+    await store.g.apply(
+      (await Promise.all(seen.map((eid) => opening(store, person, eid))))
+        .flat(),
+    )
+  }
+}
+
+export type UpdateCounts = { waiting: number; needs: number }
+
+/** The Operator page's badge counts. Only unread notices need their chat
+ * resolved when a person opens one, so the chat can mark those notices read. */
+export let updateCounts = async (
+  store: Store,
+  person: string,
+  space: string,
+  root: string,
+  chat?: string,
+): Promise<UpdateCounts> => {
+  let { kept, abouts } = await keptOf(store, person, space, false, Date.now())
+  let shown = kept.slice(0, MOST)
+  let waiting = waitingIn(kept)
+  let needs = shown.filter(({ t }) => t.lane == 'Needs you').length
+  if (!chat) return { waiting, needs }
+  let unread = shown.filter(({ t }) => t.unread && t.lane != 'Needs you')
+  let places = await placesOf(store, unread.map(({ row }) => row), abouts, root)
+  let seen = unread.flatMap(({ t }, i) =>
+    places[i]?.chat == chat ? [t.eid] : []
+  )
+  await acknowledge(store, person, seen)
+  return { waiting: waiting - seen.length, needs }
+}
+
 /** A person's Updates once they opened the conversation `chat`: what came
  * from it is read now, since they are reading it there, and counts no more. */
 export let openedIn = async (
@@ -461,10 +529,8 @@ export let openedIn = async (
     u.unread && !u.needs && u.from?.chat == chat
   )
   if (!seen.length) return read
-  await store.g.apply(
-    (await Promise.all(seen.map((u) => opening(store, person, u.eid)))).flat(),
-  )
   let now = new Set(seen.map((u) => u.eid))
+  await acknowledge(store, person, [...now])
   return {
     updates: read.updates.map((u) =>
       now.has(u.eid) ? { ...u, unread: false } : u

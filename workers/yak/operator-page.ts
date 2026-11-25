@@ -140,9 +140,9 @@ import {
   type Listed,
   listingOf,
   listOf,
-  needCount,
   waitsOf,
 } from './operator-lists.ts'
+import type { UpdateCounts } from './operator-updates.ts'
 import { talkBeside } from './talk-beside.ts'
 import {
   appCanvas,
@@ -1025,10 +1025,16 @@ export let conversationOf = async (
     now: '',
     standing: '',
   }
-  // A Builder still on the code before it answers none (a deploy's window),
-  // and is asked for them apart.
-  let news = async (read?: Updates) =>
-    !updates ? undefined : read ?? await updatesOf(env, space, who)
+  // A Builder on the previous version still returns the full Updates.
+  let news = async (read?: UpdateCounts | Updates) => {
+    if (!updates) return
+    read ??= await updatesOf(env, space, who)
+    if ('needs' in read) return read
+    return {
+      waiting: read.waiting,
+      needs: read.updates.filter((u) => u.needs).length,
+    }
+  }
   if (open == 'new') return { ...none, updates: await news() }
   let opening = mentions === undefined
     ? (await listingOf(env, who.person, space.eid)).mentions
@@ -1057,7 +1063,7 @@ export let conversationOf = async (
       ...everyone ? { everyone } : {},
       ...opens ? { opens } : {},
       ...drawing ? { lines: true } : {},
-      ...updates ? { updates } : {},
+      ...updates ? { updates: true, updateCounts: true } : {},
       ...from != null ? { from } : {},
       ...opening ? { mentions: opening } : {},
       ...take ? { take } : {},
@@ -1077,7 +1083,7 @@ export let conversationOf = async (
     standing: string
     aside?: Asided
     helper?: HelperPage
-    updates?: Updates
+    updates?: UpdateCounts | Updates
   }
   return {
     updates: await news(read),
@@ -1811,7 +1817,7 @@ let chatParts = async (
           at,
           who.person ? pushKey(env) : null,
           alerting == 'push',
-          needCount(listed ?? [], news.updates),
+          waitsOf(listed ?? []) + news.needs,
           !!declined,
         )
         : null,

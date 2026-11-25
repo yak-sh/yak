@@ -1,5 +1,10 @@
 import { type Built, type Line, line as q, sub } from '@yaks/query'
-import { openedIn, updatesOf, updating } from './operator-updates.ts'
+import {
+  openedIn,
+  updateCounts,
+  updatesOf,
+  updating,
+} from './operator-updates.ts'
 import { elapsed } from './lib/hops.ts'
 import {
   addressed,
@@ -2456,6 +2461,11 @@ export let operatorRequest = async (
     // What came from the conversation opened is read once it is open.
     let news = async (chat?: string) => {
       if (args.updates !== true) return {}
+      if (args.updateCounts === true) {
+        return {
+          updates: await updateCounts(store, person, spaceId, root, chat),
+        }
+      }
       let read = await updatesOf(store, person, spaceId)
       return {
         updates: chat ? await openedIn(store, person, read, chat) : read,
