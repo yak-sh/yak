@@ -32,8 +32,17 @@ let worker = (files = 2) => {
   let site = new Map<string, string>()
   let asked: string[] = []
   let hear = new Map<string, (e: unknown) => void>()
+  let databases = ['yaks-page:ada', 'yaks', 'yaks-page:bo']
   let scope: Scope = {
     caches,
+    indexedDB: {
+      databases: () =>
+        Promise.resolve(databases.map((name) => ({ name, version: 1 }))),
+      deleteDatabase: (name: string) => {
+        databases = databases.filter((n) => n != name)
+        return {} as IDBOpenDBRequest
+      },
+    },
     location: { origin: 'https://yaks.app' },
     clients: { claim: () => Promise.resolve() },
     fetch: (r: RequestInfo | URL) => {
@@ -50,7 +59,12 @@ let worker = (files = 2) => {
     addEventListener: (type: string, fn: (e: never) => void) =>
       hear.set(type, fn as (e: unknown) => void),
   }
-  keeping(scope, { forget: ['/logout'], named: '/_yak/', files })
+  keeping(scope, {
+    forget: ['/logout'],
+    named: '/_yak/',
+    files,
+    databases: 'yaks-page:',
+  })
   let waiting: Promise<unknown>[] = []
   let settled = async () => {
     while (waiting.length) await waiting.shift()
@@ -85,7 +99,7 @@ let worker = (files = 2) => {
     })
     await settled()
   }
-  return { site, asked, ask, open, leave, stores }
+  return { site, asked, ask, open, leave, stores, databases: () => databases }
 }
 
 let page = (said: string) =>
@@ -108,7 +122,7 @@ test('a page left is drawn again at once as a kept picture, and its bootstrap ge
   assertEquals(w.asked, ['/checks'])
 })
 
-test('signing out forgets every kept page, and a page loaded before it keeps nothing after', async () => {
+test('signing out forgets every kept page and page graph, and a page loaded before it keeps nothing after', async () => {
   let w = worker()
   w.site.set('/checks', page('now'))
   let loaded = Date.now() - 1000
@@ -117,6 +131,7 @@ test('signing out forgets every kept page, and a page loaded before it keeps not
     await w.ask('/logout', { mode: 'navigate', method: 'POST' }),
     null,
   )
+  assertEquals(w.databases(), ['yaks'])
   // The page being left as it signs out sends its snapshot after.
   await w.leave('/checks', page('mine, again'), loaded)
   assertEquals(await w.open('/checks'), page('now'))

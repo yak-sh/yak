@@ -21,6 +21,9 @@ export type WireVault = {
     bytes: number,
   ) => Promise<void>
   load: (epoch: string, limit: number) => Promise<Saved[]>
+  /** Check the epoch as `load` does, clearing what another kept, without
+   * reading the rows. */
+  claim: (epoch: string) => Promise<void>
   save: (epoch: string, rows: Saved[], limit: number) => Promise<void>
   drop: (epoch: string, eids: Eid[]) => Promise<void>
 }
@@ -45,6 +48,13 @@ export let wireStash = (
       throw new Error('invalid retention limit')
     }
   }
+  let claim = (next: string) => {
+    if (epoch !== next) {
+      rows.clear()
+      answers = []
+    }
+    epoch = next
+  }
   let prune = (limit: number) => {
     while (rows.size > limit) rows.delete(rows.keys().next().value!)
   }
@@ -66,14 +76,11 @@ export let wireStash = (
     },
     load: (next, limit) => {
       check(limit)
-      if (epoch !== next) {
-        rows.clear()
-        answers = []
-      }
-      epoch = next
+      claim(next)
       prune(limit)
       return Promise.resolve([...rows.values()])
     },
+    claim: (next) => Promise.resolve(claim(next)),
     save: (expected, saved, limit) => {
       check(limit)
       if (epoch === expected) {
@@ -88,6 +95,49 @@ export let wireStash = (
     drop: (expected, eids) => {
       if (epoch === expected) { for (let eid of eids) rows.delete(eid) }
       return Promise.resolve()
+    },
+  }
+}
+
+/** The wire vault of a page its server drew from `rows`: it loads those
+ * rows alone, and no answers, since what the page shows is newer than
+ * anything `vault` kept and must not be drawn over by it, and keeps them in
+ * `vault`, with everything the page goes on to hold. A page drawn without
+ * its server (an app's shell, offline) loads `vault` itself. A vault that
+ * cannot be written (a browser refusing its storage) keeps nothing; the
+ * page still holds what it was drawn from.
+ *
+ * ```ts
+ * import { wireDrawn, wireStash } from '@yaks/client'
+ * import { equal } from '@yaks/testing'
+ * let kept = wireStash({ epoch: 'e', rows: [
+ *   { entity: { eid: 'old' }, doc: { title: 'Kept' } },
+ *   { entity: { eid: 'card' }, doc: { title: 'Before' } },
+ * ] })
+ * let page = wireDrawn(kept, [{ entity: { eid: 'card' }, doc: { title: 'Now' } }])
+ * equal((await page.load('e', 10)).map((r) => [r.eid, r.comps.doc]), [
+ *   ['card', { title: 'Now' }],
+ * ])
+ * equal((await kept.load('e', 10)).map((r) => [r.eid, r.comps.doc]), [
+ *   ['old', { title: 'Kept' }],
+ *   ['card', { title: 'Now' }],
+ * ])
+ * ```
+ */
+export let wireDrawn = (vault: WireVault, rows: Bundle[]): WireVault => {
+  let drawn = rows.map(({ entity: { eid, num, prefix }, ...comps }) => ({
+    eid,
+    num,
+    prefix,
+    comps: comps as Saved['comps'],
+  }))
+  return {
+    ...vault,
+    loadAnswers: () => Promise.resolve([]),
+    load: async (epoch, limit) => {
+      await vault.claim(epoch).catch(() => {})
+      await vault.save(epoch, drawn, limit).catch(() => {})
+      return drawn.slice(Math.max(0, drawn.length - limit))
     },
   }
 }

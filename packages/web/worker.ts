@@ -12,7 +12,8 @@
  *   `files` of them: a picture drawn by an earlier release still has its
  *   sheet and fonts.
  * - Visiting an address in `forget` (signing out, the sign-in page) forgets
- *   every kept page, and any snapshot taken by a page loaded before it.
+ *   every kept page, any snapshot taken by a page loaded before it, and the
+ *   databases its pages kept (`databases`).
  *
  * Every other request goes to the network as if there were no worker.
  *
@@ -25,12 +26,15 @@ export let PAGES = 'yak-pages'
 export let FILES = 'yak-files'
 
 /** What a site keeps: the paths whose visit forgets its pages, where its
- * files named by their bytes are, and how many of each are kept. */
+ * files named by their bytes are, and how many of each are kept. Forgetting
+ * also deletes the IndexedDB databases whose names start with `databases`:
+ * what its pages kept of their own. */
 export type Keeping = {
   forget: string[]
   named?: string
   pages?: number
   files?: number
+  databases?: string
 }
 
 /** What a page sends its worker as it is left (./keep.ts): its address, its
@@ -92,6 +96,7 @@ export type Scope = {
   fetch: typeof fetch
   location: { origin: string }
   clients: { claim(): Promise<void> }
+  indexedDB?: Pick<IDBFactory, 'databases' | 'deleteDatabase'>
   addEventListener(
     type: 'fetch',
     hear: (e: FetchLike) => void,
@@ -130,6 +135,12 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   }
   let forget = async () => {
     asked.clear()
+    let { databases } = opts
+    if (databases && scope.indexedDB) {
+      for (let { name } of await scope.indexedDB.databases()) {
+        if (name?.startsWith(databases)) scope.indexedDB.deleteDatabase(name)
+      }
+    }
     await caches.delete(PAGES)
     await (await caches.open(PAGES)).put(
       location.origin + FORGOT,

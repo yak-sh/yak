@@ -73,6 +73,7 @@ All exports come from `@yaks/client`:
 | `idb`, `stash`                   | IndexedDB and in-memory implementations of `Vault` for local components.  |
 | `keep`, `localComps`             | Connect a `Vault` to a graph, or select the components it stores.         |
 | `wireIdb`, `wireStash`           | IndexedDB and in-memory implementations of `WireVault` for server data.   |
+| `wireDrawn`                      | A page's `WireVault` over the rows its server drew it from.               |
 | `retention`                      | Add cache retention to an existing graph, RAM store, and watch registry.  |
 | `RETENTION_ROWS`, `ANSWER_BYTES` | Default cache budgets: 20,000 rows and 1,000,000 bytes of query metadata. |
 
@@ -540,8 +541,16 @@ writes. With `opts.epoch`, `client.ready` waits for that restore too.
 `wireIdb()` defaults to the separate `yaks-wire` database. Its name must differ
 from the local vault's database. `wireVault: false` disables server persistence
 without disabling drafts. `wireStash()` is its in-memory equivalent. Custom
-`WireVault` implementations provide `load`, `save`, and `drop`, with optional
-`loadAnswers` and `saveAnswers` for query metadata.
+`WireVault` implementations provide `load`, `claim`, `save`, and `drop`, with
+optional `loadAnswers` and `saveAnswers` for query metadata. `claim(epoch)`
+checks the epoch as `load` does, clearing what another epoch kept, without
+reading any rows.
+
+A page its server drew from rows shows those, which are newer than anything
+kept. `wireDrawn(vault, rows)` loads those rows alone and no kept answers, so
+nothing kept is drawn over the page as if current, and keeps them in `vault`
+with everything the page goes on to hold, for a page drawn without its server to
+load.
 
 An epoch mismatch clears persisted server rows and query metadata atomically.
 Saves and drops check the epoch in their transaction, preventing a late write

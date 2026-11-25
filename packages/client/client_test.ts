@@ -14,7 +14,7 @@ import { loadVocab } from '@yaks/vocab'
 import { box, boxClient, comp, COOK, server, titles } from './testing.ts'
 import { client } from './client.ts'
 import { stash } from './vault.ts'
-import { wireStash } from './wire-vault.ts'
+import { wireDrawn, wireStash } from './wire-vault.ts'
 
 let heldVocab = loadVocab({
   $defs: {
@@ -621,6 +621,34 @@ test('a page shows the rows its server drew it from until its subscription answe
   assertEquals(dinners.ready, true)
   assertEquals(titles(dinners.value).sort(), ['Dal', 'Soup'])
   assertEquals(page.ent('r3'), undefined)
+  writer.close()
+  page.close()
+})
+
+test('a page its server drew never shows what an earlier page kept, and keeps what it hears for later', async () => {
+  let srv = server()
+  let writer = boxClient(srv)
+  writer.watch('.recipe')
+  writer.mutate([dal('r1'), { ...dal('r2'), doc: { title: 'Soup' } }])
+  await writer.idle()
+  // Kept by a page an hour ago: r3, deleted since.
+  let kept = wireStash({
+    epoch: 'page',
+    rows: [{ ...dal('r3'), doc: { title: 'Gone' } }],
+  })
+  let page = boxClient(srv, {
+    wireVault: wireDrawn(kept, [{ ...dal('r1'), doc: { title: 'Old dal' } }]),
+    epoch: 'page',
+  })
+  await page.ready
+  let dinners = page.watch('.recipe.course=dinner&?doc')
+  assertEquals(titles(dinners.value), ['Old dal'])
+  await page.idle()
+  assertEquals(titles(dinners.value).sort(), ['Dal', 'Soup'])
+  await page.cache.idle()
+  let held = await kept.load('page', 10)
+  assertEquals(held.map((r) => r.eid).sort(), ['r1', 'r2', 'r3'])
+  assertEquals(held.find((r) => r.eid == 'r1')?.comps.doc, { title: 'Dal' })
   writer.close()
   page.close()
 })

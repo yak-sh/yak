@@ -272,6 +272,21 @@ export let wireIdb = (
       throw new Error('invalid retention limit')
     }
   }
+  // Whether what is kept is `epoch`'s; if not, it is cleared and starts as
+  // `epoch`'s, empty.
+  let claimed = async (
+    rows: IDBObjectStore,
+    meta: IDBObjectStore,
+    epoch: string,
+  ) => {
+    if (await ask(meta.get('epoch')) === epoch) return true
+    rows.clear()
+    meta.delete('answers')
+    meta.delete('answerBytes')
+    meta.put(epoch, 'epoch')
+    meta.put(0, 'order')
+    return false
+  }
   return {
     loadAnswers: async (epoch, bytes) => {
       let bounded = answerCache(bytes)
@@ -308,18 +323,15 @@ export let wireIdb = (
     load: (epoch, limit) => {
       check(limit)
       return transaction('readwrite', async (rows, meta) => {
-        if (await ask(meta.get('epoch')) !== epoch) {
-          rows.clear()
-          meta.delete('answers')
-          meta.delete('answerBytes')
-          meta.put(epoch, 'epoch')
-          meta.put(0, 'order')
-          return []
-        }
+        if (!await claimed(rows, meta, epoch)) return []
         await prune(rows, Number(await ask(meta.get('order')) ?? 0), limit)
         return await bounded(rows, limit)
       })
     },
+    claim: (epoch) =>
+      transaction('readwrite', async (rows, meta) => {
+        await claimed(rows, meta, epoch)
+      }),
     save: (epoch, saved, limit) => {
       check(limit)
       return transaction('readwrite', async (rows, meta) => {
