@@ -14,7 +14,7 @@
  *
  * @module
  */
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, dead } from '@yaks/graph'
 import { appsSpace, sideLine } from './side-rows.ts'
 import { accountLine, FRIENDS } from './account-rows.ts'
 import { UPDATE_WAITING } from './update-waiting.ts'
@@ -143,10 +143,19 @@ export let personChanges = (bundles: Bundle[]) => {
   let apps = bundles.filter((b) => 'app' in b || 'last_deploy' in b)
   let releases = apps.filter(releaseOnly).map((b) => b.entity.eid)
   let reachability = apps.length != releases.length
+  // A release names the open draft it closed. Its tombstone only moves
+  // the released app's draft and the listings already scoped by the release.
+  let closed = new Set(bundles.flatMap(({ deploy }) => {
+    let { app, draft } = (deploy ?? {}) as { app?: string; draft?: string }
+    return app && draft && releases.includes(app) ? [draft] : []
+  }))
+  let relevant = closed.size
+    ? bundles.filter((b) => !dead(b) || !closed.has(b.entity.eid))
+    : bundles
   let other = reachability ||
-    bundles.some((b) => DIRECTORY_VIEWS.some((key) => key in b))
+    relevant.some((b) => DIRECTORY_VIEWS.some((key) => key in b))
   let connections = reachability ||
-    bundles.some((b) =>
+    relevant.some((b) =>
       ['$delete', 'connection', 'uses', 'mcp_server'].some((key) => key in b)
     )
   // Model reservations and settlements move the paying space's month.
@@ -161,7 +170,7 @@ export let personChanges = (bundles: Bundle[]) => {
     releases: other && connections ? [] : releases,
     affects: (line: string, spaces: ReadonlySet<string | null>) => {
       let draft = draftedApp(line)
-      if (draft != undefined) return bundles.some((b) => draftMoved(b, draft))
+      if (draft != undefined) return relevant.some((b) => draftMoved(b, draft))
       let space = releaseSpace(line)
       if (space && spaces.has(space)) return true
       if (movedSpace(line) != undefined) return connections

@@ -21,14 +21,18 @@ let lines = [
   appDrafted('that'),
 ]
 
-test('a release refreshes the changed app and the listings of its space', () => {
+test('a release that closes a draft refreshes its app and space listings', () => {
   let change = personChanges([
     {
       entity: { eid: 'this' },
       app: { source: 'second', version: 2, fence: null },
       last_deploy: {},
     },
-    { entity: { eid: 'version' }, deploy: { version: 2 } },
+    {
+      entity: { eid: 'version' },
+      deploy: { app: 'this', version: 2, draft: 'taken' },
+    },
+    { entity: { eid: 'taken' }, tombstone: {} },
   ])
   equal(change.releases, ['this'])
   equal(lines.filter((line) => change.affects(line, new Set(['one']))), [
@@ -37,6 +41,19 @@ test('a release refreshes the changed app and the listings of its space', () => 
     connectionsMoved('one'),
     appDrafted('this'),
   ])
+})
+
+test('a deletion alongside a release still refreshes other views', () => {
+  let change = personChanges([
+    { entity: { eid: 'this' }, app: { version: 2 } },
+    {
+      entity: { eid: 'version' },
+      deploy: { app: 'this', version: 2, draft: 'taken' },
+    },
+    { entity: { eid: 'taken' }, tombstone: {} },
+    { entity: { eid: 'unrelated' }, tombstone: {} },
+  ])
+  equal(change.affects(SIDE_SPACES, new Set(['one'])), true)
 })
 
 test('moving an app refreshes the views that depended on its old address', () => {
