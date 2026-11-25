@@ -40,11 +40,15 @@ let lines = (n: number, from = 0): Line[] =>
 // A page with its pane, the conversation in it held in a page graph; `grow`
 // is the browser telling it its content changed size. It is a phone's,
 // 844px tall, its pane the frame's height but for its bar and box (44px),
-// the frame as tall as the page holds it (`VIEWPORT`); `keyboard` opens one
-// that many px tall the way iOS Safari does, the page panned up under it.
+// the frame as tall as the page holds it (`VIEWPORT`) or else the window;
+// `keyboard` opens one that many px tall the way iOS Safari does, the page
+// panned up under it, `quiet` without telling the visual viewport, as iOS
+// at times does not. `type` and `leave` move into its field and out, and
+// `lift` lifts a finger.
 let page = (hash = '') => {
   let { document, window, Event } = parseHTML(
     '<html><body><main id="pane"><div id="talk"></div></main>' +
+      '<textarea id="field"></textarea>' +
       '<nav id="menu"></nav></body></html>',
   )
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -77,6 +81,17 @@ let page = (hash = '') => {
     },
   })
   Object.defineProperty(document, 'defaultView', { value: win })
+  let field = document.getElementById('field')!
+  let focused: Element | null = null
+  Object.defineProperty(document, 'activeElement', {
+    get: () => focused ?? document.body,
+  })
+  let focus = (to: Element | null) => {
+    // Leaving is heard while what is left still has focus.
+    focused?.dispatchEvent(new Event('focusout', { bubbles: true }))
+    focused = to
+    if (to) to.dispatchEvent(new Event('focusin', { bubbles: true }))
+  }
   let pane = document.getElementById('pane') as HTMLElement
   // Each line is 100px high, and what grows besides them (a picture
   // loading) adds to it.
@@ -85,7 +100,7 @@ let page = (hash = '') => {
   let height = () => grown + rows().length * 100
   let frame = () =>
     parseFloat(document.documentElement.style.getPropertyValue(VIEWPORT)) ||
-    visible
+    844
   let tall = () => frame() - 44
   Object.defineProperties(pane, {
     clientHeight: { get: tall },
@@ -139,13 +154,17 @@ let page = (hash = '') => {
     press: (at: Element) => at.dispatchEvent(new Event('click')),
     grow: (by: number) => (grown += by, grew.forEach((f) => f())),
     newest: () => pane.scrollTop == height() - tall(),
-    keyboard: (px: number) => {
+    keyboard: (px: number, quiet = false) => {
       visible = 844 - px
       pageY = panned = px
+      if (quiet) return
       view.dispatchEvent(new globalThis.Event('scroll'))
       view.dispatchEvent(new globalThis.Event('resize'))
       grew.forEach((f) => f())
     },
+    type: () => focus(field),
+    leave: () => focus(null),
+    lift: () => document.dispatchEvent(new Event('touchend')),
     frame,
     pageY: () => pageY,
     rows: () => rows().map((r) => r.id),
@@ -204,18 +223,21 @@ test('standing hidden, it leaves the pane it shares as another view has it', () 
   equal(p.newest(), true, 'shown again, it is at its newest')
 })
 
-test('the page is held to what a person sees, at its own scale, and back at its top unless pinched', () => {
-  equal(seen({ height: 508, scale: 1, offsetTop: 336 }, 0), {
+test('the page is held to what a person sees while they type, at its own scale, and back at its top unless pinched', () => {
+  equal(seen({ height: 508, scale: 1, offsetTop: 336 }, 0, true), {
     height: 508,
     top: true,
   })
-  equal(seen({ height: 844, scale: 1, offsetTop: 0 }, 0), {
+  equal(seen({ height: 844, scale: 1, offsetTop: 0 }, 0, true), {
     height: 844,
     top: false,
   })
-  equal(seen({ height: 254, scale: 2, offsetTop: 120 }, 120), {
+  equal(seen({ height: 254, scale: 2, offsetTop: 120 }, 120, true), {
     height: 508,
     top: false,
+  })
+  equal(seen({ height: 508, scale: 1, offsetTop: 336 }, 0, false), {
+    top: true,
   })
 })
 
@@ -223,6 +245,7 @@ test('a keyboard opening shortens its pane at the newest, and the page stays at 
   using p = page()
   p.draw(lines(20))
   equal([p.frame(), p.newest()], [844, true])
+  p.type()
   p.keyboard(336)
   equal([p.frame(), p.pane.clientHeight, p.pageY()], [508, 464, 0])
   equal([p.newest(), p.state().away], [true, false])
@@ -234,8 +257,36 @@ test('a reader scrolled up stays where they were as the keyboard opens', () => {
   using p = page()
   p.draw(lines(20))
   p.scroll(900)
+  p.type()
   p.keyboard(336)
   equal([p.pane.scrollTop, p.state().away, p.pageY()], [900, true, 0])
+})
+
+test('the page is whole again once its field is left, though the visual viewport never says the keyboard closed', () => {
+  using p = page()
+  p.type()
+  p.keyboard(336)
+  equal(p.frame(), 508)
+  p.keyboard(0, true)
+  p.leave()
+  equal(p.frame(), 844)
+})
+
+test('a swipe while typing ends with the page whole once the keyboard has closed, though the visual viewport never said so', () => {
+  using p = page()
+  p.type()
+  p.keyboard(336)
+  p.lift()
+  equal(p.frame(), 508, 'the keyboard is still up')
+  p.keyboard(0, true)
+  p.lift()
+  equal(p.frame(), 844)
+})
+
+test('the visual viewport changing while no field is typed in holds no height', () => {
+  using p = page()
+  p.keyboard(336)
+  equal([p.frame(), p.pageY()], [844, 0])
 })
 
 test('told it is back at the newest, it goes there', () => {

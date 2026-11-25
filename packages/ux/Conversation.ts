@@ -188,15 +188,18 @@ let scroller = (at: HTMLElement): HTMLElement => {
 /** The visual viewport, as much of it as `seen` reads. */
 export type Seen = { height: number; scale: number; offsetTop: number }
 
-/** What the page is held to, given the visual viewport and how far the page
- * is scrolled: its height in px, which the keyboard shortens, at the page's
- * own scale; and whether the page goes back to its top, which it does unless
- * a person pinched it larger, when where it is shown is theirs. */
+/** What the page is held to, given the visual viewport, how far the page is
+ * scrolled, and whether a field is typed in: while one is, its height in px,
+ * which the keyboard shortens, at the page's own scale, and otherwise none,
+ * so it is the whole window; and whether the page goes back to its top,
+ * which it does unless a person pinched it larger, when where it is shown is
+ * theirs. */
 export let seen = (
   view: Seen,
   scrollY: number,
-): { height: number; top: boolean } => ({
-  height: Math.round(view.height * view.scale),
+  typing: boolean,
+): { height?: number; top: boolean } => ({
+  ...(typing && { height: Math.round(view.height * view.scale) }),
   top: view.scale == 1 && (scrollY > 0 || view.offsetTop > 0),
 })
 
@@ -204,25 +207,44 @@ export let seen = (
  * `height: var(--viewport-height, 100dvh)`. */
 export let VIEWPORT = '--viewport-height'
 
+// What a keyboard comes up for.
+let EDITABLE = 'input, textarea, select, [contenteditable]'
+
 /** Holds `doc`'s page to what a person sees as it changes (`seen`): a
  * keyboard opening shortens it rather than scrolling it, which iOS Safari
- * does whatever the viewport meta says. Returns what lets it go. */
+ * does whatever the viewport meta says. It holds a height only while a field
+ * is typed in, and reads it again whenever the visual viewport or window
+ * changes, focus moves and a finger lifts, since iOS does not always tell the
+ * visual viewport a keyboard closed (around a swipe). Returns what lets it
+ * go. */
 export let fit = (doc: Document): () => void => {
   let win = doc.defaultView
   let view = win?.visualViewport
   if (!win || !view) return () => {}
   let root = doc.documentElement
-  let held = () => {
-    let { height, top } = seen(view, win.scrollY ?? 0)
-    root.style.setProperty(VIEWPORT, `${height}px`)
+  // Focus leaving is heard before it has gone.
+  let held = (ev?: Event) => {
+    let at = doc.activeElement
+    let typing = !!at?.matches?.(EDITABLE) &&
+      !(ev?.type == 'focusout' && ev.target == at)
+    let { height, top } = seen(view, win.scrollY ?? 0, typing)
+    if (height == null) root.style.removeProperty(VIEWPORT)
+    else root.style.setProperty(VIEWPORT, `${height}px`)
     if (top) win.scrollTo(0, 0)
   }
+  let heard: [EventTarget, string][] = [
+    [view, 'resize'],
+    [view, 'scroll'],
+    [win, 'resize'],
+    [doc, 'focusin'],
+    [doc, 'focusout'],
+    [doc, 'touchend'],
+    [doc, 'touchcancel'],
+  ]
   held()
-  view.addEventListener('resize', held)
-  view.addEventListener('scroll', held)
+  for (let [at, type] of heard) at.addEventListener(type, held)
   return () => {
-    view.removeEventListener('resize', held)
-    view.removeEventListener('scroll', held)
+    for (let [at, type] of heard) at.removeEventListener(type, held)
     root.style.removeProperty(VIEWPORT)
   }
 }
