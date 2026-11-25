@@ -82,7 +82,6 @@ import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
 import { type Listed, listed, type Worked } from './operator-view.ts'
-import { column, conversationOf } from './operator-page.ts'
 import { ADMIN, managePath } from '@yaks/platform/routes'
 import { admin } from './tool.ts'
 import { adminWho } from './asking.ts'
@@ -91,6 +90,7 @@ import { type Item, Sidebar } from './sidebar.ts'
 import { type Asked, type Counted, spendingBody } from './admin-spending.ts'
 import { reconciled, type Spending } from './operator-spending.ts'
 import { receiptEid } from './model-spend.ts'
+import { type Clock, clock } from './timing.ts'
 
 export let PATH = ADMIN
 
@@ -978,6 +978,7 @@ let operatorPage = async (
     )
   }
   // Read and drawn as the chat app reads and draws it.
+  let { column, conversationOf } = await import('./operator-page.ts')
   let talked = await conversationOf(
     env,
     space,
@@ -1242,9 +1243,6 @@ let funnelPage = (
 let spaceOfApp = (dir: Pick<Directory, 'appAt'>) => async (app: string) =>
   (await dir.appAt(app))?.space.slug ?? null
 
-/** Where the funnel is answered as data, for the box's admin_funnel tool. */
-export let FUNNEL = '/api/funnel'
-
 let refused = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
@@ -1294,6 +1292,7 @@ export let answer = async (
   env: Env,
   path: string,
   dir: Directory,
+  c: Clock = clock(),
 ): Promise<Response | null> => {
   if (path != PATH && !path.startsWith(`${PATH}/`)) return null
   let asked = new URL(req.url)
@@ -1322,8 +1321,17 @@ export let answer = async (
       headers: { location: `${PATH}/people` },
     })
   }
-  let d = read(env, await dir.census(), asked.searchParams.has('tests'))
-  if (isList(rest)) return list(d, rest, asked.searchParams.get('q') ?? '')
+  let census = await c.time('directory_read', () => dir.census())
+  let d = c.measure(
+    'directory_summary',
+    () => read(env, census, asked.searchParams.has('tests')),
+  )
+  if (isList(rest)) {
+    return c.measure(
+      'render',
+      () => list(d, rest, asked.searchParams.get('q') ?? ''),
+    )
+  }
   if (rest == 'invites') return invitesPage(d)
   if (rest == 'builds') return buildsPage(d, await opened(dir))
   if (rest == 'sessions') return await sessionsPage(d, env, who)

@@ -55,7 +55,6 @@ import { vouched, type Who, whoIs } from './session.ts'
 import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
 import { writes } from '@yaks/member'
-import { TOOLS } from './tools.ts'
 import { type Clock, clock } from './timing.ts'
 import { woken } from './build-door.ts'
 import { DAYS } from './views.ts'
@@ -72,7 +71,7 @@ import {
   sideApps,
   visitsRows,
 } from './side.ts'
-import { warmApps } from './app-warm.ts'
+import { warmApp, warmApps } from './app-warm.ts'
 import { background, caught } from './defects.ts'
 import { listedRows } from '@yaks/platform/space-apps'
 import { brokenOf } from './apps-reads.ts'
@@ -268,7 +267,9 @@ export let manage = async (
       at.account,
     )
   }
-  if ('updates' in at) return everyUpdate(req, env, dir, person, until, asked)
+  if ('updates' in at) {
+    return everyUpdate(req, env, dir, person, until, asked, c)
+  }
   let view = at.view
   let paged = page ?? dir.page(
     at.space,
@@ -327,26 +328,43 @@ export let manage = async (
   // opens the files sent in it where it stands (operator-view.ts `attached`).
   // Its Updates open in the chat app too.
   let reading = req.method == 'GET' || req.method == 'HEAD'
-  // A page of the space wakes its Operator for a member who talks to it as
-  // soon as the space is known (build-door.ts `woken`): one that reads it (its
-  // chat, Updates, Matches) finds it starting while the directory is read,
-  // and any other leaves it up for the chat opened next. A store's door asks
-  // it at once.
-  if (
-    reading && !at.door && writes(who.role) && !administrative &&
+  let chat = view == 'operator' && !url.searchParams.has('attachment')
+    ? at.open
+    : undefined
+  let chosen = view == 'operator' ? url.searchParams.get('app') : null
+  let canWarm = reading && !at.door && writes(who.role) && !administrative &&
     !space.trashed
-  ) {
-    woken(env, space.eid)
-    // Start the apps while the space's page is read. A chat opened beside
-    // a particular app puts it first, including when looked up ahead.
-    let chosen = view == 'operator' ? url.searchParams.get('app') : null
+  let roster: ReturnType<typeof appsFor> | undefined
+  let apps = () => roster ??= appsFor(dir, space, who)
+  let warm = (start: (mine: Awaited<ReturnType<typeof appsFor>>) => void) =>
     background(
-      appsFor(dir, space, who).then(
-        (apps) => warmApps(env, space, apps, chosen),
+      apps().then(
+        start,
         (error) =>
           caught(error, { request: 'app warm roster', space: space.eid }),
       ),
     )
+  let warmRoster = () => warm((mine) => warmApps(env, space, mine, chosen))
+  let ready = async (page: Promise<Response>) => {
+    let answer = await page
+    if (canWarm && answer.ok) warmRoster()
+    return answer
+  }
+  let sidebar = () =>
+    c.time('sidebar', () => beside(env, dir, space, who, apps().then(sideApps)))
+  // Chat and Updates boot the Operator with their read, so its wake cannot
+  // start owed work before that read. Their links warm once the page is
+  // drawn, with only the app already asked for starting alongside it.
+  if (canWarm) {
+    if (!chat && view != 'updates') {
+      woken(env, space.eid)
+      warmRoster()
+    } else if (chosen) {
+      warm((mine) => {
+        let app = mine.find((app) => app.slug == chosen)
+        if (app) warmApp(env, space, app)
+      })
+    }
   }
   if (view == 'updates' && writes(who.role) && !space.trashed) {
     if (req.method == 'POST') {
@@ -357,18 +375,22 @@ export let manage = async (
     let { shownAnswer } = await import('./updates.ts')
     let shown = await shownAnswer(req, env, space, who)
     if (shown) return shown
-    let { updatesPage } = await import('./operator-page.ts')
-    return unread(
+    let { updatesPage } = await c.time(
+      'page_modules',
+      () => import('./operator-page.ts'),
+    )
+    return ready(unread(
       req,
       updatesPage(
         env,
         space,
         who,
-        await beside(env, dir, space, who),
+        sidebar(),
         new URL(req.url).searchParams.has('dismissed'),
         !lookingAhead(req),
+        c,
       ),
-    )
+    ))
   }
   // Its Matches are its members' to pick in (matches.ts).
   if (view == 'matches' && writes(who.role) && !space.trashed) {
@@ -380,23 +402,25 @@ export let manage = async (
     return matchesPage(req, env, space, who, await beside(env, dir, space, who))
   }
   if (view == 'operator' && writes(who.role) && !space.trashed) {
-    let { chatPage, operatorAnswer, storeAnswer } = await import(
-      './operator-page.ts'
+    let { chatPage, operatorAnswer, storeAnswer } = await c.time(
+      'page_modules',
+      () => import('./operator-page.ts'),
     )
     if (at.door) return storeAnswer(req, env, space, who, at.door)
-    if (at.open && !new URL(req.url).searchParams.has('attachment')) {
+    if (chat) {
       return reading
-        ? chatPage(
+        ? ready(chatPage(
           env,
           space,
           who,
-          at.open,
-          await beside(env, dir, space, who),
-          url.searchParams.get('app'),
+          chat,
+          sidebar(),
+          chosen,
           url.searchParams.has('from')
             ? Number(url.searchParams.get('from'))
             : undefined,
-        )
+          c,
+        ))
         : nothingHere(env)
     }
     return await operatorAnswer(req, env, space, who) ??
@@ -576,6 +600,7 @@ let everyUpdate = async (
   person: string,
   until: number | undefined,
   asked: string | null,
+  c: Clock,
 ): Promise<Response> => {
   let url = new URL(req.url)
   // A tab drawn before the reach watch still asks here without opening Updates.
@@ -590,15 +615,13 @@ let everyUpdate = async (
     return moved(req, to.href)
   }
   if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
-  let seats = (await dir.seated(person)).filter((s) =>
-    !s.space.trashed && writes(s.role)
+  let seats = (await c.time('directory_read', () => dir.seated(person))).filter(
+    (s) => !s.space.trashed && writes(s.role),
   ).sort((a, b) => Number(b.own) - Number(a.own))
   let held = seats.map(({ space, role }) => ({
     space,
     who: { person, role, until } satisfies Owner,
   }))
-  // Each Operator starts while the side is read, before Updates asks it.
-  for (let { space } of held) woken(env, space.eid)
   let into = url.searchParams.get('in')
   let home = held.find((s) => s.space.slug == into) ?? held[0]
   if (!home) return redirect(hostUrl(env, MANAGE), 303)
@@ -612,18 +635,28 @@ let everyUpdate = async (
     }),
   ).then((all) => new Map(all))
   apps.catch(() => {})
-  let { allUpdatesPage } = await import('./operator-page.ts')
-  return unread(
+  let { allUpdatesPage } = await c.time(
+    'page_modules',
+    () => import('./operator-page.ts'),
+  )
+  let roster = appsFor(dir, home.space, home.who)
+  let answer = await unread(
     req,
     allUpdatesPage(
       env,
       home,
       held,
-      await beside(env, dir, home.space, home.who),
+      c.time(
+        'sidebar',
+        () => beside(env, dir, home.space, home.who, roster.then(sideApps)),
+      ),
       apps,
       !lookingAhead(req),
+      c,
     ),
   )
+  if (answer.ok) warmApps(env, home.space, await roster)
+  return answer
 }
 
 // Updates fetched ahead marked nothing read, and say so: the navigator asks
@@ -646,13 +679,13 @@ let beside = async (
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
+  roster = appsFor(dir, space, who).then((mine) => (
+    warmApps(env, space, mine), sideApps(mine)
+  )),
 ): Promise<Beside> => {
   let [spaces, apps, name, panes, ways, platformAdmin] = await Promise.all([
     pickable(dir, who.person),
-    // Drawn in the side, each is a press away (app-warm.ts).
-    appsFor(dir, space, who).then((mine) => (
-      warmApps(env, space, mine), sideApps(mine)
-    )),
+    roster,
     dir.nameAt(who.person),
     dir.panes(who.person),
     // As the page asked it ahead (`foresee`), so it is answered from there.
@@ -1053,6 +1086,7 @@ let pressed = async (
   args: Record<string, unknown>,
 ) => {
   try {
+    let { TOOLS } = await import('./tools.ts')
     let out = await TOOLS.find((t) => t.name == name)!.run(
       { env, dir, person: who.person },
       args,

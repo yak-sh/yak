@@ -47,6 +47,14 @@ export let clock = (now: () => number = Date.now) => {
   let mark = (name: string, ms: number, desc?: string | null) =>
     marks.push(`${name};dur=${ms}${desc ? `;desc=${desc}` : ''}`)
   return {
+    measure: <T>(name: string, work: () => T): T => {
+      let at = now()
+      try {
+        return work()
+      } finally {
+        mark(name, now() - at)
+      }
+    },
     // One stage that happens many times — a put per file — summed under one
     // name, so a twenty-file write reads as one `put` and not twenty.
     sum: (name: string) => async <T>(work: () => Promise<T>): Promise<T> => {

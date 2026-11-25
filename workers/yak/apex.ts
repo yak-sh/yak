@@ -2,7 +2,6 @@
 // the listings Site caches, sign-in, the dashboard, the admin's directory,
 // money, phones and the owner's doors. Loaded on the first request to the
 // apex, so an isolate woken for a space's page never compiles them (T-148886).
-import * as admin from './admin.ts'
 import * as apps from './apps.ts'
 import { packageAt } from '@yaks/platform/kept'
 import * as billing from './billing.ts'
@@ -19,7 +18,6 @@ import * as skillPage from './skill-page.ts'
 import * as install from './install.ts'
 import * as appPage from './app-page.ts'
 import * as publisherPage from './publisher-page.ts'
-import { call } from './tools.ts'
 import { isListing } from './kept-page.ts'
 import { sprite } from './icons.ts'
 import { lost } from './pages.ts'
@@ -27,6 +25,7 @@ import { callback } from './connections.ts'
 import { logoDoor } from './catalog.ts'
 import { answer as seo } from './seo.ts'
 import {
+  ADMIN,
   aim,
   APPROVE,
   LOGOUT,
@@ -51,6 +50,7 @@ import * as funnel from './funnel.ts'
 import { badgeFollowed, isHome, isPage } from './view-point.ts'
 import { keep } from './arrival.ts'
 import * as ads from './ads.ts'
+import { clock, timed } from './timing.ts'
 
 // Doors loaded when a request first reaches one (T-37977). What they import,
 // the MCP SDK and zod, the OAuth provider, is evaluated only by an isolate
@@ -222,7 +222,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   if (path == funnel.LOADED) return funnel.loaded(req, env)
   // The funnel as data for the box's admin_funnel tool (admin.ts
   // `funnelDoor`), the owner's door, before the connector for the same reason.
-  if (path == admin.FUNNEL) return admin.funnelDoor(req, env)
+  if (path == '/api/funnel') {
+    return (await import('./admin.ts')).funnelDoor(req, env)
+  }
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }
@@ -278,12 +280,18 @@ let atApex = async (req: Request, env: Env, path: string) => {
     return publisherPage.answer(req, env, path, dir)
   }
   if (path == gallery.REVIEW) {
+    let { call } = await import('./tools.ts')
     let shown = await gallery.answer(req, env, path, dir, call)
     if (shown) return shown
   }
   // The platform admin's directory, signed in and uncached like the review.
-  let directed = await admin.answer(req, env, path, dir)
-  if (directed) return directed
+  if (path == ADMIN || path.startsWith(ADMIN + '/')) {
+    let c = clock()
+    return c.counting(async () => {
+      let admin = await c.time('page_modules', () => import('./admin.ts'))
+      return timed((await admin.answer(req, env, path, dir, c))!, c)
+    })
+  }
   // A space's own address, its Operator (D-473): last but the site's files,
   // so a space never stands where the apex serves anything of its own.
   if (spaced(path)) return bound(env.APPS, apps.fetch, env).fetch(req)

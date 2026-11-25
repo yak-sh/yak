@@ -49,7 +49,8 @@ import {
   PLATFORM_BACKGROUND,
   PLATFORM_DARK_BACKGROUND,
 } from '@yaks/platform/woven'
-import { keepFile, type Request as Intake } from './operator-channels.ts'
+import type { Request as Intake } from './operator-channels.ts'
+import { type Clock, clock } from './timing.ts'
 import { attachmentKey } from './attachment-key.ts'
 import { mailFrom } from '@yaks/platform/host'
 import { subdomainMail } from './space-mail.ts'
@@ -780,7 +781,7 @@ export let operatorAnswer = async (
         let bytes = await holding({ stream: fromChunks(part.body) }, 0)
         if (bytes instanceof Uint8Array && !bytes.length) continue
         files.push(
-          await keepFile(
+          await (await import('./operator-channels.ts')).keepFile(
             env,
             space,
             part.filename,
@@ -1645,13 +1646,17 @@ export let chatPage = async (
   space: Space,
   who: Who,
   open: string,
-  beside: Beside = {},
+  side: Beside | Promise<Beside> = {},
   chosen?: string | null,
   from?: number,
+  c: Clock = clock(),
 ) => {
-  let chat = await chatParts(env, space, who, open, beside, chosen, from)
+  let [chat, beside] = await Promise.all([
+    chatParts(env, space, who, open, side, chosen, from),
+    side,
+  ])
   if (chat instanceof Response) return chat
-  return talkPage(env, space, who, beside, chat)
+  return c.measure('render', () => talkPage(env, space, who, beside, chat))
 }
 
 // What a chat draws, or where its address sends the person: the conversation
@@ -1661,29 +1666,31 @@ let chatParts = async (
   space: Space,
   who: Who,
   open: string,
-  beside: Beside = {},
+  side: Beside | Promise<Beside> = {},
   chosen?: string | null,
   from?: number,
+  lists = reading(env, space, who),
 ): Promise<Response | TalkPage> => {
   let at = managePath('operator', space.slug)
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
   // Their lists are read with every conversation, at once with it, and
   // never hold it back (`reading`).
-  let lists = reading(env, space, who)
-  let [talked, newcomer, { mentions }, alerting, declined] = await Promise.all([
-    lists.listing.then((l) =>
-      conversationOf(env, space, who, at, open == 'new' ? '' : open, {
-        updates: true,
-        mentions: l.mentions ?? null,
-        ...from != null && Number.isFinite(from) ? { from } : {},
-      })
-    ),
-    who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
-    lists.listing,
-    who.person ? directoryOf(env.STORE).alerts(who.person) : null,
-    who.person ? directoryOf(env.STORE).alertsDeclined(who.person) : null,
-  ])
+  let [talked, newcomer, { mentions }, alerting, declined, beside] =
+    await Promise.all([
+      lists.listing.then((l) =>
+        conversationOf(env, space, who, at, open == 'new' ? '' : open, {
+          updates: true,
+          mentions: l.mentions ?? null,
+          ...from != null && Number.isFinite(from) ? { from } : {},
+        })
+      ),
+      who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
+      lists.listing,
+      who.person ? directoryOf(env.STORE).alerts(who.person) : null,
+      who.person ? directoryOf(env.STORE).alertsDeclined(who.person) : null,
+      side,
+    ])
   let listed = await lists.drawn()
   let news = talked.updates!
   // Their one conversation, as the store names it: what an empty `open` asks
@@ -1896,67 +1903,71 @@ export let updatesPage = async (
   env: Env,
   space: Space,
   who: Who,
-  beside: Beside = {},
+  side: Beside | Promise<Beside> = {},
   dismissed = false,
   opened = true,
+  c: Clock = clock(),
 ) => {
   // Opening them reads them, and the count beside them goes with it. The
   // rows of their servers' lists that wait on them are here too, before
   // their Updates.
   let lists = reading(env, space, who)
-  let [news, views, , put, friends, chat] = await Promise.all([
+  let [news, views, , put, friends, chat, beside] = await Promise.all([
     updatesOf(env, space, who, opened && !dismissed),
-    visitsOf(env, beside.apps ?? []),
+    Promise.resolve(side).then((beside) => visitsOf(env, beside.apps ?? [])),
     lists.listing,
     dismissed ? dismissedOf(env, space, who) : undefined,
     dismissed ? undefined : friendsHere(env, space, who).catch((e) => {
       caught(e, { request: 'friends here', space: space.slug })
       return undefined
     }),
-    dismissed ? undefined : chatBeside(env, space, who, beside),
+    dismissed ? undefined : chatBeside(env, space, who, side, lists),
+    side,
   ])
+  let listed = await lists.drawn()
   if (put) {
-    return talkPage(env, space, who, beside, {
-      title: `Dismissed updates from ${space.operator}`,
+    return c.measure('render', () =>
+      talkPage(env, space, who, beside, {
+        title: `Dismissed updates from ${space.operator}`,
+        status: 200,
+        waiting: news.updates.filter((u) => u.needs).length,
+        listed,
+        current: ['updates'],
+        here: talkPath('updates', space.slug) + '?dismissed',
+        skip: ['#content', 'Skip to content'],
+        main: h(
+          'div',
+          updateColumn(space, who),
+          dismissedUpdates(env, space, put, beside.apps),
+        ),
+      }))
+  }
+  let here = talkPath('updates', space.slug)
+  let at = managePath('operator', space.slug)
+  return c.measure('render', () =>
+    talkPage(env, space, who, beside, {
+      title: 'Updates',
       status: 200,
       waiting: news.updates.filter((u) => u.needs).length,
-      listed: await lists.drawn(),
+      listed,
       current: ['updates'],
-      here: talkPath('updates', space.slug) + '?dismissed',
+      here,
       skip: ['#content', 'Skip to content'],
       main: h(
         'div',
         updateColumn(space, who),
-        dismissedUpdates(env, space, put, beside.apps),
+        updates(
+          env,
+          space,
+          news,
+          listed ? besides(listed, at, here, true) : later('waits'),
+          beside.apps,
+          views,
+          friends,
+          who.person ?? '',
+        ),
       ),
-    })
-  }
-  let listed = await lists.drawn()
-  let here = talkPath('updates', space.slug)
-  let at = managePath('operator', space.slug)
-  return talkPage(env, space, who, beside, {
-    title: 'Updates',
-    status: 200,
-    waiting: news.updates.filter((u) => u.needs).length,
-    listed,
-    current: ['updates'],
-    here,
-    skip: ['#content', 'Skip to content'],
-    main: h(
-      'div',
-      updateColumn(space, who),
-      updates(
-        env,
-        space,
-        news,
-        listed ? besides(listed, at, here, true) : later('waits'),
-        beside.apps,
-        views,
-        friends,
-        who.person ?? '',
-      ),
-    ),
-  }, chat ? [chat] : [])
+    }, chat ? [chat] : []))
 }
 
 // The space's Updates as a view of a page opened at another of its views:
@@ -2044,9 +2055,19 @@ let chatBeside = async (
   env: Env,
   space: Space,
   who: Who,
-  beside: Beside,
+  beside: Beside | Promise<Beside>,
+  lists?: ReturnType<typeof reading>,
 ): Promise<TalkPage | undefined> => {
-  let chat = await chatParts(env, space, who, 'new', beside).catch((e) => {
+  let chat = await chatParts(
+    env,
+    space,
+    who,
+    'new',
+    beside,
+    undefined,
+    undefined,
+    lists,
+  ).catch((e) => {
     caught(e, { request: 'chat beside', space: space.slug })
     return undefined
   })
@@ -2062,44 +2083,47 @@ export let allUpdatesPage = async (
   env: Env,
   home: Seat,
   seats: Seat[],
-  beside: Beside,
+  side: Beside | Promise<Beside>,
   apps: Promise<Map<string, Apps>>,
   opened = true,
+  c: Clock = clock(),
 ) => {
   let { space, who } = home
   let lists = reading(env, space, who)
-  let [news, shelves, , chat] = await Promise.all([
+  let [news, shelves, , chat, beside] = await Promise.all([
     updatesAcross(env, seats, { seen: opened }),
     apps,
     lists.listing,
-    chatBeside(env, space, who, beside),
+    chatBeside(env, space, who, side, lists),
+    side,
   ])
   for (let { space, error } of news.missed) {
     caught(error, { request: 'all updates', space: space.slug })
   }
   let listed = await lists.drawn()
   let here = allAt(space)
-  return talkPage(env, space, who, beside, {
-    title: 'All updates',
-    status: 200,
-    waiting: news.updates.filter((u) => u.needs && u.space.eid == space.eid)
-      .length,
-    listed,
-    current: ['all'],
-    here,
-    skip: ['#content', 'Skip to content'],
-    main: h(
-      'div',
-      updateColumn(space, who),
-      allUpdates(
-        env,
-        news,
-        shelves,
-        news.missed.map((m) => m.space),
-        who.person ?? '',
+  return c.measure('render', () =>
+    talkPage(env, space, who, beside, {
+      title: 'All updates',
+      status: 200,
+      waiting: news.updates.filter((u) => u.needs && u.space.eid == space.eid)
+        .length,
+      listed,
+      current: ['all'],
+      here,
+      skip: ['#content', 'Skip to content'],
+      main: h(
+        'div',
+        updateColumn(space, who),
+        allUpdates(
+          env,
+          news,
+          shelves,
+          news.missed.map((m) => m.space),
+          who.person ?? '',
+        ),
       ),
-    ),
-  }, chat ? [chat] : [])
+    }, chat ? [chat] : []))
 }
 
 /** A space's Matches (@yaks/platform/operator-matches-view), beside the

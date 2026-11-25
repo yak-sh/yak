@@ -19,7 +19,7 @@ import type { Settings } from './operator-settings.ts'
 import type { Env } from './env.ts'
 import { caught, refusing, stopped } from './defects.ts'
 import { refuse } from '@yaks/api/refuse'
-import { hop, reported, type Tally, tallying } from './lib/hops.ts'
+import { elapsed, hop, reported, type Tally, tallying } from './lib/hops.ts'
 import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
@@ -731,9 +731,13 @@ export class Builder extends Durable {
       () => this.#store = undefined,
       async () => {
         let starting = Date.now()
-        let { operatorStore, owing } = await import('./operator-store.ts')
-        let { SLICE } = await import('@yaks/durable-object/alarm')
-        let { operatorFrames } = await import('./operator-host.ts')
+        let [{ operatorStore, owing }, { SLICE }, { operatorFrames }] =
+          await elapsed('operator_modules_wait', () =>
+            Promise.all([
+              import('./operator-store.ts'),
+              import('@yaks/durable-object/alarm'),
+              import('./operator-host.ts'),
+            ]))
         // A write that owes work starts it now, beside a step in flight, so a
         // person's words reach the session they are for at once, within a
         // slice; the alarm is there for what this wake leaves. The work goes on
@@ -764,29 +768,33 @@ export class Builder extends Durable {
         let chat = once(async () =>
           (await import('./chat.ts')).chatters(this.#env)
         )
-        let store: OperatorStore = await operatorStore(
-          this.#ctx.storage,
-          {
-            version: this.#env.CF_VERSION_METADATA?.id,
-            report: (e, where) =>
-              caught(e, {
-                request: 'operator effects',
-                handler: where.handler,
+        let store: OperatorStore = await elapsed(
+          'operator_open_wait',
+          () =>
+            operatorStore(
+              this.#ctx.storage,
+              {
+                version: this.#env.CF_VERSION_METADATA?.id,
+                report: (e, where) =>
+                  caught(e, {
+                    request: 'operator effects',
+                    handler: where.handler,
+                  }),
+                nudge,
+              },
+              {
+                senders: {
+                  operator: { send: async (m) => (await post()).send(m) },
+                },
+                chatter: async (via) => (await chat())[via],
+              },
+              operatorVectors(this.#env, {
+                space: () => store,
+                arm: (at) => this.clock.arm(at),
+                hold: (work) => this.#ctx.waitUntil?.(work),
+                ready: () => store.vectors?.run(),
               }),
-            nudge,
-          },
-          {
-            senders: {
-              operator: { send: async (m) => (await post()).send(m) },
-            },
-            chatter: async (via) => (await chat())[via],
-          },
-          operatorVectors(this.#env, {
-            space: () => store,
-            arm: (at) => this.clock.arm(at),
-            hold: (work) => this.#ctx.waitUntil?.(work),
-            ready: () => store.vectors?.run(),
-          }),
+            ),
         )
         // The logos of integrations its lines and approvals name, as the
         // platform keeps them (connections.ts `logosOf`).
