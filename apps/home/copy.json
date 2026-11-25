@@ -864,6 +864,7 @@
     },
     "plans": {
       "title": "Each space is free or on a paid plan.",
+      "support": "Support contracts are available with the Pro plan. They include direct access to your support provider and an agreed number of build hours each month.",
       "renewal": "An included domain gets up to $12 a year toward renewal when registered through yaks.app. The first year and other domains’ renewals are at the registrar’s price, with no markup."
     },
     "always": {

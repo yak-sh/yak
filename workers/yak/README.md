@@ -840,6 +840,26 @@ working account. Add its name to `PROTECTED` (idle-spaces.ts) first: the sweep
 and `yak admin erase` keep what's named there however long it sits idle, and a
 `space_delete` of it asks by letter.
 
+## Support contract invoicing
+
+Set `STRIPE_INVOICE_KEY` to a dedicated restricted key from the same Stripe
+account and mode as `STRIPE_KEY`. Give it Write for Products and Invoices,
+including invoice items. The existing key still creates and updates the space's
+subscription and handles its webhooks. Use a test-mode invoice key on staging.
+
+Set the terms on the platform admin's space page or with
+`yak admin support-contract <space> set`. A contract names a provider by their
+yaks.app account. The provider gets requests as asks in their Operator's
+Updates. Use `--billing platform` for yaks.app's invoicing or `--billing terms`
+to record terms for a provider who handles billing.
+
+The first platform-billed setup for a space without a subscription opens a
+yearly Pro plan and its support item together. On an existing yearly invoiced
+plan, use the plan's renewal date. Stripe carries the first prorated support
+charge on the next plan invoice. The onboarding invoice is separate. Both kinds
+of invoice offer card and ACH. Record paper checks in the Stripe Dashboard after
+receipt.
+
 ## STRIPE_WEBHOOK_SECRET — the billing door's events
 
 billing.ts is the platform's own plan: Stripe sells to us, and tells us at

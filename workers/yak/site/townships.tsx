@@ -243,6 +243,7 @@ export let Townships = () => (
           ),
         })}
       />
+      <p class='Note Note-small' {...text('pricing.plans.support')} />
     </section>
     <Card class='Join' aria-labelledby='join'>
       <h2 class='Title' id='join' {...text('townships.join.title')} />

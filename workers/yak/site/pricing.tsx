@@ -64,6 +64,7 @@ export let Pricing = () => (
           />
         ))}
       </div>
+      <p class='Note Note-small' {...text('pricing.plans.support')} />
       <p class='Note Note-small' {...text('pricing.plans.renewal')} />
       <p class='Note Note-small' {...text('home.cost.ai')} />
     </section>

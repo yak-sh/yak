@@ -1,3 +1,4 @@
+import { CONTRACTS } from '@yaks/platform/support-contract'
 // yaks.app as a client speaks it: the sign-in card, the connector, an app's
 // two store doors, and the platform's own fee. Everything here is something a
 // person could do in a browser — this file holds no credential of its own and
@@ -477,6 +478,21 @@ export let setFreeBudget = (
   dollars: string,
 ): Promise<FreeBudget> =>
   said(posted(apex(BUDGET), { tier: 'free', dollars }, session))
+
+/** One space's support contract, or the monthly totals across contracts. */
+export let supportContracts = <T>(
+  session: string,
+  space?: string,
+  changes?: Record<string, string>,
+): Promise<T> =>
+  said(
+    changes
+      ? posted(apex(CONTRACTS), { ...changes, space: space ?? '' }, session)
+      : sent(
+        apex(CONTRACTS + (space ? `?space=${encodeURIComponent(space)}` : '')),
+        session,
+      ),
+  )
 
 /** A platform comp is separate from a space's subscription. */
 import type { SpaceComp } from '@yaks/platform/comp'

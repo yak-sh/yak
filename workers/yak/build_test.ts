@@ -25,7 +25,7 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, modelPage, platform, state, type Turn } from './testing.ts'
 import { rootOf } from './operator-root.ts'
-import { test, until } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import { line } from '@yaks/query'
 import { opened, seal, sign } from './lib/token.ts'
 import { calling, streamDoor, type Ticket } from './operator-calls.ts'
@@ -440,7 +440,7 @@ test('a wake beside an answer still under way leaves the work to the wake behind
 })
 
 test('the door wakes a space’s object behind an answer that says it owes work', async () => {
-  let o = await seeded()
+  let o = await seeded([], { CLOCK: clock(Date.now()) })
   // The wake goes on behind the answer; the runtime keeps it, as this does.
   let behind: Promise<void>[] = []
   let answer = await within(

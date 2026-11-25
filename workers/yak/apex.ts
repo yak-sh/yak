@@ -1,3 +1,4 @@
+import { CONTRACTS } from '@yaks/platform/support-contract'
 // The apex's own pages and doors (kernel.ts routes here): the home page and
 // the listings Site caches, sign-in, the dashboard, the admin's directory,
 // money, phones and the owner's doors. Loaded on the first request to the
@@ -180,6 +181,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // A space's model budget, set by the same owner (budget.ts, T-137556),
   // before the connector for the same reason as the fee's.
   if (path == '/api/budget') return budget.fetch(req, env)
+  if (path == CONTRACTS) {
+    return (await import('./support-contracts.ts')).supportDoor(req, env)
+  }
   if (path == '/api/comp') return comp.fetch(req, env)
   if (path == '/api/spaces') return freeSpaces.fetch(req, env)
   // A page of ours in Cloudflare's browser, for the platform's test accounts

@@ -33,6 +33,7 @@ import type {
 } from '@yaks/host/payments'
 import { ask, found, idOf, type Keyed, list, minimum } from './mod.ts'
 import { checkout } from './checkout.ts'
+import { addOnPrice, invoiceMethods, invoiceOnce } from './invoices.ts'
 import { refund } from './refunds.ts'
 
 /** What a config gives the plans: the key and clock every call is made with
@@ -40,6 +41,7 @@ import { refund } from './refunds.ts'
  * a price none lists falls back to the first of, and each tier's price ids it
  * no longer sells but whose subscriptions are still on it. */
 export type Options = Keyed & {
+  invoiceKey?: string
   prices?: Record<string, Partial<Record<Per, string>>>
   kept?: Record<string, string[] | undefined>
 }
@@ -69,13 +71,20 @@ export type Sub = {
   trial_end?: number | null
   current_period_start?: number | null
   current_period_end?: number | null
+  billing_cycle_anchor?: number
   /** expanded where it is asked for; an id otherwise */
   latest_invoice?: string | Bill | null
   items?: {
     data?: {
+      id?: string
+      metadata?: Tags
       current_period_start?: number | null
       current_period_end?: number | null
-      price?: string | { id?: string; recurring?: { interval?: string } } | null
+      price?: string | {
+        id?: string
+        unit_amount?: number
+        recurring?: { interval?: string }
+      } | null
     }[]
   }
 }
@@ -275,6 +284,10 @@ let expanded = (subscription: string) =>
  * time. */
 export let plans = (options: Options): Plans => {
   let now = () => options.clock?.now() ?? Date.now()
+  let invoicing = (): Keyed => ({
+    key: options.invoiceKey,
+    clock: options.clock,
+  })
   let price = (tier: string, per: Per) => options.prices?.[tier]?.[per]
   let subscription = async (id: string) => {
     let sub = await found(options, expanded(id)) as Sub | null
@@ -361,16 +374,30 @@ export let plans = (options: Options): Plans => {
         email: asked.to.email,
         name: asked.to.name || undefined,
       })
+      let addOn = asked.addOn
+      let start = addOn && Date.parse(addOn.start) / 1000
+      let renewal = addOn && Date.parse(addOn.renewal) / 1000
+      let future = start != null && start > now() / 1000
+      let contract = addOn
+        ? {
+          payment_settings: invoiceMethods,
+          billing_cycle_anchor: renewal,
+          ...(future ? { trial_end: start } : { backdate_start_date: start }),
+        }
+        : trialFor(asked.trial, now())
       let made = await ask(
         options,
         '/v1/subscriptions',
         {
           customer: asked.payer,
-          items: { 0: { price: bought, quantity: 1 } },
+          items: [
+            { price: bought, quantity: 1 },
+            ...addOn ? [await addOnPrice(invoicing(), addOn)] : [],
+          ],
           collection_method: 'send_invoice',
           days_until_due: asked.due,
           metadata: asked.tags,
-          ...trialFor(asked.trial, now()),
+          ...contract,
           ...EXPAND,
         },
         undefined,
@@ -383,6 +410,44 @@ export let plans = (options: Options): Plans => {
         at: when(made.created) ?? new Date(now()).toISOString(),
       }
     },
+    invoicingOn: () => !!options.key && !!options.invoiceKey,
+    addOn: async (id, item) => {
+      let sub = await ask(options, path(id)) as Sub
+      let items = sub.items?.data ?? []
+      let held = items.find((it) => it.metadata?.yaks_add_on == item.key)
+      let tier = tierFor(sub, options)
+      if (
+        sub.collection_method != 'send_invoice' ||
+        cadence(sub, tier, options) != 'year' ||
+        sub.status == 'canceled' || sub.status == 'incomplete_expired'
+      ) {
+        return 'Support contracts require a yearly plan paid by invoice.'
+      }
+      let end = when(periodEnd(sub))?.slice(0, 10)
+      if (end != item.renewal) {
+        return `The yearly plan renews on ${
+          end ?? 'an unknown date'
+        }. Use the plan renewal date.`
+      }
+      if (
+        typeof held?.price == 'object' && held.price?.unit_amount == item.cents
+      ) return null
+      let price = await addOnPrice(invoicing(), item)
+      await ask(
+        options,
+        path(id),
+        {
+          items: [{ ...price, id: held?.id }],
+          payment_settings: invoiceMethods,
+          proration_behavior: held ? 'none' : 'create_prorations',
+        },
+        undefined,
+        'POST',
+        `add-on|${id}|${item.key}|${idOf(held?.price)}|${item.cents}`,
+      )
+      return null
+    },
+    invoiceOnce: (asked) => invoiceOnce(invoicing(), asked),
     minimum,
     // Payment mode under Managed Payments, the price made inline with its
     // tax code and tax included, as every price here is: no dashboard price

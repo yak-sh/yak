@@ -671,6 +671,8 @@ export type DeskPage = {
   /** whether the platform's payment provider takes sellers at all, which
    * puts Selling in the side on every manage page */
   shops?: boolean
+  support?: import('preact').ComponentChildren
+  supportAvailable?: boolean
   renewals?: Domain[]
   /** on a paid plan, which is what taking payments needs */
   paying?: boolean

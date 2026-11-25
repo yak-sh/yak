@@ -120,6 +120,24 @@ export type Invoice = {
   tags: Tags
   /** as {@link Checkout.trial}: the first invoice is sent when it ends */
   trial?: string | null
+  addOn?: RecurringAddOn
+}
+
+export type RecurringAddOn = {
+  key: string
+  name: string
+  cents: number
+  start: string
+  renewal: string
+}
+
+export type OneTimeInvoice = {
+  payer: string
+  key: string
+  name: string
+  cents: number
+  due: number
+  tags: Tags
 }
 
 /** A subscription as one call made it, and when the provider made it, which
@@ -209,6 +227,12 @@ export type Plans = {
    * within the hour, and it awaits that invoice's payment before it holds
    * its plan */
   invoice: (asked: Invoice) => Promise<Subscribed>
+  /** Whether the provider is configured to set up support billing. */
+  invoicingOn?: () => boolean
+  /** Attach or revise a yearly item on an existing invoiced yearly plan. */
+  addOn?: (subscription: string, item: RecurringAddOn) => Promise<string | null>
+  /** Send a stand-alone invoice, once per payer and key. */
+  invoiceOnce?: (asked: OneTimeInvoice) => Promise<string>
   /** The smallest standalone payment accepted in this currency. */
   minimum?: (currency: string) => number
   /** the address of a hosted checkout for something paid for once */

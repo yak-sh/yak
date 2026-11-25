@@ -1,3 +1,13 @@
+import {
+  contractAdmin,
+  supportHours,
+} from '@yaks/platform/support-contract-view'
+import {
+  allSupport,
+  setupWaiting,
+  supportFor,
+  todayOf,
+} from './support-contracts.ts'
 import { possessive } from '@yaks/text'
 import { line } from '@yaks/query'
 import { Form, Head } from '@yaks/ui/parts'
@@ -660,6 +670,7 @@ let desk = (
     | List
     | 'sessions'
     | 'spending'
+    | 'support-contracts'
     | 'funnel'
     | 'invites'
     | 'builds'
@@ -704,6 +715,12 @@ let desk = (
       `${PATH}/spending${tested(d)}`,
       'receipt',
       'Spending',
+    ),
+    link(
+      'support-contracts',
+      `${PATH}/support-contracts`,
+      'receipt',
+      'Support contracts',
     ),
     link(
       'funnel',
@@ -841,6 +858,15 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
       seats.filter((s) => s.member!.role == role)
         .flatMap((s) => byId(seatPerson(s)) ?? [])
     ctx.owners = held('owner').map((p) => refOf(d, p))
+    let space = spaceOf(r)
+    let [support, retry] = await Promise.all([
+      supportFor(env, space),
+      setupWaiting(env, space),
+    ])
+    let subscription = space.plan?.status == 'canceled' ||
+        space.plan?.status == 'incomplete_expired'
+      ? undefined
+      : space.plan?.subscription
     more = h(
       Fragment,
       null,
@@ -854,6 +880,14 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
             possessive(spaceOf(r).operator)
           } conversations, and what its model was told`,
         ),
+      ),
+      contractAdmin(
+        space.slug,
+        support?.contract,
+        support ?? undefined,
+        subscription,
+        todayOf(env),
+        retry,
       ),
       grouped(d, 'Owners', held('owner')),
       grouped(d, 'Editors', held('editor')),
@@ -1343,6 +1377,30 @@ export let answer = async (
   if (rest == 'invites') return invitesPage(d)
   if (rest == 'builds') return buildsPage(d, await opened(dir))
   if (rest == 'sessions') return await sessionsPage(d, env, who)
+  if (rest == 'support-contracts') {
+    let rows = await allSupport(env)
+    return desk(
+      d,
+      'Support contracts',
+      'support-contracts',
+      rows.length
+        ? h(
+          'ul',
+          null,
+          rows.map((r) =>
+            h('li', null, [
+              h(
+                'a',
+                { href: `${PATH}/${r.contract.space}#support-contract` },
+                r.slug,
+              ),
+              ' · ' + supportHours(r),
+            ])
+          ),
+        )
+        : empty('No support contracts'),
+    )
+  }
   if (rest == 'spending') return await spendingPage(d, env, who)
   if (rest == 'letters') return lettersPage(d, await dir.trials())
   if (rest.startsWith('letters/')) {

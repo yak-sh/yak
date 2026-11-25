@@ -317,6 +317,7 @@ export let Organizations = () => (
           plans: <a href='/pricing' {...text('organizations.cost.plans')} />,
         })}
       />
+      <p class='Note Note-small' {...text('pricing.plans.support')} />
     </section>
     <Card class='Join' aria-labelledby='join'>
       <h2 class='Title' id='join' {...text('organizations.join.title')} />

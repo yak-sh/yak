@@ -4,6 +4,7 @@ import { mcpRetirementDoc, sweepDoc } from './sweep-vocab.ts'
 import { joinSchema } from './manifest.ts'
 import { bool, num, owned, ref, text, time, unique } from './schema.ts'
 import { NAME_SOURCES } from './named.ts'
+import { supportWords } from './support-contract.ts'
 // A server-owned property and what it holds.
 let described = (s: PropSchema, description: string) => ({
   ...owned(s),
@@ -13,6 +14,7 @@ export let directoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'directory',
   $defs: {
+    ...supportWords,
     app_icon: {
       description: 'The platform artwork requested and drawn for an app.',
       component: true,

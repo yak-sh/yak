@@ -1134,6 +1134,95 @@
         "decision"
       ]
     },
+    "admin_support_contract": {
+      "tool": true,
+      "destructive": false,
+      "idempotent": false,
+      "noun": "admin",
+      "verb": "support-contract",
+      "title": "Manage a space’s support contract",
+      "description": "Read monthly hours across all support contracts or for one space. Set terms and invoice through the space’s yearly plan, or log time with a note. Only a platform admin can change terms or log time.",
+      "input": {
+        "space": {
+          "type": "string",
+          "description": "the space by its subdomain"
+        },
+        "op": {
+          "type": "string",
+          "enum": [
+            "set",
+            "log"
+          ],
+          "description": "set the terms and invoice, or log time"
+        },
+        "annual": {
+          "type": "string",
+          "description": "annual support fee, in US dollars"
+        },
+        "onboarding": {
+          "type": "string",
+          "description": "one-time onboarding fee, in US dollars"
+        },
+        "hours": {
+          "type": "string",
+          "description": "included build hours per calendar month"
+        },
+        "email": {
+          "type": "string",
+          "description": "the provider’s direct email address, blank to offer phone only"
+        },
+        "phone": {
+          "type": "string",
+          "description": "the provider’s direct phone in international format, blank to offer email only"
+        },
+        "start": {
+          "type": "string",
+          "description": "contract start date, YYYY-MM-DD"
+        },
+        "renewal": {
+          "type": "string",
+          "description": "first renewal date, YYYY-MM-DD. Use the plan renewal date on an existing subscription."
+        },
+        "provider": {
+          "type": "string",
+          "description": "the support provider’s yaks.app account email; uses the current provider or the signed-in person when omitted"
+        },
+        "billing": {
+          "type": "string",
+          "enum": ["platform", "terms"],
+          "description": "platform adds the support charge to the yearly plan; terms saves terms without new billing"
+        },
+        "billing_email": {
+          "type": "string",
+          "description": "invoice recipient, required to start a yearly Pro plan"
+        },
+        "billing_name": {
+          "type": "string",
+          "description": "name on the first plan invoice, defaults to the space’s name"
+        },
+        "minutes": {
+          "type": "string",
+          "description": "whole minutes of work to log"
+        },
+        "day": {
+          "type": "string",
+          "description": "date the work was done, defaults to today (UTC)"
+        },
+        "note": {
+          "type": "string",
+          "description": "what was worked on"
+        },
+        "as": {
+          "type": "string",
+          "description": "the platform admin’s yaks.app connection"
+        }
+      },
+      "positional": [
+        "space",
+        "op"
+      ],
+      "openWorld": true
+    },
     "admin_comp": {
       "tool": true,
       "destructive": false,

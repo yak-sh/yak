@@ -67,18 +67,23 @@ export let deskSide = (at: DeskPage, view: Setting, env: Host) => {
         id: 'side-space',
         label: 'This space',
         heading: true,
-        items: at.member ? [item('operator', 'Operator')] : [
-          item('apps', 'Apps'),
-          item('people', 'People'),
-          item('operator', 'Operator'),
-          item('connections', 'Connections'),
-          item('visits', 'Visits'),
-          ...(at.shops ? [item('selling', 'Selling')] : []),
-          item('billing', 'Billing'),
-          item('settings', 'Space settings'),
-          item('domains', 'Domains'),
-          item('trash', 'Trash'),
-        ],
+        items: at.member
+          ? [
+            item('operator', 'Operator'),
+            ...(at.supportAvailable ? [item('billing', 'Billing')] : []),
+          ]
+          : [
+            item('apps', 'Apps'),
+            item('people', 'People'),
+            item('operator', 'Operator'),
+            item('connections', 'Connections'),
+            item('visits', 'Visits'),
+            ...(at.shops ? [item('selling', 'Selling')] : []),
+            item('billing', 'Billing'),
+            item('settings', 'Space settings'),
+            item('domains', 'Domains'),
+            item('trash', 'Trash'),
+          ],
       }],
     },
     sections: [{

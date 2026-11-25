@@ -58,6 +58,7 @@ import type {
   Changed,
   Per,
   Plans,
+  RecurringAddOn,
   Standing,
   Subscription,
   Tags,
@@ -474,30 +475,59 @@ export let invoice = async (env: Env, req: Request, space: Space, to: To) => {
   let bad = badTo(to)
   if (bad) return bad
   let email = await dir.emailAt(person) ?? ''
-  let seen = space.plan
   try {
-    let made = await lent.invoice({
-      payer: await payerFor(env, lent, space, email),
-      ...INVOICED,
-      to,
-      due: DUE,
-      key: `invoice|${space.eid}|${seen?.subscription ?? ''}|${seen?.at ?? ''}`,
-      tags: tagsOf(env, space),
-      trial: free,
-    })
+    await invoicePlan(env, dir, space, lent, to, email)
     step(env, 'checkout', req, { who: email })
-    await follow(
-      env,
-      dir,
-      space,
-      planOf(made.subscription, made.at, lent.standing),
-      lent.standing,
-    )
     return null
   } catch (e) {
     defect(e, { request: 'POST billing invoice' })
     return "We couldn't send that invoice. It's been logged; try again in a minute"
   }
+}
+
+/** The invoiced-plan purchase shared by the Billing page and admin. */
+export let invoicePlan = async (
+  env: Env,
+  dir: Dir,
+  space: Space,
+  lent: Plans,
+  to: To,
+  email: string,
+  addOn?: RecurringAddOn,
+) => {
+  let seen = space.plan
+  let payer = await payerFor(env, lent, space, email)
+  let previous = addOn &&
+    (await lent.subscriptions(payer)).find((sub) =>
+      sub.tags.support_contract == addOn.key &&
+      lent.standing(sub.status) != 'ended'
+    )
+  let made = previous
+    ? {
+      subscription: previous,
+      at: new Date(env.CLOCK?.now() ?? Date.now()).toISOString(),
+    }
+    : await lent.invoice({
+      payer,
+      ...INVOICED,
+      to,
+      due: DUE,
+      key: `invoice|${space.eid}|${seen?.subscription ?? ''}|${seen?.at ?? ''}`,
+      tags: {
+        ...tagsOf(env, space),
+        ...addOn ? { support_contract: addOn.key } : {},
+      },
+      trial: freeThrough(space),
+      addOn,
+    })
+  await follow(
+    env,
+    dir,
+    space,
+    planOf(made.subscription, made.at, lent.standing),
+    lent.standing,
+  )
+  return made.subscription
 }
 
 // ---- AI credit -----------------------------------------------------------

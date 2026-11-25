@@ -69,6 +69,7 @@ import {
   storesNow,
   storeUpload,
   supportAnswer,
+  supportContracts,
   supportNow,
   supportWaiting,
   tunnelNow,
@@ -619,6 +620,49 @@ export let runs = (
         ? await budgetNow(at.bearer, space!)
         : await setBudget(at.bearer, space!, dollars == 'plan' ? '' : dollars)
       return [said(call, budgetLines(now))]
+    }),
+
+    admin_support_contract: verb(async (call) => {
+      let a = argsOf(call)
+      let space = word(a, 'space')
+      let op = word(a, 'op')
+      let keys = [
+        'annual',
+        'onboarding',
+        'hours',
+        'email',
+        'phone',
+        'start',
+        'renewal',
+        'provider',
+        'billing',
+        'billing_email',
+        'billing_name',
+        'minutes',
+        'day',
+        'note',
+      ]
+      if (op && !space) throw new CallError('space', 'Name the space.')
+      let at = await (op ? writing(a) : acting(a))
+      let changes = op
+        ? Object.fromEntries([
+          ['op', op],
+          ...keys.flatMap((key) => {
+            let value = word(a, key)
+            return value == null ? [] : [[key, value]]
+          }),
+        ])
+        : undefined
+      return [
+        said(
+          call,
+          JSON.stringify(
+            await supportContracts(at.bearer, space, changes),
+            null,
+            2,
+          ),
+        ),
+      ]
     }),
 
     admin_comp: verb(async (call) => {

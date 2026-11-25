@@ -419,8 +419,9 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   }
   if (view == 'billing') {
     body = [
-      payment(at, env, 'billing'),
-      domainRenewals(at.space, at.renewals ?? []),
+      at.member ? null : payment(at, env, 'billing'),
+      at.support,
+      at.member ? null : domainRenewals(at.space, at.renewals ?? []),
     ]
   }
   if (view == 'connections') body = connectionsPage(at, env)

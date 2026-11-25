@@ -372,6 +372,7 @@ export let payments: Config & { via: string } = {
     facets: ['graph'],
     with: {
       key: { secret: 'STRIPE_KEY' },
+      invoiceKey: { secret: 'STRIPE_INVOICE_KEY' },
       client: { secret: 'STRIPE_CLIENT_ID' },
       clock: { binding: 'CLOCK' },
       prices: {

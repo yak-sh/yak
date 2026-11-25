@@ -1,3 +1,5 @@
+import { Stale } from '@yaks/graph/errors'
+import { CONTRACT_REQUEST, requestAsk } from '@yaks/platform/support-contract'
 import { type Built, type Line, line as q, sub } from '@yaks/query'
 import {
   openedIn,
@@ -2407,6 +2409,25 @@ export let operatorRequest = async (
         }),
       )
       : missing()
+  }
+  if (path == CONTRACT_REQUEST) {
+    if (!access.administrative) return missing()
+    let ask = requestAsk(person, {
+      id: String(args.id),
+      space: String(args.space),
+      name: String(args.name),
+      replyTo: String(args.replyTo),
+      words: String(args.words),
+    })
+    try {
+      await store.g.apply([{
+        ...ask,
+        $was: { decision: { question: null } },
+      }], { trusted: true })
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+    }
+    return Response.json({ eid: ask.entity.eid })
   }
   // Their Updates from the Operator, and what they do there.
   if (path == '/operator/updates') {

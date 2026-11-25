@@ -1,3 +1,6 @@
+import { mint } from '@yaks/graph'
+import { contactCard } from '@yaks/platform/support-contract-view'
+import { supportFor } from './support-contracts.ts'
 // The dashboard, at the apex: the person's own pages and each space's, drawn
 // and their forms saved. apps.ts serves a space's pages and loads this on the
 // first request to `/manage`, so an isolate that only serves pages never
@@ -426,6 +429,28 @@ export let manage = async (
     return await operatorAnswer(req, env, space, who) ??
       desk(req, env, dir, space, who, view)
   }
+  if (
+    reading && view == 'billing' && role && !space.trashed &&
+    who.role != 'owner'
+  ) {
+    let support = await supportFor(env, space)
+    if (support) {
+      return deskPage({
+        person,
+        space: space.slug,
+        spaceEid: space.eid,
+        apps: [],
+        member: true,
+        supportAvailable: true,
+        view: 'billing',
+        support: contactCard(space.slug, support, {
+          id: mint(),
+          sent: url.searchParams.get('support') == 'sent',
+          log: support.contract.provider == person,
+        }),
+      }, env)
+    }
+  }
   if (who.role != 'owner') {
     // Of a space they don't own, a member who may change it has its
     // Operator, which every other page of it sends them to.
@@ -822,6 +847,9 @@ let desk = async (
       : undefined,
   ])
   let connected = await inHand(agentsRow)
+  let support = view == 'billing' || view == 'operator' && who.role != 'owner'
+    ? await supportFor(env, space)
+    : null
   let page = deskPage({
     person: who.person,
     // Apps' and New app's rows carry the agents connected, where in hand; a
@@ -859,6 +887,14 @@ let desk = async (
       },
       held,
     },
+    supportAvailable: !!support,
+    support: view == 'billing' && support
+      ? contactCard(space.slug, support, {
+        id: mint(),
+        sent: q.get('support') == 'sent',
+        log: support.contract.provider == who.person,
+      })
+      : undefined,
     renewals,
     spaces: picks.some((s) => s.slug == space.slug) ? picks : [
       {
