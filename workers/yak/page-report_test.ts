@@ -33,11 +33,9 @@ let loaded = (
   before?: (window: Window) => void,
 ) => {
   let { document, window } = parseHTML(html)
-  let [first, ...rest] = [
-    ...document.querySelectorAll<HTMLScriptElement>(
-      'script:not([type=importmap])',
-    ),
-  ]
+  let first = document.querySelector<HTMLScriptElement>(
+    'script:not([type=importmap])',
+  )!
   let sent: { url: string; body: Blob }[] = []
   Object.defineProperty(document, 'currentScript', { value: first })
   // linkedom resolves no base, and the wrapper reads addresses against it.
@@ -87,17 +85,13 @@ let loaded = (
     () => 0,
     () => {},
   )
-  return { document, window, first, rest, sent, fetch: scope.fetch }
+  return { document, window, first, sent, fetch: scope.fetch }
 }
 
 let ran = async (own: string, frame = at, page = at) => {
   let html = await shell({}, 'Operator', null, 200, own).text()
-  let { window, first, rest, sent } = loaded(html, page)
-  for (
-    let script of rest.filter((s) =>
-      !s.src && !s.matches('[data-yak-early-report], [data-yak-open]')
-    )
-  ) {
+  let { document, window, first, sent } = loaded(html, page)
+  for (let script of document.querySelectorAll('main script:not([src])')) {
     try {
       new Function(script.textContent ?? '')()
     } catch (error) {
