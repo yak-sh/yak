@@ -25,8 +25,9 @@
 // word its code lacks from a word nobody declares, and the newer code's
 // answer is the one the call gets. A resend the newer code answers is the
 // recovery working and reports nothing (T-2141). A store still behind after
-// every resend has its refusal answered as a refusal and reported under the
-// word it refused (`settled`, `behind`, door.ts `storeOf`).
+// every resend is reported under the word it refused. A directory compiler
+// refusal still unconfirmed by the caller stays a 503 (`settled`, `behind`,
+// door.ts `storeOf`).
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
 // upload time on every deploy, the same for the Worker and every object it
@@ -384,13 +385,9 @@ export let skewed = async (
 export type Refusal = { status: number; body: unknown }
 
 /**
- * The answer a call gets when every resend met a store still behind its
- * caller (@yaks/durable-object `resending`'s `settled`): the refusal that
- * store gave, as the refusal it is. The older code's word is the only one
- * there is yet; a refusal the newer code would repeat is the caller's own
- * mistake, and one it would not lasts only until the runtime moves the
- * store, so the caller reports it. Either way a deploy never fails a
- * person's call with a 500. Null for any other failure.
+ * The answer when every resend met a store still behind its caller. A
+ * directory query whose compiler refusal the caller did not confirm is
+ * still waiting for the new code. Give that failure its own status.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -406,12 +403,22 @@ export type Refusal = { status: number; body: unknown }
  * assertEquals(settled(new Error('Network connection lost.')), null)
  * ```
  */
-export let settled = (failure: unknown): Response | null => {
+export let settled = (
+  failure: unknown,
+  directoryRead = false,
+): Response | null => {
   if (!(failure instanceof Error) || !failure.message.startsWith(SKEWED)) {
     return null
   }
-  let said = (failure as { said?: { refusal?: Partial<Refusal> } }).said
+  let said = (failure as {
+    said?: { refusal?: { status?: number; body?: Partial<RefusalBody> } }
+  }).said
   let { status, body } = said?.refusal ?? {}
+  if (
+    directoryRead && (body?.error == 'Unknown' || body?.error == 'Unsupported')
+  ) {
+    return Response.json(said, { status: 503 })
+  }
   let why = failure.message.slice(SKEWED.length).trim()
   return Response.json(body ?? { error: 'Refused', message: why }, {
     status: typeof status == 'number' && status >= 400 && status < 500

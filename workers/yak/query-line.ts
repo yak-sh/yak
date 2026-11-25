@@ -21,14 +21,33 @@ export let scope = (line: string) => {
 /** Check a vocabulary refusal against the current code using no store data.
  * A newly readable query must keep its retry, including projections whose
  * syntax the older compiler refused. */
+let compileLine = (line: string, vocab: Vocab) => {
+  let query = kinded(vocab, parse(line))
+  compile(projection(vocab, query)?.query ?? query, vocab)
+}
+
+export let readable = (line: string, vocab: Vocab): boolean => {
+  try {
+    compileLine(line, vocab)
+    return true
+  } catch (e) {
+    if (
+      e instanceof Unknown || e instanceof Unsupported ||
+      e instanceof SyntaxError
+    ) {
+      return false
+    }
+    throw e
+  }
+}
+
 export let confirmedRefusal = (
   line: string,
   vocab: Vocab,
   old: Partial<Refusal>,
 ): Unknown | Unsupported | undefined => {
   try {
-    let query = kinded(vocab, parse(line))
-    compile(projection(vocab, query)?.query ?? query, vocab)
+    compileLine(line, vocab)
   } catch (e) {
     if (e instanceof Unknown && old.error == e.name && old.prop == e.prop) {
       return e

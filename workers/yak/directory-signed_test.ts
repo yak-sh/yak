@@ -289,7 +289,7 @@ for (
     let f = independent(), time = clock()
     let transport = signedDirectory({ fetch }, f.door, time)
     let answer = observing(transport.fetch(query('page')))
-    for (let n = 0; n < 80; n++) {
+    for (let elapsed = 0; elapsed < FENCE_WAIT; elapsed += 250) {
       await time.advance(250)
       await flush()
     }

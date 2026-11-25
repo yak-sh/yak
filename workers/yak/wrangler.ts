@@ -17,6 +17,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
+import type { Metafile } from 'esbuild'
 import { parse, stringify } from 'smol-toml'
 import { imaged } from './sandbox/base.ts'
 import { installed } from '@yaks/cli/dependencies'
@@ -472,6 +473,38 @@ let contents = (
 let shipped = (path: string) =>
   !path.endsWith('.map') && !path.startsWith('metafile.json')
 
+// The query compiler and the vocabulary loaded by stores are their read
+// interface. Use the sources of the shipped compiler so chunk reshuffling
+// and changes elsewhere in the Worker don't interrupt active objects.
+let compiler =
+  /^(?:\.\.\/\.\.\/packages\/(?:query|sql|match|vocab)\/|\.\.\/\.\.\/packages\/graph\/projection\.ts$)/
+let graphDigest = async (root: string, meta: string) => {
+  let [{ appVocab, storeWords }, { vocabFacets }, { operatorVocab }] =
+    await Promise.all([
+      import('./vocab.ts'),
+      import('./load.ts'),
+      import('./operator-store.ts'),
+    ])
+  let { inputs } = JSON.parse(io.readTextFileSync(meta)) as Metafile
+  let files = Object.fromEntries(
+    Object.keys(inputs).filter((p) => compiler.test(p)).map((
+      p,
+    ) => [p, io.readFileSync(join(root, p))]),
+  )
+  return uploadDigest(
+    JSON.stringify([
+      appVocab().docs,
+      storeWords('directory').docs,
+      storeWords('git').docs,
+      operatorVocab.docs,
+      Object.values(vocabFacets).map((facet) => facet.docs),
+    ]),
+    files,
+  )
+}
+
+let graphOf = (message: string) => /^graph:([a-f0-9]{64})$/m.exec(message)?.[1]
+
 /** What the kernel's deploy runs: its upload, its version annotated with the
  * digest of its inputs ({@link inputsOf}: config, served executor, flags,
  * modules and assets), or, when the single version serving was made from the
@@ -484,10 +517,11 @@ let shipped = (path: string) =>
  * asked. */
 export let kernelStep = async (
   argv: string[],
-  { args, output, executor }: {
+  { args, output, executor, graph }: {
     args: string[]
     output?: string
     executor?: string
+    graph?: string
   },
   read: Reads = cloudflare,
   root = dir,
@@ -510,24 +544,32 @@ export let kernelStep = async (
     argv,
     files,
   )
-  let message = noted(argv[said + 1], `inputs:${digest}`)
+  let message = noted(
+    argv[said + 1],
+    ...graph ? [`graph:${graph}`] : [],
+    `inputs:${digest}`,
+  )
   let deployments = await serving
-  if (
-    await sameServing(
-      digest,
-      deployments,
-      async (id) => await read.version('wrangler.toml', id, env) ?? null,
+  let live = sole(deployments)
+  let version = live?.versions[0]?.version_id
+  let annotation = once(async () => {
+    if (!version) return null
+    let detail = await read.version('wrangler.toml', version, env).catch(() =>
+      null
     )
+    return detail?.id == version ? detail : null
+  })
+  if (
+    await sameServing(digest, deployments, annotation)
   ) {
-    let { versions: [live] } = sole(deployments)!
     console.log(
       `wrangler.toml: unchanged upload ${digest.slice(0, 12)} — ` +
-        `deploying serving version ${live.version_id} under this commit`,
+        `deploying serving version ${version} under this commit`,
     )
     return [
       'versions',
       'deploy',
-      `${live.version_id}@100%`,
+      `${version}@100%`,
       '--yes',
       '--message',
       message,
@@ -536,6 +578,19 @@ export let kernelStep = async (
   }
   let annotated = [...args]
   annotated[annotated.indexOf('--message') + 1] = message
+  if (
+    graph &&
+    !args.some((a) => a == UPDATE_MODE || a.startsWith(`${UPDATE_MODE}=`))
+  ) {
+    let previous = graphOf(messageOf(live)) ??
+      graphOf(messageOf(await annotation()))
+    if (previous != graph) {
+      console.log(
+        'The graph read interface changed. Durable Objects update immediately.',
+      )
+      annotated.push(UPDATE_MODE, 'immediate')
+    }
+  }
   return annotated
 }
 
@@ -856,7 +911,7 @@ export let bundled = async (
       (parsed) =>
         direct(parsed, Object.values(planned(join(root, 'public')).names)),
     )
-    return { args: [...upload, '-c', config], output, remove }
+    return { args: [...upload, '-c', config], output, meta, remove }
   } catch (error) {
     remove()
     throw error
@@ -1250,7 +1305,7 @@ export let updateMode = async (
   note(
     why
       ? `production is failing (${why}); Durable Objects take this deploy immediately`
-      : `${url} answers; Durable Objects take this deploy deferred (wrangler.toml)`,
+      : `${url} answers`,
   )
   return why ? [UPDATE_MODE, 'immediate'] : []
 }
@@ -1475,9 +1530,12 @@ if (import.meta.main) {
       allowed: still,
     })
   // The kernel's deploy goes live in a step of its own, the guard's look
-  // right before it (`staged`), in the update mode the probe chose.
+  // right before it (`staged`), in the update mode its graph and probe chose.
   let deploy = async (argv: string[]) => {
-    let args = deploying(argv) ? [...argv, ...await mode] : argv
+    let override = deploying(argv) ? await mode : []
+    let args = override.length
+      ? [...without(UPDATE_MODE, argv), ...override]
+      : argv
     return door && command(args) == 'deploy'
       ? stagedDeploy(
         args,
@@ -1551,6 +1609,9 @@ if (import.meta.main) {
           args: composed.args,
           output: bundle.output,
           executor: served.value,
+          graph: bundle.meta && !argv.includes('--dry-run')
+            ? await graphDigest(dir, bundle.meta)
+            : undefined,
           remove: () => {
             composed.remove()
             bound.remove()

@@ -288,9 +288,8 @@ class_name = "Chats"
 # object onto the latest code, including work that started after that deploy.
 # Give a busy Operator time for the model and its tools across a deploy burst.
 # Idle objects still take the new version when they next wake (T-2212). A
-# deploy while production fails its probe goes live with immediate updates
-# instead, so a fix reaches objects that fail every request (wrangler.ts
-# `updateMode`, T-2954).
+# deploy that changes the graph read interface or finds the production probe
+# failing uses immediate updates (wrangler.ts, T-3741 and T-2954).
 [durable_objects.code_update_strategy]
 mode = "deferred"
 max_delay = 1800

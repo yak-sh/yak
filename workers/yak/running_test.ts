@@ -9,6 +9,12 @@ import { installPair, made } from '../../packages/workerd/testing.ts'
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { doorOf, fetchOf, storeOf } from './door.ts'
 import { evicted } from '@yaks/durable-object'
+import { backoff } from '@yaks/durable-object/resets'
+import { sleep } from '@yaks/fp'
+import { refuse } from '@yaks/api'
+import { compile } from '@yaks/sql'
+import { loadVocab, Unknown } from '@yaks/vocab'
+import { parse } from '@yaks/query'
 import { Store } from './graph.ts'
 import { Wire } from './stream.ts'
 import { Builder } from './build.ts'
@@ -17,14 +23,24 @@ import {
   learn,
   owed,
   ran,
+  skewed,
   WORKER_VERSION,
   WORKER_VERSION_AT,
 } from './running.ts'
 import { kvStorage, state } from './testing.ts'
 import { within } from './defects.ts'
-import { KERNEL } from './meta.ts'
+import { answered, KERNEL, metaOf } from './meta.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { mint, token } from '@yaks/graph'
+import { type Bundle, mint, token } from '@yaks/graph'
+import {
+  EPOCH,
+  READS,
+  readsAnswer,
+  servingDirectory,
+} from './directory-copy.ts'
+import { platformVocab } from './vocab.ts'
+import { oneContract } from '@yaks/platform/support-contract-service'
+import { walkTo } from './directory.ts'
 
 let A = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
 let B = { id: 'b', timestamp: '2026-10-12T16:30:00Z' }
@@ -403,6 +419,178 @@ test('a projection fixed in the newer query compiler still retries across deploy
   assertEquals([sends, status, body, reports], [2, 200, [{
     comped: { until: '2026-12-01' },
   }], []])
+})
+
+let space = mint(), app = mint(), hostname = mint(), contract = mint()
+let host = 'crayons.example'
+let serves = `.hostnames_serves.hostname.name=${host}`
+let domain = `(.hostname.name=${host})|(.app&${serves})|` +
+  `(.space&(${serves}|.apps${serves}))`
+let v = platformVocab()
+let withoutSupport = loadVocab(v.docs.map((doc) => ({
+  ...doc,
+  $defs: Object.fromEntries(
+    Object.entries(doc.$defs ?? {}).filter(([word]) =>
+      !word.startsWith('support_contract')
+    ),
+  ),
+})))
+let updated = new Store(state(PLATFORM_STORE), {
+  CF_VERSION_METADATA: B,
+  CLOCK: clock(),
+})
+let seeded = await updated.fetch(
+  new Request('http://store/apply', {
+    method: 'POST',
+    headers: { 'x-store': PLATFORM_STORE, ...KERNEL },
+    body: JSON.stringify([
+      { entity: { eid: space }, space: { slug: 'crayons', store: 'crayons' } },
+      { entity: { eid: app }, app: { slug: 'coloring', space, version: 1 } },
+      {
+        entity: { eid: hostname },
+        hostname: { name: host, serves: app, space },
+      },
+      {
+        entity: { eid: contract },
+        support_contract: { space, monthly: 120, start: '2026-11-01' },
+      },
+    ]),
+  }),
+)
+assertEquals(seeded.status, 200, await seeded.text())
+
+// The previous Directory's batch body has one status per line. Only its
+// single query route sends the deployment-skew envelope on the wire.
+let rollout = (
+  read: (q: string) => Response,
+  time?: ReturnType<typeof clock>,
+) => {
+  learn(B)
+  let old = true, paths: string[] = []
+  let previous = async (req: Request) => {
+    let { pathname, searchParams } = new URL(req.url)
+    paths.push(pathname)
+    if (!old || (time?.now() ?? 0) >= 16_000) return updated.fetch(req)
+    if (pathname == READS) {
+      return readsAnswer(searchParams.getAll('q').map(read))
+    }
+    let answer = read(searchParams.get('q')!)
+    let lag = await skewed(req.headers, A, answer)
+    if (!lag) return answer
+    let { name, message, retryable, running, caller, refusal } = lag
+    return Response.json({
+      error: name,
+      message,
+      retryable,
+      running,
+      caller,
+      refusal,
+    }, {
+      status: 503,
+    })
+  }
+  let door = storeOf(
+    {
+      idFromName: (name) => name,
+      get: () => ({ fetch: previous }),
+    },
+    PLATFORM_STORE,
+    undefined,
+    (ms) => {
+      if (time) return sleep(ms, undefined, time)
+      old = false
+      return Promise.resolve()
+    },
+  )
+  let via = servingDirectory(
+    {
+      fetch: (req) => {
+        let { pathname, search } = new URL(req.url)
+        return door(pathname + search, req, KERNEL)
+      },
+    },
+    time && {
+      time,
+      copy: {
+        begin: () => Promise.resolve(0),
+        finish: () => Promise.resolve(true),
+        put: () => Promise.resolve(true),
+        get: () => Promise.resolve(null),
+      },
+    },
+  )
+  let ask = (q: string) =>
+    via.fetch(
+      new Request(`http://store/query?q=${encodeURIComponent(q)}`),
+    )
+  let rows = async (q: string): Promise<Bundle[]> => {
+    let answer = await ask(q)
+    if (!answer.ok) throw await answered(answer)
+    return await answer.json()
+  }
+  return { rows, ask, paths }
+}
+
+test('a custom-domain lookup waits through the older reverse-association compiler refusal', async () => {
+  // The refusal the CrayonBloom request received from the old compiler.
+  let { paths, rows } = rollout(() => refuse(new Unknown('hostnames_serves')))
+  let found = await within({}, {}, () => rows(domain))
+  assertEquals(
+    found.map((row) => row.entity.eid).sort(),
+    [space, app, hostname].sort(),
+  )
+  assertEquals(paths, ['/query', '/query'])
+})
+
+test('Billing reads the support contract through a batch during a Directory rollout', async () => {
+  let time = clock()
+  let { paths, rows, ask } = rollout((q) => {
+    try {
+      compile(parse(q), withoutSupport)
+      return Response.json([{ entity: { eid: space } }], {
+        headers: { [EPOCH]: '0' },
+      })
+    } catch (e) {
+      return refuse(e)
+    }
+  }, time)
+  let [bill, good, unknown] = await within({}, {}, () =>
+    [
+      oneContract(rows, walkTo('crayons', space), '2026-11-25'),
+      rows('.space'),
+      ask('.unheard_of'),
+    ] as const)
+  let [known, typo] = await Promise.all([good, unknown])
+  assertEquals(time.now(), 0)
+  for (let pause of backoff.pauses) await time.advance(pause)
+  let support = await bill
+  assertEquals(
+    [support?.eid, support?.left, known[0]?.entity.eid, typo.status],
+    [
+      contract,
+      120,
+      space,
+      400,
+    ],
+  )
+  assertEquals(paths[0], READS)
+  assert(paths.slice(1).every((path) => path == '/query'))
+})
+
+test('the trusted Directory read that wakes a restored app carries the kernel vouch across deploys', async () => {
+  learn(B)
+  let old = older(object()), sent = 0
+  let door = storeOf(
+    {
+      idFromName: (name) => name,
+      get: () => ({ fetch: (req) => (sent++, old.fetch(req)) }),
+    },
+    PLATFORM_STORE,
+    undefined,
+    unpaused,
+  )
+  assertEquals(await metaOf(door).query('.space', { trusted: true }), [])
+  assertEquals(sent, 1)
 })
 
 test("a refused subscription on a newer caller's directory socket leaves the socket and the directory running", async () => {

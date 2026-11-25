@@ -19,7 +19,7 @@ import { background, caught, defect } from './defects.ts'
 import { behind, settled, stamp, unserved } from './running.ts'
 import { confirmedRefusal } from './query-line.ts'
 import { type Refusal, refuse } from '@yaks/api'
-import { staleRefusal } from '@yaks/api/refuse'
+import { FILED, staleRefusal } from '@yaks/api/refuse'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { evicted, retried } from '@yaks/durable-object/resets'
 import {
@@ -408,14 +408,13 @@ export let storeOf = (
   return resending(doorOf(open, name, app), {
     report: (e, path) =>
       defect(e, { request: `store ${path.split('?')[0]}`, store: name }),
-    // A store still behind after every resend: its refusal, as a refusal,
-    // and reported under the word it refused, since the newer code may well
-    // have taken the call. A resend the newer code answered reports nothing:
-    // that is the recovery working. Under a deferred deploy only the runtime
-    // moves a store onto new code, when it hibernates or its update's delay
-    // runs out (wrangler.toml).
+    // Report a store still behind under the word it refused. A resend the
+    // newer code answered reports nothing.
     settled: (failure, path) => {
-      let answer = settled(failure)
+      let answer = settled(
+        failure,
+        name == PLATFORM_STORE && path.split('?')[0] == '/query',
+      )
       if (answer) {
         defect(
           failure,
@@ -424,6 +423,7 @@ export let storeOf = (
             fault: behind(failure, path),
           },
         )
+        if (answer.status >= 500) answer.headers.set(FILED, '1')
       }
       return answer
     },

@@ -106,16 +106,18 @@ deployed. `yak admin rollback [version]` is for a broken build path and refuses
 to cross a data migration boundary. A Durable Object already migrated keeps its
 data, even when older code is deployed.
 
-A busy Durable Object takes new code up to 30 minutes after its version goes
-live: Cloudflare defers an active object's code update until it hibernates or
-`max_delay` (wrangler.toml, 1800 s) passes. A Builder working an Operator run
-stays on the old version for those minutes while stateless requests serve the
-new one. An object failing every request is busy too, so the deploy door probes
-the demo space's recipe box API first (wrangler.ts `PROBES`), and when it gets a
-5xx or no answer in 10 s, the version goes live with
-`--durable-objects-code-update-mode immediate`: every object takes the new code
-within a minute. To hurry a version that is already live, deploy it again the
-same way:
+A busy Durable Object has up to 30 minutes to finish its work on an ordinary
+deploy. Cloudflare applies the update when the object hibernates or reaches
+`max_delay` in `wrangler.toml`. A deploy that changes the stores' vocabulary or
+the query compiler uses `--durable-objects-code-update-mode immediate`. While
+the update propagates, the shared store door retries queries refused by an older
+version. Signed reads allow 30 seconds for those retries. A confirmed query
+mistake returns its usual refusal. An immediate update can interrupt an active
+Builder, whose next incarnation recovers checkpointed Operator work.
+
+The deploy also uses immediate updates when the demo space's recipe box API
+returns a 5xx or takes more than 10 seconds to answer. To hurry a version that
+is already live, use
 `npx wrangler versions deploy <version>@100% --yes --durable-objects-code-update-mode immediate`.
 To see a fix live in an object, compare the `version` tag on what it reports
 with `admin_deploys`.

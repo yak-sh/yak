@@ -256,6 +256,9 @@ export let meta = (
         hold: background,
         turn: setImmediate,
         clock: env.CLOCK,
+        // Let the store retry within each trip. Two lost trips still fit
+        // within the kernel's response deadline.
+        patience: 24_000,
         wait: (seated) => waiting('directory_wait', seated),
       },
     )

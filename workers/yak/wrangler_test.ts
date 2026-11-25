@@ -31,7 +31,9 @@ import {
   siblingMessage,
   SIBLINGS,
   siblings,
+  staged,
   stagedDeploy,
+  UPDATE_MODE,
   updateMode,
   uploadDigest,
   uploadSibling,
@@ -1079,8 +1081,11 @@ for (
 let kernelDeploy = (
   commit: string,
   serving?: string,
-  { executor, flags = [] }: { executor?: string; flags?: readonly string[] } =
-    {},
+  { executor, flags = [], graph }: {
+    executor?: string
+    flags?: readonly string[]
+    graph?: string
+  } = {},
 ) => {
   let argv = ['deploy', ...flags, '--message', commit]
   let read: Reads = {
@@ -1097,7 +1102,7 @@ let kernelDeploy = (
   let args = [...argv, '-c', 'bundle.toml']
   return kernelStep(
     argv,
-    { args, output: join(built, 'out'), executor },
+    { args, output: join(built, 'out'), executor, graph },
     read,
     built,
   )
@@ -1145,6 +1150,20 @@ test('a commit whose kernel inputs are unchanged deploys the serving version und
     '--message',
     `b\n${made.split('\n')[1]}`,
   ])
+})
+
+test('a changed graph read interface updates objects immediately at promotion', async () => {
+  let graph = 'b'.repeat(64)
+  let previous = `older\ngraph:${'a'.repeat(64)}`
+  let args = await kernelDeploy('change graph', previous, { graph })
+  let steps = staged(args)
+  assert(!steps.upload.includes(UPDATE_MODE))
+  assertEquals(steps.promote('next').slice(-2), [UPDATE_MODE, 'immediate'])
+  assert(args[args.indexOf('--message') + 1].includes(`\ngraph:${graph}\n`))
+  let ordinary = await kernelDeploy('change page', `older\ngraph:${graph}`, {
+    graph,
+  })
+  assert(!ordinary.includes(UPDATE_MODE))
 })
 
 test('a changed module, asset, config, flag or executor uploads; a source map or metafile does not', async () => {

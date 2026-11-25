@@ -15,6 +15,7 @@ import { evicted, jittered, opaque, retried } from '@yaks/durable-object/resets'
 import { type Clock, system, within } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
 import { RETIRED } from './serving-copy.ts'
+import { readable } from './query-line.ts'
 
 export type ServingCopyDoor = {
   read?(key: string): Promise<{ revision: number; body: string } | null>
@@ -349,8 +350,9 @@ let moving = (e: unknown) => evicted(e) || opaque(e)
 export let EPOCH = 'x-yak-directory-revision'
 /** A signed read still fenced asks the directory to mend an orphaned fence. */
 export let MEND = 'x-yak-mend'
-/** How long a signed read waits for a directory write to release its fence. */
-export let FENCE_WAIT = 15_000
+/** A cold or fenced signed read can outlast one full store retry sequence
+ * (22.6 seconds of pauses plus the trips). */
+export let FENCE_WAIT = 30_000
 /** How long a read waits on the directory before asking the copy as well. A
  * far colo's healthy read takes 100 ms and more, so this sits beyond it: every
  * ask of the copy is trips of its own. Once a read of a request has gone this
@@ -384,6 +386,14 @@ export let gathered = (via: Fetcher): Fetcher => {
   let waiting = new WeakMap<object, [Asked[], Asked[]]>()
   let single = ({ req, answer, fail }: Asked) =>
     via.fetch(req).then(answer, fail)
+  // Older stores put query refusals inside a successful batch response. A
+  // line this Worker can compile goes through the version-aware query door.
+  let refusedRead = async (q: string, { status, body }: ReadAnswer) => {
+    if (status != 400) return false
+    if (!['Unknown', 'Unsupported'].includes(refusalName(body))) return false
+    let { platformVocab } = await import('./vocab.ts')
+    return readable(q, platformVocab())
+  }
   let send = async (asked: Asked[]) => {
     if (asked.length == 1) return await single(asked[0])
     let url = new URL(READS, asked[0].req.url)
@@ -406,9 +416,10 @@ export let gathered = (via: Fetcher): Fetcher => {
         () => r.json() as Promise<ReadAnswer[]>,
         `reads of ${asked.length}`,
       )
-      asked.forEach(({ answer }, n) => {
+      await Promise.all(asked.map(async (one, n) => {
         let { status, epoch, body } = answers[n]
-        answer(
+        if (await refusedRead(one.q, answers[n])) return await single(one)
+        one.answer(
           new Response(body, {
             status,
             headers: {
@@ -417,7 +428,7 @@ export let gathered = (via: Fetcher): Fetcher => {
             },
           }),
         )
-      })
+      }))
     } catch (e) {
       for (let { fail } of asked) fail(e)
     }
@@ -766,6 +777,13 @@ export let signedDirectory = (
 let said = (e: unknown) =>
   (e instanceof Error ? e.message : String(e))
     .slice(0, 300)
+let refusalName = (text: string): string => {
+  try {
+    let { error } = JSON.parse(text)
+    if (typeof error == 'string') return error
+  } catch { /* Some older refusals are plain text. */ }
+  return ''
+}
 let message = (text: string) => {
   try {
     let { message } = JSON.parse(text)
