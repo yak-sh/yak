@@ -8,11 +8,11 @@
 // stops it.
 
 import { assert, assertEquals } from '@std/assert'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { line } from '@yaks/query'
 import type { D1Like } from '@yaks/d1'
-import type { Socket } from '@yaks/chat/listen'
+import { type Socket, upgraded } from '@yaks/chat/listen'
 import { d1 } from '../../packages/d1/testing.ts'
 import { connecting } from './connections.ts'
 import { directory, over } from './directory.ts'
@@ -25,7 +25,8 @@ let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
 let TOKEN = 'MTA.own.bot'
 let ME = '1300000000000000001'
 
-let setup = async () => {
+let setup = async (refused?: (url: string) => number | undefined) => {
+  let time = clock()
   let p = platform('a probe secret', {
     VAULT: d1() as unknown as D1Like,
     VAULT_KEY: KEY,
@@ -60,17 +61,22 @@ let setup = async () => {
   // The stand-in Gateway: each socket opened, what was sent on it, and its
   // events to fire.
   type Wire = {
-    url: string
     sent: { op: number; d?: { token?: string } & Record<string, unknown> }[]
     fire: Record<string, Parameters<Socket['addEventListener']>[1]>
     onSend?: (frame: Wire['sent'][number]) => void
     closed?: number
   }
   let wires: Wire[] = []
-  let open = (url: string) => {
-    let w: Wire = { url, sent: [], fire: {} }
-    wires.push(w)
-    return Promise.resolve<Socket>({
+  let attempts: string[] = []
+  let upgrade: typeof fetch = (input, init) => {
+    let url = String(input)
+    assertEquals(new Headers(init?.headers).get('upgrade'), 'websocket')
+    attempts.push(url)
+    let status = refused?.(url)
+    if (status) return Promise.resolve(new Response(null, { status }))
+    let w: Wire = { sent: [], fire: {} }
+    let webSocket: Socket & { accept(): void } = {
+      accept: () => wires.push(w),
       send: (t) => {
         let frame = JSON.parse(t)
         w.sent.push(frame)
@@ -78,7 +84,10 @@ let setup = async () => {
       },
       close: (code) => w.closed = code,
       addEventListener: (type, fn) => w.fire[type] = fn,
-    })
+    }
+    let response = Object.assign(new Response(null), { webSocket })
+    Object.defineProperty(response, 'status', { value: 101 })
+    return Promise.resolve(response)
   }
   let frame = (f: unknown) =>
     Promise.resolve(wires.at(-1)!.fire.message({ data: JSON.stringify(f) }))
@@ -106,7 +115,8 @@ let setup = async () => {
         },
       },
       p.env,
-      open,
+      (url) => upgraded(url, upgrade),
+      time,
     )
     objects.set(name, o)
     return o
@@ -170,6 +180,8 @@ let setup = async () => {
     connection,
     held,
     wires,
+    attempts,
+    time,
     frame,
     asked,
     told,
@@ -177,6 +189,96 @@ let setup = async () => {
     settled,
   }
 }
+
+test('the Chats alarm retries a Gateway 503 and delivers the message replayed on resume', async () => {
+  let down = false
+  let s = await setup(() => down ? 503 : undefined)
+  let alarm = () => s.call(() => s.held.object.alarm())
+  try {
+    await alarm()
+    await s.frame({ op: 10, d: { heartbeat_interval: 45_000 } })
+    await s.frame({
+      op: 0,
+      t: 'READY',
+      s: 42,
+      d: {
+        session_id: 'before-gap',
+        resume_gateway_url: 'wss://resume.test',
+        user: { id: ME, username: 'Kit' },
+      },
+    })
+    down = true
+    s.wires[0].fire.close({ code: 1006 })
+    await s.time.advance(1000)
+    assertEquals(s.attempts.length, 2)
+    assertEquals(s.told, [])
+
+    down = false
+    await alarm()
+    assertEquals(s.attempts.length, 2)
+    await s.time.advance(1000)
+    assertEquals(s.attempts.slice(1), [
+      'https://resume.test/?v=10&encoding=json',
+      'https://resume.test/?v=10&encoding=json',
+    ])
+    await s.frame({ op: 10, d: { heartbeat_interval: 45_000 } })
+    assertEquals(s.wires[1].sent[0], {
+      op: 6,
+      d: { token: TOKEN, session_id: 'before-gap', seq: 42 },
+    })
+    await s.frame({
+      op: 0,
+      t: 'MESSAGE_CREATE',
+      s: 43,
+      d: {
+        id: '1310000000000000001',
+        channel_id: '1310000000000000777',
+        guild_id: '81384788765712384',
+        author: { id: '4242', username: 'ann' },
+        content: `<@${ME}> said during the gap`,
+        timestamp: '2026-11-20T05:40:00.000Z',
+        mentions: [{ id: ME }],
+      },
+    })
+    await s.frame({ op: 0, t: 'RESUMED', s: 44, d: {} })
+    assertEquals(
+      s.asked.map(({ body }) => (body.said as { text: string }).text),
+      [
+        'said during the gap',
+      ],
+    )
+    assertEquals(s.told, [])
+  } finally {
+    await s.call(() => s.held.object.stop())
+  }
+})
+
+test('the Chats alarm reports a sustained Gateway outage once and keeps trying', async () => {
+  let down = true
+  let s = await setup(() => down ? 503 : undefined)
+  try {
+    await s.call(() => s.held.object.alarm())
+    await s.time.advance(120_000)
+    assertEquals(s.told, [])
+    await s.time.advance(60_000)
+    assertEquals(s.told.length, 1)
+    assert(s.told[0].includes(`after ${s.attempts.length} attempts`), s.told[0])
+    assert(s.told[0].includes('503'), s.told[0])
+    let attempts = s.attempts.length
+    await s.time.advance(180_000)
+    assert(s.attempts.length > attempts)
+    assertEquals(s.told.length, 1)
+
+    down = false
+    await s.time.advance(60_000)
+    assertEquals(s.wires.length, 1)
+    assertEquals(await s.call(() => s.held.object.alarm()), {
+      open: true,
+    })
+  } finally {
+    await s.call(() => s.held.object.stop())
+  }
+})
 
 test('a pasted bot listens with its own token, and what it hears is its space’s', async () => {
   let s = await setup()
@@ -241,7 +343,7 @@ test('a final close reaches the tracker in Discord’s words, and pasting the ke
   // Refused its privileged intents, it asks for the needed ones alone;
   // refused those too, it stops.
   s.wires[0].fire.close({ code: 4014 })
-  await s.settled(() => s.wires.length > 1)
+  await s.time.advance(1000)
   s.wires[1].fire.close({ code: 4014 })
   await s.settled(() => s.told.length > 0)
   assert(

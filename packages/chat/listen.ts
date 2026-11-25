@@ -8,6 +8,7 @@
 // awake (a deploy, an eviction), and reads the credential again: a new one
 // starts afresh with it, and none closes the socket.
 
+import { backoff, type Clock, system } from '@yaks/fp'
 import type {
   Media,
   Platform,
@@ -27,6 +28,24 @@ export type Socket = Wire & {
       event: { data?: unknown; code?: number },
     ) => void | Promise<void>,
   ): void
+}
+
+/** Open and accept a Workers socket through its HTTP upgrade. */
+export let upgraded = async (
+  url: string,
+  fetcher: typeof fetch = fetch,
+): Promise<Socket> => {
+  let res = await fetcher(url.replace(/^wss:/, 'https:'), {
+    headers: { upgrade: 'websocket' },
+  })
+  let ws = (res as Response & { webSocket?: Socket & { accept(): void } })
+    .webSocket
+  if (!ws) {
+    await res.body?.cancel()
+    throw new Error(`${url} did not open a socket: ${res.status}`)
+  }
+  ws.accept()
+  return ws
 }
 
 /** What a host gives a listener. */
@@ -54,10 +73,12 @@ export type Hosting = {
   /** the host's timers, for a test to drive */
   every?: (ms: number, fn: () => void) => () => void
   later?: (ms: number, fn: () => void) => void
+  clock?: Clock
 }
 
 /** How often the host's alarm should look that the socket is open. */
 export let WATCH = 60_000
+let OUTAGE = 120_000
 
 export type Status =
   | { open: true }
@@ -79,13 +100,12 @@ let timers = {
     let id = setInterval(fn, ms)
     return () => clearInterval(id)
   },
-  later: (ms: number, fn: () => void) => void setTimeout(fn, ms),
 }
 
 /** A listener for `host`'s platform. Nothing opens until `alarm` runs. */
 export let listener = (host: Hosting): Listener => {
   let every = host.every ?? timers.every
-  let later = host.later ?? timers.later
+  let clock = host.clock ?? system
   let held: ReturnType<typeof holder> | undefined
   // the credential the socket opens with, as the last alarm read it
   let token: string | undefined
@@ -93,6 +113,8 @@ export let listener = (host: Hosting): Listener => {
   let stopBeat = () => {}
   let status: Status = { open: false }
   let opening: Promise<Status> | undefined
+  let retry: { at: number; cancel?: () => void } | undefined
+  let outage: { since: number; attempts: number; reported: boolean } | undefined
   // how many times it was closed: a socket or a reconnect begun before the
   // last close is not its any more
   let era = 0
@@ -107,25 +129,57 @@ export let listener = (host: Hosting): Listener => {
       s?.close(4000)
     } catch { /* it was closing already */ }
   }
-  let follow = (next: { every?: number; again?: boolean }) => {
+  let follow = (s: Socket, next: { every?: number; again?: boolean }) => {
+    if (socket != s) return
     if (next.every) {
       stopBeat()
-      let s = socket!
-      stopBeat = every(next.every, () => follow(held!.beat(s)))
+      stopBeat = every(next.every, () => follow(s, held!.beat(s)))
     }
     if (next.again) {
       drop()
       again()
     }
   }
-  let again = () => {
-    let at = era
-    later(1000, () => void (at == era && open()))
+  let cancelRetry = () => {
+    retry?.cancel?.()
+    retry = undefined
   }
-  // One opening at a time: an alarm while one is under way joins it.
-  let open = (): Promise<Status> =>
-    opening ??= connect().finally(() => opening = undefined)
-  let connect = async (): Promise<Status> => {
+  let again = (ms = 1000) => {
+    let next = retry = { at: clock.now() + ms }
+    let resume = () => {
+      if (retry != next) return
+      retry = undefined
+      return open()
+    }
+    if (host.later) host.later(ms, resume)
+    else retry.cancel = clock.after(ms, resume)
+  }
+  let failed = (error: unknown) => {
+    let now = clock.now()
+    let down = outage ??= { since: now, attempts: 0, reported: false }
+    down.attempts++
+    again(Math.min(WATCH, backoff(down.attempts)))
+    if (down.reported || now - down.since < OUTAGE) return
+    down.reported = true
+    let why = error instanceof Error ? error.message : String(error)
+    host.report(
+      new Error(
+        `${host.platform.title} could not open its socket after ${down.attempts} attempts: ${why}`,
+        { cause: error },
+      ),
+    )
+  }
+  // An alarm joins an opening or leaves a pending retry alone until it is due.
+  let open = (): Promise<Status> => {
+    if (opening) return opening
+    if (retry && clock.now() < retry.at) return Promise.resolve(status)
+    cancelRetry()
+    let pending = connect(era).finally(() => {
+      if (opening == pending) opening = undefined
+    })
+    return opening = pending
+  }
+  let connect = async (at: number): Promise<Status> => {
     try {
       if (socket) return status
       if (!token) {
@@ -144,17 +198,27 @@ export let listener = (host: Hosting): Listener => {
         media: host.media,
         ...pressed ? { pressed: (p: Press[]) => pressed(p, credential) } : {},
       })
-      let at = era
-      let s = await host.open(held.url())
+      let url = held.url()
+      let s: Socket
+      try {
+        s = await host.open(url)
+      } catch (error) {
+        if (at == era) failed(error)
+        return status
+      }
       if (at != era) {
         s.close(4000)
         return status
       }
       socket = s
+      outage = undefined
       status = { open: true }
       s.addEventListener('message', (event) => {
         if (socket != s) return
-        return held!.frame(s, String(event.data)).then(follow, host.report)
+        return held!.frame(s, String(event.data)).then(
+          (next) => follow(s, next),
+          host.report,
+        )
       })
       s.addEventListener('close', (event) => {
         if (socket != s) return
@@ -173,13 +237,16 @@ export let listener = (host: Hosting): Listener => {
       return status
     } catch (error) {
       host.report(error)
-      drop()
+      if (at == era) drop()
       return status
     }
   }
 
   let close = () => {
     era++
+    opening = undefined
+    cancelRetry()
+    outage = undefined
     drop()
     held = undefined
   }

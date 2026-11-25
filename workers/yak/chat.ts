@@ -30,7 +30,7 @@ import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import { type Line, line } from '@yaks/query'
-import { after, system } from '@yaks/fp'
+import { after, type Clock, system } from '@yaks/fp'
 import {
   type Answer,
   type Basics,
@@ -55,7 +55,13 @@ import {
   type Voice,
   within,
 } from '@yaks/chat'
-import { type Listener, listener, type Socket, WATCH } from '@yaks/chat/listen'
+import {
+  type Listener,
+  listener,
+  type Socket,
+  upgraded,
+  WATCH,
+} from '@yaks/chat/listen'
 import { type Act, voiceRooms } from '@yaks/chat/voice'
 import { discord } from '@yaks/discord'
 import type { Chatter } from '@yaks/host/senders'
@@ -1401,20 +1407,6 @@ type State = {
   }
 }
 
-/** A socket at a `wss://` address, opened the way a Worker opens one: an
- * upgrade asked of its `https://` twin. */
-let opened = async (url: string): Promise<Socket> => {
-  let res = await fetch(url.replace(/^wss:/, 'https:'), {
-    headers: { upgrade: 'websocket' },
-  })
-  // A Worker's socket, which is accepted before it is used.
-  let ws = (res as Response & { webSocket?: Socket & { accept(): void } })
-    .webSocket
-  if (!ws) throw new Error(`${url} did not open a socket: ${res.status}`)
-  ws.accept()
-  return ws
-}
-
 /** The object listening on one bot's socket (index.ts `Chats`): yaks.app's
  * own on a platform, named `platform:<name>`, or one a space brought, named
  * `connection:<eid>`. `listen` starts it; its alarm keeps the socket open,
@@ -1424,15 +1416,17 @@ export class Listening {
   #state: State
   #env: Env
   #open: (url: string) => Promise<Socket>
+  #clock: Clock
   #held?: Promise<Listener>
   // The voice rooms its bot is in, as its socket says (@yaks/chat/voice),
   // and the joins waiting on the relay, by server.
   #rooms = voiceRooms()
   #joining = new Map<string, (said: string) => void>()
-  constructor(state: State, env: Env, open = opened) {
+  constructor(state: State, env: Env, open = upgraded, clock = system) {
     this.#state = state
     this.#env = env
     this.#open = open
+    this.#clock = clock
   }
   // The bot it was asked to listen as.
   async #bot(): Promise<Bot | undefined> {
@@ -1466,6 +1460,7 @@ export class Listening {
         ? () => botOf(ctxOf(env), connection)
         : () => platformBot(env, via),
       open: this.#open,
+      clock: this.#clock,
       heard: bound(async (said: Said[]) => {
         for (let s of said) {
           await arrived(env, platform, s, bot).catch((e) =>
@@ -1537,7 +1532,7 @@ export class Listening {
     let l = await this.#listener(bot)
     let was = l.status()
     if ('ended' in was && was.ended) l.close()
-    await storage.setAlarm(Date.now())
+    await storage.setAlarm(this.#clock.now())
     return l.status()
   }
   // What the voice rooms say to do: join or leave a room on the socket,
@@ -1625,7 +1620,7 @@ export class Listening {
       return status
     } finally {
       if (gone) await this.stop()
-      else await this.#state.storage.setAlarm(Date.now() + WATCH)
+      else await this.#state.storage.setAlarm(this.#clock.now() + WATCH)
     }
   }
 }
