@@ -154,7 +154,7 @@ export let manage = async (
     let { reachDoor } = await import('./reach-door.ts')
     let dir = dirOf()
     let who = await whoIs(req, env, () => Promise.resolve(null), null, dir)
-    return reachDoor(req, env, dir, who, c)
+    return reachDoor(req, env, dir, who, c, dirOf)
   }
   let at = managed(url.pathname) ?? spaced(url.pathname)
   if (!at) return nothingHere(env)

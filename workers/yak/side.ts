@@ -62,6 +62,7 @@ import { shelf } from './apps.ts'
 import { kernels } from '@yaks/platform/ladder'
 import { allowancesRow, paymentPart } from '@yaks/platform/payment-rows'
 import { draftedApp, draftedRow } from '@yaks/platform/app-canvas'
+import { withLegacy } from '@yaks/platform/draft-choice'
 import { movedRow, movedSpace } from '@yaks/platform/connections-page'
 import { gauges } from '@yaks/platform/standing'
 import { budget, spent } from '@yaks/platform/meter'
@@ -357,13 +358,15 @@ let draftedRows = async (
   )
   if (!seated) return []
   let { app } = at
-  let [write, drafts] = await Promise.all([
+  let [write, rows] = await Promise.all([
     dir.newestWrite(app),
     dir.drafts(app),
   ])
+  let drafts = withLegacy(app, rows)
   return [draftedRow(person, eid, {
     write,
     drafts: drafts.map((d) => d.eid),
+    previews: drafts.map((d) => d.previewed),
     source: app.source ?? null,
   })]
 }

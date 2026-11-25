@@ -77,7 +77,7 @@ import { AGENTS, disconnecting, GRANTS } from '@yaks/platform/agents'
 import { agentsIn, disconnected } from './agent-rows.ts'
 import { paymentPart, paymentWrite } from '@yaks/platform/payment-rows'
 import { ownedSpace, paymentApply, paymentRead } from './payment-reads.ts'
-import { makingApp } from '@yaks/platform/app-canvas'
+import { DRAFT_PREVIEW, makingApp } from '@yaks/platform/app-canvas'
 import { making, watchMaking } from './canvas-read.ts'
 import {
   actedRow,
@@ -151,6 +151,7 @@ export let reachDoor = async (
   dir: Directory,
   who: Who,
   c: Clock,
+  reopen?: () => Directory,
 ): Promise<Response> => {
   let url = new URL(req.url)
   let door = url.pathname.slice(REACH.length)
@@ -239,6 +240,10 @@ export let reachDoor = async (
     ),
   ]
   try {
+    if (door == DRAFT_PREVIEW && req.method == 'GET') {
+      let { previewDraft } = await import('./app-draft-door.ts')
+      return await previewDraft({ ...caller, reopen }, url.searchParams)
+    }
     if (door == '/query' && req.method == 'GET') {
       let q = new URL(req.url).searchParams
       let line = q.get('q') ?? ''
@@ -339,6 +344,12 @@ export let reachDoor = async (
     }
     if (door == '/apply' && req.method == 'POST') {
       let bundles = await req.json() as Bundle[]
+      if (bundles.length == 1 && bundles[0].appDraftAct) {
+        let { actOnDraft } = await import('./app-draft-door.ts')
+        return Response.json(
+          await actOnDraft({ ...caller, reopen, clock: c }, bundles[0]),
+        )
+      }
       let agent = disconnecting(bundles)
       if (agent != undefined) {
         return Response.json(

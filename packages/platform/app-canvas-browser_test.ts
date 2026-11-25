@@ -19,7 +19,12 @@ import type { MarkedApp } from './routes.ts'
 
 let bound = (app: MarkedApp = RECIPES, making?: Making) => {
   let root = page(view(app))
-  let g = graph(() => Promise.resolve([]))
+  let g = graph((rows) =>
+    Promise.resolve(rows.map(({ entity }) => ({
+      entity,
+      appDraftActed: { said: 'Released v2.' },
+    })))
+  )
   for (let [line, held] of lines([app], making)) g.set(line, held)
   bindCanvas(root, g)
   settled(root)
@@ -41,8 +46,44 @@ let bound = (app: MarkedApp = RECIPES, making?: Making) => {
     [...root.querySelectorAll(`[data-part=${part}] .Rows_Name`)].map((e) =>
       e.textContent
     )
-  return { root, making: making_, renamed, stage, on, pick, names }
+  return {
+    root,
+    making: making_,
+    renamed,
+    stage,
+    on,
+    pick,
+    names,
+    wrote: g.wrote,
+  }
 }
+
+test('releasing from Drafts sends the named draft and keeps the list open when it updates', async () => {
+  let draft = crypto.randomUUID()
+  let current = {
+    ...made(),
+    drafts: [{
+      eid: draft,
+      writers: ['Ana'],
+      paths: ['index.html'],
+      edited: null,
+      behind: true,
+      crossed: [],
+    }],
+  }
+  let { root, pick, making, stage, wrote } = bound(released(), current)
+  pick('drafts')
+  root.querySelector<HTMLButtonElement>('[data-draft-act=release]')!.click()
+  equal(wrote[0][0].appDraftAct, { app: RECIPES.eid, draft, act: 'release' })
+  await Promise.resolve()
+  making({ ...current, drafts: [] })
+  equal(stage(), 'drafts')
+  equal(root.querySelector('[data-draft-status]')?.textContent, 'Released v2.')
+  equal(
+    root.querySelector('[data-part=drafts] .Empty')?.textContent,
+    'No open drafts.',
+  )
+})
 
 test('what an app is made of fills in as the page graph brings it, and the stage is no longer busy', () => {
   let c = bound()

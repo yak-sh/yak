@@ -9,7 +9,14 @@
 import type { Bundle } from '@yaks/graph'
 import { type Built, line } from '@yaks/query'
 import { workflow } from '@yaks/builders/workflow'
-import { appDrafted, type Making, makingRow } from '@yaks/platform/app-canvas'
+import {
+  appDrafted,
+  draftAuthors,
+  type Making,
+  makingRow,
+  shownDrafts,
+} from '@yaks/platform/app-canvas'
+import { editedAt } from '@yaks/platform/draft-choice'
 import { madeOf, pagesOf } from '@yaks/platform/app-made'
 import { VOCABS } from '@yaks/platform/manifest'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -17,7 +24,7 @@ import { CallError } from '@yaks/tools/errors'
 import type { Kept } from '@yaks/api/reached'
 import type { Frame } from '@yaks/reach'
 import { caught } from './defects.ts'
-import type { Directory, Space } from './directory.ts'
+import type { App, Directory, Space } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -26,7 +33,13 @@ import { linkOf } from './preview.ts'
 import { watching } from './reach.ts'
 import { vouched, type Who } from './session.ts'
 import { inApp } from './tool.ts'
-import { type Draft, drafting, draftsOf, theirs } from './written.ts'
+import {
+  type AppDraft,
+  drafting,
+  draftsOf,
+  theirs,
+  type Written,
+} from './written.ts'
 
 type Found = NonNullable<Awaited<ReturnType<typeof inApp>>>
 
@@ -69,12 +82,39 @@ let stepsOf = async (found: Found, space: Space) => {
   }
 }
 
-// When the draft was last written: its newest write, else when it opened.
-let editedAt = ({ rows, of }: Draft) =>
-  rows.reduce<string | null>(
-    (at, w) => w.at && (!at || w.at > at) ? w.at : at,
-    null,
-  ) ?? of?.at ?? null
+let draftList = async (
+  dir: Directory,
+  app: App,
+  drafts: AppDraft[],
+  own: AppDraft | null,
+  written: (app: App, draft: string) => Promise<Written[]>,
+) => {
+  let bases = drafts.map((d) => d.base ?? 0).filter((v) =>
+    v < (app.version ?? 0)
+  )
+  let numbers = bases.length
+    ? [...new Set([app.version!, ...bases])].filter(Boolean)
+    : []
+  let [entries, versions] = await Promise.all([
+    Promise.all(
+      drafts.map(async (draft) => ({
+        draft,
+        rows: await written(app, draft.eid),
+      })),
+    ),
+    Promise.all(numbers.map((version) => dir.deployAt(app, version))),
+  ])
+  let names = await dir.writers(
+    entries.flatMap(({ draft, rows }) => draftAuthors(draft, rows)),
+  )
+  return shownDrafts(
+    entries,
+    names,
+    versions.filter((v) => v != null),
+    app.version,
+    own?.eid,
+  )
+}
 
 // What the app is made of, from the draft the person and their Operator
 // write in (written.ts `theirs`).
@@ -85,12 +125,20 @@ let makingOf = async (
   found: Found,
 ): Promise<Making> => {
   let { app } = found
-  let draft = await drafting(
-    r2RawObjects(env.BLOBS),
-    dir,
-    app,
-    theirs(await draftsOf(dir, app), found.who),
-  )
+  let rows = new Map<string, Promise<Written[]>>()
+  let written = (app: App, draft?: string) => {
+    if (!draft) return dir.written(app)
+    let read = rows.get(draft) ?? dir.written(app, draft)
+    rows.set(draft, read)
+    return read
+  }
+  let drafts = await draftsOf({ ...dir, written }, app)
+  let own = theirs(drafts, found.who)
+  let [draft, list, steps] = await Promise.all([
+    drafting(r2RawObjects(env.BLOBS), { written }, app, own),
+    draftList(dir, app, drafts, own, written),
+    stepsOf(found, space),
+  ])
   let decoded = (bytes: Uint8Array | null) =>
     bytes ? new TextDecoder().decode(bytes) : ''
   let file = VOCABS.find((p) => p in draft.files)
@@ -112,11 +160,12 @@ let makingOf = async (
   return {
     made: madeOf(words && decoded(words), file),
     pages,
-    steps: await stepsOf(found, space),
+    steps,
     draft: shown
       ? (await linkOf(ctx, space, app, found.who, draft.of!)).at
       : null,
-    edited: shown ? editedAt(draft) : null,
+    edited: shown ? editedAt(shown, draft.rows) : null,
+    drafts: list,
   }
 }
 

@@ -20,10 +20,16 @@ import { Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import type { Bundle } from '@yaks/graph'
 import type { Client } from '@yaks/client'
+import { mint } from '@yaks/graph'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
 import { pageGraph } from './page-graph.ts'
 import { appsOf, sideApps, sideWords } from './side-rows.ts'
-import { appCanvasWords, appMaking, makingOf } from './app-canvas.ts'
+import {
+  appCanvasWords,
+  appMaking,
+  type DraftAction,
+  makingOf,
+} from './app-canvas.ts'
 import {
   appCanvas,
   appQuestion,
@@ -36,9 +42,11 @@ import {
   VIEW,
 } from './app-canvas-view.ts'
 import { besideMark, type SideView } from './side-parts.ts'
+import { refusal } from './account-browser.ts'
 
 // The rows the page carried for its first paint stay as they are.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
+let DRAFT_STATUS = '[data-draft-status]'
 
 let OPENING = 'data-canvas-opening'
 
@@ -99,13 +107,21 @@ export let drawCanvas = (root: HTMLElement, held: Held): void => {
     made: checked(root, 'made'),
     preview: checked(root, 'preview'),
   }
+  let status = root.querySelector<HTMLElement>(DRAFT_STATUS)
+  let nextStatus = drawn.querySelector<HTMLElement>(DRAFT_STATUS)
+  if (status && nextStatus) {
+    nextStatus.textContent = status.textContent
+    nextStatus.hidden = status.hidden
+  }
   let went = addresses(root)
   morph(root, drawn, KEPT)
   // A newer stage opens as it is reached; until then the person's pick stays.
   check(
     root,
     'made',
-    root.dataset.stage == stage ? picked.made : root.dataset.stage,
+    picked.made == 'drafts' || root.dataset.stage == stage
+      ? picked.made
+      : root.dataset.stage,
   )
   check(root, 'preview', picked.preview)
   let frames = framesIn(root)
@@ -121,12 +137,59 @@ export let drawCanvas = (root: HTMLElement, held: Held): void => {
   if (open && shown?.dataset.at) open.href = shown.dataset.at
 }
 
+let draftActions = (
+  root: HTMLElement,
+  app: string,
+  graph: Pick<Client, 'mutate'>,
+) => {
+  let pending = false
+  let say = (text: string) => {
+    let status = root.querySelector<HTMLElement>(DRAFT_STATUS)
+    if (!status) return
+    status.hidden = !text
+    status.textContent = text
+  }
+  return async (e: Event) => {
+    let button = (e.target as Element).closest<HTMLButtonElement>(
+      '[data-draft-act]',
+    )
+    if (!button || pending) return
+    let draft = button.closest<HTMLElement>('[data-key]')!.dataset.key!
+    let act = button.dataset.draftAct as DraftAction['act']
+    if (
+      act == 'discard' &&
+      !root.ownerDocument.defaultView?.confirm('Discard this draft?')
+    ) return
+    pending = true
+    button.setAttribute('aria-busy', 'true')
+    say(act == 'release' ? 'Releasing draft…' : 'Discarding draft…')
+    try {
+      let [answer] = await graph.mutate([{
+        entity: { eid: mint() },
+        appDraftAct: { app, draft, act },
+      }], { optimistic: false })
+      let said = answer?.appDraftActed as { said: string } | undefined
+      say(said?.said ?? '')
+    } catch (error) {
+      say(
+        refusal(
+          error,
+          'The result is unknown. Check the drafts before trying again.',
+        ),
+      )
+    } finally {
+      pending = false
+      button.removeAttribute('aria-busy')
+    }
+  }
+}
+
 /** Keep the canvas `root` drawn from `graph`. A page chosen in Commands opens
  * in its frame by itself (its link's target); Preview, and that frame in it,
  * come forward with it. The answer lets go of it all. */
 export let bindCanvas = (
   root: HTMLElement,
-  graph: Pick<Client, 'watch'>,
+  graph: Pick<Client, 'watch' | 'mutate'>,
 ): () => void => {
   let view = JSON.parse(root.dataset.canvasView!) as CanvasRoot
   let watches = {
@@ -154,8 +217,11 @@ export let bindCanvas = (
       ?.dispatchEvent(new win.Event('change', { bubbles: true }))
   }
   root.addEventListener('click', shows)
+  let act = draftActions(root, view.app.eid, graph)
+  root.addEventListener('click', act)
   return () => {
     root.removeEventListener('click', shows)
+    root.removeEventListener('click', act)
     for (let stop of off) stop()
     for (let w of all) w.close()
   }

@@ -1101,12 +1101,15 @@
      stays put, and its preview fills it. */
   .Talk_Made {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--canvas-tabs, 3), minmax(0, 1fr));
     grid-template-rows: auto minmax(0, 1fr);
     height: 100%;
   }
   .Talk_Made:has(> .Tabs_Item:nth-child(4)) {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    --canvas-tabs: 4;
+  }
+  .Talk_Made:has(> .Tabs_Item:nth-child(5)) {
+    --canvas-tabs: 5;
   }
   .Talk_Made .Tabs_Panel {
     grid-column: 1 / -1;

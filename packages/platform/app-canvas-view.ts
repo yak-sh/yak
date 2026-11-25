@@ -21,11 +21,13 @@ import {
   Button,
   Card,
   Check,
+  Chip,
   Empty,
   Icon,
   Identity,
   layer,
   Preview,
+  Rows,
   TabSet,
   Toolbar,
 } from '@yaks/ui/parts'
@@ -35,7 +37,7 @@ import ArrowLeft from 'lucide/dist/esm/icons/arrow-left.mjs'
 import ExternalLink from 'lucide/dist/esm/icons/external-link.mjs'
 import { Time } from '@yaks/ui/Time'
 import { does, keeps, runs } from './app-made.ts'
-import type { Making } from './app-canvas.ts'
+import { draftPreview, type Making, type ShownDraft } from './app-canvas.ts'
 import { appMark, type MarkedApp } from './routes.ts'
 
 /** What the canvas is drawn for, beside its rows: where the space's apps
@@ -105,6 +107,59 @@ let stageOf = (live: string | null, { made, draft }: Making) =>
 // the panel. While both are there a pair of radios switches them (pages.css
 // shows the frame of the checked one, and the other loads once shown), the
 // draft first, since it is what is changing.
+let editedLabel = (at: string) => ['Edited ', h(Time, { at, tabindex: -1 })]
+
+let draftList = (app: string, drafts: ShownDraft[]): Node => [
+  h('p', { role: 'status', 'data-draft-status': '', hidden: true }),
+  !drafts.length ? h(Empty, null, h('p', null, 'No open drafts.')) : h(
+    Rows,
+    { as: 'ul', mod: 'ruled', 'aria-label': 'Open drafts' },
+    drafts.map((d) =>
+      h(
+        Rows.Item,
+        { as: 'li', 'data-key': d.eid },
+        h(
+          Rows.Main,
+          null,
+          h(Rows.Name, null, d.writers.join(', ') || 'Unattributed draft'),
+          h(
+            Rows.Meta,
+            null,
+            d.edited ? editedLabel(d.edited) : 'Edit time unknown',
+          ),
+          d.behind
+            ? h('span', null, h(Chip, { mod: 'quiet' }, 'Behind live'))
+            : null,
+          h(Rows.Meta, null, d.paths.join(', ') || 'No files changed'),
+          d.crossed.length
+            ? h(
+              Rows.Meta,
+              null,
+              'Also changed in a release · ',
+              d.crossed.join(', '),
+            )
+            : null,
+        ),
+        h(
+          Rows.Actions,
+          null,
+          h(Button, {
+            href: draftPreview(app, d.eid),
+            target: '_blank',
+            rel: 'noopener',
+          }, 'Preview'),
+          h(Button, { type: 'button', 'data-draft-act': 'release' }, 'Release'),
+          h(Button, {
+            type: 'button',
+            mod: 'danger',
+            'data-draft-act': 'discard',
+          }, 'Discard'),
+        ),
+      )
+    ),
+  ),
+]
+
 let preview = (
   title: string,
   operator: string,
@@ -123,9 +178,7 @@ let preview = (
     draft && {
       id: 'draft' as const,
       at: draft,
-      said: edited
-        ? ['Edited ', h(Time, { at: edited, tabindex: -1 })]
-        : 'Draft',
+      said: edited ? editedLabel(edited) : 'Draft',
     },
     live && { id: 'live' as const, at: live, said: 'Live' },
   ].filter((x) => !!x)
@@ -191,7 +244,7 @@ export let appCanvas = (
   let stage = stageOf(live, now)
   // Open starts at the frame on screen; location reports keep it current.
   let away = now.draft ?? live
-  let tab = (id: string, name: string, ...inside: Node[]) =>
+  let tab = (id: string, name: Node, ...inside: Node[]) =>
     h(
       TabSet.Item,
       null,
@@ -283,6 +336,14 @@ export let appCanvas = (
           'preview',
           'Preview',
           preview(title, operator, live, now.draft, now.edited),
+        ),
+        now.drafts && tab(
+          'drafts',
+          [
+            'Drafts',
+            now.drafts.length > 0 && h(TabSet.Badge, null, now.drafts.length),
+          ],
+          draftList(app.eid, now.drafts),
         ),
       ),
     ),

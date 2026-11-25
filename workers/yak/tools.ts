@@ -389,7 +389,11 @@ import {
   whatChanged,
 } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
-import { toolDraft } from '@yaks/platform/draft-choice'
+import {
+  crossedPaths,
+  draftPaths,
+  toolDraft,
+} from '@yaks/platform/draft-choice'
 import {
   anew,
   type AppDraft,
@@ -407,6 +411,7 @@ import {
   history,
   modifying,
   NEW,
+  openDraft,
   releasing,
   replaced,
   replayed,
@@ -2414,6 +2419,9 @@ export let released = async (
   // `record`), so only a release that stopped short has one left to lift.
   let released = false
   try {
+    // A draft discarded just before the fence was acquired may already
+    // have a tombstone. Check it is open while this release holds it.
+    if (taken) taken = await openDraft(ctx.dir, standing, taken.eid)
     // A deploy names the shas its draft holds, and a version put back that
     // kept no release names the shas its manifest does: neither reads or
     // copies a byte to make the release. The fence above holds edits off, so
@@ -3460,6 +3468,43 @@ export let call = (ctx: Ctx, name: string, args: Args): Promise<Out> => {
   return tool.run(ctx, args)
 }
 
+/** Discard an open draft and let go of its preview. */
+export let discardOpen = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  of: AppDraft,
+): Promise<Out> => {
+  let paths = draftPaths(await ctx.dir.written(app, of.eid))
+  try {
+    await discarded(ctx.dir, app, of, who)
+  } catch (error) {
+    if (!(error instanceof Stale)) throw error
+    throw refuse(
+      'conflict',
+      'The draft or its app changed. Check the open drafts and try again.',
+    )
+  }
+  background(
+    unbranched(ctx.env, space, app, of).catch((e) =>
+      caught(e, {
+        request: 'drop draft branch',
+        space: space.slug,
+        app: app.slug,
+      })
+    ),
+  )
+  return {
+    text: `discarded draft ${of.eid} of ${space.slug}/${app.slug}: ` +
+      'nothing of it was released. What it wrote stays in each ' +
+      `file's history (${paths.join(', ') || 'it wrote nothing'}); ` +
+      'op: history and op: restore bring a file back.',
+    space,
+    value: { discarded: of.eid },
+  }
+}
+
 // ---- the workbench (sandbox.ts, T-34264) -----------------------------------
 
 /**
@@ -4487,28 +4532,7 @@ let OURS: Row[] = [
               `to discard${all.length ? `; ${whichDraft(all)}` : ''}`,
           )
         }
-        let rows = await ctx.dir.written(app, of.eid)
-        await discarded(ctx.dir, app, of, who)
-        // Its preview's branch goes with it, and everything written there.
-        background(
-          unbranched(ctx.env, space, app, of).catch((e) =>
-            caught(e, {
-              request: 'drop draft branch',
-              space: space.slug,
-              app: app.slug,
-            })
-          ),
-        )
-        return {
-          text: `discarded draft ${of.eid} of ${space.slug}/${app.slug}: ` +
-            'nothing of it was released. What it wrote stays in each ' +
-            `file's history (${
-              [...new Set(rows.map((w) => w.path))].sort().join(', ') ||
-              'it wrote nothing'
-            }); op: history and op: restore bring a file back.`,
-          space,
-          value: { discarded: of.eid },
-        }
+        return await discardOpen(ctx, space, app, who, of)
       }
       if (op == 'list') {
         around().catch(() => {})
@@ -4536,9 +4560,7 @@ let OURS: Row[] = [
         // when: the presence of everyone else editing the app (D-414), which
         // nobody locks.
         let changed = (eid: string) =>
-          [
-            ...new Set(rows.filter((w) => w.draft == eid).map((w) => w.path)),
-          ].sort()
+          draftPaths(rows.filter((w) => w.draft == eid))
         let of = d.of
         let others = (await drafts()).filter((o) => o.eid != of?.eid)
         let names = new Map(
@@ -4555,12 +4577,7 @@ let OURS: Row[] = [
         let base = of?.base ?? version
         // A release since the draft opened that touched a path it changed
         // too: what the draft would put back over, said before it does.
-        let then = all.find((v) => v.version == of?.base)?.files
-        let crossed = of && then && base < version
-          ? ours.filter((path) =>
-            (live?.files[path] ?? null) != (then[path] ?? null)
-          )
-          : []
+        let crossed = of ? crossedPaths(ours, of.base, app.version, all) : []
         // Every fact in the value said in the words too: claude.ai's model
         // reads only the words, and app_deploy's base is the draft's.
         return {

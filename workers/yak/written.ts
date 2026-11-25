@@ -39,7 +39,14 @@ import { assetKey, atRelease, filesAt, filesIn, viewOf } from './release.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { META } from './release_index.ts'
-import { GRACE, LANES, latest, type Pinner, waiting } from './versions.ts'
+import {
+  GRACE,
+  holds,
+  LANES,
+  latest,
+  type Pinner,
+  waiting,
+} from './versions.ts'
 import {
   addressed,
   type Files,
@@ -143,8 +150,23 @@ let openedFor = (app: App, asked: typeof NEW | Opens) =>
  * names as `app.draft` where no row stands for it yet, each one the live
  * release left behind marked ({@link marked}). Never cached: a write chooses
  * among them. */
-export let draftsOf = async (dir: Directory, app: App) =>
-  marked(dir, app, withLegacy(app, await dir.drafts(app)))
+export let draftsOf = async (
+  dir: Pick<Directory, 'drafts' | 'switches' | 'written'>,
+  app: App,
+) => marked(dir, app, withLegacy(app, await dir.drafts(app)))
+
+/** A named open draft, including one an older app still names directly. */
+export let openDraft = async (
+  dir: Pick<Directory, 'draftAt'>,
+  app: App,
+  eid: string,
+): Promise<AppDraft> => {
+  let row = await dir.draftAt(eid)
+  let drafts = withLegacy(app, row?.app == app.eid ? [row.draft] : [])
+  let draft = drafts.find((d) => d.eid == eid)
+  if (!draft) throw refuse('missing', 'This draft was released or discarded.')
+  return draft
+}
 
 /** `drafts` with each one the live release left behind marked `behind`:
  * opened before the live version and last worked in before it went out. A
@@ -493,7 +515,7 @@ export type Draft = {
  * writes laid over them; the serving release's alone with no draft. */
 export let drafting = async (
   raw: Objects,
-  dir: Directory,
+  dir: Pick<Directory, 'written'>,
   app: App,
   of: AppDraft | null,
 ): Promise<Draft> => {
@@ -530,7 +552,7 @@ export let holding = async (raw: Objects, dir: Directory, app: App) => {
 
 // The draft's own writes laid over `base`.
 let over = async (
-  dir: Directory,
+  dir: Pick<Directory, 'written'>,
   app: App,
   of: AppDraft | null,
   base: Promise<Files>,
@@ -845,16 +867,35 @@ export let modifying = async <T>(
 /** A draft closed unreleased (app_files op: discard): its row gone, or
  * for the one `app.draft` names, that pointer. What it wrote stays in each
  * path's history, as a released draft's does. */
-export let discarded = (dir: Directory, app: App, d: AppDraft, who: Who) =>
-  dir.stamp({
-    entities: d.legacy
-      ? [{
+export let discarded = (dir: Directory, app: App, d: AppDraft, who: Who) => {
+  if (app.fence && holds(app.fence, d.eid)) {
+    throw refuse(
+      'conflict',
+      'This draft is being released. Try again when the release finishes.',
+    )
+  }
+  return dir.stamp({
+    entities: [
+      {
         entity: { eid: app.eid },
-        app: { draft: null },
-        $was: { app: { draft: token(d.eid) } },
-      }]
-      : [{ entity: { eid: d.eid }, $delete: true }],
+        ...d.legacy ? { app: { draft: null } } : {},
+        $was: {
+          app: {
+            fence: token(app.fence),
+            version: token(app.version),
+            source: token(app.source),
+            ...d.legacy ? { draft: token(d.eid) } : {},
+          },
+        },
+      },
+      ...d.legacy ? [] : [{
+        entity: { eid: d.eid },
+        $delete: true as const,
+        $was: { app_draft: { branch: token(d.branch) } },
+      }],
+    ],
   }, vouched(who))
+}
 
 /** A delete sent again is already done if this draft records its deletion,
  * or if a competing writer deleted it while the caller retried. */

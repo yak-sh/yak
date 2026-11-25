@@ -1,6 +1,7 @@
 import { relative } from '@yaks/ui/relative'
 import { type Clock, system } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
+import type { Version } from './versions.ts'
 
 /** An open draft, including a legacy draft still named by the app row. */
 export type AppDraft = {
@@ -41,6 +42,30 @@ export let withLegacy = (
 type Draft = Pick<AppDraft, 'eid' | 'at' | 'behind'>
 type Write = { path: string; at: string | null }
 
+/** When the draft was last written, or when it opened. */
+export let editedAt = (draft: Draft, writes: Write[]) =>
+  writes.reduce<string | null>(
+    (at, w) => w.at && (!at || w.at > at) ? w.at : at,
+    null,
+  ) ?? draft.at
+
+/** The paths a draft wrote, including paths it deleted. */
+export let draftPaths = (writes: Pick<Write, 'path'>[]) =>
+  [...new Set(writes.map((w) => w.path))].sort()
+
+/** Paths the draft wrote that differ between its base and live. */
+export let crossedPaths = (
+  paths: string[],
+  base: number | null,
+  live: number | null,
+  versions: Version[],
+) => {
+  if (live == null || (base ?? 0) >= live) return []
+  let before = base ? versions.find((v) => v.version == base)?.files : {}
+  let after = versions.find((v) => v.version == live)?.files
+  return before && after ? paths.filter((p) => before[p] != after[p]) : []
+}
+
 /** The drafts a call that names none may land in: every open draft but
  * those a release left behind. */
 export let current = <D extends Draft>(drafts: D[]) =>
@@ -64,7 +89,7 @@ let optionsOf = (drafts: { draft: Draft; writes: Write[] }[], now: number) =>
         null,
       )
       let age = relative(draft.at ?? first, now) || 'age unknown'
-      let paths = [...new Set(writes.map((w) => w.path))].sort()
+      let paths = draftPaths(writes)
       return `- ${draft.eid} · ${age} · ${
         paths.join(', ') || 'no files changed'
       }`

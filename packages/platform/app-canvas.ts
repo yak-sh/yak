@@ -23,6 +23,69 @@ import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Step } from '@yaks/builders/workflow'
 import type { Made, Page } from './app-made.ts'
+import { REACH } from './page-graph.ts'
+import {
+  type AppDraft,
+  crossedPaths,
+  draftPaths,
+  editedAt,
+} from './draft-choice.ts'
+import type { Version } from './versions.ts'
+
+/** An open draft as the app's writers see it. */
+export type ShownDraft = {
+  eid: string
+  writers: string[]
+  paths: string[]
+  edited: string | null
+  behind: boolean
+  crossed: string[]
+}
+
+type Write = { path: string; at: string | null; by: string | null }
+
+/** The app's draft author, or the writers remembered by the shared draft. */
+export let draftAuthors = (draft: AppDraft, rows: Write[]) =>
+  draft.by ? [draft.by] : [...new Set(rows.flatMap((w) => w.by ? [w.by] : []))]
+
+/** Show the selected draft first, then the others by last edit. */
+export let shownDrafts = (
+  entries: { draft: AppDraft; rows: Write[] }[],
+  names: ReadonlyMap<string, string>,
+  versions: Version[],
+  live: number | null,
+  selected?: string,
+): ShownDraft[] =>
+  entries.map(({ draft, rows }) => {
+    let paths = draftPaths(rows)
+    return {
+      eid: draft.eid,
+      writers: draftAuthors(draft, rows).map((id) =>
+        (names.get(id) ?? 'Unknown writer') +
+        (draft.by && draft.via ? '’s agent' : '')
+      ),
+      paths,
+      edited: editedAt(draft, rows),
+      behind: !!draft.behind,
+      crossed: crossedPaths(paths, draft.base, live, versions),
+    }
+  }).sort((a, b) =>
+    Number(b.eid == selected) - Number(a.eid == selected) ||
+    (b.edited ?? '').localeCompare(a.edited ?? '') ||
+    a.eid.localeCompare(b.eid)
+  )
+
+/** What a writer asks to do with one of the drafts listed on the app. */
+export type DraftAction = {
+  app: string
+  draft: string
+  act: 'release' | 'discard'
+}
+
+export let DRAFT_PREVIEW = '/draft-preview'
+
+export let draftPreview = (app: string, draft: string) =>
+  `${REACH}${DRAFT_PREVIEW}?${new URLSearchParams({ app, draft })}`
 
 /** What an app beside the chat is made of as it is being made: its kinds and
  * commands (./app-made.ts), its pages, its workflow stage by stage, and its
@@ -35,6 +98,7 @@ export type Making = {
   steps: Step[][]
   draft: string | null
   edited: string | null
+  drafts?: ShownDraft[]
 }
 
 let MAKING = '.appMaking.app='
@@ -60,6 +124,7 @@ export let draftedApp = (line: string): string | undefined =>
 export type Drafted = {
   write: string | null
   drafts: string[]
+  previews?: (string | null)[]
   source: string | null
 }
 
@@ -88,8 +153,27 @@ export let appCanvasWords: VocabDoc = {
         steps: list,
         draft: nullable,
         edited: nullable,
+        drafts: list,
       },
       required: ['app', 'made', 'pages', 'steps'],
+    },
+    appDraftAct: {
+      component: true,
+      durable: '0s',
+      type: 'object',
+      properties: {
+        app: { type: 'string' },
+        draft: { type: 'string' },
+        act: { type: 'string', enum: ['release', 'discard'] },
+      },
+      required: ['app', 'draft', 'act'],
+    },
+    appDraftActed: {
+      component: true,
+      durable: '0s',
+      type: 'object',
+      properties: { said: { type: 'string' } },
+      required: ['said'],
     },
     appDrafted: {
       component: true,
@@ -98,6 +182,7 @@ export let appCanvasWords: VocabDoc = {
         app: { type: 'string' },
         write: nullable,
         drafts: list,
+        previews: list,
         source: nullable,
       },
       required: ['app', 'drafts'],
@@ -121,6 +206,13 @@ export let makingOf = (rows: Bundle[], app: string): Making | undefined => {
     (r.appMaking as { app?: string } | undefined)?.app == app
   )?.appMaking as (Making & { app: string }) | undefined
   if (!row) return undefined
-  let { made, pages, steps, draft, edited } = row
-  return { made, pages, steps, draft: draft ?? null, edited: edited ?? null }
+  let { made, pages, steps, draft, edited, drafts } = row
+  return {
+    made,
+    pages,
+    steps,
+    draft: draft ?? null,
+    edited: edited ?? null,
+    drafts,
+  }
 }

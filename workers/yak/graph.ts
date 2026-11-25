@@ -1016,10 +1016,12 @@ let refOf = (v: unknown): string | null =>
 // Whether `b` moves where the app `app`'s drafts stand
 // (@yaks/platform/app-canvas `appDrafted`): its row, one of its drafts, a
 // write into one, or a row gone.
-let draftMoved = (b: Bundle, app: string) =>
-  '$delete' in b || b.entity.eid == app ||
-  (b.written as { app?: string } | undefined)?.app == app ||
-  (b.app_draft as { app?: string } | undefined)?.app == app
+let draftMoved = (b: Bundle, app: string) => {
+  let draft = b.app_draft as { app?: string; previewed?: string } | undefined
+  return '$delete' in b || b.entity.eid == app ||
+    (b.written as { app?: string } | undefined)?.app == app ||
+    (draft?.app ? draft.app == app : !!draft?.previewed)
+}
 
 // Whether `b` may move a space's Connections page
 // (@yaks/platform/connections-page `connectionsMoved`): a connection, a link
