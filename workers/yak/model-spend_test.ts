@@ -42,6 +42,7 @@ let uncertain = await fixture()
 let retried = await fixture()
 let started = await fixture()
 let measured = await fixture()
+let duringDeploy = await fixture()
 let rollover = await fixture()
 let free = await fixture(0.20023140)
 let visited = await fixture()
@@ -246,6 +247,39 @@ test('measured cost above a quote settles once and later calls see the full debi
     () => reserved(p.env, measured.space, () => ({ dollars: 0.01 })),
     ModelError,
   )
+})
+
+test('settlement rereads a competing write through a directory on the previous deploy', async () => {
+  let call = mint()
+  await reserved(p.env, duringDeploy.space, () => ({ dollars: 0.1 }), call)
+  let store = p.env.STORE
+  let writes = 0
+  let env = {
+    STORE: {
+      idFromName: (name: string) => store.idFromName(name),
+      get: (id: unknown) => ({
+        fetch: async (req: Request) => {
+          let first = new URL(req.url).pathname == '/apply' && ++writes == 1
+          // A second caller settles after the first caller has read the hold.
+          if (first) assertEquals(await settled(p.env, call, 0.03), true)
+          let answer = await store.get(id).fetch(req)
+          if (!first || answer.status != 409) return answer
+          let body = await answer.json()
+          return Response.json({
+            error: 'Skewed',
+            message:
+              'Durable Object on an older deploy refused a caller on a newer one: ' +
+              body.message,
+            retryable: true,
+            refusal: { status: answer.status, body },
+          }, { status: 503 })
+        },
+      }),
+    },
+  }
+  assertEquals(await settled(env, call, 0.03), true)
+  assertEquals(writes, 1)
+  assertAlmostEquals(await duringDeploy.used(), 0.03)
 })
 
 test('settling an older reservation does not reset or refund this month', async () => {

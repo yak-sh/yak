@@ -22,7 +22,7 @@ import { stringify } from '@yaks/vocab/wire'
 import type { Bundle } from '@yaks/graph'
 import type { Trash, TrashPage } from '@yaks/graph/trash'
 import { type Restored, trashSearch } from './trash-wire.ts'
-import { knownOptions, Stale } from '@yaks/graph/errors'
+import { knownOptions, Stale, STATUS } from '@yaks/graph/errors'
 import { storeOf } from './door.ts'
 import { coalesced, type Door, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -30,7 +30,7 @@ import { jittered } from '@yaks/durable-object/resets'
 import type { Clock } from '@yaks/fp'
 import { Pending, said } from '@yaks/api/log'
 import { background, reported } from './defects.ts'
-import { FILED } from '@yaks/api/refuse'
+import { FILED, staleRefusal } from '@yaks/api/refuse'
 import { setImmediate } from 'node:timers'
 import { waiting } from './lib/waits.ts'
 import type { Asked } from '@yaks/query'
@@ -118,11 +118,13 @@ export let written = async (r: Response): Promise<Bundle[]> => {
   // as the graph's own `Stale`, so a caller that wrote on `$was` can tell
   // "read again" from a failure.
   // Another 409 (a home's, said across a reach) is its refusal as it came.
-  if (r.status == 409) {
+  if (r.status == STATUS.Stale) {
     let text = await r.text()
-    let s = refusal(text) as Partial<Stale> & { error?: unknown }
-    if (s.error != 'Stale') throw answeredBody(r, text)
-    throw new Stale(s.eid!, s.comp!, s.prop!, s.current)
+    let s = refusal(text)
+    if (staleRefusal(r.status, s)) {
+      throw new Stale(s.eid, s.comp, s.prop, s.current)
+    }
+    throw answeredBody(r, text)
   }
   // Kept by the store's write log and applied later (@yaks/api/log): the batch as
   // applied does not exist yet, so there is nothing to return, but how long

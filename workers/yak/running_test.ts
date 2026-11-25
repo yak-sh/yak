@@ -24,6 +24,7 @@ import { kvStorage, state } from './testing.ts'
 import { within } from './defects.ts'
 import { KERNEL } from './meta.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { mint, token } from '@yaks/graph'
 
 let A = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
 let B = { id: 'b', timestamp: '2026-10-12T16:30:00Z' }
@@ -103,6 +104,33 @@ test("a store answers a newer caller's read and write on the code it has, and ke
   assertEquals(wrote.status, 200, await wrote.clone().text())
   await time.advance(60_000)
   assertEquals(o.restarts, [])
+})
+
+test('an older store returns a stale write conflict without restarting', async () => {
+  let o = object()
+  let store = older(o)
+  let eid = mint()
+  let write = (title: string, was?: string | null) =>
+    store.fetch(
+      new Request('http://store/apply', {
+        method: 'POST',
+        headers: { ...Object.fromEntries(from(B)), ...KERNEL },
+        body: JSON.stringify([{
+          entity: { eid },
+          doc: { title },
+          ...was === undefined ? {} : { $was: { doc: { title: was } } },
+        }]),
+      }),
+    )
+  assertEquals((await write('current')).status, 200)
+  let stale = await write('next', token('older'))
+  let { error, current } = await stale.json()
+  assertEquals([stale.status, error, current, o.restarts], [
+    409,
+    'Stale',
+    'current',
+    [],
+  ])
 })
 
 // The uptime probe's query at 23:22:39Z: the kernel's door read a store still

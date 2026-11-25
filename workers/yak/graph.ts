@@ -2353,7 +2353,7 @@ export class Store extends Durable {
         // yet: the object restarts onto that deploy, as for a refused request.
         refused: (r) => {
           let named = Object.assign(new Error(r.message), { name: r.error })
-          if (!this.#behind || !refuses(status(named))) return
+          if (!this.#behind || !refuses(status(named), r)) return
           // The restart ends this object's work in the runtime's words,
           // which nobody waits on here; anything else is a failure.
           this.#behind().catch((e) =>
@@ -4913,7 +4913,7 @@ export class Store extends Durable {
     )
     if (restart && upgrading(request)) this.#behind = restart
     let answer = await this.#door(request, waking, woke)
-    if (restart && refused(answer)) await restart()
+    if (restart && await refused(answer)) await restart()
     return answer
   }
 

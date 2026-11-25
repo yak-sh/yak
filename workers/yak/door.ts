@@ -19,6 +19,7 @@ import { background, caught, defect } from './defects.ts'
 import { behind, settled, stamp, unserved } from './running.ts'
 import { confirmedRefusal } from './query-line.ts'
 import { type Refusal, refuse } from '@yaks/api'
+import { staleRefusal } from '@yaks/api/refuse'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { evicted, retried } from '@yaks/durable-object/resets'
 import {
@@ -356,22 +357,26 @@ export let ahead = (
 
 let stamped = (req: Request) => (stamp(req.headers), req)
 
-// A directory query can be checked against this deploy's vocabulary without
-// reaching storage. The older store's refusal may still apply on new code.
-let directoryAnswer = async (req: Request, answer: Response) => {
+let storeAnswer = async (name: string, req: Request, answer: Response) => {
   if (answer.status != 503) return answer
   let url = new URL(req.url)
-  if (url.pathname != '/query') return answer
+  let directoryQuery = name == PLATFORM_STORE && url.pathname == '/query'
+  if (!directoryQuery && url.pathname != '/apply') return answer
   let said = await answer.clone().json().catch(() => null) as {
     error?: string
     refusal?: { status?: number; body?: Partial<Refusal> }
   } | null
-  let refusal = said?.refusal
-  let old = refusal?.body
-  if (
-    said?.error != 'Skewed' || refusal?.status != 400 ||
-    old?.error != 'Unknown' && old?.error != 'Unsupported'
-  ) return answer
+  if (said?.error != 'Skewed') return answer
+  let { status, body: old } = said.refusal ?? {}
+  // A store from before T-3725 can still wrap a stale write during rollout.
+  // Hand the conflict to its caller before the door resends the same write.
+  if (status != null && staleRefusal(status, old)) {
+    return Response.json(old, { status })
+  }
+  // A directory query can be checked against this deploy's vocabulary without
+  // reaching storage. The older store's refusal may still apply on new code.
+  if (!directoryQuery || status != 400) return answer
+  if (old?.error != 'Unknown' && old?.error != 'Unsupported') return answer
   let { platformVocab } = await import('./vocab.ts')
   let current = confirmedRefusal(
     url.searchParams.get('q') ?? '',
@@ -398,10 +403,8 @@ export let storeOf = (
   app?: Served,
   wait?: (ms: number) => Promise<void>,
 ): Door => {
-  let send = (req: Request) => placed(ns, name).fetch(req)
-  let open = name == PLATFORM_STORE
-    ? async (req: Request) => directoryAnswer(req, await send(req))
-    : send
+  let open = async (req: Request) =>
+    storeAnswer(name, req, await placed(ns, name).fetch(req))
   return resending(doorOf(open, name, app), {
     report: (e, path) =>
       defect(e, { request: `store ${path.split('?')[0]}`, store: name }),

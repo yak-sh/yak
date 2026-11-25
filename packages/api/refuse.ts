@@ -11,7 +11,7 @@
 // defect, which any package's error joins by setting its own `name`.
 
 import { stringify } from '@yaks/vocab/wire'
-import { status } from '@yaks/graph/errors'
+import { type Stale, STATUS, status } from '@yaks/graph/errors'
 
 /** A refusal, as a client reads it: the error's name, its message, and any
  * fields the error carried (a {@link https://jsr.io/@yaks/graph | Stale}
@@ -25,6 +25,13 @@ export type Refusal = {
   /** whatever else the error carried */
   [detail: string]: unknown
 }
+
+/** A graph precondition conflict carries the value the caller can retry on. */
+export let staleRefusal = (
+  code: number,
+  body: unknown,
+): body is Refusal & Pick<Stale, 'eid' | 'comp' | 'prop' | 'current'> =>
+  code == STATUS.Stale && (body as Partial<Refusal> | null)?.error == 'Stale'
 
 /** The request could not be authenticated. Throw this from an
  * {@link https://jsr.io/@yaks/api/doc/~/Authenticate | Authenticate} to answer

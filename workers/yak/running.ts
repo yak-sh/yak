@@ -34,6 +34,9 @@
 // invocation's is everyone's (defects-runtime.ts `entry`). Under `wrangler
 // dev` and the test kernels there is none, and nothing is stamped or compared.
 
+import { type Refusal as RefusalBody, staleRefusal } from '@yaks/api/refuse'
+import { STATUS } from '@yaks/graph/errors'
+
 /** A Worker version: the runtime's id for it and when it was uploaded. */
 // The platform's release, as a person reads it: what a connector says it runs
 // (`serverInfo.version`), what a feedback letter names, and the stand-in for
@@ -240,17 +243,21 @@ export let restart = (ctx: Restartable, reason: string): void => {
   ctx.abort(reason)
 }
 
-/** Whether an answer refuses its caller: what an object on an older deploy
- * may say only because its code does not know what the caller's does. A 429
- * asks for a wait (a pace, an object past its rows), which no deploy changes,
- * and a restart would forget the rows that stopped the object. */
-export let refused = (answer: Response): boolean => refuses(answer.status)
+let refusalOf = (answer: Response): Promise<Partial<RefusalBody> | null> =>
+  answer.clone().json().catch(() => null) as Promise<
+    Partial<RefusalBody> | null
+  >
 
-/** Whether an answer of status `code` refuses its caller, as `refused` judges
- * an answer: what a refusal a socket was sent is judged by, its status the
- * one its error's name has. */
-export let refuses = (code: number): boolean =>
-  code >= 400 && code < 500 && code != 429
+/** Whether a refusal may be due to older code. A pacing response asks for
+ * time and a stale precondition asks for a new read. */
+export let refuses = (code: number, body?: unknown): boolean =>
+  code >= 400 && code < 500 && code != 429 && !staleRefusal(code, body)
+
+export let refused = async (answer: Response): Promise<boolean> =>
+  refuses(
+    answer.status,
+    answer.status == STATUS.Stale ? await refusalOf(answer) : undefined,
+  )
 
 /** How long an object's work behind an answer waits once its caller has read
  * the answer through (`onceRead`), so the runtime has sent it on: the runtime
@@ -359,11 +366,10 @@ export let skewed = async (
   | null
 > => {
   let theirs = caller(headers), here = versionOf(mine)
-  if (!refused(answer)) return null
+  if (!refuses(answer.status)) return null
   if (!theirs || !here || !newer(theirs, here)) return null
-  let said = await answer.clone().json().catch(() => null) as
-    | { message?: unknown }
-    | null
+  let said = await refusalOf(answer)
+  if (!refuses(answer.status, said)) return null
   let why = typeof said?.message == 'string' ? said.message : answer.status
   return Object.assign(new Error(`${SKEWED} ${why}`), {
     name: 'Skewed',
