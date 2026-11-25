@@ -599,8 +599,10 @@ export let start = (
         let mine = turn
         view.requestAnimationFrame(() =>
           view.setTimeout(() => {
+            let active = doc.activeElement
             if (
-              mine == turn && main.isConnected && doc.activeElement == focused
+              mine == turn && main.isConnected &&
+              (active == focused || active == doc.body || !active)
             ) {
               main.focus({ preventScroll: true })
             }
