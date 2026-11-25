@@ -129,17 +129,19 @@ export let parts = (
   texts: string[],
   count: number,
   load: number,
+  measure: (text: string) => number = (text) => text.length,
 ): string[][] => {
   let runs: string[][] = []
   let size = Infinity
   for (let t of texts) {
+    let weight = measure(t)
     let run = runs.at(-1)
-    if (!run || run.length >= count || size + t.length > load) {
+    if (!run || run.length >= count || size + weight > load) {
       runs.push([t])
-      size = t.length
+      size = weight
     } else {
       run.push(t)
-      size += t.length
+      size += weight
     }
   }
   return runs
@@ -174,6 +176,8 @@ export type Load = {
   count?: number
   /** the most characters one request carries (default {@link LOAD}) */
   load?: number
+  /** measure of one input in the request, in the same units as `load` */
+  measure?: (text: string) => number
 }
 
 /**
@@ -211,8 +215,9 @@ export type Batched = Omit<Embedder, 'embed'> & {
  * An {@link Embedder} over a provider that answers many texts at once. Every
  * `embed()` made together, before the microtasks already queued have run,
  * rides one call of `ask`, split by {@link parts} into calls no larger than
- * `load` allows; a call that fails fails every text in it. `ask` answers a
- * vector per text, in order ({@link answered}).
+ * `load` allows. A refused batch is retried one text at a time, so each
+ * caller gets its own vector or refusal. `ask` answers a vector per text,
+ * in order ({@link answered}).
  */
 export let batched = (
   model: string,
@@ -235,6 +240,7 @@ export let batched = (
         all.map((w) => w.text),
         load.count ?? COUNT,
         load.load ?? LOAD,
+        load.measure,
       )
     ) {
       let mine = all.slice(at, at += run.length)
@@ -242,7 +248,19 @@ export let batched = (
         let got = await ask(run)
         mine.forEach((w, i) => w.ok(got[i]))
       } catch (error) {
-        for (let w of mine) w.no(error)
+        // A refused batch reveals neither which text failed nor whether
+        // their combined size failed. Isolate each answer for every reader.
+        if (error instanceof Refused && mine.length > 1) {
+          for (let w of mine) {
+            try {
+              w.ok((await ask([w.text]))[0])
+            } catch (failure) {
+              w.no(failure)
+            }
+          }
+        } else {
+          for (let w of mine) w.no(error)
+        }
       }
     }
   }
@@ -304,22 +322,28 @@ async (input) => {
 }
 
 /** `ask`, where one text asked alone and {@link Refused} is asked again as
- * its opening half, down to {@link SHORTEST}: a model that will not take a
- * whole text still embeds what it can read of it. */
-export let halving = (ask: Ask): Ask => {
-  let fit: Ask = async (input) => {
+ * its opening half, up to `retries` times and down to `shortest`: a
+ * model that will not take a whole text still embeds what it can read of it. */
+export let halving = (
+  ask: Ask,
+  { retries = Infinity, shortest = SHORTEST } = {},
+): Ask => {
+  let fit = async (input: string[], left: number): Promise<Float32Array[]> => {
     try {
       return await ask(input)
     } catch (error) {
       let [text] = input
       if (
         !(error instanceof Refused) || input.length > 1 ||
-        text.length <= SHORTEST
+        !left || text.length <= shortest
       ) throw error
-      return fit([text.slice(0, text.length >> 1)])
+      let half = text.length >> 1
+      if (/[\uDC00-\uDFFF]/.test(text[half])) half--
+      if (!half) throw error
+      return fit([text.slice(0, half)], left - 1)
     }
   }
-  return fit
+  return (input) => fit(input, retries)
 }
 
 /** An {@link Embedder} that asks a server for every vector, batching the

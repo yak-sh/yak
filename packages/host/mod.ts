@@ -46,7 +46,9 @@ export type Role = string
  * `model` and `dim`. The embedder's `model` names its vector space, and
  * making one loads nothing until its first embed, so asking for the space is
  * free. */
-export type Embedding = (said: { model: string; dim?: number }) => {
+export type Embedding = (
+  said: { model: string; dim?: number; context?: number; count?: number },
+) => {
   model: string
   embed: (text: string) => Float32Array | Promise<Float32Array>
 }

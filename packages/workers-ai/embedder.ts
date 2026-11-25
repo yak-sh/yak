@@ -39,6 +39,8 @@ export type Ai = {
 export type Embeds = {
   /** the model's Workers AI name (`@cf/qwen/qwen3-embedding-0.6b`) */
   model: string
+  /** its published context window in tokens, where the host knows it */
+  context?: number
   /** Matryoshka width: keep this many leading coordinates (./remote.ts `cut`) */
   dim?: number
   /** the Worker's `AI` binding */
@@ -52,25 +54,51 @@ let unfit = (e: unknown) =>
       e instanceof Error ? e.message : String(e),
     )
 
+let utf8 = new TextEncoder()
+
+// A text token can cover one byte. Leave room for the model's framing and
+// end marker, and cut at a Unicode character boundary.
+let fit = (text: string, context: number): string => {
+  let bytes = Math.floor(context * 0.9)
+  if (text.length * 3 <= bytes) return text
+  let { read } = utf8.encodeInto(text, new Uint8Array(bytes))
+  return text.slice(0, read)
+}
+
 /** A {@link Batched} embedder that asks Workers AI for every vector,
  * batching the calls made together. */
-export let embedder = (said: Embeds): Batched =>
-  batched(
+export let embedder = (said: Embeds): Batched => {
+  let { context } = said
+  let made = batched(
     space(said),
-    halving(retrying('workers-ai', said.model, async (input) => {
-      let got: unknown
-      try {
-        got = await said.ai.run(said.model, { text: input })
-      } catch (e) {
-        if (!unfit(e)) throw e
-        throw new Refused(`@yaks/workers-ai: refused — ${e}`)
-      }
-      return answered(
-        'workers-ai',
-        input,
-        (got as { data?: number[][] } | null)?.data,
-        said.dim,
-      )
-    })),
-    said,
+    halving(
+      retrying('workers-ai', said.model, async (input) => {
+        let got: unknown
+        try {
+          got = await said.ai.run(said.model, { text: input })
+        } catch (e) {
+          if (!unfit(e)) throw e
+          let bytes = utf8.encode(JSON.stringify({ text: input })).length
+          throw new Refused(
+            `@yaks/workers-ai: ${said.model} refused ${input.length} text(s), ${bytes} input bytes — ${e}`,
+            { cause: e },
+          )
+        }
+        return answered(
+          'workers-ai',
+          input,
+          (got as { data?: number[][] } | null)?.data,
+          said.dim,
+        )
+      }),
+      context ? { retries: 1, shortest: 1 } : undefined,
+    ),
+    {
+      ...said,
+      measure: (text) => utf8.encode(JSON.stringify(text)).length + 1,
+    },
   )
+  return context
+    ? { ...made, embed: (text) => made.embed(fit(text, context)) }
+    : made
+}

@@ -4,7 +4,8 @@
 // protocol-complete suffix.
 
 import type { Bundle, Comp } from '@yaks/graph'
-import { ANSWER, QUESTIONS } from '@yaks/model'
+import { sizeOf } from '@yaks/blob'
+import { ANSWER, type Item, QUESTIONS, type Request } from '@yaks/model'
 import { USING } from './native.ts'
 import { kindOf, newestAsk, seqOf } from './state.ts'
 import { checkpointOf, turnNote, unarchived } from './pruning.ts'
@@ -84,9 +85,35 @@ export let GAP = 4
 export let limit = (window: number, share: number): number =>
   Math.floor(window * Math.min(0.9, Math.max(0.1, share)))
 
-/** About how many tokens a model reads for this many characters of
- * projected text, where its provider has not counted them. */
-export let tokens = (chars: number): number => Math.ceil(chars / 4)
+let utf8 = new TextEncoder()
+
+/** Estimate the tokens in serialized text. Multibyte text gets a larger
+ * allowance because a single character may take several tokens. */
+export let tokens = (value: unknown): number => {
+  let text = JSON.stringify(value) ?? ''
+  let bytes = utf8.encode(text).length
+  return Math.ceil(text.length / 4 + bytes - text.length)
+}
+
+/** A provider tokenizes images by their dimensions. Documents have no
+ * portable page count, so estimate from their byte size. */
+export let itemTokens = (item: Item): number => {
+  if (item.kind != 'image' && item.kind != 'document') return tokens(item)
+  let { bytes, ...label } = item
+  let size = item.kind == 'image' ? sizeOf(bytes) : undefined
+  let media = size
+    ? Math.ceil(size.w / 32) * Math.ceil(size.h / 32)
+    : Math.ceil(bytes.byteLength / 4)
+  return tokens(label) + Math.max(1024, media)
+}
+
+export let itemsTokens = (items: readonly Item[]): number =>
+  items.reduce((total, item) => total + itemTokens(item), 0)
+
+/** The instructions, native input and schemas that accompany the items. */
+export let requestTokens = (req: Request): number =>
+  tokens([req.instructions, req.tools, req.questions, req.input]) +
+  itemsTokens(req.items) + itemsTokens(req.turnContext ?? [])
 
 /** The oldest lines to summarize, so that the newest ones kept weigh at most
  * `keep` (each line's weight is its place in `sizes`), cut where no result is
@@ -115,7 +142,7 @@ export let tooLong = (code: string, text: string): boolean =>
     'max_tokens_exceeded',
     'context_window_exceeded',
   ].includes(code) ||
-  /prompt is too long|exceeds? (?:the )?(?:maximum|context|token)|(?:context|input|prompt)[\s\S]{0,80}(?:too long|length exceeded)/i
+  /input too big|prompt is too long|exceeds? (?:the )?(?:maximum|context|token)|(?:context|input|prompt)[\s\S]{0,80}(?:too long|length exceeded)/i
     .test(text)
 
 /** Only an explicitly stated token limit, never the request's token count.

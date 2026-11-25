@@ -118,13 +118,13 @@ import {
   context,
   GAP,
   history,
+  itemsTokens,
   limit,
   lines,
   prefix,
   recent,
-  retained,
+  requestTokens,
   SHARE,
-  tokens,
   tooLong,
 } from './compact.ts'
 export { lines, recent } from './compact.ts'
@@ -756,10 +756,14 @@ let compaction = async (o: {
   entries: Bundle[]
   said: Bundle[]
   tools: Map<Eid, Declared>
+  model?: Eid
   window: number
   reads: number
   fixed: number
+  measured: number
+  output?: number
   share: number
+  media?: Map<Eid, Item[]>
   resultText?: (entry: Bundle) => Promise<string>
   inputText?: (entry: Bundle) => InputText
   force?: boolean
@@ -767,8 +771,10 @@ let compaction = async (o: {
   { chunk: Bundle[]; results?: Map<Eid, string> } | undefined
 > => {
   let most = limit(o.window, o.share)
-  if (o.fixed >= most && !o.force) return
-  // One item per line: without an anchor, a line projects to one item.
+  let hard = limit(o.window, 0.9) - (o.output ?? 0)
+  if (!o.said.some((b) => !b.checkpoint) || !o.force && o.fixed >= hard) {
+    return
+  }
   let weigh = async (lines: Bundle[]) => {
     let results = o.resultText
       ? new Map(
@@ -779,14 +785,19 @@ let compaction = async (o: {
         ),
       )
       : undefined
-    let sizes = project(o.entries, lines, o.tools, {
+    let weights = new Map<Eid, number>()
+    project(o.entries, lines, o.tools, {
       results,
+      media: o.media,
       history: true,
       session: o.session,
       inputText: o.inputText,
+      projected: (line, items) => {
+        let id = line.entity.eid
+        weights.set(id, (weights.get(id) ?? 0) + itemsTokens(items))
+      },
     })
-      .map((i) => tokens(JSON.stringify(i).length))
-    return { sizes, results }
+    return { sizes: lines.map((b) => weights.get(b.entity.eid) ?? 0), results }
   }
   let mark = checkpointOf(o.entries)
   let asks = o.entries.filter((b) =>
@@ -795,22 +806,29 @@ let compaction = async (o: {
   let count = (b?: Bundle) =>
     Number(comp(b ?? {} as Bundle, USAGE)?.input_tokens)
   // A count taken under other archive marks weighed another context.
-  let last = asks.findLast((b) => count(b) > 0)
+  let last = asks.findLast((b) => count(b) > 0 && comp(b, ASK)?.to == o.model)
   let counted = last && comp(last, ASK)?.pruning === pruning(o.entries)
     ? last
     : undefined
   let after = counted ? o.said.filter((b) => seqOf(b) > seqOf(counted)) : o.said
-  let weight = (counted ? count(counted) : o.fixed) +
-    sum((await weigh(after)).sizes)
-  if (!o.force && (weight <= most || (mark && asks.length < GAP))) return
+  let weight = Math.max(
+    o.measured,
+    counted ? count(counted) + sum((await weigh(after)).sizes) : 0,
+  )
+  if (
+    !o.force && weight <= hard &&
+    (weight <= most || o.fixed >= most || (mark && asks.length < GAP))
+  ) return
   let { sizes, results } = await weigh(o.said)
   // Text estimates scaled to the provider's count where there is one.
-  let scale = counted && sum(sizes) > 0 ? (weight - o.fixed) / sum(sizes) : 1
+  let scale = counted && sum(sizes) > 0
+    ? Math.max(1, (weight - o.fixed) / sum(sizes))
+    : 1
   // What the kept lines may weigh: half the limit less what every request
   // carries, so a heavy fixed part cuts deeper rather than keeping every line
   // but the oldest; and at least enough that the cut fits the summarizer's
   // own window.
-  let room = most / 2 - o.fixed - (o.force ? 4096 : 0)
+  let room = Math.min(most / 2, hard) - o.fixed - (o.force ? 4096 : 0)
   let keep = Math.max(
     0,
     o.force ? room : Math.max(room, weight - o.fixed - limit(o.reads, 0.75)),
@@ -2014,6 +2032,7 @@ export let react = async (
   let turnItems: Request['turnContext'] = deps.requestInstructions
     ? []
     : undefined
+  let historyWeight = 0
   let transcriptItems = project(entries, window, toolEntities, {
     anchor: anchorId ? asked!.entity.eid : undefined,
     results,
@@ -2022,6 +2041,13 @@ export let react = async (
     inputText: inputs,
     resultUpdatesAsUser: !providerModel.lateResults,
     turnItems,
+    projected: deps.compactModel
+      ? (entry, items) => {
+        if (!entry.prompt && !entry.task_context && !entry.checkpoint) {
+          historyWeight += itemsTokens(items)
+        }
+      }
+      : undefined,
   })
   if (turnItems) {
     let available = catalog(tools)
@@ -2103,13 +2129,15 @@ export let react = async (
   // of the newest request since the last checkpoint, which includes whatever
   // history an anchor kept there, plus the lines since; text estimates it
   // before the first count.
-  let cut = deps.compactModel && !coldTurn
+  let measured = deps.compactModel ? requestTokens(req) : 0
+  let cut = deps.compactModel
     ? {
       g,
       session,
       entries,
-      said: said.filter((b) => !b.prompt),
+      said: reads.filter((b) => !b.prompt && !b.task_context),
       tools: toolEntities,
+      model: modelEid,
       window: await windowOf(g, served, using?.provider),
       reads: await windowOf(
         g,
@@ -2119,20 +2147,11 @@ export let react = async (
           MODEL,
         ),
       ),
-      fixed: tokens(
-        String(req.instructions ?? '').length +
-          JSON.stringify(turnItems ?? [...dynamic, ...moment]).length +
-          JSON.stringify(req.tools).length +
-          JSON.stringify(
-            project(entries, retained(entries), toolEntities, {
-              session,
-              inputText: inputs,
-            }),
-          )
-            .length +
-          JSON.stringify(taskItems(snapshot(held))).length,
-      ),
-      share: deps.compactAt ?? SHARE,
+      measured,
+      fixed: Math.max(0, measured - historyWeight),
+      output: req.tokens,
+      share: coldTurn ? 0.9 : deps.compactAt ?? SHARE,
+      media,
       resultText: deps.resultText,
       inputText: inputs,
     }
@@ -2150,7 +2169,7 @@ export let react = async (
   }
   if (summarizing && !checkpoint) {
     held = await tasksOf(g, session)
-    cut!.fixed += tokens(JSON.stringify(taskItems(snapshot(held))).length)
+    cut!.fixed += itemsTokens(taskItems(snapshot(held)))
     summarizing = await compaction(cut!)
   }
   if (summarizing) {
@@ -2498,7 +2517,9 @@ export let react = async (
             elide(context(entries), elision),
             askingOf(entries),
           )
-            .filter((b) => !b.prompt)
+            .filter((b) =>
+              !b.prompt && !b.task_context && (!readable || readable(b))
+            )
         }
         // Without a stated ceiling, cut relative to the refused payload,
         // not an optimistic configured window. Never touch the fixed prefix.
@@ -2506,12 +2527,10 @@ export let react = async (
         // the rest, so the cut is relative to the window.
         if (!checkpoint) {
           held = await tasksOf(g, session)
-          cut.fixed += tokens(JSON.stringify(taskItems(snapshot(held))).length)
+          cut.fixed += itemsTokens(taskItems(snapshot(held)))
         }
         let smaller = enforced ??
-          (anchorId
-            ? cut.window / 2
-            : tokens(JSON.stringify(req.items).length) / 2)
+          (anchorId ? cut.window / 2 : cut.measured / 2)
         let forced = await compaction({
           ...cut,
           window: Math.min(cut.window, smaller),

@@ -188,6 +188,12 @@ test('a rate limit, a timeout, spent credits, an unaccepted license and an unkno
   }
 })
 
+test('Workers AI 3030 lets the conversation fit its context and retry', async () => {
+  let provider = binding(new Error('AiError: 3030: input too big'))
+  let error = await assertRejects(() => provider.model(ask([])), ModelError)
+  assertEquals(error.code, 'context_length_exceeded')
+})
+
 test('images are sent as native image parts and cancelled requests are never sent', async () => {
   let { asked, model } = binding({ response: 'ok' })
   let image: Item = {

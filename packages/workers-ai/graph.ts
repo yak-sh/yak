@@ -4,7 +4,7 @@
 // `embedder: {"provider": "workers-ai", "model": …, "dim": …}`; a Worker names
 // the binding in its config, `{"use": "@yaks/workers-ai", "with": {"ai":
 // {"binding": "AI"}}}`. Where no binding is lent, it lends nothing.
-import { type Ai, embedder } from './embedder.ts'
+import { type Ai, embedder, type Embeds } from './embedder.ts'
 import type { Batched } from '@yaks/embedding'
 
 /** The plugin's options in a config. */
@@ -18,7 +18,7 @@ export type Options = {
 export let embedders = (
   _host: unknown,
   options: Options = {},
-): Record<string, (said: { model: string; dim?: number }) => Batched> => {
+): Record<string, (said: Omit<Embeds, 'ai'>) => Batched> => {
   let ai = options.ai
   return ai ? { 'workers-ai': (said) => embedder({ ...said, ai }) } : {}
 }

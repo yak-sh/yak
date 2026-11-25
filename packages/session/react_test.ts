@@ -972,6 +972,71 @@ test('a transcript compacts at half its model’s window, not before', async () 
   assertEquals(summarizer.asked.length, 1)
 })
 
+test('context fitting includes instructions, schemas, turn context and attachments', async () => {
+  let g = world()
+  let window = 10_000
+  await windowed(g, window)
+  let older = 'old attachment'
+  await appendEntry(g, ids.s, older)
+  await appendEntry(g, ids.s, 'Keep this latest instruction.')
+  let summarize = scripted([says('summary', 'Earlier work.')], false)
+  let asked: Request[] = []
+  let instructions = 'Persona '.repeat(1000)
+  let tool = { ...echo, description: 'Tool schema '.repeat(750) }
+  let besides = 'Recent facts '.repeat(750)
+  let data = new Uint8Array(32_000)
+  assertEquals(
+    await rest(g, ids.s, {
+      model: (req) => {
+        asked.push(req)
+        let text = JSON.stringify([
+          req.instructions,
+          req.tools,
+          req.items,
+          req.turnContext,
+        ], (key, value) => key == 'bytes' ? undefined : value)
+        let attachments = req.items.filter((i) => i.kind == 'document')
+          .reduce((n, item) => n + item.bytes.length / 4, 0)
+        if (text.length / 4 + attachments > window * 0.9) throw lengthError()
+        return Promise.resolve(says('r', 'Fits.'))
+      },
+      tools: [tool],
+      mint,
+      requestInstructions: () => Promise.resolve({ instructions }),
+      turnItems: () =>
+        Promise.resolve([{ kind: 'instruction', text: besides }]),
+      contextItems: (entries) =>
+        Promise.resolve(
+          new Map<string, Item[]>(
+            entries.filter((b) => textOf(b) == older).map((
+              b,
+            ) => [b.entity.eid, [
+              {
+                kind: 'document',
+                label: 'notes.pdf',
+                mediaType: 'application/pdf',
+                bytes: data,
+              },
+            ]]),
+          ),
+        ),
+      compactModel: { model: summarize.model, name: 'fake-1' },
+    }),
+    'settled',
+  )
+  assertEquals(summarize.asked.length, 1)
+  assertEquals(asked.length, 1)
+  assertEquals(asked[0].instructions, instructions)
+  assertEquals(
+    asked[0].tools.some((t) => t.description == tool.description),
+    true,
+  )
+  assertEquals(
+    asked[0].turnContext?.some((i) => 'text' in i && i.text.includes(besides)),
+    true,
+  )
+})
+
 test('a step withdrawn while it summarizes writes and reports nothing, and the next step summarizes', async () => {
   let g = world()
   await windowed(g, 100_000)

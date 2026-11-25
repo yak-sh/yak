@@ -66,3 +66,39 @@ test('a text too big for the model is asked again as its opening half', async ()
   let v = await workersAi({ model: 'm', ai }).embed('x'.repeat(1000))
   assertEquals([round(v), sent], [[1, 0], [1000, 500, 250]])
 })
+
+test('an oversized input fits the model window before the first call', async () => {
+  let { ai, runs } = binding()
+  let embed = workersAi({ model: 'm', ai, context: 8192 })
+  let text = '🚲'.repeat(7000)
+  await embed.embed(text)
+  let [[, input]] = runs as [string, { text: string[] }][]
+  let sent = input.text[0]
+  let fittedBytes = new TextEncoder().encode(sent).length
+  assertEquals(runs.length, 1)
+  assertEquals(sent, '🚲'.repeat(1843))
+  assertEquals(fittedBytes < 8192, true)
+})
+
+test('a rejected batch isolates its texts and retries an oversized text once', async () => {
+  let sent: number[][] = []
+  let ai = {
+    run: (_: string, input: unknown) => {
+      let { text } = input as { text: string[] }
+      let sizes = text.map((t) => t.length)
+      sent.push(sizes)
+      return text.length > 1 || sizes[0] > 100
+        ? Promise.reject(new Error('AiError: 3030: input too big'))
+        : Promise.resolve({ data: [[sizes[0], 1]] })
+    },
+  }
+  let e = workersAi({ model: 'm', ai, context: 8192 })
+  let [short, long] = await Promise.all([
+    e.embed('Read title'),
+    e.embed('x'.repeat(200)),
+  ])
+  assertEquals([Array.from(short), Array.from(long)], [[10, 1], [100, 1]])
+  assertEquals(sent, [[10, 200], [10], [200], [100]])
+  await assertRejects(() => e.embed('x'.repeat(3000)), Refused)
+  assertEquals(sent.slice(-2), [[3000], [1500]])
+})

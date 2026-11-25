@@ -1,6 +1,8 @@
 {
   "provider": "workers-ai",
   "model": "@cf/qwen/qwen3-embedding-0.6b",
+  "context": 8192,
+  "count": 32,
   "dimensions": 1024,
   "floors": {
     "floor": 0.6,

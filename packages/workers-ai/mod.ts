@@ -341,6 +341,9 @@ let unlicensed = (e: unknown) => /^5016:/.test(message(e))
 // (5007), or one Cloudflare retired (5028, "was deprecated").
 let missing = (e: unknown) => /^(5007|5028):/.test(message(e))
 
+let overflow = (e: unknown) =>
+  /^(?:AiError:\s*)?3030:|input too big/i.test(message(e))
+
 /**
  * Whether the binding refused the input it was asked with: it fits none of
  * the model's schemas (5006), carries data of a type the model takes none of
@@ -358,7 +361,7 @@ let missing = (e: unknown) => /^(5007|5028):/.test(message(e))
  * ```
  */
 export let unfit = (e: unknown): boolean =>
-  /^(5006|5004|3006|5005):/.test(message(e))
+  overflow(e) || /^(5006|5004|3006|5005):/.test(message(e))
 
 // What the binding is asked: a chat, or a structured model's questions about
 // the same conversation.
@@ -409,6 +412,7 @@ let detailed = (e: unknown): unknown => {
  * may pass if asked again (`retry`), credits the account has spent
  * one coded `limit`, a model whose license the account has not accepted or a
  * name the binding has no model by (never had, or retired) one coded `model`,
+ * an input beyond its window (3030) one coded `context_length_exceeded`,
  * and a `ModelError` the
  * binding throws itself (one that
  * meters it, say) or anything else is passed on as it was thrown. For a host
@@ -417,6 +421,8 @@ let detailed = (e: unknown): unknown => {
 export let failure = (e: unknown): unknown =>
   e instanceof ModelError
     ? e
+    : overflow(e)
+    ? new ModelError('context_length_exceeded', message(e))
     : busy(e)
     ? new ModelError('busy', message(e), {})
     : spent(e)

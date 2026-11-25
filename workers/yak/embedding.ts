@@ -30,7 +30,6 @@ import type { Taken } from '@yaks/host/words'
 import { embedding } from './config.ts'
 import { lenderFacets } from './load.ts'
 import { LIMIT } from '@yaks/session/status'
-import { MODEL } from './embedding-model.ts'
 
 export { DIM, FLOORS, MODEL, SPACE } from './embedding-model.ts'
 
@@ -42,7 +41,7 @@ export let embedder = (bind: object): Embedder | null => {
     [plugin, options],
   ) => [lenderFacets[plugin], options, plugin])
   let made = lending(taken, {}, 'embedders')?.[configured.provider]
-  return made?.({ model: MODEL }) ?? null
+  return made?.(configured) ?? null
 }
 
 /** A door the store lends an embedder, its spent budget said as the

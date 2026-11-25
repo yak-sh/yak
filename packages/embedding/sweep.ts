@@ -308,26 +308,20 @@ export let remodel = (
 }
 
 // The vectors for a batch of texts, asked for together; a text the embedder
-// refused is its `Refused`. One refusal fails the request it rode in, so a
-// refused batch is asked again a text at a time to find it. Anything else is
-// an embedder that cannot be reached, and stops the sweep.
-let embedAll = async (
+// refused is its `Refused`. The embedder isolates each refusal when it
+// batches requests. Anything else stops the sweep.
+let embedAll = (
   embedder: Embedder,
   texts: string[],
 ): Promise<(Float32Array | Refused)[]> => {
-  let ask = async (t: string) => {
+  return Promise.all(texts.map(async (t) => {
     try {
       return await embedder.embed(t)
     } catch (error) {
       if (error instanceof Refused) return error
       throw error
     }
-  }
-  let got = await Promise.all(texts.map(ask))
-  if (texts.length < 2 || !got.some((v) => v instanceof Refused)) return got
-  let one: (Float32Array | Refused)[] = []
-  for (let t of texts) one.push(await ask(t))
-  return one
+  }))
 }
 
 /** What one sweep did. */

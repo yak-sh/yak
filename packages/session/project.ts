@@ -193,6 +193,8 @@ export let project = (
     resultUpdatesAsUser?: boolean
     /** Collect transient prompt entries at the request tail. */
     turnItems?: Item[]
+    /** Observe the projected items associated with a transcript entry. */
+    projected?: (entry: Bundle, items: Item[]) => void
   } = {},
 ): Item[] => {
   let out: Item[] = []
@@ -360,21 +362,28 @@ export let project = (
       ),
     )
   }
+  let emitting = (b: Bundle) => {
+    let start = out.length
+    emit(b)
+    opts.projected?.(b, out.slice(start))
+  }
   logical.forEach((b, at) => {
     if (taken.has(b)) return
-    emit(b)
+    emitting(b)
     let reply = replies.get(String(comp(b, CALL)?.source))
     if (reply?.at(-1) != b) return
     for (let call of reply) {
       let a = answer.get(call.entity.eid)
       if (a) {
-        if (!taken.has(a) && index.get(a)! > at) emit(a)
+        if (!taken.has(a) && index.get(a)! > at) emitting(a)
       } else if (pending(call)) {
-        out.push(message({
+        let item = message({
           kind: 'result',
           id: spelled(call).id,
           output: PENDING,
-        }, 'the system'))
+        }, 'the system')
+        out.push(item)
+        opts.projected?.(call, [item])
       }
     }
   })
