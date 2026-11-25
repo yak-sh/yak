@@ -151,7 +151,7 @@ let openedFor = (app: App, asked: typeof NEW | Opens) =>
  * release left behind marked ({@link marked}). Never cached: a write chooses
  * among them. */
 export let draftsOf = async (
-  dir: Pick<Directory, 'drafts' | 'switches' | 'written'>,
+  dir: Pick<Directory, 'drafts' | 'picked' | 'written'>,
   app: App,
 ) => marked(dir, app, withLegacy(app, await dir.drafts(app)))
 
