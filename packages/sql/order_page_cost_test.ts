@@ -15,6 +15,7 @@ import {
   DEPTH,
   insert,
   render,
+  renderStable,
   type Row,
   VARIABLES,
 } from './mod.ts'
@@ -22,7 +23,10 @@ import {
 let vocab = loadVocab({
   $defs: {
     entity: { component: true, properties: { num: { type: 'number' } } },
-    entry: { component: true, properties: {} },
+    entry: {
+      component: true,
+      properties: { link: { type: 'string', ref: 'entity' } },
+    },
     comment: {
       component: true,
       properties: { kind: { type: 'string' } },
@@ -46,7 +50,7 @@ let vocab = loadVocab({
 let db = new Database(':memory:'), sql = driver(db)
 let tables: Record<string, string[]> = {
   entity: ['eid', 'num'],
-  entry: [],
+  entry: ['link'],
   comment: ['kind'],
   created: ['at'],
   content: ['body'],
@@ -61,7 +65,7 @@ for (let [name, cols] of Object.entries(tables)) {
       { name: name == 'entity' ? 'id' : 'entity', type: 'integer', pk: true },
       ...cols.map((name) => ({
         name,
-        type: ['num', 'to'].includes(name)
+        type: ['num', 'to', 'link'].includes(name)
           ? 'integer' as const
           : 'text' as const,
       })),
@@ -81,6 +85,12 @@ sql.query({
   cols: [col('eid')],
 })
 sql.query({ t: 'create index', name: 'link_to', on: 'link', cols: [col('to')] })
+sql.query({
+  t: 'create index',
+  name: 'entry_link',
+  on: 'entry',
+  cols: [col('link')],
+})
 // Two entities share each moment, numbered against their ids, so the number
 // breaks a tie in the other order than the index keeps; every thousandth has
 // no moment, one has an empty one, and the newest few are no entry.
@@ -93,7 +103,12 @@ for (let id = 1; id <= 4096; id++) {
   if (id % 1000) {
     sql.query(insert('created', { entity: id, at: id == 3001 ? '' : at(id) }))
   }
-  if (id <= 4000) sql.query(insert('entry', { entity: id }))
+  if (id <= 4000) {
+    sql.query(insert('entry', {
+      entity: id,
+      link: id <= 64 ? 4 : id == 3998 ? 5 : null,
+    }))
+  }
   if (id == 50 || id == 3000) {
     sql.query(
       insert('comment', { entity: id, kind: id == 50 ? 'note' : 'ask' }),
@@ -102,6 +117,9 @@ for (let id = 1; id <= 4096; id++) {
   // Three entities, one with no moment, point at the first.
   if ([20, 1000, 2001].includes(id)) {
     sql.query(insert('link', { entity: id, to: 1 }))
+  }
+  if ([21, 22, 3990].includes(id) || id >= 51 && id <= 88) {
+    sql.query(insert('link', { entity: id, to: 3 }))
   }
   sql.query(
     insert('content', { entity: id, body: id == 7 ? 'rare' : 'common' }),
@@ -114,7 +132,8 @@ let status = Deno.dlopen(sqlitePath, {
   },
 })
 let read = (line: string, opts?: BindOpts) => {
-  let q = compile(parse(line), vocab, opts)
+  let compiled = compile(parse(line), vocab, opts)
+  let q = opts?.stable ? renderStable(compiled, VARIABLES, DEPTH) : compiled
   let stmt = db.prepare(q.sql)
   try {
     let rows = stmt.all<Row>(...q.params)
@@ -249,6 +268,26 @@ test('a page in an indexed order stops at the page', () => {
     let { steps } = read(line)
     assert(steps < 10_000, `${steps} VM instructions: ${line}`)
   }
+})
+
+test('an ordered reference presence page seeks its non-null range', () => {
+  let page = '.link.to ?created .order=-created.at .fields=link.to,created.at'
+  let opts = { stable: true }
+  let { eids, steps } = read(`${page} .limit=2`, opts)
+  assertEquals(eids, ['row-3990', 'row-2001'])
+  assert(steps < 4_000, `${steps} VM instructions for a page from 44 links`)
+  let underfilled = read(`${page} .limit=50`, opts)
+  assertEquals(underfilled.eids.length, 44)
+  assertEquals(underfilled.eids.slice(-4), [
+    'row-22',
+    'row-20',
+    'row-21',
+    'row-1000',
+  ])
+  let crowded = read('.entry.link ?created .order=-created.at .limit=1', {
+    stable: true,
+  })
+  assertEquals(crowded.eids, ['row-3998'])
 })
 
 // A census that counts a component's owners few sends a tested page to its

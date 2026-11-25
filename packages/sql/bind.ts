@@ -4541,6 +4541,26 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     let named: Pred = { kind: 'pred', path: [unnamed], op: '!', value: null }
     return inOrder({ ...ast, clauses: [named, ...ast.clauses] }, ctx)
   }
+  let sparse = (ordered: Frag): Frag => {
+    let presence = indexedPresence(ctx, filters, comp, limit.n)
+    if (!presence) return ordered
+    let { walk, crowded } = presence
+    return render(select({
+      from: from({
+        t: 'compound',
+        op: 'union all',
+        parts: [
+          page({ walk }, [], crowded),
+          select({
+            from: from(select({
+              from: raw(`(${ordered.sql})`, ordered.params),
+              limit: { t: 'case', arms: [[crowded, lit(-1)]], else: lit(0) },
+            })),
+          }),
+        ],
+      }),
+    }))
+  }
   let tests = (c: Clause) =>
     c.kind != 'pred' || c.not || c.where || opOf(c) != 'want' &&
       !(c.path.length == 1 && c.path[0] == driven && opOf(c) == EXISTS)
@@ -4565,7 +4585,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       ...few,
       cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
     })
-    return ahead(
+    return sparse(ahead(
       ctx,
       page(
         { bounded: true, candidates: { ...newest, test: TRUE } },
@@ -4574,9 +4594,11 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       ),
       page({ walk: null }, [], limit.n),
       limit.n,
-    )
+    ))
   }
-  if (required) return render(page({ walk: { comp, index } }, [], limit.n))
+  if (required) {
+    return sparse(render(page({ walk: { comp, index } }, [], limit.n)))
+  }
   let holding: Pred = { kind: 'pred', path, op: '!', value: null }
   // Blank, so it holds an empty text too, which the holding half may also read.
   let lacking: Pred = {
@@ -4651,9 +4673,35 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   )
   let parts = [lead, rest(few ? or(few, full) : full)]
   if (few) parts.push(page({ walk: null }, [], not(few)))
-  return render(select({
+  return sparse(render(select({
     from: from({ t: 'compound', op: 'union', parts }),
-  }))
+  })))
+}
+
+// A reference can be far sparser than the component holding it. Probe its
+// non-null index range before walking an unrelated order index. If the range
+// is short, sort all its matches, so even an underfilled page needs no walk.
+let indexedPresence = (ctx: Ctx, cs: Clause[], ordered: string, n: number) => {
+  if (ctx.d.scoped || ctx.visibility?.entity || !ctx.d.refCol) return
+  for (let c of flattened(cs)) {
+    if (c.kind != 'pred' || c.path.length != 2 || opOf(c) != EXISTS) continue
+    let comp = needOf(ctx, c), prop = c.path[1]
+    if (
+      !comp || comp == ordered || !spined(ctx, comp) ||
+      ctx.v.prop(comp, prop)?.category != 'ref'
+    ) continue
+    let index = leading(ctx, comp, prop)
+    let src = index && ctx.d.indexed?.(comp, index)
+    if (!index || !src || src == ctx.d.table(comp)) continue
+    let crowded = exists(select({
+      cols: [lit(1)],
+      from: raw(src),
+      where: notNull(raw(ctx.d.refCol(comp, prop))),
+      limit: lit(1),
+      offset: lit(Math.min(Math.max(64, n * FEW), PREFIX)),
+    }))
+    return { walk: { comp, index }, crowded }
+  }
 }
 
 // One arm of a page read in parts: the ids of the rows `clauses` admit, in
