@@ -119,7 +119,7 @@ let waits = (e, r) => {
 // fill and the page's query of the same line. Each caller parses its own copy,
 // so no two share an object to change. A write that lands ends the sharing:
 // a read asked after it is its own, so it sees the write.
-let door = (base) => {
+let door = (base, fetch) => {
   let flying = new Map()
   let send = async (path, init) => {
     let version = pageVersion()
@@ -403,15 +403,17 @@ let busy = (e) =>
 // Whether the request never had an answer: the connection, not the platform.
 let unanswered = (e) => e.status == null
 
-// How many calls are waiting out a dropped connection. The page hears the
-// first one start and the last one end (`yak-reconnecting`), and the reporter
-// woven into it (@yaks/tracker/page) says it is reconnecting meanwhile.
-let waiting = 0
-let wait = (by) => {
-  waiting += by
-  if (waiting == (by > 0 ? 1 : 0)) {
-    globalThis.dispatchEvent?.(
-      new CustomEvent('yak-reconnecting', { detail: waiting > 0 }),
+// Each page hears its first dropped connection and its last recovery
+// (`yak-reconnecting`). Its reporter (@yaks/tracker/page) shows the wait.
+let waiting = new WeakMap()
+let wait = (events, by) => {
+  let before = waiting.get(events) ?? 0
+  let after = before + by
+  if (after) waiting.set(events, after)
+  else waiting.delete(events)
+  if (!!before != !!after) {
+    events.dispatchEvent?.(
+      new CustomEvent('yak-reconnecting', { detail: after > 0 }),
     )
   }
 }
@@ -423,29 +425,30 @@ let READ = { when: unanswered }
 // Sent again while the way there failed (`when`, by default `busy`), which
 // waits for the browser to say it is back online. A refusal is thrown at once.
 // Each wait doubles, to fifteen seconds, `tries` times.
-let again = async (clock, call, { when = busy, tries = 7 } = {}) => {
-  let waited = false
-  try {
-    for (let n = 0;; n++) {
-      try {
-        return await call()
-      } catch (e) {
-        if (!when(e) || n >= tries) throw e
-        if (!waited) wait(+(waited = true))
-        if (globalThis.navigator?.onLine === false) {
+let retrying =
+  (clock, events) => async (call, { when = busy, tries = 7 } = {}) => {
+    let waited = false
+    try {
+      for (let n = 0;; n++) {
+        try {
+          return await call()
+        } catch (e) {
+          if (!when(e) || n >= tries) throw e
+          if (!waited) wait(events, +(waited = true))
+          if (globalThis.navigator?.onLine === false) {
+            await new Promise((on) =>
+              events.addEventListener('online', on, { once: true })
+            )
+          }
           await new Promise((on) =>
-            addEventListener('online', on, { once: true })
+            clock.after(Math.min(1000 * 2 ** n, 15000), on)
           )
         }
-        await new Promise((on) =>
-          clock.after(Math.min(1000 * 2 ** n, 15000), on)
-        )
       }
+    } finally {
+      if (waited) wait(events, -1)
     }
-  } finally {
-    if (waited) wait(-1)
   }
-}
 
 // `go` for every item, `LANES` at a time; the first failure stops the rest
 // taking new items, and is thrown once those under way have ended.
@@ -468,13 +471,16 @@ let lanes = async (items, go) => {
 export let store = (base, {
   clock = system,
   connect = (url) => new WebSocket(url),
+  fetch = (input, init) => globalThis.fetch(input, init),
+  events = /** @type {EventTarget} */ (globalThis),
 } = {}) => {
   base = based(base)
-  let once = door(base)
+  let once = door(base, fetch)
+  let again = retrying(clock, events)
   // A read is asked again while it has no answer, so a page that loads as
   // the connection drops gets its rows once it is back, not an empty page.
   let rawAsk = (path, init, read = READ) =>
-    init ? once(path, init) : again(clock, () => once(path), read)
+    init ? once(path, init) : again(() => once(path), read)
   // The store's words: each component it declares, by name, its documents
   // (`vocab.json`) merged. Asked once, and again after a failure.
   let vocabulary, definitions
@@ -681,7 +687,7 @@ export let store = (base, {
     let name = opts.name ?? file.name ?? ''
     let mime = file.type || 'application/octet-stream'
     if (file.size < SPLIT) {
-      return again(clock, () =>
+      return again(() =>
         ask('blob', {
           method: 'POST',
           headers: {
@@ -691,17 +697,19 @@ export let store = (base, {
             ...(name ? { 'x-yak-name': encodeURIComponent(name) } : {}),
           },
           body: file,
-        }))
+        })
+      )
     }
     let { sha, states } = await hashed(file)
     let at = `blob/${sha}`
     let stand = () =>
-      again(clock, () =>
+      again(() =>
         ask(at, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ bytes: file.size, name, mime }),
-        }))
+        })
+      )
     // An upload the platform let go of (409) is begun again; a few rounds
     // with nothing finished is a fault, not a slow line.
     for (let round = 0; round < 4; round++) {
@@ -709,14 +717,15 @@ export let store = (base, {
       if (!need) return done
       try {
         await lanes(need, (n) =>
-          again(clock, () =>
+          again(() =>
             ask(`${at}/${n}`, {
               method: 'PUT',
               // Where the hash stood before this part, so the door hashes it
               // on from there as it passes.
               headers: { 'x-yak-state': states[(n - 1) * part / MIB] },
               body: file.slice((n - 1) * part, n * part),
-            })))
+            })
+          ))
       } catch (e) {
         if (e.status != 409) throw e
       }
@@ -886,8 +895,12 @@ export let store = (base, {
   // fetches and this module's alike, and says so (report.js `yak-moved`);
   // an answer under this app's address is this store's.
   let app = new URL('..', base).href
-  globalThis.addEventListener?.('yak-moved', (e) => {
-    if (!sock || !String(e.detail).startsWith(app)) return
+  events.addEventListener?.('yak-moved', (e) => {
+    if (
+      !sock || !String(/** @type {CustomEvent} */ (e).detail).startsWith(app)
+    ) {
+      return
+    }
     let s = sock
     sock = null
     s.onopen = s.onclose = s.onmessage = null

@@ -524,10 +524,10 @@ test('a deploy says how many round trips it took', async () => {
   assertEquals({ hops: written.hops, r2: written.r2 }, { hops: 3, r2: 2 })
   assertEquals(resent.r2, 0)
   assert(deploy.hops <= 21, JSON.stringify(deploy))
-  // Deploy reads the page for validation and packing and checks the prior
-  // release's index for existing markers. It opens the stylesheet to check
-  // its references and puts the asset marker, release index and declaration.
-  assertEquals(deploy.r2, 7)
+  // Deploy reads the page for validation and packing, opens the stylesheet
+  // to check its references, and puts the release index and declaration.
+  // No asset has left service on this first release, so it writes no pointer.
+  assertEquals(deploy.r2, 5)
   assertEquals(listing.r2, 0)
   // Once the release's index is held, reading a file costs only its bytes.
   assertEquals(reread.r2, 1)

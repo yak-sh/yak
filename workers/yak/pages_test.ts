@@ -873,10 +873,10 @@ test('connections: a built integration is offered by its face, and a site is lin
     card.querySelector('a[href="https://cal.test/"]')?.textContent,
     'Service homepage',
   )
-  assertEquals(
-    (await offered('javascript:alert(1)', true)).includes('alert'),
-    false,
-  )
+  let unsafe = parseHTML(await offered('javascript:alert(1)', true)).document
+    .querySelector('#connect .Card')!
+  assertEquals(unsafe.querySelector('a[href^="javascript:"]'), null)
+  assertEquals(unsafe.textContent.includes('Service homepage'), false)
 })
 
 test('a service detail URL is a server-open modal with its pitch, access, provider, space and Connect form', async () => {

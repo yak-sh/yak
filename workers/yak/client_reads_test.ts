@@ -2,8 +2,7 @@
 // same moment, and each caller still holds its own answer; a subscription's
 // first rows are a promise a page can wait on.
 import { assertEquals, assertNotStrictEquals, assertRejects } from '@std/assert'
-import { stub } from '@std/testing/mock'
-import { clock, test } from '@yaks/testing'
+import { type Clock, clock, test } from '@yaks/testing'
 import { store } from '@yaks/platform/client'
 
 let base = 'https://reads-client.test/house/api/'
@@ -12,30 +11,27 @@ let asked = (
   status = 200,
 ) => {
   let paths: string[] = []
-  let fetching = stub(globalThis, 'fetch', async (url) => {
+  let events = new EventTarget()
+  let fetch = async (url: URL) => {
     let path = String(url).slice(base.length)
     paths.push(path)
     return Response.json(await answer(path), { status })
-  })
+  }
   // A socket that never opens, so a subscription's rows come over HTTP.
-  let socket = stub(
-    globalThis,
-    'WebSocket',
-    function () {
-      return { readyState: 0, send() {}, close() {} }
-    },
-  )
+  let connect = () =>
+    ({ readyState: 0, send() {}, close() {} }) as unknown as WebSocket
   return {
     paths,
-    [Symbol.dispose]: () => (fetching.restore(), socket.restore()),
+    events,
+    client: (clock?: Clock) => store(base, { clock, fetch, events, connect }),
   }
 }
 
 test('reads asked together are one request, each caller its own rows', async () => {
-  using wire = asked((path) =>
+  let wire = asked((path) =>
     path == 'who' ? { person: 'jo' } : [{ entity: { eid: path } }]
   )
-  let client = store(base)
+  let client = wire.client()
   let [one, two] = await Promise.all([client.me(), client.me()])
   let [rows, same, other] = await Promise.all([
     client.query('.house_item'),
@@ -51,8 +47,8 @@ test('reads asked together are one request, each caller its own rows', async () 
 })
 
 test('a read asked again after its answer is asked again', async () => {
-  using wire = asked(() => ({ person: 'jo' }))
-  let client = store(base)
+  let wire = asked(() => ({ person: 'jo' }))
+  let client = wire.client()
   await client.me()
   await client.me()
   assertEquals(wire.paths, ['who', 'who'])
@@ -61,11 +57,11 @@ test('a read asked again after its answer is asked again', async () => {
 test('a read on its way when a write lands answers nobody who asks after', async () => {
   let open = () => {}
   let gate = new Promise<void>((on) => open = on)
-  using wire = asked(async (path) => {
+  let wire = asked(async (path) => {
     if (path == 'query?.house_item' && wire.paths.length == 1) await gate
     return path == 'query?.house_item' ? [] : { path }
   })
-  let client = store(base)
+  let client = wire.client()
   let early = client.query('.house_item')
   await client.publish(new Blob(['<p>hi']), 'hi.html')
   let late = client.query('.house_item')
@@ -79,9 +75,9 @@ test('a read on its way when a write lands answers nobody who asks after', async
 })
 
 test("a subscription's ready is the first rows its callback is handed", async () => {
-  using wire = asked(() => [{ entity: { eid: 'a' } }])
+  let wire = asked(() => [{ entity: { eid: 'a' } }])
   let heard: unknown[] = []
-  let live = store(base).subscribe(
+  let live = wire.client().subscribe(
     '.house_item',
     (rows: unknown) => heard.push(rows),
   )
@@ -93,8 +89,8 @@ test("a subscription's ready is the first rows its callback is handed", async ()
 })
 
 test("a subscription's ready rejects with the store's refusal", async () => {
-  using _wire = asked(() => ({ error: { message: 'no component house' } }), 400)
-  let live = store(base).subscribe('.house', () => {})
+  let wire = asked(() => ({ error: { message: 'no component house' } }), 400)
+  let live = wire.client().subscribe('.house', () => {})
   await assertRejects(() => live.ready, Error, 'no component house')
   live()
 })
@@ -104,21 +100,17 @@ test("a subscription's ready rejects with the store's refusal", async () => {
 let dropping = (drops: number, answer: (path: string) => unknown) => {
   let missed = new Map<string, number>()
   let heard: boolean[] = []
-  let on = (e: Event) => heard.push((e as CustomEvent).detail)
-  addEventListener('yak-reconnecting', on)
   let wire = asked((path) => {
     let n = missed.get(path) ?? 0
     missed.set(path, n + 1)
     if (n < drops && path != 'apply') throw new TypeError('Failed to fetch')
     return answer(path)
   })
-  return {
-    heard,
-    paths: wire.paths,
-    [Symbol.dispose]: () => (
-      wire[Symbol.dispose](), removeEventListener('yak-reconnecting', on)
-    ),
-  }
+  wire.events.addEventListener(
+    'yak-reconnecting',
+    (e) => heard.push((e as CustomEvent).detail),
+  )
+  return { ...wire, heard }
 }
 
 // Time passes in steps, so a retry a wait sets off sets its next wait in time.
@@ -127,23 +119,33 @@ let pass = async (time: ReturnType<typeof clock>, ms: number) => {
 }
 
 test('a read with no answer is asked again, and the page hears it reconnect', async () => {
-  using wire = dropping(2, () => [{ entity: { eid: 'a' } }])
+  let wire = dropping(2, () => [{ entity: { eid: 'a' } }])
+  let other = dropping(1, () => ({ person: 'jo' }))
   let time = clock()
-  let rows = store(base, { clock: time }).query('.house_item')
-  await pass(time, 3000)
+  let rows = wire.client(time).query('.house_item')
+  let person = other.client(time).me()
+  await time.advance(1000)
+  assertEquals(await person, { person: 'jo' })
+  assertEquals(other.heard, [true, false])
+  assertEquals(wire.heard, [true])
+  await pass(time, 2000)
   assertEquals(await rows, [{ entity: { eid: 'a' } }])
   assertEquals(wire.paths.length, 3)
   assertEquals(wire.heard, [true, false])
 })
 
 test('a read the store refuses is not asked again', async () => {
-  using wire = asked(() => ({ error: { message: 'no component house' } }), 400)
-  await assertRejects(() => store(base).query('.house'), Error, 'no component')
+  let wire = asked(() => ({ error: { message: 'no component house' } }), 400)
+  await assertRejects(
+    () => wire.client().query('.house'),
+    Error,
+    'no component',
+  )
   assertEquals(wire.paths, ['query?.house'])
 })
 
 test('a write made while the connection is away waits for who is writing', async () => {
-  using wire = dropping(
+  let wire = dropping(
     8,
     (path) =>
       path == 'who'
@@ -151,7 +153,7 @@ test('a write made while the connection is away waits for who is writing', async
         : { ok: true, aliases: {}, bundles: [{ entity: { eid: 'a' } }] },
   )
   let time = clock()
-  let receipt = store(base, { clock: time }).apply({ entity: { eid: 'a' } })
+  let receipt = wire.client(time).apply({ entity: { eid: 'a' } })
   await pass(time, 120_000)
   assertEquals((await receipt).ok, true)
   assertEquals(wire.paths.filter((p) => p == 'who').length > 8, true)
@@ -161,16 +163,19 @@ test('a write made while the connection is away waits for who is writing', async
 test('a watch a stopped store refused is declared again after the wait it asked', async () => {
   let sent: { subscribe?: string; id?: string }[] = []
   let sock: { onmessage?: (e: { data: string }) => void } = {}
-  using _fetch = stub(globalThis, 'fetch', () => new Promise(() => {}))
-  using _socket = stub(globalThis, 'WebSocket', function () {
-    return Object.assign(sock, {
+  let connect = () =>
+    Object.assign(sock, {
       readyState: 1,
       send: (frame: string) => void sent.push(JSON.parse(frame)),
       close() {},
-    })
-  })
+    }) as unknown as WebSocket
   let time = clock()
-  store(base, { clock: time }).subscribe('.house_item', () => {})
+  let live = store(base, {
+    clock: time,
+    connect,
+    fetch: () => new Promise(() => {}),
+    events: new EventTarget(),
+  }).subscribe('.house_item', () => {})
   let [{ id, subscribe }] = sent
   sock.onmessage!({
     data: JSON.stringify({
@@ -182,13 +187,13 @@ test('a watch a stopped store refused is declared again after the wait it asked'
   assertEquals(sent.length, 1)
   await time.advance(1)
   assertEquals(sent, [{ subscribe, id }, { subscribe, id }])
+  live()
 })
 
 test('a store that moved is watched from a new socket at once, and only its own', () => {
   type Sock = { sent: unknown[]; closed: boolean; onopen?: () => void }
   let opened: Sock[] = []
-  using _fetch = stub(globalThis, 'fetch', () => new Promise(() => {}))
-  using _socket = stub(globalThis, 'WebSocket', function () {
+  let connect = () => {
     let s: Sock & Record<string, unknown> = {
       readyState: 1,
       sent: [],
@@ -197,14 +202,19 @@ test('a store that moved is watched from a new socket at once, and only its own'
       close: () => void (s.closed = true),
     }
     opened.push(s)
-    return s
-  })
-  store('https://moved-client.test/house/api/').subscribe(
+    return s as unknown as WebSocket
+  }
+  let events = new EventTarget()
+  let live = store('https://moved-client.test/house/api/', {
+    connect,
+    fetch: () => new Promise(() => {}),
+    events,
+  }).subscribe(
     '.house_item',
     () => {},
   )
   let moved = (url: string) =>
-    dispatchEvent(new CustomEvent('yak-moved', { detail: url }))
+    events.dispatchEvent(new CustomEvent('yak-moved', { detail: url }))
   moved('https://moved-client.test/garden/request')
   assertEquals(opened.length, 1)
   moved('https://moved-client.test/house/request')
@@ -212,4 +222,5 @@ test('a store that moved is watched from a new socket at once, and only its own'
   let [first, second] = opened
   second.onopen!()
   assertEquals(second.sent, first.sent)
+  live()
 })
