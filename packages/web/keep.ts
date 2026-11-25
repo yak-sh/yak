@@ -27,13 +27,22 @@ export type Window = {
   reportError?: (error: unknown) => void
 }
 
-/** The snapshot of the page in `win` as it is now. */
-export let snapshot = (win: Window): Snapshot => ({
-  keep: win.location.href,
-  html: '<!doctype html>' + win.document.documentElement.outerHTML,
-  at: Date.now(),
-  since: win.performance.timeOrigin,
-})
+// What a page holds that nobody sees: a picture of it would only be slower
+// to draw, and its scripts never run in one (./picture.ts).
+let UNSEEN = 'script, template, [hidden], dialog:not([open])'
+
+/** The snapshot of the page in `win` as it shows now, without what is not
+ * shown. */
+export let snapshot = (win: Window): Snapshot => {
+  let shown = win.document.documentElement.cloneNode(true) as Element
+  for (let e of shown.querySelectorAll(UNSEEN)) e.remove()
+  return {
+    keep: win.location.href,
+    html: '<!doctype html>' + shown.outerHTML,
+    at: Date.now(),
+    since: win.performance.timeOrigin,
+  }
+}
 
 /** Register `worker` for the page in `win`, and keep the page with it. */
 export let keep = (win: Window, worker: string): void => {

@@ -34,8 +34,10 @@ let tab = (html: string) => {
   return { sent, registered, hide, leave, load }
 }
 
-test('a page registers its worker once loaded, and sends it what it shows as it is hidden or left in place', () => {
-  let t = tab('<html><body><p>Seen last</p></body></html>')
+test('a page registers its worker once loaded, and sends it what it shows as it is hidden or left in place, without what it does not', () => {
+  let t = tab(
+    '<html><body><p>Seen last</p><section hidden><p>Not shown</p></section><script>go()</script></body></html>',
+  )
   assertEquals(t.registered, [])
   t.load()
   assertEquals(t.registered, ['/worker.js'])
@@ -45,7 +47,10 @@ test('a page registers its worker once loaded, and sends it what it shows as it 
     'https://yaks.app/checks',
     'https://yaks.app/checks',
   ])
-  assertEquals(t.sent[0].html.includes('<p>Seen last</p>'), true)
+  assertEquals(
+    t.sent[0].html,
+    '<!doctype html><html><body><p>Seen last</p></body></html>',
+  )
 })
 
 test('a kept picture registers nothing and sends nothing', () => {
