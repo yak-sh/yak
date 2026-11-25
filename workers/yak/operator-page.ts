@@ -2151,6 +2151,16 @@ let talk = mountTalk({
   },
 })
 let heading = document.querySelector('[data-title]')
+// The conversation's title is its view's (@yaks/platform/talk-views), which
+// a press showing it again names the page with, and the bar's while it shows.
+let titled = (title) => {
+  let view = box.closest('[data-talk-view]')
+  if (view) {
+    let was = JSON.parse(view.dataset.talkView)
+    view.dataset.talkView = JSON.stringify({ ...was, title, page: title + was.page.slice(was.title.length) })
+  }
+  if (!view?.hidden) heading.textContent = title
+}
 // The app open beside the chat (T-140509) is drawn again from the page graph
 // as the Operator works on it (@yaks/platform/app-canvas-browser), and its
 // live screens loaded again when the Operator changes it. With none open, the
@@ -2486,7 +2496,7 @@ let read = async () => {
         if (reach) aside().querySelector('[data-helpers]').after(reach)
         shown(), show()
       }
-      if (got.title) heading.textContent = got.title
+      if (got.title) titled(got.title)
       dates(document)
     } while (again)
   })()

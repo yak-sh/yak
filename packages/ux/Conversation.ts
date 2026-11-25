@@ -418,9 +418,12 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     at.current.away = away
     at.current.onChange(conversed(at.current.e, { away }))
   }
+  // A conversation standing hidden (another view of its page showing) moves
+  // nothing: the pane it shares is that view's.
+  let unseen = () => !!root.current?.closest('[hidden]')
   let newest = () => {
     let p = at.current.pane
-    if (!p) return
+    if (!p || unseen()) return
     p.scrollTop = p.scrollHeight
     at.current.y = p.scrollTop
   }
@@ -476,7 +479,7 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     }
     opened()
     let scroll = () => {
-      if (address()?.over) return
+      if (address()?.over || unseen()) return
       let now = p.scrollTop
       let was = at.current.y
       at.current.y = now

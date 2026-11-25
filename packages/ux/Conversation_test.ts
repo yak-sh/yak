@@ -191,6 +191,19 @@ test('it stays at the newest as lines arrive, until the reader scrolls up', () =
   equal(p.newest(), true)
 })
 
+test('standing hidden, it leaves the pane it shares as another view has it', () => {
+  using p = page()
+  p.root.toggleAttribute('hidden', true)
+  p.scroll(300)
+  equal(p.state().away, false, 'another view scrolled, not its reader')
+  p.grow(400)
+  p.draw(lines(6))
+  equal(p.pane.scrollTop, 300)
+  p.root.toggleAttribute('hidden', false)
+  p.grow(100)
+  equal(p.newest(), true, 'shown again, it is at its newest')
+})
+
 test('the page is held to what a person sees, at its own scale, and back at its top unless pinched', () => {
   equal(seen({ height: 508, scale: 1, offsetTop: 336 }, 0), {
     height: 508,

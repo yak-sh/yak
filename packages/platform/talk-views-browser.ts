@@ -4,8 +4,8 @@
  * showing it (@yaks/ui/navigate `DRAW`), with nothing fetched. Showing a
  * view hides the others, names the page, lights the side's link to it,
  * stands the aside beside it or not, points the page's back fields at it,
- * and puts back where it was scrolled (a conversation never shown opens at
- * its newest line). Every view keeps running while hidden; one whose script
+ * and puts back where it was scrolled: at its foot where it was left at its
+ * foot, as a conversation never shown opens at its newest line. Every view keeps running while hidden; one whose script
  * stood hidden since the page came starts when first shown (a script that
  * started says so with `STARTED`). Updates shown this way are read, as
  * opening their page reads them: each space's are marked through the tab's
@@ -72,15 +72,17 @@ export let show = (
   let view = said(next)
   let body = doc.getElementById('content')
   let was = views.find((v) => !v.hidden)
-  if (body && was) was.dataset.scroll = String(body.scrollTop)
+  // Where the view left was scrolled: its foot, where it was at its end,
+  // so what came while it stood hidden is in sight when it shows again.
+  if (body && was) {
+    let end = body.scrollTop + body.clientHeight >= body.scrollHeight - 2
+    was.dataset.scroll = end ? 'end' : String(body.scrollTop)
+  }
   for (let v of views) v.hidden = v != next
   if (body) {
-    let kept = next.dataset.scroll
-    body.scrollTop = kept != null
-      ? Number(kept)
-      : next.querySelector('[data-conversation]')
-      ? body.scrollHeight
-      : 0
+    let kept = next.dataset.scroll ??
+      (next.querySelector('[data-conversation]') ? 'end' : '0')
+    body.scrollTop = kept == 'end' ? body.scrollHeight : Number(kept)
   }
   for (let s of next.querySelectorAll(`script:not([src]):not([${STARTED}])`)) {
     if (s.getAttribute('type') == 'module') rerun(s)

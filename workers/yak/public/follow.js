@@ -31,13 +31,16 @@ export function follow(win, conversation, pane, signal) {
     }, { once: true })
   }
   if (!pane) return
+  // A conversation standing hidden (another view of its page showing) keeps
+  // nothing of the pane it shares, and puts nothing back.
+  let hidden = () => !!conversation.closest('[hidden]')
   // Where the person was, kept while nothing is over the conversation.
   let y = pane.scrollTop
   pane.addEventListener('scroll', () => {
-    if (!over()) y = pane.scrollTop
+    if (!over() && !hidden()) y = pane.scrollTop
   }, { passive: true, signal })
   let back = () => {
-    pane.scrollTop = y
+    if (!hidden()) pane.scrollTop = y
   }
   win.addEventListener('hashchange', () => {
     if (!named()) back()
