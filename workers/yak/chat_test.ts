@@ -633,9 +633,8 @@ test('a linked Discord account is its person’s, and a space’s link is nobody
 })
 
 // Whom the Operator's reply in a room notifies (T-2379): someone who spoke
-// there, by the name they go by on Discord or, once they linked it, by their
-// own name here, is mentioned where the reply names them.
-test('a reply in a room mentions those it names who spoke there, by either name', async () => {
+// there can be mentioned by their Discord name or their linked name here.
+test('a room reply resolves explicit mentions by Discord or linked name', async () => {
   let p = hosted('a probe secret', {
     VAULT: d1() as unknown as D1Like,
     VAULT_KEY: KEY,
@@ -677,6 +676,7 @@ test('a reply in a room mentions those it names who spoke there, by either name'
     { entity: { eid: room }, chat_room: { via: 'discord', id: 'general' } },
     ...said('700', 'mattp'),
     ...said('800', 'Ember'),
+    ...said('106256068165799936', 'yaks'),
   ], { trusted: true })
   let eid = crypto.randomUUID()
   let [row] = replyIn('discord', {
@@ -684,10 +684,12 @@ test('a reply in a room mentions those it names who spoke there, by either name'
     chat_message: { room, connection: 'c1' },
   }, {
     eid,
-    text: 'Matthew, it is live; Ember, thanks. Bob, hi.',
+    text:
+      '@Matthew, it is live on yaks.app. Ember says thanks. @Ember, @Bob, hi.',
   }, await peopleIn(p.env, store.g, room))
   assertEquals(row.doc, {
-    body: '<@700>, it is live; <@800>, thanks. Bob, hi.',
+    body:
+      '<@700>, it is live on yaks.app. Ember says thanks. <@800>, @Bob, hi.',
   })
 })
 

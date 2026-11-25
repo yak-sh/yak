@@ -638,7 +638,10 @@ let chatFraming = async (
   let [held] = room ? await g.get([room], ['chat_room']) : []
   let c = part<Comp | undefined>(held ?? undefined, 'chat_room')
   // Only a direct message is said where nobody else hears the answer.
-  return cue({ group: m.addressed != 'direct', to: !!m.addressed }) +
+  let mentions = platform.mentions
+    ? 'To notify someone in your reply, write @Name. '
+    : ''
+  return cue({ group: m.addressed != 'direct', to: !!m.addressed }) + mentions +
     framing(platform, {
       name: who || (request.address ?? 'someone'),
       addressed: m.addressed as Said['addressed'],
@@ -886,9 +889,9 @@ export let LETTERED = new Set(['email', 'letter'])
 /**
  * What answers words that came by a channel, in the package of the item
  * they arrived as, for its own effect to send: a letter answering a letter
- * in its thread ({@link letterRows}), mentioning those of `people` it names
- * in a chat room (operator-rooms.ts `peopleIn`), signed by the space's Operator, naming
- * the answer it carries where it is one of its own (`target`). Words
+ * in its thread ({@link letterRows}), mentioning those of `people` it writes
+ * as `@Name` in a chat room (operator-rooms.ts `peopleIn`), signed by the
+ * space's Operator, naming the answer it carries where it is one of its own (`target`). Words
  * answered where they were said need nothing written.
  */
 export let replyRows = (

@@ -689,15 +689,15 @@ export type Mentioner = (account: string) => string
 export type Named = { name: string; account: string }
 
 /**
- * A reply with the first time it names each of `people` written as a
- * mention of their account (`form`), so they are notified; a name is a whole
- * word, any case, longest first. Code and links keep what they hold, and a
- * name too short to be one (under three letters) stays a name.
+ * A reply with its first `@Name` for each of `people` written as a mention
+ * of their account (`form`). Names match whole words, any case, longest
+ * first, and must have at least three characters. Prose, code and links
+ * keep their text.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(
- *   mentioned('Matt, it is live. Thanks Matt!', [{ name: 'Matt', account: '7' }], (a) => `<@${a}>`),
+ *   mentioned('@Matt, it is live. Thanks Matt!', [{ name: 'Matt', account: '7' }], (a) => `<@${a}>`),
  *   '<@7>, it is live. Thanks Matt!',
  * )
  * ```
@@ -714,19 +714,22 @@ export let mentioned = (
       names.set(name.toLowerCase(), p.account)
     }
   }
-  if (!names.size) return text
+  if (!names.size || !text.includes('@')) return text
   let escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   let words = [...names.keys()].sort((a, b) => b.length - a.length)
     .map(escape).join('|')
   let find = new RegExp(
-    `(\`\`\`[\\s\\S]*?\`\`\`|\`[^\`\\n]*\`|\\[[^\\]\\n]*\\]\\([^)\\s]*\\)|<[^>\\s]*>|https?:\\/\\/\\S+)|(?<![\\p{L}\\p{N}_@])(${words})(?![\\p{L}\\p{N}_])`,
+    `${LINK.source}|` +
+      String
+        .raw`<[^>\s]*>|(?<![\p{L}\p{M}\p{N}_.@/\\])@(?<name>${words})(?![\p{L}\p{M}\p{N}_@]|\.[\p{L}\p{N}])`,
     'giu',
   )
   let done = new Set<string>()
-  return text.replace(find, (whole, kept, name) => {
-    if (kept) return kept
-    let account = names.get(String(name).toLowerCase())!
-    if (done.has(account)) return whole
+  return text.replace(find, (whole, ...match) => {
+    let { name } = match.at(-1) as { name?: string }
+    if (!name) return whole
+    let account = names.get(name.toLowerCase())
+    if (!account || done.has(account)) return whole
     done.add(account)
     return form(account)
   })

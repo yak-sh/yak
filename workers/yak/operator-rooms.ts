@@ -697,8 +697,8 @@ export let chatRead = (
  * (`chat_message{room}`), replying to it where it names its message, posted
  * by the bot of its connection (@yaks/chat `chat_post`), its links written
  * as the platform writes them (@yaks/chat `linked`), cut to the platform's
- * limit, one message a piece. The first time it names one of `people`
- * ({@link peopleIn}) it mentions them (@yaks/chat `mentioned`), so they are
+ * limit, one message a piece. Its first `@Name` for each of `people`
+ * ({@link peopleIn}) becomes a mention (@yaks/chat `mentioned`), so they are
  * notified. One `to` an account alone (`chat_private`) is
  * one message, never cut, as a press answers it whole; `controls` go with
  * its last piece. */
@@ -798,7 +798,10 @@ export let chatSend = (env: Env, store: Store, space = false): Tool => ({
         description:
           "The platform's id for the message to reply to; left out, a message of its own in the room.",
       },
-      text: { type: 'string', description: 'What to say there.' },
+      text: {
+        type: 'string',
+        description: 'What to say there. To notify someone, write @Name.',
+      },
       to: {
         type: 'string',
         description:

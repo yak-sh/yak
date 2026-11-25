@@ -214,26 +214,30 @@ test('a link is written once, by its words or else its address alone', () => {
   ) assertEquals(linked(text, form), want, text)
 })
 
-// The Operator naming someone in its reply mentions them, so they are
-// notified (T-2379): the first time each is named, by any name they go by.
-test('a reply names each person once as a mention, never in code or a link', () => {
+test('a reply converts each explicit mention once and preserves prose, code and links', () => {
   let people = [
     { name: 'Matt', account: '7' },
     { name: 'Matthew Doe', account: '7' },
     { name: 'Bo', account: '8' },
     { name: 'Ann', account: '9' },
+    { name: 'yaks', account: '10' },
   ]
   let at = (a: string) => `<@${a}>`
   for (
     let [text, want] of [
-      ['Matt, it is live.', '<@7>, it is live.'],
-      ['matt and Matt', '<@7> and Matt'],
-      ['Matthew Doe, then Matt.', '<@7>, then Matt.'],
-      ['Mattress, Bo, @Matt', 'Mattress, Bo, @Matt'],
+      ['Matt, it is live.', 'Matt, it is live.'],
+      ['Matt and @matt and @Matt', 'Matt and <@7> and @Matt'],
+      ['@Matthew Doe, then @Matt.', '<@7>, then @Matt.'],
+      ['@Mattress, @Bo, @Matt.', '@Mattress, @Bo, <@7>.'],
       [
-        '`Ann` [Ann](https://a.com/Ann) <https://a.com/Ann>, ann!',
-        '`Ann` [Ann](https://a.com/Ann) <https://a.com/Ann>, <@9>!',
+        '`@Ann` [@Ann](https://a.com/Ann) <https://a.com/@Ann> https://a.com/@Ann, @ann!',
+        '`@Ann` [@Ann](https://a.com/Ann) <https://a.com/@Ann> https://a.com/@Ann, <@9>!',
       ],
+      [
+        'The people who run yaks.app have been told. hi@yaks.app @yaks.app',
+        'The people who run yaks.app have been told. hi@yaks.app @yaks.app',
+      ],
+      ['\\@Matt <@9> and @nobody', '\\@Matt <@9> and @nobody'],
       ['Nobody here.', 'Nobody here.'],
     ]
   ) assertEquals(mentioned(text, people, at), want, text)
