@@ -90,13 +90,16 @@ export let badge = (count: number) => {
 /** Takes away this device's notifications whose thing was read or
  * answered since they came: `handled` is asked which of the tags shown are,
  * and those close. A page calls it as it is seen to clear any stale tagged
- * notifications still on the device. */
+ * notifications still on the device. A browser that keeps no notifications
+ * (Chrome on an iPhone) has none to tidy. */
 export let tidy = async (
   handled: (tags: string[]) => Promise<string[]>,
 ): Promise<void> => {
   if (!('serviceWorker' in navigator)) return
   let registered = await navigator.serviceWorker.getRegistration('/')
-  let shown = (await registered?.getNotifications() ?? []).filter((n) => n.tag)
+  let shown = (await registered?.getNotifications?.() ?? []).filter((n) =>
+    n.tag
+  )
   if (!shown.length) return
   let gone = new Set(await handled([...new Set(shown.map((n) => n.tag))]))
   shown.filter((n) => gone.has(n.tag)).forEach((n) => n.close())

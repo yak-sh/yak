@@ -1,7 +1,7 @@
 // Subscribing a browser while its push service refuses for a while.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { persist, Unallowed } from './browser.ts'
+import { persist, tidy, Unallowed } from './browser.ts'
 
 // The browser's push service refusing a subscription for a while (bug
 // a0001c73): the page tries again later and says so once.
@@ -48,4 +48,19 @@ test('persist passes any other failure through untried', async () => {
   let r = run([new DOMException('bad key', 'InvalidAccessError')])
   await assertRejects(() => r.done, DOMException, 'bad key')
   assertEquals(r.slept, [])
+})
+
+test('tidy asks nothing in a browser that keeps no notifications', async () => {
+  let asked = false
+  let serviceWorker = { getRegistration: () => Promise.resolve({}) }
+  Object.defineProperty(navigator, 'serviceWorker', {
+    value: serviceWorker,
+    configurable: true,
+  })
+  try {
+    await tidy(() => (asked = true, Promise.resolve([])))
+  } finally {
+    delete (navigator as { serviceWorker?: unknown }).serviceWorker
+  }
+  assertEquals(asked, false)
 })
