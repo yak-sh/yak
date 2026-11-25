@@ -1,27 +1,6 @@
 /** A visible result that arrives after the event's own frame. Works across
  * independently bundled page scripts through the document's event channel. */
 export let RESULT = 'yak-interaction-result'
-export let USABLE = 'yak-usable'
-export let PRERENDER_LINK = 'data-prerender'
-export let PRERENDER_KEY = 'yak-interaction-prerender'
-
-/** Run once the page's own controls are ready. */
-export let whenUsable = (
-  win: Window & typeof globalThis,
-  use: (at: number) => void,
-): void => {
-  let mark = win.performance.getEntriesByName(USABLE)[0]
-  if (mark) return use(mark.startTime)
-  let observer = new win.PerformanceObserver((list) => {
-    let mark = list.getEntriesByName(USABLE)[0]
-    if (!mark) return
-    observer.disconnect()
-    win.clearTimeout(stop)
-    use(mark.startTime)
-  })
-  let stop = win.setTimeout(() => observer.disconnect(), 10_000)
-  observer.observe({ entryTypes: ['mark'] })
-}
 
 export type Result = {
   /** Milliseconds spent waiting for a response, exclusive of drawing it. */

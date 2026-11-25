@@ -330,6 +330,8 @@ export type Browsing =
   & Partial<Pick<Window, 'requestIdleCallback'>>
   & {
     DOMParser: typeof DOMParser
+    /** Whether a link belongs to this navigator. */
+    follows?: (link: HTMLAnchorElement) => boolean
     /** Prepare the files of a held document while its link is on screen. */
     prepare?: (page: Document, at: URL) => void
     /** Open a READY page as a document when the current page has its own
@@ -469,6 +471,7 @@ let followed = (
   base: string,
   here: string,
   readyOnly = false,
+  follows?: Browsing['follows'],
 ): URL | null => {
   let link = (e.target as Element | null)?.closest?.('a[href]') as
     | HTMLAnchorElement
@@ -476,7 +479,8 @@ let followed = (
   let m = e as MouseEvent
   if (
     !link || e.defaultPrevented || m.button > 0 || m.metaKey || m.ctrlKey ||
-    m.shiftKey || m.altKey || (readyOnly && !link.hasAttribute(READY))
+    m.shiftKey || m.altKey || (readyOnly && !link.hasAttribute(READY)) ||
+    follows?.(link) === false
   ) return null
   return destination(link, base, here)
 }
@@ -923,7 +927,7 @@ export let start = (
   let ahead = (e: Event) => {
     let link = (e.target as Element | null)?.closest?.(`a[${WARM}][href]`)
     if (link && !e.defaultPrevented) warmLink(link)
-    let to = followed(e, win.location.href, here, !!win.enter)
+    let to = followed(e, win.location.href, here, !!win.enter, win.follows)
     if (!to || pages.has(page(to)) || drawing(to)) return
     drop()
     let key = page(to), held = ask(to, true)
@@ -961,7 +965,7 @@ export let start = (
   })
   win.addEventListener('click', (e: MouseEvent) => {
     let began = Math.min(now(), e.timeStamp)
-    let to = followed(e, win.location.href, here, !!win.enter)
+    let to = followed(e, win.location.href, here, !!win.enter, win.follows)
     if (!to) return
     let pressed = result(doc, e)
     e.preventDefault()

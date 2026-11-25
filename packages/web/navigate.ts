@@ -17,6 +17,7 @@
  */
 import {
   AHEAD,
+  type Browsing,
   GOING,
   PAGE,
   SHOWN,
@@ -25,8 +26,16 @@ import {
 } from '@yaks/ui/navigate'
 import { browserHistory } from './history.ts'
 
-if (typeof document != 'undefined') {
-  let win = globalThis.window
+const NAVIGATOR = Symbol.for('yaks.navigator')
+
+/** The navigator shared by the views of a browser document. */
+export let navigation = (
+  win: Window & typeof globalThis,
+  follows?: Browsing['follows'],
+): ReturnType<typeof start> => {
+  let held = win as Window & { [NAVIGATOR]?: ReturnType<typeof start> }
+  if (held[NAVIGATOR]) return held[NAVIGATOR]
+  let { document, location, DOMParser, performance } = win
   // Each page it asks for is a `yak-fetch` mark, whether ahead or not, so
   // what its looking ahead costs is counted apart from a page's own fetches.
   let fetch: typeof win.fetch = (url, init) => {
@@ -36,7 +45,7 @@ if (typeof document != 'undefined') {
     }
     return win.fetch(url, init)
   }
-  start(
+  let go = start(
     {
       document,
       location,
@@ -45,14 +54,15 @@ if (typeof document != 'undefined') {
       scrollTo: win.scrollTo.bind(win),
       requestIdleCallback: win.requestIdleCallback?.bind(win),
       DOMParser,
+      follows,
     },
-    browserHistory(),
+    browserHistory(win),
   )
   let measure = (e: Event) => {
     let { began, phases, from, url, tally } = (e as CustomEvent<Swapped>)
       .detail
     let swapped = performance.now()
-    requestAnimationFrame(() => {
+    win.requestAnimationFrame(() => {
       let end = performance.now()
       let frame = end - swapped
       performance.measure('yak-page', {
@@ -67,7 +77,7 @@ if (typeof document != 'undefined') {
   // A click on a page not held: the frame it shows itself in at once.
   document.addEventListener(GOING, (e) => {
     let { began } = (e as CustomEvent<{ began: number }>).detail
-    requestAnimationFrame(() =>
+    win.requestAnimationFrame(() =>
       performance.measure('yak-press', {
         start: began,
         end: performance.now(),
@@ -75,4 +85,12 @@ if (typeof document != 'undefined') {
       })
     )
   })
+  return held[NAVIGATOR] = go
+}
+
+if (
+  typeof document != 'undefined' &&
+  document.querySelector('script[data-navigate]')
+) {
+  navigation(globalThis.window)
 }

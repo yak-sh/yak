@@ -43,17 +43,17 @@ export let pageTalk = (
   let heard = new Set<(told: Heard) => void>()
   let watch: Watch | undefined, off: (() => void) | undefined
   let view = at?.closest<HTMLElement>(`[${VIEW}]`)
-  let doc = at?.ownerDocument as
-    | (Document & { prerendering?: boolean })
-    | undefined
+  let doc = at?.ownerDocument
   let closed = false
+  let frame = view?.closest('[data-site-frame]')
   let showing = () => {
-    if (closed || doc?.prerendering) return
-    if (view?.hidden && watch) {
+    if (closed) return
+    let hidden = view?.hidden || frame?.hasAttribute('inert')
+    if (hidden && watch) {
       off!()
       watch.close()
       watch = off = undefined
-    } else if (!view?.hidden && !watch) {
+    } else if (!hidden && !watch) {
       watch = graph.watch(line)
       off = watch.subscribe(([row]) => {
         if (!row?.operatorTalk) return
@@ -64,14 +64,12 @@ export let pageTalk = (
   // An already mounted conversation can paint before its live watch opens.
   let activated = () => {
     let win = doc?.defaultView
-    if (win?.requestAnimationFrame) {
+    if (!frame?.hasAttribute('inert') && win?.requestAnimationFrame) {
       win.requestAnimationFrame(() => win.setTimeout(showing, 0))
     } else showing()
   }
   view?.addEventListener(VIEWED, showing)
-  if (doc?.prerendering) {
-    doc.addEventListener('prerenderingchange', activated, { once: true })
-  }
+  frame?.addEventListener(VIEWED, activated)
   showing()
   return {
     /** be told the row each time it moves, from now on */
@@ -89,7 +87,7 @@ export let pageTalk = (
     close: () => {
       closed = true
       view?.removeEventListener(VIEWED, showing)
-      doc?.removeEventListener('prerenderingchange', activated)
+      frame?.removeEventListener(VIEWED, activated)
       off?.()
       watch?.close()
       watch = off = undefined

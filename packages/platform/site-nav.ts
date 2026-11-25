@@ -30,22 +30,20 @@ export let island = (module: string) =>
     if (!who.signedIn) linkToOpen()?.removeAttribute('${READY}')
   }).catch((error) => globalThis.reportError?.(error))
   let warm = async () => {
-    let native = globalThis.HTMLScriptElement?.supports?.('speculationrules')
-    let chat = native || !remembered ? (await checking)?.chat : undefined
-    let to = chat || (remembered ? '${MANAGE}' : undefined)
+    let to = remembered ? '${MANAGE}' : (await checking)?.chat
     if (!to) return
-    let first = native && chat ? undefined : fetch(to, {
+    let first = fetch(to, {
       headers: { accept: 'text/html', '${AHEAD}': 'prefetch' },
       credentials: 'same-origin',
     }).catch(() => null)
-    let { ready, prerender } = await import(${JSON.stringify(module)})
+    let { ready } = await import(${JSON.stringify(module)})
     let link = linkToOpen()
     if (!link && document.readyState == 'loading') {
       await new Promise((done) => document.addEventListener('DOMContentLoaded', done, { once: true }))
       link = linkToOpen()
     }
     if (link && who?.signedIn !== false) {
-      return native && chat ? prerender(link, to) : ready(link, to, first)
+      return ready(link, to, first)
     }
   }
   let warming = warm().catch((error) => globalThis.reportError?.(error))

@@ -1625,13 +1625,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   // Signing out starts fresh guest work; old attribution receipts stay owned.
   // Only a POST, so a link a mail client fetches signs nobody out.
   if (path == LOGOUT && req.method == 'POST' && env.SESSION_SECRET) {
-    let res = redirect(
+    return redirect(
       hostUrl(env, '/'),
       await signedOut(req, env, env.SESSION_SECRET),
       303,
     )
-    res.headers.set('clear-site-data', '"prerenderCache"')
-    return res
   }
 
   // The home page's box (newcomer.ts): the words go to the Operator of the

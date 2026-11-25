@@ -39,6 +39,7 @@
   let slot = document.querySelector('.Hello_Yak')
   let after = document.querySelector('.Sky_End, .Yours')
   let sky = document.querySelector('.Sky')
+  let active = () => sky?.isConnected && !sky.closest('[inert]')
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
   let dark = matchMedia('(prefers-color-scheme: dark)')
   let sink = Number(sky?.dataset.sink ?? 0)
@@ -152,7 +153,9 @@
     }
   }
   let place = () => {
+    if (!active()) return
     let r = slot.getBoundingClientRect(), n = after.getBoundingClientRect()
+    if (!r.width) return
     let set = (name, px) => sky.style.setProperty(name, px.toFixed(2) + 'px')
     u = r.width / 128
     feet = Math.max(1, r.top + scrollY + r.height * .89 - sink * u)
@@ -711,6 +714,18 @@
     clearTimeout(dim)
     dim = setTimeout(() => pass(-1e4, -1e4), 700)
   }
+  // Own the input whose next frame the sky draws. Its ambient changes
+  // also run while a finger taps the background without asking for anything.
+  let drawInput = (input, change) => {
+    let pressed
+    document.dispatchEvent(
+      new document.defaultView.CustomEvent('yak-interaction-result', {
+        detail: { input, take: (own) => pressed = own },
+      }),
+    )
+    change()
+    pressed?.drawn()
+  }
 
   if (slot && after && sky) {
     place()
@@ -722,9 +737,10 @@
   if (sky && sun && moon && halo && far) {
     let frame = 0
     addEventListener('pointermove', (e) => {
-      if (frame) return
+      if (!active() || frame) return
       frame = requestAnimationFrame(() => {
         frame = 0
+        if (!active()) return
         // the sun and the moon show they answer a touch to a mouse only
         let on = e.pointerType == 'mouse' && !turning && !page(e.target) &&
           over(e.clientX, e.clientY)
@@ -734,12 +750,18 @@
       })
     }, { passive: true })
     addEventListener('click', (e) => {
-      if (page(e.target) || getSelection()?.toString()) return
-      if (over(e.clientX, e.clientY)) return spin()
+      if (!active() || page(e.target) || getSelection()?.toString()) return
+      if (over(e.clientX, e.clientY)) {
+        if (!turning) drawInput(e, spin)
+        return
+      }
       if (calm.matches) return
       let [, y] = unit([e.clientX, e.clientY])
       if (dark.matches && y < -40 && y > -700) {
-        brighten(e.clientX, e.clientY), through(e.clientX, e.clientY)
+        drawInput(e, () => {
+          brighten(e.clientX, e.clientY)
+          through(e.clientX, e.clientY)
+        })
       }
     })
   }

@@ -717,7 +717,7 @@
      hero. Dusk when the page is light, night when it is dark; a touch on
      the sun or the moon turns it through the other and back (sky.js
      `spin`). */
-  :root:has(> .Home),
+  :root:has(> .Home, > body > .Home),
   .Home {
     overflow-x: clip;
   }

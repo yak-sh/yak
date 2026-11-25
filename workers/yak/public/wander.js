@@ -191,7 +191,7 @@
       where = 'out', size = lane.size, x = lane.x + scrollX
       yak.classList.add('Wander-out')
       yak.style.width = yak.style.height = `${size}px`
-      document.body.append(yak)
+      ;(slot.closest('[data-site-home]') ?? document.body).append(yak)
       let m = getComputedStyle(yak)
       room = [m.scrollMarginTop, m.scrollMarginBottom].map((v) =>
         parseFloat(v) || 0
@@ -223,6 +223,7 @@
         return
       }
       wake()
+      if (slot.closest('[inert]')) return
       let dt = Math.min(.05, (now - last) / 1000 || 0)
       last = now
       let quiet = now - scrolled > DELAY

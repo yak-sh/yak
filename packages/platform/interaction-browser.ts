@@ -90,5 +90,14 @@ if (view && view.top == view) {
     page: (url) => pageKind(url.pathname, url.searchParams.has('app')),
     target: targetKind,
     send,
+    explicit: (target) => target == 'home-background',
+    measured: checked
+      ? (point, began) =>
+        performance.measure('yak-interaction', {
+          start: began,
+          duration: point.ms,
+          detail: { url: location.href, ...point },
+        })
+      : undefined,
   })
 }

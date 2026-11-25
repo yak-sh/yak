@@ -9,7 +9,8 @@
   * {
     box-sizing: border-box;
   }
-  body {
+  body:not([data-site-views]),
+  .Site_Workspace {
     margin: 0;
     min-height: 100vh;
     display: grid;
@@ -19,24 +20,23 @@
     font: 400 var(--size)/1.6 var(--font);
     -webkit-font-smoothing: antialiased;
   }
-  main {
+  :where(body:not([data-site-views]), .Site_Workspace) main {
     width: 100%;
     max-width: 34rem;
     padding: 2rem 1rem;
     text-align: center;
     overflow-wrap: anywhere;
   }
-  h1 {
+  :where(body:not([data-site-views]), .Site_Workspace) h1 {
     font-size: 1.6rem;
     font-weight: 800;
     line-height: 1.25;
     margin: 0 0 .5rem;
   }
-  h2,
-  h3 {
+  :where(body:not([data-site-views]), .Site_Workspace) :is(h2, h3) {
     line-height: 1.3;
   }
-  p {
+  :where(body:not([data-site-views]), .Site_Workspace) p {
     color: var(--muted);
     margin: 0 0 1rem;
   }
@@ -48,16 +48,16 @@
     outline: 3px solid var(--accent);
     outline-offset: 3px;
   }
-  form {
+  :where(body:not([data-site-views]), .Site_Workspace) form {
     display: grid;
     gap: .75rem;
     margin: 1.5rem 0 1rem;
   }
-  form p {
+  :where(body:not([data-site-views]), .Site_Workspace) form p {
     margin: 0;
     font-size: var(--small);
   }
-  input {
+  :where(body:not([data-site-views]), .Site_Workspace) input {
     text-align: center;
   }
   code {
@@ -307,6 +307,21 @@
     max-width: none;
     padding: 0;
     text-align: left;
+  }
+  .Site_Workspace {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+  }
+  .Site_Workspace[inert],
+  [data-site-home][inert] {
+    visibility: hidden;
+  }
+  .Site_Workspace[inert] {
+    opacity: 0;
+  }
+  body[data-site-workspace] {
+    overflow: hidden;
   }
   /* What the column holds is sized to it: the yak beside the Operator's
      box (operator-page.ts `composer`), and what its bar opens. */

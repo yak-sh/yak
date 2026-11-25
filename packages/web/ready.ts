@@ -1,139 +1,198 @@
+import { result } from '@yaks/ui/interaction'
 import {
-  PRERENDER_KEY,
-  PRERENDER_LINK,
-  result,
-  USABLE,
-  whenUsable,
-} from '@yaks/ui/interaction'
-import { type Entering, READY, start } from '@yaks/ui/navigate'
-import { browserHistory } from './history.ts'
+  DRAW,
+  type Drawing,
+  LEAVE,
+  READY,
+  sources,
+  TAKES,
+} from '@yaks/ui/navigate'
+import { navigation } from './navigate.ts'
+import { SCROLL } from './picture.ts'
 
-let FILES = 'link[rel=stylesheet], link[rel=modulepreload], script[src]'
+let HOME = '[data-site-home]'
+let RUNS = /^(|module|text\/javascript|application\/javascript)$/
 
-// Start the held page's stylesheets and scripts without installing them in
-// the current page. The destination declares its own module dependencies.
-let prepare = (doc: Document) => {
-  let links = new Map<string, HTMLLinkElement>()
-  return (page: Document, at: URL) => {
-    let used = new Set<string>()
-    for (let file of page.querySelectorAll(FILES)) {
-      let href = new URL(
-        file.getAttribute('href') ?? file.getAttribute('src')!,
-        at,
-      )
-      if (href.origin != at.origin) continue
-      let as = file.getAttribute('rel') == 'stylesheet' ? 'style' : 'script'
-      let module = file.getAttribute('rel') == 'modulepreload' ||
-        file.getAttribute('type') == 'module'
-      let cors = file.getAttribute('crossorigin') ?? (module ? '' : null)
-      let key = JSON.stringify([href.href, as, cors])
-      used.add(key)
-      if (links.has(key)) continue
-      let link = doc.createElement('link')
-      link.rel = 'preload'
-      link.as = as
-      link.href = href.href
-      if (cors != null) link.crossOrigin = cors
-      doc.head.append(link)
-      links.set(key, link)
+let loaded = (at: HTMLElement, event: string, name: string) =>
+  new Promise<void>((done, fail) => {
+    at.addEventListener(event, () => done(), { once: true })
+    at.addEventListener('error', () => fail(Error('Could not load ' + name)), {
+      once: true,
+    })
+  })
+
+let run = (old: HTMLScriptElement) => {
+  let script = old.ownerDocument.createElement('script')
+  for (let { name, value } of old.attributes) script.setAttribute(name, value)
+  script.textContent = old.textContent
+  let event = 'load'
+  if (!script.src && script.type == 'module') {
+    script.id ||= crypto.randomUUID()
+    event = 'yak-script-ready'
+    script.textContent += `\n;document.getElementById(${
+      JSON.stringify(script.id)
+    })?.dispatchEvent(new Event('${event}'))`
+  }
+  let began = script.src || script.type == 'module'
+    ? loaded(script, event, script.src || 'the view')
+    : undefined
+  old.replaceWith(script)
+  return began
+}
+
+let scripts = (doc: Document, view: HTMLElement, base: string) => {
+  let ran = sources(doc)
+  let boot: Promise<void>[] = []
+  for (let script of view.querySelectorAll('script')) {
+    if (!RUNS.test(script.getAttribute('type') ?? '')) continue
+    let src = script.getAttribute('src')
+    if (src) {
+      let at = new URL(src, base).href
+      if (ran.has(at)) continue
+      ran.add(at)
+      script.src = at
     }
-    for (let [key, link] of links) {
-      if (used.has(key)) continue
-      link.remove()
-      links.delete(key)
+    let began = run(script)
+    if (began) boot.push(began)
+  }
+  return Promise.all(boot)
+}
+
+let joined = (
+  win: Window & typeof globalThis,
+  home: HTMLElement,
+  view: HTMLElement,
+  title: string,
+) => {
+  let { document: doc } = win
+  let address = win.location.pathname + win.location.search
+  let homeTitle = doc.title
+  let workspaceTitle = title
+  let visible = (workspace: boolean) => {
+    if (view.inert == !workspace) return
+    view.inert = !workspace
+    home.inert = workspace
+    doc.body.toggleAttribute('data-site-workspace', workspace)
+    if (workspace) doc.title = workspaceTitle
+    else {
+      workspaceTitle = doc.title
+      doc.title = homeTitle
+    }
+    view.dispatchEvent(new win.Event('yak-viewed', { bubbles: true }))
+  }
+  let find = (event: Event) => {
+    if (!view.isConnected) return
+    let asked = (event as CustomEvent<Drawing>).detail
+    let draw = asked.draw
+    if (asked.to.pathname + asked.to.search == address) {
+      asked.draw = () => visible(false)
+      asked.focusAfterPaint = true
+    } else if (draw) {
+      asked.draw = () => {
+        visible(true)
+        draw()
+      }
+      asked.focusAfterPaint = true
     }
   }
+  doc.addEventListener(DRAW, find)
 }
 
-// The markup can paint before its controls are bound. Time the frame after
-// the destination says it is usable, using the clock of the original click.
-let finished = (win: Window & typeof globalThis, opening: Entering) => {
-  let { performance } = win
-  whenUsable(win, (usable) => {
-    opening.drawn?.()
-    win.requestAnimationFrame(() =>
-      win.setTimeout(() => {
-        let { url, from, began, wait } = opening
-        performance.measure('yak-page', {
-          start: began,
-          end: performance.now(),
-          detail: { url, from, wait, usable: usable - began },
-        })
-      }, 0)
-    )
-  })
-}
-
-/** Ask the browser to prepare a running document for this same-tab link. */
-export let prerender = (
+/** Mount the signed-in frame as a view beside the current site page. */
+export let ready = async (
   link: HTMLAnchorElement,
   to: string,
-): (input: Event) => void => {
-  let doc = link.ownerDocument
-  let win = doc.defaultView!
-  link.href = to
-  link.setAttribute(READY, '')
-  link.setAttribute(PRERENDER_LINK, '')
-  try {
-    // The browser copies this key to the document it prepares. The click
-    // itself comes later and is written under that key in shared storage.
-    let key = PRERENDER_KEY + ':' + win.crypto.randomUUID()
-    let was = win.sessionStorage.getItem(PRERENDER_KEY)
-    if (was) win.localStorage.removeItem(was)
-    win.sessionStorage.setItem(PRERENDER_KEY, key)
-  } catch { /* private browsing can leave timing unavailable */ }
-  let rule = doc.createElement('script')
-  rule.type = 'speculationrules'
-  rule.textContent = JSON.stringify({
-    prerender: [{ source: 'list', urls: [link.href] }],
-  })
-  doc.head.append(rule)
-  return (input) => {
-    result(doc, input)?.leaving()
-    win.location.assign(link.href)
-  }
-}
-
-/** Keep a link's document ready. Return an opener for a press received
- * before the navigator attached. */
-export let ready = (
-  link: HTMLAnchorElement,
-  to: string,
-  first?: Promise<Response | null>,
-): (input: Event) => Promise<void> => {
+  first: Promise<Response | null>,
+): Promise<((input: Event) => Promise<void>) | undefined> => {
   let win = globalThis.window
-  let doc = win.document
-  link.href = to
-  link.setAttribute(READY, '')
-  let address = link.href
-  let go = start(
-    {
-      document: doc,
-      location: win.location,
-      fetch: async (url, init) => {
-        if (!first || url != address) return win.fetch(url, init)
-        let asked = first
-        first = undefined
-        return await asked ?? Response.error()
-      },
-      addEventListener: win.addEventListener.bind(win),
-      scrollTo: win.scrollTo.bind(win),
-      requestIdleCallback: win.requestIdleCallback?.bind(win),
-      DOMParser,
-      prepare: prepare(doc),
-      enter: (html, opening) => {
-        win.performance.clearMarks(USABLE)
-        doc.open()
-        finished(win, opening)
-        doc.write(html)
-        doc.close()
-      },
-    },
-    browserHistory(win),
+  let doc = link.ownerDocument
+  let home = doc.querySelector<HTMLElement>(HOME)
+  if (!home) return
+  let response = await first
+  if (
+    !response?.ok ||
+    !response.headers.get('content-type')?.includes('text/html')
+  ) return
+  let at = new URL(response.url || to, win.location.href)
+  if (at.origin != win.location.origin || at.pathname.startsWith('/login')) {
+    return
+  }
+  let page = new win.DOMParser().parseFromString(
+    await response.text(),
+    'text/html',
   )
+  if (!page.querySelector(`script[${TAKES}]`)) return
+  let map = (owner: Document) =>
+    owner.querySelector('script[type=importmap]')?.textContent
+  if (map(doc) != map(page)) return
+  let view = doc.createElement('div')
+  view.className = `Site_Workspace ${page.body.className}`
+  view.setAttribute('data-site-frame', '')
+  view.inert = true
+  for (let node of page.body.childNodes) view.append(doc.importNode(node, true))
+  for (let script of page.head.querySelectorAll('script[data-frame-script]')) {
+    view.append(doc.importNode(script, true))
+  }
+  // Set the boundary before installing the workspace sheet. The public view
+  // stays in its own layout while the workspace is built at viewport size.
+  doc.body.setAttribute('data-site-views', '')
+  let sheets = [
+    ...page.querySelectorAll<HTMLLinkElement>('link[rel=stylesheet]'),
+  ]
+    .map((sheet) => doc.importNode(sheet, true))
+  let discarded = false
+  let discard = () => {
+    discarded = true
+    if (view.isConnected) doc.dispatchEvent(new win.Event(LEAVE))
+    view.remove()
+    for (let sheet of sheets) sheet.remove()
+    doc.body.removeAttribute('data-site-views')
+    link.removeAttribute(READY)
+  }
+  let timeout: number | undefined
+  try {
+    let prepare = async () => {
+      let styles = sheets.map((sheet) => loaded(sheet, 'load', sheet.href))
+      doc.head.append(...sheets)
+      await Promise.all(styles)
+      if (discarded) return
+      let boot = scripts(doc, view, at.href)
+      doc.body.append(view)
+      await boot
+    }
+    await Promise.race([
+      prepare(),
+      new Promise<never>((_, fail) => {
+        timeout = win.setTimeout(
+          () => fail(Error('The signed-in view did not start')),
+          10_000,
+        )
+      }),
+    ])
+  } catch (error) {
+    discard()
+    throw error
+  } finally {
+    win.clearTimeout(timeout)
+  }
+  for (let pane of view.querySelectorAll<HTMLElement>(`[${SCROLL}="end"]`)) {
+    pane.scrollTop = pane.scrollHeight
+  }
+  joined(win, home, view, page.title)
+  let go = navigation(
+    win,
+    (a) => home.inert || !home.contains(a) || a.hasAttribute(READY),
+  )
+  link.href = at.href
+  link.setAttribute(READY, '')
+  win.addEventListener('storage', (event) => {
+    if (event.key != 'yak:signed' || event.newValue || !view.isConnected) return
+    if (view.inert) discard()
+    else win.location.reload()
+  })
   return (input) =>
     go(
-      new URL(address),
+      at,
       false,
       result(doc, input),
       Math.min(win.performance.now(), input.timeStamp),

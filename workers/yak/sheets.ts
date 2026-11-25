@@ -10,6 +10,7 @@ import { EARLY_REPORT } from '@yaks/platform/early-report'
 import { openScript } from '@yaks/platform/open-script'
 import { opening } from '@yaks/platform/opening'
 import { openingHead } from '@yaks/web/opening'
+import { importMap } from './page-imports.ts'
 
 declare const YAK_NAMED: Record<string, string> | undefined
 declare const YAK_CHAT_CHUNKS: string[] | undefined
@@ -110,19 +111,31 @@ let NAMING = /\b(src|href)=(["'])\/?([\w.-]+)\2/g
  * reporter already (`links`). */
 export let sheeted = (html: string, env: Host, names = NAMES) =>
   html.replace(
-    /<link rel="stylesheet" href="([\w-]+\.css)"\s*\/?>/,
-    (_, sheet: string) =>
-      `${links(env, sheet, names, undefined, WOVEN.test(html))}\n${
-        island(asset(env, '_ready.js', names))
-      }`,
-  ).replace(
-    /<a class="[^"]*\bNav_SignIn\b[^"]*"[^>]*>Sign in<\/a>/,
-    (a) => a + signedIn,
+    /<head>/i,
+    (head) => head + importMap((name) => asset(env, name, names)),
   )
-    .replace(NAMING, (whole, attr, quote, name) =>
-      names[name]
-        ? `${attr}=${quote}${asset(env, name, names)}${quote}`
-        : whole)
+    .replace(/<body([^>]*)>/i, (_, attrs: string) => {
+      let classes = attrs.match(/\sclass=(?:"[^"]*"|'[^']*')/)?.[0] ?? ''
+      return `<body${attrs.replace(classes, '')}><div data-site-home${classes}>`
+    })
+    .replace(/<\/body>/i, '</div></body>')
+    .replace(
+      /<link rel="stylesheet" href="([\w-]+\.css)"\s*\/?>/,
+      (_, sheet: string) =>
+        `${links(env, sheet, names, undefined, WOVEN.test(html))}\n${
+          island(asset(env, '_ready.js', names))
+        }`,
+    ).replace(
+      /<a class="[^"]*\bNav_SignIn\b[^"]*"[^>]*>Sign in<\/a>/,
+      (a) => a + signedIn,
+    )
+    .replace(
+      NAMING,
+      (whole, attr, quote, name) =>
+        names[name]
+          ? `${attr}=${quote}${asset(env, name, names)}${quote}`
+          : whole,
+    )
 
 /** The source behind a content-made address, for one no longer deployed. */
 export let named = (path: string) => {

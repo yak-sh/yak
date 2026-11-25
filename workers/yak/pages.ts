@@ -171,7 +171,7 @@ ${importMap(file)}${
 <meta name="theme-color" content="${PLATFORM_BACKGROUND}" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="${PLATFORM_DARK_BACKGROUND}" media="(prefers-color-scheme: dark)">
 <script type="module" src="${file('_navigate.js')}" data-navigate></script>
-<script type="module" src="${file('_keep.js')}"></script>`
+<script type="module" data-frame-script src="${file('_keep.js')}"></script>`
       : ''
   }
 <title>${preview ? esc(preview.title) : `${title} · yaks.app`}</title>

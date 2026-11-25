@@ -381,6 +381,7 @@ let TIMELINE = `(() => {
   let moves = [
     ...performance.getEntriesByName('yak-press'),
     ...performance.getEntriesByName('yak-page'),
+    ...performance.getEntriesByName('yak-interaction'),
   ].sort((a, b) => a.startTime - b.startTime)
   for (let m of moves) {
     let { url = '', elapsed = m.duration, ...parts } = m.detail ?? {}

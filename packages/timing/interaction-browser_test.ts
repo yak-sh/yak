@@ -1,10 +1,5 @@
 import { equal, test } from '@yaks/testing'
-import {
-  PRERENDER_KEY,
-  PRERENDER_LINK,
-  RESULT,
-  type Result,
-} from '@yaks/ui/interaction'
+import { RESULT, type Result } from '@yaks/ui/interaction'
 import { type Batch } from './interaction.ts'
 import { interactions } from './interaction-browser.ts'
 
@@ -13,13 +8,8 @@ let browser = (
   path: string,
   origin: number,
   storage = new Map<string, string>(),
-  prerendering = false,
-  shared = new Map<string, string>(),
 ) => {
-  let doc = Object.assign(new EventTarget(), {
-    visibilityState: prerendering ? 'hidden' : 'visible',
-    prerendering,
-  })
+  let doc = Object.assign(new EventTarget(), { visibilityState: 'visible' })
   let win = new EventTarget()
   let now = 0
   let raf: (() => void)[] = []
@@ -45,20 +35,12 @@ let browser = (
       timeOrigin: origin,
       getEntriesByType: (type: string) =>
         observed.filter((entry) => entry.entryType == type),
-      getEntriesByName: (name: string) =>
-        observed.filter((entry) => entry.name == name),
-      measure: () => {},
     },
     crypto,
     sessionStorage: {
       getItem: (key: string) => storage.get(key),
       setItem: (key: string, value: string) => storage.set(key, value),
       removeItem: (key: string) => storage.delete(key),
-    },
-    localStorage: {
-      getItem: (key: string) => shared.get(key),
-      setItem: (key: string, value: string) => shared.set(key, value),
-      removeItem: (key: string) => shared.delete(key),
     },
     MutationObserver: Changes,
     requestAnimationFrame: (frame: () => void) => raf.push(frame),
@@ -69,16 +51,11 @@ let browser = (
     },
     clearTimeout: (id: number) => tasks.delete(id),
   })
-  let click = (
-    href?: string,
-    key = false,
-    manual = false,
-    prerender = false,
-  ) => {
+  let click = (href?: string, key = false, manual = false) => {
     let at = {
       nodeType: 1,
       getAttribute: (name: string) => name == 'href' ? href : null,
-      hasAttribute: (name: string) => name == PRERENDER_LINK && prerender,
+      hasAttribute: () => false,
       contains: (another: unknown) => another == at,
       closest: () => href ? at : null,
     }
@@ -97,11 +74,12 @@ let browser = (
     if (key) input('keydown', now - 1)
     return input('click', now)
   }
-  let install = () =>
+  let install = (explicit?: (target: string) => boolean) =>
     interactions(scope as unknown as Browser, {
       page: (url) => url.pathname.slice(1),
       target: (_at, _url, event) => event,
       send: (batch) => seen.push(batch),
+      explicit,
     })
   return {
     install,
@@ -109,11 +87,6 @@ let browser = (
     click,
     change: () => change(),
     at: (t: number) => now = t,
-    activate: () => {
-      doc.prerendering = false
-      doc.visibilityState = 'visible'
-      doc.dispatchEvent(new Event('prerenderingchange'))
-    },
     result: (input: Event) => {
       let chosen: Result | undefined
       doc.dispatchEvent(
@@ -136,41 +109,19 @@ let browser = (
   }
 }
 
-test('a prerendered navigation counts the press through the activated usable frame', () => {
-  let storage = new Map([[PRERENDER_KEY, 'tab-key']])
-  let shared = new Map<string, string>()
-  let home = browser('/', 1_000, storage, false, shared)
-  home.install()
-  let chat = browser('/chat', 2_000, new Map(storage), true, shared)
-  chat.install()
-  chat.observe({
-    entryType: 'navigation',
-    type: 'navigate',
-    activationStart: 1_050,
-    responseEnd: 250,
-  })
-  chat.observe({ entryType: 'mark', name: 'yak-usable', startTime: 500 })
-  chat.observe({
-    entryType: 'paint',
-    name: 'first-contentful-paint',
-    startTime: 1_066,
-  })
-  home.at(2_020)
-  home.click('/chat', false, false, true)
-  home.at(2_040)
+test('a background tap counts only a change owned by that input', () => {
+  let home = browser('/', 1_000)
+  home.install((target) => target == 'click')
+  home.at(10)
+  home.click()
+  home.change()
+  home.frame(49)
+  home.at(60)
+  let tap = home.click()
+  home.result(tap).drawn()
+  home.frame(75)
   home.leave()
-  chat.activate()
-  chat.frame(1_052)
-  chat.leave()
-  equal(chat.seen(), [{
-    page: '',
-    target: 'click',
-    ms: 46,
-    input: 0,
-    server: 0,
-    script: 30,
-    render: 16,
-  }])
+  equal(home.seen().map((point) => point.ms), [15])
 })
 
 test('the event clock follows a keyboard-activated link through loading to its result', () => {

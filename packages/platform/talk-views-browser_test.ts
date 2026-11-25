@@ -2,7 +2,7 @@ import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { DRAW, type Drawing } from '@yaks/ui/navigate'
 import { switching } from './talk-views-browser.ts'
-import { PART, type TalkView, VIEW } from './talk-views.ts'
+import { PART, type TalkView, VIEW, VIEWED } from './talk-views.ts'
 import { type Heard, pageTalk } from './operator-talk-browser.ts'
 import { operatorTalk } from './operator-talk.ts'
 import { graph } from './page-graph_fixture_test.ts'
@@ -265,16 +265,24 @@ test('a conversation that is no view of its page is watched until it is closed',
   equal(g.open, [])
 })
 
-test('a prerendered Operator starts watching its conversation on activation', () => {
-  let doc = Object.assign(page(), { prerendering: true })
+test('the prepared Operator watches its conversation only while its frame shows', () => {
+  let doc = page()
+  let frame = doc.createElement('div')
+  frame.setAttribute('data-site-frame', '')
+  frame.setAttribute('inert', '')
+  frame.append(...doc.body.childNodes)
+  doc.body.append(frame)
   let g = graph((b) => Promise.resolve(b))
   let talk = pageTalk('club', 'ada', 'chat', {
     graph: g,
     in: doc.querySelector('p')!,
   })
   equal(g.open, [])
-  doc.prerendering = false
-  doc.dispatchEvent(new doc.defaultView!.Event('prerenderingchange'))
+  frame.removeAttribute('inert')
+  frame.dispatchEvent(new doc.defaultView!.Event(VIEWED))
   equal(g.open, [operatorTalk('club', 'chat')])
+  frame.setAttribute('inert', '')
+  frame.dispatchEvent(new doc.defaultView!.Event(VIEWED))
+  equal(g.open, [])
   talk.close()
 })
