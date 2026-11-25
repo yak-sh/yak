@@ -2,6 +2,8 @@
  * independently bundled page scripts through the document's event channel. */
 export let RESULT = 'yak-interaction-result'
 export let USABLE = 'yak-usable'
+export let PRERENDER_LINK = 'data-prerender'
+export let PRERENDER_KEY = 'yak-interaction-prerender'
 
 /** Run once the page's own controls are ready. */
 export let whenUsable = (

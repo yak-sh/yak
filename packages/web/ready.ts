@@ -1,4 +1,10 @@
-import { result, USABLE, whenUsable } from '@yaks/ui/interaction'
+import {
+  PRERENDER_KEY,
+  PRERENDER_LINK,
+  result,
+  USABLE,
+  whenUsable,
+} from '@yaks/ui/interaction'
 import { type Entering, READY, start } from '@yaks/ui/navigate'
 import { browserHistory } from './history.ts'
 
@@ -67,6 +73,15 @@ export let prerender = (
   let win = doc.defaultView!
   link.href = to
   link.setAttribute(READY, '')
+  link.setAttribute(PRERENDER_LINK, '')
+  try {
+    // The browser copies this key to the document it prepares. The click
+    // itself comes later and is written under that key in shared storage.
+    let key = PRERENDER_KEY + ':' + win.crypto.randomUUID()
+    let was = win.sessionStorage.getItem(PRERENDER_KEY)
+    if (was) win.localStorage.removeItem(was)
+    win.sessionStorage.setItem(PRERENDER_KEY, key)
+  } catch { /* private browsing can leave timing unavailable */ }
   let rule = doc.createElement('script')
   rule.type = 'speculationrules'
   rule.textContent = JSON.stringify({

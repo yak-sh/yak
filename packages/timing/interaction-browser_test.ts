@@ -1,5 +1,10 @@
 import { equal, test } from '@yaks/testing'
-import { RESULT, type Result } from '@yaks/ui/interaction'
+import {
+  PRERENDER_KEY,
+  PRERENDER_LINK,
+  RESULT,
+  type Result,
+} from '@yaks/ui/interaction'
 import { type Batch } from './interaction.ts'
 import { interactions } from './interaction-browser.ts'
 
@@ -9,6 +14,7 @@ let browser = (
   origin: number,
   storage = new Map<string, string>(),
   prerendering = false,
+  shared = new Map<string, string>(),
 ) => {
   let doc = Object.assign(new EventTarget(), {
     visibilityState: prerendering ? 'hidden' : 'visible',
@@ -49,6 +55,11 @@ let browser = (
       setItem: (key: string, value: string) => storage.set(key, value),
       removeItem: (key: string) => storage.delete(key),
     },
+    localStorage: {
+      getItem: (key: string) => shared.get(key),
+      setItem: (key: string, value: string) => shared.set(key, value),
+      removeItem: (key: string) => shared.delete(key),
+    },
     MutationObserver: Changes,
     requestAnimationFrame: (frame: () => void) => raf.push(frame),
     setTimeout: (run: () => void, ms: number) => {
@@ -58,11 +69,16 @@ let browser = (
     },
     clearTimeout: (id: number) => tasks.delete(id),
   })
-  let click = (href?: string, key = false, manual = false) => {
+  let click = (
+    href?: string,
+    key = false,
+    manual = false,
+    prerender = false,
+  ) => {
     let at = {
       nodeType: 1,
       getAttribute: (name: string) => name == 'href' ? href : null,
-      hasAttribute: () => false,
+      hasAttribute: (name: string) => name == PRERENDER_LINK && prerender,
       contains: (another: unknown) => another == at,
       closest: () => href ? at : null,
     }
@@ -121,10 +137,11 @@ let browser = (
 }
 
 test('a prerendered navigation counts the press through the activated usable frame', () => {
-  let storage = new Map<string, string>()
-  let home = browser('/', 1_000, storage)
+  let storage = new Map([[PRERENDER_KEY, 'tab-key']])
+  let shared = new Map<string, string>()
+  let home = browser('/', 1_000, storage, false, shared)
   home.install()
-  let chat = browser('/chat', 2_000, storage, true)
+  let chat = browser('/chat', 2_000, new Map(storage), true, shared)
   chat.install()
   chat.observe({
     entryType: 'navigation',
@@ -133,13 +150,17 @@ test('a prerendered navigation counts the press through the activated usable fra
     responseEnd: 250,
   })
   chat.observe({ entryType: 'mark', name: 'yak-usable', startTime: 500 })
+  chat.observe({
+    entryType: 'paint',
+    name: 'first-contentful-paint',
+    startTime: 1_066,
+  })
   home.at(2_020)
-  home.click('/chat')
+  home.click('/chat', false, false, true)
   home.at(2_040)
   home.leave()
   chat.activate()
   chat.frame(1_052)
-  chat.frame(1_066)
   chat.leave()
   equal(chat.seen(), [{
     page: '',

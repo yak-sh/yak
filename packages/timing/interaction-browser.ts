@@ -1,7 +1,13 @@
 // The input and paint boundary shared by the platform's documents. Most
 // controls need only their native input or DOM change. An asynchronous
 // result takes its input with @yaks/ui/interaction before doing any work.
-import { RESULT, type ResultEvent, whenUsable } from '@yaks/ui/interaction'
+import {
+  PRERENDER_KEY,
+  PRERENDER_LINK,
+  RESULT,
+  type ResultEvent,
+  whenUsable,
+} from '@yaks/ui/interaction'
 import {
   type Batch,
   MAX_MS,
@@ -90,17 +96,25 @@ let painted = (win: Browser, after: (end: number) => void) =>
     win.setTimeout(() => after(win.performance.now()), 0)
   )
 
-let local = (win: Browser) => {
+let local = (win: Browser, prerender = false) => {
+  let place = () => {
+    if (!prerender) return { store: win.sessionStorage, key: CROSSING }
+    let key = win.sessionStorage.getItem(PRERENDER_KEY)
+    return key ? { store: win.localStorage, key } : undefined
+  }
   let read = (): Crossing | undefined => {
     try {
-      let held = win.sessionStorage.getItem(CROSSING)
-      win.sessionStorage.removeItem(CROSSING)
+      let at = place()
+      if (!at) return
+      let held = at.store.getItem(at.key)
+      at.store.removeItem(at.key)
       if (held) return JSON.parse(held)
     } catch { /* storage is optional */ }
   }
   let keep = (crossing: Crossing) => {
     try {
-      win.sessionStorage.setItem(CROSSING, JSON.stringify(crossing))
+      let at = place()
+      if (at) at.store.setItem(at.key, JSON.stringify(crossing))
     } catch { /* storage is optional */ }
   }
   return { read, keep }
@@ -138,8 +152,13 @@ let crossed = (
   record: (point: Point) => void,
   restored = false,
 ) => {
-  let held = store.read()
   let perf = win.performance
+  let nav = perf.getEntriesByType('navigation')[0] as
+    | (PerformanceNavigationTiming & { activationStart?: number })
+    | undefined
+  let activation = nav?.activationStart
+  let held = (activation && !restored ? local(win, true).read() : undefined) ??
+    store.read()
   if (!held || Math.abs(perf.timeOrigin + perf.now() - held.began) > MAX_MS) {
     return
   }
@@ -147,16 +166,12 @@ let crossed = (
   // input. One that started later (back from another site's sign-in page)
   // would count the time the person spent there.
   if (!restored && perf.timeOrigin > held.left + SLACK) return
-  let nav = perf.getEntriesByType('navigation')[0] as
-    | (PerformanceNavigationTiming & { activationStart?: number })
-    | undefined
-  let activation = nav?.activationStart
   if (activation && !restored) {
     let began = held.began - perf.timeOrigin
-    whenUsable(win, (usable) =>
-      painted(win, (end) => {
+    whenUsable(win, (usable) => {
+      let ready = Math.max(began, activation, usable)
+      let finish = (end: number) => {
         let ms = end - began
-        let ready = Math.max(began, activation, usable)
         if (ms < 0 || win.document.visibilityState == 'hidden') return
         perf.measure('yak-page', {
           start: Math.max(0, began),
@@ -175,7 +190,12 @@ let crossed = (
           ms,
           ...phases(ms, 0, 0, end - ready),
         })
-      }))
+      }
+      firstPaint(win, (paint) => {
+        if (paint >= ready) finish(paint)
+        else painted(win, finish)
+      })
+    })
     return
   }
   let finish = (end: number) => {
@@ -227,6 +247,14 @@ export let interactions = (win: Browser, labels: Labels): void => {
   }
 
   let store = local(win)
+  let prepared = local(win, true)
+  let leaving = ({ page, target, began }: Input): Crossing => ({
+    page,
+    target,
+    began: perf.timeOrigin + began,
+    before: perf.timeOrigin,
+    left: perf.timeOrigin + perf.now(),
+  })
   let recent: Input | undefined
   let crossing: { input: Input; event?: Event } | undefined
   let events = new WeakMap<Event, Input>()
@@ -331,8 +359,13 @@ export let interactions = (win: Browser, labels: Labels): void => {
     let to = native(e, at, here)
     if (to && e.type == 'click' && sameDocument(to, here)) {
       localFrame(input, () => !e.defaultPrevented || !!input.changed)
-    } else if (to) crossing = { input, event: e }
-    else crossing = undefined
+    } else if (to) {
+      crossing = { input, event: e }
+      if (
+        e.type == 'click' &&
+        at.closest('a[href]')?.hasAttribute(PRERENDER_LINK)
+      ) prepared.keep(leaving(input))
+    } else crossing = undefined
   }
 
   let capture = { capture: true, passive: true }
@@ -365,14 +398,7 @@ export let interactions = (win: Browser, labels: Labels): void => {
     let next = crossing
     crossing = undefined
     if (next && !next.event?.defaultPrevented && !next.input.done) {
-      let { page, target, began } = next.input
-      store.keep({
-        page,
-        target,
-        began: perf.timeOrigin + began,
-        before: perf.timeOrigin,
-        left: perf.timeOrigin + perf.now(),
-      })
+      store.keep(leaving(next.input))
     }
     flush()
   })
