@@ -68,12 +68,14 @@
 
 import type { Bundle, Comp, Eid, Graph, Row } from '@yaks/graph'
 import { type Built, line, sub } from '@yaks/query'
+import { given } from './answer.ts'
 import { stoppedNotice } from './claude-control.ts'
 import { askingOf, lines } from './compact.ts'
 import { checkpointOf } from './pruning.ts'
 import { ASK, CALL, CONTENT, ENTRY, OUTPUT, RESULT, USING } from './native.ts'
 import {
   attemptState,
+  kinded,
   kindOf,
   marksOf,
   newestAsk,
@@ -741,6 +743,44 @@ export let openOf = async (g: Graph, session: Eid): Promise<Bundle[]> =>
   (await named(await chain(g, session, { comps: [ENTRY, CALL] }), {}))
     .filter((b) => b.call)
 
+// Whether someone else's words steer the turn (./answer.ts `steered`) is
+// decided over every line since the person's newest words, however far below
+// the rows those lie: the words, the line before the notices that lead up to
+// them (a room's other speakers), and each line `heard` between that and the
+// rows. Where the rows hold that line, nothing more is read; else at most
+// three lookups, each by seq on a segment's own lines.
+let hearing = async (r: Read, rows: Bundle[]): Promise<Bundle[]> => {
+  let { g } = r
+  if (!g.vocab.comp('heard')) return []
+  let at = rows.findLastIndex(given)
+  let start = at
+  while (start > 0 && rows[start - 1].notice) start--
+  if (start > 0) return []
+  let words = at >= 0 ? rows[at] : await newest(
+    r,
+    line`&.${CONTENT}${sub(without(g, OUTPUT, 'notice', ...kinded()))}`,
+  )
+  let before = words &&
+    await newest(
+      r,
+      line`&.entry.seq<${seqOf(words)}${sub(without(g, 'notice'))}`,
+    )
+  let from = before ? seqOf(before) : -Infinity
+  let under = rows.length ? seqOf(rows[0]) : Infinity
+  let heard = await every(
+    r,
+    () =>
+      line`${sub(Number.isFinite(from) ? line`&.entry.seq>${from}` : line``)}${
+        sub(Number.isFinite(under) ? line`&.entry.seq<${under}` : line``)
+      }&.heard`,
+  )
+  return [
+    ...words && at < 0 ? [words] : [],
+    ...before ? [before] : [],
+    ...heard,
+  ]
+}
+
 // What a decision still reads, found as the rows come: the oldest seq the rows
 // must reach, undefined while they cannot say.
 type Needs = {
@@ -961,6 +1001,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
     held.push(
       ...await aspect(r, USING, rows),
       ...await aspect(r, SENDING, rows),
+      ...await hearing(r, rows),
     )
     held.push(
       ...await fetch({ ...r, names: [SENDING] }, unsent(await gather())),

@@ -75,6 +75,10 @@ let KINDS: [string, Kind][] = [
   ['reasoning', 'reasoning'],
 ]
 
+/** The components that make an entry a kind ({@link kindOf}): a line
+ * carrying none of them, with prose and no `output`, is an input. */
+export let kinded = (): string[] => KINDS.map(([c]) => c)
+
 /** The components that make an entry a kind ranked before `kind`
  * ({@link kindOf}), whatever else it carries: a stop naming the request it
  * answers (`ask.through`) is a stop, not an ask. */
