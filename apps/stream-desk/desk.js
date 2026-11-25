@@ -2,7 +2,7 @@
 // reaches OBS (a phone's https page may not open ws:// to another machine),
 // so every phone's press is a cue in the store, and the desk plays each into
 // OBS and marks it aired or missed.
-import { due, idOf, shots, steps } from './model.js'
+import { BEAT, due, idOf, shots, steps } from './model.js'
 
 let sleep = (ms) => new Promise((done) => setTimeout(done, ms))
 
@@ -36,13 +36,14 @@ export let tend = async (
 }
 
 /** Runs the desk on a connected OBS: follows the scene on air, tells every
- * page through `relay({scene, scenes})`, and answers `kick()`, called on each
- * new cue, by tending the cues, one pass at a time. */
+ * page through `relay({scene, scenes, seen})` when it changes and every
+ * `BEAT`, and answers `kick()`, called on each new cue, by tending the cues,
+ * one pass at a time. `stop()` ends the beat. */
 export let desk = async ({ query, apply, obs, relay, wait }) => {
   let list = await obs.call('GetSceneList')
   let scenes = list.scenes.map((s) => s.sceneName).toReversed()
   let scene = list.currentProgramSceneName
-  let told = () => relay({ scene, scenes })
+  let told = () => relay({ scene, scenes, seen: new Date().toISOString() })
   obs.on((type, data) => {
     if (type == 'CurrentProgramSceneChanged') {
       scene = data.sceneName
@@ -53,6 +54,7 @@ export let desk = async ({ query, apply, obs, relay, wait }) => {
     }
   })
   await told()
+  let beat = setInterval(told, BEAT)
   let running = null
   let again = false
   let kick = () => {
@@ -64,5 +66,5 @@ export let desk = async ({ query, apply, obs, relay, wait }) => {
       })
     return running
   }
-  return { kick, scene: () => scene }
+  return { kick, scene: () => scene, stop: () => clearInterval(beat) }
 }

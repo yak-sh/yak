@@ -4,7 +4,7 @@
 import { apply, query, subscribe } from './api/client.js'
 import { connect } from './obs.js'
 import { desk } from './desk.js'
-import { DESK, idOf, onAir, shots } from './model.js'
+import { DESK, idOf, onAir, present, shots } from './model.js'
 
 let $ = (s) => document.querySelector(s)
 let esc = (s) =>
@@ -95,6 +95,7 @@ let run = async ({ url, password }) => {
     kick()
     draw()
     let why = await obs.closed
+    d.stop()
     kick = null
     if (state.mine == obs) state.trouble = `${why}. Connecting again…`
   } catch (e) {
@@ -133,10 +134,17 @@ subscribe('.cue&?aired&?missed&?created&limit=50', (rows) => {
   kick?.()
   draw()
 })
-subscribe(`.desk`, (rows) => {
-  state.desk = rows.find((r) => r.entity.eid == DESK)?.desk ?? null
+// A desk that stopped writing is away; the status is read again each beat.
+let deskRows = []
+let look = () => {
+  state.desk = present(deskRows, Date.now())
   draw()
+}
+subscribe('.desk', (rows) => {
+  deskRows = rows
+  look()
 })
+setInterval(look, 15_000)
 let saved = JSON.parse(localStorage.getItem(SAVED) ?? 'null')
 if (saved) run(saved)
 draw()

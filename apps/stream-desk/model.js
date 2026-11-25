@@ -2,7 +2,7 @@
 // socket: which cues to play, what each sends OBS, and what is on air.
 import { ptz } from './obs.js'
 
-/** The one entity the desk relays what OBS shows on. */
+/** The one entity the desk writes what OBS shows on. */
 export let DESK = 'b7d64f0e-3c2a-4f8e-9d17-5e0c4a9b2f61'
 
 /** A cue older than this when the desk first sees it is not played: the
@@ -15,6 +15,17 @@ export let NUDGE = 400
 /** How long a camera is given to reach its preset before its scene is cut
  * to, when the cut changes the scene. */
 export let SETTLE = 1500
+
+/** How often the desk says it is still there, and how long a desk not
+ * heard from is taken to be away. */
+export let BEAT = 30_000
+export let AWAY = 75_000
+
+/** The desk's own row while it is there, else null. */
+export let present = (rows, now) => {
+  let desk = rows.find((r) => r.entity.eid == DESK)?.desk
+  return desk?.seen && now - Date.parse(desk.seen) <= AWAY ? desk : null
+}
 
 /** A reference as a read speaks it: the eid, or `{eid, name}`. */
 export let idOf = (v) => typeof v == 'string' ? v : v?.eid ?? null

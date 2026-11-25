@@ -8,7 +8,7 @@ import { appStore } from '../../workers/yak/directory.ts'
 import { ADA_OWNS, platform, seeded } from '../../workers/yak/serving-probe.ts'
 import { connect } from './obs.js'
 import { desk } from './desk.js'
-import { due, onAir, STALE } from './model.js'
+import { AWAY, DESK, due, onAir, present, STALE } from './model.js'
 import { mockObs } from './mock_obs.ts'
 
 let read = (path: string) =>
@@ -58,7 +58,7 @@ test('the desk plays each pressed cue into OBS and marks it', async () => {
     query,
     apply,
     obs: client,
-    relay: (v: Comp) => relayed.push(v),
+    relay: ({ seen: _, ...v }: Comp) => relayed.push(v),
     wait: () => Promise.resolve(),
   })
   equal(relayed, [{
@@ -112,6 +112,7 @@ test('the desk plays each pressed cue into OBS and marks it', async () => {
   let shots = await query('.shot')
   equal(onAir(cues, shots, 'Camera'), SHOT.wide)
   equal(onAir(cues, shots, 'Projector'), null)
+  d.stop()
   client.close()
   equal(await client.closed, 'OBS closed the connection (1005)')
 })
@@ -144,4 +145,15 @@ test('a cue pressed while the desk was away is missed, not played', () => {
     ['c2', 'c3'],
     ['c1'],
   ])
+})
+
+test('a desk not heard from for a while is away', () => {
+  let desk = (ms: number) => [{
+    entity: { eid: DESK },
+    desk: { scene: 'Camera', seen: new Date(ms).toISOString() },
+  }]
+  let now = 1_000_000
+  equal(present(desk(now - AWAY), now)?.scene, 'Camera')
+  equal(present(desk(now - AWAY - 1), now), null)
+  equal(present([], now), null)
 })

@@ -15,9 +15,10 @@ also zoom buttons. The app lives in `jeff/stream-desk`.
   over IP, Pelco or ONVIF) and offers `ptz_preset_recall` and `ptz_move` as
   vendor requests on the same socket. A preset is recalled before its scene is
   cut to, so the camera moves off air.
-- The desk relays what OBS has on air, and its scenes, in `desk{scene, scenes}`
-  (`sync: peers`). The value goes away when the desk's page closes, so every
-  phone sees whether a desk is connected.
+- The desk writes what OBS has on air, and its scenes, in
+  `desk{scene, scenes, seen}`, again every 30 s. A phone takes a desk not seen
+  for 75 s as away. (`./api/client.js` sends every write to the store, so a
+  `sync: peers` value would not be relayed from this page.)
 - `seed.json` writes four shots to rename or replace: Projector, Stage wide,
   Pulpit and Picture in picture.
 - `desk_test.ts` runs the app's vocab and seed on the platform in memory,
