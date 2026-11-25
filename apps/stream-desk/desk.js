@@ -39,7 +39,7 @@ export let tend = async (
  * page through `relay({scene, scenes, seen})` when it changes and every
  * `BEAT`, and answers `kick()`, called on each new cue, by tending the cues,
  * one pass at a time. `stop()` ends the beat. */
-export let desk = async ({ query, apply, obs, relay, wait }) => {
+export let desk = async ({ query, apply, obs, relay, wait = sleep }) => {
   let list = await obs.call('GetSceneList')
   let scenes = list.scenes.map((s) => s.sceneName).toReversed()
   let scene = list.currentProgramSceneName
