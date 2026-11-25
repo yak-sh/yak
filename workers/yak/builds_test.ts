@@ -1,6 +1,4 @@
-// A failed Workers Build of main is filed under its cause, naming its commit,
-// unless it is its commit's first failure and the build of it again started:
-// then it is only logged. Nothing else is filed or built again.
+// Every failed Workers Build of main reaches the tracker under its cause.
 import { clock, test } from '@yaks/testing'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -8,6 +6,7 @@ import { within } from './defects.ts'
 import {
   assertEquals,
   assertInstanceOf,
+  assertRejects,
   assertStringIncludes,
 } from '@std/assert'
 import {
@@ -239,9 +238,8 @@ let receipts = (): Meta => {
   }
 }
 
-// What one Worker comes to when the queue hands it these events in these
-// batches: the builds the deploy hook is asked for, the failures filed, and
-// the lines logged. The hook answers `hook`, or is not configured.
+// What reaches the deploy hook and the tracker. Tracker intake keeps one
+// occurrence per eid, also when it receives the same occurrence again.
 let consumed = async (
   batches: Built[][],
   hook: number | null = 200,
@@ -258,14 +256,11 @@ let consumed = async (
       },
     },
   } as Env
-  let time = clock()
   let asked = 0
-  let logged = 0
-  let [fetch, log] = [globalThis.fetch, console.log]
+  let fetch = globalThis.fetch
   globalThis.fetch = () => (
     asked++, Promise.resolve(Response.json(answer, { status: hook ?? 500 }))
   )
-  console.log = () => void logged++
   try {
     await within(env, {}, async () => {
       for (let batch of batches) {
@@ -274,17 +269,16 @@ let consumed = async (
           env,
         )
       }
-    }, time)
-    await time.advance(10_000)
+    })
   } finally {
     globalThis.fetch = fetch
-    console.log = log
   }
-  let filed =
+  let filed = new Set(
     rows.filter((r) =>
       (r.exception as { type?: string } | undefined)?.type == 'BuildFailed'
-    ).length
-  return { asked, filed, logged }
+    ).map((r) => r.entity.eid),
+  ).size
+  return { asked, filed }
 }
 
 // What the deploy hook's own build says when it fails: main, and no commit.
@@ -295,38 +289,38 @@ let hooked = () => {
   return e
 }
 
-test('builds: a first failure whose rebuild started is a log line', async () => {
-  let quiet = { asked: 1, filed: 0, logged: 1 }
-  assertEquals(await consumed([[event('failed')]]), quiet)
+test('builds: a first failure is filed and rebuilt once', async () => {
+  let once = { asked: 1, filed: 1 }
+  assertEquals(await consumed([[event('failed')]]), once)
   // The queue delivering the same failure again, in one batch or the next.
-  assertEquals(await consumed([[event('failed'), event('failed')]]), quiet)
-  assertEquals(await consumed([[event('failed')], [event('failed')]]), quiet)
+  assertEquals(await consumed([[event('failed'), event('failed')]]), once)
+  assertEquals(await consumed([[event('failed')], [event('failed')]]), once)
 })
 
-test('builds: a hook that defers to a pending build of main is a log line', async () => {
+test('builds: a pending rebuild still leaves the failed build in the tracker', async () => {
   let pending = { success: true, result: { already_exists: true } }
   assertEquals(
     await consumed([[event('failed')]], 200, pending),
-    { asked: 1, filed: 0, logged: 1 },
+    { asked: 1, filed: 1 },
   )
 })
 
 test('builds: a hook that answers 200 without success started nothing', async () => {
   assertEquals(
     await consumed([[event('failed')]], 200, { success: false }),
-    { asked: 1, filed: 1, logged: 0 },
+    { asked: 1, filed: 1 },
   )
 })
 
 test("builds: the rebuild's failure is filed under the commit it rebuilt", async () => {
   assertEquals(
     await consumed([[event('failed')], [hooked()]]),
-    { asked: 1, filed: 1, logged: 1 },
+    { asked: 1, filed: 2 },
   )
 })
 
 test('builds: a failure that earns no rebuild is filed', async () => {
-  let filed = { asked: 0, filed: 1, logged: 0 }
+  let filed = { asked: 0, filed: 1 }
   assertEquals(await consumed([[event('failed')]], null), filed)
   assertEquals(await consumed([[event('failed')]], 404), { ...filed, asked: 1 })
   // The commit's second build, after its first earned the rebuild.
@@ -334,17 +328,44 @@ test('builds: a failure that earns no rebuild is filed', async () => {
   again.payload!.buildUuid = 'build-3'
   assertEquals(
     await consumed([[event('failed'), again]]),
-    { asked: 1, filed: 1, logged: 1 },
+    { asked: 1, filed: 2 },
   )
 })
 
-test("builds: a hook build the kernel did not start is the catch-up's", async () => {
+test('builds: an unlinked hook failure is filed without another rebuild', async () => {
   assertEquals(broke(hooked())!.commit, undefined)
   assertEquals(broke(hooked())!.request, 'BUILD yak unknown')
   assertEquals(
     await consumed([[hooked()], [hooked()]]),
-    { asked: 0, filed: 0, logged: 1 },
+    { asked: 0, filed: 1 },
   )
+})
+
+test('builds: a tracker queue outage leaves the build event unacknowledged', async () => {
+  let sent: string[] = []
+  let acked = 0
+  let env = {
+    META: receipts(),
+    ERRORS: {
+      send: (rows: Bundle[]) => {
+        let occurrence = rows.find((r) =>
+          (r.exception as Comp | undefined)?.type == 'BuildFailed'
+        )
+        if (!occurrence) return Promise.resolve()
+        sent.push(occurrence.entity.eid)
+        return sent.length == 1
+          ? Promise.reject(new Error('tracker queue unavailable'))
+          : Promise.resolve()
+      },
+    },
+  } as Env
+  let batch = { messages: [{ body: event('failed'), ack: () => acked++ }] }
+  let consume = () => within(env, {}, () => builds(batch, env), clock())
+  await assertRejects(consume, Error, 'tracker queue unavailable')
+  assertEquals(acked, 0)
+  await consume()
+  assertEquals(acked, 1)
+  assertEquals(sent, [sent[0], sent[0]])
 })
 
 test('builds: with no hook there is nothing to start', async () => {
@@ -482,7 +503,7 @@ let reported = async (readable: boolean) => {
       },
     },
   } as Env
-  let [fetch, log] = [globalThis.fetch, console.log]
+  let fetch = globalThis.fetch
   globalThis.fetch = (input) =>
     Promise.resolve(
       String(input).startsWith('https://hook.test')
@@ -494,19 +515,16 @@ let reported = async (readable: boolean) => {
         })
         : new Response('', { status: 401 }),
     )
-  console.log = () => {}
   let push = event('failed')
   push.payload!.buildTriggerMetadata!.commitHash = commit
   let catchup = hooked()
   catchup.payload!.buildUuid = 'build-3'
-  let time = clock()
   try {
     await within(env, {}, async () => {
       for (let body of [push, hooked(), catchup]) {
         await builds({ messages: [{ body, ack() {} }] }, env)
       }
-    }, time)
-    await time.advance(10_000)
+    })
     return {
       rows: rows.filter((row) => row.error).map((row) => ({
         error: row.error as {
@@ -520,29 +538,40 @@ let reported = async (readable: boolean) => {
     }
   } finally {
     globalThis.fetch = fetch
-    console.log = log
   }
 }
 
-test('builds: a rebuild with an unreadable log is filed under why', async () => {
+test('builds: unreadable logs keep all the build links in the tracker', async () => {
   let { rows, commit } = await reported(false)
-  assertEquals(rows.length, 1)
-  let [{ error, message }] = rows
-  assertEquals(
-    error.fault,
-    'build failed:yak:log unread: build logs returned HTTP 401',
-  )
-  assertEquals(error.commit, commit)
-  assertEquals(error.tags.commit, commit)
-  assertStringIncludes(message, 'at 0b580211')
-  assertStringIncludes(message, 'build logs returned HTTP 401')
+  assertEquals(rows.map(({ error }) => error.commit), [
+    commit,
+    commit,
+    'build-3',
+  ])
+  assertEquals(rows.map(({ error }) => error.tags.commit), [
+    commit,
+    commit,
+    undefined,
+  ])
+  rows.forEach(({ error, message }, i) => {
+    assertEquals(
+      error.fault,
+      'build failed:yak:log unread: build logs returned HTTP 401',
+    )
+    assertStringIncludes(message, 'build logs returned HTTP 401')
+    assertStringIncludes(message, `/production/builds/build-${i + 1}`)
+  })
 })
 
-test('builds: a readable log is filed under its error', async () => {
-  let { rows, commit } = await reported(true)
-  assertEquals(rows.map((r) => r.error.fault), [
-    'build failed:yak:Workers Builds setup: missing module',
-  ])
-  assertEquals(rows[0].error.commit, commit)
-  assertStringIncludes(rows[0].message, 'error: missing module')
+test('builds: the push, rebuild, and catch-up each carry their diagnostic', async () => {
+  let { rows } = await reported(true)
+  assertEquals(rows.length, 3)
+  rows.forEach(({ error, message }, i) => {
+    assertEquals(
+      error.fault,
+      'build failed:yak:Workers Builds setup: missing module',
+    )
+    assertStringIncludes(message, 'error: missing module')
+    assertStringIncludes(message, `/production/builds/build-${i + 1}`)
+  })
 })

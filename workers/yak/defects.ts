@@ -276,19 +276,68 @@ export let filing = (error: unknown): boolean => {
   return !!invocation?.env.ERRORS && !redone(error, invocation.replaced)
 }
 
+type Details = {
+  hit?: Hit
+  fault?: string
+  commit?: string
+  // How a page's reporter met it and what the page did before.
+  page?: Pick<Break, 'mechanism' | 'breadcrumbs'>
+}
+
+let captured = (
+  invocation: Invocation,
+  error: unknown,
+  tags: Tags,
+  details: Details,
+  sink: Parameters<typeof capture>[1]['sink'],
+  eid?: string,
+): Bundle[] =>
+  capture(error, {
+    ...invocation.origin,
+    ...details.page,
+    eid,
+    sink,
+    commit: details.commit ?? invocation.env.CF_VERSION_METADATA?.id,
+    fault: details.fault ??
+      (moved(error)
+        ? `reset:${normalize((error as Error).message)}`
+        : undefined),
+    environment: invocation.env.ENVIRONMENT == 'staging'
+      ? 'staging'
+      : 'production',
+    tags: Object.fromEntries(
+      Object.entries({
+        ...invocation.origin?.tags,
+        ...invocation.tags,
+        ...tags,
+        ...details.hit
+          ? { user_id: details.hit.id, account: details.hit.account }
+          : {},
+      }).filter(([, value]) => value != null),
+    ),
+  })
+
+/** Send a queue event's occurrence before the caller acknowledges the event.
+ * A failed send rejects so the queue can redeliver it. The tracker accepts
+ * the same occurrence id once. */
+export let deliverDefect = async (
+  error: unknown,
+  tags: Tags,
+  details: Details & { eid?: string },
+): Promise<void> => {
+  let invocation = context.getStore()
+  if (!invocation?.env.ERRORS) throw Error('tracker queue unavailable')
+  let sink = queue(invocation.env.ERRORS)
+  await sink(captured(invocation, error, tags, details, sink, details.eid))
+}
+
 /** {@link defect}, answering the occurrence it sent, whose fault
  * (@yaks/tracker `faultOf`) is the one its bug is filed under, or nothing
  * where it sent none. */
 export let filed = (
   error: unknown,
   tags: Tags,
-  details: {
-    hit?: Hit
-    fault?: string
-    commit?: string
-    // How a page's reporter met it, and what the page did before (./page-report.ts).
-    page?: Pick<Break, 'mechanism' | 'breadcrumbs'>
-  } = {},
+  details: Details = {},
 ): Bundle | undefined => {
   let invocation = context.getStore()
   if (
@@ -305,27 +354,7 @@ export let filed = (
     sink = delivery(env, invocation.clock)
     reporters.set(env.ERRORS!, sink)
   }
-  let rows = capture(error, {
-    ...invocation.origin,
-    ...details.page,
-    sink,
-    commit: details.commit ?? env.CF_VERSION_METADATA?.id,
-    fault: details.fault ??
-      (moved(error)
-        ? `reset:${normalize((error as Error).message)}`
-        : undefined),
-    environment: env.ENVIRONMENT == 'staging' ? 'staging' : 'production',
-    tags: Object.fromEntries(
-      Object.entries({
-        ...invocation.origin?.tags,
-        ...invocation.tags,
-        ...tags,
-        ...details.hit
-          ? { user_id: details.hit.id, account: details.hit.account }
-          : {},
-      }).filter(([, value]) => value != null),
-    ),
-  })
+  let rows = captured(invocation, error, tags, details, sink)
   let pending = Promise.resolve(sink(rows))
   invocation.retain?.(pending)
   invocation.pending.add(pending)

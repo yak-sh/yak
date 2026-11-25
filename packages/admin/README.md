@@ -336,14 +336,14 @@ keeps a check run named `Workers Builds: yak` on the commit in GitHub, in
 progress while the build runs, and the catch-up reads it with `gh`. A head that
 changed no watched path has no build of its own, so the check run read is that
 of the newest commit before it that did. A head whose build failed waits a
-`BOUND` from the failure: Builds tells the kernel, which builds main again
-through the deploy hook and files that build's failure (workers/yak/builds.ts),
-and no check run shows that build. Any other head that is not live, or a failed
-one still not live a `BOUND` on, asks main's deploy hook for a build, and the
-ask leaves a `rebuilt{at, by, via, said}` mark on the commit's entity (its eid
-is its sha) with what Builds answered. The hook starts none while one is queued
-or initializing, so a build waiting its turn is neither duplicated nor reported.
-A build it did start is reported to the tracker, tagged with the commit, what is
+`BOUND` from the failure: Builds tells the kernel, which reports each failure
+and builds main again through the deploy hook (workers/yak/builds.ts). No GitHub
+check run shows the hook build. Any other head that is not live, or a failed one
+still not live a `BOUND` on, asks main's deploy hook for a build, and the ask
+leaves a `rebuilt{at, by, via, said}` mark on the commit's entity (its eid is
+its sha) with what Builds answered. The hook starts none while one is queued or
+initializing, so a build waiting its turn is neither duplicated nor reported. A
+build it did start is reported to the tracker, tagged with the commit, what is
 live and what Builds said, only when the failure is ours: the head's own build
 passed and something older went live over it, or Builds started no build for the
 head nor for the Worker source change before it, so its trigger stopped building

@@ -215,15 +215,14 @@ Wrangler deploy whose Cloudflare call fails for a moment (a 5xx, the containers
 API's internal error, a version not yet readable after its upload, a spent or
 refused asset upload session) runs again, three attempts in all (`wrangler.ts`
 `runStep`). A push's build that fails is started once more through the
-`BUILD_HOOK` deploy hook (builds.ts), since most failures are the network's.
-While that build runs, the first failure is a log line, as it is when the hook
-answers that a build of main is already pending (`hook.ts`, which the catch-up
-reads its answers with too); the second build's failure is filed, and so is a
-failure the hook refused or could not be reached for. A push Builds starts no
-build for fails nowhere, so the box looks: its deploy catch-up
-([@yaks/admin](../../packages/admin/README.md#the-deploy-catch-up)) starts
-main's build through a deploy hook of its own once main's head is not live 3
-minutes after it landed with no build under way, and reports it. A head whose
+`BUILD_HOOK` deploy hook (builds.ts), since most failures are the network's. The
+queue reports each failed production build to the tracker before acknowledging
+it, including failures of deploy-hook builds. Each occurrence carries its build
+link and, when the logs API answers, a redacted diagnostic. The build UUID
+identifies a redelivery. The box's
+[deploy catch-up](../../packages/admin/README.md#the-deploy-catch-up) starts
+main's build through a deploy hook of its own when main's head is still not live
+3 minutes after it landed with no build under way, and reports it. A head whose
 build failed is this rebuild's for 15 minutes; the catch-up builds it only if it
 is still not live then.
 

@@ -11,49 +11,22 @@
 // Builds deploys (README "Workers Builds"): nothing it built was on its way
 // to production.
 //
-// What reaches the tracker is a failure someone has to fix. Most failures are
-// the network's (Builds' own clone of the repo, a download that 404s for a
-// minute, a registry push that times out), so a commit's first failure is
-// built once more through the deploy hook, and while that build runs the
-// failure is a log line: nothing is lost yet. A hook that answers a build of
-// main is already pending started nothing (hook.ts), and that is a log line
-// too: the pending build deploys main's head, which holds the failed commit,
-// and reports its own failure. One that ends without a failure (Builds
-// terminates a build that never left initializing, and raises no
-// `build.failed` for it) leaves main's head not live, the catch-up's case. A failure our code causes fails
-// the rebuild too, and the rebuild's failure is filed with its diagnosis
-// minutes later. The deploy hook's builds carry an empty commit while their
-// event still says `push_event`, so the trigger source cannot tell a retry
-// from a push, and a build that names no commit is never built again: a retry
-// that retried its own failure would never stop. A failure that earns no
-// rebuild is filed at once: no `BUILD_HOOK`, a hook that refused or could not
-// be reached, a commit's second build. A rebuild that
-// never reports back leaves its commit not live, which the box's deploy
-// catch-up reports (NotLive, packages/admin/catchup.ts).
+// Every failed build goes to the tracker before the event is acknowledged.
+// Its UUID identifies the occurrence on redelivery. The failing step and
+// diagnostic group builds by cause, or the report says why the log is unread.
 //
-// A cause is one tracker bug, however many builds and commits it fails: the
-// failing step and the error its log names, or, when the log cannot be read,
-// why not. Each occurrence names the commit it built. A push's build names its
-// commit in its event. A deploy hook's build names none, in its event or its
-// own record, so the commit comes from whoever asked for it: the kernel notes
-// the commit it rebuilds on the build the hook started (`built{commit}`), and
-// the log's checked-out commit stands in when it can be read. A hook build
-// with neither is the deploy catch-up's, which builds main's head and reports
-// that head when it still is not live (catchup.ts `stuck`), so here it is a
-// log line. A build that fails after its bug was resolved brings the bug
-// back.
-//
-// The meta store holds the receipts that make each decision once (unseen.ts
-// `metaBreaks`): a failed build is noted as its own entity, and a commit's
-// failure as the commit's, each on the condition (`$was`) that it holds no
-// receipt yet. A build delivered twice is decided by its first delivery, and
-// only the commit's first note earns the rebuild.
+// A push's first failure also starts a rebuild of main. The directory receipt
+// gives each commit one rebuild. Deploy hook events omit the commit, so they
+// only report their failure. The log's checkout or the directory's retry note
+// names their commit when available. The box's deploy catch-up covers builds
+// that never announce a failure and leave main behind.
 
 import { line } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Env } from './env.ts'
-import { caught, defect } from './defects.ts'
-import { type Hooked, hooked, PENDING } from '@yaks/cloudflare/hook'
+import { caught, deliverDefect } from './defects.ts'
+import { type Hooked, hooked } from '@yaks/cloudflare/hook'
 import { meta } from './meta.ts'
 import { type Breaks, metaBreaks } from './unseen.ts'
 import { accountUrl, resent } from '@yaks/cloudflare/api'
@@ -98,7 +71,7 @@ export let broke = (b: Built) => {
       `the Workers Build of ${worker} at ${short} (${branch ?? '?'}) failed` +
         (commitMessage ? `: ${commitMessage}` : ''),
     ),
-    tags: { worker, commit: commitHash, branch },
+    tags: { worker, commit: commitHash || undefined, branch },
   }
 }
 
@@ -369,7 +342,7 @@ export let first = async (
  * `BUILD_HOOK` secret, and say what came of it (hook.ts). The hook builds the
  * branch's head: when a build of it is already pending, a push after the
  * failed one or the catch-up's ask, the hook starts none and answers
- * {@link PENDING}, and that pending build is the one that deploys. */
+ * that a pending build already exists. */
 export let rebuild = async (env: Env): Promise<Hooked> => {
   if (!env.BUILD_HOOK) return { started: false, said: 'no BUILD_HOOK' }
   try {
@@ -386,55 +359,47 @@ export let rebuild = async (env: Env): Promise<Hooked> => {
 
 type Batch = { messages: readonly { body: Built; ack(): void }[] }
 
-/** The queue handler: decide each failed build once, however often it is
- * delivered, and acknowledge every message. A commit's first failure is built
- * again, noting the commit on the build the hook started, and is a log line
- * once that build started; a build that names no commit is the catch-up's
- * and a log line too; any other failure goes to the tracker with what its
- * retry came to. A note that fails is telemetry: the build is decided as new,
- * and earns no retry, since a retry nobody recorded is how the loop starts. */
-export let builds = async (batch: Batch, env: Env) => {
+let retryPush = async (env: Env, event: Broke, commit: string) => {
   let breaks = metaBreaks(env)
-  let noted = (b: Broke, eid: string | undefined, otherwise: boolean) =>
-    eid
-      ? first(breaks, eid, b).catch((why) => {
-        caught(why, { request: `file ${b.request}` })
-        return otherwise
-      })
-      : otherwise
+  let once = await first(breaks, commit, event).catch((why) => {
+    caught(why, { request: `record the first failure of ${event.request}` })
+    return false
+  })
+  if (!once) return
+  let retry = await rebuild(env)
+  if (retry.build) {
+    await breaks([{
+      entity: { eid: retry.build },
+      built: { commit },
+    }]).catch((why) => caught(why, { request: `note ${event.request}` }))
+  }
+}
+
+let reportBuild = async (env: Env, event: Broke) => {
+  let b = await diagnosed(env, await asked(env, event))
+  await deliverDefect(b.error, {
+    request: b.request,
+    ...b.tags,
+    build_log: buildUrl(env, b),
+  }, {
+    eid: b.uuid ? derivedEid(`failed-build|${b.uuid}`) : undefined,
+    fault: `build failed:${b.tags.worker}:${b.cause}`,
+    commit: b.commit ?? b.build,
+  })
+}
+
+/** Report each production failure before acknowledging it. */
+export let builds = async (batch: Batch, env: Env) => {
   for (let m of batch.messages) {
     let event = broke(m.body)
-    if (event && await noted(event, event.uuid, true)) {
-      event = await asked(env, event)
-      let detail = diagnosed(env, event)
-      let once = await noted(event, event.commit, false)
-      let retry = once ? await rebuild(env) : undefined
-      if (retry?.build) {
-        await breaks([{
-          entity: { eid: retry.build },
-          built: { commit: event.commit },
-        }]).catch((why) => caught(why, { request: `note ${event!.request}` }))
-      }
-      let b = await detail
-      if (!b.commit) {
-        console.log(
-          `yak-builds: ${b.error.message}. The deploy catch-up asked for ` +
-            `this build and reports main's head if it stays not live.`,
-        )
-      } else if (retry?.started) {
-        console.log(`yak-builds: ${b.error.message}. Building it again.`)
-      } else if (retry?.said == PENDING) {
-        console.log(`yak-builds: ${b.error.message}. ${PENDING}.`)
-      } else {
-        defect(b.error, {
-          request: b.request,
-          ...b.tags,
-          build_log: buildUrl(env, b),
-          retry: retry?.said,
-        }, {
-          fault: `build failed:${b.tags.worker}:${b.cause}`,
-          commit: b.commit ?? b.build,
-        })
+    if (event) {
+      let recovery = event.commit
+        ? retryPush(env, event, event.commit)
+        : undefined
+      try {
+        await reportBuild(env, event)
+      } finally {
+        await recovery
       }
     }
     m.ack()
