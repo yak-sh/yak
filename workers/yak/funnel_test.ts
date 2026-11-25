@@ -36,6 +36,18 @@ let visit = (ua = BROWSER, path = '/', cf?: Visited['cf']) =>
     { cf },
   )
 
+test("a step kept for every client is written for a crawler's or an assistant's too, saying which", () => {
+  let views = dataset()
+  for (let ua of [BROWSER, 'facebookexternalhit/1.1', 'ClaudeBot/1.0']) {
+    step({ VIEWS: views }, 'invite', visit(ua, '/i/k7q2m'), { kept: true })
+  }
+  assertEquals(views.points.map((p) => p.blobs?.[5]), [
+    'browser',
+    'bot',
+    'agent',
+  ])
+})
+
 test("a step is written under the platform, saying what a view says, its campaign and the home page it is on, and a crawler's or a script's is not", () => {
   let views = dataset()
   step({ VIEWS: views }, 'code_sent', visit())

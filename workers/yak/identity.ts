@@ -1662,7 +1662,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let dir = dirOf(env)
     let inviter = await dir.referrer(invite)
     if (!inviter) return signCard(env)
-    if (req.method == 'GET') step(env, 'invite', req)
+    if (req.method == 'GET') step(env, 'invite', req, { kept: true })
     return signCard(env, { by: await dir.nameAt(inviter) ?? '' })
   }
 

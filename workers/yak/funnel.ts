@@ -65,7 +65,7 @@ export let STEPS = [
   // names the app; `badges` reads it by space.
   { name: 'badge', say: 'Badges and "Website by yaks.app" lines followed' },
   // A person's invite link opened (referral.ts `linkOf`, identity.ts), for a
-  // code somebody holds.
+  // code somebody holds; a crawler's or an agent's opening is counted apart.
   { name: 'invite', say: 'Invite links opened' },
   { name: 'home', say: 'Home page visits' },
   {
@@ -186,21 +186,24 @@ export type Who = string | null | readonly (string | null)[]
  * from a person's. One taken away from a
  * request counts under the `campaign` its taker came by, and apart when its
  * taker is nobody's (`test`, directory.ts `stepper`), so an agent's check's
- * newcomer building is counted apart too.
+ * newcomer building is counted apart too. A step `kept` for every client is
+ * written for a crawler's or an assistant's too, which the funnel counts apart
+ * (`apart`): an invite link a messaging app fetched to draw its preview.
  */
 export let step = (
   env: Pick<Env, 'VIEWS'>,
   name: Step,
   req?: Request,
-  { button, who, campaign, test, page }: {
+  { button, who, campaign, test, page, kept }: {
     button?: string
     who?: Who
     campaign?: string
     test?: boolean
     page?: string
+    kept?: boolean
   } = {},
 ) => {
-  if (!env.VIEWS || (req && !isPerson(req))) return
+  if (!env.VIEWS || (req && !kept && !isPerson(req))) return
   try {
     env.VIEWS.writeDataPoint(
       stepOf(name, req as Visited | undefined, {
