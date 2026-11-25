@@ -778,7 +778,7 @@ for, and the Deno replay isolates the change in module loading. The deployed
 
 November 25, 2026. Desktop opens used a fresh browser cache and service worker
 state at 1280 × 800. The Operator paths used the checks account and admin used
-the platform admin bot. The probe alternated `/updates`, `/checks/updates`,
+the platform admin bot. The measured routes were `/updates`, `/checks/updates`,
 `/checks` and `/admin/people`. The `cold` Server-Timing marker identifies the
 subset that also started a gateway isolate. On the new code, the presence of
 `operator_boot_wait` identifies a page request that started a Builder store.
@@ -829,13 +829,16 @@ After the change, median directory wait was 249 ms for All Updates, 110 ms for
 Space Updates, 58 ms for chat, and 170 ms for Admin People. The Admin People
 census read took a median of 184 ms. The Builder's module and store-open marks
 both read 0 ms on the two confirmed Builder boots. The gateway's render marks
-also read 0 ms.
+also read 0 ms. The child spans began 24 and 49 ms after the caller sent the
+Updates fetches on those boots.
 
 Four after opens through the `/admin` redirect painted in 872–1,968 ms. The
 original admin report, `1250404f81`, recorded 625 ms from request to first byte
 within 2,756 ms to paint. Its record lacks timings for the browser resources and
 rendering that followed. The report stays open because the historical cause has
-yet to be verified.
+yet to be verified. Two paired desktop replays showed styled admin content in
+102–133 ms with the old loading screen and 119–149 ms with the new one, measured
+from when the replay began parsing the HTML.
 
 ### Phone
 
@@ -885,3 +888,14 @@ now retain an alarm and let the caller wake the Operator as soon as the caller
 has the receipt. A running Operator still takes a new send beside its current
 step. The Builder also reports intake and alarm arming waits on the send
 response.
+
+All three after sends on kernel `031c8fa7` confirmed their request id. Median
+gateway time was 327 ms and median browser receipt time was 1,115 ms, compared
+with 168 and 430 ms before. The sole confirmed Builder-cold send in the after
+series took 1,086 ms of gateway time and 1,052 ms at the Builder door.
+Cloudflare's Builder handler span began about 535 ms after the caller sent the
+request, compared with about 35 ms on the sole before boot. The after invocation
+reported 290 ms of CPU, and the app's intake and alarm I/O clocks read 0 ms. The
+live comparison did not establish a latency reduction. The Builder test confirms
+that the cold receipt is sent before model work and that the caller's wake
+carries out the request.
