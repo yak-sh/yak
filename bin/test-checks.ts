@@ -5,7 +5,7 @@
 // types, and every package's public API, after the push.
 
 import type { Survey } from '@yaks/testing/deps'
-import { type Prepared, types } from './check-types.ts'
+import { types } from './check-types.ts'
 import { formatting } from '@yaks/git/land'
 import config from '../deno.json' with { type: 'json' }
 
@@ -106,14 +106,11 @@ export let check = async (
   run = command,
   typed = (
     changed: string[],
-    prepared: Prepared,
     snapshot?: Promise<Survey | undefined>,
-  ) =>
-    types(changed, (args) => run({ name: 'types', args }), prepared, snapshot),
-  prepared: Prepared = [],
+  ) => types(changed, (args) => run({ name: 'types', args }), snapshot),
   snapshot?: Promise<Survey | undefined>,
 ) =>
   (await Promise.all([
     ...checks(changed).filter((c) => c.name != 'format').map((c) => run(c)),
-    typed(changed, prepared, snapshot),
+    typed(changed, snapshot),
   ])).every(Boolean)

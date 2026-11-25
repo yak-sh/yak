@@ -7,9 +7,8 @@
 import { cleanup, test, tick, until } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import * as yaml from 'yaml'
 import type { Stash } from '@yaks/draft'
-import { imported } from '@yaks/fp/imports'
-import { ASSETS } from './assets.ts'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import {
@@ -32,6 +31,9 @@ import { clock } from './timing.ts'
 import type { Wire } from '@yaks/durable-object'
 import type { Who } from './session.ts'
 import { pageModule } from './page-module-probe.ts'
+import { sourceModules } from './page-source-probe.ts'
+import { operatorVocab } from './operator-store.ts'
+import { pageDocs } from './operator-words.ts'
 import { released, talking } from './operator-testing.ts'
 import { openedOf, operatorFrames } from './operator-host.ts'
 import { operatorStore } from './operator-store.ts'
@@ -195,18 +197,20 @@ let storage = (): Stash => {
 // store's socket. 'held' and 'down' give the page a clock the test holds: its
 // time passes only by `pass`. Under the others, the page's waits run a
 // thousand times faster.
-let scripts = new Map<string, Promise<string>>()
-let scriptAt = (url: string) => {
-  let read = scripts.get(url)
-  if (!read) {
-    read = p.env.ASSETS.fetch(new Request(url)).then((response) => {
-      if (!response.ok) throw new Error(`${url}: ${response.status}`)
-      return response.text()
-    })
-    scripts.set(url, read)
-  }
-  return read
-}
+let scripts = sourceModules(base, {
+  yaml,
+  '/follow.js': new URL('./public/follow.js', import.meta.url),
+  '/frames.js': new URL('./public/frames.js', import.meta.url),
+  '/voice.js': new URL('./public/voice.js', import.meta.url),
+  '/_talk.js': new URL('./operator-rows.ts', import.meta.url),
+  '/_words.js': { default: pageDocs(operatorVocab.docs) },
+})
+
+// Timers from the client and its socket and presence code belong to the tab.
+let fromTab = () =>
+  /\/packages\/(client\/|notify\/tab\.ts|sync\/(socket|sync)\.ts)/.test(
+    new Error().stack ?? '',
+  )
 
 // A tab: its page graph, kept on the tab's global as @yaks/client `shared`
 // keeps it, the page graph's sockets, and how many frames they have heard.
@@ -348,7 +352,7 @@ let load = async (
   let after = (fn: () => void, ms: number) => {
     if (left) return 0
     let id = ++n
-    if (new Error().stack?.includes('_page-client')) tabTimers.add(id)
+    if (fromTab()) tabTimers.add(id)
     if (held) waits.set(id, { at: now + ms, fn })
     else {
       timers.set(
@@ -372,7 +376,7 @@ let load = async (
   // The page's beats: the tab's page graph's outlive it, and are not its.
   let every = () => {
     ++n
-    if (!new Error().stack?.includes('_page-client')) intervals.add(n)
+    if (!fromTab()) intervals.add(n)
     return n
   }
   // Lets `ms` of the held clock pass, the page's waits running in the order
@@ -568,10 +572,6 @@ let load = async (
   }
   let source = document.querySelector('script[data-operator-chat]')!
     .textContent!
-  // Generated bundles still depend on the source graph that builds them.
-  imported(
-    ASSETS.flatMap(({ bundle }) => bundle instanceof URL ? [bundle.href] : []),
-  )
   // Where the page went by its address (`location.assign`).
   let went: string[] = []
   let place = {
@@ -598,7 +598,7 @@ let load = async (
   let marks = new Map<string, { name: string; startTime: number }>()
   await pageModule(source, {
     at: base,
-    read: scriptAt,
+    ...scripts,
     globals: {
       document,
       fetch,

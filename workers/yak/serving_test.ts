@@ -9,7 +9,6 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { parse } from 'es-module-lexer/js'
 import type { Frame } from '@yaks/api'
 import type { Wire } from '@yaks/durable-object'
 import { graph } from '@yaks/graph'
@@ -37,8 +36,7 @@ import {
 } from './directory.ts'
 import { pageScript } from './page-script.ts'
 import { badged, badgeOf } from '@yaks/platform/woven'
-import { planned } from './assets.ts'
-import { client as clientNamed } from './sheets.ts'
+import { CLIENT_SCRIPT, readAsset } from './site-assets-probe.ts'
 import * as dirPart from './directory.ts'
 import { granting, scriptName, WARMING } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -146,22 +144,10 @@ let client = (env: Env, cookie?: string) => {
 let CAKE = 'c0000000-0000-4000-8000-00000000cake'.replace('cake', '0001')
 
 // The platform's own scripts, read once.
-let PUBLIC = new URL('./public/', import.meta.url)
-let ASSETS = assets(PUBLIC)
+let ASSETS = assets()
 await pageScript(ASSETS, '/', 0, { badge: 'https://yaks.app/' })
 
 // ---- the tests -------------------------------------------------------------
-
-// The platform's client as a page receives it: the module exporting `store`,
-// importing nothing more, so one request brings the whole of it
-// (assets.ts). `import.meta` is not an import.
-let served = (js: string) => {
-  let [imports, exports] = parse(js)
-  return {
-    imports: imports.filter((i) => i.d != -2).map((i) => i.n),
-    store: exports.some((e) => e.n == 'store'),
-  }
-}
 
 test('a page is served with its base and its reporter', async () => {
   await using scenario = platform()
@@ -181,24 +167,27 @@ test('a page is served with its base and its reporter', async () => {
   // wraps.
   let js = await apps.fetch(visit('/cookbook/api/client.js'), env)
   assertEquals(js.status, 200)
-  assertEquals(served(await js.text()), { imports: [], store: true })
+  assertEquals(await js.text(), CLIENT_SCRIPT)
 })
 
 // The client by the name of its bytes (sheets.ts `client`) is the same
 // client, which the browser keeps for good. A page held from before a deploy
 // names one it no longer holds, and is sent to the client it has.
 test('the client by its bytes is kept for good, and an old name finds the client', async () => {
-  await using scenario = platform()
+  let name = 'client.abcdef1234.js'
+  let ASSETS = assets((path) =>
+    readAsset(path == `/_yak/_${name}` ? '/_client.js' : path)
+  )
+  await using scenario = platform({ ASSETS })
   let { env } = scenario
   await seeded(env, 'public', scenario.dir)
-  let name = clientNamed(planned(PUBLIC.pathname).names)!
   let kept = await apps.fetch(visit(`/cookbook/api/${name}`), env)
   assertEquals(kept.status, 200)
   assertEquals(
     kept.headers.get('cache-control'),
     'public, max-age=31536000, immutable',
   )
-  assertEquals(served(await kept.text()), { imports: [], store: true })
+  assertEquals(await kept.text(), CLIENT_SCRIPT)
   let old = await apps.fetch(visit('/cookbook/api/client.0123456789.js'), env)
   assertEquals([old.status, old.headers.get('location')], [302, 'client.js'])
 })
@@ -276,7 +265,7 @@ test("a release's module imports the client by the page's own path", async () =>
     res = await apps.fetch(new Request(url), env)
   }
   assertEquals(res.status, 200)
-  assertEquals(served(await res.text()), { imports: [], store: true })
+  assertEquals(await res.text(), CLIENT_SCRIPT)
   assertEquals(new URL('.', url).pathname, '/cookbook/api/')
 })
 

@@ -1,5 +1,5 @@
 // The file door, through the whole kernel (probe.ts `kernel`): a page hands the
-// app bytes through the served client's `upload`, gets a content-addressed
+// app bytes through the client's `upload`, gets a content-addressed
 // address back, and reads the same bytes out of it. What is proved here is
 // what C-32675 found missing — there was nowhere to put a photo — plus the
 // four edges that make the door safe to hand a person: the same file twice is
@@ -10,17 +10,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { browser, connector, kernel, seed, unique } from './probe.ts'
 import { START } from '@yaks/blob'
-
-// The client module the kernel serves, loaded the way a page loads it.
-let served = async (
-  k: Awaited<ReturnType<typeof kernel>>,
-  dir: string,
-  host: string,
-) => {
-  let source = await (await k.at(host, '/photos/api/client.js')).text()
-  Deno.writeTextFileSync(`${dir}/client.js`, source)
-  return await import(`file://${dir}/client.js`)
-}
+import * as mod from '@yaks/platform/client'
 
 // A tiny PNG and a tiny JPEG: header bytes a picture would really open with,
 // so the mime a page sends is a mime a page means and the door can read the
@@ -174,7 +164,6 @@ type Row = {
 let pageDoor = await (async () => {
   let k = await kernel()
   let jeff5 = unique('jeff5')
-  let dir = Deno.makeTempDirSync({ prefix: 'tasks-blob-' })
   let them = await seed(k, [{
     slug: jeff5,
     apps: ['photos', 'pictures', 'dropbox'],
@@ -192,7 +181,6 @@ let pageDoor = await (async () => {
     }],
   })
   await agent.tool('app_deploy', pictures)
-  let mod = await served(k, dir, `${jeff5}.yaks.app`)
   let mine = browser(k, `${jeff5}.yaks.app`, them.cookie)
   let anyone = browser(k, `${jeff5}.yaks.app`)
   // Open each empty store before measuring uploads; do not prime the door
@@ -203,7 +191,7 @@ let pageDoor = await (async () => {
       [],
     )
   }
-  return { k, jeff5, dir, them, mine, anyone, mod }
+  return { k, jeff5, them, mine, anyone }
 })()
 let pngSha = await hex(png)
 let page = new TextEncoder().encode('<h1>hi</h1>')
@@ -228,7 +216,7 @@ test('a small upload is one trip to the bucket', async () => {
 })
 
 test('the file door: a page uploads bytes and gets an address', async () => {
-  let { k, jeff5, dir, them, mine, anyone, mod } = pageDoor
+  let { k, jeff5, them, mine, anyone } = pageDoor
   try {
     let store = mod.store(`${mine.origin}/photos/api/`)
 
@@ -407,7 +395,6 @@ test('the file door: a page uploads bytes and gets an address', async () => {
   } finally {
     await mine.stop()
     await anyone.stop()
-    Deno.removeSync(dir, { recursive: true })
     await k.stop()
   }
 })

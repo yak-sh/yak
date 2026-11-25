@@ -8,7 +8,7 @@ import type { App, Space } from './directory.ts'
 import { pageScript } from './page-script.ts'
 import { assets } from './binding-probe.ts'
 
-let ASSETS = assets(new URL('./public/', import.meta.url))
+let ASSETS = assets()
 let code = await Deno.readTextFile(
   new URL('./public/edit.js', import.meta.url),
 )

@@ -1,5 +1,5 @@
 // The data editor through the whole kernel (probe.ts `kernel`): its door, then
-// public/data.js driven on a linkedom document over the served client, as a
+// The editor source driven on a linkedom document over the client, as a
 // clerk would use it on a township's notices, meetings and links.
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
@@ -17,6 +17,7 @@ import {
 import type { PropSchema } from '@yaks/vocab'
 import { fields, kinds } from '@yaks/data-editor'
 import { open, patch, title } from '@yaks/data-editor/editor'
+import { draftEid, store as appStore } from '@yaks/platform/client'
 import { appDoc } from './vocab.ts'
 
 let k = await kernel()
@@ -74,19 +75,11 @@ await agent.tool('app_files', {
 })
 await agent.tool('app_deploy', at)
 
-let dir = Deno.makeTempDirSync({ prefix: 'tasks-data-editor-' })
-Deno.writeTextFileSync(
-  `${dir}/client.js`,
-  await (await k.at(host, '/site/api/client.js')).text(),
-)
-let served = await import(`file://${dir}/client.js`)
-Deno.removeSync(dir, { recursive: true })
-
 // One person's page: the editor on a document of its own, and what a person
 // does to it. The drafts are a desk in memory; @yaks/draft has its own tests.
 let page = (cookie: string) => {
   let door = browser(k, host, cookie)
-  let store = served.store(`${door.origin}/site/api/`)
+  let store = appStore(`${door.origin}/site/api/`)
   let typed = new Map<string, string>()
   // The page's work is its calls to the store: it has settled when none is
   // in flight. A handler starts its call as it is dispatched, and the next
@@ -112,7 +105,7 @@ let page = (cookie: string) => {
     query: held(store.query),
     apply: held(store.apply),
     upload: held(store.upload),
-    draftEid: served.draftEid,
+    draftEid,
     drafts: () => ({
       text: (p: string) => typed.get(p) ?? '',
       type: (p: string, text: string) => typed.set(p, text),
@@ -276,7 +269,7 @@ test('a row is added, listed, edited, linked, given a file and removed', async (
   assertEquals(p.typed.size, 0)
 
   // Once the app has written it, the row shows it, and an edit leaves it be.
-  let reader = served.store(`${browser(k, host, them.cookie).origin}/site/api/`)
+  let reader = appStore(`${browser(k, host, them.cookie).origin}/site/api/`)
   let [notice] = await reader.query('.announcement')
   await reader.apply([{
     entity: { eid: notice.entity.eid },

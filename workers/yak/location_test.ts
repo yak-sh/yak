@@ -9,7 +9,7 @@ let code = await Deno.readTextFile(
 )
 let served = await Promise.all([undefined, 'draft-link'].map(async (draft) => {
   let { tags } = await pageScript(
-    assets(new URL('./public/', import.meta.url)),
+    assets(),
     '/',
     1,
     {

@@ -1,11 +1,5 @@
-// The store client an app's pages import, through the whole kernel (probe.ts
-// `kernel`): the kernel serves public/client.js beside every app's doors, and
-// a page that imports it saves and lists the app's own entities.
-//
-// The page here is a module, and it runs where the test runs: Deno loads the
-// bytes the kernel served and calls them. What a browser gives a page and a
-// test cannot is its origin — the hostname and the cookie that says who is
-// asking — which probe.ts's `browser()` stands in for.
+// The client source drives the kernel's app doors. Browser requests go
+// through probe.ts's browser(), which supplies the hostname and cookie.
 import {
   assert,
   assertEquals,
@@ -15,6 +9,7 @@ import {
 } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { client as keeper } from '@yaks/client'
+import * as mod from '@yaks/platform/client'
 import { loadVocab } from '@yaks/vocab'
 import { test } from '@yaks/testing'
 import { browser, client, connector, kernel, seed, unique } from './probe.ts'
@@ -35,7 +30,6 @@ type Row = {
 test('the served client: a page saves, lists and watches', async () => {
   let k = await kernel()
   let jeff7 = unique('jeff7')
-  let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
   let them = await seed(k, [{ slug: jeff7, apps: ['recipes'] }])
   let cookie = them.cookie
   let mine = browser(k, `${jeff7}.yaks.app`, cookie)
@@ -45,7 +39,7 @@ test('the served client: a page saves, lists and watches', async () => {
     let served = await k.at(`${jeff7}.yaks.app`, '/recipes/api/client.js')
     assertEquals(served.status, 200)
     assertMatch(served.headers.get('content-type') ?? '', /javascript/)
-    let source = await served.text()
+    await served.body?.cancel()
     // A page that already holds it is told so, without the bytes again.
     let again = await k.at(`${jeff7}.yaks.app`, '/recipes/api/client.js', {
       headers: { 'if-none-match': served.headers.get('etag') ?? '' },
@@ -71,8 +65,6 @@ test('the served client: a page saves, lists and watches', async () => {
     assertStringIncludes(html, '"./api/client.js"')
     assertStringIncludes(html, '<base href="/recipes/">')
 
-    Deno.writeTextFileSync(`${dir}/client.js`, source)
-    let mod = await import(`file://${dir}/client.js`)
     assertStringIncludes(
       mod.qr(`${mine.origin}/recipes/`, 'Scan to open Recipes'),
       'aria-label="Scan to open Recipes"',
@@ -280,7 +272,6 @@ test('the served client: a page saves, lists and watches', async () => {
   } finally {
     await mine.stop()
     await anyone.stop()
-    Deno.removeSync(dir, { recursive: true })
     await k.stop()
   }
 })
@@ -292,7 +283,6 @@ test('the served client: a page saves, lists and watches', async () => {
 test('the client at a pretty path, and a sibling app by path', async () => {
   let k = await kernel()
   let nora8 = unique('nora8')
-  let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
   let them = await seed(k, [{ slug: nora8, apps: ['reading', 'lending'] }])
   let mine = browser(k, `${nora8}.yaks.app`, them.cookie)
   try {
@@ -320,8 +310,7 @@ test('the client at a pretty path, and a sibling app by path', async () => {
 
     // The module as that page holds it: a page has an origin, which is what
     // an address that is a path resolves against.
-    Deno.writeTextFileSync(`${dir}/client.js`, await served.text())
-    let mod = await import(`file://${dir}/client.js`)
+    await served.body?.cancel()
     let held = Object.getOwnPropertyDescriptor(globalThis, 'location')
     Object.defineProperty(globalThis, 'location', {
       value: { origin: mine.origin, href: `${mine.origin}/reading/loans/1` },
@@ -348,7 +337,6 @@ test('the client at a pretty path, and a sibling app by path', async () => {
     }
   } finally {
     await mine.stop()
-    Deno.removeSync(dir, { recursive: true })
     await k.stop()
   }
 })

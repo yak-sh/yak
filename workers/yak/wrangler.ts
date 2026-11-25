@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com,api.cloudflare.com,yourname.yaks.app,yourname.yaks.fyi --allow-env --allow-sys=uid --allow-run=deno,node,pnpm,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
-// `deno task dev:yak`, their `-staging` variants and the test runner
-// (bin/test.ts) all come through here, so the pinned version is written once
+// `deno task dev:yak` and their `-staging` variants come through here, so the
+// pinned version is written once
 // and `node_modules` is current before wrangler reads it.
 //
 // pnpm installs the repository workspace before bundling. Package manifests
@@ -20,7 +20,6 @@ import { Buffer } from 'node:buffer'
 import { parse, stringify } from 'smol-toml'
 import { imaged } from './sandbox/base.ts'
 import { installed } from '@yaks/cli/dependencies'
-import { assets } from './asset-ready.ts'
 import { planned } from './assets.ts'
 import { CHUNK } from '@yaks/cli/page'
 import { once, sleep } from '@yaks/fp'
@@ -57,23 +56,21 @@ let repo = fileURLToPath(new URL('../../', import.meta.url))
 // for: every read waits for pnpm to install the pinned Wrangler first.
 let cloudflare = reads(dir, once(() => credentials(WRANGLER, dir)))
 
-// A prerequisite made, and what making it took; `quiet` says only a failure.
-let timed = async <T>(name: string, make: () => Promise<T>, quiet = false) => {
+// A prerequisite made, and what making it took.
+let timed = async <T>(name: string, make: () => Promise<T>) => {
   let started = performance.now()
   let value = await make()
-  if (!quiet) {
-    console.log(
-      `${name}: ready in ${((performance.now() - started) / 1000).toFixed(3)}s`,
-    )
-  }
+  console.log(
+    `${name}: ready in ${((performance.now() - started) / 1000).toFixed(3)}s`,
+  )
   return value
 }
 
-let generated = async (name: string, args: string[], quiet = false) => {
+let generated = async (name: string, args: string[]) => {
   let result = await spawnCommand('deno', {
     args: ['run', '--no-lock', '-A', ...args],
     stdin: 'null',
-    stdout: quiet ? 'null' : 'inherit',
+    stdout: 'inherit',
   }).spawn().status
   if (!result.success) throw new Error(`${name} generation failed`)
 }
@@ -105,83 +102,28 @@ export let readiness = (
   return { dependencies, web, catalog, cli, client, all }
 }
 
-let modules = (root: string, quiet: boolean) =>
-  timed('pnpm dependencies', () => installed(resolve(root, '../..')), quiet)
-
-let preparing = (
-  root = dir,
-  quiet = false,
-  dependencies: () => Promise<boolean> = () => modules(root, quiet),
-) =>
+let preparing = () =>
   readiness({
-    dependencies,
+    dependencies: () => timed('pnpm dependencies', () => installed(repo)),
     web: () =>
       timed('Web assets', () =>
         generated('Web asset', [
           join(repo, 'packages/web/static.ts'),
-          join(root, 'public/_web'),
+          join(dir, 'public/_web'),
           '@yaks/browse/web',
-        ], quiet), quiet),
+        ])),
     client: () =>
-      timed(
-        'Site assets',
-        () => generated('Site asset', [join(root, 'assets.ts')], quiet),
-        quiet,
-      ),
+      timed('Site assets', () =>
+        generated('Site asset', [join(dir, 'assets.ts')])),
     cli: () =>
       timed('Sandbox CLI', () =>
-        generated(
-          'Sandbox CLI',
-          [join(root, 'sandbox/cli-assets.ts')],
-          quiet,
-        ), quiet),
+        generated('Sandbox CLI', [join(dir, 'sandbox/cli-assets.ts')])),
     catalog: () =>
       timed('Compiler catalog', () =>
         generated('Compiler catalog', [
           join(repo, 'bin/compiler-packages.ts'),
-        ], quiet), quiet),
+        ])),
   })
-
-/** Set in the environment of a process that readied a root, naming it: every
- * process it starts afterwards inherits it, so a test run (bin/test.ts)
- * readies once, and the runtimes that boot its kernels find it done. */
-export let READIED = 'YAK_WORKER_READIED'
-
-/** Prepare every prerequisite before a probe reads it, unless this process or
- * the one that started it already did. Answers whether pnpm installed. `quiet`
- * says only what failed: a test run's reader acts on nothing else. Without
- * `assets`, only node_modules: a run none of whose files read a generated
- * asset leaves them as they are. */
-export let ready = async (
-  quiet = false,
-  {
-    root = dir,
-    assets: made = true,
-    prepared,
-  }: {
-    root?: string
-    assets?: boolean
-    prepared?: (outputs: readonly string[]) => void
-  } = {},
-) => {
-  if (system.env.get(READIED) == root) return false
-  let dependencies = modules(root, quiet)
-  let make = async () => {
-    await preparing(root, quiet, () => dependencies).all
-  }
-  let artifacts = made && assets(repo, root, make)
-  let completed = await Promise.allSettled([
-    dependencies,
-    artifacts,
-  ])
-  for (let result of completed) {
-    if (result.status == 'rejected') throw result.reason
-  }
-  if (artifacts) prepared?.(await artifacts)
-  let changed = await dependencies
-  if (made) system.env.set(READIED, root)
-  return changed
-}
 
 // Wrangler accepts --env on either side of the command. Both forms need
 // the same commit annotation, so production and staging identify one build.

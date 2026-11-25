@@ -6,14 +6,11 @@
 // the rest of the budget, and main's CI runs the full suite after the push.
 // Cached passes leave out tests already passed unchanged.
 // Paths narrow an explicit run.
-// There are no browser or workerd tests. A run whose files reach the Worker's
-// generated files and npm tree makes them current first (`READIES`).
 
 import type { TestCommand } from './phases.ts'
 import type { Suite } from './test-budget.ts'
 import type { Survey } from '@yaks/testing/deps'
 import type { Examples } from '@yaks/testing/examples'
-import type { Prepared } from './check-types.ts'
 import { localCheck, onRunner } from './check-work.ts'
 
 /** Set in a run's environment, naming the run: every process it starts
@@ -66,7 +63,7 @@ let { fileURLToPath } = await import('node:url')
 let { choose } = await import('@yaks/testing/choose')
 let { changes, edits, member } = await import('./test-changes.ts')
 let { check, format } = await import('./test-checks.ts')
-let { excluded, MADE: GENERATORS, sourceSurvey } = await import(
+let { excluded, sourceSurvey } = await import(
   './check-types.ts'
 )
 let { discover, PAGES, tested } = await import('@yaks/testing/find')
@@ -343,35 +340,6 @@ export let RUNS = [
   rel(new URL('../workers/yak/runtime-resolve.ts', import.meta.url)),
 ]
 
-/** What the Worker's `ready` makes (workers/yak/wrangler.ts) is read by these:
- * the in-memory platform's static assets over the generated public/ files
- * (binding-probe.ts `assets`, which testing.ts and the RAM probes use). They
- * are gitignored, so a fresh worktree has none until a run that reaches them
- * makes them. */
-export let READIES = [
-  'workers/yak/binding-probe.ts',
-]
-
-/// MADE.test('workers/yak/public/_client.js') -> true
-/// MADE.test('workers/yak/public/_web/app.js') -> true
-/// MADE.test('workers/yak/public/_headers') -> false
-/// MADE.test('workers/yak/public/docs.md') -> false
-/// MADE.test('workers/yak/public/pricing.html') -> true
-/// MADE.test('workers/yak/public/docs/index.html') -> false
-/** The generated assets among those: what public/ holds under a name
- * beginning `_`, but `_headers`, which git keeps, and the site's pages at its
- * top (workers/yak/site/). A run makes them only when a file it runs read one
- * as this version of it last passed, or has no reads kept of this version: a
- * test added to a file may read what its last version did not. Bundling them
- * is seconds a run whose files never read them need not wait. */
-export let MADE =
-  /^workers\/yak\/public\/(?:_(?!headers$)|sky\.js$|[^/]+\.html$)/
-
-/** The generated modules a source imports (check-types.ts `MADE`): a run
- * whose files import one, as the public client imports its parts, makes the
- * assets whatever its files read. */
-let IMPORTED = Object.values(GENERATORS).flat()
-
 /** What a change's own run may expect its tests to take, in milliseconds,
  * loading included: with choosing and starting them, under the ten seconds an
  * agent may wait. The rest of its consumers run in main's CI after the push. */
@@ -451,25 +419,8 @@ export let prepare = async (
     format,
     find: (paths: string[]) => discover(paths, PAGES),
     chosen,
-    check: (
-      changed: string[],
-      prepared: Prepared,
-      snapshot?: Promise<Survey | undefined>,
-    ) => check(changed, undefined, undefined, prepared, snapshot),
-    ready: async (
-      quiet: boolean,
-      assets: boolean,
-    ): Promise<readonly string[] | void> => {
-      let { ready } = await import('../workers/yak/wrangler.ts')
-      let prepared: string[] = []
-      await ready(quiet, {
-        assets,
-        prepared: (outputs) => {
-          prepared = outputs.map((path) => relative(Deno.cwd(), path))
-        },
-      })
-      return prepared
-    },
+    check: (changed: string[], snapshot?: Promise<Survey | undefined>) =>
+      check(changed, undefined, undefined, snapshot),
   },
   resolve = sourceSurvey,
 ) => {
@@ -500,13 +451,9 @@ export let prepare = async (
     snapshot.resolve(work)
     return work
   }
-  let imports = Promise.withResolvers<readonly string[]>()
-  // A selection failure still settles the source job, even when no program
-  // needs generated imports and therefore nobody awaits this receipt.
-  void imports.promise.catch(() => {})
   let ok = all
     ? Promise.resolve(true)
-    : effects.check(changedFiles, imports.promise, snapshot.promise)
+    : effects.check(changedFiles, snapshot.promise)
       .catch((e) => (console.error(e), false))
   try {
     // Source files named are selected from as a change is, among every file;
@@ -535,7 +482,7 @@ export let prepare = async (
     let runtimeChanges = changed?.filter((path) =>
       !path.endsWith('.toml') || declarations?.[path]?.length !== 0
     )
-    let { keys, run, beyond, reaches, read } = await effects.chosen(
+    let { keys, run, beyond } = await effects.chosen(
       files,
       all,
       [sqlite],
@@ -546,22 +493,9 @@ export let prepare = async (
       declarations,
     )
     if (!inspected) snapshot.resolve(undefined)
-    let imported = reaches(IMPORTED)
-    let prepared = imported || reaches(READIES)
-      ? effects.ready(
-        !flags.includes('--verbose'),
-        imported ||
-          run.some((f) => read(f)?.some((p) => MADE.test(p)) ?? true),
-      ).then((outputs) => outputs ?? [])
-      : Promise.resolve([])
-    // Source discovery and other checks run beside readiness. Only preparing
-    // generated imports awaits its receipts; runtimes still need ready assets.
-    imports.resolve(prepared)
-    await prepared
     return { flags, paths, tags, files, keys, run, beyond, ok }
   } catch (error) {
     snapshot.reject(error)
-    imports.reject(error)
     await ok
     throw error
   }

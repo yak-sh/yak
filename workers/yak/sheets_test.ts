@@ -11,13 +11,30 @@ import { halved } from '@yaks/ui'
 import { kernel } from './probe.ts'
 import { lost } from './pages.ts'
 import { parseHTML } from 'linkedom'
-import { ASSETS, planned } from './assets.ts'
+import { plan, reading } from '@yaks/web/assets'
+import { ASSETS } from './assets.ts'
+import { PUBLIC, readAsset } from './site-assets-probe.ts'
+import { kit } from './sheet-assets.ts'
 import { asset, client, links, named, sheeted } from './sheets.ts'
 import { direct } from './wrangler.ts'
 import { dataAsset } from './web.ts'
 
-let PUBLIC = new URL('./public/', import.meta.url).pathname
-let { files, names } = planned(PUBLIC)
+let disk = reading(PUBLIC.pathname)
+let made = new Map(
+  await Promise.all(
+    [...ASSETS, ...await kit()].filter(({ bundle, body, file, name }) =>
+      bundle || body || file || name == '_words.js'
+    ).map(async ({ name }) =>
+      [
+        name,
+        await readAsset('/' + name) ??
+          new TextEncoder().encode(`fixture for ${name}`),
+      ] as const
+    ),
+  ),
+)
+let read = (name: string) => made.get(name) ?? disk(name)
+let { files, names } = plan(ASSETS, read, halved)
 let sheet = (root: string) => new TextDecoder().decode(files.get(names[root])!)
 
 // Every sheet a head blocks on.
@@ -140,7 +157,7 @@ test('sheets: each file the pages name is kept under a name of its bytes, as it 
   let kept = ASSETS.filter((a) => a.named && !a.name.endsWith('.css'))
   for (let { name: file } of kept) {
     assertMatch(names[file], /^_yak\/.+\.[0-9a-f]{10}\.\w+$/)
-    assertEquals(files.get(names[file]), Deno.readFileSync(`${PUBLIC}${file}`))
+    assertEquals(files.get(names[file]), read(file))
     assertEquals(named(`/${names[file]}`), `/${file}`)
   }
   assertEquals(
@@ -255,7 +272,7 @@ test('sheets: an address no longer deployed goes to its source', async () => {
 })
 
 test('sheets: what is content-named is marked immutable and readable from a space', () => {
-  let rules = Deno.readTextFileSync(`${PUBLIC}_headers`)
+  let rules = Deno.readTextFileSync(new URL('_headers', PUBLIC))
   assertStringIncludes(rules, '/_yak/*')
   assertStringIncludes(rules, 'immutable')
   assertStringIncludes(rules, 'Access-Control-Allow-Origin: *')

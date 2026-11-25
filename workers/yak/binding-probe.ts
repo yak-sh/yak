@@ -20,6 +20,7 @@ import { Wire as Wired } from './stream.ts'
 import { durable as raw } from '../../packages/durable-object/testing.ts'
 import type { Limiter } from '@yaks/workerd/rate'
 import { digest } from '@yaks/graph/sha256'
+import { readAsset } from './site-assets-probe.ts'
 
 let sameBytes = (a: Uint8Array, b: Uint8Array) => {
   if (a.length != b.length) return false
@@ -224,14 +225,19 @@ export let kv = (now = () => Date.now()) => {
 }
 
 /**
- * Workers static assets over a directory (wrangler.toml `[assets]`), with the
+ * Workers static assets over supplied bytes (wrangler.toml `[assets]`), with the
  * binding's default html handling: `/x` answers x.html and `/x/` answers
  * x/index.html, a page asked for by its file name moves to its address with a
- * 307, and anything else not on disk is a 404.
+ * 307, and a missing asset gets a 404.
  */
-export let assets = (root: URL) => {
-  let read = (path: string) =>
-    Deno.readFile(new URL(`.${path}`, root)).catch(() => null)
+export let assets = (
+  read: (
+    path: string,
+  ) =>
+    | Uint8Array<ArrayBuffer>
+    | null
+    | Promise<Uint8Array<ArrayBuffer> | null> = readAsset,
+) => {
   // As the runtime's binding answers: an ETag of the bytes, and a 304 to a
   // request already holding them.
   let file = async (
@@ -409,7 +415,7 @@ export let bindings = (secret: string, vars: Vars = {}) => {
     // The grants ledger (grants.ts): what a CLI token and the build sandbox's
     // own sign-in are written down in.
     OAUTH_KV: kv(),
-    ASSETS: assets(new URL('./public/', import.meta.url)),
+    ASSETS: assets(),
     WIRE: {
       idFromName: (n: string) => n,
       get: (n: unknown) => ({

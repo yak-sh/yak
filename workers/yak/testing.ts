@@ -273,8 +273,8 @@ export let unclassified = (held: Held, stamp: string) => {
 
 /**
  * One platform: a Store per name the kernel builds, the bucket its files are
- * in, and the platform's own assets off disk (the client an app imports, the
- * guide the builder reads). Made in a test, it closes as the test ends, inside
+ * in, and assets the tests can supply through ASSETS. Made in a test, it
+ * closes as the test ends, inside
  * the test's time, so what it left running never reaches the next test.
  */
 export let platform = (

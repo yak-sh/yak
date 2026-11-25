@@ -2,7 +2,7 @@ import { equal, test, throws } from '@yaks/testing'
 import { affected } from '@yaks/testing/choose'
 import { survey } from '@yaks/testing/deps'
 import { changes } from './test-changes.ts'
-import { prepare, READIES, ROOTS, RUNS } from './test.ts'
+import { prepare, ROOTS, RUNS } from './test.ts'
 
 // A module graph with a runner consumer and an unrelated example page.
 let helpers = [
@@ -87,7 +87,6 @@ let planned = async (
       checked.push(changed)
       return Promise.resolve(pass)
     },
-    ready: () => Promise.resolve(),
   })
   return { plan, git, checked, selected }
 }
@@ -156,7 +155,6 @@ let named = async (args: string[]) => {
       })
     },
     check: () => Promise.resolve(true),
-    ready: () => Promise.resolve(),
   })
   return { found, by }
 }
@@ -177,100 +175,29 @@ test('a source file named selects, among every file, the tests depending on it',
   })
 })
 
-let readied = async (
-  read: (file: string) => string[] | undefined,
-  reached = READIES,
-) => {
-  let made: boolean[] = []
-  let order: string[] = []
-  let plan = await prepare([], '/sqlite.so', {
-    edits: () => Promise.resolve({}),
-    changes: () => Promise.resolve(['worker.ts', 'guide.md']),
-    format: (files) => Promise.resolve(files),
-    find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
-    chosen: (files, _all, _also, _changed, sources) => {
-      equal(sources, ['worker.ts'])
-      equal(order, ['check'])
-      return Promise.resolve({
-        keys: new Map(),
-        run: files,
-        affected: files,
-        sources: ['worker.ts'],
-        beyond: 0,
-        reaches: (paths) => paths.some((p) => reached.includes(p)),
-        read,
-      })
-    },
-    check: async (_changed, prepared) => {
-      order.push('check')
-      equal(
-        await prepared,
-        made.at(-1) ? ['workers/yak/public/_client.js'] : [],
-      )
-      return Promise.resolve(made.length > 0)
-    },
-    ready: async (_quiet, assets) => {
-      order.push('ready')
-      made.push(assets)
-      await Promise.resolve()
-      order.push('completed')
-      return assets ? ['workers/yak/public/_client.js'] : []
-    },
-  })
-  equal(await plan.ok, true)
-  equal(order, ['check', 'ready', 'completed'])
-  return made
-}
-
-test('source checks begin before selection and receive completed generated imports', async () => {
-  equal(await readied(() => undefined), [true])
-})
-
-test('a run makes the generated assets only when a file it runs read one, or has no reads kept', async () => {
-  equal(await readied(() => ['workers/yak/public/docs.md']), [false])
-  equal(await readied(() => ['workers/yak/public/_client.js']), [true])
-})
-
-test('a run whose files import a generated module makes the assets, whatever they read', async () => {
-  let docs = () => ['workers/yak/public/docs/speed.md']
-  equal(await readied(docs, ['workers/yak/public/_wire.js']), [true])
-})
-
-test('planning and readiness failures settle source jobs waiting for their imports', async () => {
-  for (let failure of ['selection', 'readiness']) {
-    let settled = false
-    await throws(() =>
-      prepare([], '/sqlite.so', {
-        edits: () => Promise.resolve({}),
-        changes: () => Promise.resolve(['worker.ts']),
-        format: (files) => Promise.resolve(files),
-        find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
-        chosen: (files) => {
-          if (failure == 'selection') throw new Error(failure)
-          return Promise.resolve({
-            keys: new Map(),
-            run: files,
-            affected: files,
-            sources: [],
-            beyond: 0,
-            reaches: () => true,
-            read: () => undefined,
-          })
-        },
-        check: async (_changed, prepared, snapshot) => {
-          try {
-            await Promise.all([prepared, snapshot])
-            return true
-          } catch {
-            return false
-          } finally {
-            settled = true
-          }
-        },
-        ready: () => Promise.reject(new Error(failure)),
-      }), new RegExp(failure))
-    equal(settled, true)
-  }
+test('selection failures settle source checks waiting for the shared graph', async () => {
+  let settled = false
+  await throws(() =>
+    prepare([], '/sqlite.so', {
+      edits: () => Promise.resolve({}),
+      changes: () => Promise.resolve(['worker.ts']),
+      format: (files) => Promise.resolve(files),
+      find: () => Promise.resolve({ tests: ['a_test.ts'], pages: [] }),
+      chosen: () => {
+        throw new Error('selection failed')
+      },
+      check: async (_changed, snapshot) => {
+        try {
+          await snapshot
+          return true
+        } catch {
+          return false
+        } finally {
+          settled = true
+        }
+      },
+    }), /selection failed/)
+  equal(settled, true)
 })
 
 test('source planning and selection consume one command snapshot', async () => {
@@ -294,11 +221,10 @@ test('source planning and selection consume one command snapshot', async () => {
         read: () => undefined,
       }
     },
-    check: async (_changed, _prepared, snapshot) => {
+    check: async (_changed, snapshot) => {
       checked = await snapshot
       return true
     },
-    ready: () => Promise.resolve(),
   }, (paths) => {
     queried.push(paths)
     return Promise.resolve(graph)
@@ -329,7 +255,6 @@ test('selection receives the example snapshot from the same discovery', async ()
       })
     },
     check: () => Promise.resolve(true),
-    ready: () => Promise.resolve(),
   })
   equal(received === parsed, true)
   equal(result.run, ['guide.md'])

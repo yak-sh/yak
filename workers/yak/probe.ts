@@ -475,8 +475,7 @@ export let signedIn = async (k: Kernel, person: string) =>
  * A page as this checkout draws it, written to `file` as one still document
  * (@yaks/platform/still) for `yak admin browse <path> --html <file>` to show
  * at its live address in Cloudflare's browser: a UI change seen before it
- * lands. The site's built files (the kit's `_ui.css` among them) are built
- * first, as the deploy builds them (assets.ts).
+ * lands. Its styles come from the in-process asset binding.
  *
  * ```ts ignore
  * let k = await kernel()
@@ -491,7 +490,6 @@ export let stillPage = async (
   cookie: string,
   file: string,
 ) => {
-  await (building ??= import('./assets.ts').then((a) => a.build()))
   let get = (url: string) => {
     let { pathname, search } = new URL(url, 'https://yaks.app')
     return k.at('yaks.app', pathname + search, {
@@ -509,7 +507,6 @@ export let stillPage = async (
   let { still } = await import('@yaks/platform/still')
   await Deno.writeTextFile(file, await still(await r.text(), at.href, get))
 }
-let building: Promise<void> | undefined
 
 // `num` is optional because a store may not have numbers at all: it is
 // @yaks/id's property, which an app's store does not load and the fleet's does.

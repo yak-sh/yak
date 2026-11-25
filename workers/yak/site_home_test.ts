@@ -24,7 +24,7 @@ let html = (body: string, drawn?: string) =>
 
 // The deploy's own files: a page of the site as the Worker drew it, of the
 // drawing `drawn`, anything else (the woven scripts) from public/.
-let disk = assets(new URL('./public/', import.meta.url))
+let disk = assets()
 let deploy = (drawn?: string) =>
   ({
     fetch: (req: Request) => {

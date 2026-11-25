@@ -830,35 +830,17 @@ let program = async (
   }
 }
 
-/** Outputs validated by this run, possibly while source discovery proceeds. */
-export type Prepared = readonly string[] | PromiseLike<readonly string[]>
-
-/** Make a source's imports unless readiness validated every output this run. */
-export let generate = async (
-  made: string[],
-  run: Run,
-  prepared: Prepared = [],
-) => {
-  if (!made.length) return true
-  let completed = await prepared
-  return (await Promise.all(
-    made.filter((g) => !MADE[g].every((path) => completed.includes(path)))
-      .map((g) => run(['run', '--no-lock', '-A', g])),
-  )).every(Boolean)
-}
-
 /** Check independent host programs as soon as their generated imports are
  * ready. A generator shared by hosts still runs only once. */
 export let programs = async (
   jobs: { made: string[]; check: () => Promise<boolean> }[],
   run: Run,
-  prepared: Prepared = [],
 ) => {
   let generating = new Map<string, Promise<boolean>>()
   let imports = (made: string[]) =>
     Promise.all(made.map((name) => {
       if (!generating.has(name)) {
-        generating.set(name, generate([name], run, prepared))
+        generating.set(name, run(['run', '--no-lock', '-A', name]))
       }
       return generating.get(name)!
     })).then((out) => out.every(Boolean))
@@ -874,7 +856,6 @@ let check = async (
   roots: string[],
   hosted: Host[],
   run: Run,
-  prepared: Prepared = [],
   snapshot?: Survey,
   all = false,
 ) => {
@@ -898,7 +879,6 @@ let check = async (
       })),
     ],
     run,
-    prepared,
   )
 }
 
@@ -906,7 +886,6 @@ let check = async (
 export let types = async (
   changed: string[],
   run: Run = spawn,
-  prepared: Prepared = [],
   snapshot?: Promise<Survey | undefined>,
 ) => {
   let on = await hosts()
@@ -917,7 +896,7 @@ export let types = async (
     )
   ) return true
   let { roots, hosted, survey } = await reached(changed, on, snapshot)
-  return await check(roots, hosted, run, prepared, survey)
+  return await check(roots, hosted, run, survey)
 }
 
 if (import.meta.main) {
@@ -932,7 +911,6 @@ if (import.meta.main) {
       await every(),
       on,
       spawn,
-      [],
       undefined,
       all,
     )

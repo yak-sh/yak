@@ -1,4 +1,4 @@
-// Drive the served module's public drafts door, including its HTTP receipt
+// Drive the public client's drafts door, including its HTTP receipt
 // envelope and socket frames. The transport controls acceptance independently
 // of optimistic/watch text: neither one is a durable receipt.
 import { assert, assertEquals, assertThrows } from '@std/assert'
@@ -6,6 +6,7 @@ import { stub } from '@std/testing/mock'
 import { parseHTML } from 'linkedom'
 import { type Clock, clock, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
+import * as publicClient from '@yaks/platform/client'
 import { kernel, seed, unique } from './probe.ts'
 
 let k = await kernel()
@@ -15,13 +16,6 @@ let host = `${slug}.yaks.app`
 let vocabulary = await k.at(host, '/notes/api/vocab.json')
 assertEquals(vocabulary.status, 200)
 let words = await vocabulary.json()
-let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-drafts-' })
-let response = await k.at(host, '/notes/api/client.js')
-assertEquals(response.status, 200)
-Deno.writeTextFileSync(`${dir}/client.js`, await response.text())
-let publicClient = await import(`file://${dir}/client.js`)
-Deno.removeSync(dir, { recursive: true })
-
 type Call = {
   base: string
   key: string | null
