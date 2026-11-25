@@ -740,13 +740,13 @@ test('every Operator page holds the chat, its Updates and every space’s as vie
       v.querySelector('[data-operator-chat]') ? 'chat' : 'news',
     ])
   assertEquals(await views(chatPage(p.env, space, who, 'new', beside)), [
-    ['/club', 'shown', 'chat'],
+    ['/club/operator', 'shown', 'chat'],
     ['/club/updates', 'hidden', 'news'],
     ['/updates?in=club', 'hidden', 'news'],
   ])
   assertEquals(await views(updatesPage(p.env, space, who, beside)), [
     ['/club/updates', 'shown', 'news'],
-    ['/club', 'hidden', 'chat'],
+    ['/club/operator', 'hidden', 'chat'],
     ['/updates?in=club', 'hidden', 'news'],
   ])
   // A page that is none of them holds them too.

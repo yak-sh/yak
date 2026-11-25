@@ -4,7 +4,13 @@ import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { bearerFor, connector, kernel, seed, signIn, unique } from './probe.ts'
 import { ADMIN as ADMIN_ACCOUNT } from '@yaks/platform/bots'
-import { ADMIN, chatPath, managePath, talkPath } from '@yaks/platform/routes'
+import {
+  ADMIN,
+  chatPath,
+  dashboardPath,
+  managePath,
+  talkPath,
+} from '@yaks/platform/routes'
 import { REACH } from '@yaks/platform/page-graph'
 import { UPDATE_WAITING, waitingCounts } from '@yaks/platform/update-waiting'
 import type { Bundle } from '@yaks/graph'
@@ -226,6 +232,7 @@ test('All updates sits above the space picker and opens with that space still se
     a.getAttribute('href')
   )
   assertEquals(links, [
+    dashboardPath(club.slug),
     chatPath(club.slug),
     updates,
     `${chatPath(club.slug, 'new')}?app=notes`,

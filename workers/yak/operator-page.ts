@@ -1297,7 +1297,7 @@ export let installing = (space: Space) => {
 // them; and the app open beside them all. The side's Updates is the page's one bell: what
 // waits on the person there and in their servers' lists, counted once.
 /** What a page of the chat app draws (`talkPage`). */
-type TalkPage = {
+export type TalkPage = {
   title: string
   status: number
   // how many Updates wait on the person (updates.ts `updatesOf`)
@@ -1349,7 +1349,7 @@ type TalkPage = {
 // another view is open; and a helper's way back out stands only while its
 // own view shows. The app open beside a chat is its view's, chosen in the
 // browser (@yaks/platform/app-canvas-browser).
-let talkPage = (
+export let talkPage = (
   env: Env,
   space: Space,
   who: Who,
@@ -1464,6 +1464,8 @@ let viewOf = (space: Space, page: TalkPage, aside: boolean): TalkView => {
       ? page.here
       : page.current.includes('updates')
       ? talkPath('updates', space.slug)
+      : page.current.includes('dashboard')
+      ? talkPath('dashboard', space.slug)
       : chatPath(space.slug),
     title: page.title,
     page: `${page.title} · ${space.operator} · yaks.app`,
@@ -1607,7 +1609,7 @@ let later = (part: 'waits' | 'other') => h('div', { 'data-later': part })
 // `drawn` gives them where they are in by the time it is drawn, or null,
 // which the page reads after (`lateScript`). `listing` is how many lists
 // there are and where their ids open.
-let reading = (env: Env, space: Space, who: Who) => {
+export let reading = (env: Env, space: Space, who: Who) => {
   let listing = listingOf(env, who.person, space.eid)
   let read = listing.then((l) => l.size ? l.read() : [])
   return {
@@ -1889,7 +1891,7 @@ let canvasOf = (
   ]
 }
 
-let updateColumn = (space: Space, who: Who) => ({
+export let updateColumn = (space: Space, who: Who) => ({
   class: 'Talk_Column Updates',
   'data-inbox-actions': '',
   'data-inbox-scope': who.person,
@@ -2051,7 +2053,7 @@ let allBeside = (
 // The person's one conversation in the space as a view of a page opened at
 // another of its views; none where it could not be read, which leaves the
 // page as it was.
-let chatBeside = async (
+export let chatBeside = async (
   env: Env,
   space: Space,
   who: Who,
@@ -2564,6 +2566,15 @@ document.addEventListener('click', (e) => {
   let start = e.target.closest('[data-say]')
   if (start && boxed) typing(start.dataset.say)
 }, { signal })
+// A link that opens the chat with a request written for the person
+// (\`?say=\`, a Dashboard's suggestion) fills the box, never sends it: sending
+// is their own press.
+let asked = new URL(location.href)
+if (asked.searchParams.has('say') && boxed) {
+  if (!drafts.text(place)) typing(asked.searchParams.get('say'))
+  asked.searchParams.delete('say')
+  history.replaceState(history.state, '', asked)
+}
 // The one menu every line's time opens (operator-draw.ts \`EntryMenu\`),
 // filled from the time that opened it: the line's id, its words, and the
 // entries Hide or Restore changes, which a line of none goes without.

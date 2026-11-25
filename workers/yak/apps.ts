@@ -131,6 +131,7 @@ import {
   APP_WARM,
   appWarmAt,
   chatPath,
+  dashboardPath,
   hostOf,
   iconAt,
   iconVersion,
@@ -2485,19 +2486,20 @@ export let index = async (
   if (req.method == 'GET') { for (let app of warming) warmApp(env, space, app) }
   let owner = who.role == 'owner'
   let alone = aloneOf(who)
+  let { launched } = await import('./dashboard.ts')
+  let gallery = new Map(mine.map((a) => [
+    a.eid,
+    owner || standing(a) == 'listed' ? pilled(standing(a)) : '',
+  ]))
   let page = spaceIndex({
     space: space.slug,
     title: space.title,
     // What the pill says about the gallery (gallery.ts, T-34476). Listed is
     // said to anybody — it is a public page — and waiting only to the owner,
     // who is the one it is news for.
-    apps: mine.map((a) => ({
-      eid: a.eid,
-      slug: a.slug,
-      title: a.title,
-      home: a.home,
-      access: a.access,
-      gallery: owner || standing(a) == 'listed' ? pilled(standing(a)) : '',
+    apps: launched('', mine).map((a) => ({
+      ...a,
+      about: gallery.get(a.eid) || a.about,
     })),
     hidden: all.length - mine.length,
     warm: warming.map((app) => appWarmAt(`/${app.slug}`)),
@@ -2505,6 +2507,13 @@ export let index = async (
     person: !!who.person,
     signIn: signInAt(req.url, env),
     manage: owner ? manageAt(space.slug, 'apps', env) : undefined,
+    // Its Dashboard's member parts, for whoever may ask its Operator.
+    dashboard: who.person && writes(who.role)
+      ? {
+        src: hostUrl(env, `${dashboardPath(space.slug)}?framed`),
+        origin: hostUrl(env, ''),
+      }
+      : undefined,
   }, env)
   return { page, alone }
 }

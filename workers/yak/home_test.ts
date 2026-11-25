@@ -131,7 +131,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   assertStringIncludes(page, 'href="https://dana.yaks.app/recipes/"')
   let { document, account, space, back } = sides(page)
   assertEquals(back?.getAttribute('aria-label'), 'Back to Pip')
-  assertEquals(back?.getAttribute('href'), '/dana')
+  assertEquals(back?.getAttribute('href'), '/dana/operator')
   assertEquals(document.querySelector('.Sidebar_Title')?.textContent, 'Manage')
   assertEquals(account, [
     { label: 'Profile', href: '/manage/account/profile' },
@@ -292,7 +292,7 @@ test('the Operator page is drawn beside the side, which a member sees with only 
   )
   let member = sides(await block({ view: 'operator', member: true }))
   assertEquals(member.space.map((l) => l.label), ['Operator'])
-  assertEquals(member.back?.getAttribute('href'), '/dana')
+  assertEquals(member.back?.getAttribute('href'), '/dana/operator')
   assertEquals(member.account.length, 5)
   // On the person's own space it is the Operator too.
   let own = sides(
@@ -465,7 +465,7 @@ test('who visited is drawn from the rows the page carries, and only for the owne
     space,
   )
   assert(view.querySelector('script[data-page-graph]'), 'carries its rows')
-  let theirs = await face({ apps: [recipes] })
+  let theirs = await face({ apps: [{ ...recipes, href: '/recipes/' }] })
   assert(!parseHTML(theirs).document.querySelector('.Report'))
 })
 

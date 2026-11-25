@@ -113,9 +113,9 @@ test('the apex opens a chat with the space’s Operator, whose Manage opens its 
   let first = await get(MANAGE)
   assertEquals(first.status, 302)
   assertEquals(first.headers.get('location'), to(home))
-  // The space's own address is a new chat with its Operator, and Manage its
-  // settings (D-473).
-  assertEquals(home, `/${slug}`)
+  // The Operator's chat is under the space's own address, and Manage its
+  // settings (D-473, T-3702).
+  assertEquals(home, `/${slug}/operator`)
   let landed = await get(home)
   assertEquals(landed.status, 200)
   let { document } = parseHTML(await landed.text())
@@ -238,10 +238,10 @@ test('the dashboard’s old addresses move to their pages', async () => {
       ['yaks.app', `/manage/${slug}?app=site`, `${home}?app=site`],
       ['yaks.app', `/manage/${slug}/operator/new`, home],
       ['yaks.app', `/manage/${slug}/operator/${ID}`, `${home}/${ID}`],
-      ['yaks.app', `/manage/${slug}/updates`, `${home}/updates`, 'POST'],
+      ['yaks.app', `/manage/${slug}/updates`, `/${slug}/updates`, 'POST'],
       ['yaks.app', '/manage/updates?waiting', '/updates?waiting'],
       ['yaks.app', `/manage/updates?space=${slug}`, `/updates?space=${slug}`],
-      ['yaks.app', `/updates?space=${slug}`, `${home}/updates`],
+      ['yaks.app', `/updates?space=${slug}`, `/${slug}/updates`],
     ]
   ) {
     let res = await k.at(from, was, {

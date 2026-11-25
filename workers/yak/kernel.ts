@@ -105,6 +105,7 @@ import {
   collapsed,
   cors,
   foreign,
+  framers,
   handedOff,
   hostOf,
   platform,
@@ -351,7 +352,12 @@ let hosting = async (
       r = at(req, env)
     }
     let answer = await next(req)
-    return sealed(given.anyone ? cors(answer) : answer, env)
+    // A space's Dashboard is framed by that space's own hostname, and only
+    // at the apex, where no app answers.
+    let also = r.space == null && !domain
+      ? framers(new URL(req.url).pathname, env)
+      : []
+    return sealed(given.anyone ? cors(answer) : answer, env, also)
   } catch (e) {
     if (req.signal.aborted && e === req.signal.reason) {
       return new Response(null, { status: 499 })
