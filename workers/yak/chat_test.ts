@@ -25,7 +25,6 @@ import {
   directTo,
   linked,
   offers,
-  ownLinks,
   PLATFORMS,
   reached,
   recent,
@@ -35,6 +34,8 @@ import {
 } from './chat.ts'
 import { chatCard } from '@yaks/platform/operator-settings-view'
 import { chatRows } from './connections.ts'
+import { personRows } from './side.ts'
+import { CHAT_LINKS, chatLinksOf } from '@yaks/platform/account-rows'
 import { chatRows as replyIn, peopleIn } from './operator-rooms.ts'
 import { operatorMemory } from './operator-testing.ts'
 import { builderOf, SPACE as SPACE_HEADER } from './build-door.ts'
@@ -788,9 +789,9 @@ test("yaks.app's bot goes by its space's Operator's name in the server it was ad
   }
 })
 
-// Profile's Connect Discord (chat.ts `ownLinks`): any member links their own
-// Discord account, offered once yaks.app keeps its bot, and named by what
-// Discord calls them once linked.
+// Profile's Connect Discord, the person's `chatLink` rows (side.ts
+// `personRows`): any member links their own Discord account, offered once
+// yaks.app keeps its bot, and named by what Discord calls them once linked.
 test('Profile offers each person their own Discord link, and names the accounts they linked', async () => {
   let p = hosted('a probe secret', {
     VAULT: d1() as unknown as D1Like,
@@ -798,9 +799,13 @@ test('Profile offers each person their own Discord link, and names the accounts 
   })
   let ann = crypto.randomUUID(), bob = crypto.randomUUID()
   let links = async (person: string) =>
-    ownLinks(
-      p.env,
-      await directory({ fetch: over(meta(p.env)) }).ownConnections(person),
+    chatLinksOf(
+      await personRows(
+        directory({ fetch: over(meta(p.env)) }),
+        person,
+        CHAT_LINKS,
+        p.env,
+      ),
     )
   assertEquals(await links(ann), [])
   await meta(p.env).apply([

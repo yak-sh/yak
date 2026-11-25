@@ -15,7 +15,7 @@ import { Field } from '@yaks/ui/Field'
 import { Form } from '@yaks/ui/Form'
 import { Rows } from '@yaks/ui/Rows'
 import { Time } from '@yaks/ui/Time'
-import type { Account, SignedIn } from './account-rows.ts'
+import type { Account, ChatLink, SignedIn } from './account-rows.ts'
 import { showing } from './friends-view.ts'
 import {
   fieldsOf,
@@ -30,23 +30,12 @@ import { MANAGE, managePath } from './routes.ts'
 import type { Picked } from './side-rows.ts'
 import { browserName } from './signed-in.ts'
 
-/** A chat platform the person links their own account on, and the accounts
- * they linked. */
-export type ChatLink = {
-  platform: string
-  integration: string
-  accounts: string[]
-}
-
 /** What the Profile page says about itself beside the rows: whose it is, the
- * zone its spaces answer under, the browser it is open in, and the chat
- * platforms the person may link, which change only by leaving the page to
- * sign in there. */
+ * zone its spaces answer under, and the browser it is open in. */
 export type ProfileView = {
   person: string
   apex: string
   session?: string
-  links: ChatLink[]
 }
 
 /** A browser signed in as the person, by its session's eid. */
@@ -54,13 +43,14 @@ export type Browser = SignedIn & { eid: string }
 
 let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
 
-/** The Profile page: `account`, the person's `spaces` and their
- * `browsers`. */
+/** The Profile page: `account`, the person's `spaces`, their `browsers` and
+ * the chat platforms they `link` their own account on. */
 export let profileView = (
   view: ProfileView,
   account: Account,
   spaces: Picked[],
   browsers: Browser[],
+  links: ChatLink[],
 ): Kids[] => {
   let mine = spaces.filter((s) => s.owner)
   let first = mine.find((s) => s.own)?.slug ?? ''
@@ -107,7 +97,7 @@ export let profileView = (
         ),
       ),
     ),
-    ...view.links.map(linkCard),
+    ...links.map(linkCard),
     h(
       Card,
       null,
@@ -145,7 +135,8 @@ let signOut = (
 
 // A chat platform the person links their own account on, so every space's
 // Operator knows it is them there: the accounts they linked, and a button to
-// link one, which signs in there and comes back.
+// link one, which leaves to sign in there (manage.ts `linkFrom`) and comes
+// back.
 let linkCard = (l: ChatLink) =>
   h(
     Card,
@@ -162,11 +153,9 @@ let linkCard = (l: ChatLink) =>
     ),
     h(
       Form,
-      {
-        method: 'post',
-        action: `${managePath('profile')}?enable=${l.integration}`,
-      },
+      { method: 'get', action: managePath('profile') },
       h(Form.Hidden, { name: 'link', value: l.integration }),
+      h(Form.Hidden, { name: 'enable', value: l.integration }),
       send(
         l.accounts.length ? 'Link another account' : `Connect ${l.platform}`,
       ),

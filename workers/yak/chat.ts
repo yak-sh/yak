@@ -727,7 +727,7 @@ let present = async (env: Env, platform: Platform, all: Present[]) => {
 }
 
 /** The person's own accounts on each platform whose bot yaks.app keeps, as
- * Profile shows them (desk-pages.ts `profile`): the platform, the
+ * Profile shows them (side.ts `personRows`, `chatLink`): the platform, the
  * integration a person links their account there with, and the names of
  * those they linked, which tell every space's Operator it is them
  * ({@link linked}). `rows` are the connections the person connected as

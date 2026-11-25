@@ -77,6 +77,7 @@ import { agentsIn } from './agent-rows.ts'
 import {
   ACCOUNT,
   accountOf,
+  CHAT_LINKS,
   FRIENDS,
   friendsOf,
   INVITE_PAGE,
@@ -464,7 +465,6 @@ let foresee = (
     dir.nameAt(person),
     seats,
     ...view == 'shared' ? [dir.granted(person)] : [],
-    ...view == 'profile' ? [dir.ownConnections(person)] : [],
     // The chat draws the lists their servers offer (operator-lists.ts), once
     // it knows the conversation is their landing.
     ...view == 'operator' && chat ? [dir.listings(person)] : [],
@@ -853,7 +853,7 @@ let paymentDrawn = async (
 // The lines of the page graph each page of the person's own is drawn from
 // (@yaks/platform/account-rows, side-rows).
 let DRAWN: Partial<Record<AccountView, string[]>> = {
-  profile: [ACCOUNT, SIDE_SPACES, SIGNED_IN],
+  profile: [ACCOUNT, SIDE_SPACES, SIGNED_IN, CHAT_LINKS],
   friends: [ACCOUNT, FRIENDS],
   invite: [INVITE_PAGE, SIDE_SPACES],
   shared: [SHARED_APPS],
@@ -886,7 +886,6 @@ let mine = async (
     own,
     panes,
     provider,
-    links,
     drawn,
   ] = await Promise.all([
     pickable(dir, person),
@@ -894,10 +893,6 @@ let mine = async (
     dir.own(person),
     dir.panes(person),
     payments(env),
-    view == 'profile'
-      ? Promise.all([import('./chat.ts'), dir.ownConnections(person)])
-        .then(([c, rows]) => c.ownLinks(env, rows))
-      : undefined,
     // The rows a page drawn from the page graph's reads is drawn from
     // (@yaks/platform/account-rows), carried for its first paint, and the
     // agents Agents lists (agent-rows.ts).
@@ -917,7 +912,6 @@ let mine = async (
     friendList: drawn && friendsOf(drawn),
     drawn,
     allFriends: q.has('all'),
-    links,
     session: who.session,
     shops: provider.shops.on(),
     spaces: picks.some((s) => s.slug == own.slug) ? picks : [
@@ -1008,11 +1002,6 @@ let account = async (
     if (done) return done
   }
   if (view != 'profile' && view != 'friends') return nothingHere(env)
-  // Connect Discord: the person links their own account, whatever spaces
-  // they are in, the sign-in held under their own space.
-  // Only a platform's own account integration is linked here.
-  let linking = String(form.get('link') ?? '')
-  if (linking) return await linkFrom(req, env, dir, who, linking)
   // The side's fold (sidebar.ts `fold`) and the aside's (frame.ts `toggle`),
   // pressed on any page: kept on the person's row, then that page again, or
   // for the script that sent it, nothing more.

@@ -2312,6 +2312,8 @@ export class Store extends Durable {
                 // changed, so its end is `cancelled` alone.
                 'browser_session',
                 'cancelled',
+                // A chat account they linked (account-rows `chatLink`).
+                'connection',
                 // An agent connected or disconnected (agents).
                 'oauth_grant',
                 // A friend's message, and its reading (update-rows).

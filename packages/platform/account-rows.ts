@@ -4,7 +4,9 @@
  * `signedIn{agent, place, at}`, each confirmed friend, `befriended{…}`,
  * online first, each app of someone else's they may open, `sharedApp{rank,
  * eid, slug, title, space}`, and their invite to yaks.app, `invitePage{said,
- * text, mail, address, joined, built}`. The directory answers each as a read
+ * text, mail, address, joined, built}`, and each chat platform whose bot
+ * yaks.app keeps, with the accounts they linked there, `chatLink{rank,
+ * platform, integration, accounts}`. The directory answers each as a read
  * of the person (graph.ts `/person/ws`), and the tab's page graph watches them through
  * its door (reach-door.ts), as it does the side's (./side-rows.ts).
  *
@@ -36,6 +38,9 @@ export let SHARED_APPS = '.sharedApp'
 /** The person's own invite to yaks.app. */
 export let INVITE_PAGE = '.invitePage'
 
+/** The chat platforms the person links their own account on. */
+export let CHAT_LINKS = '.chatLink'
+
 /** How often where a friend is is read again while it is watched. */
 export let SEEN_EVERY = 30_000
 
@@ -64,6 +69,14 @@ export type Invitation = {
   address: string
   joined: number
   built: number
+}
+
+/** A chat platform the person links their own account on: the integration
+ * that links one, and the names of the accounts they linked. */
+export type ChatLink = {
+  platform: string
+  integration: string
+  accounts: string[]
 }
 
 /** Where a friend is on yaks.app, as the reader may see it. */
@@ -171,6 +184,17 @@ export let accountWords: VocabDoc = {
       },
       required: ['said', 'text', 'mail', 'address', 'joined', 'built'],
     },
+    chatLink: {
+      component: true,
+      type: 'object',
+      properties: {
+        rank: { type: 'integer' },
+        platform: strings,
+        integration: strings,
+        accounts: { type: 'array', items: strings },
+      },
+      required: ['rank', 'platform', 'integration', 'accounts'],
+    },
     friendMessage: {
       component: true,
       type: 'object',
@@ -257,7 +281,23 @@ export let inviteRow = (person: string, invite: Invitation): Bundle => ({
 export let inviteOf = (rows: Bundle[]): Invitation | undefined =>
   rows.find((r) => r.invitePage)?.invitePage as Invitation | undefined
 
+/** The chat platforms `person` links their own account on as rows, `links`
+ * in their page's order. */
+export let chatLinkRows = (person: string, links: ChatLink[]): Bundle[] =>
+  links.map((l, rank) => ({
+    entity: { eid: derivedEid(`chatLink|${person}|${l.integration}`) },
+    chatLink: { rank, ...l },
+  }))
+
+/** The chat platforms `rows` hold, in their page's order. */
+export let chatLinksOf = (rows: Bundle[]): ChatLink[] =>
+  rows.flatMap((r) =>
+    r.chatLink ? [r.chatLink as ChatLink & { rank: number }] : []
+  )
+    .sort((a, b) => a.rank - b.rank)
+    .map(({ rank: _, ...l }) => l)
+
 /** Whether the directory answers `line` as a read of the person. */
 export let accountLine = (line: string): boolean =>
   line == ACCOUNT || line == FRIENDS || line == SIGNED_IN ||
-  line == SHARED_APPS || line == INVITE_PAGE
+  line == SHARED_APPS || line == INVITE_PAGE || line == CHAT_LINKS

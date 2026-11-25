@@ -34,6 +34,8 @@ import { pilled, standing } from './gallery-row.ts'
 import {
   ACCOUNT,
   accountRow,
+  CHAT_LINKS,
+  chatLinkRows,
   friendRows,
   FRIENDS,
   INVITE_PAGE,
@@ -141,7 +143,8 @@ export let sideApps = async (dir: Directory, space: Space, who: Who) =>
     { eid, slug, title, source, generatedIcon },
   ) => ({ eid, slug, title, source, generatedIcon }))
 
-/** The rows `line` asks of the person: their account, browsers, friends,
+/** The rows `line` asks of the person: their account, browsers, linked chat
+ * accounts (whose platforms `env`'s vault says), friends,
  * what others shared with them, their invite (which says the number `env`
  * texts from), what the directory holds for them in a space, or the side's;
  * none for a space they hold no seat in that lets them change it. */
@@ -165,6 +168,13 @@ export let personRows = async (
   }
   if (line == SIGNED_IN) {
     return signedInRows(await dir.browserSessions(person))
+  }
+  if (line == CHAT_LINKS) {
+    let [{ ownLinks }, rows] = await Promise.all([
+      import('./chat.ts'),
+      dir.ownConnections(person),
+    ])
+    return chatLinkRows(person, await ownLinks(env, rows))
   }
   if (line == ALERTING) {
     let [channel, texting, email, pushes] = await Promise.all([

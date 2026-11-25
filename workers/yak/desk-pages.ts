@@ -33,6 +33,7 @@ import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { type ProfileView, profileView } from '@yaks/platform/profile-view'
 import {
   accountOf,
+  chatLinksOf,
   inviteOf,
   sharedOf,
   signedInOf,
@@ -183,7 +184,6 @@ let profile = (at: DeskPage, env: Host) => {
     person: at.person ?? '',
     apex: apex(env),
     session: at.session,
-    links: at.links ?? [],
   }
   let rows = at.drawn ?? []
   return h(
@@ -194,6 +194,7 @@ let profile = (at: DeskPage, env: Host) => {
       accountOf(rows) ?? { name: '', email: '', hidden: false },
       pickedOf(rows),
       signedInOf(rows),
+      chatLinksOf(rows),
     ),
     drawing(at),
   )

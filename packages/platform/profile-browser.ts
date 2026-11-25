@@ -2,10 +2,10 @@
  * The Profile page in the browser (D-475 step 3). The page is drawn from the
  * person's rows (./profile-view.ts), and here it is drawn again from the tab's
  * page graph as they move: a name changed in another tab, a space made or
- * given away, a browser that signs in or out shows at once. Its Save bar
- * writes the person's `account` row through the graph (./account-browser.ts),
- * and signing a browser out is a `signOut{session}` row written through it;
- * signing every one out leaves for the sign-in page.
+ * given away, a browser that signs in or out, a chat account linked shows at
+ * once. Its Save bar writes the person's `account` row through the graph
+ * (./account-browser.ts), and signing a browser out is a `signOut{session}`
+ * row written through it; signing every one out leaves for the sign-in page.
  *
  * The view is `[data-view="profile"]`, saying what it draws for in
  * `data-profile-view` (`ProfileView`).
@@ -22,6 +22,8 @@ import {
   ACCOUNT,
   accountOf,
   accountWords,
+  CHAT_LINKS,
+  chatLinksOf,
   SIGNED_IN,
   signedInOf,
 } from './account-rows.ts'
@@ -47,7 +49,12 @@ let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
 export let drawProfile = (
   root: HTMLElement,
   view: ProfileView,
-  rows: { account: Bundle[]; spaces: Bundle[]; browsers: Bundle[] },
+  rows: {
+    account: Bundle[]
+    spaces: Bundle[]
+    browsers: Bundle[]
+    links: Bundle[]
+  },
 ): void => {
   let account = accountOf(rows.account)
   if (!account) return
@@ -60,6 +67,7 @@ export let drawProfile = (
         account,
         pickedOf(rows.spaces),
         signedInOf(rows.browsers),
+        chatLinksOf(rows.links),
       ),
     ),
   )
@@ -78,15 +86,17 @@ export let bindProfile = (
   let account = graph.watch(ACCOUNT)
   let spaces = graph.watch(SIDE_SPACES)
   let browsers = graph.watch(SIGNED_IN)
+  let links = graph.watch(CHAT_LINKS)
   let draw = () => {
     drawProfile(root, view, {
       account: account.value,
       spaces: spaces.value,
       browsers: browsers.value,
+      links: links.value,
     })
     savesAccount(root, graph, view.person, () => account.value)
   }
-  let off = [account, spaces, browsers].map((w) => w.subscribe(draw))
+  let off = [account, spaces, browsers, links].map((w) => w.subscribe(draw))
   let submit = async (e: Event) => {
     let form = e.target as HTMLFormElement
     let session = form.dataset.signOut
@@ -110,7 +120,7 @@ export let bindProfile = (
   return () => {
     root.removeEventListener('submit', submit)
     for (let stop of off) stop()
-    for (let w of [account, spaces, browsers]) w.close()
+    for (let w of [account, spaces, browsers, links]) w.close()
   }
 }
 

@@ -11,6 +11,9 @@ import {
   ACCOUNT,
   type Account,
   accountRow,
+  CHAT_LINKS,
+  type ChatLink,
+  chatLinkRows,
   SIGNED_IN,
   signedInRows,
 } from './account-rows.ts'
@@ -23,7 +26,6 @@ let view: ProfileView = {
   person: ADA,
   apex: 'yaks.app',
   session: 'here',
-  links: [],
 }
 let ada: Account = { name: 'Ada', email: 'a@x', hidden: false }
 let space = (slug: string, own = false): Picked & { eid: string } => ({
@@ -34,6 +36,11 @@ let space = (slug: string, own = false): Picked & { eid: string } => ({
   own,
 })
 let browser = (eid: string, agent = 'Firefox'): Browser => ({ eid, agent })
+let discord = (...accounts: string[]): ChatLink => ({
+  platform: 'Discord',
+  integration: 'discord-account',
+  accounts,
+})
 let spaces = [space('home', true), space('shop')]
 let browsers = [browser('here'), browser('phone', 'Safari')]
 
@@ -43,7 +50,7 @@ let page = () => {
     h(
       'div',
       { 'data-view': 'profile', 'data-profile-view': JSON.stringify(view) },
-      profileView(view, ada, spaces, browsers),
+      profileView(view, ada, spaces, browsers, [discord()]),
     ),
   )
   let { document, window } = parseHTML(`<html><body>${html}</body></html>`)
@@ -62,6 +69,7 @@ let held = (
   g.set(ACCOUNT, [accountRow(ADA, ada)])
   g.set(SIDE_SPACES, spaceRows(ADA, spaces))
   g.set(SIGNED_IN, signedInRows(browsers))
+  g.set(CHAT_LINKS, chatLinkRows(ADA, [discord()]))
   return g
 }
 
@@ -74,6 +82,9 @@ let shown = (root: HTMLElement) => ({
   ),
   browsers: [...root.querySelectorAll('[data-sign-out]')].map((f) =>
     f.getAttribute('data-sign-out')
+  ),
+  links: [...root.querySelectorAll('form[method=get]')].map((f) =>
+    f.closest('.Card')!.querySelector('p')!.textContent
   ),
 })
 
@@ -97,7 +108,7 @@ let submit = (
 
 let flush = () => new Promise((r) => setTimeout(r, 0))
 
-test('the Profile page draws again as its rows move: a name from another tab, a space, a browser gone', () => {
+test('the Profile page draws again as its rows move: a name from another tab, a space, a browser gone, an account linked', () => {
   let { root } = page()
   let g = held()
   bindProfile(root, g)
@@ -105,15 +116,35 @@ test('the Profile page draws again as its rows move: a name from another tab, a 
     name: 'Ada',
     first: ['home*', 'shop'],
     browsers: ['here', 'phone', 'all'],
+    links: ['Link your Discord account so your Operator knows it’s you there.'],
   })
   g.set(ACCOUNT, [accountRow(ADA, { ...ada, name: 'Ada L' })])
   g.set(SIDE_SPACES, spaceRows(ADA, [space('home'), space('shop', true)]))
   g.set(SIGNED_IN, signedInRows([browser('here')]))
+  g.set(CHAT_LINKS, chatLinkRows(ADA, [discord('ada#1', 'ada#2')]))
   equal(shown(root), {
     name: 'Ada L',
     first: ['home', 'shop*'],
     browsers: ['here', 'all'],
+    links: ['Linked as ada#1, ada#2. Your Operator knows it’s you there.'],
   })
+})
+
+test("Connect leaves to sign in there, asking for the platform's link", () => {
+  let { root } = page()
+  let form = root.querySelector<HTMLFormElement>('form[method=get]')!
+  equal(
+    [
+      form.getAttribute('action'),
+      ...[...form.querySelectorAll('input')]
+        .map((i) => `${i.getAttribute('name')}=${i.getAttribute('value')}`),
+    ],
+    [
+      '/manage/account/profile',
+      'link=discord-account',
+      'enable=discord-account',
+    ],
+  )
 })
 
 test('until its account is in, the Profile page stays as the server drew it', () => {

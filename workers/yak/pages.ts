@@ -646,9 +646,6 @@ export type DeskPage = {
   name?: string
   email?: string
   sessions?: import('./browser-sessions.ts').BrowserSession[]
-  /** the person's own accounts on each chat platform yaks.app's bot is on,
-   * which Profile links (chat.ts `ownLinks`) */
-  links?: { platform: string; integration: string; accounts: string[] }[]
   /** the session the asking browser holds, among `sessions` */
   session?: string
   /** the days the Visits page counts */
