@@ -50,7 +50,7 @@ import {
   SHA,
 } from '@yaks/platform/versions'
 import { linkFor } from '@yaks/platform/preview'
-import { type AppDraft, withLegacy } from '@yaks/platform/draft-choice'
+import { type AppDraft, current, withLegacy } from '@yaks/platform/draft-choice'
 export { type AppDraft, withLegacy }
 
 /** One file written into an app (the directory's `written` row): the sha it
@@ -140,10 +140,39 @@ let openedFor = (app: App, asked: typeof NEW | Opens) =>
     : mint()
 
 /** An app's open drafts: its `app_draft` rows, and the draft its row still
- * names as `app.draft` where no row stands for it yet. Never cached: a write
- * chooses among them. */
+ * names as `app.draft` where no row stands for it yet, each one the live
+ * release left behind marked ({@link marked}). Never cached: a write chooses
+ * among them. */
 export let draftsOf = async (dir: Directory, app: App) =>
-  withLegacy(app, await dir.drafts(app))
+  marked(dir, app, withLegacy(app, await dir.drafts(app)))
+
+/** `drafts` with each one the live release left behind marked `behind`:
+ * opened before the live version and last worked in before it went out. A
+ * release is a pick: once it is out, a person's draft is the live version
+ * and what they wrote since, never an option it did not take, nor edits it
+ * went out over (T-3487). Such a draft stays open (M-59093), and only a call
+ * that names it works in it. Only a draft opened before the live version
+ * reads its writes and the app's switches to say so. */
+export let marked = async (
+  dir: Pick<Directory, 'switches' | 'written'>,
+  app: App,
+  drafts: AppDraft[],
+): Promise<AppDraft[]> => {
+  let older = drafts.filter((d) => (d.base ?? 0) < (app.version ?? 0))
+  if (!older.length) return drafts
+  let [moves, ...rows] = await Promise.all([
+    dir.switches(app),
+    ...older.map((d) => dir.written(app, d.eid)),
+  ])
+  let out = moves.reduce<string>(
+    (last, m) => (m.switched?.at ?? '') > last ? m.switched!.at! : last,
+    '',
+  )
+  let left = new Set(
+    older.filter((d, i) => out && touched(d, rows[i]) <= out).map((d) => d.eid),
+  )
+  return drafts.map((d) => left.has(d.eid) ? { ...d, behind: true } : d)
+}
 
 /** Whether a draft is the caller's own: one its connector session opened,
  * or, for a person at their own browser, the one their hands share. */
@@ -191,7 +220,7 @@ export let chosen = (
     }
     return named
   }
-  let own = drafts.filter(ownBy(who))
+  let own = current(drafts).filter(ownBy(who))
   if (own.length > 1) {
     throw refuse(
       'arguments',
@@ -247,7 +276,7 @@ export let guessed = async (
   who: Who,
   asked?: Asked,
 ): Promise<AppDraft | null> => {
-  let own = asked ? [] : drafts.filter(ownBy(who))
+  let own = asked ? [] : current(drafts).filter(ownBy(who))
   if (own.length < 2) return chosen(app, drafts, who, asked)
   return (await lastWorked(dir, app, own))[0]
 }
@@ -263,9 +292,9 @@ export let shipping = async (
   asked?: Asked,
 ): Promise<AppDraft | null> => {
   if (asked) return chosen(app, drafts, who, asked)
-  let own = drafts.filter(ownBy(who))
+  let own = current(drafts).filter(ownBy(who))
   if (own.length == 1) return own[0]
-  let byPerson = drafts.filter((d) => who.person && d.by == who.person)
+  let byPerson = current(drafts).filter((d) => who.person && d.by == who.person)
   let latest = own.length
     ? await lastWorked(dir, app, own)
     : latestAt(byPerson, byPerson.map((d) => d.at))
@@ -340,7 +369,7 @@ export let releasing = (
 ): AppDraft | null => {
   let mine = chosen(app, drafts, who, asked == NEW ? null : asked)
   if (mine || asked) return mine
-  let theirs = drafts.filter((d) => !d.by || d.by == who.person)
+  let theirs = current(drafts).filter((d) => !d.by || d.by == who.person)
   if (theirs.length > 1) {
     throw refuse(
       'arguments',
@@ -353,11 +382,14 @@ export let releasing = (
 }
 
 /** The draft a page shows a person when nothing names one: their own
- * newest, else the one no author holds; none where they have neither. */
-export let theirs = (drafts: AppDraft[], who: Who) =>
-  [...drafts.filter(ownBy(who))].sort(byAt).at(-1) ??
-    [...drafts.filter((d) => d.by == who.person)].sort(byAt).at(-1) ??
-    drafts.find((d) => !d.by) ?? null
+ * newest, else the one no author holds; none where they have neither, or
+ * where the live release left every one behind, so the page shows live. */
+export let theirs = (drafts: AppDraft[], who: Who) => {
+  let open = current(drafts)
+  return [...open.filter(ownBy(who))].sort(byAt).at(-1) ??
+    [...open.filter((d) => d.by == who.person)].sort(byAt).at(-1) ??
+    open.find((d) => !d.by) ?? null
+}
 
 let byAt = (a: AppDraft, b: AppDraft) =>
   (a.at ?? '') < (b.at ?? '') ? -1 : (a.at ?? '') > (b.at ?? '') ? 1 : 0
@@ -679,7 +711,7 @@ export let modifying = async <T>(
       dir.newestWrite(row),
     ])
     row = standing
-    let drafts = withLegacy(row, rows)
+    let drafts = await marked(dir, row, withLegacy(row, rows))
     let into = await selecting(dir, row, drafts, who, asked)
     row = await waiting(dir, space, row, who, into?.eid ?? null)
     // A release completed while waiting. Select again from the open drafts
@@ -799,7 +831,8 @@ export let modifying = async <T>(
         draft: id,
         drafts: [
           ...drafts.filter((o) => o.eid != id),
-          { ...d, legacy: undefined },
+          // Written just now, so no release has left it behind.
+          { ...d, legacy: undefined, behind: undefined },
         ],
       }
     } catch (e) {

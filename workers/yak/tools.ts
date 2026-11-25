@@ -4605,7 +4605,9 @@ let OURS: Row[] = [
                 ...others.map((o) =>
                   `- ${o.eid} · ${held(o)} · ${
                     changed(o.eid).join(', ') || 'nothing written'
-                  }${o.at ? ` · since ${o.at}` : ''}`
+                  }${o.at ? ` · since ${o.at}` : ''}${
+                    o.behind ? ` · left behind by live v${version}` : ''
+                  }`
                 ),
               ]
               : [],
@@ -4623,6 +4625,7 @@ let OURS: Row[] = [
               by: o.by,
               via: o.via,
               at: o.at,
+              ...o.behind ? { behind: true } : {},
               paths: changed(o.eid),
               ...o == of ? { yours: true } : {},
             })),

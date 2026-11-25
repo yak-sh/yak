@@ -13,6 +13,11 @@ export type AppDraft = {
   previewed: string | null
   branch: number | null
   legacy?: true
+  /** The live version went out after it was last worked in (written.ts
+   * `marked`): an option a release did not take, or work a release overtook.
+   * It stays open, and only a call that names it works in it. Read, never
+   * stored. */
+  behind?: true
 }
 
 /** Keep a draft named by older app rows until it has a row of its own. */
@@ -33,15 +38,20 @@ export let withLegacy = (
     }]
     : rows
 
-type Draft = Pick<AppDraft, 'eid' | 'at'>
+type Draft = Pick<AppDraft, 'eid' | 'at' | 'behind'>
 type Write = { path: string; at: string | null }
 
-/** A named draft or the app's only open draft. */
+/** The drafts a call that names none may land in: every open draft but
+ * those a release left behind. */
+export let current = <D extends Draft>(drafts: D[]) =>
+  drafts.filter((d) => !d.behind)
+
+/** A named draft or the app's only current one. */
 let pick = <D extends Draft>(drafts: D[], asked?: string | null) =>
   asked
     ? drafts.find((d) => d.eid == asked)
-    : drafts.length == 1
-    ? drafts[0]
+    : current(drafts).length == 1
+    ? current(drafts)[0]
     : undefined
 
 /** One line per open draft, with its age and the paths it edited. */
@@ -105,10 +115,13 @@ export let toolDraft =
     drafts: D[],
   ) => {
     let picked = pick(drafts, asked)
-    if (picked || !asked && !drafts.length) return picked ?? null
+    if (picked || !asked && !current(drafts).length) return picked ?? null
+    // An unnamed call chooses among the current drafts; a named one that
+    // closed is shown every open draft, behind or not.
+    let among = asked ? drafts : current(drafts)
     let [released, options] = await Promise.all([
       asked ? history.draftRelease(app, asked) : null,
-      Promise.all(drafts.map(async (draft) => ({
+      Promise.all(among.map(async (draft) => ({
         draft,
         writes: await history.written(app, draft.eid),
       }))),
@@ -126,6 +139,6 @@ export let toolDraft =
     let live = app.version ? '' : ' The app has no live version yet.'
     throw new CallError(
       'arguments',
-      `${app.slug} has ${drafts.length} open drafts.${live}\n${next}`,
+      `${app.slug} has ${among.length} open drafts.${live}\n${next}`,
     )
   }

@@ -27,6 +27,10 @@ previous files, vocabulary and worker serving together.
   open drafts. If you omit `draft` when there are several, the tool lists their
   ids, ages and changed paths. It selects the only open draft automatically.
   With none open, a read sees the live files and a write opens a draft.
+- A release leaves behind every draft opened before it and not written to since,
+  such as the Options it did not take. Such a draft stays open, and `op: 'list'`
+  marks it, but only a call that names it uses it: one that omits `draft` sees
+  the live files, and the app's page shows live.
 - Use `draft: 'new'` to open a separate draft over the live files.
   `drafts: [{files}, …]` writes two to four drafts for Options. Each entry's
   files are laid over the call's shared `files`. One entry is a plain write.

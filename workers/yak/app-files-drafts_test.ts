@@ -8,6 +8,7 @@ import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { type Ctx, type Listed, TOOLS } from './tools.ts'
 import { digest } from '@yaks/graph/sha256'
 import { validateToolInput } from '@yaks/vocab/tools'
+import { draftsOf, theirs } from './written.ts'
 
 let runtime = platform(SECRET)
 let { env } = { ...runtime, ...lifecycleStores(runtime.env) }
@@ -328,6 +329,46 @@ test('files and previews use a lone draft and offer recovery when a draft closes
   )
   let fresh = (await write('new.txt', 'new')).value!.draft
   equal(await open(app), [fresh])
+})
+
+test('a release takes one option and leaves the others behind: open, but no draft an unnamed call or the page lands in', async () => {
+  let app = await made('picked')
+  let live = { 'index.html': '<h1>live</h1>' }
+  await run('app_files', { app, files: sent(live) })
+  await run('app_deploy', { app })
+  let [picked, ...rest] = (await fanned(app)).value!.drafts as string[]
+  await run('app_deploy', { app, draft: picked })
+  let row = async () => (await dir.app(space, app))!
+  let page = async () =>
+    theirs(await draftsOf(dir, await row()), { person: ADA, role: 'owner' })
+  equal(await open(app), [...rest].sort())
+  equal(await page(), null)
+  // An unnamed read is live, the option the release took.
+  let released = await held(app)
+  equal(released['index.html'], (await shas(OWN[0]))['index.html'])
+  // Named, an option left behind is still read, laid over live.
+  equal(await held(app, rest[1]), {
+    ...released,
+    ...await shas({ ...SHARED, ...OWN[2] }),
+  })
+
+  let wrote = (await run('app_files', { app, path: 'a.txt', content: 'a' }))
+    .value!.draft as string
+  ok(!rest.includes(wrote))
+  equal(await held(app, wrote), {
+    ...released,
+    ...await shas({ 'a.txt': 'a' }),
+  })
+  equal((await page())?.eid, wrote)
+
+  // Worked in since the release, an option is current again.
+  await run('app_files', { app, path: 'b.txt', content: 'b', draft: rest[0] })
+  equal(
+    (await draftsOf(dir, await row())).filter((d) => d.behind).map((d) =>
+      d.eid
+    ),
+    [rest[1]],
+  )
 })
 
 test('a plain write answers as it did, in the one draft it opened', async () => {
