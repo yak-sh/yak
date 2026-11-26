@@ -254,6 +254,8 @@ export {
   indexed,
   logged,
   META,
+  type Orphan,
+  orphaned,
   refit,
   respine,
   respined,

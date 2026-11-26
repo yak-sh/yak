@@ -34,22 +34,32 @@ let outlasts = (
   } satisfies Outlasts
 }
 
-test('app_deploy through the door runs in its object and answers its release', async () => {
+test('app_deploy through the door runs in its object, one per arguments, and answers its release', async () => {
   let keys: string[] = []
   let k = await fresh({}, (env) => outlasts(env, (key) => keys.push(key)))
   try {
     let space = unique('outlast')
     let { cookie } = await seed(k, [{ slug: space, apps: ['site'] }])
     let agent = connector(k, cookie)
-    await agent.tool('app_files', {
-      space,
-      app: 'site',
-      files: [{ path: 'index.html', content: '<h1>Site</h1>' }],
-    })
-    let said = await agent.tool('app_deploy', { space, app: 'site' })
-    assertStringIncludes(JSON.stringify(said), `deployed ${space}/site v1`)
-    assertEquals(keys.length, 1)
-    assertStringIncludes(keys[0], `|app_deploy|${space}/site`)
+    let release = async (content: string, args: object) => {
+      await agent.tool('app_files', {
+        space,
+        app: 'site',
+        files: [{ path: 'index.html', content }],
+      })
+      return JSON.stringify(
+        await agent.tool('app_deploy', { space, app: 'site', ...args }),
+      )
+    }
+    assertStringIncludes(await release('<h1>Site</h1>', {}), `${space}/site v1`)
+    // Another release's arguments are a run of their own, never the first's.
+    assertStringIncludes(
+      await release('<h1>Two</h1>', { message: 'Two' }),
+      `deployed ${space}/site v2`,
+    )
+    assertEquals(keys.length, 2)
+    assertStringIncludes(keys[0], '|app_deploy|')
+    assertEquals(keys[0] == keys[1], false)
   } finally {
     await k.stop()
   }

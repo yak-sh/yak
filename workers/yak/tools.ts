@@ -6,7 +6,6 @@ import { FRIEND, friendTools, recipientOf } from './friends.ts'
 import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
 import { hostedFeedback } from './feedback.ts'
-import { sha256 } from '@yaks/graph/sha256'
 import { base64 } from './bytes.ts'
 import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
@@ -468,6 +467,7 @@ import {
   rejected,
   renew,
   retainedApp,
+  runOf,
   seatIn,
   type Shape,
   SPACE,
@@ -745,11 +745,17 @@ let FILES_INPUT: Shape = {
   required: ['app'],
 }
 
+// The names a caller that meant `content` sends it under.
+let CONTENTISH = ['contents', 'text', 'body', 'code', 'source', 'html', 'data']
+
 // The refusal of a call with no op and nothing to write (the schema refuses an
-// op it does not list): every op with what it takes, and any argument the
-// tool has no use for, since a caller that left the op out has often guessed
-// a name too (`contents` for `content`).
+// op it does not list): the likely fix first, read off what the call did send,
+// then any argument the tool has no use for, since a caller that left the op
+// out has often guessed a name too (`contents` for `content`). Only a call
+// that says nothing to guess from hears every op with what it takes.
 let opless = (args: Args) => {
+  let stray = Object.keys(args).filter((k) => !(k in FILES_INPUT.properties))
+  let unused = stray.length ? ` app_files takes no ${stray.join(', ')}.` : ''
   let meant = args.edits != null || args.find != null || args.replace != null
     ? 'patch'
     : args.url != null
@@ -760,11 +766,23 @@ let opless = (args: Args) => {
     ? 'restore'
     : null
   if (meant) return `Set op: '${meant}'. ${meant} takes ${TAKES[meant]}.`
-  let stray = Object.keys(args).filter((k) => !(k in FILES_INPUT.properties))
+  let named = stray.find((k) => CONTENTISH.includes(k))
+  if (named) {
+    return `Send the file's text as content, not ${named}: a write takes ` +
+      `${TAKES.write}, and may leave op out.${unused}`
+  }
+  if (!stray.length && args.path != null) {
+    return `no op for ${args.path}: set op: 'read' to read it, or send ` +
+      'its content to write it.'
+  }
+  if (!stray.length) {
+    return "no op: set op: 'list' to list the app's files, or op: 'read' " +
+      'to read every text file. A write sends path and content, or files, ' +
+      'and may leave op out.'
+  }
   return 'no op, and no content, base64 or files to write. op is one of ' +
     OPS.map((op) => `${op} (${TAKES[op]})`).join('; ') +
-    '; a write may leave op out' +
-    (stray.length ? `. app_files takes no ${stray.join(', ')}` : '')
+    `; a write may leave op out.${unused}`
 }
 
 // An app_files refusal of an argument ends with the whole shape its op takes
@@ -3622,12 +3640,8 @@ let WAKING = 'the sandbox is waking: starting its container and restoring ' +
 
 // Preparation is shared by every sandbox operation. The command's own timeout
 // can only start once the workbench can answer.
-export let sandboxJob = (
-  args: Args,
-  { who }: Ctx,
-  fields: unknown[] = Object.keys(args).sort().map((key) => [key, args[key]]),
-) => ({
-  key: sha256(JSON.stringify([who?.spaceEid ?? who?.space, ...fields])),
+export let sandboxJob = (args: Args, ctx: Ctx, fields?: unknown[]) => ({
+  key: runOf(args, ctx, fields),
   progress: 'The sandbox is preparing to run your request.',
 })
 
@@ -5417,12 +5431,11 @@ let OURS: Row[] = [
   {
     name: 'app_deploy',
     // A compile in a cold container, or again under a compiler rollout, can
-    // take longer than a client waits (outlast.ts, T-141686).
-    outlasts: (args, { who }) => ({
-      key: `${args.space ?? ''}/${args.app}${
-        who?.spaceEid || who?.space ? `|${who.spaceEid ?? who.space}` : ''
-      }`,
-    }),
+    // take longer than a client waits (outlast.ts, T-141686). A call joins
+    // only a release asked with the same arguments: one naming another draft,
+    // base or confirm is a release of its own, which waits its turn
+    // (versions.ts `TURN`) and answers for itself.
+    outlasts: (args, ctx) => ({ key: runOf(args, ctx) }),
     // The two examples the code owns, said in its words (tools.yml
     // `app_deploy`): a vocab.json's component and its tool, so the sentence
     // follows the example rather than keeping a copy of it.

@@ -1,5 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { analysisCache } from './analysis.ts'
+import { external } from './shared.ts'
 import { Files } from './npm.ts'
 import { type Catalog, seed } from './platform.ts'
 
@@ -102,4 +103,31 @@ test('analysis cache validates fresh Files at the same manifest identity', async
   f.fresh()
   equal((await f.analyze())[2], 'export let a = 101; export let b = 202')
   equal(f.calls, 2)
+})
+
+test('an unserved toolkit import names what the platform serves of it', () => {
+  let refusal = (spec: string) => {
+    try {
+      return external({ '@yaks/md': 'u', '@yaks/md/site': 'v' })!(
+        spec,
+        'main.ts',
+        {},
+      )
+    } catch (e) {
+      return (e as Error).message
+    }
+  }
+  equal(
+    refusal('@yaks/md/away'),
+    "@yaks/md/away: the platform's @yaks/md has no such browser export; it " +
+      'exports @yaks/md, @yaks/md/site. Import one of those, or deploy ' +
+      "again once the platform's @yaks/md exports it",
+  )
+  equal(
+    refusal('@yaks/ui'),
+    '@yaks/ui: missing browser package in the platform catalog; declare ' +
+      '@yaks/ui in package.json dependencies',
+  )
+  equal(refusal('@yaks/md/site'), 'v')
+  equal(refusal('left-pad'), undefined)
 })

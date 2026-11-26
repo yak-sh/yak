@@ -105,12 +105,15 @@ let closed = (
   live: number | null,
   released: number | null,
 ) =>
-  (released == null
-    ? `No open draft ${asked} for ${app}. It may have been released or discarded.`
-    : `Draft ${asked} of ${app} was released as v${released}.`) +
-  (live
-    ? ` The live version is v${live}.`
-    : ' The app has no live version yet.')
+  released != null && released == live
+    ? `Draft ${asked} of ${app} was released as v${released}, the live ` +
+      'version, so its change is already live.'
+    : (released == null
+      ? `No open draft ${asked} for ${app}. It may have been released or discarded.`
+      : `Draft ${asked} of ${app} was released as v${released}.`) +
+      (live
+        ? ` The live version is v${live}.`
+        : ' The app has no live version yet.')
 
 type App = { slug: string; version: number | null }
 
@@ -131,8 +134,9 @@ export let deployDraftRefusal = (
       (open.length ? open : drafts).map((d) => d.eid).join(', ')
     }.`
     : 'There are no open drafts, so nothing waits to release. To change ' +
-      'the app, write the change with app_files first, without draft: that ' +
-      'opens a new draft, and app_deploy with its id releases it.'
+      'the app again, write the change with app_files first, without ' +
+      'draft: its answer names the new draft, and app_deploy with that id ' +
+      'releases it.'
   return new CallError(
     'missing',
     closed(app.slug, asked, app.version, released),

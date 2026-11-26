@@ -97,6 +97,8 @@ import {
   logged,
   minted,
   mintSql,
+  type Orphan,
+  orphaned,
   patchSql,
   pointSql,
   projected,
@@ -609,18 +611,16 @@ export let storage = <S extends Prepared<S>>(
           Object.entries(unresolved(vocab, before)).map(
             async ([comp, checks]) => [
               comp,
-              (await Promise.all(checks.map(one))).some((rows) => rows.length),
+              (await Promise.all(checks.map(one))).map((rows) => rows[0])
+                .find(Boolean),
             ],
           ),
         ),
       )
       for (let [comp, stmts] of Object.entries(refit(vocab, before))) {
-        if (missing[comp]) {
-          report(
-            new Error(
-              `${comp} keeps its old shape: a reference names no entity`,
-            ),
-          )
+        let orphan = missing[comp]
+        if (orphan) {
+          report(orphaned(comp, orphan as Orphan))
           continue
         }
         await send(stmts).catch((e) => report(unfit(comp, e)))

@@ -726,32 +726,28 @@ test(
         }),
         '<svg/>',
       )
-      // A call it cannot place is told what it sent, every op with what it
-      // takes, and any argument the tool has no use for.
-      let refused = async (
-        args: Record<string, unknown>,
-        ...said: string[]
-      ) => {
+      // A call it cannot place is told the likely fix, read off what it
+      // sent, and any argument the tool has no use for; only a call with
+      // nothing to guess from hears every op with what it takes.
+      for (
+        let [args, said] of [
+          [{}, "no op: set op: 'list' to list the app's files"],
+          [{ path: 'a.js' }, "no op for a.js: set op: 'read' to read it"],
+          [
+            { path: 'a.js', contents: 'x' },
+            "Send the file's text as content, not contents: a write takes " +
+            'path and content',
+          ],
+          [{ path: 'a.js', colour: 'x' }, 'patch (path, find and replace'],
+          [{ path: 'a.js', colour: 'x' }, 'app_files takes no colour.'],
+        ] as const
+      ) {
         let e = await assertRejects(
           () => agent.tool('app_files', { ...app, ...args }),
           Error,
         )
-        for (
-          let s of [
-            ...said,
-            'write (path and content',
-            'files: [{path, content}, …]',
-            'patch (path, find and replace',
-          ]
-        ) {
-          assertStringIncludes(e.message, s)
-        }
+        assertStringIncludes(e.message, said)
       }
-      await refused({}, 'no op, and no content, base64 or files to write')
-      await refused(
-        { path: 'a.js', contents: 'x' },
-        'app_files takes no contents',
-      )
       await assertRejects(
         () =>
           agent.tool('app_files', {

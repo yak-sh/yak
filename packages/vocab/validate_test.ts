@@ -99,7 +99,9 @@ test('storable refuses what a table cannot lower', () => {
   assert(said.includes('recipe.linked uses $ref'))
   assert(said.includes('recipe."eid" uses the reserved name "eid"'))
   assert(said.includes('starting with a lowercase letter'))
-  assert(said.includes('Name it "bell_two".'))
+  assert(
+    said.includes('Name it "bell_two", and read and write it by that name'),
+  )
   assert(
     said.includes('recipe.numbered is a closed set — its type is "string"'),
   )

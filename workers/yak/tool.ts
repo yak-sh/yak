@@ -16,6 +16,7 @@ import type { Security } from '@yaks/mcp'
 import { type Level, writes } from '@yaks/member'
 import { CallError } from '@yaks/tools/errors'
 import { Refused } from '@yaks/graph/errors'
+import { sha256 } from '@yaks/graph/sha256'
 import { restoreDrafts } from '@yaks/platform/draft-choice'
 import { SLUG } from '@yaks/platform/names'
 import type { Steps } from '@yaks/tools/title'
@@ -140,6 +141,16 @@ export let asCaller = (ctx: Ctx, role: Who['role']): Who => ({
 
 export type Args = Record<string, unknown>
 
+/** Which run a call that outlasts its caller (outlast.ts) joins: one asked in
+ * the same credential's space with the same `fields`, every argument by
+ * default. A call that asks for anything else is its own run, and never hears
+ * another's answer. */
+export let runOf = (
+  args: Args,
+  { who }: Pick<Ctx, 'who'>,
+  fields: unknown[] = Object.keys(args).sort().map((key) => [key, args[key]]),
+): string => sha256(JSON.stringify([who?.spaceEid ?? who?.space, ...fields]))
+
 // What a tool answers: the text, the space it worked in (so the door can
 // append what is unseen there), and, where code has something to read, the
 // same answer as data. The text is for a person and may carry more than the
@@ -202,10 +213,10 @@ export type Tool = {
   // admission.
   role?: Need
   input: Shape
-  // A tool that may take longer than a client waits for a call names what a
-  // call is about (`space/app` for a release): a door that lets calls outlast
-  // it (Ctx `outlast`) runs this one in the object for that key, one per
-  // caller (outlast.ts).
+  // A tool that may take longer than a client waits for a call names the run
+  // it joins ({@link runOf}): a door that lets calls outlast it (Ctx
+  // `outlast`) runs this one in the object for that key, one per caller
+  // (outlast.ts).
   outlasts?: (
     args: Args,
     ctx: Ctx,

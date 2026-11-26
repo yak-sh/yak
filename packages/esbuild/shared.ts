@@ -455,16 +455,24 @@ export let shared = async (
 }
 
 /** Replace a browser package import, refusing a toolkit import that cannot be
- * served. Ordinary npm imports remain part of the app's entry. */
+ * served: a package the app's package.json does not declare, or an export
+ * the platform's copy of a declared one does not have, such as one newer than
+ * the platform serving the app. Ordinary npm imports remain part of the
+ * app's entry. */
 export let external = (urls: Shared['urls']): Options['external'] => (spec) => {
   let url = urls[spec]
   if (url) return url
-  if (spec.startsWith('@yaks/') || singletons.includes(packageOf(spec) ?? '')) {
-    throw new Error(
-      `${spec}: missing browser package or export in the platform catalog; ` +
-        'declare the package in package.json dependencies',
-    )
-  }
+  let name = packageOf(spec) ?? ''
+  if (!spec.startsWith('@yaks/') && !singletons.includes(name)) return
+  let served = Object.keys(urls).filter((s) => packageOf(s) == name).sort()
+  throw new Error(
+    served.length
+      ? `${spec}: the platform's ${name} has no such browser export; it ` +
+        `exports ${served.join(', ')}. Import one of those, or deploy ` +
+        `again once the platform's ${name} exports it`
+      : `${spec}: missing browser package in the platform catalog; declare ` +
+        `${name} in package.json dependencies`,
+  )
 }
 
 /// unexported('import{a,b as c}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'let a,x;export{a,x as b}' }, 'https://o') -> []

@@ -5,7 +5,7 @@
 // after it was asked, to a caller that had heard a timeout. A Worker cannot
 // finish work after it answers (`waitUntil` lends 30 s), so a tool that may
 // take longer than its caller waits (tools.ts `outlasts`) runs in a Durable
-// Object, one per caller, tool and target (index.ts `Outlast`), where pending
+// Object, one per caller, tool and arguments (index.ts `Outlast`), where pending
 // I/O keeps the object up until the work ends (wrangler.toml
 // `durable_object_io_tasks_prevent_eviction`).
 //
@@ -45,9 +45,13 @@ let said = (body: string, value?: Record<string, unknown>, call?: string) => [{
   output: { ...call ? { source: call } : {}, ...value ? { value } : {} },
 }]
 
+// A late answer is an earlier run's, asked with the same arguments, and this
+// call ran nothing: a caller that changed what it acts on since hears so.
 let earlier = (name: string, asked: string) =>
-  `This answers the ${name} asked at ${asked}, which was still running when ` +
-  'it answered:\n'
+  `This answers the ${name} asked at ${asked} with the same arguments, ` +
+  'which was still running when its caller stopped waiting; this call ran ' +
+  `nothing of its own. If what it acts on changed since, call ${name} ` +
+  'again to run it anew:\n'
 
 type Result = {
   key: string

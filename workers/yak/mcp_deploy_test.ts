@@ -37,7 +37,8 @@ test('deploying a closed draft names its replacement and keeps it open for retry
     let closed = await assertRejects(
       () => agent.tool('app_deploy', { ...app, draft: stale }),
       Error,
-      'was released as v1',
+      `Draft ${stale} of notes was released as v1, the live version, so ` +
+        'its change is already live.',
     )
     assertStringIncludes(closed.message, 'no open drafts')
 

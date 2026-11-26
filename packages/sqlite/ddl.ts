@@ -697,8 +697,10 @@ let converted = (
     return []
   })
 
-/** Values that cannot resolve through the entity spine. A failed conversion
- * must leave its old column untouched rather than turn a missing id into null. */
+/** Values that cannot resolve through the entity spine, one check per
+ * converted column, each answering an {@link Orphan} where one stands. A
+ * failed conversion must leave its old column untouched rather than turn a
+ * missing id into null. */
 export let unresolved = (
   vocab: Vocab,
   was: Standing,
@@ -712,15 +714,22 @@ export let unresolved = (
           comp,
           changes.map(({ name, from, to }) =>
             select({
-              cols: [col(name, comp)],
+              cols: [
+                as(lit(name), 'prop'),
+                as(col('eid', '__row'), 'row'),
+                as(col(name, comp), 'value'),
+              ],
               from: table(comp),
-              joins: [left(
-                table('entity', '__ref'),
-                eq(
-                  col(from, '__ref'),
-                  col(name, comp),
+              joins: [
+                left(
+                  table('entity', '__ref'),
+                  eq(col(from, '__ref'), col(name, comp)),
                 ),
-              )],
+                left(
+                  table('entity', '__row'),
+                  eq(col('id', '__row'), col('entity', comp)),
+                ),
+              ],
               where: and(notNull(col(name, comp)), isNull(col(to, '__ref'))),
               limit: lit(1),
             })
@@ -728,6 +737,25 @@ export let unresolved = (
         ]]
         : []
     }),
+  )
+
+/** A row an {@link unresolved} check found: the property, the row's eid and
+ * the value in it that names no entity. */
+export type Orphan = { prop: string; row: string | null; value: unknown }
+
+/// orphaned('outing', { prop: 'day', row: 'o1', value: 'Saturday' }).message.startsWith('outing keeps its old shape: outing.day names an entity now, and o1 holds "Saturday", which names none.') -> true
+/** What a store says of a component whose reference column it could not
+ * convert ({@link unresolved}): the table is as it stood, and the refusal
+ * names the property, a row and the value, and the ways out. */
+export let orphaned = (comp: string, { prop, row, value }: Orphan): Error =>
+  new Error(
+    `${comp} keeps its old shape: ${comp}.${prop} names an entity now, and ` +
+      `${row ?? 'a row'} holds ${JSON.stringify(value)}, which names none. ` +
+      `Set ${comp}.${prop} on each such row to the eid of the entity it ` +
+      "means, or clear it, through the app's own commands or a store_load " +
+      'of bundles naming each row, then deploy again; or keep the old ' +
+      'value under its own property and declare the reference under a new ' +
+      'name.',
   )
 
 /**
@@ -994,18 +1022,13 @@ export let fit = (
     let missing = Object.fromEntries(
       Object.entries(unresolved(vocab, was)).map(([comp, checks]) => [
         comp,
-        checks.some((q) => driver.query(q).length),
+        checks.map((q) => driver.query(q)[0]).find(Boolean),
       ]),
     )
     let plans = refitting(vocab, was)
     return Object.entries(refit(vocab, was)).flatMap(([comp, stmts]) => {
-      if (missing[comp]) {
-        return [
-          new Error(
-            `${comp} keeps its old shape: a reference names no entity`,
-          ),
-        ]
-      }
+      let orphan = missing[comp]
+      if (orphan) return [orphaned(comp, orphan as Orphan)]
       if (owe(comp, plans[comp])) return []
       try {
         unit(driver, () => stmts.forEach((s) => driver.query(s)))

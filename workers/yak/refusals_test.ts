@@ -71,6 +71,16 @@ test('a cause keeps the words and loses the values', () => {
         'text "…" is too long',
       ],
       ['`space` is required', '`space` is required'],
+      [
+        'media."blobHash" must use 1–40 characters, starting with a lowercase ' +
+        'letter. Name it "blob_hash".',
+        'media."blobHash" must use <n>–<n> characters, starting with a ' +
+        'lowercase letter. Name it "blob_hash".',
+      ],
+      [
+        "the app's draft isn't what it wants",
+        "the app's draft isn't what it wants",
+      ],
       ['  spread\n over   lines ', 'spread over lines'],
     ]
   ) equal(cause(said), kept)

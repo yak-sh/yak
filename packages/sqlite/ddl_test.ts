@@ -270,8 +270,9 @@ test('an orphan scalar eid refuses conversion and keeps its bytes', () => {
   }])
   let errors: Error[] = []
   storage(d, next, { report: (e) => errors.push(e) }).install()
-  assertEquals(errors.map((e) => e.message), [
-    'look keeps its old shape: a reference names no entity',
+  assertEquals(errors.map((e) => e.message.split(' Set ')[0]), [
+    'look keeps its old shape: look.player names an entity now, and face ' +
+    'holds "missing", which names none.',
   ])
   assertEquals(before.read('.look&*'), [{
     entity: { eid: 'face' },

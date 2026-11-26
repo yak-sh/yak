@@ -37,7 +37,8 @@ let badProperty = (comp: string, prop: string, props: object) => {
     .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2').toLowerCase()
     .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '')
   let rename = propertyName(fixed) && !Object.hasOwn(props, fixed)
-    ? ` Name it ${JSON.stringify(fixed)}.`
+    ? ` Name it ${JSON.stringify(fixed)}, and read and write it by that ` +
+      'name in code.'
     : ''
   return `${name} must use 1–40 characters, starting with a lowercase ` +
     `letter (a–z), followed by lowercase letters, digits or underscores.${rename}`

@@ -65,7 +65,9 @@ let VALUES: [RegExp, string][] = [
     '<id>',
   ],
   [/\b(?=[\w+/=-]*\d)[\w+/=-]{16,}/g, '<token>'],
-  [/(["'`])(?:(?!\1).){25,}?\1/g, '$1…$1'],
+  // A quote opens where no word runs into it and closes where none runs on,
+  // so the words between two short quoted names, or an apostrophe's, stay.
+  [/(?<!\w)(["'`])(?:(?!\1).){25,}?\1(?!\w)/g, '$1…$1'],
   [/\b\d+(\.\d+)?\b/g, '<n>'],
 ]
 
