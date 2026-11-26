@@ -1103,6 +1103,13 @@ test('an unknown property is refused with what its component holds', () => {
   )
   assertThrows(() => w.aim('alias.title'), Unknown, 'title is book.title')
   // a slip is told the name it was closest to, and the spine's id is its eid
+  // an operator word is taught the grammar's form, not a spelling neighbour
+  assertEquals(
+    unknownProps(w, 'book', ['in']),
+    'unknown property: book.in — a query has no in: a list value is ' +
+      'membership, so .book.<prop>=a,b,c equals any of a, b and c; book has ' +
+      'title (string)',
+  )
   assertEquals(
     unknownProps(w, 'book', ['titles']),
     'unknown property: book.titles (closest declared: book.title) — book has ' +
@@ -1163,6 +1170,16 @@ test('a name alone that names no component says what it is closest to', () => {
   assertEquals(
     said('rows'),
     'unknown prop: .rows (closest declared: .seat.row)',
+  )
+  assertEquals(
+    said('seat.row.in'),
+    'unknown prop: .in — a query has no in: a list value is membership, so ' +
+      '.seat.row=a,b,c equals any of a, b and c',
+  )
+  assertEquals(
+    said('on'), // one edit is half a two-letter word: no slip of .seat.row
+    'unknown prop: .on — no component is named on, ' +
+      'and none has a property of that name',
   )
   assertEquals(
     said('sandwich'),

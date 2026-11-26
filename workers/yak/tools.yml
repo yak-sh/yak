@@ -500,8 +500,10 @@ app_deploy:
     Release one draft of the app as a version: files, vocabulary and
     worker begin serving together, and error reports name this version.
     Its edits are laid over the live files, so paths it did not change stay
-    as live has them, and the app's other drafts stay open. Rows its
-    preview wrote stay on its branch unless rows: all merges them, a
+    as live has them, and the app's other drafts stay open. A release closes
+    the draft it releases: nothing more is written to it, and the next
+    app_files write without draft opens a new draft, released by its own id.
+    Rows its preview wrote stay on its branch unless rows: all merges them, a
     property both sides changed waiting for the person's pick; app_files
     op: discard drops them.
     Options wait for the person to choose one (decision_new); release only

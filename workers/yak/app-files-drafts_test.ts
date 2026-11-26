@@ -302,7 +302,7 @@ test('files and previews use a lone draft and offer recovery when a draft closes
   for (let call of [() => show(first), () => held(app, first)]) {
     let { message } = await throws(
       call,
-      `was released as v1. The live version is v2.`,
+      `was released as v1, which closed it. The live version is v2.`,
     ) as Error
     ok(message.includes(other) && message.includes('other.txt'), message)
   }

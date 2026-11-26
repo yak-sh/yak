@@ -679,8 +679,9 @@ let edits = (a: string, b: string): number => {
 
 /**
  * The names closest to a word nothing declares, best first and at most
- * `most`: a slip (within a third of the word in edits), a name that opens
- * with the other, or one holding the word as a part of its snake_case name,
+ * `most`: a slip (within a third of the word in edits; one edit from a
+ * two-letter word only where the name holds it), a name that opens with the
+ * other, or one holding the word as a part of its snake_case name,
  * ranked as a one-letter slip. With `fallback`, return the closest names even
  * when none looks like a slip.
  *
@@ -697,6 +698,8 @@ let edits = (a: string, b: string): number => {
  *   'outreach_letter',
  *   'meter',
  * ])
+ * assertEquals(nearest('in', ['on', 'id', 'index']), [])
+ * assertEquals(nearest('id', ['eid', 'in']), ['eid'])
  * ```
  */
 export let nearest = (
@@ -711,8 +714,14 @@ export let nearest = (
     let n = name.toLowerCase()
     let part = w.length >= 3 && n.split('_').includes(w)
     let d = part ? 1 : edits(w, n)
-    let near = d <= Math.max(1, Math.floor(w.length / 3)) || opens(w, n) ||
-      opens(n, w)
+    // One edit is half a two-letter word, so it is a slip only of a name
+    // that holds it whole: `id` of `eid`, but `in` of neither `on` nor `id`.
+    let slip = w.length >= 3
+      ? Math.max(1, Math.floor(w.length / 3))
+      : n.includes(w)
+      ? 1
+      : 0
+    let near = d <= slip || opens(w, n) || opens(n, w)
     return { name, d, near }
   })
   let close = ranked.filter((c) => c.near)
@@ -730,10 +739,28 @@ let WRITTEN: Record<string, string> = {
     "$was guards a write with the hash of a value as it was read, and no row holds one; a query reads a row's history as .updated.at and .created.at",
 }
 
+// Words other query languages spell as operators, which this grammar writes
+// as a value or a sign (@yaks/query README, Predicates and text), each said
+// with the path the caller put it after.
+let OPERATORS: Record<string, (path: string) => string> = {
+  in: (p) =>
+    `a query has no in: a list value is membership, so .${p}=a,b,c equals ` +
+    'any of a, b and c',
+  like: (p) =>
+    `a query has no like: ~= matches part of a value, so .${p}~=cake holds ` +
+    'cake anywhere in it',
+  not: (p) =>
+    `a query has no not: != excludes a value (.${p}!=done), and !comp is a ` +
+    "component's absence",
+}
+OPERATORS.contains = (p) => OPERATORS.like(p).replace('no like', 'no contains')
+
 /**
  * The refusal for a name nothing in this vocabulary declares, said where a
  * query named it: the declared names it is closest to, so a slip is fixed in
- * one more call, or what a write's own word is instead of a component.
+ * one more call, what a write's own word is instead of a component, or how
+ * the grammar writes an operator another query language spells as a word,
+ * after the path the caller put it on (`at`).
  *
  * ```ts
  * import { assertEquals, assertStringIncludes } from '@std/assert'
@@ -748,15 +775,23 @@ let WRITTEN: Record<string, string> = {
  *     'a property of that name',
  * )
  * assertStringIncludes(unknownName('$was', []), '.updated.at and .created.at')
+ * assertEquals(
+ *   unknownName('in', ['blocked'], () => ['on'], 'task.status'),
+ *   'unknown prop: .in — a query has no in: a list value is membership, so ' +
+ *     '.task.status=a,b,c equals any of a, b and c',
+ * )
  * ```
  */
 export let unknownName = (
   word: string,
   names: string[],
   props: (comp: string) => string[] = () => [],
+  at = 'comp.prop',
 ): string => {
   let said = `unknown prop: .${word}`
   if (WRITTEN[word]) return `${said} — ${WRITTEN[word]}`
+  let op = OPERATORS[word.toLowerCase()]
+  if (op) return `${said} — ${op(at)}`
   // A slip of a component's name, else of a property's, said with its
   // component.
   let near = nearest(word, names).map((n) => `.${n}`)
@@ -796,17 +831,18 @@ export let kindNamed = (kind: string, is: string[]): string =>
   `on one of them (.${is[0]}.<prop>)`
 
 /** The refusal for a name this vocabulary has no component of, where a query
- * names it alone: a kind's name says the components the kind is
- * ({@link kindNamed}), and any other the names it is closest to
+ * names it alone or after a path (`at`): a kind's name says the components
+ * the kind is ({@link kindNamed}), and any other the names it is closest to
  * ({@link unknownName}). */
 export let unknownWord = (
   v: Pick<Vocab, 'all' | 'props' | 'kind'>,
   word: string,
+  at?: string,
 ): string => {
   let kind = v.kind(word)
   return kind?.is.length
     ? kindNamed(word, kind.is)
-    : unknownName(word, v.all, v.props)
+    : unknownName(word, v.all, v.props, at)
 }
 
 /** The refusal for properties a component does not declare: one wording,
@@ -849,9 +885,15 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
     let paths = companions.filter((c) => v.prop(c, p)).map((c) => `${c}.${p}`)
     return paths.length ? [`${p} is ${paths.join(' or ')}`] : []
   })
-  let about = near.length || through.length || worn.length || named.length
-    ? ''
-    : v.comp(comp)?.description
+  // An operator word put after a component (`.task.in=a,b`).
+  let ops = props.flatMap((p) => {
+    let op = OPERATORS[p.toLowerCase()]
+    return op ? [op(`${comp}.<prop>`)] : []
+  })
+  let about =
+    near.length || through.length || worn.length || named.length || ops.length
+      ? ''
+      : v.comp(comp)?.description
   return `unknown ${props.length > 1 ? 'properties' : 'property'}: ${
     props.map((p) => `${comp}.${p}`).join(', ')
   }${
@@ -859,8 +901,10 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
       ? ` (closest declared: ${near.map((p) => `${comp}.${p}`).join(', ')})`
       : ''
   } — ${props.includes(comp) ? `Use .${comp} to test for presence. ` : ''}${
-    named.map((t) => `${t}. `).join('')
-  }${through.map((t) => `${t}; `).join('')}${
+    ops.map((t) => `${t}; `).join('')
+  }${named.map((t) => `${t}. `).join('')}${
+    through.map((t) => `${t}; `).join('')
+  }${
     worn.length
       ? `a component is no property of another, so an entity wearing both ` +
         `is ${worn.join(' or ')}; `
@@ -1269,7 +1313,12 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
           if (at.length) {
             refuse(a, unqualified(a, at, (c) => v.comp(c)?.description))
           }
-          if (b != null || !facet) refuse(a, unknownWord(v, a))
+          if (b != null || !facet) {
+            refuse(
+              a,
+              unknownWord(v, a, segs.slice(0, i).join('.') || undefined),
+            )
+          }
           out.push({ comp: a, prop: '' })
           continue
         }

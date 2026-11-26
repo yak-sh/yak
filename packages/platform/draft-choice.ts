@@ -98,6 +98,11 @@ let optionsOf = (drafts: { draft: Draft; writes: Write[] }[], now: number) =>
 
 export let WRITE_DRAFT = 'An app_files write without draft opens a new draft.'
 
+/** How a change after a release reaches the app: a new draft. */
+let REDRAFT = 'To change the app again, write the change with app_files ' +
+  'first, without draft: its answer names the new draft, and app_deploy ' +
+  'with that id releases it.'
+
 /** Recovery when a named draft has closed. Older releases may lack its id. */
 let closed = (
   app: string,
@@ -107,17 +112,33 @@ let closed = (
 ) =>
   released != null && released == live
     ? `Draft ${asked} of ${app} was released as v${released}, the live ` +
-      'version, so its change is already live.'
+      'version, so its change is already live. A release closes its draft: ' +
+      'nothing more is written to it or released from it.'
     : (released == null
       ? `No open draft ${asked} for ${app}. It may have been released or discarded.`
-      : `Draft ${asked} of ${app} was released as v${released}.`) +
+      : `Draft ${asked} of ${app} was released as v${released}, which ` +
+        'closed it.') +
       (live
         ? ` The live version is v${live}.`
         : ' The app has no live version yet.')
 
 type App = { slug: string; version: number | null }
 
-/** Recovery for a deploy whose draft has closed. */
+/**
+ * Recovery for a deploy whose draft has closed. A release closed it, so the
+ * change that follows is written into a new draft, not this one.
+ *
+ * ```ts
+ * import { assertStringIncludes } from '@std/assert'
+ * import { deployDraftRefusal } from '@yaks/platform/draft-choice'
+ * let app = { slug: 'site', version: 10 }
+ * let old = { eid: 'd2', at: null, behind: true as const }
+ * let { message } = deployDraftRefusal(app, 'd1', [old], 10)
+ * assertStringIncludes(message, 'A release closes its draft')
+ * assertStringIncludes(message, 'write the change with app_files first')
+ * assertStringIncludes(message, 'left behind stay open, released only by naming one as draft: d2.')
+ * ```
+ */
 export let deployDraftRefusal = (
   app: App,
   asked: string,
@@ -125,18 +146,19 @@ export let deployDraftRefusal = (
   released: number | null,
 ): CallError => {
   let open = current(drafts)
+  let ids = (ds: Draft[]) => ds.map((d) => d.eid).join(', ')
   let next = open.length == 1
     ? `The current draft is ${open[0].eid}. Retry app_deploy with draft: '${
       open[0].eid
     }' to release it.`
-    : drafts.length
+    : open.length
     ? `To release an open draft, retry app_deploy with its id as draft. Open drafts: ${
-      (open.length ? open : drafts).map((d) => d.eid).join(', ')
+      ids(open)
     }.`
-    : 'There are no open drafts, so nothing waits to release. To change ' +
-      'the app again, write the change with app_files first, without ' +
-      'draft: its answer names the new draft, and app_deploy with that id ' +
-      'releases it.'
+    : drafts.length
+    ? `${REDRAFT} Drafts a release left behind stay open, released only ` +
+      `by naming one as draft: ${ids(drafts)}.`
+    : `There are no open drafts, so nothing waits to release. ${REDRAFT}`
   return new CallError(
     'missing',
     closed(app.slug, asked, app.version, released),
