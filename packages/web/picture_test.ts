@@ -8,7 +8,7 @@ import { picture } from './picture.ts'
 // runs every timer it set.
 let opened = (
   answer: () => Promise<Response>,
-  o: { shell?: boolean; offline?: boolean } = {},
+  o: { shell?: boolean; offline?: boolean; file?: Response } = {},
 ) => {
   let html = picture(
     '<!doctype html><html><head></head><body><p>kept</p></body></html>',
@@ -54,10 +54,11 @@ let opened = (
   }
   let location = {
     href: 'https://yaks.app/manage/chat',
+    origin: 'https://yaks.app',
     reload: () => void reloads++,
   }
   let fetch = (at: string) =>
-    at == location.href ? answer() : Promise.resolve(new Response(''))
+    at == location.href ? answer() : Promise.resolve(o.file ?? new Response(''))
   new Function(
     'document',
     'navigator',
@@ -117,6 +118,24 @@ test('a picture whose page answers as no page tells why and loads once from the 
   assertEquals(o.said, {
     written: '',
     told: ['A kept picture fell back to the network: answered 503'],
+    network: ['https://yaks.app/manage/chat'],
+  })
+  assertEquals(o.reloads(), 1)
+})
+
+test('a missing fresh stylesheet keeps the picture until the fallback navigation', async () => {
+  let o = opened(
+    html(
+      '<head><link rel="stylesheet" href="/_yak/release.css"></head><body>new</body>',
+    ),
+    { file: new Response('gone', { status: 404 }) },
+  )
+  await o.settle()
+  assertEquals(o.said, {
+    written: '',
+    told: [
+      'A kept picture fell back to the network: threw A file the page needs answered 404 at /_yak/release.css',
+    ],
     network: ['https://yaks.app/manage/chat'],
   })
   assertEquals(o.reloads(), 1)

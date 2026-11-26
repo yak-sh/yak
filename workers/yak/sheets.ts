@@ -84,9 +84,10 @@ export let links = (
       at('favicon-32.png')
     }" type="image/png" sizes="32x32">`
     : ''
-  let opens = openingHead(
-    opening(at('apple-touch-icon.png'), url(env, '/api/report')),
-  )
+  let opens = openingHead({
+    ...opening(at('apple-touch-icon.png'), url(env, '/api/report')),
+    retryBlank: base == null,
+  })
   return `${
     reported ? '' : reporter
   }${opens}<script data-yak-open="${timed}">${openScript()}</script>${

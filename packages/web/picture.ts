@@ -134,6 +134,7 @@ let boot = ({ opening, door }: Boot = {}) =>
     }
     return r.text().then(async (html) => {
       let url = r.headers.get('${FRESH_URL}') || r.url
+      if (!html.trim()) return network('answered with an empty page')
       // What the page waits on before it can paint, its sheets and the
       // scripts its head runs in order, asked for first, so the picture stays
       // until the page can take its place, never a blank page between.
@@ -145,7 +146,16 @@ let boot = ({ opening, door }: Boot = {}) =>
           (/^<script/i.test(tag) && !/\\b(type=["']?module|defer|async)\\b/i.test(tag)))
         .map((tag) => /\\b(?:href|src)=["']?([^"' >]+)/i.exec(tag)?.[1])
         .filter(Boolean)
-      await Promise.all(held.map((at) => fetch(at).then((r) => r.blob()).catch(() => {})))
+        .map((at) => new URL(at, url || location.href))
+        .filter((at) => at.origin == location.origin)
+      await Promise.all(held.map(async (at) => {
+        let file = await fetch(at.href)
+        if (!file.ok) {
+          await file.body?.cancel()
+          throw new Error('A file the page needs answered ' + file.status + ' at ' + at.pathname)
+        }
+        await file.blob()
+      }))
       if (settled) return
       if (url && url != location.href) {
         history.replaceState(history.state, '', url)

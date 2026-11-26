@@ -11,10 +11,11 @@
  * - One that has painted nothing after 4 s says it is taking longer than
  *   usual and offers Try again, where the browser can paint it.
  * - Both leave by themselves once the page is in whole, parsed with every
- *   stylesheet: the page that came, however late, is never covered. Neither
- *   reloads the page, nor drops a stylesheet: a page held up by a slow
- *   server would only wait again, adding to its load. A slow open is
- *   reported by its open timing (@yaks/timing).
+ *   stylesheet: the page that came, however late, is never covered. A slow
+ *   open is reported by its open timing (@yaks/timing).
+ * - A site can retry an open once after a visible window finishes loading
+ *   and still paints nothing. It reports the failure and shows a recovery
+ *   screen. A page still waiting on its server or files keeps waiting.
  * - A script or stylesheet of the site's own that fails before the page has
  *   loaded says the page could not open, over the page where it drew
  *   nothing, else in a line at its foot, and offers Try again. Its reporter
@@ -42,6 +43,7 @@ export type Opening = {
   dark: { background: string; ink: string }
   mark: string
   report: string
+  retryBlank?: boolean
 }
 
 /** Why a page could not be opened, as a service worker found it: the
@@ -151,7 +153,9 @@ let SCRIPT = `(o, pages, forgot) => {
   let given = root.getAttribute('${OPENING}')
   if (given) {
     draw(given)
-    if (given == 'failed') report(root.getAttribute('${OPENING}-said') || 'The page could not be opened')
+    if (given == 'failed' || given == 'unreachable') {
+      report(root.getAttribute('${OPENING}-said') || 'The page could not be opened')
+    }
     return
   }
   // Painted nothing yet, so far as the browser can say.
@@ -190,10 +194,43 @@ let SCRIPT = `(o, pages, forgot) => {
     broke = t != window ? 'A file the page needs did not load: ' + file : (e.message || 'A script failed') + ' at ' + file
   }
   addEventListener('error', heard, true)
+  // A blank document may have finished loading without running a needed
+  // script. Start the deadline after load, so a slow server is never retried
+  // automatically. Only the visible window can provide paint evidence.
+  let retry = () => {
+    if (!o.retryBlank || !timing || document.readyState != 'complete') return
+    let key = 'yak-blank-retry'
+    let at = location.pathname + location.search
+    let watch
+    let check = () => {
+      clearTimeout(watch)
+      if (document.visibilityState != 'visible') return
+      watch = setTimeout(() => {
+        document.removeEventListener('visibilitychange', check)
+        let blank = !painted()
+        let first = false
+        try {
+          let retried = sessionStorage.getItem(key) == at
+          if (!blank && retried) sessionStorage.removeItem(key)
+          if (blank && !retried) {
+            sessionStorage.setItem(key, at)
+            first = true
+          }
+        } catch {}
+        if (!blank) return
+        report('The page finished loading but painted nothing')
+        draw('failed')
+        if (first) void again()
+      }, ${SLOW})
+    }
+    document.addEventListener('visibilitychange', check)
+    check()
+  }
   let judge = () => {
     document.removeEventListener('readystatechange', settle)
     removeEventListener('error', heard, true)
     removeEventListener('load', settle, true)
+    retry()
     if (!broke) return
     let text = (document.body?.innerText || '').trim()
     let bare = text.length <= 80 && !document.body?.querySelector('img, canvas, svg, video, iframe')

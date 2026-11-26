@@ -14,6 +14,7 @@ let site: Opening = {
   dark: { background: '#2b231f', ink: '#f1e6d8' },
   mark: '/mark.png',
   report: '/api/report',
+  retryBlank: true,
 }
 
 // A page opening with the head's script run in it, on a clock the test moves:
@@ -21,11 +22,12 @@ let site: Opening = {
 // the script (the site's own, or a worker's failure page).
 let opening = (
   html = `<html><head>${openingHead(site)}</head><body></body></html>`,
-  o: { reporter?: boolean } = {},
+  o: { reporter?: boolean; storage?: Map<string, string> } = {},
 ) => {
   let { document, window } = parseHTML(html)
   let state = 'loading'
   Object.defineProperty(document, 'readyState', { get: () => state })
+  Object.defineProperty(document, 'visibilityState', { value: 'visible' })
   let clock = 0
   let timers: { at: number; fn: () => void; id: number }[] = []
   let ids = 0
@@ -37,6 +39,7 @@ let opening = (
     ['https://yaks.app/ada', 1],
   ])
   let reloaded = 0
+  let storage = o.storage ?? new Map<string, string>()
   // A window of the page's own: linkedom's writes through to the process's.
   let w: Record<PropertyKey, unknown> = {
     PerformanceObserver: { supportedEntryTypes: ['paint'] },
@@ -56,6 +59,7 @@ let opening = (
     'addEventListener',
     'removeEventListener',
     'caches',
+    'sessionStorage',
     'fetch',
     script,
   )(
@@ -69,6 +73,7 @@ let opening = (
     {
       href: 'https://yaks.app/ada',
       origin: 'https://yaks.app',
+      pathname: '/ada',
       search: '',
       reload: () => reloaded++,
     },
@@ -90,6 +95,11 @@ let opening = (
           keys: () => Promise.resolve([...kept.keys()].map((url) => ({ url }))),
           delete: (r: { url: string }) => kept.delete(r.url),
         }),
+    },
+    {
+      getItem: (key: string) => storage.get(key),
+      setItem: (key: string, value: string) => storage.set(key, value),
+      removeItem: (key: string) => storage.delete(key),
     },
     () => Promise.resolve(),
   )
@@ -118,6 +128,7 @@ let opening = (
       document.dispatchEvent(new window.Event('readystatechange'))
     },
     loaded: () => {
+      state = 'complete'
       fire('load')
       at(clock)
     },
@@ -192,6 +203,30 @@ test('a page in whole gets no screen, even where the browser never says it paint
   p.parsed(PAGE)
   p.at(10_000)
   equal(p.screen(), null)
+})
+
+test('an open that completes without a paint reports and retries once, then shows recovery', async () => {
+  let storage = new Map<string, string>()
+  let first = opening(undefined, { storage })
+  first.at(12_000)
+  equal(first.reloaded(), 0)
+  first.parsed()
+  first.loaded()
+  first.at(16_000)
+  await new Promise((done) => setTimeout(done, 0))
+  equal(first.reloaded(), 1)
+  equal(first.reports.map((r) => r.message), [
+    'The page finished loading but painted nothing',
+  ])
+
+  let second = opening(undefined, { storage })
+  second.parsed()
+  second.loaded()
+  second.at(4000)
+  equal([second.reloaded(), second.screen()?.state], [0, 'failed'])
+  equal(second.reports.map((r) => r.message), [
+    'The page finished loading but painted nothing',
+  ])
 })
 
 test('a page that has painted is never covered, however long the rest takes', () => {
@@ -275,7 +310,7 @@ test("a worker's page says at once why the open failed, and reports only what is
   equal(shown({ state: 'unreachable', said: 'TypeError: Load failed' }), [
     'unreachable',
     ["yaks.app couldn't be reached.", 'Check your connection, then try again.'],
-    [],
+    ['TypeError: Load failed'],
   ])
   equal(shown({ state: 'failed', said: 'The server answered 502 <&>' }), [
     'failed',
