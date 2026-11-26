@@ -52,23 +52,42 @@ export let prior = (person: string, via: string) =>
 export let sessionId = (claims: Claims & { via: string }) =>
   claims.session ?? prior(claims.person, claims.via)
 
-export let held = async (
+/** Why a browser's session is not `person`'s now, as the directory says
+ * it, or null while it is. */
+export let unheld = async (
   env: Env,
   person: string,
   via: string,
   session?: string,
   dir: Directory = sessions(env),
-) => {
+): Promise<string | null> => {
   let { cancelled, ended, present, session: kept } = await dir
     .browserSession(
       session ?? prior(person, via),
       person,
     )
-  if (!present || cancelled || !session && ended) return false
-  return kept
-    ? kept.person == person && Date.parse(String(kept.until)) > Date.now()
-    : !session
+  return !present
+    ? 'the directory has no such person'
+    : cancelled
+    ? 'it was signed out'
+    : !session && ended
+    ? 'its person signed out everywhere'
+    : !kept
+    ? session ? 'the directory has no row for it' : null
+    : kept.person != person
+    ? 'its row names someone else'
+    : Date.parse(String(kept.until)) <= Date.now()
+    ? `it ended at ${kept.until}`
+    : null
 }
+
+export let held = async (
+  env: Env,
+  person: string,
+  via: string,
+  session?: string,
+  dir?: Directory,
+) => !await unheld(env, person, via, session, dir)
 
 export let keep = async (
   env: Env,

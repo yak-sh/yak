@@ -54,7 +54,7 @@ import { envDoor, fetchDoor, outbound } from './outbound.ts'
 import { PUBLISHED } from './published.ts'
 import type { Asked } from './apps.ts'
 import { desk } from './desk-pages.ts'
-import type { Who } from './session.ts'
+import { signedOut, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
 import { within } from './defects.ts'
 import { tallying } from './lib/hops.ts'
@@ -381,6 +381,33 @@ test(
       303,
       `https://yaks.app/manage/ada/connections?enable=${google}`,
     ])
+    // Her browser, holding a session signed out elsewhere, is asked like a
+    // stranger's, and the lost session is a failure heard at once.
+    let reports: Bundle[] = []
+    s.p.env.ERRORS = {
+      send: (rows) => (reports.push(...rows), Promise.resolve()),
+    }
+    let ended = await signedInAs(s.p.env, s.person)
+    await signedOut(
+      new Request('https://yaks.app/', { headers: { cookie: ended } }),
+      s.p.env,
+      s.p.env.SESSION_SECRET!,
+    )
+    let again = await begun()
+    let pending: Promise<void>[] = []
+    let lost = await within(
+      s.p.env,
+      {},
+      () => returned(s.p.env, again, { query: 'code=C', cookie: ended }),
+      undefined,
+      { retain: (work) => pending.push(work) },
+    )
+    await Promise.all(pending)
+    assertEquals(lost.status, 200)
+    assertStringIncludes(
+      JSON.stringify(reports),
+      'whose session did not hold: it was signed out.',
+    )
   },
 )
 

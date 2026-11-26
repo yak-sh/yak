@@ -116,6 +116,18 @@ export let sessionReading = async (
     : null
 }
 
+/** The person a cookie that verifies names, and why the directory no longer
+ * holds its session; null for one that does not verify, or holds. */
+export let lapsed = async (req: Request, env: Env, dir?: Directory) => {
+  let secret = env.SESSION_SECRET
+  let token = sessionCookie(req, env)
+  let claims = token && secret ? await verify(token, secret) : null
+  if (!claims) return null
+  let via = claims.via ?? `session:${sha256(token!)}`
+  let why = await browsers.unheld(env, claims.person, via, claims.session, dir)
+  return why ? { person: claims.person, why } : null
+}
+
 /** A browser session within its reach. Account doors omit the space; app
  * doors name its eid. Full-account sessions keep every existing seat. */
 export let sessionAt = async (

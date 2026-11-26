@@ -138,7 +138,7 @@ import {
 } from '@yaks/platform/routes'
 import { telling } from '@yaks/platform/cookie'
 import { background, caught } from './defects.ts'
-import { domainOf, vouched, type Who, whoIs } from './session.ts'
+import { domainOf, lapsed, vouched, type Who, whoIs } from './session.ts'
 import { held as live } from './browser-sessions.ts'
 import { type Ctx as Asking, EID, refuse } from './tool.ts'
 export { EID }
@@ -1729,6 +1729,21 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
     return held ? told(held.back, 'refused') : answer(url(env, MANAGE))
   }
   if (params.has('code') && here.person != held.person) {
+    // The browser that began it, whose session the directory no longer
+    // holds: still asked, and a failure to hear about.
+    let lost = await lapsed(req, env, dir)
+    if (lost?.person == held.person) {
+      caught(
+        new Error(
+          `A sign-in came back to the browser that began it, whose session did not hold: ${lost.why}.`,
+        ),
+        {
+          request: `GET ${CALLBACK}`,
+          space: held.space,
+          connection: held.connection,
+        },
+      )
+    }
     let asked = await confirming(req, env, held, at, b)
     if (asked) return asked
   }
