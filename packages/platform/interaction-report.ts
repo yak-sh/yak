@@ -33,26 +33,19 @@ let duration = (n: unknown): n is number =>
   typeof n == 'number' && n >= 0 && n <= MAX_MS
 let milestone = (n: unknown): n is number | null => n === null || duration(n)
 
+// Each timestamp the browser gave, kept on its own: WebKit omits some, and
+// one missing never loses the rest.
 let navigationOf = (value: unknown): Navigation | undefined => {
   if (!OBJECT(value)) return
-  let { workerStart, fetchStart, requestStart, responseStart } = value
-  if (
-    duration(workerStart) && duration(fetchStart) && duration(requestStart) &&
-    duration(responseStart)
-  ) {
-    let navigation = {
-      workerStart,
-      fetchStart,
-      requestStart,
-      responseStart,
-    } as Navigation
-    for (let key of NAVIGATION_DETAILS) {
-      let n = value[key]
-      if (duration(n)) navigation[key] = n
-    }
-    return navigation
+  let navigation: Navigation = {}
+  for (let key of NAVIGATION_DETAILS) {
+    let n = value[key]
+    if (duration(n)) navigation[key] = n
   }
+  return Object.keys(navigation).length ? navigation : undefined
 }
+
+let STAGE = /^[a-z]{1,16}$/
 
 let opening = (value: unknown): Open | undefined => {
   if (!OBJECT(value)) return
@@ -66,6 +59,9 @@ let opening = (value: unknown): Open | undefined => {
     server,
     estimated,
     controlled,
+    stage,
+    left,
+    hidden,
   } = value as Partial<Open>
   if (
     !source || !OPEN_SOURCES.includes(source) ||
@@ -74,6 +70,9 @@ let opening = (value: unknown): Open | undefined => {
     source != 'push' && picture != (source == 'picture' || source == 'shell') ||
     typeof installed != 'boolean' || typeof estimated != 'boolean' ||
     controlled != null && typeof controlled != 'boolean' ||
+    stage != null && !(typeof stage == 'string' && STAGE.test(stage)) ||
+    left != null && typeof left != 'boolean' ||
+    hidden != null && typeof hidden != 'boolean' ||
     !milestone(paint) || !milestone(usable) || !milestone(server) ||
     paint != null && usable != null && usable < paint
   ) return
@@ -89,6 +88,9 @@ let opening = (value: unknown): Open | undefined => {
     estimated,
     ...controlled == null ? {} : { controlled },
     ...navigation ? { navigation } : {},
+    ...stage == null ? {} : { stage },
+    ...left ? { left } : {},
+    ...hidden ? { hidden } : {},
   }
 }
 
@@ -166,6 +168,10 @@ let slowOpen = (
         ...open.server == null ? {} : { server: open.server },
         ...open.navigation,
         ...open.controlled == null ? {} : { controlled: open.controlled },
+        ...open.usable == null ? { usable: null } : {},
+        ...open.stage == null ? {} : { stage: open.stage },
+        ...open.left ? { left: true } : {},
+        ...open.hidden ? { hidden: true } : {},
         account: 'person',
         entrypoint: 'browser interaction',
       },

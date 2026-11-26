@@ -31,6 +31,10 @@ export let OPEN_SOURCES = [
 ] as const
 export let DEVICES = ['iphone-compact', 'phone', 'tablet', 'desktop'] as const
 export let NAVIGATION_DETAILS = [
+  'workerStart',
+  'fetchStart',
+  'requestStart',
+  'responseStart',
   'redirectCount',
   'redirectStart',
   'redirectEnd',
@@ -42,14 +46,10 @@ export let NAVIGATION_DETAILS = [
   'responseEnd',
 ] as const
 
-export type Navigation =
-  & Partial<Record<typeof NAVIGATION_DETAILS[number], number>>
-  & {
-    workerStart: number
-    fetchStart: number
-    requestStart: number
-    responseStart: number
-  }
+// Each a browser gives: WebKit leaves some out.
+export type Navigation = Partial<
+  Record<typeof NAVIGATION_DETAILS[number], number>
+>
 export type Open = {
   source: typeof OPEN_SOURCES[number]
   picture: boolean
@@ -63,6 +63,11 @@ export type Open = {
   controlled?: boolean
   // Offsets in the browser from the navigation start (Batch.at).
   navigation?: Navigation
+  // How far a picture's bootstrap came (@yaks/web/picture), and whether the
+  // open was sent as the page was left before it was usable, and hidden.
+  stage?: string
+  left?: boolean
+  hidden?: boolean
 }
 export type Batch = { id: string; at: number; points: Point[]; open?: Open }
 export type Phases = Pick<Point, 'input' | 'server' | 'script' | 'render'>
@@ -151,6 +156,9 @@ export let interactionRows = (
               estimated: Number(open.estimated && ms != null),
               ...open.server == null ? {} : { server: open.server },
             }
+            : {},
+          ...ms == null
+            ? { left: Number(!!open.left), hidden: Number(!!open.hidden) }
             : {},
         },
       })

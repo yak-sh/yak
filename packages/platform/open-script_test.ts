@@ -305,3 +305,44 @@ test('a shell paints on the picture budget and is usable on the cold one', async
     ],
   )
 })
+
+test('a picture left before its page is usable says how far its bootstrap came', async () => {
+  let b = browser()
+  let held = b.run('picture')
+  held.step('files')
+  b.parsed(30)
+  b.frame(600, 590)
+  b.window.dispatchEvent(new Event('pagehide'))
+  equal(
+    b.sent.map(({ open }) => [open?.usable, open?.stage, open?.left]),
+    [[null, 'files', true]],
+  )
+  let rows = await reported(b, {
+    page: 'operator',
+    person: crypto.randomUUID(),
+  })
+  let timings = rows.filter((row) => row.timing) as TimingRow[]
+  equal(timings.map((row) => row.timing.counts.left), [undefined, 1])
+  let [tags] = rows.flatMap((row) =>
+    row.error ? [(row.error as { tags: Record<string, unknown> }).tags] : []
+  )
+  equal([tags.usable, tags.stage, tags.left], [null, 'files', true])
+})
+
+test('a browser that leaves out navigation timestamps keeps those it gave', async () => {
+  let b = browser()
+  b.run()
+  b.parsed(4000)
+  b.frame(4100)
+  let { workerStart: _, requestStart: __, ...given } = navigation
+  b.sent[0].open!.navigation = given
+  let rows = await reported(b, { page: 'updates' })
+  let [tags] = rows.flatMap((row) =>
+    row.error ? [(row.error as { tags: Record<string, unknown> }).tags] : []
+  )
+  equal([tags.fetchStart, tags.responseStart, 'workerStart' in tags], [
+    20,
+    180,
+    false,
+  ])
+})

@@ -73,6 +73,8 @@ let OPENING = `(endpoint, source) => {
     let send = (leaving = false) => {
       if (sent || (!leaving && (!ready || open.paint == null))) return
       sent = true
+      if (leaving && open.usable == null) open.left = true
+      if (document.visibilityState == 'hidden') open.hidden = true
       observer?.disconnect()
       // Paint Timing can publish after the frame callback. Its timestamp
       // still belongs to the picture if the fresh document was not in yet.
@@ -127,6 +129,8 @@ let OPENING = `(endpoint, source) => {
       }, 0))))
     held = {
       frame,
+      // How far a picture's bootstrap came (@yaks/web/picture).
+      step: (stage) => open.stage = stage,
       swapping: () => replaced = performance.now(),
       waited: (ms) => {
         open.server = ms

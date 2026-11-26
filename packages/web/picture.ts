@@ -67,7 +67,12 @@ let boot = ({ opening, door }: Boot = {}) =>
   let began = performance.now()
   let root = document.documentElement
   let shell = root.hasAttribute('${SHELL}')
-  let stage = 'asked'
+  let stage
+  let step = (now) => {
+    stage = now
+    try { opened?.step?.(now) } catch {}
+  }
+  step('asked')
   let settled = false
   let door = ${JSON.stringify(door ?? null)}
   let tell = (why) => {
@@ -127,7 +132,7 @@ let boot = ({ opening, door }: Boot = {}) =>
     cache: 'no-store',
     headers: { accept: 'text/html', '${FRESH}': '1' },
   }).then((r) => {
-    stage = 'read'
+    step('read')
     let wait = r.headers.get('${FRESH_WAIT}')
     try { opened?.waited(wait == null ? performance.now() - began : Number(wait)) } catch {}
     if (!r.ok || !(r.headers.get('content-type') || '').includes('text/html')) {
@@ -139,7 +144,7 @@ let boot = ({ opening, door }: Boot = {}) =>
       // What the page waits on before it can paint, its sheets and the
       // scripts its head runs in order, asked for first, so the picture stays
       // until the page can take its place, never a blank page between.
-      stage = 'files'
+      step('files')
       let head = html.slice(0, html.search(/<body[\\s>]/i))
       let held = [...head.matchAll(/<(link|script)\\b[^>]*>/gi)]
         .map(([tag]) => tag)
@@ -161,18 +166,18 @@ let boot = ({ opening, door }: Boot = {}) =>
       if (url && url != location.href) {
         history.replaceState(history.state, '', url)
       }
-      stage = 'parsed'
+      step('parsed')
       if (document.readyState == 'loading') {
         await new Promise((ready) =>
           document.addEventListener('DOMContentLoaded', ready, { once: true }))
       }
       // The open timing's frame, but never longer than a second of it.
-      stage = 'frame'
+      step('frame')
       if (document.visibilityState != 'hidden' && opened?.frame) {
         await Promise.race([opened.frame, new Promise((on) => setTimeout(on, 1000))])
       }
       if (settled) return
-      stage = 'written'
+      step('written')
       try { opened?.swapping() } catch {}
       document.open()
       document.write(html)
