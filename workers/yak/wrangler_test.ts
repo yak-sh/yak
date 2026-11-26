@@ -1764,28 +1764,14 @@ let checkSiblingPreparation = async () => {
     try {
       let uploads = 0
       assertEquals(
-        await uploadSibling(prepared, (argv, unpinned) => {
+        await uploadSibling(prepared, () => {
           uploads++
-          assert(unpinned)
-          assertEquals(argv, [
-            'versions',
-            'deploy',
-            'v@100%',
-            '--yes',
-            '-c',
-            'outbound/wrangler.toml',
-            '--env',
-            'staging',
-            '--message',
-            siblingMessage(digest),
-          ])
-          return Promise.resolve(0)
+          return Promise.resolve(7)
         }),
         0,
       )
-      assertEquals(uploads, 1)
+      assertEquals(uploads, 0)
       assertEquals(versionReads, 1)
-      assertEquals(await uploadSibling(prepared, () => Promise.resolve(7)), 7)
     } finally {
       prepared.remove()
     }

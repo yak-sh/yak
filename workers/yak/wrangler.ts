@@ -1040,14 +1040,13 @@ export let prepareSibling = async (
           digest.slice(0, 12)
         } — already serving`,
       )
-      let current = sole(deployments)!
-      let refresh = config != FRONT &&
-          messageOf(current).split('\n')[0] == siblingMessage(digest)
-        ? undefined
-        : [
+      // Only Front needs to refresh its service bindings. A sibling's
+      // version can gain new bindings while this build prepares.
+      let refresh = config == FRONT
+        ? [
           'versions',
           'deploy',
-          `${current.versions[0].version_id}@100%`,
+          `${sole(deployments)!.versions[0].version_id}@100%`,
           '--yes',
           '-c',
           config,
@@ -1055,6 +1054,7 @@ export let prepareSibling = async (
           '--message',
           siblingMessage(digest),
         ]
+        : undefined
       return {
         args,
         config,
