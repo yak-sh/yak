@@ -1,6 +1,6 @@
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { purging, sharedBytes, stored, storedBytes, through } from './cache.ts'
+import { purging, stored, storedBytes, through } from './cache.ts'
 
 let publicAnswer = (body = 'bytes') =>
   new Response(body, { headers: { 'cache-control': 'public, max-age=30' } })
@@ -29,34 +29,6 @@ test('an immutable index is shared after it exists, including its bytes', async 
   await Promise.all(writes)
   assertEquals(await read(index, () => Promise.reject('cache miss')), bytes)
   assertEquals(await read(index + '2', () => Promise.resolve(null)), null)
-})
-
-test('a shared cache answers an immutable read before the bucket is asked', async () => {
-  let bytes = Uint8Array.of(0, 128, 255)
-  let actual = await sharedBytes(
-    { fetch: () => Promise.resolve(new Response(bytes)) },
-    'https://shared.invalid/1',
-    () => Promise.reject('bucket was asked'),
-    { hold: () => {}, failed: () => {} },
-  )
-  assertEquals(actual, bytes)
-})
-
-test('the bucket can answer while the shared cache is filling', async () => {
-  let time = clock(), ready = Promise.withResolvers<Response>()
-  let held: Promise<void>[] = [], reads = 0
-  let bytes = Uint8Array.of(23)
-  let answer = sharedBytes(
-    { fetch: () => ready.promise },
-    'https://shared.invalid/1',
-    () => (reads++, Promise.resolve(bytes)),
-    { hold: (work) => held.push(work), failed: () => {}, clock: time },
-  )
-  await time.advance(25)
-  assertEquals(await answer, bytes)
-  assertEquals(reads, 1)
-  ready.resolve(new Response(bytes))
-  await Promise.all(held)
 })
 
 test('a cache fill never holds a miss or another reader behind it', async () => {

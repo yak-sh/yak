@@ -259,24 +259,6 @@ export let classes: Record<string, Deferred> = {
         }),
     }
   }),
-  // An immutable release index is one response per release shared across
-  // locations. This binding has no route and accepts only index keys.
-  ReleaseIndex: entered(WorkerEntrypoint, ['fetch'], async (_ctx, env) => {
-    let [{ immutableBytes }, { indexKey }, { r2RawObjects }] = await Promise
-      .all([
-        import('@yaks/workerd/cache'),
-        import('@yaks/platform/release-index'),
-        import('../lib/objects.ts'),
-      ])
-    return {
-      fetch: async (req: Request) => {
-        let key = indexKey(req)
-        return immutableBytes(
-          key ? await r2RawObjects(env.BLOBS).read(key) : null,
-        )
-      },
-    }
-  }),
   // Only the gateway reaches this entrypoint, and only with canonical apex
   // paths and no caller credentials. Its cache holds the public listing
   // pages. `purge` is how a page leaves that cache (@yaks/workerd/purge): an

@@ -4,10 +4,8 @@ import { test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import { fileAt } from '@yaks/platform/kept'
-import { indexAddress, META } from '@yaks/platform/release-index'
 import { warm } from './files.ts'
 import { platform } from './serving-probe.ts'
-import { within } from './defects.ts'
 
 let eid = '11111111-1111-4111-8111-111111111111'
 let source = 'ada/.releases/r1'
@@ -22,10 +20,10 @@ let warmed = async (answer: (req: Request) => Promise<Response>) => {
   env.ERRORS = {
     send: (batch: Bundle[]) => Promise.resolve(void rows.push(...batch)),
   }
-  env.FILES = env.RELEASE_INDEX = {
+  env.FILES = {
     fetch: (req) => (asked.push(req.url), answer(req)),
   }
-  await within(env, {}, () => warm(env, eid, source, paths, 20))
+  await warm(env, eid, source, paths, 20)
   return {
     asked: asked.sort(),
     reported: rows.length,
@@ -34,10 +32,8 @@ let warmed = async (answer: (req: Request) => Promise<Response>) => {
   }
 }
 
-let all = [
-  ...['/', '/a.png', '/b.png', '/c.png'].map((p) => fileAt(eid, p, source)),
-  indexAddress(source + META),
-].sort()
+let all = ['/', '/a.png', '/b.png', '/c.png'].map((p) => fileAt(eid, p, source))
+  .sort()
 let bytes = () => Promise.resolve(new Response('bytes'))
 let hung = <T>(req: Request) =>
   new Promise<T>((_, reject) =>
@@ -66,12 +62,4 @@ test('a body the cache stops sending is given up at the deadline', async () => {
       new Response(new ReadableStream({ pull: () => hung<void>(req) })),
     )
   assertEquals(await warmed(stalled), { asked: all, reported: 0, read: 0 })
-})
-
-test('an unexpected shared-index fill failure is reported behind the release', async () => {
-  let reply = (req: Request) =>
-    req.url == indexAddress(source + META)
-      ? Promise.reject(new Error('index cache connection reset'))
-      : bytes()
-  assertEquals(await warmed(reply), { asked: all, reported: 1, read: 0 })
 })

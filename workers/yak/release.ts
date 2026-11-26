@@ -15,13 +15,7 @@ import { rootOf, type Serving, serving } from '@yaks/platform/files'
 import { elapsed } from './lib/hops.ts'
 import { background } from './defects.ts'
 import { addressed, BUILT, type Files, own, SHA } from '@yaks/platform/versions'
-import {
-  decode,
-  encode,
-  type File,
-  type Index,
-  META,
-} from '@yaks/platform/release-index'
+import { decode, encode, type File, type Index, META } from './release_index.ts'
 import { sharing } from './lib/shared.ts'
 
 type Named = Pick<File, 'key'> & Partial<File>

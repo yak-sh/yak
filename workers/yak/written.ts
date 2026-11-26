@@ -38,7 +38,7 @@ import type { App, Directory, Space } from './directory.ts'
 import { assetKey, atRelease, filesAt, filesIn, viewOf } from './release.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
-import { META } from '@yaks/platform/release-index'
+import { META } from './release_index.ts'
 import {
   GRACE,
   holds,

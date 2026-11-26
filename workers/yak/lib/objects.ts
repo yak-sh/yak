@@ -4,8 +4,7 @@
 import { type Bucket, bucketObjects, type Objects } from '@yaks/blob'
 import { background, failing, streaming } from '../defects.ts'
 import { sleep } from '@yaks/fp'
-import { sharedBytes, storedBytes } from '@yaks/workerd/cache'
-import { indexAddress } from '@yaks/platform/release-index'
+import { storedBytes } from '@yaks/workerd/cache'
 import { elapsed, hop, type Tally } from './hops.ts'
 import { releaseFiles } from '../release.ts'
 import type { Env } from '../env.ts'
@@ -90,27 +89,18 @@ export let r2RawObjects = (bucket: Bucket, pause = sleep): Objects => {
 export let r2Objects = (bucket: Bucket): Objects =>
   releaseFiles(r2RawObjects(bucket))
 
-type ReleaseEnv = Pick<Env, 'BLOBS' | 'FILE_CACHE' | 'RELEASE_INDEX' | 'CLOCK'>
+type ReleaseEnv = Pick<Env, 'BLOBS' | 'FILE_CACHE' | 'CLOCK'>
 
-/** Site and Files share release indexes locally and through the upper cache. */
+/** Site and Files read the same immutable index across isolates in a colo. */
 export let releaseIndex = (env: ReleaseEnv): Objects['read'] => {
   let raw = r2RawObjects(env.BLOBS)
   let cache = env.FILE_CACHE
-  let tier = env.RELEASE_INDEX
-  let read = (key: string) =>
-    tier
-      ? sharedBytes(tier, indexAddress(key), () => raw.read(key), {
-        hold: background,
-        failed: failing('shared release index cache'),
-        clock: env.CLOCK,
-      })
-      : raw.read(key)
-  if (!cache) return read
+  if (!cache) return raw.read
   return (key) =>
     storedBytes(
       cache,
       `https://files.invalid/release-index/${encodeURIComponent(key)}`,
-      () => read(key),
+      () => raw.read(key),
       {
         hold: background,
         failed: failing('release index cache'),

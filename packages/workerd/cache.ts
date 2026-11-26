@@ -134,63 +134,23 @@ let cacheable = (res: Response) => {
     !res.headers.has('set-cookie') && res.headers.get('vary') != '*'
 }
 
-/** A cacheable blob under an internal, immutable key. Missing bytes are
- * read again on the next request. */
-export let immutableBytes = (bytes: Uint8Array<ArrayBuffer> | null): Response =>
-  bytes
-    ? new Response(bytes, {
-      headers: { 'cache-control': 'public, max-age=86400' },
-    })
-    : new Response(null, {
-      status: 404,
-      headers: { 'cache-control': 'private, no-store' },
-    })
-
-/** Keep immutable bytes under an internal cache key. */
+/** Keep immutable bytes under an internal cache key. Missing bytes are read
+ * again on the next request. */
 export let storedBytes = async (
   cache: Stored | (() => Promise<Stored>),
   key: string,
   read: () => Promise<Uint8Array<ArrayBuffer> | null>,
   options: Shelving,
 ): Promise<Uint8Array<ArrayBuffer> | null> => {
-  let response = await stored(
-    cache,
-    new Request(key),
-    async () => immutableBytes(await read()),
-    options,
-  )
+  let response = await stored(cache, new Request(key), async () => {
+    let bytes = await read()
+    return bytes
+      ? new Response(bytes, {
+        headers: { 'cache-control': 'public, max-age=86400' },
+      })
+      : new Response(null, { status: 404 })
+  }, options)
   return response.ok ? new Uint8Array(await response.arrayBuffer()) : null
-}
-
-/** Give a shared cache a short head start over an immutable origin read,
- * then take whichever answers first. A fill keeps running independently of
- * the response, bounded to two seconds. */
-export let sharedBytes = async (
-  cache: Bound,
-  key: string,
-  read: () => Promise<Uint8Array<ArrayBuffer> | null>,
-  { hold, failed, clock, patience = 25 }: Shelving,
-): Promise<Uint8Array<ArrayBuffer> | null> => {
-  let signal = AbortSignal.timeout(2_000)
-  let cached = cache.fetch(new Request(key, { signal, redirect: 'manual' }))
-    .then(async (response) => {
-      if (response.status == 200) {
-        return new Uint8Array(await response.arrayBuffer())
-      }
-      await response.body?.cancel()
-      if (response.status != 404) {
-        throw new Error(`shared cache returned ${response.status}`)
-      }
-      return null
-    }).catch((error) => {
-      if (!signal.aborted) failed(error)
-      return null
-    })
-  let first = await within(cached, patience, clock)
-  if (first) return first
-  let origin = read()
-  hold(within(cached, 2_000, clock).then(() => {}))
-  return await Promise.race([origin, cached.then((bytes) => bytes ?? origin)])
 }
 
 // How long a read waits on the cache before it is answered in-process. A miss
