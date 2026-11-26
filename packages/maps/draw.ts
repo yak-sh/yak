@@ -42,10 +42,14 @@ let look = () => {
   document.head.append(sheet)
 }
 
-/** A pin's element: a drop in the accent colour, and its label beneath. */
+/** A pin's element: a drop in the accent colour, and its label above it.
+ * It is a picture named by its label: MapLibre names a marker without a
+ * role a "Map marker" button, which a pin nobody presses is not. */
 export let pinOf = (pin: Pin): HTMLElement => {
   let el = document.createElement('div')
   el.className = 'MapPin'
+  el.setAttribute('role', 'img')
+  el.setAttribute('aria-label', pin.label || 'Pin')
   el.innerHTML = '<svg viewBox="0 0 24 32" aria-hidden="true">' +
     '<path d="M12 0C5.4 0 0 5.3 0 11.9 0 20.8 12 32 12 32s12-11.2 12-20.1C24' +
     ' 5.3 18.6 0 12 0z"/><circle cx="12" cy="12" r="4.5"/></svg>'
