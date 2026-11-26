@@ -208,23 +208,21 @@ test('a POST without replay permission hands its interrupted answer on once', as
   assertEquals(ns.sent.length, 1)
 })
 
-test('a write is sent again only when its object restarted for the deploy before serving it', async () => {
-  let write = (failure: Error) => {
+test('a write without replay permission is never sent again', async () => {
+  for (
+    let failure of [
+      deployed(),
+      new Error('Durable Object reset because its code was updated'),
+    ]
+  ) {
     let ns = namespace([failure, Response.json({ kept: true })])
     let sent = fetchOf(ns, space.eid, pause)(
       () => new Request('http://builder/graph', { method: 'POST', body: 'w' }),
       { replayable: false },
     )
-    return { ns, sent }
+    await assertRejects(() => sent, Error, failure.message)
+    assertEquals(ns.sent.length, 1)
   }
-  let unserved = write(deployed())
-  assertEquals(await (await unserved.sent).json(), { kept: true })
-  assertEquals(unserved.ns.sent.map((s) => s.body), ['w', 'w'])
-  let cut = write(
-    new Error('Durable Object reset because its code was updated'),
-  )
-  await assertRejects(() => cut.sent, Error, 'code was updated')
-  assertEquals(cut.ns.sent.length, 1)
 })
 
 test('an object event stream remains live rather than waiting for its whole body', async () => {

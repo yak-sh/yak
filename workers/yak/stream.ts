@@ -45,7 +45,7 @@
 // The roster alone, not the package: its root carries the MCP SDK and zod,
 // which a Wire waking to pass a line along never runs (T-37977).
 import { rosterLine } from '@yaks/mcp/roster'
-import { owed as restart, type Restartable, VERSION } from './running.ts'
+import { VERSION } from './running.ts'
 import type { Env } from './env.ts'
 import { fetchOf } from './door.ts'
 import { caught, defect } from './defects.ts'
@@ -58,7 +58,7 @@ import {
 
 // The slice of the Durable Object runtime this object touches, structurally,
 // so `deno check` reads it without @cloudflare/workers-types.
-type State = Durables & Restartable
+type State = Durables
 type Meta = { id?: string; timestamp?: string }
 
 // What one person's log holds: a notification says "your list moved", so many
@@ -184,25 +184,17 @@ export class Wire extends Durable {
   // The log, read from storage once and held while the object lives.
   news: News | undefined
 
-  // The deploy this incarnation runs, which a newer caller's restarts it off
-  // (running.ts `behind`).
-  meta: Meta | undefined
-
   constructor(state: State, env: { CF_VERSION_METADATA?: Meta }) {
     super(state)
-    this.meta = env?.CF_VERSION_METADATA
-    this.mark = this.meta?.id ?? VERSION
+    this.mark = env?.CF_VERSION_METADATA?.id ?? VERSION
   }
 
   // What the package's object opens: the door below, and nothing else. A
-  // caller on a later deploy restarts it first; its streams are nothing a
-  // restart may not cut, since they drop and resume as they do at any
-  // release, onto the new code.
+  // caller on a later deploy is answered on the code this incarnation has
+  // (running.ts).
   protected override specify = (): Spec => ({
     open: () => Promise.resolve({ serve: (req) => this.#serve(req) }),
     report: (e, entry) => caught(e, { request: `wire ${entry}` }),
-    behind: (req) => restart(req.headers, this.meta, this.ctx),
-    busy: () => false,
   })
 
   async log(): Promise<News> {

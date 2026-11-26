@@ -412,16 +412,7 @@ import { beside, computed, type Reached, reached } from '@yaks/api/reached'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
-import {
-  BEAT,
-  owed,
-  ran,
-  refused,
-  refuses,
-  skewed,
-  unserved,
-} from './running.ts'
-import { upgrading } from './protocol.ts'
+import { BEAT, skewed, versionOf } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { answered, KERNEL, type Meta, metaOf } from './meta.ts'
 import { BINARY } from '@yaks/vocab/wire'
@@ -626,7 +617,7 @@ export type State = Held & {
     get?<T>(key: string): Promise<T | undefined>
     put?(key: string, value: unknown): Promise<void>
     // Whatever was written, made durable before the object restarts itself
-    // (running.ts `behind`): a restart drops writes still in flight.
+    // (`#relocation`): a restart drops writes still in flight.
     sync?(): Promise<void>
   }
   // Restarting the object on the spot, which is how a recovery takes effect
@@ -1059,10 +1050,6 @@ export class Store extends Durable {
   }
   #people = new Map<string, string | null>()
   #live!: ReturnType<typeof sockets>
-  // The restart a socket's newer caller is owed, kept until a refusal on one
-  // of this object's sockets pays it (`#fetch`): a socket's refusals come in
-  // frames, after its handshake was answered.
-  #behind: (() => Promise<void>) | null = null
   #afar!: Reached
   // Opens this graph's raw feed to the news it owes (`#pages`).
   #feed: () => void = () => {}
@@ -2358,17 +2345,6 @@ export class Store extends Durable {
       (error) => defect(error, { request: 'socket restore', store: name }),
       {
         deferStatic: true,
-        // A socket a newer deploy opened, refused what its code may not know
-        // yet: the object restarts onto that deploy, as for a refused request.
-        refused: (r) => {
-          let named = Object.assign(new Error(r.message), { name: r.error })
-          if (!this.#behind || !refuses(status(named), r)) return
-          // The restart ends this object's work in the runtime's words,
-          // which nobody waits on here; anything else is a failure.
-          this.#behind().catch((e) =>
-            unserved(e) || defect(e, { request: 'restart', store: name })
-          )
-        },
         read: (read, writer) => {
           // The reach's kernel-only directory socket opens without a writer.
           if (directory && !writer) return read ?? {}
@@ -4970,18 +4946,11 @@ export class Store extends Durable {
     let waking = this.#started.holds, woke = this.#now()
     let named = request.headers.get('x-store')
     if (waking && named) this.#prepare(named).catch(() => {})
-    // The directory serves every page and its sockets feed every space's
-    // Operator watches. One version-skew refusal used to abort all of them.
-    // Its HTTP refusals still retry through #unskewed while Cloudflare moves it.
-    let restart = (named ?? this.#name()) == PLATFORM_STORE ? null : owed(
-      request.headers,
-      this.#bind.CF_VERSION_METADATA,
-      this.#ctx,
-    )
-    if (restart && upgrading(request)) this.#behind = restart
-    let answer = await this.#door(request, waking, woke)
-    if (restart && await refused(answer)) await restart()
-    return answer
+    // A newer caller is answered on the code this object has, never by a
+    // restart, which would cut every call in flight here and come back on
+    // the same code (running.ts). Its refusals retry through #unskewed while
+    // Cloudflare moves it.
+    return await this.#door(request, waking, woke)
   }
 
   async #door(
@@ -5830,10 +5799,9 @@ export class Store extends Durable {
             ...shown,
             ...(shown.physical
               ? {
-                running: await ran(
-                  this.#bind.CF_VERSION_METADATA,
-                  this.#ctx.storage,
-                ),
+                running: {
+                  version: versionOf(this.#bind.CF_VERSION_METADATA),
+                },
               }
               : {}),
           })

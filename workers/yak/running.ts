@@ -2,32 +2,26 @@
 // (T-123372, T-123489).
 //
 // Cloudflare leaves a busy Durable Object on the code it started with for up
-// to the first deploy's deadline (wrangler.toml `code_update_strategy`) and
-// moves an idle one within seconds. Every request to an object carries the
-// version its caller runs (door.ts `doorOf` for a store, `fetchOf` for the
-// Wire and the Builder), so an object knows when a newer caller reaches it.
-// A store answers that caller on the code it has, which keeps every call of
-// the deploy before working. An app store may restart when that code refused
-// the caller (`owed`), since what it refused may be a door or a word only the
-// caller's deploy has; the caller's retry of the evicted request
-// (@yaks/durable-object `evicted`) meets whatever code the runtime starts it
-// on. Under a deferred deploy (wrangler.toml `code_update_strategy`) that is
-// the code it had: only hibernating, or the update's delay running out,
-// moves an object, and a restart does neither (T-1887, T-2011). A restart is not
-// free: twice on 2026-11-07 the instance after one waited 21 and 32 s to run
-// its first line, where Cloudflare's own moves started in under a second
-// (T-150897). The directory leaves updates to the runtime, because its
-// restart interrupts every page's reads and live watches. The Wire uses
-// `Durable.behind` when idle. The Builder lets the
-// runtime update it so a newer caller cannot cut an Operator step (T-2212). A store
-// still behind its caller after its restart answers a refusal as a
-// failure the caller sends again (`skewed`, T-140262): a store cannot tell a
-// word its code lacks from a word nobody declares, and the newer code's
-// answer is the one the call gets. A resend the newer code answers is the
-// recovery working and reports nothing (T-2141). A store still behind after
-// every resend is reported under the word it refused. A directory compiler
-// refusal still unconfirmed by the caller stays a 503 (`settled`, `behind`,
-// door.ts `storeOf`).
+// to the deploy's deadline (wrangler.toml `code_update_strategy`) and moves an
+// idle one within seconds. Every request to an object carries the version its
+// caller runs (door.ts `doorOf` for a store, `fetchOf` for the Wire and the
+// Builder), so an object knows when a newer caller reaches it. An object
+// answers that caller on the code it has and never restarts for it: under a
+// deferred deploy a restarted object comes back on the code it had (seen
+// 2026-11-05 on the directory, 22b6bcece; T-2011), so a restart moved
+// nothing and cut every call in flight on the object, each of which met
+// `Durable Object reset because a newer deploy reached it` until its
+// caller's resends ran out (bug f27df94d2b). A deploy that changes what an
+// older store can read (its vocabulary or query compiler) goes out with
+// immediate updates instead (wrangler.ts, T-3741), and the runtime moves every
+// object within a minute. Until then a store behind its caller answers a
+// refusal as a failure the caller sends again (`skewed`, T-140262): a store
+// cannot tell a word its code lacks from a word nobody declares, and the
+// newer code's answer is the one the call gets. A resend the newer code
+// answers is the recovery working and reports nothing (T-2141). A store still
+// behind after every resend is reported under the word it refused. A
+// directory compiler refusal still unconfirmed by the caller stays a 503
+// (`settled`, `behind`, door.ts `storeOf`).
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
 // upload time on every deploy, the same for the Worker and every object it
@@ -117,121 +111,12 @@ export let newer = (theirs: Version | null, mine: Version | null): boolean =>
 
 /** The slice of an object's state a restart needs. Each object declares its
  * own state; a stand-in that cannot restart leaves `abort` out. */
-export type Restartable = {
-  abort?(reason?: string): void
-  storage: {
-    get?<T>(key: string): Promise<T | undefined>
-    put?(key: string, value: unknown): Promise<void>
-    // Whatever was written, made durable before the restart drops it.
-    sync?(): Promise<void>
-  }
-}
+export type Restartable = { abort?(reason?: string): void }
 
-// The key an object that restarted for a newer deploy remembers it under.
-let RESTARTED = 'restarted for'
 let retiring = new WeakSet<object>()
 
 /** An instance that requested its own restart, before storage reflects it. */
 export let restarting = (state: object): boolean => retiring.has(state)
-
-// The words the restart fails the request in flight with: the runtime's own,
-// so every caller's retry already knows them (@yaks/durable-object `evicted`).
-let BEHIND = 'Durable Object reset because a newer deploy reached it:'
-
-/**
- * The object restarted for its caller's newer deploy before serving the call,
- * so the call never ran and may be sent again, a write as safely as a read.
- * That holds for the Wire, whose `Durable.behind` restarts it only while idle
- * and before the call
- * enters. A store restarts after answering a refusal and cuts whatever else
- * it has in flight, so its doors do not lean on this.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * assertEquals(unserved(new Error(
- *   'Durable Object reset because a newer deploy reached it: 35b89b78',
- * )), true)
- * assertEquals(unserved(new Error('Durable Object reset because its code was updated.')), false)
- * assertEquals(unserved(null), false)
- * ```
- */
-export let unserved = (e: unknown): boolean =>
-  e instanceof Error && e.message.includes(BEHIND)
-
-/** The deploy this object last restarted for, as `owed` keeps it. A record
- * in any other shape says nothing. */
-export let restartedFor = async (
-  storage: Restartable['storage'],
-): Promise<Version | null> => {
-  let kept = await storage.get<Partial<Version>>?.(RESTARTED)
-  return typeof kept?.id == 'string' && typeof kept.at == 'string'
-    ? { id: kept.id, at: kept.at }
-    : null
-}
-
-/** What an object says of its deploys: the version it runs and the one it last
- * restarted for. */
-export let ran = async (
-  meta: Meta | null | undefined,
-  storage: Restartable['storage'],
-): Promise<{ version: Version | null; restartedFor: Version | null }> => ({
-  version: versionOf(meta),
-  restartedFor: await restartedFor(storage),
-})
-
-/**
- * The restart this object owes its caller, when the caller runs a later deploy
- * than the one it runs; null when it owes none. Nothing is read or written
- * until the restart runs, so an object that never needs it pays nothing. The
- * restart keeps the deploy it restarts for first, so restarts only move
- * forward and callers on two new deploys never take turns restarting it: an
- * object the runtime starts again on older code is where the runtime means it
- * to be, and it serves every caller no newer than the deploy it last restarted
- * for, refusing a newer one nothing (`skewed`). Running the restart fails the
- * requests in flight in the runtime's own words.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let kept = new Map<string, unknown>(), restarts: string[] = []
- * let ctx = {
- *   abort: (why?: string) => void restarts.push(why ?? ''),
- *   storage: {
- *     get: <T>(k: string) => Promise.resolve(kept.get(k) as T | undefined),
- *     put: (k: string, v: unknown) => Promise.resolve(void kept.set(k, v)),
- *   },
- * }
- * let from = (id: string, at: string) =>
- *   new Headers({ [WORKER_VERSION]: id, [WORKER_VERSION_AT]: at })
- * let mine = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
- * let b = from('b', '2026-10-12T16:30:00Z')
- * let c = from('c', '2026-10-12T16:31:00Z')
- * for (let them of [b, b, c, b, c]) await owed(them, mine, ctx)?.()
- * assertEquals(owed(from('z', '2026-10-12T15:00:00Z'), mine, ctx), null)
- * assertEquals(restarts.length, 2)
- * assertEquals(await restartedFor(ctx.storage), {
- *   id: 'c',
- *   at: '2026-10-12T16:31:00Z',
- * })
- * ```
- */
-export let owed = (
-  headers: Headers,
-  mine: Meta | null | undefined,
-  ctx: Restartable,
-): (() => Promise<void>) | null => {
-  let theirs = caller(headers), s = ctx.storage
-  if (
-    !theirs || !newer(theirs, versionOf(mine)) || !ctx.abort || !s.get ||
-    !s.put
-  ) return null
-  return async () => {
-    let last = await restartedFor(s)
-    if (last && !newer(theirs, last)) return
-    await s.put!(RESTARTED, theirs)
-    await s.sync?.()
-    restart(ctx, `${BEHIND} ${theirs.id}`)
-  }
-}
 
 /** Start the object again on the spot: the runtime ends every request and
  * piece of work under way on this instance, `reason` their failure, and the
@@ -263,10 +148,6 @@ export let refuses = (
     code == 404 && body?.error == 'NotFound' &&
       (message == 'no route' || message.startsWith('no route for '))
 }
-
-export let refused = async (answer: Response): Promise<boolean> =>
-  (answer.status == 400 || answer.status == 404) &&
-  refuses(answer.status, await refusalOf(answer))
 
 /** How long an object's work behind an answer waits once its caller has read
  * the answer through (`onceRead`), so the runtime has sent it on: the runtime
@@ -338,9 +219,8 @@ let SKEWED =
 
 /**
  * The failure a refusal is, when the object that answered it runs an older
- * deploy than its caller: the runtime started it again on that older code
- * after it restarted for the caller (`owed`), so what it refused may be
- * only what its code does not know yet, a row or a door the caller's deploy
+ * deploy than its caller: the runtime has not moved it onto the caller's
+ * code yet, so what it refused may be only what its code does not know yet, a row or a door the caller's deploy
  * added. The caller sends it again, retryable, until newer code answers;
  * the store reports nothing, since a refusal the newer code repeats was the
  * caller's own mistake. Any other answer is null.

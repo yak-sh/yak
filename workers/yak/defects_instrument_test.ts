@@ -3,12 +3,7 @@ import { equal, test, throws } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { instrument } from './defects-runtime.ts'
 import { caught } from './defects.ts'
-import {
-  owed,
-  type Restartable,
-  WORKER_VERSION,
-  WORKER_VERSION_AT,
-} from './running.ts'
+import { restart, type Restartable } from './running.ts'
 import { PLATFORM_OBJECT, storeOf } from './door.ts'
 import { bounded } from '@yaks/durable-object/ceiling'
 import { kvStorage } from './testing.ts'
@@ -61,13 +56,14 @@ test('instrumentation reports constructor, lifecycle and escaping RPC failures',
 // The reset belongs to the caller's retry, even while SELECT and a transaction
 // on the retiring object's storage still answer.
 class Retiring {
+  restarted = false
   constructor(private state: Restartable, private env: unknown) {}
-  async fetch(req: Request) {
-    await owed(
-      req.headers,
-      { id: 'old', timestamp: '2026-10-12T16:00:00Z' },
-      this.state,
-    )?.()
+  // deno-lint-ignore require-await
+  async fetch() {
+    if (!this.restarted) {
+      this.restarted = true
+      restart(this.state, 'Durable Object reset because the store is moving')
+    }
     return new Response('answered')
   }
 }
@@ -96,11 +92,9 @@ test('a deliberate restart is retried without reporting the retiring instance', 
   let ns = {
     idFromName: (name: string) => name,
     get: () => ({
-      fetch: (req: Request) => {
+      fetch: () => {
         attempts++
-        req.headers.set(WORKER_VERSION, 'new')
-        req.headers.set(WORKER_VERSION_AT, '2026-10-12T16:30:00Z')
-        return old.fetch(req)
+        return old.fetch()
       },
     }),
   }

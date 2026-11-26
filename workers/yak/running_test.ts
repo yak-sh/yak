@@ -1,14 +1,13 @@
 /// <reference lib="deno.ns" />
-// A store still on the code it started with restarts when a newer deploy
-// reaches it (running.ts, T-123372), and the caller's retry meets the restart.
-// The restart itself is the runtime's: here `abort` throws as workerd's does,
-// with the reason as the message. The decision is `owed`, tested on a bare
-// object; each kind of object is checked once to ask it at its door.
+// An object still on the code it started with answers a newer deploy's caller
+// on that code and never restarts for it (running.ts): a restart under a
+// deferred deploy comes back on the same code and cuts every call in flight
+// (bug f27df94d2b). Here `abort` throws as workerd's does, with the reason as
+// the message, so any restart shows; each kind of object is asked at its door.
 import { clock, equal, test, until } from '@yaks/testing'
 import { installPair, made } from '../../packages/workerd/testing.ts'
-import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertMatch } from '@std/assert'
 import { doorOf, fetchOf, storeOf } from './door.ts'
-import { evicted } from '@yaks/durable-object'
 import { backoff } from '@yaks/durable-object/resets'
 import { sleep } from '@yaks/fp'
 import { refuse } from '@yaks/api'
@@ -19,14 +18,7 @@ import { Store } from './graph.ts'
 import { Wire } from './stream.ts'
 import { Builder } from './build.ts'
 import type { Env } from './env.ts'
-import {
-  learn,
-  owed,
-  ran,
-  skewed,
-  WORKER_VERSION,
-  WORKER_VERSION_AT,
-} from './running.ts'
+import { learn, skewed, WORKER_VERSION, WORKER_VERSION_AT } from './running.ts'
 import { kvStorage, state } from './testing.ts'
 import { within } from './defects.ts'
 import { answered, KERNEL, metaOf } from './meta.ts'
@@ -62,37 +54,15 @@ let restartable = () => {
 // Retry decisions are exercised here, not the runtime's randomized pause: a
 // resend waits out none.
 let unpaused = () => Promise.resolve()
-// The restart a caller on `v` is owed, run.
-let restart = (h: Headers, mine: typeof A, ctx: Parameters<typeof owed>[2]) =>
-  Promise.resolve(owed(h, mine, ctx)?.())
 let object = () => {
   let r = restartable()
   return { ...r, ctx: { storage: kvStorage(), abort: r.abort } }
 }
 
-test('an object on an older deploy restarts once for a newer caller', async () => {
-  let o = object()
-  // The request in flight fails in the runtime's own words, which every
-  // caller already retries on.
-  let e = await assertRejects(() => restart(from(B), A, o.ctx))
-  assert(evicted(e))
-  assertEquals(o.restarts.length, 1)
-  // Started again on the same older code, it is where the runtime means it to
-  // be, and serves the newer caller rather than restarting forever.
-  await restart(from(B), A, o.ctx)
-  assertEquals(o.restarts.length, 1)
-})
-
-test('an older caller, the same deploy, or no version never restarts it', async () => {
-  let o = object()
-  for (let v of [A, B, undefined]) await restart(from(v), B, o.ctx)
-  assertEquals(o.restarts, [])
-})
-
-// A store's own door: a newer caller is answered on the code the store has,
-// and only a refusal restarts it (T-150897). Twice on 2026-11-07 the instance
-// after a restart waited 21 and 32 s before it ran a line, where Cloudflare's
-// own moves to a new deploy started in under a second.
+// A store's own door: a newer caller is answered on the code the store has
+// (T-150897). Twice on 2026-11-07 the instance after a restart waited 21 and
+// 32 s before it ran a line, where Cloudflare's own moves to a new deploy
+// started in under a second.
 let older = (o: ReturnType<typeof object>, CLOCK = clock()) =>
   new Store(Object.assign(state(), { abort: o.abort }) as never, {
     CF_VERSION_METADATA: A,
@@ -172,11 +142,16 @@ test("the kernel's read of a store on the old deploy is answered by it, sent onc
   assertEquals([sent, o.restarts.length], [1, 0])
 })
 
-test('a read the older code has no door for restarts the store at once', async () => {
+test('a call the older code has no door for is skew its caller sends again, and the store keeps running', async () => {
   let o = object()
-  let e = await assertRejects(() => older(o).fetch(asked('/nowhere')))
-  assert(evicted(e))
-  assertEquals(o.restarts.length, 1)
+  let answer = await older(o).fetch(asked('/nowhere'))
+  let { error, retryable } = await answer.json()
+  assertEquals([answer.status, error, retryable, o.restarts], [
+    503,
+    'Skewed',
+    true,
+    [],
+  ])
 })
 
 test("a caller's door stamps its deploy, and a request's own claim is dropped", async () => {
@@ -196,33 +171,24 @@ test("a caller's door stamps its deploy, and a request's own claim is dropped", 
   assertEquals(sent[0].get(WORKER_VERSION_AT), B.timestamp)
 })
 
-test('an object says the version it runs and the deploy it restarted for', async () => {
-  let o = object()
-  await assertRejects(() => restart(from(B), A, o.ctx))
-  assertEquals(await ran(A, o.ctx.storage), {
-    version: { id: A.id, at: A.timestamp },
-    restartedFor: { id: B.id, at: B.timestamp },
-  })
-})
-
-test('a call the old deploy refuses is answered by the new one', async () => {
+test('a call the old deploy refuses is answered by the new one once the runtime moves the store', async () => {
   learn(B)
   let o = object()
-  let old = older(o)
-  // The runtime starts the next incarnation on the new code, which answers.
+  let old = older(o), sent = 0
+  // The runtime moves the store onto the new code between the first send and
+  // the resend; the old incarnation never restarts itself.
   let next = {
     fetch: () => Promise.resolve(new Response('', { status: 404 })),
   }
   let ns = {
     idFromName: (name: string) => name,
-    get: () => o.restarts.length ? next : old,
+    get: () => sent++ ? next : old,
   }
   let answer = await storeOf(ns, 'ada/cookbook', undefined, unpaused)(
     '/nowhere',
     { method: 'POST', body: '{}' },
   )
-  assertEquals(answer.status, 404)
-  assertEquals(o.restarts.length, 1)
+  assertEquals([answer.status, sent, o.restarts], [404, 2, []])
 })
 
 // The Wire and the Builder are reached through `fetchOf`, which stamps the
@@ -231,7 +197,7 @@ test('a call the old deploy refuses is answered by the new one', async () => {
 let through = (object: { fetch(req: Request): Promise<Response> }) =>
   fetchOf({ idFromName: (n: string) => n, get: () => object }, 'ada', unpaused)
 
-test('a Wire on an older deploy restarts once for a newer caller', async () => {
+test('a Wire on an older deploy serves a newer caller without restarting', async () => {
   learn(B)
   let r = restartable()
   let wire = new Wire(Object.assign(state('', false), { abort: r.abort }), {
@@ -242,12 +208,8 @@ test('a Wire on an older deploy restarts once for a newer caller', async () => {
       method: 'POST',
       body: JSON.stringify({ session: 's', version: 'v', names: [] }),
     })
-  // The request in flight fails in the runtime's own words, and the caller's
-  // retry is served: started again on the same older code, the object is
-  // where the runtime means it to be.
   assertEquals((await through(wire)(roster)).status, 200)
-  assertEquals(r.restarts.length, 1)
-  assert(evicted(new Error(r.restarts[0])))
+  assertEquals(r.restarts, [])
 })
 
 // Each behavior gets its own incarnation; constructing it is fixture work.
@@ -282,22 +244,20 @@ test('an idle Builder leaves its version update to the runtime', async () => {
   assertEquals(idle.restarts.length, 0)
 })
 
-// A Worker on a newer deploy than its Store (T-140262): the store restarted
-// for that deploy and the runtime started it again on its older code, as
-// Cloudflare's deferred code updates do. A write naming a word the older code
-// does not know is no mistake of the caller's: the store answers a failure
-// the caller's door sends again, and the caller reports what the newer code
-// says or, with none, that the store stayed behind.
-// A store behind its caller after restarting for it, which refuses a word
-// only the caller's deploy declares; the next incarnation answers `next`,
-// or with none, the runtime keeps starting it on the older code. Answers
-// what the caller got, and what the tracker heard.
+// A Worker on a newer deploy than its Store (T-140262), whose code update the
+// runtime defers. A write naming a word the older code does not know is no
+// mistake of the caller's: the store answers a failure the caller's door
+// sends again, and the caller reports what the newer code says or, with none,
+// that the store stayed behind.
+// A store behind its caller, which refuses a word only the caller's deploy
+// declares; the next incarnation answers `next`, or with none, the runtime
+// keeps the older code. Answers what the caller got, and what the tracker
+// heard.
 let behind = async (next?: Response) => {
   learn(B)
   let reports: unknown[] = []
   let o = object()
   let ctx = Object.assign(state(), { abort: o.abort })
-  await ctx.storage.put('restarted for', { id: B.id, at: B.timestamp })
   let old = new Store(ctx as never, { CF_VERSION_METADATA: A })
   let reached = 0
   let ns = {

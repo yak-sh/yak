@@ -16,7 +16,7 @@
 import type { Caller } from '@yaks/egress'
 import { apart, elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { background, caught, defect } from './defects.ts'
-import { behind, refuses, settled, stamp, unserved } from './running.ts'
+import { behind, refuses, settled, stamp } from './running.ts'
 import { confirmedRefusal } from './query-line.ts'
 import { type Refusal, refuse } from '@yaks/api'
 import { FILED } from '@yaks/api/refuse'
@@ -247,8 +247,9 @@ export type Served = {
 export let BRANCH = 'x-yak-branch'
 
 // What the kernel says on every request to a store, whatever the caller set:
-// the deploy it runs, so a store still on older code restarts onto this one
-// rather than answering for it (running.ts), the store's name, and the app.
+// the deploy it runs, so a store still on older code answers a refusal as
+// skew this door sends again (running.ts `skewed`), the store's name, and
+// the app.
 let vouched = (req: Request, name: string, app?: Served) => {
   stamp(req.headers)
   req.headers.set('x-store', name)
@@ -299,15 +300,13 @@ export let doorOf = (
   }, VOUCH)
 
 /** A request factory, not a spent Request: every send gets its own body.
- * Each carries the caller's deploy, so an object still on older code restarts
- * onto it rather than answering for it (running.ts `behind`). Named an
- * `as`, each round trip is counted and timed under it, with the costs its
- * answer reports (`metered`). Finite read answers are received inside the
- * retry; a POST that reads or is idempotent opts in with `replayable: true`.
- * Other POST bodies stay with their caller, since receiving their headers
- * already says their work may have applied, and are sent again only when the
- * object restarted for this deploy before serving them (running.ts
- * `unserved`): a deploy's restart never reaches a person as a failure. */
+ * Each carries the caller's deploy (running.ts `stamp`). Named an `as`, each
+ * round trip is counted and timed under it, with the costs its answer
+ * reports (`metered`). Finite read answers are received inside the retry; a
+ * POST that reads or is idempotent opts in with `replayable: true`. Other
+ * POST bodies stay with their caller, since receiving their headers already
+ * says their work may have applied. One that says `replayable: false` is
+ * never sent twice. */
 export let fetchOf = (
   ns: Namespace,
   name: string,
@@ -325,8 +324,8 @@ export let fetchOf = (
           ? received(await thrown(answer))
           : answer
       },
-      true,
-      options.replayable === false ? unserved : evicted,
+      options.replayable !== false,
+      evicted,
       wait,
     )
   return as ? metered(as, send) : send()
@@ -390,7 +389,7 @@ let storeAnswer = async (name: string, req: Request, answer: Response) => {
 
 /** The kernel's door to one store, sent again when the runtime resets it or
  * loses the call (@yaks/durable-object `resending`). Every call to a store
- * comes through here, so this is the one place a deploy's restart is
+ * comes through here, so this is the one place a deploy's move is
  * answered: no caller handles a reset, and none can miss one. The stub is
  * taken per call (`placed`), since a door memoized for the isolate (meta.ts
  * `doors`) is reused on later requests and a stub is bound to the request

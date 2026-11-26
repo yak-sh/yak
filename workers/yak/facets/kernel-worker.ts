@@ -71,7 +71,6 @@ let DURABLE = [
   'open',
   'accept',
   'enter',
-  'behind',
 ] as const
 
 // What each deferred object answers: its class's own methods, every one of
@@ -89,7 +88,6 @@ export let STORE = [
   'open',
   'accept',
   'enter',
-  'behind',
 ] as const
 export let WIRE = [
   'log',
@@ -119,7 +117,6 @@ export let BUILDER = [
   'open',
   'accept',
   'enter',
-  'behind',
 ] as const
 export let PUBLIC_DIRECTORY = [
   'valid',

@@ -54,7 +54,7 @@ import {
  * here is the socket slice above, which is checked where it is declared.
  */
 export type State = Hibernation & Restartable & {
-  storage: DurableStorage & Restartable['storage'] & {
+  storage: DurableStorage & {
     // The one way to empty an object: dropping the tables leaves metadata
     // behind, and an object whose storage is empty ceases to exist. It is what
     // a deleted space's conversation goes through ({@link Builder.wipe}), the

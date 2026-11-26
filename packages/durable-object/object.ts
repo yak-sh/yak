@@ -21,9 +21,6 @@
  *   `Stopped` with how long to wait; an alarm past one rings again then.
  * - A new deploy restarts the object idle: nothing runs at the first entry on
  *   a new `version` but arming the alarm, which takes up what is owed.
- * - A request whose caller runs a later deploy (`behind`) restarts the object
- *   first, but only an idle one: no other entry or alarm slice in flight, and
- *   nothing `busy`, a socket by default, that the restart would cut.
  *
  * ```ts
  * import { Durable, type State } from '@yaks/durable-object/object'
@@ -124,14 +121,6 @@ export type Spec = {
   >
   /** The deploy the object runs, whose first entry arms the alarm. */
   version?: string
-  /** The restart a request's caller is owed when it runs a later deploy than
-   * the object, or none. The object runs it before the request, and only
-   * when it is idle. */
-  behind?(request: Request): (() => Promise<void>) | null | undefined
-  /** Whether a restart would cut work of the object's own, beside the
-   * entries and the alarm slice it counts itself: by default, whether it
-   * holds a socket. */
-  busy?(): boolean
   /** Each entry's work, run inside what the object measures it by. */
   around?<T>(entry: string, work: () => Promise<T>): Promise<T>
 }
@@ -151,9 +140,6 @@ export class Durable {
   #held?: Opened
   #live?: Sockets
   #restarted = false
-  // The entries in flight, and the alarm slice still under way after its
-  // ring answered.
-  #going = 0
 
   /** Without a `spec`, the object asks its `specify()` for one. */
   constructor(ctx: State, spec?: Spec) {
@@ -202,8 +188,6 @@ export class Durable {
         wait: () => this.ceiling.stopped(true),
         report: (e, work) => this.spec.report(e, `alarm ${work}`),
         ...this.spec.alarm,
-        keep: this.spec.alarm?.keep &&
-          ((slice) => this.spec.alarm!.keep!(this.#counted(slice))),
       },
     )
   }
@@ -248,27 +232,7 @@ export class Durable {
   }
 
   #around<T>(entry: string, work: () => Promise<T>): Promise<T> {
-    return this.#counted(
-      this.spec.around ? this.spec.around(entry, work) : work(),
-    )
-  }
-
-  // Work in flight until it settles.
-  #counted<T>(work: Promise<T>): Promise<T> {
-    this.#going++
-    return work.finally(() => this.#going--)
-  }
-
-  /** Restart the object before `request`, when its caller runs a later
-   * deploy (the spec's `behind`) and the object is idle: no entry or alarm
-   * slice in flight, and nothing `busy`. A door of the subclass's own, in
-   * place of `fetch`'s, asks it first. */
-  protected async behind(request: Request): Promise<void> {
-    let { behind, busy } = this.spec
-    let restart = behind?.(request)
-    if (!restart || this.#going) return
-    if (busy ? busy() : this.ctx.getWebSockets().length) return
-    await restart()
+    return this.spec.around ? this.spec.around(entry, work) : work()
   }
 
   /** A socket for this object's subscriptions: the door's to call. */
@@ -280,7 +244,6 @@ export class Durable {
   /** A request: the door's answer, `Stopped`'s with how long to wait, or a
    * 503 for a failure the door did not answer, which is reported. */
   async fetch(request: Request): Promise<Response> {
-    await this.behind(request)
     let { pathname } = new URL(request.url)
     return await this.#enter(
       `${request.method} ${pathname}`,
