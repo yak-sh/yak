@@ -198,32 +198,53 @@ export let became = (vocab: Vocab, b: Bundle): string | undefined => {
   })
 }
 
-// A reply, or nothing once `cut` aborts: what it is still reading is
-// nobody's, and the reader's close ends it.
-let dropped = (
-  reply: Promise<Bundle[]>,
-  cut?: AbortSignal,
+// What `work` answers, or what `instead` says once `cut` aborts first. An
+// `instead` that says nothing leaves the answer to `work`.
+let unless = (
+  work: Promise<Bundle[]>,
+  cut: AbortSignal | undefined,
+  instead: () => Bundle[] | undefined,
 ): Promise<Bundle[]> => {
-  if (!cut) return reply
+  if (!cut) return work
   let off!: () => void
   let gone = new Promise<Bundle[]>((done) => {
-    off = () => done([])
+    off = () => {
+      let said = instead()
+      if (said) done(said)
+    }
     if (cut.aborted) off()
     else cut.addEventListener('abort', off, { once: true })
   })
-  return Promise.race([reply, gone]).finally(() =>
+  return Promise.race([work, gone]).finally(() =>
     cut.removeEventListener('abort', off)
   )
 }
+
+// What a caller let go of a call still running is told: where its answer will
+// be kept, and what an interruption means for it.
+let outrun = (id: Eid, tool: string): Bundle => ({
+  entity: { eid: '$said' },
+  content: {
+    body: `${tool} is still running as call ${id}, and this server is ` +
+      'stopping. Its answer is kept on the call: read it with graph_query ' +
+      `.result.call=${id}. If the server ends before the tool returns, the ` +
+      'call ends interrupted, and can be asked again.',
+  },
+  output: { source: id },
+})
 
 /** One admitted call, retaining its tool through execution while registration
  * advertises the provider's current declaration at the stable tool identity. */
 export type Invocation = {
   tool: NamedTool
   ensure: () => Promise<Bundle[]>
-  /** Run it recorded. Once `cut` aborts, a call whose answer is kept is
-   * answered without its {@link Reply}: the write stands, and only the extras
-   * read beside it are dropped, as a stopping server drops its reads. */
+  /** Run it recorded. Once `cut` aborts, a stopping server's request lets go
+   * of the call. One whose answer is kept is answered without its
+   * {@link Reply}: the write stands, and only the extras read beside it are
+   * dropped, as a stopping server drops its reads. One whose tool has not
+   * returned is answered with the call, claimed and unanswered
+   * ({@link pending}), and where its answer will be kept; the tool runs on,
+   * and a host that closes first ends it as interrupted. */
   call: (o?: { cut?: AbortSignal }) => Promise<Bundle[]>
   read: () => Promise<Bundle[]>
 }
@@ -474,7 +495,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let id = asked.entity.eid.startsWith('$') ? mint() : asked.entity.eid
     let call = { ...asked, entity: { ...asked.entity, eid: id } }
     let tool = admitted ?? toolOf(call)
-    return tracked(id, async () => {
+    let work = tracked(id, async () => {
       if (!tool) {
         await g.apply([call])
         return []
@@ -491,6 +512,23 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       }
       let [stored] = await g.get([id])
       return execute(stored, tool, true, false, cut)
+    })
+    if (!tool) return work
+    // Let go at the cut while the tool is running: what goes wrong with it
+    // from then on has no caller to hear it, and is reported. A call the
+    // host's close ended meanwhile answers Stale, and is over. One whose tool
+    // has returned answers as it is, without its reply.
+    return unless(work, cut, () => {
+      if (!held.has(id)) return undefined
+      work.catch((error) =>
+        error instanceof Stale
+          ? undefined
+          : opts.report?.(error, call, tool.name)
+      )
+      return [
+        { entity: { eid: id }, execution: claim() },
+        outrun(id, tool.name),
+      ]
     })
   }
 
@@ -638,7 +676,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     try {
       return [
         ...answered,
-        ...await dropped(opts.reply(call, answerOf(answered, id), wrote), cut),
+        ...await unless(
+          opts.reply(call, answerOf(answered, id), wrote),
+          cut,
+          () => [],
+        ),
       ]
     } catch (error) {
       await opts.report?.(error, call, tool.name)
@@ -827,6 +869,7 @@ export {
   faulted,
   HELD,
   MOST,
+  pending,
   READY,
   RULES,
   structured,

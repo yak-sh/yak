@@ -31,6 +31,7 @@ export {
   answerOf,
   faulted,
   MOST,
+  pending,
   READY,
   RULES,
   structured,

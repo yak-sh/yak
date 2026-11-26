@@ -25,6 +25,7 @@ import {
   answerOf,
   aside,
   faulted,
+  pending,
   structured,
   texts,
   toolEid,
@@ -129,7 +130,8 @@ export type Options = {
    * (@yaks/api `reads`) */
   reading?: () => void
   /** aborted when a stopping server's grace is up (@yaks/api `cutOf`): a
-   * write still reading its reply is answered without it */
+   * write still reading its reply is answered without it, and a call whose
+   * tool is still running with where its answer will be kept */
   cut?: AbortSignal
   /** who is calling — every write this server makes is signed with this actor:
    * `by` the identity it acts for, `via` the run it came through (default:
@@ -632,7 +634,10 @@ export let server = (
         await (t.readOnly ? admitted.read() : admitted.call({ cut: opts.cut }))
       let answer = answerOf(landed, id)
       if (opts.readable) answer = await opts.readable(answer)
-      let isError = faulted(landed, id)
+      // A call a stopping server let go of, still running, answered where
+      // its answer will be kept: this request carries no answer of the
+      // tool's, so it is not given as one.
+      let isError = faulted(landed, id) || pending(landed, id)
       out = said(t, answer, isError)
       if (isError) out = { ...out, isError: true }
       if (opts.text) {

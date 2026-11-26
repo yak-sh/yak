@@ -32,6 +32,7 @@ import {
   CUT,
   faulted,
   Interrupted,
+  pending,
   runner,
   texts,
   toolDoc,
@@ -313,6 +314,44 @@ test('a cut call is answered without the reply it is still reading', async () =>
     asked.entity.eid,
   )
   assertEquals(answer.map((b) => b.entity.eid), ['datum'])
+})
+
+test('a cut call still running is let go, and keeps its answer on the call', async () => {
+  let vocab = words()
+  let g = graph({
+    vocab,
+    storage: ram(vocab, { computed: executionComputed }),
+  })
+  let finish!: () => void
+  let slow: Tool = {
+    ...echo,
+    run: async (call) => {
+      await new Promise<void>((done) => finish = done)
+      return [{
+        entity: { eid: '$said' },
+        content: { body: 'copied' },
+        output: { source: call.entity.eid },
+      }]
+    },
+  }
+  let cut = new AbortController()
+  let r = runner(g, { tools: [slow] })
+  await r.ensure()
+  let asked = called('example_echo', { value: 'hi' })
+  let id = asked.entity.eid
+  let answering = r.admit(asked)!.call({ cut: cut.signal })
+  await until(() => finish)
+  cut.abort()
+  let landed = await answering
+  assertEquals([pending(landed, id), faulted(landed, id)], [true, false])
+  assertEquals(
+    worded(answerOf(landed, id)).includes(`.result.call=${id}`),
+    true,
+  )
+  finish()
+  await until(async () => (await g.read(line`.result.call=${id}&*`)).length)
+  let [result] = await g.read(line`.result.call=${id}&*`)
+  assertEquals((result.content as Comp).body, 'copied')
 })
 
 test('a rehearsal keeps its answer in the call graph', async () => {

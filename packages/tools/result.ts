@@ -406,6 +406,17 @@ export let faulted = (landed: Bundle[], call: Eid): boolean => {
 }
 
 /**
+ * Is the call still running in what came back? A stopping server answers a
+ * call whose tool has not returned with the call as it stands, claimed and
+ * unanswered, and where its answer will be kept (@yaks/tools
+ * `Invocation.call`). Read from the runner's own record, as {@link faulted}.
+ */
+export let pending = (landed: Bundle[], call: Eid): boolean => {
+  let row = landed.find((b) => b.entity.eid == call)
+  return !!row && executionState(row, landed) == 'running'
+}
+
+/**
  * The fault a failed call left, aimed at it: its `refusal{code}`, its
  * `exception` or its interruption's `notice`, beside the words it said. None
  * for a call that answered, however its answer is shaped ({@link faulted}).

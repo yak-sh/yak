@@ -35,8 +35,8 @@ let closing = () =>
   new Response(null, { status: 503, headers: { 'retry-after': '1' } })
 
 /** The cut at the end of a grace, for a write's request: what its admitted
- * work may still drop once its write is kept, such as the extras an MCP call
- * reads beside its answer (@yaks/tools `Invocation.call`). */
+ * work stops waiting on, such as the extras an MCP call reads beside a kept
+ * answer, or a tool still running (@yaks/tools `Invocation.call`). */
 export let cutOf = (request: Request): AbortSignal | undefined =>
   cuts.get(request)
 

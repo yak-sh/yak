@@ -26,8 +26,9 @@
 // signal, it stops taking requests and closes its sockets, lets the requests
 // in flight finish for a grace of seconds, then cancels reads, cuts every
 // answer still streaming that no admitted write is producing (an MCP call's
-// event stream), and waits for admitted writes before returning. The reader then closes after the request
-// owners finish, preserving edits. A killed process leaves its call claimed;
+// event stream), lets go of a tool still running, and waits for admitted
+// writes before returning. The reader then closes after the request owners
+// finish, preserving edits. A killed process leaves its call claimed;
 // the next server closes that process and interrupts the call (host.ts `bury`).
 //
 // A restart is invisible when the replacement answers before this one stops
@@ -250,10 +251,11 @@ export let runs = (
     }
     // Stopping: no new connection, every socket closed, and the requests in
     // flight let finish until the grace is up. Reads and streamed answers are
-    // then cut, and so is a kept write's reply (@yaks/api `cutOf`): a reply
-    // waiting on a read the graph's close alone would end held the drain past
-    // systemd's stop timeout. Admitted writes finish before the listener and
-    // graph close.
+    // then cut, and so is a write's wait on its tool (@yaks/api `cutOf`): a
+    // kept write is answered without its reply, and a call whose tool is
+    // still running with where its answer will be kept (@yaks/tools
+    // `Invocation.call`). Either held the drain past systemd's stop timeout.
+    // Admitted writes finish before the listener and graph close.
     let cut = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let graced = new Promise<void>((done) => {
