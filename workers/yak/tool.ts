@@ -17,6 +17,7 @@ import { type Level, writes } from '@yaks/member'
 import { CallError } from '@yaks/tools/errors'
 import { Refused } from '@yaks/graph/errors'
 import { restoreDrafts } from '@yaks/platform/draft-choice'
+import { SLUG } from '@yaks/platform/names'
 import type { Steps } from '@yaks/tools/title'
 import type { Image } from '@yaks/tools/value'
 import {
@@ -262,11 +263,12 @@ export let notMember = async (
 ) =>
   refuse(
     'access',
-    `not a member of ${space.slug} — ${await yours(
-      ctx,
-      seats,
-    )} Or connect with ` +
-      `an account that belongs to ${space.slug} before naming it.`,
+    `not a member of ${space.slug} — if this is the space you need, ` +
+      `ask its owner to invite you with member_add or connect with an account ` +
+      `that already belongs. ${await yours(
+        ctx,
+        seats,
+      )}`,
   )
 
 // The spaces the caller holds a seat in and the next call naming one, or,
@@ -598,6 +600,19 @@ let named = async (ctx: Ctx, slug: string, seats?: Seat[]) => {
   // redirects there.
   let moved = await ctx.dir.formerly(slug)
   if (moved) return moved
+  if (!SLUG.test(slug)) {
+    throw refuse(
+      'arguments',
+      'space: pass a space slug or eid. app_list() lists the spaces this connection can open.',
+    )
+  }
+  seats ??= ctx.person ? await ctx.dir.seats(ctx.person) : []
+  if (seats.some(({ space }) => space.slug == slug || space.eid == slug)) {
+    throw refuse(
+      'access',
+      `this connection cannot open ${slug} — reconnect with an account or session that can open it.`,
+    )
+  }
   throw refuse(
     'missing',
     `no space ${slug} — ${await yours(ctx, seats)}`,
@@ -608,7 +623,7 @@ let named = async (ctx: Ctx, slug: string, seats?: Seat[]) => {
 let callerIn = async (
   ctx: Ctx,
   space: Space,
-  write: boolean,
+  write: boolean | 'owner',
   over: boolean,
   seat?: Role | null,
   administrative?: boolean,
@@ -619,7 +634,10 @@ let callerIn = async (
       ? ctx.who.spaceEid != space.eid
       : ctx.who?.space && ctx.who.space != space.slug
   ) {
-    throw refuse('access', 'this credential does not open that space')
+    throw refuse(
+      'access',
+      `this credential does not open that space — connect with a credential that reaches ${space.slug}.`,
+    )
   }
   let who = asCaller(
     ctx,
@@ -637,6 +655,7 @@ let callerIn = async (
       who.guest = true
     }
   }
+  if (write == 'owner') owner({ space, who })
   if (!who.role) throw await notMember(ctx, space)
   if (write && !writes(who.role)) throw below(space, 'editor')
   if (ctx.need && ctx.need != 'self' && !allows(who.role, ctx.need)) {
@@ -650,10 +669,15 @@ let below = (space: Space, need: Role) =>
   refuse(
     'access',
     need == 'owner'
-      ? `not the owner of ${space.slug} — connect with that space owner's ` +
-        `account and retry with space: '${space.slug}'`
+      ? `not the owner of ${space.slug} — ask the space's owner to make this call, ` +
+        'or reconnect with your owner account if you own the space.'
       : `not a writer of ${space.slug}`,
   )
+
+export let spaceRestoreHint = (slug: string, canRestore: boolean) =>
+  canRestore
+    ? `space_restore(space: '${slug}') brings it back`
+    : "ask the space's owner to restore it"
 
 // Something in the trash (erase.ts) is asleep: its store answers nothing
 // (graph.ts `#sleep`) and its addresses serve nothing, so a door that names
@@ -661,11 +685,18 @@ let below = (space: Space, need: Role) =>
 // what nothing will serve or relaying a sleeping store's 404. Only the
 // trash's own doors reach past this: app_delete and app_restore for an app
 // (`inBin`), space_delete and space_restore for a space (`spaceBin`).
-let awake = (space: Space, app?: App) => {
+let awake = async (ctx: Ctx, space: Space, who: Who, app?: App) => {
   if (space.trashed) {
+    // Administrative app access can stand in for an owner seat on the app
+    // call. A space restore uses the role from the caller's space scope.
+    let role = who.administrative
+      ? await ctx.dir.role(space, ctx.person)
+      : who.role
     throw refuse(
       'conflict',
-      `${space.slug} is in the trash — space_restore(space: '${space.slug}') brings it back`,
+      `${space.slug} is in the trash — ${
+        spaceRestoreHint(space.slug, role == 'owner')
+      }`,
     )
   }
   if (app?.trashed) {
@@ -693,7 +724,7 @@ export let apart = (args: Args) => {
 let seated = async (
   ctx: Ctx,
   args: Args,
-  write: boolean,
+  write: boolean | 'owner',
   over: boolean,
   trash: boolean,
 ) => {
@@ -718,7 +749,7 @@ let seated = async (
         page?.role,
         page?.administrative,
       )
-      if (write && !trash) awake(space)
+      if (write && !trash) await awake(scope, space, who)
       admitted(ctx, space, who, page?.roster)
       if (write) ctx.ahead?.(space, who)
       return { space, who }
@@ -761,7 +792,7 @@ export let reacquire = async (
         undefined,
         app,
       )
-      if (!trash) awake(space, app)
+      if (!trash) await awake(scope, space, who, app)
       ctx.dir = scope.dir
       return {
         space,
@@ -797,10 +828,10 @@ export let owner = <T extends { space: Space; who: Who }>(it: T) => {
 export let owns = async (ctx: Ctx, args: Args) =>
   owner(await inSpace(ctx, args, true))
 
-/** The caller writing in a space wherever it is, the trash included: the
+/** The owner writing in a space wherever it is, the trash included: the
  * trash's own doors, space_delete and space_restore. */
 export let spaceBin = (ctx: Ctx, args: Args) =>
-  seated(ctx, args, true, false, true)
+  seated(ctx, args, 'owner', false, true)
 
 // A listing already has the caller's seats. Look up addresses it lacks,
 // including former slugs, and reuse its seats for the refusal's alternatives.
@@ -883,7 +914,7 @@ let reached = async (
           )
           : await noApp(scope, space, slug, page?.roster ?? undefined)
       }
-      awake(space, trash ? undefined : app)
+      await awake(scope, space, who, trash ? undefined : app)
       admitted(ctx, space, who, who.guest ? [app] : page?.roster)
       if (write && !who.guest) ctx.ahead?.(space, who)
       return {

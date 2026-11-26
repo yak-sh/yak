@@ -469,6 +469,7 @@ import {
   type Shape,
   SPACE,
   spaceBin,
+  spaceRestoreHint,
   str,
   text,
   type Tool,
@@ -4177,8 +4178,9 @@ let OURS: Row[] = [
       // tool that guesses which space to destroy from context is a tool that
       // one day guesses wrong (`ownSpace`), and it costs the agent one word
       // it already knows.
-      let { space, who } = owner(
-        await spaceBin(ctx, { ...args, space: slug(args.space, 'space') }),
+      let { space, who } = await spaceBin(
+        ctx,
+        { ...args, space: slug(args.space, 'space') },
       )
       let no = await refused(space, ctx.env)
       if (no) throw refuse('access', no)
@@ -4260,8 +4262,9 @@ let OURS: Row[] = [
       required: ['space'],
     },
     run: async (ctx, args) => {
-      let { space, who } = owner(
-        await spaceBin(ctx, { ...args, space: slug(args.space, 'space') }),
+      let { space, who } = await spaceBin(
+        ctx,
+        { ...args, space: slug(args.space, 'space') },
       )
       if (!space.trashed) {
         throw refuse(
@@ -6795,7 +6798,9 @@ let OURS: Row[] = [
           `${space.slug} — ${at}${home ? ` opens ${home.title}` : ''} — you ` +
             `are ${role == 'owner' ? 'the owner' : `a ${role}`}${
               space.trashed
-                ? ` — in the trash: nothing here answers until space_restore(space: '${space.slug}')`
+                ? ` — in the trash: ${
+                  spaceRestoreHint(space.slug, role == 'owner')
+                }`
                 : ''
             }`,
           // Its plan and whom it bills, and whether it takes payments, as

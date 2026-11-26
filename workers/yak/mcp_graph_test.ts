@@ -2048,6 +2048,30 @@ test('the platform admin reads, patches and rolls back an app it holds no seat i
     assertStringIncludes(await theirs.tool('app_versions', at), 'v1')
 
     let stranger = connector(k, (await signIn(k)).cookie)
+    for (
+      let [tool, args] of [
+        ['app_files', { ...at, op: 'list' }],
+        ['app_versions', at],
+      ] as const
+    ) {
+      let error = await assertRejects(() => stranger.tool(tool, args), Error)
+      assertStringIncludes(error.message, `not a member of ${space}`)
+      assertStringIncludes(
+        error.message,
+        'ask its owner to invite you with member_add',
+      )
+    }
+    let malformed = await assertRejects(
+      () =>
+        theirs.tool('app_files', {
+          ...at,
+          op: 'list',
+          space: `${space})|(.member.space.space.slug=${space}`,
+        }),
+      Error,
+      'space: pass a space slug or eid',
+    )
+    assertStringIncludes(malformed.message, 'app_list()')
     await assertRejects(() => rows(stranger), Error, 'not a member')
     await assertRejects(() => patch(stranger), Error, 'not a member')
     await assertRejects(

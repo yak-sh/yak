@@ -119,11 +119,13 @@ test('a space that is not there is refused with the spaces the caller has', asyn
     await Promise.all([
       said(dir(spaces), 'nottawa'),
       said(dir([]), 'nottawa'),
+      said(dir(spaces), 'nottawatownship'),
       said(dir(spaces), 'old'),
     ]),
     [
       'no space nottawa — call app_list() without arguments to list all your spaces, or pass one of your space slugs as space. Your spaces are nottawatownship, peterson.',
       "no space nottawa — you are a member of no space yet. Get one by signing up at https://yaks.app, or by accepting an invitation to someone's space.",
+      'this connection cannot open nottawatownship — reconnect with an account or session that can open it.',
       'peterson',
     ],
   )

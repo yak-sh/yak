@@ -2,6 +2,7 @@
 import {
   assert,
   assertEquals,
+  assertNotMatch,
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
@@ -418,7 +419,7 @@ test('the platform admin trashes and restores an app without a seat', async () =
       await assertRejects(
         () => admin.tool('space_delete', { space, forever }),
         Error,
-        'not a member',
+        'not the owner',
       )
     }
 
@@ -630,6 +631,26 @@ test(
         ...at,
         entities: [{ entity: { eid: '$n' }, doc: { title: 'a kept thing' } }],
       })
+      let admin = connector(k, k.owner.cookie)
+      let colleague = await signIn(k)
+      let editor = connector(k, colleague.cookie)
+      let space = (await k.dir.space(binspace50))!
+      await k.dir.stamp({
+        entities: [{
+          entity: { eid: crypto.randomUUID() },
+          member: {
+            space: space.eid,
+            person: colleague.person,
+            role: 'editor',
+          },
+        }],
+      })
+      let files = (caller: typeof agent) =>
+        caller.tool('app_files', { ...at, op: 'list' })
+      let restore = (caller: typeof agent) =>
+        caller.tool('space_restore', { space: binspace50 })
+      assertStringIncludes(await files(admin), 'index.html')
+      assertStringIncludes(await files(editor), 'index.html')
       assertEquals((await page()).status, 200)
       assert((await listed()).includes('log_note'))
       assertStringIncludes(await agent.tool('about'), `${binspace50}/notes`)
@@ -730,6 +751,20 @@ test(
           name,
         )
       }
+      // App read access and an editor seat each let the caller see the trash.
+      // Only the retained owner seat grants space restoration.
+      for (let caller of [admin, editor]) {
+        let error = await assertRejects(() => files(caller), Error)
+        assertStringIncludes(error.message, `${binspace50} is in the trash`)
+        assertStringIncludes(
+          error.message,
+          "ask the space's owner to restore it",
+        )
+        assertNotMatch(error.message, /space_restore/)
+        await assertRejects(() => restore(caller), Error, 'not the owner')
+      }
+      assertEquals(await k.dir.role(space, colleague.person), 'editor')
+      assertEquals(await k.dir.role(space, them.person), 'owner')
 
       // Out, and every one of those answers is the old answer again — the rows
       // in its apps' stores included, since nothing ever touched them.
@@ -739,10 +774,11 @@ test(
         trashed: { at: '2000-01-01T00:00:00.000Z' },
       }])
       assertStringIncludes(
-        await agent.tool('space_restore', { space: binspace50 }),
+        await restore(agent),
         `${binspace50} is back`,
       )
       assertEquals((await page()).status, 200)
+      assertStringIncludes(await files(editor), 'index.html')
       assert((await listed()).includes('log_note'))
       assertStringIncludes(await agent.tool('about'), `${binspace50}/notes`)
       assertEquals(
