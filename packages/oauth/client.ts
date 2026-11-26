@@ -101,6 +101,8 @@ export type Client = {
   ) => Promise<{ url: string; attempt: Attempt & { verifier: string } }>
   /** Exchange the code the return URL carries and keep the grant. */
   complete: (pending: Attempt, callback: string | URL) => Promise<void>
+  /** Redeem a provider-started installation for later, explicit attachment. */
+  redeem: (code: string) => Promise<Tokens>
   /** A usable access token, refreshed first when it is about to expire;
    * undefined when there is no grant. */
   token: () => Promise<string | undefined>
@@ -248,7 +250,30 @@ export let client = (provider: Provider, o: Options): Client => {
       return record.access_token
     })
 
+  let exchangeCode = (code: string, verifier?: string, redirect?: string) =>
+    exchange(
+      key
+        ? { code, code_verifier: verifier!, code_challenge_method: 'S256' }
+        : {
+          grant_type: 'authorization_code',
+          code,
+          ...redirect ? { redirect_uri: redirect } : {},
+          ...verifier && provider.pkce !== false
+            ? { code_verifier: verifier }
+            : {},
+        },
+    )
+
   return {
+    redeem: async (code) => {
+      if (key || provider.pkce !== false || !provider.client?.secret) {
+        throw new OAuthError(
+          'callback',
+          'this client needs a local authorization attempt',
+        )
+      }
+      return await exchangeCode(code)
+    },
     begin: async (scopes = provider.scopes ?? []) => {
       let { verifier, challenge } = await pkce()
       let pending = { ...attempt(now()), verifier }
@@ -299,22 +324,7 @@ export let client = (provider: Provider, o: Options): Client => {
       if (codes.length != 1 || !codes[0]) {
         throw new OAuthError('code', 'the return carried no single code')
       }
-      let got = await exchange(
-        key
-          ? {
-            code: codes[0],
-            code_verifier: pending.verifier,
-            code_challenge_method: 'S256',
-          }
-          : {
-            grant_type: 'authorization_code',
-            code: codes[0],
-            redirect_uri: o.redirect,
-            ...provider.pkce === false ? {} : {
-              code_verifier: pending.verifier,
-            },
-          },
-      )
+      let got = await exchangeCode(codes[0], pending.verifier, o.redirect)
       await o.store.update(o.key, (record) => {
         Object.assign(record, NONE, got)
         return Promise.resolve()

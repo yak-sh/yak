@@ -1088,6 +1088,17 @@ let signIn = async (
 ): Promise<Client> => {
   let name = String(comp(b, CONNECTION).integration)
   let i = await known(c.graph.read, name)
+  return oauth(c, name, i, b, staged, again)
+}
+
+let oauth = async (
+  c: Ctx,
+  name: string,
+  i: Integration | undefined,
+  b?: Bundle,
+  staged?: Tokens,
+  again = false,
+): Promise<Client> => {
   if (!i?.authorize || !i.token) {
     throw new Error(
       `${name} is connected with a pasted key, not by signing in`,
@@ -1121,13 +1132,13 @@ let signIn = async (
     account: i.account,
     account_title: i.account_title,
   }, {
-    store: staged
+    store: staged || !b
       ? {
-        read: () => Promise.resolve(staged),
-        update: (_, fn) => fn(staged),
+        read: () => Promise.resolve(staged ?? {}),
+        update: (_, fn) => fn(staged ?? {}),
       }
       : keeping(c, b),
-    key: nameOf(b),
+    key: b ? nameOf(b) : '',
     redirect: c.redirect ?? '',
     fetch: c.fetch,
     now: c.now,
@@ -1273,6 +1284,43 @@ export let settle = async (
 
 let HOUR = 3_600_000
 
+/** Exchange an installation begun at a provider. The grant is still unowned. */
+export let redeemInstallation = async (
+  c: Ctx,
+  i: Integration,
+  code: string,
+): Promise<Tokens> => {
+  let grant = await (await oauth(c, i.name, i)).redeem(code)
+  if (!grant.account) {
+    throw new CallError('connection', 'Install the app in a workspace.')
+  }
+  return grant
+}
+
+/** Bind a redeemed installation to the workspace's chosen space. */
+export let attachInstallation = async (
+  c: Ctx,
+  owner: Eid,
+  integration: string,
+  grant: Tokens,
+): Promise<Bundle[]> => {
+  let [b] = await c.graph.apply(
+    await need(c.graph.read, { owner, integration }),
+  )
+  return keepGrant(
+    c,
+    b,
+    grant,
+    grant.account,
+    grantWords(grant, grant.account_title),
+  )
+}
+
+let grantWords = (tokens: Tokens, title?: string): Comp => ({
+  ...tokens.scope ? { scopes: tokens.scope.split(/\s+/) } : {},
+  ...title ? { title } : {},
+})
+
 /** Keep a connection's credential — a pasted key, or the grant a finished
  * sign-in returns — and mark it connected. */
 export let connect = async (
@@ -1321,15 +1369,24 @@ export let connect = async (
       throw new CallError('connection', 'Install the app in a workspace.')
     }
     account = who.account ?? account
-    made = {
-      ...tokens.scope ? { scopes: tokens.scope.split(/\s+/) } : {},
-      ...who.title ? { title: who.title } : {},
-    }
+    made = grantWords(tokens, who.title)
     if (i?.links && given.person) {
       linked = await linking(c, i.links, given.person, tokens)
         .catch((e) => (c.report?.(e), []))
     }
   }
+  return keepGrant(c, b, tokens, account, made, linked)
+}
+
+let keepGrant = async (
+  c: Ctx,
+  b: Bundle,
+  tokens: Tokens,
+  account: string | undefined,
+  made: Comp,
+  linked: Bundle[] = [],
+): Promise<Bundle[]> => {
+  let connection = b.entity.eid
   let grant = comp(b, CONNECTION)
   let existing = account
     ? (await c.graph.read(

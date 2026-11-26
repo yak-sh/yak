@@ -89,6 +89,30 @@ export type ConnectionsView = {
 // The integration directory, which lists services others added.
 let DIRECTORY = '/integrations'
 
+/** Choose the space that will use a provider's completed installation. */
+export let installChoice = (
+  action: string,
+  state: string,
+  spaces: { eid: string; title: string; slug: string }[],
+  label: string,
+): Kids =>
+  h(
+    'form',
+    { class: 'Page_Form', method: 'post', action },
+    held('install', state),
+    labeled(
+      'install-space',
+      'Space',
+      h(
+        Field,
+        { id: 'install-space', name: 'space', choose: true, required: true },
+        spaces.length > 1 ? h('option', { value: '' }, 'Choose a space') : null,
+        spaces.map((s) => h('option', { value: s.eid }, s.title || s.slug)),
+      ),
+    ),
+    h(Button, { type: 'submit' }, label),
+  )
+
 // A label for what may be left empty.
 let optional = (label: Kids) => [
   label,

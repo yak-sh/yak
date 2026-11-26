@@ -36,14 +36,36 @@ export let take = async <T>(
   env: Partial<Env> & Pick<Env, 'STORE'>,
   kind: string,
   state: string | null,
+): Promise<T | null> =>
+  await finish<T, T>(env, kind, state, (value) => Promise.resolve(value))
+
+/** Read a held attempt before the person confirms it. */
+export let waiting = async <T>(
+  env: Partial<Env> & Pick<Env, 'STORE'>,
+  kind: string,
+  state: string,
 ): Promise<T | null> => {
+  let text = await reveal(vaultOf(env), nameOf(kind, state), {
+    env: () => undefined,
+  })
+  return text ? JSON.parse(text) as T : null
+}
+
+/** Finish an attempt once, keeping it available if the write fails. */
+export let finish = async <T, R>(
+  env: Partial<Env> & Pick<Env, 'STORE'>,
+  kind: string,
+  state: string | null,
+  run: (value: T) => Promise<R>,
+): Promise<R | null> => {
   if (!state) return null
   let name = nameOf(kind, state)
   let vault = vaultOf(env)
   return await vault.lock(secretEid(name), async () => {
-    let text = await reveal(vault, name, { env: () => undefined })
-    if (!text) return null
+    let value = await waiting<T>(env, kind, state)
+    if (value == null) return null
+    let out = await run(value)
     await meta(env).apply([unsealed(name)], KERNEL)
-    return JSON.parse(text) as T
+    return out
   })
 }

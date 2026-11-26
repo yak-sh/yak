@@ -50,6 +50,8 @@ export type Door<E = unknown> = (
 // (T-136122), which no space can be named (./names.ts `RESERVED` holds
 // `account`).
 export let MANAGE = '/manage'
+/** Where a provider-started connection is attached to a space after sign-in. */
+export let CONNECTION_INSTALL = '/connections/install'
 /** The person's Updates from every space's Operator. */
 export let UPDATES = '/updates'
 /** A texted link's page approving one act the Operator was asked for by a
@@ -177,7 +179,8 @@ export let backTo = (env: Host, back: string, fallback: string): string => {
   let apex = new URL(url(env))
   let to = new URL(back || fallback, apex)
   return to.origin == apex.origin &&
-      (to.pathname == MANAGE || to.pathname.startsWith(`${MANAGE}/`) ||
+      (to.pathname == MANAGE || to.pathname == CONNECTION_INSTALL ||
+        to.pathname.startsWith(`${MANAGE}/`) ||
         !!spaced(to.pathname))
     ? to.href
     : new URL(fallback, apex).href

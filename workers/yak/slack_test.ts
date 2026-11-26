@@ -10,6 +10,8 @@ import { KERNEL, meta } from './meta.ts'
 import { CALLBACK, connecting, connectionsOf, ctxOf } from './connections.ts'
 import { atApex } from './kernel.ts'
 import { apiCall } from './operator-integrations.ts'
+import { backTo, CONNECTION_INSTALL } from '@yaks/platform/routes'
+import { minted } from './session.ts'
 
 let signing = 'fixture signing secret'
 let encoder = new TextEncoder()
@@ -233,6 +235,121 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
     assertEquals((await intake(mention('1785000000.000006'))).status, 200)
     await p.settled()
     assertEquals(model.asked.length, 3)
+  } finally {
+    globalThis.fetch = fetch
+  }
+})
+
+test('a Slack-started install waits for an entitled owner to confirm a destination', async () => {
+  let secret = 'external Slack installation test'
+  let p = platform(secret, {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(3))),
+  })
+  let [person, other, checks, spare, hidden] = Array.from(
+    { length: 5 },
+    () => crypto.randomUUID(),
+  )
+  await meta(p.env).apply([
+    { entity: { eid: person }, person: {} },
+    { entity: { eid: other }, person: {} },
+    ...[[checks, 'checks'], [spare, 'spare'], [hidden, 'hidden']].map((
+      [eid, slug],
+    ) => ({ entity: { eid }, space: { slug, store: slug } })),
+    ...[[person, checks, 'owner'], [person, spare, 'owner'], [
+      person,
+      hidden,
+      'editor',
+    ], [other, hidden, 'owner']].map(([person, space, role]) => ({
+      entity: { eid: crypto.randomUUID() },
+      member: { person, space, role },
+    })),
+    registration('slack', { id: 'SLACK-APP', secret: 'SLACK-CLIENT', signing }),
+  ], KERNEL)
+  let host = 'https://yaks.app'
+  let apex = (path: string, init?: RequestInit) =>
+    atApex(new Request(host + path, init), p.env).then((r) => r!)
+  let who = (person: string) =>
+    minted(new Request(host), p.env, secret, person)
+      .then((v) => v.split(';')[0])
+  let owner = await who(person)
+  let stranger = await who(other)
+  let saved = () => ctxOf(p.env).graph.read('.connection.integration=slack&*')
+  let redeem = 0
+  let fetch = globalThis.fetch
+  globalThis.fetch = async (input, init) => {
+    let r = new Request(input, init)
+    if (r.url != 'https://slack.com/api/oauth.v2.access') {
+      return fetch(input, init)
+    }
+    let fields = new URLSearchParams(await r.text())
+    assertEquals(fields.get('code'), 'provider-started')
+    assertEquals(fields.has('redirect_uri'), false)
+    assertEquals(fields.has('code_verifier'), false)
+    redeem++
+    return Response.json({
+      ok: true,
+      access_token: 'xoxb-install',
+      team: { id: 'TCHECKS', name: 'Checks <Slack>' },
+      scope: 'app_mentions:read,chat:write',
+    })
+  }
+  try {
+    let wrong = await apex(CALLBACK + '?code=provider-started&state=wrong')
+    assertEquals(wrong.headers.get('location'), host + '/manage')
+    assertEquals(redeem, 0)
+
+    let returned = await apex(CALLBACK + '?code=provider-started', {
+      headers: { cookie: owner },
+    })
+    assertEquals(redeem, 1)
+    assertEquals(returned.headers.get('location'), host + CONNECTION_INSTALL)
+    let pending = returned.headers.get('set-cookie')!.split(';')[0]
+    let state = pending.slice(pending.indexOf('=') + 1)
+    assertEquals(await saved(), [])
+    let get = (who: string) =>
+      apex(CONNECTION_INSTALL, { headers: { cookie: pending + '; ' + who } })
+    let login = new URL((await get('')).headers.get('location')!)
+    assertEquals(login.pathname, '/login')
+    assertEquals(
+      backTo(p.env, login.searchParams.get('return')!, '/manage'),
+      host + CONNECTION_INSTALL,
+    )
+    assertEquals((await get(stranger)).status, 400)
+    let screen = await get(owner)
+    assertEquals(screen.status, 200)
+    let html = await screen.text()
+    assertStringIncludes(html, 'Checks &lt;Slack')
+    assertEquals(html.includes('Checks <Slack>'), false)
+    assertStringIncludes(html, `value="${checks}"`)
+    assertStringIncludes(html, `value="${spare}"`)
+    assertEquals(html.includes(hidden), false)
+    assertEquals(html.includes('xoxb-install'), false)
+
+    let choose = (space: string, install = state) =>
+      apex(CONNECTION_INSTALL, {
+        method: 'POST',
+        headers: { cookie: pending + '; ' + owner },
+        body: new URLSearchParams({ install, space }),
+      })
+    assertEquals((await choose(hidden)).status, 403)
+    assertEquals((await choose(checks, 'another-install')).status, 403)
+    assertEquals(await saved(), [])
+    let yes = await choose(checks)
+    assertEquals(yes.status, 303)
+    assertEquals(
+      yes.headers.get('location'),
+      host + '/manage/checks/connections',
+    )
+    assertEquals((await choose(spare)).status, 400)
+    let [row, extra] = await saved()
+    assertEquals(extra, undefined)
+    let c = row.connection as Comp
+    assertEquals([c.owner, c.status, c.account], [
+      checks,
+      'connected',
+      'TCHECKS',
+    ])
   } finally {
     globalThis.fetch = fetch
   }

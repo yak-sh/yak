@@ -127,6 +127,7 @@ import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Answer } from './apps.ts'
 import type { Door } from '@yaks/platform/routes'
 import {
+  CONNECTION_INSTALL,
   enabling,
   MANAGE,
   manageAt,
@@ -1571,16 +1572,41 @@ export let connecting = async (
 // The directory the doors below ask, as apps.ts asks it.
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
+/** Finish the hosted work for a saved OAuth connection. */
+export let finishConnection = async (env: Env, saved: Bundle[], app?: {
+  who: Who
+  space: Space
+  eid: string
+}) => {
+  let eid = saved.find((b) => comp(b, CONNECTION).status == 'connected')?.entity
+    .eid
+  if (!eid) throw new Error('The service did not return a connected account.')
+  await ready(env, eid)
+  await heard(env, eid)
+  if (app) await attached(env, app.who, app.space, app.eid, eid)
+  await rebound(env, await usersOf(env, eid))
+}
+
 // The return from a service's sign-in page, in whichever browser or app it
 // lands. The attempt its `state` names must have been begun by a person still
 // signed in where they began it, for their own connection or one of a space
 // they still own; a browser signed in as anyone else may not finish it.
 // Anything else is sent back to the page it was begun on to start again.
 export let callback: Door<Env> = async ({ env, req, path, space }) => {
-  if (space != null || path != CALLBACK) return null
+  if (space != null) return null
+  if (path != CALLBACK && path != CONNECTION_INSTALL) return null
+  if (path == CONNECTION_INSTALL) {
+    return (await import('./connection-install.ts')).choose(req, env)
+  }
   let answer = (to: string) =>
     new Response(null, { status: 303, headers: { location: to } })
-  let state = new URL(req.url).searchParams.get('state')
+  let params = new URL(req.url).searchParams
+  if (!params.has('state')) {
+    return req.method == 'GET' && params.has('code')
+      ? (await import('./connection-install.ts')).outside(req, env, params)
+      : answer(url(env, MANAGE))
+  }
+  let state = params.get('state')
   let held = await take<Held>(env, ATTEMPT, state)
   let dir = dirOf(env)
   let at = held ? await dir.space(held.space) : null
@@ -1632,16 +1658,11 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
       callback: req.url,
       person: held.person,
     })
-    let connection = saved.find((b) =>
-      comp(b, CONNECTION).status == 'connected'
-    )?.entity.eid
-    if (!connection) {
-      throw new Error('The service did not return a connected account.')
-    }
-    await ready(env, connection)
-    await heard(env, connection)
-    if (held.app) await attached(env, who, at, held.app, connection)
-    await rebound(env, await usersOf(env, connection))
+    await finishConnection(
+      env,
+      saved,
+      held.app ? { who, space: at, eid: held.app } : undefined,
+    )
     return told(back, 'connected')
   } catch (e) {
     caught(e, { request: `GET ${CALLBACK}` })
