@@ -153,7 +153,7 @@ export let semantic = (
   return {
     name: 'embedding',
     // A neighbourhood is `limit` owners at most, read by key.
-    few: ['near'],
+    few: () => ['near'],
     begin: (screen) => {
       held = null
       asked = screen

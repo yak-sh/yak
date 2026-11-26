@@ -201,6 +201,14 @@ one index's page under a visibility screen holds dozens. Each index's page, its
 tied places and its exact names are read alone; joining them is arithmetic in
 JavaScript.
 
+Under the sort plan, an index is not opened when none of the screen's owners
+carries its component; SQLite asks that from the smaller side. A screen made
+from a disjunction's candidates (@yaks/sql `Selection.whole`) can only be read
+whole, so it is asked about no more than `PROVE` (1,024) owners, and one wider
+opens the index, whose every match is then tested by key. A ranked first page is
+one of the extension's `few` clauses (@yaks/sql `Extension.few`): the statement
+reads the page's owners by key, never the disjunction beside them.
+
 A ranking reads a page, not every match: each index hands back only its own best
 `limit` admitted rows through FTS5's `order by rank`, which sorts inside the
 index, and the names through `^`, newest first, until it has `limit`. A yaks.app

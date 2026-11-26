@@ -95,6 +95,15 @@ type RankOpts = SearchOpts & {
   owners?: readonly number[]
 }
 
+// The most owners a screen read whole (@yaks/sql `Selection.whole`) holds for
+// a CPU sort to ask whether any of them carries an index's component before
+// opening it (`best`). Such a screen is read in full to be joined, whichever
+// side drives: `(!entry&!knock&!notification|.created.by.person)` took 3.7 s
+// to say none of the box's 1.9M transcript entries was among its owners,
+// where opening the index and probing each match by key took 0.2 s. A screen
+// past this is read no further, and the index is opened.
+export let PROVE = 1024
+
 // Each index has one text source and may be gated by another component.
 // Restrict both before matching, so a public owner cannot reveal private text.
 export let screens = (
@@ -352,9 +361,23 @@ let best = (
           on: eq(col('entity', '__source'), col('id', '__fts_screen')),
         }],
       })
+  // A screen read whole is asked no further than PROVE owners: one past them
+  // opens the index.
+  let wide = (n: number): [Expr, Expr][] =>
+    !opts.owners && opts.screen?.whole
+      ? [[
+        exists(select({
+          cols: [lit(1)],
+          from: table('__fts_screen'),
+          limit: lit(1),
+          offset: lit(PROVE),
+        })),
+        lit(n),
+      ]]
+      : []
   let take = (arm: Index, n: number): Expr =>
     opts.owners || sorting && opts.screen
-      ? when([[exists(owned(arm)), lit(n)]], lit(0))
+      ? when([...wide(n), [exists(owned(arm)), lit(n)]], lit(0))
       : lit(n)
   // An index's rows matching `expr`, among the live owners the caller admits.
   let admitted: Admitted = (name, expr) => {

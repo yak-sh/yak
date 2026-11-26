@@ -64,6 +64,10 @@ export type Selection = Raw & {
   probe?: (owner: Expr) => Expr
   /** An indexed subset of the filters, returning candidates to probe. */
   seek?: () => Raw
+  /** Its owners come from a disjunction's candidates, a subquery SQLite reads
+   * whole before it joins any of them: no owner ID seeks the relation, and
+   * only `probe` tests one owner without reading them all. */
+  whole?: boolean
 }
 
 /** Test one owner without enumerating an iterable selection when the compiler
@@ -171,15 +175,16 @@ export type Found = { owners?: Query; few: boolean }
 // none takes, and which owners a substring test can read. A kind that is not
 // in the map is left entirely to the binder.
 //
-// `few` lists the kinds whose condition is a short list of owners in hand, the
-// way `.near` compiles to the ids of its nearest few. A statement that must
-// hold one is answered from those owners: every other clause tests each of
-// them, as it would a few eids named (`.entity.eid=a,b`), rather than
-// selecting owners of its own for the list to be found among.
+// `few` names the kinds whose condition in query `q` is a short list of owners
+// in hand: always for `.near`, which compiles to the ids of its nearest few,
+// and for words only on a ranked page, which compile to the page's owners. A
+// statement that must hold one is answered from those owners: every other
+// clause tests each of them, as it would a few eids named (`.entity.eid=a,b`),
+// rather than selecting owners of its own for the list to be found among.
 export type Extension = {
   name: string
   compile: Partial<Record<Clause['kind'], Compile>>
-  few?: readonly Clause['kind'][]
+  few?: (q: And) => readonly Clause['kind'][]
   order?: OrderBy
   lead?: Lead
   ranks?: Ranks

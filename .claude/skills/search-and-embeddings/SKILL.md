@@ -191,7 +191,13 @@ a caller may read. The `search` tool merges it with full-text hits.
   The last read the eight by key only because `.near` is one of the
   extension's `few` clauses (@yaks/sql `Extension.few`); without it,
   `(!entry|.created.by.person)` beside it selected millions of owners to find
-  the eight among them, 7 s warm.
+  the eight among them, 7 s warm. A ranked first page of words is a `few`
+  clause too: the write's related list by words took 17 s on the box before
+  it was (T-3861).
+- **A disjunction's screen is read whole.** SQLite cannot seek a union of
+  candidates by owner, so asking whether any of its owners carries an index's
+  component read it through, 3.7 s per index beside 1.9M entries. That ask
+  stops at `PROVE` owners (@yaks/fts), and a wider screen opens the index.
 - **Open:** 1-bit codes for the box's scan (T-59519), `.near` on D1 (T-59333),
   embedding calls spending from an account's budget (T-59279).
 

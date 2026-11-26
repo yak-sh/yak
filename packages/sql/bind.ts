@@ -2458,14 +2458,17 @@ let owners = (
 }
 
 // A mandatory clause an extension compiles to a few owners in hand
-// (./extend.ts `Extension.few`): `.near` names its nearest eight, which the
-// statement reads by key. Beside `(!entry|.created.by.person)` the box's graph
-// otherwise selected every owner either arm admits, millions, to find the
-// eight among them: 7 s warm on a copy of it.
-let named = (ctx: Ctx, clauses: Clause[]): boolean =>
-  flattened(clauses).some((c) =>
-    ctx.ext.some((e) => e.compile[c.kind] && e.few?.includes(c.kind))
+// (./extend.ts `Extension.few`): `.near` names its nearest eight, and a ranked
+// page of words its page, which the statement reads by key. Beside
+// `(!entry|.created.by.person)` the box's graph otherwise selected every owner
+// either arm admits, millions, to find the few among them: 7 s warm on a copy
+// of it for `.near`, 4.2 s for a page of four words.
+let named = (ctx: Ctx, ast: And): boolean => {
+  let few = ctx.ext.map((e) => e.few?.(ast) ?? [])
+  return flattened(ast.clauses).some((c) =>
+    ctx.ext.some((e, i) => e.compile[c.kind] && few[i].includes(c.kind))
   )
+}
 
 // A mandatory value filter on a stored property narrows the outer rows before
 // any derived one is read (`.session.operator=true` leaves 876 of 18,503
@@ -3116,7 +3119,8 @@ let selectionScreen = (
   if (!rest.length && !opts.visibility && !opts.eids) return null
   let query = { ...ast, clauses: rest }
   let frozen = { ...opts, now: opts.now ?? Date.now() }
-  let admits = bound(query, vocab, frozen, d, [], { screening })
+  let admitting = prepared(query, vocab, frozen, d, [], { screening })
+  let admits = admitting.lower()
   let indexed = flattened(rest).filter((c): c is Pred => {
     if (
       c.kind != 'pred' || c.not || c.where || c.path.length != 2 ||
@@ -3150,6 +3154,7 @@ let selectionScreen = (
       order: [],
     }),
     keyed,
+    whole: admitting.whole?.() ?? false,
     seek: seek && d.indexed
       ? () =>
         render({
@@ -3229,7 +3234,7 @@ let beginning = (
   screening = false,
 ) => {
   let finite = owners(ctx, ast.clauses)
-  ctx.bounded = finite != null || named(ctx, ast.clauses)
+  ctx.bounded = finite != null || named(ctx, ast)
   ctx.narrowed = narrowed(ctx, ast.clauses)
   ctx.few = few(ctx, ast.clauses)
   for (let e of ctx.ext) {
@@ -4075,7 +4080,14 @@ let unkept = (v: Vocab, derived: Derived, kept?: readonly string[]) => {
 // captured them, before any `begin` ran. A caller may reuse a proven lowering
 // after this boundary (./kept.ts); falling back continues this same context,
 // including its spine and the original live query/options.
-export type Prepared = { opts: BindOpts; spine?: string; lower: () => Select }
+export type Prepared = {
+  opts: BindOpts
+  spine?: string
+  lower: () => Select
+  /** Once lowered: whether its owners come from a disjunction's candidates,
+   * which SQLite reads whole (./extend.ts `Selection.whole`). */
+  whole?: () => boolean
+}
 
 // The catalog and the extensions a lowering asks, in place of the options'
 // own: a caller that watches what the lowering asks of them (./kept.ts) hands
@@ -4263,6 +4275,7 @@ export let prepared = (
     opts: captured,
     spine,
     lower: () => binding(lower(ast, ctx, reads, scope), ctx),
+    whole: () => !!ctx.candidates,
   }
 }
 

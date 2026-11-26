@@ -138,3 +138,79 @@ test('a word kept to entries never walks them to ask whether any is titled', () 
   equal([small.eids, large.eids], [['found'], ['found']])
   ok(large.cost - small.cost < 20_000, `${small.cost} then ${large.cost} steps`)
 })
+
+// A page of words beside a disjunction most of the graph meets, as a write's
+// related list asks: `(!entry|.created.by.person)` is a union of candidates
+// SQLite reads whole. Neither asking whether any entry is among them nor
+// reading the page's few owners reads that union through.
+let wider = loadVocab({
+  $defs: {
+    entity: { component: true, properties: {} },
+    session: { component: true, properties: {} },
+    person: { component: true, properties: {} },
+    entry: {
+      component: true,
+      search: ['content.body'],
+      properties: { session: { type: 'string', ref: 'session', index: true } },
+    },
+    content: {
+      component: true,
+      properties: { body: { type: 'string', contains: true } },
+    },
+    doc: {
+      component: true,
+      properties: { title: { type: 'string', search: true } },
+    },
+    created: {
+      component: true,
+      properties: {
+        by: { type: 'string', ref: 'entity', index: true },
+        via: { type: 'string', ref: 'entity', index: true },
+      },
+    },
+  },
+})
+let related = (history: number) => {
+  let { driver, steps } = stepping()
+  let db = { ...driver, file: true }
+  let all = indexed(wider)
+  let store = storage(db, wider, { extend: [search(all, db)] })
+  store.install()
+  let by = (
+    eid: string,
+    created: string,
+    rest: Omit<Bundle, 'entity'>,
+  ): Bundle => ({
+    ...rest,
+    entity: { eid },
+    created: { by: created, via: 'run' },
+  })
+  graph({ storage: store, vocab: wider }).apply([
+    { entity: { eid: 'ada' }, person: {} },
+    { entity: { eid: 'run' }, session: {} },
+    ...Array.from({ length: history }, (_, i) => [
+      by(`said-${i}`, 'run', {
+        entry: { session: 'run' },
+        content: { body: `line ${i}` },
+      }),
+      by(`noted-${i}`, 'run', { doc: { title: `note ${i}` } }),
+    ]).flat(),
+    by('titled', 'run', { doc: { title: 'dragon notes' } }),
+    by('asked', 'ada', {
+      entry: { session: 'run' },
+      content: { body: 'dragon?' },
+    }),
+  ])
+  adopt(db, all)
+  let before = steps()
+  let eids = store.rows(
+    '(!entry|.created.by.person)&.created.via!=elsewhere&dragon&.order=search&.limit=4&.fields=entity.eid',
+  ).map((r) => String(r.eid)).sort()
+  return { eids, cost: steps() - before }
+}
+
+test('a page of words beside a broad disjunction never reads it through', () => {
+  let small = related(1100), large = related(3300)
+  equal([small.eids, large.eids], [['asked', 'titled'], ['asked', 'titled']])
+  ok(large.cost < small.cost * 2, `${small.cost} then ${large.cost} steps`)
+})

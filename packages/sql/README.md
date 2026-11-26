@@ -616,10 +616,11 @@ equal(compile(parse('poetry'), loadVocab({}), { extend: [labels] }).params, [
 ])
 ```
 
-`few` optionally lists the clause kinds an Extension compiles to a short list of
-owners in hand, as `.near` compiles to the ids of its nearest few. A statement
-that must hold one is answered from those owners: every other clause tests each
-of them, as it would a few eids named (`.entity.eid=a,b`), rather than selecting
+`few(q)` optionally names the clause kinds an Extension compiles to a short list
+of owners in hand in query `q`, as `.near` compiles to the ids of its nearest
+few, and words on a ranked first page to the page's owners. A statement that
+must hold one is answered from those owners: every other clause tests each of
+them, as it would a few eids named (`.entity.eid=a,b`), rather than selecting
 owners of its own for the list to be found among.
 
 `order(value, site)` optionally handles `.order=` values that name no property.

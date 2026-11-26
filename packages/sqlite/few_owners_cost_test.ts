@@ -31,7 +31,7 @@ let graph = async (n: number) => {
   let named: number[] = []
   let near: Extension = {
     name: 'near',
-    few: ['near'],
+    few: () => ['near'],
     compile: {
       near: (c, site) =>
         c.kind == 'near' ? among(site.owner, named.map((id) => val(id))) : null,

@@ -230,6 +230,8 @@ export let search = (
   }
   return {
     name: 'fts',
+    // A ranked page's words select its best rows, `page` owners at most.
+    few: (q) => db && reach(q) != null ? ['text'] : [],
     begin: (screen, q) => {
       found.clear()
       standing.clear()
