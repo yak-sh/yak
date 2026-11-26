@@ -33,6 +33,4 @@ keeping(globalThis as unknown as Scope, {
   broke: BROKE,
   failed: (why) => failurePage(opening('/apple-touch-icon.png', BROKE), why),
   drew: (html) => html.includes(OPENING),
-  // T-3584: pictures stuck an iPhone PWA on a blank page; off until fixed.
-  pictures: false,
 })

@@ -5,6 +5,7 @@ import {
   FILES,
   type Keeping,
   keeping,
+  PAGES,
   type Scope,
 } from './worker.ts'
 import { FRESH, FRESH_URL, KEPT, SHELL } from './picture.ts'
@@ -211,6 +212,46 @@ test('a kept picture draws while its fresh request is pending and takes its answ
   equal(await fresh, page('fresh'))
   await w.settled()
   equal(w.asked, ['/checks'])
+})
+
+test('a kept page and shell still draw when their release sheet leaves the file cache', async () => {
+  let w = worker()
+  let html = page('last seen').replace(
+    '<head>',
+    '<head><link rel="stylesheet" media="screen" href="/_yak/release.css">' +
+      '<link rel="modulepreload" href="/_yak/a.js">',
+  )
+  w.site.set('/_yak/release.css', 'body{background:url(paper.svg)}')
+  await w.leave('/manage/checks', html, Date.now(), html)
+  await w.scope.caches.delete(FILES)
+  w.site.set('/_yak/release.css', () => new Promise(() => {}))
+  w.site.set('/manage/checks', page('fresh'))
+  w.site.set('/manage/checks/updates', page('fresh updates'))
+  w.asked.length = 0
+  for (let url of ['/manage/checks', '/manage/checks/updates']) {
+    let drawn = await w.open(url)
+    equal(drawn?.includes('last seen'), true)
+    equal(
+      drawn?.includes(
+        '<style media="screen">body{background:url("https://yaks.app/_yak/paper.svg")}</style>',
+      ),
+      true,
+    )
+    equal(drawn?.includes('rel="stylesheet"'), false)
+    equal(drawn?.includes('rel="modulepreload"'), false)
+    await w.ask(url, { fresh: true })
+  }
+  equal(w.asked, ['/manage/checks', '/manage/checks/updates'])
+})
+
+test('a picture saved before its sheets were kept opens from the network', async () => {
+  let w = worker()
+  await (await w.scope.caches.open(PAGES)).put(
+    'https://yaks.app/checks',
+    new Response(page('old picture')),
+  )
+  w.site.set('/checks', page('fresh'))
+  equal(await w.open('/checks'), page('fresh'))
 })
 
 test('a pushed opening takes the fresh page at its address without the push marker', async () => {

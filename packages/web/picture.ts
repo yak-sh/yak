@@ -200,6 +200,7 @@ let status = (said: string) =>
 // A script, whole: what it says is most of a page's bytes (the rows it was
 // drawn from, its own code), and none of it runs in a picture.
 let SCRIPT = /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi
+let AHEAD = /<link\b[^>]*\brel=(["'])(?:modulepreload|prefetch)\1[^>]*>/gi
 let FRAME_SRC = /(<iframe\b[^>]*?\s)src(\s*=)/gi
 
 // This runs at the end of the picture's markup. Its styles are in before
@@ -244,6 +245,7 @@ export let picture = (
 ): string =>
   snapshot
     .replace(SCRIPT, '')
+    .replace(AHEAD, '')
     .replace(FRAME_SRC, '$1data-kept-src$2')
     .replace(/<html\b/i, `<html ${KEPT}="${at}"${shell ? ` ${SHELL}` : ''}`)
     .replace(

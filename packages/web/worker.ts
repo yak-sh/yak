@@ -35,6 +35,7 @@
  * @module
  */
 import { FRESH, FRESH_URL, FRESH_WAIT, NETWORK, picture } from './picture.ts'
+import { pictureSheets } from './picture-sheets.ts'
 import { keptReports } from './kept-reports.ts'
 import type { Failure } from './opening.ts'
 
@@ -130,6 +131,7 @@ export let pageKey = (url: string): string => {
 // the shell.
 export let FORGOT = '/.forgot'
 let SHELL = '/.shell'
+let DRAWN = 'x-yak-picture'
 
 /** What a service worker needs of its global scope. */
 export type Scope = {
@@ -200,8 +202,10 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     let keys = (await cache.keys()).filter((r) => !own.includes(r.url))
     await Promise.all(keys.slice(0, -keep).map((r) => cache.delete(r)))
   }
-  let forgotAt = async () => {
-    let said = await (await caches.open(PAGES)).match(location.origin + FORGOT)
+  let forgotAt = async (pages?: Cache) => {
+    let said = await (pages ?? await caches.open(PAGES)).match(
+      location.origin + FORGOT,
+    )
     return said ? Number(await said.text()) : 0
   }
   let reports = opts.report && keptReports(scope, opts.report, forgotAt)
@@ -212,7 +216,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   ) => {
     if (!opts.broke) return
     let error = e instanceof Error ? e : Error(String(e))
-    scope.fetch(location.origin + opts.broke, {
+    return scope.fetch(location.origin + opts.broke, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
@@ -266,6 +270,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       headers: {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store',
+        [DRAWN]: '1',
       },
     })
   let keep = async (
@@ -273,24 +278,52 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     source: 'picture' | 'push' = 'picture',
   ) => {
     if (!pictures) return
-    if (new URL(url).origin != location.origin) return
-    if (since < await forgotAt()) return
+    let atUrl = new URL(url)
+    if (atUrl.origin != location.origin) return
+    let sheets = new Map<string, Promise<string>>()
+    let read = (href: string) => {
+      let held = sheets.get(href)
+      if (held) return held
+      let opening = file(new Request(href)).then((res) => {
+        if (!res.ok) {
+          void res.body?.cancel()
+          throw new Error(
+            `A picture's sheet answered ${res.status} at ${
+              new URL(href).pathname
+            }`,
+          )
+        }
+        return res.text()
+      })
+      sheets.set(href, opening)
+      return opening
+    }
+    let styled = (markup: string) =>
+      pictureSheets(markup, atUrl, opts.named, read)
+    let [page, frame] = await Promise.all([
+      styled(html),
+      shell && opts.shelled?.(url) ? styled(shell) : undefined,
+    ])
     let pages = await caches.open(PAGES)
-    await pages.delete(pageKey(url))
-    await pages.put(
-      pageKey(url),
-      stored(
-        picture(html, at, {
-          opening: opts.opening?.(source),
-          door: opts.broke,
-        }),
-      ),
-    )
-    if (shell && opts.shelled?.(url)) {
+    if (since < await forgotAt(pages)) return
+    let key = pageKey(url)
+    await pages.delete(key)
+    if (page != null) {
+      await pages.put(
+        key,
+        stored(
+          picture(page, at, {
+            opening: opts.opening?.(source),
+            door: opts.broke,
+          }),
+        ),
+      )
+    }
+    if (frame != null) {
       await pages.put(
         location.origin + SHELL,
         stored(
-          picture(shell, at, {
+          picture(frame, at, {
             opening: opts.opening?.('shell'),
             door: opts.broke,
             shell: true,
@@ -319,10 +352,15 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   // in a frame, whose page is another's.
   let kept = async (req: Request, key: string) => {
     let pages = await caches.open(PAGES)
+    let draw = async (key: string) => {
+      let res = await pages.match(key)
+      if (res?.headers.has(DRAWN)) return res
+      await res?.body?.cancel()
+    }
     let shell = (req.destination || 'document') == 'document' &&
       opts.shelled?.(key)
-    return await pages.match(key) ??
-      (shell ? await pages.match(location.origin + SHELL) : undefined)
+    return await draw(key) ??
+      (shell ? await draw(location.origin + SHELL) : undefined)
   }
   // The page from the network, however long it takes, or the site's page
   // saying why it can't be had. A slow answer is never given up on: the
@@ -407,7 +445,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   }
   let file = async (req: Request) => {
     let files = await caches.open(FILES)
-    let kept = await files.match(req)
+    let kept = await files.match(req, { ignoreVary: true })
     if (kept) return kept
     let got = await scope.fetch(req)
     if (got.ok) await files.put(req, got.clone())
@@ -437,7 +475,13 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       return
     }
     let url = pictures && opts.opens?.(pushed)
-    if (url) e.waitUntil(refresh(url))
+    if (url) {
+      e.waitUntil(
+        refresh(url).catch((e) =>
+          tell(e, 'The worker could not keep a pushed page')
+        ),
+      )
+    }
   })
   scope.addEventListener('message', (e) => {
     let said = e.data as Partial<Snapshot> | null
@@ -451,7 +495,11 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       typeof said?.keep == 'string' && typeof said.html == 'string' &&
       (said.shell == null || typeof said.shell == 'string')
     ) {
-      e.waitUntil(keep(said as Snapshot))
+      e.waitUntil(
+        keep(said as Snapshot).catch((e) =>
+          tell(e, 'The worker could not keep a page')
+        ),
+      )
     }
   })
 }
