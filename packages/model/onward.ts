@@ -1,6 +1,9 @@
-// A step asked of a chain of models: where the provider says the model asked
-// is retired or is none it knows, the step goes on to the next model the chain
-// names, so a model taken off a catalogue never ends a turn.
+// A step asked of a chain of models: where the provider refuses it, because
+// the model asked is retired or is none it knows, or because its own account
+// has nothing left to spend, the step goes on to the next model the chain
+// names, so neither a model taken off a catalogue nor a provider's spent
+// account ends a turn.
+import { dry } from './limits.ts'
 import { type Model, ModelError, type Request } from './mod.ts'
 
 // The codes a provider's "no such model" is heard as: `model` where a
@@ -25,32 +28,66 @@ let GONE = new Set(['model', 'model_not_found'])
 export let gone = (error: unknown): error is ModelError =>
   error instanceof ModelError && GONE.has(error.code)
 
+/**
+ * Whether `error` is a provider declining to run the request at all: the
+ * model asked is {@link gone}, or the provider's own account is dry (@yaks/model
+ * `dry`: its spend limit, billing quota, credit or plan window used up). A
+ * refused request ran nothing, so it costs nothing and another provider may
+ * take it. A caller's own ceiling (`limit`) is no refusal: every provider
+ * would meet it.
+ *
+ * ```ts
+ * import { ModelError, refused } from '@yaks/model'
+ * import { equal } from '@yaks/testing'
+ * equal(refused(new ModelError('model')), true)
+ * equal(refused(new ModelError('project_spend_limit_exceeded')), true)
+ * equal(refused(new ModelError('credit')), true)
+ * equal(refused(new ModelError('limit')), false)
+ * equal(refused(new ModelError('busy')), false)
+ * ```
+ */
+export let refused = (error: unknown): error is ModelError =>
+  gone(error) || error instanceof ModelError && dry(error)
+
 /** One model of a chain: what asks it, and the name it is asked by. */
 export type Link = { model: Model; name: string }
 
 /**
  * A model that asks `chain(req)` in order: the first link answers the step,
- * and a link that fails {@link gone} before acknowledging the request or
- * producing output passes the step to the next. `passed` hears each such
- * failure with the name it was asked by. Other failures are thrown as they
- * came.
+ * and a link {@link refused} before producing output passes the step to the
+ * next, even where the provider acknowledged the request first. `passed`
+ * hears each such failure with the name it was asked by. Other failures are
+ * thrown as they came.
  *
  * ```ts
  * import { type Model, ModelError, onward } from '@yaks/model'
  * import { equal } from '@yaks/testing'
- * let retired: Model = () => Promise.reject(new ModelError('model'))
- * let busy: Model = () => Promise.reject(new ModelError('busy'))
+ * let failing = (code: string): Model => () => Promise.reject(new ModelError(code))
+ * let acked = (code: string): Model => async (req) => {
+ *   await req.onAck?.({ p: { id: 'r' } })
+ *   throw new ModelError(code)
+ * }
+ * let started = (code: string): Model => (req) => {
+ *   req.onFirst?.()
+ *   return Promise.reject(new ModelError(code))
+ * }
  * let ok: Model = (req) =>
  *   Promise.resolve({ id: 'r', model: req.model, items: [] })
  * let heard: string[] = []
- * let ask = (links: { model: Model; name: string }[]) =>
- *   onward(() => links, (name) => heard.push(name))(
- *     { model: 'a', items: [], tools: [] },
+ * let chain = (links: Model[]) => () =>
+ *   links.map((model, i) => ({ model, name: 'm' + i }))
+ * let ask = (...links: Model[]) =>
+ *   onward(chain(links), (name) => heard.push(name))(
+ *     { model: 'm0', items: [], tools: [] },
  *   ).then((r) => r.model, (e) => e.code)
- * equal(await ask([{ model: retired, name: 'a' }, { model: ok, name: 'b' }]), 'b')
- * equal(await ask([{ model: busy, name: 'a' }, { model: ok, name: 'b' }]), 'busy')
- * equal(await ask([{ model: retired, name: 'a' }]), 'model')
- * equal(heard, ['a'])
+ * equal(await ask(failing('model'), ok), 'm1')
+ * equal(await ask(acked('project_spend_limit_exceeded'), ok), 'm1')
+ * equal(await ask(failing('credit'), failing('model'), ok), 'm2')
+ * equal(await ask(failing('busy'), ok), 'busy')
+ * equal(await ask(failing('limit'), ok), 'limit')
+ * equal(await ask(started('credit'), ok), 'credit')
+ * equal(await ask(failing('model')), 'model')
+ * equal(heard, ['m0', 'm0', 'm0', 'm1'])
  * ```
  */
 export let onward = (
@@ -65,10 +102,6 @@ async (req) => {
       return await link.model({
         ...req,
         model: link.name,
-        onAck: async (mark) => {
-          begun = true
-          await req.onAck?.(mark)
-        },
         onFirst: () => {
           begun = true
           req.onFirst?.()
@@ -80,7 +113,7 @@ async (req) => {
       })
     } catch (error) {
       req.signal?.throwIfAborted()
-      if (!gone(error) || begun || i == links.length - 1) throw error
+      if (!refused(error) || begun || i == links.length - 1) throw error
       passed?.(link.name, error)
     }
   }

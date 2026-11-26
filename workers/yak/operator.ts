@@ -1321,7 +1321,8 @@ export let operatorChoice = (env: Env, machine = false) => {
 
 /**
  * The hosted models a step asked of `asked` goes on to where its provider
- * says that model is retired or unknown (@yaks/model `onward`), in order:
+ * refuses it, the model retired or unknown or its own account dry
+ * (@yaks/model `onward`), in order:
  * `asked`, the models its space may be answered with (`own`), then each of
  * `choices` (config.ts `agents.operator`) whose provider `serves`.
  *
@@ -2289,11 +2290,12 @@ export let operating = (
     Object.entries(implementations).filter(([p]) => p != MACHINE)
       .map(([p, m]) => [p, accounting(m, p)]),
   )
-  // A hosted step whose provider says its model is retired or unknown goes
-  // on to the next model the Operator's choices name (`chainOf`), each
-  // charged as its own provider's step; the turn ends only when none is
-  // left. The model that failed is reported, so its row or its caller is
-  // fixed.
+  // A hosted step its provider refuses (@yaks/model `refused`: the model
+  // retired or unknown, or the provider's account dry, its spend limit or
+  // credit used up) goes on to the next model the Operator's choices name
+  // (`chainOf`), each charged as its own provider's step; the turn ends only
+  // when none is left. The model that failed is reported, so its row, its
+  // caller or its provider's account is fixed.
   let serves = (p: string) => !!charged[p] && ready(env, p, operatorProviders)
   let models: Record<string, Model> = Object.fromEntries(
     Object.entries(charged).map(([p, m]) => [

@@ -5,6 +5,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { messages } from '@yaks/anthropic'
+import { listPrice } from '@yaks/model'
 import { platform } from './directory-probe.ts'
 import { directoryOf } from './directory.ts'
 import { chatted, operatorMemory } from './operator-testing.ts'
@@ -110,6 +111,9 @@ let guide = {
 let operator = operating(operatorMemory(), env, {
   model: messages({ key: () => 'k', fetch }),
   name: 'claude-sonnet-5-5',
+  // One price for every model its provider is asked, so the next model a
+  // refused step goes on to is asked of the same fake API.
+  price: listPrice('claude-sonnet-5-5'),
   tools: () => [{
     name: 'zap',
     description: 'Zap',
@@ -173,8 +177,9 @@ test('a request the API refuses reaches the tracker, never shown as its error', 
   assertStringIncludes(out.reports, 'messages: bad')
 })
 
-test("yaks.app's credit with Anthropic running out reaches the tracker, and the person reads that the Operator is unavailable", async () => {
-  answer = () =>
+test("yaks.app's credit running out moves the step to the next model, and once every model is out the person reads that the Operator is unavailable", async () => {
+  let models: string[] = []
+  answer = (body) => (models.push(body.model),
     Response.json({
       type: 'error',
       error: {
@@ -182,8 +187,9 @@ test("yaks.app's credit with Anthropic running out reaches the tracker, and the 
         message:
           'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.',
       },
-    }, { status: 400 })
+    }, { status: 400 }))
   let out = await ask('Do a third thing')
+  assertEquals(models, ['claude-sonnet-5-5', '@cf/zai-org/glm-5.3'])
   assertEquals(
     out.text,
     "I couldn't finish this: the Operator is unavailable for now." + TOLD,

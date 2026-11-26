@@ -155,22 +155,32 @@ test('a released call is held again, and a completed zero-cost call is final', a
   await assertRejects(hold, ModelError, 'already holds')
 })
 
-test('a missing-model error after provider acknowledgement or output keeps the debit', async () => {
+// A provider's refusal (@yaks/model `refused`) ran nothing, so the next model
+// holds the same call, even once the provider acknowledged it; output means it
+// worked, so the debit stays and the call is not sent again.
+test('a provider refusal before output releases the debit, and after output keeps it', async () => {
+  let codes: Record<string, string> = {
+    accepted: 'model_not_found',
+    dry: 'project_spend_limit_exceeded',
+    streaming: 'model_not_found',
+  }
   let raw = Object.assign(async (req: Parameters<Model>[0]) => {
     await req.onSubmit?.()
-    if (req.model == 'accepted') await req.onAck?.({ fixture: { id: 'r' } })
-    else req.onFirst?.()
-    throw new ModelError('model_not_found')
+    if (req.model == 'streaming') req.onFirst?.()
+    else await req.onAck?.({ fixture: { id: 'r' } })
+    throw new ModelError(codes[req.model])
   }, { quote: () => ({ dollars: 0.05, tokens: 1 }) })
   let callModel = accounted(p.env, (dir) => dir.at(started.space.eid), raw)
-  for (let model of ['accepted', 'streaming']) {
+  let code = (req: Parameters<Model>[0]) =>
+    callModel(req).then(() => 'answered', (e: ModelError) => e.code)
+  for (let model of Object.keys(codes)) {
     let req = { call: mint(), model, items: [], tools: [] }
-    let failure = await assertRejects(() => callModel(req), ModelError)
-    assertEquals(failure.code, 'model_not_found')
-    let retry = await assertRejects(() => callModel(req), ModelError)
-    assertEquals(retry.code, 'submitted')
+    assertEquals(
+      [await code(req), await code(req)],
+      [codes[model], model == 'streaming' ? 'submitted' : codes[model]],
+    )
   }
-  assertAlmostEquals(await started.used(), 0.1)
+  assertAlmostEquals(await started.used(), 0.05)
 })
 
 // A call cut short once the provider may have worked on it is charged what

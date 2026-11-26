@@ -64,7 +64,7 @@ import type { MediaReceipt } from './media.ts'
 import { listLabel, listPrice } from './prices.ts'
 export { listLabel, listPrice } from './prices.ts'
 export { deferredModel } from './deferred.ts'
-export { gone, type Link, onward } from './onward.ts'
+export { gone, type Link, onward, refused } from './onward.ts'
 export { type ModelResult, type ModelResults, modelResults } from './results.ts'
 export { message } from './message.ts'
 export { type Offer, offerFor, offers, serving } from './offers.ts'
@@ -131,6 +131,7 @@ export {
   accountEid,
   accountHome,
   ACCOUNTS,
+  dry,
   limitEid,
   limitRows,
   metering,

@@ -212,11 +212,16 @@ let busy = new Set([
 ])
 
 // A spent allowance also answers 429, but it is the provider's no: the Codex
-// backend's plan window and the API's billing quota stay spent for hours, so
-// asking again in seconds meets the same limit. A request the model cannot
-// take (too long, malformed, refused) fails the same way however often it is
-// sent.
-let spent = new Set(['usage_limit_reached', 'insufficient_quota'])
+// backend's plan window, the API's billing quota and a project's spend limit
+// stay spent for hours, so asking again in seconds meets the same limit. A
+// request the model cannot take (too long, malformed, refused) fails the same
+// way however often it is sent.
+let spent = new Set([
+  'usage_limit_reached',
+  'insufficient_quota',
+  'project_spend_limit_exceeded',
+  'billing_hard_limit_reached',
+])
 let final = new Set([
   ...spent,
   'usage_not_included',

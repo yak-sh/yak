@@ -16,13 +16,13 @@ import type { Env } from './env.ts'
 import {
   affordable,
   billed,
-  gone,
   likely,
   measured,
   type Model,
   ModelError,
   type ModelResults,
   type Price,
+  refused,
   requestBound,
   retained,
 } from '@yaks/model'
@@ -347,7 +347,8 @@ export let accounted = (
         },
       )
       reached('reserved', hold)
-      let submitted = false, begun = false, written = 0, acknowledged = false
+      let submitted = false, begun = false, output = false, written = 0
+      let acknowledged = false
       let requestedAt = Date.now()
       let reply: Awaited<ReturnType<Model>>
       try {
@@ -379,11 +380,11 @@ export let accounted = (
             await req.onAck?.(mark)
           },
           onFirst: () => {
-            begun = true
+            begun = output = true
             req.onFirst?.()
           },
           onText: req.onText && ((delta) => {
-            begun = true
+            begun = output = true
             written += delta.text.length
             req.onText!(delta)
           }),
@@ -398,13 +399,16 @@ export let accounted = (
             after: 1000,
           })
         }
-        // A provider refusal before any work lets the next model hold the
-        // same call. Media the space had no room to keep is free to the
-        // person too, but the provider may already have generated it.
+        // A call never sent, or one its provider refused before any output
+        // (@yaks/model `refused`: no such model, or its account dry), ran
+        // nothing, so the next model holds the same call. Media the space
+        // had no room to keep is free to the person too, but the provider may
+        // already have generated it.
         let unkept = error instanceof ModelError && error.code == 'space_full'
         if (unkept) await hold.settle(0, false)
-        else if (!begun && (!submitted || gone(error))) await hold.release()
-        else {
+        else if (!begun && !submitted || !output && refused(error)) {
+          await hold.release()
+        } else {
           // The provider may have worked on it: what it said it used, else
           // what it most likely cost.
           let said = error instanceof ModelError

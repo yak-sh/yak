@@ -1,8 +1,8 @@
 // The model an Operator answers with is a row in the directory
 // (@yaks/platform/operator-model): switching it is one write, the next turn is
 // answered by it and charged at its row's price, a space's own persona may
-// name another, a model its provider retired passes the turn to the next, and
-// a summary is asked of the same model.
+// name another, a model its provider retired or whose provider's account is
+// dry passes the turn to the next, and a summary is asked of the same model.
 import { identityEid, mint } from '@yaks/graph'
 import { test } from '@yaks/testing'
 import { assertAlmostEquals, assertEquals } from '@std/assert'
@@ -30,30 +30,38 @@ let space = (await dir.at(
 
 // Each provider answers as itself, reporting `read` input tokens (a
 // thousand, so a step costs a thousandth of its model's input price) and no
-// dollars; a summary says so. Each says it has no model `RETIRED` once the
-// call is submitted, as a provider says of one it took off its catalogue.
+// dollars; a summary says so. Each refuses a model of `REFUSING` once the
+// call is submitted: `RETIRED` as a provider says of one it took off its
+// catalogue, `DRY` once it acknowledged the call, as OpenAI's stream does
+// when the project's spend limit is reached.
 let asked: string[] = []
 let read = 1000
-let RETIRED = 'gpt-retired'
+let RETIRED = 'gpt-retired', DRY = 'gpt-dry'
+let REFUSING: Record<string, [string, boolean]> = {
+  [RETIRED]: ['model_not_found', false],
+  [DRY]: ['project_spend_limit_exceeded', true],
+}
 let answering = (provider: string): Model =>
   Object.assign(
-    (req: Parameters<Model>[0]) => {
-      if (req.model == RETIRED) {
+    async (req: Parameters<Model>[0]) => {
+      let refusing = REFUSING[req.model]
+      if (refusing) {
+        let [code, ack] = refusing
         asked.push(`${provider} ${req.model} refused`)
-        return Promise.resolve(req.onSubmit?.()).then(() => {
-          throw new ModelError('model_not_found', `${RETIRED} was deprecated`)
-        })
+        await req.onSubmit?.()
+        if (ack) await req.onAck?.({ [provider]: { response_id: 'r' } })
+        throw new ModelError(code, `${req.model} refused`)
       }
       let summary = JSON.stringify(req.instructions ?? '').includes(
         'Summarize this transcript',
       )
       asked.push(`${provider} ${req.model}${summary ? ' summary' : ''}`)
-      return Promise.resolve({
+      return {
         id: mint(),
         model: req.model,
         items: [{ kind: 'assistant' as const, text: 'Hello.' }],
         usage: { input_tokens: read, output_tokens: 0, cache_write_tokens: 0 },
-      })
+      }
     },
     { info: (name: string) => Promise.resolve({ name }) },
   )
@@ -107,28 +115,30 @@ test('a space whose persona names its own model is answered by it, at the direct
   })
 })
 
-test('a space whose model its provider retired is answered by the directory’s, at its price', async () => {
-  await operatorOn(env, 'openai', RETIRED, { input: 1, output: 1 })
-  await operatorOn(env, 'anthropic', 'claude-opus-5-5', {
-    input: 5,
-    output: 25,
-  })
-  let own = personaFor(space.eid)
-  let model = identityEid('model', [RETIRED])
-  await store.g.apply([{ entity: { eid: model }, model: { name: RETIRED } }, {
-    entity: { eid: own },
-    using: { provider: identityEid('provider', ['openai']), model },
-  }], { trusted: true })
-  let used = async () => (await dir.at(space.eid))!.meter?.models ?? 0
-  let before = await used()
-  assertEquals(await turn(), {
-    asked: ['openai gpt-retired refused', 'anthropic claude-opus-5-5'],
-    cost: 5,
-  })
-  assertAlmostEquals(await used() - before, 0.005)
-  await store.g.apply([{ entity: { eid: own }, using: null }], {
-    trusted: true,
-  })
+test('a space whose model its provider refuses is answered by the directory’s, at its price', async () => {
+  for (let refused of [RETIRED, DRY]) {
+    await operatorOn(env, 'openai', refused, { input: 1, output: 1 })
+    await operatorOn(env, 'anthropic', 'claude-opus-5-5', {
+      input: 5,
+      output: 25,
+    })
+    let own = personaFor(space.eid)
+    let model = identityEid('model', [refused])
+    await store.g.apply([{ entity: { eid: model }, model: { name: refused } }, {
+      entity: { eid: own },
+      using: { provider: identityEid('provider', ['openai']), model },
+    }], { trusted: true })
+    let used = async () => (await dir.at(space.eid))!.meter?.models ?? 0
+    let before = await used()
+    assertEquals(await turn(), {
+      asked: [`openai ${refused} refused`, 'anthropic claude-opus-5-5'],
+      cost: 5,
+    })
+    assertAlmostEquals(await used() - before, 0.005)
+    await store.g.apply([{ entity: { eid: own }, using: null }], {
+      trusted: true,
+    })
+  }
 })
 
 test('a conversation long enough to compact is summarized by the model the directory names, in its row’s window', async () => {

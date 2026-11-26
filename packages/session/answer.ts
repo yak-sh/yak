@@ -8,6 +8,7 @@
 // the helper found goes back where they came from, not to the helper.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { dry } from '@yaks/model'
 import { refusalText } from '@yaks/tools/errors'
 import { kindOf, LIMIT, ordered, textOf } from './state.ts'
 import { transcriptBack } from './window.ts'
@@ -238,13 +239,18 @@ export let askedFor = (
 
 // What a model's refusal tells the person, by its code (@yaks/model
 // `ModelError`); any other code is the host's own failure, never the model's.
-// A ceiling (`LIMIT`) is said in its own sentence. The host's own credit with
-// the provider spent (@yaks/anthropic `credit`) is no ceiling of the person's.
+// A ceiling (`LIMIT`) is said in its own sentence. The host's own account
+// with the provider dry (@yaks/model `dry`: its credit, spend limit or plan
+// used up) is no ceiling of the person's.
 let REFUSED: Record<string, (name: string) => string> = {
   refusal: () => 'the model declined to do this',
   busy: () => 'the model is too busy to answer right now',
-  credit: (name) => `${name} is unavailable for now`,
 }
+let refusing = (code: string) =>
+  REFUSED[code] ??
+    (dry({ code })
+      ? (name: string) => `${name} is unavailable for now`
+      : undefined)
 let couldnt = (why: string) => `I couldn't finish this: ${why}.`
 
 /** What a turn ended with in plain words, what went wrong where it did, and
@@ -329,9 +335,10 @@ export let replyOf = (
     ? refusalText(code, text)
     : String(comp(end, 'failed')?.reason ?? '') || text ||
       'ended without an answer'
-  let declined = kind == 'refusal' && !!REFUSED[code]
-  let why = declined
-    ? couldnt(REFUSED[code](name))
+  let said = kind == 'refusal' ? refusing(code) : undefined
+  let declined = !!said
+  let why = said
+    ? couldnt(said(name))
     : end
     ? broke
     : 'This ended without an answer.'

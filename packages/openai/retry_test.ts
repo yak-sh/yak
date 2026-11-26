@@ -324,6 +324,12 @@ test('provider failures fail fast', async () => {
       response: { error: { code: 'context_length_exceeded' } },
     })
   )
+  await once(() =>
+    sse({
+      type: 'response.failed',
+      response: { error: { code: 'project_spend_limit_exceeded' } },
+    })
+  )
   await once(() => sse({ type: 'response.incomplete' }))
 })
 

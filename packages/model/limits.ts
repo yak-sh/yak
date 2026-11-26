@@ -59,35 +59,65 @@ export let limitEid = (
 export let metering = (limits: Limit[], model?: Eid): Limit[] =>
   limits.map((l) => l.per == 'model' && model ? { ...l, model } : l)
 
-// The codes a provider answers a spent allowance with: the Codex backend's
-// plan window, the API's billing quota, and @yaks/openai's native door's.
-let SPENT = new Set(['usage_limit_reached', 'insufficient_quota', 'limit'])
+// The codes a provider answers its own account running dry with: the Codex
+// backend's plan window, the API's billing quota, an OpenAI project's spend
+// limit and its hard billing limit, and an account out of credit
+// (@yaks/anthropic `credit`).
+let DRY = new Set([
+  'usage_limit_reached',
+  'insufficient_quota',
+  'project_spend_limit_exceeded',
+  'billing_hard_limit_reached',
+  'credit',
+])
 
 /**
- * Whether a failed request says the plan it spends is used up: a code a
- * provider answers a spent allowance with, or a window it read full that has
- * not reset by `now`. A provider merely busy is not spent.
+ * Whether a failed request says the provider's own account has nothing left
+ * to spend: a code a provider answers that with, or a plan window it read
+ * full that has not reset by `now`. A provider merely busy is not dry, nor is
+ * a caller's own ceiling (`limit`, {@link spent}).
+ *
+ * ```ts
+ * import { dry } from './limits.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let now = Date.parse('2026-11-23T12:00:00Z')
+ * let full = { provider: 'claude', window: 300, used: 100, resets: '2026-11-23T14:00:00Z' }
+ * equal(dry({ code: 'busy', limits: [full] }, now), true)
+ * equal(dry({ code: 'busy', limits: [{ ...full, resets: '2026-11-23T11:00:00Z' }] }, now), false)
+ * equal(dry({ code: 'project_spend_limit_exceeded' }, now), true)
+ * equal(dry({ code: 'credit' }, now), true)
+ * equal(dry({ code: 'limit' }, now), false)
+ * equal(dry({ code: 'busy' }, now), false)
+ * ```
+ */
+export let dry = (
+  e: { code?: string; limits?: Limit[] },
+  now: number = Date.now(),
+): boolean =>
+  DRY.has(e.code ?? '') ||
+  !!e.limits?.some((l) =>
+    l.used >= 100 && !(l.resets && Date.parse(l.resets) <= now)
+  )
+
+/**
+ * Whether a failed request says the plan it spends is used up: the
+ * provider's account {@link dry}, or the ceiling @yaks/openai's native door
+ * holds it to (`limit`).
  *
  * ```ts
  * import { spent } from './limits.ts'
  * import { equal } from '@yaks/testing'
  *
- * let now = Date.parse('2026-11-23T12:00:00Z')
- * let full = { provider: 'claude', window: 300, used: 100, resets: '2026-11-23T14:00:00Z' }
- * equal(spent({ code: 'busy', limits: [full] }, now), true)
- * equal(spent({ code: 'busy', limits: [{ ...full, resets: '2026-11-23T11:00:00Z' }] }, now), false)
- * equal(spent({ code: 'usage_limit_reached' }, now), true)
- * equal(spent({ code: 'busy' }, now), false)
+ * equal(spent({ code: 'usage_limit_reached' }), true)
+ * equal(spent({ code: 'limit' }), true)
+ * equal(spent({ code: 'busy' }), false)
  * ```
  */
 export let spent = (
   e: { code?: string; limits?: Limit[] },
   now: number = Date.now(),
-): boolean =>
-  SPENT.has(e.code ?? '') ||
-  !!e.limits?.some((l) =>
-    l.used >= 100 && !(l.resets && Date.parse(l.resets) <= now)
-  )
+): boolean => e.code == 'limit' || dry(e, now)
 
 /** The row of an account a CLI keeps on this machine (`account`), named by
  * its directory. */
