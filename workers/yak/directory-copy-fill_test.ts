@@ -71,22 +71,21 @@ await agent.tool('app_publish', {
 })
 
 // A stranger opening the app: its page, a file and `me`. What the copy was
-// told, and whether any of the requests waited on it.
+// told. Their route is read from the copy first (apps.ts `routeApp`), so a
+// request may wait on a read of it; a fill never holds one up.
 let visit = async () => {
-  let waited = false
   for (let path of ['/notes/', '/notes/notes.js', '/notes/api/who']) {
     let r = await k.at(`yourname.${k.host}`, path)
     equal(r.status, 200)
-    waited ||= /copy_wait/.test(r.headers.get('server-timing') ?? '')
     await r.body?.cancel()
   }
   await k.settled()
-  return { told: copy.told.splice(0), waited }
+  return { told: copy.told.splice(0) }
 }
 
 test('serving copy: a line is told once per revision, and again after a write', async () => {
   ok((await visit()).told.length)
-  equal(await visit(), { told: [], waited: false })
+  equal(await visit(), { told: [] })
   await owned(k, k.owner.person, 'other')
   // What it was told at the copy's revision, the copy holds for a stall.
   let held = (await visit()).told.filter(([revision]) =>
