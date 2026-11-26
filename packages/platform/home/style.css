@@ -668,14 +668,14 @@
 .Home_Features {
   grid-area: features;
   display: grid;
-  gap: clamp(2.35rem, 4vw, 4.5rem);
+  gap: clamp(2.75rem, 5vw, 5.5rem);
   padding-block-start: clamp(1.5rem, 3vw, 2.75rem);
   container-type: inline-size;
 }
 
 .Home_Feature {
   display: grid;
-  gap: .9rem clamp(1rem, 2.1vw, 2rem);
+  gap: 1.1rem clamp(1.25rem, 3vw, 3rem);
   align-items: start;
   contain: layout;
 }
@@ -687,7 +687,7 @@
 }
 
 .Home_Feature + .Home_Feature {
-  padding-block-start: clamp(1.75rem, 3vw, 3rem);
+  padding-block-start: clamp(2rem, 3.75vw, 3.75rem);
   border-block-start: 1px solid var(--border);
 }
 
@@ -1010,8 +1010,13 @@
   align-content: start;
 }
 
+/* The prices sit on a band of meadow across the whole window, a section of
+   their own under the features. */
 .Home_Pricing {
   gap: 1.55rem;
+  padding-block: clamp(2rem, 4vw, 3.5rem);
+  border-image: conic-gradient(color-mix(in srgb, var(--accent) 10%, var(--bg))
+    0 0) fill 0 / / 0 100vmax;
 }
 
 .Home_Pricing,
@@ -1150,16 +1155,11 @@
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   }
 
-  /* A thread sits under its words until there is room beside them for an
-     address on one line. */
-  .Home_Feature:has(> .Home_Scene-email) {
-    grid-template-columns: minmax(0, 32rem);
-  }
-}
-
-@container (min-width: 46rem) {
-  .Home_Feature:has(> .Home_Scene-email) {
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  /* A thread is too wide to sit beside its words with every address whole
+     on its line, so it sits under them. */
+  .Home_Scene-email {
+    grid-column: 1 / -1;
+    max-width: 34rem;
   }
 }
 
