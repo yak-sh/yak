@@ -192,6 +192,29 @@ for (let [name, make] of Object.entries(stores)) {
   }
 }
 
+test('a store with many private components sees a stale row at the end', async () => {
+  let names = Array.from({ length: 52 }, (_, i) => `private_${i}`)
+  let docs: VocabDoc = {
+    $defs: Object.fromEntries(names.map((name) => [name, {
+      component: true,
+      type: 'object',
+      readers: 'person',
+      properties: {},
+    }])),
+  }
+  let vocab = loadVocab([memberDoc, words, docs], [memberKeywords])
+  let p = privacy(declarationsOf(vocab, {}, through))
+  let g = graph({ vocab, storage: stores.SQL(vocab) })
+  let current = () => p.current((query) => g.read(whole(query)))
+  let name = names.at(-1)!
+  await g.apply([at('last', { [name]: {} })], { trusted: true })
+  equal(await current(), false)
+  await g.apply([at('last', { [PRIVACY]: { hash: p.hash } })], {
+    trusted: true,
+  })
+  equal(await current(), true)
+})
+
 test('declarations hash a floor as ever and conditions as part of them', () => {
   let order = loadVocab({
     $defs: {

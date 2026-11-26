@@ -58,11 +58,11 @@ let ref = (b: Bundle | undefined, comp: string, prop: string) => {
   return v == null ? undefined : String(v)
 }
 
-// Fifty at a time, within a statement's bound values.
-let fifties = (eids: string[]) =>
+// Keep each lookup within the store's statement limits.
+let fifties = <T>(items: T[]) =>
   Array.from(
-    { length: Math.ceil(eids.length / 50) },
-    (_, i) => eids.slice(i * 50, i * 50 + 50),
+    { length: Math.ceil(items.length / 50) },
+    (_, i) => items.slice(i * 50, i * 50 + 50),
   )
 
 /** What the declarations make of entities, and how a store keeps it. */
@@ -229,8 +229,11 @@ export let privacy = (declared: Declared): Privacy => {
     line`.${PRIVACY}.hash>${hash}`,
   ]
 
-  // A readiness check can look for one hit across all the stale lines.
-  let outstanding = [line`(${sub(joined(stale, '|'))})`]
+  // Check several stale lines per read without making an unbounded statement
+  // when an app declares many private components.
+  let outstanding = fifties(stale).map((group) =>
+    line`(${sub(joined(group, '|'))})`
+  )
 
   /** Whether a store, read through `read`, holds no entity whose privacy is
    * stale. */
