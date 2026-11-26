@@ -67,7 +67,6 @@ type Press = {
   title?: string
   icon?: IconName
   logo?: string
-  external?: boolean
   fields?: Record<string, string>
 }
 
@@ -91,7 +90,6 @@ let press = (p: Press) => {
         href: p.href,
         key: p.href,
         title: p.title,
-        ...p.external ? { target: '_blank', rel: 'noopener' } : {},
       },
       face,
     )
@@ -129,7 +127,6 @@ let lines = (space: Space, ways: Ways, here: string) => {
       logo: p.logo,
       label: p.platform,
       title: opening(p),
-      external: true,
     })),
     ...ways.unset.map((u): Press => ({
       href: enabling(

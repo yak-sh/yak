@@ -16,7 +16,12 @@ let theirs = ((
 ) =>
   h(
     tag,
-    tag == 'a' ? { ...props, rel: 'nofollow ugc' } : props,
+    tag == 'a'
+      ? {
+        ...props,
+        rel: [props?.rel, 'nofollow ugc'].filter(Boolean).join(' '),
+      }
+      : props,
     ...children,
   )) as typeof h
 

@@ -4,6 +4,7 @@
 import { h } from 'preact'
 import { useMemo } from 'preact/hooks'
 import { parse, render, type Token } from '@yaks/markdown'
+import { AWAY } from '@yaks/markdown/away'
 import type { H } from '@yaks/render'
 
 export const YAKS_APP = 'https://yaks.app'
@@ -11,11 +12,6 @@ export const YAKS_APP = 'https://yaks.app'
 // yaks.app as a word of its own: not the end of a longer name such as
 // yourname.yaks.app, nor the start of a path or another word.
 let MENTION = /(?<![\w.-])yaks\.app(?![\w/-]|\.\w)/
-
-// A link to yaks.app opens in a new tab, so the reader keeps their place.
-const AWAY = { target: '_blank', rel: 'noopener' }
-let away = (href?: string) =>
-  href == YAKS_APP || href?.startsWith(`${YAKS_APP}/`) ? AWAY : {}
 
 /** A line of text with each mention of yaks.app a link to it. */
 export let words = (line: string, cls = 'Body_Link') =>
@@ -57,14 +53,10 @@ let linked = (tokens: Token[]): Token[] =>
     ])
   })
 
-let host = ((tag: string, props: Record<string, unknown> | null, ...kids) =>
-  h(
-    tag,
-    tag == 'a' ? { ...props, ...away(props?.href as string) } : props,
-    ...kids,
-  )) as H<ReturnType<typeof h>>
-
 /** Markdown, as @yaks/markdown draws it, with each mention of yaks.app a
- * link to it, parsed again only when it changes. */
+ * link to it, opening in a new tab as every link off the page does, parsed
+ * again only when it changes. */
 export let Prose = ({ source }: { source: string }) =>
-  useMemo(() => render(linked(parse(source)), host), [source])
+  useMemo(() => render(linked(parse(source)), h as H<ReturnType<typeof h>>), [
+    source,
+  ])

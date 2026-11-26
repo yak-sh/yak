@@ -5,7 +5,9 @@
   "exports": {
     ".": "./mod.ts",
     "./structural": "./structural.ts",
-    "./graph": "./graph.ts"
+    "./graph": "./graph.ts",
+    "./away": "./away.ts",
+    "./site": "./site.ts"
   },
   "license": "Apache-2.0",
   "description": "Parses GitHub Flavored Markdown into structural renderer nodes rather than HTML strings or terminal escape sequences.",

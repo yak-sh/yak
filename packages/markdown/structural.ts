@@ -4,6 +4,7 @@
 import { Lexer, Marked, type Token, Tokenizer, type Tokens } from 'marked'
 import { HUMAN, short, WRITTEN } from '@yaks/id'
 import type { Child, H } from '@yaks/render'
+import { away, type Site } from './away.ts'
 
 export { type Token } from 'marked'
 
@@ -469,12 +470,14 @@ let bodyClass = (tag: string) =>
   (/^h[1-6]$/.test(tag) ? ` Body_Heading-${tag.slice(1)}` : '')
 
 /** What a host gives the renderer: where an entity id leads (`Refs`), what an
- * eid is called (`Ids`), and how a fenced block's code is coloured, as runs of
- * text each with its classes. */
+ * eid is called (`Ids`), how a fenced block's code is coloured, as runs of
+ * text each with its classes, and the page's own site, off which a link
+ * opens in a new tab (./away.ts; unset, the location's). */
 export type Options = {
   refs?: Refs
   ids?: Ids
   code?: (text: string, language?: string) => Run[]
+  site?: Site
   /** Links, images and ids drawn as their words, for a line that is itself
    * the thing pressed, such as a title. */
   flat?: boolean
@@ -491,7 +494,7 @@ export type Run = { text: string; classes: string[] }
 export let blocks = <Node>(
   tokens: Token[],
   host: H<Node>,
-  { refs, ids, code, flat }: Options = {},
+  { refs, ids, code, flat, site }: Options = {},
 ): Child<Node>[] => {
   let name = slugs()
   // An id the host can open is an anchor carrying the id, so a host can give
@@ -514,7 +517,7 @@ export let blocks = <Node>(
     ...children: Child<Node>[]
   ) => {
     return host(tag, {
-      ...props,
+      ...tag == 'a' && props ? away(props, site) : props,
       class: [
         bodyClass(tag),
         props?.class,

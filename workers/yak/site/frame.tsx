@@ -102,7 +102,7 @@ let Head = (
     <link rel='apple-touch-icon' href='apple-touch-icon.png' />
     <link rel='stylesheet' href={sheet} />
     <script src='idle.js' defer />
-    <script src='away.js' defer />
+    <script type='module' src='away.js' />
     {children}
   </head>
 )

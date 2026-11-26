@@ -16,6 +16,7 @@ import {
   parse,
   render,
   safeHref,
+  Site,
   stored,
   typed,
 } from './mod.ts'
@@ -78,6 +79,56 @@ test('untrusted markup and URLs never become executable nodes', () => {
     ]
   ) assertEquals(safeHref(url), undefined)
   assertEquals(safeHref('https://example.com'), 'https://example.com')
+})
+
+test('a link off the page site opens in a new tab, and one on it stays', () => {
+  let anchors = (source: string, site?: string[]) =>
+    JSON.stringify(render(parse(source), tree, {
+      site,
+      refs: (id) => `https://elsewhere.test/${id}`,
+    })).match(/"tag":"a","props":\{[^}]*\}/g)?.map((a) =>
+      a.includes('"target":"_blank","rel":"noopener"')
+    )
+  let source = [
+    '[out](https://discord.com/x)',
+    'https://ada.yaks.app/notes/',
+    '![pic](https://cdn.test/a.png)',
+    'T-12',
+    '[in](https://yaks.app/pricing)',
+    '[www](https://www.yaks.app/)',
+    '[here](/manage/ada/apps)',
+    '[mail](mailto:ada@example.com)',
+  ].join(' ')
+  assertEquals(anchors(source, ['yaks.app']), [
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+  ])
+  // With no site given and no location to read, every address leaves.
+  assertEquals(anchors('[in](https://yaks.app/pricing) [here](/x)'), [
+    true,
+    false,
+  ])
+  let ui = mount(
+    h(
+      Site.Provider,
+      { value: ['yaks.app'] },
+      h(Markdown, { source: '[out](https://a.test/) [in](https://yaks.app/)' }),
+    ),
+  )
+  try {
+    assertEquals(
+      [...ui.root.querySelectorAll('a')].map((a) => a.getAttribute('target')),
+      ['_blank', null],
+    )
+  } finally {
+    ui.free()
+  }
 })
 
 test('a document is its blocks in an element of its own', () => {

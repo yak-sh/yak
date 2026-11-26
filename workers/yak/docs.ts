@@ -31,7 +31,7 @@ import { type ComponentChildren, h } from 'preact'
 import type { H } from '@yaks/render'
 import type { Env } from './env.ts'
 import { type Page, PAGES } from './guide.ts'
-import { type Host, hosted, url } from '@yaks/platform/host'
+import { apex, type Host, hosted, url } from '@yaks/platform/host'
 import { publicPage } from '@yaks/platform/kept'
 import { drawn, head } from './shell.ts'
 import { asset } from './sheets.ts'
@@ -151,8 +151,11 @@ let prose: H<ComponentChildren> = (tag, props, ...children) =>
     class: [PARTS[tag], props?.class].filter(Boolean).join(' '),
   }, ...children)
 
-let said = (md: Md, tokens: Token[]) =>
-  tokens.length ? h(Body, {}, ...md.blocks(tokens, prose)) : null
+// A guide is on the platform's site, so a link to another opens in a new tab.
+let said = (md: Md, env: Host, tokens: Token[]) =>
+  tokens.length
+    ? h(Body, {}, ...md.blocks(tokens, prose, { site: [apex(env)] }))
+    : null
 
 // The contents: every subject with the phrase it is offered by, and the one
 // rule at the foot of it, since a reader who wants the file rather than the
@@ -258,9 +261,9 @@ let page = (
       h(
         'article',
         { class: 'Page_Body Prose' },
-        said(md, tokens.slice(0, lead + 1)),
+        said(md, env, tokens.slice(0, lead + 1)),
         under,
-        said(md, tokens.slice(lead + 1)),
+        said(md, env, tokens.slice(lead + 1)),
       ),
     ),
     { body: 'Docs' },

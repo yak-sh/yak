@@ -39,9 +39,9 @@ ${previewTags(env, { title, description, at, image })}
 <link rel="apple-touch-icon" href="${asset(env, 'apple-touch-icon.png')}">
 ${links(env, 'style.css')}
 <script src="${asset(env, 'idle.js')}" defer></script>
-<script src="${asset(env, 'away.js')}" data-home="${
+<script type="module" src="${asset(env, 'away.js')}" data-home="${
     esc(apex(env))
-  }" defer></script>
+  }"></script>
 ${island(asset(env, '_ready.js'))}`
 
 export let top = `<header class="Top">

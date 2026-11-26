@@ -24,7 +24,9 @@
  * part naming the same href is not a second link, and one naming another
  * keeps its tag and says `role="link"` and `data-href`: nested `<a>` is
  * invalid HTML, so following it is left to the application, which listens
- * for `[data-href]` once for the whole document.
+ * for `[data-href]` once for the whole document. A link to another site opens
+ * in a new tab (@yaks/markdown/away), by the page's `Site` where one is given,
+ * unless the caller names its own target.
  *
  * @module
  */
@@ -37,6 +39,8 @@ import {
   h,
 } from 'preact'
 import { useContext, useMemo } from 'preact/hooks'
+import { away } from '@yaks/markdown/away'
+import { Site } from '@yaks/markdown/site'
 
 type Mod = string | false | null | undefined
 
@@ -111,11 +115,11 @@ export let el = <P extends Props = Props>(
     })
   }
   let a = anchor(d.tag!, href, useContext(Surround).href)
+  let site = useContext(Site)
   // A part given no children passes none, rather than children that are
   // nothing: a textarea's `value` is its content only when it has none.
   let node = h(a.tag, {
-    ...props,
-    ...(a.href && { href: a.href }),
+    ...a.href ? away({ ...props, href: a.href }, site) : props,
     ...(a.demote && { role: 'link', tabIndex: 0, 'data-href': a.demote }),
     ref: elRef,
     class: classes(base, mod, extra),

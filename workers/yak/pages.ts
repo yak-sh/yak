@@ -71,6 +71,7 @@ export { esc } from './html.ts'
 import { managePath, type MarkedApp, type Setting } from '@yaks/platform/routes'
 
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
+import { Site } from '@yaks/markdown/site'
 import {
   PLATFORM_BACKGROUND,
   PLATFORM_DARK_BACKGROUND,
@@ -328,9 +329,9 @@ ${
     main.includes('data-alerts-offer')
       ? `<script type="module" src="${file('_alerts.js')}"></script>`
       : ''
-  }<script src="${file('drop.js')}" defer></script><script src="${
+  }<script src="${file('drop.js')}" defer></script><script type="module" src="${
     file('away.js')
-  }" data-home="${esc(apex(env))}" defer></script>${deployed(env)}</body>
+  }" data-home="${esc(apex(env))}"></script>${deployed(env)}</body>
 </html>`
   return new Response(staged(open, close, later), {
     status,
@@ -358,21 +359,27 @@ export type Said = {
   later?: Promise<Kids>
 }
 
+// A page is on the platform's site: a link to another opens in a new tab.
+let onSite = (env: Host, kids: Kids) =>
+  h(Site.Provider, { value: [apex(env)] }, kids)
+
 /** A page: what it says about itself, and its parts, rendered once. A page
  * with a `lead` opens with its title as the heading and the lead under it. */
 export let page = (env: Host, at: Said, ...parts: Kids[]) =>
   documented(
     env,
     esc(at.title),
-    markup([
+    markup(onSite(env, [
       at.lead == null ? null : [h('h1', null, at.title), h('p', null, at.lead)],
       parts,
-    ]),
+    ])),
     at.status ?? 200,
     at.headers,
     at.layout,
     at.head,
-    at.later && { contents: at.later.then(markup) },
+    at.later && {
+      contents: at.later.then((later) => markup(onSite(env, later))),
+    },
     at.assets,
     at.preview ?? {
       title: `${at.title} · yaks.app`,

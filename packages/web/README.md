@@ -61,19 +61,20 @@ more-specific routes.
 
 ## Exports
 
-| export       | provides                                                  |
-| ------------ | --------------------------------------------------------- |
-| `.`          | `routes`, `letters` and the host's `Hosting` interface    |
-| `./routes`   | routes facet composed by the browser host                 |
-| `./canvas`   | the canvas a composition serves, and `prepare`            |
-| `./page`     | the page every address answers, and what it wears         |
-| `./outlived` | whether a page outlived the bundle it runs                |
-| `./assets`   | an asset build said as data, to serve or to write to disk |
-| `./navigate` | the browser entry that starts `@yaks/ui/navigate`         |
-| `./picture`  | a kept page's picture, made from a snapshot of it         |
-| `./worker`   | a service worker keeping pages and files named by bytes   |
-| `./keep`     | a page registering that worker and sending it snapshots   |
-| `./opening`  | what a page shows while it opens, and when opening fails  |
+| export       | provides                                                   |
+| ------------ | ---------------------------------------------------------- |
+| `.`          | `routes`, `letters` and the host's `Hosting` interface     |
+| `./routes`   | routes facet composed by the browser host                  |
+| `./canvas`   | the canvas a composition serves, and `prepare`             |
+| `./page`     | the page every address answers, and what it wears          |
+| `./outlived` | whether a page outlived the bundle it runs                 |
+| `./assets`   | an asset build said as data, to serve or to write to disk  |
+| `./navigate` | the browser entry that starts `@yaks/ui/navigate`          |
+| `./away`     | the browser entry opening a link off the site in a new tab |
+| `./picture`  | a kept page's picture, made from a snapshot of it          |
+| `./worker`   | a service worker keeping pages and files named by bytes    |
+| `./keep`     | a page registering that worker and sending it snapshots    |
+| `./opening`  | what a page shows while it opens, and when opening fails   |
 
 A **kept page** is drawn at once when its person opens it again, before the
 network answers. A **snapshot** is a page's document as its person last saw it,

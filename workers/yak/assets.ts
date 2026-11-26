@@ -231,6 +231,8 @@ export let ASSETS: Asset[] = [
   // A signed-in page's links followed in place (pages.ts `documented`).
   { name: '_navigate.js', bundle: of('@yaks/web/navigate'), named: true },
   { name: '_ready.js', bundle: of('@yaks/web/ready'), named: true },
+  // A link off the page's site opens in a new tab (every page shell).
+  { name: 'away.js', bundle: of('@yaks/web/away'), named: true },
   {
     name: '_interaction.js',
     bundle: of('@yaks/platform/interaction-browser'),
@@ -252,7 +254,6 @@ export let ASSETS: Asset[] = [
     'voice.js',
     'drop.js',
     'idle.js',
-    'away.js',
     'menu.js',
     'side.js',
     'pane.js',

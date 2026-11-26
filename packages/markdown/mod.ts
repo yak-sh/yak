@@ -16,7 +16,10 @@ import {
   render,
   safeHref,
 } from './structural.ts'
+import { away } from './away.ts'
+import { Site } from './site.ts'
 export * from './structural.ts'
+export { Site }
 
 type Props = { children?: ComponentChildren }
 export let Bold = ({ children }: Props): VNode<{ class?: string }> =>
@@ -48,16 +51,28 @@ export let CodeBlock = (
 export let Link = (
   { href, children }: Props & { href: string },
 ): VNode<{ href: string | undefined; class: string }> =>
-  h<{ href: string | undefined; class: string }>('a', {
-    href: safeHref(href),
-    class: 'Body_Link',
-  }, children)
+  h<{ href: string | undefined; class: string }>(
+    'a',
+    away(
+      { href: safeHref(href), class: 'Body_Link' },
+      useContext(Site) ?? useContext(Host).site,
+    ),
+    children,
+  )
 
 /** What the host gives every `Markdown` beneath it: where an entity id leads
  * for this reader, and how code is coloured. The browse app gives its own
  * routes; a page whose reader cannot open entities gives none, and ids stay
  * words. */
 export let Host: Context<Options> = createContext<Options>({})
+
+/** The host's options as a component beneath it draws with them: `Host`'s,
+ * with the page's `Site` where one is given. */
+export let useHost = (): Options => {
+  let host = useContext(Host)
+  let site = useContext(Site) ?? host.site
+  return site ? { ...host, site } : host
+}
 
 /** Preact component shared by browser DOM and the terminal's Preact DOM.
  * `breaks: false` reads a document whose prose wraps across source lines. */
@@ -67,7 +82,7 @@ export let Markdown = (
   render(
     parse(source, { breaks }),
     h as H<ReturnType<typeof h>>,
-    useContext(Host),
+    useHost(),
   )
 
 /** A line of Markdown in the line it stands in, such as a label in a button:
@@ -77,4 +92,11 @@ export let Markdown = (
 export let MarkdownInline = (
   { source, flat }: { source: string; flat?: boolean },
 ): VNode =>
-  h('span', null, ...blocks(parseInline(source), h as H<VNode>, { flat }))
+  h(
+    'span',
+    null,
+    ...blocks(parseInline(source), h as H<VNode>, {
+      flat,
+      site: useHost().site,
+    }),
+  )

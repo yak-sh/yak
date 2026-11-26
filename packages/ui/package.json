@@ -24,7 +24,6 @@
     "./SideNav": "./SideNav.ts",
     "./Rows": "./Rows.ts",
     "./Report": "./Report.ts",
-    "./Tabs": "./Tabs.ts",
     "./Time": "./Time.ts",
     "./Card": "./Card.ts",
     "./Cards": "./Cards.ts",
@@ -32,7 +31,6 @@
     "./Chips": "./Chips.ts",
     "./Group": "./Group.ts",
     "./Logo": "./Logo.ts",
-    "./Modal": "./Modal.ts",
     "./Notice": "./Notice.ts",
     "./Check": "./Check.ts",
     "./Copy": "./Copy.ts",
@@ -60,6 +58,7 @@
   "dependencies": {
     "@preact/signals": "2.9.4",
     "@yaks/api": "0.2.29",
+    "@yaks/markdown": "0.2.30",
     "@yaks/render": "0.2.24",
     "@yaks/tui": "0.2.24",
     "lucide": "1.31.0",

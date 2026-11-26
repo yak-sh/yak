@@ -4,6 +4,7 @@ import { h, type VNode } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { block, el } from './el.ts'
 import { Field } from './Field.ts'
+import { Site } from '@yaks/markdown/site'
 import { parseHTML } from 'linkedom'
 
 let html = renderToString
@@ -71,6 +72,33 @@ test('links nest the way HTML allows', () => {
     html(h(Card, { href: '/T-1' }, h(Id, { href: '/T-2' }, 'T-2'))),
     '<a href="/T-1" class="Card"><span role="link" tabindex="0" ' +
       'data-href="/T-2" class="Id">T-2</span></a>',
+  )
+})
+
+test('a part linking off the page site opens it in a new tab', () => {
+  let Id = el('span', 'Id')
+  let on = (node: VNode) =>
+    html(h(Site.Provider, { value: ['yaks.app'] }, node))
+  assertEquals(
+    on(h(Id, { href: 'https://discord.com/x' }, 'x')),
+    '<a href="https://discord.com/x" target="_blank" rel="noopener" class="Id">x</a>',
+  )
+  assertEquals(
+    on(h(Id, { href: 'https://ada.yaks.app/' }, 'x')),
+    '<a href="https://ada.yaks.app/" target="_blank" rel="noopener" class="Id">x</a>',
+  )
+  assertEquals(
+    on(h(Id, { href: 'https://yaks.app/pricing' }, 'x')),
+    '<a href="https://yaks.app/pricing" class="Id">x</a>',
+  )
+  assertEquals(
+    on(h(Id, { href: 'https://discord.com/x', target: '_self' }, 'x')),
+    '<a target="_self" href="https://discord.com/x" class="Id">x</a>',
+  )
+  // Drawn with no site given and no location to read, every address leaves.
+  assertEquals(
+    html(h(Id, { href: 'https://yaks.app/' }, 'x')),
+    '<a href="https://yaks.app/" target="_blank" rel="noopener" class="Id">x</a>',
   )
 })
 
