@@ -7,6 +7,7 @@ import { loadVocab } from '@yaks/vocab'
 import { useDoc } from '@yaks/platform/directory-vocab'
 import {
   recordUse,
+  REST,
   scheduleBy,
   scheduleUse,
   useUntil,
@@ -432,6 +433,46 @@ test('a receipt whose answer a deploy cuts off is sent again and reported nowher
     sends[1].headers.get(IDEMPOTENCY),
   )
   equal(reports, [])
+})
+
+test('a receipt an overloaded store refuses is reported once and held back a minute', async () => {
+  let sends = 0, reports: unknown[] = []
+  let time = clock()
+  let ns = {
+    idFromName: (name: string) => name,
+    get: () => ({
+      fetch: () => {
+        sends++
+        return sends == 1
+          ? Promise.reject(Object.assign(
+            Error(
+              'Durable Object is overloaded. Requests queued for too long.',
+            ),
+            { overloaded: true },
+          ))
+          : Promise.resolve(Response.json({ at: '2099-01-01T00:00:00.000Z' }))
+      },
+    }),
+  } as unknown as Namespace
+  let env = {
+    ERRORS: {
+      send: (rows: unknown) => Promise.resolve(void reports.push(rows)),
+    },
+  } as unknown as Parameters<typeof within>[0]
+  let use = () => within(env, {}, () => recordUse(ns, 'busy-app', time))
+  let answers = [await use(), await use()]
+  await time.advance(REST)
+  answers.push(await use(), await use())
+  equal({ answers, sends, reports: reports.length }, {
+    answers: [
+      null,
+      null,
+      '2099-01-01T00:00:00.000Z',
+      '2099-01-01T00:00:00.000Z',
+    ],
+    sends: 2,
+    reports: 1,
+  })
 })
 
 test('a write to an app stamps when its store changed, and an install does not', async () => {

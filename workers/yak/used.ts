@@ -7,12 +7,13 @@ import type { Plugin } from '@yaks/graph'
 import { parse, retired } from '@yaks/query'
 import { ahead, storeOf, WAKE, WARM } from './door.ts'
 import { type Namespace } from '@yaks/durable-object/door'
+import { overloaded } from '@yaks/durable-object/resets'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { answered, KERNEL } from './meta.ts'
 import { background, defect, within } from './defects.ts'
 import type { Env } from './env.ts'
 import { tallying } from './lib/hops.ts'
-import { system } from '@yaks/fp'
+import { type Clock, system } from '@yaks/fp'
 
 export let useUntil = (now = Date.now()) =>
   new Date((Math.floor(now / 3_600_000) + 1) * 3_600_000).toISOString()
@@ -39,8 +40,17 @@ export let returned = (previous: unknown, at: string) =>
   typeof previous == 'string' &&
   Date.parse(at) - Date.parse(previous) >= 86_400_000
 
-let receipts = new WeakMap<Namespace, Map<string, string>>()
+// What an isolate holds for each key: the answer it may give again without
+// asking, until when. A receipt the store took holds its hour's end. One an
+// overloaded store refused (as a deploy restarts it, bug dbe06394) holds
+// nothing for `REST`, so that store is asked once a minute from each isolate,
+// not once for every request behind the refusal.
+type Held = { at: string | null; until: number }
+let receipts = new WeakMap<Namespace, Map<string, Held>>()
 let pending = new WeakMap<Namespace, Map<string, Promise<string | null>>>()
+
+/** How long an isolate holds back a receipt an overloaded store refused. */
+export let REST = 60_000
 
 // A receipt the platform store keeps until the hour it answers: one POST to
 // `door` per `key` an hour, from this isolate, whatever the traffic.
@@ -62,25 +72,37 @@ let schedule = (
     within(
       env,
       { request: r.request, app: r.app },
-      () => receipt(env.STORE!, r),
+      () => receipt(env.STORE!, r, env.CLOCK),
       undefined,
       { retain },
     )).then(() => {})
   ;(retain ?? background)(work)
 }
 
-let receipt = (ns: Namespace, r: Receipt): Promise<string | null> => {
+let receipt = (
+  ns: Namespace,
+  r: Receipt,
+  clock: Clock = system,
+): Promise<string | null> => {
   let held = receipts.get(ns)
   if (!held) receipts.set(ns, held = new Map())
-  let at = held?.get(r.key)
-  if (at && Date.parse(at) > Date.now()) return Promise.resolve(at)
+  let kept = held.get(r.key)
+  if (kept && kept.until > clock.now()) return Promise.resolve(kept.at)
   let waiting = pending.get(ns)
   let running = waiting?.get(r.key)
   if (running) return running
   if (!waiting) pending.set(ns, waiting = new Map())
+  let hold = (at: string | null, until: number) => {
+    if (held.size >= 1000) {
+      for (let [key, h] of held) if (h.until <= clock.now()) held.delete(key)
+      if (held.size >= 1000) held.delete(held.keys().next().value!)
+    }
+    held.set(r.key, { at, until })
+    return at
+  }
   let work = (async () => {
     try {
-      at = await storeOf(ns, PLATFORM_STORE).consume(
+      let at = await storeOf(ns, PLATFORM_STORE).consume(
         r.door,
         async (response) => {
           if (!response.ok) throw await answered(response)
@@ -92,17 +114,10 @@ let receipt = (ns: Namespace, r: Receipt): Promise<string | null> => {
         },
         KERNEL,
       )
-      if (held.size >= 1000) {
-        for (let [key, at] of held) {
-          if (Date.parse(at) <= Date.now()) held.delete(key)
-        }
-        if (held.size >= 1000) held.delete(held.keys().next().value!)
-      }
-      held.set(r.key, at)
-      return at
+      return hold(at, Date.parse(at))
     } catch (error) {
       defect(error, { request: r.request, app: r.app })
-      return null
+      return overloaded(error) ? hold(null, clock.now() + REST) : null
     }
   })().finally(() => waiting!.delete(r.key))
   waiting.set(r.key, work)
@@ -214,8 +229,11 @@ export let scheduleBy = (
   if (who.person) scheduleUse(env, who.person, retain)
 }
 
-export let recordUse = (ns: Namespace, eid: string): Promise<string | null> =>
-  receipt(ns, used(eid))
+export let recordUse = (
+  ns: Namespace,
+  eid: string,
+  clock?: Clock,
+): Promise<string | null> => receipt(ns, used(eid), clock)
 
 /** What a receipt writes: when something was last used, and which retired
  * spellings an app still sends. No authorization reads either. */
