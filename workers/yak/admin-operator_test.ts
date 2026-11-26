@@ -163,6 +163,25 @@ test('an id in a reply opens where the admin’s own server says, and code keeps
   )
 })
 
+// The lists and a person's page, each read from the directory with only what
+// it draws (admin.ts `readsOf`).
+let people = await get('/admin/people')
+let spaces = await get('/admin/spaces')
+let jeffs = await get(`/admin/${jeff}`)
+let tile = (d: ParentNode, name: string) =>
+  [...d.querySelectorAll('.Directory_Row')]
+    .find((r) => r.querySelector('strong')?.textContent == name)
+    ?.querySelector('.Directory_Sub')?.textContent
+test("the admin's lists and a person's page draw each row the directory keeps", () => {
+  assertEquals(
+    [tile(people.document, 'Jeff'), tile(spaces.document, 'clerk')],
+    ['jeff@example.com', 'clerk.yaks.app'],
+  )
+  assertEquals(texts(jeffs.document, '.Desk_Head h1'), ['Jeff'])
+  assertEquals(texts(jeffs.document, 'h2.Group'), ['Owner of'])
+  assertEquals(tile(jeffs.document, 'clerk'), 'clerk.yaks.app')
+})
+
 let missing = await get(`${at}/${crypto.randomUUID()}`)
 let theirs = await get(`${at}/${rootOf(eid, jeff)}`, jeff)
 test('an id that is no conversation says so, and nobody but the admin reads one', () => {

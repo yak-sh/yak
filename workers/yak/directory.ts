@@ -1442,6 +1442,20 @@ export let APP_PARTS = [
 ]
 let ABOUT = chain(APP_PARTS.map((part) => line`?${part}`), '&')
 
+/** Each kind the admin's census reads, as rows. */
+export type Census = Record<CensusKind, Row[]>
+export type CensusKind =
+  | 'people'
+  | 'spaces'
+  | 'apps'
+  | 'seats'
+  | 'deploys'
+  | 'referrals'
+  | 'agents'
+/** The `.fields` paths the census reads each kind with; a kind given none is
+ * not read. */
+export type CensusFields = Partial<Record<CensusKind, string[]>>
+
 // And what every read of a space asks for, for the same reason.
 export let SPACE_PARTS = [
   'doc',
@@ -4320,43 +4334,31 @@ export let directoryRows = (rows: {
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>
       (await query(line`.space&${sub(SPACE_ABOUT)}`)).map(spaceOf),
-    // Every person, space, app, seat and invite there is, each row whole with
-    // when it was made and last used: the platform admin's directory
-    // (admin.ts), and nothing else, asks this. Fresh, since the admin opens it
-    // to see what is. A person says the number they text from, which space
-    // their starter went to, and when they came in by the home page's box.
-    census: async () => {
-      let stamps = line`?created&?used`
+    // Every person, space, app, seat, release, invite and agent there is,
+    // each read with only the properties `fields` names for its kind, and a
+    // kind it names none for not read: the platform admin's directory
+    // (admin.ts), and nothing else, asks this, for what its page draws. Fresh,
+    // since the admin opens it to see what is.
+    census: async (fields: CensusFields): Promise<Census> => {
+      let read = (kind: keyof CensusFields, of: Built) => {
+        let paths = fields[kind]
+        return paths?.length
+          ? query(line`${sub(of)}&.fields=${paths}`)
+          : Promise.resolve([])
+      }
       let [people, spaces, apps, seats, deploys, referrals, agents] =
         await Promise.all([
-          query(
-            line`.person&?doc&?email&?phone&?signed_in&?started&?newcomer&${
-              sub(stamps)
-            }`,
-          ),
-          // A row's days ride only here: every other read of a row does
-          // without.
-          query(
-            line`.space&${
-              sub(SPACE_ABOUT)
-            }&?trend&?visitor_build&?free_ai_budget&${sub(stamps)}`,
-          ),
-          query(
-            line`.app&${sub(ABOUT)}&?trend&${
-              sub(stamps)
-            }&?changed&?errored&?last_deploy`,
-          ),
-          query(line`.member`),
-          // Only which app, when and by whom: a release's whole row is its
-          // file list. Only the releases of an app last put live before
-          // `last_deploy` was kept, as in `provenance`: the rest say no more
-          // than their app's `last_deploy` does.
-          query(
-            line`.deploy&!deploy.app.last_deploy&.fields=deploy.app,created.at,created.by`,
-          ),
-          query(line`.referral&?rewarded&?created`),
+          read('people', line`.person`),
+          read('spaces', line`.space`),
+          read('apps', line`.app`),
+          read('seats', line`.member`),
+          // Only the releases of an app last put live before `last_deploy`
+          // was kept, as in `provenance`: the rest say no more than their
+          // app's `last_deploy` does.
+          read('deploys', line`.deploy&!deploy.app.last_deploy`),
+          read('referrals', line`.referral`),
           // The agents a stamp may name (stamps.ts `writers`).
-          query(line`.acts_for&?doc`),
+          read('agents', line`.acts_for`),
         ])
       return { people, spaces, apps, seats, deploys, referrals, agents }
     },

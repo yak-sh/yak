@@ -9,6 +9,7 @@ import {
 } from '@std/assert'
 import type { ByDay } from '@yaks/ui/chart'
 import type { Space } from './directory.ts'
+import { readsOf } from './admin.ts'
 import {
   budget,
   type Meter,
@@ -232,7 +233,7 @@ test('meter queries distinguish the same handle in two deployments', async () =>
     assertEquals(requestUnits(app.meter!), 10)
     assertEquals(app.meter?.rows_read, 7)
     assertEquals(app.meter?.bytes, 4096)
-    let { apps } = await dir.census()
+    let { apps } = await dir.census(readsOf('apps'))
     assertEquals(
       apps.find((r) => r.entity.eid == recipes.eid)?.meter?.visits,
       12,
@@ -1026,7 +1027,7 @@ test('a spend lands on its day, and a letter costs no day', async () => {
   await countedSpend(c.env, c.space, 0.5, 0, NOW)
   await counted(c.env, c.space, NOW)
   // Read the way the admin's page reads it.
-  let { spaces } = await c.dir.census()
+  let { spaces } = await c.dir.census(readsOf('spending'))
   let row = spaces.find((r) => r.space?.slug == 'jeff')
   assertEquals(Object.values(row?.trend?.spend ?? {}), [0.75])
 })

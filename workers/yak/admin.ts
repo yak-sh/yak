@@ -51,6 +51,8 @@ import { holding } from './held.ts'
 import { dollars, type Held } from '@yaks/platform/standing'
 import {
   appAbout,
+  type Census,
+  type CensusFields,
   type Directory,
   directory,
   directoryOf,
@@ -60,6 +62,7 @@ import {
   newcomerIs,
   type Row,
   type Space,
+  SPACE_PARTS,
   spaceOf,
   testIs,
 } from './directory.ts'
@@ -125,8 +128,110 @@ let LISTS: Record<List, { title: string; icon: IconName }> = {
 }
 let isList = (s: string): s is List => KEYS.some((k) => k == s)
 
-/** Every person, space, app and seat, as the directory keeps them. */
-export type Census = Awaited<ReturnType<Directory['census']>>
+export type { Census }
+
+// What a page reads of each kind (directory.ts `census`): only the properties
+// it draws or counts, since the directory's bytes, more than its rows, are what
+// the page waits on (T-4002). Every page counts what the sidebar says, who is
+// a test, and each person's and space's sums.
+let COUNTED: CensusFields = {
+  people: [
+    'person',
+    'doc.title',
+    'email.address',
+    'phone.number',
+    'newcomer',
+    'signed_in.at',
+    'used.at',
+    'started.space',
+    'created.at',
+  ],
+  spaces: [
+    'space.slug',
+    'space.store',
+    'plan',
+    'comped',
+    'comp',
+    'plan_trial',
+    'credit',
+    'budget',
+    'starter',
+    'visitor_share',
+    'meter',
+    'trend.spend',
+    'used.at',
+    'visitor_build',
+    'free_ai_budget',
+    'trashed.at',
+    'created.at',
+  ],
+  apps: ['app.space', 'meter.bytes', 'meter.files', 'used.at', 'trashed.at'],
+  seats: ['member.space', 'member.person', 'member.role'],
+  referrals: ['referral', 'rewarded', 'created'],
+}
+// What each list draws beside: a space's title and requests, and an app's
+// row whole as its tile says it, with its releases and the agents its stamps
+// name.
+let SPACE_TILES: CensusFields = { spaces: ['doc.title', 'trend.requests'] }
+let APP_TILES: CensusFields = {
+  apps: [
+    'app.slug',
+    'app.version',
+    'app.access',
+    'doc.title',
+    'former.slug',
+    'meter.month',
+    'meter.requests',
+    'meter.visits',
+    'trend.requests',
+    'changed.at',
+    'errored.at',
+    'last_deploy',
+    'created.at',
+    'created.by',
+    'published.name',
+    'gallery.listed_at',
+    'installed.of',
+  ],
+  deploys: ['deploy.app', 'created.at', 'created.by'],
+  agents: ['acts_for', 'doc.title'],
+}
+// The pages that ask spaces' Operators hand each its space whole.
+let OPERATORS: CensusFields = { spaces: ['space', ...SPACE_PARTS, 'trend'] }
+let fieldsOf = (...all: CensusFields[]): CensusFields => {
+  let out: Record<string, string[]> = {}
+  for (let f of all) {
+    for (let [kind, paths] of Object.entries(f)) {
+      out[kind] = [...new Set([...out[kind] ?? [], ...paths ?? []])]
+    }
+  }
+  return out
+}
+// What each page reads; a row's own page, every list's tiles.
+let READS: Record<string, CensusFields> = {
+  people: COUNTED,
+  spaces: fieldsOf(COUNTED, SPACE_TILES),
+  apps: fieldsOf(COUNTED, APP_TILES),
+  invites: fieldsOf(COUNTED, { agents: APP_TILES.agents }),
+  sessions: fieldsOf(COUNTED, OPERATORS),
+  spending: fieldsOf(COUNTED, OPERATORS),
+}
+let ROW = fieldsOf(COUNTED, SPACE_TILES, APP_TILES)
+let pageOf = (rest: string) => rest.split('/')[0] || 'people'
+let named = (rest: string) => NAMED.has(pageOf(rest))
+/** What the page at `rest`, the path past {@link PATH}, reads of each kind. */
+export let readsOf = (rest: string): CensusFields =>
+  named(rest) ? READS[pageOf(rest)] ?? COUNTED : ROW
+let NAMED = new Set([
+  ...KEYS,
+  'invites',
+  'builds',
+  'sessions',
+  'support-contracts',
+  'spending',
+  'letters',
+  'funnel',
+])
 
 let latest = (...at: (string | null | undefined)[]) =>
   at.filter((a): a is string => !!a).sort().at(-1) ?? null
@@ -139,6 +244,15 @@ let group = (rows: Row[], key: (r: Row) => string) => {
 let seatSpace = (r: Row) => idOf(r.member!.space)
 let seatPerson = (r: Row) => idOf(r.member!.person)
 let appSpace = (r: Row) => idOf(r.app!.space)
+// An app as `holding` counts it with no listing of the bucket: what its
+// store and files weigh.
+let owner = (r: Row) => ({
+  eid: r.entity.eid,
+  slug: r.app?.slug ?? '',
+  files: null,
+  blobs: null,
+  meter: r.meter ?? null,
+})
 
 // A figure's days, for a row that has kept any.
 let days = (
@@ -180,7 +294,7 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   // (held.ts): app data and photos and files together.
   let held = new Map(c.spaces.map((r) => {
     let s = spaces.get(r.entity.eid)!
-    return [s.eid, holding(s, (everyIn.get(s.eid) ?? []).map(appAbout))]
+    return [s.eid, holding(s, (everyIn.get(s.eid) ?? []).map(owner))]
   }))
   let stored = (h?: Held) => (h?.bytes ?? 0) + (h?.files ?? 0)
   let names = new Map(c.people.map((r) => [r.entity.eid, personName(r)]))
@@ -1395,7 +1509,12 @@ export let answer = async (
   }
   if (!who || (req.method != 'GET' && req.method != 'HEAD')) return lost(env)
   let rest = path.slice(PATH.length + 1) || 'people'
-  let census = await c.time('directory_read', () => dir.census())
+  // A row's own page reads the row whole, beside the census.
+  let [census, [whole]] = await c.time('directory_read', () =>
+    Promise.all([
+      dir.census(readsOf(rest)),
+      named(rest) ? [] : dir.read(line`.entity.eid=${pageOf(rest)}`),
+    ]))
   let d = c.measure(
     'directory_summary',
     () => read(env, census, asked.searchParams.has('tests')),
@@ -1448,12 +1567,12 @@ export let answer = async (
     })
     return funnelPage(d, f, days)
   }
-  let [eid, part, open = ''] = rest.split('/')
-  let r = [...d.census.people, ...d.census.spaces, ...d.census.apps]
-    .find((x) =>
-      x.entity.eid == eid && (!part || part == 'operator' && x.space)
-    )
-  if (!r) {
+  let [, part, open = ''] = rest.split('/')
+  let r = whole as Row | undefined
+  if (
+    !r || !(r.person || r.space || r.app) ||
+    part && !(part == 'operator' && r.space)
+  ) {
     return desk(
       d,
       'Not in the directory',

@@ -4,8 +4,9 @@ import { platform as directoryPlatform } from './directory-rows-probe.ts'
 import { ownedBy } from './directory-fixture.ts'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
+import { line } from '@yaks/query'
 import { parseHTML } from 'linkedom'
-import { answer, type Census, uses } from './admin.ts'
+import { answer, type Census, readsOf, uses } from './admin.ts'
 import {
   type Directory,
   directory,
@@ -297,7 +298,7 @@ test('the census reads which app each release is of and when, never its files, a
       },
     ],
   })
-  let { deploys, people, referrals } = await dir.census()
+  let { deploys, people, referrals } = await dir.census(readsOf('apps'))
   let [row] = deploys
   assertEquals([deploys.length, row.deploy], [1, { app: 'census-app' }])
   assertEquals(typeof row.created?.at, 'string')
@@ -438,7 +439,16 @@ let inviting = {
     }),
   ],
 } as Census
-let admin = { ...dir, census: () => Promise.resolve(inviting) } as Directory
+// A row's page reads its row whole, as the directory keeps it.
+let admin = {
+  ...dir,
+  census: () => Promise.resolve(inviting),
+  read: (q: string) =>
+    Promise.resolve(
+      [...inviting.people, ...inviting.spaces, ...inviting.apps]
+        .filter((r) => q == line`.entity.eid=${r.entity.eid}`),
+    ),
+} as Directory
 // A page as the admin reads it: which side link is current, and each row
 // under a heading, where it opens, its name, the line under it, its tags and
 // its figures.
