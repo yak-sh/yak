@@ -39,6 +39,19 @@ graph, vocabulary, world and decisions remain in apps/vale.
 
 Run `deno task test packages/game` from the repository root.
 
+## Exploration starter
+
+The [starter](./starter/) is a complete yaks app. Copy its files to an app draft
+and deploy with the normal compiler. Open the app root for the low-poly world or
+`voxel.html` for the voxel world. Both use the same controls, lit scene and
+player-following camera. The compiler shares Three.js between the page and the
+toolkit.
+
+Supply the world and player meshes to `play`. The app decides how input changes
+the player's pose, and `look` draws from that pose. The voxel entry uses
+`@yaks/voxel/three` to build meshes from the app's boxes. Keep that entry and
+dependency when building a voxel world.
+
 ## Paths
 
 `aStar` accepts nodes, stable keys, neighbours with costs, a goal and a
