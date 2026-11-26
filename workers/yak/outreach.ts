@@ -10,11 +10,15 @@
 import type { Comp } from '@yaks/graph'
 import type { Facts } from '@yaks/platform/outreach'
 import { BOT } from '@yaks/platform/bots'
-import { type Census, uses } from './admin.ts'
-import { appAbout, idOf, META, spaceOf } from './directory.ts'
+import { type Census, fieldsOf, TILES, uses } from './admin.ts'
+import { idOf, META, spaceOf } from './directory.ts'
 import { calledOf } from './operator-name.ts'
 
 let str = (v: unknown) => typeof v == 'string' ? v : ''
+
+/** What the facts read of the directory's census: the admin's lists, and
+ * each space's Operator by name. */
+export let OUTREACH = fieldsOf(TILES, { spaces: ['operator.name'] })
 
 /** Every space an Operator would write to, as its facts: the platform's own
  * space and every test space left out. */
@@ -34,7 +38,7 @@ export let factsOf = (c: Census, now: Date): Facts[] => {
       return []
     }
     let apps = c.apps.filter((a) =>
-      !a.trashed && appAbout(a).space == space.eid
+      !a.trashed && idOf(a.app!.space) == space.eid
     )
     return [{
       space: space.eid,
@@ -53,7 +57,7 @@ export let factsOf = (c: Census, now: Date): Facts[] => {
       apps: apps.map((a) => {
         let u = used.get(a.entity.eid) ?? {}
         return {
-          slug: appAbout(a).slug,
+          slug: a.app!.slug ?? str((a.former as Comp | undefined)?.slug),
           title: str((a.doc as Comp | undefined)?.title),
           visits: u.visits ?? null,
           requests: u.requests ?? 0,

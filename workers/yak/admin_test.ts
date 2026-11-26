@@ -5,6 +5,7 @@ import { ownedBy } from './directory-fixture.ts'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { line } from '@yaks/query'
+import { factsOf, OUTREACH } from './outreach.ts'
 import { parseHTML } from 'linkedom'
 import { answer, type Census, readsOf, uses } from './admin.ts'
 import {
@@ -308,6 +309,33 @@ test('the census reads which app each release is of and when, never its files, a
   assertEquals(
     referrals.map((r) => [r.referral, typeof r.created?.at]),
     [[{ inviter: 'census-owner', invitee }, 'string']],
+  )
+})
+
+test('the outreach facts read each space by its Operator, and its apps, from the census', async () => {
+  await using p = platform('census outreach')
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
+  let space = await ownedBy(dir, 'outreach-owner', 'outreach-facts')
+  await dir.apply({
+    entities: [
+      { entity: { eid: space.eid }, operator: { name: 'Mabel' } },
+      {
+        entity: { eid: 'outreach-app' },
+        app: {
+          slug: 'notes',
+          space: space.eid,
+          store: 'outreach-facts/notes',
+          access: 'private',
+        },
+        doc: { title: 'Notes' },
+      },
+    ],
+  })
+  let facts = factsOf(await dir.census(OUTREACH), new Date())
+    .filter((f) => f.slug == 'outreach-facts')
+  assertEquals(
+    facts.map((f) => [f.operator, f.apps.map((a) => [a.slug, a.title])]),
+    [['Mabel', [['notes', 'Notes']]]],
   )
 })
 

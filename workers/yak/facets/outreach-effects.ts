@@ -8,7 +8,7 @@ import { batches as openai } from '@yaks/openai/batches'
 import { collect, type Trials, write } from '@yaks/platform/outreach-trial'
 import type { Options } from './store.ts'
 import { inStore } from './directory-effects.ts'
-import { factsOf } from '../outreach.ts'
+import { factsOf, OUTREACH } from '../outreach.ts'
 import { agents } from '../config.ts'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
@@ -26,7 +26,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
   let [first] = agents.operator
   let trials: Trials = {
     graph: at.graph,
-    facts: async (now) => factsOf(await inStore(at).census(), now),
+    facts: async (now) => factsOf(await inStore(at).census(OUTREACH), now),
     batches,
     fallback: { provider: first.provider, model: first.model },
   }

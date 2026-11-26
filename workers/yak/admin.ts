@@ -198,7 +198,8 @@ let APP_TILES: CensusFields = {
 }
 // The pages that ask spaces' Operators hand each its space whole.
 let OPERATORS: CensusFields = { spaces: ['space', ...SPACE_PARTS, 'trend'] }
-let fieldsOf = (...all: CensusFields[]): CensusFields => {
+/** The fields of each kind every one of `all` names. */
+export let fieldsOf = (...all: CensusFields[]): CensusFields => {
   let out: Record<string, string[]> = {}
   for (let f of all) {
     for (let [kind, paths] of Object.entries(f)) {
@@ -216,12 +217,14 @@ let READS: Record<string, CensusFields> = {
   sessions: fieldsOf(COUNTED, OPERATORS),
   spending: fieldsOf(COUNTED, OPERATORS),
 }
-let ROW = fieldsOf(COUNTED, SPACE_TILES, APP_TILES)
+/** What every list's rows draw, and every count: what a row's own page reads
+ * beside its row. */
+export let TILES = fieldsOf(COUNTED, SPACE_TILES, APP_TILES)
 let pageOf = (rest: string) => rest.split('/')[0] || 'people'
 let named = (rest: string) => NAMED.has(pageOf(rest))
 /** What the page at `rest`, the path past {@link PATH}, reads of each kind. */
 export let readsOf = (rest: string): CensusFields =>
-  named(rest) ? READS[pageOf(rest)] ?? COUNTED : ROW
+  named(rest) ? READS[pageOf(rest)] ?? COUNTED : TILES
 let NAMED = new Set([
   ...KEYS,
   'invites',
