@@ -121,6 +121,8 @@ export type Chat = {
   text: string
   /** the platform's id for the message it answers */
   reply_to?: string
+  /** the platform's id for the first message of the thread, where required */
+  thread?: string
   /** the platform's id for the one account it names, which alone is
    * pinged */
   ping?: string

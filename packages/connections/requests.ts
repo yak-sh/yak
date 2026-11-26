@@ -6,8 +6,8 @@
 // Who may send through which connection is the host's to say (`owners`): the
 // person's own, the space's for its owner, an app's grants. A connection that
 // is an MCP server's credential, or an app service's, is a source of its own
-// kind already and is not offered here, and a chat platform's bot is read
-// only through its platform (@yaks/chat), within the servers it serves.
+// kind already. A shared chat bot is read through its platform within the
+// servers it serves. A workspace's own OAuth grant can be called here.
 
 import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
@@ -63,11 +63,13 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
 
 let addressOf = (eid: Eid) => `connection:${eid}`
 
-// A connection that is a source of this kind, with its integration: connected,
-// held by one of `owners`, through an integration that names hosts and is
-// neither an MCP server's, an app service's, nor a chat platform's, whose bot
-// is read through its platform's API (@yaks/chat `Api`), confined to the
-// servers it serves.
+/** Whether a service can be called through a connection its owner holds. */
+export let requestable = (i: Integration | undefined): i is Integration =>
+  !!i && !i.name.startsWith('mcp:') && !i.service &&
+  (!i.chat || !!i.chat_grant) &&
+  i.hosts.length > 0
+
+// A connected source held by one of `owners`, with its integration.
 let offered = async (
   read: Read,
   b: Bundle,
@@ -79,7 +81,7 @@ let offered = async (
     typeof c.integration != 'string' || c.integration.startsWith('mcp:')
   ) return undefined
   let i = await known(read, c.integration)
-  return i && !i.service && !i.chat && i.hosts.length ? i : undefined
+  return requestable(i) ? i : undefined
 }
 
 let described = (b: Bundle, i: Integration): SourceCommand => {
@@ -120,13 +122,25 @@ let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
 // The request the arguments say, refused where they say none.
-let asked = (args: Record<string, unknown>): Request => {
+let methodOf = (i: Integration, url: string) => {
+  if (!i.api?.reads?.length) return 'GET'
+  let base = new URL(i.api.base)
+  let at = URL.parse(url)
+  let prefix = base.pathname.replace(/\/$/, '')
+  if (at?.origin != base.origin || !at.pathname.startsWith(prefix + '/')) {
+    return 'GET'
+  }
+  let path = at.pathname.slice(prefix.length)
+  return i.api.reads.find((r) => r.endsWith(' ' + path))?.split(' ')[0] ?? 'GET'
+}
+
+let asked = (i: Integration, args: Record<string, unknown>): Request => {
   if (typeof args.url != 'string') {
     throw new CallError('arguments', 'request needs a url')
   }
   let method = typeof args.method == 'string'
     ? args.method.toUpperCase()
-    : 'GET'
+    : methodOf(i, args.url)
   if (args.headers != null && !object(args.headers)) {
     throw new CallError('arguments', 'headers is an object of strings')
   }
@@ -175,7 +189,7 @@ export let request = async (
       `${i.title || i.name} has one command, request`,
     )
   }
-  let res = await call(c, eid, asked(a.args))
+  let res = await call(c, eid, asked(i, a.args))
   let headers = Object.fromEntries(
     [...res.headers].filter(([k]) => k != 'set-cookie'),
   )

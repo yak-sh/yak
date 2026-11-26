@@ -1,8 +1,6 @@
 // yaks.app's chat platforms (D-465): the platforms it loads, as data
-// (@yaks/chat, @yaks/discord); the chatters the Operator's store posts its
-// answers through; the objects that listen on each bot's socket; and where a
-// message a bot hears goes. Nothing here names a platform but the list it
-// loads.
+// the chatters that post the Operator's answers; socket and webhook intake;
+// and routing messages to the space that connected the platform.
 //
 // A space connects a chat integration (`integration.chat`) and that is the
 // whole setup: yaks.app's own bot added to a server is a connection the
@@ -63,7 +61,9 @@ import {
   WATCH,
 } from '@yaks/chat/listen'
 import { type Act, voiceRooms } from '@yaks/chat/voice'
+import { receive } from '@yaks/chat/events'
 import { discord } from '@yaks/discord'
+import { slack } from '@yaks/slack'
 import type { Chatter } from '@yaks/host/senders'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -90,7 +90,7 @@ let HEARS = 'chat_hears'
 let SERVES = 'chat_serves'
 
 /** The chat platforms yaks.app hears and answers on, by name. */
-export let PLATFORMS: Map<string, Platform> = platforms([discord])
+export let PLATFORMS: Map<string, Platform> = platforms([discord, slack])
 
 /** A bot that listens on `via`'s socket: yaks.app's own, or the one a space
  * brought, which its `connection` names. */
@@ -393,6 +393,33 @@ export let platformBot = async (env: Env, via: string) => {
     let bot = i.client && (await registered(vaultOf(env), i.client))?.bot
     if (bot) return bot
   }
+}
+
+// The signing secret of a platform's Events API lives with its OAuth client.
+let signing = async (env: Env, via: string) => {
+  let { registered, seeds, vaultOf, vaulted } = await need()
+  if (!vaulted(env)) return
+  let i = seeds().find((i) => i.chat == via && i.chat_grant)
+  let client = i?.client ? await registered(vaultOf(env), i.client) : undefined
+  return client?.secret ? client.signing : undefined
+}
+
+let keptOn = async (env: Env, p: Platform) =>
+  !!await (p.hook ? signing(env, p.name) : platformBot(env, p.name))
+
+/** A platform's HTTPS intake. The provider verifies the envelope; the
+ * installation account selects the same connection as socket messages. */
+export let events = async (req: Request, env: Env, via: string) => {
+  let platform = PLATFORMS.get(via)
+  if (!platform?.hook) return null
+  let secret = await signing(env, via)
+  if (!secret) return new Response(null, { status: 503 })
+  return receive(req, platform.hook, secret, async (account, said) => {
+    let [held] = await serving(env, via, account)
+    if (held) {
+      await arrived(env, platform, said, { via, connection: held.entity.eid })
+    }
+  })
 }
 
 /** Ask `bot` to listen: what connecting a space to it does, and harmless
@@ -779,7 +806,7 @@ export let offers = async (
         platform,
         bot: all.find((i) => i.chat == platform.name && !keyed(i))!,
         user: all.find((i) => i.name == platform.user),
-        kept: !!await platformBot(env, platform.name),
+        kept: await keptOn(env, platform),
       })),
     ),
   ])
@@ -800,7 +827,8 @@ export let offers = async (
  * brought. */
 export type Server = {
   connection: string
-  rooms: (Room & { eid: string })[] | null
+  rooms?: (Room & { eid: string })[] | null
+  title?: string
   away?: boolean
   hears?: string
   own?: boolean
@@ -814,7 +842,6 @@ let servers = async (
   connections: Awaited<ReturnType<typeof chatRows>>,
 ): Promise<Server[]> => {
   let { rooms } = platform
-  if (!rooms) return []
   let { botFrom, caught, ctxOf, keyed } = await need()
   let ctx = ctxOf(env)
   return await Promise.all(
@@ -823,6 +850,13 @@ let servers = async (
         Number(keyed(a.integration)) - Number(keyed(b.integration))
       )
       .map(async ({ row: c, integration }) => {
+        if (!rooms) {
+          let title = comp(c, CONNECTION).title
+          return {
+            connection: c.entity.eid,
+            ...typeof title == 'string' ? { title } : {},
+          }
+        }
         let token = await botFrom(ctx, c, integration)
         // A server the bot is not in lists nothing: it was removed there,
         // and is added again from here.
@@ -897,7 +931,7 @@ export let reached = async (
     )
     if (!theirs.length) {
       let bot = seeds().find((i) => i.chat == p.name && !keyed(i))
-      return bot && await platformBot(env, p.name)
+      return bot && await keptOn(env, p)
         ? {
           places: [],
           unset: [{
@@ -915,7 +949,8 @@ export let reached = async (
       let names = comp(row, SERVES).names as Record<string, string> | undefined
       let hears = comp(row, HEARS)
       return serves(row).map((server): Place => {
-        let name = names?.[server]
+        let name = names?.[server] ??
+          comp(row, CONNECTION).title as string | undefined
         let room = hears.server == server && hears.id ? hears : undefined
         return {
           platform: p.title,

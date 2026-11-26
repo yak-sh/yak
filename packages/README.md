@@ -539,6 +539,8 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/discord-voice](./discord-voice)** — The relay that holds a Discord
   voice room for its host, over UDP with Discord's end-to-end encryption, and
   streams the room's audio both ways over a WebSocket as a phone call's is.
+- **[@yaks/slack](./slack)** — Slack for @yaks/chat. Verifies Events API
+  callbacks and posts threaded replies with a workspace's bot token.
 - **[@yaks/push](./push)** — Web Push: a browser's subscription as
   `push_subscription{person, endpoint, p256dh, auth}`, and `push()`, which
   encrypts a message for that browser (RFC 8291) and signs it with the site's

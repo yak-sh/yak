@@ -21,7 +21,13 @@
 // (`integrationsTold`), so it reaches for one without being told to.
 import type { Bundle, Comp } from '@yaks/graph'
 import { line } from '@yaks/query'
-import { CONNECTION, type Integration, known, request } from '@yaks/connections'
+import {
+  CONNECTION,
+  type Integration,
+  known,
+  request,
+  requestable,
+} from '@yaks/connections'
 import type { Tool } from '@yaks/session'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Env } from './env.ts'
@@ -40,14 +46,6 @@ export let LIMIT = 30_000
 
 let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
 let str = (v: unknown) => typeof v == 'string' ? v.trim() : ''
-
-// An integration whose connection is called here: not an MCP server's or an
-// app service's, which are sources of their own, nor a chat platform's, read
-// within the rooms the Operator was addressed in (operator-rooms.ts
-// `roomApi`), and naming hosts to call.
-let callable = (i: Integration | undefined): i is Integration =>
-  !!i && !i.name.startsWith('mcp:') && !i.service && !i.chat &&
-  i.hosts.length > 0
 
 /** The address an integration's API paths are under.
  *
@@ -128,7 +126,7 @@ export let connectedFor = (
       )
       return held.flatMap((b, n) => {
         let i = found[n]
-        return callable(i) ? [{ held: b, i }] : []
+        return requestable(i) ? [{ held: b, i }] : []
       })
     },
   )
@@ -226,7 +224,7 @@ export let apiCall = (
       },
       method: {
         type: 'string',
-        description: 'The HTTP method; GET if omitted.',
+        description: 'The HTTP method. Omit it to use the default for a read.',
       },
       path: {
         type: 'string',
@@ -304,7 +302,7 @@ export let apiCall = (
       name: 'request',
       args: {
         url,
-        method: str(args.method) || 'GET',
+        ...str(args.method) ? { method: str(args.method) } : {},
         ...args.headers == null ? {} : { headers: args.headers },
         ...args.body == null ? {} : { body: args.body },
       },

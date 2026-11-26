@@ -57,6 +57,10 @@
           "type": "string",
           "description": "the platform's id for the message it answers, where it answers one"
         },
+        "thread": {
+          "type": "string",
+          "description": "the platform's id for the first message of the thread this message is in"
+        },
         "at": {
           "type": "string",
           "format": "date-time",

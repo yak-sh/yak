@@ -15,7 +15,13 @@ import { installed, type Integration, type Read } from './integrations.ts'
 /** A client registered with a service: its id, a confidential client's
  * secret, and the token of the bot its application speaks as on a chat
  * platform (Discord's), for an integration that `chat`s. */
-export type Registered = { id: string; secret?: string; bot?: string }
+export type Registered = {
+  id: string
+  secret?: string
+  bot?: string
+  /** The signing secret for events sent by the application's chat provider. */
+  signing?: string
+}
 
 // The name a client is kept under among the graph's secrets.
 export let clientSecret = (name: string) => `oauth_client ${name}`
@@ -36,7 +42,8 @@ export let registered = async (
   if (
     typeof c?.id != 'string' ||
     (c.secret != null && typeof c.secret != 'string') ||
-    (c.bot != null && typeof c.bot != 'string')
+    (c.bot != null && typeof c.bot != 'string') ||
+    (c.signing != null && typeof c.signing != 'string')
   ) throw new Error(`${name} is not an OAuth client`)
   return c
 }
@@ -52,5 +59,7 @@ export let clientOf = async (
   if (!i.client) return undefined
   let taken = !i.built &&
     (await installed(read)).some((b) => b.client == i.client)
-  return taken ? undefined : registered(vault, i.client)
+  let client = taken ? undefined : await registered(vault, i.client)
+  if (i.chat_grant && (!client?.secret || !client.signing)) return undefined
+  return client
 }

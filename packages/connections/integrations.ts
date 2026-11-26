@@ -29,6 +29,7 @@ import gmail from './gmail.json' with { type: 'json' }
 import discord from './discord.json' with { type: 'json' }
 import discordAccount from './discord-account.json' with { type: 'json' }
 import discordBot from './discord-bot.json' with { type: 'json' }
+import slack from './slack.json' with { type: 'json' }
 import elevenlabs from './elevenlabs.json' with { type: 'json' }
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import googleDrive from './google-drive.json' with { type: 'json' }
@@ -87,8 +88,14 @@ export type Integration = {
    * connecting it is all it takes for the Operator and the space's apps to
    * hear and answer there */
   chat?: string
+  /** The OAuth grant itself is the bot credential for this installation. */
+  chat_grant?: boolean
   /** what a connection asks for when nothing narrower was needed */
   scopes?: string[]
+  /** The provider separates OAuth scopes with commas. */
+  scope_separator?: ' ' | ','
+  /** Whether the OAuth provider accepts PKCE for this client. */
+  pkce?: boolean
   /** extra authorize parameters, such as Google's `access_type: 'offline'` */
   params?: Record<string, string>
   /** how the client authenticates at the token endpoint (@yaks/oauth) */
@@ -114,7 +121,7 @@ export type Integration = {
   /** its API: the address its paths are under, its reference, and the calls
    * that only read though their method is not GET (`POST /freeBusy`, `*` for
    * one segment); none is reached at its first host */
-  api?: { base: string; docs?: string }
+  api?: { base: string; docs?: string; reads?: string[] }
   /** the only API methods a connection through it may ask for, where the
    * service names one in each request (voip.ms's `method`); none limits
    * nothing */
@@ -180,6 +187,7 @@ let SEEDS: Integration[] = [
   lulu,
   { ...openai, refresh_encoding: 'json' },
   { ...openrouter, answers: 'key' },
+  { ...slack, scope_separator: slack.scope_separator as ',' },
   voipms,
 ]
 
@@ -276,7 +284,10 @@ let CARRIED = {
   links: 1,
   personal: 1,
   chat: 1,
+  chat_grant: 1,
   scopes: 1,
+  scope_separator: 1,
+  pkce: 1,
   params: 1,
   auth: 1,
   refresh_encoding: 1,

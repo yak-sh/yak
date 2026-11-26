@@ -93,6 +93,7 @@ async (event, tx, write, attempt) => {
         ...controls?.length ? { controls } : {},
       },
       ...said.reply_to ? { reply_to: String(said.reply_to) } : {},
+      ...said.thread ? { thread: String(said.thread) } : {},
     })
   } catch (error) {
     if (error instanceof Unsent) {

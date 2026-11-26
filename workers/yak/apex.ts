@@ -145,6 +145,10 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // under the ticket it was given (operator-line.ts). A speech provider whose own line carries calls
   // rings `/<provider>/calls` (operator-carried.ts).
   let [, via, door] = /^\/([^/]+)\/([^/]+)$/.exec(path) ?? []
+  if (via && door == 'events') {
+    let event = await (await import('./chat.ts')).events(req, env, via)
+    if (event) return event
+  }
   if (via && door == 'calls') {
     let { carriedDoor, carrierNamed } = await import('./operator-carried.ts')
     let carrier = carrierNamed(via)

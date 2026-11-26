@@ -56,7 +56,7 @@ test('the terminal copies OAuth client values without printing them or recording
   let refs: string[] = [], output: string[] = [], sent: unknown
   let run = client((ref) => {
     refs.push(ref)
-    return Promise.resolve(ref.endsWith('/id') ? 'client-id' : 'client-key')
+    return Promise.resolve(`kept-${ref.split('/').at(-1)}`)
   })
   let fetch = globalThis.fetch
   globalThis.fetch = ((_url, init) => {
@@ -73,23 +73,29 @@ test('the terminal copies OAuth client values without printing them or recording
     equal(
       await run(
         {
-          name: 'google',
+          name: 'slack',
           id: 'op://v/client/id',
           secret: 'op://v/client/secret',
+          signing: 'op://v/client/signing',
         },
         host,
         context((line) => output.push(line)),
       ),
       0,
     )
-    equal(refs, ['op://v/client/id', 'op://v/client/secret'])
+    equal(refs, [
+      'op://v/client/id',
+      'op://v/client/secret',
+      'op://v/client/signing',
+    ])
     let bundles = sent as { secret: { value: string } }[]
     equal(JSON.parse(bundles[0].secret.value), {
-      id: 'client-id',
-      secret: 'client-key',
+      id: 'kept-id',
+      secret: 'kept-secret',
+      signing: 'kept-signing',
     })
     equal(output.length, 1)
-    equal(output[0].includes('client-key'), false)
+    equal(output[0].includes('kept-'), false)
     equal(await host.graph.read('.call'), [])
   } finally {
     globalThis.fetch = fetch

@@ -2695,13 +2695,13 @@ export let operating = (
         : {
           ...chatSend(env, store),
           withheld: acts
-            ? 'nobody has addressed you in a chat room (a Discord channel) in this space yet, so there is none to write in'
+            ? 'nobody has addressed you in a chat room in this space yet, so there is none to write in'
             : 'nobody addressed you in a chat room in this conversation',
         },
     ]
     // Any service's API: a room's platform on any turn there, the person's
     // connections on their own (operator-integrations.ts).
-    let vias = rooms.map((r) => r.via)
+    let vias = rooms.map((r) => r.via).filter((via) => PLATFORMS.get(via)?.api)
     let api = (acting: boolean) =>
       acting || vias.length
         ? [apiCall(env, space, { ...acting ? { ctx } : {}, store, vias })]

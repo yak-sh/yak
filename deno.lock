@@ -3520,6 +3520,7 @@
             "npm:@yaks/effects@0.2.33",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
+            "npm:@yaks/hook@0.2.28",
             "npm:@yaks/host@0.2.29",
             "npm:@yaks/mail@0.2.23",
             "npm:@yaks/phone@0.2.30",
@@ -5157,6 +5158,14 @@
           ]
         }
       },
+      "packages/slack": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@yaks/chat@0.2.0",
+            "npm:@yaks/host@0.2.29"
+          ]
+        }
+      },
       "packages/spawn": {
         "packageJson": {
           "dependencies": [
@@ -5902,6 +5911,7 @@
             "npm:@yaks/sandbox@0.2.28",
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/session@0.2.33",
+            "npm:@yaks/slack@0.2.0",
             "npm:@yaks/spawn@0.2.28",
             "npm:@yaks/speech@0.2.33",
             "npm:@yaks/spend@0.2.32",

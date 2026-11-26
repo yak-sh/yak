@@ -13,6 +13,7 @@ import {
   Unsent,
 } from '@yaks/host/senders'
 import type { Line } from '@yaks/phone'
+import type { Scheme } from '@yaks/hook'
 
 export type { Control }
 export { carryDirect, type DirectMessage } from './direct.ts'
@@ -44,6 +45,8 @@ export type Said = {
   addressed?: Addressed
   /** the platform's id for the message it answers */
   reply_to?: string
+  /** The platform's id for the thread's first message, where replies use it. */
+  thread?: string
   /** whether these are its words as edited since it was first said: a
    * platform gives an edit as heard with the message's own id, and the
    * listener takes it only where it is addressed, as a message it has not
@@ -227,12 +230,27 @@ export type Present = {
  * of them at once, or one it joined or left. */
 export type Seated = { all: string[] } | { joined: string } | { left: string }
 
+/** A webhook's challenge, or a message routed by the installation's account. */
+export type Event =
+  | { challenge: string }
+  | { account: string; said: Said }
+
+/** An HTTP provider describes how to verify and read what it sends. */
+export type Hook = {
+  scheme: Scheme
+  event: (body: unknown) => Event | undefined
+}
+
 /** A chat platform, given as data by its own package. */
 export type Platform = {
   /** its plugin's name, which `integration.chat` names (@yaks/connections) */
   name: string
   /** what people call it */
   title: string
+  /** What this platform calls a server. */
+  place?: string
+  /** Whether replying to the bot also addresses it without a mention. */
+  followsReplies?: boolean
   /** the most characters one message may carry */
   limit: number
   /** how a message there writes a link ({@link linked}); as plain text,
@@ -248,6 +266,8 @@ export type Platform = {
   /** its socket, opened with a bot's credential, where it sends messages
    * over one */
   socket?: (credential: string) => Socket<unknown>
+  /** Where the provider delivers messages to an HTTPS endpoint instead. */
+  hook?: Hook
   /** post a reply with a bot's credential */
   send: (
     credential: string,
@@ -427,6 +447,7 @@ export let kept = (via: string, said: Said, connection?: string): Bundle[] => [
       at: said.at,
       ...said.addressed ? { addressed: said.addressed } : {},
       ...said.reply_to ? { reply_to: said.reply_to } : {},
+      ...said.thread ? { thread: said.thread } : {},
       ...connection ? { connection } : {},
     },
     doc: { body: said.text },

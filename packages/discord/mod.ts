@@ -1021,6 +1021,7 @@ export let line: Line = {
 export let discord: Platform = {
   name: 'discord',
   title: 'Discord',
+  followsReplies: true,
   limit: 2000,
   links,
   mentions,

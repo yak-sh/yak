@@ -48,6 +48,15 @@
           },
           "description": "what a connection asks for when nothing narrower was needed"
         },
+        "scope_separator": {
+          "type": "string",
+          "enum": [" ", ","],
+          "description": "the delimiter for a provider's requested and granted OAuth scopes"
+        },
+        "pkce": {
+          "type": "boolean",
+          "description": "whether the OAuth provider accepts PKCE for this client, true by default"
+        },
         "params": {
           "type": "object",
           "description": "extra parameters the authorize link carries, such as Google's access_type"
@@ -132,6 +141,11 @@
               "type": "string",
               "format": "uri",
               "description": "the API's reference, which says every endpoint under `base`"
+            },
+            "reads": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "read operations using a method other than GET, such as POST /query"
             }
           },
           "description": "its API, for an agent calling it as a connection: where its paths are and where they are documented. None is reached at its first host"
@@ -217,6 +231,10 @@
           "type": "string",
           "description": "the chat platform its connections talk through (@yaks/chat), by name: connecting it lets the Operator and the space's apps hear and answer there",
           "examples": ["discord"]
+        },
+        "chat_grant": {
+          "type": "boolean",
+          "description": "the OAuth grant is the bot credential for this installation, as with a Slack workspace"
         },
         "instructions": {
           "type": "string",

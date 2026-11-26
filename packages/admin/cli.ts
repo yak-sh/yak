@@ -40,7 +40,7 @@ export let commands: CliCommand[] = [{
   verb: 'client',
   title: 'Keep an OAuth client',
   description:
-    "Keep an OAuth client yaks.app signs in to a service as, sealed in the platform's vault under its name; every integration naming that client signs in as it. The id and the secret are op:// references read only by this terminal command and never printed. An application that also speaks as a bot on a chat platform (Discord's) keeps its bot token with it (--bot), which every chat connection through that client speaks with.\n\n  yak admin client google 'op://Yak Shaving LLC/googleapis oauth/client id' 'op://Yak Shaving LLC/googleapis oauth/client secret' --as admin@bot.yak.sh\n  yak admin client discord 'op://Yak Shaving LLC/Discord yaks.app application/application id' 'op://Yak Shaving LLC/Discord yaks.app application/client secret' --bot 'op://Yak Shaving LLC/Discord yaks.app application/bot token' --as admin@bot.yak.sh",
+    "Keep an OAuth client yaks.app signs in to a service as, sealed in the platform's vault under its name; every integration naming that client signs in as it. The id and the secret are op:// references read only by this terminal command and never printed. An application that also speaks as a bot on a chat platform (Discord's) keeps its bot token with it (--bot), which every chat connection through that client speaks with. A provider sending signed events keeps its signing secret with --signing.\n\n  yak admin client google 'op://Yak Shaving LLC/googleapis oauth/client id' 'op://Yak Shaving LLC/googleapis oauth/client secret' --as admin@bot.yak.sh\n  yak admin client discord 'op://Yak Shaving LLC/Discord yaks.app application/application id' 'op://Yak Shaving LLC/Discord yaks.app application/client secret' --bot 'op://Yak Shaving LLC/Discord yaks.app application/bot token' --as admin@bot.yak.sh",
   positional: ['name', 'id', 'secret'],
   name: 'admin_client',
   globals: ['as'],
@@ -64,6 +64,10 @@ export let commands: CliCommand[] = [{
         type: 'string',
         description:
           "an op:// reference to the token of the bot the client's application speaks as on a chat platform",
+      },
+      signing: {
+        type: 'string',
+        description: 'an op:// reference to the signing secret for chat events',
       },
       as: {
         type: 'string',

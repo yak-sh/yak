@@ -35,7 +35,8 @@ export type Adding = { name: string; testing?: boolean }
  * when the platform listed them, and the one it hears. */
 export type ChatServer = {
   connection: string
-  rooms: { id: string; eid: string; name: string }[] | null
+  rooms?: { id: string; eid: string; name: string }[] | null
+  title?: string
   away?: boolean
   hears?: string
   own?: boolean
@@ -43,7 +44,7 @@ export type ChatServer = {
 
 /** A chat platform the space's owner adds the Operator to. */
 export type ChatOffer = {
-  platform: { title: string }
+  platform: { title: string; place?: string; followsReplies?: boolean }
   bot: Adding
   user?: Adding
   kept: boolean
@@ -427,6 +428,7 @@ export let chatCard = (
   offers: ChatOffer[],
 ) =>
   offers.map(({ platform, bot, user, kept, servers }) => {
+    let place = platform.place ?? 'server'
     let adding = (i: Adding, label: string) =>
       h(
         'form',
@@ -440,6 +442,9 @@ export let chatCard = (
         h(Button, { type: 'submit' }, label),
       )
     let hearing = (s: ChatServer, i: number) => {
+      if (s.rooms === undefined) {
+        return h('p', null, s.title ? `Connected to ${s.title}.` : 'Connected.')
+      }
       let id = `chat-room-${i}`
       // A server the bot was removed from, or never joined: it is added
       // again, which keeps this connection.
@@ -493,10 +498,12 @@ export let chatCard = (
       h(
         'p',
         null,
-        `Add ${operator} to a ${platform.title} server you manage. Mention it there, reply to it, or message it directly, and it answers in the same place.`,
+        `Add ${operator} to a ${platform.title} ${place} you manage. Mention it there, ${
+          platform.followsReplies ? 'reply to it, ' : ''
+        }or message it directly, and it answers in the same place.`,
       ),
       kept ? adding(bot, `Add to ${platform.title}`) : null,
-      servers.length
+      servers.some((s) => s.rooms !== undefined)
         ? h(
           'p',
           null,

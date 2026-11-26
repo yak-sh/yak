@@ -1112,6 +1112,8 @@ let signIn = async (
     params: i.params,
     client: registered ?? (i.client_id ? { id: i.client_id } : undefined),
     auth: i.auth,
+    scopeSeparator: i.scope_separator,
+    pkce: i.pkce,
     refreshEncoding: i.refresh_encoding,
     answers: i.answers,
     resource: i.resource,
@@ -1315,6 +1317,9 @@ export let connect = async (
       Object.assign(tokens, { website_session: given.session })
     }
     let who = i ? await signedIn(i, tokens, c.fetch ?? fetch) : {}
+    if (i?.chat_grant && !who.account) {
+      throw new CallError('connection', 'Install the app in a workspace.')
+    }
     account = who.account ?? account
     made = {
       ...tokens.scope ? { scopes: tokens.scope.split(/\s+/) } : {},
@@ -1578,6 +1583,9 @@ export let botFrom = async (
 ): Promise<string | undefined> => {
   if (comp(b, CONNECTION).status != 'connected' || !i?.chat) return undefined
   if (keyed(i)) return keyOf(c, b, i)
+  if (i.chat_grant) {
+    return marking(c, b, (await signIn(c, b)).token)
+  }
   return (await clientOf(c.vault, c.graph.read, i))?.bot
 }
 

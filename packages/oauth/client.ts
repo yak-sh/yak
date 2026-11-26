@@ -19,6 +19,10 @@ export type Provider = {
   authorize: string
   token: string
   scopes?: string[]
+  /** Delimiter used by this provider for requested and granted scopes. */
+  scopeSeparator?: ' ' | ','
+  /** A confidential client whose provider requires PKCE to be omitted. */
+  pkce?: boolean
   /** Extra authorize parameters the provider wants, such as Google's
    * `access_type: 'offline'` for a refresh token. They never replace the
    * flow's own (state, challenge, redirect). */
@@ -218,7 +222,8 @@ export let client = (provider: Provider, o: Options): Client => {
       expires_at: Number.isFinite(life) && life > 0
         ? now() + life * 1000
         : undefined,
-      scope: str(body.scope) ?? was.scope,
+      scope: str(body.scope)?.split(provider.scopeSeparator ?? /\s+/)
+        .map((scope) => scope.trim()).filter(Boolean).join(' ') ?? was.scope,
       account: named(body, provider.account) ?? was.account,
       account_title: named(body, provider.account_title) ?? was.account_title,
     }
@@ -256,10 +261,14 @@ export let client = (provider: Provider, o: Options): Client => {
           redirect_uri: o.redirect,
           state: pending.state,
           resource: provider.resource,
-          ...(scopes.length ? { scope: scopes.join(' ') } : {}),
+          ...(scopes.length
+            ? { scope: scopes.join(provider.scopeSeparator ?? ' ') }
+            : {}),
         },
-        code_challenge: challenge,
-        code_challenge_method: 'S256',
+        ...provider.pkce === false ? {} : {
+          code_challenge: challenge,
+          code_challenge_method: 'S256',
+        },
       }
       for (let [k, v] of form(fields)) url.searchParams.set(k, v)
       return { url: url.href, attempt: pending }
@@ -301,7 +310,9 @@ export let client = (provider: Provider, o: Options): Client => {
             grant_type: 'authorization_code',
             code: codes[0],
             redirect_uri: o.redirect,
-            code_verifier: pending.verifier,
+            ...provider.pkce === false ? {} : {
+              code_verifier: pending.verifier,
+            },
           },
       )
       await o.store.update(o.key, (record) => {

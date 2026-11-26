@@ -114,6 +114,7 @@ let cut = (text: string, most: number) =>
 // the chat app itself carry none.
 export let VIA: Record<string, [IconName, string]> = {
   discord: ['discord', 'By Discord'],
+  slack: ['message-square', 'By Slack'],
   email: ['mail', 'By email'],
   letter: ['mail', 'A reply to a letter'],
   text: ['message-square', 'By text'],

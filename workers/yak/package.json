@@ -100,6 +100,7 @@
     "@yaks/sandbox": "0.2.28",
     "@yaks/secrets": "0.2.28",
     "@yaks/session": "0.2.33",
+    "@yaks/slack": "0.2.0",
     "@yaks/spawn": "0.2.28",
     "@yaks/speech": "0.2.33",
     "@yaks/spend": "0.2.32",

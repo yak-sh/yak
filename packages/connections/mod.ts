@@ -183,6 +183,7 @@ export {
 export {
   type Answer,
   request,
+  requestable,
   requests,
   type SourceCommand,
 } from './requests.ts'

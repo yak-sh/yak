@@ -32,6 +32,8 @@ export type Hmac = {
   prefix?: string
   /** how the digest is written: hex (the default) or base64 */
   encoding?: 'hex' | 'base64'
+  /** A timestamp signed as `[version + separator] + time + separator + body`. */
+  timestamp?: { header: string; separator: string; version?: string }
 }
 
 /** An Ed25519 signature over `<timestamp><join><raw body>`, base64 in one
@@ -208,6 +210,7 @@ let hmac = async (
   secret: string,
   body: string,
   headers: HeaderLookup,
+  now: number,
 ) => {
   let line = headers.get(scheme.header)
   if (!line) return `no ${scheme.header} header`
@@ -215,7 +218,16 @@ let hmac = async (
   if (!line.startsWith(prefix)) return MALFORMED
   let digest = line.slice(prefix.length).trim()
   let decoded = scheme.encoding == 'base64' ? base64(digest) : hex(digest)
-  return await matches(secret, body, [decoded])
+  let stamp = scheme.timestamp
+  if (!stamp) return matches(secret, body, [decoded])
+  let at = headers.get(stamp.header) ?? ''
+  if (!/^\d+$/.test(at)) return 'no timestamp on the signature'
+  if (Math.abs(now / 1000 - Number(at)) > SKEW) {
+    return 'the signature is too old'
+  }
+  let signed = [...stamp.version ? [stamp.version] : [], at, body]
+    .join(stamp.separator)
+  return await matches(secret, signed, [decoded])
 }
 
 // Ed25519: a 64-byte signature over `<t><join><raw body>`, `t` within SKEW of
@@ -275,9 +287,9 @@ export let refusal = (
     ? standard(secret, body, headers, now)
     : typeof scheme == 'object' && 'token' in scheme
     ? bearer(scheme, secret, headers)
-    : scheme != 'github' && 'timestamp' in scheme
+    : scheme != 'github' && 'signature' in scheme
     ? ed25519(scheme, secret, body, headers, now)
-    : hmac(scheme == 'github' ? GITHUB : scheme, secret, body, headers)
+    : hmac(scheme == 'github' ? GITHUB : scheme, secret, body, headers, now)
 
 /**
  * Whether a {@link refusal} can mean the receiver's own secret is wrong, and so

@@ -1,0 +1,12 @@
+{
+  "name": "@yaks/slack",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": { ".": "./mod.ts" },
+  "license": "Apache-2.0",
+  "description": "Slack for @yaks/chat, receiving Events API callbacks and posting threaded replies with a workspace's bot.",
+  "dependencies": {
+    "@yaks/chat": "0.2.0",
+    "@yaks/host": "0.2.29"
+  }
+}
