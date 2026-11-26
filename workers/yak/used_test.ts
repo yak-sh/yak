@@ -554,3 +554,84 @@ test('a store woken a moment ago is not woken again for every view', async () =>
   await Promise.all(held)
   equal(woke.sort(), ['a', 'a', 'b'])
 })
+
+// Isolates of one colo: each its own namespace (its own holds), one shared
+// cache. The store answers the hour's end, or refuses as overloaded.
+let colo = (refuse = () => false) => {
+  let sends = 0, reports: unknown[] = [], shelf = new Map<string, string>()
+  let time = clock()
+  let isolate = () =>
+    ({
+      idFromName: (name: string) => name,
+      get: () => ({
+        fetch: () => {
+          sends++
+          return refuse()
+            ? Promise.reject(Object.assign(
+              Error('Durable Object is overloaded. Requests queued too long.'),
+              { overloaded: true },
+            ))
+            : Promise.resolve(
+              Response.json({ at: useUntil(time.now()) }),
+            )
+        },
+      }),
+    }) as unknown as Namespace
+  let cache = () =>
+    Promise.resolve({
+      match: (req: Request) =>
+        Promise.resolve(
+          shelf.has(req.url) ? new Response(shelf.get(req.url)) : undefined,
+        ),
+      put: async (req: Request, res: Response) =>
+        void shelf.set(req.url, await res.text()),
+    })
+  let env = {
+    ERRORS: {
+      send: (rows: unknown) => Promise.resolve(void reports.push(rows)),
+    },
+  } as unknown as Parameters<typeof within>[0]
+  let use = (ns: Namespace, shelved = cache) =>
+    within(env, {}, () => recordUse(ns, 'crawled-app', time, shelved))
+  return { isolate, use, time, sent: () => sends, reports }
+}
+
+test('isolates of one colo send an app one use receipt an hour between them', async () => {
+  let c = colo()
+  let answers = []
+  for (let i = 0; i < 5; i++) answers.push(await c.use(c.isolate()))
+  let first = c.sent()
+  await c.time.advance(3_600_000)
+  await c.use(c.isolate())
+  equal({ first, after: c.sent(), same: new Set(answers).size }, {
+    first: 1,
+    after: 2,
+    same: 1,
+  })
+})
+
+test('a colo holds back a receipt an overloaded store refused for a minute', async () => {
+  let down = true
+  let c = colo(() => down)
+  for (let i = 0; i < 5; i++) await c.use(c.isolate())
+  let refused = c.sent()
+  down = false
+  await c.time.advance(REST)
+  let at = await c.use(c.isolate())
+  equal({ refused, sent: c.sent(), took: at != null }, {
+    refused: 1,
+    sent: 2,
+    took: true,
+  })
+})
+
+test('a colo cache that fails is asked around and reported', async () => {
+  let c = colo()
+  let broken = () => Promise.reject(Error('cache unavailable'))
+  let at = await c.use(c.isolate(), broken)
+  equal({ took: at != null, sent: c.sent(), reported: c.reports.length > 0 }, {
+    took: true,
+    sent: 1,
+    reported: true,
+  })
+})

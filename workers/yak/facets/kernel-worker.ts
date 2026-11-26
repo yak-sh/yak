@@ -27,8 +27,13 @@ import type { builds } from '../builds.ts'
 import type { Explanation } from '@yaks/tracker/resolution'
 
 let openFiles = () => caches.open('Files')
-let shelved = (env: Env): Env =>
+let filed = (env: Env): Env =>
   env.FILES ? { ...env, FILE_CACHE: openFiles } : env
+// A Worker's isolates multiply with its traffic, so they share the colo's
+// marks of what the platform store took (used.ts). An object is one instance
+// and holds its own.
+let openUses = () => caches.open('Uses')
+let shelved = (env: Env): Env => ({ ...filed(env), USE_CACHE: openUses })
 
 // Agent entrypoints share the same isolated code evaluator, loaded with the
 // first of them.
@@ -58,7 +63,7 @@ let instrumented = async <C>(load: Promise<C>) =>
 // A class's object, made the way the runtime constructs it.
 type Class = new (...args: never[]) => object
 let made = (C: Class) => (ctx: never, env: Env) =>
-  new C(ctx, shelved(env) as never)
+  new C(ctx, filed(env) as never)
 
 // @yaks/durable-object `Durable`'s own, which every object on it answers.
 let DURABLE = [
@@ -150,7 +155,9 @@ let entered = (
   methods,
   entered: true,
   load: () =>
-    Promise.resolve((ctx: never, env: never) => make(ctx, shelved(env))),
+    Promise.resolve((ctx: never, env: never) =>
+      make(ctx, base == DurableObject ? filed(env) : shelved(env))
+    ),
 })
 
 let hosting = async (env: Env) => (await import('../inference.ts')).hosting(env)

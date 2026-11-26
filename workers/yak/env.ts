@@ -357,6 +357,9 @@ export type Env = {
   FILES?: Fetcher
   // The same named cache, opened in the invocation that needs the bytes.
   FILE_CACHE?: () => Promise<Stored>
+  // The colo's marks of the use receipts the platform store took (used.ts),
+  // shared by every isolate of a Worker there. An object has none.
+  USE_CACHE?: () => Promise<Stored>
   RELEASE_VIEWS?: ReadonlyMap<
     string,
     import('@yaks/platform/release-index').ServingIndex

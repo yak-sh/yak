@@ -1,6 +1,9 @@
 // Use belongs to the directory, independently of platform bookkeeping. An app's
 // receipt records the moment of the hour's first use and is held until the
-// hour's end, so repeated visits need no durable writes. The same receipt
+// hour's end, so repeated visits need no durable writes. Each colo marks what
+// the store took in its cache, so the receipts an app's traffic sends grow
+// with the colos it reaches, not with its requests or the isolates they start
+// (T-3847). The same receipt
 // records each retired query spelling an app's code still sends, so a
 // translation in the grammar goes only once nothing sends it (T-123000).
 import type { Plugin } from '@yaks/graph'
@@ -13,7 +16,8 @@ import { answered, KERNEL } from './meta.ts'
 import { background, defect, within } from './defects.ts'
 import type { Env } from './env.ts'
 import { tallying } from './lib/hops.ts'
-import { type Clock, system } from '@yaks/fp'
+import { type Clock, system, within as inTime } from '@yaks/fp'
+import type { Stored } from '@yaks/workerd/cache'
 
 export let useUntil = (now = Date.now()) =>
   new Date((Math.floor(now / 3_600_000) + 1) * 3_600_000).toISOString()
@@ -43,14 +47,62 @@ export let returned = (previous: unknown, at: string) =>
 // What an isolate holds for each key: the answer it may give again without
 // asking, until when. A receipt the store took holds its hour's end. One an
 // overloaded store refused (as a deploy restarts it, bug dbe06394) holds
-// nothing for `REST`, so that store is asked once a minute from each isolate,
-// not once for every request behind the refusal.
+// nothing for `REST`, so that store is asked once a minute from each colo,
+// not once for every request behind the refusal. The colo's cache holds the
+// same, for every isolate there.
 type Held = { at: string | null; until: number }
 let receipts = new WeakMap<Namespace, Map<string, Held>>()
 let pending = new WeakMap<Namespace, Map<string, Promise<string | null>>>()
 
-/** How long an isolate holds back a receipt an overloaded store refused. */
+/** How long a colo holds back a receipt an overloaded store refused. */
 export let REST = 60_000
+
+/** The colo's cache of what the store took (env.ts `USE_CACHE`). */
+export type Shelf = () => Promise<Stored>
+
+// How long a receipt waits on the colo's cache before it asks the store
+// itself: a match takes a few milliseconds, and now and then seconds (T-1112).
+let GLANCE = 500
+
+let markAt = (r: Receipt) =>
+  new Request(`https://uses.invalid${r.door}/${encodeURIComponent(r.key)}`)
+
+// What the colo holds for a receipt, or null when it holds nothing or its
+// cache can't say in time. A cache that fails is reported and asked around.
+let glance = async (
+  shelf: Shelf,
+  r: Receipt,
+  clock: Clock,
+): Promise<Held | null> => {
+  try {
+    let held = await inTime(
+      shelf().then((c) => c.match(markAt(r))).then((res) =>
+        res?.json() as Promise<Held> | undefined
+      ),
+      GLANCE,
+      clock,
+    )
+    return held && held.until > clock.now() ? held : null
+  } catch (error) {
+    defect(error, { request: 'read a use receipt mark', app: r.app })
+    return null
+  }
+}
+
+let mark = async (shelf: Shelf, r: Receipt, held: Held, clock: Clock) => {
+  let seconds = Math.ceil((held.until - clock.now()) / 1000)
+  if (seconds <= 0) return
+  try {
+    await (await shelf()).put(
+      markAt(r),
+      Response.json(held, {
+        headers: { 'cache-control': `public, max-age=${seconds}` },
+      }),
+    )
+  } catch (error) {
+    defect(error, { request: 'mark a use receipt', app: r.app })
+  }
+}
 
 // A receipt the platform store keeps until the hour it answers: one POST to
 // `door` per `key` an hour, from this isolate, whatever the traffic.
@@ -72,7 +124,7 @@ let schedule = (
     within(
       env,
       { request: r.request, app: r.app },
-      () => receipt(env.STORE!, r, env.CLOCK),
+      () => receipt(env.STORE!, r, env.CLOCK, env.USE_CACHE),
       undefined,
       { retain },
     )).then(() => {})
@@ -83,6 +135,7 @@ let receipt = (
   ns: Namespace,
   r: Receipt,
   clock: Clock = system,
+  shelf?: Shelf,
 ): Promise<string | null> => {
   let held = receipts.get(ns)
   if (!held) receipts.set(ns, held = new Map())
@@ -100,7 +153,14 @@ let receipt = (
     held.set(r.key, { at, until })
     return at
   }
+  // What the store said, held here and marked for the colo.
+  let took = async (at: string | null, until: number) => {
+    if (shelf) await mark(shelf, r, { at, until }, clock)
+    return hold(at, until)
+  }
   let work = (async () => {
+    let colo = shelf && await glance(shelf, r, clock)
+    if (colo) return hold(colo.at, colo.until)
     try {
       let at = await storeOf(ns, PLATFORM_STORE).consume(
         r.door,
@@ -114,10 +174,10 @@ let receipt = (
         },
         KERNEL,
       )
-      return hold(at, Date.parse(at))
+      return await took(at, Date.parse(at))
     } catch (error) {
       defect(error, { request: r.request, app: r.app })
-      return overloaded(error) ? hold(null, clock.now() + REST) : null
+      return overloaded(error) ? await took(null, clock.now() + REST) : null
     }
   })().finally(() => waiting!.delete(r.key))
   waiting.set(r.key, work)
@@ -233,7 +293,8 @@ export let recordUse = (
   ns: Namespace,
   eid: string,
   clock?: Clock,
-): Promise<string | null> => receipt(ns, used(eid), clock)
+  shelf?: Shelf,
+): Promise<string | null> => receipt(ns, used(eid), clock, shelf)
 
 /** What a receipt writes: when something was last used, and which retired
  * spellings an app still sends. No authorization reads either. */

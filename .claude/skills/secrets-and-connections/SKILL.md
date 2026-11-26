@@ -320,7 +320,8 @@ The box has its own token for this: the secret `CLOUDFLARE_WORKERS_LOGS_TOKEN`
 in its vault, which the secret's doc describes as read-only Workers
 Observability on the yaks account. A local script reads it with
 `reveal(fileVault('<home>/.yak/secrets'), 'CLOUDFLARE_WORKERS_LOGS_TOKEN')`
-(packages/cli/vault.ts) and sends it as a Bearer token in a POST to
+(`reveal` from packages/secrets/reveal.ts, `fileVault` from
+packages/cli/vault.ts) and sends it as a Bearer token in a POST to
 `/accounts/<id>/workers/observability/telemetry/query`; the account id is in
 workers/yak/wrangler.toml. A body with `view: 'events'` and a filter on
 `$metadata.service` = `yak` returns events, `view: 'traces'` returns traces, and
