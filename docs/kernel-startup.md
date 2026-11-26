@@ -978,3 +978,28 @@ Store Durable Object and page-triggered wakes. T-126130 measured the separate
 Site and Files page-serving path. Production app queries continued through the
 existing kernel, which returned 401 to a request with an invalid bearer token.
 The three probe Workers were deleted after collecting the traces.
+
+### Production query Worker
+
+`yak-front` sends query reads on space hostnames to `yak-query` through a
+service binding. The query Worker uses the kernel's directory routing, session
+and access checks, and Store namespace. The kernel continues to serve custom
+domains, draft previews, and requests the query Worker hands back.
+
+The production and staging configurations each upload one JavaScript module. The
+final upload dry run measured about 1.78 MB of JavaScript and 567 KB gzip. The
+earlier matched Tokyo comparison used 1.64 MB for its small Worker and 7.90 MB
+for its kernel reference. The production Worker also handles authenticated
+callers, sandbox page tokens, and query features that the comparison probe did
+not exercise.
+
+Production query version `fd781aad-1bdd-4df2-8d0a-658a89bdebd5` began serving
+with the existing session signer at 01:50:24 UTC. Live checks covered public and
+private reads, invalid-bearer refusal, foreign-origin credential stripping, and
+both sandbox page-token forms. The public query returned 200 with
+`Cache-Control: private, no-store` (ray `a60540086e3cc6d7`). The private cookie
+and OAuth bearer read the same protected row (rays `a605400c3b16b1eb` and
+`a605400dd9aab1eb`). The sandbox token path with an opaque origin and the
+sandbox bearer both read the protected row. A cookie alone returned 401 and a
+token from the wrong app returned 404 (rays `a6054018f960b1eb`,
+`a605401a8e03b1eb`, `a605401b88f1b1eb`, and `a605401c1aa6b1eb`).
