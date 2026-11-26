@@ -406,7 +406,7 @@
 .Story_Page .Home_Demo {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto var(--phone-height) auto auto;
+  grid-template-rows: var(--phone-height) auto auto;
   align-content: start;
   gap: .65rem;
   width: min(100%, var(--phone-width));
@@ -416,22 +416,12 @@
 }
 
 .Home_Demo .Home_Ask {
-  grid-row: 4;
-}
-
-.Home_DemoHeader {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: .3rem .65rem;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 800;
+  grid-row: 3;
 }
 
 .Story_Page .Home_Phone {
   --radius: 2rem;
-  grid-row: 2;
+  grid-row: 1;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: .8rem;
@@ -532,11 +522,6 @@
   text-decoration: none;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .Home_MessageLink:hover {
-    text-decoration: underline;
-  }
-}
 .Home_MessageLink:focus-visible {
   text-decoration: underline;
 }
@@ -564,7 +549,7 @@
 }
 
 .Home_Picks {
-  grid-row: 3;
+  grid-row: 2;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -1197,7 +1182,6 @@
     --radius: 1.05rem;
   }
 
-  .Home_DemoHeader,
   .Home_Picks,
   .Home_Demo .Home_Ask,
   .Home_Phone::before,

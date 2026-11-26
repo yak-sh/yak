@@ -266,7 +266,6 @@
       "lead": "Describe what you need, and an AI assistant builds your app and puts it online. You can also build and change your apps from Claude or ChatGPT.",
       "prompt": "Make me an app that…",
       "ask": "Your app you would like",
-      "example": "Example conversation",
       "works": "Works with",
       "more": "See integrations",
       "connections": "Browse all integrations",

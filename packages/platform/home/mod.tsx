@@ -6,7 +6,7 @@ import { GET_PLAN } from '../routes.ts'
 import { DEMOS, SCENES, TURNS } from './demos.ts'
 import { GAME_DEMOS, GAME_FEATURES, GAME_SCENES } from './games.ts'
 import { gift, ICONS, priceTag } from './icons.ts'
-import { DemoLinks, Phone, Picks, type Told } from './phone.tsx'
+import { Phone, Picks, type Told } from './phone.tsx'
 import { FEATURES, RUN } from './parts.ts'
 import { Change, People, type Pictures, Scene, Services } from './scenes.tsx'
 import type { Copy } from './words.ts'
@@ -320,19 +320,7 @@ export let Story = (
         offer={landing.offer}
       />
       <FeatureNav copy={copy} landing={landing} />
-      <aside
-        class='Home_Demo'
-        aria-labelledby='example-title'
-        data-story-demo=''
-      >
-        <header class='Home_DemoHeader'>
-          <p
-            class='Home_DemoTitle'
-            id='example-title'
-            {...copy.text('home.story.example')}
-          />
-          <DemoLinks demos={landing.demos} />
-        </header>
+      <aside class='Home_Demo' aria-label='Example' data-story-demo=''>
         <Phone told={landing} />
         <Picks demos={landing.demos} />
         <Ask copy={copy} action={action} id='example-say' cta='walk' />

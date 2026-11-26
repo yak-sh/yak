@@ -4,7 +4,8 @@ export type Line = {
   who: 'you' | 'them'
   text: string
   link?: Link
-  shot?: Shot
+  /** The app's picture, a link to its live demo. */
+  app?: Shot & { href: string }
 }
 export type Demo = { slug: string; name: string; turn: Line[][] }
 
@@ -15,12 +16,11 @@ export const you = (text: string): Line => ({
   text: text[0].toUpperCase() + text.slice(1),
 })
 export const them = (text: string): Line => ({ who: 'them', text })
-/** The first reply: the app, its picture and its link. */
+/** The first reply: the app's picture, linking to its live demo. */
 export const built = (text: string, d: { slug: string; shot: Shot }): Line => ({
   who: 'them',
   text,
-  shot: d.shot,
-  link: { label: 'Open demo', href: `${DEMO_AT}${d.slug}/` },
+  app: { ...d.shot, href: `${DEMO_AT}${d.slug}/` },
 })
 export const live = (domain: string) => them(`Your app is ready at ${domain}.`)
 /** Where to buy a domain and have it connected to the app. */

@@ -13,8 +13,9 @@ export type Told = {
 }
 
 let Message = (
-  { line, turn, section, at, count, logo }: {
+  { line, name, turn, section, at, count, logo }: {
     line: Line
+    name: string
     turn: number
     section: string
     at: number
@@ -34,25 +35,19 @@ let Message = (
         {logo && <ServiceLogo slug={logo} />}
         {line.text}
       </a>
-      {line.shot && (
-        <a
-          class='Home_Shot'
-          href={line.link?.href}
-          tabindex={-1}
-          aria-hidden='true'
-        >
+      {line.app && (
+        <a class='Home_Shot' href={line.app.href}>
           <img
             class='Home_Image'
-            src={line.shot.src}
-            alt=''
-            width={line.shot.width}
-            height={line.shot.height}
+            src={line.app.src}
+            alt={`${name} demo`}
+            width={line.app.width}
+            height={line.app.height}
             loading='lazy'
           />
         </a>
       )}
-      {!line.shot && line.link && <a href={line.link.href}>{line.link.label}
-      </a>}
+      {line.link && <a href={line.link.href}>{line.link.label}</a>}
     </div>
   </li>
 )
@@ -81,6 +76,7 @@ let Conversation = (
         return lines.map((line, at) => (
           <Message
             line={line}
+            name={demo.name}
             turn={turn}
             section={FEATURES[feature].section}
             at={at}
@@ -92,20 +88,6 @@ let Conversation = (
         ))
       })}
     </ol>
-  </div>
-)
-
-/** A demo stays openable after its first reply scrolls out of the phone. */
-export let DemoLinks = ({ demos }: { demos: readonly Demo[] }) => (
-  <div class='Home_DemoLinks'>
-    {demos.map(({ slug, turn }, i) => {
-      let link = turn[0].find((line) => line.link)?.link
-      return link && (
-        <a href={link.href} data-demo-scene={slug} hidden={i != 0}>
-          {link.label}
-        </a>
-      )
-    })}
   </div>
 )
 
