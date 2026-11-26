@@ -9,8 +9,10 @@ let ready = (image: HTMLImageElement) =>
     image.complete && image.naturalWidth > 0 && image.currentSrc == image.src,
   )
 
-/** Hide an image's backdrop once its current source can be shown. A swap
- * can keep the node and its pixels while restoring the server's attributes. */
+/** Hide an image's backdrop once its current source can be shown. A swap or
+ * a redraw (@yaks/ui/navigate `morph`) can keep the node and its pixels while
+ * taking the mark away, as the server never drew it: it is put back while the
+ * image can still be shown. */
 export let imageFallbacks = (doc: Document): void => {
   let scan = () =>
     doc.querySelectorAll<HTMLImageElement>(`img[${MARK}]`).forEach(ready)
@@ -21,6 +23,14 @@ export let imageFallbacks = (doc: Document): void => {
   doc.addEventListener('load', loaded, true)
   doc.addEventListener('error', loaded, true)
   doc.addEventListener(PAGE, scan)
+  let Observer = doc.defaultView?.MutationObserver ??
+    globalThis.MutationObserver
+  new Observer((changes) => {
+    for (let { target } of changes) {
+      let image = target as HTMLImageElement
+      if (image.hasAttribute(MARK) && !image.hasAttribute(READY)) ready(image)
+    }
+  }).observe(doc.documentElement, { subtree: true, attributeFilter: [READY] })
   scan()
 }
 
