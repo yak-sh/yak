@@ -306,7 +306,7 @@ export let manage = async (
       chat,
     )
   }
-  let { space, role, administrative } = await paged
+  let { space, role, administrative } = reached('page_read', await paged)
   if (caller?.spaceEid && space && caller.spaceEid != space.eid) {
     return json(403, 'not_a_member', 'That token is for another space.')
   }

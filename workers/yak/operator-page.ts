@@ -25,6 +25,7 @@ import {
 import { chatRows } from './connections.ts'
 import { reachOf } from './operator-reach.ts'
 import { background, caught } from './defects.ts'
+import { reached } from './lib/hops.ts'
 import {
   builderOf,
   carried,
@@ -2351,26 +2352,28 @@ export let dashboardPage = async (
   c: Clock = clock(),
 ) => {
   let person = who.person ?? ''
-  let spared = <T>(read: Promise<T>, none: T, request: string) =>
-    read.catch((error) => {
-      caught(error, { request, space: space.slug })
-      return none
-    })
+  // Each part read, or none where it failed, its answer marked on the
+  // request's timing (`at_dashboard_<part>`, timing.ts) to say which one the
+  // page stood on.
+  let spared = <T>(part: string, read: Promise<T>, none: T) =>
+    read.then(
+      (out) => reached(`dashboard_${part}`, out),
+      (error) => {
+        caught(error, { request: `dashboard ${part}`, space: space.slug })
+        return none
+      },
+    )
   let [apps, work, offered, fixes, news, beside] = await Promise.all([
-    spared(personRows(dir, person, spaceApps(space.eid)), [], 'dashboard apps'),
-    spared(personRows(dir, person, agentWork(space.eid)), [], 'dashboard work'),
+    spared('apps', personRows(dir, person, spaceApps(space.eid)), []),
+    spared('work', personRows(dir, person, agentWork(space.eid)), []),
+    spared('suggestions', personRows(dir, person, suggestions(space.eid)), []),
     spared(
-      personRows(dir, person, suggestions(space.eid)),
-      [],
-      'dashboard suggestions',
-    ),
-    spared(
+      'fixes',
       operatorDoor(env, space, who, 'fixes', {}) as Promise<Fix[]>,
       [],
-      'dashboard fixes',
     ),
-    spared(updatesOf(env, space, who, false, dir), null, 'dashboard updates'),
-    side,
+    spared('updates', updatesOf(env, space, who, false, dir), null),
+    Promise.resolve(side).then((out) => reached('dashboard_side', out)),
   ])
   let rows = [
     ...apps,
