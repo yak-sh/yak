@@ -58,6 +58,12 @@ and local probes run inline. `MODEL_RECEIPTS` reads the executor's private
 request and receipt bucket. Kernel builds never deploy or replace an executor
 release.
 
+`MAPS` is the `yak-maps` bucket every app's maps draw from (@yaks/maps,
+maps.ts): the Protomaps planet archive and its label fonts, served read only at
+`/maps/` on the apex and kept in the zone's cache. Staging binds the same
+bucket. `deno run -A packages/maps/refresh.ts` copies the newest build in with
+the box's `MAPS_R2_*` secrets, a token for that bucket alone.
+
 An app's store is lent the model providers config.ts `serving` names
 (providers.ts), each a plugin's `./provider` facet asked by the name it serves
 under, the first for a model no row names a provider for; no layer imports one.

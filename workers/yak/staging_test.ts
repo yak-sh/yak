@@ -62,6 +62,9 @@ test('staging repeats the kernel bindings without production resources', () => {
     assertEquals(isolated.map((r) => r.binding), live.map((r) => r.binding))
     for (let row of isolated) {
       if (key == 'services' && row.binding == 'TRACKER') continue
+      // Map tiles are public and read only (maps.ts): staging draws from
+      // production's.
+      if (key == 'r2_buckets' && row.binding == 'MAPS') continue
       assertNotEquals(
         row[resource],
         live.find((r) => r.binding == row.binding)![resource],

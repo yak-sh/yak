@@ -77,6 +77,10 @@ let atApex = async (req: Request, env: Env, path: string) => {
       }),
     )
   }
+  // Map tiles and fonts for every app's maps (maps.ts, @yaks/maps).
+  if (path.startsWith('/maps/')) {
+    return (await import('./maps.ts')).fetch(req, env)
+  }
   if (path == '/icons.svg') {
     return new Response(sprite(), {
       headers: {

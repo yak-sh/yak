@@ -1,0 +1,9 @@
+{
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json",
+      "./refresh.ts"
+    ]
+  }
+}

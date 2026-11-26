@@ -233,6 +233,11 @@ grouped approximately by function, **not** by dependency order.
   page hands down (web's and the inspector's alike). `Disclosure` is a summary
   opening optional content. `Fields` renders controlled inputs and repeat
   groups; `Submit` keeps durable drafts and calls supplied readers and senders.
+- **[@yaks/maps](./maps)** — Maps of OpenStreetMap data in an app's own colours.
+  Tile and lookup providers are rows of data: the door serves a PMTiles
+  archive's tiles and fonts from a bucket, `style(theme)` makes the MapLibre
+  style, `<Place>` and `<Map>` draw, and a lookup asks a geocoder once and keeps
+  the answer.
 - **[@yaks/inspect](./inspect)** — Inspect views for entities, vocabulary
   components, packages, properties, query rows and the map. Browse mounts them
   in its shared renderer registry; the views know neither door nor store.

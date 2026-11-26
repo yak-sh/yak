@@ -1132,6 +1132,19 @@ domain_search:
     $12 a year toward one domain renewal. Other domains renew at the registrar's
     price. The space owns the domain and can attach it to an app at any time.
     Documentation: https://yaks.app/docs/domains.
+place_find:
+  title: Find where a place is
+  step:
+    doing: 'Finding %{query} on the map…'
+    done: 'Found %{query} on the map'
+  description: >-
+    Find where a place is, from its name, address, or town and country, for an
+    app's map. Answers its latitude and longitude, how OpenStreetMap names it,
+    and the <Place> line from @yaks/maps that pins it; write that point into
+    the app, since a page never looks a place up. Each answer is kept, so
+    asking again costs nothing. Answers come from OpenStreetMap's Nominatim,
+    so a map showing one credits OpenStreetMap, which <Place> and <Map> do.
+    Documentation: https://yaks.app/docs/maps.
 number_find:
   title: Find a phone number
   step:

@@ -1,0 +1,7 @@
+{
+  "name": "openfreemap",
+  "title": "OpenFreeMap",
+  "style": "https://tiles.openfreemap.org/styles/liberty",
+  "attribution": "<a href=\"https://openfreemap.org\">OpenFreeMap</a> <a href=\"https://www.openmaptiles.org/\">© OpenMapTiles</a> Data from <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>",
+  "max_zoom": 14
+}

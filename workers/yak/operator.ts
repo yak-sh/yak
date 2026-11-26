@@ -671,6 +671,7 @@ let OWN_WORDS = new Set([
   'number_verify',
   'number_status',
   'search_sitemap',
+  'place_find',
   'builder_choose',
   'builder_build',
   'builder_supply',

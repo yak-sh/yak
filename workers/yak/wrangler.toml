@@ -456,6 +456,13 @@ bucket_name = "yak-blobs"
 binding = "MODEL_RECEIPTS"
 bucket_name = "yak-model-receipts"
 
+# Map tiles and label fonts every app's maps draw from (@yaks/maps, D-482):
+# the Protomaps planet archive and its fonts, written only by
+# packages/maps/refresh.ts and read by `/maps/` on the apex (maps.ts).
+[[r2_buckets]]
+binding = "MAPS"
+bucket_name = "yak-maps"
+
 # Workers Cache holds Site's public pages across versions. Directory writes
 # purge those pages by tag. Files uses the separate local Cache API inside its
 # entrypoint: a miss reaches Files immediately, with no tier routing or fill
@@ -850,6 +857,12 @@ binding = "MODEL_RECEIPTS"
 # Staging stays inline and keeps the inference/ namespace in its existing
 # private bucket, without binding production receipts or provisioning another.
 bucket_name = "yak-blobs-staging"
+
+# Staging reads production's map tiles: they are public and read only, and a
+# second planet archive would hold nothing different.
+[[env.staging.r2_buckets]]
+binding = "MAPS"
+bucket_name = "yak-maps"
 
 [env.staging.cache]
 enabled = true

@@ -70,6 +70,7 @@
     "@yaks/lens": "0.2.24",
     "@yaks/machine": "0.2.24",
     "@yaks/mail": "0.2.23",
+    "@yaks/maps": "0.2.23",
     "@yaks/markdown": "0.2.30",
     "@yaks/match": "0.2.30",
     "@yaks/mcp": "0.2.28",

@@ -556,6 +556,7 @@ let page = (slug: string): Page => {
 export let PAGES: Page[] = [
   'store',
   'kits',
+  'maps',
   'querying',
   'speed',
   'components',

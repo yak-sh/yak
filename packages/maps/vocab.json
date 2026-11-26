@@ -1,0 +1,112 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "maps",
+  "$defs": {
+    "map_tiles": {
+      "component": true,
+      "type": "object",
+      "description": "where a map's tiles come from, as data: a PMTiles archive in the host's bucket, which the host serves, or a style another site hosts. A map is drawn from one of these, and changing which one a host serves changes no app",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "what a host names it by: protomaps, openfreemap"
+        },
+        "title": {
+          "type": "string",
+          "description": "what a person calls it, as its maker writes it"
+        },
+        "archive": {
+          "type": "string",
+          "description": "the key of its PMTiles archive in the host's maps bucket; one with none is drawn from its style"
+        },
+        "glyphs": {
+          "type": "string",
+          "description": "the key prefix in the host's maps bucket under which its label fonts are kept, as `<prefix>/<fontstack>/<range>.pbf`"
+        },
+        "style": {
+          "type": "string",
+          "format": "uri",
+          "description": "the address of a MapLibre style another site hosts and serves its tiles for; a map drawn from one wears that site's look"
+        },
+        "attribution": {
+          "type": "string",
+          "description": "what every map drawn from it says it is made of, as HTML its licence asks for"
+        },
+        "max_zoom": {
+          "type": "integer",
+          "description": "the deepest zoom its archive holds; a map looks closer by enlarging those tiles"
+        },
+        "builds": {
+          "type": "string",
+          "format": "uri",
+          "description": "where a fresh build of its archive is downloaded from, with `{date}` for the build's day as YYYYMMDD"
+        }
+      }
+    },
+    "geocoder": {
+      "component": true,
+      "type": "object",
+      "description": "a service that finds where a place is from its name or address, as data: how it is asked, how often it may be, and what a map showing its answer owes it",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "what an answer names it by: nominatim"
+        },
+        "title": {
+          "type": "string",
+          "description": "what a person calls it"
+        },
+        "search": {
+          "type": "string",
+          "format": "uri",
+          "description": "the address it is asked at, with `{query}` for the words asked and `{lang}` for the language its answer is written in"
+        },
+        "interval": {
+          "type": "integer",
+          "description": "the fewest milliseconds between two calls to it from one host, as its usage policy asks"
+        },
+        "attribution": {
+          "type": "string",
+          "description": "what is said beside an answer it gave"
+        }
+      }
+    },
+    "geocode": {
+      "component": true,
+      "type": "object",
+      "identity": ["provider", "query"],
+      "description": "one answer a geocoder gave, kept so the same words are never asked of it again; its eid is derived from the provider and the words",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "the geocoder's name"
+        },
+        "query": {
+          "type": "string",
+          "description": "the words it was asked, trimmed and lower-cased"
+        },
+        "lat": {
+          "type": "number",
+          "description": "the place's latitude, in degrees north"
+        },
+        "lng": {
+          "type": "number",
+          "description": "the place's longitude, in degrees east"
+        },
+        "address": {
+          "type": "string",
+          "description": "the place as the geocoder names it; none when it found nothing"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it answered"
+        }
+      }
+    }
+  }
+}

@@ -16,6 +16,7 @@ import { mcpConnect, mcpRemove } from './connected-mcp.ts'
 import { libraryTools } from './library-tools.ts'
 import { numberTools } from './numbers.ts'
 import { searchConsoleTools } from './search-console.ts'
+import { placeTools } from './places.ts'
 import {
   ownedPrefix,
   releasesPrefix,
@@ -8912,6 +8913,7 @@ export let TOOLS: Tool[] = [
   worded(mcpRemove),
   ...numberTools.map(worded),
   ...searchConsoleTools.map(worded),
+  ...placeTools.map(worded),
 ].map(accounted).map((tool) => ({
   ...tool,
   run: async (ctx, args) => {

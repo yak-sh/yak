@@ -1,0 +1,9 @@
+{
+  "name": "protomaps",
+  "title": "Protomaps",
+  "archive": "planet.pmtiles",
+  "glyphs": "fonts",
+  "attribution": "<a href=\"https://protomaps.com\">Protomaps</a> © <a href=\"https://openstreetmap.org/copyright\">OpenStreetMap</a>",
+  "max_zoom": 15,
+  "builds": "https://build.protomaps.com/{date}.pmtiles"
+}

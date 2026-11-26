@@ -1,0 +1,7 @@
+{
+  "name": "nominatim",
+  "title": "Nominatim",
+  "search": "https://nominatim.openstreetmap.org/search?q={query}&format=jsonv2&limit=1&accept-language={lang}",
+  "interval": 1000,
+  "attribution": "Data © OpenStreetMap contributors, ODbL 1.0. https://osm.org/copyright"
+}

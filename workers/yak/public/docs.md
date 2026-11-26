@@ -72,6 +72,18 @@ any field a person types in with `drafts().bind(field, place)` from the client.
 Deeper: <https://yaks.app/docs/kits.md> — the files, colours and type, words
 from `copy.json`, and the visitors' book, a whole working example.
 
+## Maps
+
+Draw a map with @yaks/maps, named `"platform"` in `package.json`: `<Place>` for
+one place on a still map with a pin and a directions link, and `<Map>` for a map
+a person moves, with a pin for each of an app's rows. yaks.app serves the
+OpenStreetMap tiles, so a map needs no key, and it wears the app's colours. Find
+a place's latitude and longitude once with `place_find` and write them into the
+app; a page never looks a place up.
+
+Deeper: <https://yaks.app/docs/maps.md> — the files, a map of an app's rows,
+colours and size, and the credit OpenStreetMap asks for.
+
 ## Performance
 
 A page's load time is set by its network round trips, and a read that waits for

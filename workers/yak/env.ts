@@ -89,6 +89,9 @@ export type Env = {
     version(): Promise<{ executor: string; id?: string }>
   }
   MODEL_RECEIPTS?: Bucket
+  // Map tiles and their label fonts (@yaks/maps/tiles, maps.ts): read only,
+  // filled by packages/maps/refresh.ts. Unbound, `/maps/` answers 503.
+  MAPS?: Bucket
   APEX?: string
   // When yaks.app began giving trials of the Plus plan (trial.ts, D-476),
   // an ISO time; unset, it gives none and every space keeps the terms it had.

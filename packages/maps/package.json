@@ -1,0 +1,35 @@
+{
+  "name": "@yaks/maps",
+  "version": "0.2.23",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./providers": "./providers.ts",
+    "./color": "./color.ts",
+    "./style": "./style.ts",
+    "./theme": "./theme.ts",
+    "./draw": "./draw.ts",
+    "./tiles": "./tiles.ts",
+    "./lookup": "./lookup.ts",
+    "./Place": "./Place.ts",
+    "./Map": "./Map.ts",
+    "./testing": "./testing.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Maps of OpenStreetMap data in an app's own colours, from tile and lookup providers that are rows of data: serving a PMTiles archive, themed styles, <Place> and <Map>, and lookups kept once answered.",
+  "dependencies": {
+    "@protomaps/basemaps": "5.7.2",
+    "@yaks/blob": "0.2.30",
+    "@yaks/graph": "0.2.33",
+    "@yaks/vocab": "0.2.32",
+    "maplibre-gl": "5.24.1",
+    "pmtiles": "4.5.0",
+    "preact": "10.29.7"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/cli": "0.2.33",
+    "@yaks/secrets": "0.2.28"
+  }
+}

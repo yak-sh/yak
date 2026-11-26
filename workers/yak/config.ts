@@ -94,6 +94,9 @@ export let directoryConfig: Config = {
       facets: ['vocab'],
       words: ['phone', 'own_number', 'sms_consent', 'sender'],
     },
+    // Where a place is, as a geocoder answered it once for every space
+    // (places.ts, @yaks/maps/lookup).
+    { use: '@yaks/maps', facets: ['vocab'], words: ['geocode'] },
     // The browsers a person allowed notifications on (operator-alerts.ts).
     { use: '@yaks/push', facets: ['vocab'], words: ['push_subscription'] },
     // Where each person is available now, channel by channel (whereabouts.ts):
