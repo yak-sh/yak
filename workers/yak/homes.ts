@@ -16,7 +16,7 @@ import { borrowed } from '@yaks/reach'
 import { sandboxed } from '@yaks/platform/installs'
 import type { App, Directory, Role, Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { type Reach, vocabAt } from './reach.ts'
+import type { Reach } from './reach.ts'
 import type { Who } from './session.ts'
 
 /** Whether an app keeps to its own store: one scoped to it, or a sandboxed
@@ -123,6 +123,8 @@ export let borrowedDocs = async (
   reach: Reach[],
   uses: Record<string, string>,
 ): Promise<VocabDoc[]> => {
+  if (reach.length <= 1) return []
+  let { vocabAt } = await import('./reach.ts')
   let docs = await Promise.all(
     reach.slice(1).map(async ({ space, app: home }) => {
       let doc = await vocabAt(env, space, home)

@@ -95,7 +95,6 @@ import {
 import { bound, type Env } from './env.ts'
 import { warmable, warmApp } from './app-warm.ts'
 import { pilled, standing } from './gallery-row.ts'
-import { buying, covered, giving } from './sell.ts'
 import {
   addressed,
   bodyOf,
@@ -125,7 +124,6 @@ import {
   spaceBinned,
   spaceIndex,
 } from './pages.ts'
-import { join, joinable } from './join.ts'
 import {
   API_AT,
   APP_WARM,
@@ -385,6 +383,9 @@ export let invitedHere = async (
     person,
     mayRead ? 'not_a_writer' : 'not_a_reader',
   )
+
+let joinable: typeof import('./join.ts').joinable = async (...asked) =>
+  (await import('./join.ts')).joinable(...asked)
 
 /** The page for a signed-in person an app's pages are shut to: that their
  * invitation waits, if the owner let them in, else Join where the app's own
@@ -1888,7 +1889,7 @@ let appDoor = async (
     if (!mayUse) return refuse('not_a_reader')
     let params = new URL(req.url).searchParams
     if (req.method == 'GET' && params.has('cents')) {
-      return await covered(
+      return await (await import('./sell.ts')).covered(
         env,
         params.get('cents'),
         params.get('monthly') == 'true',
@@ -1903,7 +1904,7 @@ let appDoor = async (
       return (await import('./sale-door.ts')).showGiving(asked)
     }
     if (req.method != 'POST') return json(405, 'method_not_allowed')
-    return giving(env, {
+    return (await import('./sell.ts')).giving(env, {
       space,
       app: app.slug,
       root: urlOf(space, app, env),
@@ -1915,7 +1916,7 @@ let appDoor = async (
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayUse) return refuse('not_a_reader')
     let body = await req.json().catch(() => null)
-    return buying(
+    return (await import('./sell.ts')).buying(
       env,
       {
         space,
@@ -2197,6 +2198,7 @@ export let storeApi = async (
   if (path == '/join') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!who.person) return await refused('not_a_reader')
+    let { join, joinable } = await import('./join.ts')
     let role = await joinable(env, dir, space, app, who)
     if (!role) return json(403, 'not_listed')
     await join(env, dir, space, app, who.person, role)

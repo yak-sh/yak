@@ -24,7 +24,6 @@ import {
 } from './directory.ts'
 import { ACROSS } from './door.ts'
 import type { Env } from './env.ts'
-import { friendsOf, friendWhereabouts, sendFriend } from './friends.ts'
 import { metaOf } from './meta.ts'
 import { vouched, type Who } from './session.ts'
 import { EID, refuse } from './tool.ts'
@@ -63,6 +62,7 @@ export let queryFriends = async (
   let rows: Bundle[] = []
   if (line == APP_FRIENDS) rows = [friendsStatus(app.eid, person, allowed)]
   else if (person && allowed) {
+    let { friendsOf, friendWhereabouts } = await import('./friends.ts')
     let friends = (await friendsOf(dir, person)).filter((f) =>
       f.standing == 'friend'
     )
@@ -118,6 +118,7 @@ export let inviteFriend = async (
   }
   let link = playLink(url(space, { ...app, home: false }, env), path ?? '')
   if (!link) throw refuse('arguments', 'Choose a play link inside this app.')
+  let { sendFriend } = await import('./friends.ts')
   await sendFriend(dir, { ...who, person }, {
     eid: derivedEid(`play invite ${app.eid} ${person} ${b.entity.eid}`),
     to,

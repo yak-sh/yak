@@ -94,11 +94,10 @@ import { AppWorkerTimeout } from '@yaks/platform/app-worker'
 import { sealed } from '@yaks/platform/kept'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
-import { customOf, reading, refresh, type Step } from './domains.ts'
+import type { Step } from './domains.ts'
 import { bound, type Env, type Inbound } from './env.ts'
 import { apex } from '@yaks/platform/host'
 import { lost, oops, provisioning } from './pages.ts'
-import { hook } from './connections.ts'
 import {
   admitted,
   aim,
@@ -113,6 +112,7 @@ import {
   ready,
   type Route,
   route,
+  spaceDoor,
   unmounted,
 } from '@yaks/platform/routes'
 import { slid } from './session.ts'
@@ -155,10 +155,12 @@ let inSpace = async (req: Request, env: Env, space: string) => {
   }
   // Git and connection hooks belong to the space's hostname, ahead of
   // its apps and the home app's catch-all worker.
-  let arrived = { env, req, path: asked, space }
-  let mine = await (await import('./git_door.ts')).answer(arrived) ??
-    await hook(arrived)
-  if (mine) return mine
+  if (spaceDoor(asked)) {
+    let arrived = { env, req, path: asked, space }
+    let mine = await (await import('./git_door.ts')).answer(arrived) ??
+      await (await import('./connections.ts')).hook(arrived)
+    if (mine) return mine
+  }
   return bound(env.APPS, apps.fetch, env).fetch(req)
 }
 
@@ -182,6 +184,7 @@ let settling = async (
   host: string,
   attached?: dirPart.Host,
 ): Promise<Response | null> => {
+  let { customOf, reading, refresh } = await import('./domains.ts')
   let how: Step[] | null = null
   let stage: dirPart.HostStage = attached?.stage == 'error'
     ? 'error'

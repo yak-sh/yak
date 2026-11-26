@@ -5,7 +5,7 @@
 // settings page. The names and how one is chosen are @yaks/persona's.
 import type { Bundle, Comp } from '@yaks/graph'
 import { line } from '@yaks/query'
-import { christened, pick } from '@yaks/persona'
+import { christened, pick } from '@yaks/persona/name'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rule } from './mover.ts'
 
