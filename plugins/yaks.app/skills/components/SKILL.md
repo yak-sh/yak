@@ -837,17 +837,17 @@ The complete list of reserved names:
     acts_for admin_action agent_step alias answer app app_draft app_friend
     app_friends app_icon app_icon_draw app_permission app_splash
     app_splash_draw app_transfer app_transfer_answer archetype archived
-    arrived artifact ask attachment attempt attribute_writes authorship
+    arrived artifact ask asks attachment attempt attribute_writes authorship
     belief binding blob bounced browser browser_session budget build
     build_of builder builder_answer builder_dep builder_edit
     builder_model_answer builder_open builder_ring built byline call
     call_ready call_woken called calls cancel cancelled chat_account
     chat_hears chat_message chat_post chat_private chat_room chat_serves
     checkout chosen cites cli_grant code_review comment commit comp compat
-    completed connection contains content conversation cost counted created
-    credit credit_block decided decision decision_ask delegates
-    delete_retired_files delete_upload deliver delivered demo deploy
-    desk_aside desk_sidebar dismissed_suggestions dispatch doc
+    completed connection connection_given contains content conversation cost
+    counted created credit credit_block decided decision decision_ask
+    delegates delete_retired_files delete_upload deliver delivered demo
+    deploy desk_aside desk_sidebar dismissed_suggestions dispatch doc
     document_extract document_page document_text domain_choice
     domain_courtesy domain_credit_used domain_order domain_refunded
     domain_refused domain_registered domain_renewal domain_renewal_paid

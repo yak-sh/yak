@@ -37,7 +37,7 @@ export let keyBox = (
   send: Kids,
   hint: Kids = '',
   fields: Field[] = [KEY],
-) => {
+): Kids => {
   let box = (at: string, name: string, f: Field) =>
     h(Box, {
       id: at,
