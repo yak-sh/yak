@@ -499,6 +499,8 @@ export let enabled = (req: Request): string[] =>
 /** Who is asking for a space's connections, and about what. */
 type Asked = {
   trash?: boolean
+  /** Whether to read the integrations and outside servers offered on the page. */
+  catalog?: boolean
   /** A general page can draw while the broker checks pending sign-ins. */
   deferSettlement?: boolean
   /** whether it is the person's own space; still being read, what they
@@ -560,7 +562,7 @@ export let connectionsAsked = async (
   env: Env,
   space: Space | Promise<Space>,
   person: string,
-  { own, add, dir = dirOf(env), by }: Asked = {},
+  { own, add, dir = dirOf(env), by, catalog = true }: Asked = {},
 ) => {
   let read = readOn(dir)
   let eid = Promise.resolve(space).then((s) => s.eid)
@@ -569,14 +571,14 @@ export let connectionsAsked = async (
       space,
       by ? read(line`${sub(by)}&.space`) : undefined,
       ownedBy(dir, by ? { path: by, eid } : await eid),
-      read(line`.${PUBLISHED}&.${INTEGRATION}`),
+      catalog ? read(line`.${PUBLISHED}&.${INTEGRATION}`) : [],
       own ? list(read, person) : [],
-      catalogOf(env)(read),
+      catalog ? catalogOf(env)(read) : [],
       add ? known(read, add) : undefined,
       own ?? false,
       // The MCP servers the person keeps, of which the page shows those in
       // this space (@yaks/connections/mcp `reachedIn`).
-      read(line`.mcp_server.owner=${person}&*`),
+      catalog ? read(line`.mcp_server.owner=${person}&*`) : [],
     ],
   )
 }
@@ -694,6 +696,16 @@ export let connectionsOf = async (
   // The catalog, beside them: a built one is offered as above, and one only
   // the catalog lists where its broker or the vault can take it.
   let catalog = (async (): Promise<[Catalog, Offer[]]> => {
+    if (at.catalog == false) {
+      return [{
+        q: '',
+        featured: [],
+        found: [],
+        matched: 0,
+        total: 0,
+        kinds: [],
+      }, []]
+    }
     let [all, offered, brokered] = await Promise.all([
       offersOf(env, built),
       offers,

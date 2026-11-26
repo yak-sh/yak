@@ -531,6 +531,7 @@ let CONNECTIONS: Row[] = [
         ctx.person,
         {
           dir: ctx.dir,
+          catalog: false,
           by: args.space == null
             ? line`.members_space.member.person=${ctx.person}`
             : line`.space.slug=${text(args.space, 'space')}`,
