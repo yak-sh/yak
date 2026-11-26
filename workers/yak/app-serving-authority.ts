@@ -88,7 +88,8 @@ export let servingAuthority = (host: Host) => {
     // A query returns only what it names, and a visitor's standing is read from
     // the app's offer and its sample (@yaks/platform/visits `visitorRole`).
     let at = app ?? ''
-    let seat = person
+    let itself = !!app && person === app
+    let seat = person && !itself
       ? line`|.member.person=${person}&?member|.grant.app=${at}&.grant.person=${person}&?grant`
       : line``
     let visit = edge ? line`|.entity.eid=${edge}&?visit` : line``
@@ -126,7 +127,9 @@ export let servingAuthority = (host: Host) => {
         visitOfRow(rows.find((r) => r.entity.eid == edge)?.visit as Comp),
       )
       : null
-    let role = member?.role ?? grant?.access ?? visitor
+    // The kernel authenticated the app as itself. Its standing follows
+    // the app's live row, since it has no seat in its own roster.
+    let role = itself ? 'editor' : member?.role ?? grant?.access ?? visitor
     req.headers.set('x-yak-app', app!)
     req.headers.set('x-yak-access', mode(definition.access))
     req.headers.set('x-yak-policy', raw)
