@@ -82,6 +82,12 @@ export let draw = async (
     cooperativeGestures: d.interactive ?? true,
   }
   let map = new maplibre.Map(options)
+  // A door whose archive is not in its bucket yet answers 503 (tiles.ts):
+  // the map stays a plain box in the theme's land colour, pins and credit
+  // drawn, until it is. Any other failure is told as MapLibre tells it.
+  map.on('error', ({ error }) => {
+    if ((error as { status?: number }).status != 503) console.error(error)
+  })
   for (let pin of d.pins ?? []) {
     new maplibre.Marker({ element: pinOf(pin), anchor: 'bottom' })
       .setLngLat(pin.at).addTo(map)
