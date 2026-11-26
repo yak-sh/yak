@@ -23,7 +23,7 @@ import { type Bundle, transient } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
 import { operatorMemory } from './operator-testing.ts'
-import { type Asker, operatorApi } from './operator-api.ts'
+import { type Asker, FRESH, LAPSE, operatorApi } from './operator-api.ts'
 import { operatorFrames } from './operator-host.ts'
 import { state } from './testing.ts'
 
@@ -126,9 +126,9 @@ let socket = async (
   who: Asker,
   q = '.entry&?content',
   host = door,
-  // Whether it holds the seat its handshake read (build.ts `#operate`), as
-  // a socket accepted before sockets held theirs does not.
-  holds = true,
+  // The seat its handshake read (build.ts `#operate`), or `unheld`, as a
+  // socket accepted before sockets held theirs.
+  level: Level | null | 'unheld' = seats.get(who.person) ?? null,
 ) => {
   let sent: Record<string, unknown>[] = []
   let held: unknown = null
@@ -150,7 +150,7 @@ let socket = async (
       }),
       who,
       false,
-      holds ? seats.get(who.person) ?? null : undefined,
+      level == 'unheld' ? undefined : level,
     )
   } finally {
     delete factory.WebSocketPair
@@ -442,7 +442,7 @@ test('a socket that holds no seat reads it once, however many frames it sends', 
     seat: (person) => (seatReads++, Promise.resolve(seats.get(person) ?? null)),
   })
   let was = seatReads
-  let sent = await socket(ada, '.memory', fresh, false)
+  let sent = await socket(ada, '.memory', fresh, 'unheld')
   await sent.subscribe('.draft')
   await sent.subscribe('.doc')
   equal([seatReads - was, sent.ws.readyState], [1, 1])
@@ -490,4 +490,84 @@ test('a seat the directory could not read is left as the socket held it', async 
   await sent.subscribe('.draft')
   equal([refused, sent.ws.readyState], ['overloaded', 1])
   await failing.close(sent.ws)
+})
+
+// A host on its own clock whose directory says each seat as `seats` has it,
+// or fails while `down`, and how many times it was asked.
+let clocked = () => {
+  let time = clock(Date.now())
+  let asked = { reads: 0, down: false }
+  let host = operatorApi(store, state(), {
+    seat: (person) => {
+      asked.reads++
+      return asked.down
+        ? Promise.reject(new Error('overloaded'))
+        : Promise.resolve(seats.get(person) ?? null)
+    },
+    clock: time,
+  })
+  return { time, asked, host }
+}
+let memory = () =>
+  write([{ entity: { eid: id() }, memory: {}, doc: { title: 'New' } }])
+
+test('a person removed while the directory’s notice is lost hears nothing once their held seat is older than FRESH, and their socket closes', async () => {
+  let { time, host } = clocked()
+  let sent = await socket(bea, '.memory', host)
+  let heard = sent.length
+  seats.delete(bea.person)
+  try {
+    await time.advance(FRESH + 1)
+    await memory()
+    await until(() => sent.ws.readyState == 3)
+    equal(sent.length, heard)
+  } finally {
+    seats.set(bea.person, 'editor')
+  }
+})
+
+test('a held seat is read again at most once per FRESH, however many deliveries', async () => {
+  let { time, asked, host } = clocked()
+  let sent = await socket(ada, '.memory', host)
+  try {
+    await time.advance(FRESH + 1)
+    await memory()
+    await memory()
+    await until(() => sent.filter((f) => f.id == 'lines').length > 2)
+    equal([asked.reads, sent.ws.readyState], [1, 1])
+  } finally {
+    await host.close(sent.ws)
+  }
+})
+
+test('a seat the directory cannot read keeps its hold until LAPSE, and then the socket closes', async () => {
+  let { time, asked, host } = clocked()
+  let sent = await socket(bea, '.memory', host)
+  asked.down = true
+  await time.advance(FRESH + 1)
+  await memory()
+  await until(() => sent.filter((f) => f.id == 'lines').length > 1)
+  equal([asked.reads, sent.ws.readyState], [1, 1])
+  let heard = sent.length
+  await time.advance(LAPSE)
+  await memory()
+  await until(() => sent.ws.readyState == 3)
+  equal(sent.length, heard)
+})
+
+test('a socket accepted while a seat moves reads its seat once more', async () => {
+  let { host } = clocked()
+  seats.delete(bea.person)
+  try {
+    // The notice reached the object before the socket did, and the
+    // handshake read her seat before she was removed.
+    await host.reseat()
+    let closed = await socket(bea, '.memory', host, 'editor').then(
+      async (sent) => (await until(() => sent.ws.readyState == 3), true),
+      (e: Error) => e.message.startsWith('closed at once'),
+    )
+    equal(closed, true)
+  } finally {
+    seats.set(bea.person, 'editor')
+  }
 })

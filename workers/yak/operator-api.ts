@@ -13,8 +13,10 @@
 // (operator-host.ts `operatorFrames`).
 // A socket outlives the seat it was opened with, so it stands by its person's
 // seat as it holds it: the level the handshake read, checked on every frame in
-// and every delivery out, and read again only when the directory says a seat
-// in the space moved (`reseat`), never on a frame. Once they no longer write
+// and every delivery out. It is read again when the directory says a seat in
+// the space moved (`reseat`), once more after a socket accepted just after
+// one moved, and on a frame or delivery once the held read is older than
+// FRESH, so a notice that was lost costs that long. Once they no longer write
 // in the space it hears nothing more, and closes.
 import { api, type Handler, subscriptions } from '@yaks/api'
 import { beside, computed, type Reached } from '@yaks/api/reached'
@@ -40,6 +42,20 @@ import type { OperatorStore } from './operator-store.ts'
 import { paged } from './build-door.ts'
 import { updatesOf, waitingUntil } from './operator-updates.ts'
 
+/** How long a socket's held seat stands unread: older, it is read again on
+ * the socket's next frame or delivery, so a person whose seat was taken away
+ * and whose notice (`reseat`) was lost stops hearing within this. */
+export let FRESH = 30_000
+
+/** How long a held seat stands that the directory could not confirm: a read
+ * that fails keeps the hold and is tried again a FRESH later, and once the
+ * seat was last read longer ago than this, the socket closes. */
+export let LAPSE = 10 * 60_000
+
+/** A socket's read as it holds its seat: `seated` is when `level` was read
+ * (the clock's milliseconds). */
+type Seated = ReadOpts & { seated?: number }
+
 /** Who a request is from, as the kernel said: a person who writes in a
  * space (build.ts `#operate`). */
 export type Asker = { person: string; space: string }
@@ -49,7 +65,8 @@ export type Seating = {
   /** `person`'s seat in the space as the directory has it now, an
    * administrator's (`administrative`, as the kernel vouched at the
    * handshake) read as theirs: the level it gives, or null for none. Read
-   * when a seat moved (`reseat`), and for a socket that holds no level. */
+   * when a seat moved (`reseat`), when a held one is older than FRESH, and
+   * for a socket that holds no level. */
   seat: (person: string, administrative: boolean) => Promise<Level | null>
   report?: (error: Error) => void
   clock?: Clock
@@ -204,9 +221,56 @@ export let operatorApi = (
   let unheld = new Map<string, Promise<Level | null>>()
   let key = (person: string, administrative: boolean) =>
     `${person} ${administrative}`
+  // When the space's seats last moved, as the directory said.
+  let moved = -Infinity
+  // Each person's seat as it is being read for their sockets, and when a
+  // read of it last failed.
+  let confirming = new Map<string, Promise<Level | null>>()
+  let missed = new Map<string, number>()
+  // `person`'s seat read again, and each of their sockets holding what it
+  // gives, as read now. A read under way is shared unless `again` (a seat
+  // moved since it began), and only the last one begun is held.
+  let confirm = (person: string, admin: boolean, again = false) => {
+    let at = key(person, admin)
+    let under = confirming.get(at)
+    if (under && !again) return under
+    let seated = clock.now()
+    let reading: Promise<Level | null> = seat(person, admin).then(
+      async (level) => {
+        if (confirming.get(at) !== reading) return level
+        missed.delete(at)
+        await live.restand((read) =>
+          read?.person == person && !!read.administrative == admin
+            ? { ...read, level, seated } as Seated
+            : read
+        )
+        return level
+      },
+      (e) => {
+        missed.set(at, clock.now())
+        if (!again) report?.(e)
+        throw e
+      },
+    ).finally(() => {
+      if (confirming.get(at) === reading) confirming.delete(at)
+    })
+    confirming.set(at, reading)
+    return reading
+  }
   let levelOf = (read: ReadOpts) => {
-    if ('level' in read) return read.level as Level | null
     let person = String(read.person), admin = !!read.administrative
+    if ('level' in read) {
+      // A read held before holds were dated (`seated`) is read again, and
+      // never lapses.
+      let level = read.level as Level | null, now = clock.now()
+      let { seated } = read as Seated
+      if (seated != undefined && now - seated < FRESH) return level
+      let held = seated != undefined && now - seated > LAPSE ? null : level
+      if (now - (missed.get(key(person, admin)) ?? -Infinity) < FRESH) {
+        return held
+      }
+      return confirm(person, admin).catch(() => held)
+    }
     let known = unheld.get(key(person, admin))
     if (!known) {
       known = seat(person, admin)
@@ -286,46 +350,45 @@ export let operatorApi = (
       let url = new URL(request.url)
       url.pathname = url.pathname.slice('/api'.length)
       let read = { person: who.person, administrative }
-      return url.pathname == '/ws' || url.pathname == '/waiting/ws'
-        ? live.accept(
-          request,
-          level === undefined ? read : { ...read, level },
-        )
-        : as(who)(new Request(url, request))
+      if (url.pathname != '/ws' && url.pathname != '/waiting/ws') {
+        return as(who)(new Request(url, request))
+      }
+      if (level === undefined) return live.accept(request, read)
+      let held: Seated = { ...read, level, seated: clock.now() }
+      return after(live.accept(request, held), (ok) => {
+        // The kernel read this seat before the socket reached here, so a
+        // notice that came in the meantime found no socket of theirs.
+        if (clock.now() - moved < FRESH) {
+          let again = confirm(who.person, administrative)
+          hold?.(again.then(() => {}, () => {}))
+        }
+        return ok
+      })
     },
     /** A seat in the space moved (build.ts `SEATED`): each person with a
      * socket here has their seat read again, once, and their sockets hold
      * what it gives now; one who no longer writes is closed. A seat that
-     * could not be read is left as it was, and the failure thrown. */
+     * could not be read is left as it was, read again after FRESH, and the
+     * failure thrown, so the directory tells again. */
     reseat: async () => {
-      let held = new Map<string, ReadOpts>()
+      moved = clock.now()
+      unheld.clear()
+      let held = new Map<string, [string, boolean]>()
       for (let ws of ctx.getWebSockets()) {
         let read = (ws.deserializeAttachment() as { read?: ReadOpts } | null)
           ?.read
         if (read?.person) {
-          held.set(key(read.person, !!read.administrative), read)
+          let admin = !!read.administrative
+          held.set(key(read.person, admin), [read.person, admin])
         }
       }
-      unheld.clear()
-      let failed: unknown[] = []
-      let levels = new Map(
-        await Promise.all(
-          [...held].map(async ([at, read]) =>
-            [
-              at,
-              await seat(String(read.person), !!read.administrative).catch(
-                (e) => (failed.push(e), undefined),
-              ),
-            ] as const
-          ),
+      let read = await Promise.allSettled(
+        [...held.values()].map(([person, admin]) =>
+          confirm(person, admin, true)
         ),
       )
-      await live.restand((read) => {
-        let level = read?.person &&
-          levels.get(key(read.person, !!read.administrative))
-        return level === undefined || !read ? read : { ...read, level }
-      })
-      if (failed.length) throw failed[0]
+      let failed = read.find((r) => r.status == 'rejected')
+      if (failed) throw failed.reason
     },
     /** A frame from one of its sockets: the object's `webSocketMessage`. */
     message: live.message,

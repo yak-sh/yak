@@ -234,7 +234,7 @@ export let seatsHeard = (
   { store }: Options,
   tell = async (env: Env, space: string) => {
     let { reseated } = await import('../build-door.ts')
-    await (await reseated(env, space)).body?.cancel()
+    await reseated(env, space)
   },
 ): Plugin => {
   let keys = ['member', '$delete', TOMBSTONE, '$retireMcp']

@@ -1,7 +1,7 @@
 // The kernel's door to a space's Builder, the object its Operator runs in:
 // its request protocol, independent of the Durable Object itself.
 import { audit } from './admin-action.ts'
-import { jittered } from '@yaks/durable-object/resets'
+import { jittered, retried } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
 import { ahead, fetchOf, HEARD, WAKE } from './door.ts'
 import type { Space } from './directory.ts'
@@ -173,8 +173,22 @@ export let SEATED = '/seated'
 
 /** A seat in the space moved: its Operator's subscriptions look again, and
  * its pages' sockets hold their people's seats as they are now (build.ts
- * `SEATED`). */
-export let reseated = (env: Wiring, space: string) => signal(env, space, SEATED)
+ * `SEATED`). Sent again while it fails, as when the Builder resets for a
+ * deploy or cannot read a seat; one lost all the same costs a socket's held
+ * seat operator-api.ts `FRESH`. */
+export let reseated = (env: Wiring, space: string): Promise<void> =>
+  retried(
+    async () => {
+      let answer = await signal(env, space, SEATED)
+      await answer.body?.cancel()
+      if (!answer.ok) {
+        throw new Error(`the Builder answered ${SEATED} with ${answer.status}`)
+      }
+    },
+    true,
+    () => true,
+    jittered(env.CLOCK),
+  )
 
 /** A restored space's pending Operator work is due again. */
 export let reviveBuilder = async (env: Wiring, space: string) => {
