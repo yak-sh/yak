@@ -136,7 +136,7 @@ import {
 } from '@yaks/platform/routes'
 import { telling } from '@yaks/platform/cookie'
 import { background, caught } from './defects.ts'
-import { domainOf, vouched, type Who, whoIs } from './session.ts'
+import { domainOf, vouched, type Who } from './session.ts'
 import { held as live } from './browser-sessions.ts'
 import { type Ctx as Asking, EID, refuse } from './tool.ts'
 export { EID }
@@ -1599,16 +1599,28 @@ export let finishConnection = async (env: Env, saved: Bundle[], app?: {
     .eid
   if (!eid) throw new Error('The service did not return a connected account.')
   await ready(env, eid)
-  await heard(env, eid)
   if (app) await attached(env, app.who, app.space, app.eid, eid)
-  await rebound(env, await usersOf(env, eid))
+  // The person is sent back as soon as the connection stands: its bot starts
+  // listening and its apps are bound to it after the answer, each failure
+  // reported where it happens.
+  background(
+    Promise.all([
+      heard(env, eid),
+      usersOf(env, eid).then((apps) => rebound(env, apps)),
+    ]).then(
+      () => {},
+      (e) => caught(e, { request: 'finish connection', connection: eid }),
+    ),
+  )
 }
 
 // The return from a service's sign-in page, in whichever browser or app it
 // lands. The attempt its `state` names must have been begun by a person still
 // signed in where they began it, for their own connection or one of a space
-// they still own; a browser signed in as anyone else may not finish it.
-// Anything else is sent back to the page it was begun on to start again.
+// they still own. It is finished as that person, with their rights: whoever
+// the returning browser is signed in as, if anyone, gains nothing by it, so a
+// person approving at the service for someone else lands back on the page it
+// was begun from, connected. Anything else is sent back there to start again.
 export let callback: Door<Env> = async ({ env, req, path, space }) => {
   if (space != null) return null
   if (path != CALLBACK && path != CONNECTION_INSTALL) return null
@@ -1627,12 +1639,15 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
   }
   let held = await take<Held>(env, ATTEMPT, states.length == 1 ? state : null)
   let dir = dirOf(env)
-  let at = held ? await dir.space(held.space) : null
-  let here = at && await whoIs(req, env, (p) => dir.role(at, p), at.eid)
-  let began = held && at && (!held.session ||
-    await live(env, held.person, held.via ?? '', held.session))
-  let who: Who | null = held && at && began &&
-      (!here?.person || here.person == held.person)
+  // What the attempt names is asked at once.
+  let [at, began, [b]] = held
+    ? await Promise.all([
+      dir.space(held.space),
+      !held.session || live(env, held.person, held.via ?? '', held.session),
+      readOf(env)(line`.entity.eid=${held.connection}&.${CONNECTION}`),
+    ])
+    : [null, false, []]
+  let who: Who | null = held && at && began
     ? {
       person: held.person,
       role: await dir.role(at, held.person),
@@ -1640,9 +1655,6 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
       ...held.session ? { session: held.session } : {},
     }
     : null
-  let [b] = held && who
-    ? await readOf(env)(line`.entity.eid=${held.connection}&.${CONNECTION}`)
-    : []
   let owner = comp(b, CONNECTION).owner
   // A return that cannot be finished is a failure to hear about, and the
   // person goes back to the page they began on, told so; never to another
@@ -1653,10 +1665,8 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
     ? 'its attempt was never begun, or was already finished'
     : !at
     ? 'its space is gone'
-    : !began
+    : !began || !who
     ? 'the person who began it has since signed out'
-    : !who
-    ? 'someone else is signed in where it came back'
     : !b
     ? 'its connection is gone'
     : owner != who.person && !(owner == at.eid && who.role == 'owner')

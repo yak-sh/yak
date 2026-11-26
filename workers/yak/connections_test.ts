@@ -244,23 +244,26 @@ test(
       303,
       'https://yaks.app/manage',
     ])
-    // A browser signed in as someone else may not finish it.
+    // A browser signed in as someone else, approving for her, finishes it
+    // as her, and lands on the page she began it from.
     let other = crypto.randomUUID()
     await s.at.apply([{ entity: { eid: other }, person: {} }], KERNEL)
     let bo =
       (await minted(new Request('https://yaks.app/'), s.p.env, SECRET, other))
         .split(';')[0]
+    let back = await returned(s.p.env, await begun('/manage/ada/operator'), {
+      cookie: bo,
+      query: 'code=C',
+    })
+    assertEquals(to(back), [
+      303,
+      'https://yaks.app/manage/ada/operator?enable=google-search-console',
+    ])
     assertEquals(
-      to(
-        await returned(s.p.env, await begun('/manage/ada/operator'), {
-          cookie: bo,
-          query: 'code=C',
-        }),
-      ),
-      [
-        303,
-        'https://yaks.app/manage/ada/operator?enable=google-search-console',
-      ],
+      (await s.shown(['google-search-console'])).list
+        .filter((c) => c.integration == 'google-search-console')
+        .map((c) => c.status),
+      ['connected'],
     )
   },
 )
