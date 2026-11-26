@@ -112,7 +112,12 @@ let home = () => {
     shows: view.textContent!.trim(),
   })
   let link = document.querySelector('.Nav_Open')!
-  return { press, answer, seen, measured, loads, view, link }
+  // A script of the view's page done loading.
+  let loaded = async (script: Element) => {
+    script.dispatchEvent(new Event('load'))
+    await new Promise((go) => setTimeout(go))
+  }
+  return { press, answer, seen, measured, loads, view, link, loaded }
 }
 
 test('a press before the signed-in page comes draws its frame in its own frame, and the page fills it', async () => {
@@ -151,6 +156,17 @@ test('the signed-in page waits unseen until a press shows it through the navigat
   assertEquals(measured, ['drawn'])
   assertEquals(seen().address, '/ada')
   assertEquals(seen().title, 'Hazel · yaks.app')
+})
+
+test("the signed-in page's scripts run before the navigator takes its links", async () => {
+  let { answer, view, link, loaded } = home()
+  await answer(WORKSPACE.replace(
+    '</main>',
+    '</main><script type="module" src="/_talk-views.js"></script>',
+  ))
+  assertEquals(link.hasAttribute(READY), false)
+  await loaded(view.querySelector('script[src]')!)
+  assertEquals(link.hasAttribute(READY), true)
 })
 
 test('a page not to be had is loaded, whether pressed before or after', async () => {

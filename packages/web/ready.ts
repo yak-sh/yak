@@ -40,8 +40,9 @@ let run = (old: HTMLScriptElement) => {
   return began
 }
 
-let scripts = (doc: Document, view: HTMLElement, base: string) => {
-  let ran = sources(doc)
+// Run the view's scripts but those `ran` names, which the document ran
+// before the view came.
+let scripts = (view: HTMLElement, base: string, ran: Set<string>) => {
   let boot: Promise<void>[] = []
   for (let script of view.querySelectorAll('script')) {
     if (!RUNS.test(script.getAttribute('type') ?? '')) continue
@@ -148,8 +149,9 @@ export let ready = (
     if (was) win.location.replace(at.href)
   }
 
-  // The page and its sheets, in the view; false where it is not to be had.
-  let fill = async () => {
+  // The page and its sheets, in the view, and the scripts the document ran
+  // before it; false where it is not to be had.
+  let fill = async (): Promise<Set<string> | false> => {
     let response = await first
     if (
       !response?.ok ||
@@ -183,6 +185,9 @@ export let ready = (
     }
     view.className = `Site_Workspace ${page.body.className}`
     view.removeAttribute('aria-busy')
+    // Read before the view's own scripts are in the document, which would
+    // count them as run.
+    let ran = sources(doc)
     view.replaceChildren(...nodes)
     workspaceTitle = page.title
     if (shown()) {
@@ -192,13 +197,14 @@ export let ready = (
     for (let pane of view.querySelectorAll<HTMLElement>(`[${SCROLL}="end"]`)) {
       pane.scrollTop = pane.scrollHeight
     }
-    return true
+    return ran
   }
 
   let go: ReturnType<typeof navigation> | undefined
   let boot = async () => {
-    if (!await fill()) return fail()
-    await scripts(doc, view, at.href)
+    let ran = await fill()
+    if (!ran) return fail()
+    await scripts(view, at.href, ran)
     if (gone) return
     win.removeEventListener('popstate', popped)
     doc.addEventListener(DRAW, (event) => {

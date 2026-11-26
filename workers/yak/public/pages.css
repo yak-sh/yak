@@ -806,8 +806,8 @@
   }
   /* An Operator page's views (talk-views.ts): the one shown fills the body
      as the body's own column would. One standing hidden takes no room and
-     draws nothing, but keeps how it was laid out, so showing it again is a
-     frame rather than a layout of the whole view (content-visibility). */
+     draws nothing, but keeps how it was laid out, so showing it is a frame
+     rather than a layout of the whole view (content-visibility). */
   .Talk_View {
     display: flex;
     flex-direction: column;
@@ -819,6 +819,12 @@
     height: 0;
     overflow: hidden;
     content-visibility: hidden;
+  }
+  /* Laid out once, unseen, before its first show (talk-views-browser.ts
+     `warm`): content-visibility keeps a layout, but never makes one. */
+  .Talk_View[hidden][data-warming] {
+    content-visibility: visible;
+    visibility: hidden;
   }
   .Frame_Aside[hidden],
   .Frame_AsideTools[hidden] {
