@@ -11,6 +11,7 @@
 // else leaves the container directly.
 import { env } from 'cloudflare:workers'
 import * as sdk from '@cloudflare/sandbox'
+import { outgoing } from '@yaks/platform/app-outbound'
 import { apex, type Host } from '@yaks/platform/host'
 import {
   ARCHIVE_PATH,
@@ -23,6 +24,7 @@ import { moved } from '@yaks/durable-object/resets'
 
 type Env = Host & {
   KERNEL: {
+    fetch(req: Request): Promise<Response>
     send(req: Request, container: string): Promise<Response>
     fault(message: string, container: string): Promise<void>
   }
@@ -108,7 +110,7 @@ export class Workbench extends sdk.Sandbox<Env> {
 // The inherited setter registers by class name; an own static field would
 // skip that registration. The hosts are the deployment's (APEX).
 let platform = (req: Request, env: Env, out: { containerId: string }) =>
-  env.KERNEL.send(req, out.containerId)
+  outgoing(req, out.containerId, env.KERNEL)
 let restore = (req: Request, env: Env, out: { containerId: string }) =>
   snapshot(env.BLOBS, out.containerId, req)
 let at = apex(env as Env)

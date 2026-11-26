@@ -21,7 +21,7 @@ export let outgoing = (
   return service.fetch(new Request(req, { headers }))
 }
 
-/** Unwrap the caller supplied by the dispatch namespace's outbound Worker.
+/** Unwrap the caller supplied by the outbound Worker.
  * Only its private service binding reaches this entrypoint. */
 export let incoming = <T>(
   req: Request,

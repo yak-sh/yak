@@ -315,12 +315,15 @@ export let classes: Record<string, Deferred> = {
   // secret its placeholder is swapped with (sandbox.ts `swapped`).
   SandboxOutbound: entered(
     WorkerEntrypoint,
-    ['send', 'fault'],
+    ['send', 'fetch', 'fault'],
     async (_ctx, env) => {
       let { swapped } = await import('../sandbox.ts')
       let { caught } = await import('../defects.ts')
+      let send = (req: Request, container: string) =>
+        swapped(env, container, req)
       return {
-        send: (req: Request, container: string) => swapped(env, container, req),
+        send,
+        fetch: (req: Request) => incoming(req, send),
         fault: (message: string, container: string) => {
           caught(new Error(message), {
             request: 'workbench snapshot',
