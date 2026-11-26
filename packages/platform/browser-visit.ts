@@ -1084,7 +1084,7 @@ let loaded = async (
       signal.throwIfAborted()
       await ready()
       waitingFor('reading the trace')
-      let tasks = await traced?.()
+      let trace = await traced?.()
       signal.throwIfAborted()
       waitingFor('taking the final screenshot')
       let image = await shoot()
@@ -1099,15 +1099,28 @@ let loaded = async (
         dialogs,
         errors,
         status,
-        ...tasks
+        ...trace
           ? {
-            traced: tasks.map((t) => ({
-              name: 'task',
-              url,
-              ms: t.ms,
-              parts: { at: t.at, ...Object.fromEntries(t.spent) },
-              server: {},
-            })),
+            traced: [
+              {
+                name: 'trace',
+                url,
+                ms: 0,
+                parts: {
+                  events: trace.events,
+                  marked: String(trace.marked),
+                  tasks: trace.tasks.length,
+                },
+                server: {},
+              },
+              ...trace.tasks.map((t) => ({
+                name: 'task',
+                url,
+                ms: t.ms,
+                parts: { at: t.at, ...Object.fromEntries(t.spent) },
+                server: {},
+              })),
+            ],
           }
           : {},
       }

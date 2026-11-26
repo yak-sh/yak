@@ -85,11 +85,14 @@ export let tasks = (
   events: TraceEvent[],
   zero: { name: string; ms: number },
 ): Task[] => {
-  let main = events.find((e) =>
-    e.ph == 'M' && e.name == 'thread_name' && e.args?.name == 'CrRendererMain'
-  )
-  if (!main) return []
+  // The page's thread is the one its mark is on; a trace holds every
+  // renderer's.
   let mark = events.find((e) => e.name == zero.name)
+  let main = mark ??
+    events.find((e) =>
+      e.ph == 'M' && e.name == 'thread_name' && e.args?.name == 'CrRendererMain'
+    )
+  if (!main) return []
   let on = (e: TraceEvent) => e.pid == main.pid && e.tid == main.tid
   let complete = events
     .filter((e) => on(e) && e.ph == 'X' && e.dur != null)
@@ -149,11 +152,15 @@ export let tasks = (
   return out
 }
 
-/** Start tracing the page `cdp` drives; the answer stops it and says its
- * long tasks. */
+/** What a trace held: how many events, whether the page's mark was among
+ * them to find its thread by, and its long tasks. */
+export type Traced = { events: number; marked: boolean; tasks: Task[] }
+
+/** Start tracing the page `cdp` drives; the answer stops it and says what
+ * it held. */
 export let tracing = async (
   cdp: Session,
-): Promise<() => Promise<Task[]>> => {
+): Promise<() => Promise<Traced>> => {
   let events: TraceEvent[] = []
   cdp.on('Tracing.dataCollected', ({ value }: { value: TraceEvent[] }) => {
     events.push(...value)
@@ -172,6 +179,13 @@ export let tracing = async (
     )
     await cdp.send('Tracing.end')
     await done
-    return tasks(events, { name: 'yak-trace', ms: Number(result.value) || 0 })
+    return {
+      events: events.length,
+      marked: events.some((e) => e.name == 'yak-trace'),
+      tasks: tasks(events, {
+        name: 'yak-trace',
+        ms: Number(result.value) || 0,
+      }),
+    }
   }
 }
