@@ -282,7 +282,9 @@ A query that works on the box can be refused in a store.
   booted. A page view wakes its app's store for the scripts that ask it next,
   from the edge too (page-cache.ts `shown`, front.ts through `Uses`), and the
   pages that send a person to a space's chat wake its Builder (build-door.ts
-  `woken`). Both go through door.ts `ahead`.
+  `woken`). Both go through door.ts `ahead`. A Dashboard wakes its Builder
+  before the directory says which space it is, from the colo's note of the
+  space the person's last one reached (build-door.ts `foreseen`, `noting`).
 - **Only the caller knows an answer has arrived.** The runtime sends an object's
   answer on in turns of its event loop, so work begun as the answer was read, or
   on a timer as the handler returned, held it (T-149700). Work nobody waits for

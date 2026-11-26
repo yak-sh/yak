@@ -314,8 +314,14 @@ export let listedApps = async (
 let suggestionsFor = async (dir: Directory, space: Space, who: Who) => {
   let apps = (await appsFor(dir, space, who))
     .toSorted((a, b) => (b.meter?.visits ?? 0) - (a.meter?.visits ?? 0))
-  let { uses, dismissed } = await dir.suggesting(space, apps, who.person!)
-  return suggested({ operator: space.operator, uses, apps, dismissed })
+  let walk = walkTo(space.slug, space.eid)
+  let { uses, dismissed } = await dir.suggesting(walk, apps, who.person!)
+  return suggested({
+    operator: space.operator,
+    uses: { ...uses, selling: !!space.seller },
+    apps,
+    dismissed,
+  })
 }
 
 /** The space `eid` when `person` owns it, out of the trash. */
@@ -387,7 +393,10 @@ let sideRows = async (
   let { space, role } = seat
   let who = { person, role }
   if (listed) return listedRows(person, eid, await listedApps(dir, space, who))
-  if (work) return workRows(person, eid, await dir.agentWork(space))
+  if (work) {
+    let walk = walkTo(space.slug, space.eid)
+    return workRows(person, eid, await dir.agentWork(walk, space.operator))
+  }
   if (offered) {
     return suggestionRows(person, eid, await suggestionsFor(dir, space, who))
   }

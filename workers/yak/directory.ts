@@ -3737,9 +3737,11 @@ export let directoryRows = (rows: {
         ? { host: domain.host, space: full.space, app: full.app }
         : null
     },
-    domainTransfersTo: (space: Space) =>
+    domainTransfersTo: (walk: Walk) =>
       query(
-        line`.domain_transfer.to=${space.eid}&?domain_transfer_answer&?created`,
+        line`.domain_transfer.to${
+          sub(walk.path)
+        }&?domain_transfer_answer&?created`,
       ),
     domainTransferAt: (eid: string) =>
       one(line`.entity.eid=${eid}&.domain_transfer`),
@@ -4179,70 +4181,74 @@ export let directoryRows = (rows: {
       let named = [...made, ...releases].filter((r) => by.has(r.entity.eid))
       return { of, writers: writers(named) }
     },
-    // The releases agents put out in `space` (T-3702), newest first, at most
-    // `count`: its Operator's, which writes as the space (operator.ts
-    // `opened`), and an agent's writing for a person (@yaks/platform/
-    // instrument `agentRow`), named as itself. A person's own are left out.
+    // The releases agents put out in the space at `walk` (T-3702), newest
+    // first, at most `count`: its Operator's, which writes as the space
+    // (operator.ts `opened`) and is named `operator`, and an agent's writing
+    // for a person (@yaks/platform/instrument `agentRow`), named as itself. A
+    // person's own are left out. One read, by the walk, so a page asks it
+    // beside the read that learns the space (manage.ts `foresee`): each
+    // release's writer comes back beside it, as a bundle of its own.
     agentWork: async (
-      space: Pick<Space, 'eid' | 'slug' | 'operator'>,
+      walk: Walk,
+      operator: Space['operator'],
       count = 40,
     ): Promise<Release[]> => {
-      let apps = line`app.space=${space.eid}`
-      let releases = await query(
-        line`.deploy.app.${
-          sub(apps)
+      let rows = await query(
+        line`.deploy.app.app.space${
+          sub(walk.path)
         }&?created&.order=-created.at&.limit=${count}&.fields=${[
           'deploy.app',
           'deploy.version',
           'created.at',
           'created.by',
+          'created.by.doc.title',
+          'created.by.acts_for.person',
         ]}`,
       )
-      let stamps = releases.flatMap((r) => {
-        let at = stampOf(r.created)
-        return r.deploy && at?.by
-          ? [{ app: idOf(r.deploy.app)!, version: r.deploy.version, ...at }]
-          : []
-      })
-      let others = [...new Set(stamps.map((s) => s.by!))]
-        .filter((by) => by != space.eid)
+      let space = await walk.eid
       let agents = new Map(
-        (others.length
-          ? await query(line`.entity.eid=${others}&.acts_for&?doc`)
-          : []).map((r) => [r.entity.eid, agentName(r) ?? 'An agent']),
+        rows.flatMap((r) =>
+          r.acts_for ? [[r.entity.eid, agentName(r) ?? 'An agent']] : []
+        ),
       )
-      return stamps.flatMap(({ app, version, at, by }) =>
-        by == space.eid
-          ? [{ app, version, at, by, name: space.operator, operator: true }]
-          : agents.has(by!)
-          ? [{ app, version, at, by: by!, name: agents.get(by!)! }]
-          : []
-      )
+      return rows.flatMap((r): Release[] => {
+        let at = stampOf(r.created)
+        let by = at?.by
+        if (!r.deploy || !at || !by) return []
+        let release = { app: idOf(r.deploy.app)!, version: r.deploy.version }
+        if (by == space) {
+          return [{ ...release, at: at.at, by, name: operator, operator: true }]
+        }
+        let name = agents.get(by)
+        return name ? [{ ...release, at: at.at, by, name }] : []
+      })
     },
-    // The facts the suggestions on `space`'s Dashboard are picked by
-    // (@yaks/platform/dashboard `Uses`), for `person`, and the suggestions
-    // they dismissed there.
+    // The facts the suggestions on the Dashboard of the space at `walk` are
+    // picked by (@yaks/platform/dashboard `Uses`), but whether it sells,
+    // which its row says: for `person`, about `apps`, and the suggestions
+    // they dismissed there. By the walk, so a page asks it beside the read
+    // that learns the space (manage.ts `foresee`).
     suggesting: async (
-      space: Space,
+      walk: Walk,
       apps: Pick<App, 'eid' | 'phone'>[],
       person: string,
-    ): Promise<{ uses: Uses; dismissed: string[] }> => {
-      let served = apps.map((a) => a.eid)
-      let [named, members, me] = await Promise.all([
-        query(
-          served.length
-            ? line`.hostname.serves=${served}&!trashed`
-            : line`.hostname.space=${space.eid}&!trashed`,
-        ),
-        self.members(space),
+    ): Promise<{ uses: Omit<Uses, 'selling'>; dismissed: string[] }> => {
+      let [serving, named, members, me] = await Promise.all([
+        query(line`.hostname.serves.app.space${sub(walk.path)}&!trashed`),
+        query(line`.hostname.space${sub(walk.path)}&!trashed`),
+        query(line`.member.space${sub(walk.path)}`),
         one(line`.entity.eid=${person}&?phone&?dismissed_suggestions`),
       ])
-      let prefix = `${space.eid} `
+      let shown = new Set(apps.map((a) => a.eid))
+      let prefix = `${await walk.eid} `
       return {
         uses: {
-          domain: named.length > 0,
-          people: members.length > 1,
-          selling: !!space.seller,
+          domain: apps.length
+            ? serving.some((r) =>
+              !!r.hostname?.serves && shown.has(idOf(r.hostname.serves))
+            )
+            : named.length > 0,
+          people: members.filter((r) => r.member?.person).length > 1,
           texts: apps.some((a) => !!a.phone),
           phoned: !!me?.phone?.number,
         },

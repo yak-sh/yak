@@ -4,6 +4,8 @@ import { audit } from './admin-action.ts'
 import { jittered, retried } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
 import { ahead, fetchOf, HEARD, WAKE } from './door.ts'
+import { apart } from './lib/hops.ts'
+import { background, caught } from './defects.ts'
 import type { Space } from './directory.ts'
 import { type Settings, worn } from './operator-settings.ts'
 import type { Env } from './env.ts'
@@ -12,7 +14,7 @@ import { url } from '@yaks/platform/host'
 import { chatPath, managePath } from '@yaks/platform/routes'
 import { answered } from './meta.ts'
 import { type Call, type Door, finite } from '@yaks/durable-object/door'
-import { system } from '@yaks/fp'
+import { system, within } from '@yaks/fp'
 import { rejected } from './tool.ts'
 
 /** What a socket remembers about itself across a hibernation: who is on the
@@ -160,6 +162,69 @@ export let woken = (
   warmed.set(space, now)
   if (warmed.size > 1024) warmed.delete(warmed.keys().next().value!)
   wake(env, space, retain)
+}
+
+// How long a look at the colo's note may take: a match answers in a few
+// milliseconds, and now and then in seconds (used.ts `GLANCE`), by which time
+// the directory has answered and the page wakes the Operator itself.
+let GLANCE = 500
+// How long a note stands, in seconds. A space seldom moves to another
+// address, and a note that outlived the move wakes another space's Operator,
+// once a visit, until the page notes the space it found.
+let NOTED = 30 * 86_400
+
+let noteOf = (person: string, slug: string) =>
+  new Request(`https://operators.invalid/${person}/${encodeURIComponent(slug)}`)
+
+/** Start the Operator a Dashboard of the space at `slug` asks, as the colo
+ * last noted `person` writing there (`noting`), before the read that learns
+ * the space answers, so a cold Operator starts beside that read rather than
+ * after it. Nothing waits on it; it answers the space the note named. */
+export let foreseen = (
+  env: Env,
+  person: string,
+  slug: string,
+): Promise<string | null> => {
+  let notes = env.OPERATOR_CACHE
+  if (!notes || !person) return Promise.resolve(null)
+  return apart(async () => {
+    let found = await within(
+      notes().then((c) => c.match(noteOf(person, slug))),
+      GLANCE,
+      env.CLOCK,
+    )
+    let space = found ? await found.text() : ''
+    if (space) woken(env, space)
+    return space || null
+  }).catch((error) => {
+    caught(error, { request: 'operator note read' })
+    return null
+  })
+}
+
+/** Note in the colo the space whose Operator `person`'s Dashboard at `slug`
+ * reaches, or none where they write in none there, when the note `said`
+ * (`foreseen`) is not that already. */
+export let noting = (
+  env: Env,
+  person: string,
+  slug: string,
+  space: string | null,
+  said: Promise<string | null>,
+): void => {
+  let notes = env.OPERATOR_CACHE
+  if (!notes || !person) return
+  background(
+    apart(async () => {
+      if ((await said ?? '') == (space ?? '')) return
+      await (await notes()).put(
+        noteOf(person, slug),
+        new Response(space ?? '', {
+          headers: { 'cache-control': `public, max-age=${NOTED}` },
+        }),
+      )
+    }).catch((error) => caught(error, { request: 'operator note write' })),
+  )
 }
 
 /** An app the space's Operator watches committed (graph.ts `#herald`): its

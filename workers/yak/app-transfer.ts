@@ -9,7 +9,7 @@ import type {
   Request as DomainTransfer,
 } from '@yaks/platform/domain-transfer'
 import { mint } from '@yaks/graph/identity'
-import { line } from '@yaks/query'
+import { line, sub } from '@yaks/query'
 import { sendable } from '@yaks/mail'
 import { canon } from './signin.ts'
 import {
@@ -19,6 +19,8 @@ import {
   idOf,
   type Row,
   type Space,
+  type Walk,
+  walkTo,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import type { Who } from './session.ts'
@@ -133,19 +135,30 @@ export let transferTool: ToolRow = {
   },
 }
 
-let offers = (dir: Directory, space: Space, who: Who) =>
-  !who.person || who.role != 'owner' ? [] : dir.read(
-    line`.app_transfer.to=${space.eid}&.app_transfer.recipient=${who.person}&?app_transfer_answer&?created`,
-  )
+/** The offers of apps and domains to the space at `walk` that `person` is
+ * to answer, by the walk, so a page asks them beside the read that learns
+ * the space (manage.ts `foresee`). */
+export let offered = (dir: Directory, walk: Walk, person: string) =>
+  Promise.all([
+    dir.read(
+      line`.app_transfer.to${
+        sub(walk.path)
+      }&.app_transfer.recipient=${person}&?app_transfer_answer&?created`,
+    ),
+    dir.domainTransfersTo(walk),
+  ])
+
+let newest = (rows: Row[]) =>
+  rows.toSorted((a, b) =>
+    (b.created?.at ?? '').localeCompare(a.created?.at ?? '')
+  ).slice(0, 40)
 
 let appUpdates = async (
   dir: Directory,
   space: Space,
-  who: Who,
+  offers: Row[],
 ): Promise<Update[]> => {
-  let items = (await offers(dir, space, who) as unknown as Row[])
-    .sort((a, b) => (b.created?.at ?? '').localeCompare(a.created?.at ?? ''))
-    .slice(0, 40)
+  let items = newest(offers)
   return (await Promise.all(items.map(async (row) => {
     let offer = row.app_transfer!
     let response = row.app_transfer_answer
@@ -184,12 +197,9 @@ let appUpdates = async (
 let domainUpdates = async (
   dir: Directory,
   space: Space,
-  who: Who,
+  offers: Row[],
 ): Promise<Update[]> => {
-  if (!who.person || who.role != 'owner') return []
-  let rows = (await dir.domainTransfersTo(space))
-    .sort((a, b) => (b.created?.at ?? '').localeCompare(a.created?.at ?? ''))
-    .slice(0, 40)
+  let rows = newest(offers)
   return (await Promise.all(rows.map(async (row) => {
     let offer = row.domain_transfer!
     let response = row.domain_transfer_answer
@@ -217,11 +227,22 @@ let domainUpdates = async (
   }))).filter((row) => row != null)
 }
 
-export let transferUpdates = async (dir: Directory, space: Space, who: Who) =>
-  (await Promise.all([
-    appUpdates(dir, space, who),
-    domainUpdates(dir, space, who),
+export let transferUpdates = async (
+  dir: Directory,
+  space: Space,
+  who: Who,
+) => {
+  if (!who.person || who.role != 'owner') return []
+  let [apps, domains] = await offered(
+    dir,
+    walkTo(space.slug, space.eid),
+    who.person,
+  )
+  return (await Promise.all([
+    appUpdates(dir, space, apps as unknown as Row[]),
+    domainUpdates(dir, space, domains),
   ])).flat()
+}
 
 export let answerTransfer = async (
   env: Env,

@@ -363,6 +363,10 @@ export type Env = {
   // The colo's marks of the use receipts the platform store took (used.ts),
   // shared by every isolate of a Worker there. An object has none.
   USE_CACHE?: () => Promise<Stored>
+  // The colo's notes of which space's Operator a person's Dashboard reaches
+  // (build-door.ts `foreseen`), shared by every isolate of a Worker there and
+  // outliving a deploy. An object has none.
+  OPERATOR_CACHE?: () => Promise<Stored>
   RELEASE_VIEWS?: ReadonlyMap<
     string,
     import('@yaks/platform/release-index').ServingIndex

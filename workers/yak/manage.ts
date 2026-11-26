@@ -59,11 +59,12 @@ import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
 import { writes } from '@yaks/member'
 import { type Clock, clock } from './timing.ts'
-import { woken } from './build-door.ts'
+import { foreseen, noting, woken } from './build-door.ts'
 import { DAYS } from './views.ts'
 import { admin } from './tool.ts'
 import { reachOf } from './operator-reach.ts'
-import { friendsOf as standingWith } from './friends.ts'
+import { friendsOf as standingWith, messagesOf } from './friends.ts'
+import { offered } from './app-transfer.ts'
 import { json } from '@yaks/platform/refused'
 import { moved, redirect, shelf } from './apps.ts'
 import {
@@ -165,9 +166,17 @@ export let manage = async (
   if ('moved' in at) return moved(req, hostUrl(env, at.moved) + url.search)
   let dir = dirOf()
   let page: ReturnType<typeof dir.page> | undefined
+  // The colo's note of the space a Dashboard's Operator is (`foreseen`).
+  let note: Promise<string | null> | undefined
   let ahead = (person: string) => {
     let reads = req.method == 'GET' || req.method == 'HEAD'
     if ('space' in at) {
+      // A Dashboard asks its Operator once it knows the space, so a cold one
+      // starts now, by the colo's note of which space this is, beside the
+      // read that learns it.
+      if (req.method == 'GET' && at.view == 'dashboard' && !url.search) {
+        note = foreseen(env, person, at.space)
+      }
       page = dir.page(
         at.space,
         null,
@@ -321,6 +330,10 @@ export let manage = async (
     role: administrative ? 'owner' : role ?? null,
     administrative,
     until,
+  }
+  if (note) {
+    let reaches = writes(who.role) && !administrative && !space.trashed
+    noting(env, person, at.space, reaches ? space.eid : null, note)
   }
   if (at.logo) return logoOf(req, env, space, who, at.logo)
   if (at.manifest) {
@@ -611,6 +624,21 @@ let rowsAhead = (
     return [agentsIn(at.env, dir, person), dir.provenance(walk)]
   }
   if (view == 'new') return [agentsIn(at.env, dir, person)]
+  // The Dashboard's parts (operator-page.ts `dashboardPage`): its apps with
+  // who made them, its agents' work, what its suggestions are picked by, and
+  // the directory's share of its Updates (updates.ts `offersIn`), so the page
+  // waits on nothing but its Operator once it knows the space.
+  if (view == 'dashboard') {
+    return [
+      dir.provenance(walk),
+      // Its names are the page's to give.
+      dir.agentWork(walk, ''),
+      dir.suggesting(walk, [], person),
+      offered(dir, walk, person),
+      standingWith(dir, person),
+      messagesOf(dir, person),
+    ]
+  }
   if (view == 'billing') {
     return [
       dir.domainOrders(walk),

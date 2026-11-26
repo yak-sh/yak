@@ -33,7 +33,12 @@ let filed = (env: Env): Env =>
 // marks of what the platform store took (used.ts). An object is one instance
 // and holds its own.
 let openUses = () => caches.open('Uses')
-let shelved = (env: Env): Env => ({ ...filed(env), USE_CACHE: openUses })
+let openOperators = () => caches.open('Operators')
+let shelved = (env: Env): Env => ({
+  ...filed(env),
+  USE_CACHE: openUses,
+  OPERATOR_CACHE: openOperators,
+})
 
 // Agent entrypoints share the same isolated code evaluator, loaded with the
 // first of them.
