@@ -3,13 +3,12 @@ doc:
   title: Multiplayer Games
 guide:
   slug: games
-  brief: multiplayer games with fullscreen play, rules, controls and rendering
+  brief: runnable 3D, voxel and 2D starters with a page graph, fullscreen play and live rooms
   description: >-
-    Building a multiplayer game, following Holdfast: platform dependencies and
-    their vocabulary, game state in the graph, @yaks/game rules, input controls
-    and HUD, @yaks/stage rendering, @yaks/voxel geometry and @yaks/voxel/three,
-    the shared clock and fixed-step timing, owner election (one page simulates
-    each entity), and retrying a lost write without charging twice.
+    Start a game with app_files and the game starter. Choose a 3D, voxel or
+    2D view, then add live rooms for multiplayer. Covers fullscreen play,
+    local and stored game state, guest invites, controls, HUD, rendering,
+    fixed-step timing and retrying lost writes.
 ---
 
 # Multiplayer Games
@@ -19,7 +18,42 @@ writes bundles back to the graph. The toolkit computes and draws values; it does
 not store your graph, world, economy or save rules. Keep those in the app, so
 another page can read the same game state and a different renderer can draw it.
 
-Start with the working examples:
+## Start with a game starter
+
+Create an app with `app_new`, then have `app_files` write its first draft. Pass
+`starter: {}` for a lit Three.js scene with a camera that follows the player. A
+low-poly world to explore uses this view. The starter includes an in-memory page
+graph, fullscreen controls and an install manifest.
+
+| Game                                        | Arguments to `app_files`              |
+| ------------------------------------------- | ------------------------------------- |
+| 3D exploration                              | `{app, starter: {}}`                  |
+| Voxel game                                  | `{app, starter: {view: 'voxel'}}`     |
+| Card game, puzzle grid or requested 2D view | `{app, starter: {view: '2d'}}`        |
+| Multiplayer exploration                     | `{app, starter: {multiplayer: true}}` |
+
+Use `app_new` with `access: 'private'` for multiplayer. You can combine
+`multiplayer: true` with any view. The starter writes runnable files to the
+draft. Read them with `app_files(op: 'read')`, then build the person's game on
+those files. Keep the scene inputs, the page graph and room wiring as you add
+the world, controls and rules the person asked for. Set the app name, icon and
+manifest for that game before releasing it.
+
+The starter opens the app vocabulary with `@yaks/game/page`. Use `ent(eid)` for
+indexed reads, `watch` for projections and `mutate` for batches. Declare
+page-only components as `sync: none` and use local watches with
+`{remote: false}`. Apply a frame simulation batch per `fixedStep` step or a turn
+batch per accepted action.
+
+In a multiplayer draft, `room-client.ts` watches the selected room via
+`@yaks/client` and `@yaks/sync`. The same subscription supplies the initial
+state, accepted turns and the state after reconnect. The app worker checks the
+guest invitation and writes a turn batch only when `room-rules.ts` accepts the
+action. Keep that authority in the app. The sample uses `play_pawn{room, x, z}`
+for saved positions and `play_motion{room, seat, x, z}` for a transient aim
+marker. Use peer components for frequent motion, with an appropriate `pace`.
+
+## Working examples
 
 - [Holdfast](https://yourname.yaks.app/holdfast/) is cooperative tower defense.
   Its app source is `apps/holdfast`: `rules.ts` decides play, `main.ts` connects
@@ -365,28 +399,15 @@ values. The look holds GPU and audio handles; it keeps no copy of the game
 state. Replacing it should leave `rules.ts`, spending receipts and saved runs
 unchanged. Dispose its resources and the controls when the page leaves.
 
-This browser-side example draws ordinary Three.js geometry without any voxel
-imports. It needs a mounted `canvas`; the caller owns the loop and disposal:
+The [game starter](#start-with-a-game-starter) wires the renderer, frame
+callback and orbit camera from `@yaks/stage`. Its `look.ts` takes the game's
+geometry and draws a supplied player pose. Replace the example world in
+`world.ts` and supply the player's pose from the page graph.
 
-```ts ignore
-import * as THREE from 'three'
-import { renderer } from '@yaks/stage/render'
-
-let gpu = renderer(canvas, 640, 360, 1)
-let scene = new THREE.Scene()
-let camera = new THREE.PerspectiveCamera(40, 640 / 360, 0.1, 150)
-camera.position.z = 4
-let shape = new THREE.BoxGeometry(1, 1, 1)
-let material = new THREE.MeshBasicMaterial({ color: 0x80cbd0 })
-scene.add(new THREE.Mesh(shape, material))
-gpu.render(scene, camera)
-// On unmount: shape.dispose(); material.dispose(); gpu.dispose().
-```
-
-For a voxel look, replace the geometry and material construction with
-`geometry(packedQuads)` and `soft(...)` from `@yaks/voxel/three`. Keep the
-`packedQuads` generation in the app or a worker using `@yaks/voxel`; stage still
-receives ordinary Three.js geometry.
+The voxel starter builds its geometry with `geometry(packedQuads)` and
+`soft(...)` from `@yaks/voxel/three`. Its `trees.ts` is one example of a voxel
+mesh built from app-authored boxes. The compiler shares the same Three.js module
+across the scene and these packages.
 
 ## Recovering lost writes without charging twice
 

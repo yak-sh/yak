@@ -1,3 +1,5 @@
+import { type GameStarter, gameStarter, gameViews } from '@yaks/game/starter'
+import { GAME_STARTER } from './content.ts'
 import { DOMAIN_RENEWAL } from '@yaks/platform/plans'
 import { transferTool } from './app-transfer.ts'
 import { FRIEND, friendTools, recipientOf } from './friends.ts'
@@ -586,7 +588,8 @@ let FILE = {
 let TAKES: Record<string, string> = {
   list: 'an optional draft',
   read: 'path, paths, or neither for every text file',
-  write: 'path and content (base64 for bytes), or files: [{path, content}, …]',
+  write:
+    'path and content (base64 for bytes), files: [{path, content}, …], or starter',
   patch: 'path, find and replace, or edits: [{path, find, replace}, …]',
   fetch: 'path and url',
   delete: 'path',
@@ -606,7 +609,7 @@ let FILES_INPUT: Shape = {
       type: 'string',
       enum: OPS,
       description: OPS.map((op) => `${op}: ${TAKES[op]}`).join('; ') +
-        '. Left out, a call with files, content or base64 is a write',
+        '. Left out, a call with files, content, base64 or starter is a write',
     },
     draft: str(
       'Pass an open draft id when several drafts are open, or to choose ' +
@@ -678,6 +681,24 @@ let FILES_INPUT: Shape = {
       'for restore: put the file back to what it was at this moment, ' +
         'e.g. 2026-09-06T14:20:00Z',
     ),
+    starter: {
+      type: 'object',
+      description:
+        'Write a runnable game starter into this draft before editing its files. ' +
+        'Pass {} for 3D, or set multiplayer and view as needed. Files supplied in the same call replace starter files with those paths.',
+      properties: {
+        view: {
+          type: 'string',
+          enum: [...gameViews],
+          description:
+            '3d (the default), voxel (Three.js voxel geometry), or 2d (a board)',
+        },
+        multiplayer: {
+          type: 'boolean',
+          description: 'include private live rooms and an invitation link',
+        },
+      },
+    },
     files: {
       type: 'array',
       items: FILE,
@@ -738,7 +759,9 @@ let shaped = <T extends Pick<Tool, 'run'>>(tool: T): T => ({
     try {
       return await tool.run(ctx, args)
     } catch (e) {
-      let batch = [args.files, args.drafts].some(Array.isArray) ? 1 : 0
+      let batch = args.starter || [args.files, args.drafts].some(Array.isArray)
+        ? 1
+        : 0
       let op = opOf(args, batch)
       if (!(e instanceof CallError) || e.code != 'arguments') throw e
       if (!OPS.includes(op) || e.summary.includes(TAKES[op])) throw e
@@ -4426,7 +4449,16 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let batch = files(args.files)
       let fan = entries(args.drafts)
-      let op = opOf(args, batch.length + fan.length)
+      let op = opOf(args, batch.length + fan.length + Number(!!args.starter))
+      if (args.starter) {
+        if (op !== 'write') {
+          throw refuse('arguments', 'Use starter for a write.')
+        }
+        let paths = new Set(batch.map((file) => file.path.replace(/^\/+/, '')))
+        let base = gameStarter(args.starter as GameStarter, GAME_STARTER)
+          .filter((file) => !paths.has(file.path))
+        batch = [...files(base, 'starter'), ...batch]
+      }
       if (!OPS.includes(op)) throw refuse('arguments', opless(args))
       if (fan.length && op != 'write') {
         throw refuse('arguments', `drafts: for a write, not op: ${op}`)

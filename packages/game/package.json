@@ -8,6 +8,7 @@
     "./controls": "./controls.ts",
     "./hud": "./hud.ts",
     "./screen": "./screen.ts",
+    "./starter": "./starter.ts",
     "./vocab": "./vocab.ts",
     "./ui": "./ui.ts",
     "./page": "./page.ts"

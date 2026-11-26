@@ -14,7 +14,7 @@ import { act, ActionRefused, spawn } from './room-rules.ts'
 import { roomSocket } from './room-wire.ts'
 
 type Door = { fetch(path: string, init?: RequestInit): Promise<Response> }
-type Env = { APP: Door; FILES: Door }
+type Env = { APP: Door; FILES: Door; ROOM_PAGE?: string }
 
 let refuse = (status: number, message: string) =>
   Response.json({ error: 'room_action', message }, { status })
@@ -142,7 +142,7 @@ export let rooms = async (req: Request, env: Env): Promise<Response> => {
     ? pathname.slice(mount.length - 1)
     : pathname
   if (path === '/room' && req.method === 'GET') {
-    return env.FILES.fetch('/room.html')
+    return env.FILES.fetch(env.ROOM_PAGE ?? '/room.html')
   }
   if (installFiles.has(path) && ['GET', 'HEAD'].includes(req.method)) {
     let file = await env.FILES.fetch(path, { method: req.method })

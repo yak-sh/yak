@@ -25,6 +25,19 @@ let show = (error: unknown) => {
   if (!(error instanceof RoomRefused)) reportError(error)
 }
 
+let view = roomView(canvas)
+let live:
+  | Awaited<ReturnType<typeof connectRoom>> & { member: Joined }
+  | undefined
+frames(
+  (_now, dt) => view.draw(live?.watch.value ?? [], dt, live?.member),
+  () => {
+    disposeScreen()
+    live?.front.close()
+    view.dispose()
+  },
+)
+
 let selected = new URL(location.href).searchParams.get('room') ?? ''
 let invitation = new URLSearchParams(location.hash.slice(1)).get('invite')
 let remember = (room: string) => {
@@ -46,13 +59,7 @@ let playRoom = async (member: Joined) => {
       else if (error) show(error)
     },
   })
-  let view: ReturnType<typeof roomView>
-  try {
-    view = roomView(canvas, member)
-  } catch (error) {
-    front.close()
-    throw error
-  }
+  live = { front, watch, member }
   let turn = () =>
     watch.value.find((r) => r.entity.eid === room)?.play_turn as
       | Turn
@@ -97,7 +104,15 @@ let playRoom = async (member: Joined) => {
       link.hidden = false
       link.value = url.href
       link.select()
-      if (navigator.clipboard) await navigator.clipboard.writeText(url.href)
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url.href).catch((error) => {
+          if (
+            !(error instanceof DOMException && error.name === 'NotAllowedError')
+          ) throw error
+          link.focus()
+          link.select()
+        })
+      }
     })().catch(show)
   })
   let eid = motionId(member)
@@ -109,11 +124,6 @@ let playRoom = async (member: Joined) => {
       entity: { eid },
       play_motion: { room, seat, x: point.x, z: point.z },
     }])).catch(show)
-  })
-  frames((_now, dt) => view.draw(watch.value, dt), () => {
-    disposeScreen()
-    front.close()
-    view.dispose()
   })
 }
 

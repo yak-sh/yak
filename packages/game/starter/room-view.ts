@@ -3,7 +3,8 @@ import * as THREE from 'three'
 import type { Bundle } from '@yaks/graph'
 import { look } from './look.ts'
 import { type Pawn, type Seat } from './room-model.ts'
-import { field, pine, traveler } from './world.ts'
+import { tree } from './trees.ts'
+import { field, traveler } from './world.ts'
 
 let still = {
   orbit: [0, 0] as [number, number],
@@ -14,8 +15,8 @@ let still = {
   faceMove: false,
 }
 
-export let roomView = (canvas: HTMLCanvasElement, { seat }: Seat) => {
-  let world = field(pine)
+export let roomView = (canvas: HTMLCanvasElement) => {
+  let world = field(tree)
   let shape = new THREE.RingGeometry(0.26, 0.4, 16)
   shape.rotateX(-Math.PI / 2)
   let material = new THREE.MeshBasicMaterial({ color: 0xf9d29e })
@@ -26,11 +27,12 @@ export let roomView = (canvas: HTMLCanvasElement, { seat }: Seat) => {
 
   return {
     ...view,
-    draw(rows: Bundle[], dt: number) {
-      let me = rows.find((r) => r.entity.eid === seat)?.play_pawn as
+    draw(rows: Bundle[], dt: number, member?: Seat) {
+      let seat = member?.seat
+      let me = (rows.find((r) => r.entity.eid === seat)?.play_pawn as
         | Pawn
-        | undefined
-      if (!me) return
+        | undefined) ??
+        { x: 0, z: 2 }
       let pawns = rows.filter((r) => r.entity.eid !== seat && r.play_pawn)
       for (let [i, actor] of others.entries()) {
         let pawn = pawns[i]

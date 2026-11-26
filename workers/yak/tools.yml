@@ -226,6 +226,7 @@ app_files:
     op is one of:
     write (or op left out): requires path and either content (text) or
     base64 (bytes) for one file, or files: [{path, content}, …] for several.
+    For a game, pass starter with optional view and multiplayer.
     For separate drafts, pass drafts: [{files: [{path, content}, …]}, …];
     list: requires only app. An optional draft chooses which files to list.
     The answer gives each path and

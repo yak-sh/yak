@@ -37,6 +37,7 @@ import { command as spawnCommand } from '@yaks/process/command'
 import { front, read } from '@yaks/yaml'
 import { contentIdentity } from './content-identity.ts'
 import { fileURLToPath } from 'node:url'
+import { starterSources } from '@yaks/game/starter'
 import { members } from '@yaks/cli/dependencies'
 import {
   domains,
@@ -214,6 +215,17 @@ let persona = () => {
   )
 }
 
+let gameSources = () =>
+  Object.fromEntries(starterSources.map((path) => [
+    path,
+    path.endsWith('.png')
+      ? io.readFileSync(new URL(`../../packages/game/starter/${path}`, HERE))
+        .toBase64()
+      : io.readTextFileSync(
+        new URL(`../../packages/game/starter/${path}`, HERE),
+      ),
+  ]))
+
 let HEAD = `// Generated — do not edit. The words live in the files:
 // public/docs/*.md (a page's frontmatter), prompts/*.md (a prompt's),
 // tools.yml (what each tool says about itself), and the Operator's base
@@ -242,6 +254,10 @@ let body = () =>
     '/** What every tool says about itself, by name. */',
     `export let WORDS: Record<string, Words> = ${
       JSON.stringify(words(), null, 2)
+    }\n`,
+    '/** The game starter’s source files, by path. */',
+    `export let GAME_STARTER: Record<string, string> = ${
+      JSON.stringify(gameSources(), null, 2)
     }\n`,
     "/** The Operator's base persona's files, by name. */",
     `export let PERSONA: Record<string, string> = ${

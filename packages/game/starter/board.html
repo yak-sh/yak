@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Board starter</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./style.css">
+  <body class="GameScreen">
+    <canvas class="GameScreen_Surface" aria-label="Board" tabindex="0"></canvas>
+    <div class="GameScreen_Hud">
+      <p class="Hint" role="status">Tap a tile or move with the arrow keys.</p>
+      <button class="GameScreen_Control Fullscreen" id="fullscreen"
+        type="button" hidden>Enter fullscreen</button>
+    </div>
+    <script type="module" src="./board-page.ts"></script>
+  </body>
+</html>

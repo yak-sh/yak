@@ -82,13 +82,25 @@ packages in a package.json beside index.html; app_preview and app_deploy compile
 A site any tool builds (Vite, Astro, Eleventy, SvelteKit) serves as built: build
 it in the sandbox, ship the output into a folder, and name that folder in a
 wrangler.jsonc, {"assets": {"directory": "dist"}}
-(${url(env, '/docs/code.md')}). Five steps:
+(${url(env, '/docs/code.md')}).
+
+For a game, call guide with page games before writing its files. Start with
+app_files({app, starter: {}}) for a lit Three.js scene with a following camera,
+the page graph and fullscreen play. Use app_new with access 'private' and set
+starter.multiplayer to true when people play together. It adds live store
+subscriptions and scoped guest invites. Set starter.view to 'voxel' for voxel
+games or '2d' for requests and genres that call for 2D, such as card games
+and puzzle grids. Read the starter's files and adapt its world, rules and
+interface to the person's prompt before releasing it.
+
+Five steps:
 
 1. app_new — the app. Leave the space argument out: signing in gave them
    one, and every tool uses it unless they have several. Its address serves
    nothing until step 4, so say nothing to the person about the app yet.
 2. app_files — write index.html, and any css, js or images beside it; the
-   whole set in one call, as files: [{path, content}, ...]. Write an icon.svg
+   whole set in one call, as files: [{path, content}, ...], or use the game
+   starter above. Write an icon.svg
    beside index.html as well, as content: a square viewBox, a background that
    fills it, and shapes rather than <text>, which has no font. The platform
    draws it as the icon.png a phone's home screen shows. Put the pages'

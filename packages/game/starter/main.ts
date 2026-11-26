@@ -1,4 +1,5 @@
 import { play } from './play.ts'
-import { field, pine, traveler } from './world.ts'
+import { field, traveler } from './world.ts'
+import { tree } from './trees.ts'
 
-await play(field(pine), traveler())
+await play(field(tree), traveler())
