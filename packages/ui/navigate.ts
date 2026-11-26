@@ -354,9 +354,10 @@ export type Phases = { wait: number; swap: number }
 
 /** Where the page a swap drew came from: fetched on the click (`fetch`),
  * held already, fetched ahead or opened before (`held`), the answer
- * asked for after drawing a held one, laid over it (`fresh`), or drawn in
- * place by the page on screen from what the tab holds (`drawn`, `DRAW`). */
-export type From = 'fetch' | 'held' | 'fresh' | 'drawn'
+ * asked for after drawing a held one or a frame, laid over it (`fresh`),
+ * its frame, until it comes (`framed`, `FRAME`), or drawn in place by the
+ * page on screen from what the tab holds (`drawn`, `DRAW`). */
+export type From = 'fetch' | 'held' | 'fresh' | 'framed' | 'drawn'
 
 /** Heard on the document before a press or Back fetches anything, its detail
  * a `Drawing`: a page that can show `to` itself, from what the tab holds,
@@ -548,6 +549,40 @@ let going = (win: Browsing, link: Element, to: URL) => {
   content(doc)?.setAttribute('aria-busy', 'true')
 }
 
+/** The mark on a template holding the frame the pages under a path share,
+ * its value that path (`/admin`): what those pages show before their own
+ * content, such as an empty heading over an empty body. A press on a link
+ * to one of them that is not held puts the frame in place of what stands
+ * beside the template, in the press's own frame, its titles (`TITLE`)
+ * saying what the link names its page (`NAMES`), and lays the page over
+ * it when it comes. Links under a frame are never held as the browser
+ * idles (`HOLD`): a press draws their frame at once all the same. */
+export let FRAME = 'data-frame'
+
+// The frame of the page at `to`, where the page on screen holds one.
+let frameOf = (doc: Document, to: URL) =>
+  [...doc.querySelectorAll<HTMLTemplateElement>(`template[${FRAME}]`)]
+    .find((t) => {
+      let under = t.getAttribute(FRAME)!
+      return to.pathname == under || to.pathname.startsWith(`${under}/`)
+    })
+
+// Put `frame` in place of what stands beside it, titled `names`.
+let framed = (frame: HTMLTemplateElement, names?: string | null): Tally => {
+  let region = frame.parentElement!
+  let made = frame.content.cloneNode(true) as DocumentFragment
+  for (let title of made.querySelectorAll(`[${TITLE}]`)) {
+    title.textContent = names ?? ''
+  }
+  let tally = {
+    kept: 1,
+    made: made.childNodes.length,
+    dropped: region.childNodes.length - 1,
+  }
+  region.replaceChildren(frame, made)
+  return tally
+}
+
 /**
  * Follow the links of `win`'s pages in place: a click on a link to another
  * page of the same origin, and Back and Forward between such pages, `swap`
@@ -562,7 +597,8 @@ let going = (win: Browsing, link: Element, to: URL) => {
  * A held page older than `FRESH`, or one whose answer asked (`AGAIN`), is
  * asked for again once drawn, and laid over what was drawn where it
  * changed. A click on a page not held draws what it can of that page at
- * once, from what the page holds (`going`), and the rest when it comes.
+ * once, from what the page holds (`going`), and its frame where the page
+ * holds one (`FRAME`), and the rest when it comes.
  * Links marked `READY` or `HOLD` are asked for as the browser idles.
  * A page with its own document scripts can supply `enter` to open only its
  * READY links this way, keeping that document's ordinary links with the
@@ -772,6 +808,17 @@ export let start = (
     let change = () => swap(doc, answer.page, ran, rerun, at.href)
     return land(at, change, from, began, wait, pop)
   }
+  // The page at `to` laid over its frame as it comes, pressed at `began`, or
+  // loaded where it cannot be; left be where another press came since.
+  let laid = async (to: URL, using: Held, began: number, mine: number) => {
+    using.used = true
+    let answer = await using.answer
+    if (mine != turn) return
+    let wait = answer ? Math.max(0, answer.received - began) : 0
+    if (!answer || !draw(to, answer, 'fresh', began, wait, true)) {
+      load(answer ? new URL(answer.url) : to, true)
+    }
+  }
   // How the page on screen draws `to` itself, where it can (`DRAW`).
   let drawing = (to: URL) => {
     let asked: Drawing = { to }
@@ -788,6 +835,7 @@ export let start = (
     pressed?: Result,
     began = now(),
     own = drawing(to),
+    names?: string | null,
   ) => {
     if (stays(doc)) {
       pressed?.leaving()
@@ -806,6 +854,16 @@ export let start = (
       return load(to, pop)
     }
     let from: Entering['from'] = held?.received ? 'held' : 'fetch'
+    // Its frame now, and the page laid over it as it comes, the address
+    // already moved.
+    let frame = !win.enter && !held?.received && frameOf(doc, to)
+    if (
+      frame &&
+      land(new URL(to), () => framed(frame, names), 'framed', began, 0, pop)
+    ) {
+      pressed?.drawn(0)
+      return laid(to, held ?? ask(to), began, mine)
+    }
     let using = held ?? ask(to)
     using.used = true
     let answer = await using.answer
@@ -859,6 +917,7 @@ export let start = (
         if (!to) continue
         let key = page(to)
         if (key == here || targets.has(key) || drawing(to)) continue
+        if (mark == HOLD && frameOf(doc, to)) continue
         targets.set(key, to)
         most--
       }
@@ -973,11 +1032,12 @@ export let start = (
     let pressed = result(doc, e)
     e.preventDefault()
     let own = drawing(to)
+    let link = (e.target as Element).closest('a[href]')!
     if (!own && !pages.get(page(to))?.received) {
-      going(win, (e.target as Element).closest('a[href]')!, to)
+      going(win, link, to)
       tell(doc, GOING, { began })
     }
-    go(to, false, pressed, began, own)
+    go(to, false, pressed, began, own, link.getAttribute(NAMES))
   })
   if (!win.enter) {
     history.listen(({ path }) => {

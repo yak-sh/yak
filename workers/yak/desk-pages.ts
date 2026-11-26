@@ -7,6 +7,7 @@ import { frame, FRAMED } from './frame.ts'
 import { AGENT } from './docs.ts'
 import { Button, Card, Field } from '@yaks/ui/parts'
 import { h } from 'preact'
+import { FRAME, TITLE } from '@yaks/ui/navigate'
 import {
   type ConnectionsView,
   connectionsView,
@@ -85,6 +86,9 @@ export let deskFrame = (
     class?: string
     person?: string
     apex?: string
+    /** the path whose pages share this frame (@yaks/ui/navigate `FRAME`):
+     * a press on a link to one draws its heading over an empty body at once */
+    framed?: string
   },
 ) =>
   frame({
@@ -99,6 +103,20 @@ export let deskFrame = (
     content: h(
       'div',
       { class: 'Desk_Body', 'data-contents-root': '' },
+      at.framed
+        ? h(
+          'template',
+          { [FRAME]: at.framed },
+          h(
+            'header',
+            { class: 'Desk_Head' },
+            h('div', null, h(Head.Title, { mod: 'page', [TITLE]: '' })),
+          ),
+          h(Shell.Content, {
+            class: ['Desk_Content', at.class].filter(Boolean).join(' '),
+          }),
+        )
+        : null,
       h('header', { class: 'Desk_Head' }, at.head),
       contents({ class: 'Desk_Contents', from: SECTIONS }),
       h(Shell.Content, {

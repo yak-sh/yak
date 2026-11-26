@@ -10,6 +10,7 @@ import {
   DRAW,
   type Drawing,
   type Entering,
+  FRAME,
   FRESH,
   GOING,
   HOLD,
@@ -601,6 +602,42 @@ test('the menu warms pages behind its views one at a time, and a press draws wit
   let { from, phases } = await b.swapped
   assertEquals([from, phases.wait], ['held', 0])
   assertEquals(b.fetched.length, 2)
+})
+
+// A desk whose pages under /desk share a frame: a heading over nothing.
+let desk = (here: string) =>
+  framed(
+    here,
+    `<b ${TITLE}>${here}</b><div class="Body"><template ${FRAME}="/desk">` +
+      `<h1 ${TITLE}></h1></template><h1>${here}</h1><p>rows of ${here}</p>` +
+      `<a ${NAMES}="Bee" href="/desk/b">b</a></div>`,
+    `<a ${HOLD} href="/desk/b">B</a><a ${HOLD} href="/updates">Updates</a>`,
+  )
+let desks = { ...site, '/desk/a': desk('a'), '/desk/b': desk('b') }
+
+test('a press on a page under a frame draws its frame at once, titled as the link names it, and lays the page over it as it comes', async () => {
+  let b = browsing(desks, '/desk/a')
+  b.slow()
+  b.click(`a[${NAMES}]`)
+  assertEquals(b.drawn.map((d) => d.from), ['framed'])
+  assertEquals(b.entries.map((e) => e.path), ['/desk/b'])
+  assertEquals(b.doc.querySelector('.Body > h1')?.textContent, 'Bee')
+  assertEquals(b.doc.querySelector('.Body > p'), null)
+  await b.answer()
+  assertEquals(b.drawn.map((d) => d.from), ['framed', 'fresh'])
+  assertEquals(b.entries.length, 1, 'the address moved once')
+  assertEquals(b.doc.querySelector('.Body > p')?.textContent, 'rows of b')
+})
+
+test('a link under a frame is not held as the browser idles, but one looked ahead at draws whole', async () => {
+  let b = browsing(desks, '/desk/a')
+  await settled()
+  assertEquals(b.fetched, ['https://y.test/updates prefetch'])
+  b.press('mousedown', `a[${NAMES}]`)
+  await settled()
+  b.click(`a[${NAMES}]`)
+  assertEquals((await b.swapped).from, 'held')
+  assertEquals(b.doc.querySelector('.Body > p')?.textContent, 'rows of b')
 })
 
 test('a pointer that moves on before its page comes lets it go, and one look ahead stands at a time', async () => {

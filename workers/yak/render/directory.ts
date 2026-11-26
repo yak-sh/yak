@@ -9,6 +9,7 @@
 // a visitor's build.
 
 import { parse } from '@yaks/query'
+import { NAMES as NAMED } from '@yaks/ui/navigate'
 import { type Days, sparkline } from '@yaks/ui/chart'
 import type { Child, Context, H, Renderer } from '@yaks/render'
 import { COMPED, NAMES } from '@yaks/platform/plans'
@@ -145,7 +146,7 @@ let row = <N>(
       { class: 'Directory_Who' },
       h(
         'a',
-        { class: 'Directory_Open', href: at(ctx, eid) },
+        { class: 'Directory_Open', href: at(ctx, eid), [NAMED]: name },
         h('strong', null, name),
       ),
       h('span', { class: 'Directory_Sub' }, sub),
@@ -166,7 +167,7 @@ let row = <N>(
   )
 
 let link = <N>(h: H<N>, ctx: Context, r: Ref) =>
-  h('a', { href: at(ctx, r.eid) }, r.name)
+  h('a', { href: at(ctx, r.eid), [NAMED]: r.name }, r.name)
 let refs = <N>(h: H<N>, ctx: Context, all: Ref[]) =>
   all.length
     ? all.flatMap((r, i) => i ? [', ', link(h, ctx, r)] : [link(h, ctx, r)])

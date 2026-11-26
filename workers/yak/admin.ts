@@ -95,6 +95,7 @@ import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
 import { type Listed, listed, type Worked } from './operator-view.ts'
 import { ADMIN, managePath } from '@yaks/platform/routes'
+import { NAMES } from '@yaks/ui/navigate'
 import { admin } from './tool.ts'
 import { adminWho } from './asking.ts'
 import { browsingAdmin } from './browse.ts'
@@ -692,6 +693,7 @@ let desk = (
     href,
     icon: icons[icon],
     label,
+    names: label,
     count,
     current: current == key,
   })
@@ -762,6 +764,7 @@ let desk = (
       head: h('div', null, kicker, h(Head.Title, { mod: 'page' }, title)),
       content: body,
       class: 'Directory_Content',
+      framed: PATH,
     })),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     FRAMED,
@@ -777,11 +780,13 @@ export let listing = (d: Reading, key: List, q: string) => {
   let toggle = d.tests
     ? h('a', {
       class: 'Directory_Toggle',
+      [NAMES]: LISTS[key].title,
       href: `${PATH}/${key}${q ? `?q=${encodeURIComponent(q)}` : ''}`,
     }, 'Leave out test accounts')
     : hidden
     ? h('a', {
       class: 'Directory_Toggle',
+      [NAMES]: LISTS[key].title,
       href: `${PATH}/${key}?tests=1${q ? `&q=${encodeURIComponent(q)}` : ''}`,
     }, `Show ${hidden} more from test accounts`)
     : null
@@ -928,7 +933,11 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     h(Fragment, null, raw(drawn(r, 'Directory.Page', ctx)), more),
     h(
       'a',
-      { class: 'Head_Address', href: `${PATH}/${key}${tested(d)}` },
+      {
+        class: 'Head_Address',
+        href: `${PATH}/${key}${tested(d)}`,
+        [NAMES]: LISTS[key].title,
+      },
       LISTS[key].title,
     ),
   )
@@ -1003,7 +1012,11 @@ let operatorPage = async (
   let space = spaceOf(r)
   let home = `${PATH}/${r.entity.eid}/operator`
   let back = (to: string, said: string) =>
-    h('a', { class: 'Head_Address', href: `${to}${tested(d)}` }, said)
+    h('a', {
+      class: 'Head_Address',
+      href: `${to}${tested(d)}`,
+      [NAMES]: said,
+    }, said)
   let ask = (path: string, args: unknown) =>
     asking(env, space, person, path, args)
   if (!open) {
@@ -1190,6 +1203,7 @@ let funnelPage = (
     i ? ' · ' : null,
     h('a', {
       href: `${PATH}/funnel?days=${n}`,
+      [NAMES]: 'Funnel',
       'aria-current': n == days ? 'page' : undefined,
     }, n == 1 ? '1 day' : `${n} days`),
   ])
