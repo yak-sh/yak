@@ -23,8 +23,16 @@ let read = async function* (path: string, size: number) {
   }
 }
 
+// A path that names nothing is the caller's to correct, as a scratch file
+// whose checkout is gone, not a failure of the browse.
+let stat = (path: string, refusal: CallError) =>
+  fs.stat(path).catch((e) => {
+    throw fs.isNotFound(e) ? refusal : e
+  })
+
 export let documentAt = async (path: string): Promise<BrowseFile> => {
-  let { size, isFile } = await fs.stat(path)
+  let refusal = new CallError('html_file', `No HTML file at ${path}.`)
+  let { size, isFile } = await stat(path, refusal)
   if (!isFile) throw new CallError('html_file', 'Choose an HTML file.')
   if (size > HTML_BYTES) {
     throw new CallError(
@@ -46,9 +54,8 @@ export let mockupAt = async (root: string, page: string) => {
   if (!url) throw pageError()
   let entry = mockupPath(url)
   if (!entry || !assetPath(entry)) throw pageError()
-  if (!(await fs.stat(root)).isDirectory) {
-    throw new CallError('mockup_directory', 'Choose a mockup directory.')
-  }
+  let refusal = new CallError('mockup_directory', 'Choose a mockup directory.')
+  if (!(await stat(root, refusal)).isDirectory) throw refusal
   let mockup: MockupFile[] = []
   let size = 0
   let walk = async (dir: string) => {

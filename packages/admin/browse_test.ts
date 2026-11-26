@@ -12,8 +12,9 @@ import {
 } from '@yaks/platform/browser-wire'
 import { clock, equal, test, throws } from '@yaks/testing'
 import type { Browse } from './api.ts'
-import { mockupAt } from './browse-files.ts'
+import { documentAt, mockupAt } from './browse-files.ts'
 import { visit } from './browse.ts'
+import { CallError } from '@yaks/tools/errors'
 
 let asked = { url: 'https://yaks.app/manage' }
 let shot = (name: string, size: number) =>
@@ -368,4 +369,15 @@ test('a silent stream retries a read-only visit and describes the last phase', (
     equal(failures, [
       '/api/browse lost its answer (HTTP 200) (Cloudflare ray stalled-ray) for https://yaks.app/app/<preview> while waiting for the page to reach DOMContentLoaded (2000 ms in the browser service) after 8000 ms: no browse bytes for 8 seconds. Try the visit again.',
     ])
+  }))
+
+test('a local page or mockup that is not there is the caller’s to correct', () =>
+  inDir(async (dir) => {
+    let codes = await Promise.all([
+      documentAt(`${dir}/gone.html`),
+      mockupAt(`${dir}/gone`, '/'),
+    ].map((asked) =>
+      asked.then(() => null, (e) => e instanceof CallError ? e.code : e)
+    ))
+    equal(codes, ['html_file', 'mockup_directory'])
   }))
