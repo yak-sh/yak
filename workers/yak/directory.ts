@@ -4241,8 +4241,12 @@ export let directoryRows = (rows: {
           ),
           query(line`.member`),
           // Only which app, when and by whom: a release's whole row is its
-          // file list.
-          query(line`.deploy&.fields=deploy.app,created.at,created.by`),
+          // file list. Only the releases of an app last put live before
+          // `last_deploy` was kept, as in `provenance`: the rest say no more
+          // than their app's `last_deploy` does.
+          query(
+            line`.deploy&!deploy.app.last_deploy&.fields=deploy.app,created.at,created.by`,
+          ),
           query(line`.referral&?rewarded&?created`),
           // The agents a stamp may name (stamps.ts `writers`).
           query(line`.acts_for&?doc`),
