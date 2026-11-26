@@ -55,6 +55,10 @@ export type Said = {
   limits?: Limit[]
   /** the model it says answers the lines after it, by the model's own name */
   model?: string
+  /** a fragment of an entry the lines after it carry on, where a stream
+   * prints a reply in pieces: a run of parts of one `key` is one entry, at
+   * the line of its first, and any other line ends the run (./tail.ts) */
+  part?: { key: string; entry: Comps }
 }
 
 /** A harness's line format. */
@@ -572,12 +576,159 @@ export let grokStream: Reader = (e) => {
   )
 }
 
-/** The readers this package ships for the stream each harness prints, by the
- * harness's name. */
+// A turn's end, with what it used, and why it failed where it did.
+let ended = (error: string, used: Comps): Comps[] => [
+  ...error
+    ? [{ refusal: { code: 'error' }, content: { body: error }, output: {} }]
+    : [],
+  { stop: {}, ...used },
+]
+
+/**
+ * Gemini CLI: the stream `gemini -p --output-format stream-json` prints. Its
+ * reply comes in fragments (`message` with `delta`), each a part of the entry
+ * the next tool call or the turn's end closes. The prompt it echoes is the
+ * session's own request already, and is read as nothing.
+ *
+ * ```ts
+ * import { gemini } from '@yaks/session'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let piece = { type: 'message', role: 'assistant', content: 'Hel', delta: true }
+ * assertEquals(gemini(piece).part, { key: 'reply', entry: { content: { body: 'Hel' }, output: {} } })
+ * let used = { type: 'tool_use', tool_name: 'read_file', tool_id: 't1', parameters: { file_path: 'a.ts' } }
+ * assertEquals(gemini(used).entries, [{ call: { to: 'read_file', id: 't1', args: { file_path: 'a.ts' } } }])
+ * ```
+ */
+export let gemini: Reader = (e) => {
+  let type = str(e.type)
+  let stats = obj(e.stats)
+  let models = Object.keys(obj(stats.models))
+  let entries: Comps[] = type == 'tool_use'
+    ? [call(str(e.tool_name), e.tool_id, e.parameters)]
+    : type == 'tool_result'
+    ? [result(
+      e.tool_id,
+      str(e.output) || str(obj(e.error).message),
+      e.status == 'error',
+    )]
+    : type == 'error'
+    ? e.severity == 'error'
+      ? [{
+        refusal: { code: 'error' },
+        content: { body: str(e.message) },
+        output: {},
+      }]
+      : said(str(e.message), { notice: {} })
+    : type == 'result'
+    ? ended(
+      e.status == 'success'
+        ? ''
+        : str(obj(e.error).message) || 'the turn failed',
+      usage(
+        count(stats.input_tokens),
+        count(stats.output_tokens),
+        count(stats.cached),
+      ),
+    )
+    : type == 'message' && e.role == 'assistant' && !e.delta
+    ? said(str(e.content), { output: {} })
+    : []
+  let piece = type == 'message' && e.role == 'assistant' && e.delta &&
+    str(e.content)
+  return {
+    entries,
+    ...piece
+      ? {
+        part: { key: 'reply', entry: { content: { body: piece }, output: {} } },
+      }
+      : {},
+    ...type == 'init' && e.session_id
+      ? { about: { session: { id: str(e.session_id) } } }
+      : {},
+    ...type == 'init' && str(e.model)
+      ? { model: str(e.model) }
+      : models.length == 1
+      ? { model: models[0] }
+      : {},
+    ...str(e.timestamp) ? { at: str(e.timestamp) } : {},
+  }
+}
+
+/**
+ * Antigravity CLI: the stream `agy --print --output-format stream-json`
+ * prints (antigravity.google/docs/cli/headless), an `init`, then a
+ * `step_update` per step as it runs and finishes, then the `result`. What
+ * the model says arrives as `text_delta` fragments of its `agent_response`
+ * step, each a part of that step's entry; a `tool` step finished carries
+ * its call and what it answered (`tool_info`). The result repeats the last
+ * reply whole (`response`), which its parts already said.
+ *
+ * ```ts
+ * import { antigravityStream } from '@yaks/session'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let ran = { event: 'step_update', step_update: { step_index: 4, state: 'DONE', step_type: 'tool',
+ *   tool_info: { name: 'run_command', parameters: { CommandLine: 'ls' }, output: 'a.ts' } } }
+ * assertEquals(antigravityStream(ran).entries.map((c) => c.call ?? c.result), [
+ *   { to: 'run_command', id: 'step-4', args: { CommandLine: 'ls' } },
+ *   { call: 'step-4' },
+ * ])
+ * ```
+ */
+export let antigravityStream: Reader = (e) => {
+  let event = str(e.event)
+  let s = obj(e.step_update)
+  let info = obj(s.tool_info)
+  let id = stepCall(Number(s.step_index))
+  let r = obj(e.result)
+  let u = obj(r.usage)
+  let entries: Comps[] = event == 'step_update' && s.step_type == 'tool' &&
+      Object.keys(info).length
+    ? [
+      call(str(info.name) || str(s.tool_name), id, info.parameters),
+      ...s.state == 'DONE'
+        ? [result(
+          id,
+          str(info.output) || str(obj(info.error).message),
+          !!info.error,
+        )]
+        : [],
+    ]
+    : event == 'result'
+    ? ended(
+      r.status == 'SUCCESS' ? '' : str(r.error) || 'the turn failed',
+      usage(
+        count(u.input_tokens),
+        count(u.output_tokens),
+        count(u.cache_read_tokens),
+        { reasoning_tokens: count(u.thinking_tokens) },
+      ),
+    )
+    : []
+  let piece = event == 'step_update' && s.step_type == 'agent_response' &&
+    str(s.text_delta)
+  let init = obj(e.init)
+  return {
+    entries,
+    ...piece
+      ? { part: { key: id, entry: { content: { body: piece }, output: {} } } }
+      : {},
+    ...event == 'init' && e.conversation_id
+      ? { about: { session: { id: str(e.conversation_id) } } }
+      : {},
+    ...str(init.model) ? { model: str(init.model) } : {},
+  }
+}
+
+/** The readers this package ships for the stream each harness prints when
+ * a run is managed (@yaks/spawn), by the harness's name. */
 export let readers: Record<string, Reader> = {
   claude,
   codex,
   grok: grokStream,
+  gemini,
+  antigravity: antigravityStream,
 }
 
 // Codex rollouts repeat their visible messages in event_msg notifications.

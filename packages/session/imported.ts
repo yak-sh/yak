@@ -154,3 +154,48 @@ export let imported = (
   for (let b of limitRows(said.limits ?? [], said.at)) put(b)
   return [...out.values()]
 }
+
+/** A run of parts being joined: its key, the line of its first, and the
+ * entry they make so far. */
+export type Open = { key: string; line: number; entry: Comps }
+
+/**
+ * What a line says once the run of parts before it is joined, each with the
+ * line its entries sit at: the run's entry at its first line, where this line
+ * ends the run, then the line's own. A part of the run's key carries the run
+ * on, and a part of another key starts one.
+ *
+ * ```ts
+ * import { pieced } from '@yaks/session/tail'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let h = {}
+ * let piece = (body: string) => ({ entries: [], part: { key: 'r', entry: { content: { body } } } })
+ * pieced(h, piece('Hel'), 3)
+ * pieced(h, piece('lo'), 4)
+ * assertEquals(pieced(h, { entries: [{ stop: {} }] }, 5), [
+ *   [{ entries: [{ content: { body: 'Hello' } }] }, 3],
+ *   [{ entries: [{ stop: {} }] }, 5],
+ * ])
+ * ```
+ */
+export let pieced = (
+  h: { part?: Open },
+  said: Said,
+  line: number,
+): [Said, number][] => {
+  let { part, ...own } = said
+  let open = h.part
+  if (part && open?.key == part.key) {
+    let body = (c: Comps) => String(c.content?.body ?? '')
+    open.entry = {
+      ...open.entry,
+      content: { body: body(open.entry) + body(part.entry) },
+    }
+    return [[own, line]]
+  }
+  h.part = part && { key: part.key, line, entry: part.entry }
+  return open
+    ? [[{ entries: [open.entry] }, open.line], [own, line]]
+    : [[own, line]]
+}

@@ -1,5 +1,5 @@
 // What a managed session runs: a CLI's argv, and the reader that makes its
-// JSON-lines output a transcript (@yaks/session's `claude` and `codex`) — code,
+// JSON-lines output a transcript (@yaks/session's `readers`) — code,
 // and only code. Which providers exist and which models each one serves is
 // graph data (@yaks/model's `provider` and `model` entities), so adding a model
 // means inserting a row, not cutting a release. So is the CLI a provider
@@ -12,7 +12,8 @@
 // and appends whatever comes back.
 //
 // A run carries its persona (@yaks/persona) through its provider's own
-// instruction flag, beside the instruction file the provider reads in its
+// instruction flag, or at the head of its prompt where the provider has none,
+// beside the instruction file the provider reads in its
 // checkout. Each adapter names that file, so ./run.ts can tell whether the
 // file already says the persona, and gives the persona only when it does not.
 //
@@ -277,32 +278,40 @@ export let codex: Adapter = {
   account: 'codex',
 }
 
+// A CLI that takes no MCP server, and drops none, for one run: only its own
+// configuration names them. A server on this machine is `yak mcp`, which its
+// config names and which reads the session from the run's environment; a
+// remote one would be connected without the session, and one a run goes
+// without would be connected anyway, so either is refused, as is a bare run,
+// since such a CLI keeps its tools.
+let ownServers = (cli: string, j: Job) => {
+  if (j.bare) throw new Error(`${cli} cannot run bare: it keeps its tools`)
+  let remote = servers(j).filter(([, url]) => !local(url, j.session))
+  if (remote.length || j.without?.length) {
+    throw new Error(
+      `${cli} connects only the MCP servers its own config names, so a run ` +
+        'can neither add a remote one nor go without one',
+    )
+  }
+}
+
+// The instruction of a CLI with no flag for instructions of its own: the
+// persona goes first, in the prompt.
+let briefed = (j: Job): string =>
+  j.persona ? `${j.persona}\n\n---\n\n${j.instruction}` : j.instruction
+
 /**
  * `grok -p --output-format streaming-messages-json`, carrying on its thread
  * with `--resume` (xAI's Grok Build, docs.x.ai/build/cli/headless-scripting).
  * That format is Claude Code's stream-json wire format, read by
  * @yaks/session `grokStream`. Grok signs in only with an offered account (`GROK_HOME`), a Grok
  * subscription or an API key, and connects the MCP servers its own
- * configuration names, Claude Code's `~/.claude.json` among them; the session
- * reaches a server run as `yak mcp` through `TASKS_SESSION`, and a run asked
- * for a remote server, or to go without one, is refused.
+ * configuration names, Claude Code's `~/.claude.json` among them (its
+ * GROK_CONFIG overlay refuses `mcp_servers`).
  */
 export let grok: Adapter = {
   argv: (j) => {
-    // Grok takes no MCP server, and drops none, for one run: only its
-    // configuration names them (its GROK_CONFIG overlay refuses
-    // `mcp_servers`). A server on this machine is `yak mcp`, which its config
-    // names and which reads the session from the run's environment; a remote
-    // one would be connected without the session, and one a run goes without
-    // would be connected anyway, so either is refused.
-    if (j.bare) throw new Error('grok cannot run bare: it keeps its tools')
-    let remote = servers(j).filter(([, url]) => !local(url, j.session))
-    if (remote.length || j.without?.length) {
-      throw new Error(
-        'grok connects only the MCP servers its own config names, so a run ' +
-          'can neither add a remote one nor go without one',
-      )
-    }
+    ownServers('grok', j)
     return [
       'grok',
       '-p',
@@ -328,10 +337,80 @@ export let grok: Adapter = {
 }
 
 /**
+ * `gemini --output-format stream-json`, carrying on its thread with
+ * `--resume` (Google's Gemini CLI, geminicli.com/docs/cli/headless). It signs
+ * in with a Google account it has cached in `~/.gemini`, or a Gemini API key
+ * (`GEMINI_API_KEY`), and connects the MCP servers its settings name
+ * (`~/.gemini/settings.json`). It has no flag for instructions of its own, so
+ * the persona leads the prompt.
+ */
+export let gemini: Adapter = {
+  argv: (j) => {
+    ownServers('gemini', j)
+    return [
+      'gemini',
+      ...(j.thread ? ['--resume', j.thread] : ['--session-id', j.session]),
+      '--output-format',
+      'stream-json',
+      // Nobody is at the prompt, and the run owns its worktree: approve every
+      // call, and trust the folder for this run.
+      '--approval-mode',
+      'yolo',
+      '--skip-trust',
+      ...(j.model ? ['--model', j.model] : []),
+      // The prompt is the flag's own value, so one that opens with a dash is
+      // read as the prompt and not as a flag.
+      `--prompt=${briefed(j)}`,
+    ]
+  },
+  read: readers.gemini,
+  file: 'GEMINI.md',
+}
+
+/**
+ * `agy --print --output-format stream-json`, carrying on its conversation
+ * with `--conversation` (Google's Antigravity CLI,
+ * antigravity.google/docs/cli/headless). It signs in with a Google account
+ * it keeps under `~/.gemini/antigravity-cli`, or a Gemini API key, and
+ * connects the MCP servers its config names (`~/.gemini/config/mcp_config.json`).
+ * It never spends AI credits past the plan's quota, and has no flag for
+ * instructions of its own, so the persona leads the prompt.
+ */
+export let antigravity: Adapter = {
+  argv: (j) => {
+    ownServers('agy', j)
+    return [
+      'agy',
+      ...(j.thread ? ['--conversation', j.thread] : []),
+      '--output-format',
+      'stream-json',
+      // Nobody is at the prompt, and the run owns its worktree.
+      '--dangerously-skip-permissions',
+      '--settings',
+      JSON.stringify({ useG1Credits: false }),
+      ...(j.model ? ['--model', j.model] : []),
+      ...(j.effort ? ['--effort', j.effort] : []),
+      // The prompt is the flag's own value: agy reads the word after a bare
+      // `--print` as the prompt, whatever it is.
+      `--print=${briefed(j)}`,
+    ]
+  },
+  read: readers.antigravity,
+  file: 'AGENTS.md',
+  account: 'antigravity',
+}
+
+/**
  * The CLIs run as commands, keyed by the name a `provider` entity speaks: its
  * `api`, else its own `name`. A server with a CLI of its own builds its own table
  * ({@link https://jsr.io/@yaks/spawn/doc/effects/~/spawning | spawning}). A
  * provider missing from this table is one this package does not launch, which
  * is how an `http` provider is left to the in-process daemon.
  */
-export let adapters: Record<string, Adapter> = { claude, codex, grok }
+export let adapters: Record<string, Adapter> = {
+  claude,
+  codex,
+  grok,
+  gemini,
+  antigravity,
+}

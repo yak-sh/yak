@@ -50,9 +50,16 @@ import type { Reader, Said } from './readers.ts'
 import { humanCaller } from './who.ts'
 import type { Chunks } from './archive.ts'
 import { fix, step, type Walk, walker } from './parts.ts'
-import { imported, merge, retained, typed } from './imported.ts'
+import {
+  imported,
+  merge,
+  type Open,
+  pieced,
+  retained,
+  typed,
+} from './imported.ts'
 
-export { askOf, callOf, imported, prose } from './imported.ts'
+export { askOf, callOf, imported, pieced, prose } from './imported.ts'
 
 /** A log being read, and the session it is read into. */
 export type Tail = {
@@ -97,7 +104,10 @@ export type Tail = {
    * log's first line */
   walk?: Walk
   /** a resumed walk, followed in slices before any new entries are read */
-  replay?: { line: number; lines: AsyncGenerator<string> }
+  replay?: { line: number; lines: AsyncGenerator<string>; part?: Open }
+  /** the run of parts read so far and not yet ended (./readers.ts
+   * `Said.part`), which no `consumed` passes */
+  part?: Open
 }
 
 /** How a line is read in. */
@@ -446,17 +456,19 @@ let follow = async (t: Tail, read: Reader, o: Pull): Promise<boolean> => {
     if (!event) continue
     let said = read(event)
     for (let f of said.fixed ?? []) fix(t.walk, f)
-    walked(
-      t.walk,
-      imported(said, {
-        ...o,
-        session: t.session!,
-        file: t.file.entity.eid,
-        path: t.path,
-        line,
-        own: t.own,
-      }),
-    )
+    for (let [one, at] of pieced(replay, said, line)) {
+      walked(
+        t.walk,
+        imported(one, {
+          ...o,
+          session: t.session!,
+          file: t.file.entity.eid,
+          path: t.path,
+          line: at,
+          own: t.own,
+        }),
+      )
+    }
   }
   await replay.lines.return(undefined)
   t.replay = undefined
@@ -526,6 +538,36 @@ export let pull = async (
     text = 0
     if (lines.length) await land(lines)
   }
+  // What a line says, its entries sitting at line `at`, into the run that
+  // reading `line` writes: a run of parts is placed at its first line, and
+  // read once the line that ends it is.
+  let take = async (said: Said, at: number, line: number) => {
+    let kept = o.prose ? said.entries.filter(retained) : said.entries
+    if (!kept.length && !said.about && !said.limits?.length) return
+    t.session ??= await created(g, t)
+    // A run is one write, so one reading of `own` holds for all its lines.
+    if (!run.length) await settle(g, t)
+    let made = imported(said, {
+      ...o,
+      session: t.session,
+      file: t.file.entity.eid,
+      path: t.path,
+      line: at,
+      own: t.own,
+    })
+    let signed = made.some((b) => b.$actor)
+    // A line a person signed is a transaction of its own: in a batch, an
+    // entity nobody signs is written by the first writer the batch names
+    // (@yaks/graph `writers`), and nothing else in the run is theirs.
+    if (signed) await flush()
+    run.push({
+      bundles: fold(made, t.walk ? walked(t.walk, made) : []),
+      at: said.at,
+      line,
+      person: kept.some(typed),
+    })
+    if (signed || run.length >= RUN || text >= RUN_TEXT) await flush()
+  }
   reading: for await (let all of batches(t, o.final)) {
     if (!o.prose && !await follow(t, read, o)) {
       t.rest = [...all, t.rest].join('\n')
@@ -550,33 +592,15 @@ export let pull = async (
       if (!event) continue
       let said = timed(read(event), t)
       if (t.walk) { for (let f of said.fixed ?? []) fix(t.walk, f) }
-      let kept = o.prose ? said.entries.filter(retained) : said.entries
-      if (!kept.length && !said.about && !said.limits?.length) continue
-      t.session ??= await created(g, t)
-      // A run is one write, so one reading of `own` holds for all its lines.
-      if (!run.length) await settle(g, t)
-      let made = imported(said, {
-        ...o,
-        session: t.session,
-        file: t.file.entity.eid,
-        path: t.path,
-        line,
-        own: t.own,
-      })
-      let signed = made.some((b) => b.$actor)
-      // A line a person signed is a transaction of its own: in a batch, an
-      // entity nobody signs is written by the first writer the batch names
-      // (@yaks/graph `writers`), and nothing else in the run is theirs.
-      if (signed) await flush()
-      run.push({
-        bundles: fold(made, t.walk ? walked(t.walk, made) : []),
-        at: said.at,
-        line,
-        person: kept.some(typed),
-      })
+      for (let [one, at] of pieced(t, said, line)) await take(one, at, line)
       text += raw.length
-      if (signed || run.length >= RUN || text >= RUN_TEXT) await flush()
     }
+  }
+  // A run of parts the log ends on is all it will say.
+  if (t.part && (o.final || o.prose || t.stream?.done)) {
+    let open = t.part
+    t.part = undefined
+    await take({ entries: [open.entry] }, open.line, t.line)
   }
   await flush()
   // Lines past the last that made an entry, or refused ones, are marked read
@@ -604,12 +628,14 @@ export let pull = async (
  * ```
  */
 export let rest = async (g: Graph, t: Tail): Promise<void> => {
-  if (t.line <= t.marked) return
+  // A run of parts not yet ended is read again from its first line.
+  let read = t.part ? t.part.line - 1 : t.line
+  if (read <= t.marked) return
   t.session ??= await created(g, t)
   await settle(g, t)
-  await g.apply(marks(t, t.line), { trusted: true })
+  await g.apply(marks(t, read), { trusted: true })
   t.known = true
-  t.marked = t.line
+  t.marked = read
 }
 
 // What an earlier reading of a line put on an entry that a request now

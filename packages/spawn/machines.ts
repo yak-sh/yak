@@ -29,8 +29,11 @@ import {
   imported,
   latestRequest,
   letGo,
+  type Open,
+  pieced,
   readers,
   requested,
+  type Said,
   SESSION,
   told,
   unanswered,
@@ -265,7 +268,10 @@ export let log = async (
   }
   let read = readers[cli]
   let from = got.from ?? 0
-  let rows = (got.lines ?? []).flatMap((text, i) => {
+  // A run of parts is joined within what one hand-back holds, and ends with
+  // it: the next carries on in an entry of its own.
+  let held: { part?: Open } = {}
+  let said = (got.lines ?? []).flatMap((text, i): [Said, number][] => {
     let event: unknown
     try {
       event = JSON.parse(text)
@@ -273,11 +279,13 @@ export let log = async (
       return []
     }
     if (!event || typeof event != 'object') return []
-    return imported(read(event as Record<string, unknown>), {
-      session,
-      line: from + i,
-    }).filter((b) => !b.rate_limit)
+    return pieced(held, read(event as Record<string, unknown>), from + i)
   })
+  let open = held.part
+  if (open) said.push([{ entries: [open.entry] }, open.line])
+  let rows = said.flatMap(([one, line]) =>
+    imported(one, { session, line }).filter((b) => !b.rate_limit)
+  )
   if (got.pid != null) {
     rows.push({ entity: { eid: session }, [PROCESS]: { pid: got.pid } })
   }

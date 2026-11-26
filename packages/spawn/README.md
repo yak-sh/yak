@@ -65,21 +65,26 @@ much memory pressure, the start waits 15 seconds before checking again.
 
 The `@yaks/spawn/effects` handlers run after the batch commits. They read the
 CLI the provider speaks (`provider.api`, else its `name`), select the matching
-`claude`, `codex` or `grok` adapter, validate the requested effort against the
-model, and start the command: the adapter's own program, or the one the row
-names in `provider.command`. A request that names a provider alone runs the
-model in the provider's own `using{model}`. Configure Claude's default with the
-`opus` model row, retaining the alias so the CLI resolves its current release.
-The selected model is recorded on the request before launch and passed
-explicitly to the CLI, including on resumed runs. Claude's transcript also
-records the release that answered; Codex's JSON output never says which model
-answered. Grok (xAI's Grok Build,
+`claude`, `codex`, `grok`, `gemini` or `antigravity` adapter, validate the
+requested effort against the model, and start the command: the adapter's own
+program, or the one the row names in `provider.command`. A request that names a
+provider alone runs the model in the provider's own `using{model}`. Configure
+Claude's default with the `opus` model row, retaining the alias so the CLI
+resolves its current release. The selected model is recorded on the request
+before launch and passed explicitly to the CLI, including on resumed runs.
+Claude's transcript also records the release that answered; Codex's JSON output
+never says which model answered. Grok (xAI's Grok Build,
 `grok -p --output-format streaming-messages-json`) prints Claude Code's
 stream-json format, read by @yaks/session `grokStream` (a shell call's result as
 the text the model saw), and signs in with its own account (`GROK_HOME`), a Grok
-subscription (`grok login --device-auth`) or an API key. Providers handled over
-HTTP have no command adapter and remain the responsibility of the in-process
-`@yaks/session` daemon.
+subscription (`grok login --device-auth`) or an API key. Gemini CLI
+(`gemini --output-format stream-json`) and Antigravity CLI
+(`agy --print --output-format stream-json`) sign in with a Google account each
+keeps cached in `~/.gemini`, or a Gemini API key; neither has a flag for
+instructions of its own, so the persona heads the prompt. Each prints its reply
+in fragments, which the importer joins into one entry (@yaks/session
+`Said.part`). Providers handled over HTTP have no command adapter and remain the
+responsibility of the in-process `@yaks/session` daemon.
 
 A CLI signs in with an **account**, an `account{home, provider}` row naming its
 config directory (`~/.claude`, `~/.claude-teams-bob`); a second account is one
@@ -295,10 +300,12 @@ codex's `-c mcp_servers={…}`), replacing a server of that name in the person's
 own config, and with an `x-via` header naming the run's session. The door
 resolves that header (@yaks/session `authenticate`), so what the agent writes is
 stamped `by` its actor and `via` its session from its first call, with nothing
-asked of the agent. Grok has no flag for a run's servers: it connects the ones
-its configuration names (Claude Code's `~/.claude.json` among them, where the
-box's `tasks` server is `yak mcp`, told the session by `TASKS_SESSION`), and
-refuses a run asked to connect a remote server or go without one.
+asked of the agent. Grok, Gemini CLI and Antigravity CLI have no flag for a
+run's servers: each connects the ones its configuration names (Claude Code's
+`~/.claude.json` for grok, `~/.gemini/settings.json` for gemini,
+`~/.gemini/config/mcp_config.json` for agy, where the box's `tasks` server is
+`yak mcp`, told the session by `TASKS_SESSION`), and refuses a run asked to
+connect a remote server or go without one.
 
 `without` names the MCP servers of a provider's own configuration its runs go
 without, by the provider's name and then the names that provider lists them

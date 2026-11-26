@@ -7,7 +7,7 @@ import { Refused } from '@yaks/graph/errors'
 import { toolEid } from '@yaks/tools'
 import { ids, locked, pages, store, transcriptGraph } from './testing.ts'
 import { sessions } from './plugin.ts'
-import { claude } from './readers.ts'
+import { claude, gemini } from './readers.ts'
 import { callOf, pull, rest, tail } from './tail.ts'
 
 let c = (b: Bundle | undefined, name: string) => b?.[name] as Comp | undefined
@@ -295,6 +295,33 @@ test('lines that make nothing ride the next write, or are marked once the file i
     assertEquals(await resumes(), 3)
     await rest(g, t)
     assertEquals(await resumes(), 4)
+  }))
+
+test('a reply printed in parts is one entry at its first line, and a resume reads its run again', () =>
+  file(async (g, log, path) => {
+    let piece = (content: string) => ({
+      type: 'message',
+      role: 'assistant',
+      content,
+      delta: true,
+    })
+    let ran = { type: 'tool_use', tool_name: 'ls', tool_id: 't1' }
+    log({ type: 'init', session_id: 'g1' }, piece('Hel'), piece('lo'))
+    let t = await tail(g, path, { session: ids.run1 })
+    await pull(g, t, gemini)
+    await rest(g, t)
+    // No reading passes a run of parts still being printed.
+    assertEquals((await tail(g, path, { session: ids.run1 })).line, 1)
+    log(piece('!'), ran, piece('Done.'))
+    await pull(g, await tail(g, path, { session: ids.run1 }), gemini, {
+      final: true,
+    })
+    let said = await g.read(line`.entry.session=${ids.run1}&.order=entry.seq&*`)
+    assertEquals(
+      said.map((b) => c(b, 'content')?.body ?? c(b, 'call')?.name),
+      ['Hello!', 'ls', 'Done.'],
+    )
+    assertEquals(c(said[0], 'lines')?.start, 2)
   }))
 
 test('prose alone: what was typed and what the model said', () =>

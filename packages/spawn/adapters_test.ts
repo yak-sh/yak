@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from 'smol-toml'
-import { claude, codex, grok } from './adapters.ts'
+import { antigravity, claude, codex, gemini, grok } from './adapters.ts'
 
 let job = {
   session: 'S1',
@@ -203,17 +203,100 @@ test('grok runs headless on its thread, its persona in its rules', () => {
   assert(!again.includes('--session-id'))
 })
 
-test('grok refuses a run it cannot give its servers or take them from', () => {
-  // This machine's server is `yak mcp`, which grok's own config names.
+test('a CLI that keeps its own servers refuses a run it cannot give them to or take them from', () => {
+  // This machine's server is `yak mcp`, which each one's own config names.
   let here = { mcp: { tasks: 'http://localhost:5173/mcp' } }
-  assertEquals(grok.argv({ ...job, ...here }).slice(0, 2), ['grok', '-p'])
-  for (
-    let ask of [
-      { mcp: { yaks: 'https://yaks.app/mcp' } },
-      { without: ['railway'] },
-      { bare: true },
-    ]
-  ) assertThrows(() => grok.argv({ ...job, ...ask }), Error)
+  for (let cli of [grok, gemini, antigravity]) {
+    cli.argv({ ...job, ...here })
+    for (
+      let ask of [
+        { mcp: { yaks: 'https://yaks.app/mcp' } },
+        { without: ['railway'] },
+        { bare: true },
+      ]
+    ) assertThrows(() => cli.argv({ ...job, ...ask }), Error)
+  }
+})
+
+test('gemini and agy run headless on their threads, the persona heading the prompt', () => {
+  let flag = (argv: string[], name: string) => argv[argv.indexOf(name) + 1]
+  let brief = 'Be brief.\n\n---\n\n-x fix it'
+  let first = gemini.argv({ ...job, persona: 'Be brief.' })
+  assertEquals(flag(first, '--session-id'), 'S1')
+  assertEquals(flag(first, '--output-format'), 'stream-json')
+  assertEquals(flag(first, '--approval-mode'), 'yolo')
+  assertEquals(first.at(-1), `--prompt=${brief}`)
+  assertEquals(flag(gemini.argv({ ...job, thread: 'T1' }), '--resume'), 'T1')
+  let agy = antigravity.argv({ ...job, persona: 'Be brief.' })
+  assert(!agy.includes('--conversation'))
+  assertEquals(flag(agy, '--output-format'), 'stream-json')
+  assertEquals(flag(agy, '--effort'), 'high')
+  assertEquals(JSON.parse(flag(agy, '--settings')), { useG1Credits: false })
+  assertEquals(agy.at(-1), `--print=${brief}`)
+  assertEquals(
+    flag(antigravity.argv({ ...job, thread: 'T1' }), '--conversation'),
+    'T1',
+  )
+})
+
+test("gemini's and agy's streams read as transcripts, their threads named by their opening lines", () => {
+  let step = (s: Record<string, unknown>) => ({
+    event: 'step_update',
+    step_update: { state: 'DONE', ...s },
+  })
+  let streams = [
+    [gemini, [
+      { type: 'init', session_id: 'g1', model: 'gemini-3' },
+      { type: 'message', role: 'user', content: '-x fix it' },
+      { type: 'message', role: 'assistant', content: 'Look', delta: true },
+      { type: 'tool_use', tool_name: 'ls', tool_id: 't1', parameters: {} },
+      {
+        type: 'result',
+        status: 'success',
+        stats: { input_tokens: 9, output_tokens: 2, cached: 4 },
+      },
+    ]],
+    [antigravity, [
+      { event: 'init', conversation_id: 'g1', init: { model: 'gemini-3' } },
+      step({ step_index: 0, step_type: 'user_input' }),
+      step({
+        step_index: 2,
+        state: 'ACTIVE',
+        step_type: 'agent_response',
+        text_delta: 'Look',
+      }),
+      step({
+        step_index: 3,
+        step_type: 'tool',
+        tool_info: { name: 'ls', parameters: {}, output: 'a' },
+      }),
+      {
+        event: 'result',
+        result: {
+          status: 'SUCCESS',
+          response: 'Look',
+          usage: { input_tokens: 9, output_tokens: 2, cache_read_tokens: 4 },
+        },
+      },
+    ]],
+  ] as const
+  for (let [cli, events] of streams) {
+    let lines = events.map((e) => cli.read(e))
+    assertEquals(lines[0].about, { session: { id: 'g1' } })
+    assertEquals(lines[0].model, 'gemini-3')
+    // The prompt it echoes is the run's own request already.
+    assertEquals(lines[1].entries, [])
+    assertEquals(lines[2].part?.entry, {
+      content: { body: 'Look' },
+      output: {},
+    })
+    assertEquals(lines[3].entries[0].call?.to, 'ls')
+    // The reply the result repeats was said by its parts.
+    assertEquals(lines[4].entries, [{
+      stop: {},
+      usage: { input_tokens: 9, output_tokens: 2, cached_tokens: 4 },
+    }])
+  }
 })
 
 test("grok's stream reads as a transcript, its thread named by its opening line", () => {
