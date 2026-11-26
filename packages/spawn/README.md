@@ -98,7 +98,11 @@ account, and a request telling it to carry on starts its next run there, on the
 same thread and in the same checkout. The run is started with that account's
 variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`), and without it for
 the CLI's default directory, which Claude Code reads its `~/.claude.json`
-beside. A provider that offers no account runs on the server's own environment.
+beside. A provider that offers no account runs on the server's own environment,
+except Claude and Grok, which start nothing without an offered account. An
+account whose plan ends, such as a subscription taken for a trial, carries
+`account{expires}`: from then on no run is given it, so its provider starts
+nothing more.
 
 The process is stored on the session entity. It runs through `@yaks/process` in
 a detached systemd user scope, so it can outlive the process that opened the

@@ -203,6 +203,30 @@ test('a spawn names its account by its directory or its name, and refuses one no
   )
 })
 
+test('an account whose plan has ended is offered no longer', async () => {
+  let { g } = host()
+  await g.apply([...shelf, {
+    entity: { eid: identityEid('account', ['/u/.fake-trial']) },
+    account: {
+      home: '/u/.fake-trial',
+      provider: P,
+      offered: true,
+      expires: '2000-01-01T00:00:00Z',
+    },
+  }])
+  let refused = await assertRejects(() =>
+    through(g, 'session_spawn', {
+      task: 'the-task',
+      provider: P,
+      account: '.fake-trial',
+    })
+  )
+  assertStringIncludes(
+    (refused as Error).message,
+    '.fake-trial names no account offered',
+  )
+})
+
 let extra = host()
 await extra.g.apply(shelf)
 test('an added instruction keeps the task body as the spec', async () => {

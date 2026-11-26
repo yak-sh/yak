@@ -317,6 +317,11 @@
         "offered": {
           "type": "boolean",
           "description": "a run may be given it: a spawn that names no account runs on the offered account of its provider further under its weekly pace (@yaks/model `freest`)"
+        },
+        "expires": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when its plan ends, a subscription taken for a trial: from then on no run is given it, offered or not"
         }
       }
     },

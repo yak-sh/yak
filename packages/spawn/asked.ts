@@ -4,6 +4,7 @@
 // itself (yaks.app, handing a run to its developer's machine, ./machines.ts)
 // reads a request the way ./run.ts does.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { system as systemClock } from '@yaks/fp'
 import { identityEid } from '@yaks/graph/identity'
 import { edgeEid } from '@yaks/edge'
 import { firstInput, firstRequest, SESSION } from '@yaks/session'
@@ -156,14 +157,21 @@ export let asked = async (
 let accountOf = async (g: Graph, eid: string): Promise<Account> => {
   let a = comp(await one(g, eid), 'account')
   if (!a?.home) throw new Error(`${eid} names no account`)
-  if (a.offered !== true) throw new Error(`${a.home} is not offered to runs`)
+  if (!open(a, systemClock.now())) {
+    throw new Error(`${a.home} is not offered to runs`)
+  }
   return { eid, home: String(a.home) }
 }
+
+// An account a run may be given: offered, and its plan not yet ended.
+let open = (a: Comp, now: number) =>
+  a.offered === true && !(Date.parse(String(a.expires)) <= now)
 
 /**
  * The accounts of a CLI's provider offered to runs (`account{offered}`), the
  * only ones a spawn signs in with: one never falls back to the box's default
- * login.
+ * login. An account whose plan has ended (`account{expires}`) is offered no
+ * longer.
  *
  * ```ts
  * import { offeredTo } from '@yaks/spawn'
@@ -171,11 +179,15 @@ let accountOf = async (g: Graph, eid: string): Promise<Account> => {
  * // let rows = await offeredTo(graph, 'claude')
  * ```
  */
-export let offeredTo = async (g: Graph, runner: string): Promise<Bundle[]> => {
+export let offeredTo = async (
+  g: Graph,
+  runner: string,
+  now: number = systemClock.now(),
+): Promise<Bundle[]> => {
   let provider = identityEid('provider', [runner])
   return (await g.read('.account *')).filter((b) => {
     let a = comp(b, 'account')
-    return a?.offered === true && a.provider == provider && a.home
+    return a && open(a, now) && a.provider == provider && a.home
   })
 }
 

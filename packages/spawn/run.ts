@@ -324,7 +324,9 @@ let offered = async (
   now: number,
   other?: string,
 ): Promise<(Account & { full?: true }) | undefined> => {
-  let rows = (await offeredTo(g, runner)).filter((b) => b.entity.eid != other)
+  let rows = (await offeredTo(g, runner, now)).filter((b) =>
+    b.entity.eid != other
+  )
   let homes = new Map(
     rows.map((b) => [b.entity.eid, String(comp(b, 'account')!.home)]),
   )
