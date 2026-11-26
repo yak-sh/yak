@@ -3,8 +3,9 @@
  * at once when they open it again, before the network answers, and replaced
  * by the page itself as soon as it does.
  *
- * A **snapshot** is a page's whole document as the person last saw it, taken
- * by the page (`@yaks/web/keep`). A **picture** is a snapshot made safe to
+ * A **snapshot** is a page's document as the person last saw it, taken by
+ * the page (`@yaks/web/keep`): what showed and a screen either side of it, and
+ * the rules of its sheets that it uses. A **picture** is a snapshot made safe to
  * show again (`picture`): it has no scripts, and its frames are empty, so no
  * code from the release that drew it starts, and it says it is kept: `data-kept` on
  * its root and a status line, never passing for the page as it is now. The

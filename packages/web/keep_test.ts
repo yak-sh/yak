@@ -19,11 +19,39 @@ let tab = (html: string, controlled = true, pending?: string) => {
     addEventListener: window.addEventListener.bind(window),
   }
   Object.defineProperty(document, 'visibilityState', { get: () => shown })
+  // Laid out as each element says: data-at="top height" in the window, and
+  // data-css its computed style, a block in the flow unless it says else.
+  for (let e of document.querySelectorAll('[data-at]')) {
+    let [top, height] = e.getAttribute('data-at')!.split(' ').map(Number)
+    e.getBoundingClientRect = () =>
+      ({ top, height, bottom: top + height }) as DOMRect
+  }
+  let getComputedStyle = (e: Element) => ({
+    display: /^(HEAD|SCRIPT|STYLE)$/.test(e.tagName) ? 'none' : 'block',
+    position: 'static',
+    float: 'none',
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    gridAutoFlow: 'row',
+    gridTemplateColumns: 'none',
+    gridRowStart: 'auto',
+    gridColumnStart: 'auto',
+    ...Object.fromEntries(
+      (e.getAttribute('data-css') ?? '').split(';').filter(Boolean).map((p) =>
+        p.split(':').map((s) =>
+          s.trim().replace(/-(.)/g, (_, c) => c.toUpperCase())
+        )
+      ),
+    ),
+  })
+  let location = { href: 'https://yaks.app/checks' }
   let win = {
     document,
-    location: { href: 'https://yaks.app/checks' },
+    location,
     navigator: { serviceWorker: workers },
     performance: { timeOrigin: 0 },
+    innerHeight: 800,
+    getComputedStyle,
     addEventListener: window.addEventListener.bind(window),
   } as unknown as Window
   keep(win, '/worker.js', pending)
@@ -38,7 +66,19 @@ let tab = (html: string, controlled = true, pending?: string) => {
     workers.controller = { postMessage: (said: never) => sent.push(said) }
     window.dispatchEvent(new window.Event('controllerchange'))
   }
-  return { document, sent, registered, hide, leave, load, claim, arrive }
+  return {
+    document,
+    sent,
+    registered,
+    hide,
+    leave,
+    load,
+    claim,
+    arrive,
+    set href(at: string) {
+      location.href = at
+    },
+  }
 }
 
 test('a page registers its worker once loaded, and sends it what it shows as it is hidden or left in place, without what it does not', () => {
@@ -138,4 +178,124 @@ test('the kept picture of a scrolled conversation restores the saved pane positi
 test('a fresh picture starts at the newest line or centers the line its link opens', () => {
   assertEquals(scrolls(transcript), 900)
   assertEquals(scrolls(transcript, '#row-a'), 80)
+})
+
+// A conversation's pane, 700 high at 100, scrolled to `at`, and the ids of
+// the rows its picture keeps. Each row is 500 high, the newest last.
+let trimmed = (at: string, rows: string, extra = '') => {
+  let t = tab(
+    `<html><body><main ${SCROLL} data-at="100 700"${extra}>${rows}</main></body></html>`,
+  )
+  let pane = t.document.querySelector('main')!
+  Object.assign(pane, {
+    scrollHeight: 9000,
+    clientHeight: 700,
+    scrollTop: at == 'end' ? 8300 : Number(at),
+  })
+  t.hide()
+  let { document } = parseHTML(t.sent[0].html)
+  return [
+    document.querySelector('main')!.getAttribute(SCROLL),
+    [...document.querySelectorAll('[id]')].map((e) => e.id).join(' '),
+  ]
+}
+let row = (id: string, top: number, css = '') =>
+  `<p id="${id}" data-at="${top} 500"${
+    css ? ` data-css="${css}"` : ''
+  }>${id}</p>`
+
+test('a picture of a long conversation keeps only the rows within a screen of what shows', () => {
+  let rows = [-2400, -1900, -1400, -900, -400, 100, 600]
+    .map((top, i) => row(`r${i}`, top)).join('')
+  assertEquals(trimmed('end', rows), ['end', 'r3 r4 r5 r6'])
+})
+
+test('a pane scrolled to a place is scrolled less by the rows left out above it', () => {
+  let rows = [-1900, -1400, -400, 100, 1400, 2400]
+    .map((top, i) => row(`r${i}`, top)).join('')
+  assertEquals(trimmed('3000', rows), ['1500', 'r2 r3 r4'])
+})
+
+test('rows far off stay where taking them out would move what shows, and the linked row always stays', () => {
+  let rows = row('far', -3000) + row('near', 100)
+  let grid = (columns: string) =>
+    trimmed(
+      'end',
+      rows,
+      ` data-css="display:grid;grid-template-columns:${columns}"`,
+    )
+  assertEquals(grid('100px 100px'), ['end', 'far near'])
+  assertEquals(grid('[start] 343px [end]'), ['end', 'near'])
+  let floating = row('far', -3000, 'float:left') +
+    row('loose', 4000, 'position:fixed') + row('near', 100)
+  assertEquals(trimmed('end', floating), ['end', 'far near'])
+  let t = tab(
+    `<html><body><main ${SCROLL}="end" data-at="100 700">${
+      row('row-a', -3000)
+    }${row('near', 100)}</main></body></html>`,
+  )
+  t.href = 'https://yaks.app/checks#row-a'
+  t.hide()
+  assertEquals(t.sent[0].html.includes('id="row-a"'), true)
+})
+
+// A style rule, a group of rules and a rule no selector picks, as a sheet's
+// CSSOM lists them.
+let rule = (selectorText: string) => ({
+  selectorText,
+  cssText: `${selectorText} { color: red; }`,
+})
+let group = (prelude: string, rules: object[], named = false) => ({
+  cssRules: rules,
+  cssText: `${prelude} {${rules.map((r) => (r as CSSRule).cssText).join('')}}`,
+  ...named ? { name: prelude } : {},
+})
+let whole = (cssText: string) => ({ cssText })
+
+test('a picture carries only the rules of its sheets that something in it matches', () => {
+  let t = tab(
+    '<html><head><link rel="stylesheet" href="/_yak/pages.css"><link rel="stylesheet" href="https://elsewhere.example/a.css"></head>' +
+      '<body><p class="row md:wide">Hi</p></body></html>',
+  )
+  let [ours, theirs] = t.document.querySelectorAll('link')
+  Object.defineProperty(ours, 'sheet', {
+    value: {
+      href: 'https://yaks.app/_yak/pages.css',
+      cssRules: [
+        rule(':root'),
+        rule('.row'),
+        rule('.gone'),
+        rule('.row:not(.gone)'),
+        rule('.md\\:wide'),
+        rule('.row:hover'),
+        rule('.row::before'),
+        rule('.menu:target'),
+        group('@media (width < 700px)', [rule('.row'), rule('.gone')]),
+        group('@supports (display: grid)', [rule('.gone')]),
+        group('@layer base', [rule('.gone')], true),
+        whole('@font-face { src: url(face.woff2); }'),
+      ],
+    },
+  })
+  Object.defineProperty(theirs, 'sheet', {
+    value: {
+      href: 'https://elsewhere.example/a.css',
+      get cssRules() {
+        throw new DOMException('Cross-origin', 'SecurityError')
+      },
+    },
+  })
+  t.hide()
+  let red = (s: string) => `${s} { color: red; }`
+  assertEquals(
+    t.sent[0].html,
+    '<!doctype html><html><head><style>' +
+      red(':root') + red('.row') + red('.row:not(.gone)') +
+      red('.md\\:wide') + red('.row::before') +
+      red('.menu:target') + `@media (width < 700px) {${red('.row')}}` +
+      '@layer base {}' +
+      '@font-face { src: url("https://yaks.app/_yak/face.woff2"); }</style>' +
+      '<link rel="stylesheet" href="https://elsewhere.example/a.css"></head>' +
+      '<body><p class="row md:wide">Hi</p></body></html>',
+  )
 })

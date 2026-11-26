@@ -9,6 +9,26 @@ let HREF = attribute('href')
 let MEDIA = attribute('media')
 let URL_IN_CSS = /url\(\s*(["']?)([^"')]+)\1\s*\)/gi
 
+/** `css` with each address in it made whole against `at`, the sheet's own
+ * address, so it means the same once moved into a document elsewhere.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   absolute('a{background:url(i.png)}b{mask:url("#m")}', 'https://yaks.app/_yak/p.css'),
+ *   'a{background:url("https://yaks.app/_yak/i.png")}b{mask:url("#m")}',
+ * )
+ * ```
+ */
+export let absolute = (css: string, at: string | URL): string =>
+  css.replace(
+    URL_IN_CSS,
+    (whole, _, href: string) =>
+      /^(data:|#)/i.test(href)
+        ? whole
+        : `url("${new URL(href.trim(), at).href}")`,
+  )
+
 let value = (tag: string, attr: RegExp) =>
   tag.match(attr)?.slice(1).find(
     (s) => s != null,
@@ -39,16 +59,9 @@ export let pictureSheets = async (
       if (/@import\b|<\/style/i.test(css)) {
         throw new Error('The picture cannot carry the sheet at ' + url.pathname)
       }
-      let text = css.replace(
-        URL_IN_CSS,
-        (whole, _, href: string) =>
-          /^(data:|#)/i.test(href)
-            ? whole
-            : `url("${new URL(href.trim(), url).href}")`,
-      )
       return [
         tag,
-        `<style${tag.match(MEDIA)?.[0] ?? ''}>${text}</style>`,
+        `<style${tag.match(MEDIA)?.[0] ?? ''}>${absolute(css, url)}</style>`,
       ] as const
     })),
   )

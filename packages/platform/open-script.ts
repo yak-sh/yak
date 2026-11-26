@@ -51,15 +51,17 @@ let OPENING = `(endpoint, source) => {
       server: picture || !nav || !nav.responseStart ? null : nav.responseStart - nav.requestStart,
       estimated: false,
       controlled: self.origin !== 'null' && !!navigator.serviceWorker?.controller,
-      navigation: picture || !nav ? undefined : {
-        workerStart: nav.workerStart,
-        fetchStart: nav.fetchStart,
-        requestStart: nav.requestStart,
-        responseStart: nav.responseStart,
-        ...Object.fromEntries(${
+    }
+    // Read as it is sent, when the response has ended. A picture's says how
+    // long its worker took to start and to answer with it.
+    let navigation = () => nav && {
+      workerStart: nav.workerStart,
+      fetchStart: nav.fetchStart,
+      requestStart: nav.requestStart,
+      responseStart: nav.responseStart,
+      ...Object.fromEntries(${
   JSON.stringify(NAVIGATION_DETAILS)
 }.map((key) => [key, nav[key]])),
-      },
     }
     let id = !checked && crypto.randomUUID?.()
     let at = Math.floor(performance.timeOrigin)
@@ -85,6 +87,7 @@ let OPENING = `(endpoint, source) => {
       }
       if (open.usable != null) open.usable = Math.max(open.usable, open.paint ?? 0)
       if (!id) return
+      open.navigation = navigation()
       let body = JSON.stringify({ id, at, points: [], open })
       if (!navigator.sendBeacon?.(endpoint, body)) {
         void fetch(endpoint, { method: 'POST', body, keepalive: true }).catch(() => {})

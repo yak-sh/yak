@@ -39,6 +39,7 @@ export let NAVIGATION_DETAILS = [
   'connectStart',
   'secureConnectionStart',
   'connectEnd',
+  'responseEnd',
 ] as const
 
 export type Navigation =

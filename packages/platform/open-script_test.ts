@@ -19,6 +19,7 @@ let navigation = {
   connectEnd: 59,
   requestStart: 60,
   responseStart: 180,
+  responseEnd: 190,
 }
 
 let browser = (
@@ -262,7 +263,7 @@ test('a picture and its replacement report one paired sample and use the picture
   equal(rows.filter((row) => row.error).length, 1)
 })
 
-test('an offline kept picture reports its paint without pretending its scripts ran', () => {
+test("an offline kept picture reports its paint and its worker's answer without pretending its scripts ran", () => {
   let b = browser()
   let held = b.run('picture')
   held.offline()
@@ -278,6 +279,7 @@ test('an offline kept picture reports its paint without pretending its scripts r
     server: null,
     estimated: true,
     controlled: false,
+    navigation,
   }])
 })
 

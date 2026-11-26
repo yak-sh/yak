@@ -11,11 +11,19 @@
 import { KEPT, OWN, SCROLL } from './picture.ts'
 import { LEAVE, PAGE } from '@yaks/ui/navigate'
 import type { Snapshot } from './worker.ts'
+import { absolute } from './picture-sheets.ts'
 
 /** What `keep` needs of the window around the page. */
 export type Window = {
   document:
-    & Pick<Document, 'documentElement' | 'visibilityState' | 'readyState'>
+    & Pick<
+      Document,
+      | 'documentElement'
+      | 'visibilityState'
+      | 'readyState'
+      | 'getElementById'
+      | 'createElement'
+    >
     & {
       scrollingElement?: Element | null
       addEventListener(type: string, hear: () => void): void
@@ -28,6 +36,8 @@ export type Window = {
     >
   }
   performance: { timeOrigin: number }
+  innerHeight: number
+  getComputedStyle(e: Element): CSSStyleDeclaration
   addEventListener(type: string, hear: () => void): void
   reportError?: (error: unknown) => void
 }
@@ -42,17 +52,252 @@ let scroll = (pane: Element) =>
     ? 'end'
     : String(Math.max(0, pane.scrollTop || 0))
 
+// What lies far above or below what the window or a scrolled pane shows is
+// left out too: a picture lays out all it holds before it paints, and a long
+// conversation is many screens of it. Each keeps one of its own heights
+// either side of what it shows, for the first moment of a scroll.
+type Reach = { top: number; bottom: number; shift: number }
+let reach = (top: number, height: number): Reach => ({
+  top: top - height,
+  bottom: top + 2 * height,
+  shift: 0,
+})
+
+// A parent whose children stand one under the next, so taking one out moves
+// only what follows it: a block, a flex column, or a grid of one column its
+// children flow down. And a child that stands that way in it.
+let stacked = (s: CSSStyleDeclaration) =>
+  /^(block|inline-block|flow-root|list-item)$/.test(s.display) ||
+  /flex$/.test(s.display) && s.flexDirection.startsWith('column') &&
+    s.flexWrap == 'nowrap' ||
+  /grid$/.test(s.display) && s.gridAutoFlow.startsWith('row') &&
+    s.gridTemplateColumns.replace(/\[[^\]]*\]/g, '').trim().split(/\s+/)
+        .length == 1
+let BLOCK = /^(block|flex|grid|table|list-item|flow-root)$/
+let placed = (s: CSSStyleDeclaration) =>
+  s.gridRowStart != 'auto' || s.gridColumnStart != 'auto'
+
+// Takes what lies beyond `within` out of `copy`, the copy of `live`. A child
+// that is out of the flow goes freely. One in it goes only from a stacked
+// parent, and the height gone above what shows is the pane's `shift`, which
+// its scroll position gives back. The address's `target` always stays. Only
+// what holds a pane (`holds`) or reaches past `within` is looked into.
+type Trim = {
+  win: Window
+  target: Element | null
+  holds: Set<Element>
+}
+let beyond = (
+  t: Trim,
+  live: Element,
+  copy: Element,
+  style: CSSStyleDeclaration,
+  within: Reach,
+) => {
+  let copies = [...copy.children]
+  let flow = stacked(style)
+  let removed = Infinity, kept = Infinity
+  for (let [i, e] of [...live.children].entries()) {
+    if (e.namespaceURI != HTML) continue
+    let s = t.win.getComputedStyle(e)
+    if (s.display == 'none') continue
+    if (s.display == 'contents') {
+      beyond(t, e, copies[i], style, within)
+      continue
+    }
+    let r = e.getBoundingClientRect()
+    let loose = s.position == 'absolute' || s.position == 'fixed'
+    let flowing = !loose && flow && BLOCK.test(s.display) &&
+      s.float == 'none' && s.position != 'sticky' && !placed(s)
+    let above = r.bottom < within.top
+    let out = (above || r.top > within.bottom) && !e.contains(t.target)
+    if (out && (loose || flowing)) {
+      copies[i].remove()
+      if (flowing && above) removed = Math.min(removed, r.top)
+      continue
+    }
+    if (!loose) kept = Math.min(kept, r.top)
+    // What stays above keeps its height, or what shows would move.
+    if (above) continue
+    let pane = e.hasAttribute(SCROLL)
+    if (
+      !pane && !t.holds.has(e) && r.top >= within.top &&
+      r.bottom <= within.bottom
+    ) {
+      continue
+    }
+    let inner = pane
+      ? reach(r.top, Math.min(r.height, t.win.innerHeight))
+      : within
+    beyond(t, e, copies[i], s, inner)
+    if (pane) unshift(copies[i], inner)
+  }
+  if (removed < kept && kept < Infinity) within.shift += kept - removed
+}
+let HTML = 'http://www.w3.org/1999/xhtml'
+
+// A pane scrolled to a place is scrolled less by what went above it.
+let unshift = (copy: Element, pane: Reach) => {
+  let at = copy.getAttribute(SCROLL)
+  if (at && at != 'end' && pane.shift) {
+    copy.setAttribute(SCROLL, String(Math.max(0, Number(at) - pane.shift)))
+  }
+}
+
+// A picture carries its page's sheets, and matches every rule in them against
+// every element before it paints: most of a sheet styles other pages. Only the
+// rules something in the picture matches are carried, read from the sheets the
+// page has parsed. A rule for a state the picture can't be in (hovered,
+// focused) is left out. One for the address's target stays, as does every
+// rule no selector picks (a font, a keyframe). A sheet the page can't read
+// stays linked, for the worker to carry whole (./picture-sheets.ts).
+let SHEETS = 'link[rel~="stylesheet"]'
+let PSEUDO =
+  /::?(?:before|after|first-line|first-letter)\b|::[\w-]+(?:\([^)]*\))?/g
+// The classes and ids each branch of a selector asks every match to hold:
+// those outside brackets and parentheses, where :not() and :is() can ask
+// for less. Most rules name one the picture holds nowhere, found without
+// matching them.
+let needs = (selector: string) => {
+  let flat = '', depth = 0
+  for (let c of selector) {
+    if (c == '(' || c == '[') depth++
+    else if (c == ')' || c == ']') depth--
+    else if (!depth) flat += c
+  }
+  return flat.split(',').map((branch) =>
+    [...branch.matchAll(/([.#])((?:[\w-]|\\.)+)/g)].map(([, kind, name]) =>
+      kind + name.replace(/\\(.)/g, '$1')
+    )
+  )
+}
+let held = (shown: Element) => {
+  let names = new Set<string>()
+  for (let e of [shown, ...shown.querySelectorAll('*')]) {
+    if (e.id) names.add('#' + e.id)
+    for (let c of e.classList) names.add('.' + c)
+  }
+  return names
+}
+
+// A sheet's rules as read once: reading them is most of the time a picture
+// takes, and a page's sheets don't change while it is open. A rule's text is
+// read once something in a picture matches it.
+type Styled = { selector: string; needs: string[][]; rule: CSSRule }
+type Rule =
+  | Styled
+  | { group: string; rules: Rule[]; layer: boolean }
+  | { rule: CSSRule }
+let read = (rules: CSSRuleList): Rule[] =>
+  [...rules].map((rule) => {
+    if ('selectorText' in rule) {
+      let selector = rule.selectorText as string
+      return { selector, needs: needs(selector), rule }
+    }
+    if (!('cssRules' in rule) || 'findRule' in rule) return { rule }
+    // A group (@media, @supports, @layer, @container) and what is in it.
+    return {
+      group: rule.cssText.slice(0, rule.cssText.indexOf('{')),
+      rules: read(rule.cssRules as CSSRuleList),
+      layer: 'name' in rule,
+    }
+  })
+let texts = new WeakMap<CSSRule, string>()
+let text = (rule: CSSRule) => {
+  let said = texts.get(rule)
+  if (said == null) texts.set(rule, said = rule.cssText)
+  return said
+}
+let readings = new WeakMap<CSSStyleSheet, Rule[]>()
+let hits = (shown: Element, names: Set<string>, rule: Styled) => {
+  let { selector } = rule
+  if (selector.includes(':target')) return true
+  if (!rule.needs.some((branch) => branch.every((n) => names.has(n)))) {
+    return false
+  }
+  let s = selector.replace(PSEUDO, '').replace(/:root\b/g, 'html') || '*'
+  try {
+    return shown.matches(s) || !!shown.querySelector(s)
+  } catch {
+    return true // a selector this engine can't match here
+  }
+}
+// A layer keeps its place in the order of layers even when empty.
+let used = (shown: Element, names: Set<string>, rules: Rule[]): string =>
+  rules.map((r) => {
+    if ('selector' in r) return hits(shown, names, r) ? text(r.rule) : ''
+    if (!('group' in r)) return text(r.rule)
+    let kept = used(shown, names, r.rules)
+    return kept || r.layer ? `${r.group}{${kept}}` : ''
+  }).join('')
+let carry = (
+  win: Window,
+  shown: Element,
+  sheets: [Element, Element][],
+) => {
+  let names = held(shown)
+  for (let [live, copy] of sheets) {
+    let sheet = (live as HTMLLinkElement).sheet
+    if (!sheet?.href || sheet.disabled) continue
+    let rules = readings.get(sheet)
+    try {
+      if (!rules) readings.set(sheet, rules = read(sheet.cssRules))
+    } catch {
+      continue // another site's sheet
+    }
+    let style = win.document.createElement('style')
+    let media = copy.getAttribute('media')
+    if (media) style.setAttribute('media', media)
+    style.textContent = absolute(used(shown, names, rules), sheet.href)
+    copy.replaceWith(style)
+  }
+}
+
+// The element the address's fragment names, as the picture scrolls to it.
+let linked = (win: Window) => {
+  try {
+    let id = decodeURIComponent(new URL(win.location.href).hash.slice(1))
+    return id ? win.document.getElementById(id) : null
+  } catch {
+    return null // a malformed fragment names nothing
+  }
+}
+
 /** The snapshot of the page in `win` as it shows now, without what is not
  * shown, and its shell where it has parts of its own. */
 export let snapshot = (win: Window): Snapshot => {
   let { documentElement: root, scrollingElement: page } = win.document
   let shown = root.cloneNode(true) as Element
+  let lives = root.querySelectorAll(SHEETS)
+  let sheets = [...shown.querySelectorAll(SHEETS)].map((copy, i) =>
+    [lives[i], copy] as [Element, Element]
+  )
   if (page?.scrollTop) shown.setAttribute(SCROLL, scroll(page))
   let panes = root.querySelectorAll(`[${SCROLL}]`)
   for (let [i, copy] of [...shown.querySelectorAll(`[${SCROLL}]`)].entries()) {
     copy.setAttribute(SCROLL, scroll(panes[i]))
   }
+  let holds = new Set<Element>()
+  for (let pane of panes) {
+    for (
+      let e: Element | null = pane;
+      e && !holds.has(e);
+      e = e.parentElement
+    ) {
+      holds.add(e)
+    }
+  }
+  let view = reach(0, win.innerHeight)
+  beyond(
+    { win, target: linked(win), holds },
+    root,
+    shown,
+    win.getComputedStyle(root),
+    view,
+  )
+  unshift(shown, view)
   for (let e of shown.querySelectorAll(UNSEEN)) e.remove()
+  carry(win, shown, sheets)
   let doc = (e: Element) => '<!doctype html>' + e.outerHTML
   let shell = shown.querySelector(`[${OWN}]`) &&
     shown.cloneNode(true) as Element

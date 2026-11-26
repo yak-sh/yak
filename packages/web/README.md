@@ -76,9 +76,12 @@ more-specific routes.
 | `./opening`  | what a page shows while it opens, and when opening fails  |
 
 A **kept page** is drawn at once when its person opens it again, before the
-network answers. A **snapshot** is a page's whole document as its person last
-saw it, which the page (`keep`) sends its site's service worker as it is hidden,
-left in place or unloaded. The worker (`keeping`) keeps the **picture** of each
+network answers. A **snapshot** is a page's document as its person last saw it,
+which the page (`keep`) sends its site's service worker as it is hidden, left in
+place or unloaded. It holds what showed and a screen's height either side of it,
+in the window and in each scrolled pane, and only the rules of the page's sheets
+that something in it matches, so the picture made of it paints at once however
+long the page is. The worker (`keeping`) keeps the **picture** of each
 (`picture`): a snapshot whose scripts and frames never run and which says it is
 kept, `data-kept` on its root and a status line over it. Opening the page again
 answers the picture at once while the worker asks for the page as it is now, and
