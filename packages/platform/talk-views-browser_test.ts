@@ -1,7 +1,7 @@
 import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { DRAW, type Drawing } from '@yaks/ui/navigate'
-import { type Frames, switching, warm, WARMING } from './talk-views-browser.ts'
+import { switching } from './talk-views-browser.ts'
 import { PART, type TalkView, VIEW, VIEWED } from './talk-views.ts'
 import { type Heard, pageTalk } from './operator-talk-browser.ts'
 import { operatorTalk } from './operator-talk.ts'
@@ -118,26 +118,6 @@ test('each view keeps where it was scrolled', () => {
   equal(body.scrollTop, 40)
   press(doc, '/club/updates')
   equal(body.scrollTop, 7)
-})
-
-test('each view standing hidden is laid out once, unseen, one per idle moment', () => {
-  let doc = page()
-  let later: (() => void)[] = []
-  let soon = (go: () => void) => later.push(go)
-  warm(doc, {
-    requestIdleCallback: soon,
-    requestAnimationFrame: soon,
-    setTimeout: soon,
-  } as unknown as Frames)
-  let warming = () =>
-    [...doc.querySelectorAll(`[${WARMING}]`)].map((v) => v.textContent)
-  let seen: string[] = []
-  while (later.length) {
-    later.shift()!()
-    seen.push(warming().join())
-  }
-  // idle, frame, the frame's end; then idle finds nothing left
-  equal(seen, ['news', 'news', '', ''])
 })
 
 test('an address the page holds no view of is left to the navigator', () => {

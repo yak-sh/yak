@@ -18,14 +18,9 @@
  * read, as opening their page reads them: each space's are marked through
  * the tab's page graph (@yaks/inbox `seen`), after the frame that shows them.
  *
- * A view standing hidden keeps the layout it had, but one never shown has
- * none (`content-visibility: hidden`), so its first show would lay all of
- * it out in the press's frame. Each is laid out once, unseen, while the
- * browser is idle (`warm`).
- *
  * @module
  */
-import { DRAW, type Drawing, PAGE, rerun } from '@yaks/ui/navigate'
+import { DRAW, type Drawing, rerun } from '@yaks/ui/navigate'
 import { actionWords } from '@yaks/inbox/actions-browser'
 import type { UpdatesView } from './updates-view.ts'
 import { pageGraph } from './page-graph.ts'
@@ -159,50 +154,6 @@ export let show = (
   } else read(next)
 }
 
-/** The mark on a view standing hidden for the one frame it is laid out in,
- * unseen (pages.css `.Talk_View`). */
-export let WARMING = 'data-warming'
-
-/** The clock `warm` keeps: the browser's idle moments and frames. */
-export type Frames = Pick<
-  Window,
-  'requestAnimationFrame' | 'setTimeout' | 'requestIdleCallback'
->
-
-/** Lay out each view of `doc` standing hidden that has no layout yet, one
- * each time the browser is idle (`win`), so it shows in a frame that only
- * paints. */
-export let warm = (
-  doc: Document,
-  win: Frames | null = doc.defaultView,
-): void => {
-  if (!win?.requestAnimationFrame) return
-  let laid = new WeakSet<Element>()
-  let busy = false
-  let idle = (go: () => void) =>
-    win.requestIdleCallback ? win.requestIdleCallback(go) : win.setTimeout(go)
-  let next = () => {
-    let view = [...doc.querySelectorAll<HTMLElement>(`[${VIEW}]`)]
-      .find((v) => v.hidden && !laid.has(v))
-    busy = !!view
-    if (!view) return
-    laid.add(view)
-    view.setAttribute(WARMING, '')
-    win.requestAnimationFrame(() =>
-      win.setTimeout(() => {
-        view.removeAttribute(WARMING)
-        idle(next)
-      })
-    )
-  }
-  let start = () => {
-    for (let v of doc.querySelectorAll(`[${VIEW}]:not([hidden])`)) laid.add(v)
-    if (!busy) (busy = true, idle(next))
-  }
-  start()
-  doc.addEventListener(PAGE, start)
-}
-
 /** Draw the views of each page in `doc` in place when a press or Back
  * leads to one. */
 export let switching = (doc: Document, bind = canvases(doc)): void => {
@@ -230,7 +181,4 @@ export let switching = (doc: Document, bind = canvases(doc)): void => {
   })
 }
 
-if (typeof document != 'undefined') {
-  switching(document)
-  warm(document)
-}
+if (typeof document != 'undefined') switching(document)
