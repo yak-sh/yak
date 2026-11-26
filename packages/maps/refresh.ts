@@ -4,8 +4,8 @@
 //   deno run -A packages/maps/refresh.ts [provider] [--date YYYYMMDD] [--fonts-only]
 //
 // The archive streams from the provider's `builds` address into the bucket
-// under its `archive` key (rclone copyurl, a multipart upload that replaces
-// the object only once it is whole, so the door serves the old build until
+// under its `archive` key (rclone, a multipart upload that replaces the
+// object only once it is whole, so the door serves the old build until
 // then). The fonts come from protomaps/basemaps-assets on GitHub. The
 // bucket's S3 credentials are the box's vault secrets MAPS_R2_ACCESS_KEY_ID
 // and MAPS_R2_SECRET_ACCESS_KEY: a token that reads and writes the yak-maps
@@ -128,12 +128,18 @@ export let archive = async (
     ? { url: buildOf(p, date), bytes: 0 }
     : await newest(p)
   console.log(`maps: ${url} (${(bytes / 1e9).toFixed(1)} GB) to ${p.archive}`)
+  // Read through rclone's http remote rather than copyurl: a read the
+  // provider's server breaks off is opened again at the byte it reached
+  // (--low-level-retries), where copyurl starts all 140 GB over.
+  let { origin, pathname } = new URL(url)
   await rclone([
-    'copyurl',
-    url,
+    'copyto',
+    `:http:${pathname}`,
     `:s3:${BUCKET.name}/${p.archive}`,
+    `--http-url=${origin}`,
     '--s3-chunk-size=128M',
     '--s3-upload-concurrency=8',
+    '--low-level-retries=50',
   ], env)
 }
 
