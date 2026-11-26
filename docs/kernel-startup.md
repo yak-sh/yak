@@ -1003,3 +1003,30 @@ and OAuth bearer read the same protected row (rays `a605400c3b16b1eb` and
 sandbox bearer both read the protected row. A cookie alone returned 401 and a
 token from the wrong app returned 404 (rays `a6054018f960b1eb`,
 `a605401a8e03b1eb`, `a605401b88f1b1eb`, and `a605401c1aa6b1eb`).
+
+#### Tokyo production GET traces
+
+On November 26 UTC, two direct NRT probes on the same Tokyo Oracle network read
+`/recipes/api/query?.recipe&.limit=1` through query Worker
+`e00f351e-70f1-475f-a536-215231f39f21`. The first response carried `cold;dur=1`.
+Both returned identical 200 bodies with `Cache-Control: private, no-store`. All
+timings below are milliseconds.
+
+| Worker and isolate  | Ray                | First byte | GET span | Invocation wall | Outside invocation | Gateway | Store wait |
+| ------------------- | ------------------ | ---------: | -------: | --------------: | -----------------: | ------: | ---------: |
+| Earlier kernel cold | `a604faa9691c6468` |      1,321 |    1,117 |             759 |                358 |       — |        683 |
+| Earlier kernel warm | `a604fabd4a1c354b` |        326 |      105 |             118 |                −13 |       — |         66 |
+| Query Worker cold   | `a60543696fc735ab` |        920 |      740 |             616 |                124 |     562 |        547 |
+| Query Worker warm   | `a605437dd8371b46` |        256 |       65 |              73 |                 −8 |      53 |         42 |
+
+The observed increase outside the invocation from warm to cold fell from 371 ms
+to 132 ms. Each production path has one direct cold/warm pair. The matched
+uploads above provide the controlled size comparison. Eight subsequent GETs with
+both Worker and Store warm took 223–302 ms to first byte, with a 264.5 ms
+median. The cold Query Worker request still spent 547 ms waiting for the Store,
+which T-151187 tracks separately.
+
+All 12 live access checks passed again on `e00f351e`, including private cookie
+and OAuth authorization (rays `a60544675c27cf83` and `a6054468ee31cf83`),
+sandbox token in the path and as a bearer (`a60544743b89cf83` and
+`a60544759d57cf83`), and the wrong-app token refusal (`a6054476deebcf83`).
