@@ -27,13 +27,16 @@ import { deferred, type Made } from './deferred.ts'
 import type { Context, Env } from './worker.ts'
 
 /** The boundary every invocation enters: the Worker's own handlers, and each
- * call of a class whose calls are {@link Deferred.entered}. It runs `run` and
- * answers what it answers; a tracker reports what escapes it. */
+ * call of a class whose calls are {@link Deferred.entered}, given the state or
+ * context the runtime made it with, so a Durable Object's boundary can ask
+ * whether the runtime moved it. It runs `run` and answers what it answers; a
+ * tracker reports what escapes it. */
 export type Entry = <T>(
   env: Env,
   name: string,
   run: () => Promise<T>,
   request?: Request,
+  state?: unknown,
 ) => Promise<T>
 
 /** A class the runtime constructs by its name (a Durable Object, an
@@ -162,13 +165,13 @@ export let compose = (
 
   let giving = single(named, 'entry')
   let loading: Promise<Entry> | undefined
-  let entry: Entry = async (env, name, run, request) => {
+  let entry: Entry = async (env, name, run, request, state) => {
     if (!giving) return await run()
     let enter = await (loading ??= giving[1]().catch((e) => {
       loading = undefined
       throw e
     }))
-    return await enter(env, name, run, request)
+    return await enter(env, name, run, request, state)
   }
 
   let classes: Composed['classes'] = {}
@@ -186,6 +189,7 @@ export let compose = (
               `${name} ${method}`,
               call,
               given.find((g): g is Request => g instanceof Request),
+              args[0],
             )
           : undefined,
       )

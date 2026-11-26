@@ -194,6 +194,21 @@ export let overloaded = (e: unknown): e is Error =>
     ))
 
 /**
+ * The object never ran the call: the runtime reset it under the call
+ * (`evicted`), or dropped the call from its queue (`overloaded`). Either is
+ * safe to send again, a write included, and `retried` paces an overloaded
+ * object's resends apart (`backoff.crowded`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(unserved(new Error('Network connection lost.')), true)
+ * assertEquals(unserved(Object.assign(new Error('x'), { overloaded: true })), true)
+ * assertEquals(unserved(new Error('boot failed')), false)
+ * ```
+ */
+export let unserved = (e: unknown): boolean => evicted(e) || overloaded(e)
+
+/**
  * The runtime killed the object for its limits. Its own code never sees the
  * kill, and the retry may well answer, so whoever sees these words reports
  * them before anything retries, or nothing ever would (M-37965).
@@ -246,8 +261,15 @@ export let opaque = (e: unknown): e is Error =>
 // that: a read waits for the object rather than failing a person's page or
 // leaving a store out of an answer. Only a call that keeps failing spends
 // them.
-export let backoff: { pauses: number[] } = {
+//
+// An object that dropped a call from its queue (`overloaded`) is busy, or
+// stalled for seconds with its queue filling (the directory froze for 14 s on
+// 2026-11-26, bug dbe06394), so its resends start a second apart and spread
+// out, `crowded`: each adds one call to the queue it refused, not five, and
+// together they outlast such a stall.
+export let backoff: { pauses: number[]; crowded: number[] } = {
   pauses: [100, 500, 2000, 5000, 15000],
+  crowded: [1000, 3000, 8000],
 }
 
 /** How `retried` waits out a pause: half of it or more, so calls that failed
@@ -257,7 +279,8 @@ export let jittered = (clock: Clock = system) => (ms: number): Promise<void> =>
 
 /**
  * Send one replayable call again while it fails in words `retry` knows,
- * pausing before each resend, once per `backoff` pause, as `wait` waits one
+ * pausing before each resend, once per `backoff` pause (`crowded` after an
+ * `overloaded` refusal), as `wait` waits one
  * (`jittered` on the runtime's clock by default; a test hands its own). The
  * last failure propagates unchanged.
  *
@@ -273,6 +296,15 @@ export let jittered = (clock: Clock = system) => (ms: number): Promise<void> =>
  * assertEquals(await retried(send, true, evicted, wait), 'answered')
  * assertEquals(paused, [100, 500])
  * assertEquals(sends, 3)
+ * let crowded = Object.assign(new Error('queued too long'), { overloaded: true })
+ * let refused = 0
+ * let busy = () => {
+ *   if (++refused < 3) throw crowded
+ *   return 'answered'
+ * }
+ * paused = []
+ * assertEquals(await retried(busy, true, unserved, wait), 'answered')
+ * assertEquals(paused, [1000, 3000])
  * ```
  */
 export let retried = async <T>(
@@ -285,7 +317,7 @@ export let retried = async <T>(
     try {
       return await send()
     } catch (e) {
-      let pause = backoff.pauses[sent]
+      let pause = (overloaded(e) ? backoff.crowded : backoff.pauses)[sent]
       if (!retry(e) || !replayable || pause == null) throw e
       await wait(pause)
     }

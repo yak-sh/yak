@@ -84,6 +84,24 @@ test('a GET is sent again once per pause at most; other errors throw', async () 
   assertEquals(other.ns.sent.length, 1)
 })
 
+test('a call an overloaded object dropped, a write too, is sent again a second and more apart', async () => {
+  let crowded = () =>
+    Object.assign(
+      new Error('Durable Object is overloaded. Requests queued for too long.'),
+      { overloaded: true },
+    )
+  let d = door([crowded(), crowded(), 'ok'])
+  assertEquals(await (await d.store('/apply', post)).text(), 'ok')
+  assertEquals([d.bodies(), d.paused], [
+    ['[1]', '[1]', '[1]'],
+    backoff.crowded.slice(0, 2),
+  ])
+  let sends = backoff.crowded.length + 1
+  let full = door([...Array.from({ length: sends }, crowded), 'retried'])
+  await assertRejects(() => full.store('/query'), Error, 'overloaded')
+  assertEquals(full.ns.sent.length, sends)
+})
+
 test('another 500 is the answer, not a reset', async () => {
   let d = door([said('boot failed'), 'retried'])
   let no = await d.store('/query')

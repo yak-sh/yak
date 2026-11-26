@@ -21,7 +21,7 @@ import { confirmedRefusal } from './query-line.ts'
 import { type Refusal, refuse } from '@yaks/api'
 import { FILED } from '@yaks/api/refuse'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { evicted, retried } from '@yaks/durable-object/resets'
+import { retried, unserved } from '@yaks/durable-object/resets'
 import {
   type Call,
   type Door,
@@ -325,7 +325,7 @@ export let fetchOf = (
           : answer
       },
       options.replayable !== false,
-      evicted,
+      unserved,
       wait,
     )
   return as ? metered(as, send) : send()

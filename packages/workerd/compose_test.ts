@@ -13,11 +13,15 @@ let says = (method: string, path: string, said: string): Route => ({
 })
 let text = async (res: Response | Promise<Response>) => (await res).text()
 
-// Every invocation the Worker enters, by name and request path.
+// Every invocation the Worker enters, by name, request path and the state
+// its object was made with.
 let entering = () => {
   let entered: string[] = []
-  let entry: Entry = (_env, name, run, request) => {
-    entered.push(request ? `${name} ${new URL(request.url).pathname}` : name)
+  let entry: Entry = (_env, name, run, request, state) => {
+    entered.push(
+      [name, request && new URL(request.url).pathname, state].filter(Boolean)
+        .join(' '),
+    )
     return run()
   }
   return { entered, facet: { entry: () => Promise.resolve(entry) } }
@@ -160,7 +164,7 @@ class Base {
   constructor(readonly ctx: unknown, readonly env: unknown) {}
 }
 
-test('a class is made on its first call, and an entered one answers inside the entry', async () => {
+test('a class is made on its first call, and an entered one answers inside the entry, given its state', async () => {
   let { entered, facet } = entering()
   let loads = 0
   let make = () => {
@@ -184,5 +188,5 @@ test('a class is made on its first call, and an entered one answers inside the e
   equal([shop.ctx, loads], ['ctx', 0])
   equal(await shop.ask(at('/a')), 'ctx shop /a')
   equal(await quiet.ask(at('/b')), 'ctx quiet /b')
-  equal([loads, entered], [2, ['Shop ask /a']])
+  equal([loads, entered], [2, ['Shop ask /a ctx']])
 })

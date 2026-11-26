@@ -12,7 +12,14 @@
 
 import { IDEMPOTENCY } from '@yaks/api/log'
 import { type Clock, heard, type Hold, resolvers, system } from '@yaks/fp'
-import { evicted, killed, opaque, retried, starved } from './resets.ts'
+import {
+  evicted,
+  killed,
+  opaque,
+  retried,
+  starved,
+  unserved,
+} from './resets.ts'
 
 /** A Durable Object stub: one object, reachable by fetch. */
 export type Stub = { fetch(req: Request): Promise<Response> }
@@ -424,8 +431,10 @@ export type Resend = {
 }
 
 /**
- * A door that sends a call again when the runtime reset the object or lost
- * the call, thrown or answered (`reset`), as `retried` paces it. A call is
+ * A door that sends a call again when the object never ran it (`unserved`):
+ * the runtime reset the object or lost the call, thrown or answered
+ * (`reset`), or dropped it from an overloaded object's queue, as `retried`
+ * paces it. A call is
  * sent again only when that is safe: its request can be built again (no
  * streamed body, and not `replayable: false`), and each carries one
  * `IDEMPOTENCY` key across its sends, so an object that applied it before its
@@ -462,7 +471,7 @@ export let resending = (door: Door, o: Resend = {}): Door => {
     let replayable = rebuildable(init) && options.replayable !== false
     let take = read ??
       ((r: Response) => (replayable ? received(r) : r) as T | Promise<T>)
-    let resent = (e: unknown) => evicted(e) || (!!read && safe && opaque(e))
+    let resent = (e: unknown) => unserved(e) || (!!read && safe && opaque(e))
     let sent = retried(
       async () => {
         if (init instanceof Request) init.signal.throwIfAborted()
