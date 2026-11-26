@@ -111,6 +111,36 @@ export type Step =
   | { open: string }
   | { push: unknown }
   | { offline: boolean }
+
+/** The interaction steps accepted by an app preview. */
+export let previewSteps = (value: unknown): Step[] => {
+  if (value == null) return []
+  let refused = () =>
+    new CallError(
+      'arguments',
+      'steps takes up to six actions: {tap: selector}, {type: text, into?: selector}, {press: key}, or {wait: milliseconds (0–3000)}',
+    )
+  if (!Array.isArray(value) || value.length > 6) throw refused()
+  let word = (v: unknown) => typeof v == 'string' && v.length > 0
+  return value.map((step) => {
+    if (!step || typeof step != 'object' || Array.isArray(step)) throw refused()
+    let keys = Object.keys(step)
+    if (
+      keys.includes('type') &&
+      keys.every((key) => key == 'type' || key == 'into') &&
+      typeof step.type == 'string' &&
+      (!keys.includes('into') || word(step.into))
+    ) return step
+    if (keys.length != 1) throw refused()
+    let [key] = keys
+    if ((key == 'tap' || key == 'press') && word(step[key])) return step
+    if (
+      key == 'wait' && Number.isInteger(step.wait) && step.wait >= 0 &&
+      step.wait <= 3000
+    ) return step
+    throw refused()
+  })
+}
 /** What yak-browser is asked to open. */
 export type Visit = {
   url: string
@@ -459,7 +489,6 @@ export let READ = 2_500
 export let MOST = 20_000
 // Allow time for the service binding and serialization outside the visit.
 export let BROWSE_REPLY = OPEN + MOST + READ + RELEASE + 2_500
-export let PREVIEW_REPLY = OPEN + RENDER + CHECK + RELEASE + 2_500
 export let STEP = 2_000
 
 let stepWait = (step: Step) => 'wait' in step ? Math.max(0, step.wait) : 0
@@ -480,6 +509,13 @@ export let allowed = (
       steps.filter((s) => 'open' in s).length * LOAD +
       (includeWaits ? steps.reduce((ms, s) => ms + stepWait(s), 0) : 0),
   )
+
+/** Render time reserved for a preview, including its accessibility check. */
+export let previewTime = (visit: Visit) => allowed(visit) + CHECK
+
+/** Allow time for the binding, opening a browser, and cleanup too. */
+export let previewReply = (visit: Visit) =>
+  OPEN + previewTime(visit) + RELEASE + 2_500
 
 /** Planned waits get time of their own in an interactive browse visit. */
 export let waitRoom = (visit: Visit): number =>

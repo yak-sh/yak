@@ -166,7 +166,7 @@ if (import.meta.main) {
       let warm = await new Deno.Command('deno', {
         args: [
           ...args(path),
-          import.meta.url,
+          `${path}/workers/yak/sandbox/launch.ts`,
           '--warm-workspace',
           path,
           '/opt/yaks-cli',

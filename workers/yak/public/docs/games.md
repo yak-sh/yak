@@ -20,24 +20,26 @@ another page can read the same game state and a different renderer can draw it.
 
 ## Start with a game starter
 
-Create an app with `app_new`, then have `app_files` write its first draft. Pass
-`starter: {}` for a lit Three.js scene with a camera that follows the player. A
-low-poly world to explore uses this view. The starter includes an in-memory page
-graph, fullscreen controls and an install manifest.
+Create an app with `app_new`. Call `app_files({app, starter: {into: app}})` to
+put the starter files in `/workspace/<app>` in the sandbox. The default is a lit
+Three.js scene with a camera that follows the player. Use it for a low-poly
+world to explore.
 
-| Game                                        | Arguments to `app_files`              |
-| ------------------------------------------- | ------------------------------------- |
-| 3D exploration                              | `{app, starter: {}}`                  |
-| Voxel game                                  | `{app, starter: {view: 'voxel'}}`     |
-| Card game, puzzle grid or requested 2D view | `{app, starter: {view: '2d'}}`        |
-| Multiplayer exploration                     | `{app, starter: {multiplayer: true}}` |
+| Request                                     | Additional starter options |
+| ------------------------------------------- | -------------------------- |
+| Voxel game                                  | `view: 'voxel'`            |
+| Card game, puzzle grid or requested 2D view | `view: '2d'`               |
+| Multiplayer game                            | `multiplayer: true`        |
 
-Use `app_new` with `access: 'private'` for multiplayer. You can combine
-`multiplayer: true` with any view. The starter writes runnable files to the
-draft. Read them with `app_files(op: 'read')`, then build the person's game on
-those files. Keep the scene inputs, the page graph and room wiring as you add
-the world, controls and rules the person asked for. Set the app name, icon and
-manifest for that game before releasing it.
+For multiplayer, create the app with `access: 'private'`. You can combine
+`multiplayer: true` with any view.
+
+Read and edit the files in the sandbox with `sandbox_shell`. Start with
+`room-model.ts`, `room-rules.ts` and `room-page.ts` for multiplayer, and
+`world.ts` for 3D terrain. Reuse the page graph, game loop and room wiring. Name
+the game and update its manifest and icon. Then stage the folder with
+`sandbox_ship({app, paths: [app]})`. Without `into`, the starter goes directly
+into a draft, where you can read and patch individual files with `app_files`.
 
 The starter opens the app vocabulary with `@yaks/game/page`. Use `ent(eid)` for
 indexed reads, `watch` for projections and `mutate` for batches. Declare
@@ -45,12 +47,10 @@ page-only components as `sync: none` and use local watches with
 `{remote: false}`. Apply a frame simulation batch per `fixedStep` step or a turn
 batch per accepted action.
 
-For a multiplayer game, start by reading `room-model.ts`, `room-rules.ts` and
-`room-page.ts`. Change the rules and page as needed. The app worker checks the
-guest invitation and writes a turn batch only when the rules accept the action.
-The sample uses `play_pawn{room, x, z}` for saved positions and
-`play_motion{room, seat, x, z}` for a transient aim marker. Use peer components
-for frequent motion, with an appropriate `pace`.
+The app worker checks each guest invitation and writes a turn batch only when
+the rules accept the action. The sample uses `play_pawn{room, x, z}` for saved
+positions and `play_motion{room, seat, x, z}` for a transient aim marker. Use
+peer components for frequent motion, with an appropriate `pace`.
 
 Keep the watch returned by `connectRoom` in `room-client.ts` as the source of
 room state. It delivers the initial snapshot, accepted turns and a fresh
@@ -59,13 +59,19 @@ snapshot arrives and `watch.refused` to show a refusal. The watch can keep
 drawing the last state while it reconnects. Room reads on a timer or after each
 action are unnecessary.
 
-Use `app_preview` for the draft's browser check. To check two separate players,
-host a released test game as a signed-in editor, join by invitation in a
-signed-out tab, then disconnect the guest while the host takes a turn. The guest
+Use `app_preview({app, steps: [{tap: '#host'}]})` to try the host button in the
+draft. Use the selector from your page. Draft actions stay on the preview
+branch. After releasing, use `app_preview({app, released: true, steps: [...]})`
+when you need the private host view. The browser is signed in as you and the
+actions use live data. For a signed-out guest, open the game invitation in a
+fresh Playwright context in the sandbox. For a direct sandbox check of a draft,
+use the link from `app_preview({app, screenshot: false})` as returned, including
+its `~` segment.
+
+With two players, disconnect the guest while the host takes a turn. The guest
 should see the new turn on the same seat when the socket reconnects. If a
-sandbox browser stays on Connecting, check whether the socket opened and
-received its initial subscription frame in a regular browser or with a WebSocket
-client. A browser logging a socket URL alone has only shown that it attempted a
+sandbox browser stays on Connecting, check the first subscription frame in a
+regular browser or with a WebSocket client. A socket URL shows the attempted
 handshake.
 
 ## Working examples

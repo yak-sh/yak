@@ -292,7 +292,7 @@ import { requested } from './confirm.ts'
 import { NARROW, PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
 import { BUDGET, paid, seconds, spending, workbench } from './sandbox.ts'
-import { CWD } from '@yaks/sandbox/cloudflare'
+import { CWD, seedTree } from '@yaks/sandbox/cloudflare'
 import {
   attachmentBytes,
   attachmentStream,
@@ -693,7 +693,8 @@ let FILES_INPUT: Shape = {
       type: 'object',
       description:
         'Write a runnable game starter into this draft before editing its files. ' +
-        'Pass {} for 3D, or set multiplayer and view as needed. Files supplied in the same call replace starter files with those paths.',
+        'For sandbox editing, set into to write the starter straight to a new sandbox folder instead. ' +
+        'Pass {} for 3D, or set multiplayer and view as needed. Files supplied with a draft starter replace starter files with those paths.',
       properties: {
         view: {
           type: 'string',
@@ -705,6 +706,9 @@ let FILES_INPUT: Shape = {
           type: 'boolean',
           description: 'include private live rooms and an invitation link',
         },
+        into: str(
+          'Write the starter into a new folder relative to /workspace. Edit it with sandbox_shell, then stage it with sandbox_ship. Leave draft, files and drafts out of this call.',
+        ),
       },
     },
     files: {
@@ -4465,12 +4469,29 @@ let OURS: Row[] = [
       let batch = files(args.files)
       let fan = entries(args.drafts)
       let op = opOf(args, batch.length + fan.length + Number(!!args.starter))
-      if (args.starter) {
+      let starter = args.starter as
+        | (GameStarter & { into?: string })
+        | undefined
+      let folder = starter?.into == null
+        ? undefined
+        : appFolder(text(starter.into, 'starter.into'))
+      if (
+        folder !== undefined && (!folder ||
+          ['draft', 'path', 'content', 'base64', 'files', 'drafts'].some((
+            key,
+          ) => args[key] != null))
+      ) {
+        throw refuse(
+          'arguments',
+          'starter.into takes a new sandbox folder without draft or file arguments.',
+        )
+      }
+      if (starter) {
         if (op !== 'write') {
           throw refuse('arguments', 'Use starter for a write.')
         }
         let paths = new Set(batch.map((file) => file.path.replace(/^\/+/, '')))
-        let base = gameStarter(args.starter as GameStarter, GAME_STARTER)
+        let base = gameStarter(starter, GAME_STARTER)
           .filter((file) => !paths.has(file.path))
         batch = [...files(base, 'starter'), ...batch]
       }
@@ -4486,6 +4507,26 @@ let OURS: Row[] = [
         'inApp',
         () => inApp(ctx, args, write, !write),
       )
+      if (folder) {
+        let seeded = await bench(
+          ctx,
+          space,
+          ({ provider, ref }) => seedTree(provider, ref, folder, batch),
+        )
+        let path = `${CWD}/${folder}`
+        if (!seeded) {
+          throw refuse(
+            'conflict',
+            `${path} already exists. Use that folder or choose a new starter.into.`,
+          )
+        }
+        return {
+          text:
+            `Wrote ${batch.length} starter files to ${path}. Edit the files there, then stage them with sandbox_ship({app: "${app.slug}", paths: ["${folder}"]}).`,
+          space,
+          value: { path, files: batch.map((file) => file.path) },
+        }
+      }
       let blobs = r2RawObjects(ctx.env.BLOBS)
       // `draft: 'new'` opens the draft named for this call, so the call run
       // again after it was cut off lands in it (written.ts `anew`).

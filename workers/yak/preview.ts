@@ -115,7 +115,14 @@ import {
   withLegacy,
 } from './written.ts'
 import type { Objects } from '@yaks/blob'
-import type { Cookie, View, Visit } from '@yaks/platform/browser-visit'
+import {
+  type Cookie,
+  previewSteps,
+  previewTime,
+  type Step,
+  type View,
+  type Visit,
+} from '@yaks/platform/browser-visit'
 import { sourceOf } from './wrangler_app.ts'
 import { walled } from '@yaks/platform/installs'
 import { screen as screenAt } from './screen.ts'
@@ -636,11 +643,10 @@ let shownDraft = async (
 // the time it took, failing or not (model-spend.ts `onHold`).
 let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
   let { render } = await import('./browser.ts')
-  let { RENDER, CHECK } = await import('@yaks/platform/browser-visit')
   let rendered = await onHold(
     ctx.env,
     space,
-    (RENDER + CHECK) / 1000 * RATE,
+    previewTime(visit) / 1000 * RATE,
     'models',
     (spent) =>
       render(ctx.env, visit, (duration) => {
@@ -736,6 +742,7 @@ let released = async (
   who: Who,
   path: string,
   view: View,
+  steps: Step[],
   screenshot: boolean,
   keep: boolean,
 ) => {
@@ -765,7 +772,7 @@ let released = async (
   let cookies = signed
     ? [await signedIn(ctx.env, who.person!, space, new URL(at).host)]
     : []
-  let shot = await rendering(ctx, space, app, { url: at, view, cookies })
+  let shot = await rendering(ctx, space, app, { url: at, view, cookies, steps })
   Object.assign(value, shot.diagnostics, { cost: shot.cost })
   if (keep) value.screenshot = await kept(ctx, space, app, who, shot.png)
   return {
@@ -789,11 +796,15 @@ export let preview = async (ctx: Ctx, args: Args) => {
     }
   }
   let screenshot = args.screenshot !== false
+  let steps = previewSteps(args.steps)
+  if (!screenshot && steps.length) {
+    throw refuse('arguments', 'Browser steps require a screenshot.')
+  }
   if (!ctx.env.SESSION_SECRET) {
     throw refuse('unavailable', 'Draft previews are not configured')
   }
   let live = args.released === true
-  let { space, app, who } = await inApp(ctx, args, !live)
+  let { space, app, who } = await inApp(ctx, args, !live || steps.length > 0)
   if (screenshot && !ctx.env.BROWSER) {
     throw refuse(
       'unavailable',
@@ -808,7 +819,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
     )
   }
   if (live) {
-    return released(ctx, space, app, who, path, view, screenshot, keep)
+    return released(ctx, space, app, who, path, view, steps, screenshot, keep)
   }
   if (args.draft != null && typeof args.draft != 'string') {
     throw refuse('arguments', "draft: the id of one of the app's drafts")
@@ -843,7 +854,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
       value,
     }
   }
-  let shot = await rendering(ctx, space, app, { url, view })
+  let shot = await rendering(ctx, space, app, { url, view, steps })
   Object.assign(value, shot.diagnostics, { cost: shot.cost })
   return {
     text: shot.said(

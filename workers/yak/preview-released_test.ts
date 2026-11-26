@@ -12,6 +12,7 @@ import { connector, fresh, type Kernel, seed } from './probe.ts'
 import { verify } from './lib/token.ts'
 
 let visits: Visit[] = []
+let did: string[] = []
 let k: Kernel
 let browsing: Browsing = {
   acquire: () => Promise.resolve('session'),
@@ -21,7 +22,7 @@ let browsing: Browsing = {
     return Promise.resolve({
       newPage: () =>
         Promise.resolve({
-          ...actions(),
+          ...actions((line) => did.push(line)),
           on: () => {},
           setViewport: () => Promise.resolve(),
           emulateMediaFeatures: () => Promise.resolve(),
@@ -108,6 +109,25 @@ test('a public release opens as a visitor sees it', async () => {
   equal(visits.at(-1)!.cookies, [])
   assertStringIncludes(String(said.text), 'as a visitor sees it')
   assertStringIncludes(String(said.text), 'The open release')
+})
+
+test('a released private preview executes steps in its signed-in browser', async () => {
+  let start = did.length
+  let said = await agent.answer('app_preview', {
+    space,
+    app: 'shut',
+    released: true,
+    steps: [{ type: 'Fern', into: '#name' }, { press: 'Enter' }],
+  })
+  let [cookie] = visits.at(-1)!.cookies!
+  equal((await verify(cookie.value, k.secret))?.person, owner.person)
+  equal(did.slice(start), [
+    'find #name',
+    'focus #name',
+    'type Fern',
+    'press Enter',
+  ])
+  assertStringIncludes(String(said.text), 'The shut release')
 })
 
 test('an app never released has nothing to open', async () => {

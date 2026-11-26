@@ -15,8 +15,7 @@
 #
 # The Cloudflare tag must match @cloudflare/sandbox in ../../package.json: the
 # control server here and the client in the Worker are halves of one release.
-# Keep its ENTRYPOINT, /container-server/sandbox, which serves every sandbox RPC.
-# It already exposes port 3000.
+# Start the same RPC server after importing the container's HTTPS certificate.
 #
 # Toolchain archives and Python wheels are pinned and checksummed. Apt packages
 # come from the base Ubuntu release, with recommendations and caches omitted.
@@ -201,3 +200,33 @@ RUN apt-get update \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
  && pandoc --version && pdftotext -v && libreoffice --headless --version
+
+# Playwright and its headless Chromium are installed once when building the
+# image. Only the headless browser is needed for app checks.
+ARG PLAYWRIGHT_VERSION=1.65.1
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/yak-browser/browsers \
+    NODE_PATH=/opt/yak-browser/lib/node_modules
+RUN npm install --global --prefix /opt/yak-browser "playwright@${PLAYWRIGHT_VERSION}" \
+ && /opt/yak-browser/bin/playwright install --with-deps --only-shell chromium \
+ && apt-get install -y --no-install-recommends libnss3-tools \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/* /root/.npm
+
+# Cloudflare injects a fresh CA when a container starts with HTTPS interception.
+# Chromium on Linux takes local trust anchors from its NSS database.
+RUN <<'SETUP'
+install -m 755 /dev/stdin /usr/local/bin/yak-sandbox <<'ENTRYPOINT'
+#!/bin/sh
+set -eu
+ca=/etc/cloudflare/certs/cloudflare-containers-ca.crt
+if [ -s "$ca" ]; then
+    db="$HOME/.local/share/pki/nssdb"
+    if [ -d "$HOME/.pki/nssdb" ]; then db="$HOME/.pki/nssdb"; fi
+    mkdir -p "$db"
+    if [ ! -f "$db/cert9.db" ]; then certutil -N -d "sql:$db" --empty-password; fi
+    certutil -A -d "sql:$db" -n 'Cloudflare Containers' -t 'C,,' -i "$ca"
+fi
+exec /container-server/sandbox "$@"
+ENTRYPOINT
+SETUP
+ENTRYPOINT ["/usr/local/bin/yak-sandbox"]

@@ -99,6 +99,11 @@ DOMContentLoaded to capture asynchronous rendering and diagnostics, from 0 to
 without running a browser. Screenshots run on Cloudflare at the requested
 viewport size, and return as an image the connector client displays.
 
+Use `steps` to interact with the page before capturing it. For example,
+`steps: [{type: 'Basil', into: '#name'}, {press: 'Enter'}]` fills and submits a
+field. The steps run against the draft's isolated rows. With `released: true`, a
+private app opens with your sign-in, and the steps can change live rows.
+
 The accessibility report uses a vendored axe-core checker, including WCAG 2.0
 and 2.1 A and AA rules. `accessibility.problems` lists every affected element;
 `accessibility.review` lists elements needing manual review. The chat reply

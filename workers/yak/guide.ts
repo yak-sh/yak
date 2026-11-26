@@ -85,13 +85,13 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
 (${url(env, '/docs/code.md')}).
 
 For a game, call guide with page games before writing its files. Start with
-app_files({app, starter: {}}) for a lit Three.js scene with a following camera,
-the page graph and fullscreen play. Use app_new with access 'private' and set
+app_files({app, starter: {into: app}}) to put a runnable Three.js starter in
+the sandbox. Edit its world, rules and interface there, then stage the folder
+with sandbox_ship. Use app_new with access 'private' and set
 starter.multiplayer to true when people play together. It adds live store
 subscriptions and scoped guest invites. Set starter.view to 'voxel' for voxel
-games or '2d' for requests and genres that call for 2D, such as card games
-and puzzle grids. Read the starter's files and adapt its world, rules and
-interface to the person's prompt before releasing it.
+games or '2d' for requests and genres that call for 2D. Use app_preview with
+steps to interact with a draft or with the signed-in private release.
 
 Five steps:
 
@@ -353,7 +353,8 @@ document formats; poppler-utils extracts PDF text and renders pages.
 LibreOffice Writer, Calc and Impress run headless for office-file conversion
 and PDF output. sandbox_write with an attachment id copies its original bytes in.
 sandbox_shell names the versions; anything else installs with apt or a package
-manager. Call guide with page sandbox.
+manager. Headless Chromium and Playwright are installed for browser scripts.
+Call guide with page sandbox.
 
 Asked to save things from other sites — a recipe, a listing, an article —
 give the app a /clip route on its worker.js: it fetches the address, reads

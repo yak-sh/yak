@@ -75,7 +75,7 @@ new_sqlite_classes = ["Workbench"]
 # on first yak use; a package change builds no sandbox image.
 [[containers]]
 class_name = "Workbench"
-image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-53f8d601daaa6562"
+image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-4899dcb5afb77e5f"
 instance_type = "standard-2"
 max_instances = 5
 
@@ -113,6 +113,6 @@ new_sqlite_classes = ["Workbench"]
 
 [[env.staging.containers]]
 class_name = "Workbench"
-image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-53f8d601daaa6562"
+image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-4899dcb5afb77e5f"
 instance_type = "standard-2"
 max_instances = 5

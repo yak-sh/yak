@@ -41,6 +41,24 @@ export let tools = [worded(
           description:
             'default true; false returns the address without running a browser',
         },
+        steps: {
+          type: 'array',
+          maxItems: 6,
+          items: {
+            type: 'object',
+            properties: {
+              tap: str('click the visible element matching this selector'),
+              type: str('type this text'),
+              into: str(
+                'with type, focus the visible element matching this selector',
+              ),
+              press: str('press a key, such as Enter'),
+              wait: { type: 'integer', minimum: 0, maximum: 3000 },
+            },
+          },
+          description:
+            'Interact in the browser in order before taking the screenshot. Each step is tap, type (optionally with into), press, or wait. Released actions run with your live permissions.',
+        },
         draft: str(
           'Pass an open draft id when several drafts are open. Omit draft to ' +
             'show the only open draft. Released or discarded ids are closed. ' +

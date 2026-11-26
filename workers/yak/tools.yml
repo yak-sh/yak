@@ -226,7 +226,9 @@ app_files:
     op is one of:
     write (or op left out): requires path and either content (text) or
     base64 (bytes) for one file, or files: [{path, content}, …] for several.
-    For a game, pass starter with optional view and multiplayer.
+    For a game, pass starter with optional view and multiplayer. Set
+    starter.into to write the files to a new sandbox folder. Edit there
+    with sandbox_shell and stage the folder with sandbox_ship.
     For separate drafts, pass drafts: [{files: [{path, content}, …]}, …];
     list: requires only app. An optional draft chooses which files to list.
     The answer gives each path and
@@ -306,7 +308,9 @@ sandbox_shell:
     0.16.0, also the C and C++ compiler (`zig cc -target wasm32-freestanding
     -nostdlib -Wl,--no-entry` makes a module a browser loads with no glue
     code, -target wasm32-wasi one a WASI layer runs); Deno 2.9.1, and the
-    image's Node and Bun. Read, edit and write PDF, DOCX, XLSX, PPTX, CSV
+    image's Node and Bun. Playwright 1.65.1 and headless Chromium are
+    ready for browser scripts using require('playwright') from Node.
+    Read, edit and write PDF, DOCX, XLSX, PPTX, CSV
     and images with these tools. sandbox_write with an attachment id copies
     the original file into the sandbox. The command runs as root, so
     `apt-get install -y <pkg>`, cargo, pip, npm and go get install anything;
@@ -459,6 +463,9 @@ app_preview:
     deploying; findings are a report and never refuse a release. Automated
     checks do not prove conformance. Choose path and
     width (390 for a phone, 1280 for desktop), height, and wait in milliseconds.
+    Use steps to tap a control, type into a field, press a key or wait in
+    the same browser before capturing it. A released preview of a private
+    app signs the browser in as you. Steps on a release can change live data.
     The browser runs on Cloudflare; no local files, CLI or computer is needed.
     The draft reads the app's live rows as they stood when it was first
     previewed, in the draft's vocabulary, on a branch of its own, so preview

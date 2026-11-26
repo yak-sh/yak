@@ -13,7 +13,7 @@ import {
   BrowserTimeout,
   type BrowseVisit,
   type Fault,
-  PREVIEW_REPLY,
+  previewReply,
   type Rendered,
   type Reply,
   type Result,
@@ -66,7 +66,9 @@ export let seen = async (
     let browser = env.BROWSER
     said = await bounded(
       time,
-      visit.audit === false ? BROWSE_REPLY + waitRoom(visit) : PREVIEW_REPLY,
+      visit.audit === false
+        ? BROWSE_REPLY + waitRoom(visit)
+        : previewReply(visit),
       () => 'Waiting for the browser service to answer',
       async (signal) =>
         answered(

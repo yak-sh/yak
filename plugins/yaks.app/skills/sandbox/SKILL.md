@@ -34,6 +34,7 @@ Preinstalled:
     Go 1.27.1        GOOS=js GOARCH=wasm, and lib/wasm/wasm_exec.js beside it
     Zig 0.16.0       and with it C and C++: `zig cc`, `zig c++`
     Deno 2.9.1       plus the Node and Bun the base image ships
+    Playwright 1.65.1 with headless Chromium
 
 `zig cc -target wasm32-freestanding -nostdlib -Wl,--no-entry` is the shortest
 way from C to a WebAssembly module a browser instantiates with no glue code; the
@@ -43,6 +44,37 @@ same flags, with `-fno-exceptions`.
 Commands run as root, so `apt-get install -y <package>`, `cargo`, `pip`, `npm`
 and `go get` all work. Files and installed tools are restored when the sandbox
 wakes.
+
+## Browser checks
+
+Use `app_preview` for a draft or for the signed-in private release. Its `steps`
+argument can tap controls and fill fields. Steps on the released app act on its
+live data.
+
+For a scripted check in the sandbox, open the draft address from
+`app_preview({app, screenshot: false})`, or open a guest's invitation in a fresh
+context. Run a CommonJS file with Node and load Playwright with
+`require('playwright')`. Use software WebGL for 3D scenes:
+
+```js ignore
+const { chromium } = require('playwright')
+async function check(url) {
+  const browser = await chromium.launch({
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  })
+  try {
+    const page = await browser.newPage()
+    await page.goto(url)
+    console.log(await page.title())
+  } finally {
+    await browser.close()
+  }
+}
+check(process.argv[2]).catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})
+```
 
 ## Document files
 
@@ -163,8 +195,9 @@ prefer to write the JSON-RPC yourself:
 The container never holds the grant itself. `$YAKS_TOKEN` is a placeholder, and
 yaks.app replaces it with the grant in an outgoing request, only when the
 request goes to yaks.app or to your space's own address (`<space>.yaks.app`,
-which answers a clone of your app). Sent anywhere else, it stays a placeholder,
-so printing it, or a package reading it, reveals nothing.
+which answers a clone of your app). Sent to any other route, including an app
+page or custom worker, it stays a placeholder, so printing it, or a package
+reading it, reveals nothing.
 
 The grant is minted when the container wakes and **expires with the container**:
 it is revoked as soon as the sandbox is destroyed, and it expires on its own

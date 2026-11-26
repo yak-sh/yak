@@ -21,6 +21,7 @@ test('sandbox CLI workspace keeps runtime source and every member config', () =>
       'packages/task/assets.gen.ts',
       'packages/task/conform.ts',
       'workers/yak/secrets.ts',
+      'workers/yak/sandbox/launch.ts',
     ], ['./workers/yak', './apps/other', './packages/cli']),
     [
       'apps/other/deno.json',
@@ -30,6 +31,7 @@ test('sandbox CLI workspace keeps runtime source and every member config', () =>
       'packages/task/views.tsx',
       'packages/task/vocab.json',
       'workers/yak/deno.json',
+      'workers/yak/sandbox/launch.ts',
     ],
   )
 })

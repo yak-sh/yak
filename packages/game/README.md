@@ -41,9 +41,10 @@ Run `deno task test packages/game` from the repository root.
 ## Exploration starter
 
 On yaks.app, pass `starter: {}` to `app_files` for the 3D starter. Set
-`view: 'voxel'` for a voxel scene, `view: '2d'` for a board, or
-`multiplayer: true` to add rooms to any view. Read the files in the draft and
-adapt the geometry and rules to the game.
+`view: 'voxel'` for a voxel scene, `view: '2d'` for a board, or multiplayer:
+true`to add rooms to any view. Set`starter.into`to place the
+starter in a new sandbox folder. Edit the files there and stage them with`sandbox_ship`. Without`into`,
+the starter goes into the app's draft.
 
 The [starter](./starter/) is a complete yaks app. Copy its files to an app draft
 and deploy with the normal compiler. Open the app root for the low-poly world or

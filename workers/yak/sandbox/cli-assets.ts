@@ -21,6 +21,7 @@ export let sources = (paths: string[], members: string[]): string[] => {
     'pnpm-lock.yaml',
     'pnpm-workspace.yaml',
     '.npmrc',
+    'workers/yak/sandbox/launch.ts',
     ...members.map((path) => `${path.replace(/^\.\//, '')}/package.json`),
     ...members.map((path) => `${path.replace(/^\.\//, '')}/deno.json`),
   ])
