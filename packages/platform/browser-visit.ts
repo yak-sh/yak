@@ -303,8 +303,11 @@ export type Rendered = {
  * first, from asking to its content loaded; `yak-page` a move between
  * pages in place (@yaks/web/navigate), from the click to the frame that
  * drew it, and `yak-press` from such a click to the frame that first showed
- * it; `fetched` the server's time on every page the navigator fetched. `parts` says where the time went, `server` what the answer's
- * `Server-Timing` said. */
+ * it; `fetched` the server's time on every page the navigator fetched;
+ * `frame` a long animation frame: its `render` and `layout` at its end, and
+ * its longest scripts, each with the style and layout it forced. `parts`
+ * says where the time went, `server` what the answer's `Server-Timing` said.
+ * They come in the order they happened. */
 export type Timing = {
   name: string
   url: string
@@ -313,11 +316,13 @@ export type Timing = {
   server: Record<string, number>
 }
 
-// The page's own timeline, read in the audit's world: the document's load
-// and every `yak-page` measure, each with the server's word on its answer.
-// Written as the script it runs, since a bundler's helpers would not come
-// along with a function's own text.
-let TIMELINE = `(() => {
+// The page's own timeline, read in the audit's world: the document's load,
+// every `yak-page` measure, each with the server's word on its answer, and
+// each long frame (a `frame`), saying how much of it was style and layout and
+// which scripts held it, with the style and layout each forced. Written as
+// the script it runs, since a bundler's helpers would not come along with a
+// function's own text.
+let TIMELINE = `(async () => {
   let round = (n) => Math.round(n * 10) / 10
   let server = (url) => {
     let last = performance.getEntriesByName(url)
@@ -423,12 +428,50 @@ let TIMELINE = `(() => {
       name: m.name,
       url: String(url),
       ms: round(elapsed),
+      startTime: m.startTime,
       parts: Object.fromEntries(Object.entries(parts)
         .map(([k, v]) => [k, typeof v == 'number' ? round(v) : v])),
       server: server(String(url)),
     })
   }
-  return out
+  let frames = typeof PerformanceObserver == 'undefined' ||
+      !PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')
+    ? []
+    : await new Promise((done) => {
+      let seen = new PerformanceObserver((list) => done(list.getEntries()))
+      seen.observe({ type: 'long-animation-frame', buffered: true })
+      setTimeout(() => done([]), 200)
+    })
+  let file = (url) => url.split('/').pop().split('?')[0]
+  for (let f of frames) {
+    let end = f.startTime + f.duration
+    let scripts = [...f.scripts]
+      .sort((a, b) => b.duration - a.duration).slice(0, 4)
+    out.push({
+      name: 'frame',
+      url: location.href,
+      ms: round(f.duration),
+      startTime: f.startTime,
+      parts: {
+        at: round(f.startTime),
+        render: round(end - (f.renderStart || end)),
+        layout: round(end - (f.styleAndLayoutStart || end)),
+        ...Object.fromEntries(scripts.map((s, i) => [
+          'script' + (i + 1),
+          [
+            s.invoker,
+            (s.sourceFunctionName || '?') + '@' + file(s.sourceURL || '') +
+            ':' + s.sourceCharPosition,
+            round(s.duration) + 'ms',
+            'forced ' + round(s.forcedStyleAndLayoutDuration) + 'ms',
+          ].join(' '),
+        ])),
+      },
+      server: {},
+    })
+  }
+  return out.sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0))
+    .map(({ startTime, ...t }) => t)
 })()`
 
 /** A render that failed, and the browser time it held all the same. */
