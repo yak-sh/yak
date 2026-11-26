@@ -6,6 +6,9 @@
 import { type ComponentChildren, h, type VNode } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import type { Map as MapLibre } from 'maplibre-gl'
+import { Icon } from '@yaks/ui/Icon'
+// @ts-types="@yaks/ui/lucide"
+import info from 'lucide/dist/esm/icons/info.mjs'
 import { draw, type Drawing } from './draw.ts'
 import { TILES_DEFAULT } from './providers.ts'
 
@@ -54,7 +57,7 @@ export let Frame = (p: Framed): VNode => {
         h(
           'summary',
           { title: 'Map credits' },
-          h('span', { 'aria-hidden': 'true' }, 'ⓘ'),
+          h(Icon, { of: info }),
           h('span', { class: 'MapCredit_Name' }, 'Map credits'),
         ),
         h('span', {

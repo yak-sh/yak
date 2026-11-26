@@ -3312,9 +3312,15 @@ importers:
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/ui':
+        specifier: 0.2.30
+        version: link:../ui
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
+      lucide:
+        specifier: 1.31.0
+        version: 1.31.0
       maplibre-gl:
         specifier: 5.24.1
         version: 5.24.1

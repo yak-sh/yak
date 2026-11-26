@@ -22,7 +22,9 @@
     "@protomaps/basemaps": "5.7.2",
     "@yaks/blob": "0.2.30",
     "@yaks/graph": "0.2.33",
+    "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",
+    "lucide": "1.31.0",
     "maplibre-gl": "5.24.1",
     "pmtiles": "4.5.0",
     "preact": "10.29.7"
