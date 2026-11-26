@@ -85,7 +85,11 @@ let read = (view: Element) => {
   }
 }
 
-/** Show `next` of the page's `views` in `doc`, the others hidden. */
+/** Show `next` of the page's `views` in `doc`, the others hidden. The
+ * page's layout is read once, before anything changes, and laid out once,
+ * by putting the scroll back after every other change: a read or a write
+ * between two changes lays the whole page out again, which is most of a
+ * press's time on a long conversation. */
 export let show = (
   doc: Document,
   views: HTMLElement[],
@@ -94,6 +98,12 @@ export let show = (
   let view = said(next)
   let body = doc.getElementById('content')
   let was = views.find((v) => !v.hidden)
+  // Where the view left was scrolled: its foot, where it was at its end,
+  // so what came while it stood hidden is in sight when it shows again.
+  if (body && was) {
+    let end = body.scrollTop + body.clientHeight >= body.scrollHeight - 2
+    was.dataset.scroll = end ? 'end' : String(body.scrollTop)
+  }
   let frame = doc.querySelector('.Frame')
   if (frame) {
     if (was) frame.classList.remove(...said(was).marks)
@@ -102,21 +112,10 @@ export let show = (
   for (let part of doc.querySelectorAll<HTMLElement>(`[${PART}]`)) {
     part.hidden = part.getAttribute(PART) != view.here
   }
-  // Where the view left was scrolled: its foot, where it was at its end,
-  // so what came while it stood hidden is in sight when it shows again.
-  if (body && was) {
-    let end = body.scrollTop + body.clientHeight >= body.scrollHeight - 2
-    was.dataset.scroll = end ? 'end' : String(body.scrollTop)
-  }
   for (let v of views) {
     if (v.hidden == (v != next)) continue
     v.hidden = v != next
     v.dispatchEvent(new (doc.defaultView ?? globalThis).Event(VIEWED))
-  }
-  if (body) {
-    let kept = next.dataset.scroll ??
-      (next.querySelector('[data-conversation]') ? 'end' : '0')
-    body.scrollTop = kept == 'end' ? body.scrollHeight : Number(kept)
   }
   for (let s of next.querySelectorAll(`script:not([src]):not([${STARTED}])`)) {
     if (s.getAttribute('type') == 'module') rerun(s)
@@ -142,6 +141,11 @@ export let show = (
     )
   ) back.value = view.here
   light(doc, view)
+  if (body) {
+    let kept = next.dataset.scroll ??
+      (next.querySelector('[data-conversation]') ? 'end' : '0')
+    body.scrollTop = kept == 'end' ? body.scrollHeight : Number(kept)
+  }
   // Marking them read is no part of what the press shows: it is written
   // once the frame showing them is drawn.
   let win = doc.defaultView
