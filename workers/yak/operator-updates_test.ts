@@ -803,3 +803,36 @@ test('Updates shown in place are read, as opening their page reads them', async 
   assertEquals(await seen.json(), [{ entity, inboxReceipt: { label: 'Read' } }])
   assertEquals(await unread(), 0)
 })
+
+test('All Updates sends its heading before the cards and carries the cards in the same page', async () => {
+  let words = 'A notice waiting for the All Updates cards.'
+  await store.g.apply([notification({ to: ada, words })], { trusted: true })
+  let space = (await directoryOf(p.env.STORE).at(eid))!
+  let seat = { space, who: { person: ada, role: 'owner' as const } }
+  let page = await allUpdatesPage(
+    p.env,
+    seat,
+    [seat],
+    {},
+    Promise.resolve(new Map()),
+    false,
+  )
+  let reader = page.body!.getReader()
+  let decode = new TextDecoder()
+  let first = decode.decode((await reader.read()).value)
+  assertStringIncludes(first, 'All updates')
+  assertEquals(first.includes(words), false)
+  let rest = decode.decode((await reader.read()).value)
+  assertEquals((await reader.read()).done, true)
+  let doc = parseHTML(first + rest).document
+  let shown = doc.querySelector('[data-talk-view]:not([hidden])')!
+  assertStringIncludes(
+    shown.querySelector('[data-updates-view]')!.textContent!,
+    words,
+  )
+  assertEquals(!!doc.querySelector('script[src*="_updates.js"]'), true)
+  assertEquals(
+    (await read(ada)).updates.find((u) => u.words == words)?.unread,
+    true,
+  )
+})

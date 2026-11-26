@@ -11,6 +11,7 @@ import {
   toChildArray,
 } from 'preact'
 import { renderToString } from 'preact-render-to-string'
+import type { Stage } from '@yaks/web/stage'
 import { Button, Card, Empty, Field, Form, Icon } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
 import {
@@ -128,7 +129,8 @@ import { icons } from './icons.ts'
 import {
   ALL,
   allLater,
-  allUpdates,
+  allUpdatesCards,
+  allUpdatesIntro,
   type Apps,
   dismissedOf,
   dismissedUpdates,
@@ -1366,7 +1368,7 @@ let talkPage = (
   beside: Beside,
   page: TalkPage,
   others: TalkPage[] = [],
-  rest?: Promise<string>,
+  rest?: Stage,
 ) => {
   let at = managePath('operator', space.slug)
   let { listed } = page
@@ -1499,6 +1501,17 @@ let UNREAD = html(
   h('p', null, 'Your lists could not be read. Open this page again to try.'),
 )
 
+let addWaiting = (count: string, remember = false) => `
+for (let badge of document.querySelectorAll('[data-waiting]')) {
+  let n = Number(badge.dataset.waiting) + ${count}
+  ${remember ? 'badge.dataset.waiting = String(n)' : ''}
+  badge.textContent = n
+  badge.hidden = !n
+}
+let offer = document.querySelector('[data-alerts-offer][data-badge]')
+if (offer) navigator.setAppBadge?.(Number(offer.dataset.badge) + ${count})?.catch(() => {})
+`
+
 // The script of a page drawn before the person's lists were in (`talkPage`):
 // it reads them from `from` (`?lists`), puts each part in its slot
 // (`later`), shows the column beside the conversation where it now holds
@@ -1520,13 +1533,7 @@ for (let slot of document.querySelectorAll('[data-later]')) {
 if (got) {
   let lists = document.querySelector('.Talk_Lists')
   if (lists?.children.length) lists.hidden = false
-  for (let badge of document.querySelectorAll('[data-waiting]')) {
-    let n = Number(badge.dataset.waiting) + got.waiting
-    badge.textContent = n
-    badge.hidden = !n
-  }
-  let offer = document.querySelector('[data-alerts-offer][data-badge]')
-  if (offer) navigator.setAppBadge?.(Number(offer.dataset.badge) + got.waiting)?.catch(() => {})
+  ${addWaiting('got.waiting')}
 }
 })`))
 
@@ -1707,7 +1714,7 @@ export let openingChat = async (...args: Parameters<typeof chatPage>) => {
           true,
         ),
         [],
-        later,
+        { contents: later },
       ),
   )
 }
@@ -2175,8 +2182,9 @@ let allBeside = (
 }
 
 /** The person's Updates from every space's Operator together
- * (updates.ts `allUpdates`), beside the chat app's side of `home`, the
- * space they came from. Opening them reads them, in every space, where
+ * (updates.ts `allUpdatesCards`), sent in the same response as the opening
+ * frame beside the side of `home`, the space they came from. Opening them reads
+ * them in every space, where
  * `opened` says the person did. `apps` are each space's the person may
  * open, by slug. */
 export let allUpdatesPage = async (
@@ -2190,38 +2198,58 @@ export let allUpdatesPage = async (
   dir?: Directory,
 ) => {
   let { space, who } = home
-  let [news, shelves, beside] = await Promise.all([
+  let cards = Promise.all([
     updatesAcross(env, seats, { seen: opened, dir }),
     apps,
-    side,
-  ])
-  for (let { space, error } of news.missed) {
-    caught(error, { request: 'all updates', space: space.slug })
-  }
+  ]).then(([news, shelves]) => {
+    for (let { space, error } of news.missed) {
+      caught(error, { request: 'all updates', space: space.slug })
+    }
+    let waiting = news.updates.filter((u) =>
+      u.needs && u.space.eid == space.eid
+    )
+      .length
+    return html([
+      allUpdatesCards(
+        env,
+        news,
+        shelves,
+        news.missed.map((m) => m.space),
+        who.person ?? '',
+      ),
+      waiting ? run(addWaiting(String(waiting), true)) : null,
+    ])
+  }).catch((error) => {
+    caught(error, { request: 'all updates cards', space: space.slug })
+    return html(h(
+      'p',
+      { class: 'Note', role: 'status', 'data-updates-unavailable': '' },
+      'Updates could not be read. Open this page again to try.',
+    ))
+  })
+  let beside = await side
   let here = allAt(space)
   let chat = openingParts(env, space, who, 'new', beside)
+  let slot = h('template', { 'data-update-cards': '' })
   return c.measure('render', () =>
-    talkPage(env, space, who, beside, {
-      title: 'All updates',
-      status: 200,
-      waiting: news.updates.filter((u) => u.needs && u.space.eid == space.eid)
-        .length,
-      listed: null,
-      current: ['all'],
-      here,
-      skip: ['#content', 'Skip to content'],
-      main: h(
-        'div',
-        updateColumn(space, who),
-        allUpdates(
-          env,
-          news,
-          shelves,
-          news.missed.map((m) => m.space),
-          who.person ?? '',
-        ),
-      ),
-    }, [chat]))
+    talkPage(
+      env,
+      space,
+      who,
+      beside,
+      {
+        title: 'All updates',
+        status: 200,
+        waiting: 0,
+        listed: null,
+        current: ['all'],
+        here,
+        skip: ['#content', 'Skip to content'],
+        main: h('div', updateColumn(space, who), allUpdatesIntro, slot),
+      },
+      [chat],
+      { marker: html(slot), contents: cards },
+    ))
 }
 
 /** A space's Matches (@yaks/platform/operator-matches-view), beside the

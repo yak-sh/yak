@@ -137,6 +137,19 @@ test('Updates reports readiness while its hidden Operator view is still opening'
   equal(b.sent.map(({ open }) => [open?.paint, open?.usable]), [[220, 220]])
 })
 
+test('an Updates error paints without reporting the cards usable', () => {
+  let b = browser('https://yaks.app/updates')
+  let { document } = parseHTML(
+    '<main><p data-updates-unavailable>Updates could not be read.</p></main>',
+  )
+  b.document.querySelector = (selector) => document.querySelector(selector)
+  let open = b.run()
+  b.parsed(200)
+  b.frame(250, 220)
+  open.leave()
+  equal(b.sent.map(({ open }) => [open?.paint, open?.usable]), [[220, null]])
+})
+
 test('the streamed composer can take typing before the document finishes', () => {
   let b = browser()
   b.document.querySelector = () => ({})

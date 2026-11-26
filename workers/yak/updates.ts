@@ -12,7 +12,7 @@ import {
 // Operator's store (operator-updates.ts): what needs the person first, with a
 // button for each choice, then what happened, newest first. A choice, or
 // words about one, go into their conversation, and the chat they went to
-// opens. Every space's together are at `/updates` (`allUpdates`), the
+// opens. Every space's together are at `/updates` (`allUpdatesCards`), the
 // same read across the spaces a person talks with an Operator in
 // (`updatesAcross`).
 import { bound, type Env } from './env.ts'
@@ -313,7 +313,8 @@ let dismissedLink = (space: Space) =>
 /** The person's Updates from every space's Operator, at `/updates`. */
 export let ALL = talkPath('updates')
 
-let allAbout = h(
+/** The introduction shared by the streamed page and the in-place view. */
+export let allUpdatesIntro = h(
   'p',
   { class: 'Note Update_About' },
   'What the Operator of each of your spaces wrote or asked you, together. Ask about any of it, and its chat opens.',
@@ -326,7 +327,7 @@ export let allLater = (env: Env, spaces: Spot[], person: string) =>
   h(
     Fragment,
     null,
-    allAbout,
+    allUpdatesIntro,
     listed(env, person, spaces, { updates: [], waiting: 0 }, () => [], {
       back: ALL,
       drawn: false,
@@ -379,7 +380,7 @@ let listed = (
  * with what needs them ahead: each card names the space and Operator it came
  * from, acts as it does on that space's page, and comes back here. A space
  * whose Operator did not answer says so. `apps` are each space's, by slug. */
-export let allUpdates = (
+export let allUpdatesCards = (
   env: Env,
   news: Updates & { read: Read[] },
   apps: Map<string, Apps>,
@@ -389,7 +390,6 @@ export let allUpdates = (
   h(
     Fragment,
     null,
-    allAbout,
     missed.map((space) =>
       h(
         'p',

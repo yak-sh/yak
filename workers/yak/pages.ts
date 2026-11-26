@@ -94,6 +94,7 @@ import { kinds } from '@yaks/data-editor'
 import type { Domain } from '@yaks/platform/domain-pages'
 import type { Held, SpaceView } from '@yaks/platform/space-pages-view'
 import { importMap } from './page-imports.ts'
+import { type Stage, staged } from '@yaks/web/stage'
 
 export type Kids = ComponentChildren
 
@@ -148,7 +149,7 @@ let documented = (
   headers: Record<string, string> = {},
   layout = '',
   head = '',
-  later?: Promise<string>,
+  later?: Stage,
   assets?: string,
   preview?: Preview,
 ) => {
@@ -327,32 +328,9 @@ ${
     file('away.js')
   }" data-home="${esc(apex(env))}" defer></script>${deployed(env)}</body>
 </html>`
-  return new Response(
-    later
-      ? staged(open, later.then((said) => said + close, () => close))
-      : open + close,
-    {
-      status,
-      headers: { 'content-type': 'text/html; charset=utf-8', ...headers },
-    },
-  )
-}
-
-// A body sent in two parts: `first` at once, `rest` once it settles. A reader
-// that went away meanwhile is owed nothing more.
-let staged = (first: string, rest: Promise<string>) => {
-  let bytes = new TextEncoder()
-  return new ReadableStream<Uint8Array>({
-    async start(body) {
-      body.enqueue(bytes.encode(first))
-      let last = await rest
-      try {
-        body.enqueue(bytes.encode(last))
-        body.close()
-      } catch {
-        // Cancelled: nobody is reading.
-      }
-    },
+  return new Response(staged(open, close, later), {
+    status,
+    headers: { 'content-type': 'text/html; charset=utf-8', ...headers },
   })
 }
 
@@ -390,7 +368,7 @@ export let page = (env: Host, at: Said, ...parts: Kids[]) =>
     at.headers,
     at.layout,
     at.head,
-    at.later?.then(markup),
+    at.later && { contents: at.later.then(markup) },
     at.assets,
     at.preview ?? {
       title: `${at.title} · yaks.app`,
@@ -409,7 +387,7 @@ export let shell = (
   headers: Record<string, string> = {},
   layout = '',
   head = '',
-  later?: Promise<string>,
+  later?: Stage,
 ) =>
   documented(
     env,
