@@ -1,7 +1,7 @@
 /** A plain browser field on the same desk as every other draft interface. */
 import { effect, signal } from '@preact/signals'
 import type { Bundle } from '@yaks/graph'
-import { desk, type DeskOpts, type Drafts, type Stash } from './desk.ts'
+import { type Desk, desk, type DeskOpts, type Stash } from './desk.ts'
 import { merge } from './merge.ts'
 export { draftEid } from './desk.ts'
 
@@ -136,7 +136,7 @@ let scoped = (
 }
 
 /** A durable desk with plain DOM bindings. */
-export type BrowserDrafts = Drafts & {
+export type BrowserDrafts = Desk & {
   bind: (
     field: HTMLInputElement | HTMLTextAreaElement,
     place: string,
@@ -147,7 +147,6 @@ export type BrowserDrafts = Drafts & {
   /** Run `fn` now and again whenever a text, place or identity it read
    * changes, until the returned function is called. */
   follow: (fn: () => void) => () => void
-  close: () => void
 }
 
 /** Bind fields with one line; all merging, receipts and recovery belong to desk. */

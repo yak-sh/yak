@@ -70,9 +70,15 @@ export type Drafts = {
    * (the send it went into) */
   spend: (place: string, also?: Bundle[]) => Promise<boolean>
   /** Restore text from another source, preserving subsequent typing.
-   * `over` is the source text already imported (default: empty).
-   * Returns whether the restored draft is durable across reload. */
+   * `over` is the source text already imported (default: empty). */
+  restore: (place: string, text: string, over?: string) => void
+}
+
+/** A desk can tell a recovery source when it can release its own copy. */
+export interface Desk extends Drafts {
+  /** Whether the restored draft is durable across reload. */
   restore: (place: string, text: string, over?: string) => boolean
+  close: () => void
 }
 
 /** What a desk is bound with. */
@@ -179,7 +185,7 @@ type Kept = { text: string; over: string; rev: number }
 export let desk = (
   client: Client,
   opts: DeskOpts,
-): Drafts & { close: () => void } => {
+): Desk => {
   let pace = opts.pace ?? 500
   let held = new Map<string, Held>()
   let shown = new Map<string, Signal<string>>()
