@@ -348,9 +348,12 @@ let underEnding = (session: Eid, row: Bundle | undefined): Bundle[] =>
 
 /**
  * The writes that give a transcript {@link carrying} a task an instruction: an
- * input carrying the `using` in force, the claim where it was let go, and,
+ * input carrying the `using` in force, so its next run or turn goes on the
+ * provider, model and account it ran on, the claim where it was let go, and,
  * while its run is over, the precondition that it still is. A run starting
- * under them refuses the write with `Stale`, and asking again answers.
+ * under them refuses the write with `Stale`, and asking again answers. A
+ * transcript no request ever named a `using` for cannot be carried on, and
+ * gets none. `eid` names the input, for a writer whose input is its receipt.
  *
  * ```ts
  * import { handing } from '@yaks/session'
@@ -363,14 +366,18 @@ export let handing = async (
   session: Eid,
   task: Eid,
   body: string,
+  { eid }: { eid?: Eid } = {},
 ): Promise<Bundle[]> => {
+  let using = await inForce(g, session)
+  if (!using) return []
   let held = comp(await one(g, task, [CLAIM]), CLAIM)?.session
   return [
     {
-      entity: { eid: crypto.randomUUID() },
+      entity: { eid: eid ?? crypto.randomUUID() },
+      ...eid ? { $was: { entry: { session: null } } } : {},
       entry: { session },
       content: { body },
-      using: (await inForce(g, session))!,
+      using,
     },
     ...held ? [] : [{ entity: { eid: task }, [CLAIM]: { session } }],
     ...underEnding(session, await one(g, session, SEEN)),

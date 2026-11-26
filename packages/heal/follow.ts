@@ -9,6 +9,7 @@ import type { Client } from '@yaks/client'
 import { link } from '@yaks/edge'
 import { human, short } from '@yaks/id'
 import { absent, and, eq, fields, list, present } from '@yaks/query'
+import { handing } from '@yaks/session'
 import { remoteBug, reopened } from '@yaks/tracker'
 import { active, fixing, live, type Options } from './fix.ts'
 
@@ -56,26 +57,23 @@ let mark = (mutate: Client['mutate'], rows: Bundle[], opening?: unknown) =>
   })
 
 // Each opening is news, including a regression while fixer starts are
-// paused: for the session whose work raised it while that session is at work,
-// otherwise for the project. It knocks in the write that files or reopens the
-// bug's task, so the task is the receipt: a replay, a second tracker holding
-// the same bug and a stamp that moved all find the work already open. A
-// reopening is named by the completion it undid.
+// paused: for the session whose work raised it, knocked while it is at work
+// and started again once it is over, otherwise for the project. It is told in
+// the write that files or reopens the bug's task, so the task is the receipt:
+// a replay, a second tracker holding the same bug and a stamp that moved all
+// find the work already open. A reopening is named by the completion it undid.
+let heard = (bug: Bundle, undid?: unknown) =>
+  identityEid('heal_knock', [bug.entity.eid, ...undid ? [str(undid)] : []])
+
 let knock = (
   g: Graph,
   target: string | undefined,
-  bug: Bundle,
+  eid: string,
   body: string,
-  undid?: unknown,
 ): Bundle[] =>
   target && g.vocab.comp('knock')
     ? [{
-      entity: {
-        eid: identityEid('heal_knock', [
-          bug.entity.eid,
-          ...undid ? [str(undid)] : [],
-        ]),
-      },
+      entity: { eid },
       $was: { knock: { target: null } },
       knock: { target },
       doc: { title: '', body },
@@ -83,10 +81,10 @@ let knock = (
     : []
 
 /** Whom a bug's opening names (`during`): the session whose work raised it,
- * while it is still at work, and the task that work was on, unless that was
- * cancelled. The task only names the work in the session's knock; the bug's
- * own task holds the fix. */
-type Owner = { session?: string; task?: Bundle }
+ * at work (`session`) or over and not stopped (`ended`), and the task that
+ * work was on, unless that was cancelled. The task only names the work in the
+ * session's knock; the bug's own task holds the fix. */
+type Owner = { session?: string; ended?: string; task?: Bundle }
 
 // A running fixer holding the bug's task has taken the bug, and the tracker
 // tells the bug's letter thread. It is news once per opening: a bug with no
@@ -223,11 +221,25 @@ export let follow = (
       let rows = new Map((await g.get(ids)).map((row) => [row.entity.eid, row]))
       let s = rows.get(session), t = rows.get(task)
       return {
-        ...s?.session && live(s) ? { session } : {},
+        ...s?.session && live(s)
+          ? { session }
+          : s?.session && !s.stop
+          ? { ended: session }
+          : {},
         ...t?.task && !t.cancelled ? { task: t } : {},
       }
     }
-    let news = async (bug: Bundle, owner: Owner, undid?: unknown) => {
+    // What tells a bug's opening, and the session that will work it, if any:
+    // a knock at the session at work; for one that is over, an input that
+    // starts it again on the provider, model and account it ran on
+    // (@yaks/session `handing`), claiming `task` for it; else a knock at the
+    // project. Its own claim on the bug's task is the caller's to write.
+    let news = async (
+      bug: Bundle,
+      owner: Owner,
+      task: string,
+      undid?: unknown,
+    ) => {
       let project = await home()
       let evidence = bug.entity.eid
       let page = /^https?:/.test(url)
@@ -243,30 +255,43 @@ export let follow = (
       let what = bug.regressed ? reopened(bug) : title
       let kind = bug.regressed ? 'Regressed bug' : 'New bug'
       // The session hears all of it and what to do last; the project, a line.
-      let body = owner.session
-        ? `${kind} your work raised${
+      let yours =
+        `${kind} your work raised${
           owner.task ? ` on ${human(g.vocab)(owner.task)}` : ''
-        }: ${what} (${where})\n\n${last(evidence, url, scope)}`
-        : `${kind}: ${where} — ${
-          what.length > 240 ? `${what.slice(0, 240)}…` : what
-        }\n\n${read}`
+        }: ${what} (${where})\n\nFix it forward first, before any other ` +
+        `work.\n\n${last(evidence, url, scope)}`
+      let eid = heard(bug, undid)
+      let resumed = owner.ended
+        ? (await handing(g, owner.ended, task, yours, { eid }))
+          .filter((row) => row.entity.eid != task)
+        : []
+      let session = owner.session ?? (resumed.length ? owner.ended : undefined)
+      let knocks = owner.session
+        ? knock(g, owner.session, eid, yours)
+        : resumed.length
+        ? resumed
+        : knock(
+          g,
+          project,
+          eid,
+          `${kind}: ${where} — ${
+            what.length > 240 ? `${what.slice(0, 240)}…` : what
+          }\n\n${read}`,
+        )
       // An opening already told is not told again: a close that restored
       // the completion this reopening undid (a tracker answering with an
-      // older resolution) names the same opening, and its knock's guard
-      // would refuse the reopening with it.
-      let knocks = knock(g, owner.session ?? project, bug, body, undid)
-      let told = new Set(
-        knocks.length
-          ? (await g.get(knocks.map((k) => k.entity.eid), ['knock']))
-            .filter((row) => row.knock).map((row) => row.entity.eid)
-          : [],
-      )
+      // older resolution) names the same opening, and its guard would refuse
+      // the reopening with it.
+      let told = knocks.length &&
+        (await g.get([eid], ['knock', 'entry']))
+          .some((row) => row.knock || row.entry)
       return {
         project,
         where,
         read,
         title,
-        knocks: knocks.filter((k) => !told.has(k.entity.eid)),
+        session,
+        knocks: told ? [] : knocks,
       }
     }
     // Whether the decision wrote the box.
@@ -315,36 +340,53 @@ export let follow = (
           // task leaves it as it was. Only an act on the bug resolves or
           // archives it, and that act closes the task above.
           if (task.cancelled || bug.resolved) return
+          let told = reopen
+            ? await news(
+              bug,
+              await whose(bug),
+              task.entity.eid,
+              comp(task, 'completed')?.at,
+            )
+            : undefined
+          let session = told?.knocks.length ? told.session : undefined
           return {
             task,
             bug: evidence,
             reopen,
             opening: str(comp(bug, 'regressed')?.at),
             open: true,
+            handed: !!session,
             last: last(evidence, url, scope),
             writes: reopen
               ? [{
                 entity: task.entity,
                 completed: null,
+                ...session ? { claim: { session } } : {},
                 $was: {
                   completed: { at: token(comp(task, 'completed')?.at) },
                   cancelled: { at: token(comp(task, 'cancelled')?.at) },
+                  ...session
+                    ? {
+                      claim: { session: token(comp(task, 'claim')?.session) },
+                    }
+                    : {},
                 },
               }]
               : [],
-            knocks: reopen
-              ? (await news(bug, await whose(bug), comp(task, 'completed')?.at))
-                .knocks
-              : [],
+            knocks: told?.knocks ?? [],
           }
         }
         if (bug.resolved || bug.archived) return
         let owner = await whose(bug)
-        let { project, where, read, title, knocks } = await news(bug, owner)
-        // The session at work holds what its work raised, so no fixer starts
+        let { project, where, read, title, session, knocks } = await news(
+          bug,
+          owner,
+          eid,
+        )
+        // The session whose work raised it holds it, so no fixer starts
         // beside it; once it ends, a fixer may take the work over. The task
         // its work was on is not the bug's: a regression is work of its own.
-        let held = owner.session ? { claim: { session: owner.session } } : {}
+        let held = session ? { claim: { session } } : {}
         task = {
           entity: { eid },
           task: {},
@@ -359,6 +401,7 @@ export let follow = (
         return {
           task,
           bug: evidence,
+          handed: !!session,
           last: last(evidence, url, scope),
           writes: [task, link(eid, 'about', evidence)],
           knocks,

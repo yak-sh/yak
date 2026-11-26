@@ -2666,6 +2666,9 @@ importers:
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/session':
+        specifier: 0.2.33
+        version: link:../session
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools
@@ -2706,9 +2709,6 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
-      '@yaks/session':
-        specifier: 0.2.33
-        version: link:../session
       '@yaks/task':
         specifier: 0.2.23
         version: link:../task

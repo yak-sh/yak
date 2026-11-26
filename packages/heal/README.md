@@ -66,28 +66,35 @@ the gates allow it, the fixer request. A bug whose opening names the session
 whose work raised it (`during{session, entity}`,
 [tracker](../tracker/README.md)) still gets a task of its own: the task that
 work was on stays as it was, finished or not, since a regression is not the
-feature. While that session is at work (process up or turn going on), the bug's
-task is claimed for it, so no fixer starts beside it, and the opening's knock
-goes to it, naming its task and carrying the resolve step, instead of to the
-home project. Once it ends, its claim no longer holds the task, and a fixer may
-take the work. An existing task linked by an `about` edge is reused. A replay or
-another follower reads the task and its claim and writes nothing while its fixer
-has work outstanding. A pass reads its bugs' work together, so its reads do not
-grow with its bugs: one read finds every bug's `about` edges, one reads their
-tasks, and the first decision that needs fixer history reads it for every open
-bug. The home project and `nofix` are read once a pass, and the running fixers
-once until the pass requests a fixer. A bug whose work the pass writes reads its
-task and fixers again. The request is a `session{operator}` with `fixer{bug}`,
-an `entry{session}` with `content{body}` and
-`using{provider, model, effort, why}`, and a `claim{session}` on the task. The
-provider and model are the native harness's default (`defaultUsing` from
-`@yaks/harness/default`: the offering its router chooses, the pinned one where
-`yak model pin` pinned one, else the `using` on the harness's package row), read
-when the request is written, so the graph write that changes every native
-session's model changes the fixers' too; the request fails while no default is
-set. No process starts inside the follower; the native harness answers the
-request. Anyone can write a bug's words, so the fixer runs isolated: a sandbox
-holding a snapshot of the source, without the box's shell, keys or CLI
+feature. The opening goes to that session instead of the home project, naming
+its task, asking it to fix it forward first, and carrying the resolve step:
+while it is at work (process up or turn going on) as a knock; once it is over
+and nobody stopped it, as an input carrying the `using` its last request carried
+(@yaks/session `handing`), which starts it again on the provider, model and
+account it ran on. A main that CI turned red reaches the session that landed the
+commit this way (`bench/ci.ts`). Either way the bug's task is claimed for it, so
+no fixer starts beside it while it is at work or its next run is asked for. A
+session that cannot be started again (one never given a `using`, an outside
+harness's own) leaves the knock to the home project and the work to a fixer.
+Once it ends, its claim no longer holds the task, and a fixer may take the work.
+An existing task linked by an `about` edge is reused. A replay or another
+follower reads the task and its claim and writes nothing while its fixer has
+work outstanding. A pass reads its bugs' work together, so its reads do not grow
+with its bugs: one read finds every bug's `about` edges, one reads their tasks,
+and the first decision that needs fixer history reads it for every open bug. The
+home project and `nofix` are read once a pass, and the running fixers once until
+the pass requests a fixer. A bug whose work the pass writes reads its task and
+fixers again. The request is a `session{operator}` with `fixer{bug}`, an
+`entry{session}` with `content{body}` and `using{provider, model, effort, why}`,
+and a `claim{session}` on the task. The provider and model are the native
+harness's default (`defaultUsing` from `@yaks/harness/default`: the offering its
+router chooses, the pinned one where `yak model pin` pinned one, else the
+`using` on the harness's package row), read when the request is written, so the
+graph write that changes every native session's model changes the fixers' too;
+the request fails while no default is set. No process starts inside the
+follower; the native harness answers the request. Anyone can write a bug's
+words, so the fixer runs isolated: a sandbox holding a snapshot of the source,
+without the box's shell, keys or CLI
 ([@yaks/harness](../harness/README.md#sessions-outside-words-start)). It hands
 its fix to a lander with `submit_patch`; the lander takes the task's claim and
 does the steps below that need the box. The entry names the task and the fixer's
@@ -147,14 +154,15 @@ hears a fixer started. Terminal native sessions do not mark bugs taken.
 regression to reopen the bug; archival stops its notifications. A regression
 newer than completion reopens its task immediately, even while fixer starts are
 paused. Each new bug and each reopening writes one `knock{target}` for the home
-project, in the write that files or reopens the task. The task is its receipt,
-so a replay, a restart, a second tracker holding the same bug or a moved stamp
-sends no second knock; a regression after the next completion sends a new one. A
-reopening's knock names the hit that reopened it, from
-`regressed{message,
-commit}`. Its last line says what heal did about the bug:
-that a fixer starts on it, or which gate holds one back (fixers off, at cap,
-cooling down), so whoever hears the knock knows whether the work waits for them.
+project, or tells the session its work raised as above, in the write that files
+or reopens the task. The task is its receipt, so a replay, a restart, a second
+tracker holding the same bug or a moved stamp sends no second knock; a
+regression after the next completion sends a new one. A reopening's knock names
+the hit that reopened it, from `regressed{message,
+commit}`. Its last line says
+what heal did about the bug: that a fixer starts on it, or which gate holds one
+back (fixers off, at cap, cooling down), so whoever hears the knock knows
+whether the work waits for them.
 
 The follower writes each mark through the same client's `/apply` door, with
 `optimistic: false` to await tracker admission. Its task and `about` edge are

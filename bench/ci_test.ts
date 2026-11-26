@@ -210,9 +210,29 @@ test('a breakage is blamed once, however long main stays red, and a new one is a
   )
   equal(sent, [
     'gate failed on main: lens (w/lens_test.ts); since b (b) run/2',
-    'gate failed on main: lens (w/lens_test.ts); since b (b) run/4',
+    'gate failed on main: lens (w/lens_test.ts); since b (b) run/4; it first failed in run/2',
     'gate failed on main: cog (p/cog_test.ts); since d (d) run/4',
-    'gate failed on main: cog (p/cog_test.ts); since d (d) run/6',
+    'gate failed on main: cog (p/cog_test.ts); since d (d) run/6; it first failed in run/4',
+  ])
+})
+
+test('a run that leaves a failure out keeps its blame, and a later commit is not blamed for it', async () => {
+  // lens breaks at b; at c a check fails before the tests run, so run 3
+  // names cog alone; lens fails again at d, which touched w/ after it broke.
+  let sent = await told(
+    [['ok', 'red', 'red', 'red']],
+    {
+      2: ['lens w/lens_test.ts'],
+      3: ['cog p/cog_test.ts'],
+      4: ['lens w/lens_test.ts', 'cog p/cog_test.ts'],
+    },
+    { a: [], b: ['w/x.ts'], c: ['p/y.ts'], d: ['w/z.ts'] },
+  )
+  equal(sent, [
+    'gate failed on main: lens (w/lens_test.ts); since b (b) run/2',
+    'gate failed on main: cog (p/cog_test.ts); since c (c) run/3',
+    'gate failed on main: lens (w/lens_test.ts); since b (b) run/4; it first failed in run/2',
+    'gate failed on main: cog (p/cog_test.ts); since c (c) run/4; it first failed in run/3',
   ])
 })
 
@@ -228,7 +248,9 @@ test('a failure its fault’s fix explains is not reported, and an unreadable lo
       commits,
       { fix: { 'ci failed: gate since b': 'c' } },
     ),
-    ['gate failed on main: lens (w/lens_test.ts); since b (b) run/3'],
+    [
+      'gate failed on main: lens (w/lens_test.ts); since b (b) run/3; it first failed in run/2',
+    ],
   )
   equal(await told([['ok', 'red']], {}, { a: [], b: [] }), [
     'gate failed on main: see its log; since b (b) run/2',

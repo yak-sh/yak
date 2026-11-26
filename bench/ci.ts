@@ -4,11 +4,15 @@
  * A red run is broken: a check or a test failed. What a test took fails
  * nothing (bin/test-budget.ts). Its report names what failed, read from the
  * run's log, and the commit that broke it. Each failing test or check is
- * blamed once, in the run it first fails in: of the commits after the run
- * before that one up to it, the newest that changed where the test lives,
- * else that run's own. A run's failures report under the fault of the commit
- * each was blamed on, so a workflow that stays red adds hits to its open bugs,
- * and each new breakage is a bug of its own, however long main stays red. The
+ * blamed once, in the run it first fails in since main was last green: of the
+ * commits after the run before that one up to it, the newest that changed
+ * where the test lives, else that run's own. A run that leaves it out (a
+ * check failed before the tests ran) does not clear its blame, so a commit
+ * that only came after it failed is never blamed for it, and a later report
+ * names the run it first failed in. A run's failures report under the fault
+ * of the commit each was blamed on, so a workflow that stays red adds hits to
+ * its open bugs, and each new breakage is a bug of its own, however long main
+ * stays red. The
  * report names the session that landed the commit and the task it was for,
  * from the box's `commit{target}` row and its `created.via`, as the failure's
  * `during{session, entity}`: heal sends the bug to that session while it is at
@@ -49,19 +53,21 @@ export type Run = {
 export type Seen = Record<string, number>
 
 /** What broke a failure: the commit, the session that landed it and the
- * task it was for, when the box recorded them. */
+ * task it was for, when the box recorded them, and the run it first failed
+ * in. */
 export type Broke = {
   sha: string
   subject: string
   session?: string
   task?: string
+  first?: string
 }
 
 /** Each failing test or check by name, and what broke it. */
 export type Blamed = Record<string, Broke>
 
-/** What a workflow is red with: its newest red run, and what each of that
- * run's failures was blamed on. */
+/** What a workflow is red with: its newest red run, and what each failure
+ * since main was last green was blamed on. */
 export type Red = { last: Run; blamed: Blamed }
 
 /** What the watcher keeps between passes: each workflow's newest run seen,
@@ -285,7 +291,10 @@ let MOST = 5
 
 /// said('gate', { url: 'u' } as Run, { sha: 'abcdef0123', subject: 'Land it' }, [{ name: 't', file: 'a_test.ts' }])
 ///   -> 'gate failed on main: t (a_test.ts); since abcdef012 (Land it) u'
-/** A red run's report: what failed and the commit that broke it. */
+/// said('gate', { url: 'u2' } as Run, { sha: 'abcdef0123', subject: 'Land it', first: 'u1' }, [{ name: 't' }])
+///   -> 'gate failed on main: t; since abcdef012 (Land it) u2; it first failed in u1'
+/** A red run's report: what failed, the commit that broke it, and the run it
+ * first failed in when that was an earlier one. */
 export let said = (
   workflow: string,
   run: Run,
@@ -298,9 +307,12 @@ export let said = (
   let what = names.length
     ? `${names.join('; ')}${more ? `; and ${more} more` : ''}`
     : 'see its log'
+  let first = broke.first && broke.first != run.url
+    ? `; it first failed in ${broke.first}`
+    : ''
   return `${workflow} failed on main: ${what}; since ${
     broke.sha.slice(0, 9)
-  } (${broke.subject}) ${run.url}`
+  } (${broke.subject}) ${run.url}${first}`
 }
 
 /** What reporting a red run reads, and where it sends the report. */
@@ -341,7 +353,12 @@ export let reporting = (doors: Doors) => {
       .then(changed, () => [])
     let { sha, subject } = culprit(changes, now, member) ??
       { sha: run.headSha, subject: run.displayTitle }
-    return { sha, subject, ...await doors.landed(sha).catch(() => ({})) }
+    return {
+      sha,
+      subject,
+      first: run.url,
+      ...await doors.landed(sha).catch(() => ({})),
+    }
   }
   let fixed = predates(doors.fixOf, doors.has)
   return async (
@@ -353,9 +370,11 @@ export let reporting = (doors: Doors) => {
     let all = await failed(run)
     let fresh = all.filter((f) => !blamed[f.name])
     let broke = fresh.length ? await blame(run, before, fresh) : undefined
-    let next: Blamed = Object.fromEntries(
-      all.map((f) => [f.name, blamed[f.name] ?? broke!]),
-    )
+    // Blame outlasts a run that left its failure out, for the whole streak.
+    let next: Blamed = {
+      ...blamed,
+      ...Object.fromEntries(fresh.map((f) => [f.name, broke!])),
+    }
     let groups = Map.groupBy(all, (f) => next[f.name].sha)
     for (let [sha, them] of groups) {
       if (await fixed(fault(workflow, sha), run)) continue

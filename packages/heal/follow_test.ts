@@ -18,7 +18,7 @@ import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { projectDoc } from '@yaks/project'
-import { sessionDoc } from '@yaks/session'
+import { sessionDoc, sessions } from '@yaks/session'
 import { statusComputed } from '../session/state.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { mailDoc } from '@yaks/mail/vocab'
@@ -2008,18 +2008,30 @@ test('unmuting reopened regression starts a fresh fixer instead of continuing it
 })
 
 // A bug whose opening names the session whose work raised it and that work's
-// task, done: `up` says whether the session is still at work. The bug is
-// resolved and comes back once, and the finished task stays as it was.
-let raised = async (up: boolean) => {
+// task, done: the session is still at work (`up`), over with the provider and
+// model it ran on recorded (`resumable`), or over with none (`ended`). The
+// bug is resolved and comes back once, and the finished task stays as it was.
+let ran = { provider, model, effort: 'max' }
+let raised = async (state: 'up' | 'resumable' | 'ended') => {
   let f = await fixture()
+  f.g.use(sessions())
   let session = crypto.randomUUID(), work = crypto.randomUUID()
   let done = { at: '2026-10-02T00:00:00Z' }
+  let up = state == 'up'
   await put(f.g, [
     {
       entity: { eid: session },
       session: up ? {} : { ended: true },
-      ...up ? { process: { pid: 1 } } : {},
+      ...up ? { process: { pid: 1 } } : { exit: { code: 0 } },
     },
+    ...state == 'resumable'
+      ? [{
+        entity: { eid: crypto.randomUUID() },
+        entry: { session },
+        content: { body: 'land the lens mover' },
+        using: ran,
+      }, { entity: { eid: crypto.randomUUID() }, entry: { session }, stop: {} }]
+      : [],
     {
       entity: { eid: work },
       task: {},
@@ -2036,6 +2048,15 @@ let raised = async (up: boolean) => {
   let [opened] = await f.g.get([taskEid(bug)])
   let knocks = await rows(f.g, 'knock')
   let fixers = await rows(f.g, 'fixer')
+  let inputs = async () => {
+    let them = await f.g.read(and(present('entry'), present('using')))
+    let mine = them.filter((e) => comp(e, 'entry').session == session)
+    return (await f.g.get(mine.map((e) => e.entity.eid)))
+      .filter((e) => comp(e, 'content').body != 'land the lens mover')
+  }
+  let told = await inputs()
+  await f.replay()
+  let replayed = await inputs()
   await put(f.tracker, [{
     entity: { eid: bug },
     resolved: { at: '2026-10-02T00:00:02Z' },
@@ -2049,6 +2070,8 @@ let raised = async (up: boolean) => {
   await f.replay()
   let [task] = await f.g.get([work])
   let [own] = await f.g.get([taskEid(bug)])
+  let again = await inputs()
+  let later = await rows(f.g, 'fixer')
   f.close()
   return {
     session,
@@ -2058,10 +2081,15 @@ let raised = async (up: boolean) => {
     own,
     knocks,
     fixers,
+    told,
+    replayed,
+    again,
+    later,
     about: (await f.g.get([edgeEid(work, 'about', bug)]))[0],
   }
 }
-let atWork = await raised(true), ended = await raised(false)
+let atWork = await raised('up'), ended = await raised('ended')
+let resumable = await raised('resumable')
 test('a bug goes to the session at work that raised it, on its own task', () => {
   let { session, done, task, opened, knocks, fixers, about } = atWork
   equal(comp(task, 'completed').at, done.at)
@@ -2071,8 +2099,22 @@ test('a bug goes to the session at work that raised it, on its own task', () => 
   equal(knocks.map((k) => comp(k, 'knock').target), [session])
   let body = String(comp(knocks[0], 'doc').body)
   ok(body.includes('TypeError: missing row') && body.includes('bug resolve'))
+  ok(body.includes('Fix it forward first'))
 })
-test('a bug whose session ended starts a fixer on its own task', () => {
+test('a bug whose session ended starts it again where it ran, once per opening', () => {
+  let { session, opened, own, knocks, fixers, told, replayed, again, later } =
+    resumable
+  equal(comp(opened, 'claim').session, session)
+  equal([fixers, later], [[], []])
+  equal(knocks, [])
+  equal(told.map((e) => comp(e, 'using')), [ran])
+  let body = String(comp(told[0], 'content').body)
+  ok(body.includes('Fix it forward first') && body.includes('bug resolve'))
+  equal(replayed.length, 1)
+  equal(again.length, 2)
+  equal(comp(own, 'claim').session, session)
+})
+test('a bug whose session ended with no provider on record starts a fixer on its own task', () => {
   let { done, task, opened, knocks, fixers, about } = ended
   equal(comp(task, 'completed').at, done.at)
   ok(!about && opened.task && !opened.completed)

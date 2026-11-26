@@ -8,6 +8,7 @@ import { token } from '@yaks/graph/sha256'
 import { defaultUsing } from '@yaks/harness/default'
 import { human } from '@yaks/id'
 import { absent, and, eq, fields, list, present } from '@yaks/query'
+import { requested } from '@yaks/session'
 
 /** What config can set. A fixer asks the native harness's default model
  * (@yaks/harness/default), like every session that names none. */
@@ -82,6 +83,8 @@ export type Work = {
   opening?: string
   /** The tracker still reports this bug open, regardless of local completion. */
   open?: boolean
+  /** The session whose work raised the bug was given it, so no fixer starts. */
+  handed?: boolean
   last?: string
 }
 
@@ -121,6 +124,14 @@ export let live = (session: Bundle): boolean =>
       !['settled', 'stopped', 'failed'].includes(
         str(comp(session, 'session')?.status),
       ))
+
+/** Whether the session `eid` is at work: {@link live}, or asked for its next
+ * run or turn, which it has not begun (@yaks/session `requested`). */
+export let atWork = async (g: Graph, eid: string): Promise<boolean> => {
+  let session = await one(g, eid)
+  if (!session) return false
+  return live(session) || !!g.vocab.comp('using') && await requested(g, eid)
+}
 
 /** What one pass's decisions share, each read once. */
 type Pass = {
@@ -212,8 +223,10 @@ export let fixing = (g: Graph, options: Options = {}) => {
     pass: Pass,
   ): Promise<{ asked: Bundle[]; said?: string }> => {
     let none = { asked: [] }
-    let { task, bug, reopen, opening, open, last } = work
-    if (task.cancelled || (!reopen && !open && task.completed)) return none
+    let { task, bug, reopen, opening, open, last, handed } = work
+    if (handed || task.cancelled || (!reopen && !open && task.completed)) {
+      return none
+    }
     let history = await pass.fixers(bug)
     let latest =
       history.toSorted((a, b) =>
@@ -226,8 +239,9 @@ export let fixing = (g: Graph, options: Options = {}) => {
     // A claim is stale only with terminal evidence. Unknown or empty foreign
     // sessions are held conservatively, including a managed start in flight.
     if (holder && holder != latest?.entity.eid) {
-      let owner = await one(g, str(holder))
-      if (!owner || live(owner)) return none
+      if (!await one(g, str(holder)) || await atWork(g, str(holder))) {
+        return none
+      }
     }
     if (history.some((f) => active(f))) return none
     let continuing = !reopen &&

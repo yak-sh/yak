@@ -342,7 +342,9 @@ a transcript was told that its last turn or run was not given, and
 person. A wake records the task it woke its transcript for (`woken{task}`), so
 `carrying(graph, task)` finds the transcript already on a task, its claim held
 or let go, and `handing(graph, session, task, body)` gives it an instruction
-instead of a second run starting (`@yaks/spawn`).
+instead of a second run starting (`@yaks/spawn`), on the provider, model and
+account its last request named; a transcript never given one gets none.
+@yaks/heal hands a session that is over the bug its work raised the same way.
 
 When `x` finishes, a transcript parked on `y` which requires `x` receives that
 news and a request for another turn, carrying its previous provider choice. The
