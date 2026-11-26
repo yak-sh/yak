@@ -668,6 +668,51 @@ test('a guard on an absent value is null, and on an unknown property refuses', (
   )
 })
 
+for (
+  let [label, pages] of Object.entries({
+    missing: {},
+    null: { pages: null },
+    undefined: { pages: undefined },
+  })
+) {
+  let storage = memory()
+  let one = graph({ storage, vocab: books })
+  storage.tx((tx) =>
+    tx.patch([{ entity: { eid: 'b1' }, book: { shelved: true, ...pages } }])
+  )
+
+  test(`a null guard accepts an absent property (${label})`, () => {
+    sync(one.apply([{
+      entity: { eid: 'b1' },
+      book: { pages: 412 },
+      $was: { book: { pages: null } },
+    }]))
+    assertEquals((one.get(['b1']) as Bundle[])[0].book, {
+      shelved: true,
+      pages: 412,
+    })
+  })
+}
+
+test('a guard distinguishes zero from absence and names the current token', () => {
+  let one = g()
+  let write = (pages: number | null, was: string | null) =>
+    sync(one.apply([{
+      entity: { eid: 'b1' },
+      book: { pages },
+      $was: { book: { pages: was } },
+    }]))
+  write(0, null)
+  assertThrows(() => write(412, null), Stale)
+  write(null, token(0))
+  let error = assertThrows(
+    () => write(412, token(0)),
+    Stale,
+    'current: null\ncurrent token: null',
+  ) as Stale
+  assertEquals(error.was, null)
+})
+
 test('a delete tombstones the entity and death spreads by the vocabulary', () => {
   let one = g()
   sync(one.apply([

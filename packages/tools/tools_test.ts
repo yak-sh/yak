@@ -1379,7 +1379,7 @@ test('a stale tool refusal returns the committed text and its read token', async
   let text = worded(answerOf(landed, call.entity.eid))
   assertEquals(faulted(landed, call.entity.eid), true)
   assertEquals(text.includes(`current: ${JSON.stringify(body)}`), true)
-  assertEquals(text.includes(`was: ${token(body)}`), true)
+  assertEquals(text.includes(`current token: ${token(body)}`), true)
 })
 
 let nested: Tool = {

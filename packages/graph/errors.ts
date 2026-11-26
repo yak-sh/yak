@@ -88,11 +88,12 @@ export class Stale extends Error {
     public prop: string,
     public current: unknown,
   ) {
+    let was = token(current)
     super(
       `${comp}.${prop} of ${eid} has moved since it was read\n` +
-        `current: ${JSON.stringify(current)}\nwas: ${token(current)}`,
+        `current: ${JSON.stringify(current)}\ncurrent token: ${was}`,
     )
-    this.was = token(current)
+    this.was = was
     this.name = 'Stale'
   }
 }

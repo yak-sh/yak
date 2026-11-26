@@ -70,15 +70,16 @@ export let preconditions = (
         if (!identity && prop !== '' && !vocab.prop(comp, prop)) {
           throw new Refused(`unknown property in $was: ${comp}.${prop}`)
         }
+        let expected = want ?? null
         // First creation requires an unused identity, including no grave.
         // Other guards keep the existing delete-race semantics below.
-        if (buried && comp != TOMBSTONE && !(identity && want === null)) {
+        if (buried && comp != TOMBSTONE && !(identity && expected === null)) {
           continue
         }
         let cur = prop === ''
           ? stored?.[comp] ?? null
           : (stored?.[comp] as Comp | undefined)?.[prop] ?? null
-        if (token(cur) == want) continue
+        if (token(cur) === expected) continue
         // A value read from an id that names nothing was never read: the
         // id is mistyped or made up, which no re-read would merge onto.
         if (!stored) {
