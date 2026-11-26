@@ -130,6 +130,11 @@ left out and refill when needed, so keep work in `/workspace`. The more a
 snapshot holds, the longer waking takes. Older snapshots are retained without an
 automatic purge. Processes stop at shutdown.
 
+When a sandbox tool reports that its call is still in progress, repeat the same
+call with the same arguments to retrieve its result. When `sandbox_shell`
+returns a process ID for a running command, use `sandbox_wait` or `sandbox_stop`
+with that ID.
+
 `sandbox_ship` copies files into an app independently, so the app serves them
 without waking the sandbox.
 

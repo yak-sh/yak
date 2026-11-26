@@ -4,6 +4,7 @@
 // the directory opened afresh as mcp.ts opens it.
 import { CallError } from '@yaks/tools/errors'
 import { Durable, type State } from '@yaks/durable-object/object'
+import type { Clock } from '@yaks/fp'
 import { running } from './agent.ts'
 import { caught } from './defects.ts'
 import { copyOf } from './directory-copy.ts'
@@ -22,13 +23,13 @@ let ran = async (
 ): Promise<Ended> => {
   let t = TOOLS.find((one) => one.name == asked.tool)
   if (!t) return { refused: { code: 'missing', text: `no tool ${asked.tool}` } }
-  let space = asked.who?.space
+  let { space, spaceEid } = asked.who ?? {}
   let reopen = () => {
     let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
       copy: copyOf(env),
       time: env.CLOCK,
     })
-    return space ? narrowed(dir, space, asked.who?.spaceEid) : dir
+    return space || spaceEid ? narrowed(dir, space ?? undefined, spaceEid) : dir
   }
   let ctx: Ctx = {
     env,
@@ -62,11 +63,11 @@ let ran = async (
 export class Outlast extends Durable {
   #once: ReturnType<typeof outlasting>
   #env: Env
-  constructor(ctx: State, env: Env) {
+  constructor(ctx: State, env: Env, time: Clock | undefined = env.CLOCK) {
     super(ctx, {
       report: (e, entry) => caught(e, { request: `outlast ${entry}` }),
     })
-    this.#once = outlasting(this.keys)
+    this.#once = outlasting(this.keys, time)
     this.#env = env
   }
   call(asked: Asked): Promise<Heard> {

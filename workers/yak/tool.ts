@@ -208,7 +208,7 @@ export type Tool = {
   outlasts?: (
     args: Args,
     ctx: Ctx,
-  ) => { key: string; patience?: number; progress?: string }
+  ) => { key: string; patience?: number; progress?: string } | undefined
   run: (ctx: Ctx, args: Args) => Promise<Out>
   recover?: (ctx: Ctx, args: Args) => Promise<Out | undefined>
 }

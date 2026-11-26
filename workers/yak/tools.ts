@@ -3590,7 +3590,6 @@ let bench = async <T>(
   if (no) throw refuse('limit', no)
   ctx.doing?.(WAKING)
   let box = await workbench(ctx.env, space, ctx.person, spend)
-  ctx.doing?.('the sandbox is running the command')
   try {
     return await body(box)
   } finally {
@@ -3604,6 +3603,18 @@ let bench = async <T>(
 // container: a sandbox that slept restores its kept files first.
 let WAKING = 'the sandbox is waking: starting its container and restoring ' +
   'the files it kept, which takes longer the more it keeps'
+
+// Preparation is shared by every sandbox operation. The command's own timeout
+// can only start once the workbench can answer.
+let sandboxJob = (
+  args: Args,
+  { who }: Ctx,
+  fields: unknown[] = Object.keys(args).sort().map((key) => [key, args[key]]),
+) => ({
+  key: sha256(JSON.stringify([who?.spaceEid ?? who?.space, ...fields])),
+  patience: 6_000,
+  progress: 'The sandbox is preparing to run your request.',
+})
 
 // The machine tools (@yaks/harness), declared there once and listed here as
 // sandbox_<name>, run on this space's container (sandbox.ts
@@ -3669,23 +3680,17 @@ let attachedFile = async (ctx: Ctx, space: Space, args: Args, who: Who) => {
 let SANDBOX: Row[] = machineDeclared().map((t) => {
   let shape = t.parameters as Omit<Shape, 'type'>
   let writes = t.name == 'write'
+  let shell = t.name == 'shell'
   return {
     ...HINTS[t.name],
     name: `sandbox_${t.name}`,
-    ...t.name == 'shell'
-      ? {
-        outlasts: (args: Args, { who }: Ctx) => ({
-          key: sha256(JSON.stringify([
-            who?.spaceEid ?? who?.space,
-            args.space,
-            args.command,
-            args.timeout,
-          ])),
-          patience: 6_000,
-          progress: 'The sandbox is preparing or running your command.',
-        }),
-      }
-      : {},
+    // Keep the key of commands already running across a deploy.
+    outlasts: shell
+      ? (args, ctx) => ({
+        ...sandboxJob(args, ctx, [args.space, args.command, args.timeout]),
+        progress: 'The sandbox is preparing or running your command.',
+      })
+      : sandboxJob,
     input: {
       type: 'object',
       properties: {
@@ -3702,6 +3707,13 @@ let SANDBOX: Row[] = machineDeclared().map((t) => {
         ctx,
         space,
         async ({ workspace, provider, ref }) => {
+          ctx.doing?.(
+            shell
+              ? 'the sandbox is running the command'
+              : t.name == 'wait'
+              ? 'the sandbox is checking the process'
+              : 'the sandbox is handling your request',
+          )
           if (!file) {
             return await machineTools(workspace, {
               cwd: () => CWD,
@@ -4464,6 +4476,10 @@ let OURS: Row[] = [
     name: 'app_files',
     destructive: false,
     openWorld: true,
+    outlasts: (args, ctx) =>
+      (args.starter as { into?: unknown } | undefined)?.into == null
+        ? undefined
+        : sandboxJob(args, ctx),
     input: FILES_INPUT,
     run: async (ctx, args) => {
       let batch = files(args.files)
@@ -4511,7 +4527,10 @@ let OURS: Row[] = [
         let seeded = await bench(
           ctx,
           space,
-          ({ provider, ref }) => seedTree(provider, ref, folder, batch),
+          ({ provider, ref }) => {
+            ctx.doing?.('the sandbox is writing the starter files')
+            return seedTree(provider, ref, folder, batch)
+          },
         )
         let path = `${CWD}/${folder}`
         if (!seeded) {
@@ -5253,6 +5272,7 @@ let OURS: Row[] = [
     name: 'sandbox_ship',
     destructive: false,
     openWorld: true,
+    outlasts: sandboxJob,
     input: {
       type: 'object',
       properties: {
@@ -5310,6 +5330,7 @@ let OURS: Row[] = [
         named,
       )
       let files = await bench(ctx, space, async ({ provider, ref }) => {
+        ctx.doing?.('the sandbox is exporting files')
         // One listing expands every glob and walks every folder at once, so
         // a whole build costs one command rather than one per path.
         let found = await provider.exec(ref, listing(asked))
@@ -5331,6 +5352,7 @@ let OURS: Row[] = [
         }
         return files
       })
+      ctx.doing?.('the files are being staged in the app draft')
       let { paths, already, draft, drafts, gone } = await wroteAt(
         ctx.env,
         space,

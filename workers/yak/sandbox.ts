@@ -94,6 +94,7 @@ import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { refuse } from './tool.ts'
 import { plans } from '@yaks/platform/standing'
 import { caught } from './defects.ts'
+import { elapsed } from './lib/hops.ts'
 import { type Meta, meta } from './meta.ts'
 
 /**
@@ -255,7 +256,10 @@ type Bound = Keys & {
 // A call into a box or its workspace, sent again while the runtime resets
 // the object, each pause waited out on the env's clock.
 let retrying = (env: Bound) => <T>(send: () => T | Promise<T>) =>
-  retried(send, true, evicted, jittered(env.CLOCK))
+  elapsed(
+    'workbench_wait',
+    () => retried(send, true, evicted, jittered(env.CLOCK)),
+  )
 
 // Workbench owns persistence across idle shutdowns as well as disposal. Its
 // prepare RPC restores a cold filesystem before any command reaches it.

@@ -348,6 +348,8 @@ sandbox_wait:
     and output, stdout then stderr, or says it is still
     running when timeout milliseconds pass (default 60000). Waiting keeps
     the sandbox awake, metered by the second as with sandbox_shell.
+    If the wait itself is still in progress, call sandbox_wait again with
+    the same arguments for its result.
     Documentation: https://yaks.app/docs/sandbox.
 sandbox_stop:
   title: Stop a sandbox command

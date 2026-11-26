@@ -71,7 +71,7 @@ import {
 import { narrowed } from './lexicon.ts'
 import { queried } from './page-graph.ts'
 import { META, META_STORE, ranked } from './directory.ts'
-import { wrote } from './lib/hops.ts'
+import { elapsed, wrote } from './lib/hops.ts'
 import { titling } from './session.ts'
 import {
   type Ctx,
@@ -225,20 +225,27 @@ export let answered = async (
 export let running =
   (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) => {
     let invocation = { ...ctx, ...(call ? { call } : {}) }
-    if (t.outlasts && ctx.outlast && ctx.env.OUTLAST) {
-      let { key, patience, progress } = t.outlasts(args, invocation)
-      return outlasted(
-        ctx.env.OUTLAST,
-        `${ctx.person}|${t.name}|${key}`,
-        {
-          tool: t.name,
-          args,
-          person: ctx.person,
-          ...(call ? { call } : {}),
-          ...(ctx.who ? { who: ctx.who } : {}),
-          ...(patience == null ? {} : { patience }),
-        },
-        progress,
+    let objects = ctx.outlast ? ctx.env.OUTLAST : undefined
+    let delayed = objects && t.outlasts?.(args, invocation)
+    if (objects && delayed) {
+      let { key, patience, progress } = delayed
+      return elapsed(
+        'outlast_wait',
+        () =>
+          outlasted(
+            objects,
+            `${ctx.person}|${t.name}|${key}`,
+            {
+              tool: t.name,
+              args,
+              person: ctx.person,
+              ...(call ? { call } : {}),
+              ...(ctx.who ? { who: ctx.who } : {}),
+              ...(patience == null ? {} : { patience }),
+            },
+            progress,
+          ),
+        t.name,
       )
     }
     return t.run(invocation, args).then((out) =>
