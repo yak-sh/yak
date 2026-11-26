@@ -25,7 +25,7 @@ export let connected = async (
 ) => {
   let area = heard(req.cf ?? {})
   if (!Object.keys(area).length) return
-  await note(kept(env), person, {
+  await note(await kept(env), person, {
     kind: 'current',
     source: 'network',
     ...area,
@@ -40,7 +40,7 @@ export let billedTo = async (
 ) => {
   let area = billed(address)
   if (!Object.keys(area).length) return
-  await note(kept(env), person, {
+  await note(await kept(env), person, {
     kind: 'home',
     source: 'billing',
     ...area,

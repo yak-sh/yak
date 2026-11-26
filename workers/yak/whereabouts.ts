@@ -33,13 +33,13 @@ export type Kept = {
 }
 
 /** The directory, read and written as the kernel. */
-export let kept = (env: Pick<Env, 'STORE'>): Kept => {
+export let kept = (env: Pick<Env, 'STORE'>): Promise<Kept> => {
   let store = meta(env)
-  return {
+  return Promise.resolve({
     read: (q) => store.query(q as Line) as Promise<Bundle[]>,
     apply: (bundles) => store.apply(bundles, KERNEL),
     whereabouts: directory({ fetch: (req) => fetch(req, env) }).whereabouts,
-  }
+  })
 }
 
 /** Keep what a channel said of a person, if it is news. */
@@ -49,7 +49,7 @@ export let present = async (
   now: number = Date.now(),
   dir?: Kept,
 ): Promise<void> => {
-  dir ??= kept(env)
+  dir ??= await kept(env)
   let eid = whereaboutsEid(said.person, said.channel, said.place)
   let [row] = await dir.read(line`.entity.eid=${eid}&.whereabouts&*`)
   let next = noted(row, said, now)
@@ -62,7 +62,7 @@ export let whereaboutsOf = async (
   person: string,
   dir?: Kept,
 ): Promise<Bundle[]> => {
-  dir ??= kept(env)
+  dir ??= await kept(env)
   return await (dir.whereabouts?.([person]) ??
     dir.read(line`.whereabouts.person=${person}&*`))
 }
@@ -88,7 +88,7 @@ export let whereaboutsItem = async (
   place: string,
   dir?: Kept,
 ): Promise<string | undefined> => {
-  dir ??= kept(env)
+  dir ??= await kept(env)
   let [g, [row]] = await Promise.all([
     seen(env, person, place, Date.now(), dir),
     dir.read(line`.entity.eid=${person}&.fields=entity.eid,doc.title`),
