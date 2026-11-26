@@ -1,9 +1,35 @@
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { purging, stored, through } from './cache.ts'
+import { purging, stored, storedBytes, through } from './cache.ts'
 
 let publicAnswer = (body = 'bytes') =>
   new Response(body, { headers: { 'cache-control': 'public, max-age=30' } })
+
+test('an immutable index is shared after it exists, including its bytes', async () => {
+  let files = new Map<string, Response>(), writes: Promise<void>[] = []
+  let cache = {
+    match: (req: Request) => Promise.resolve(files.get(req.url)?.clone()),
+    put: (req: Request, res: Response) =>
+      Promise.resolve(void files.set(req.url, res)),
+  }
+  let index = 'https://files.invalid/release-index/1'
+  let bytes = Uint8Array.of(0, 128, 255)
+  let read = (
+    key: string,
+    draw: () => Promise<Uint8Array<ArrayBuffer> | null>,
+  ) =>
+    storedBytes(cache, key, draw, {
+      hold: (work) => writes.push(work),
+      failed: (error) => {
+        throw error
+      },
+    })
+  assertEquals(await read(index, () => Promise.resolve(null)), null)
+  assertEquals(await read(index, () => Promise.resolve(bytes)), bytes)
+  await Promise.all(writes)
+  assertEquals(await read(index, () => Promise.reject('cache miss')), bytes)
+  assertEquals(await read(index + '2', () => Promise.resolve(null)), null)
+})
 
 test('a cache fill never holds a miss or another reader behind it', async () => {
   let filling = Promise.withResolvers<void>()

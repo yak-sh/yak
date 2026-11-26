@@ -57,14 +57,14 @@ let written = async (raw: Objects, source: string, index: Index) => {
   })
   trim(all)
 }
-let indexAt = (raw: Objects, prefix: string) => {
+let indexAt = (raw: Objects, prefix: string, read = raw.read) => {
   let all = cache(raw)
   let found = all.get(prefix)
   if (found) return found.index
   let entry = {
     size: 0,
     index: elapsed('index_wait', async () => {
-      let bytes = await raw.read(prefix.slice(0, -1) + META)
+      let bytes = await read(prefix.slice(0, -1) + META)
       entry.size = bytes?.byteLength ?? 0
       return bytes && decode(bytes)
     }),
@@ -142,8 +142,9 @@ export let packed = async (
 export let filesIn = async (
   raw: Objects,
   source: string,
+  read?: Objects['read'],
 ): Promise<Files | null> => {
-  let index = await indexAt(raw, `${source}/`)
+  let index = await indexAt(raw, `${source}/`, read)
   return index && filesOf(index)
 }
 
@@ -172,8 +173,12 @@ let unrewritten = async (raw: Objects, index: Index): Promise<Assets> => {
 }
 
 let assetsByIndex = new WeakMap<Index, Promise<Assets>>()
-export let assetsIn = async (raw: Objects, source: string): Promise<Assets> => {
-  let index = await indexAt(raw, `${source}/`)
+export let assetsIn = async (
+  raw: Objects,
+  source: string,
+  read?: Objects['read'],
+): Promise<Assets> => {
+  let index = await indexAt(raw, `${source}/`, read)
   return index
     ? sharing(assetsByIndex, index, () => {
       let assets = assetsOf(index)
@@ -290,8 +295,11 @@ export let filesAt = async (raw: Objects, source: string): Promise<Files> => {
 // The bucket's keys, with a key under a release read through that release's
 // index: a path there names the bytes at their content address, and their
 // text where the index carries it, so those bytes are never asked for.
-export let releaseFiles = (blobs: Objects): Objects => {
-  let index = (prefix: string) => indexAt(blobs, prefix)
+export let releaseFiles = (
+  blobs: Objects,
+  indexRead?: Objects['read'],
+): Objects => {
+  let index = (prefix: string) => indexAt(blobs, prefix, indexRead)
   // The file a key names: the bucket's own key outside a release, and null
   // for a path its release does not hold.
   let named = async (key: string): Promise<Named | null> => {

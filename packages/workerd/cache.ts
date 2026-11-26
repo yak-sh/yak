@@ -134,6 +134,25 @@ let cacheable = (res: Response) => {
     !res.headers.has('set-cookie') && res.headers.get('vary') != '*'
 }
 
+/** Keep immutable bytes under an internal cache key. Missing bytes are read
+ * again on the next request. */
+export let storedBytes = async (
+  cache: Stored | (() => Promise<Stored>),
+  key: string,
+  read: () => Promise<Uint8Array<ArrayBuffer> | null>,
+  options: Shelving,
+): Promise<Uint8Array<ArrayBuffer> | null> => {
+  let response = await stored(cache, new Request(key), async () => {
+    let bytes = await read()
+    return bytes
+      ? new Response(bytes, {
+        headers: { 'cache-control': 'public, max-age=86400' },
+      })
+      : new Response(null, { status: 404 })
+  }, options)
+  return response.ok ? new Uint8Array(await response.arrayBuffer()) : null
+}
+
 // How long a read waits on the cache before it is answered in-process. A miss
 // goes the long way round in most of a second; a cache that holds an answer
 // back holds it for a minute or more (T-153286).

@@ -13,7 +13,7 @@ import { type Clock, clock, timed } from './timing.ts'
 //
 // Its requests use internal addresses from @yaks/platform/kept. Both the
 // gateway and the named Files entrypoint use the same local cache.
-import { r2Objects, r2RawObjects } from './lib/objects.ts'
+import { r2RawObjects, releaseIndex, servedObjects } from './lib/objects.ts'
 import { filesIn } from './release.ts'
 import {
   type Loaded,
@@ -146,8 +146,8 @@ export let holding = async (
   source: string,
 ): Promise<(path: string) => boolean> => {
   let [files, config] = await Promise.all([
-    filesIn(r2RawObjects(env.BLOBS), source),
-    configOf(r2Objects(env.BLOBS), source),
+    filesIn(r2RawObjects(env.BLOBS), source, releaseIndex(env)),
+    configOf(servedObjects(env), source),
   ])
   let root = rootOf('', config).slice(1)
   let at = root ? `${root}/` : ''
@@ -320,7 +320,7 @@ export let warm = async (
   if (!cache) return
   // A file's address is its path inside the served folder, and a file
   // outside that folder has none.
-  let dir = (await configOf(r2Objects(env.BLOBS), source)).assets?.directory
+  let dir = (await configOf(servedObjects(env), source)).assets?.directory
   let asked = warmed(
     dir
       ? paths.filter((p) => p.startsWith(`${dir}/`))
@@ -588,7 +588,7 @@ let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // An undecodable path is absent, not a failure of the file service.
   let at = decodedPath(path)
   if (at == null) return missing()
-  let blobs = r2Objects(env.BLOBS)
+  let blobs = servedObjects(env)
   let config = await c.time('config', () => configOf(blobs, prefix))
   let root = rootOf(prefix, config)
   let key = keyed(root, path)

@@ -2,10 +2,12 @@
 // name over the `BLOBS` binding, with every trip counted on the request's
 // tally (hops.ts), which the request reports as `r2;dur=<n>`.
 import { type Bucket, bucketObjects, type Objects } from '@yaks/blob'
-import { streaming } from '../defects.ts'
+import { background, failing, streaming } from '../defects.ts'
 import { sleep } from '@yaks/fp'
+import { storedBytes } from '@yaks/workerd/cache'
 import { elapsed, hop, type Tally } from './hops.ts'
 import { releaseFiles } from '../release.ts'
+import type { Env } from '../env.ts'
 
 /**
  * The same store, with every verb counted as one round trip on the request's
@@ -86,3 +88,28 @@ export let r2RawObjects = (bucket: Bucket, pause = sleep): Objects => {
 /** The app's file keys, resolved through an immutable release index. */
 export let r2Objects = (bucket: Bucket): Objects =>
   releaseFiles(r2RawObjects(bucket))
+
+type ReleaseEnv = Pick<Env, 'BLOBS' | 'FILE_CACHE' | 'CLOCK'>
+
+/** Site and Files read the same immutable index across isolates in a colo. */
+export let releaseIndex = (env: ReleaseEnv): Objects['read'] => {
+  let raw = r2RawObjects(env.BLOBS)
+  let cache = env.FILE_CACHE
+  if (!cache) return raw.read
+  return (key) =>
+    storedBytes(
+      cache,
+      `https://files.invalid/release-index/${encodeURIComponent(key)}`,
+      () => raw.read(key),
+      {
+        hold: background,
+        failed: failing('release index cache'),
+        clock: env.CLOCK,
+        patience: 30,
+      },
+    )
+}
+
+/** App files with the serving door's index cache. */
+export let servedObjects = (env: ReleaseEnv): Objects =>
+  releaseFiles(r2RawObjects(env.BLOBS), releaseIndex(env))

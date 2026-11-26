@@ -41,7 +41,7 @@ import { previewed } from './preview-html.ts'
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
 import { type Host, url as hostUrl } from '@yaks/platform/host'
-import { r2Objects, r2RawObjects } from './lib/objects.ts'
+import { r2Objects, r2RawObjects, releaseIndex } from './lib/objects.ts'
 import { generatedIconKey } from '@yaks/platform/app-icon'
 import { splashAsked, splashPrefix } from '@yaks/platform/splash'
 import { monogram } from '@yaks/platform/monogram'
@@ -1266,7 +1266,7 @@ let releaseAssets = (
   source: string | null | undefined,
 ): Promise<Assets> =>
   releaseId(source)
-    ? assetsIn(r2RawObjects(env.BLOBS), source!)
+    ? assetsIn(r2RawObjects(env.BLOBS), source!, releaseIndex(env))
     : Promise.resolve({})
 
 let releaseAsset = (assets: Assets, path: string) => {
