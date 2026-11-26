@@ -292,24 +292,16 @@ test('the style guide demonstrates every shared component', async () => {
   }
 })
 
-// Other pages share their links. The home page also links into its feature
-// sections. A person signed in reads
-// "Open yaks.app" where "Sign in" was, on every page as it leaves.
+// Other pages share their links. The home page's bar is shorter, and links to
+// its own pricing section where the others link /pricing. A person signed in
+// reads "Open yaks.app" where "Sign in" was, on every page as it leaves.
 test('the home nav links to its sections and other pages share their nav', () => {
   let want = ['/#how', '/gallery', '/pricing', '/docs', '/login', '/manage']
   for (let page of branded) {
     let { document } = parseHTML(sheeted(read(page), {}))
     let nav = [...document.querySelectorAll('.Nav a')]
     assert(nav.length, `${page} has no nav`)
-    let home = [
-      '#how',
-      '#integrations',
-      '/gallery',
-      '#cost',
-      '/docs',
-      '/login',
-      '/manage',
-    ]
+    let home = ['/gallery', '#cost', '/docs', '/login', '/manage']
     assertEquals(
       nav.map((a) => a.getAttribute('href')),
       page == 'index.html' ? home : want,
