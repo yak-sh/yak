@@ -377,6 +377,7 @@ import { an, invitedWords, room, send } from './invite.ts'
 import { aloud, peopleOwned, shown } from './people.ts'
 import {
   fenced,
+  latest,
   overtaken,
   record,
   releaseOf,
@@ -406,6 +407,7 @@ import {
 import { digest } from '@yaks/graph/sha256'
 import {
   crossedPaths,
+  deployDraftRefusal,
   draftPaths,
   toolDraft,
 } from '@yaks/platform/draft-choice'
@@ -2469,10 +2471,17 @@ export let released = async (
           error.eid == standing.eid && error.prop == 'draft'
         )
       ) {
-        throw refuse(
-          'missing',
-          `draft ${taken.eid} was released or discarded while this ` +
-            'release waited its turn; app_files op: list names the open ones',
+        ctx.dir.reread()
+        let app = await latest(ctx.dir, space, standing)
+        let [drafts, version] = await Promise.all([
+          draftsOf(ctx.dir, app),
+          ctx.dir.draftRelease(app, taken.eid),
+        ])
+        throw deployDraftRefusal(
+          app,
+          taken.eid,
+          drafts,
+          version,
         )
       }
       if (!overtaken(error, standing)) throw error
@@ -5513,11 +5522,22 @@ let OURS: Row[] = [
         }
       }
       paused(ctx, space)
+      let drafts = await draftsOf(ctx.dir, app)
+      if (
+        named && named != NEW && !drafts.some((draft) => draft.eid == named)
+      ) {
+        throw deployDraftRefusal(
+          app,
+          named,
+          drafts,
+          await ctx.dir.draftRelease(app, named),
+        )
+      }
       let draft = releasing(
         app,
-        await draftsOf(ctx.dir, app),
+        drafts,
         who,
-        draftArg(args),
+        named,
       )
       let { version, said, serves, review } = await released(
         ctx,

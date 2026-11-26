@@ -130,11 +130,43 @@ test('a released private preview executes steps in its signed-in browser', async
   assertStringIncludes(String(said.text), 'The shut release')
 })
 
-test('an app never released has nothing to open', async () => {
-  await agent.tool('app_new', { space, slug: 'unborn', title: 'Unborn' })
-  await assertRejects(
-    () => agent.answer('app_preview', { space, app: 'unborn', released: true }),
+let unreleased = { space, app: 'unborn', screenshot: false }
+await agent.tool('app_new', { space, slug: unreleased.app, title: 'Unborn' })
+let unwritten = { ...unreleased, app: 'unwritten' }
+await agent.tool('app_new', { space, slug: unwritten.app, title: 'Unwritten' })
+let draft = (await agent.answer('app_files', {
+  space,
+  app: unreleased.app,
+  path: 'index.html',
+  content: '<h1>First draft</h1>',
+})).value!.draft
+
+test('an unreleased app points a live preview call to its private draft', async () => {
+  let refusal = await assertRejects(
+    () => agent.answer('app_preview', { ...unreleased, released: true }),
     Error,
     'has no release yet',
   )
+  assertStringIncludes(refusal.message, 'released: false')
+  assertStringIncludes(refusal.message, String(draft))
+  assertStringIncludes(refusal.message, 'app_deploy')
+  let preview = await agent.answer('app_preview', {
+    ...unreleased,
+    released: false,
+    draft,
+  })
+  equal(preview.value?.draft, draft)
+  equal(preview.value?.isolated, true)
+})
+
+test('an app without a draft or release points preview callers to app_files', async () => {
+  for (let released of [true, false]) {
+    let refusal = await assertRejects(
+      () => agent.answer('app_preview', { ...unwritten, released }),
+      Error,
+      'has no release yet',
+    )
+    assertStringIncludes(refusal.message, 'app_files')
+    assertStringIncludes(refusal.message, 'released: false')
+  }
 })

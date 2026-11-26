@@ -45,7 +45,8 @@ import { argsOf } from '@yaks/graph/call'
 import { composed as perEntity } from '@yaks/graph/bundle'
 import { detached } from '@yaks/graph/storage'
 import { Refused } from '@yaks/graph/errors'
-import { parse, stringify, whole } from '@yaks/query'
+import { conjoin, parse, stringify, whole } from '@yaks/query'
+import { corrections } from '@yaks/query/corrections'
 import { addressed, wordish } from '@yaks/alias'
 import { edges } from '@yaks/edge'
 import { SHORT } from '@yaks/id'
@@ -81,7 +82,8 @@ import {
   TOOLS,
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
-import { appVocab, packagesOf } from './vocab.ts'
+import { appVocab, packagesOf, platformVocab } from './vocab.ts'
+import { CallError } from '@yaks/tools/errors'
 import { lined } from '@yaks/platform/page-wire'
 import { queryRefusal, scope, unasked } from './query-line.ts'
 import { apex, type Host, hosted } from '@yaks/platform/host'
@@ -521,8 +523,33 @@ let held = (
         : await read(ctx.env, where, whole(one))
       return { answer, reduced: !!aggregate(parse(one)) }
     } catch (e) {
-      let said = queryRefusal(e, at && `${at.space.slug}/${at.app.slug}`)
-      if (said) throw refuse('arguments', said)
+      let location = at && `${at.space.slug}/${at.app.slug}`
+      let hint = queryRefusal(e, location)
+      if (hint) throw refuse('arguments', hint)
+      if (e instanceof Error && e.name == 'Unknown' && 'prop' in e) {
+        let path = e.prop
+        if (
+          typeof path == 'string' &&
+          (location == META_STORE || path.includes('.'))
+        ) {
+          let vocab = location == META_STORE
+            ? platformVocab()
+            : await spoken(ctx, where)
+          let fixes = corrections(vocab, one, path)
+          if (fixes.length) {
+            let lines = fixes.map((q) =>
+              JSON.stringify(
+                said ? conjoin(q, `.in=${said}`) : q,
+              )
+            )
+            throw new CallError(
+              e.name,
+              e.message,
+              `Try q: ${lines.join(' or ')}.`,
+            )
+          }
+        }
+      }
       throw e
     }
   }

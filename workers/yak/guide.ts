@@ -529,7 +529,10 @@ export let NARROW =
   "app, add .in=<app> to the query ('.recipe&.in=recipes'), or " +
   '.in=<space>/<app> where two of your spaces have an app by that name. ' +
   '.in says only which app: the query still names a component the app ' +
-  "declares, never .in alone. App trash is listed by app_list(space: '<space slug>'), including ids " +
+  'declares. To find a person by email in the platform directory, use ' +
+  'q ".person&.email.address=ada@example.com&.in=yak/platform". The ' +
+  'person marker and email{address} belong to the same entity. ' +
+  "App trash is listed by app_list(space: '<space slug>'), including ids " +
   'for app_restore. Platform admins can query the directory with ' +
   "'.app .trashed ?doc ?former .in=yak/platform'; trashed{at, by} is a " +
   'separate component, not app.trashed or .tombstone. To check a deleted ' +

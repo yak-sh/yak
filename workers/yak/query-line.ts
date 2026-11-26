@@ -66,6 +66,10 @@ export let confirmedRefusal = (
 export let queryRefusal = (error: unknown, at?: string): string | undefined => {
   if (!(error instanceof Error)) return
   let word = /(?:^|: )unknown prop: \.(\w+)(?= |$)/.exec(error.message)?.[1]
+  if (word == 'in') {
+    return '.in= chooses which app to query. Include a filter for its rows, ' +
+      `for example q: ".doc&.in=${at ?? 'recipes'}".`
+  }
   if (word && operatorDoc.$defs?.[word]?.component) {
     return `.${word} is a component in the space's Operator store. ` +
       'In that space’s Operator, add self: true to graph_query. ' +

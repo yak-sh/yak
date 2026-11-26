@@ -114,6 +114,43 @@ let closed = (
 
 type App = { slug: string; version: number | null }
 
+/** Recovery for a deploy whose draft has closed. */
+export let deployDraftRefusal = (
+  app: App,
+  asked: string,
+  drafts: Draft[],
+  released: number | null,
+): CallError => {
+  let open = current(drafts)
+  let next = open.length == 1
+    ? `The current draft is ${open[0].eid}. Retry app_deploy with draft: '${
+      open[0].eid
+    }' to release it.`
+    : drafts.length
+    ? `To release an open draft, retry app_deploy with its id as draft. Open drafts: ${
+      (open.length ? open : drafts).map((d) => d.eid).join(', ')
+    }.`
+    : 'There are no open drafts. ' + WRITE_DRAFT
+  return new CallError(
+    'missing',
+    closed(app.slug, asked, app.version, released),
+    next,
+  )
+}
+
+/** Recovery for a requested live preview before the first release. */
+export let firstPreview = (app: string, drafts: Draft[] | null): string =>
+  `${app} has no release yet. ` +
+  (drafts == null
+    ? 'An editor can preview its draft with app_preview and released: false.'
+    : drafts.length
+    ? `Preview ${
+      drafts.length == 1 ? 'the private draft' : 'a private draft'
+    } with app_preview. Use released: false and set draft to ` +
+      drafts.map((d) => `'${d.eid}'`).join(' or ') +
+      '. Call app_deploy with that draft when it is ready for its first release.'
+    : 'Use app_files to write a draft, then call app_preview with released: false.')
+
 /** How to recover an app in the trash that still holds open drafts. */
 export let restoreDrafts = (
   space: string,

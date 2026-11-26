@@ -50,7 +50,12 @@ import {
 import { bound, type Env } from './env.ts'
 import { report } from '@yaks/platform/preview-audit'
 import { fitted } from '@yaks/platform/preview-fit'
-import { toolDraft, WRITE_DRAFT } from '@yaks/platform/draft-choice'
+import {
+  firstPreview,
+  toolDraft,
+  WRITE_DRAFT,
+} from '@yaks/platform/draft-choice'
+import { writes } from '@yaks/member'
 import { ours } from './asking.ts'
 import { compiled, pageInputs } from './esbuild.ts'
 import { configured } from './deploy_worker.ts'
@@ -630,10 +635,13 @@ let shownDraft = async (
     await draftsOf(ctx.dir, app),
   )
   if (!d) {
+    let name = `${space.slug}/${app.slug}`
     throw refuse(
       'missing',
-      `${space.slug}/${app.slug} has no open draft. ${WRITE_DRAFT} ` +
-        'Call app_preview with released: true to see the live app.',
+      app.version
+        ? `${name} has no open draft. ${WRITE_DRAFT} ` +
+          'Call app_preview with released: true to see the live app.'
+        : firstPreview(name, []),
     )
   }
   return d
@@ -749,12 +757,6 @@ let released = async (
   screenshot: boolean,
   keep: boolean,
 ) => {
-  if (!app.version) {
-    throw refuse(
-      'missing',
-      `${space.slug}/${app.slug} has no release yet; app_deploy releases it`,
-    )
-  }
   let at = appUrl(space, app, ctx.env) + path
   let value: Record<string, unknown> = {
     url: at,
@@ -808,17 +810,26 @@ export let preview = async (ctx: Ctx, args: Args) => {
   }
   let live = args.released === true
   let { space, app, who } = await inApp(ctx, args, !live || steps.length > 0)
-  if (screenshot && !ctx.env.BROWSER) {
-    throw refuse(
-      'unavailable',
-      'Cloudflare Browser Rendering is not configured',
-    )
-  }
   let keep = args.keep === true
   if (keep && (!live || !screenshot)) {
     throw refuse(
       'arguments',
       'keep: true keeps a picture of the release, so it needs released: true and a screenshot',
+    )
+  }
+  if (live && !app.version) {
+    throw refuse(
+      'missing',
+      firstPreview(
+        `${space.slug}/${app.slug}`,
+        writes(who.role) ? await draftsOf(ctx.dir, app) : null,
+      ),
+    )
+  }
+  if (screenshot && !ctx.env.BROWSER) {
+    throw refuse(
+      'unavailable',
+      'Cloudflare Browser Rendering is not configured',
     )
   }
   if (live) {

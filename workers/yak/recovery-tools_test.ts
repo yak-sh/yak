@@ -100,6 +100,40 @@ test('graph_query keeps the vocabulary’s guidance for uses', async () => {
   ok(property.includes('.uses&.connection for presence'), property)
 })
 
+test('graph_query gives a working rewrite for person.email and qualifies session', async () => {
+  let ask = (q: string) => admin.tool('graph_query', { app: 'yak/platform', q })
+  let { message } = await throws(
+    () => ask(`.person.email=${them.email}&.limit=1`),
+    'unknown property: person.email',
+  ) as Error
+  let corrected = `.person&.email.address=${them.email}&.limit=1`
+  ok(message.includes(corrected), message)
+  let rows = JSON.parse(await ask(corrected))
+  equal(rows.map((r: { entity: { eid: string } }) => r.entity.eid), [
+    them.person,
+  ])
+
+  let session = await throws(
+    () => ask('.session&.limit=1'),
+    '.session is a property',
+  ) as Error
+  for (let field of ['support.session', 'tool_refusal.session']) {
+    let corrected = `.${field}&.limit=1`
+    ok(session.message.includes(corrected), session.message)
+    ok(Array.isArray(JSON.parse(await ask(corrected))))
+  }
+})
+
+test('graph_query explains how to scope a query with .in', async () => {
+  let { message } = await throws(
+    () => owner.tool('graph_query', { app: `${other}/shelf`, q: '.in' }),
+    '.in=',
+  ) as Error
+  let q = `.doc&.in=${other}/shelf`
+  ok(message.includes(q), message)
+  ok(Array.isArray(JSON.parse(await owner.tool('graph_query', { q }))))
+})
+
 test('app tools share short ids for live and trashed apps', async () => {
   let app = short(them.eids[`${other}/shelf`])
   let bare = app.slice(1)

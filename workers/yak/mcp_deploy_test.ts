@@ -22,6 +22,42 @@ import {
 import { deployedOver, type Version } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
 
+test('deploying a closed draft names its replacement and keeps it open for retry', async () => {
+  let k = await kernel()
+  try {
+    let space = unique('replacement')
+    let app = { space, app: 'notes' }
+    let { cookie } = await seed(k, [{ slug: space, apps: [app.app] }])
+    let agent = connector(k, cookie)
+    let write = async (content: string) =>
+      (await agent.answer('app_files', { ...app, path: 'index.html', content }))
+        .value!.draft
+    let stale = await write('<h1>First</h1>')
+    await agent.tool('app_deploy', { ...app, draft: stale })
+    let closed = await assertRejects(
+      () => agent.tool('app_deploy', { ...app, draft: stale }),
+      Error,
+      'was released as v1',
+    )
+    assertStringIncludes(closed.message, 'no open drafts')
+
+    let draft = await write('<h1>Replacement</h1>')
+    let replaced = await assertRejects(
+      () => agent.tool('app_deploy', { ...app, draft: stale }),
+      Error,
+      'The current draft',
+    )
+    assertStringIncludes(replaced.message, String(draft))
+    let live = await k.at(`${space}.yaks.app`, '/notes/')
+    assertStringIncludes(await live.text(), '<h1>First</h1>')
+    let deployed = await agent.answer('app_deploy', { ...app, draft })
+    assertEquals(deployed.value?.version, 2)
+    assertEquals(deployed.value?.draft, draft)
+  } finally {
+    await k.stop()
+  }
+})
+
 test('a vocabulary refusal tells preview and deploy callers how to repair a reference', async () => {
   let k = await kernel()
   try {
