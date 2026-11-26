@@ -1,6 +1,5 @@
 import { instrumentEid } from '@yaks/platform/instrument'
 import { claim, settled, type Visit, visitAt } from '@yaks/platform/visits'
-import { background } from './defects.ts'
 import { type App, type Space, storeName } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
@@ -8,10 +7,12 @@ import { KERNEL } from './meta.ts'
 import { COPY } from './relocate.ts'
 import { cleared } from './sample.ts'
 import { ledgerOf } from './visit.ts'
+import { inFlight } from './lib/shared.ts'
 
-// The births under way in this isolate, by app and browser: a page that sends
-// two writes at once makes one store.
-let births = new Map<string, Promise<Visit>>()
+// The births under way, by app and browser, shared within a request
+// (lib/shared.ts). Two requests that write at once each bear one; the edge
+// keeps the first, and the other's copy is emptied (`settled`).
+let births = {}
 
 /**
  * A store of this browser's own, copied from the app's sample at one instant,
@@ -31,14 +32,7 @@ export let born = (
   now = new Date(),
 ): Promise<Visit> => {
   let key = `${app.eid} ${instrumentEid(via)}`
-  let held = births.get(key)
-  if (held) return held
-  let birth = bear(env, space, app, via, by, now)
-    .finally(() => births.delete(key))
-  births.set(key, birth)
-  // Another request may await this birth: held to its end (lib/shared.ts).
-  background(birth.then(() => {}, () => {}))
-  return birth
+  return inFlight(births, key, () => bear(env, space, app, via, by, now))
 }
 
 let bear = async (

@@ -12,6 +12,7 @@
 // that reads a file.
 
 import type { Eid } from '@yaks/graph'
+import { locks } from '@yaks/fp'
 
 /** What a vault keeps for one secret: the handle the graph holds for it and
  * the value. References are kept separately so they cannot be sent as values. */
@@ -76,17 +77,8 @@ export type Local =
   }
 
 /** One lock per key, within this process: each caller waits for the one
- * before it. */
-export let queue = (): Vault['lock'] => {
-  let tails = new Map<string, Promise<unknown>>()
-  return <T>(key: string, fn: () => Promise<T>): Promise<T> => {
-    let run = (tails.get(key) ?? Promise.resolve()).then(fn, fn)
-    let tail = run.catch(() => {})
-    tails.set(key, tail)
-    tail.then(() => tails.get(key) == tail && tails.delete(key))
-    return run
-  }
-}
+ * before it (@yaks/fp `locks`). */
+export let queue = (): Vault['lock'] => locks()
 
 /** A vault in memory: its secrets last as long as the process, which is right
  * for a graph that does too, and for a test. */

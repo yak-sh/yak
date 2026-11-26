@@ -21,11 +21,37 @@ export let id = <T>(x: T): T => x
 /**
  * `f`, called the first time it is asked for and never again: every later
  * asking answers the first answer. A promise is kept as itself, so callers
- * waiting at once share one wait.
+ * waiting at once share one wait: keep one only where a single I/O context
+ * reaches it (see {@link Scope}), and hold a value anywhere else.
  */
 export let once = <T>(f: () => T): () => T => {
   let held: { v: T } | undefined
   return () => (held ??= { v: f() }).v
+}
+
+/**
+ * `load`'s answer, kept as a value once it lands. Until then each call loads
+ * for itself, so no caller awaits a promise another made (see {@link Scope}):
+ * the way to load a module or build a client once at module scope. A failed
+ * load keeps nothing.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { lazy } from '@yaks/fp'
+ *
+ * let loads = 0
+ * let client = lazy(async () => ({ id: ++loads }))
+ * let [a, b] = await Promise.all([client(), client()])
+ * assertEquals([a, b, await client(), loads], [{ id: 1 }, { id: 1 }, { id: 1 }, 2])
+ * ```
+ */
+export let lazy = <T>(load: () => Promise<T>): () => Promise<T> => {
+  let held: { v: T } | undefined
+  return async () => {
+    if (held) return held.v
+    let v = await load()
+    return (held ??= { v }).v
+  }
 }
 
 /// always(1)() -> 1
@@ -487,13 +513,12 @@ export type Turn = {
 
 /**
  * A FIFO turn for each caller, which a caller that never comes back for it
- * cannot keep. Every caller awaits a promise created in its own execution
- * context, and is woken from another's. A runtime that drops a wake into a
- * request that has ended (Workers' `handle_cross_request_promise_resolution`)
- * loses the turn there, and a caller ended between `ready` and `end` keeps it.
- * So every waiter watches the turn ahead of it, in time it could hear
- * ({@link heard}): one woken and not taken within `lapse` ms, or seen taken
- * and still held `hold` ms later, is passed on.
+ * cannot keep. No caller wakes another: each looks at the queue every `beat`
+ * ms on its own clock and takes the turn once it heads it, so its promise
+ * settles in the context that made it, wherever the queue is held. A turn
+ * ahead that has gone untaken for `lapse` ms, or stood taken for `hold` ms,
+ * in time the waiter could hear (a look more than a beat late counts
+ * nothing), is passed on: its caller ended, or its request did.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -515,37 +540,75 @@ export let turns = (
   clock: Clock = system,
   lapse = 1_000,
   hold = 5_000,
+  beat = 10,
 ): () => Turn => {
-  type Place = { wake: () => void; taken: boolean }
+  type Place = { taken: boolean }
   let queue: Place[] = []
   let drop = (p: Place) => {
     let at = queue.indexOf(p)
-    if (at < 0) return
-    queue.splice(at, 1)
-    if (at == 0) queue[0]?.wake()
+    if (at >= 0) queue.splice(at, 1)
   }
   return () => {
-    let { promise, resolve } = resolvers<void>()
-    let p: Place = { wake: resolve, taken: false }
+    let p: Place = { taken: false }
     queue.push(p)
-    let cancel = () => {}
-    // Watch the turn ahead until this one is woken.
-    let watch = () => {
+    let { promise: ready, resolve } = resolvers<void>()
+    // The turn ahead as last seen, and how long it has stood so.
+    let ahead: Place | undefined, taken = false, stood = 0
+    let last = clock.now()
+    let look = (): void => {
+      if (!queue.includes(p)) return
       let head = queue[0]
-      if (!head || head == p || !queue.includes(p)) return
-      let taken = head.taken
-      cancel = heard(taken ? hold : lapse, () => {
-        if (queue[0] == head && head.taken == taken) drop(head)
-        watch()
-      }, clock)
+      if (head == p) {
+        p.taken = true
+        return resolve()
+      }
+      let now = clock.now(), step = now - last
+      last = now
+      if (head != ahead || head.taken != taken) {
+        ahead = head, taken = head.taken, stood = 0
+      } else if (step <= 2 * beat) stood += step
+      if (stood >= (taken ? hold : lapse)) {
+        drop(head)
+        return look()
+      }
+      clock.after(beat, look)
     }
-    if (queue[0] == p) resolve()
-    else watch()
-    let ready = promise.then(() => {
-      cancel()
-      p.taken = true
-    })
+    look()
     return { ready, end: () => drop(p), gone: () => !queue.includes(p) }
+  }
+}
+
+/**
+ * A lock per key: each caller's `fn` runs once every earlier caller's with the
+ * same key has ended, in the turn {@link turns} gives it, so no caller wakes
+ * another and one whose request ended cannot hold the rest.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { locks } from '@yaks/fp'
+ *
+ * let lock = locks(), order: string[] = []
+ * let step = (name: string) => async () => void order.push(name)
+ * await Promise.all([lock('k', step('a')), lock('k', step('b'))])
+ * assertEquals(order, ['a', 'b'])
+ * ```
+ */
+export let locks = (
+  clock: Clock = system,
+): <T>(key: string, fn: () => Promise<T>) => Promise<T> => {
+  let lines = new Map<string, { turn: () => Turn; waiting: number }>()
+  return async <T>(key: string, fn: () => Promise<T>): Promise<T> => {
+    let line = lines.get(key)
+    if (!line) lines.set(key, line = { turn: turns(clock), waiting: 0 })
+    line.waiting++
+    let turn = line.turn()
+    try {
+      await turn.ready
+      return await fn()
+    } finally {
+      turn.end()
+      if (!--line.waiting && lines.get(key) == line) lines.delete(key)
+    }
   }
 }
 
@@ -716,6 +779,57 @@ export let within = <T>(
     asking.then(resolve, reject).finally(cancel)
   })
 
+/**
+ * What `look` answers once it answers something, looked at every `beat` ms,
+ * or null once `ms` heard ({@link heard}) on `clock` have gone by. Looks run
+ * on `clock` and on the runtime's timers (`ticks`) alike, so a clock that
+ * stands still or races ahead, as a test's does, neither stops them nor
+ * outruns them. Waits on state other callers change, held as a value: the
+ * promise it answers is made and settled in the caller's own context, so no
+ * other request can drop its wake (see {@link Scope}).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { waitFor } from '@yaks/fp'
+ *
+ * let shared: { answer?: string } = {}
+ * setTimeout(() => shared.answer = 'landed', 20)
+ * assertEquals(await waitFor(() => shared.answer, 1000), 'landed')
+ * assertEquals(await waitFor(() => undefined, 30), null)
+ * ```
+ */
+export let waitFor = <T>(
+  look: () => T | null | undefined,
+  ms = Infinity,
+  { clock = system, beat = 5, ticks = system }: {
+    clock?: Clock
+    beat?: number
+    ticks?: Clock
+  } = {},
+): Promise<T | null> => {
+  let seen = look()
+  if (seen != null) return Promise.resolve(seen)
+  let { promise, resolve } = resolvers<T | null>()
+  let cancels: (() => void)[] = []
+  let quiet = () => cancels.splice(0).forEach((cancel) => cancel())
+  let stop = Number.isFinite(ms)
+    ? heard(ms, () => (quiet(), resolve(null)), clock)
+    : () => {}
+  let poll = () => {
+    quiet()
+    let v = look()
+    if (v == null) return arm()
+    stop()
+    resolve(v)
+  }
+  let arm = () => {
+    cancels.push(ticks.after(beat, poll))
+    if (clock != ticks) cancels.push(clock.after(beat, poll))
+  }
+  arm()
+  return promise
+}
+
 /** A timer cut short by a signal; a cancelled wait resolves without work. */
 export let sleep = (
   ms: number,
@@ -735,11 +849,12 @@ export let sleep = (
     if (signal?.aborted) done()
   })
 
-/** Where `sharing` keeps reads by key: a Map, a WeakMap, or any store of the
- * same three calls. */
+/** Where `sharing` keeps answers by key: a Map, a WeakMap, or any store of
+ * the same four calls. It holds values, never a promise. */
 export type Kept<K, T> = {
-  get(key: K): Promise<T> | undefined
-  set(key: K, value: Promise<T>): unknown
+  has(key: K): boolean
+  get(key: K): T | undefined
+  set(key: K, value: T): unknown
   delete(key: K): unknown
 }
 
@@ -747,68 +862,80 @@ export type Kept<K, T> = {
  * does. */
 export type Hold = (work: Promise<void>) => void
 
+/** Who may share work still under way: an object standing for one I/O
+ * context (a Worker's request, a Durable Object), or undefined, which shares
+ * nothing. A promise settles safely only in the context that made it: a
+ * Worker drops a wake one request gives another once that request has ended
+ * (`handle_cross_request_promise_resolution`). So work under way is shared
+ * only within a scope, and what outlives one is a value. */
+export type Scope = () => object | undefined
+
+// Work under way, by scope, group and key.
+let flights = new WeakMap<object, WeakMap<object, Map<unknown, unknown>>>()
+
+let flight = <T>(
+  owner: object | undefined,
+  group: object,
+  key: unknown,
+  read: () => Promise<T>,
+  hold?: Hold,
+): Promise<T> => {
+  if (!owner) return read()
+  let groups = flights.get(owner)
+  if (!groups) flights.set(owner, groups = new WeakMap())
+  let pending = groups.get(group)
+  if (!pending) groups.set(group, pending = new Map())
+  let had = pending.get(key) as Promise<T> | undefined
+  if (had) return had
+  let work = read()
+  pending.set(key, work)
+  let forget = () => void pending.delete(key)
+  let done = work.then(forget, forget)
+  hold?.(done)
+  return work
+}
+
 /** Deduplicate work by group and key within the caller's scope. A call with
  * no scope runs independently. A host may keep the scoped work alive. */
 export let singleFlight = (
-  scope: () => object | undefined,
+  scope: Scope,
   hold?: Hold,
-): <K, T>(group: object, key: K, read: () => Promise<T>) => Promise<T> => {
-  let scopes = new WeakMap<object, WeakMap<object, Map<unknown, unknown>>>()
-  return <K, T>(group: object, key: K, read: () => Promise<T>): Promise<T> => {
-    let owner = scope()
-    if (!owner) return read()
-    let groups = scopes.get(owner)
-    if (!groups) scopes.set(owner, groups = new WeakMap())
-    let pending = groups.get(group)
-    if (!pending) groups.set(group, pending = new Map())
-    let had = pending.get(key) as Promise<T> | undefined
-    if (had) return had
-    let work = read()
-    pending.set(key, work)
-    let forget = () => void pending.delete(key)
-    let done = work.then(forget, forget)
-    hold?.(done)
-    return work
-  }
-}
+): <K, T>(group: object, key: K, read: () => Promise<T>) => Promise<T> =>
+<K, T>(group: object, key: K, read: () => Promise<T>): Promise<T> =>
+  flight(scope(), group, key, read, hold)
 
 /**
- * A read every caller shares by key: begun by the first to ask, and handed to
- * each that asks while it runs or after. A failed read is not kept, so the
- * next ask reads again. Where `limit` is given, a Map keeps that many keys,
- * dropping the oldest asked.
- *
- * Where a runtime cancels a read once the request that began it ends, a read
- * still running then never settles, and every later caller waits on it. So
- * the caller that begins a read is held (`hold`) until the read settles. A
- * host lends its hold; code that knows no host takes it from its caller. The
- * promise kept is made by `resolvers`, so a caller that joins the read resumes
- * in its own request.
+ * A read every caller shares by key. Its first answer is kept in `kept` as a
+ * value, and every caller after it is handed that value. While it runs, it is shared
+ * only with callers in the same `scope` (a {@link Scope}): two requests that
+ * ask at once read once each, and never await each other's promise. A failed
+ * read keeps nothing, so the next ask reads again. Where `limit` is given, a
+ * Map keeps that many keys, dropping the oldest asked. `hold` keeps a scoped
+ * read alive until it lands, so its answer is kept for later callers.
  */
 export let sharing = <K, T>(
   kept: Kept<K, T>,
   key: K,
   read: () => Promise<T>,
-  { limit, hold }: { limit?: number; hold?: Hold } = {},
+  { limit, scope, hold }: { limit?: number; scope?: Scope; hold?: Hold } = {},
 ): Promise<T> => {
   let lru = limit && kept instanceof Map ? kept : null
-  let had = kept.get(key)
-  if (had) {
+  if (kept.has(key)) {
+    let had = kept.get(key) as T
     lru?.delete(key)
     lru?.set(key, had)
-    return had
+    return Promise.resolve(had)
   }
-  let began = read()
-  let { promise: reading, resolve, reject } = resolvers<T>()
-  began.then(resolve, reject)
-  kept.set(key, reading)
-  let settled = reading.then(() => {}, () => {
-    if (kept.get(key) == reading) kept.delete(key)
-  })
-  hold?.(settled)
-  for (let old of lru?.keys() ?? []) {
-    if (lru!.size <= limit!) break
-    lru!.delete(old)
-  }
-  return reading
+  return flight(scope?.(), kept, key, async () => {
+    let answer = await read()
+    // Another scope's read may have landed first: it stays kept, and this
+    // scope answers its own.
+    if (kept.has(key)) return answer
+    kept.set(key, answer)
+    for (let old of lru?.keys() ?? []) {
+      if (lru!.size <= limit!) break
+      lru!.delete(old)
+    }
+    return answer
+  }, hold)
 }

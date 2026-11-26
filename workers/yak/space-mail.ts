@@ -78,8 +78,12 @@ let zoned = (name: string, records: DomainRecord[]): ZoneRecord[] => {
   ]
 }
 
-// Setups under way in this isolate, by space, so two letters at once ask once.
-let running = new Map<string, Promise<void>>()
+// When this isolate began each setup under way, by space, so two letters at
+// once ask once: a value, never the setup's promise, which settles only in the
+// request that made it (@yaks/fp `Scope`). A setup whose request ended
+// unfinished is begun again after `SETTING`.
+let running = new Map<string, number>()
+let SETTING = 60_000
 
 let setUp = async (env: Bound, space: Space, name: string) => {
   let provider = await mailDomains(env)
@@ -106,16 +110,13 @@ export let usedMail = async (env: Bound, space: Space) => {
   if (!paid(space.tier) || space.trashed || !env.STORE) return
   if (subdomainMail(env, space)) return
   let name = spaceHost(env, space.slug)
-  let held = running.get(space.eid)
-  if (!held) {
-    held = setUp(env, space, name)
-      .catch((why) =>
-        caught(why, { request: 'subdomain mail', space: space.slug })
-      )
-      .finally(() => running.delete(space.eid))
-    running.set(space.eid, held)
-  }
-  await held
+  if (Date.now() - (running.get(space.eid) ?? -Infinity) < SETTING) return
+  running.set(space.eid, Date.now())
+  await setUp(env, space, name)
+    .catch((why) =>
+      caught(why, { request: 'subdomain mail', space: space.slug })
+    )
+    .finally(() => running.delete(space.eid))
 }
 
 /**

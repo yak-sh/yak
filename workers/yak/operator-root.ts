@@ -47,7 +47,9 @@ export let spacedAt = (store: Pick<Store, 'marks'>, space: string) => {
   }
 }
 
-let spaces = new WeakMap<object, Promise<string | undefined>>()
+// The space each store's sessions name, once read: a value, never the read's
+// promise (@yaks/fp `Scope`).
+let spaces = new WeakMap<object, string>()
 /** The space an Operator store is: the one its file keeps (`spacedAt`), else
  * the one its sessions name. */
 export let spaceOf = (
@@ -55,17 +57,17 @@ export let spaceOf = (
 ): string | Promise<string | undefined> => {
   let kept = store.marks?.get(SPACED)
   if (kept) return kept
-  let held = spaces.get(store.g)
-  if (!held) {
-    held = Promise.resolve(
-      store.g.read('.operator_session.space&.limit=1'),
-    ).then(([row]) =>
-      (row?.operator_session as { space?: string } | undefined)?.space
-    )
-    spaces.set(store.g, held)
-    held.then((space) => space ?? spaces.delete(store.g))
-  }
-  return held
+  // One read is answered as a promise, as a read is: an embedder lent from it
+  // is announced (operator-vectors.ts `ready`).
+  let read = spaces.get(store.g)
+  if (read) return Promise.resolve(read)
+  return Promise.resolve(store.g.read('.operator_session.space&.limit=1'))
+    .then(([row]) => {
+      let space = (row?.operator_session as { space?: string } | undefined)
+        ?.space
+      if (space) spaces.set(store.g, space)
+      return space
+    })
 }
 
 /** The person's one conversation in `store`: the one said to be theirs

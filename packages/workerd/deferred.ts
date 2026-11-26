@@ -4,6 +4,8 @@
 // object's code and not the router's, and one that answers a page none of
 // the object's own.
 
+import { lazy } from '@yaks/fp'
+
 /** What makes the object a deferred class answers through, from the
  * arguments the runtime constructed the class with (its state or context,
  * and its bindings). A class is one: `(...args) => new C(...args)`. */
@@ -30,12 +32,7 @@ export let deferred = (
   methods: readonly string[],
   around?: Around,
 ): new (...args: unknown[]) => object => {
-  let loading: Promise<Made> | undefined
-  let loaded = () =>
-    loading ??= load().catch((e) => {
-      loading = undefined
-      throw e
-    })
+  let loaded = lazy(load)
   let args = new WeakMap<object, unknown[]>()
   let made = new WeakMap<object, Promise<Answering>>()
   let Lazy = class extends (Base as new (...args: unknown[]) => object) {

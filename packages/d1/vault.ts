@@ -36,6 +36,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
+import { locks } from '@yaks/fp'
 import { type D1Like, prepare, type Prepared } from './d1.ts'
 
 /** What a vault keeps for one secret — @yaks/secrets' `Sealed`, by shape. */
@@ -210,18 +211,6 @@ let unbase64 = (text: string) =>
   Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
 let utf8 = new TextEncoder()
 
-// One lock per key within this isolate: each caller waits for the one before.
-let queue = () => {
-  let tails = new Map<string, Promise<unknown>>()
-  return <T>(key: string, fn: () => Promise<T>): Promise<T> => {
-    let run = (tails.get(key) ?? Promise.resolve()).then(fn, fn)
-    let tail = run.catch(() => {})
-    tails.set(key, tail)
-    tail.then(() => tails.get(key) == tail && tails.delete(key))
-    return run
-  }
-}
-
 /**
  * The vault in a D1 database, every value encrypted under `key` (AES-GCM),
  * which may still be on its way — a key imported from a Worker secret is. Its
@@ -288,7 +277,8 @@ export let d1Vault = <S extends Prepared<S>>(
   }
 
   let salt: Uint8Array | undefined
-  let held = queue()
+  // One lock per key within this isolate (@yaks/fp `locks`).
+  let held = locks()
   return {
     // Two isolates asking at once each offer one; the first written wins and
     // both read it back.

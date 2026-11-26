@@ -19,7 +19,7 @@ import {
 } from '@yaks/platform/app-icon'
 import { audit } from '../admin-action.ts'
 import type { Who } from '../session.ts'
-import { sharing } from '@yaks/fp'
+import { singleFlight } from '@yaks/fp'
 
 let released = ({ app, space }: OnOffer) =>
   (app.version ?? 0) > 0 && !app.trashed && !space.trashed
@@ -62,7 +62,8 @@ export let drawingIcons = (store: Stored, dir: Directory): Handlers => {
   if (!store.env.RASTER || !store.env.BLOBS) return {}
   let env = store.env as Env
   let raw = r2RawObjects(env.BLOBS)
-  let pending = new Map<string, Promise<void>>()
+  // One drawing at a time for each app, within this object.
+  let drawing = singleFlight(() => store)
   return {
     app_icon_draw: async ({ entity }, _tx, write, attempt) => {
       let record = async () =>
@@ -81,8 +82,8 @@ export let drawingIcons = (store: Stored, dir: Directory): Handlers => {
           draw: (app) => draw(env, store, app, entity.eid),
           put: raw.put,
           record: () => attempt?.retry ? attempt.retry(record) : record(),
-        }).finally(() => pending.delete(entity.eid))
-      await sharing(pending, entity.eid, work)
+        })
+      await drawing(store, entity.eid, work)
     },
   }
 }

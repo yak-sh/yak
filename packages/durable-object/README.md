@@ -406,25 +406,26 @@ the call's own, and hands the request to `send`, which has the last word on its
 headers. An init that is a `Request` carries its method, body and headers
 across, which is how a socket upgrade reaches the object.
 
-`coalesced(door, reads, {hold?, turn?, patience?, clock?, wait?})` shares GETs
-that `reads(request)` accepts and that arrive before `turn` sends them, keyed by
-address and headers. Each caller gets its own response bytes. A read already
-sent answers no later caller, since its snapshot may predate that caller, so one
-read of a request travels at a time: callers who ask it meanwhile share the
-next, sent the turn after it lands, and the object answers a burst of one read
+`coalesced(door, reads, {hold?, turn?, patience?, clock?, beat?, wait?})` shares
+GETs that `reads(request)` accepts and that arrive before `turn` sends them,
+keyed by address and headers. Each caller gets its own response bytes. A read
+already sent answers no later caller, since its snapshot may predate that
+caller, so one read of a request travels at a time: callers who ask it meanwhile
+share the next, sent once it lands, and the object answers a burst of one read
 once a round trip. A write or an excluded request separates batches. Select only
-finite read responses. `turn` defaults to a microtask; `hold` keeps the first
-caller's I/O alive until the body is read, as a Worker's `waitUntil` does. A
-Worker settles a promise only in the request that created it, so no caller
-awaits another's: each waits on its own, made by `resolvers` (@yaks/fp) so it
-carries its request even once V8 optimizes the door, and a batch is sent from
-the request that opened it. What runs in another request is dropped once that
-request ends, so a caller whose seat is unanswered for `patience` ms (15 s by
-default, on `clock`) presumes its batch lost: the door forgets it and the caller
-boards once more. A second lost trip fails the read. Once the last seat leaves a
-lost batch, the door aborts its trip and releases the hold. `wait` wraps the
-full wait, so a host can name it. Wrap a resending door so reading the shared
-body participates in its retries.
+finite read responses. `turn` defaults to a microtask; `hold` keeps the opener's
+trip alive past its own request, as a Worker's `waitUntil` does.
+
+A Worker settles a promise only in the request that made it, so no caller awaits
+or settles another's (@yaks/fp `Scope`). The caller that opens a batch sends it
+from its own request, and the answer lands on the batch as a value: the bytes,
+or the failure. Every caller looks for it every `beat` ms (5 by default) on its
+own clock (@yaks/fp `waitFor`). A caller unanswered for `patience` ms (15 s by
+default, on `clock`) presumes its batch lost, as when its opener's request
+ended, and boards once more; a second lost trip fails the read. An opener aborts
+its own trip still out after `patience`. `wait` wraps the full wait, so a host
+can name it. Wrap a resending door so reading the shared body participates in
+its retries.
 
 `resending(door, { report?, wait? })` sends a call again, as `retried` paces it,
 when the runtime reset the object or lost the call: thrown, or answered as a

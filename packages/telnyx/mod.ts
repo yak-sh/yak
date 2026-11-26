@@ -4,6 +4,7 @@
 // https://developers.telnyx.com/docs/messaging/messages/receiving-webhooks
 // https://developers.telnyx.com/docs/messaging/messages/error-codes
 
+import { lazy } from '@yaks/fp'
 import { Unsent } from '@yaks/host/senders'
 import {
   Blocked,
@@ -122,21 +123,17 @@ export let telnyx = (
   { key, profile, tollFree, api = TELNYX.api, fetch: given }: Telnyx,
 ): Sender => {
   let call = requester({ key, api, fetch: given })
-  // The profile and its number, asked once and kept while they answer.
-  let own: Promise<{ id: string; number: string }> | null = null
-  let ours = () =>
-    own ??= (async () => {
-      let id = await profileOf(call, profile)
-      let numbers = await call(`/messaging_profiles/${id}/phone_numbers`)
-      let all = (numbers.data as unknown as { phone_number: string }[] ?? [])
-        .map((n) => n.phone_number).filter(Boolean)
-      let number = (tollFree ? all.find(free) : undefined) ?? all[0]
-      if (!number) throw new Error(`"${profile}" has no number on Telnyx`)
-      return { id, number }
-    })().catch((error) => {
-      own = null
-      throw error
-    })
+  // The profile and its number, asked until they answer and kept as values
+  // (@yaks/fp `lazy`): a client may serve many requests.
+  let ours = lazy(async () => {
+    let id = await profileOf(call, profile)
+    let numbers = await call(`/messaging_profiles/${id}/phone_numbers`)
+    let all = (numbers.data as unknown as { phone_number: string }[] ?? [])
+      .map((n) => n.phone_number).filter(Boolean)
+    let number = (tollFree ? all.find(free) : undefined) ?? all[0]
+    if (!number) throw new Error(`"${profile}" has no number on Telnyx`)
+    return { id, number }
+  })
   return {
     from: async () => (await ours()).number,
     send: async ({ to, text, from, agent, group }: Text): Promise<Receipt> => {

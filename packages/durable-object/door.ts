@@ -11,7 +11,14 @@
 // the object is for.
 
 import { IDEMPOTENCY } from '@yaks/api/log'
-import { type Clock, heard, type Hold, resolvers, system } from '@yaks/fp'
+import {
+  type Clock,
+  heard,
+  type Hold,
+  resolvers,
+  system,
+  waitFor,
+} from '@yaks/fp'
 import {
   evicted,
   killed,
@@ -133,50 +140,46 @@ let copied = async (response: Response): Promise<() => Response> => {
 // inside the minute after which a request that has not answered is a defect.
 let PATIENCE = 15_000
 
-// A caller waiting in a batch: its own promise's ends.
-type Seat = {
-  resolve: (answer: () => Response) => void
-  reject: (error: unknown) => void
-}
-
-// One read's callers, the trip that answers them, and `go`, which tells the
-// caller who opened it that the read ahead has landed.
-type Batch = {
-  seats: Set<Seat>
-  trip: () => Promise<() => Response>
-  go: () => void
-  abandon: () => void
-}
+// How often a caller looks for its batch's answer.
+let BEAT = 5
 
 type Trip = (signal: AbortSignal) => Promise<() => Response>
+
+// One read's callers share a batch: the opener sends its trip, and the answer
+// lands on it as a value, the response's bytes or the failure, or `lost` once
+// nobody will answer it.
+type Batch = {
+  answer?: () => Response
+  failed?: { error: unknown }
+  lost?: boolean
+}
+
+let landed = (batch: Batch) =>
+  batch.answer || batch.failed || batch.lost ? batch : null
 
 /** Share finite reads accepted by `reads` and queued before `turn` sends them,
  * each caller receiving its own bytes. A read already sent answers no later
  * caller: its snapshot may predate that caller. So one read of a request
- * travels at a time: whoever asks it meanwhile shares the next, sent the turn
- * after it lands, as passengers board the next lift rather than the one
- * already moving. However many callers ask one read together, the object
- * answers it once a round trip. A write or an excluded read separates
- * batches. `hold` keeps the first caller's I/O alive.
+ * travels at a time: whoever asks it meanwhile shares the next, sent once it
+ * lands, as passengers board the next lift rather than the one already
+ * moving. However many callers ask one read together, the object answers it
+ * once a round trip. A write or an excluded read separates batches. `hold`
+ * keeps the opener's trip alive past its own request.
  *
  * Callers are often different requests, and a Worker settles a promise only
- * in the request that created it: once that request ends, whoever awaits it
- * is failed (workerd's `handle_cross_request_promise_resolution`). So no
- * caller awaits a promise another made. Each waits on its own seat, settled
- * from the trip, and a batch is sent from the request that opened it, woken
- * there when the read ahead lands. Seats and wakes are made by `resolvers`
- * (@yaks/fp), whose promise carries the request that made it: one made by a
- * `new Promise` V8 had optimized carried none, so the request whose trip
- * settled it ran its waiter, and the bytes it handed on were that request's
- * (cloudflare/workerd#8228).
+ * in the request that made it: one request's wake to another is dropped once
+ * the sleeper's request ends (@yaks/fp `Scope`). So no caller awaits or
+ * settles another's promise. The caller that opens a batch sends it from its
+ * own request, and its answer lands on the batch as a value: the bytes, which
+ * each caller makes its own response from, or the failure. Every other
+ * caller looks for it every `beat` ms on its own clock (@yaks/fp `waitFor`).
  *
  * What runs in another request is dropped, without a word, once that request
- * ends: a batch whose opener ended before sending it, or whose sender ended
- * before it landed, would answer nobody, and every later caller would board
- * behind it. So a seat unanswered for `patience` ms (`heard` on `clock`)
- * presumes its batch lost: the door forgets the batch, and the caller boards
- * again from its own request once. `wait` wraps the caller's full wait, so
- * a host can name it. */
+ * ends: a batch whose opener ended before sending it, or whose trip never
+ * lands, would answer nobody. So a caller unanswered for `patience` ms
+ * (`heard` on `clock`) presumes its batch lost and boards again from its own
+ * request once, and an opener aborts a trip of its own still out then. `wait`
+ * wraps the caller's full wait, so a host can name it. */
 export let coalesced = (
   door: Door,
   reads: (request: Request) => boolean,
@@ -185,22 +188,23 @@ export let coalesced = (
     turn = queueMicrotask,
     patience = PATIENCE,
     clock = system,
+    beat = BEAT,
     wait = (seated) => seated(),
   }: {
     hold?: Hold
     turn?: (send: () => void) => void
     patience?: number
     clock?: Clock
+    beat?: number
     wait?: <T>(seated: () => Promise<T>) => Promise<T>
   } = {},
 ): Door => {
   // The batch still boarding for each read, and the one travelling.
   let boarding = new Map<string, Batch>()
   let moving = new Map<string, Batch>()
-  // What boards from here on shares nothing sent before; a batch waiting on
-  // a read now forgotten goes at once.
+  let looking = { clock, beat }
+  // What boards from here on shares nothing sent before.
   let part = () => {
-    for (let batch of boarding.values()) batch.go()
     boarding.clear()
     moving.clear()
   }
@@ -212,84 +216,60 @@ export let coalesced = (
       part()
     }
   }
-  let send = async (key: string, batch: Batch) => {
+  // A batch nobody answered in time: nobody boards behind it again.
+  let lost = (key: string, batch: Batch) => {
+    batch.lost ||= !batch.answer && !batch.failed
     if (boarding.get(key) == batch) boarding.delete(key)
-    moving.set(key, batch)
-    let landed = (each: (seat: Seat) => void) => {
-      if (moving.get(key) == batch) {
-        moving.delete(key)
-        boarding.get(key)?.go()
-      }
-      batch.seats.forEach(each)
-    }
-    try {
-      let answer = await batch.trip()
-      landed((seat) => seat.resolve(answer))
-    } catch (error) {
-      landed((seat) => seat.reject(error))
-    }
+    if (moving.get(key) == batch) moving.delete(key)
   }
-  // A batch opened by this caller, which sends it now or once woken.
-  let board = (key: string, trip: Trip) => {
-    let woken = resolvers<void>(), done = resolvers<void>()
-    let stop = new AbortController()
-    let batch: Batch = {
-      seats: new Set(),
-      trip: () => trip(stop.signal),
-      go: () => woken.resolve(),
-      abandon: () => {
+  // The opener's send, all in its own request: once the read ahead lands (or
+  // is presumed lost) and this turn's callers have boarded.
+  let send = (key: string, batch: Batch, trip: Trip): Promise<void> => {
+    let { promise: sent, resolve: done } = resolvers<void>()
+    let go = () => {
+      if (batch.lost) return done()
+      if (boarding.get(key) == batch) boarding.delete(key)
+      moving.set(key, batch)
+      let stop = new AbortController()
+      let { promise: cut, reject } = resolvers<never>()
+      let cancel = heard(patience, () => {
         stop.abort()
-        done.resolve()
-      },
-    }
-    boarding.set(key, batch)
-    let left = false
-    let leave = () => {
-      if (left) return
-      left = true
-      turn(() => {
-        if (!stop.signal.aborted) void send(key, batch).finally(done.resolve)
+        reject(new Error('The store did not answer the read in time'))
+      }, clock)
+      Promise.race([trip(stop.signal), cut]).then(
+        (answer) => void (batch.answer = answer),
+        (error) => {
+          if (stop.signal.aborted) lost(key, batch)
+          else batch.failed = { error }
+        },
+      ).finally(() => {
+        cancel()
+        if (moving.get(key) == batch) moving.delete(key)
+        done()
       })
     }
-    void woken.promise.then(leave)
-    if (!moving.has(key)) leave()
-    hold?.(done.promise)
-    return batch
-  }
-  // A batch nobody answered in time, and the read ahead it waited on if it
-  // was never sent: nobody boards behind either again.
-  let lost = (key: string, batch: Batch) => {
-    if (boarding.get(key) == batch) {
-      boarding.delete(key)
-      moving.delete(key)
+    let ahead = moving.get(key)
+    if (!ahead) turn(go)
+    else {
+      let gone = () => moving.get(key) != ahead || landed(ahead)
+      void waitFor(() => gone() || null, patience, looking).then((went) => {
+        if (!went) lost(key, ahead)
+        turn(go)
+      })
     }
-    if (moving.get(key) == batch) {
-      moving.delete(key)
-      boarding.get(key)?.go()
-    }
-    if (!batch.seats.size) batch.abandon()
+    return sent
   }
-  // Leave an expired seat behind so a lost trip holds no callers.
-  let seated = async (batch: Batch) => {
-    let answer = resolvers<(() => Response) | null>()
-    let seat = { resolve: answer.resolve, reject: answer.reject }
-    let cancel = heard(patience, () => answer.resolve(null), clock)
-    batch.seats.add(seat)
-    try {
-      return await answer.promise
-    } finally {
-      cancel()
-      batch.seats.delete(seat)
-    }
-  }
-  let ride = async (
-    key: string,
-    trip: Trip,
-  ): Promise<Response> => {
+  let ride = async (key: string, trip: Trip): Promise<Response> => {
     for (let sent = 0; sent < 2; sent++) {
-      let batch = boarding.get(key) ?? board(key, trip)
-      let answer = await seated(batch)
-      if (answer) return answer()
+      let batch = boarding.get(key)
+      if (!batch) {
+        boarding.set(key, batch = {})
+        let sending = send(key, batch, trip)
+        hold?.(sending)
+      }
+      let got = await waitFor(() => landed(batch), patience, looking)
+      if (got?.answer) return got.answer()
+      if (got?.failed) throw got.failed.error
       lost(key, batch)
     }
     throw Object.assign(

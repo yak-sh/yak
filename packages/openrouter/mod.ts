@@ -1,4 +1,4 @@
-import { type Hold, sharing } from '@yaks/fp'
+import { type Scope, sharing } from '@yaks/fp'
 import { type Catalogue, catalogue, speechModels } from './list.ts'
 export { listed, listing } from './list.ts'
 /** OpenRouter's stateless OpenResponses adapter. */
@@ -30,9 +30,8 @@ export type Options = Pick<ResponsesOptions, 'fetch' | 'signal'> & {
   receipts?: MediaReceipts
   /** Models served by OpenRouter's byte-stream speech endpoint. */
   speech?: readonly string[]
-  /** keeps a shared catalogue read alive past its request (@yaks/model
-   * `Lent.hold`) */
-  hold?: Hold
+  /** who may share a read under way (@yaks/model `Lent.scope`) */
+  scope?: Scope
 }
 
 /** Always sends complete context. OpenRouter rejects stored continuations. */
@@ -49,15 +48,15 @@ export let responses = (options: Options): Model => {
       web: false,
       shape: req ? (body) => responseBody(req, body) : undefined,
     })
-  let speakers = new Map<'speech', Promise<string[]>>()
-  let catalogues = new Map<'models', Promise<Catalogue>>()
+  let speakers = new Map<'speech', string[]>()
+  let catalogues = new Map<'models', Catalogue>()
   let speechNames = () =>
     sharing(speakers, 'speech', () => speechModels(options.fetch), {
-      hold: options.hold,
+      scope: options.scope,
     })
   let described = () =>
     sharing(catalogues, 'models', () => catalogue(options.fetch), {
-      hold: options.hold,
+      scope: options.scope,
     })
   let model: Model = async (request) => {
     await options.key()

@@ -1,6 +1,6 @@
 // Workers AI's binding listing and published model page, never a code catalogue.
 import type { Listed, Price } from '@yaks/model'
-import { type Clock, type Hold, sharing, system } from '@yaks/fp'
+import { type Clock, type Scope, sharing, system } from '@yaks/fp'
 import { pageReads } from './reads.ts'
 
 export type Listing = {
@@ -96,24 +96,23 @@ let readInfo = async (
 // A model's page is read once an hour per fetch binding, the read shared by
 // every caller that asks in that hour, so a stored offering never freezes an
 // old price. A failed read is read again on the next ask.
-let pages = new WeakMap<typeof fetch, Map<string, Promise<Info>>>()
+let pages = new WeakMap<typeof fetch, Map<string, Info>>()
 
-/** How a page read is shared: the clock its hour is read from, and the hold
- * that keeps the read alive past the request that began it (@yaks/model
- * `Lent.hold`). */
-export type Reading = { clock?: Clock; hold?: Hold }
+/** How a page read is shared: the clock its hour is read from, and who may
+ * share one under way (@yaks/model `Lent.scope`). */
+export type Reading = { clock?: Clock; scope?: Scope }
 
 let described = (
   name: string,
   fetcher: typeof fetch,
-  { clock = system, hold }: Reading,
+  { clock = system, scope }: Reading,
 ): Promise<Info> => {
   let held = pages.get(fetcher) ?? new Map()
   pages.set(fetcher, held)
   let hour = Math.floor(clock.now() / 3_600_000)
   return sharing(held, `${hour} ${name}`, () => readInfo(name, fetcher), {
     limit: 512,
-    hold,
+    scope,
   })
 }
 

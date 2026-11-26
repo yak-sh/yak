@@ -1017,7 +1017,12 @@ export let aloneOf = (who: Pick<Who, 'person' | 'role'>): Alone | null =>
 // deployment (its assets binding); an ask that failed is asked again by the
 // next page, so a release is never left stale by one refused write (a Store
 // still on the last deploy's code refuses the remake's words until it moves).
-let remakes = new WeakMap<Env['ASSETS'], Map<string, Promise<void>>>()
+// When each source was asked, or Infinity once its ask is done: a value, never
+// the asking's promise, which settles only in the request that made it
+// (@yaks/fp `Scope`). An ask whose request ended unfinished is asked again
+// after `ASKING`.
+let remakes = new WeakMap<Env['ASSETS'], Map<string, number>>()
+let ASKING = 60_000
 export let refresh = (
   env: Env,
   space: Space,
@@ -1025,20 +1030,21 @@ export let refresh = (
 ): Promise<void> | undefined => {
   let source = app.source
   if (!source) return
-  let refreshed = remakes.get(env.ASSETS) ?? new Map<string, Promise<void>>()
+  let refreshed = remakes.get(env.ASSETS) ?? new Map<string, number>()
   remakes.set(env.ASSETS, refreshed)
-  if (refreshed.has(source)) return refreshed.get(source)
+  if ((refreshed.get(source) ?? -Infinity) > Date.now() - ASKING) return
   // A refusal here is the platform's own write refused: every failure is ours.
   let work = (async () => {
     let { stale } = await import('./toolkit.ts')
     if (await stale(env, source)) {
       await (await import('./remake.ts')).ask(env, { app: app.eid, source })
     }
+    refreshed.set(source, Infinity)
   })().catch((e) => {
     refreshed.delete(source)
     defect(e, { request: 'toolkit refresh', space: space.slug, app: app.slug })
   })
-  refreshed.set(source, work)
+  refreshed.set(source, Date.now())
   for (let old of refreshed.keys()) {
     if (refreshed.size <= 512) break
     refreshed.delete(old)

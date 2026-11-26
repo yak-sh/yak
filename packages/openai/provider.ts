@@ -195,6 +195,7 @@ export let providers = (
           web: options.web ?? lent.env('HARNESS_WEB') != '0',
           background: options.background,
           receipts: lent.receipts,
+          scope: lent.scope,
           hold: lent.hold,
           store,
           retention,

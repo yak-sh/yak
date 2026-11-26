@@ -19,7 +19,7 @@ export let providers = (lent: Lent): Record<string, Model> => ({
           fetch: lent.fetch,
           media: { store: lent.store },
           receipts: lent.receipts,
-          hold: lent.hold,
+          scope: lent.scope,
           key: async () => {
             let key = await lent.key('openrouter')
             if (!key) {

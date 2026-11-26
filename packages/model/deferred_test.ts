@@ -1,5 +1,6 @@
-// Provider selection must not open unused transports; once selected, concurrent
-// requests and metadata calls share the same provider and retain its recorders.
+// Provider selection must not open unused transports; once loaded, requests and
+// metadata calls share the provider that landed first and retain its recorders.
+// Concurrent first calls each load (@yaks/fp `lazy`).
 import { equal, test } from '@yaks/testing'
 import type { Model, Request } from '@yaks/model'
 import { deferredModel, modelReads } from './mod.ts'
@@ -31,8 +32,8 @@ let plain = deferredModel(() => Promise.resolve(provider), { mark })
 test('an unused provider records replies without loading its transport', () => {
   equal(before, { loaded: 0, marked: { fake: { response_id: 'reply' } } })
 })
-test('concurrent requests and discovery share one deferred provider', () => {
-  equal({ loaded, calls }, { loaded: 1, calls: 2 })
+test('requests and discovery share the deferred provider that landed first', () => {
+  equal({ loaded, calls }, { loaded: 2, calls: 2 })
   equal(answers, [reply, reply])
   equal(listed, [{ name: 'fake' }])
   equal(described, { name: 'fake' })

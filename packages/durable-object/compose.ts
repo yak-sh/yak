@@ -55,6 +55,7 @@ import {
   type Binding,
   prepare,
 } from '@yaks/host/assembly'
+import { lazy } from '@yaks/fp'
 import { effects } from '@yaks/effects'
 import { type Blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
 import { ramVault } from '@yaks/secrets/vault'
@@ -93,9 +94,10 @@ export let planned = (
   if (!byRoles) byLoad.set(load, byRoles = new Map())
   let key = roles.join(), plan = byRoles.get(key)
   if (plan) return plan
-  let made: Promise<Assembling> | undefined
-  plan = () =>
-    made ??= prepare(config, roles, load).then((facets) => {
+  // Kept as a value once loaded: a plan is shared by every object and
+  // request of an isolate (@yaks/fp `lazy`).
+  plan = lazy(() =>
+    prepare(config, roles, load).then((facets) => {
       let own: Assembly | undefined
       let worded = new WeakMap<Words, Assembly>()
       let assembly = (words?: Words) =>
@@ -106,10 +108,8 @@ export let planned = (
         if (!held) worded.set(words, held = assembly(words))
         return held
       }
-    }, (e) => {
-      made = undefined
-      throw e
     })
+  )
   byRoles.set(key, plan)
   return plan
 }

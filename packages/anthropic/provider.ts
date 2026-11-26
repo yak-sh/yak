@@ -42,7 +42,7 @@ export let providers = (
               return key
             },
             web,
-            hold: lent.hold,
+            scope: lent.scope,
           })
         ),
       {

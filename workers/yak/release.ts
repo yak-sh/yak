@@ -13,7 +13,6 @@ import {
 } from '@yaks/platform/fingerprint'
 import { rootOf, type Serving, serving } from '@yaks/platform/files'
 import { elapsed } from './lib/hops.ts'
-import { background } from './defects.ts'
 import { addressed, BUILT, type Files, own, SHA } from '@yaks/platform/versions'
 import {
   decode,
@@ -23,7 +22,7 @@ import {
   META,
   type ServingIndex,
 } from '@yaks/platform/release-index'
-import { sharing } from './lib/shared.ts'
+import { inFlight, sharing } from './lib/shared.ts'
 
 type Named = Pick<File, 'key'> & Partial<File>
 
@@ -37,7 +36,7 @@ let release = (key: string) =>
 // (T-123988). Kept up to HELD bytes of them, the oldest let go first: an index
 // carries texts (`packed`), and an app of a thousand files names them all.
 let HELD = 16 * 2 ** 20
-type Held = Map<string, { index: Promise<Index | null>; size: number }>
+type Held = Map<string, { index: Index; size: number }>
 let held = new WeakMap<Objects, Held>()
 let cache = (raw: Objects) => {
   let kept: Held = held.get(raw) ?? new Map()
@@ -58,34 +57,29 @@ let written = async (raw: Objects, source: string, index: Index) => {
   let bytes = encode(index)
   await raw.put(source + META, bytes)
   let all = cache(raw)
-  all.set(`${source}/`, {
-    index: Promise.resolve(index),
-    size: bytes.byteLength,
-  })
+  all.set(`${source}/`, { index, size: bytes.byteLength })
   trim(all)
 }
-let indexAt = (raw: Objects, prefix: string, read = raw.read) => {
+// A read under way is shared within its request (lib/shared.ts); what lands
+// is kept as a value for every request after.
+let indexAt = (
+  raw: Objects,
+  prefix: string,
+  read = raw.read,
+): Promise<Index | null> => {
   let all = cache(raw)
   let found = all.get(prefix)
-  if (found) return found.index
-  let entry = {
-    size: 0,
-    index: elapsed('index_wait', async () => {
+  if (found) return Promise.resolve(found.index)
+  return inFlight(all, prefix, () =>
+    elapsed('index_wait', async () => {
       let bytes = await read(prefix.slice(0, -1) + META)
-      entry.size = bytes?.byteLength ?? 0
-      return bytes && decode(bytes)
-    }),
-  }
-  let drop = () => all.get(prefix) == entry && all.delete(prefix)
-  all.set(prefix, entry)
-  // Held to its end by the request that began it (lib/shared.ts): a later
-  // request awaits this same read.
-  let settled = entry.index.then((index) => {
-    if (index) trim(all)
-    else drop()
-  }, drop)
-  background(settled.then(() => {}))
-  return entry.index
+      let index = bytes ? decode(bytes) : null
+      if (bytes && index) {
+        all.set(prefix, { index, size: bytes.byteLength })
+        trim(all)
+      }
+      return index
+    }))
 }
 
 // What a release's index carries the text of: what a first view reads before

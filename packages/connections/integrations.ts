@@ -338,18 +338,17 @@ let STAMP = [
  * whole only when the stamp moved, or beside the stamp when none is held yet.
  * The rows are shared by every caller, so none changes them. */
 export let catalogHeld = (): (read: Read) => Promise<Marked[]> => {
-  type Held = { stamp: Promise<string>; rows: Promise<Marked[]> }
-  let held: Held | undefined
+  // Values, never the reads' promises, which settle only in the request that
+  // made them (@yaks/fp `Scope`).
+  let held: { stamp: string; rows: Marked[] } | undefined
   return async (read: Read): Promise<Marked[]> => {
-    let stamp = Promise.all(STAMP.map((q) => read(q))).then(JSON.stringify)
-    let hold = () => {
-      let now: Held = held = { stamp, rows: catalogued(read) }
-      Promise.all([now.stamp, now.rows])
-        .catch(() => held == now && (held = undefined))
-      return now
-    }
-    let was = held ?? hold()
-    return await (await was.stamp == await stamp ? was : hold()).rows
+    let stamping = Promise.all(STAMP.map((q) => read(q))).then(JSON.stringify)
+    let [stamp, rows] = held
+      ? [await stamping, undefined]
+      : await Promise.all([stamping, catalogued(read)])
+    if (held?.stamp == stamp) return held.rows
+    held = { stamp, rows: rows ?? await catalogued(read) }
+    return held.rows
   }
 }
 

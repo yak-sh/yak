@@ -1,5 +1,6 @@
 // Unused provider transports cost no module loading. Their synchronous recorders
 // are still available before a request, as on a directly constructed Model.
+import { lazy } from '@yaks/fp'
 import { type Model, modelReads } from './mod.ts'
 
 export let deferredModel = (
@@ -17,8 +18,7 @@ export let deferredModel = (
       reads?: Model['reads'] | true
     },
 ): Model => {
-  let pending: Promise<Model> | undefined
-  let get = () => pending ??= load()
+  let get = lazy(load)
   let { recover, retrieve, info, count, reads, ...record } = meta
   return Object.assign(
     async (...args: Parameters<Model>) => (await get())(...args),

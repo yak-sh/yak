@@ -6,7 +6,7 @@
 // https://voip.ms/m/apidocs.php (behind a sign-in; the parameters here are
 // as its docs and an account's answers name them)
 
-import { type Clock, system } from '@yaks/fp'
+import { type Clock, lazy, system } from '@yaks/fp'
 import { Unsent } from '@yaks/host/senders'
 import {
   type Account,
@@ -142,17 +142,15 @@ export let voipms = (
         ? { callback: String(d.sms_url_callback) }
         : {},
     }))
-  // The number texts go from, asked once and kept while it answers.
-  let own: Promise<string> | null = number ? Promise.resolve(number) : null
-  let from = () =>
-    own ??= lines().then((all) => {
+  // The number texts go from, asked until it answers and kept as a value
+  // (@yaks/fp `lazy`): a client may serve many requests.
+  let from = lazy(() =>
+    number ? Promise.resolve(number) : lines().then((all) => {
       let line = all.find((l) => l.sms)
       if (!line) throw new Error('No number on this voip.ms account texts')
       return line.number
-    }).catch((error) => {
-      own = null
-      throw error
     })
+  )
   return {
     lines,
     from,

@@ -289,13 +289,22 @@ A query that works on the box can be refused in a store.
   runs where no answer is under way: the Builder marks its answers while its
   incarnation owes work (build-door.ts `OWED`), and its door wakes it once it
   has one.
-- **A promise another request settles or awaits is made by `resolvers`**
-  (@yaks/fp; `sharing` keeps one). workerd runs a request's waiter in its own
-  request only while the promise carries that request's tag, and a `new Promise`
-  in code V8 has optimized carries none, so the code works until it is hot and
-  then fails with "Cannot perform I/O on behalf of a different request"
-  (cloudflare/workerd#8228). A local workerd shows it with v8Flags
-  `--invocation-count-for-maglev=2 --invocation-count-for-turbofan=4`.
+- **No promise is kept where another request can reach it.** Cloudflare drops a
+  wake one request gives another once the sleeper's request has ended
+  (`handle_cross_request_promise_resolution`), so a promise, queue, lock, dedupe
+  map or deferred kept at module scope, or on an object memoized there (a door,
+  a client, a vault), hangs or fails every request that joins it: an app use
+  receipt failed 2,342 times in a day (bug 4be33893d9), a directory write queue
+  stalled every write behind one lost turn (T-3866). Module scope is shared by
+  every request and every object in the isolate; a Durable Object's own fields
+  are not, since it runs all its requests in one I/O context. Keep a value
+  there, never a promise, with @yaks/fp: `sharing` keeps a read's answer and
+  shares a read under way only within the request (lib/shared.ts binds it to the
+  invocation), `lazy` loads a module or client until one lands, `turns` and
+  `locks` queue callers that each look at the queue on their own clock, and
+  `waitFor` waits on a value another request sets. A promise made by hand is
+  made by `resolvers`: a `new Promise` in code V8 has optimized carries no
+  request tag (cloudflare/workerd#8228).
 - **An isolate's first wake runs every path cold.** Its boot and first read cost
   a store 130-320 ms of CPU against a warm wake's 5-15 ms (T-148354): each
   function runs for the first time, and each per-isolate derivation (a

@@ -5,7 +5,7 @@
 // never says where it runs, and the host never names a provider.
 
 import type { ArtifactStore } from '@yaks/blob'
-import type { Hold } from '@yaks/fp'
+import type { Hold, Scope } from '@yaks/fp'
 import type { Affordable } from './afford.ts'
 import type { Listed, MediaReceipts, Model } from './mod.ts'
 
@@ -25,9 +25,12 @@ export type Lent = {
    * call is delivered again without being bought again (a host that keeps
    * none lends none) */
   receipts?: MediaReceipts
-  /** keeps a read one call begins and later calls share alive until it
-   * settles, past the request that began it (@yaks/fp `sharing`); a host
-   * whose reads outlive their request lends none */
+  /** who may share a read under way, as @yaks/fp `sharing` takes it: the
+   * host's current request or object; a host that lends none shares only
+   * finished reads */
+  scope?: Scope
+  /** keeps work a call leaves behind (a cancel sent once its reply is
+   * dropped) alive past its request, as a Worker's `waitUntil` does */
   hold?: Hold
 }
 

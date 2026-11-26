@@ -12,7 +12,7 @@ import { pictured } from '../raster.ts'
 import { generatedIconKey, ICON_PNG } from '@yaks/platform/app-icon'
 import { MANIFEST } from '@yaks/platform/routes'
 import { ensureSplash, pageSheets, palette } from '@yaks/platform/splash'
-import { sharing } from '@yaks/fp'
+import { singleFlight } from '@yaks/fp'
 import { defect } from '../defects.ts'
 
 let released = ({ app, space }: OnOffer) =>
@@ -100,7 +100,8 @@ export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
   if (!store.env.RASTER || !store.env.BLOBS) return {}
   let env = store.env as Env
   let raw = r2RawObjects(env.BLOBS)
-  let pending = new Map<string, Promise<unknown>>()
+  // One drawing at a time for each app, within this object.
+  let drawing = singleFlight(() => store)
   return {
     app_splash_draw: async ({ entity }, _tx, write, attempt) => {
       let record = (drawn: { key: string; dark: boolean }) => async () =>
@@ -126,8 +127,8 @@ export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
             defect(e, { request: 'app splash', app: entity.eid })
             throw e
           },
-        ).finally(() => pending.delete(entity.eid))
-      await sharing(pending, entity.eid, work)
+        )
+      await drawing(store, entity.eid, work)
     },
   }
 }

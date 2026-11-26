@@ -267,8 +267,9 @@ export class Unfenced extends Error {
 // no fence `mend` must spare.
 let raising = new Set<Turn>()
 let held = new Map<number, Turn>()
-// The wake carries no result. The next writer reads the committed revision
-// from storage in its own request before asking the copy for a fence.
+// No writer wakes another: each takes its turn on its own clock (@yaks/fp
+// `turns`), and reads the committed revision from storage in its own request
+// before asking the copy for a fence.
 let nextTurn = turns()
 let writing = () => [...raising, ...held.values()].some((turn) => !turn.gone())
 

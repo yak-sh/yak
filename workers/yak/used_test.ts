@@ -655,3 +655,12 @@ test('a colo cache that fails is asked around and reported', async () => {
     reported: true,
   })
 })
+
+test('a use another request in the isolate is asking for is left to it, never awaited', async () => {
+  let c = colo()
+  let ns = c.isolate()
+  let first = c.use(ns, () => new Promise(() => {}))
+  let second = await c.use(ns)
+  equal({ second, sent: c.sent() }, { second: null, sent: 0 })
+  void first
+})

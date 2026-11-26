@@ -151,11 +151,13 @@ test('native model pages stay first and failed metadata never confirms a model',
 let pricedPage = (input: number) =>
   `$${input} per M input tokens, $2 per M output tokens`
 
-test('model metadata shares concurrent reads, expires and keeps fetch bindings separate', async () => {
+test('model metadata shares concurrent reads within a request, expires and keeps fetch bindings separate', async () => {
   let time = clock(), reads = 0
   let fetcher: typeof fetch = () =>
     Promise.resolve(new Response(pricedPage(++reads)))
-  let read = () => modelInfo('vendor/model', fetcher, { clock: time })
+  let request = {}
+  let read = () =>
+    modelInfo('vendor/model', fetcher, { clock: time, scope: () => request })
   let infos = await Promise.all([read(), read()])
   assertEquals(infos.map((info) => info.price?.input), [1, 1])
   assertEquals((await read()).price?.input, 1)
@@ -169,19 +171,20 @@ test('model metadata shares concurrent reads, expires and keeps fetch bindings s
   )
 })
 
-test('the caller that begins a shared read is held until it settles', async () => {
-  let held: Promise<void>[] = [], answer = (_: Response) => {}
-  let fetcher: typeof fetch = () => new Promise((yes) => answer = yes)
-  let read = () =>
-    modelInfo('vendor/held', fetcher, { hold: (w) => held.push(w) })
+test('a read under way is shared within one scope, and its answer with every caller', async () => {
+  let reads = 0, answer = (_: Response) => {}
+  let fetcher: typeof fetch =
+    () => (reads++, new Promise((yes) => answer = yes))
+  let request = {}
+  let read = () => modelInfo('vendor/held', fetcher, { scope: () => request })
   let [first, second] = [read(), read()]
-  assertEquals(held.length, 1)
   answer(new Response(pricedPage(4)))
   assertEquals([(await first).price?.input, (await second).price?.input], [
     4,
     4,
   ])
-  await held[0]
+  await modelInfo('vendor/held', fetcher)
+  assertEquals(reads, 1)
 })
 
 test('a failed metadata fetch is retried and an unpriced page can acquire a price', async () => {

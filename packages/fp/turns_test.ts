@@ -22,11 +22,36 @@ test('turns pass in order, each when the one before it ends', async () => {
   await time.advance(0)
   equal(taken, ['a'])
   a.end()
-  await time.advance(0)
+  await time.advance(10)
   equal(taken, ['a', 'b'])
   b.end()
-  await time.advance(0)
+  await time.advance(10)
   equal([taken, a.gone(), c.gone()], [['a', 'b', 'c'], true, false])
+})
+
+test('a turn whose caller never looks again passes on', async () => {
+  let time = clock()
+  // A caller whose request ended: its timers never fire.
+  let dead = false
+  let lossy = {
+    now: time.now,
+    after: (ms: number, f: () => void) => dead ? () => {} : time.after(ms, f),
+  }
+  let turn = turns(lossy, 1000, 5000)
+  let taken: string[] = []
+  let a = turn()
+  dead = true
+  let b = turn()
+  dead = false
+  let c = turn()
+  a.ready.then(() => taken.push('a'))
+  b.ready.then(() => taken.push('b'))
+  c.ready.then(() => taken.push('c'))
+  a.end()
+  await time.advance(990)
+  equal(taken, ['a'])
+  await time.advance(30)
+  equal([taken, b.gone()], [['a', 'c'], true])
 })
 
 test('a caller that leaves before its turn is skipped', async () => {
@@ -34,19 +59,18 @@ test('a caller that leaves before its turn is skipped', async () => {
   let { all: [a, b], taken } = taking(['a', 'b', 'c'], turns(time))
   b.end()
   a.end()
-  await time.advance(0)
+  await time.advance(10)
   equal(taken, ['a', 'c'])
 })
 
 test('a turn held past its hold passes on, and its late end passes nothing', async () => {
   let time = clock()
   let { all: [a], taken } = taking(['a', 'b', 'c'], turns(time, 1000, 5000))
-  // Seen taken at the first beat, a second after it was.
-  await time.advance(5900)
+  await time.advance(4990)
   equal(taken, ['a'])
-  await time.advance(200)
+  await time.advance(20)
   equal([taken, a.gone()], [['a', 'b'], true])
   a.end()
-  await time.advance(0)
+  await time.advance(10)
   equal(taken, ['a', 'b'])
 })

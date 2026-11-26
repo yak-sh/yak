@@ -15,6 +15,7 @@
 // binding, `{"secret": "KEY"}` the secret. What is built from one env is kept
 // for as long as that env object is.
 import { type Route, routed } from '@yaks/api/routed'
+import { lazy } from '@yaks/fp'
 import {
   type Config,
   given,
@@ -164,13 +165,10 @@ export let compose = (
     ) as Options
 
   let giving = single(named, 'entry')
-  let loading: Promise<Entry> | undefined
+  let entering = giving && lazy(giving[1])
   let entry: Entry = async (env, name, run, request, state) => {
-    if (!giving) return await run()
-    let enter = await (loading ??= giving[1]().catch((e) => {
-      loading = undefined
-      throw e
-    }))
+    if (!entering) return await run()
+    let enter = await entering()
     return await enter(env, name, run, request, state)
   }
 

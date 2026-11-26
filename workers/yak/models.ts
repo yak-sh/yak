@@ -42,7 +42,7 @@ import { metered } from './metered.ts'
 import { mediaRoom } from './usage.ts'
 import type { Env } from './env.ts'
 import { outbound } from './outbound.ts'
-import { background, caught } from './defects.ts'
+import { background, caught, invocationKey } from './defects.ts'
 import type { Answer, Asked } from './apps.ts'
 import type { Stored } from './graph.ts'
 import { lending } from './inference.ts'
@@ -352,6 +352,7 @@ let lent = (at: Stored) => (plug: Plug): Lent => {
     env: () => undefined,
     receipts: receiptsFor(at),
     hold: background,
+    scope: invocationKey,
   }
 }
 

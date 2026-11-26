@@ -25,9 +25,9 @@ equal(tally('status')([{ status: 'open' }, { status: 'open' }]), { open: 2 })
 
 ## Exports
 
-| Export     | Provides                                                                                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/fp` | All functions, `Fn` (a function of any shape), `Table` (see [Dispatch](#dispatch)), `Clock`, with `system` (see [Waits](#waits)), and `Kept` and `Hold` (see [Shared reads](#shared-reads)) |
+| Export     | Provides                                                                                                                                                                                             |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/fp` | All functions, `Fn` (a function of any shape), `Table` (see [Dispatch](#dispatch)), `Clock`, with `system` (see [Waits](#waits)), and `Kept`, `Hold` and `Scope` (see [Shared reads](#shared-reads)) |
 
 | `@yaks/fp/imports` | `importing`, `imported`, `watchImports`: observable
 module loading |
@@ -329,35 +329,54 @@ equal([await late, await within(Promise.resolve(1), 2000, time)], [null, 1])
 
 ## Shared reads
 
-`sharing(kept, key, read, { limit?, hold? })` hands every caller asking for
-`key` one read: the first ask begins it, and each ask after, while it runs or
-once it is done, gets the same promise. A failed read is dropped, so the next
-ask reads again. `kept` is a Map, a WeakMap or any store with `get`, `set` and
-`delete` (`Kept`); with a Map, `limit` keeps the newest asked keys.
+`sharing(kept, key, read, { limit?, scope? })` hands every caller asking for
+`key` one answer. The first ask reads; its answer is kept in `kept` as a value,
+and every ask after it gets that value. A failed read keeps nothing, so the next
+ask reads again. `kept` is a Map, a WeakMap or any store with `has`, `get`,
+`set` and `delete` (`Kept`); with a Map, `limit` keeps the newest asked keys.
+`lazy(load)` is the same for one value, such as a module or a client.
 
-A Worker cancels a request's reads when the request ends, so a read one request
-begins and another awaits never settles. `hold` (a `Hold`, the runtime's
-`waitUntil` or a host's wrapper of it) keeps the caller that began a read alive
-until the read settles. A package that cannot see the runtime takes its hold
-from whoever calls it (@yaks/model `Lent.hold`).
+A promise settles safely only in the I/O context that made it: a Worker drops a
+wake one request gives another once that request has ended. So a read under way
+is shared only within `scope` (a `Scope`: the host's object for the current
+request, or a Durable Object), and two requests asking at once each read once.
+With no scope, nothing under way is shared. `singleFlight(scope)` is the same
+sharing without the kept value. `turns()` queues callers without waking one from
+another: each looks at the queue on its own clock.
 
 ```ts
 import { sharing } from '@yaks/fp'
 import { equal } from '@yaks/testing'
 
-let kept = new Map<string, Promise<string>>(), held: Promise<void>[] = []
+let kept = new Map<string, string>()
 let reads = 0
 let read = () => Promise.resolve(`page ${++reads}`)
-let hold = (work: Promise<void>) => held.push(work)
+let request = {}
+let scope = () => request
 let [a, b] = [
-  sharing(kept, 'k', read, { hold }),
-  sharing(kept, 'k', read, { hold }),
+  sharing(kept, 'k', read, { scope }),
+  sharing(kept, 'k', read, { scope }),
 ]
-equal([await a, await b, reads, held.length], ['page 1', 'page 1', 1, 1])
+equal([await a, await b, reads], ['page 1', 'page 1', 1])
+equal([await sharing(kept, 'k', read), reads, kept.get('k')], [
+  'page 1',
+  1,
+  'page 1',
+])
+
+// Unscoped asks under way share nothing; each answers its own read, and the
+// first is kept.
+let [c, d] = [sharing(kept, 'n', read), sharing(kept, 'n', read)]
+equal([await c, await d, reads, kept.get('n')], [
+  'page 2',
+  'page 3',
+  3,
+  'page 2',
+])
 
 let failing = sharing(kept, 'f', () => Promise.reject(new Error('down')))
 await failing.catch(() => {})
-equal(await sharing(kept, 'f', read), 'page 2')
+equal(await sharing(kept, 'f', read), 'page 4')
 ```
 
 ## Limits

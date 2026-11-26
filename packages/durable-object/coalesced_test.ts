@@ -21,7 +21,10 @@ let fixture = () => {
   let answer = (n: number, body: string) =>
     answers[n](new Response(body, { headers: { 'x-revision': body } }))
   let flush = () => queued.splice(0).forEach((send) => send())
-  return { door, calls, held, answer, answers, flush, queued, time }
+  // Callers look for their batch's answer on the runtime's timers, a beat
+  // apart.
+  let look = () => new Promise((beat) => setTimeout(beat, 10))
+  return { door, calls, held, answer, answers, flush, queued, time, look }
 }
 
 test('queued reads share one trip and each gets its own bytes', async () => {
@@ -34,12 +37,14 @@ test('queued reads share one trip and each gets its own bytes', async () => {
   equal(f.calls.length, 1)
   equal(f.held.length, 1)
   f.answer(0, 'first')
+  await f.look()
   equal(await Promise.all(reads), Array(100).fill('first'))
   await Promise.all(f.held)
   let next = f.door('/query?q=x')
   f.flush()
   equal(f.calls.length, 2)
   f.answer(1, 'second')
+  await f.look()
   let response = await next
   equal([await response.text(), response.headers.get('x-revision')], [
     'second',
@@ -57,6 +62,7 @@ test('read sharing separates queries and callers with different standing', async
   f.flush()
   equal(f.calls.length, 3)
   reads.forEach((_, n) => f.answer(n, String(n)))
+  await f.look()
   equal(await Promise.all(reads.map(async (r) => (await r).text())), [
     '0',
     '1',
@@ -73,11 +79,13 @@ test('a write separates reads and an old answer cannot remove a newer read', asy
   await (await write).body?.cancel()
   let next = f.door('/query')
   f.answer(0, 'old')
+  await f.look()
   equal(await (await first).text(), 'old')
   let joined = f.door('/query')
   f.flush()
   equal(f.calls.length, 3)
   f.answer(2, 'new')
+  await f.look()
   equal(await Promise.all([next, joined].map(async (r) => (await r).text())), [
     'new',
     'new',
@@ -87,6 +95,7 @@ test('a write separates reads and an old answer cannot remove a newer read', asy
 test('a failed body fails its readers and the next read starts anew', async () => {
   let f = fixture()
   let reads = [f.door('/query'), f.door('/query')]
+  let settled = Promise.allSettled(reads)
   f.flush()
   let failure = Error('broken body')
   f.answers[0](
@@ -96,7 +105,8 @@ test('a failed body fails its readers and the next read starts anew', async () =
       }),
     ),
   )
-  equal((await Promise.allSettled(reads)).map((r) => r.status), [
+  await f.look()
+  equal((await settled).map((r) => r.status), [
     'rejected',
     'rejected',
   ])
@@ -104,6 +114,7 @@ test('a failed body fails its readers and the next read starts anew', async () =
   f.flush()
   equal(f.calls.length, 2)
   f.answer(1, 'recovered')
+  await f.look()
   equal(await (await next).text(), 'recovered')
 })
 
@@ -116,12 +127,14 @@ test('callers during a read share the next one, sent once it lands', async () =>
   f.flush()
   equal(f.calls.length, 2)
   f.answer(0, 'before')
+  await f.look()
   equal(await (await first).text(), 'before')
   f.flush()
   equal(f.calls.length, 3)
   let after = f.door('/query')
   f.flush()
   f.answer(2, 'next')
+  await f.look()
   equal(
     await Promise.all(later.map(async (r) => (await r).text())),
     Array(50).fill('next'),
@@ -130,6 +143,7 @@ test('callers during a read share the next one, sent once it lands', async () =>
   equal(f.calls.length, 4)
   f.answer(1, 'other')
   f.answer(3, 'last')
+  await f.look()
   equal(await Promise.all([other, after].map(async (r) => (await r).text())), [
     'other',
     'last',
@@ -139,14 +153,17 @@ test('callers during a read share the next one, sent once it lands', async () =>
 test('a read that fails still sends the one waiting behind it', async () => {
   let f = fixture()
   let first = f.door('/query')
+  let settled = Promise.allSettled([first])
   f.flush()
   let later = f.door('/query')
   f.answers[0](
     new Response(new ReadableStream({ start: (c) => c.error(Error('cut')) })),
   )
-  equal((await Promise.allSettled([first])).map((r) => r.status), ['rejected'])
+  await f.look()
+  equal((await settled).map((r) => r.status), ['rejected'])
   f.flush()
   f.answer(1, 'again')
+  await f.look()
   equal(await (await later).text(), 'again')
 })
 
@@ -166,10 +183,12 @@ test('socket upgrades leave reads queued behind a read in flight', async () => {
   )
   await Promise.all(upgrades)
   f.answer(0, 'first')
+  await f.look()
   equal(await (await first).text(), 'first')
   f.flush()
   equal(f.calls.length, 22)
   f.answer(21, 'next')
+  await f.look()
   equal(await (await later).text(), 'next')
 })
 
@@ -185,6 +204,7 @@ test('a completed write separates reads begun while it was running', async () =>
   equal(f.calls.length, 3)
   f.answer(1, 'before commit')
   f.answer(2, 'after commit')
+  await f.look()
   equal(await Promise.all([during, after].map(async (r) => (await r).text())), [
     'before commit',
     'after commit',
@@ -241,9 +261,11 @@ test('callers behind a read whose sender ended board again once patience runs ou
   f.flush()
   equal(f.calls.length, 1)
   await f.time.advance(14_000)
+  await f.look()
   f.flush()
   equal(f.calls.length, 2)
   f.answer(1, 'again')
+  await f.look()
   equal(
     await Promise.all([first, ...behind].map(async (r) => (await r).text())),
     [
@@ -255,6 +277,7 @@ test('callers behind a read whose sender ended board again once patience runs ou
   let next = f.door('/query')
   f.flush()
   f.answer(2, 'healed')
+  await f.look()
   equal(await (await next).text(), 'healed')
 })
 
@@ -267,6 +290,7 @@ test('callers in a batch its opener never sent board again once patience runs ou
   f.flush()
   equal(f.calls.length, 1)
   f.answer(0, 'sent')
+  await f.look()
   equal(await Promise.all(reads.map(async (r) => (await r).text())), [
     'sent',
     'sent',
@@ -290,5 +314,6 @@ test('a second lost trip fails its readers and the next request starts fresh', a
   let next = f.door('/query')
   f.flush()
   f.answer(2, 'fresh')
+  await f.look()
   equal(await (await next).text(), 'fresh')
 })

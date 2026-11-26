@@ -5,7 +5,7 @@ import {
   nativeReads,
   type Published,
 } from './list.ts'
-import { type Hold, toBase64 } from '@yaks/fp'
+import { type Scope, toBase64 } from '@yaks/fp'
 export {
   listed,
   listing,
@@ -630,9 +630,8 @@ export let workersAi = (
     fetch?: typeof fetch
     gateway?: string
     receipts?: MediaReceipts
-    /** keeps a shared model-page read alive past its request (@yaks/model
-     * `Lent.hold`) */
-    hold?: Hold
+    /** who may share a read under way (@yaks/model `Lent.scope`) */
+    scope?: Scope
     /** each retired model's name, and the model that answers for it */
     successors?: Record<string, string>
   } = {},
@@ -781,11 +780,11 @@ export let workersAi = (
     }
   }, {
     recover: (call: string) => recoveredMedia(call, options.receipts, deliver),
-    list: () => listing(ai, options.fetch, { hold: options.hold }),
+    list: () => listing(ai, options.fetch, { scope: options.scope }),
     info: (name: string) =>
-      modelInfo(current(name), options.fetch, { hold: options.hold }),
+      modelInfo(current(name), options.fetch, { scope: options.scope }),
     reads: (name: string) =>
-      nativeReads(current(name), options.fetch, { hold: options.hold }),
+      nativeReads(current(name), options.fetch, { scope: options.scope }),
     quote: (req: Request, remaining: number) =>
       music(current(req.model))
         ? musicQuote(current(req.model), req.input ?? {}, remaining)

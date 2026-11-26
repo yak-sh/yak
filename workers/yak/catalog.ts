@@ -43,6 +43,7 @@ import {
 import { patient } from '@yaks/blob'
 import { LOGOS } from '@yaks/platform/routes'
 import { background, caught } from './defects.ts'
+import { inFlight } from './lib/shared.ts'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { refuse } from './tool.ts'
@@ -74,9 +75,12 @@ export type Kept = {
 // asked again.
 let VERSION = 3
 
-// This isolate's copy, and the read under way, for each bucket it is kept in.
+// This isolate's copy for each bucket it is kept in, and when a refresh of a
+// stale one began: values, never a read's promise, which settles only in the
+// request that made it (@yaks/fp `Scope`).
 let held = new WeakMap<object, Kept>()
-let reading = new WeakMap<object, Promise<Kept | undefined>>()
+let refreshing = new WeakMap<object, number>()
+let REFRESHING = 60_000
 
 let keep = async (env: Env, kept: Kept) => {
   let text = JSON.stringify(kept)
@@ -111,20 +115,14 @@ let stored = async (env: Env): Promise<Kept | undefined> => {
 let fresh = (kept: Kept | undefined) =>
   !!kept && kept.v == VERSION && Date.now() - kept.at <= DAY
 
-// One read at a time in an isolate: a page drawn while it is under way waits
-// on the same one, so the request that began it holds it to its end
-// (lib/shared.ts).
-let once = (env: Env, read: () => Promise<Kept | undefined>) => {
-  let under = reading.get(env.BLOBS)
-  if (under) return under
-  let now = read().then((kept) => {
-    if (kept) held.set(env.BLOBS, kept)
-    return kept
-  }).finally(() => reading.delete(env.BLOBS))
-  reading.set(env.BLOBS, now)
-  background(now.then(() => {}, () => {}))
-  return now
-}
+// One read at a time in a request: a page drawn while it is under way waits
+// on the same one (lib/shared.ts).
+let once = (env: Env, read: () => Promise<Kept | undefined>) =>
+  inFlight(held, env.BLOBS, () =>
+    read().then((kept) => {
+      if (kept) held.set(env.BLOBS, kept)
+      return kept
+    }))
 
 let readKept = (env: Env) => once(env, () => stored(env))
 
@@ -140,7 +138,9 @@ export let listingsOf = async (env: Env): Promise<Kept | undefined> => {
     }
   }
   let kept = held.get(env.BLOBS)
-  if (kept && !fresh(kept) && !reading.has(env.BLOBS)) {
+  let began = refreshing.get(env.BLOBS) ?? -Infinity
+  if (kept && !fresh(kept) && Date.now() - began > REFRESHING) {
+    refreshing.set(env.BLOBS, Date.now())
     background(
       once(env, async () => {
         let latest = await stored(env)
@@ -148,8 +148,11 @@ export let listingsOf = async (env: Env): Promise<Kept | undefined> => {
           ? latest
           : await asked(env, latest ?? kept)
       }).then(
-        () => {},
-        (e) => caught(e, { request: 'catalog' }),
+        () => void refreshing.delete(env.BLOBS),
+        (e) => {
+          refreshing.delete(env.BLOBS)
+          caught(e, { request: 'catalog' })
+        },
       ),
     )
   }

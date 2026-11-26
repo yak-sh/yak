@@ -52,7 +52,13 @@ export let returned = (previous: unknown, at: string) =>
 // same, for every isolate there.
 type Held = { at: string | null; until: number }
 let receipts = new WeakMap<Namespace, Map<string, Held>>()
-let pending = new WeakMap<Namespace, Map<string, Promise<string | null>>>()
+// When this isolate began asking for each receipt it is asking for: a value,
+// never the asking's promise, which settles only in the request that made it
+// (@yaks/fp `Scope`). A request that finds one under way leaves it to that
+// one; one whose request ended without an answer is asked again after
+// `ASKING`.
+let asking = new WeakMap<Namespace, Map<string, number>>()
+let ASKING = 30_000
 
 /** How long a colo holds back a receipt an overloaded store refused. */
 export let REST = 60_000
@@ -141,10 +147,18 @@ let receipt = (
   if (!held) receipts.set(ns, held = new Map())
   let kept = held.get(r.key)
   if (kept && kept.until > clock.now()) return Promise.resolve(kept.at)
-  let waiting = pending.get(ns)
-  let running = waiting?.get(r.key)
-  if (running) return running
-  if (!waiting) pending.set(ns, waiting = new Map())
+  let under = asking.get(ns)
+  if (!under) asking.set(ns, under = new Map())
+  let began = under.get(r.key)
+  if (began != null && clock.now() - began < ASKING) {
+    return Promise.resolve(null)
+  }
+  if (under.size >= 1000) {
+    for (let [key, at] of under) {
+      if (clock.now() - at >= ASKING) under.delete(key)
+    }
+  }
+  under.set(r.key, clock.now())
   let hold = (at: string | null, until: number) => {
     if (held.size >= 1000) {
       for (let [key, h] of held) if (h.until <= clock.now()) held.delete(key)
@@ -158,7 +172,7 @@ let receipt = (
     if (shelf) await mark(shelf, r, { at, until }, clock)
     return hold(at, until)
   }
-  let work = (async () => {
+  return (async () => {
     let colo = shelf && await glance(shelf, r, clock)
     if (colo) return hold(colo.at, colo.until)
     try {
@@ -180,9 +194,7 @@ let receipt = (
       defect(error, { request: r.request, app: r.app })
       return overloaded(error) ? await took(null, clock.now() + REST) : null
     }
-  })().finally(() => waiting!.delete(r.key))
-  waiting.set(r.key, work)
-  return work
+  })().finally(() => under.delete(r.key))
 }
 
 let used = (eid: string): Receipt => ({

@@ -18,6 +18,7 @@ import { holding } from './written.ts'
 import type { App, Directory } from './directory.ts'
 import { addressed, BUILT } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
+import { within } from './defects.ts'
 
 let memory = () => {
   let held = new Map<string, Uint8Array<ArrayBuffer>>()
@@ -214,7 +215,12 @@ let first = async (written: Record<string, Body>, path: string) => {
   }
   await stage.finish()
   let env = { BLOBS: b.r2 } as unknown as Env
-  let r = await fileBytes(env, 'eid', source, path, source)
+  // A view is one request, which shares its own reads (lib/shared.ts).
+  let r = await within(
+    {},
+    {},
+    () => fileBytes(env, 'eid', source, path, source),
+  )
   let timing = r.headers.get('server-timing') ?? ''
   return [
     r.status,

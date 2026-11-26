@@ -62,21 +62,17 @@ export type Options<E extends Env = Env> = {
  * object, and the object is what calls this.
  */
 export let worker = <E extends Env = Env>(opts: Options<E>): Worker<E> => {
-  let built = new WeakMap<object, Promise<Handler>>()
-  let handler = (env: E) => {
+  // Kept as a value per env once built, never as the build's promise, which
+  // settles only in the request that made it (@yaks/fp `Scope`). A build
+  // that failed keeps nothing: a binding that was not there is worth trying
+  // again rather than answering 500 for the isolate's whole life.
+  let built = new WeakMap<object, Handler>()
+  let handler = async (env: E) => {
     let held = built.get(env)
-    if (!held) {
-      held = Promise.resolve(opts.api(env))
-        .then((o) => api({ upgrade: workerUpgrade, ...o }))
-        // A binding that was not there is worth retrying: forget the failure
-        // rather than answering 500 for the isolate's whole life.
-        .catch((err) => {
-          built.delete(env)
-          throw err
-        })
-      built.set(env, held)
-    }
-    return held
+    if (held) return held
+    let made = api({ upgrade: workerUpgrade, ...await opts.api(env) })
+    if (!built.has(env)) built.set(env, made)
+    return built.get(env)!
   }
 
   return {

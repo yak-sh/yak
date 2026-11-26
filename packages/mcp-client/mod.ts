@@ -16,7 +16,6 @@ import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation'
 // The MCP SDK, imported the first time a connection is used rather than when
 // this module is: a host with no server configured never loads it, and it is
 // most of what a harness would otherwise load at start.
-let sdkModules: Promise<Sdk> | undefined
 type Sdk = {
   Client: typeof Client
   Transport: typeof StreamableHTTPClientTransport
@@ -31,8 +30,11 @@ type Sdk = {
 // `.js` path, which the map types from its JS source, so each is typed by its
 // subpath's declarations instead.
 let typed = <M>(code: Promise<unknown>) => code as Promise<M>
+// The runtime keeps each module once loaded, so no promise of them is kept
+// here: one kept at module scope would be shared by every request of a Worker's
+// isolate (@yaks/fp `Scope`).
 let loaded = (): Promise<Sdk> =>
-  sdkModules ??= Promise.all([
+  Promise.all([
     import('@modelcontextprotocol/sdk/client'),
     typed<typeof import('@modelcontextprotocol/sdk/client/streamableHttp')>(
       import('@modelcontextprotocol/sdk/client/streamableHttp.js'),

@@ -32,7 +32,7 @@ import { providerFacets } from './load.ts'
 import { ctxOf } from './connections.ts'
 import { vaultOf } from './vault.ts'
 import type { Env } from './env.ts'
-import { background } from './defects.ts'
+import { background, invocationKey } from './defects.ts'
 
 let setting = (env: object, name: string): string | undefined => {
   let value = (env as Record<string, unknown>)[name]
@@ -67,6 +67,7 @@ let lending = (env: Env, send: typeof fetch): Lent => {
       ),
     env: (name) => setting(env, name),
     hold: background,
+    scope: invocationKey,
   }
 }
 

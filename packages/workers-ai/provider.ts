@@ -61,7 +61,7 @@ export let providers = (
       fetch: lent.fetch,
       gateway: options.gateway,
       receipts: lent.receipts,
-      hold: lent.hold,
+      scope: lent.scope,
       successors: options.successors,
     })
     : refusing,
@@ -134,7 +134,7 @@ export let native = (
     let track = music(model)
     let info: Published = track
       ? { name: model }
-      : await modelInfo(model, lent.fetch, { hold: lent.hold })
+      : await modelInfo(model, lent.fetch, { scope: lent.scope })
     let { price, speechPerThousand } = info
     if (!track && !price && speechPerThousand == null) {
       throw priceless(model, lent.fetch, spending)

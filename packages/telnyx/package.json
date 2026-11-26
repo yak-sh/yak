@@ -10,6 +10,7 @@
   "description": "Telnyx texting, calls and verified webhook events for @yaks/phone.",
   "type": "module",
   "dependencies": {
+    "@yaks/fp": "0.2.23",
     "@yaks/phone": "0.2.30",
     "@yaks/host": "0.2.29",
     "@yaks/hook": "0.2.28"

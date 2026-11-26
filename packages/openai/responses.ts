@@ -1,4 +1,4 @@
-import { type Hold, sharing, sleep } from '@yaks/fp'
+import { type Hold, type Scope, sharing, sleep } from '@yaks/fp'
 import { listing } from './list.ts'
 import { described } from './info.ts'
 import { reads } from './reads.ts'
@@ -61,8 +61,9 @@ export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   /** The account whose ChatGPT plan the Codex backend's limit readings are
    * of (@yaks/model `accountEid`). */
   account?: string
-  /** keeps a shared model-list read alive past its request (@yaks/model
-   * `Lent.hold`) */
+  /** who may share a read under way (@yaks/model `Lent.scope`) */
+  scope?: Scope
+  /** keeps a cancel sent after its request alive (@yaks/model `Lent.hold`) */
   hold?: Hold
   /** How long the endpoint keeps a cached prefix, in seconds: each reply's
    * mark records the request's start plus this as its `cache_expires_at`.
@@ -357,12 +358,12 @@ export let items = (done: Frame[]): Item[] => {
 export let responses = (opts: Options): Model => {
   let list = async () =>
     listing(await opts.credential(), opts.fetch, opts.refresh, opts.headers)
-  let known = new Map<string, Promise<Listed | undefined>>()
+  let known = new Map<string, Listed | undefined>()
   let info = (name: string) =>
     sharing(known, name, async () => {
       let model = (await list()).find((m) => m.name == name)
       return model ? described(model, opts.fetch) : undefined
-    }, { hold: opts.hold })
+    }, { scope: opts.scope })
   let client = transport({
     ...opts,
     shape: (request) => request,
