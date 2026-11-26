@@ -7,7 +7,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { api } from '@yaks/api'
 import { installPair, made, req, shopGraph } from './testing.ts'
-import { workerUpgrade } from './upgrade.ts'
+import { rehandshake, workerUpgrade } from './upgrade.ts'
 
 let ws = () => req('/ws', { headers: { upgrade: 'websocket' } })
 
@@ -31,6 +31,30 @@ test('off a Worker it says so instead of failing obscurely', () => {
     Error,
     'no WebSocketPair here',
   )
+})
+
+test('a forwarded socket lets the next hop write its handshake headers', () => {
+  let webSocket = {}
+  let upgraded = Object.assign(
+    new Response(null, {
+      status: 101,
+      headers: {
+        connection: 'Upgrade',
+        upgrade: 'websocket',
+        'sec-websocket-accept': 'upstream',
+        'sec-websocket-protocol': 'room',
+      },
+    }),
+    { webSocket },
+  )
+  let forwarded = rehandshake(upgraded)
+  assertEquals(forwarded.status, 101)
+  assert(
+    (forwarded as Response & { webSocket: unknown }).webSocket === webSocket,
+  )
+  assertEquals([...forwarded.headers], [['sec-websocket-protocol', 'room']])
+  let ordinary = new Response('ok')
+  assert(rehandshake(ordinary) === ordinary)
 })
 
 test('/ws through this upgrade serves subscriptions', async () => {

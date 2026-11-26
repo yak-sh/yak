@@ -21,6 +21,7 @@ import {
   snapshot,
 } from '@yaks/sandbox/recovery'
 import { moved } from '@yaks/durable-object/resets'
+import { rehandshake } from '@yaks/workerd/upgrade'
 
 type Env = Host & {
   KERNEL: {
@@ -110,7 +111,7 @@ export class Workbench extends sdk.Sandbox<Env> {
 // The inherited setter registers by class name; an own static field would
 // skip that registration. The hosts are the deployment's (APEX).
 let platform = (req: Request, env: Env, out: { containerId: string }) =>
-  outgoing(req, out.containerId, env.KERNEL)
+  outgoing(req, out.containerId, env.KERNEL).then(rehandshake)
 let restore = (req: Request, env: Env, out: { containerId: string }) =>
   snapshot(env.BLOBS, out.containerId, req)
 let at = apex(env as Env)

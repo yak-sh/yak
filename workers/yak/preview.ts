@@ -92,7 +92,8 @@ import {
   within,
 } from '@yaks/platform/preview'
 import { vouched, type Who } from './session.ts'
-import { clock, headed } from './timing.ts'
+import { clock } from './timing.ts'
+import { headed } from '@yaks/workerd/upgrade'
 import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
 import { misfit } from '@yaks/graph/errors'

@@ -438,7 +438,7 @@ import {
   waited,
 } from './lib/hops.ts'
 import { once, timed } from './lib/stage.ts'
-import { headed } from './timing.ts'
+import { headed } from '@yaks/workerd/upgrade'
 import {
   batch,
   BATCHES,

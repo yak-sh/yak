@@ -64,3 +64,31 @@ export let workerUpgrade: Upgrade = (_request) => {
   server.accept()
   return { socket: server, response: new Response(null, handing(client)) }
 }
+
+/** The answer again under other headers, carrying its WebSocket if present. */
+export let headed = (res: Response, headers: Headers): Response => {
+  let socket = (res as { webSocket?: unknown }).webSocket
+  if (res.status == 101 && !socket) return res
+  let out = new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+    ...socket ? { webSocket: socket } : {},
+  } as ResponseInit)
+  // A runtime with no socket of its own keeps it on the object.
+  if (socket && !(out as { webSocket?: unknown }).webSocket) {
+    Object.assign(out, { webSocket: socket })
+  }
+  return out
+}
+
+/** Forward the socket so the next HTTP hop can generate its own handshake.
+ * A container's outbound proxy appends its headers to the ones it gets. */
+export let rehandshake = (response: Response): Response => {
+  if (response.status !== 101) return response
+  let headers = new Headers(response.headers)
+  headers.delete('upgrade')
+  headers.delete('connection')
+  headers.delete('sec-websocket-accept')
+  return headed(response, headers)
+}
