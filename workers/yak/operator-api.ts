@@ -12,12 +12,14 @@
 // (@yaks/platform/operator-talk), answered by the Operator's frames
 // (operator-host.ts `operatorFrames`).
 // A socket outlives the seat it was opened with, so it stands by its person's
-// seat as the directory has it now, on every frame in and every delivery out:
-// once they no longer write in the space it hears nothing more, and closes.
+// seat as it holds it: the level the handshake read, checked on every frame in
+// and every delivery out, and read again only when the directory says a seat
+// in the space moved (`reseat`), never on a frame. Once they no longer write
+// in the space it hears nothing more, and closes.
 import { api, type Handler, subscriptions } from '@yaks/api'
 import { beside, computed, type Reached } from '@yaks/api/reached'
 import { type Hibernation, socketRenewals, sockets } from '@yaks/durable-object'
-import { type Clock, system } from '@yaks/fp'
+import { after, type Clock, system } from '@yaks/fp'
 import { type Level, writes } from '@yaks/member'
 import { UPDATE_WAITING, waitingBundle } from '@yaks/platform/update-waiting'
 import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
@@ -31,7 +33,7 @@ import {
 } from '@yaks/platform/operator-matches'
 import { trialDoc } from '@yaks/trial/vocab'
 import { line } from '@yaks/query'
-import type { Bundle, Graph } from '@yaks/graph'
+import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
 import { mayWrite, sight } from './operator-access.ts'
 import { spaceOf } from './operator-root.ts'
 import type { OperatorStore } from './operator-store.ts'
@@ -46,7 +48,8 @@ export type Asker = { person: string; space: string }
 export type Seating = {
   /** `person`'s seat in the space as the directory has it now, an
    * administrator's (`administrative`, as the kernel vouched at the
-   * handshake) read as theirs: the level it gives, or null for none. */
+   * handshake) read as theirs: the level it gives, or null for none. Read
+   * when a seat moved (`reseat`), and for a socket that holds no level. */
   seat: (person: string, administrative: boolean) => Promise<Level | null>
   report?: (error: Error) => void
   clock?: Clock
@@ -196,6 +199,22 @@ export let operatorApi = (
   // Whether each person holds a seat, as the directory last said for their
   // socket: what it is read with.
   let members = new Map<string, boolean>()
+  // The level of a socket that holds none (one accepted before sockets held
+  // theirs), read once for the incarnation, until a seat moves.
+  let unheld = new Map<string, Promise<Level | null>>()
+  let key = (person: string, administrative: boolean) =>
+    `${person} ${administrative}`
+  let levelOf = (read: ReadOpts) => {
+    if ('level' in read) return read.level as Level | null
+    let person = String(read.person), admin = !!read.administrative
+    let known = unheld.get(key(person, admin))
+    if (!known) {
+      known = seat(person, admin)
+      known.catch(() => unheld.delete(key(person, admin)))
+      unheld.set(key(person, admin), known)
+    }
+    return known
+  }
   let theirs = beside(
     beside(
       beside(
@@ -231,11 +250,13 @@ export let operatorApi = (
         let member = members.get(person) ?? false
         return { person, ...sight(store, { person, member }) }
       },
-      authorize: async (read) => {
-        if (!read?.person) return false
-        let level = await seat(read.person, !!read.administrative)
-        members.set(read.person, level != null)
-        return writes(level)
+      authorize: (_read, _writer, held) => {
+        let person = held?.person
+        if (!held || !person) return false
+        return after(levelOf(held), (level) => {
+          members.set(person, level != null)
+          return writes(level)
+        })
       },
     },
   )
@@ -260,12 +281,51 @@ export let operatorApi = (
       request: Request,
       who: Asker,
       administrative = false,
+      level?: Level | null,
     ): Response | Promise<Response> => {
       let url = new URL(request.url)
       url.pathname = url.pathname.slice('/api'.length)
+      let read = { person: who.person, administrative }
       return url.pathname == '/ws' || url.pathname == '/waiting/ws'
-        ? live.accept(request, { person: who.person, administrative })
+        ? live.accept(
+          request,
+          level === undefined ? read : { ...read, level },
+        )
         : as(who)(new Request(url, request))
+    },
+    /** A seat in the space moved (build.ts `SEATED`): each person with a
+     * socket here has their seat read again, once, and their sockets hold
+     * what it gives now; one who no longer writes is closed. A seat that
+     * could not be read is left as it was, and the failure thrown. */
+    reseat: async () => {
+      let held = new Map<string, ReadOpts>()
+      for (let ws of ctx.getWebSockets()) {
+        let read = (ws.deserializeAttachment() as { read?: ReadOpts } | null)
+          ?.read
+        if (read?.person) {
+          held.set(key(read.person, !!read.administrative), read)
+        }
+      }
+      unheld.clear()
+      let failed: unknown[] = []
+      let levels = new Map(
+        await Promise.all(
+          [...held].map(async ([at, read]) =>
+            [
+              at,
+              await seat(String(read.person), !!read.administrative).catch(
+                (e) => (failed.push(e), undefined),
+              ),
+            ] as const
+          ),
+        ),
+      )
+      await live.restand((read) => {
+        let level = read?.person &&
+          levels.get(key(read.person, !!read.administrative))
+        return level === undefined || !read ? read : { ...read, level }
+      })
+      if (failed.length) throw failed[0]
     },
     /** A frame from one of its sockets: the object's `webSocketMessage`. */
     message: live.message,

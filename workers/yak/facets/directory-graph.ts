@@ -228,13 +228,13 @@ let erasedMcp = (
   })
 
 /** Each space whose seats a commit wrote or took away, told to its Operator
- * (build-door.ts `heard`). An owner who shared MCP servers is told what
+ * (build-door.ts `reseated`). An owner who shared MCP servers is told what
  * stopped being shared. Read those names before a delete can cascade. */
 export let seatsHeard = (
   { store }: Options,
   tell = async (env: Env, space: string) => {
-    let { heard } = await import('../build-door.ts')
-    await (await heard(env, space)).body?.cancel()
+    let { reseated } = await import('../build-door.ts')
+    await (await reseated(env, space)).body?.cancel()
   },
 ): Plugin => {
   let keys = ['member', '$delete', TOMBSTONE, '$retireMcp']

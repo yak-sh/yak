@@ -17,7 +17,8 @@ import { KERNEL, meta } from './meta.ts'
 import { assertEquals } from '@std/assert'
 import { until } from '@yaks/testing'
 import { background, caught, refusing } from './defects.ts'
-import type { Held } from './build-door.ts'
+import { type Held, SEATED } from './build-door.ts'
+import { HEARD } from './door.ts'
 import type { Env } from './env.ts'
 import { operatorPost } from './metered.ts'
 import { operating, type Operator, type Options } from './operator.ts'
@@ -189,8 +190,12 @@ export let operatorService = (
     assertEquals(req.method, 'POST')
     let path = new URL(req.url).pathname
     // What a commit the space's subscriptions read stirs them with, as the
-    // Builder answers it (build.ts `HEARD`).
-    if (path == '/heard' && req.headers.get('x-yak-kernel') == '1') {
+    // Builder answers it (build.ts `HEARD`), and a seat moving in the space
+    // (build.ts `SEATED`), which has no page sockets to hold seats here.
+    if (
+      (path == HEARD || path == SEATED) &&
+      req.headers.get('x-yak-kernel') == '1'
+    ) {
       let { heard } = await import('./operator-schedules.ts')
       let at = await heard(store, false)
       return new Response(null, { status: at == null ? 410 : 204 })

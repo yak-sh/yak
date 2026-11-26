@@ -167,6 +167,15 @@ export let woken = (
  * 204 while one watches the space, 410 once none does. */
 export let heard = (env: Wiring, space: string) => signal(env, space, HEARD)
 
+/** The Builder path the directory tells of a seat in its space moving
+ * (directory-graph.ts `seatsHeard`), kernel only. */
+export let SEATED = '/seated'
+
+/** A seat in the space moved: its Operator's subscriptions look again, and
+ * its pages' sockets hold their people's seats as they are now (build.ts
+ * `SEATED`). */
+export let reseated = (env: Wiring, space: string) => signal(env, space, SEATED)
+
 /** A restored space's pending Operator work is due again. */
 export let reviveBuilder = async (env: Wiring, space: string) => {
   let response = await signal(env, space, '/revive')

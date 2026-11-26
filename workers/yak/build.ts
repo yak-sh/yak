@@ -37,6 +37,7 @@ import {
   NOT_A_WRITER,
   OWED,
   paged,
+  SEATED,
   seatOf,
   SPACE,
   WALKTHROUGH,
@@ -219,6 +220,18 @@ export class Builder extends Durable {
       let at = await heard(store, false)
       if (at != null) await this.clock.arm(at)
       return new Response(null, { status: at == null ? 410 : 204 })
+    }
+    // A seat in the space moved (directory-graph.ts `seatsHeard`): what
+    // reads its members looks again, as on `HEARD`, and each page's socket
+    // holds its person's seat as it is now. A socket never reads its seat
+    // on a frame, so this is how one taken away closes it.
+    if (url.pathname == SEATED && request.method == 'POST') {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      let { store, door } = await this.#stored()
+      let { heard } = await import('./operator-schedules.ts')
+      let [at] = await Promise.all([heard(store, false), door.reseat()])
+      if (at != null) await this.clock.arm(at)
+      return new Response(null, { status: 204 })
     }
     if (url.pathname == '/revive') {
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
@@ -604,7 +617,12 @@ export class Builder extends Durable {
     let read = await reading
     if (API.test(new URL(request.url).pathname)) {
       let asker = { person, space: spaceId }
-      return await read.door.answer(request, asker, access.administrative)
+      return await read.door.answer(
+        request,
+        asker,
+        access.administrative,
+        role,
+      )
     }
     if (new URL(request.url).pathname == '/operator/settings') {
       let { setting } = await import('./operator-persona.ts')

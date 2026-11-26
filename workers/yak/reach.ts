@@ -261,6 +261,12 @@ type Wire = {
 let FIRST = 1_000
 let MOST = 30_000
 let HELD = 10_000
+// How long a socket that held waits before it opens again, drawn at random
+// below this, by path. Every signed-in tab in every isolate holds one on the
+// platform store's `/person/ws`, and that one object is reset together for a
+// code update (up to 30 minutes after each deploy, wrangler.toml), so its
+// sockets come back over ten seconds rather than one (bug dbe06394).
+let SPREAD: Record<string, number> = { '/person/ws': 10_000 }
 
 type Watch = (
   door: Door,
@@ -328,7 +334,7 @@ let shared = (
 ) => {
   type Line = { line: string; sink: (frame: Frame) => void; first: boolean }
   let lines = new Map<string, Line>()
-  let next = 0, wait = FIRST, again = false, opening = false
+  let next = 0, wait = FIRST, again = false, opening = false, held = false
   let wire: Wire | undefined
   let timer: (() => void) | undefined
   let steady: (() => void) | undefined
@@ -361,7 +367,10 @@ let shared = (
     ws.accept()
     if (!lines.size) return ws.close(1000)
     wire = ws
-    steady = clock.after(HELD, () => void (wait = FIRST))
+    steady = clock.after(HELD, () => {
+      wait = FIRST
+      held = true
+    })
     ws.addEventListener('message', (e) => {
       if (wire != ws) return
       let id: string, frame: Frame
@@ -397,7 +406,9 @@ let shared = (
     gone()
     wire = undefined
     again = true
-    timer = clock.after(random() * wait, () => {
+    let within = held ? SPREAD[path] ?? wait : wait
+    held = false
+    timer = clock.after(random() * within, () => {
       timer = undefined
       start()
     })

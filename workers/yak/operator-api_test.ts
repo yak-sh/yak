@@ -2,7 +2,8 @@
 // share a space read and write it: each reads, and hears on a socket, only
 // what is theirs or nobody's, and writes only their drafts, the archive
 // marks on their own lines and the walkthrough marks on their own
-// conversations. A socket stands by its person's seat as it is now.
+// conversations. A socket stands by the seat its handshake read, and the
+// directory saying a seat moved is what reads it again.
 import { clock, equal, test, until } from '@yaks/testing'
 import { UPDATE_WAITING, waitingFrom } from '@yaks/platform/update-waiting'
 import { updateCards, updatesIn } from '@yaks/platform/update-rows'
@@ -49,15 +50,17 @@ let adas = await conversation(ada), beas = await conversation(bea)
 let shared = id()
 await write([{ entity: { eid: shared }, memory: {}, doc: { title: 'Ours' } }])
 
-// Each person's seat in the space, as the directory has it now.
+// Each person's seat in the space, as the directory has it now, and how
+// many times it was read.
 let seats = new Map<string, Level>([[ada.person, 'owner'], [
   bea.person,
   'editor',
 ]])
+let seatReads = 0
 let ctx = state()
 let frames = operatorFrames(store)
 let door = operatorApi(store, ctx, {
-  seat: (person) => Promise.resolve(seats.get(person) ?? null),
+  seat: (person) => (seatReads++, Promise.resolve(seats.get(person) ?? null)),
   talks: frames.talks,
 })
 let ask = async (who: Asker, path: string, init?: RequestInit) =>
@@ -123,6 +126,9 @@ let socket = async (
   who: Asker,
   q = '.entry&?content',
   host = door,
+  // Whether it holds the seat its handshake read (build.ts `#operate`), as
+  // a socket accepted before sockets held theirs does not.
+  holds = true,
 ) => {
   let sent: Record<string, unknown>[] = []
   let held: unknown = null
@@ -143,6 +149,8 @@ let socket = async (
         headers: { upgrade: 'websocket' },
       }),
       who,
+      false,
+      holds ? seats.get(who.person) ?? null : undefined,
     )
   } finally {
     delete factory.WebSocketPair
@@ -150,7 +158,10 @@ let socket = async (
   let subscribe = (q: string, id = q) =>
     host.message(ws, JSON.stringify({ subscribe: q, id }))
   await subscribe(q, 'lines')
-  await until(() => sent.length > 0)
+  await until(() => sent.length > 0 || ws.readyState == 3)
+  if (ws.readyState == 3) {
+    throw new Error('closed at once: ' + JSON.stringify(held))
+  }
   return Object.assign(sent, { ws, subscribe })
 }
 
@@ -413,27 +424,70 @@ test('a conversation’s watch in another space is answered with nothing', async
   }
 })
 
-test('a person removed from the space hears nothing more, and their socket closes', async () => {
-  let sent = await socket(bea, '.memory')
-  let heard = sent.length
-  seats.delete(bea.person)
+test('a socket reads its seat on no frame in and no delivery out', async () => {
+  let was = seatReads
+  let sent = await socket(ada, '.memory')
   try {
+    await sent.subscribe('.draft')
     await write([{ entity: { eid: id() }, memory: {}, doc: { title: 'New' } }])
-    await until(() => sent.ws.readyState == 3)
-    equal(sent.length, heard)
+    await until(() => sent.filter((f) => f.id == 'lines').length > 1)
+    equal(seatReads, was)
   } finally {
-    seats.set(bea.person, 'editor')
+    await door.close(sent.ws)
   }
 })
 
-test('a person made a viewer is answered no new subscription, and their socket closes', async () => {
+test('a socket that holds no seat reads it once, however many frames it sends', async () => {
+  let fresh = operatorApi(store, state(), {
+    seat: (person) => (seatReads++, Promise.resolve(seats.get(person) ?? null)),
+  })
+  let was = seatReads
+  let sent = await socket(ada, '.memory', fresh, false)
+  await sent.subscribe('.draft')
+  await sent.subscribe('.doc')
+  equal([seatReads - was, sent.ws.readyState], [1, 1])
+  await fresh.close(sent.ws)
+})
+
+test('a person removed from the space hears nothing more once the directory says so, and their socket closes', async () => {
+  let sent = await socket(bea, '.memory')
+  let kept = await socket(ada, '.memory')
+  let heard = sent.length
+  seats.delete(bea.person)
+  try {
+    await door.reseat()
+    await write([{ entity: { eid: id() }, memory: {}, doc: { title: 'New' } }])
+    equal([sent.ws.readyState, sent.length, kept.ws.readyState], [
+      3,
+      heard,
+      1,
+    ])
+  } finally {
+    seats.set(bea.person, 'editor')
+    await door.close(kept.ws)
+  }
+})
+
+test('a person made a viewer is closed once the directory says so, and answered no new subscription', async () => {
   let sent = await socket(bea)
   let heard = sent.length
   seats.set(bea.person, 'viewer')
   try {
+    await door.reseat()
     await sent.subscribe('.memory')
     equal([sent.ws.readyState, sent.length], [3, heard])
   } finally {
     seats.set(bea.person, 'editor')
   }
+})
+
+test('a seat the directory could not read is left as the socket held it', async () => {
+  let failing = operatorApi(store, state(), {
+    seat: () => Promise.reject(new Error('overloaded')),
+  })
+  let sent = await socket(ada, '.memory', failing)
+  let refused = await failing.reseat().then(() => null, (e: Error) => e.message)
+  await sent.subscribe('.draft')
+  equal([refused, sent.ws.readyState], ['overloaded', 1])
+  await failing.close(sent.ws)
 })

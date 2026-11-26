@@ -107,6 +107,13 @@ type Renewals = {
 type LiveSockets = Sockets & {
   /** Refresh timed watches from the object's alarm and return the next due time. */
   renew(): Promise<number | null>
+  /** Each open socket's read as `update` makes it, kept on the socket, then
+   * checked again (`authorize`): a host told that a caller's standing moved
+   * (a seat taken away) says so here, rather than reading it on each frame.
+   * A socket refused closes. */
+  restand(
+    update: (read: ReadOpts | undefined) => ReadOpts | undefined,
+  ): Promise<void>
 }
 
 /** Schedule subscription reads on the object's existing alarm. On a cold
@@ -364,10 +371,12 @@ export let sockets = (
      * new handshake before this writer relays again. */
     writer?: (writer: PeerWriter) => boolean | Promise<boolean>
     /** Current read/delivery authority. Denial or failure retires the socket.
-     * Checked on recovery, input, and at transport delivery (including ACKs). */
+     * Checked on recovery, input, and at transport delivery (including ACKs).
+     * `held` is the read the socket holds, as accepted or last `restand`. */
     authorize?: (
       read: ReadOpts | undefined,
       writer: PeerWriter | undefined,
+      held: ReadOpts | undefined,
     ) => boolean | Promise<boolean>
     /** Told each refusal a socket is sent, as the client reads it: an
      * object on older code than its caller restarts on one, as it does on a
@@ -572,7 +581,7 @@ export let sockets = (
     }
     try {
       let held = ws.deserializeAttachment() as Held | null
-      let out = opts.authorize(reading(held), held?.writer)
+      let out = opts.authorize(reading(held), held?.writer, held?.read)
       let admit = (ok: boolean) => {
         if (closed.has(ws)) return refused()
         if (!ok) {
@@ -840,6 +849,18 @@ export let sockets = (
       if (!opts.renewals) return null
       await adapter.wake()
       return await opts.renewals.run()
+    },
+
+    restand: async (update) => {
+      await Promise.all(
+        ctx.getWebSockets().map((ws) => {
+          if (closed.has(ws) || !open(ws)) return
+          let held = ws.deserializeAttachment() as Held | null
+          let read = update(held?.read)
+          if (read !== held?.read) ws.serializeAttachment({ ...held, read })
+          return authorize(ws)
+        }),
+      )
     },
 
     wake: (deferStatic = false) => {

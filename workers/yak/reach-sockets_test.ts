@@ -45,6 +45,30 @@ let store = () => {
 
 let rows = [{ entity: { eid: 'a' } }]
 
+// One line watched at `path` with every draw the longest, and how long the
+// newest socket, answered, held `held` ms, then dropped, waits to open again.
+let dropping = async (
+  c: ReturnType<typeof clock>,
+  door: Door,
+  sockets: Socket[],
+  sink: (f: Frame) => void = () => {},
+  path = '/ws',
+) => {
+  socketsOf({ clock: c, random: () => 1 })(door, 'at', 'line', sink, {}, path)
+  await c.advance(0)
+  return async (held = 0) => {
+    let socket = sockets.at(-1)!
+    socket.answer(String((socket.said[0] as { id: string }).id), {
+      bundles: rows,
+    })
+    await c.advance(held)
+    socket.drop()
+    let before = sockets.length, start = c.now()
+    while (sockets.length == before) await c.advance(100)
+    return c.now() - start
+  }
+}
+
 test('the lines a tab watches at one store share one socket, each hearing its own answers', async () => {
   let c = clock()
   let { door, sockets } = store()
@@ -80,28 +104,20 @@ test('a socket that keeps dropping waits longer each time, until one holds ten s
   let c = clock()
   let { door, sockets } = store()
   let heard: Frame[] = []
-  socketsOf({ clock: c, random: () => 1 })(
-    door,
-    'operator',
-    'waiting',
-    (f) => heard.push(f),
-    {},
-  )
-  await c.advance(0)
-  // How long the newest socket, answered then dropped, waits to open again.
-  let waited = async (held = 0) => {
-    let socket = sockets.at(-1)!
-    socket.answer(String((socket.said[0] as { id: string }).id), {
-      bundles: rows,
-    })
-    await c.advance(held)
-    socket.drop()
-    let before = sockets.length, start = c.now()
-    while (sockets.length == before) await c.advance(100)
-    return c.now() - start
-  }
+  let waited = await dropping(c, door, sockets, (f) => heard.push(f))
   equal([await waited(), await waited(), await waited()], [1000, 2000, 4000])
   equal(await waited(10_000), 1000)
   // Each answer after a socket opened again is said whole.
   equal(heard.map((f) => !!f.reset), [false, true, true, true])
+})
+
+test("the platform store's sockets that held come back over ten seconds, since every tab's drop at once when it takes new code", async () => {
+  let c = clock()
+  let { door, sockets } = store()
+  let waited = await dropping(c, door, sockets, undefined, '/person/ws')
+  equal([await waited(10_000), await waited(), await waited(10_000)], [
+    10_000,
+    2000,
+    10_000,
+  ])
 })
