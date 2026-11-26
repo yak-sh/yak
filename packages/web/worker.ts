@@ -429,7 +429,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     let since = Date.now()
     let now = await scope.fetch(key, {
       credentials: 'same-origin',
-      headers: { accept: 'text/html' },
+      headers: { accept: 'text/html', purpose: 'prefetch' },
       cache: 'no-store',
       signal: AbortSignal.timeout(PUSHED),
     })

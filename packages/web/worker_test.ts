@@ -37,7 +37,10 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
     open: (name: string) => Promise.resolve(cache(name)),
     delete: (name: string) => Promise.resolve(stores.delete(name)),
   } as unknown as CacheStorage
-  let site = new Map<string, string | (() => Promise<Response>)>()
+  let site = new Map<
+    string,
+    string | ((req: RequestInfo | URL, init?: RequestInit) => Promise<Response>)
+  >()
   let navigator = { onLine: true }
   let asked: string[] = []
   let hear = new Map<string, (e: unknown) => void>()
@@ -55,11 +58,11 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
     location: { origin: 'https://yaks.app' },
     navigator,
     clients: { claim: () => Promise.resolve() },
-    fetch: (r: RequestInfo | URL) => {
+    fetch: (r: RequestInfo | URL, init?: RequestInit) => {
       let url = key(r)
       asked.push(new URL(url).pathname)
       let body = site.get(new URL(url).pathname)
-      if (typeof body == 'function') return body()
+      if (typeof body == 'function') return body(r, init)
       return Promise.resolve(
         body == null ? new Response('gone', { status: 404 }) : new Response(
           body,
@@ -315,7 +318,15 @@ test('a file named by its bytes is answered from what was kept, the newest few o
 
 test('a push keeps the page its notification opens as it is then, to draw at once even offline', async () => {
   let w = worker()
-  w.site.set('/checks/c1', page('the reply'))
+  w.site.set('/checks/c1', (_, init) =>
+    Promise.resolve(
+      new Response(
+        page(
+          new Headers(init?.headers).has('purpose') ? 'the reply' : 'loading',
+        ),
+        { headers: { 'content-type': 'text/html; charset=utf-8' } },
+      ),
+    ))
   await w.push({ url: '/checks/c1?from=3#row-e1', title: 'Hazel replied' })
   await w.push({ close: ['t1'] })
   await w.push({ url: '/gone' })
