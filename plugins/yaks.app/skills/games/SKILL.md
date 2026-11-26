@@ -45,11 +45,15 @@ in the current page.
 
 When the player chooses a friend, send one bundle with `apply`.
 
-```js
-await apply({
-  entity: { eid: crypto.randomUUID() },
-  friend_invite: { to: friend.entity.eid, path: 'play#' + roomCode },
-})
+```js ignore
+import { apply } from './api/client.js'
+
+export async function invite(friend, roomCode, eid = crypto.randomUUID()) {
+  return await apply({
+    entity: { eid },
+    friend_invite: { to: friend.entity.eid, path: 'play#' + roomCode },
+  })
+}
 ```
 
 The optional `path` is relative to the app's root. It can include a room code in
