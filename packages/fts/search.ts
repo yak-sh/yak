@@ -325,29 +325,36 @@ let best = (
     }))
   // A kind can have no owners in an index at all. A CPU sort proves that
   // through the selected owners' component keys before opening its cursor.
-  // Joined, not crossed: SQLite drives from the smaller side, so a broad
-  // screen seeks a rare component's few owners rather than walking the graph
-  // in id order to find one.
-  let candidates = opts.owners
-    ? from(array(opts.owners), '__fts_screen')
-    : table('__fts_screen')
+  // Joined, not crossed, with the index's component first: SQLite drives from
+  // the smaller side, so a broad screen seeks a rare component's few owners,
+  // and a rare component seeks a broad screen's, rather than walking either
+  // in id order to find one. A screen's own CROSS JOIN pins every table
+  // written after it, so the component written second could only be probed:
+  // `.entry` walked 1.9M transcript entries to find one carrying a doc.
+  let source = (arm: Index) => table(arm.on ?? arm.comp, '__source')
+  let owned = (arm: Index): Select =>
+    opts.owners
+      ? select({
+        cols: [lit(1)],
+        from: from(array(opts.owners), '__fts_screen'),
+        joins: [{
+          how: 'cross',
+          src: source(arm),
+          on: eq(col('entity', '__source'), col('value', '__fts_screen')),
+        }],
+      })
+      : select({
+        cols: [lit(1)],
+        from: source(arm),
+        joins: [{
+          how: 'join',
+          src: table('__fts_screen'),
+          on: eq(col('entity', '__source'), col('id', '__fts_screen')),
+        }],
+      })
   let take = (arm: Index, n: number): Expr =>
     opts.owners || sorting && opts.screen
-      ? when([[
-        exists(select({
-          cols: [lit(1)],
-          from: candidates,
-          joins: [{
-            how: opts.owners ? 'cross' : 'join',
-            src: table(arm.on ?? arm.comp, '__source'),
-            on: eq(
-              col('entity', '__source'),
-              col(opts.owners ? 'value' : 'id', '__fts_screen'),
-            ),
-          }],
-        })),
-        lit(n),
-      ]], lit(0))
+      ? when([[exists(owned(arm)), lit(n)]], lit(0))
       : lit(n)
   // An index's rows matching `expr`, among the live owners the caller admits.
   let admitted: Admitted = (name, expr) => {

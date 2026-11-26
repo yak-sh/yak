@@ -81,3 +81,60 @@ test('a ranked transcript page checks its own session even for a common word', (
     )
   }
 })
+
+// A word over every index, kept to transcript entries: the doc index's page
+// first asks whether any entry carries a doc at all. That asks from the
+// smaller side, the few docs, not by walking every entry.
+let words = loadVocab({
+  $defs: {
+    entity: { component: true, properties: {} },
+    session: { component: true, properties: {} },
+    entry: {
+      component: true,
+      search: ['content.body'],
+      properties: { session: { type: 'string', ref: 'session', index: true } },
+    },
+    content: {
+      component: true,
+      properties: { body: { type: 'string', contains: true } },
+    },
+    created: {
+      component: true,
+      properties: { at: { type: 'number', index: true } },
+    },
+    doc: {
+      component: true,
+      properties: { title: { type: 'string', search: true } },
+    },
+  },
+})
+let kept = (history: number) => {
+  let { driver, steps } = stepping()
+  let db = { ...driver, file: true }
+  let store = storage(db, words)
+  store.install()
+  graph({ storage: store, vocab: words }).apply([
+    { entity: { eid: 'target' }, session: {} },
+    ...Array.from(
+      { length: history },
+      (_, i) => entry(`said-${i}`, 'target', `line ${i}`),
+    ),
+    entry('found', 'target', 'a dragon'),
+    { entity: { eid: 'titled' }, doc: { title: 'dragon notes' } },
+  ])
+  let all = indexed(words)
+  adopt(db, all)
+  let before = steps()
+  let rows = db.query(
+    compile(parse('dragon .entry ?entry .limit=5'), words, {
+      extend: [search(all, db)],
+    }),
+  )
+  return { eids: rows.map((r) => r.eid), cost: steps() - before }
+}
+
+test('a word kept to entries never walks them to ask whether any is titled', () => {
+  let small = kept(20), large = kept(4020)
+  equal([small.eids, large.eids], [['found'], ['found']])
+  ok(large.cost - small.cost < 20_000, `${small.cost} then ${large.cost} steps`)
+})
