@@ -1474,21 +1474,40 @@ let seatedWriter = async (
   ) return undefined
   return await dir.role({ eid: o.space }, writer) ? writer : undefined
 }
+// The role a turn's asks ran with, from their instruction scope
+// (`instructionScope`): null for a turn acting for its conversation's own
+// person or for no member, undefined where no ask recorded one (asks before
+// the scope named the role).
+let ranAs = (asks: Bundle[], o: Working) => {
+  for (let ask of asks) {
+    let scope = JSON.parse(String(comp(ask, 'sending')?.scope ?? 'null'))
+    if (!Array.isArray(scope) || scope.length != 2) continue
+    let [person, role] = scope
+    return person == o.person ? null : role ?? null
+  }
+}
 /** The lines of a conversation a turn acting for someone with no seat in
  * the space reads (@yaks/session/react `Deps.readable`): the words said, the
  * Operator's answers, and what turns acting for no member brought in. A turn
  * a member's words began ({@link actorOf}) ran with their tools, so its
- * calls, results and other inputs are theirs, as is a summary of them. Every
- * line, where no member's words began a turn. */
+ * calls, results and other inputs are theirs, as is a summary of them,
+ * whatever became of that member's seat since: a turn is decided by the role
+ * its asks recorded, and by its writer's role now only where they recorded
+ * none. Every line, where no member's turn ran. */
 export let unseated = async (
   store: Store,
   session: string,
   o: Working,
   dir: Pick<Directory, 'role'>,
 ): Promise<((line: Bundle) => boolean) | undefined> => {
-  let inputs = await store.g.read(
-    q`.entry.session=${session} .intake !notice .order=entry.seq .fields=entity.eid,entry.seq,channel.name,created.by`,
-  )
+  let [inputs, asks] = await Promise.all([
+    store.g.read(
+      q`.entry.session=${session} .intake !notice .order=entry.seq .fields=entity.eid,entry.seq,channel.name,created.by`,
+    ),
+    store.g.read(
+      q`.entry.session=${session} .ask .order=entry.seq .fields=entry.seq,sending.scope`,
+    ),
+  ])
   // Each writer's role is asked once, however often they spoke.
   let roles = new Map<string, ReturnType<Directory['role']>>()
   let once: Pick<Directory, 'role'> = {
@@ -1498,10 +1517,20 @@ export let unseated = async (
       return role
     },
   }
-  let turns = await Promise.all(inputs.map(async (input) => ({
-    seq: seqOf(input),
-    member: !!await seatedWriter(input, o, once),
-  })))
+  let turns = await Promise.all(inputs.map(async (input, i) => {
+    let seq = seqOf(input)
+    let next = inputs[i + 1] ? seqOf(inputs[i + 1]) : Infinity
+    let role = ranAs(
+      asks.filter((ask) => seqOf(ask) > seq && seqOf(ask) < next),
+      o,
+    )
+    return {
+      seq,
+      member: role === undefined
+        ? !!await seatedWriter(input, o, once)
+        : !!role,
+    }
+  }))
   if (!turns.some((t) => t.member)) return undefined
   let said = new Set(inputs.map((input) => input.entity.eid))
   let theirs = (line: Bundle) =>

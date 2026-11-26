@@ -125,7 +125,16 @@ let fixture = async () => {
     equal((intake.created as Comp).by, writer)
     return store.g.read('.operator_approval&*')
   }
-  return { ask, answered, dir, owner, read, tools }
+  // The owner leaves the space: their seat's row is deleted.
+  let unseat = async () => {
+    let seat = (await dir.member(space, owner))!
+    await meta(env).apply(
+      [{ entity: { eid: seat.eid }, $delete: true }],
+      KERNEL,
+    )
+    equal(await dir.role(space, owner), null)
+  }
+  return { ask, answered, dir, owner, read, tools, unseat }
 }
 
 let ann = await fixture()
@@ -182,6 +191,16 @@ test("a stranger's voice turn reads what was said, not a member's tool calls", a
   equal(calls(guest), 0)
   equal(guest.filter((line) => line.includes('is invited')).length, 1)
   equal(calls(await turn('ann')), 2)
+})
+
+// A member's turn stays theirs once they have left the space.
+let left = await fixture()
+test("a stranger's voice turn reads no tool calls of a member who has since left", async () => {
+  await left.ask('ann')
+  await left.unseat()
+  let from = left.read.length
+  await left.ask('bo')
+  equal(left.read[from].filter((line) => /^(call|result):/.test(line)), [])
 })
 
 // Asked aloud to take notes, the call is marked; once it ends, the Operator
