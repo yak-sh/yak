@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
 import { suggestion } from '@yaks/platform/friends'
 import {
   FRIEND_MESSAGES,
@@ -12,6 +13,7 @@ import { connector, kernel, pressPeople, saveAccount, signIn } from './probe.ts'
 import { managePath, talkPath } from '@yaks/platform/routes'
 import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
 import { APP_FRIEND, APP_FRIENDS } from '@yaks/platform/app-friends'
+import { DAY, type Day } from '@yaks/platform/updates-day'
 
 let k = await kernel()
 let [ann, bo, cy, dee, eve, fay] = await Promise.all(
@@ -224,14 +226,14 @@ test('a friend building shows only the apps and spaces you can already open', as
   assertEquals(fays?.presence?.state, 'building')
   assertEquals(fays?.presence?.spaces, [])
   assertEquals(fays?.presence?.apps.map((a) => a.slug), ['gift'])
-  let page = await (await updates(eve, eveSpace.slug)).text()
-  assertStringIncludes(page, 'Friends on yaks.app now')
-  assertEquals(page.includes('Secret'), false)
+  let seen = await friendInUpdates(eve, eveSpace, fay.person)
+  assertEquals(seen?.state, 'building')
+  assertEquals(seen?.spaces, [])
+  assertEquals(seen?.apps.map((a) => a.slug), ['gift'])
 })
 
 test('nobody but a friend sees where someone is', async () => {
-  let page = await (await updates(ann, annSpace.slug)).text()
-  assertEquals(page.includes('Friends on yaks.app now'), false)
+  assertEquals(await friendInUpdates(ann, annSpace, fay.person), undefined)
 })
 
 test('a friend’s message lands in their Updates, and a reply there comes back', async () => {
@@ -277,11 +279,14 @@ test('a person who hides their presence shows to no friend, until they show it a
     }[]).find((f) => f.person == fay.person)?.presence
   await tools(fay).answer('friend_presence', { hidden: true })
   assertEquals(await seen(), undefined)
-  let page = await (await updates(eve, eveSpace.slug)).text()
-  assertEquals(page.includes('Friends on yaks.app now'), false)
+  assertEquals(await friendInUpdates(eve, eveSpace, fay.person), undefined)
   let shown = await saveAccount(k, fay, { hidden: false })
   assertEquals(shown.status, 200, await shown.text())
   assertEquals((await seen() as { state: string }).state, 'building')
+  assertEquals(
+    (await friendInUpdates(eve, eveSpace, fay.person))?.state,
+    'building',
+  )
 })
 
 let friendsPage = async (p: typeof ann, query = '') =>
@@ -298,6 +303,22 @@ let door = (p: typeof ann, path: string, init: RequestInit = {}) =>
       'content-type': 'application/json',
     },
   })
+let friendInUpdates = async (
+  p: typeof ann,
+  space: typeof annSpace,
+  friend: string,
+) => {
+  let { document } = parseHTML(await (await updates(p, space.slug)).text())
+  let day = document.querySelector(`[${DAY}]`)?.getAttribute(DAY)
+  assertEquals(day && JSON.parse(day) as Day, {
+    person: p.person,
+    space: space.eid,
+    friends: true,
+  })
+  let response = await door(p, `/query?q=${FRIENDS}`)
+  assertEquals(response.status, 200)
+  return friendsOf(await response.json()).find((f) => f.person == friend)?.seen
+}
 let live = async (p: typeof ann) => {
   let rows = await (await door(p, `/query?q=${FRIENDS}`)).json()
   return Object.fromEntries(
