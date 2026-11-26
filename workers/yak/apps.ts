@@ -242,7 +242,7 @@ import {
 import { born } from './visit-birth.ts'
 import { MOVED } from '@yaks/sync'
 import { full } from './usage.ts'
-import { scheduleBy } from './used.ts'
+import { scheduleBy, wake } from './used.ts'
 import { seen } from './views.ts'
 import { refuse } from './tool.ts'
 import type { PoolCtx } from './declared.ts'
@@ -3751,6 +3751,12 @@ let served = async (
   // What it may do as the app is `env.APP` and nothing else; its `env.STORE`
   // is still the visitor, so a worker that only passes a store read on
   // refuses exactly what the page would have.
+  if (
+    mayRead && !itself && app.worker && req.method == 'GET' && fence.page(path)
+  ) {
+    // The worker can query its store before the page is sent.
+    wake(env, storeName(space, app))
+  }
   let own = itself
     ? null
     : await c.time('worker', () =>

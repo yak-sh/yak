@@ -74,6 +74,7 @@ import { digest } from '@yaks/graph/sha256'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { handler as gateway } from './kernel.ts'
+import { WAKE } from './door.ts'
 import { SITE_CHECKED } from './kept-page.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 
@@ -2070,6 +2071,35 @@ test('a space in the trash serves nothing, and its owner restores it', async () 
 })
 
 // ---- env.APP: the worker as the app's own gatekeeper (T-34303) --------------
+
+test('a direct open starts the app store alongside its worker', async () => {
+  let order: string[] = []
+  await using k = await router(() => {
+    order.push('worker')
+    return new Response('<!doctype html><body>worker page</body>', {
+      headers: { 'content-type': 'text/html' },
+    })
+  })
+  await k.dir.apply({
+    entities: [{ entity: { eid: k.app.eid }, app: { worker: 'version' } }],
+  }, KERNEL)
+  let stores = k.env.STORE
+  k.env.STORE = {
+    ...stores,
+    get: (...args) => {
+      let stub = stores.get(...args)
+      return {
+        fetch: (req) => {
+          if (new URL(req.url).pathname == WAKE) order.push('wake')
+          return stub.fetch(req)
+        },
+      }
+    },
+  }
+  let page = await k.at('/')
+  assertStringIncludes(await page.text(), 'worker page')
+  assertEquals(order, ['wake', 'worker'])
+})
 
 test('an app page passed by the front uses the gateway route and vouches for its visitor', async () => {
   let calls: Request[] = []
