@@ -35,6 +35,20 @@ export let PACKAGES = BUILT + '__packages/'
 let scripts = /^(?:text|application)\/javascript\b/
 export let moduleAsset = (asset: Asset) => scripts.test(asset.type)
 
+/// publicPath({ assets: { public: ['room.ts', 'theme/'] } }, 'room.ts') -> true
+/// publicPath({ assets: { public: ['room.ts', 'theme/'] } }, 'theme/kit.css') -> true
+/// publicPath({ assets: { public: ['room.ts'] } }, 'owner.ts') -> false
+/// publicPath({ assets: { public: ['api/'] } }, 'api/x.js') -> false
+/// publicPath({ main: 'w.js', assets: { public: ['w.js'] } }, 'w.js') -> false
+/** Whether the release's config gives the file at served `path` (below its
+ * serving folder) to everyone (wrangler's `assets.public`): never the worker
+ * or the app's API, whatever the list says. */
+export let publicPath = (config: Serving, path: string): boolean =>
+  path != (config.main ?? WORKER) && !path.startsWith('api/') &&
+  !!config.assets?.public?.some((entry) =>
+    entry.endsWith('/') ? path.startsWith(entry) : path == entry
+  )
+
 // The serving folder and compiled output use the same paths as the files
 // door. The configured worker and the platform's private files stay inside.
 let browserFiles = (files: Files, config: Serving) => {
@@ -56,9 +70,7 @@ let browserFiles = (files: Files, config: Serving) => {
     let type = mimeOf(built ? 'compiled.js' : path)
     if (type.startsWith('text/html')) continue
     let original = built || sha
-    let open = config.assets?.public?.some((entry) =>
-      entry.endsWith('/') ? path.startsWith(entry) : path == entry
-    )
+    let open = publicPath(config, path)
     keys.set(path, {
       sha: original,
       original,

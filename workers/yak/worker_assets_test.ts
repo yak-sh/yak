@@ -117,8 +117,8 @@ await agent.tool('app_files', {
     { path: 'wrangler.jsonc', content: '{"assets":{"public":["theme/"]}}' },
     { path: 'theme/kit.css', content: '.kit{}' },
     { path: 'owner.css', content: '.owner{}' },
-    { path: 'theme/room.ts', content: 'export let room: number = 1' },
-    { path: 'owner.ts', content: 'export let owner: number = 1' },
+    { path: 'theme/room.js', content: 'export let room = import.meta.url' },
+    { path: 'owner.js', content: 'export let owner = import.meta.url' },
     { path: 'icon.png', base64: PNG },
     { path: 'fonts/f.ttf', content: 'gated font' },
     { path: 'images/photo.svg', content: '<svg>photo</svg>' },
@@ -254,16 +254,16 @@ test('a private release serves its public assets without dispatching', async () 
     )
     equal((await get(kit, { method: 'HEAD' })).status, 200)
     equal((await get(owner)).status, 401)
-    // A compiled module names its siblings relatively, so a page loads it
-    // at its release's address, where its public files are anyone's too.
+    // A module that resolves paths as it runs keeps its release's address,
+    // where a public one is anyone's too.
     let release = app.source!.slice(app.source!.lastIndexOf('/') + 1)
     let at = (path: string) => get(`${mount}api/assets/${release}/${path}`)
-    let module = await at('theme/room.ts')
+    let module = await at('theme/room.js')
     equal([module.status, await module.text()], [
       200,
-      'export let room: number = 1',
+      'export let room = import.meta.url',
     ])
-    equal((await at('owner.ts')).status, 401)
+    equal((await at('owner.js')).status, 401)
     if (domain == host) {
       equal(
         await (await get(owner, { headers: { cookie } })).text(),

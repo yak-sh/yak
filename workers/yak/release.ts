@@ -174,10 +174,25 @@ let assetsOf = (index: Index): Assets =>
 
 // Older indexes still pin the original files. Their documents, stylesheets
 // and scripts keep their release URLs, where relative references work.
-let unrewritten = async (raw: Objects, index: Index): Promise<Assets> => {
+let configOf = async (raw: Objects, index: Index): Promise<Serving> => {
   let config = index['wrangler.jsonc'] ?? index['wrangler.json']
   let text = config?.text ?? (config && textOf(await raw.get(config.key)))
-  return plainAssets(filesOf(index), text ? serving(text) : {})
+  return text ? serving(text) : {}
+}
+
+let unrewritten = async (raw: Objects, index: Index): Promise<Assets> =>
+  plainAssets(filesOf(index), await configOf(raw, index))
+
+/** How a release serves its files: the wrangler config it was made with. */
+export let servingIn = async (
+  raw: Objects,
+  source: string,
+  read?: Objects['read'],
+  carried?: ServingIndex,
+): Promise<Serving> => {
+  if (carried) return carried.config
+  let index = await indexAt(raw, `${source}/`, read)
+  return index ? configOf(raw, index) : {}
 }
 
 let assetsByIndex = new WeakMap<Index, Assets>()

@@ -63,9 +63,9 @@ import {
   releaseId,
   SHA,
 } from '@yaks/platform/versions'
-import type { Asset, Assets } from '@yaks/platform/fingerprint'
+import { type Asset, type Assets, publicPath } from '@yaks/platform/fingerprint'
 import { etagOf, otherThanAsset } from '@yaks/platform/asset-response'
-import { assetsIn, keptAsset } from './release.ts'
+import { assetsIn, keptAsset, servingIn } from './release.ts'
 import * as files from './files.ts'
 import * as fence from '@yaks/platform/files'
 import { readView, type ServingIndex } from '@yaks/platform/release-index'
@@ -1287,6 +1287,15 @@ let releaseAssets = (
     )
     : Promise.resolve({})
 
+// The config a release was made with, read from its index.
+let releaseServing = (env: Env, source: string) =>
+  servingIn(
+    r2RawObjects(env.BLOBS),
+    source,
+    releaseIndex(env),
+    env.RELEASE_VIEWS?.get(source),
+  )
+
 let releaseAsset = (assets: Assets, path: string) => {
   let name = fence.decoded(path)?.slice(1)
   return name && Object.hasOwn(assets, name) ? assets[name] : null
@@ -1755,12 +1764,15 @@ let appDoor = async (
     // The release a published app offers is anyone's, as installing it hands
     // it out (`offered`), so Site can keep it (@yaks/platform/kept
     // `keepable`). Every other release is its own people's, a stranger's
-    // sample visit included, but for the files the live release made public
-    // (wrangler's `assets.public`), at this address as at their hash's: a
-    // compiled module is loaded here, since it names its siblings relatively.
-    let open = async () =>
-      source == app.source &&
-      !!releaseAsset(await releaseAssets(env, source), versioned.path)?.public
+    // sample visit included, but for the files the live release's config
+    // makes public (wrangler's `assets.public`), here as at their hashes: a
+    // module that could not be named by its hash (it resolves paths as it
+    // runs) is loaded only here, and has no hash's entry to say so.
+    let open = async () => {
+      let name = fence.decoded(versioned.path)?.slice(1)
+      return source == app.source && !!name &&
+        publicPath(await releaseServing(env, source), name)
+    }
     if (
       !mayUse && source != await offeredSource(dir, app) && !await open()
     ) {
