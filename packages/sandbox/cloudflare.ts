@@ -1,6 +1,7 @@
 // Cloudflare containers as sandbox providers. The namespace supplies the
 // deployed image; the host supplies invocation environment and RPC retry policy.
 // Grants, accounts and billing are not container concerns.
+import { type Clock, sleep, system } from '@yaks/fp'
 import { type Bundle, type Comp, identityEid } from '@yaks/graph'
 import { shellStat, type Workspace } from '@yaks/machine'
 import type {
@@ -56,12 +57,44 @@ export type Sandboxes = {
 export let CWD = '/workspace'
 /** Commands have a four-minute ceiling, including background processes. */
 export let TIMEOUT = 240_000
-/** Idle containers shut down after five minutes; their files are temporary. */
-export let NAP = 300
+/** An idle workbench releases its container after one minute. */
+export let NAP = 60
 export let SLEEP = `${NAP / 60}m`
 /** How long one call keeps a container awake, in seconds: the longest
  * command, then the nap before it sleeps on its own. */
 export let HELD = TIMEOUT / 1000 + NAP
+
+let POOL_WAIT = 90_000
+let POOL_POLL = 2_000
+let MAX_INSTANCES = 'Maximum number of running container instances exceeded'
+export let POOL_BUSY =
+  'All sandbox containers are busy. Try the same call again shortly.'
+
+let capacity = (error: unknown): boolean => {
+  for (let cause = error; cause instanceof Error; cause = cause.cause) {
+    if (cause.message.includes(MAX_INSTANCES)) return true
+  }
+  return false
+}
+
+/** Wait for a free slot during startup, before any workspace operation runs.
+ * The window gives an idle workbench time to snapshot and release its slot. */
+export let admitted = async <T>(
+  start: () => T | Promise<T>,
+  clock: Clock = system,
+): Promise<T> => {
+  let until = clock.now() + POOL_WAIT
+  for (;;) {
+    try {
+      return await start()
+    } catch (error) {
+      if (!capacity(error)) throw error
+      let left = until - clock.now()
+      if (left <= 0) throw new Error(POOL_BUSY, { cause: error })
+      await sleep(Math.min(left, POOL_POLL), undefined, clock)
+    }
+  }
+}
 
 /** The container a group lends one person, by name: one each, so the
  * person's every way in reaches one workbench. The group's id rather than a

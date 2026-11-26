@@ -70,6 +70,11 @@ def scan():
             walk(name)
     return found
 
+def write_baseline(before):
+    with open(baseline + '.part', 'w') as out:
+        json.dump(before, out)
+    os.replace(baseline + '.part', baseline)
+
 os.makedirs(held, exist_ok=True)
 mode = sys.argv[1]
 if mode in ('fresh', 'existing'):
@@ -78,21 +83,19 @@ if mode in ('fresh', 'existing'):
     else:
         # A pre-deploy running container has no pristine-image manifest.
         # Keep all its bytes instead of mistaking its files for the image.
-        # Written whole or not at all, so a failed scan leaves no baseline.
-        with open(baseline + '.part', 'w') as out:
-            json.dump(scan() if mode == 'fresh' else {}, out)
-        os.replace(baseline + '.part', baseline)
+        write_baseline(scan() if mode == 'fresh' else {})
         print('fresh')
 elif mode == 'ready':
     open(ready, 'a').close()
 elif mode == 'save':
-    # A baseline left empty by an interrupted write (before it was written
-    # whole) names no image files: keep every byte.
+    # A missing or incomplete baseline cannot distinguish edits from image
+    # files. Keep all eligible files and replace the baseline conservatively.
     try:
         with open(baseline) as source:
             before = json.load(source)
-    except ValueError:
+    except (FileNotFoundError, ValueError):
         before = {}
+        write_baseline(before)
     current = scan()
     # A baseline written before a path was regenerable still lists it.
     removed = sorted({n for n in before if n not in current and kept(n)},

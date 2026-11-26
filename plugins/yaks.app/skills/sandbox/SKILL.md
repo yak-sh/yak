@@ -122,18 +122,20 @@ Fonts and layout can differ from the application that created the original.
 
 ## Files
 
-A sandbox sleeps five minutes after its last command, and a managed build stops
-it when the build ends. Before either shutdown, the platform retains a snapshot
-of its changed files and restores them when the sandbox wakes. Files in `/tmp`
-and package managers' download caches (apt, npm, pip, Deno, Go and Cargo) are
-left out and refill when needed, so keep work in `/workspace`. The more a
-snapshot holds, the longer waking takes. Older snapshots are retained without an
-automatic purge. Processes stop at shutdown.
+A sandbox sleeps after one minute of inactivity once its processes have
+finished. Before shutdown, the platform retains a snapshot of its changed files
+and restores them when the sandbox wakes. Files in `/tmp` and package managers'
+download caches (apt, npm, pip, Deno, Go and Cargo) are left out and refill when
+needed, so keep work in `/workspace`. The more a snapshot holds, the longer
+waking takes. Older snapshots are retained without an automatic purge. Processes
+stop at shutdown.
 
 When a sandbox tool reports that its call is still in progress, repeat the same
-call with the same arguments to retrieve its result. When `sandbox_shell`
-returns a process ID for a running command, use `sandbox_wait` or `sandbox_stop`
-with that ID.
+call with the same arguments to retrieve its result. When the platform's
+containers are all busy, a new sandbox waits for a slot before running the
+command. If they stay busy, try the same call again shortly. When
+`sandbox_shell` returns a process ID for a running command, use `sandbox_wait`
+or `sandbox_stop` with that ID.
 
 `sandbox_ship` copies files into an app independently, so the app serves them
 without waking the sandbox.
@@ -166,11 +168,9 @@ downloads its template (`npm create astro`), any registry and any API all work.
 
 Your sandbox is private to you in each space, and a space can have one sandbox
 awake at a time on the free plan, two on the Personal plan and three on the Pro
-plan. A sandbox goes to sleep five minutes after its last command, and another
-member's sandbox in that space can wake after that. The monthly compute time
-(the sandbox's, and compiling TypeScript and npm packages at `app_deploy`) is 1
-hour for each free space, 10 hours for each space on the Personal plan and 50
-hours on the Pro plan.
+plan. The monthly compute time (the sandbox's, and compiling TypeScript and npm
+packages at `app_deploy`) is 1 hour for each free space, 10 hours for each space
+on the Personal plan and 50 hours on the Pro plan.
 
 ## The `yak` CLI and `$YAKS_TOKEN`
 

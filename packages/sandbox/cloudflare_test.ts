@@ -1,6 +1,6 @@
 // A Cloudflare namespace chooses its deployed image. Unsupported request
 // inputs must fail before any RPC can create a container with the wrong data.
-import { equal, test, throws } from '@yaks/testing'
+import { clock, equal, test, throws } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -8,13 +8,61 @@ import { kernelDoc } from '@yaks/kernel'
 import { sandboxDoc } from './vocab.ts'
 import { sandboxes } from './testing.ts'
 import {
+  admitted,
   type Box,
   cloudflareProvider,
   HELD,
   hold,
   lending,
+  POOL_BUSY,
   slept,
 } from './cloudflare.ts'
+
+let full = () =>
+  new Error(
+    'Maximum number of running container instances exceeded. Try again later, or try configuring a higher value for max_instances',
+  )
+
+test('a full pool waits for a slot before the workspace operation runs', async () => {
+  let time = clock()
+  let free = false
+  let commands = 0
+  let done = admitted(() => {
+    if (!free) throw new Error('startup failed', { cause: full() })
+  }, time).then(() => commands++)
+  await time.advance(2_000)
+  equal(commands, 0)
+  free = true
+  await time.advance(2_000)
+  await done
+  equal(commands, 1)
+})
+
+test('a pool that stays full answers with a retryable busy message', async () => {
+  let time = clock()
+  let done = throws(
+    () =>
+      admitted(() => {
+        throw full()
+      }, time),
+    POOL_BUSY,
+  )
+  await time.advance(90_000)
+  await done
+  equal(time.pending(), 0)
+})
+
+test('an unrelated startup failure is passed through without waiting', async () => {
+  let time = clock()
+  await throws(
+    () =>
+      admitted(() => {
+        throw new Error('missing sandbox image')
+      }, time),
+    'missing sandbox image',
+  )
+  equal(time.pending(), 0)
+})
 
 test('a retried start reads its process after an acknowledgement is lost', async () => {
   let command = 'write once'

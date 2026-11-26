@@ -76,6 +76,7 @@ import {
   lending,
   named,
   NAP,
+  POOL_BUSY,
   type Sandboxes,
   TIMEOUT,
 } from '@yaks/sandbox/cloudflare'
@@ -200,7 +201,7 @@ export let tooAwake = (space: Space, awake: number, env: Host = {}) =>
       ? 'Personal plan'
       : 'free tier'
   } allows ${AWAKE[space.tier ?? 'free']} at a time — wait: a sandbox ` +
-  `sleeps ${NAP / 60} minutes after its last command. ${plans(space, env)}`
+  `sleeps after a minute of inactivity. ${plans(space, env)}`
 
 /**
  * This person's sandbox in this space, counted awake — refused where other
@@ -258,15 +259,23 @@ type Bound = Keys & {
 let retrying = (env: Bound) => <T>(send: () => T | Promise<T>) =>
   elapsed(
     'workbench_wait',
-    () => retried(send, true, evicted, jittered(env.CLOCK)),
+    async () => {
+      try {
+        return await retried(send, true, evicted, jittered(env.CLOCK))
+      } catch (error) {
+        if (error instanceof Error && error.message == POOL_BUSY) {
+          throw refuse('unavailable', POOL_BUSY)
+        }
+        throw error
+      }
+    },
   )
 
 // Workbench owns persistence across idle shutdowns as well as disposal. Its
 // prepare RPC restores a cold filesystem before any command reaches it.
 let prepared = (_ref: unknown, box: Box) =>
   (box as Box & { prepare(): Promise<void> }).prepare()
-let retained = async (ref: unknown, box: Box) => {
-  await prepared(ref, box)
+let retained = async (_ref: unknown, box: Box) => {
   await box.destroy()
 }
 
@@ -430,7 +439,6 @@ export let workbench = async (
   }
   spend.person = person
   await awake(env, space, person, now())
-  spend.since ??= now()
   let ref = { id: named(space.eid, person) }
   let provider = cloudflareProvider(ns, {
     ephemeral: true,
@@ -442,11 +450,8 @@ export let workbench = async (
       caught(e, { request: 'sandbox sleep', space: space.slug }),
   })
   let lent = await (first ? provider.request!(ref) : provider.connect(ref))
-  // A container that slept since this build's last call restores its files
-  // here, so the wait is the wake's and not the command's.
-  if (!first) {
-    await retrying(env)(() => prepared(ref, ns.get(ns.idFromName(ref.id))))
-  }
+  await retrying(env)(() => prepared(ref, ns.get(ns.idFromName(ref.id))))
+  spend.since ??= now()
   spend.preparing ??= (async () => {
     await lent.workspace.write('/usr/local/bin/yak', LAUNCHER)
     let result = await provider.exec(ref, 'chmod +x /usr/local/bin/yak')
@@ -458,7 +463,10 @@ export let workbench = async (
     } catch (e) {
       caught(e, { request: 'sandbox warm', space: space.slug })
     }
-  })()
+  })().catch((error) => {
+    spend.preparing = undefined
+    throw error
+  })
   await spend.preparing
   return { ...lent, provider, ref }
 }

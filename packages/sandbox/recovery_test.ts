@@ -269,6 +269,44 @@ test('a workspace call arriving during shutdown restores before reading', async 
   equal(await reading, 'unique')
 })
 
+test('idle shutdown skips running processes and restores files after they finish', async () => {
+  let bench = fixture()
+  let busy = true
+  let idle = () => bench.idle(() => Promise.resolve(busy), bench.stop)
+  await bench.use(() =>
+    Promise.resolve(bench.files.set('/workspace/note', 'kept'))
+  )
+  await idle()
+  equal(bench.awake, true)
+  busy = false
+  await idle()
+  equal(bench.awake, false)
+  equal(
+    await bench.use(() => Promise.resolve(bench.files.get('/workspace/note'))),
+    'kept',
+  )
+})
+
+test('an alarm that waited for workspace activity leaves a fresh idle window', async () => {
+  let bench = fixture()
+  let started = Promise.withResolvers<void>()
+  let finished = Promise.withResolvers<void>()
+  let writing = bench.use(async () => {
+    started.resolve()
+    await finished.promise
+    bench.files.set('/workspace/note', 'kept')
+  })
+  await started.promise
+  let idle = () => bench.idle(() => Promise.resolve(false), bench.stop)
+  let expiring = idle()
+  finished.resolve()
+  await writing
+  await expiring
+  equal(bench.awake, true)
+  await idle()
+  equal(bench.awake, false)
+})
+
 test('confirmed purge removes snapshots and receipt after stopping the workbench', async () => {
   let bench = fixture()
   await bench.prepare()
@@ -335,7 +373,7 @@ let sh = async (command: string) => {
 }
 let local = (root: string) =>
   filesystem(
-    { getState: () => Promise.resolve({ status: 'running' }), exec: sh },
+    { live: () => true, exec: sh },
     async function* () {},
     root,
   )
@@ -391,6 +429,23 @@ test('a woken sandbox gets back its changed files and deletions, without caches'
     ])
     equal(await Deno.readTextFile(`${woken}/etc/conf`), 'edited')
     await throws(() => fs.run('restore', archive, String(Number(size) + 1)))
+
+    await Deno.remove(`${woken}/.yak-recovery/baseline.json`)
+    await Deno.writeTextFile(
+      `${woken}/workspace/notes`,
+      'after missing baseline',
+    )
+    let repaired = await fs.run('save')
+    equal(await Deno.readTextFile(`${woken}/.yak-recovery/baseline.json`), '{}')
+    await local(was).run(
+      'restore',
+      `file://${woken}/.yak-recovery/snapshot.tar.gz`,
+      repaired,
+    )
+    equal(
+      await Deno.readTextFile(`${was}/workspace/notes`),
+      'after missing baseline',
+    )
   } finally {
     await Deno.remove(made, { recursive: true })
   }

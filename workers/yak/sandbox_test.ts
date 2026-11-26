@@ -845,7 +845,7 @@ test('the guide and the limits page say the same image', () => {
   }
   for (let page of [guide, tech]) {
     assertStringIncludes(page, 'apt')
-    assertStringIncludes(page, 'five minutes after its last command')
+    assertStringIncludes(page, 'one minute of inactivity')
   }
 })
 

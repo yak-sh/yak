@@ -13,6 +13,7 @@ import { env } from 'cloudflare:workers'
 import * as sdk from '@cloudflare/sandbox'
 import { outgoing } from '@yaks/platform/app-outbound'
 import { apex, type Host } from '@yaks/platform/host'
+import { admitted, SLEEP, TIMEOUT } from '@yaks/sandbox/cloudflare'
 import {
   ARCHIVE_PATH,
   filesystem,
@@ -40,10 +41,20 @@ let streamed = async function* (stream: Promise<ReadableStream<Uint8Array>>) {
 
 export class Workbench extends sdk.Sandbox<Env> {
   override interceptHttps = true
+  override sleepAfter = SLEEP
   private files = recovery(
     filesystem({
-      getState: () => super.getState(),
-      exec: (command) => super.exec(command, { timeout: 240_000 }),
+      live: () => this.ctx.container?.running === true,
+      start: () =>
+        admitted(() =>
+          super.startAndWaitForPorts({
+            cancellationOptions: {
+              instanceGetTimeoutMS: 30_000,
+              portReadyTimeoutMS: 120_000,
+            },
+          })
+        ),
+      exec: (command) => super.exec(command, { timeout: TIMEOUT }),
     }, () => streamed(super.readFileStream(ARCHIVE_PATH))),
     this.ctx.storage,
     this.env.BLOBS,
@@ -73,13 +84,22 @@ export class Workbench extends sdk.Sandbox<Env> {
       ) => Promise<unknown>
       Object.defineProperty(this.prototype, method, {
         value: function (this: Workbench, ...args: unknown[]) {
-          return this.files.use(() => invoke.apply(this, args))
+          return this.use(() => invoke.apply(this, args))
         },
       })
     }
   }
+  private use<T>(act: () => Promise<T>) {
+    return this.files.use(async () => {
+      try {
+        return await act()
+      } finally {
+        this.renewActivityTimeout()
+      }
+    })
+  }
   prepare() {
-    return this.files.use(() => Promise.resolve())
+    return this.use(() => Promise.resolve())
   }
   override async destroy() {
     await this.files.stop(() => super.destroy())
@@ -98,7 +118,13 @@ export class Workbench extends sdk.Sandbox<Env> {
   // failure is the retry working, not a fault (@yaks/durable-object `moved`).
   override async onActivityExpired() {
     try {
-      await this.files.stop(() => super.onActivityExpired())
+      await this.files.idle(
+        async () =>
+          (await super.listProcesses()).some(({ status }) =>
+            status == 'starting' || status == 'running'
+          ),
+        () => super.destroy(),
+      )
     } catch (error) {
       if (!moved(error)) {
         await this.env.KERNEL.fault(String(error), String(this.ctx.id))

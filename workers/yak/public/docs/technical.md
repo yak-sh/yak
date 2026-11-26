@@ -180,8 +180,9 @@ time; past that the build says so and keeps whatever it has already shipped. A
 month holds **1 hour** of compute time on Free and **10 hours** on the Personal
 plan, the container's and the compiling at `app_deploy` together, and one person
 has one container awake at a time on Free, two on the Personal plan. The
-container goes to sleep five minutes after its last command, or is destroyed
-when a build ends, and everything in it with it.
+container goes to sleep after one minute of inactivity once its processes have
+finished. The platform snapshots changed files and restores them on its next
+wake.
 
 [The pricing page](/pricing) has both plans in full.
 

@@ -24,7 +24,8 @@ type Archive = {
   delete(keys: string[]): Promise<unknown>
 }
 type Box = {
-  getState(): Promise<{ status: string }>
+  live(): boolean | Promise<boolean>
+  start?(): Promise<void>
   exec(command: string): Promise<{
     exitCode: number
     stdout: string
@@ -32,7 +33,8 @@ type Box = {
   }>
 }
 type Filesystem = {
-  live(): Promise<boolean>
+  live(): boolean | Promise<boolean>
+  start?(): Promise<void>
   run(mode: string, ...args: string[]): Promise<string>
   read(): AsyncIterable<Uint8Array>
   restore(name: string, size: number): Promise<string>
@@ -41,13 +43,13 @@ type Recovery = {
   prepare(): Promise<void>
   save(): Promise<void>
   use<T>(act: () => Promise<T>): Promise<T>
+  idle(busy: () => Promise<boolean>, stop: () => Promise<void>): Promise<void>
   stop<T>(act: () => Promise<T>): Promise<T>
   purge(stop: () => Promise<unknown>): Promise<void>
   reset(): void
 }
 
 let quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
-let live = (status: string) => status == 'running' || status == 'healthy'
 export let RECOVERY_HOST = 'workbench-recovery.internal'
 export let ARCHIVE_PATH = '/.yak-recovery/snapshot.tar.gz'
 let prefix = (id: string) => `workbench/${id}/`
@@ -98,7 +100,8 @@ export let filesystem = (
     return result.stdout.trim()
   }
   return {
-    live: async () => live((await box.getState()).status),
+    live: box.live,
+    start: box.start,
     run,
     read,
     restore: (name: string, size: number) =>
@@ -182,6 +185,7 @@ export let recovery = (
   let prepared: Promise<void> | undefined
   let checkpoint: Promise<void> | undefined
   let tail = Promise.resolve()
+  let activity = 0
   let locked = <T>(act: () => Promise<T>) => {
     let result = tail.then(act, act)
     tail = result.then(() => {}, () => {})
@@ -189,7 +193,9 @@ export let recovery = (
   }
   let prepare = () =>
     prepared ??= (async () => {
-      let made = await run(await box.live() ? 'existing' : 'fresh')
+      let running = await box.live()
+      if (!running) await box.start?.()
+      let made = await run(running ? 'existing' : 'fresh')
       if (made != 'fresh') return
       let head = await state.get<Head>(HEAD)
       if (head) {
@@ -232,21 +238,33 @@ export let recovery = (
     })().finally(() => {
       checkpoint = undefined
     })
+  let stop = async <T>(act: () => Promise<T>) => {
+    await save()
+    let result = await act()
+    prepared = undefined
+    return result
+  }
   return {
     prepare,
     save,
     use: <T>(act: () => Promise<T>) =>
       locked(async () => {
-        await prepare()
-        return await act()
+        try {
+          await prepare()
+          return await act()
+        } finally {
+          activity++
+        }
       }),
-    stop: <T>(act: () => Promise<T>) =>
-      locked(async () => {
-        await save()
-        let result = await act()
-        prepared = undefined
-        return result
-      }),
+    idle: (busy, shutdown) => {
+      let seen = activity
+      return locked(async () => {
+        if (seen == activity && await box.live() && !await busy()) {
+          await stop(shutdown)
+        }
+      })
+    },
+    stop: (act) => locked(() => stop(act)),
     // The caller reaches this only after the person confirms their purge.
     // Stop first so no command can create unarchived state during removal.
     purge: (stop: () => Promise<unknown>) =>

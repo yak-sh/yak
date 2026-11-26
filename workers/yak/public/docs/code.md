@@ -1205,8 +1205,8 @@ a folder of files is built in the sandbox
 ([Sandbox](https://yaks.app/docs/sandbox.md)) and served as built:
 
 1. Write the project into the sandbox, then install and build in one
-   `sandbox_shell` command. Its files last until the sandbox goes to sleep, five
-   minutes after its last command, so build and ship in one session.
+   `sandbox_shell` command. Keep the project in `/workspace` so its files are
+   restored if the sandbox sleeps between calls.
 2. Ship the output into a folder of the app, replacing the last build, and ship
    the source beside it, so the next build starts from this one's source:
 
@@ -1214,8 +1214,7 @@ a folder of files is built in the sandbox
        sandbox_ship(app, paths: ['site/src'], into: 'src')
        sandbox_ship(app, paths: ['site/package.json', 'site/package-lock.json'])
 
-   A sandbox that went to sleep starts empty. To get the app back, including its
-   images, clone the app's last release:
+   You can also get the app back from its last release:
    `git clone https://x:$YAKS_TOKEN@<space>.yaks.app/<app>.git`.
 3. Name the folder the app serves in `wrangler.jsonc`:
    `{"assets": {"directory": "dist"}}`, so `dist/index.html` is the app's front
