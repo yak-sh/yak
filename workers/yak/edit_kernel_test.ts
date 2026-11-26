@@ -5,6 +5,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { connector, kernel, seed, unique } from './probe.ts'
 import { draftEid } from '@yaks/draft'
 import { placeOf } from '@yaks/platform/edit-mode'
+import { chatPath } from '@yaks/platform/routes'
 
 let k = await kernel()
 let space = unique('edit')
@@ -37,7 +38,7 @@ let read = await k.at(host, `/site/api/query?.draft.by=${person}`, {
 
 test("an owner's page wears the pencil, and a stranger's does not", () => {
   ok(owned.includes('data-yak-edit="'))
-  ok(owned.includes(`/${space}?app=site`))
+  ok(owned.includes(`${chatPath(space)}?app=site`))
   ok(!strangers.includes('data-yak-edit'))
 })
 

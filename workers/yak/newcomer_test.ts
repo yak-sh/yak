@@ -377,7 +377,7 @@ test("a stranger's idea opens a space of their own, signed in, in its chat", () 
   assertEquals(first.status, 303)
   assert(cookie.length > 0, 'the browser is signed in')
   assert(
-    /^\/[a-z0-9-]+\/[0-9a-f-]{36}$/.test(
+    /^\/[a-z0-9-]+\/operator\/[0-9a-f-]{36}$/.test(
       new URL(first.headers.get('location')!).pathname,
     ),
     'it lands on the chat its words opened',

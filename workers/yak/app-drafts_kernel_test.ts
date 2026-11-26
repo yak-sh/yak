@@ -4,6 +4,7 @@ import { parseHTML } from 'linkedom'
 import { appMaking, type DraftAction } from '@yaks/platform/app-canvas'
 import { drawCanvas } from '@yaks/platform/app-canvas-browser'
 import { DRAWN, REACH } from '@yaks/platform/page-graph'
+import { chatPath } from '@yaks/platform/routes'
 import { connector, kernel, seed, signIn, unique } from './probe.ts'
 
 test('the app lists every open draft and its actions name only that draft', async () => {
@@ -63,7 +64,7 @@ test('the app lists every open draft and its actions name only that draft', asyn
   let get = (path: string, as = cookie) =>
     k.at(k.host, path, { headers: { cookie: as }, redirect: 'manual' })
   let canvas = async () => {
-    let page = await get(`/${space}?app=garden`)
+    let page = await get(`${chatPath(space)}?app=garden`)
     equal(page.status, 200)
     let { document } = parseHTML(await page.text())
     let root = document.querySelector<HTMLElement>('[data-canvas-view]')!

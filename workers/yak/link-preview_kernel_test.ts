@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { kernel } from './probe.ts'
+import { chatPath } from '@yaks/platform/routes'
 
 let k = await kernel()
 
@@ -10,7 +11,7 @@ test('signed-out links keep sign-in navigation while previewing their destinatio
     let [path, title] of [
       ['/manage/private-space/connections', 'Connections · yaks.app'],
       [
-        '/private-space/15ae7fb4-dc03-48f8-b3b6-31a62133ccf9',
+        chatPath('private-space', '15ae7fb4-dc03-48f8-b3b6-31a62133ccf9'),
         'A conversation with an Operator · yaks.app',
       ],
       ['/manage/account/agents', 'Connect an assistant · yaks.app'],

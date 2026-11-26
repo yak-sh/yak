@@ -4,6 +4,7 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
+import { chatPath } from '@yaks/platform/routes'
 import { registration } from '@yaks/connections'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
@@ -132,7 +133,10 @@ test('a new verified address is somebody new, signed in on their own space', asy
   assertEquals((person.signed_in as { via: string }).via, 'google')
   assert((person.signed_in as { first?: string }).first)
   // Their own space's chat, made for them in the write that signed them in.
-  assertEquals(r.headers.get('location'), 'https://yaks.app/new-person')
+  assertEquals(
+    r.headers.get('location'),
+    `https://yaks.app${chatPath('new-person')}`,
+  )
   assertEquals(r.headers.get('referrer-policy'), 'no-referrer')
   // The exchange spent the code with the verifier and our client's secret.
   let [form] = s.exchanged

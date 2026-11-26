@@ -2,6 +2,7 @@
 // app's doors a request inside it goes to, for whom.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
+import { chatPath } from './routes.ts'
 import {
   type Asked,
   type Asking,
@@ -108,11 +109,11 @@ test('rung: the directory and a trashed space answer nothing', async () => {
 test('rung: the old dashboard is sent to its new address', async () => {
   assertEquals(await stop('/_yaks', {}, { search: '?a=1' }), [
     'sent',
-    { href: 'https://yaks.app/ada?a=1', status: 301 },
+    { href: `https://yaks.app${chatPath('ada')}?a=1`, status: 301 },
   ])
   assertEquals(await stop('/_yaks', {}, { method: 'POST' }), [
     'sent',
-    { href: 'https://yaks.app/ada', status: 303 },
+    { href: `https://yaks.app${chatPath('ada')}`, status: 303 },
   ])
   assertEquals(await stop('/_yaks/nowhere'), ['nothing', {}])
 })
