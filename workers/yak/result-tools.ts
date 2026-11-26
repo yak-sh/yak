@@ -4,6 +4,7 @@ import { CallError } from '@yaks/tools/errors'
 import { resultDoor } from './build-door.ts'
 import { opened } from './anon.ts'
 import { queryResult } from './result-query.ts'
+import { resultOf } from './outlast.ts'
 import { keepResult, readResult } from './results.ts'
 import { apart, APP, type Args, type Ctx, inSpace, SPACE } from './tool.ts'
 
@@ -133,4 +134,27 @@ export let resultTools = (ctx: Ctx, local?: ResultHost): Tool[] => [{
       ),
     )]
   },
+}, {
+  name: 'result_wait',
+  title: 'Get a pending tool result',
+  description:
+    'Get the original answer to a tool call that is still running. ' +
+    'Pass the result_handle from that call. If it is still running, use the ' +
+    'same handle again. This does not start the tool again.',
+  inputSchema: {
+    type: 'object',
+    properties: { result_handle: { type: 'string' } },
+    required: ['result_handle'],
+    additionalProperties: false,
+  },
+  readOnly: true,
+  run: (call) =>
+    resultOf(
+      ctx.env.OUTLAST,
+      ctx.env.SESSION_SECRET,
+      String(argsOf(call).result_handle),
+      ctx.person,
+      ctx.who,
+      call.entity.eid,
+    ),
 }]

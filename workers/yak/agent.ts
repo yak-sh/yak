@@ -244,6 +244,7 @@ export let running =
               ...(patience == null ? {} : { patience }),
             },
             progress,
+            ctx.env.SESSION_SECRET,
           ),
         t.name,
       )

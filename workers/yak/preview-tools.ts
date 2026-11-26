@@ -2,12 +2,19 @@
 // the roster is needed while the app and preview routers are loading.
 import { APP, SPACE, str } from './tool.ts'
 import { type Row, worded } from './tool-words.ts'
+import { sha256 } from '@yaks/graph/sha256'
 
 export let tools = [worded(
   {
     name: 'app_preview',
     destructive: false,
     openWorld: true,
+    outlasts: (args, { who }) => ({
+      key: sha256(JSON.stringify([
+        who?.spaceEid ?? who?.space,
+        Object.keys(args).sort().map((key) => [key, args[key]]),
+      ])),
+    }),
     input: {
       type: 'object',
       properties: {

@@ -643,6 +643,7 @@ let shownDraft = async (
 // refused there in the directory's own transaction, and charged
 // the time it took, failing or not (model-spend.ts `onHold`).
 let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
+  ctx.doing?.('the browser is opening and checking the page')
   let { render } = await import('./browser.ts')
   let rendered = await onHold(
     ctx.env,
@@ -827,6 +828,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
   }
   let of = await shownDraft(ctx, space, app, args.draft as string | undefined)
   let { draft, link, mount, at } = await linkOf(ctx, space, app, who, of)
+  ctx.doing?.('the draft is building for its private link')
   await following(ctx, space, app, draft, link, mount, who)
   let url = at + path
   let value: Record<string, unknown> = {

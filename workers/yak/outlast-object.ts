@@ -12,7 +12,8 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { narrowed } from './grants.ts'
-import { type Asked, type Ended, type Heard, outlasting } from './outlast.ts'
+import { type Ended, type Heard, outlasting } from '@yaks/tools/outlast'
+import type { Asked } from './outlast.ts'
 import { PUBLISHED } from './published.ts'
 import type { Ctx } from './tool.ts'
 import { TOOLS } from './tools.ts'
@@ -69,13 +70,19 @@ export class Outlast extends Durable {
     super(ctx, {
       report: (e, entry) => caught(e, { request: `outlast ${entry}` }),
     })
-    this.#once = outlasting(this.keys, time)
+    this.#once = outlasting(this.keys, {
+      ...time,
+      report: (e) => caught(e, { request: 'keep tool result' }),
+    })
     this.#env = env
   }
   call(asked: Asked): Promise<Heard> {
     return this.enter(
       'call',
-      () => this.#once((doing) => ran(this.#env, asked, doing), asked.patience),
+      () =>
+        asked.pickup
+          ? this.#once.read(asked.pickup, asked.patience)
+          : this.#once((doing) => ran(this.#env, asked, doing), asked.patience),
     )
   }
 }

@@ -15,118 +15,10 @@
 // call with the same key joins a run still going, or is handed the answer of
 // one nobody heard, once, in place of running again.
 import type { Bundle } from '@yaks/graph'
+import type { Heard } from '@yaks/tools/outlast'
 import { CallError } from '@yaks/tools/errors'
 import type { Caller } from './session.ts'
-
-/** How long the door waits before answering that a call is still running:
- * well inside the minute a client gives a call. */
-export let PATIENCE = 40_000
-
-/** How long an answer nobody heard is kept for the next call to hear. */
-export let KEPT = 15 * 60_000
-
-/** How a call ended: its answer, or the refusal it said. */
-export type Ended =
-  | { said: Bundle[] }
-  | { refused: { code: string; text: string } }
-
-/** What a caller hears: how the call ended, when it was asked, and whether it
- * was asked by an earlier call that heard it still running; or that it is,
- * and what it is doing when the run has said. */
-export type Heard =
-  | Ended & { asked: string; late?: true }
-  | { running: string; doing?: string }
-
-/** A run: given how to say what it is doing now, it ends. */
-export type Run = (doing: (step: string) => void) => Promise<Ended>
-
-/** The object's own storage, as much of it as this keeps. */
-export type Keep = {
-  get<T>(key: string): Promise<T | undefined>
-  put(key: string, value: unknown): Promise<void>
-  delete(key: string): Promise<boolean>
-}
-
-type Unread = { asked: string; ended: number; out: Ended }
-type Job = {
-  asked: string
-  ended: Promise<Ended>
-  heard: boolean
-  late?: true
-  doing?: string
-}
-
-let UNREAD = 'unread'
-
-/** Run `callback` in `ms`, answering how to cancel it. */
-export type After = (
-  ms: number,
-  callback: () => void | Promise<void>,
-) => () => void
-
-let timer: After = (ms, callback) => {
-  let t = setTimeout(callback, ms)
-  return () => clearTimeout(t)
-}
-
-/** One key's calls: one run at a time, joined by every call that arrives while
- * it runs, each waiting at most `patience`. `run` never rejects; a refusal or
- * a failure is how it ended. */
-export let outlasting = (keep: Keep, {
-  patience = PATIENCE,
-  now = Date.now,
-  after = timer,
-}: { patience?: number; now?: () => number; after?: After } = {}) => {
-  let job: Promise<Job> | null = null
-  let begin = async (run: Run): Promise<Job> => {
-    let unread = await keep.get<Unread>(UNREAD)
-    if (unread) {
-      await keep.delete(UNREAD)
-      if (now() - unread.ended < KEPT) {
-        return {
-          asked: unread.asked,
-          ended: Promise.resolve(unread.out),
-          heard: false,
-          late: true,
-        }
-      }
-    }
-    let j: Job = {
-      asked: new Date(now()).toISOString(),
-      ended: Promise.resolve({ said: [] }),
-      heard: false,
-    }
-    j.ended = run((step) => j.doing = step)
-    return j
-  }
-  // Kept once every caller waiting has been answered: a timer runs after the
-  // promise callbacks that answer the callers who were still waiting.
-  let settle = async (mine: Promise<Job>, j: Job, out: Ended) => {
-    if (job == mine) job = null
-    if (!j.heard && !j.late) {
-      await keep.put(UNREAD, { asked: j.asked, ended: now(), out })
-    }
-  }
-  return async (run: Run, wait = patience): Promise<Heard> => {
-    if (!job) {
-      let mine: Promise<Job> = begin(run).then((j) => {
-        j.ended.then((out) => after(0, () => settle(mine, j, out)))
-        return j
-      })
-      job = mine
-    }
-    let j = await job
-    let cancel = () => {}
-    let out = await Promise.race([
-      j.ended,
-      new Promise<null>((done) => cancel = after(wait, () => done(null))),
-    ])
-    cancel()
-    if (!out) return { running: j.asked, ...j.doing ? { doing: j.doing } : {} }
-    j.heard = true
-    return { ...out, asked: j.asked, ...j.late ? { late: true as const } : {} }
-  }
-}
+import { opened, seal } from './lib/token.ts'
 
 /** A call, as the door hands it to the object: the tool, what it was asked,
  * and who asked through which credential. */
@@ -137,6 +29,8 @@ export type Asked = {
   person: string
   who?: Caller
   patience?: number
+  /** Read this run's answer without starting any work. */
+  pickup?: string
 }
 
 /** The objects calls outlast their callers in (index.ts `Outlast`). */
@@ -155,6 +49,16 @@ let earlier = (name: string, asked: string) =>
   `This answers the ${name} asked at ${asked}, which was still running when ` +
   'it answered:\n'
 
+type Result = {
+  key: string
+  tool: string
+  asked: string
+  person: string
+  scope: string | null
+}
+
+let scopeOf = (who?: Caller) => who?.spaceEid ?? who?.space ?? null
+
 /** The door's half: the call, run in the object for its key, and its answer
  * as the caller hears it. */
 export let outlasted = async (
@@ -162,20 +66,37 @@ export let outlasted = async (
   key: string,
   asked: Asked,
   progress?: string,
+  secret?: string,
 ): Promise<Bundle[]> => {
   let name = asked.tool
   let heard = await objects.get(objects.idFromName(key)).call(asked)
   if ('running' in heard) {
     let { running, doing } = heard
+    let handle = secret && await seal(
+      'tool-result',
+      {
+        key,
+        tool: name,
+        asked: running,
+        person: asked.person,
+        scope: scopeOf(asked.who),
+      } satisfies Result,
+      secret,
+    )
     return said(
       (doing
         ? `${name} asked at ${running} is still running: ${doing}.`
         : progress ??
           `${name} asked at ${running} is still running, and goes on.`) +
-        ' ' +
+        (handle ? ' Use result_wait with the result_handle. ' : ' ') +
         `Call ${name} again with the same arguments to wait for it and hear ` +
         'how it ended.',
-      { running: true, asked: running, ...doing ? { doing } : {} },
+      {
+        running: true,
+        asked: running,
+        ...doing ? { doing } : {},
+        ...handle ? { result_handle: handle } : {},
+      },
       asked.call,
     )
   }
@@ -189,4 +110,37 @@ export let outlasted = async (
       ? { ...b, content: { ...content, body: before + (content.body ?? '') } }
       : b
   })
+}
+
+/** A handle belongs to the person and credential scope that started the run. */
+export let resultOf = async (
+  objects: Outlasts | undefined,
+  secret: string | undefined,
+  handle: string,
+  person: string | null,
+  who?: Caller,
+  call?: string,
+): Promise<Bundle[]> => {
+  let result = secret && person &&
+    await opened<Result>('tool-result', handle, secret)
+  if (
+    !objects || !result || result.person != person ||
+    result.scope != scopeOf(who)
+  ) {
+    throw new CallError('missing', 'No pending tool result with that handle.')
+  }
+  return outlasted(
+    objects,
+    result.key,
+    {
+      tool: result.tool,
+      person: result.person,
+      who,
+      call,
+      args: {},
+      pickup: result.asked,
+    },
+    undefined,
+    secret,
+  )
 }

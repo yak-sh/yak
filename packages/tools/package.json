@@ -14,6 +14,7 @@
     "./views": "./views.ts",
     "./read": "./read.ts",
     "./result": "./result.ts",
+    "./outlast": "./outlast.ts",
     "./persist": "./persist.ts",
     "./fault": "./fault.ts",
     "./check": "./check.ts",

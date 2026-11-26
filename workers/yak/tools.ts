@@ -3613,7 +3613,6 @@ export let sandboxJob = (
   fields: unknown[] = Object.keys(args).sort().map((key) => [key, args[key]]),
 ) => ({
   key: sha256(JSON.stringify([who?.spaceEid ?? who?.space, ...fields])),
-  patience: 6_000,
   progress: 'The sandbox is preparing to run your request.',
 })
 
@@ -5396,7 +5395,11 @@ let OURS: Row[] = [
     name: 'app_deploy',
     // A compile in a cold container, or again under a compiler rollout, can
     // take longer than a client waits (outlast.ts, T-141686).
-    outlasts: (args) => ({ key: `${args.space ?? ''}/${args.app}` }),
+    outlasts: (args, { who }) => ({
+      key: `${args.space ?? ''}/${args.app}${
+        who?.spaceEid || who?.space ? `|${who.spaceEid ?? who.space}` : ''
+      }`,
+    }),
     // The two examples the code owns, said in its words (tools.yml
     // `app_deploy`): a vocab.json's component and its tool, so the sentence
     // follows the example rather than keeping a copy of it.

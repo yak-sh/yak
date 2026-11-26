@@ -57,6 +57,7 @@ export { COOKIE, cookieValue }
 /** What a sealed value is for: one word per kind of token the kernel mints.
  * A new kind of token is a new word here, never a reuse of an old one. */
 export type Use =
+  | 'tool-result' // a pending result for one authenticated tool caller
   | 'artifact' // one private app artifact, expiring provider fetch authority
   | 'gift' // a donor's way to their monthly gift's portal, from its receipt
   | 'preview' // private draft snapshot, isolated store and expiry

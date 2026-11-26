@@ -471,6 +471,9 @@ app_preview:
     the same browser before capturing it. A released preview of a private
     app signs the browser in as you. Steps on a release can change live data.
     The browser runs on Cloudflare; no local files, CLI or computer is needed.
+    A draft build or browser check still in progress returns a pending result.
+    Use the result_handle with result_wait, or call app_preview again with
+    the same arguments to retrieve that result.
     The draft reads the app's live rows as they stood when it was first
     previewed, in the draft's vocabulary, on a branch of its own, so preview
     edits never change released app data unless app_deploy merges them
