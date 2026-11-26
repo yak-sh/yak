@@ -120,6 +120,32 @@ test('each view keeps where it was scrolled', () => {
   equal(body.scrollTop, 7)
 })
 
+test('a view hears it was shown after the frame that shows it, not in the press', () => {
+  let doc = page()
+  // This document's own window, its frames run when the test says.
+  let later: (() => void)[] = []
+  let real = doc.defaultView!
+  Object.defineProperty(doc, 'defaultView', {
+    value: {
+      Event: real.Event,
+      CustomEvent: real.CustomEvent,
+      requestAnimationFrame: (fn: () => void) => later.push(fn),
+      setTimeout: (fn: () => void) => later.push(fn),
+    },
+  })
+  let heard: string[] = []
+  for (let v of doc.querySelectorAll(`[${VIEW}]`)) {
+    v.addEventListener(
+      VIEWED,
+      () => heard.push(v.querySelector('p')!.textContent!),
+    )
+  }
+  press(doc, '/club/updates')
+  equal([shown(doc).view, heard], [['news'], []])
+  while (later.length) later.shift()!()
+  equal(heard, ['chat', 'news'])
+})
+
 test('an address the page holds no view of is left to the navigator', () => {
   let doc = page()
   equal(press(doc, '/club?app=packing'), false)

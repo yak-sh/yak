@@ -8,15 +8,17 @@
  * or not, marks the frame as it, points the page's back fields at it, and
  * puts back where it was scrolled: at its foot where it was left at its
  * foot, as a conversation never shown opens at its newest line. The bar's
- * title it wore comes back with it, as it was drawn. Each view shown or
- * hidden hears `VIEWED`.
+ * title it wore comes back with it, as it was drawn.
  *
- * Every view keeps running while hidden, save the conversation's watch,
- * which says the tab is on its Operator (./operator-talk-browser.ts); one
- * whose script stood hidden since the page came starts when first shown (a
- * script that started says so with `STARTED`). Updates shown this way are
- * read, as opening their page reads them: each space's are marked through
- * the tab's page graph (@yaks/inbox `seen`), after the frame that shows them.
+ * What a view does once shown is no part of what the press shows, so it
+ * runs after the frame that shows it: each view shown or hidden hears
+ * `VIEWED` then. Every view keeps running while hidden, save the
+ * conversation's watch, which says the tab is on its Operator
+ * (./operator-talk-browser.ts); one whose script stood hidden since the page
+ * came starts when first shown (a script that started says so with
+ * `STARTED`). Updates shown this way are read, as opening their page reads
+ * them: each space's are marked through the tab's page graph (@yaks/inbox
+ * `seen`).
  *
  * @module
  */
@@ -112,14 +114,8 @@ export let show = (
   for (let part of doc.querySelectorAll<HTMLElement>(`[${PART}]`)) {
     part.hidden = part.getAttribute(PART) != view.here
   }
-  for (let v of views) {
-    if (v.hidden == (v != next)) continue
-    v.hidden = v != next
-    v.dispatchEvent(new (doc.defaultView ?? globalThis).Event(VIEWED))
-  }
-  for (let s of next.querySelectorAll(`script:not([src]):not([${STARTED}])`)) {
-    if (s.getAttribute('type') == 'module') rerun(s)
-  }
+  let changed = views.filter((v) => v.hidden != (v != next))
+  for (let v of changed) v.hidden = v != next
   doc.title = view.page
   let bar = doc.querySelector('[data-title]')
   if (bar) title(bar, was, next)
@@ -146,12 +142,21 @@ export let show = (
       (next.querySelector('[data-conversation]') ? 'end' : '0')
     body.scrollTop = kept == 'end' ? body.scrollHeight : Number(kept)
   }
-  // Marking them read is no part of what the press shows: it is written
-  // once the frame showing them is drawn.
+  let shown = () => {
+    for (let v of changed) {
+      v.dispatchEvent(new (doc.defaultView ?? globalThis).Event(VIEWED))
+    }
+    for (
+      let s of next.querySelectorAll(`script:not([src]):not([${STARTED}])`)
+    ) {
+      if (s.getAttribute('type') == 'module') rerun(s)
+    }
+    read(next)
+  }
   let win = doc.defaultView
   if (win?.requestAnimationFrame) {
-    win.requestAnimationFrame(() => win.setTimeout(() => read(next)))
-  } else read(next)
+    win.requestAnimationFrame(() => win.setTimeout(shown))
+  } else shown()
 }
 
 /** Draw the views of each page in `doc` in place when a press or Back
