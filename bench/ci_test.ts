@@ -134,7 +134,11 @@ let told = async (
   ticks: string[][],
   logs: Record<number, string[]>,
   commits: Record<string, string[]>,
-  { listed = Infinity, fix = {} as Record<string, string> } = {},
+  {
+    listed = Infinity,
+    fix = {} as Record<string, string>,
+    imports = {} as Record<string, string[]>,
+  } = {},
 ) => {
   let sent: string[] = [], order = Object.keys(commits)
   let doors: Doors = {
@@ -145,6 +149,10 @@ let told = async (
           return `gate\ttests\tT ${name} => ./${file}:3:1`
         }).join('\n'),
       ),
+    imports: (file) =>
+      file in imports
+        ? Promise.resolve(imports[file])
+        : Promise.reject(new Error('no module graph')),
     history: (from, to) =>
       Promise.resolve(
         order.slice(
@@ -241,6 +249,28 @@ test('the commit that reaches every new failure is blamed, not a newer one besid
     'gate failed on main: lens (w/lens_test.ts); since b (b) run/3; it first failed in run/2',
     'gate failed on main: badge (packages/platform/side-browser_test.ts); updates (workers/yak/updates_test.ts); since x (x) run/3',
   ])
+})
+
+test('a failure is blamed on the commit that changed what its test imports, not a newer one beside it', async () => {
+  // b changed the module the failing test imports; c, newer, another file in
+  // the same package.
+  equal(
+    await told(
+      [['ok', 'cancelled', 'red']],
+      { 3: ['dir workers/yak/directory_test.ts'] },
+      {
+        a: [],
+        b: ['workers/yak/directory-index.ts'],
+        c: ['workers/yak/directory.ts'],
+      },
+      {
+        imports: {
+          'workers/yak/directory_test.ts': ['workers/yak/directory-index.ts'],
+        },
+      },
+    ),
+    ['gate failed on main: dir (workers/yak/directory_test.ts); since b (b) run/3'],
+  )
 })
 
 test('a run that leaves a failure out keeps its blame, and a later commit is not blamed for it', async () => {

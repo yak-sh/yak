@@ -216,8 +216,9 @@ export let predates = (
   }
 }
 
-/** A test or check that failed, and the file it lives in, when known. */
-export type Failed = { name: string; file?: string }
+/** A test or check that failed, the file it lives in, when known, and the
+ * files that file imports, when read. */
+export type Failed = { name: string; file?: string; imports?: string[] }
 
 // A line of `gh run view --log-failed`: its job, its step, a timestamp, then
 // what the step printed.
@@ -274,24 +275,35 @@ let dir = (path: string) => path.replace(/\/?[^/]*$/, '')
 /// [...culprits([b, both, a], [{ name: 't', file: 'w/t_test.ts' }, { name: 'u', file: 'p/u_test.ts' }]).values()].map((c) => c.sha) -> ['c', 'c']
 /// let two = culprits([b, a], [{ name: 't', file: 'w/t_test.ts' }, { name: 'u', file: 'p/u_test.ts' }])
 /// [two.get('t')?.sha, two.get('u')?.sha] -> ['a', 'b']
+/// let near = { sha: 'd', subject: '', paths: ['w/y.ts'] }
+/// culprits([near, a], [{ name: 't', file: 'w/t_test.ts', imports: ['w/x.ts'] }]).get('t')?.sha -> 'a'
 /// culprits([], [{ name: 't' }]).size -> 0
-/** The commit that broke each of `failed`, among `changes` newest first. The
- * commit that changed where the most failing tests live (their package, by
- * `owner`) broke those, the newer winning a tie; the rest are blamed the same
- * way, so two breakages in one run are two commits. A failure no commit
- * reaches is the newest's. One commit breaking several tests is likelier than
- * several each breaking one, and a newer commit beside a package another one
- * broke does not take the blame for it. */
+/** The commit that broke each of `failed`, among `changes` newest first. A
+ * commit reaches a failing test where it changed the test or a file the test
+ * imports; where no commit did (a stylesheet, a fixture), where the test lives
+ * (its package, by `owner`). The commit that reaches the most failing tests
+ * broke those, the newer winning a tie; the rest are blamed the same way, so
+ * two breakages in one run are two commits. A failure no commit reaches is the
+ * newest's. One commit breaking several tests is likelier than several each
+ * breaking one, and a newer commit beside code another one broke does not take
+ * the blame for it. */
 export let culprits = (
   changes: Change[],
   failed: Failed[],
   owner: (path: string) => string | undefined = dir,
 ): Map<string, Change> => {
   let area = (f: Failed) => f.file && (owner(f.file) ?? dir(f.file))
-  let touches = (c: Change, f: Failed) => {
+  let near = (c: Change, f: Failed) => {
     let a = area(f)
     return !!a && c.paths.some((p) => p == a || p.startsWith(`${a}/`))
   }
+  let imported = (c: Change, f: Failed) =>
+    c.paths.some((p) => p == f.file || f.imports?.includes(p))
+  let narrow = new Set(
+    failed.filter((f) => changes.some((c) => imported(c, f))),
+  )
+  let touches = (c: Change, f: Failed) =>
+    narrow.has(f) ? imported(c, f) : near(c, f)
   let blamed = new Map<string, Change>()
   let left = failed
   while (left.length && changes.length) {
@@ -338,6 +350,8 @@ export type Doors = {
   log: (run: Run) => Promise<string>
   /** `git log --format=%x00%H%x09%s --name-only` after `from` up to `to` */
   history: (from: string | undefined, to: string) => Promise<string>
+  /** the files a test file imports, as paths from the repository's root */
+  imports: (file: string) => Promise<string[]>
   /** who landed a commit and for what */
   landed: (commit: string) => Promise<{ session?: string; task?: string }>
   /** the commit the bug of a fault was resolved with */
@@ -365,11 +379,26 @@ export let reporting = (doors: Doors) => {
     }
     return logs.get(run.databaseId)!
   }
+  // What each failing test file imports, read once; a door that fails reads
+  // none, and its test is blamed by where it lives.
+  let reads = new Map<string, Promise<string[] | undefined>>()
+  let imports = (file: string) => {
+    if (!reads.has(file)) {
+      reads.set(file, doors.imports(file).catch(() => undefined))
+    }
+    return reads.get(file)!
+  }
   // What broke each of `now`, each commit's lander read once.
   let blame = async (run: Run, before: Run | undefined, now: Failed[]) => {
     let changes = await doors.history(before?.headSha, run.headSha)
       .then(changed, () => [])
-    let by = culprits(changes, now, member)
+    let read = await Promise.all(
+      now.map(async (f) => {
+        let them = f.file ? await imports(f.file) : undefined
+        return them ? { ...f, imports: them } : f
+      }),
+    )
+    let by = culprits(changes, read, member)
     let own = { sha: run.headSha, subject: run.displayTitle }
     let broke = new Map<string, Promise<Broke>>()
     let of = async ({ sha, subject }: { sha: string; subject: string }) => ({
@@ -464,6 +493,18 @@ if (import.meta.main) {
   let report = reporting({
     log: (run) =>
       output('gh', ['run', 'view', String(run.databaseId), '--log-failed']),
+    imports: async (file) => {
+      let root = `${Deno.cwd()}/`
+      let { modules } = JSON.parse(
+        await output('deno', ['info', '--json', file]),
+      ) as { modules: { specifier: string }[] }
+      return modules.flatMap(({ specifier }) => {
+        let path = specifier.startsWith('file://')
+          ? decodeURIComponent(new URL(specifier).pathname)
+          : ''
+        return path.startsWith(root) ? [path.slice(root.length)] : []
+      })
+    },
     history: (from, to) =>
       output('git', [
         'log',
