@@ -11,8 +11,11 @@ export let KEPT: number = 15 * 60_000
 
 /** How a call ended: its answer, or the refusal it said. */
 export type Ended =
-  | { said: Bundle[] }
-  | { refused: { code: string; text: string } }
+  & { timing?: string }
+  & (
+    | { said: Bundle[] }
+    | { refused: { code: string; text: string } }
+  )
 
 /** What a caller hears: how the call ended, when it was asked, and whether it
  * was asked by an earlier call that heard it still running; or that it is,

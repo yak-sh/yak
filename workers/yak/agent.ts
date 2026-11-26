@@ -245,6 +245,7 @@ export let running =
             },
             progress,
             ctx.env.SESSION_SECRET,
+            ctx.clock?.include,
           ),
         t.name,
       )

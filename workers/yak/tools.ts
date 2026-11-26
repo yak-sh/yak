@@ -3591,7 +3591,9 @@ let bench = async <T>(
   let no = refusedSpend(space, 'seconds', ctx.env, seconds(spend))
   if (no) throw refuse('limit', no)
   ctx.doing?.(WAKING)
-  let box = await workbench(ctx.env, space, ctx.person, spend)
+  let prepare = () => workbench(ctx.env, space, ctx.person, spend)
+  let box =
+    await (ctx.clock ? ctx.clock.time('workbench_prepare', prepare) : prepare())
   try {
     return await body(box)
   } finally {

@@ -67,6 +67,7 @@ export let outlasted = async (
   asked: Asked,
   progress?: string,
   secret?: string,
+  include?: (header: string) => void,
 ): Promise<Bundle[]> => {
   let name = asked.tool
   let heard = await objects.get(objects.idFromName(key)).call(asked)
@@ -100,6 +101,7 @@ export let outlasted = async (
       asked.call,
     )
   }
+  if (heard.timing) include?.(heard.timing)
   let before = heard.late ? earlier(name, heard.asked) : ''
   if ('refused' in heard) {
     throw new CallError(heard.refused.code, before + heard.refused.text)
@@ -120,6 +122,7 @@ export let resultOf = async (
   person: string | null,
   who?: Caller,
   call?: string,
+  include?: (header: string) => void,
 ): Promise<Bundle[]> => {
   let result = secret && person &&
     await opened<Result>('tool-result', handle, secret)
@@ -142,5 +145,6 @@ export let resultOf = async (
     },
     undefined,
     secret,
+    include,
   )
 }

@@ -13,6 +13,7 @@ import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { narrowed } from './grants.ts'
 import { type Ended, type Heard, outlasting } from '@yaks/tools/outlast'
+import { clock } from './timing.ts'
 import type { Asked } from './outlast.ts'
 import { PUBLISHED } from './published.ts'
 import type { Ctx } from './tool.ts'
@@ -34,22 +35,29 @@ let ran = async (
     })
     return space || spaceEid ? narrowed(dir, space ?? undefined, spaceEid) : dir
   }
+  let c = clock()
   let ctx: Ctx = {
     env,
     dir: reopen(),
     reopen,
     person: asked.person,
     doing,
+    clock: c,
     ...asked.who ? { who: asked.who } : {},
   }
   try {
-    return { said: await running(ctx, t)(asked.args, asked.call) }
+    let said = await c.counting(() => running(ctx, t)(asked.args, asked.call))
+    return { said, timing: c.header('tool_') }
   } catch (e) {
     if (e instanceof CallError) {
-      return { refused: { code: e.code, text: e.message } }
+      return {
+        refused: { code: e.code, text: e.message },
+        timing: c.header('tool_'),
+      }
     }
     caught(e, { tool: asked.tool })
     return {
+      timing: c.header('tool_'),
       refused: {
         code: 'unavailable',
         text: `${asked.tool} failed on our side, and we have been told: ${

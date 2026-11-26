@@ -60,6 +60,7 @@ test('a draft preview returns progress while its compiler is busy', async () => 
   let compiling = Promise.withResolvers<void>()
   let compiled = Promise.withResolvers<void>()
   let builds = 0
+  let timings: string[] = []
   let k = await fresh({}, (env) => {
     outlasts(env, undefined, time)
     let assets = env.ASSETS
@@ -81,14 +82,21 @@ test('a draft preview returns progress while its compiler is busy', async () => 
           installed: [],
           notes: [],
           errors: [],
-        })
+        }, { headers: { 'server-timing': 'compiler_install;dur=17' } })
       },
     }
   })
   try {
     let space = unique('outlast')
     let { cookie } = await seed(k, [{ slug: space, apps: ['site'] }])
-    let agent = connector(k, cookie)
+    let agent = connector({
+      host: k.host,
+      at: async (...args) => {
+        let r = await k.at(...args)
+        timings.push(r.headers.get('server-timing') ?? '')
+        return r
+      },
+    }, cookie)
     await agent.tool('app_files', {
       space,
       app: 'site',
@@ -118,6 +126,10 @@ test('a draft preview returns progress while its compiler is busy', async () => 
     })
     assertStringIncludes(String(preview.value?.url), '/site/~')
     assertEquals(builds, 1)
+    assertEquals(
+      timings.some((t) => t.includes('tool_compiler_install;dur=17')),
+      true,
+    )
   } finally {
     compiled.resolve()
     await k.stop()
