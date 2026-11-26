@@ -6,6 +6,7 @@ import {
 import { type Built, line, sub } from '@yaks/query'
 import { decodedPath } from './request-path.ts'
 import { CallError } from '@yaks/tools/errors'
+import { friendPermissions } from '@yaks/platform/app-friends'
 import {
   type Borrowed,
   type Catalog,
@@ -519,6 +520,8 @@ type Asked = {
   by?: Built
 }
 
+type McpRows = { servers: Bundle[]; permissions: Bundle[] }
+
 let readOn = (dir: ReturnType<typeof dirOf>): Read => (said) => {
   let q = said as Taken
   return typeof q == 'string' ? dir.read(q) : []
@@ -553,6 +556,14 @@ let catalogOf = (env: Env) => {
   return held
 }
 
+let mcpRows = async (read: Read, person: string): Promise<McpRows> => {
+  let [servers, permissions] = await Promise.all([
+    read(line`.mcp_server.owner=${person}&*`),
+    read(friendPermissions(person)),
+  ])
+  return { servers, permissions }
+}
+
 /** What a connections page is drawn from (`connectionsOf`), asked by the
  * space and the person all at once, so it travels as one trip
  * (directory-copy.ts `gathered`). A page asks it ahead of learning its space
@@ -578,7 +589,7 @@ export let connectionsAsked = async (
       own ?? false,
       // The MCP servers the person keeps, of which the page shows those in
       // this space (@yaks/connections/mcp `reachedIn`).
-      catalog ? read(line`.mcp_server.owner=${person}&*`) : [],
+      catalog ? mcpRows(read, person) : { servers: [], permissions: [] },
     ],
   )
 }
@@ -603,7 +614,7 @@ export let connectionsOf = async (
     services?: Promise<Service[]>
     /** the page of the person's MCP servers, drawn from their rows read
      * with the rest */
-    mcp?: (kept: Bundle[]) => Promise<McpPage>
+    mcp?: (rows: McpRows) => Promise<McpPage>
     enable?: string[]
   } = {},
 ): Promise<Connections> => {
@@ -613,11 +624,11 @@ export let connectionsOf = async (
   let read = readOn(dir)
   let month = monthOf(Date.now())
   // Only what those answers name outside this space is asked after.
-  let [here, reached, ahead, listing, theirs, built, byName, own, servers] =
+  let [here, reached, ahead, listing, theirs, built, byName, own, mcpRead] =
     await connectionsAsked(env, space, person, { ...at, dir })
   // A service a built integration stands in for is added as that one.
   let wanted = at.add && standIn(built, at.add, BROKER) || byName
-  let mcp = at.mcp?.(servers)
+  let mcp = at.mcp?.(mcpRead)
   mcp?.catch(() => {})
   let mine = own ? theirs : []
   let [apps, held, out] =
@@ -909,13 +920,19 @@ export let connectionsRow = async (
     services: import('./identity.ts').then((part) =>
       part.services(env, person, dir)
     ),
-    mcp: async (kept) =>
+    mcp: async ({ servers: kept, permissions }) =>
       (await import('./connected-mcp.ts')).mcpPage(
         env,
         dir,
         { person, role: who.role },
         space.eid,
-        { kept, open: asked('mcp'), grant: asked('grant'), at: asked('at') },
+        {
+          kept,
+          permissions,
+          open: asked('mcp'),
+          grant: asked('grant'),
+          at: asked('at'),
+        },
       ),
     enable: q.getAll('enable').flatMap((n) => n.split(',')),
     add: asked('detail'),

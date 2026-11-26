@@ -139,6 +139,8 @@ export let mcpPage = async (
   asked: {
     /** the person's `mcp_server` rows, where the page read them already */
     kept?: Bundle[]
+    /** the person's app permissions, read in the same directory round */
+    permissions?: Bundle[]
     open?: string
     grant?: string
     at?: string
@@ -150,7 +152,7 @@ export let mcpPage = async (
   let remote = pageServers(env, dir, who, space)
   let [shown, permissions] = await Promise.all([
     remote.shown(kept),
-    person ? dir.read(friendPermissions(person)) : [],
+    asked.permissions ?? (person ? dir.read(friendPermissions(person)) : []),
   ])
   let by = await grantees(read, shown.map((s) => s.id))
   let named = new Map<string, Grantee | null>()
