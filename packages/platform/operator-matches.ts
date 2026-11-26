@@ -18,7 +18,7 @@
  */
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { line } from '@yaks/query'
+import { line } from '@yaks/query/core'
 import type { VocabDoc } from '@yaks/vocab'
 
 /** A round a member may pick in, with how many of its pairs are left for

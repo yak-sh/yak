@@ -18,7 +18,7 @@
 import { Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import type { Client } from '@yaks/client'
-import { mint } from '@yaks/graph'
+import { mint } from '@yaks/graph/identity'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
 import { refusal } from './account-browser.ts'
 import { pageGraph } from './page-graph.ts'

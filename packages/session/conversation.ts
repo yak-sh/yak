@@ -22,9 +22,9 @@
  * @module
  */
 
-import { type ComponentChildren as Node, Fragment, h, type VNode } from 'preact'
+import { type ComponentChildren as Node, h, type VNode } from 'preact'
 import { useContext } from 'preact/hooks'
-import { blocks, Host, type Options, parse } from '@yaks/markdown'
+import { Host, type Options } from '@yaks/markdown'
 import {
   Attachments,
   Body,
@@ -45,8 +45,10 @@ import {
 import { parse as query } from '@yaks/query/core'
 import { loadVocab } from '@yaks/vocab/runtime'
 import { type Step, stepOf, type Steps } from '@yaks/tools/title'
+import { markdown } from './prose.ts'
 
 export { type Joined, joined } from './joined.ts'
+export { markdown } from './prose.ts'
 
 type Comp = Record<string, unknown>
 let comp = (b: Bundle | undefined, name: string) =>
@@ -210,38 +212,6 @@ let Called = (
   let value = { ...host, ids: (eid: string) => ids[eid] ?? host.ids?.(eid) }
   return h(Host.Provider, { value }, children)
 }
-
-// A link whose words are its own address, a bare URL that slipped into the
-// prose, as its host alone: https://yaks.app/approve?t=… reads "yaks.app".
-let shortened = (href: unknown, kids: Node[]): Node[] => {
-  let url = typeof href == 'string' && /^https?:/.test(href) &&
-    URL.parse(href)
-  return url && kids.flat().join('') == href
-    ? [url.host.replace(/^www\./, '')]
-    : kids
-}
-
-// An id that opens on another site opens in a tab of its own, so the page
-// it was read on stays; a bare URL is drawn as its host (`shortened`).
-let away =
-  ((tag: string, props: Record<string, unknown> | null, ...kids: Node[]) =>
-    h(
-      tag,
-      tag == 'a' && props?.['data-ref'] && /^https?:/.test(String(props.href))
-        ? { ...props, target: '_blank', rel: 'noopener' }
-        : props,
-      ...tag == 'a' ? shortened(props?.href, kids) : kids,
-    )) as typeof h
-
-// The words, under the Refs of the page they are drawn on.
-let Prose = ({ text }: { text: string }): VNode =>
-  h(Fragment, null, ...blocks(parse(text), away, useContext(Host)))
-
-/** Markdown drawn as formatted text, the kit's Body: markup in it stays
- * words, and an id is a link where the page's `Host` opens it
- * (@yaks/markdown). */
-export let markdown = (text: string): VNode =>
-  h(Body, { mod: 'flow' }, h(Prose, { text }))
 
 /** A reply as it was written, in Markdown. */
 export let reply = (text: string): VNode =>
