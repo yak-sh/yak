@@ -74,8 +74,8 @@ export let frameLoop = (
 ): FrameRequestCallback => {
   let loop = (now: number) => {
     schedule(loop)
-    let elapsed = (now - then) / 1000
-    then = now
+    let elapsed = Math.max(0, now - then) / 1000
+    then = Math.max(then, now)
     frame(now, Math.min(0.05, elapsed), elapsed)
   }
   return loop

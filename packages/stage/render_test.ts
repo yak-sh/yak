@@ -25,3 +25,11 @@ test('the frame loop schedules once and bounds simulation but not elapsed time',
   queued.pop()!(1210)
   equal(frames[1], [1210, 0.01, 0.01])
 })
+
+test('the first browser frame may have started before the loop was attached', () => {
+  let frames: number[][] = []
+  let loop = frameLoop((...args) => frames.push(args), 1000, () => {})
+  loop(998)
+  loop(1015)
+  equal(frames, [[998, 0, 0], [1015, 0.015, 0.015]])
+})

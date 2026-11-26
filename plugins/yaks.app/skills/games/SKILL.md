@@ -72,7 +72,8 @@ in the same screen when the player asks for 2D or the genre calls for it.
 ```html
 <meta name="viewport"
   content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="./manifest.webmanifest">
+<link rel="manifest" href="./manifest.webmanifest"
+  crossorigin="use-credentials">
 <body class="GameScreen">
   <canvas class="GameScreen_Surface" aria-label="Game world"></canvas>
   <div class="GameScreen_Hud">
