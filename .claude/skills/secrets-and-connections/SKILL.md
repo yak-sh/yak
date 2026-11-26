@@ -339,12 +339,54 @@ only the parameters you name.
 The admin's Wrangler commands have a token of their own:
 `yak admin deploys|tail|rollback --as admin` run Wrangler with
 `CLOUDFLARE_ADMIN_TOKEN` (Workers Scripts read and write, Workers Tail read;
-packages/admin/README.md). New Cloudflare tokens were minted as account-owned
-tokens with the 1Password "Homelab Cloudflare" item's token, sealed into the
-vault by the minting script itself, never through a file or an argument. That
-token now answers 401 Invalid API Token, so nothing on the box can mint one.
+packages/admin/README.md).
 
 Workers Builds logs take a user-owned token; every account-owned one gets 403 or 12006. The 1Password item "cloudflare user read-only" (vault Yak Shaving LLC, field credential) is one, so an agent on the box reads a build's log with it: `op read` inside the script, sent as a Bearer token to `/accounts/<id>/builds/workers/<script tag>/builds` (the tag is the script's `tag` in `/workers/scripts`; yak's is f1694d3fa03d42dabe44ba70137c678a), then `/builds/builds/<uuid>/logs`. It is the owner's key and stays on the box; the Worker's `BUILD_LOG_TOKEN` waits on a scoped token he mints (T-123153).
+
+## Minting a Cloudflare token
+
+An agent mints Cloudflare tokens itself, as **account-owned** tokens. The
+minting credential is the 1Password item "Homelab Cloudflare" (vault Yak
+Shaving LLC, field `credential`), the account token named "homelab full
+access": Account API Tokens Write on the yaks account, no expiry, no IP limit,
+readable by every agent shell on the box through `OP_SERVICE_ACCOUNT_TOKEN`.
+Never copy it anywhere else.
+
+1. A script reads it with `op read` and never prints it.
+2. `GET /accounts/<id>/tokens/permission_groups` names the groups;
+   `POST /accounts/<id>/tokens` with `name` and `policies` mints. The answer
+   carries the new value once.
+3. The same script hands the value to where it is used: the box's vault
+   (`graph_apply` with `secret{name, value}`), a Worker (`wrangler secret put
+   NAME` on stdin), or a 1Password item. If the value is lost along the way,
+   delete the token it belonged to.
+4. Verify it at `/accounts/<id>/tokens/verify`, then with one call it exists
+   for.
+
+Scope each token to one service: the one account, zone or bucket it touches,
+only the permission groups that service needs, and an expiry when the service
+can live with one. Its name says which service and which secret holds it
+(`yak-worker CF_HOSTNAMES_TOKEN`). Two services get two tokens.
+
+The prefix tells you the owner, and the owner tells you the endpoint. A
+`cfat_` token is account-owned and verifies only at
+`/accounts/<id>/tokens/verify`. A `cfut_` token is user-owned and verifies only
+at `/user/tokens/verify`. On the wrong endpoint a live token answers
+`401 1000`, and an account token answers `9109` from any `/user/…` path.
+
+**A user-owned token is the owner's to make.** Nothing on the box holds
+user-level auth that can create one. Our account tokens can't reach `/user/…`,
+and the `cloudflare-api-yak` OAuth has no scope for `/user/tokens`. Only a
+service that refuses account tokens needs one; the Workers Builds API is one
+(its API reference says so, and it answers 12006). Ask Jeff for that token
+with a task assigned to him, and name the exact permission and account.
+
+Listing: `GET /accounts/<id>/tokens` with the minting credential gives each
+token's name, policies, `issued_on` and `last_used_on`. `last_used_on` does not
+count R2's S3 calls. An R2 token's id is its S3 access key id, so "never used"
+is not evidence. `yak-graph-backups-write` reads as never used, yet it is
+`bin/backup`'s `YAK_BACKUP_R2_ACCESS_KEY_ID`. Before you delete a token, check
+that no vault secret, 1Password item or Worker secret holds it (M-37923).
 
 Wrangler's sign-in gets a 403 from this API. That refusal sends you here, not
 hunting for a token that might work. A token in another project's `.env` was
