@@ -167,8 +167,8 @@ let spaceOf = (r: Response) =>
   new URL(r.headers.get('location') ?? '/', 'https://yaks.app').pathname
     .split('/')[1]
 
-// What the model was last asked, as text.
-let lastAsked = () => JSON.stringify(model.asked.at(-1)?.input ?? {})
+// The model's conversation, apart from the tool definitions it was sent.
+let lastAsked = () => JSON.stringify(model.asked.at(-1)?.input.messages ?? [])
 // The chat they land in, once its `turns`th turn has answered.
 let answered = (r: Response, cookie: string, turns = 1) =>
   until(async () => {

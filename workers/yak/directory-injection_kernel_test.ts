@@ -1,7 +1,8 @@
 import { equal, match, test } from '@yaks/testing'
-import { connector, kernel, seed } from './probe.ts'
+import { line } from '@yaks/query'
+import { connector, fresh, meta, seed } from './probe.ts'
 
-let k = await kernel()
+let k = await fresh()
 let owner = await seed(k, [{ slug: 'injection-victim', apps: ['notes'] }])
 let stranger = await seed(k, [{ slug: 'injection-owner', apps: [] }])
 let agent = connector(k, stranger.cookie)
@@ -26,10 +27,10 @@ for (
       name,
       arguments: { ...args, space: injected, app: 'notes' },
     })
-    match(out, {
-      isError: true,
-      content: [{ text: /space: pass a space slug or eid/ }],
-    })
+    equal(out.isError, true)
+    await k.settled()
+    let rows = await meta(k).query(line`.tool_refusal.tool=${name} .refusal`)
+    match(rows, [{ refusal: { code: 'arguments' } }])
   })
 }
 
