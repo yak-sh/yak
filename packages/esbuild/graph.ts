@@ -22,6 +22,10 @@ export type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
  * is not a script is a leaf, since its imports are not ours to follow. */
 export type Reached = {
   files: Map<string, Uint8Array<ArrayBuffer>>
+  /** App paths imported with `type: 'text'`, regardless of extension. */
+  texts: Set<string>
+  /** App paths imported without the text loader. */
+  linked: Set<string>
   /** Every specifier that is not a path: `three`, `hono/cors`, `node:fs`. */
   named: string[]
   /** Each Web Worker a reached file starts from the app's files, as the file
@@ -48,9 +52,10 @@ let unparsed = (e: unknown) =>
 let STARTS =
   /\bnew\s+(?:Shared)?Worker\s*\(\s*new\s+URL\s*\(\s*(['"`])([^'"`$]+)\1\s*,\s*import\.meta\.url\s*\)/g
 
-type Lexed = { specifiers: string[]; started: string[] }
+type Imported = { specifier: string; text: boolean }
+type Lexed = { imports: Imported[]; started: string[] }
 
-let NOTHING: Lexed = { specifiers: [], started: [] }
+let NOTHING: Lexed = { imports: [], started: [] }
 
 // A module read once: what it imports, and what it starts as a worker. A
 // module that does not parse imports and starts nothing, and neither does
@@ -65,8 +70,12 @@ let lexed = async (
   try {
     let js = await read(path, source)
     return {
-      specifiers: parse(js)[0].map((i) => i.n)
-        .filter((n): n is string => n != null),
+      imports: parse(js)[0].flatMap(({ n, at }) =>
+        n == null ? [] : [{
+          specifier: n,
+          text: !!at?.some(([key, value]) => key == 'type' && value == 'text'),
+        }]
+      ),
       started: [...js.matchAll(STARTS)].map((m) => m[2]),
     }
   } catch (e) {
@@ -99,7 +108,8 @@ export let specifiers = async (
   path: string,
   source: string,
   strip: Strip,
-): Promise<string[]> => (await lexed(path, source, strip)).specifiers
+): Promise<string[]> =>
+  (await lexed(path, source, strip)).imports.map((i) => i.specifier)
 
 /** The specifiers of the scripts a module starts as Web Workers.
  *
@@ -262,8 +272,9 @@ let walk = (find: Find, strip?: Strip): Walk => async (read, entry) => {
       loaded.set(path, result)
       if (result.status != 'fulfilled' || !result.value?.lex) continue
       let { at, lex } = result.value
-      for (let spec of lex.specifiers.filter(relative)) {
-        let next = resolved(at, spec)
+      for (let { specifier } of lex.imports) {
+        if (!relative(specifier)) continue
+        let next = resolved(at, specifier)
         if (queued.has(next)) continue
         queued.add(next)
         pending.push(next)
@@ -271,6 +282,8 @@ let walk = (find: Find, strip?: Strip): Walk => async (read, entry) => {
     }
   }
   let files = new Map<string, Uint8Array<ArrayBuffer>>()
+  let texts = new Set<string>()
+  let linked = new Set<string>()
   let named: string[] = []
   let started: [string, string][] = []
   let seen = new Set<string>()
@@ -284,14 +297,20 @@ let walk = (find: Find, strip?: Strip): Walk => async (read, entry) => {
     let { at, bytes, lex } = hit
     files.set(at, bytes)
     if (!lex) return
-    for (let spec of lex.specifiers) {
-      if (relative(spec)) await visit(resolved(at, spec))
-      else if (!named.includes(spec)) named.push(spec)
+    for (let { specifier, text } of lex.imports) {
+      if (relative(specifier)) {
+        let next = resolved(at, specifier)
+        let found = loaded.get(next)
+        if (found?.status == 'fulfilled' && found.value) {
+          ;(text ? texts : linked).add(found.value.at)
+        }
+        await visit(next)
+      } else if (!named.includes(specifier)) named.push(specifier)
     }
     for (let spec of lex.started.filter(relative)) started.push([at, spec])
   }
   await visit(entry)
-  return { files, named, started }
+  return { files, texts, linked, named, started }
 }
 
 /** What the runtime loads from `entry`: each specifier names a file exactly,

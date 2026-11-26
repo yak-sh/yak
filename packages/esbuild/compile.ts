@@ -15,6 +15,7 @@
 // page it is a request the browser makes for nothing.
 import { parse } from 'es-module-lexer/js'
 import { isBuiltin } from 'node:module'
+import { posix } from 'node:path'
 import { bundle, type Options, Stopped } from './bundle.ts'
 import { packageOf, relative, resolved, twins } from './graph.ts'
 import { lockfile, type Pins, pins, reached, split, wanted } from './lock.ts'
@@ -281,14 +282,24 @@ export let compile = async (
   if (ask.worker) {
     let finish = phase(report, 'worker')
     try {
-      let { entry, flags } = ask.worker
+      let { entry, flags, carry } = ask.worker
       let main = compiledName(entry)
+      let separate = new Set(carry)
       let code = await built(
         entry,
         // A workerd module name is not a URL. Its file URL is a logical
         // identity, not a hosted asset address; a page keeps its browser's URL.
         new URL(main, 'file:///'),
-        { node: flags.includes('nodejs_compat') },
+        {
+          node: flags.includes('nodejs_compat'),
+          external: (spec, importer, attributes) => {
+            if (attributes.type == 'text' || !relative(spec)) return
+            let path = resolved(importer, spec)
+            if (!separate.has(path)) return
+            let moved = posix.relative(posix.dirname(main), path)
+            return relative(moved) ? moved : './' + moved
+          },
+        },
         unlinked(ask, main),
       )
       if (code != null) answer.worker = { main, code }

@@ -12,12 +12,13 @@
 // URL('./grow.ts', import.meta.url))`) is a page script too, compiled by the
 // same rule, except that no import map reaches it.
 //
-// An app with no TypeScript and no package.json plans nothing, without a
-// file read, and its deploy is the one it always was.
+// File-only apps with no TypeScript or package.json plan nothing. A JavaScript
+// worker can also ask the compiler to embed a text import.
 import type { Catalog } from './platform.ts'
 import type { Timing } from './timing.ts'
 import {
   packageOf,
+  type Reached,
   type Read,
   resolved,
   script,
@@ -262,10 +263,10 @@ let covers = (map: string[], spec: string) =>
  * Throws {@link Unplanned} when package.json cannot be read.
  */
 export let plan = async (app: App): Promise<Plan | null> => {
-  // Without TypeScript there is nothing to compile but packages, and a
-  // package is installed only when package.json names it. So an app with
-  // neither is not read at all, and its deploy costs what it always did.
-  if (!app.paths.includes('package.json') && !app.paths.some(typed)) {
+  // Skip file-only apps that have no inputs to the compiler.
+  if (
+    !app.main && !app.paths.includes('package.json') && !app.paths.some(typed)
+  ) {
     return null
   }
   let has = new Set(app.paths)
@@ -289,23 +290,27 @@ export let plan = async (app: App): Promise<Plan | null> => {
   let files: Record<string, string> = {}
   let notes: string[] = []
   let inputs: Plan['inputs'] = { pages: {} }
-  let send = (reached: Map<string, Uint8Array>) => {
-    for (let [path, bytes] of reached) {
-      if (COMPILED.test(path)) files[path] = decode(bytes)
-    }
+  let send = ({ files: reached, texts }: Reached) => {
+    let paths = [...reached.keys()].filter((p) =>
+      COMPILED.test(p) || texts.has(p)
+    )
+    for (let path of paths) files[path] = decode(reached.get(path)!)
+    return paths
   }
   let walk = sources(app.strip)
   let worker: Ask['worker']
   if (app.main && has.has(app.main)) {
-    let { files: reached, named: specs } = await walk(readApp, app.main)
+    let graph = await walk(readApp, app.main)
+    let { files: reached, named: specs, texts, linked } = graph
     let packages = specs.filter((s) => packageOf(s))
-    if ([...reached.keys()].some(typed) || packages.length) {
-      send(reached)
-      inputs.worker = [...reached.keys()].filter((p) => COMPILED.test(p))
+    if ([...reached.keys()].some(typed) || packages.length || texts.size) {
+      inputs.worker = send(graph)
       worker = {
         entry: app.main,
         flags: app.flags ?? [],
-        carry: [...reached.keys()].filter((p) => !COMPILED.test(p)),
+        carry: [...reached.keys()].filter((p) =>
+          !COMPILED.test(p) && (!texts.has(p) || linked.has(p))
+        ),
       }
     }
   }
@@ -328,12 +333,11 @@ export let plan = async (app: App): Promise<Plan | null> => {
   let pages: string[] = []
   for (let [entry, maps] of loads) {
     if (!has.has(entry) || !script(entry)) continue
-    let { files: reached, named: specs, started: starts } = await walk(
-      readApp,
-      entry,
-    )
+    let graph = await walk(readApp, entry)
+    let { files: reached, named: specs, started: starts, texts } = graph
     let wanted = specs.filter((s) => named.has(packageOf(s) ?? ''))
-    let compiled = [...reached.keys()].some(typed) || wanted.length > 0
+    let compiled = [...reached.keys()].some(typed) || wanted.length > 0 ||
+      texts.size > 0
     // esbuild leaves `import.meta.url` as written, so in a compiled script
     // it is the entry's address, and a worker's path resolves against the
     // entry; in a script served as written, against the file that names it.
@@ -345,8 +349,7 @@ export let plan = async (app: App): Promise<Plan | null> => {
     }
     if (!compiled) continue
     pages.push(entry)
-    send(reached)
-    inputs.pages[entry] = [...reached.keys()].filter((p) => COMPILED.test(p))
+    inputs.pages[entry] = send(graph)
     // A package the compile leaves in is the browser's to resolve, and only
     // an import map on every page that loads the script resolves it.
     for (let spec of specs) {
@@ -363,7 +366,11 @@ export let plan = async (app: App): Promise<Plan | null> => {
               'browser cannot load it'),
       )
     }
-    for (let css of [...reached.keys()].filter((p) => p.endsWith('.css'))) {
+    for (
+      let css of [...reached.keys()].filter((p) =>
+        p.endsWith('.css') && !texts.has(p)
+      )
+    ) {
       notes.push(
         `${entry} imports ${css}, and a compiled page script leaves CSS ` +
           `out: link it from the page instead`,

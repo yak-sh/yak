@@ -28,8 +28,12 @@ export type Options = {
   node?: boolean
   minify?: boolean
   define?: Record<string, string>
-  /** A package import replaced by a hosted module URL. */
-  external?: (specifier: string, importer: string) => string | undefined
+  /** An import kept outside the bundle, possibly with a new address. */
+  external?: (
+    specifier: string,
+    importer: string,
+    attributes: Record<string, string>,
+  ) => string | undefined
   /** A package import read from another of the build's files, by path. */
   alias?: (specifier: string, importer: string) => string | undefined
   /** The expression a package module's `import.meta.url` becomes, asked
@@ -234,12 +238,12 @@ let virtual = (
     let left = (path: string) => ({ path, external: true })
     build.onResolve(
       { filter: /.*/ },
-      ({ kind, path, resolveDir, importer: name }) => {
+      ({ kind, path, resolveDir, importer: name, with: attributes }) => {
         let importer = plain(files, name)
         if (kind == 'entry-point') return found(path)
         let other = alias?.(path, importer)
         if (other) return found(other)
-        let url = external?.(path, importer)
+        let url = external?.(path, importer, attributes)
         if (url) return left(url)
         if (path.startsWith('.')) {
           let hit = tried(

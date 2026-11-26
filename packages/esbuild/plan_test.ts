@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { plan, Unplanned } from './plan.ts'
+import { compile } from './compile.ts'
 import { modules, sources } from './graph.ts'
 import { strip } from './strip.ts'
 
@@ -108,6 +109,21 @@ test('a JavaScript worker that imports a package compiles', async () => {
   }, 'worker.js')
   assertEquals(got?.worker, 'worker.js')
   assertEquals(got?.sent, ['package-lock.json', 'package.json', 'worker.js'])
+})
+
+test('a release compiles attributed Markdown imports as text', async () => {
+  let markdown = '# Guide\n\nRead the guide.'
+  let release = await plan(app({
+    'worker.js': "import guide from './guide.md' with { type: 'text' }\n" +
+      'export default guide',
+    'guide.md': markdown,
+  }, 'worker.js'))
+  assertEquals(release?.inputs.worker, ['worker.js', 'guide.md'])
+  assertEquals(release?.ask.worker?.carry, [])
+  let got = await compile(release!.ask)
+  assertEquals(got.errors, [])
+  let code = encodeURIComponent(got.worker!.code)
+  assertEquals((await import(`data:text/javascript,${code}`)).default, markdown)
 })
 
 test('a page script compiles when it is TypeScript or imports a declared package', async () => {

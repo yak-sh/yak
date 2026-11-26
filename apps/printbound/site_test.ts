@@ -66,7 +66,7 @@ test('the home page links its studio, guides, look and pictures from the address
   }
 })
 
-test('every guide and policy is read under its cover, in the words of its file', async () => {
+test('every guide and policy renders its released text without a file request', async () => {
   let before = reads.length
   for (let name of GUIDES) {
     let guide = await page(name)
