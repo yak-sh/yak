@@ -11,12 +11,15 @@ import { sha256 } from '@yaks/graph/sha256'
 import { ddl as journalDdl } from '@yaks/journal'
 import { history as historyOf } from '@yaks/journal/graph'
 import {
+  and,
   col,
   type CreateTable,
   type Derived,
   type Driver,
   eq,
+  ge,
   type History,
+  lt,
   render,
   select,
   type Stmt,
@@ -216,6 +219,12 @@ export let slotsOf = <K extends string = string>(
   driver: () => Driver,
   cache = new Map<K, string | null>(),
 ) => ({
+  branches: (): string[] =>
+    driver().query(select({
+      cols: [col('v')],
+      from: table(KV.name),
+      where: and(ge(col('k'), val('branch:')), lt(col('k'), val('branch;'))),
+    })).map((row) => String(row.v)),
   read: (key: K): string | null => {
     if (cache.has(key)) return cache.get(key)!
     let [row] = driver().query(select({

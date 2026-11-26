@@ -30,7 +30,7 @@ import {
 } from '@yaks/query/core'
 import { dead } from '@yaks/graph/bundle'
 import { token } from '@yaks/graph/sha256'
-import type { Bundle, Comp, Tracker, Tx } from '@yaks/graph'
+import type { Bundle, Comp, ReadOpts, Tracker, Tx } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { type Ask, type Asked, asking, conditions } from './asking.ts'
 import { type Floor, type Level, LEVELS, reaches } from './words.ts'
@@ -38,6 +38,8 @@ import { type Floor, type Level, LEVELS, reaches } from './words.ts'
 /** What a store answers, now or later: a synchronous store's transaction
  * stays synchronous through here (a Durable Object's `transactionSync`). */
 export type Maybe<T> = T | Promise<T>
+
+type Read = (line: Built, opts: ReadOpts, comps: string[]) => Maybe<Bundle[]>
 
 /** The component an entity's privacy is kept in. */
 export let PRIVACY = '_privacy'
@@ -88,10 +90,7 @@ export type Privacy = {
   /** The lines stale entities are found by. */
   stale: Built[]
   /** Whether a store holds no stale entity. */
-  current: (
-    read: (line: Built) => Maybe<Bundle[]>,
-    lines?: Built[],
-  ) => Maybe<boolean>
+  current: (read: Read) => Maybe<boolean>
   /** The entities a reader may read by their privacy. */
   seen: (who: string | null | undefined, level: Level | null) => And
   /** The rule that keeps every entity's privacy in a transaction. */
@@ -229,22 +228,19 @@ export let privacy = (declared: Declared): Privacy => {
     line`.${PRIVACY}.hash>${hash}`,
   ]
 
-  // Check several stale lines per read without making an unbounded statement
-  // when an app declares many private components.
+  // Ask for any stale identity. Ordering the matches or fetching their
+  // components does extra work before the first scoped read.
   let outstanding = fifties(stale).map((group) =>
-    line`(${sub(joined(group, '|'))})`
+    line`(${sub(joined(group, '|'))})&.limit=1&.fields=entity.eid`
   )
 
   /** Whether a store, read through `read`, holds no entity whose privacy is
    * stale. */
-  let current = (
-    read: (line: Built) => Maybe<Bundle[]>,
-    lines = outstanding,
-  ): Maybe<boolean> =>
-    !lines.length ||
+  let current = (read: Read, i = 0): Maybe<boolean> =>
+    i == outstanding.length ||
     after(
-      read(line`${sub(lines[0])}&.limit=1&.fields=entity.eid`),
-      (rows) => !rows.length && current(read, lines.slice(1)),
+      read(outstanding[i], { unordered: true }, ['entity']),
+      (rows) => !rows.length && current(read, i + 1),
     )
 
   /** The entities `who`, holding `level`, may read by their privacy. */

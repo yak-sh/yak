@@ -221,7 +221,7 @@ export let personal = (
     if (!keeps || ready) return ready
     if (asked) return false
     asked = true
-    let none = keeps.current((line) => tx.read(line))
+    let none = keeps.current((line, opts, comps) => tx.read(line, opts, comps))
     if (isPromise(none)) {
       none.then((v) => ready ||= v, () => asked = false)
       return false

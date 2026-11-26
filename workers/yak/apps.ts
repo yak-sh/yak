@@ -72,7 +72,11 @@ import { readView, type ServingIndex } from '@yaks/platform/release-index'
 import { parse as parseRedirects, sentOn } from './redirects.ts'
 import { prefixOf, VERSION } from './files.ts'
 import { appCopy, type Copy, filled } from './page-copy.ts'
-import { door as publicDoor, served as publicFile } from './public-files.ts'
+import {
+  askedFor as publishedAt,
+  door as publicDoor,
+  served as publicFile,
+} from './public-files.ts'
 import {
   type App,
   appStore,
@@ -3288,6 +3292,19 @@ let served = async (
   )
   let { url, dir, direct, identity } = routed
   let step = await routed.step
+  // Site can wake a readable Store as soon as it recognizes the worker page.
+  // The gateway and the app's callbacks can join that boot.
+  let wakePage = (
+      edge && step.to == 'app' && step.app.worker && !sandboxed(step.app) &&
+      !dir.stale && req.method == 'GET' && fence.page(step.path) &&
+      !appApi(step.path) && !formPath(step.path, req) &&
+      reads(mode(step.app.access), step.read.role ?? null)
+    )
+    ? () => wake(env, storeName(step.space, step.app))
+    : null
+  let published = step.to == 'app' && step.app.publishing?.length &&
+    step.app.publishing.includes(publishedAt(step.path) ?? '')
+  if (!published) wakePage?.()
   // What Site keeps from a directory copy says so, and is kept for now only
   // (site.ts).
   let marked = (answer: Response) => {
@@ -3467,16 +3484,8 @@ let served = async (
   }
   // Nor does the gateway ask Site about the addresses of an app it keeps
   // nothing of for a while.
-  if (edge && !keeps(app, path)) {
-    // Site has the route before the gateway starts the app worker. Begin the
-    // Store's wake here for pages whose visitor can already read it.
-    if (
-      app.worker && !walls && !dir.stale && req.method == 'GET' &&
-      fence.page(path) && !appApi(path) && !formPath(path, req) &&
-      reads(mode(app.access), routing.role ?? null)
-    ) wake(env, storeName(space, app))
-    return passed()
-  }
+  if (published) wakePage?.()
+  if (edge && !keeps(app, path)) return passed()
   if (!edge && !keepable(app)) unkept(req, env, bare, c)
   let calendarToken = /^\/calendar\/([a-zA-Z0-9_-]+)\.ics$/.exec(path)?.[1]
   if (path == '/calendar.ics' || calendarToken) {

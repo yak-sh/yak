@@ -463,6 +463,12 @@ let lineOf = (body: unknown): string | null => {
   return null
 }
 
+/** Shape a query's published bundles before writing them to the wire. */
+export type ListQuery = (
+  rows: Bundle[],
+  request: Request,
+) => Bundle[] | Promise<Bundle[]>
+
 /**
  * `GET /query?q=…` or `POST /query` — a query string in, the bundles it
  * selects out.
@@ -478,6 +484,7 @@ export let ask = async (
   request: Request,
   activity: object = graph,
   opts?: ReadOpts,
+  list?: ListQuery,
 ): Promise<Response> => {
   let q = request.method == 'GET'
     ? new URL(request.url).searchParams.get('q')
@@ -495,9 +502,9 @@ export let ask = async (
   }
   let op = aggregate(ast)
   try {
-    return op
-      ? json(reduced(op, await graph.rows(ast, options)))
-      : listed(published(graph.vocab, await graph.read(ast, options)))
+    if (op) return json(reduced(op, await graph.rows(ast, options)))
+    let rows = published(graph.vocab, await graph.read(ast, options))
+    return listed(list ? await list(rows, request) : rows)
   } catch (error) {
     if (request.signal.aborted && error === request.signal.reason) {
       throw new Refused('query was interrupted')

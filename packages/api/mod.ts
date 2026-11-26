@@ -78,6 +78,7 @@ export {
   type Applying,
   ask,
   CHUNK,
+  type ListQuery,
   pour,
   poured,
   type Trusted,

@@ -39,7 +39,7 @@ import {
 } from '@yaks/platform/regional-route'
 import { queryCache } from './query-cache.ts'
 import { answers, recalling } from './answered.ts'
-import { appRead } from '@yaks/platform/app-read'
+import { appListing, appRead } from '@yaks/platform/app-read'
 import { type Lend, lends, type Lent } from '@yaks/platform/lent'
 import { eraseStore, weighing } from '@yaks/platform/app-storage'
 import { reviveStore, suspendStore } from './app-dormancy.ts'
@@ -1572,14 +1572,11 @@ export class Store extends Durable {
   // speaks nor writes.
   #fitted(shape: Shape): Shape {
     if (storeKind(this.#name() ?? '') != 'app') return shape
-    let said = this.#sql.query(select({
-      cols: [col('k'), col('v')],
-      from: table(KV.name),
-    })).filter((r) => String(r.k).startsWith('branch:'))
+    let said = this.#slots.branches()
     if (!said.length) return shape
     return this.#shape(JSON.stringify(widened(
       appDoc(this.#get('vocab') ?? '{}'),
-      said.map((r) => appDoc(String(r.v))),
+      said.map((text) => appDoc(text)),
     )))
   }
 
@@ -2390,18 +2387,27 @@ export class Store extends Durable {
             : this.#socketStanding(local, read?.person ?? null, writer?.actor),
       },
     )
-    let route = api({ ...applying, graph: g, subs })
+    let read = (request: Request) => this.#callerRead(request)
+    let route = api({
+      ...applying,
+      graph: g,
+      subs,
+      list: appListing({
+        vocab: g.vocab,
+        read,
+        found: (text, opts, limit) => this.#found(text, opts, { limit }),
+        speak: this.#speak,
+      }),
+    })
     let reading = appRead({
       graph: g,
       vocab: g.vocab,
       route,
       authenticate: this.#auth,
-      read: (request) => this.#callerRead(request),
+      read,
       own,
       spoke: (line) => this.#spoke(line),
       trusted: () => this.#kernelGraph(g, branch),
-      found: (text, opts, limit) => this.#found(text, opts, { limit }),
-      speak: this.#speak,
       taught: (answer) => this.#taught(answer),
     })
     return { graph: g, live, route, reading, afar }

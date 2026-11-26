@@ -11,7 +11,7 @@ import type { Actor, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { whole } from '@yaks/query'
 import { type Authenticate } from './actor.ts'
-import { applier, type Applying, ask } from './doors.ts'
+import { applier, type Applying, ask, type ListQuery } from './doors.ts'
 import { denoUpgrade } from './deno.ts'
 import { json } from './refuse.ts'
 import { type Report, served } from './request.ts'
@@ -66,6 +66,8 @@ export type Options = Applying & {
   read?: (
     request: Request,
   ) => ReadOpts | undefined | Promise<ReadOpts | undefined>
+  /** Shape the published bundles of a query, including a live snapshot. */
+  list?: ListQuery
   /** the runtime's WebSocket upgrade (default: Deno's) */
   upgrade?: Upgrade
   /** schedule socket relay batches (default: setTimeout) */
@@ -171,14 +173,23 @@ export let api = (opts: Options): Handler => {
       if (request.method == 'GET' && url.searchParams.get('live') == '1') {
         let q = url.searchParams.get('q')
         if (q == null) throw new Refused('/query needs a query: ?q=…')
+        let rows = await subs.snapshot(whole(q), {
+          ...readOpts,
+          signal: request.signal,
+        })
         return json(
-          await subs.snapshot(whole(q), {
-            ...readOpts,
-            signal: request.signal,
-          }),
+          opts.list && Array.isArray(rows)
+            ? await opts.list(rows, request)
+            : rows,
         )
       }
-      return await ask(graph, request, opts.activity ?? graph, readOpts)
+      return await ask(
+        graph,
+        request,
+        opts.activity ?? graph,
+        readOpts,
+        opts.list,
+      )
     }
     // What a client must load to read and write this graph as it does:
     // the documents and the keyword sets they are written with, for

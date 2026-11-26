@@ -28,7 +28,7 @@ import { PLATFORM_OBJECT } from './door.ts'
 import type { Env } from './env.ts'
 import { appGuard, authenticating, vouchOf } from '@yaks/platform/app-authority'
 import { appDoc, appVocab } from './vocab.ts'
-import { appRead } from '@yaks/platform/app-read'
+import { appListing, appRead } from '@yaks/platform/app-read'
 import { lowering, staleGrant, vouching } from '@yaks/platform/app-writes'
 import type { Hit } from '@yaks/fts'
 import { kinded, naming } from '@yaks/platform/app-subs'
@@ -134,6 +134,12 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
     authenticate,
     writeParams: ['stamp'],
     read,
+    list: composition.found && appListing({
+      vocab,
+      read,
+      found: (text, opts, limit) => composition.found!(g, text, opts, limit),
+      speak: (rows) => rows,
+    }),
   })
   let query = composition.found && appRead({
     graph: g,
@@ -144,8 +150,6 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
     own: false,
     spoke: () => {},
     trusted: () => g,
-    found: (text, opts, limit) => composition.found!(g, text, opts, limit),
-    speak: (rows) => rows,
     taught: (answer) => Promise.resolve(answer),
   })
   let route = async (req: Request) => {
