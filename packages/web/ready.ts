@@ -8,7 +8,7 @@ import {
   TAKES,
 } from '@yaks/ui/navigate'
 import { navigation } from './navigate.ts'
-import { SCROLL } from './picture.ts'
+import { SCROLL, TURNS } from './picture.ts'
 
 let HOME = '[data-site-home]'
 let RUNS = /^(|module|text\/javascript|application\/javascript)$/
@@ -95,6 +95,9 @@ export let ready = (
   view.setAttribute('data-site-frame', '')
   view.setAttribute('aria-busy', 'true')
   view.inert = true
+  // The one inert is no part of the page's picture (@yaks/web/keep).
+  view.setAttribute(TURNS, '')
+  home.setAttribute(TURNS, '')
   view.append(busy)
   // Set the boundary before installing the workspace sheet. The public view
   // stays in its own layout while the workspace is built at viewport size.
@@ -136,6 +139,7 @@ export let ready = (
     win.removeEventListener('popstate', popped)
     if (view.isConnected) doc.dispatchEvent(new win.Event(LEAVE))
     view.remove()
+    home.removeAttribute(TURNS)
     for (let sheet of sheets) sheet.remove()
     doc.body.removeAttribute('data-site-views')
     link.removeAttribute(READY)

@@ -4,13 +4,14 @@
  * controlled, again once it has stood unchanged for a moment (`QUIET`), and
  * when it is left (hidden or unloaded, once for both) or left in place
  * (`yak-leave`), if it changed since. A part that moves by itself (`MOVES`)
- * changes nothing. A page with parts of its own (`OWN`) sends its shell beside it:
+ * or that nobody sees, an inert one of two that take turns (`TURNS`) among
+ * them, changes nothing. A page with parts of its own (`OWN`) sends its shell beside it:
  * the same document with those parts empty. The fresh page that replaces
  * a picture sends its own snapshot.
  *
  * @module
  */
-import { KEPT, MOVES, OWN, SCROLL } from './picture.ts'
+import { KEPT, MOVES, OWN, SCROLL, TURNS } from './picture.ts'
 import { LEAVE, PAGE } from '@yaks/ui/navigate'
 import type { Snapshot } from './worker.ts'
 import { absolute } from './picture-sheets.ts'
@@ -54,7 +55,17 @@ export type Window = {
 
 // What a page holds that nobody sees: a picture of it would only be slower
 // to draw, and its scripts never run in one (./picture.ts).
-let UNSEEN = 'script, template, [hidden], dialog:not([open])'
+let UNSEEN = `script, template, [hidden], dialog:not([open]), [${TURNS}][inert]`
+
+// What a change to the page is: anything but what happens in a part nobody
+// sees or one that moves by itself, unless it shows or hides that part.
+let SHOWING = new Set(['hidden', 'inert', 'open'])
+let STILL = `${UNSEEN}, [${MOVES}]`
+let changing = (r: MutationRecord) => {
+  if (r.type == 'attributes' && SHOWING.has(r.attributeName!)) return true
+  let at = r.target.nodeType == 1 ? r.target as Element : r.target.parentElement
+  return !at?.closest(STILL)
+}
 
 let scroll = (pane: Element) =>
   pane.scrollTop > 0 &&
@@ -325,14 +336,8 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
   // taken again only when what it shows changed since the last.
   let changed = true
   let quiet: number | undefined
-  let moving = (r: MutationRecord) => {
-    let at = r.target.nodeType == 1
-      ? r.target as Element
-      : r.target.parentElement
-    return !!at?.closest(`[${MOVES}]`)
-  }
   let changes = new win.MutationObserver((records) => {
-    if (!records.every(moving)) change()
+    if (records.some(changing)) change()
   })
   let change = () => {
     changed = true
@@ -355,7 +360,7 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
   win.addEventListener('resize', change)
   let send = () => {
     let root = win.document.documentElement
-    if (!changes.takeRecords().every(moving)) changed = true
+    if (changes.takeRecords().some(changing)) changed = true
     if (
       !changed || !workers.controller || root.hasAttribute(KEPT) ||
       pending && root.querySelector(pending)

@@ -150,6 +150,29 @@ test('a part that moves by itself changes nothing, so a page of birds is kept on
   assertEquals(t.sent.length, 2)
 })
 
+test('of two parts taking turns, the inert one is no part of the picture and its changes are none, until it shows', async () => {
+  let t = tab(
+    '<html><body><div data-kept-turns><p>Home</p></div><div data-kept-turns inert><p>Workspace</p></div></body></html>',
+  )
+  t.load()
+  let [home, workspace] = t.document.querySelectorAll('[data-kept-turns]')
+  assertEquals(
+    t.sent[0].html,
+    '<!doctype html><html><body><div data-kept-turns=""><p>Home</p></div></body></html>',
+  )
+  // An attribute: linkedom names a childList record's target as the root.
+  workspace.querySelector('p')!.setAttribute('title', 'updated')
+  await t.wait()
+  t.hide()
+  assertEquals(t.sent.length, 1)
+  workspace.removeAttribute('inert')
+  home.setAttribute('inert', '')
+  t.leave()
+  assertEquals(t.sent.length, 2)
+  assertEquals(t.sent[1].html.includes('title="updated"'), true)
+  assertEquals(t.sent[1].html.includes('Home'), false)
+})
+
 test('a page going away is taken once as it is unloaded and hidden', () => {
   let t = tab('<html><body><p>Seen</p></body></html>')
   t.load()

@@ -39,6 +39,12 @@ export let SCROLL = 'data-kept-scroll'
  * a picture shows it as it stood when taken. */
 export let MOVES = 'data-kept-moves'
 
+/** The attribute on each of two parts of a page that take turns, one shown
+ * and the other inert behind it (Home and its signed-in view,
+ * @yaks/web/ready): while inert, it is no part of a picture, and its changes
+ * are no change. */
+export let TURNS = 'data-kept-turns'
+
 /** The header the bootstrap's fetch carries, which a service worker may
  * answer with the page it already asked the network for (`@yaks/web/worker`). */
 export let FRESH = 'x-yak-fresh'
