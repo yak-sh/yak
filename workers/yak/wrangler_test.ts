@@ -1836,7 +1836,7 @@ for (let { name } of ASSETS.filter((a) => a.named || a.split)) {
 }
 Deno.writeTextFileSync(
   join(kernelRoot, 'wrangler.toml'),
-  'main="index.ts"\ncompatibility_flags=["nodejs_compat"]\nupload_source_maps=true\n[assets]\ndirectory="public"',
+  'main="index.ts"\ntsconfig="tsconfig.json"\ncompatibility_flags=["nodejs_compat"]\nupload_source_maps=true\n[assets]\ndirectory="public"',
 )
 let kernelArgs = ['deploy', '--env', 'staging', '--message', 'commit']
 let kernelBundle = await bundled(kernelArgs, (output, meta) => {
@@ -1863,6 +1863,7 @@ test('a kernel upload uses its prepared bundle and retains source maps and modul
     let config = parse(Deno.readTextFileSync(kernelBundle.args.at(-1)!))
     assertEquals(kernelBundle.args.slice(0, -2), kernelArgs)
     assertEquals(config.no_bundle, true)
+    assertEquals(config.tsconfig, undefined)
     assertEquals(config.find_additional_modules, true)
     assert(
       (config.rules as { type: string; globs: string[] }[]).some((rule) =>

@@ -845,6 +845,8 @@ let unbundled = async (
   let path = join(root, from)
   let parsed = parse(io.readTextFileSync(path))
   await fit(parsed)
+  // The prepared JavaScript has already used the source compiler settings.
+  delete parsed.tsconfig
   Object.assign(parsed, {
     main: entry,
     base_dir: output,
