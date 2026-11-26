@@ -40,6 +40,7 @@
   --edge-width: 1px;
   --edge-color: var(--border2);
   --edge-filter: none;
+  --well-filter: none;
   --raised-shadow: var(--shadow);
   --raised-hatch: none;
   --raised-ink: transparent;

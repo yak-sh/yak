@@ -20,6 +20,7 @@
   --edge-width: var(--stroke);
   --edge-color: var(--graphite);
   --edge-filter: var(--drawn);
+  --well-filter: url(pencil.svg#edge);
   --raised-shadow: none;
   --raised-hatch: var(--hatch); /* its lines, as a mask */
   --raised-ink: var(--text); /* what they are drawn in */

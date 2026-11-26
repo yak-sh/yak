@@ -74,7 +74,7 @@
   box-shadow: var(--hollow);
   color: var(--text);
   font: inherit;
-  filter: var(--edge-filter);
+  filter: var(--well-filter);
 }
 :where(.Surface_Well, .Field):focus-visible {
   outline: 0;
