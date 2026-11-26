@@ -4,26 +4,50 @@
       "component": true,
       "type": "object",
       "properties": {
-        "invite": { "type": "string" },
-        "seats": { "type": "array", "items": { "type": "string" } }
+        "invite": {
+          "type": "string"
+        },
+        "seats": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "play_turn": {
       "component": true,
       "type": "object",
       "properties": {
-        "seat": { "type": "string", "ref": "entity" },
-        "number": { "type": "integer" },
-        "roll": { "type": "integer" }
+        "seat": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "number": {
+          "type": "integer"
+        },
+        "roll": {
+          "type": "integer"
+        }
       }
     },
     "play_pawn": {
       "component": true,
       "type": "object",
       "properties": {
-        "room": { "type": "string", "ref": "entity", "index": true },
-        "x": { "type": "number" },
-        "z": { "type": "number" }
+        "room": {
+          "type": "string",
+          "ref": "entity",
+          "index": true,
+          "death": "cascade"
+        },
+        "x": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        }
       }
     },
     "play_motion": {
@@ -33,10 +57,22 @@
       "durable": "connection",
       "pace": "100ms",
       "properties": {
-        "room": { "type": "string", "ref": "entity" },
-        "seat": { "type": "string", "ref": "entity" },
-        "x": { "type": "number" },
-        "z": { "type": "number" }
+        "room": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        },
+        "seat": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        },
+        "x": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        }
       }
     }
   }

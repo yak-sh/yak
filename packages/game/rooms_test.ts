@@ -36,7 +36,7 @@ let request = (who: string, path: string, body?: unknown) =>
     new Request('https://game.test/game/' + path, {
       method: body === undefined ? 'GET' : 'POST',
       headers: {
-        'x-yak-mount': '/game/',
+        'x-yak-app': 'game',
         'x-yak-via': who,
         ...(who === 'host' ? { 'x-yak-role': 'editor' } : {}),
       },

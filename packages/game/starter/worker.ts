@@ -136,7 +136,8 @@ let installFiles = new Set([
 
 export let rooms = async (req: Request, env: Env): Promise<Response> => {
   let { pathname, origin } = new URL(req.url)
-  let mount = req.headers.get('x-yak-mount') ?? '/'
+  let slug = req.headers.get('x-yak-app')
+  let mount = req.headers.get('x-yak-mount') ?? (slug ? `/${slug}/` : '/')
   let path = pathname.startsWith(mount)
     ? pathname.slice(mount.length - 1)
     : pathname
