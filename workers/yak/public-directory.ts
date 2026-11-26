@@ -10,6 +10,11 @@ import {
   type ServingCopyState,
   ServingCopyUnavailable,
 } from '@yaks/platform/serving-copy'
+import {
+  type RegionalLease,
+  RegionalServingCopy,
+} from '@yaks/platform/regional-serving-copy'
+import { regionalStorage } from '@yaks/platform/regional-route-storage'
 
 // The one row the copy keeps: its ceiling.
 let COPY: CreateTable = {
@@ -37,7 +42,8 @@ let unavailable = <T>(read: () => T): T | null => {
 // the copy in its memory, whose ceiling is its one row of SQL.
 export class PublicDirectoryStore extends Durable {
   #made?: ServingCopy
-  constructor(ctx: State, _env: Env) {
+  #regional?: RegionalServingCopy
+  constructor(ctx: State, private readonly env: Pick<Env, 'CLOCK'>) {
     super(ctx, {
       report: (e, entry) => caught(e, { request: `public directory ${entry}` }),
     })
@@ -109,5 +115,33 @@ export class PublicDirectoryStore extends Durable {
   }
   get(key: string) {
     return this.#at('get', (c) => unavailable(() => c.get(key)))
+  }
+
+  get #routes(): RegionalServingCopy {
+    return this.#regional ??= new RegionalServingCopy({
+      persistence: regionalStorage({
+        query: driver(this.ctx.storage).query,
+        tx: (work) => this.ctx.storage.transactionSync(work),
+      }),
+      clock: this.env.CLOCK,
+    })
+  }
+  regionalRead(key: string) {
+    return this.enter(
+      'regionalRead',
+      () => unavailable(() => this.#routes.read(key)),
+    )
+  }
+  regionalPublish(lease: RegionalLease, key: string, body: string) {
+    return this.enter(
+      'regionalPublish',
+      () => this.#routes.publish(lease, key, body),
+    )
+  }
+  regionalInvalidate(epoch: number) {
+    return this.enter(
+      'regionalInvalidate',
+      () => this.#routes.invalidate(epoch),
+    )
   }
 }

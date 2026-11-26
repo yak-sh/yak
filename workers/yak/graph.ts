@@ -27,10 +27,16 @@ import {
   mend,
   READS,
   readsAnswer,
+  regionalOf,
   released,
+  type ServingCopyDoor,
   servingDirectory,
   Unfenced,
 } from './directory-copy.ts'
+import {
+  RegionalAuthority,
+  type RegionalJournal,
+} from '@yaks/platform/regional-route'
 import { queryCache } from './query-cache.ts'
 import { answers, recalling } from './answered.ts'
 import { appRead } from '@yaks/platform/app-read'
@@ -453,6 +459,8 @@ import {
   directoryRows,
   fetch as directoryFetch,
   inTrash,
+  regionalPageAsked,
+  regionalPageRows,
   type Row as DirectoryRow,
 } from './directory.ts'
 import { UPDATE_WAITING } from '@yaks/platform/update-waiting'
@@ -738,6 +746,7 @@ type Listening = 'borrowers' | 'operators'
 
 type Word =
   | 'directory-revision'
+  | 'regional-route-leases'
   // The serving copy the directory fences (directory-copy.ts `handover`).
   | 'serving-copy'
   | 'policy'
@@ -1068,6 +1077,8 @@ export class Store extends Durable {
   // it to hold nothing an authorization reads (`unheld`).
   #unheld = new WeakMap<object, Set<Eid>>()
   #copyBatch = new AsyncLocalStorage<number>()
+  #regionalHeld = new Map<number, () => void>()
+  #regionalRoutes?: RegionalAuthority
   #bind: Bindings
   // The mover's rules (mover.ts `RULES`), and the ones whose batch failed in
   // this incarnation: those wait for the next one, which fixed code arrives
@@ -2023,7 +2034,7 @@ export class Store extends Durable {
                     // The transaction commits synchronously from here, so
                     // the write holds its fence no longer, though its
                     // effects may run on for a while (directory-copy.ts).
-                    released(revision)
+                    this.#releasedFence(revision)
                     return bundles
                   },
                 },
@@ -2082,8 +2093,7 @@ export class Store extends Durable {
           if (!copy) return under(-1)
           // Effects may themselves write the directory and acquire a newer
           // fence. Only explicit synchronous mover batches reuse an epoch.
-          let fence = () =>
-            fenced(copy, under, this.#committed, clockOf(this.#time))
+          let fence = () => this.#fenced(copy, under)
           // A write no authorization reads raises no fence (`unfenced`), and
           // one decided inside raises it as foreseen, or once it turns out to
           // (`deciding`).
@@ -2463,6 +2473,55 @@ export class Store extends Durable {
         (this.#get('directory-revision') ? FORMER : null),
       () => this.#put('serving-copy', COPY),
     )
+
+  get #regional(): RegionalAuthority {
+    return this.#regionalRoutes ??= new RegionalAuthority({
+      read: () => {
+        let body = this.#get('regional-route-leases')
+        return body ? JSON.parse(body) as RegionalJournal : undefined
+      },
+      write: (journal) =>
+        this.#put('regional-route-leases', JSON.stringify(journal)),
+      committed: this.#committed,
+      door: (region) => {
+        let door = regionalOf(this.#bind.SERVING_COPY, region)
+        if (!door) throw new Error(`Regional route door missing in ${region}`)
+        return door
+      },
+      clock: clockOf(this.#time),
+      failed: (e, region) =>
+        caught(e, { request: 'regional route invalidation', region }),
+    })
+  }
+
+  #fenced<T>(
+    copy: ServingCopyDoor,
+    write: (revision: number) => T | Promise<T>,
+  ) {
+    let release = this.#regional.hold()
+    let at: number | undefined
+    return fenced(
+      copy,
+      async (revision) => {
+        if (at !== undefined) this.#regionalHeld.delete(at)
+        at = revision
+        this.#regionalHeld.set(revision, release)
+        await elapsed('regional_fence_wait', () => this.#regional.fence())
+        return await write(revision)
+      },
+      this.#committed,
+      clockOf(this.#time),
+    ).finally(() => {
+      if (at !== undefined) this.#regionalHeld.delete(at)
+      release()
+    })
+  }
+
+  #releasedFence(revision: number) {
+    this.#regionalHeld.get(revision)?.()
+    this.#regionalHeld.delete(revision)
+    released(revision)
+  }
 
   /** The revision the directory holds committed, read past a rolled-back
    * write's memory of it. */
@@ -4427,11 +4486,10 @@ export class Store extends Durable {
                 }
                 let s = step(m, rule, was, size, now, plan)
                 this.#put(rule.mark, JSON.stringify(s))
+                if (revision != -1) this.#releasedFence(revision)
                 return s
               }))
-          s = copy
-            ? await fenced(copy, moved, this.#committed, clockOf(this.#time))
-            : moved()
+          s = copy ? await this.#fenced(copy, moved) : moved()
         } catch (e) {
           this.#kv.clear()
           // Stopped, the batch unwound and the rule is no failure: the alarm
@@ -6168,6 +6226,23 @@ export class Store extends Durable {
       : this.#directoryAsked(request))
     if (revision == null) {
       return answer
+    }
+    let route = answer.ok && this.#bind.SERVING_COPY &&
+      regionalPageAsked(request, this.#bind.REGIONAL_ROUTE_SPACES)
+    if (route) {
+      let snapshot = answer.clone()
+      let { key, space, app, region } = route
+      this.#ctx.waitUntil?.(
+        apart(async () => {
+          await yielded()
+          let body = await snapshot.text()
+          if (
+            regionalPageRows(JSON.parse(body) as DirectoryRow[], space, app)
+          ) {
+            await this.#regional.publish(region, Number(revision), key, body)
+          }
+        }).catch((e) => caught(e, { request: 'regional route fill', region })),
+      )
     }
     let headers = new Headers(answer.headers)
     headers.set(EPOCH, revision)

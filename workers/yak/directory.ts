@@ -11,7 +11,13 @@ import {
   sub,
   whole,
 } from '@yaks/query'
-import { after, together } from '@yaks/fp'
+import { after, system, together } from '@yaks/fp'
+import {
+  PAGE_ROUTE,
+  regionalLook,
+  regionalSpace,
+  regionOf,
+} from '@yaks/platform/regional-route'
 import type { Row as WhereaboutsRow } from '@yaks/notify/whereabouts'
 import { christened, pick } from '@yaks/persona/name'
 import { calledOf } from './operator-name.ts'
@@ -101,6 +107,7 @@ import {
 import { ADMIN, isTestAddress } from '@yaks/platform/bots'
 import {
   ambient,
+  elapsed,
   forget,
   recall,
   type Tally,
@@ -1342,7 +1349,12 @@ export let fetch = (
           req.headers.has(MEND) ? '&mend=1' : ''
         }`,
       {},
-      req.headers.get(STATIC_QUERY) == '1' ? { [STATIC_QUERY]: '1' } : {},
+      {
+        ...req.headers.get(STATIC_QUERY) == '1' ? { [STATIC_QUERY]: '1' } : {},
+        ...req.headers.has(PAGE_ROUTE)
+          ? { [PAGE_ROUTE]: req.headers.get(PAGE_ROUTE)! }
+          : {},
+      },
     )
   }
   return over(metaStore(env))(req)
@@ -1440,6 +1452,69 @@ export let SPACE_PARTS = [
   'mail_domain',
 ]
 let SPACE_ABOUT = chain(SPACE_PARTS.map((part) => line`?${part}`), '&')
+
+let pageLine = (
+  slug: string,
+  app: string | null | undefined,
+  every = !app,
+  seat = NONE,
+  views = false,
+) => {
+  let at = line`.app.space.space.slug=${slug}`
+  let which = every
+    ? at
+    : line`((${sub(at)}&.app.slug=${app ?? ''})|(${sub(at)}&.home))`
+  return line`(.space.slug=${slug}&${sub(SPACE_ABOUT)})|(${sub(which)}&${
+    sub(ABOUT)
+  }${sub(views ? line`&?release_view` : NONE)})${sub(seat)}`
+}
+
+/** A regional fill may only originate from the anonymous routing line. */
+export let regionalPageAsked = (
+  request: Request,
+  spaces: string | undefined,
+) => {
+  let hint = request.headers.get(PAGE_ROUTE)
+  if (!hint || request.headers.get(STATIC_QUERY) !== '1') return
+  let pair: unknown
+  try {
+    pair = JSON.parse(hint)
+  } catch {
+    return
+  }
+  if (!Array.isArray(pair)) return
+  let [where, space, app] = pair
+  let region = regionOf(where)
+  if (
+    !region || typeof space !== 'string' ||
+    (app !== null && typeof app !== 'string')
+  ) return
+  if (!regionalSpace(spaces, space)) return
+  let key = new URL(request.url).searchParams.get('q')
+  if (
+    key === null || key !== pageLine(space, app) &&
+      (!app || key !== pageLine(space, app, false, NONE, true))
+  ) return
+  return { region, space, app, key }
+}
+
+/** Only an uncredentialed static public route can be answered regionally. */
+export let regionalPageRows = (
+  rows: Row[],
+  space: string,
+  app: string | null,
+) => {
+  let here = rows.find((r) => r.space?.slug === space)
+  if (!here || trashedOf(here)) return false
+  let staticApp = (r: Row) =>
+    r.app?.access === 'public' && r.app.worker === '' &&
+    !r.installed?.sandboxed && !trashedOf(r)
+  let home = rows.find((r) => r.app && r.home && !trashedOf(r))
+  if (home && !staticApp(home)) return false
+  if (!app) return rows.every((r) => !r.app || r.app.access === 'public')
+  let asked = rows.find((r) => r.app?.slug === app && !trashedOf(r))
+  return !!asked && staticApp(asked)
+}
 
 let DOMAIN_FIELDS = [
   'hostname',
@@ -2273,11 +2348,22 @@ let remote = (via: Fetcher) => ({
 // directory answered at (`policy`): the revision belongs to this response, not
 // a shared last-response slot, since parallel reads resume in either order.
 type Revised = Readonly<{ text: string; revision: number }>
-let revised = async (via: Fetcher, q: string): Promise<Revised> => {
+let revised = async (
+  via: Fetcher,
+  q: string,
+  hint?: string,
+): Promise<Revised> => {
   let answer = await via.fetch(
     new Request(
       `http://directory/query?q=${encodeURIComponent(q)}`,
-      { headers: { [EPOCH]: '1', [FRESH]: '1', [STATIC_QUERY]: '1' } },
+      {
+        headers: {
+          [EPOCH]: '1',
+          [FRESH]: '1',
+          [STATIC_QUERY]: '1',
+          ...hint ? { [PAGE_ROUTE]: hint } : {},
+        },
+      },
     ),
   )
   if (!answer.ok) throw await answered(answer)
@@ -2561,11 +2647,14 @@ export let directory = (
 ) => {
   let serving = servingDirectory(via, options)
   let door = remote(via)
-  let query = (q: string): Promise<ReadRow[]> =>
+  let query = (
+    q: string,
+    read = () => revised(serving, q),
+  ): Promise<ReadRow[]> =>
     recall(
       META_STORE,
       `${EPOCH} ${q}`,
-      () => revised(serving, q),
+      read,
       true,
       ({ text, revision }) =>
         (JSON.parse(text) as Row[]).map((row) => ({
@@ -2573,8 +2662,36 @@ export let directory = (
           policy: { revision },
         })),
     )
+  let pageQuery = (q: string, space: string, app: string | null) => {
+    let regional = options.regional
+    if (!regional || !regionalSpace(regional.spaces, space)) return query(q)
+    let { region, door } = regional
+    return query(q, async () => {
+      let tags = { request: 'regional route read', region }
+      let looked = await elapsed(
+        'regional_route_wait',
+        () => regionalLook(() => door.regionalRead(q), options.time ?? system),
+        region,
+      ).catch((e) => {
+        caught(e, tags)
+        return null
+      })
+      if (looked?.answer) {
+        return { text: looked.answer.body, revision: looked.answer.revision }
+      }
+      if (looked && !looked.reachable) {
+        caught(new Error('Regional route read timed out'), tags)
+      }
+      return revised(
+        serving,
+        q,
+        looked?.reachable ? JSON.stringify([region, space, app]) : undefined,
+      )
+    })
+  }
   return directoryRows({
     query,
+    pageQuery,
     apply: door.apply,
     whereabouts: door.whereabouts,
     trash: door.trash,
@@ -2774,13 +2891,14 @@ export let directoryRows = (rows: {
   purgeTrashEntities?: (eids: string[]) => Promise<void>
   whereabouts?: (people: string[]) => Promise<WhereaboutsRow[]>
   query: (q: Line) => Promise<ReadRow[]>
+  pageQuery?: (q: Line, space: string, app: string | null) => Promise<ReadRow[]>
   apply: (
     entities: Bundle[],
     headers: Record<string, string>,
   ) => Promise<Bundle[]>
   readonly stale?: boolean
 }) => {
-  let query = rows.query
+  let { query, pageQuery } = rows
   let one = async (q: Line) => (await query(q))[0]
   // A read about each of these apps, and none about no app: an empty list
   // would say `.app=`, which is a question about rows naming none.
@@ -2999,10 +3117,6 @@ export let directoryRows = (rows: {
       every = !app,
       files = false,
     ) => {
-      let at = line`.app.space.space.slug=${slug}`
-      let which = every
-        ? at
-        : line`((${sub(at)}&.app.slug=${app ?? ''})|(${sub(at)}&.home))`
       let seat = person
         ? chain([
           line`|(.member.space.space.slug=${slug}&.member.person=${person})`,
@@ -3020,11 +3134,11 @@ export let directoryRows = (rows: {
         : NONE
       let epoch = wrote(META_STORE)
       let views = files && !every
-      let rows = await query(
-        line`(.space.slug=${slug}&${sub(SPACE_ABOUT)})|(${sub(which)}&${
-          sub(ABOUT)
-        }${sub(views ? line`&?release_view` : NONE)})${sub(seat)}`,
-      )
+      let asked = pageLine(slug, app, every, seat, views)
+      let rows =
+        await (!person && !over && every === !app && pageQuery
+          ? pageQuery(asked, slug, app ?? null)
+          : query(asked))
       let mine = epoch != null && epoch == wrote(META_STORE)
         ? found()
         : undefined

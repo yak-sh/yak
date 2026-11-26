@@ -10,6 +10,8 @@ import type { Env } from './env.ts'
 import { pageAt, SEEN } from '@yaks/platform/kept'
 import { sign } from './lib/token.ts'
 import { fetch as siteFetch } from './site.ts'
+import { EDGE_REGION } from '@yaks/platform/regional-route'
+import { REGIONAL_CLOCK_SKEW_MS } from '@yaks/platform/regional-serving-copy'
 import { ServingCopy, type ServingCopyState } from '@yaks/platform/serving-copy'
 import { ADA_OWNS, platform, seeded, visit } from './serving-probe.ts'
 
@@ -358,6 +360,63 @@ let SECRET = 'a session secret'
 let sessionOf = (person: string) =>
   sign({ person, space: null, exp: Date.now() / 1000 + 3600, via: 'v' }, SECRET)
 let [outsider, owner] = await Promise.all(['p', 'o'].map(sessionOf))
+
+test('directory serving: a regional route keeps a public page and expires back to authority', async () => {
+  let f = fixture()
+  let time = clock(), regional = 0
+  f.env.CLOCK = time
+  let held = {
+    epoch: 0,
+    revision: 0,
+    until: REGIONAL_CLOCK_SKEW_MS + 10,
+    body: JSON.stringify(f.rows),
+  }
+  let read = () => {
+    regional++
+    return Promise.resolve(held)
+  }
+  f.env.SERVING_COPY = {
+    idFromName: (name) => name,
+    get: (id) =>
+      id == 'regional-route/weur'
+        ? {
+          ...f.door,
+          regionalRead: read,
+          regionalPublish: () => Promise.resolve(false),
+          regionalInvalidate: () => Promise.resolve(),
+        }
+        : f.door,
+  }
+  f.env.SESSION_SECRET = SECRET
+  let request = (path: string, session?: string) =>
+    new Request(pageAt('ada.yaks.app', path, null, session), {
+      headers: {
+        [EDGE_REGION]: 'weur',
+        ...session ? { cookie: `yak_session=${session}` } : {},
+      },
+    })
+  let ask = async (path: string, session?: string) => {
+    let answer = await siteFetch(request(path, session), f.env)
+    await answer.body?.cancel()
+    return answer
+  }
+
+  let page = await ask('/cookbook/')
+  equal([page.status, page.headers.get('cache-tag')], [200, 'app:a,space:s'])
+  equal([regional, f.reads()], [1, 0])
+  await ask('/cookbook/', outsider)
+  await ask('/cookbook/api/client.js')
+  equal(regional, 1)
+  ok(f.reads() >= 2)
+
+  await time.advance(10)
+  f.rows[1].app!.access = 'private'
+  let reads = f.reads()
+  let privatePage = await ask('/cookbook/')
+  equal([regional, f.reads() - reads], [2, 1])
+  equal([privatePage.status, privatePage.headers.get(SEEN)], [204, null])
+})
+
 let seated = []
 for (let [key, cookie] of [[outsider], [owner], [outsider, owner]]) {
   let f = fixture('private')

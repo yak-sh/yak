@@ -5,6 +5,7 @@
 // @yaks/workerd/cache's. Nothing here reaches the graph stack or a secret, so
 // the front Worker's upload stays small.
 import { matches } from '@yaks/blob/serve'
+import { EDGE_REGION, edgeRegion } from '@yaks/platform/regional-route'
 import { hit } from '@yaks/workerd/cache'
 import {
   BROWSER,
@@ -96,6 +97,7 @@ export let asked = async (
     return null
   }
   let pick = req.headers.get(PICK)
+  let region = !session && edgeRegion(req)
   // What Site holds at a key, and what it says of it, or null for a pass.
   let held = async (key: string, cookie?: string) => {
     if (signal?.aborted) return null
@@ -108,6 +110,7 @@ export let asked = async (
             headers: {
               ...pick ? { [PICK]: pick } : {},
               ...cookie ? { cookie: `${COOKIE}=${cookie}` } : {},
+              ...!cookie && region ? { [EDGE_REGION]: region } : {},
             },
             redirect: 'manual',
           }),

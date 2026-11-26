@@ -9,7 +9,8 @@ import {
 import { decodedPath } from './request-path.ts'
 import { serves, stamped } from './site-data.ts'
 import { BINARY } from '@yaks/vocab/wire'
-import { copyOf } from './directory-copy.ts'
+import { anonymousPage, copyOf, regionalOf } from './directory-copy.ts'
+import type { Region } from '@yaks/platform/regional-route'
 import { APP, type Preview } from './link-preview.ts'
 import { previewed } from './preview-html.ts'
 // The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
@@ -2636,7 +2637,12 @@ let firstly = async (
 /** An address as Site keeps it (page-cache.ts): served to nobody, fresh.
  * A page Site draws around it reads the directory through its own `view`,
  * so the two share one trip and one stall's deadline, and its staleness. */
-export let edged = async (req: Request, env: Env, view?: Directory) => {
+export let edged = async (
+  req: Request,
+  env: Env,
+  view?: Directory,
+  region?: Region,
+) => {
   let copied = false
   let c = clock()
   let answer = await c.counting(async () =>
@@ -2651,6 +2657,7 @@ export let edged = async (req: Request, env: Env, view?: Directory) => {
         },
         req,
         view,
+        { region },
       ),
       c,
       'site_',
@@ -2695,7 +2702,8 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     let res = await browsing(
       req,
       env,
-      (r) => served(r, env, c, false, undefined, req, undefined, siteChecked),
+      (r) =>
+        served(r, env, c, false, undefined, req, undefined, { siteChecked }),
       remember,
     )
     return timed(
@@ -2746,16 +2754,23 @@ let served = async (
   copied: () => void = () => {},
   visitor = req,
   view?: Directory,
-  siteChecked = false,
+  { siteChecked, region }: { siteChecked?: boolean; region?: Region } = {},
 ): Promise<Response> => {
   let url = new URL(req.url)
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
   let serving = copyOf(env)
+  let nearby = region && edge && anonymousPage(req) &&
+      !req.headers.has(MOUNT) && !fixed(url.pathname) && !uploaded(url.pathname)
+    ? regionalOf(env.SERVING_COPY, region)
+    : undefined
   let dir = view ?? directory(direct, {
     copy: serving,
     time: env.CLOCK,
     public: edge,
     used: copied,
+    regional: region && nearby
+      ? { region, door: nearby, spaces: env.REGIONAL_ROUTE_SPACES }
+      : undefined,
   })
   // What Site keeps from a directory copy says so, and is kept for now only
   // (site.ts).

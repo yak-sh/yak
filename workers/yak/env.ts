@@ -346,6 +346,8 @@ export type Env = {
   BILLING?: Fetcher
   // Independent public-only read fallback, never a source of signed-in standing.
   SERVING_COPY?: ServingCopies
+  /** Comma-separated rollout spaces. Unset admits every eligible space. */
+  REGIONAL_ROUTE_SPACES?: string
   DIRECTORY?: Fetcher
   APPS?: Fetcher
   // Release warming and older objects' reads reach the named Files

@@ -132,6 +132,9 @@ export let PUBLIC_DIRECTORY = [
   'settle',
   'put',
   'get',
+  'regionalRead',
+  'regionalPublish',
+  'regionalInvalidate',
   ...DURABLE,
 ] as const
 export let PURGER = ['purge', ...DURABLE] as const

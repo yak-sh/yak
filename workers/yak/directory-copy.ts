@@ -15,6 +15,11 @@ import { evicted, jittered, opaque, retried } from '@yaks/durable-object/resets'
 import { type Clock, system, within } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
 import { RETIRED } from '@yaks/platform/serving-copy'
+import {
+  PAGE_ROUTE,
+  type Region,
+  type RegionalDoor,
+} from '@yaks/platform/regional-route'
 import { readable } from './query-line.ts'
 
 export type ServingCopyDoor = {
@@ -37,7 +42,20 @@ export type ServingCopyDoor = {
 export type Filled = [revision: number, key: string, body: string]
 export type ServingCopies = {
   idFromName(name: string): unknown
-  get(id: unknown): ServingCopyDoor
+  get(
+    id: unknown,
+    options?: { locationHint: string },
+  ): ServingCopyDoor & Partial<RegionalDoor>
+}
+
+export let regionalOf = (copies: ServingCopies | undefined, region: Region) => {
+  let copy = copies?.get(copies.idFromName(`regional-route/${region}`), {
+    locationHint: region,
+  })
+  if (
+    !copy?.regionalRead || !copy.regionalPublish || !copy.regionalInvalidate
+  ) return
+  return copy as RegionalDoor
 }
 /** The copy's name. An object stands where it was first reached and never
  * moves (relocate.ts), so the copy beside the directory near Chicago (door.ts
@@ -452,7 +470,7 @@ export let gathered = (via: Fetcher): Fetcher => {
       let q = url.searchParams.get('q')
       if (
         req.method != 'GET' || url.pathname != '/query' || q == null ||
-        req.headers.has(MEND)
+        req.headers.has(MEND) || req.headers.has(PAGE_ROUTE)
       ) return via.fetch(req)
       let owner = invocationKey()
       if (!owner) return via.fetch(req)
@@ -492,6 +510,7 @@ export type ServingDirectoryOptions = {
   public?: boolean
   used?: () => void
   copyFirst?: boolean
+  regional?: { region: Region; door: RegionalDoor; spaces?: string }
 }
 
 /** The transport every directory client uses. Revisions travel with direct

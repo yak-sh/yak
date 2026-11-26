@@ -1,4 +1,5 @@
 import { integrationDirectory } from './catalog.ts'
+import { EDGE_REGION, regionOf } from '@yaks/platform/regional-route'
 import { copyOf } from './directory-copy.ts'
 // The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
 // the apex's pages drawn from directory listings (the gallery and the
@@ -232,7 +233,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     let host = hostOf(asked, env)
     let page = foreign(host, env)
       ? await atDomain(asked, env, host)
-      : await edged(asked, env)
+      : await edged(
+        asked,
+        env,
+        undefined,
+        regionOf(req.headers.get(EDGE_REGION)),
+      )
     let copied = page.headers.has(COPIED)
     page.headers.delete(COPIED)
     let answer = await kept(
