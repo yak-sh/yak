@@ -205,3 +205,24 @@ test('a release that lands is in Recent work at once', () => {
   ])
   equal(texts('.Dash_DidTitle')[0], 'Hazel updated Notes')
 })
+
+test('a suggestion row from before its request was kept fills the box with its line', () => {
+  let { root, g } = bound()
+  g.set(suggestions(SPACE), [{
+    ...offered[0],
+    suggestion: {
+      space: SPACE,
+      rank: 0,
+      name: 'people',
+      says: 'Invite family',
+    },
+  }])
+  let pill = root.querySelector<HTMLElement>('[data-ask]')!
+  pill.dispatchEvent(
+    new root.ownerDocument.defaultView!.Event('click', { bubbles: true }),
+  )
+  equal(
+    root.querySelector<HTMLTextAreaElement>('.Dash_AskBox')!.value,
+    'Invite family',
+  )
+})

@@ -434,18 +434,25 @@ export let suggestionRows = (
   }))
 
 /** The suggestions in the space `space` that `rows` hold, in order, but
- * those a `dismissSuggestion` row there names. */
+ * those a `dismissSuggestion` row there names. The directory's store runs
+ * the code before a deploy for up to half an hour after it (workers/yak
+ * reach.ts), so a row it wrote may lack `ask`: its request is then its line. */
 export let suggestionsOf = (rows: Bundle[], space: string): Suggestion[] => {
   let gone = new Set(
     held<{ name: string }>(rows, 'dismissSuggestion', space).map((d) => d.name),
   )
-  return held<Suggestion & { rank: number }>(rows, 'suggestion', space)
+  return held<
+    Partial<Suggestion> & { name: string; says: string; rank: number }
+  >(
+    rows,
+    'suggestion',
+    space,
+  )
     .filter((s) => !gone.has(s.name))
     .sort((a, b) => a.rank - b.rank)
-    .map(({ rank: _r, space: _s, ...s }: Suggestion & {
-      rank: number
-      space?: string
-    }) => s)
+    .map(({ name, says, app, ask }) =>
+      drop({ name, says, app, ask: ask ?? says })
+    )
 }
 
 /** The act that dismisses the suggestion `name` in the space `space` for
