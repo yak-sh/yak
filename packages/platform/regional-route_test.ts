@@ -15,7 +15,7 @@ test('an empty regional copy may be filled but an unreachable copy is left alone
     answer: null,
   })
   let waiting = regionalLook(() => new Promise(() => {}), time)
-  await time.advance(120)
+  await time.advance(50)
   assertEquals(await waiting, { reachable: false, answer: null })
 })
 

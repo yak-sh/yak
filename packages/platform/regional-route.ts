@@ -44,12 +44,13 @@ export type RegionalDoor = {
   regionalInvalidate(epoch: number): Promise<void>
 }
 
-/** A reachable copy can be filled on a miss. An outage does not extend its lease. */
+/** Give the nearby copy a short head start. A missed deadline sends the
+ * caller on to the authority and leaves the copy's lease alone. */
 export let regionalLook = async (
   read: () => Promise<RegionalAnswer | null>,
   clock: Clock = system,
 ) => {
-  let heard = await within(read().then((answer) => ({ answer })), 120, clock)
+  let heard = await within(read().then((answer) => ({ answer })), 50, clock)
   let answer = heard?.answer
   return {
     reachable: heard !== null,

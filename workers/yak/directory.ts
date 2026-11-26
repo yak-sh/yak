@@ -2679,9 +2679,6 @@ export let directory = (
       if (looked?.answer) {
         return { text: looked.answer.body, revision: looked.answer.revision }
       }
-      if (looked && !looked.reachable) {
-        caught(new Error('Regional route read timed out'), tags)
-      }
       return revised(
         serving,
         q,

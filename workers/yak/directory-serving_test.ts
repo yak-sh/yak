@@ -3,6 +3,7 @@
 // storage are fixtures. The copy and its deadline are the production ones.
 import { clock, equal, ok, test } from '@yaks/testing'
 import { edged, fetch as appFetch } from './apps.ts'
+import { within as tracked } from './defects.ts'
 import { directory, type Row } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { EPOCH, type ServingCopyDoor, STALL } from './directory-copy.ts'
@@ -415,6 +416,51 @@ test('directory serving: a regional route keeps a public page and expires back t
   let privatePage = await ask('/cookbook/')
   equal([regional, f.reads() - reads], [2, 1])
   equal([privatePage.status, privatePage.headers.get(SEEN)], [204, null])
+})
+
+test('directory serving: a slow regional route falls back promptly without reporting a failure', async () => {
+  let f = fixture()
+  let time = clock()
+  f.env.CLOCK = time
+  let reports: unknown[] = []
+  let regional = 0
+  f.env.ERRORS = {
+    send: (report: unknown) => {
+      reports.push(report)
+      return Promise.resolve()
+    },
+  }
+  f.env.SERVING_COPY = {
+    idFromName: (name) => name,
+    get: (id) =>
+      id == 'regional-route/weur'
+        ? {
+          ...f.door,
+          regionalRead: () => {
+            regional++
+            return new Promise(() => {})
+          },
+          regionalPublish: () => Promise.resolve(false),
+          regionalInvalidate: () => Promise.resolve(),
+        }
+        : f.door,
+  }
+  let req = new Request(pageAt('ada.yaks.app', '/cookbook/', null), {
+    headers: { [EDGE_REGION]: 'weur' },
+  })
+  let page = watching(tracked(f.env, {}, () => siteFetch(req, f.env)))
+  await continuations()
+  equal([regional, f.reads(), page.pending()], [1, 0, true])
+  await time.advance(50)
+  await continuations()
+  let answer = page.answer()
+  equal([answer.status, answer.headers.get('cache-tag'), f.reads()], [
+    200,
+    'app:a,space:s',
+    1,
+  ])
+  await answer.body?.cancel()
+  equal(reports, [])
 })
 
 let seated = []
