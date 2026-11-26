@@ -694,6 +694,9 @@ let desk = (
     icon: icons[icon],
     label,
     names: label,
+    // Each list is a census read: held as the browser idles, every visit
+    // would read them all. A press draws its frame at once instead.
+    held: false,
     count,
     current: current == key,
   })

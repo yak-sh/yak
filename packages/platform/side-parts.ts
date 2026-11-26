@@ -53,6 +53,9 @@ export type Item = {
   /** Whether its page is kept ready, fetched ahead once the page is drawn
    * (@yaks/ui/navigate `READY`): one its server is slow to answer. */
   ready?: boolean
+  /** Whether its page is held as the browser idles (@yaks/ui/navigate
+   * `HOLD`), as every page link's is unless it says not. */
+  held?: boolean
   warm?: string
   icon: IconNode
   image?: ReturnType<typeof appMarkImage>
@@ -114,7 +117,8 @@ export let link = (at: Item) => {
       title: at.label,
       [NAMES]: at.names,
       [READY]: at.ready || undefined,
-      [HOLD]: !(at.submit || at.external || at.app) || undefined,
+      [HOLD]: at.held != false && !(at.submit || at.external || at.app) ||
+        undefined,
       [WARM]: at.warm,
       'data-side-app': at.app ? JSON.stringify(at.app) : undefined,
       mod: at.current && 'on',

@@ -226,6 +226,17 @@ test('the home sign-in check opts into waking only the signed-in Operator', asyn
 // moves to its own, the space in the path, the rest of the query kept, and a
 // form posted there kept a form.
 let ID = '0b5e6a52-3c1d-4f2e-9a8b-7c6d5e4f3a2b'
+test('a space’s pages share a frame, so a press on another draws its heading at once', async () => {
+  let res = await get(`/manage/${slug}/connections`)
+  let { document } = parseHTML(await res.text())
+  let frame = document.querySelector(`template[data-frame="/manage/${slug}"]`)
+  assertEquals(
+    frame?.innerHTML.includes(`>${slug}<`) &&
+      !!document.querySelector(`a[data-hold][href="/manage/${slug}/apps"]`),
+    true,
+  )
+})
+
 test('the dashboard’s old addresses move to their pages', async () => {
   let billing = `/manage/${slug}/billing?paid=1`
   for (

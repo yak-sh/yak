@@ -642,15 +642,31 @@ test('a press on a page under a frame keeps the look ahead it started, though it
   assertEquals(b.drawn.map((d) => d.from), ['framed', 'fresh'])
 })
 
-test('a link under a frame is not held as the browser idles, but one looked ahead at draws whole', async () => {
+test('a link under a frame is held as the browser idles, and a press once its page came draws it whole', async () => {
   let b = browsing(desks, '/desk/a')
   await settled()
-  assertEquals(b.fetched, ['https://y.test/updates prefetch'])
-  b.press('mousedown', `a[${NAMES}]`)
   await settled()
+  assertEquals(b.fetched, [
+    'https://y.test/desk/b prefetch',
+    'https://y.test/updates prefetch',
+  ])
   b.click(`a[${NAMES}]`)
   assertEquals((await b.swapped).from, 'held')
   assertEquals(b.doc.querySelector('.Body > p')?.textContent, 'rows of b')
+})
+
+test('a press on a page held but not come yet draws its frame at once, and lays the page over it from the one fetch', async () => {
+  let b = browsing(desks, '/desk/a')
+  b.slow()
+  await settled()
+  assertEquals(b.fetched, ['https://y.test/desk/b prefetch'])
+  b.click(`a[${NAMES}]`)
+  assertEquals(b.drawn.map((d) => d.from), ['framed'])
+  assertEquals(b.doc.querySelector('.Body > h1')?.textContent, 'Bee')
+  await b.answer()
+  assertEquals(b.drawn.map((d) => d.from), ['framed', 'fresh'])
+  assertEquals(b.doc.querySelector('.Body > p')?.textContent, 'rows of b')
+  assertEquals(b.fetched.filter((f) => f.includes('/desk/b')).length, 1)
 })
 
 test('a pointer that moves on before its page comes lets it go, and one look ahead stands at a time', async () => {

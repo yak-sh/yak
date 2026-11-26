@@ -30,7 +30,12 @@ import {
   type PeopleView,
   peopleView,
 } from '@yaks/platform/people-view'
-import { accountView, managePath, type Setting } from '@yaks/platform/routes'
+import {
+  accountView,
+  MANAGE,
+  managePath,
+  type Setting,
+} from '@yaks/platform/routes'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { type ProfileView, profileView } from '@yaks/platform/profile-view'
 import {
@@ -90,6 +95,8 @@ export let deskFrame = (
     /** the path whose pages share this frame (@yaks/ui/navigate `FRAME`):
      * a press on a link to one draws its heading over an empty body at once */
     framed?: string
+    /** what the frame's heading says above its title, as the page's does */
+    eyebrow?: Kids
   },
 ) =>
   frame({
@@ -111,7 +118,12 @@ export let deskFrame = (
           h(
             'header',
             { class: 'Desk_Head' },
-            h('div', null, h(Head.Title, { mod: 'page', [TITLE]: '' })),
+            h(
+              'div',
+              null,
+              at.eyebrow == null ? null : h(Head.Eyebrow, {}, at.eyebrow),
+              h(Head.Title, { mod: 'page', [TITLE]: '' }),
+            ),
           ),
           h(Shell.Content, {
             class: ['Desk_Content', at.class].filter(Boolean).join(' '),
@@ -478,6 +490,10 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       apex: apex(env),
       title: titles[view],
       sub: whose,
+      // A press on another of the space's pages draws its heading at once,
+      // and the page under it as it comes.
+      framed: `${MANAGE}/${encodeURIComponent(at.space)}`,
+      eyebrow: whose,
       head: [
         h(
           'div',

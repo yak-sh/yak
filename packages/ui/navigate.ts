@@ -552,11 +552,10 @@ let going = (win: Browsing, link: Element, to: URL) => {
 /** The mark on a template holding the frame the pages under a path share,
  * its value that path (`/admin`): what those pages show before their own
  * content, such as an empty heading over an empty body. A press on a link
- * to one of them that is not held puts the frame in place of what stands
- * beside the template, in the press's own frame, its titles (`TITLE`)
- * saying what the link names its page (`NAMES`), and lays the page over
- * it when it comes. Links under a frame are never held as the browser
- * idles (`HOLD`): a press draws their frame at once all the same. */
+ * to one of them whose page has not come yet, held or not, puts the frame
+ * in place of what stands beside the template, in the press's own frame,
+ * its titles (`TITLE`) saying what the link names its page (`NAMES`), and
+ * lays the page over it when it comes. */
 export let FRAME = 'data-frame'
 
 // The frame of the page at `to`, where the page on screen holds one.
@@ -918,7 +917,6 @@ export let start = (
         if (!to) continue
         let key = page(to)
         if (key == here || targets.has(key) || drawing(to)) continue
-        if (mark == HOLD && frameOf(doc, to)) continue
         targets.set(key, to)
         most--
       }
