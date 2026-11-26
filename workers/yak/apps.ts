@@ -3467,7 +3467,16 @@ let served = async (
   }
   // Nor does the gateway ask Site about the addresses of an app it keeps
   // nothing of for a while.
-  if (edge && !keeps(app, path)) return passed()
+  if (edge && !keeps(app, path)) {
+    // Site has the route before the gateway starts the app worker. Begin the
+    // Store's wake here for pages whose visitor can already read it.
+    if (
+      app.worker && !walls && !dir.stale && req.method == 'GET' &&
+      fence.page(path) && !appApi(path) && !formPath(path, req) &&
+      reads(mode(app.access), routing.role ?? null)
+    ) wake(env, storeName(space, app))
+    return passed()
+  }
   if (!edge && !keepable(app)) unkept(req, env, bare, c)
   let calendarToken = /^\/calendar\/([a-zA-Z0-9_-]+)\.ics$/.exec(path)?.[1]
   if (path == '/calendar.ics' || calendarToken) {

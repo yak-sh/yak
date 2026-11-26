@@ -279,13 +279,15 @@ export let namespace = (types: string) =>
       !lib.includes('/// <reference lib="deno.ns" />')
     ).join('')
 
-// A stylesheet imported `with { type: 'text' }` is its text, as Deno's
+// An asset imported `with { type: 'text' }` is its text, as Deno's
 // `raw-imports` and the app compiler (@yaks/esbuild) both load it.
-let TEXT = `declare module '*.css' {
+let TEXT = ['css', 'md'].map((ext) =>
+  `declare module '*.${ext}' {
   const text: string
   export default text
 }
 `
+).join('')
 
 let deno = (): Platform => {
   let { lib, ...options } = config.compilerOptions

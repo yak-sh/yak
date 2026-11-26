@@ -67,6 +67,7 @@ test('the home page links its studio, guides, look and pictures from the address
 })
 
 test('every guide and policy is read under its cover, in the words of its file', async () => {
+  let before = reads.length
   for (let name of GUIDES) {
     let guide = await page(name)
     let source = await Deno.readTextFile(
@@ -80,6 +81,7 @@ test('every guide and policy is read under its cover, in the words of its file',
     ok(words.trim().length > 100, name)
     ok(!guide.documentElement.outerHTML.includes('deno-fmt'))
   }
+  equal(reads.length, before)
 })
 
 test('a guide links the app from its address, its own headings in place, and copies its prompt', async () => {

@@ -9,19 +9,32 @@ import { styleLinks, stylesheets } from './look/links.ts'
 import { Bottom, Top } from './site/frame.ts'
 import { Home } from './site/home.ts'
 import { Guide, read } from './site/doc.ts'
+import pictureBook from './pages/make-a-picture-book-in-chatgpt.md' with {
+  type: 'text',
+}
+import chatgptBook from './pages/print-your-chatgpt-book.md' with {
+  type: 'text',
+}
+import aiImages from './pages/can-you-print-ai-images.md' with { type: 'text' }
+import terms from './pages/terms.md' with { type: 'text' }
+import refund from './pages/refund.md' with { type: 'text' }
+import privacy from './pages/privacy.md' with { type: 'text' }
+import contact from './pages/contact.md' with { type: 'text' }
 
 type Files = { fetch(path: string): Promise<Response> }
 
-/** The guides and policies, each read from `pages/<name>.md`. */
-export let GUIDES = [
-  'make-a-picture-book-in-chatgpt',
-  'print-your-chatgpt-book',
-  'can-you-print-ai-images',
-  'terms',
-  'refund',
-  'privacy',
-  'contact',
-]
+// The guide's Markdown is part of the same release as its renderer.
+let guides = {
+  'make-a-picture-book-in-chatgpt': pictureBook,
+  'print-your-chatgpt-book': chatgptBook,
+  'can-you-print-ai-images': aiImages,
+  terms,
+  refund,
+  privacy,
+  contact,
+}
+
+export let GUIDES = Object.keys(guides)
 
 // A file handed over as it is kept, by the address it answers at.
 let KEPT: Record<string, string> = {
@@ -71,15 +84,13 @@ let answers: Record<
       { headers: HTML },
     )
   },
-  ...Object.fromEntries(GUIDES.map((name) => [
-    name,
-    async (files: Files, base: string) => {
-      let file = await files.fetch(`/pages/${name}.md`)
-      if (!file.ok) return file
-      let doc = read(await file.text())
-      return page(renderToString(h(Guide, { base, doc, path: name })))
-    },
-  ])),
+  ...Object.fromEntries(
+    Object.entries(guides).map(([path, source]) => [
+      path,
+      (_files: Files, base: string) =>
+        page(renderToString(h(Guide, { base, doc: read(source), path }))),
+    ]),
+  ),
   ...Object.fromEntries(
     Object.entries(ADDRESSED).map(([name, type]) => [
       name,

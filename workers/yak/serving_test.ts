@@ -2101,6 +2101,41 @@ test('a direct open starts the app store alongside its worker', async () => {
   assertEquals(order, ['wake', 'worker'])
 })
 
+test('Site starts a worker page’s readable store before handing off', async () => {
+  for (let access of ['public', 'private'] as const) {
+    await using k = await router(() => {
+      throw Error('Site called the app worker')
+    })
+    await k.dir.apply({
+      entities: [{
+        entity: { eid: k.app.eid },
+        app: { worker: 'version', access },
+      }],
+    }, KERNEL)
+    let wakes: string[] = []
+    let stores = k.env.STORE
+    k.env.STORE = {
+      ...stores,
+      get: (...args) => {
+        let stub = stores.get(...args)
+        return {
+          fetch: (req) => {
+            if (new URL(req.url).pathname == WAKE) {
+              wakes.push(req.headers.get('x-store')!)
+            }
+            return stub.fetch(req)
+          },
+        }
+      },
+    }
+    await apps.edged(visit('/api/who'), k.env)
+    assertEquals(wakes, [])
+    let answer = await apps.edged(visit('/'), k.env)
+    assertEquals(answer.status, 204)
+    assertEquals(wakes, access == 'public' ? [storeName(k.space, k.app)] : [])
+  }
+})
+
 test('an app page passed by the front uses the gateway route and vouches for its visitor', async () => {
   let calls: Request[] = []
   await using k = await router((req) => {

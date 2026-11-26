@@ -38,9 +38,8 @@ let denied = () =>
 export let receiptPage = async (
   request: Request,
   env: Environment,
-): Promise<Response | null> => {
+): Promise<Response> => {
   let url = new URL(request.url)
-  if (url.pathname !== '/receipt') return null
   let id = url.searchParams.get('order'), who = caller(request)
   if (
     !id || !/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id) || !who.person
