@@ -30,6 +30,9 @@ import { claimed } from './site-data.ts'
 // the same one (kernel.ts says the same of the apex's pages).
 let PICK = 'Cloudflare-Workers-Version-Overrides'
 
+/** The front already gave Site its chance to answer this request. */
+export let SITE_CHECKED = 'x-yak-site-checked'
+
 // What the caller serves itself lately, per binding (one per isolate in the
 // runtime, one per test platform): an address Site passed, or every address
 // of an app under its mount (`scope`), until a pass would have gone stale. A
@@ -72,6 +75,7 @@ export let asked = async (
   c: Timer,
   count: (answer: Response, at: Seen) => void,
   session: string | null = null,
+  signal?: AbortSignal,
 ) => {
   let path = new URL(req.url).pathname
   if (!shareable(req, path)) return null
@@ -94,6 +98,7 @@ export let asked = async (
   let pick = req.headers.get(PICK)
   // What Site holds at a key, and what it says of it, or null for a pass.
   let held = async (key: string, cookie?: string) => {
+    if (signal?.aborted) return null
     let got = await c.time(
       'page',
       () =>
@@ -109,6 +114,10 @@ export let asked = async (
         ),
       (r) => r.headers.get('cf-cache-status'),
     )
+    if (signal?.aborted) {
+      await got.body?.cancel()
+      return null
+    }
     // A hit carries the old render's timing, not work done for this view.
     if (!hit(got)) c.include(got.headers.get('server-timing'))
     let said = got.headers.get(SEEN)

@@ -74,6 +74,7 @@ import { WORKER } from '@yaks/platform/files'
 import { refuse, rejected } from './tool.ts'
 import { background, caught, refused, reported } from './defects.ts'
 import { modules } from '@yaks/esbuild'
+import { elapsed } from './lib/hops.ts'
 import {
   archived,
   type Retirement,
@@ -667,7 +668,13 @@ let called = <T>(
   who: Who,
   wait: keyof typeof workerWaits,
   read: (res: Response) => Promise<T>,
-  opts: { call?: string; at?: string; source?: string; cpuMs?: number } = {},
+  opts: {
+    call?: string
+    at?: string
+    source?: string
+    cpuMs?: number
+    browsers?: string[]
+  } = {},
 ): Promise<T | null> => {
   let { DISPATCH: dispatch, SESSION_SECRET: secret } = env
   if (!dispatch || !secret) return Promise.resolve(null)
@@ -677,8 +684,10 @@ let called = <T>(
   if (app.worker === '') return Promise.resolve(null)
   let ms = workerWaits[wait]
   return before(req, ms, new AppWorkerTimeout(ms), async (req) => {
-    if (env.STORE && who.person !== app.eid) {
-      who = await browsersOf({ STORE: env.STORE }, who)
+    if (env.STORE && who.person && who.person !== app.eid) {
+      who = opts.browsers
+        ? { ...who, browsers: opts.browsers }
+        : await browsersOf({ STORE: env.STORE }, who)
     }
     let { signal } = req
     let out = await handed(
@@ -701,7 +710,7 @@ let called = <T>(
         who,
         opts.cpuMs,
       )
-      res = await worker.fetch(out, { signal })
+      res = await elapsed('dispatch_wait', () => worker.fetch(out, { signal }))
     } catch (e) {
       if (nowhere(e)) return null
       throw e
@@ -863,10 +872,12 @@ export let ran = async (
   app: App,
   req: Request,
   who: Who,
+  // Available when the same authoritative route read supplied the claims.
+  browsers?: string[],
 ): Promise<Response | null> => {
   let res
   try {
-    res = await called(env, space, app, req, who, 'page', checked)
+    res = await called(env, space, app, req, who, 'page', checked, { browsers })
   } catch (e) {
     if (req.signal.aborted) throw e
     if (e instanceof AppWorkerTimeout) {

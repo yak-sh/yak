@@ -22,8 +22,10 @@ import {
   listing,
   LOGIN,
   remember,
+  SITE_CHECKED,
   type Timer,
 } from '../kept-page.ts'
+import { page as documentPath } from '@yaks/platform/files'
 import {
   opens,
   recordsUse,
@@ -58,7 +60,7 @@ import {
   spaceDoor,
   timedOut,
 } from '@yaks/platform/routes'
-import type { Clock } from '@yaks/fp'
+import { type Clock, within } from '@yaks/fp'
 import { VERSION } from '@yaks/workerd/worker'
 import { answerBy, resending } from '@yaks/workerd/fetch'
 import { workerWaits } from '@yaks/platform/app-worker'
@@ -135,6 +137,7 @@ let session = (req: Request, env: Host) => {
 // What an answer from here says about the time it took, under the same names
 // the gateway uses for its own.
 let served = 0
+let SITE_WAIT = 60
 let finished = (
   res: Response,
   env: Host,
@@ -186,6 +189,7 @@ export let kept = (
   env: FrontEnv,
   ctx: Lent,
   said: string[] = [],
+  signal?: AbortSignal,
 ): Promise<Response | number | null> | null => {
   let host = hostOf(req, env), path = new URL(req.url).pathname
   if (
@@ -247,27 +251,62 @@ export let kept = (
     !foreign(host, env) && host.slice(0, -apex(env).length - 1).includes('.')
   ) return null
   if (spaceDoor(path)) return null
-  return asked(req, env.SITE, host, null, timer(said), (answer, at) => {
-    if (env.VIEWS && isView(answer)) {
-      env.VIEWS.writeDataPoint(pointOf(req as Visited, answer, at))
-    }
-    if (answer.status < 400 && recordsUse(req) && !remembered(at.app)) {
-      ctx.waitUntil(
-        Promise.resolve(env.USES.used(at.app)).catch((e) =>
-          report(e, env, ctx, 'front used', req)
-        ),
-      )
-    }
-    // The page's scripts ask its store next, and a store asleep takes longer
-    // to start and boot than they take to load (page-cache.ts `shown`).
-    if (at.store && opens(answer)) {
-      ctx.waitUntil(
-        Promise.resolve(env.USES.wake(at.store)).catch((e) =>
-          report(e, env, ctx, 'front wake', req)
-        ),
-      )
-    }
-  }, session(req, env))
+  return asked(
+    req,
+    env.SITE,
+    host,
+    null,
+    timer(said),
+    (answer, at) => {
+      if (env.VIEWS && isView(answer)) {
+        env.VIEWS.writeDataPoint(pointOf(req as Visited, answer, at))
+      }
+      if (answer.status < 400 && recordsUse(req) && !remembered(at.app)) {
+        ctx.waitUntil(
+          Promise.resolve(env.USES.used(at.app)).catch((e) =>
+            report(e, env, ctx, 'front used', req)
+          ),
+        )
+      }
+      // The page's scripts ask its store next, and a store asleep takes longer
+      // to start and boot than they take to load (page-cache.ts `shown`).
+      if (at.store && opens(answer)) {
+        ctx.waitUntil(
+          Promise.resolve(env.USES.wake(at.store)).catch((e) =>
+            report(e, env, ctx, 'front wake', req)
+          ),
+        )
+      }
+    },
+    session(req, env),
+    signal,
+  )
+}
+
+// A shared-page hit is usually local. A miss can cross regions and start a
+// Worker before it knows whether it can serve the page. Give the gateway
+// its turn while an outstanding cache fill finishes.
+let glance = async (
+  req: Request,
+  env: FrontEnv,
+  ctx: Lent,
+  said: string[],
+) => {
+  let stop = new AbortController()
+  let at = (env.CLOCK?.now ?? Date.now)()
+  let work = Promise.resolve(kept(req, env, ctx, said, stop.signal))
+    .then((answer) => ({ answer }))
+  try {
+    let ready = await within(work, SITE_WAIT, env.CLOCK)
+    if (ready) return ready.answer
+    stop.abort()
+    ctx.waitUntil(work.catch((error) => {
+      report(error, env, ctx, 'front Site fill', req)
+    }))
+    return null
+  } finally {
+    said.push(`site;dur=${(env.CLOCK?.now ?? Date.now)() - at}`)
+  }
 }
 
 let report = (
@@ -312,6 +351,10 @@ let serving = async (
   waiting: (name: string) => void,
 ) => {
   let at = Date.now(), cold = served++ == 0, said: string[] = []
+  let host = hostOf(req, env)
+  let path = new URL(req.url).pathname
+  let appPage = host != apex(env) && documentPath(path) &&
+    shareable(req, path) && !spaceDoor(path)
   let refused: number | null = null
   try {
     if (cli(req, env)) {
@@ -328,20 +371,28 @@ let serving = async (
       }
     }
     waiting('site_wait')
-    let page = await kept(req, env, ctx, said)
+    let page = appPage
+      ? await glance(req, env, ctx, said)
+      : await kept(req, env, ctx, said)
     if (page instanceof Response) return finished(page, env, at, cold, said)
     refused = page
   } catch (error) {
     report(error, env, ctx, 'front fetch', req)
   }
   waiting('kernel_wait')
-  let path = new URL(req.url).pathname
   // Give app pages time to finish or reach their deadline before resending a
   // lost kernel hop. Platform doors keep the shorter retry interval.
   let app = hostOf(req, env) != apex(env) || homed(path) ||
     path.startsWith('/home/')
   let retry = app ? workerWaits.page + 5_000 : undefined
-  let res = await resending(env.KERNEL, req, env.CLOCK, retry)
+  let forwarded = req
+  if (appPage || req.headers.has(SITE_CHECKED)) {
+    let headers = new Headers(req.headers)
+    headers.delete(SITE_CHECKED)
+    if (appPage) headers.set(SITE_CHECKED, '1')
+    forwarded = new Request(req, { headers })
+  }
+  let res = await resending(env.KERNEL, forwarded, env.CLOCK, retry)
   if (path == VERSION) {
     let out = new Response(res.body, res)
     out.headers.set(FRONT_VERSION, env.CF_VERSION_METADATA?.id ?? '')
@@ -360,15 +411,20 @@ let serving = async (
     )
   }
   let mount = res.headers.get(UNKEPT_AT)
-  if (!mount) return res
+  if (res.status == 101 || !mount && !appPage) return res
   // An app whose pages are never kept pays the hop to Site once in a while,
   // not on every view.
-  remember(
-    env.SITE,
-    scope(hostOf(req, env), null, mount),
-  )
+  if (mount) remember(env.SITE, scope(host, null, mount))
   let out = new Response(res.body, res)
   out.headers.delete(UNKEPT_AT)
+  if (appPage) {
+    let timing = [
+      out.headers.get('server-timing'),
+      ...said,
+      `front;dur=${Date.now() - at}`,
+    ]
+    out.headers.set('server-timing', timing.filter(Boolean).join(', '))
+  }
   return out
 }
 

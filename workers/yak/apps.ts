@@ -188,6 +188,7 @@ import { edits, mode, reads, writes } from '@yaks/member'
 import { ACROSS } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, shown, told, unkept } from './page-cache.ts'
+import { SITE_CHECKED } from './kept-page.ts'
 import {
   type Alone,
   assetKept,
@@ -2671,6 +2672,12 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
   // is counted on this request's own tally (hops.ts) and reported beside the
   // stages it took.
   return c.counting(async () => {
+    let siteChecked = req.headers.has(SITE_CHECKED)
+    if (siteChecked) {
+      let headers = new Headers(req.headers)
+      headers.delete(SITE_CHECKED)
+      req = new Request(req, { headers })
+    }
     // Every request gets a verified browser instrument before any app code
     // runs. Page tokens and machine credentials have their own instrument
     // and may arrive with the ambient cookie stripped: never replace that
@@ -2688,7 +2695,7 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     let res = await browsing(
       req,
       env,
-      (r) => served(r, env, c, false, undefined, req),
+      (r) => served(r, env, c, false, undefined, req, undefined, siteChecked),
       remember,
     )
     return timed(
@@ -2739,6 +2746,7 @@ let served = async (
   copied: () => void = () => {},
   visitor = req,
   view?: Directory,
+  siteChecked = false,
 ): Promise<Response> => {
   let url = new URL(req.url)
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
@@ -2781,7 +2789,7 @@ let served = async (
     mount: req.headers.get(MOUNT),
   }, {
     kept: async () => {
-      if (edge) return null
+      if (edge || siteChecked) return null
       let { cookied } = await identity()
       let session = cookied && sessionCookie(req, env)
       return await asked(visitor, env, c, session || null)
@@ -2841,6 +2849,8 @@ let served = async (
     env = { ...env, RELEASE_VIEWS: views }
   }
   let { person, authenticated } = await identity()
+  let browserClaims = (who: Who) =>
+    who.person && who.person == person ? routing.browsers : undefined
   // A seat, from that read for the person it asked about, else the directory.
   let seatOf = (p: string) =>
     p == person && routing.role !== undefined
@@ -3165,11 +3175,8 @@ let served = async (
           : whoIs(req, env, seatOf, space!.eid, dir),
     )
   if (path.startsWith('/api/') && !itsApp(who, app)) {
-    // The route read the cookie's person's claims; any other caller asks.
-    let { browsers } = routing
-    who = who.person && who.person == person && browsers
-      ? { ...who, browsers }
-      : await browsersOf(env, who)
+    let browsers = browserClaims(who)
+    who = browsers ? { ...who, browsers } : await browsersOf(env, who)
   }
   // And the page's own address for its relative URLs: a sandboxed page's
   // carries a token for whoever loaded it, dying with their cookie.
@@ -3514,7 +3521,8 @@ let served = async (
   // refuses exactly what the page would have.
   let own = itself
     ? null
-    : await c.time('worker', () => ran(env, space!, app!, req, who))
+    : await c.time('worker', () =>
+      ran(env, space!, app!, req, who, browserClaims(who)))
   // A write the worker made for a stranger on the sample gave them a store of
   // their own (above): their browser is told it holds one, and the page that
   // asked that its store moved, as the page's own write tells them.

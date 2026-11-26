@@ -74,6 +74,8 @@ import { digest } from '@yaks/graph/sha256'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { handler as gateway } from './kernel.ts'
+import { SITE_CHECKED } from './kept-page.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 
 let platform = (vars: Partial<Env> = {}, physical = false) => {
   let runtime = bindings(SECRET, { BUILDER: operators, ...vars })
@@ -2068,6 +2070,48 @@ test('a space in the trash serves nothing, and its owner restores it', async () 
 })
 
 // ---- env.APP: the worker as the app's own gatekeeper (T-34303) --------------
+
+test('an app page passed by the front uses the gateway route and vouches for its visitor', async () => {
+  let calls: Request[] = []
+  await using k = await router((req) => {
+    calls.push(req)
+    return new Response('from the app')
+  })
+  let browser = crypto.randomUUID()
+  await k.dir.apply({
+    entities: [{ entity: { eid: browser }, browser: { by: ADA } }],
+  }, KERNEL)
+  let site = 0
+  k.env.SITE = {
+    fetch: () => {
+      site++
+      return Promise.resolve(
+        new Response(null, {
+          status: 204,
+          headers: { 'cache-control': 'no-store' },
+        }),
+      )
+    },
+  }
+  let cookie = await as(ADA)
+  let headers = { cookie, 'x-yak-browsers': 'unverified' }
+  assertEquals(
+    await (await apps.fetch(visit('/', { headers }), k.env)).text(),
+    'from the app',
+  )
+  assertEquals(
+    await (await apps.fetch(
+      visit('/', { headers: { ...headers, [SITE_CHECKED]: '1' } }),
+      k.env,
+    )).text(),
+    'from the app',
+  )
+  assertEquals(site, 1)
+  for (let call of calls) {
+    assertEquals(call.headers.get(SITE_CHECKED), null)
+    assertEquals(call.headers.get('x-yak-browsers'), instrumentEid(browser))
+  }
+})
 
 test('warming a worker leaves the decision to give its file with the worker', async () => {
   let calls: string[] = []

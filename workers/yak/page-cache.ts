@@ -7,9 +7,8 @@
 // yak-front (front/) asks Site first for a page any visitor could be sent,
 // so a kept page waits on no kernel to start (kept-page.ts holds that path).
 // It asks a customer's own domain by its hostname, and Site reads whose it is
-// on a miss (site.ts `atDomain`). The gateway (apps.ts `served`) asks too, at
-// the address it carried a domain to, and a page Site passed a moment ago
-// costs it one cached answer. On a miss Site serves the address as an
+// on a miss (site.ts `atDomain`). The gateway (apps.ts `served`) asks where
+// the front has not already tried the document. On a miss Site serves the address as an
 // anonymous visitor would be served it (apps.ts `edged`), and keeps it only
 // where @yaks/platform/kept `keepable` and `keep` say it is the same answer
 // for everyone.

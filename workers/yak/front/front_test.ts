@@ -6,6 +6,7 @@ import { FRONT_VERSION, type FrontEnv, serve, settled } from './front.ts'
 import { pageAt, personal, SEEN } from '@yaks/platform/kept'
 import type { Conversion } from '../arrival.ts'
 import { routes, VERSION } from '@yaks/workerd/worker'
+import { SITE_CHECKED } from '../kept-page.ts'
 
 let body = (claims: unknown) => `${btoa(JSON.stringify(claims))}.mac`
 let days = (n: number) => Date.now() / 1000 + n * 24 * 60 * 60
@@ -108,7 +109,9 @@ test('a front request returns a timeout and reports a pending kernel or Site', a
     )
     f.env.CLOCK = time
     let result = f.go(
-      service == 'site' ? at : 'https://yaks.app/connections?token=secret',
+      service == 'site'
+        ? 'https://yaks.app/gallery'
+        : 'https://yaks.app/connections?token=secret',
     )
     await time.advance(55_000)
     let timeout = await result
@@ -123,7 +126,9 @@ test('a front request returns a timeout and reports a pending kernel or Site', a
     assertEquals(error.error?.tags.waiting, `${service}_wait`)
     assertEquals(
       http.request?.url,
-      service == 'site' ? at : 'https://yaks.app/connections',
+      service == 'site'
+        ? 'https://yaks.app/gallery'
+        : 'https://yaks.app/connections',
     )
     await time.advance(120_000)
     assertEquals(f.errors.length, 1)
@@ -372,6 +377,27 @@ test('an address Site passes goes to the kernel, and is not asked again', async 
   assertEquals(await (await f.go(at)).text(), 'kernel')
   assertEquals(await (await f.go(at)).text(), 'kernel')
   assertEquals(f.asked.length, 1)
+})
+
+test('a cold app navigation goes to the gateway while Site fills its cache', async () => {
+  let time = clock(), fill = Promise.withResolvers<Response>()
+  let f = front(() => fill.promise)
+  f.env.CLOCK = time
+  let cookie = `yak_session=${body({ person: 'p', via: 'v', exp: days(80) })}`
+  let response = f.go(at, { headers: { cookie } })
+  await time.advance(100)
+
+  let answered = await response
+  assertEquals(await answered.text(), 'kernel')
+  assertStringIncludes(answered.headers.get('server-timing')!, 'site;dur=60')
+  assertEquals(f.forwarded[0].headers.get(SITE_CHECKED), '1')
+  assertEquals(f.forwarded[0].headers.get('cookie'), cookie)
+
+  let late = page({ [SEEN]: JSON.stringify({ app: 'a', stranger: true }) })
+  fill.resolve(late)
+  await Promise.all(f.retained)
+  assertEquals(late.bodyUsed, true)
+  assertEquals([f.asked.length, f.points.length, f.used.length], [1, 0, 0])
 })
 
 test('a broken Site is reported and answered by the kernel', async () => {
