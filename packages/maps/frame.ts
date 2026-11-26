@@ -53,8 +53,9 @@ export let Frame = (p: Framed): VNode => {
         { class: 'MapCredit' },
         h(
           'summary',
-          { 'aria-label': 'Map credits', title: 'Map credits' },
-          'ⓘ',
+          { title: 'Map credits' },
+          h('span', { 'aria-hidden': 'true' }, 'ⓘ'),
+          h('span', { class: 'MapCredit_Name' }, 'Map credits'),
         ),
         h('span', {
           dangerouslySetInnerHTML: { __html: provider.attribution },
