@@ -47,6 +47,8 @@ test('a long task is split by what it spent its time on', () => {
       ['task', 12],
       ['js _fit.2.js', 10],
     ],
+    styled: 0,
+    laid: 0,
   })
 })
 
@@ -56,4 +58,16 @@ test('a short task and another thread are left out', () => {
     tasks([...thread(['RunTask', 0, 20]), other], { name: 'yak-trace', ms: 0 }),
     [],
   )
+})
+
+test('a long task says how many elements it styled and objects it laid out', () => {
+  let events = thread(['RunTask', 0, 50], ['UpdateLayoutTree', 1, 10], [
+    'Layout',
+    20,
+    20,
+  ])
+  events[3].args = { elementCount: 700 }
+  events[4].args = { beginData: { dirtyObjects: 4000 } }
+  let [task] = tasks(events, { name: 'yak-trace', ms: 0 })
+  assertEquals([task.styled, task.laid], [700, 4000])
 })

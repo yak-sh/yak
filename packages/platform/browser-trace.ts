@@ -28,12 +28,24 @@ export type TraceEvent = {
   dur?: number
   pid: number
   tid: number
-  args?: { name?: string; data?: { url?: string } }
+  args?: {
+    name?: string
+    data?: { url?: string }
+    elementCount?: number
+    beginData?: { dirtyObjects?: number; elementCount?: number }
+  }
 }
 
 /** One long task: when it started (ms on the page's clock), how long it
- * took, and its time by what it was spent on, the most first. */
-export type Task = { at: number; ms: number; spent: [string, number][] }
+ * took, its time by what it was spent on, the most first, and how much its
+ * style and layout redid: the elements styled and the objects laid out. */
+export type Task = {
+  at: number
+  ms: number
+  spent: [string, number][]
+  styled: number
+  laid: number
+}
 
 // Script runs under these: their own time is the script's, named by the
 // file of the nearest one that says it.
@@ -140,6 +152,9 @@ export let tasks = (
     }
     close(Infinity)
     add('task', stack[0].own)
+    let count = (name: string, n: (e: TraceEvent) => number | undefined) =>
+      inside.filter((e) => e.name == name)
+        .reduce((sum, e) => sum + (n(e) ?? 0), 0)
     out.push({
       at: at(task.ts),
       ms: ms(task.dur!),
@@ -147,6 +162,11 @@ export let tasks = (
         .map(([label, us]) => [label, ms(us)] as [string, number])
         .filter(([, n]) => n >= 1)
         .sort((a, b) => b[1] - a[1]),
+      styled: count(
+        'UpdateLayoutTree',
+        (e) => e.args?.elementCount ?? e.args?.beginData?.elementCount,
+      ),
+      laid: count('Layout', (e) => e.args?.beginData?.dirtyObjects),
     })
   }
   return out

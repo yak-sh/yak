@@ -1117,7 +1117,12 @@ let loaded = async (
                 name: 'task',
                 url,
                 ms: t.ms,
-                parts: { at: t.at, ...Object.fromEntries(t.spent) },
+                parts: {
+                  at: t.at,
+                  ...Object.fromEntries(t.spent),
+                  styled: t.styled,
+                  laid: t.laid,
+                },
                 server: {},
               })),
             ],
