@@ -2212,12 +2212,7 @@ export let matchesPage = async (
 ) => {
   let { matchesOf } = await import('./matches.ts')
   let round = new URL(req.url).searchParams.get('round') ?? ''
-  let lists = reading(env, space, who)
-  let [read, news] = await Promise.all([
-    matchesOf(env, space, who, round ? { round } : {}),
-    updatesOf(env, space, who),
-    lists.listing,
-  ])
+  let read = await matchesOf(env, space, who, round ? { round } : {})
   let person = who.person ?? ''
   let view: MatchesView = {
     person,
@@ -2227,8 +2222,9 @@ export let matchesPage = async (
   return talkPage(env, space, who, beside, {
     title: 'Pick between drafts',
     status: 200,
-    waiting: news.updates.filter((u) => u.needs).length,
-    listed: await lists.drawn(),
+    // The shared side watches Updates counts, and loads its lists after paint.
+    waiting: 0,
+    listed: null,
     current: ['updates'],
     here: matchesAt(space, round),
     skip: ['#content', 'Skip to content'],
