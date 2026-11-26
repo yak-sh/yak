@@ -789,7 +789,7 @@ export class Builder extends Durable {
           })
         })
         let chat = once(async () =>
-          (await import('./chat.ts')).chatters(this.#env)
+          (await import('./chat.ts')).chatters(this.#env, 'operator')
         )
         let store: OperatorStore = await elapsed(
           'operator_open_wait',

@@ -49,6 +49,7 @@ import {
   managePath,
   manifestPath,
   type MarkedApp,
+  OPERATOR_ICON,
   rooted,
   type StoreDoor,
   talkPath,
@@ -1262,7 +1263,6 @@ let following = (newcomer: boolean): Follows => newcomer ? 'worked' : 'started'
 // chat, and the tags a phone reads beside it. The icon is the Operator's own
 // tile, the connector's, which is opaque, so iOS paints no black behind it.
 // Its scope is the whole origin, so signing in stays in the window.
-let ICON = '/connector-512.png'
 let whoseOf = (space: Space) =>
   `${space.operator}, ${possessive(space.title || space.slug)} Operator`
 let installable = (space: Space) =>
@@ -1275,7 +1275,7 @@ let installable = (space: Space) =>
     space.logo ? h('link', { rel: 'icon', href: logoPath(space) }) : null,
     h('link', {
       rel: 'apple-touch-icon',
-      href: logoPath(space, 'icon') ?? ICON,
+      href: logoPath(space, 'icon') ?? OPERATOR_ICON,
     }),
     h('meta', { name: 'mobile-web-app-capable', content: 'yes' }),
     h('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }),
@@ -1309,7 +1309,7 @@ export let installing = (space: Space) => {
     icons: [
       space.logo
         ? { src: logoPath(space, 'icon'), type: 'image/png', sizes: '512x512' }
-        : { src: ICON, type: 'image/png', sizes: '512x512' },
+        : { src: OPERATOR_ICON, type: 'image/png', sizes: '512x512' },
     ],
   }, {
     headers: {

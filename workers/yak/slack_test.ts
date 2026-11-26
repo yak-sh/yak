@@ -12,6 +12,7 @@ import { atApex } from './kernel.ts'
 import { apiCall } from './operator-integrations.ts'
 import { backTo, CONNECTION_INSTALL } from '@yaks/platform/routes'
 import { minted } from './session.ts'
+import { settingsAt } from './build-door.ts'
 
 let signing = 'fixture signing secret'
 let encoder = new TextEncoder()
@@ -64,7 +65,7 @@ let mention = (
   },
 })
 
-test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded replies, and disconnect', async () => {
+test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded replies showing its current name, and disconnect', async () => {
   let model = ai([{ text: 'Channel reply.' }, { text: 'Same thread.' }, {
     text: 'DM reply.',
   }])
@@ -78,7 +79,11 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
   let person = crypto.randomUUID(), checks = crypto.randomUUID()
   await meta(p.env).apply([
     { entity: { eid: person }, person: {} },
-    { entity: { eid: checks }, space: { slug: 'checks', store: 'checks' } },
+    {
+      entity: { eid: checks },
+      space: { slug: 'checks', store: 'checks' },
+      operator: { name: 'Hazel' },
+    },
     {
       entity: { eid: '$seat' },
       member: { person, space: checks, role: 'owner', own: true },
@@ -113,7 +118,7 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
         ok: true,
         access_token: 'xoxb-checks',
         token_type: 'bot',
-        scope: 'app_mentions:read,chat:write,im:history',
+        scope: 'app_mentions:read,chat:write,chat:write.customize,im:history',
         team: { id: 'TCHECKS', name: 'Checks Slack' },
       })
     }
@@ -150,6 +155,7 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
     assertEquals(connection.scopes, [
       'app_mentions:read',
       'chat:write',
+      'chat:write.customize',
       'im:history',
     ])
 
@@ -179,6 +185,7 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
     assertEquals((await intake(first)).status, 200)
     assertEquals((await intake(first)).status, 200)
     await p.settled()
+    await settingsAt(p.env, space, who, { name: 'Sage' })
     assertEquals(
       (await intake(mention('1785000000.000004', {
         thread_ts: first.event.ts,
@@ -202,6 +209,8 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
         body.channel,
         body.thread_ts,
         body.text,
+        body.username,
+        body.icon_url,
       ]),
       [
         [
@@ -210,6 +219,8 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
           'CGENERAL',
           first.event.ts,
           'Channel reply.',
+          'Hazel',
+          'https://yaks.app/connector-512.png',
         ],
         [
           'POST /api/chat.postMessage',
@@ -217,6 +228,8 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
           'CGENERAL',
           first.event.ts,
           'Same thread.',
+          'Sage',
+          'https://yaks.app/connector-512.png',
         ],
         [
           'POST /api/chat.postMessage',
@@ -224,6 +237,8 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
           'DDIRECT',
           dm.event.ts,
           'DM reply.',
+          'Sage',
+          'https://yaks.app/connector-512.png',
         ],
       ],
     )

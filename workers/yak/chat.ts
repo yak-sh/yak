@@ -70,7 +70,12 @@ import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import type { chatRows } from './connections.ts'
 import type { Integration } from '@yaks/connections'
-import { accountLink, integrationLogo, managePath } from '@yaks/platform/routes'
+import {
+  accountLink,
+  integrationLogo,
+  managePath,
+  OPERATOR_ICON,
+} from '@yaks/platform/routes'
 import { url as hostUrl } from '@yaks/platform/host'
 import { CallError } from '@yaks/tools/errors'
 import { named } from '@yaks/session/turn'
@@ -137,19 +142,37 @@ let speaker = async (env: Env, p: Platform, connection?: string) => {
   return token
 }
 
-/** The chatters the Operator's store posts its answers through, one per
- * platform: each posts with the bot that speaks for the answer's connection
- * (@yaks/connections `botOf`), and shows a room it is working on an answer
- * where its platform can. */
-export let chatters = (env: Env): Record<string, Chatter> =>
+let operatorAppearance = async (env: Env, connection: string) => {
+  let [held] = await read(env, line`.entity.eid=${connection}&.${CONNECTION}`)
+  let { owner } = comp(held, CONNECTION)
+  if (!owner) return
+  let { directoryOf } = await need()
+  let space = await directoryOf(env.STORE).at(String(owner))
+  if (space && !space.trashed) {
+    return { name: space.operator, icon: hostUrl(env, OPERATOR_ICON) }
+  }
+}
+
+/** The chatters stores post through, one per platform. Each uses the bot of
+ * the connection and, where supported, the Operator's current appearance. */
+export let chatters = (
+  env: Env,
+  from: 'operator' | 'app',
+): Record<string, Chatter> =>
   Object.fromEntries(
     [...PLATFORMS.values()].map((p) => {
       let { working } = p
       return [
         p.name,
         {
-          post: async (chat) =>
-            p.send(await speaker(env, p, chat.connection), chat),
+          post: async (chat) => {
+            let token = await speaker(env, p, chat.connection)
+            let appearance = from == 'operator' && p.messageAppearance &&
+                chat.connection
+              ? await operatorAppearance(env, chat.connection)
+              : undefined
+            return p.send(token, { ...chat, appearance })
+          },
           ...working
             ? {
               working: {
@@ -165,7 +188,7 @@ export let chatters = (env: Env): Record<string, Chatter> =>
   )
 
 /** The chatters an app's store posts its rows through (graph.ts), one per
- * platform that says which server a room is in: the Operator's,
+ * platform that says which server a room is in: the shared chatters,
  * {@link confined} to the servers of a connection that `at()`'s space owns,
  * the app `uses`, and that chats on that platform, connected
  * ({@link serves}). So an app's row reaches only rooms of its own
@@ -174,7 +197,7 @@ export let appChatters = (
   env: Env,
   at: () => { space?: string | null; app?: string | null },
 ): Record<string, Chatter> => {
-  let all = chatters(env)
+  let all = chatters(env, 'app')
   return Object.fromEntries(
     [...PLATFORMS.values()].filter((p) => p.server).map((p) => [
       p.name,

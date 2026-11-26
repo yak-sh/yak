@@ -62,7 +62,9 @@ export type Addressed = 'mention' | 'reply' | 'direct'
 /** A reply to post into a room, answering a message where it names one,
  * naming and pinging the one account `ping` where it names one, with
  * buttons where it has `controls`. */
-export type Reply = Omit<Chat, 'connection'>
+export type Reply = Omit<Chat, 'connection'> & {
+  appearance?: { name: string; icon: string }
+}
 
 /** A control (a button) someone pressed on a bot's message, as its platform
  * gives it: which control (`control`, its {@link Control} id), who pressed
@@ -268,6 +270,8 @@ export type Platform = {
   socket?: (credential: string) => Socket<unknown>
   /** Where the provider delivers messages to an HTTPS endpoint instead. */
   hook?: Hook
+  /** Whether the platform can show the bot's name and icon per message. */
+  messageAppearance?: true
   /** post a reply with a bot's credential */
   send: (
     credential: string,

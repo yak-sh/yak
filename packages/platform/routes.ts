@@ -396,6 +396,8 @@ let SHA = /^[0-9a-f]{64}$/
 /** The name a web manifest answers at, under an app's mount or a space's
  * Operator. */
 export let MANIFEST = 'manifest.webmanifest'
+/** The Operator's public icon. */
+export let OPERATOR_ICON = '/connector-512.png'
 /** What a space's Operator page installs from (operator-page.ts
  * `installing`). */
 export let manifestPath = (space: string) =>

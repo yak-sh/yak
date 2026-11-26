@@ -115,6 +115,9 @@ let send = async (
     channel: reply.room,
     text,
     ...thread ? { thread_ts: thread } : {},
+    ...reply.appearance
+      ? { username: reply.appearance.name, icon_url: reply.appearance.icon }
+      : {},
     unfurl_links: false,
     unfurl_media: false,
   })
@@ -155,6 +158,7 @@ export let slack: Platform = {
   title: 'Slack',
   place: 'workspace',
   limit: 4_000,
+  messageAppearance: true,
   mentions: mention,
   links: (words, url) =>
     words ? `<${url}|${words.replace(/[<>|]/g, '')}>` : `<${url}>`,
