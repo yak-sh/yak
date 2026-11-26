@@ -33,7 +33,13 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import { EPOCH, fenced, READS, type ServingCopyDoor } from './directory-copy.ts'
 import type { Env, Vars } from './env.ts'
 import { vouchOf } from '@yaks/platform/app-authority'
-import { directoryOf, directoryRows, part, type Row } from './directory.ts'
+import {
+  directoryOf,
+  directoryRows,
+  part,
+  type Row,
+  whereaboutsAsked,
+} from './directory.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { platformVocab } from './vocab.ts'
 import { bindings } from './binding-probe.ts'
@@ -119,9 +125,9 @@ export let rows = (
         return trashDoor(req, g, true)
       }
       if (url.pathname == '/whereabouts') {
-        assertEquals(req.method, 'POST')
+        assertEquals(req.method, 'GET')
         assertEquals(req.headers.get('x-yak-kernel'), '1')
-        let people = await req.json() as string[]
+        let people = await whereaboutsAsked(req)
         let history = await dir.whereabouts(people)
         let now = env.CLOCK?.now() ?? Date.now()
         return Response.json(people.flatMap((person) =>

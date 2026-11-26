@@ -314,6 +314,39 @@ test('a request answers an app from its first read until it asks again', async (
   })
 })
 
+// The directory's graph door asks a line once a request, as the directory
+// client does: until the request writes there, whatever it asked between,
+// and a live read asks every time. Where people are is a read like any other.
+test('a request asks the directory a line once, until it writes there', async () => {
+  let sent: string[] = []
+  let store = metaOf(
+    doorOf((req) => {
+      let url = new URL(req.url)
+      sent.push(`${req.method} ${url.pathname}`)
+      return Promise.resolve(Response.json([]))
+    }, PLATFORM_STORE),
+    {},
+    PLATFORM_STORE,
+  )
+  let dir = directory(fixture(store))
+  let ask = () => store.query(line`.space.slug=ada`)
+  await tallying(new Map(), async () => {
+    await ask()
+    await dir.whereabouts(['ada'])
+    await ask()
+    await store.query(line`.space.slug=ada`, { live: true })
+    await store.apply([])
+    await ask()
+  })
+  assertEquals(sent, [
+    'GET /query',
+    'GET /whereabouts',
+    'GET /query',
+    'POST /apply',
+    'GET /query',
+  ])
+})
+
 // Read real graph predicates so address/home filtering, not a stub's roster,
 // determines which apps may route a path.
 let routingGraph = graph({ storage: ram(routingVocab), vocab: routingVocab })

@@ -49,15 +49,28 @@ export type Build = {
   rows: number
 }
 
-/** Shared generation metadata, as any connection reads it. */
+/** Shared generation metadata, as any connection reads it: read once while
+ * its table's rows stand. */
+let builds = new WeakMap<Statements, { at: number; build: Build }>()
 export let current = (db: Statements): Build => {
-  let row = db.query(select({ from: table(BUILD) }))[0] ?? {}
-  return {
-    n: Number(row.n ?? 0),
-    model: (row.model as string | null) ?? null,
-    dim: Number(row.dim ?? 0),
-    rows: Number(row.rows ?? 0),
+  let at = db.revision('data', BUILD)
+  let held = builds.get(db)
+  if (held?.at !== at) {
+    let row = db.query(select({ from: table(BUILD) }))[0] ?? {}
+    builds.set(
+      db,
+      held = {
+        at,
+        build: {
+          n: Number(row.n ?? 0),
+          model: (row.model as string | null) ?? null,
+          dim: Number(row.dim ?? 0),
+          rows: Number(row.rows ?? 0),
+        },
+      },
+    )
   }
+  return { ...held.build }
 }
 
 let tally = (db: Statements, name: string): number =>

@@ -59,7 +59,7 @@ export let statements = (driver: Driver): Statements => {
     ownership: driver.file ? 'shared' : 'exclusive',
     inside: () => owned(driver),
     arms: driver.arms,
-    revision: (scope) => revision(driver, scope),
+    revision: (scope, table) => revision(driver, scope, table),
     atomic: (body) =>
       exclusive(driver, () =>
         enter((begun) =>

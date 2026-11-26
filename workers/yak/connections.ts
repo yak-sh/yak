@@ -243,15 +243,15 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
 }
 
 /** Settle each needed connection `owners` hold through a brokered
- * integration (@yaks/connections `settle`), or through `integration` alone,
- * and each one they began signing in to again there (`reconnecting`): a
- * sign-in that finished at its broker, which never sends the person back to
- * us. Whoever reads a person's connections settles theirs first, so nothing
- * waits on the broker telling us. */
+ * integration (@yaks/connections `settle`), or through `integration` alone
+ * (one name, or several), and each one they began signing in to again there
+ * (`reconnecting`): a sign-in that finished at its broker, which never sends
+ * the person back to us. Whoever reads a person's connections settles theirs
+ * first, so nothing waits on the broker telling us. */
 export let settling = async (
   env: Env,
   owners: string[],
-  integration?: string,
+  integration?: string | string[],
 ) => {
   let { read } = ctxOf(env).graph
   let held = owners.filter(Boolean)
@@ -1201,6 +1201,37 @@ export let addingAt = (env: Env, space: string, i: Integration) =>
     `${pageOf(env, space)}#${encodeURIComponent(i.name)}`,
     i.testing ? [i.name] : [],
   )
+
+/** A person's own connected connection through each integration, held for
+ * them by an agent working in `space` (the Operator), by the integration's
+ * name: theirs, or else that space's when they own it. One read of every
+ * connection both owners hold, which a request asks once (lib/hops.ts
+ * `recall`). */
+export let ownConnections = async (
+  env: Env,
+  ctx: Pick<Asking, 'person' | 'dir'>,
+  space: Pick<Space, 'eid'>,
+): Promise<Map<string, Bundle>> => {
+  let [role, rows] = await Promise.all([
+    ctx.dir.role(space, ctx.person),
+    meta(env).query(
+      line`.${CONNECTION}.owner=${[
+        ctx.person,
+        space.eid,
+      ]}&.${CONNECTION}.status=${'connected'}&*`,
+    ),
+  ])
+  let owners = role == 'owner' ? [ctx.person, space.eid] : [ctx.person]
+  let first = new Map<string, Bundle>()
+  for (let owner of owners) {
+    for (let b of rows) {
+      let c = comp(b, CONNECTION)
+      let name = String(c.integration)
+      if (c.owner == owner && !first.has(name)) first.set(name, b)
+    }
+  }
+  return first
+}
 
 /** A person's own connected connection through `integration`, held for them by
  * an agent working in `space` (the Operator): theirs, or else that space's when

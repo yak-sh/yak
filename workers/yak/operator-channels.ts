@@ -38,6 +38,7 @@ import { background, caught } from './defects.ts'
 import { CallError } from '@yaks/tools/errors'
 import { fullFiles } from './usage.ts'
 import type { Operator } from './operator.ts'
+import { counted } from './lib/hops.ts'
 import { phoneTexts } from './phone-move.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { fromApp, NEW_APP, onPage } from './operator-view.ts'
@@ -1631,7 +1632,7 @@ export let handleChannels = (
     ]
     return withheld.length ? { ...request, withheld } : request
   }
-  fx.handle({
+  fx.handle(counted({
     // How the Operator uses one of the person's own numbers changed: their
     // callbacks follow it (operator-line.ts `pointed`).
     operator_line_point: async (event) => {
@@ -2040,5 +2041,5 @@ export let handleChannels = (
         ...(receipt.id ? { operator_answer: { message_id: receipt.id } } : {}),
       }], { trusted: true })
     },
-  })
+  }))
 }

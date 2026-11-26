@@ -194,7 +194,7 @@ let kept = (driver: Driver, k: string): string | undefined => {
     }
     standing.add(driver)
   }
-  let at = revision(driver, 'data'), on = driver.connection ?? driver
+  let at = revision(driver, 'data', META), on = driver.connection ?? driver
   let read = held.get(on)
   if (read?.at !== at) held.set(on, read = { at, values: new Map() })
   if (!read.values.has(k)) read.values.set(k, meta(driver).get(k))

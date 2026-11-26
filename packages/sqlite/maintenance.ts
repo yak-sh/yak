@@ -24,6 +24,7 @@ import { backfill, classify, pointable, presence, strays } from './archetype.ts'
 import { beside, SEEDING, type Seeding, seedPage } from './history.ts'
 import { needless } from './ddl.ts'
 import { meta } from './meta.ts'
+import { META } from './layout.ts'
 import { componentTables, objects } from './physical.ts'
 import { OWED, owed } from './owe.ts'
 import { unit } from './unit.ts'
@@ -46,12 +47,12 @@ export let maintenance = (driver: Driver, vocab: Vocab) => {
   let marks = meta(driver)
   let classifying = () => marks.get(CLASSIFYING) != null
   // Asked before every read the store plans, and answered by two reads of
-  // `server_meta`: kept until the connection's data moves (@yaks/sql
-  // `revision`), which every write, rollback, DDL and other connection's
-  // commit does.
+  // `server_meta`: kept until that table's data moves (@yaks/sql
+  // `revision`), which a write to it, a rollback, DDL and another
+  // connection's commit do.
   let known: { at: number; pending: boolean } | undefined
   let pending = () => {
-    let at = revision(driver, 'data')
+    let at = revision(driver, 'data', META)
     if (known?.at === at) return known.pending
     let pending = classifying() ||
       owed(driver).some((w) =>

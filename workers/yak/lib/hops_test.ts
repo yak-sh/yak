@@ -6,6 +6,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import {
   apart,
+  counted,
   counts,
   elapsed,
   forget,
@@ -84,6 +85,17 @@ test('a request reads once, until it writes to what it read', async () => {
   // Another request asks for itself, and outside every request it is a read.
   await tallying(new Map(), async () => assertEquals(await read(), 3))
   assertEquals([await read(), await read()], [4, 5])
+})
+
+test('each run of a counted handler reads once, on a count of its own', async () => {
+  let read = asking()
+  let begun: Tally[] = []
+  let { run } = counted(
+    { run: async () => [await read(), await read()] },
+    (tally) => begun.push(tally),
+  )
+  assertEquals([await run(), await run()], [[1, 1], [2, 2]])
+  assertEquals(begun.length, 2)
 })
 
 test('a request that forgets a store reads it again, and only that store', async () => {

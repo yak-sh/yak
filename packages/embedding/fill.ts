@@ -56,10 +56,20 @@ export let schedule = (db: Statements, names: Iterable<string>): void => {
   }
 }
 
-/** Whether reconciliation still has source rows to visit. */
-export let filling = (db: Statements): boolean =>
-  db.query(select({ cols: [lit(1)], from: table(FILL), limit: lit(1) }))
-    .length > 0
+/** Whether reconciliation still has source rows to visit: looked at once
+ * while its table's rows stand. */
+let looked = new WeakMap<Statements, { at: number; filling: boolean }>()
+export let filling = (db: Statements): boolean => {
+  let at = db.revision('data', FILL)
+  let held = looked.get(db)
+  if (held?.at !== at) {
+    let rows = db.query(
+      select({ cols: [lit(1)], from: table(FILL), limit: lit(1) }),
+    )
+    looked.set(db, held = { at, filling: rows.length > 0 })
+  }
+  return held.filling
+}
 
 /** Queue at most `limit` candidate rows, including rows without eligible
  * text. Applying the keyset window before eligibility also bounds a long

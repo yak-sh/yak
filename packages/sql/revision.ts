@@ -19,6 +19,10 @@ type Tokens = {
 }
 type State = Tokens & {
   outside: number
+  /** writes by this connection's statements to each table, by its name */
+  tables: Map<string, number>
+  /** what moves every table's token: data changed in a way no table names */
+  wrote: number
   schemaVersion?: unknown
   dataVersion?: unknown
   /** where each open transaction and savepoint began */
@@ -45,8 +49,16 @@ let wrapped = new WeakSet<Driver>()
 // another connection's commit, a loaded library, a template, and DDL.
 type Scope = 'schema' | 'catalog' | 'data' | 'descriptors' | 'outside'
 
-/** A monotonic invalidation token, not a stored row or catalog fingerprint. */
-export function revision(driver: Driver, scope: Scope): number {
+/** A monotonic invalidation token, not a stored row or catalog fingerprint.
+ * With `named`, the `data` token of that one table: it moves when a statement
+ * names the table as the one it writes, and with whatever moves data without
+ * naming a table (a rollback, DDL, another connection's commit). A table
+ * written only by triggers on others never moves its own token. */
+export function revision(
+  driver: Driver,
+  scope: Scope,
+  named?: string,
+): number {
   let at = driver.connection ?? driver
   let state = held.get(at)
   if (!state) {
@@ -56,6 +68,8 @@ export function revision(driver: Driver, scope: Scope): number {
       data: 0,
       descriptors: 0,
       outside: 0,
+      tables: new Map(),
+      wrote: 0,
       scopes: [],
       seen: { schema: false, data: false },
     }
@@ -70,13 +84,16 @@ export function revision(driver: Driver, scope: Scope): number {
       current.data++
       current.descriptors++
       current.outside++
+      current.wrote++
     }
     let undo = (at: Tokens) => {
       if (current.schema != at.schema) current.schema++
       if (current.catalog != at.catalog) current.catalog++
-      if (current.data != at.data) current.data++
+      if (current.data != at.data) current.data++, current.wrote++
       if (current.descriptors != at.descriptors) current.descriptors++
     }
+    let wrote = (name: string) =>
+      current.tables.set(name, (current.tables.get(name) ?? 0) + 1)
     let observe = (s: Stmt): void => {
       // A raw statement is SQL this package wrote: a rendered one keeps the
       // statement it came from, and one without is a query the compiler
@@ -86,6 +103,9 @@ export function revision(driver: Driver, scope: Scope): number {
         return
       }
       if (s.t == 'insert' || s.t == 'update' || s.t == 'delete') current.data++
+      if (s.t == 'insert') wrote(s.into)
+      else if (s.t == 'update') wrote(s.table)
+      else if (s.t == 'delete') wrote(s.from)
       if (
         s.t == 'insert' && s.into == 'archetype' ||
         s.t == 'update' && s.table == 'archetype' ||
@@ -181,6 +201,7 @@ export function revision(driver: Driver, scope: Scope): number {
         state.data++
         state.descriptors++
         state.outside++
+        state.wrote++
       }
       if (inside) state.seen.schema = true
     }
@@ -192,9 +213,12 @@ export function revision(driver: Driver, scope: Scope): number {
         state.data++
         state.descriptors++
         state.outside++
+        state.wrote++
       }
       if (inside) state.seen.data = true
     }
   }
-  return state[scope]
+  return named != null && scope == 'data'
+    ? state.wrote + (state.tables.get(named) ?? 0)
+    : state[scope]
 }

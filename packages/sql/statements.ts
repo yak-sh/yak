@@ -16,8 +16,10 @@ export type Statements = {
   /** Entity rows point at the standard archetype table. A missing pointer
    * is corruption to report and repair before reading the entity. */
   archetypes?: boolean
-  /** Invalidation tokens include writes, DDL and rollback, and other hosts. */
-  revision: (scope: 'schema' | 'catalog' | 'data') => number
+  /** Invalidation tokens include writes, DDL and rollback, and other hosts.
+   * A `data` token of one `table` moves only with writes naming that table
+   * (@yaks/sql `revision`): for a table no trigger writes. */
+  revision: (scope: 'schema' | 'catalog' | 'data', table?: string) => number
   /** A unit on the adapter's transaction, nested where needed. A held writer
    * is awaited before the body starts, without blocking the calling thread.
    * The body is synchronous: an adapter's transaction may commit when it

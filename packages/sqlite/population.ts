@@ -174,11 +174,24 @@ export let installed = (driver: Driver): boolean => {
   return PARTS.every((s) => held.has(s.name))
 }
 
-// Whether the file keeps counts at all, one look at their table: what a plan
-// is sized by asks. A count gone stale sizes a plan badly and answers nothing,
-// and the next answer read from the counts seeds them anew ({@link population}).
-let kept = (driver: Driver): boolean =>
-  driver.query({ t: 'pragma', name: 'table_info', arg: POPULATION }).length > 0
+// Whether the file keeps counts at all, one look at their table, once while
+// the schema stands: what a plan is sized by asks. A count gone stale sizes a
+// plan badly and answers nothing, and the next answer read from the counts
+// seeds them anew ({@link population}).
+let looked = new WeakMap<object, { at: number; kept: boolean }>()
+let kept = (driver: Driver): boolean => {
+  let at = revision(driver, 'schema'), on = driver.connection ?? driver
+  let held = looked.get(on)
+  if (held?.at !== at) {
+    let rows = driver.query({
+      t: 'pragma',
+      name: 'table_info',
+      arg: POPULATION,
+    })
+    looked.set(on, held = { at, kept: rows.length > 0 })
+  }
+  return held.kept
+}
 
 /** Install once, after the entity schema and its archetype backfill stand.
  * Seeding and the triggers commit together; another opener sees both or none.
@@ -302,7 +315,6 @@ let counting = (driver: Driver, component?: string): number => {
 // `revision`): the reads of one summary share a revision, and ask once.
 type Counted = {
   at: number
-  kept?: boolean
   held: Map<string, number | undefined>
   looked: Map<string, boolean>
   numbered: Map<string, boolean>
@@ -352,7 +364,7 @@ let numbering = (driver: Driver, comp: string): boolean =>
 export let census = (driver: Driver): Census => ({
   held: (comp) => {
     let at = counted(driver)
-    if (!(at.kept ??= kept(driver))) return
+    if (!kept(driver)) return
     if (!at.held.has(comp)) at.held.set(comp, counting(driver, comp))
     return at.held.get(comp)
   },
@@ -379,14 +391,13 @@ export let census = (driver: Driver): Census => ({
   },
   numbered: (comp) => {
     let at = counted(driver)
-    if (!(at.kept ??= kept(driver))) return
+    if (!kept(driver)) return
     if (!at.numbered.has(comp)) at.numbered.set(comp, numbering(driver, comp))
     return at.numbered.get(comp)
   },
   // A count gone stale chooses a road badly and answers nothing.
   counts: () => {
-    let at = counted(driver)
-    if (!(at.kept ??= kept(driver))) return
+    if (!kept(driver)) return
     return { population: POPULATION, membership: MEMBERSHIP }
   },
 })

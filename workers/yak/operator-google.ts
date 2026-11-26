@@ -23,12 +23,14 @@ import {
   CONNECTION,
   type Integration,
   known,
+  knownAll,
+  knownIn,
 } from '@yaks/connections'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { addingAt, ctxOf, ownConnection, settling } from './connections.ts'
+import { addingAt, ctxOf, ownConnections, settling } from './connections.ts'
 import { vaulted } from './vault.ts'
 import { recall } from './lib/hops.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -276,21 +278,22 @@ export let googleAccounts = (
   recall(
     PLATFORM_STORE,
     `operator google ${ctx.person} ${space.eid}`,
-    () =>
-      Promise.all([CALENDAR, GMAIL, DRIVE].map(async (name) => {
-        // A sign-in finished at a broker is theirs from this ask on: the
-        // connection is read beside it, and again only once one settled.
-        let { read } = ctxOf(env).graph
-        let [made, i, held] = await Promise.all([
-          settling(env, [ctx.person, space.eid], name),
-          known(read, name),
-          ownConnection(env, ctx, space, name),
-        ])
-        return {
-          i,
-          held: made ? await ownConnection(env, ctx, space, name) : held,
-        }
-      })),
+    async () => {
+      // A sign-in finished at a broker is theirs from this ask on: the
+      // connections are read beside it, and again only once one settled.
+      let names = [CALENDAR, GMAIL, DRIVE]
+      let { read } = ctxOf(env).graph
+      let [made, built, held] = await Promise.all([
+        settling(env, [ctx.person, space.eid], names),
+        knownAll(read, names),
+        ownConnections(env, ctx, space),
+      ])
+      let own = made ? await ownConnections(env, ctx, space) : held
+      return names.map((name) => ({
+        i: knownIn(built, name),
+        held: own.get(name),
+      }))
+    },
   )
 
 /** The person's Google tools, each while its connection is connected. */

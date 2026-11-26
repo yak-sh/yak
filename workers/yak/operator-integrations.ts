@@ -20,7 +20,6 @@
 // Every connected service is said to the Operator in one line on each ask
 // (`integrationsTold`), so it reaches for one without being told to.
 import type { Bundle, Comp } from '@yaks/graph'
-import { line } from '@yaks/query'
 import {
   CONNECTION,
   type Integration,
@@ -33,7 +32,7 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { ctxOf, pageOf } from './connections.ts'
+import { ctxOf, ownConnections, pageOf } from './connections.ts'
 import { recall } from './lib/hops.ts'
 import { roomApi, roomApis } from './operator-rooms.ts'
 import type { OperatorStore } from './operator-store.ts'
@@ -102,25 +101,7 @@ export let connectedFor = (
     `operator integrations ${ctx.person} ${space.eid}`,
     async () => {
       let { read } = ctxOf(env).graph
-      let [role, rows] = await Promise.all([
-        ctx.dir.role(space, ctx.person),
-        read(
-          line`.${CONNECTION}.owner=${[
-            ctx.person,
-            space.eid,
-          ]}&.${CONNECTION}.status=${'connected'}&*`,
-        ),
-      ])
-      let owners = role == 'owner' ? [ctx.person, space.eid] : [ctx.person]
-      let first = new Map<string, Bundle>()
-      for (let owner of owners) {
-        for (let b of rows) {
-          let c = comp(b, CONNECTION)
-          let name = String(c.integration)
-          if (c.owner == owner && !first.has(name)) first.set(name, b)
-        }
-      }
-      let held = [...first.values()]
+      let held = [...(await ownConnections(env, ctx, space)).values()]
       let found = await Promise.all(
         held.map((b) => known(read, String(comp(b, CONNECTION).integration))),
       )

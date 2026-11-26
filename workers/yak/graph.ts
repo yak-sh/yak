@@ -407,7 +407,7 @@ import {
 } from './homes.ts'
 import { type Reach, read, written } from './reach.ts'
 import { vouched, vouchedAs, type Who } from './session.ts'
-import { type Role, SEED_DIRECTORY } from './directory.ts'
+import { type Role, SEED_DIRECTORY, whereaboutsAsked } from './directory.ts'
 import { beside, computed, type Reached, reached } from '@yaks/api/reached'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
@@ -5563,9 +5563,9 @@ export class Store extends Durable {
     }
     if (
       path == '/whereabouts' && kernel && this.#name() == PLATFORM_STORE &&
-      request.method == 'POST'
+      (request.method == 'GET' || request.method == 'POST')
     ) {
-      let people = await request.json() as string[]
+      let people = await whereaboutsAsked(request)
       return Response.json(await this.#pageWhereabouts(this.#graph, people))
     }
     if (path.startsWith('/branches') && kernel) {

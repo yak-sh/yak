@@ -131,13 +131,13 @@ import { caught, defect, filed } from './defects.ts'
 import { hearing } from './refusals.ts'
 import {
   ambient,
+  counted,
   counts,
   reached,
   recall as recallHop,
   since,
   spansOf,
   type Tally,
-  tallying,
   traced,
 } from './lib/hops.ts'
 import type { OperatorStore } from './operator-store.ts'
@@ -1617,22 +1617,14 @@ let working = async (
 }
 
 // Each step of an Operator session is counted and remembered as a request
-// is (lib/hops.ts): what it reads of the directory is asked once, until it
-// writes there, and its tool roster, instructions and payer share the
-// answers.
+// is (lib/hops.ts `counted`), and traced: its tool roster, instructions and
+// payer share the answers.
 let steps = new WeakSet<Tally>()
 let stepwise = (handlers: Handlers): Handlers =>
-  Object.fromEntries(
-    Object.entries(handlers).map(([name, handler]) => [
-      name,
-      (...args: Parameters<typeof handler>) => {
-        let tally: Tally = new Map()
-        steps.add(tally)
-        traced(tally)
-        return tallying(tally, () => handler(...args))
-      },
-    ]),
-  )
+  counted(handlers, (tally) => {
+    steps.add(tally)
+    traced(tally)
+  })
 
 // How long a step took to ask its model and hear its answer, and the round
 // trips it made on the way, in the Worker's logs: store hops, bucket reads,

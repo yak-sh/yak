@@ -33,6 +33,7 @@ import { background, reported } from './defects.ts'
 import { FILED, staleRefusal } from '@yaks/api/refuse'
 import { setImmediate } from 'node:timers'
 import { waiting } from './lib/waits.ts'
+import { recall } from './lib/hops.ts'
 import type { Asked } from '@yaks/query'
 
 /** The meta store, in the graph's own wire. */
@@ -149,10 +150,16 @@ export let restored = async (r: Response): Promise<Restored> => {
  * line as one parameter. This is what graph.ts's Store serves, at the
  * directory and at every app alike — {@link meta} is it aimed at
  * `yak/platform`, and unseen.ts aims it at one app's own store.
+ *
+ * Over a door that counts its writes to the store `named` (door.ts `doorOf`),
+ * a request asks each line once: asked again, it is answered from the first
+ * asking until the request writes there (lib/hops.ts `recall`). A live read
+ * asks the store now, every time.
  */
 export let metaOf = (
   store: Door,
   base: Record<string, string> = {},
+  named?: string,
 ): Meta => ({
   door: store,
   trash: (eids, page) =>
@@ -191,20 +198,27 @@ export let metaOf = (
       { ...base, ...KERNEL },
     ),
   query: (line, opts) => {
+    let path = `/query?q=${encodeURIComponent(line)}${
+      opts?.names ? '' : '&names=0'
+    }${opts?.live ? '&live=1' : ''}${opts?.listing ? '&listing=1' : ''}${
+      opts?.trusted ? '&trusted=1' : ''
+    }${opts?.graves ? '&graves=1' : ''}`
     // The Store requires the kernel header for a trusted read.
-    return store.consume(
-      `/query?q=${encodeURIComponent(line)}${opts?.names ? '' : '&names=0'}${
-        opts?.live ? '&live=1' : ''
-      }${opts?.listing ? '&listing=1' : ''}${
-        opts?.trusted ? '&trusted=1' : ''
-      }${opts?.graves ? '&graves=1' : ''}`,
-      async (r) => {
-        if (!r.ok) throw await answered(r)
-        return await r.json() as Bundle[]
-      },
-      {},
-      opts?.trusted ? { ...base, ...KERNEL } : base,
-    )
+    let read = () =>
+      store.consume(
+        path,
+        async (r) => {
+          if (!r.ok) throw await answered(r)
+          return await r.text()
+        },
+        {},
+        opts?.trusted ? { ...base, ...KERNEL } : base,
+      )
+    // Each caller parses its own rows from the text the request kept.
+    let rows = (text: string) => JSON.parse(text) as Bundle[]
+    return named && !opts?.live
+      ? recall(named, `meta ${path}`, read, true, rows)
+      : read().then(rows)
   },
   apply: (bundles, headers = {}, opts = {}) => {
     knownOptions(opts, ['stamp', 'check'])
@@ -262,7 +276,7 @@ export let meta = (
         wait: (seated) => waiting('directory_wait', seated),
       },
     )
-    doors.set(ns, held = metaOf(door))
+    doors.set(ns, held = metaOf(door, {}, PLATFORM_STORE))
   }
   return held
 }

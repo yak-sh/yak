@@ -217,6 +217,15 @@ export let known = async (
   return b?.[INTEGRATION] as Integration | undefined
 }
 
+/** The integrations of these names, as the graph holds them, in one read:
+ * each found among them by `knownIn`. */
+export let knownAll = (read: Read, names: string[]): Promise<Bundle[]> =>
+  Promise.resolve(
+    names.length
+      ? read(line`.entity.eid=${names.map(integrationEid)}&.${INTEGRATION}`)
+      : [],
+  )
+
 /** The built integration that stands in for the service `name`: the one of
  * that name, else one signing in through a broker's listing of it (Gmail for
  * Nango's google-mail). The catalog offers, the directory lists and the

@@ -69,6 +69,25 @@ export let reached = <T>(stage: string, value: T): T => {
   return value
 }
 
+/** Each of `handlers`, its every run counted and remembered as a request is
+ * (`tallying`): what one run reads is asked once, until it writes there.
+ * `begin` sees each run's own tally before the run starts. */
+// deno-lint-ignore no-explicit-any
+export let counted = <H extends Record<string, (...args: any[]) => unknown>>(
+  handlers: H,
+  begin: (tally: Tally) => void = () => {},
+): H =>
+  Object.fromEntries(
+    Object.entries(handlers).map(([name, handler]) => [
+      name,
+      (...args: unknown[]) => {
+        let tally: Tally = new Map()
+        begin(tally)
+        return tallying(tally, () => handler(...args))
+      },
+    ]),
+  ) as H
+
 /** The tally the work running now counts on, if any. */
 export let ambient = (): Tally | undefined => here.getStore()
 

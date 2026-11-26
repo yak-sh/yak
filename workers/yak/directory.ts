@@ -1260,13 +1260,10 @@ export let over = (store: Meta) => {
   return async (req: Request): Promise<Response> => {
     let url = new URL(req.url)
     if (
-      url.pathname == '/whereabouts' && req.method == 'POST' &&
+      url.pathname == '/whereabouts' && req.method == 'GET' &&
       req.headers.get('x-yak-kernel') == '1' && store.door
     ) {
-      return store.door('/whereabouts', {
-        method: 'POST',
-        body: req.body,
-      }, KERNEL)
+      return store.door(url.pathname + url.search, {}, KERNEL)
     }
     if (req.method == 'GET' && req.headers.has(EPOCH) && store.door) {
       return store.door(url.pathname + url.search, {}, {
@@ -2282,13 +2279,24 @@ export let kept = (
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>
 
+/** Where the directory answers where `people` are: each named once. */
+export let whereaboutsPath = (people: string[]) =>
+  `/whereabouts?${new URLSearchParams(people.map((p) => ['person', p]))}`
+
+/** The people a whereabouts read names: its `person`s, or, from a kernel
+ * older than the read being asked as one, the body it posted. */
+export let whereaboutsAsked = async (req: Request): Promise<string[]> =>
+  req.method == 'POST'
+    ? await req.json() as string[]
+    : new URL(req.url).searchParams.getAll('person')
+
 let remote = (via: Fetcher) => ({
+  // A read, asked as one: a request that asks where people are has written
+  // nothing, and what it read before still answers (lib/hops.ts `recall`).
   whereabouts: async (people: string[]): Promise<WhereaboutsRow[]> => {
     if (!people.length) return []
     let r = await via.fetch(
-      new Request('http://directory/whereabouts', {
-        method: 'POST',
-        body: JSON.stringify(people),
+      new Request(`http://directory${whereaboutsPath(people)}`, {
         headers: KERNEL,
       }),
     )
