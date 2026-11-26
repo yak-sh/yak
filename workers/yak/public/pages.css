@@ -850,8 +850,8 @@
     display: none;
   }
   /* A space's Dashboard (@yaks/platform/dashboard-view): its apps across
-     the top, what it could use next under them, then what its agents did
-     beside its Updates on a wide screen, and one above the other on a
+     the top, the box to ask its Operator under them, then what its agents
+     did beside its Updates on a wide screen, and one above the other on a
      phone, Updates first. */
   .Dash {
     display: grid;
@@ -862,20 +862,21 @@
     padding: 1rem;
     text-align: left;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "apps" "suggests" "updates" "work";
+    grid-template-areas: "apps" "ask" "updates" "work";
   }
   @media (min-width: 1000px) {
     .Dash {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      grid-template-areas: "apps apps" "suggests suggests" "work updates";
+      grid-template-areas: "apps apps" "ask ask" "work updates";
       padding: 1.5rem 2rem;
     }
   }
   .Dash_Apps {
     grid-area: apps;
   }
-  .Dash_Suggests {
-    grid-area: suggests;
+  .Dash_Ask {
+    grid-area: ask;
+    display: block;
   }
   .Dash_Work {
     grid-area: work;
@@ -960,7 +961,28 @@
     align-items: center;
     gap: .4rem;
   }
+  .Dash_AskForm {
+    display: flex;
+    gap: .5rem;
+    align-items: flex-end;
+    margin: 0 0 .6rem;
+  }
+  .Dash_AskBox {
+    flex: 1;
+    min-height: 3rem;
+    resize: vertical;
+    font: inherit;
+    padding: .5rem .7rem;
+  }
   @media (max-width: 999px) {
+    .Dash_AskForm {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .Dash_AskBox {
+      flex: 1 1 100%;
+      min-height: 5.5rem;
+    }
     .Dash_Suggests {
       flex-wrap: nowrap;
       overflow-x: auto;

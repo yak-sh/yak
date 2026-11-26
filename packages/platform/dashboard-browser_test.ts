@@ -13,6 +13,7 @@ import {
 } from './dashboard.ts'
 import { type DashboardView, VIEW_ATTR } from './dashboard-view.ts'
 import { graph } from './page-graph_fixture_test.ts'
+import { managePath } from './routes.ts'
 import { listedRows, spaceApps } from './space-apps.ts'
 import { updateCards, updateRows } from './update-rows.ts'
 
@@ -63,7 +64,7 @@ let offered = suggestionRows(ADA, SPACE, [
     name: 'people',
     says: 'Invite family to sign in to Strides',
     app: 'strides',
-    opens: 'people',
+    ask: 'I’d like my family to sign in to Strides.',
   },
   {
     name: 'install',
@@ -140,7 +141,7 @@ test('the Dashboard draws its apps most opened first, what its agents did, its s
       a.getAttribute('href')
     ),
     [
-      '/manage/ada/people',
+      '/ada/operator?say=I%E2%80%99d+like+my+family+to+sign+in+to+Strides.',
       '/ada/operator?say=How+do+I+add+Packing+List%3F',
     ],
   )
@@ -156,6 +157,24 @@ test('the Dashboard draws its apps most opened first, what its agents did, its s
     ['Approve'],
   )
   equal(texts('.Dash_Updates .Dash_Head .Badge'), ['1'])
+})
+
+test('a pressed suggestion writes its longer request in the box, which sends to the Operator', () => {
+  let { root } = bound()
+  let box = root.querySelector<HTMLTextAreaElement>('.Dash_AskBox')!
+  let pill = root.querySelector<HTMLElement>('[data-ask]')!
+  let press = new root.ownerDocument.defaultView!.Event('click', {
+    bubbles: true,
+    cancelable: true,
+  })
+  pill.dispatchEvent(press)
+  equal(press.defaultPrevented, true)
+  equal(box.value, 'I’d like my family to sign in to Strides.')
+  let form = box.closest('form')!
+  equal(
+    [form.getAttribute('action'), form.getAttribute('enctype'), box.name],
+    [managePath('operator', 'ada'), 'multipart/form-data', 'say'],
+  )
 })
 
 test('a dismissed suggestion is written through the page graph and gone once held', () => {

@@ -13,7 +13,7 @@
  *   each break its Operator took up on its own (yaks.app's unseen.ts `fix`)
  *   with what it said of it, and what it is working on now. The space's
  *   Operator store answers it as a live read of the person;
- * - `suggestion{space, rank, name, says, ask, opens, app}`: what the space
+ * - `suggestion{space, rank, name, says, ask, app}`: what the space
  *   could use and doesn't yet, picked from {@link FEATURES} by its facts
  *   (`Uses`), each said about one of its apps. The directory answers it;
  *   `dismissSuggestion{space, name}` dismisses one for good;
@@ -98,10 +98,9 @@ export let dashboardWords: VocabDoc = {
         name: str,
         says: str,
         ask: str,
-        opens: str,
         app: str,
       },
-      ['space', 'rank', 'name', 'says'],
+      ['space', 'rank', 'name', 'says', 'ask'],
     ),
     dismissSuggestion: row({ space: str, name: str }, ['space', 'name']),
   },
@@ -305,17 +304,16 @@ export type Fitted = { eid: string; slug: string; title: string }
 
 /** A feature of the platform as a row: `name` keys its dismissal; `uses`,
  * the fact that makes it moot; `app`, whether it is said about one of the
- * space's apps; `says`, its short line, and `ask`, the longer request it
- * hands the Operator, where `{app}` is the app's title, `{domain}` a domain
- * made of it and `{operator}` the Operator's name; or `opens`, the settings
- * page that does it. */
+ * space's apps; `says`, its short line, and `ask`, the longer request a
+ * press on it writes in the box to the Operator, where `{app}` is the app's
+ * title, `{domain}` a domain made of it and `{operator}` the Operator's
+ * name. */
 export type Feature = {
   name: string
   uses?: keyof Uses
   app: boolean
   says: string
-  ask?: string
-  opens?: 'domains' | 'people'
+  ask: string
 }
 
 /** The features a Dashboard suggests from, in the order it offers them. */
@@ -325,14 +323,16 @@ export let FEATURES: Feature[] = [
     uses: 'domain',
     app: true,
     says: 'Put {app} on {domain}',
-    opens: 'domains',
+    ask:
+      'I’d like {app} at its own address, {domain}. Check whether the domain is free, tell me what it costs a year, and set it up once I say yes.',
   },
   {
     name: 'people',
     uses: 'people',
     app: true,
     says: 'Invite family to sign in to {app}',
-    opens: 'people',
+    ask:
+      'I’d like my family to sign in to {app}. Tell me how to invite them, and what they will be able to see and change.',
   },
   {
     name: 'operator-texts',
@@ -365,13 +365,12 @@ export let FEATURES: Feature[] = [
 ]
 
 /** A suggestion as the Dashboard shows it: what it says, about which app,
- * and the request it hands the Operator or the settings page it opens. */
+ * and the longer request it writes in the box to the Operator. */
 export type Suggestion = {
   name: string
   says: string
   app?: string
-  ask?: string
-  opens?: Feature['opens']
+  ask: string
 }
 
 let domainOf = (title: string) =>
@@ -417,8 +416,7 @@ export let suggested = (
         name: f.name,
         says: filled(f.says, at.operator, app),
         app: app?.slug,
-        ask: f.ask && filled(f.ask, at.operator, app),
-        opens: f.opens,
+        ask: filled(f.ask, at.operator, app),
       })]
     })
     .slice(0, count)

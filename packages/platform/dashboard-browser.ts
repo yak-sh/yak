@@ -5,10 +5,11 @@
  * made, an update answered elsewhere.
  *
  * A Dashboard standing hidden beside another view of an Operator page
- * (./talk-views.ts) watches nothing until it is first shown. Dismissing a
- * suggestion writes `dismissSuggestion{space, name}` through the graph, so
- * it is gone in the frame it was pressed in, and for good once the door has
- * kept it; a refusal puts it back.
+ * (./talk-views.ts) watches nothing until it is first shown. Pressing a
+ * suggestion writes its longer request in the box to the Operator, to change
+ * and send. Dismissing one writes `dismissSuggestion{space, name}` through
+ * the graph, so it is gone in the frame it was pressed in, and for good once
+ * the door has kept it; a refusal puts it back.
  *
  * The view is `[data-view="dashboard"]`, saying what it draws for in
  * `data-dashboard-view` (`DashboardView`).
@@ -100,9 +101,17 @@ export let bindDashboard = (
     drawDashboard(root, view, rows, pending)
   }
   let click = (e: Event) => {
-    let button = (e.target as Element).closest<HTMLButtonElement>(
-      'button[data-dismiss]',
-    )
+    let pressed = e.target as Element
+    let ask = pressed.closest<HTMLElement>('a[data-ask]')
+    let box = root.querySelector<HTMLTextAreaElement>('.Dash_AskBox')
+    if (ask && box) {
+      e.preventDefault()
+      box.value = ask.dataset.ask!
+      box.focus()
+      box.setSelectionRange?.(box.value.length, box.value.length)
+      return
+    }
+    let button = pressed.closest<HTMLButtonElement>('button[data-dismiss]')
     if (!button) return
     let gone = dismissal(eid, button.dataset.dismiss!)
     Promise.resolve(graph.mutate([gone])).catch((error: unknown) =>

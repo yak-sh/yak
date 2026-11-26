@@ -1,7 +1,7 @@
 /**
  * A space's Dashboard (T-3702), the view at its own address, yaks.app/<space>:
- * its apps to open, most opened first; what the space could use next, each a
- * request to its Operator or the page that does it; what its agents did
+ * its apps to open, most opened first; a box to ask its Operator for something
+ * new, with what the space could use next to try in it; what its agents did
  * lately; and its Updates. It is drawn from rows (./dashboard.ts), by the
  * server for the first paint and by the browser as they move
  * (./dashboard-browser.ts).
@@ -12,6 +12,7 @@ import { type ComponentChildren as Kids, h } from 'preact'
 import { Badge } from '@yaks/ui/Badge'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
+import { Field } from '@yaks/ui/Field'
 import { Form } from '@yaks/ui/Form'
 import { Icon } from '@yaks/ui/Icon'
 import { Time } from '@yaks/ui/Time'
@@ -143,41 +144,70 @@ let appsPart = (view: DashboardView, { apps, pending }: Dashboard) =>
       : h('p', { class: 'Dash_None' }, 'No apps here yet.'),
   )
 
-// Where a suggestion leads: the settings page that does it, or the chat with
-// its request written in the box, for the person to change and send.
-let leads = (view: DashboardView, s: Suggestion) =>
-  s.opens
-    ? managePath(s.opens, view.space.slug)
-    : `${view.chat}?${new URLSearchParams({ say: s.ask ?? s.says })}`
+// A suggestion: its short line, which a press turns into its longer request
+// in the box (./dashboard-browser.ts), or without a script into the chat's
+// box; and its dismissal.
+let suggestion = (view: DashboardView, s: Suggestion) =>
+  h(
+    'span',
+    { class: 'Dash_Suggest', key: s.name },
+    h('a', {
+      href: `${view.chat}?${new URLSearchParams({ say: s.ask })}`,
+      'data-ask': s.ask,
+    }, s.says),
+    h('button', {
+      type: 'button',
+      'data-dismiss': s.name,
+      'aria-label': `Dismiss: ${s.says}`,
+      title: 'Dismiss',
+    }, '×'),
+  )
 
-let suggestsPart = (view: DashboardView, all: Suggestion[]) =>
-  all.length
-    ? h(
-      'section',
+// The box to ask the Operator for something new, and what to try: sending
+// starts a conversation and opens it.
+let askPart = (view: DashboardView, all: Suggestion[]) => {
+  let { slug, operator } = view.space
+  return h(
+    Card,
+    {
+      as: 'section',
+      class: 'Dash_Panel Dash_Ask',
+      'aria-labelledby': 'dash-ask',
+    },
+    head(
+      'dash-ask',
+      `Ask ${operator}`,
+      h('a', { href: view.chat }, 'Open the chat'),
+    ),
+    h(
+      'form',
       {
-        class: 'Dash_Suggests',
-        'aria-label': `${view.space.operator} could also`,
+        class: 'Dash_AskForm',
+        method: 'post',
+        action: managePath('operator', slug),
+        enctype: 'multipart/form-data',
       },
-      h(
-        'span',
-        { class: 'Dash_SuggestLead' },
-        `${view.space.operator} could also`,
-      ),
-      all.map((s) =>
-        h(
-          'span',
-          { class: 'Dash_Suggest', key: s.name },
-          h('a', { href: leads(view, s) }, s.says),
-          h('button', {
-            type: 'button',
-            'data-dismiss': s.name,
-            'aria-label': `Dismiss: ${s.says}`,
-            title: 'Dismiss',
-          }, '×'),
-        )
-      ),
-    )
-    : null
+      h(Field, {
+        lines: true,
+        name: 'say',
+        rows: 2,
+        required: true,
+        class: 'Dash_AskBox',
+        placeholder: `What should ${operator} do next?`,
+        'aria-label': `Ask ${operator}`,
+      }),
+      h(Button, { mod: 'go', type: 'submit' }, 'Send'),
+    ),
+    all.length
+      ? h(
+        'div',
+        { class: 'Dash_Suggests' },
+        h('span', { class: 'Dash_SuggestLead' }, 'Try'),
+        all.map((s) => suggestion(view, s)),
+      )
+      : null,
+  )
+}
 
 let didLine = (d: Did) =>
   h(
@@ -215,15 +245,7 @@ let workPart = (view: DashboardView, read: Dashboard) =>
       class: 'Dash_Panel Dash_Work',
       'aria-labelledby': 'dash-work',
     },
-    head(
-      'dash-work',
-      'Recent work',
-      h(
-        Button,
-        { mod: 'go', href: view.chat },
-        `Message ${view.space.operator}`,
-      ),
-    ),
+    head('dash-work', 'Recent work'),
     read.working
       ? h(
         'p',
@@ -347,7 +369,7 @@ let updatesPart = (view: DashboardView, read: Dashboard) => {
 /** The Dashboard of `view`'s space, as `read` says it. */
 export let dashboardView = (view: DashboardView, read: Dashboard) => [
   appsPart(view, read),
-  suggestsPart(view, read.suggestions),
+  askPart(view, read.suggestions),
   workPart(view, read),
   updatesPart(view, read),
 ]
