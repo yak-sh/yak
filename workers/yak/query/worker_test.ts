@@ -5,6 +5,9 @@ import { type FrontEnv, serve } from '../front/front.ts'
 import { handler } from '../kernel.ts'
 import { bearerFor, connector, fresh, signIn } from '../probe.ts'
 import { fetch, QUERY_VERSION } from './worker.ts'
+import outbound from '../outbound/worker.ts'
+import { GRANT, granting } from '../dispatch.ts'
+import { storeName } from '../directory.ts'
 
 test('the front serves anonymous, authenticated and sandboxed queries through the query Worker', async () => {
   let env!: Env
@@ -130,6 +133,44 @@ test('the front serves anonymous, authenticated and sandboxed queries through th
       await answer.body?.cancel()
     }
     assertEquals(kernelCalls, 0)
+
+    let scope = (await k.dir.space(space))!
+    let app = (await k.dir.app(scope, 'private'))!
+    let grant = await granting(env.SESSION_SECRET!, storeName(scope, app), {
+      person: owner.person,
+      role: 'owner',
+    }, app.policy)
+    let workerQuery = (stamp: string) =>
+      outbound.fetch(
+        new Request(`https://${host}/private/${query}`, {
+          headers: { [GRANT]: stamp, 'cf-connecting-ip': 'untrusted' },
+        }),
+        {
+          APEX: k.host,
+          CALLER: { app: app.eid },
+          QUERY: {
+            fetch: (req) => {
+              assertEquals(req.headers.get('cf-connecting-ip'), app.eid)
+              return fetch(req, env)
+            },
+          },
+          YAK: {
+            send: () => {
+              throw Error('A worker query reached the gateway')
+            },
+            fetch: () => {
+              throw Error('A worker query reached the gateway')
+            },
+          },
+        },
+        { waitUntil: () => {} },
+      )
+    let workerRead = await workerQuery(grant)
+    assertEquals(workerRead.status, 200, await workerRead.clone().text())
+    assertEquals((await workerRead.json())[0].doc.title, 'Private row')
+    let forged = await workerQuery('invalid')
+    assertEquals(forged.status, 401)
+    await forged.body?.cancel()
 
     front.QUERY = {
       fetch: (req: Request) =>

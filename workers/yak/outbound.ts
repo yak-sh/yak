@@ -47,6 +47,7 @@ import { directory, directoryOf } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { manageAt } from '@yaks/platform/routes'
 import { apex } from '@yaks/platform/host'
+import { appRequest } from '@yaks/platform/app-outbound'
 
 // The outside service's own failure, carried past the catch below unchanged.
 class Wire extends Error {
@@ -159,11 +160,9 @@ export let fromApp = async (
   let ours = host == apex(env) || host.endsWith(`.${apex(env)}`) ||
     await directory(bound(env.DIRECTORY, dirPart.fetch, env)).serves(host)
   if (!ours) return sent(env, caller, req)
-  let headers = new Headers(req.headers)
-  headers.set('cf-connecting-ip', caller.app)
   // The runtime's caller, rather than anything the app put in its request,
   // names the source at every platform door, including custom domains.
-  return serve(new Request(req, { headers }))
+  return serve(appRequest(req, caller.app))
 }
 
 // What a page's request says about the page and the platform, none of which

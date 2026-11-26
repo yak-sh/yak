@@ -1,5 +1,5 @@
 # yak-out (worker.ts): the kernel's dispatch namespace's outbound Worker, which
-# hands every fetch an app's worker makes back to the kernel. The kernel's own
+# hands the app's reads to yak-query and other calls to the kernel. The kernel's
 # deploy deploys it first, to the same environment (../wrangler.ts `outbound`),
 # so a push to main ships both.
 name = "yak-out"
@@ -14,6 +14,21 @@ binding = "YAK"
 service = "yak"
 entrypoint = "Outbound"
 
+[[services]]
+binding = "QUERY"
+service = "yak-query"
+
+[[queues.producers]]
+binding = "ERRORS"
+queue = "yak-errors"
+
+[vars]
+APEX = "yaks.app"
+WORKER_NAME = "yak-out"
+
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
 [env.staging]
 name = "yak-out-staging"
 workers_dev = false
@@ -23,3 +38,18 @@ preview_urls = false
 binding = "YAK"
 service = "yak-staging"
 entrypoint = "Outbound"
+
+[[env.staging.services]]
+binding = "QUERY"
+service = "yak-query-staging"
+
+[[env.staging.queues.producers]]
+binding = "ERRORS"
+queue = "yak-errors"
+
+[env.staging.vars]
+APEX = "yaks.fyi"
+WORKER_NAME = "yak-out-staging"
+
+[env.staging.version_metadata]
+binding = "CF_VERSION_METADATA"
