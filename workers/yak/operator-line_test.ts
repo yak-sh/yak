@@ -16,6 +16,7 @@ import { directoryOf } from './directory.ts'
 import { connecting, ctxOf, ended } from './connections.ts'
 import { credential, known } from '@yaks/connections'
 import { reveal } from '@yaks/secrets'
+import { replies } from '@yaks/phone'
 import {
   callable,
   operatorMemory,
@@ -343,6 +344,9 @@ await texted('stop-signup', '2695550199', 'STOP')
 await texted('stopped-signup', '2695550199', 'KIDS')
 let whileStopped = (await store.g.read('.operator_request')).length
 await texted('help-signup', '2695550199', 'HELP')
+let helpBack = of('sendSMS').concat(of('sendMMS')).findLast((t) =>
+  t.get('dst') == '2695550199'
+)!
 await texted('start-signup', '2695550199', 'START')
 await texted('yes-signup', '2695550199', 'yes')
 await service.drain()
@@ -770,6 +774,11 @@ test('a fresh text to the chosen voip.ms inbound number reaches only sign-up too
   assertEquals(signupBack.get('dst'), '2695550199')
   assertEquals(whileStopped, beforeControl)
   assertEquals(afterStart, beforeControl + 1)
+})
+
+test("a keyword's answer on a space's line is the number's words exactly, unsigned", () => {
+  assertEquals(helpBack.get('did'), '2695550111')
+  assertEquals(helpBack.get('message'), replies(space.title || space.slug).help)
 })
 
 test('a legacy voip.ms account-number connection answers without own_number rows', () => {

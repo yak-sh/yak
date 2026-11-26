@@ -649,8 +649,8 @@ export type Line = { phone: Texter; paid: boolean }
  * (`phoneSend`), or texting a number of the space's or one of its apps', in
  * their own conversation: texted back from the number they texted, signed as
  * that text was, through `lineFor`. A carrier's required answer (the
- * `control` channel) goes whatever the budget says and is counted all the
- * same.
+ * `control` channel) is the number's own words, exactly, with no signature;
+ * it goes whatever the budget says and is counted all the same.
  */
 export let answerText = async (
   env: Env,
@@ -671,7 +671,9 @@ export let answerText = async (
   let { directoryOf } = await import('./directory.ts')
   let person = String(comp(sent, 'operator_text').person ?? '')
   let me = person ? await directoryOf(env.STORE).known(person) : null
-  let body = `${text}\n\n${textedFor(space, me?.name || 'the sender')}`
+  let body = control
+    ? text
+    : `${text}\n\n${textedFor(space, me?.name || 'the sender')}`
   try {
     let receipt = await (paid && !control ? charged(env, space, phone) : phone)
       .send({ to, text: body, from })
