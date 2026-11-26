@@ -58,18 +58,49 @@ let scripts = (doc: Document, view: HTMLElement, base: string) => {
   return Promise.all(boot)
 }
 
-let joined = (
-  win: Window & typeof globalThis,
-  home: HTMLElement,
-  view: HTMLElement,
-  title: string,
-) => {
-  let { document: doc } = win
-  let address = win.location.pathname + win.location.search
+/** Mount the signed-in frame as a view beside the current site page.
+ *
+ * The view is in the document at once: an empty frame, `aria-busy` with a
+ * Loading line, drawn by the sheet Home and the workspace share. The page
+ * `first` answers fills it once it and its stylesheets are in, and its
+ * scripts boot after. A press before the scripts run draws in its own frame
+ * whatever the view holds by then, the frame or the page, and moves the
+ * address; a press after is the navigator's (@yaks/web/navigate). Where the
+ * page cannot be had (signed out, another importmap, an error), a press
+ * loads it instead.
+ */
+export let ready = (
+  link: HTMLAnchorElement,
+  to: string,
+  first: Promise<Response | null>,
+): ((input: Event) => Promise<void> | void) | undefined => {
+  let win = globalThis.window
+  let doc = link.ownerDocument
+  let home = doc.querySelector<HTMLElement>(HOME)
+  if (!home) return
+  let at = new URL(to, win.location.href)
+  let path = (url: URL | Location) => url.pathname + url.search
+  let address = path(win.location)
   let base = doc.querySelector('base[href]')
   let homeBase = base?.getAttribute('href')
   let homeTitle = doc.title
-  let workspaceTitle = title
+  let workspaceTitle = homeTitle
+  let view = doc.createElement('div')
+  let busy = doc.createElement('p')
+  busy.className = 'Loading'
+  busy.setAttribute('role', 'status')
+  busy.textContent = 'Loading…'
+  view.className = 'Site_Workspace'
+  view.setAttribute('data-site-frame', '')
+  view.setAttribute('aria-busy', 'true')
+  view.inert = true
+  view.append(busy)
+  // Set the boundary before installing the workspace sheet. The public view
+  // stays in its own layout while the workspace is built at viewport size.
+  doc.body.setAttribute('data-site-views', '')
+  doc.body.append(view)
+  let sheets: HTMLLinkElement[] = []
+  let shown = () => !view.inert
   let visible = (workspace: boolean) => {
     if (view.inert == !workspace) return
     view.inert = !workspace
@@ -85,121 +116,135 @@ let joined = (
     }
     view.dispatchEvent(new win.Event('yak-viewed', { bubbles: true }))
   }
-  let find = (event: Event) => {
-    if (!view.isConnected) return
-    let asked = (event as CustomEvent<Drawing>).detail
-    let draw = asked.draw
-    if (asked.to.pathname + asked.to.search == address) {
-      asked.draw = () => visible(false)
-      asked.focusAfterPaint = true
-    } else if (draw) {
-      asked.draw = () => {
-        visible(true)
-        draw()
-      }
-      asked.focusAfterPaint = true
-    }
+  // Show the view by a press of its own, before the navigator can.
+  let show = () => {
+    win.history.pushState(null, '', path(at))
+    visible(true)
   }
-  doc.addEventListener(DRAW, find)
-}
+  // Until the navigator runs, Back and Forward between Home and the view
+  // are these.
+  let popped = () =>
+    path(win.location) == address
+      ? visible(false)
+      : path(win.location) == path(at) && visible(true)
+  win.addEventListener('popstate', popped)
 
-/** Mount the signed-in frame as a view beside the current site page. */
-export let ready = async (
-  link: HTMLAnchorElement,
-  to: string,
-  first: Promise<Response | null>,
-): Promise<((input: Event) => Promise<void>) | undefined> => {
-  let win = globalThis.window
-  let doc = link.ownerDocument
-  let home = doc.querySelector<HTMLElement>(HOME)
-  if (!home) return
-  let response = await first
-  if (
-    !response?.ok ||
-    !response.headers.get('content-type')?.includes('text/html')
-  ) return
-  let at = new URL(response.url || to, win.location.href)
-  if (at.origin != win.location.origin || at.pathname.startsWith('/login')) {
-    return
-  }
-  let page = new win.DOMParser().parseFromString(
-    await response.text(),
-    'text/html',
-  )
-  if (!page.querySelector(`script[${TAKES}]`)) return
-  let map = (owner: Document) =>
-    owner.querySelector('script[type=importmap]')?.textContent
-  if (map(doc) != map(page)) return
-  let view = doc.createElement('div')
-  view.className = `Site_Workspace ${page.body.className}`
-  view.setAttribute('data-site-frame', '')
-  view.inert = true
-  for (let node of page.body.childNodes) view.append(doc.importNode(node, true))
-  for (let script of page.head.querySelectorAll('script[data-frame-script]')) {
-    view.append(doc.importNode(script, true))
-  }
-  // Set the boundary before installing the workspace sheet. The public view
-  // stays in its own layout while the workspace is built at viewport size.
-  doc.body.setAttribute('data-site-views', '')
-  let sheets = [
-    ...page.querySelectorAll<HTMLLinkElement>('link[rel=stylesheet]'),
-  ]
-    .map((sheet) => doc.importNode(sheet, true))
-  let discarded = false
+  let gone = false
   let discard = () => {
-    discarded = true
+    gone = true
+    win.removeEventListener('popstate', popped)
     if (view.isConnected) doc.dispatchEvent(new win.Event(LEAVE))
     view.remove()
     for (let sheet of sheets) sheet.remove()
     doc.body.removeAttribute('data-site-views')
     link.removeAttribute(READY)
   }
-  let timeout: number | undefined
-  try {
-    let prepare = async () => {
-      let styles = sheets.map((sheet) => loaded(sheet, 'load', sheet.href))
-      doc.head.append(...sheets)
-      await Promise.all(styles)
-      if (discarded) return
-      let boot = scripts(doc, view, at.href)
-      doc.body.append(view)
-      await boot
-    }
-    await Promise.race([
-      prepare(),
-      new Promise<never>((_, fail) => {
-        timeout = win.setTimeout(
-          () => fail(Error('The signed-in view did not start')),
-          10_000,
-        )
-      }),
-    ])
-  } catch (error) {
+  // The page is not to be had: a view a press showed loads it instead.
+  let fail = (error?: unknown) => {
+    if (error) globalThis.reportError?.(error)
+    if (gone) return
+    let was = shown()
     discard()
-    throw error
-  } finally {
-    win.clearTimeout(timeout)
+    if (was) win.location.replace(at.href)
   }
-  for (let pane of view.querySelectorAll<HTMLElement>(`[${SCROLL}="end"]`)) {
-    pane.scrollTop = pane.scrollHeight
-  }
-  joined(win, home, view, page.title)
-  let go = navigation(
-    win,
-    (a) => home.inert || !home.contains(a) || a.hasAttribute(READY),
-  )
-  link.href = at.href
-  link.setAttribute(READY, '')
-  win.addEventListener('storage', (event) => {
-    if (event.key != 'yak:signed' || event.newValue || !view.isConnected) return
-    if (view.inert) discard()
-    else win.location.reload()
-  })
-  return (input) =>
-    go(
-      at,
-      false,
-      result(doc, input),
-      Math.min(win.performance.now(), input.timeStamp),
+
+  // The page and its sheets, in the view; false where it is not to be had.
+  let fill = async () => {
+    let response = await first
+    if (
+      !response?.ok ||
+      !response.headers.get('content-type')?.includes('text/html')
+    ) return false
+    let answered = new URL(response.url || to, win.location.href)
+    if (
+      answered.origin != win.location.origin ||
+      answered.pathname.startsWith('/login')
+    ) return false
+    at = answered
+    let page = new win.DOMParser().parseFromString(
+      await response.text(),
+      'text/html',
     )
+    if (!page.querySelector(`script[${TAKES}]`)) return false
+    let map = (owner: Document) =>
+      owner.querySelector('script[type=importmap]')?.textContent
+    if (map(doc) != map(page)) return false
+    sheets = [...page.querySelectorAll<HTMLLinkElement>('link[rel=stylesheet]')]
+      .map((sheet) => doc.importNode(sheet, true))
+    let styles = sheets.map((sheet) => loaded(sheet, 'load', sheet.href))
+    doc.head.append(...sheets)
+    await Promise.all(styles)
+    if (gone) return false
+    let nodes = [...page.body.childNodes].map((n) => doc.importNode(n, true))
+    for (
+      let script of page.head.querySelectorAll('script[data-frame-script]')
+    ) {
+      nodes.push(doc.importNode(script, true))
+    }
+    view.className = `Site_Workspace ${page.body.className}`
+    view.removeAttribute('aria-busy')
+    view.replaceChildren(...nodes)
+    workspaceTitle = page.title
+    if (shown()) {
+      win.history.replaceState(null, '', path(at))
+      doc.title = workspaceTitle
+    }
+    for (let pane of view.querySelectorAll<HTMLElement>(`[${SCROLL}="end"]`)) {
+      pane.scrollTop = pane.scrollHeight
+    }
+    return true
+  }
+
+  let go: ReturnType<typeof navigation> | undefined
+  let boot = async () => {
+    if (!await fill()) return fail()
+    await scripts(doc, view, at.href)
+    if (gone) return
+    win.removeEventListener('popstate', popped)
+    doc.addEventListener(DRAW, (event) => {
+      if (!view.isConnected) return
+      let asked = (event as CustomEvent<Drawing>).detail
+      let draw = asked.draw
+      if (path(asked.to) == address) {
+        asked.draw = () => visible(false)
+        asked.focusAfterPaint = true
+      } else if (draw) {
+        asked.draw = () => {
+          visible(true)
+          draw()
+        }
+        asked.focusAfterPaint = true
+      }
+    })
+    go = navigation(
+      win,
+      (a) => home.inert || !home.contains(a) || a.hasAttribute(READY),
+    )
+    link.href = at.href
+    link.setAttribute(READY, '')
+    win.addEventListener('storage', (event) => {
+      if (event.key != 'yak:signed' || event.newValue || !view.isConnected) {
+        return
+      }
+      if (view.inert) discard()
+      else win.location.reload()
+    })
+  }
+  let timeout = win.setTimeout(
+    () => !go && fail(Error('The signed-in view did not start')),
+    10_000,
+  )
+  boot().catch(fail).finally(() => win.clearTimeout(timeout))
+
+  return (input) => {
+    let began = Math.min(win.performance.now(), input.timeStamp)
+    let pressed = result(doc, input)
+    if (go) return go(at, false, pressed, began)
+    if (gone) {
+      pressed?.leaving()
+      return win.location.assign(at.href)
+    }
+    if (!shown()) show()
+    pressed?.drawn(0)
+  }
 }

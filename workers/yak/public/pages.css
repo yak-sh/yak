@@ -308,31 +308,6 @@
     padding: 0;
     text-align: left;
   }
-  .Site_Workspace {
-    position: fixed;
-    inset: 0;
-    z-index: 1;
-    contain: layout paint;
-    overflow: hidden;
-    overscroll-behavior: contain;
-    will-change: opacity;
-  }
-  .Site_Workspace[inert] {
-    opacity: 0;
-  }
-  [data-site-home] {
-    isolation: isolate;
-  }
-  /* On touch screens stop painting the Home scene behind the Operator.
-     Home stays laid out so Back keeps its scroll. */
-  @media (pointer: coarse) {
-    [data-site-views] [data-site-home] {
-      will-change: opacity;
-    }
-    [data-site-views] [data-site-home][inert] {
-      opacity: 0;
-    }
-  }
   /* What the column holds is sized to it: the yak beside the Operator's
      box (operator-page.ts `composer`), and what its bar opens. */
   .Frame_Column {

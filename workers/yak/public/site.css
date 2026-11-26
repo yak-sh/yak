@@ -80,3 +80,41 @@
     --float: 10;
   }
 }
+
+/* Home's signed-in view (@yaks/web/ready): a layer over Home, drawn by the
+   sheet both share so a press shows its frame (`aria-busy`, a Loading line)
+   before the workspace's own sheet is in. */
+@layer sections {
+  .Site_Workspace {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    contain: layout paint;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    will-change: opacity;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+  }
+  .Site_Workspace[aria-busy] {
+    display: grid;
+    place-items: center;
+  }
+  .Site_Workspace[inert] {
+    opacity: 0;
+  }
+  [data-site-home] {
+    isolation: isolate;
+  }
+  /* On touch screens stop painting the Home scene behind the Operator.
+     Home stays laid out so Back keeps its scroll. */
+  @media (pointer: coarse) {
+    [data-site-views] [data-site-home] {
+      will-change: opacity;
+    }
+    [data-site-views] [data-site-home][inert] {
+      opacity: 0;
+    }
+  }
+}
