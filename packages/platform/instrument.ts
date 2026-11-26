@@ -28,3 +28,23 @@ export let agentRow = (person: string, name: string): {
   doc: { title: name },
   acts_for: { person },
 })
+
+/** The name of an agent whose client named nothing, which nobody can say
+ * more of: its stamps read "an agent". */
+export let UNNAMED = 'agent'
+
+/**
+ * What an agent row is called on a stamp: its name, or null where its client
+ * named nothing (`UNNAMED`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(agentName(agentRow('p', 'Claude')), 'Claude')
+ * assertEquals(agentName(agentRow('p', UNNAMED)), null)
+ * assertEquals(agentName({}), null)
+ * ```
+ */
+export let agentName = (row: object): string | null => {
+  let title = (row as { doc?: { title?: unknown } }).doc?.title
+  return typeof title == 'string' && title && title != UNNAMED ? title : null
+}

@@ -37,6 +37,74 @@ export let GRANTS = '.agentGrant'
 /** A grant as the directory lists it: no secret of it, only which it is. */
 export type Grant = { id: string; client: string; created: number }
 
+let NAMES: Record<Brand, string> = {
+  chatgpt: 'ChatGPT',
+  claude: 'Claude',
+  'claude-code': 'Claude Code',
+  cursor: 'Cursor',
+}
+
+let branded = (name = ''): Brand | undefined => {
+  switch (name.trim().toLowerCase().replaceAll(/[-_]/g, ' ')) {
+    case 'chatgpt':
+      return 'chatgpt'
+    case 'claude':
+    case 'claude ai':
+    case 'claude.ai':
+    case 'claude desktop':
+      return 'claude'
+    case 'claude code':
+      return 'claude-code'
+    case 'cursor':
+      return 'cursor'
+  }
+}
+
+// The brand a callback's host names, or `local` for a client on the person's
+// own machine, which can only be known by the name it gives.
+let hosted = (uri: string | undefined): { brand?: Brand; local?: boolean } => {
+  if (!uri) return { local: true }
+  try {
+    let url = new URL(uri)
+    if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+      return { local: true }
+    }
+    if (url.protocol == 'https:') {
+      if (['chatgpt.com', 'chat.openai.com'].includes(url.hostname)) {
+        return { brand: 'chatgpt' }
+      }
+      if (['claude.ai', 'claude.com'].includes(url.hostname)) {
+        return { brand: 'claude' }
+      }
+    }
+  } catch { /* An invalid callback cannot identify an agent. */ }
+  return {}
+}
+
+/**
+ * What an agent is called, as the person's connections name it, from what
+ * its OAuth grant keeps: the host its callback returns to, else the name the
+ * client gave itself (at consent, or at an MCP `initialize`). A known agent
+ * is named by its brand; any other by its own name, or none.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(agentCalled('https://claude.ai/api/mcp/auth_callback'), { brand: 'claude', name: 'Claude' })
+ * assertEquals(agentCalled(undefined, 'claude-code'), { brand: 'claude-code', name: 'Claude Code' })
+ * assertEquals(agentCalled(undefined, ' Zed '), { name: 'Zed' })
+ * assertEquals(agentCalled('https://example.com/cb'), {})
+ * ```
+ */
+export let agentCalled = (
+  redirect?: string,
+  name?: string,
+): { brand?: Brand; name?: string } => {
+  let host = hosted(redirect)
+  let brand = host.brand ?? (host.local ? branded(name) : undefined)
+  if (brand) return { brand, name: NAMES[brand] }
+  return name?.trim() ? { name: name.trim() } : {}
+}
+
 /** Where an agent with a web app is opened, to ask it for an app there. */
 export let DESTINATIONS: Partial<
   Record<Brand, { href: string; label: string }>

@@ -11,7 +11,7 @@ import { type Directory, directory, type Role } from './directory.ts'
 import { copyOf } from './directory-copy.ts'
 import * as dirPart from './directory.ts'
 import { CLI_GRANT, GRANT, ledger, sealed } from './grants.ts'
-import { stands } from './grant-rows.ts'
+import { held } from './grant-rows.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import { bound, type Env } from './env.ts'
 import { says } from '@yaks/platform/routes'
@@ -82,17 +82,19 @@ export let asking = async (
   dir: Directory = dirOf(env),
 ): Promise<{ who: Caller | null; tried: boolean }> => {
   // The caller, once the directory says their person stands: by
-  // `standing`, a credential's own read that says it with the person's row,
-  // else by asking. `ahead` starts on them meanwhile.
+  // `standing`, a credential's own read that says it with the person's row
+  // and what more that row tells of the caller, else by asking. `ahead`
+  // starts on them meanwhile.
   let person = async (
     who: Caller | null,
-    standing?: () => Promise<boolean>,
+    standing?: () => Promise<Partial<Caller> | null>,
   ) => {
     if (!who) return null
     ahead?.(who)
-    return await (standing ? standing() : dir.hasPerson(who.person))
-      ? who
-      : null
+    let more = standing
+      ? await standing()
+      : await dir.hasPerson(who.person) && {}
+    return more ? { ...who, ...more } : null
   }
   let said = req.headers.get('authorization') ?? ''
   let cookied = sessionCookie(req, env)
@@ -120,7 +122,7 @@ export let asking = async (
             space: g.space,
             ...g.spaceEid ? { spaceEid: g.spaceEid } : {},
             instrument: instrumentEid(`${CLI_GRANT}:${g.person}:${g.id}`),
-          }, () => book.stands(g.person, g.id))
+          }, async () => await book.stands(g.person, g.id) ? {} : null)
           : null,
         tried,
       }
@@ -128,7 +130,9 @@ export let asking = async (
     // Only an agent's token needs the provider's verifier. Whether its grant
     // still stands is the directory's word, read with the person's row:
     // KV, which the provider reads the token from, keeps a revoked one
-    // answering wherever it was read.
+    // answering wherever it was read. The grant's row also names the agent
+    // holding it, as the person's connections do: a connector that
+    // initialized signed out holds no session naming its client.
     let { person: id, grant, until } =
       await (await import('./oauth-provider.ts'))
         .unwrapped(env, token)
@@ -139,7 +143,7 @@ export let asking = async (
           via: 'oauth',
           until,
           instrument: instrumentEid(`oauth:${sha256(token)}`),
-        }, () => stands(dir, grant, id))
+        }, () => held(dir, grant, id))
         : null,
       tried,
     }

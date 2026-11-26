@@ -135,7 +135,7 @@ import type { Alerting } from './operator-alerts.ts'
 import type { Subscription } from '@yaks/push'
 import type { Row as GrantRow } from './grant-rows.ts'
 import { principals, type Stamp, stampOf, writers } from './stamps.ts'
-import { instrumentEid } from '@yaks/platform/instrument'
+import { agentName, instrumentEid } from '@yaks/platform/instrument'
 import { type Id, idOf, unnamed } from '@yaks/platform/listing'
 import { type AppDraft, withLegacy } from '@yaks/platform/draft-choice'
 import { sharing } from './lib/shared.ts'
@@ -4112,15 +4112,10 @@ export let directoryRows = (rows: {
       let apps = line`app.space${sub(space.path)}`
       // Each stamp's writer comes back beside the row it stamps, as a bundle
       // of its own (@yaks/graph projections): their names, and for an agent
-      // the person it writes for and theirs.
-      let names = ['doc.title', 'email.address', 'phone.number']
+      // that it is one.
       let who = (stamp: string) => [
         line`${stamp}.at`,
-        ...[
-          ...names,
-          'acts_for.person',
-          ...names.map((n) => `acts_for.person.${n}`),
-        ]
+        ...['doc.title', 'email.address', 'phone.number', 'acts_for.person']
           .map((n) => line`${stamp}.by.${n}`),
       ]
       let [made, releases] = await Promise.all([
@@ -4162,13 +4157,7 @@ export let directoryRows = (rows: {
         if (at && at.at > (was.deployed?.at ?? '')) was.deployed = at
         of.set(app, was)
       }
-      let rows = [...made, ...releases]
-      let theirs = new Set(
-        principals(rows.filter((r) => by.has(r.entity.eid))),
-      )
-      let named = rows.filter((r) =>
-        by.has(r.entity.eid) || theirs.has(r.entity.eid)
-      )
+      let named = [...made, ...releases].filter((r) => by.has(r.entity.eid))
       return { of, writers: writers(named) }
     },
     // The releases agents put out in `space` (T-3702), newest first, at most
@@ -4201,7 +4190,7 @@ export let directoryRows = (rows: {
       let agents = new Map(
         (others.length
           ? await query(line`.entity.eid=${others}&.acts_for&?doc`)
-          : []).map((r) => [r.entity.eid, r.doc?.title || 'An agent']),
+          : []).map((r) => [r.entity.eid, agentName(r) ?? 'An agent']),
       )
       return stamps.flatMap(({ app, version, at, by }) =>
         by == space.eid
@@ -4257,17 +4246,11 @@ export let directoryRows = (rows: {
         }],
       }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
     },
-    // What each writer is called (stamps.ts `writers`): a person, or an agent
-    // for its person, whose row is read beside it.
+    // What each writer is called (stamps.ts `writers`): a person, or an agent.
     writers: async (eids: string[]): Promise<Map<string, string>> => {
       let ids = [...new Set(eids)]
       if (!ids.length) return new Map()
-      let rows = await query(line`.entity.eid=${ids}`)
-      let more = principals(rows).filter((p) => !ids.includes(p))
-      return writers([
-        ...rows,
-        ...more.length ? await query(line`.entity.eid=${more}`) : [],
-      ])
+      return writers(await query(line`.entity.eid=${ids}`))
     },
     // The person each writer stands for: an agent's, by its `acts_for`, and
     // anyone else themself. Who made a release, as a space's membership

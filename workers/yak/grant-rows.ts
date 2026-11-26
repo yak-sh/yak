@@ -27,6 +27,7 @@ import { identityEid } from '@yaks/graph'
 import type { GrantSummary } from '@cloudflare/workers-oauth-provider'
 import { Pending } from '@yaks/api/log'
 import type { Directory } from './directory.ts'
+import { agentCalled } from '@yaks/platform/agents'
 
 /** An `oauth_grant` row: what a listing shows of one grant. Times are unix
  * seconds, as the provider keeps them; `until` is when KV lets the grant go
@@ -138,20 +139,27 @@ let revoked = (id: string): Bundle => ({
 })
 
 /**
- * Whether a token's grant still stands, as the directory says (T-1353): the
+ * Whether a token's grant still stands, as the directory says (T-1353), and
+ * if so, the agent holding it by the name the person's connections call it
+ * (@yaks/platform/agents `agentCalled`), or `{}` where its row names none. The
  * provider reads the token from KV, which a location that read it before a
  * revocation keeps answering for a minute or more. A grant the provider
  * deleted has its row cancelled, so its tokens are refused at once. A grant
  * with no row is still KV's to answer: rows began after grants did, and a row
  * KV let go on its own (`listing`) names no token.
  */
-export let stands = async (
+export let held = async (
   dir: Pick<Directory, 'credential'>,
   grant: string,
   person: string,
-) => {
+): Promise<{ agent?: string } | null> => {
   let { present, row } = await dir.credential(eidOf(grant), person)
-  return present && !row?.cancelled
+  if (!present || row?.cancelled) return null
+  let g = row?.oauth_grant
+  let { name } = g
+    ? agentCalled(g.redirect ?? undefined, g.name ?? undefined)
+    : {}
+  return name ? { agent: name } : {}
 }
 
 /** The grant a row lists, as the provider summarizes one. */

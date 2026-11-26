@@ -1,7 +1,7 @@
 import { Pending } from '@yaks/api/log'
 import type { Bundle } from '@yaks/graph'
 import { equal, test } from '@yaks/testing'
-import { stands, through } from './grant-rows.ts'
+import { held, through } from './grant-rows.ts'
 
 let KEY = 'grant:person:g1'
 let GRANT = JSON.stringify({ id: 'g1', clientId: 'c', createdAt: 1 })
@@ -49,9 +49,9 @@ test('a deleted grant leaves its row cancelled', async () => {
 })
 
 // Whether a token's grant stands, by what the directory holds of the grant and
-// of its person.
+// of its person, and the agent its row names.
 let standing = (person: boolean, row: Bundle | null) =>
-  stands(
+  held(
     {
       credential: () =>
         Promise.resolve({ owner: null, present: person, row } as never),
@@ -60,16 +60,44 @@ let standing = (person: boolean, row: Bundle | null) =>
     'person',
   )
 
+let grant = (g: Record<string, unknown>) =>
+  ({ entity: { eid: 'g' }, oauth_grant: { id: 'g1', ...g } }) as Bundle
+
 test("a token's grant stands until its row is cancelled or its person goes", async () => {
-  let row = { entity: { eid: 'g' }, oauth_grant: { id: 'g1' } } as Bundle
-  let ended = { ...row, cancelled: {} }
+  let row = grant({})
   equal(
     await Promise.all([
       standing(true, row),
       standing(true, null),
-      standing(true, ended),
+      standing(true, { ...row, cancelled: {} }),
       standing(false, row),
     ]),
-    [true, true, false, false],
+    [{}, {}, null, null],
+  )
+})
+
+test("a token's grant names its agent as the person's connections do", async () => {
+  equal(
+    await Promise.all([
+      standing(
+        true,
+        grant({ redirect: 'https://claude.ai/api/mcp/auth_callback' }),
+      ),
+      standing(true, grant({ redirect: 'https://chatgpt.com/cb', name: null })),
+      standing(
+        true,
+        grant({ redirect: 'http://localhost:3000/cb', name: 'claude-code' }),
+      ),
+      standing(
+        true,
+        grant({ redirect: 'https://example.com/cb', name: 'Zed' }),
+      ),
+    ]),
+    [
+      { agent: 'Claude' },
+      { agent: 'ChatGPT' },
+      { agent: 'Claude Code' },
+      { agent: 'Zed' },
+    ],
   )
 })

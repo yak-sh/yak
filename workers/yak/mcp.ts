@@ -83,7 +83,8 @@ import { ledger } from './ledger.ts'
 import { instructions, pageFor } from './guide.ts'
 import { asking, type Caller, challenge, unauthorized } from './asking.ts'
 import { narrowed } from './grants.ts'
-import { instrumentEid } from '@yaks/platform/instrument'
+import { instrumentEid, UNNAMED } from '@yaks/platform/instrument'
+import { agentCalled } from '@yaks/platform/agents'
 import { inReach, listViews, readView } from './declared.ts'
 import { answer, asset, docs, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
@@ -886,12 +887,17 @@ let answered = async (
   let instrument = await instrumentOf(session, auth.person, env.SESSION_SECRET)
   if (instrument) ctx.who = { ...auth, instrument }
   // A connector's token or the CLI's grant is held by an agent writing for the
-  // person, named as the client named itself at `initialize` (M-31958); a
-  // browser's cookie is the person's own hand.
+  // person (M-31958), named as the person's connections name it: the CLI is
+  // yak, and a connector is named by its grant (asking.ts), else by the name
+  // its client gave at `initialize`. A browser's cookie is the person's own
+  // hand.
   if (auth.via != 'session') {
     ctx.who = {
       ...ctx.who!,
-      agent: clientOf(session) ?? (auth.via == 'grant' ? 'yak' : 'agent'),
+      agent: auth.via == 'grant'
+        ? 'yak'
+        : auth.agent ?? agentCalled(undefined, clientOf(session)).name ??
+          UNNAMED,
     }
   }
   // Building the reach and tool schemas is read-only. If a directory commit

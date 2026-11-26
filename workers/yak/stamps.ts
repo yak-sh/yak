@@ -1,10 +1,12 @@
 import { time } from '@yaks/ui/parts'
 import type { H } from '@yaks/render'
+import { agentName } from '@yaks/platform/instrument'
 // A stamp as a person reads it: when, and who (T-151161). Every page of
 // yaks.app and /admin that shows one says it through `stamped`, with the names
 // `writers` gives the rows its writers are, so each says the same of it: a
-// person by the name they go by, an agent as itself for the person it writes
-// for (M-31958), and only the day where who wrote it is not known.
+// person by the name they go by, an agent by the name the person's connections
+// call it, "Claude" (@yaks/platform/agents `agentCalled`, M-31958), and only
+// the day where who wrote it is not known.
 
 /** When something was written, and the actor who wrote it, where known. */
 export type Stamp = { at: string; by: string | null }
@@ -37,21 +39,28 @@ export let personName = (b: Record<string, unknown>) =>
 export let principals = (rows: Row[]) =>
   rows.flatMap((r) => idOf((r.acts_for as Comp)?.person) ?? [])
 
-/** What each writer row is called: an agent as its name for its person, any
- * other row (a person) as a person. */
-export let writers = (rows: Row[]): Map<string, string> => {
-  let people = new Map(
-    rows.filter((r) => !r.acts_for).map((r) => [r.entity.eid, personName(r)]),
+/**
+ * What each writer row is called: an agent by its name, else "an agent",
+ * and any other row (a person) as a person.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { agentRow, UNNAMED } from '@yaks/platform/instrument'
+ * let jill = { entity: { eid: 'j' }, doc: { title: 'Jill' } }
+ * let claude = agentRow('j', 'Claude'), unnamed = agentRow('j', UNNAMED)
+ * assertEquals(
+ *   [...writers([jill, claude, unnamed]).values()],
+ *   ['Jill', 'Claude', 'an agent'],
+ * )
+ * ```
+ */
+export let writers = (rows: Row[]): Map<string, string> =>
+  new Map(
+    rows.map((r) => [
+      r.entity.eid,
+      r.acts_for ? agentName(r) ?? 'an agent' : personName(r),
+    ]),
   )
-  return new Map([
-    ...people,
-    ...rows.filter((r) => r.acts_for).map((r) => {
-      let of = people.get(idOf((r.acts_for as Comp)?.person) ?? '')
-      let name = str((r.doc as Comp)?.title) || 'an agent'
-      return [r.entity.eid, of ? `${name} for ${of}` : name] as const
-    }),
-  ])
-}
 
 /** A written moment and its writer, drawn through the kit's date face. */
 export let stamped = <N>(

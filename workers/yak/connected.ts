@@ -17,7 +17,11 @@ import type {
   OAuthHelpers,
 } from '@cloudflare/workers-oauth-provider'
 
-import type { Agent as Listed, Brand } from '@yaks/platform/agents'
+import {
+  type Agent as Listed,
+  agentCalled,
+  type Brand,
+} from '@yaks/platform/agents'
 
 export type { Brand }
 /** An agent connected, as the pages list it, and when its first grant was. */
@@ -28,28 +32,6 @@ import type { Service } from '@yaks/platform/connections-page'
 export type Clients = Pick<OAuthHelpers, 'listUserGrants'> & {
   // A missing registration or unavailable metadata cannot hide a held grant.
   lookupClient: (id: string) => Promise<ClientInfo | null | undefined>
-}
-
-let names: Record<Brand, string> = {
-  chatgpt: 'ChatGPT',
-  claude: 'Claude',
-  'claude-code': 'Claude Code',
-  cursor: 'Cursor',
-}
-
-let named = (name = ''): Brand | undefined => {
-  switch (name.trim().toLowerCase().replaceAll(/[-_]/g, ' ')) {
-    case 'chatgpt':
-      return 'chatgpt'
-    case 'claude':
-    case 'claude.ai':
-    case 'claude desktop':
-      return 'claude'
-    case 'claude code':
-      return 'claude-code'
-    case 'cursor':
-      return 'cursor'
-  }
 }
 
 // The services, by the host their callback returns to.
@@ -80,25 +62,6 @@ let live = async function* (
   } while (cursor)
 }
 
-let callback = (uri: string | undefined) => {
-  if (!uri) return { local: true }
-  try {
-    let url = new URL(uri)
-    if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
-      return { local: true }
-    }
-    if (url.protocol == 'https:') {
-      if (['chatgpt.com', 'chat.openai.com'].includes(url.hostname)) {
-        return { brand: 'chatgpt' as Brand }
-      }
-      if (['claude.ai', 'claude.com'].includes(url.hostname)) {
-        return { brand: 'claude' as Brand }
-      }
-    }
-  } catch { /* An invalid callback cannot identify an agent. */ }
-  return {}
-}
-
 /** What a grant keeps of its client (identity.ts `consent`): the name the
  * person saw on the consent card, so listing it reads no registration. */
 export type Kept = { client?: string }
@@ -126,16 +89,14 @@ let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
     grant: Pick<GrantSummary, 'clientId' | 'redirectUri' | 'metadata'>,
   ) => {
     if (serviceOf(grant.redirectUri)) return
-    let host = callback(grant.redirectUri)
-    let brand = host.brand
-    let name: string | undefined
-    if (!brand) {
-      name = await nameOf(grant)
-      if (host.local) brand = named(name)
+    let called = agentCalled(grant.redirectUri)
+    if (!called.brand) {
+      called = agentCalled(grant.redirectUri, await nameOf(grant))
     }
+    let { brand, name } = called
     return {
       id: brand ?? grant.clientId,
-      name: brand ? names[brand] : name?.trim() || 'Other agent',
+      name: name ?? 'Other agent',
       ...(brand ? { brand } : {}),
     }
   }

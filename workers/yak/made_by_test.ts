@@ -1,6 +1,7 @@
 // Who made an app and who deployed it last, through the whole kernel
 // (probe.ts `kernel`): a person at their own browser is the actor, and an
-// agent holding their credential is an actor of its own, for them (M-31958).
+// agent holding their credential is an actor of its own, named as their
+// connections name it (M-31958).
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { bearerFor, connector, kernel, meta, signIn, unique } from './probe.ts'
@@ -44,7 +45,10 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
     assert(mine.last_deploy?.at && idOf(mine.last_deploy?.via))
 
     let theirs = await made(agent)
-    let probe = agentEid(owner.person, HELLO.clientInfo.name)
+    // Named by its grant, as its client named itself at consent (probe.ts
+    // `authorizing`), not by what it said at `initialize`.
+    let called = 'a roster probe'
+    let probe = agentEid(owner.person, called)
     assertEquals(idOf(theirs.created?.by), probe)
     assertEquals(idOf(theirs.last_deploy?.by), probe)
     assert(theirs.last_deploy?.at && idOf(theirs.last_deploy?.via))
@@ -52,7 +56,7 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
       doc?: { title?: string }
       acts_for?: { person?: unknown }
     }[]
-    assertEquals(row.doc?.title, 'probe')
+    assertEquals(row.doc?.title, called)
     assertEquals(idOf(row.acts_for?.person), owner.person)
 
     // Both say who made and deployed each app where people see their apps,
@@ -64,14 +68,15 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
     }
     let today = relative(String(mine.created?.at))
     // The dashboard's row says who last changed each app where it was not
-    // the person looking: the agent writing for them, never themselves.
+    // the person looking: the agent writing for them, by its name, never
+    // themselves.
     let dashboard = await page(managePath('apps', owner.name), owner.cookie)
     let [ours, agents] = [mine.app.slug, theirs.app.slug]
     assertStringIncludes(dashboard, `/${ours} · changed ${today} `)
     assert(!dashboard.includes(`/${ours} · changed ${today} by`))
     assertStringIncludes(
       dashboard,
-      `/${agents} · changed ${today} by probe for ${owner.name}`,
+      `/${agents} · changed ${today} by ${called} `,
     )
     // An app last deployed before `last_deploy` was kept says its newest
     // release's, still unsaid to its own deployer.
@@ -83,8 +88,8 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
     assertStringIncludes(again, `/${ours} · changed ${today} `)
     assert(!again.includes(`/${ours} · changed ${today} by`))
     let admin = await page(`/admin/${theirs.entity.eid}`, k.owner.cookie)
-    assertStringIncludes(admin, `the last ${today} by probe for ${owner.name}`)
-    assertStringIncludes(admin, `Made ${today} by probe for ${owner.name}`)
+    assertStringIncludes(admin, `the last ${today} by ${called} `)
+    assertStringIncludes(admin, `Made ${today} by ${called} `)
   } finally {
     await k.stop()
   }
