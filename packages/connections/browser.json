@@ -2,7 +2,9 @@
   "_": "Browser exports checked with web globals by deno task check:types. Resolution comes from the npm workspace.",
   "entries": [
     "./vocab",
-    "./views"
+    "./views",
+    "./form",
+    "./paste"
   ],
   "compilerOptions": {
     "lib": [

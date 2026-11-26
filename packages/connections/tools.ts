@@ -25,7 +25,7 @@ export let runs = (): Runs => ({
   connection_need: (call, graph) => {
     let args = argsOf(call)
     return need(graph.read, {
-      app: str(args.app),
+      app: args.app == null ? undefined : str(args.app),
       owner: str(args.owner),
       integration: str(args.integration),
       scopes: strs(args.scopes),
@@ -33,6 +33,8 @@ export let runs = (): Runs => ({
       each: args.each == true,
       binding: args.binding == null ? undefined : str(args.binding),
       direct: args.direct == null ? undefined : args.direct == true,
+      task: args.task == null ? undefined : str(args.task),
+      keep: Array.isArray(args.keep) ? args.keep : undefined,
       ...about(args),
     })
   },

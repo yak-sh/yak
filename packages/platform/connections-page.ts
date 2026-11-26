@@ -26,18 +26,11 @@ import { derivedEid } from '@yaks/graph/identity'
 import { line } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
 
-/** One thing a person gives to connect a pasted-key service: what an app
- * reads it by, what the page asks for it by, whether it is typed in the open,
- * and what it looks like (@yaks/connections `Field`). */
-export type KeyField = {
-  name: string
-  label: string
-  shown?: boolean
-  example?: string
-}
+/** One thing a person gives to connect a pasted-key service, and the one a
+ * service that declares none asks for: its key (@yaks/connections `Field`). */
+import { type Field as KeyField, KEY } from '@yaks/connections/form'
 
-/** The one field of a service that declares none: its key. */
-export let KEY: KeyField = { name: 'key', label: 'Key' }
+export { KEY, type KeyField }
 
 /** How a connection stands. */
 export type Status = 'needed' | 'connected' | 'broken'

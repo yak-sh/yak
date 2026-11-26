@@ -244,6 +244,10 @@
           "type": "string",
           "description": "what its one key looks like, shown in the box it is pasted in: ElevenLabs' sk_••••••••, Stripe's rk_live_••••••••. None shows a row of dots"
         },
+        "check": {
+          "type": "string",
+          "description": "a call that answers 2xx once its credential works, a method and an https address on one of its hosts: GET https://api.cloudflare.com/client/v4/user/tokens/verify. Its owner may change it; none checks nothing"
+        },
         "owner": {
           "type": "string",
           "ref": "entity",
@@ -343,6 +347,27 @@
         "broker": {
           "type": "string",
           "description": "the broker it was made through, by name; none is made directly. It keeps working through it whatever its integration names later"
+        },
+        "keep": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "via",
+              "at"
+            ],
+            "properties": {
+              "via": {
+                "type": "string",
+                "description": "the keeper, by the name the host lends it under (@yaks/host/keepers): 1password, worker"
+              },
+              "at": {
+                "type": "string",
+                "description": "the keeper's own address for the key: a 1Password vault and item, a Worker and its secret's name"
+              }
+            }
+          },
+          "description": "where else its key is kept once it is given, besides the graph's own vault: each a keeper the host lends and that keeper's place for it. Each is handed the key whenever a new one is given (connection_given)"
         }
       }
     },
@@ -407,18 +432,26 @@
       },
       "description": "the relation on a link: this app calls out through that connection"
     },
+    "asks": {
+      "component": true,
+      "type": "object",
+      "edge": true,
+      "reversed": "asked by",
+      "properties": {},
+      "description": "the relation on a link from a task to the connection it asks a person for: the task shows the box the key is pasted in while the connection is needed, and is completed once the key is given, kept and checked"
+    },
     "connection_need": {
       "tool": true,
       "destructive": false,
       "noun": "connection",
       "verb": "need",
       "title": "Say an app needs a connection",
-      "description": "Say that an app needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it, owned by the asking space; give it instructions too, markdown for a person and their agent saying how to get the key (where to sign up, which page issues it, what to paste), and a title, tagline and site. Its owner asking again with any of those changes them. A key kept before it is used may have no hosts yet, and is sent nowhere until its owner asks again with them; once named, its hosts never change. With each, every person who uses the app connects their own instead, and the owner connects nothing. An app that already uses a connection through that integration is answered with it. Returns the applied bundles: JSON objects with entity ids and the components written, followed by the integration the connection goes through, its instructions among it, to walk the person through getting the key.",
+      "description": "Say that an app or a task needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it, owned by the asking space; give it instructions too, markdown for a person and their agent saying how to get the key (where to sign up, which page issues it, what to paste), and a title, tagline and site. Its owner asking again with any of those changes them. A key kept before it is used may have no hosts yet, and is sent nowhere until its owner asks again with them; once named, its hosts never change. With each, every person who uses the app connects their own instead, and the owner connects nothing. An app that already uses a connection through that integration is answered with it. Returns the applied bundles: JSON objects with entity ids and the components written, followed by the integration the connection goes through, its instructions among it, to walk the person through getting the key. Asked for a task, the task shows the person the box the key is pasted in, and is completed once the key is given, kept where keep says and checked.",
       "input": {
         "app": {
           "type": "string",
           "ref": "entity",
-          "description": "the app that needs it, by id or name"
+          "description": "the app that needs it, by id or name; none when a person connects it first, or a task asks for it"
         },
         "owner": {
           "type": "string",
@@ -504,10 +537,39 @@
         "site": {
           "type": "string",
           "description": "for a custom integration: the service's https address on the web"
+        },
+        "task": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the task that asks the person for the key, by id: it shows the box the key is pasted in, and is completed once the key works. The key never enters the task's text or an agent's context"
+        },
+        "keep": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "via",
+              "at"
+            ],
+            "properties": {
+              "via": {
+                "type": "string",
+                "description": "the keeper, by the name the host lends it under (@yaks/host/keepers): 1password, worker"
+              },
+              "at": {
+                "type": "string",
+                "description": "the keeper's own address for the key: a 1Password vault and item, a Worker and its secret's name"
+              }
+            }
+          },
+          "description": "where else the key goes once it is given, besides the graph's own vault, each a keeper the host lends (via) and its place there (at): {via: 1password, at: \"Vault/Item\"}, {via: worker, at: \"script/SECRET_NAME\"}"
+        },
+        "check": {
+          "type": "string",
+          "description": "for a custom integration: a call that answers 2xx once the key works, a method and an https address on one of its hosts: GET https://api.example.com/v1/me"
         }
       },
       "required": [
-        "app",
         "owner",
         "integration"
       ],
@@ -540,6 +602,14 @@
       "effect": true,
       "start": true,
       "description": "install the integrations this package builds whenever a process starts working the effects; a graph already holding them as shipped is read once and written nothing"
+    },
+    "connection_given": {
+      "effect": true,
+      "removed": [
+        "provisional"
+      ],
+      "target": ".connection.status=connected",
+      "description": "once a connection's new credential is sealed in the vault: hand it to each keeper its keep names, call its integration's check, and complete each task that asks for it. A keeper that fails or a check that refuses the key leaves the run failed and the task open"
     }
   },
   "kinds": {

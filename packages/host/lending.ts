@@ -1,6 +1,6 @@
 // What plugins lend a host by name, beside what the host lends itself: mail
-// senders, texters, chatters and embedders, which a graph host passes on
-// (Host.senders, Host.texters, Host.chatters, Host.embedders), and a provider's notice and
+// senders, texters, chatters, embedders and keepers, which a graph host passes on
+// (Host.senders, Host.texters, Host.chatters, Host.embedders, Host.keepers), and a provider's notice and
 // arrival readers and a payment provider (./payments.ts), which a host that
 // routes mail or takes money itself asks for, such as a Worker naming its
 // providers in config. One party per name: a letter or a vector made through a name two
@@ -16,6 +16,7 @@ import type {
   Texter,
 } from './senders.ts'
 import type { Payments } from './payments.ts'
+import type { Keeper } from './keepers.ts'
 import type { Taken } from './words.ts'
 
 /** What each kind of loan is. */
@@ -28,6 +29,7 @@ export type Lends = {
   arrivals: Arrival
   mailDomains: MailDomains
   payments: Payments
+  keepers: Keeper
 }
 
 /** The loans of one kind the graph facets make, beside the host's own

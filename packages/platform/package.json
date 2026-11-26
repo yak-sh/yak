@@ -242,6 +242,7 @@
     "@yaks/cli": "0.2.33",
     "@yaks/client": "0.2.24",
     "@yaks/code": "0.2.23",
+    "@yaks/connections": "0.2.28",
     "@yaks/data-editor": "0.2.23",
     "@yaks/draft": "0.2.24",
     "@yaks/edge": "0.2.24",

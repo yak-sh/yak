@@ -2,9 +2,9 @@
  * The parts a page connecting a service draws it with (the Connections page,
  * ./connections-view.ts, and the server's sign-in pages): its logo, what it
  * is and how it connects, how to get its key, the box the key is pasted in
- * and the button that begins its sign-in. The service and its integration are
- * separate descriptions. They come from the integration's graph row,
- * regardless of which provider connects it.
+ * (@yaks/connections' own) and the button that begins its sign-in. The
+ * service and its integration are separate descriptions. They come from the
+ * integration's graph row, regardless of which provider connects it.
  *
  * @module
  */
@@ -12,14 +12,15 @@ import { type ComponentChildren as Kids, h, type VNode } from 'preact'
 import { jsxTemplate } from 'preact/jsx-runtime'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
-import { Field } from '@yaks/ui/Field'
-import { Form } from '@yaks/ui/Form'
 import { Logo } from '@yaks/ui/Logo'
 import { More } from '@yaks/ui/More'
 import type { Host } from './host.ts'
 import { integrationLogo } from './routes.ts'
-import { labeled } from './page-parts.ts'
-import { type Face, KEY, type KeyField } from './connections-page.ts'
+import type { Face } from './connections-page.ts'
+
+/** The box a key is pasted in: @yaks/connections' own, wherever a person is
+ * asked for a key. */
+export { keyBox } from '@yaks/connections/form'
 
 let link = (face: Face, at: string | undefined, label: string) =>
   at && /^https:\/\/\S+$/.test(at)
@@ -101,50 +102,6 @@ export let howTo = (f: Face, open: boolean) =>
       h(More.Body, null, raw(f.instructions)),
     )
     : null
-
-/** The box a key is pasted in and the button that saves it, one line under
- * its label; or, for a service that asks for several fields, a box for each
- * under its own label, masked unless the field is shown, and the button under
- * them. Each box shows what its field looks like, where the integration says,
- * and a row of dots where it does not. yaks.app's connections.ts `givenOf`
- * reads what was typed. */
-export let keyBox = (
-  id: string,
-  label: Kids,
-  send: Kids,
-  hint: Kids = '',
-  fields: KeyField[] = [KEY],
-) => {
-  let box = (at: string, name: string, f: KeyField) =>
-    h(Field, {
-      id: at,
-      name,
-      type: f.shown ? 'text' : 'password',
-      placeholder: f.example || '••••••••',
-      autocomplete: 'off',
-      spellcheck: 'false',
-      required: true,
-    })
-  if (fields.length == 1) {
-    return labeled(
-      id,
-      fields[0].label == KEY.label ? label : fields[0].label,
-      h(Form.Line, null, box(id, 'key', fields[0]), send),
-      hint,
-    )
-  }
-  return [
-    ...fields.map((f) =>
-      labeled(
-        `${id}-${f.name}`,
-        f.label,
-        box(`${id}-${f.name}`, `key.${f.name}`, f),
-      )
-    ),
-    send ? h(Form.Actions, null, send) : null,
-    hint ? h(Form.Hint, null, hint) : null,
-  ]
-}
 
 /** The button that begins a sign-in at `face`'s service, sending its form's
  * `do` as `act` where it names one, `quiet` where it is not the next step.

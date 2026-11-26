@@ -25,6 +25,7 @@ import type {
   Texter,
 } from './senders.ts'
 import type { Payments } from './payments.ts'
+import type { Keeper } from './keepers.ts'
 import type { Options } from './config.ts'
 /** `<plugin>/vocab` — what the plugin declares, and nothing that could not
  * run in a browser tab: a page importing this must never reach SQL, a database
@@ -83,6 +84,8 @@ export type GraphFacet = {
   chatters?: (host: Host, options: Options) => Record<string, Chatter>
   /** The embedders this plugin lends, by name ({@link Host.embedders}). */
   embedders?: (host: Host, options: Options) => Record<string, Embedding>
+  /** The keepers this plugin lends, by name ({@link Host.keepers}). */
+  keepers?: (host: Host, options: Options) => Record<string, Keeper>
   /** The readers of a provider's signed notices about the letters it
    * carried, by name, for a host that routes them itself (./lending.ts). */
   notices?: (host: Host, options: Options) => Record<string, Notices>

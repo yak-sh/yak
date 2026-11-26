@@ -23,6 +23,9 @@ import { token } from '@yaks/graph/sha256'
 import type { Scheme } from '@yaks/hook'
 import { CallError } from '@yaks/tools/errors'
 import { INTEGRATION, integrationEid } from './identity.ts'
+import { type Field, fieldsOf, KEY } from './field.ts'
+
+export { type Field, fieldsOf, KEY }
 import anthropic from './anthropic.json' with { type: 'json' }
 import canva from './canva.json' with { type: 'json' }
 import gmail from './gmail.json' with { type: 'json' }
@@ -141,31 +144,13 @@ export type Integration = {
   /** what its one key looks like, shown in the box it is pasted in:
    * ElevenLabs' `sk_••••••••` */
   example?: string
+  /** a call that answers 2xx once its credential works, `METHOD url` on one
+   * of its hosts: Cloudflare's `GET …/user/tokens/verify` */
+  check?: string
   /** the space or person that made a custom one, who alone may change its
    * text; none for a built one */
   owner?: string
 }
-
-/** One thing a person gives to connect a pasted-key integration: what an app
- * reads it by, what the page asks for it by, whether it is typed in the open,
- * as a username or a region is, and what it looks like. */
-export type Field = {
-  name: string
-  label: string
-  shown?: boolean
-  example?: string
-}
-
-/** The one field of an integration that declares none: its key. */
-export let KEY: Field = { name: 'key', label: 'Key' }
-
-/** What a person gives to connect a pasted-key integration, in the order the
- * page asks for it: the fields it declares, or its one key, shaped as the
- * integration says. */
-export let fieldsOf = (i?: Integration): Field[] =>
-  i?.fields?.length
-    ? i.fields
-    : [i?.example ? { ...KEY, example: i.example } : KEY]
 
 /** A read of the graph: what a tool's context and a graph both offer. */
 export type Read = Reads<Bundle[] | Promise<Bundle[]>, []>
@@ -311,6 +296,7 @@ let CARRIED = {
   methods: 1,
   fields: 1,
   example: 1,
+  check: 1,
   signature: 1,
   testing: 1,
   built: 1,
@@ -367,11 +353,11 @@ export let catalogHeld = (): (read: Read) => Promise<Marked[]> => {
   }
 }
 
-/** What a person reads about an integration, which its owner may change:
- * never where its credential is sent. */
+/** What is said about an integration, which its owner may change: never
+ * where its credential is sent. */
 export type About = Pick<
   Integration,
-  'title' | 'tagline' | 'site' | 'instructions' | 'example'
+  'title' | 'tagline' | 'site' | 'instructions' | 'example' | 'check'
 >
 /** The properties of {@link About}, in the order a page shows them. */
 export let ABOUT = [
@@ -380,11 +366,14 @@ export let ABOUT = [
   'site',
   'instructions',
   'example',
+  'check',
 ] as const
+
+let CHECK = /^(GET|HEAD|POST) https:\/\/[^\s/]+\S*$/
 
 /** What was said about an integration, as it is written: each property given,
  * trimmed, and an empty one cleared. A site is an https address, the only
- * kind a page links. */
+ * kind a page links, and a check a method and an https address. */
 export let told = (
   a: Record<string, unknown>,
 ): Record<string, string | null> => {
@@ -394,6 +383,12 @@ export let told = (
     let v = String(a[k]).trim()
     if (k == 'site' && v && !/^https:\/\/[^\s/]+\S*$/.test(v)) {
       throw new CallError('site', `a site is an https address, not ${v}`)
+    }
+    if (k == 'check' && v && !CHECK.test(v)) {
+      throw new CallError(
+        'check',
+        `a check is a method and an https address, GET https://…, not ${v}`,
+      )
     }
     out[k] = v || null
   }

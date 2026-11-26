@@ -150,7 +150,26 @@ one paste and nothing else to think about.
   "telnyx API"); a box secret shows with `graph_query` `.secret.name=NAME&*`,
   and a connection with `connection_list`, his person as owner. A key found in 1Password is
   imported the way "Writing one on the box" says, without asking him at all.
-- **The command is `yak auth --key <NAME>`, any name.** A name no integration
+- **Ask with `connection_need`, never with steps through 1Password.** A key
+  only he can get is a task assigned to him and a connection asked for it:
+  file the task (its body says what the key is for and the steps to get it),
+  then call `connection_need` with his person as `owner`, `task` its id, a
+  custom integration's `hosts`, `instructions` and `check` (a call that
+  answers 2xx once the key works), and `keep`, where the key is used. The task
+  shows him a box he pastes the key into, on tasks.yak.sh. Once he pastes it,
+  `connection_given` checks it, hands it to each `keep` place and completes
+  the task; a key the service refuses asks again (packages/connections/README.md,
+  "A key asked of a person"). Never tell him to open 1Password, save an item
+  or run a command with the key.
+- **Name where the key goes as `keep`.** Each place is `{via, at}`: `1password`
+  with `<vault>/<item>[/<field>]` (field `credential` by default), lent by the
+  box's `yak` host and run as the service account whose token is
+  `OP_SERVICE_ACCOUNT_TOKEN` in the box's vault; `worker` with
+  `<script>/<NAME>`, a Worker secret put with `CLOUDFLARE_ADMIN_TOKEN`, lent by
+  @yaks/admin. Every connection is also in the box's vault, where
+  `accountCredential` and `call` read it. A keeper that fails leaves the
+  `connection_given` run failed (`effect_check`) and the task open.
+- **His own command is `yak auth --key <NAME>`, any name.** A name no integration
   holds becomes a custom key integration of that name with no hosts yet, owned
   by his person, and a connection holding the paste
   (packages/connections/auth_command.ts). Anything that could refuse is asked
@@ -341,7 +360,7 @@ The admin's Wrangler commands have a token of their own:
 `CLOUDFLARE_ADMIN_TOKEN` (Workers Scripts read and write, Workers Tail read;
 packages/admin/README.md).
 
-Workers Builds logs take a user-owned token; every account-owned one gets 403 or 12006. The 1Password item "cloudflare user read-only" (vault Yak Shaving LLC, field credential) is one, so an agent on the box reads a build's log with it: `op read` inside the script, sent as a Bearer token to `/accounts/<id>/builds/workers/<script tag>/builds` (the tag is the script's `tag` in `/workers/scripts`; yak's is f1694d3fa03d42dabe44ba70137c678a), then `/builds/builds/<uuid>/logs`. It is the owner's key and stays on the box; the Worker's `BUILD_LOG_TOKEN` waits on a scoped token he mints (T-123153).
+Workers Builds logs take a user-owned token; every account-owned one gets 403 or 12006. The 1Password item "cloudflare user read-only" (vault Yak Shaving LLC, field credential) is one, so an agent on the box reads a build's log with it: `op read` inside the script, sent as a Bearer token to `/accounts/<id>/builds/workers/<script tag>/builds` (the tag is the script's `tag` in `/workers/scripts`; yak's is f1694d3fa03d42dabe44ba70137c678a), then `/builds/builds/<uuid>/logs`. It is the owner's key and stays on the box. The Worker's `BUILD_LOG_TOKEN` is a scoped user token asked of him on T-123153 with `connection_need`, kept on yak's Worker and in 1Password once he pastes it.
 
 ## Minting a Cloudflare token
 
@@ -391,8 +410,8 @@ So an agent mints a user token only with a user token that holds **User › API
 Tokens › Edit** (the dashboard's "Create Additional Tokens" template). With one,
 the steps above apply to `/user/tokens` and `/user/tokens/permission_groups`,
 and the same credential lists and deletes user tokens. Until one is in
-1Password, ask Jeff with a task assigned to him that names the exact
-permission and account.
+1Password, ask Jeff with a task assigned to him and `connection_need` (see
+"When the owner gives us a key") that names the exact permission and account.
 
 To drive the MCP from a shell, use the saved login in
 `~/.claude/.credentials.json` (`mcpOAuth`, key `cloudflare-api-yak|…`): refresh

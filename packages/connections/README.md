@@ -68,18 +68,31 @@ them.
   @yaks/platform's `published{at}`, as anything shared on a platform does;
   taking it off takes it out. Every built integration is in the directory
   without it.
-- `connection{integration, owner, account, title, scopes, status, broker}` names
-  its integration, the space or person that `owner`s it (and is deleted with
-  them), the outside account and what people call it where the account is an id,
-  the scopes asked for or granted, and `status`: `needed` (no credential yet),
-  `connected`, or `broken` (the service refused it). The same entity wears
+- `integration.check` is a call that answers 2xx once a credential works, a
+  method and an https address on one of its `hosts`: Cloudflare's
+  `GET
+  …/user/tokens/verify`. Its owner may change it, as with `instructions`.
+- `connection{integration, owner, account, title, scopes, status, broker, keep}`
+  names its integration, the space or person that `owner`s it (and is deleted
+  with them), the outside account and what people call it where the account is
+  an id, the scopes asked for or granted, and `status`: `needed` (no credential
+  yet), `connected`, or `broken` (the service refused it). The same entity wears
   `secret{name, value}`: its name is `connection:` and a random id, and the
   entity id is derived from it. Its value is the handle of a pasted key, of its
   several fields kept as a JSON object by name, or of the OAuth tokens kept as a
   JSON record. `broker` names the broker it was made through; its record then
   holds the broker's id for it, what the broker calls its integration, and the
   current access token. A connection signed in to again at its broker wears the
-  mark `reconnecting{at, by}` until `settle` takes the new grant.
+  mark `reconnecting{at, by}` until `settle` takes the new grant. `keep` lists
+  where else a pasted key goes once it is given, besides the vault: each
+  `{via, at}`, a keeper the host lends by that name (@yaks/host/keepers) and the
+  keeper's own place for the key. This package names no keeper; the box's `yak`
+  host lends `1password` (`<vault>/<item>[/<field>]`), and @yaks/admin lends
+  `worker` (`<script>/<NAME>`, a Worker secret).
+- `asks` is the relation on an @yaks/edge link from a task to the connection it
+  asks a person for. The task shows the box the key is pasted in while the
+  connection is `needed` or `broken`, and is completed once a key is given,
+  checked and kept (see A key asked of a person, below).
 - `uses{anyone, each, binding, direct, cap}` is the relation on an
   [@yaks/edge](../edge) link from an app to the connection it calls out through.
   Only a caller holding a level on the app may call out through it, unless
@@ -170,8 +183,9 @@ data; there is no secret to register or reveal.
 The two an untrusted caller may ask are the tools. Each returns bundles for the
 caller to apply in its own name:
 
-- `need(read, {owner, integration, app?, scopes?, hosts?, fields?, each?,
-  binding?, direct?, title?, tagline?, site?, instructions?})`
+- `need(read, {owner, integration, app?, task?, keep?, scopes?, hosts?,
+  fields?, each?, binding?, direct?, title?, tagline?, site?, instructions?,
+  check?})`
   makes a `needed` connection and the `uses` link from the app, read by
   `binding` (default: the integration's name in capitals, `bindingOf`). For a
   service with no integration, it makes a custom key integration sent to the
@@ -188,7 +202,9 @@ caller to apply in its own name:
   person, or a person making their own, and an app is answered with the one that
   owner holds. An ask the owner already has standing through that integration
   for the same scopes is answered instead of a new one, with the app linked to
-  it: one ask per service. The connection comes first in what it returns.
+  it: one ask per service. `task` links the task asking for it (`asks`), and
+  `keep` says where else its key goes; only a pasted key is kept anywhere but
+  the vault. The connection comes first in what it returns.
 - `list(read, owner)` returns the owner's connections, the `uses` links to them,
   and the integrations they go through.
 
@@ -454,12 +470,35 @@ the tools; `@yaks/connections/graph` answers a direct tool call whose answer
 names a connection with the integration it goes through too (its `reply`), so an
 agent that asked for a connection reads how to get its key;
 `@yaks/connections/effects` installs the built integrations when the process
-starts. `@yaks/connections/identity` derives an integration's id from its name
-for views and other readers, and `@yaks/connections/integrations` lists them
-(`listing`) for a reader that holds no connection. A host that composes this
-package also composes @yaks/secrets over its vault, the plugin and its effect,
-which seals each credential once the write commits and drops it when the
-connection is deleted, and @yaks/edge, which derives each `uses` link's id.
+starts, and keeps, checks and completes the asks for a key once it is given
+(`connection_given`). `@yaks/connections/identity` derives an integration's id
+from its name for views and other readers, and `@yaks/connections/integrations`
+lists them (`listing`) for a reader that holds no connection. A host that
+composes this package also composes @yaks/secrets over its vault, the plugin and
+its effect, which seals each credential once the write commits and drops it when
+the connection is deleted, and @yaks/edge, which derives each `uses` link's id.
+
+## A key asked of a person
+
+An agent that needs a key only a person can get asks with `connection_need`: the
+person as `owner`, the `task` assigned to them, the custom integration's
+`hosts`, `instructions` and `check`, and `keep` naming where the key is used.
+The key never enters the task, a comment, or an agent's context.
+
+1. The task shows the box the key is pasted in (`@yaks/connections/form`
+   `KeyForm`, drawn by @yaks/browse on the task's page). The page writes
+   `pasted(connection, integration, fields, given)` through the graph, and
+   @yaks/secrets seals the value out of the write into the vault.
+2. Once it is sealed, the effect `connection_given` calls the integration's
+   `check` with it. A key the service refuses (401 or 403) marks the connection
+   `broken`, and the box asks again.
+3. A key that works is handed to each keeper `keep` names, and every open task
+   that `asks` for the connection is completed. A keeper that cannot keep it
+   fails the run, which the pool retries and reports, and the task stays open.
+
+`@yaks/connections/form` is the one box a key is pasted in: `keyBox` (plain
+markup, which yaks.app's pages draw) and `givenOf`, which reads it back, and
+`KeyForm`, a live page's.
 
 ## Terminal sign-in
 

@@ -554,6 +554,8 @@ export let assemble = (
       if (chatters) host.chatters = chatters
       let embedders = lending(graphs, host, 'embedders', lent.embedders)
       if (embedders) host.embedders = embedders
+      let keepers = lending(graphs, host, 'keepers', lent.keepers)
+      if (keepers) host.keepers = keepers
       part?.('storage')
       let extend: Extension[] = []
       let history = graphs.map(([r, options]) => r.history?.(options))

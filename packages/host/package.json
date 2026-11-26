@@ -7,6 +7,7 @@
     "./assembly": "./assembly.ts",
     "./roles": "./roles.ts",
     "./senders": "./senders.ts",
+    "./keepers": "./keepers.ts",
     "./words": "./words.ts",
     "./config": "./config.ts",
     "./documents": "./documents.ts",

@@ -30,6 +30,7 @@ import type { Context } from '@yaks/tracker/report'
 import type { Config } from './config.ts'
 import type { Meaning } from './facets.ts'
 import type { Chatter, Sender, Texter } from './senders.ts'
+import type { Keeper } from './keepers.ts'
 export type {
   Chat,
   Chatter,
@@ -117,6 +118,9 @@ export interface Host {
   /** Named texters this host lends, selected by @yaks/phone's
    * `sender: {via}`. The host owns credentials, metering and lifetime. */
   texters?: Readonly<Record<string, Texter>>
+  /** Named keepers this host lends: where a key goes besides the vault, as
+   * @yaks/connections' `connection.keep` names them (./keepers.ts). */
+  keepers?: Readonly<Record<string, Keeper>>
   /** Named chatters this host lends, one per chat platform, selected by
    * @yaks/chat's `chat_post` by the platform's name. The host owns which
    * bot's credential each connection posts with. */

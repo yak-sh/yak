@@ -100,6 +100,7 @@ import {
 } from '@yaks/fts'
 import { EFFECT, effects, expiration, released } from '@yaks/effects'
 import { type Local, peek } from '@yaks/secrets'
+import { opKeeper } from '@yaks/secrets/op'
 import { command, reporter, revision } from './report.ts'
 import { faults } from '@yaks/api/refuse'
 import { type Backend, backend } from '@yaks/blob/backend'
@@ -775,6 +776,9 @@ let composed = async (
       host: {
         fetch: freshFetch(),
         vault,
+        // A key given to the box can be kept in 1Password too
+        // (@yaks/connections `keep`), where this machine has `op`.
+        keepers: { '1password': opKeeper(vault) },
         blobs,
         artifacts,
         reader: opts.reader,

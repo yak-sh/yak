@@ -70,7 +70,6 @@ import {
   type Ctx,
   disconnect,
   envOf,
-  type Field,
   fieldsOf,
   find,
   type Given,
@@ -111,6 +110,7 @@ import { capOf, monthOf, spent } from '@yaks/egress'
 import type { Bundle, Comp, Taken } from '@yaks/graph'
 import { hooked, refusal } from '@yaks/hook'
 import { mode, reads } from '@yaks/member'
+import { givenOf } from '@yaks/connections/form'
 import { reveal, SECRET } from '@yaks/secrets'
 import {
   type App,
@@ -206,20 +206,6 @@ let faceOf = async (
   theirs: !!i?.owner,
   fields: fieldsOf(i),
 })
-
-/** What a person typed into a key box (pages.ts `keyBox`): the one key, or
- * each field by name; or what the page says when one was left empty. */
-export let givenOf = (form: FormData, fields: Field[]): Given | string => {
-  let at = (k: string) => String(form.get(k) ?? '').trim()
-  if (fields.length == 1) {
-    return at('key') ? { key: at('key') } : 'Paste the key first.'
-  }
-  let said = Object.fromEntries(
-    fields.map((f) => [f.name, at(`key.${f.name}`)]),
-  )
-  let missing = fields.find((f) => !said[f.name])
-  return missing ? `Fill in ${missing.label} first.` : { fields: said }
-}
 
 // A read of the directory. Every read the verbs make is a filter line.
 let readOf = (env: Partial<Env> & Pick<Env, 'STORE'>): Read => (said) => {

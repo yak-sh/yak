@@ -93,8 +93,16 @@ import {
   set,
   told,
 } from './integrations.ts'
-import { CONNECTION, INTEGRATION, integrationEid, USES } from './identity.ts'
+import type { Place } from '@yaks/host/keepers'
+import {
+  ASKS,
+  CONNECTION,
+  INTEGRATION,
+  integrationEid,
+  USES,
+} from './identity.ts'
 import { through } from './graph.ts'
+import { pasted } from './paste.ts'
 import { clientOf } from './clients.ts'
 import { type Broker, BrokerError, brokerOf, type Grant } from './brokers.ts'
 
@@ -137,6 +145,10 @@ export type Need = About & {
   binding?: string
   /** hand the app's code the key itself rather than a sentinel */
   direct?: boolean
+  /** the task that asks a person for the key, linked to it by `asks` */
+  task?: Eid
+  /** where else the key goes once it is given, besides the vault */
+  keep?: Place[]
 }
 
 /** What the acting verbs work with. */
@@ -389,6 +401,41 @@ let answered = async (read: Read, b: Bundle, to: Eid): Promise<Bundle[]> => {
  * for the same scopes is the one answered, with the app linked to it: one ask
  * per service. The connection comes first. */
 export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
+  let keep = placesOf(a.keep)
+  if (keep.length) {
+    let i = await known(read, a.integration)
+    if (i && !keyed(i)) {
+      throw new CallError(
+        'keep',
+        `${a.integration} is connected by signing in, and only a pasted key ` +
+          `is kept anywhere but the vault`,
+      )
+    }
+  }
+  let [made, ...rest] = await asked(read, a)
+  let eid = made.entity.eid
+  return [
+    keep.length
+      ? { ...made, [CONNECTION]: { ...comp(made, CONNECTION), keep } }
+      : made,
+    ...rest,
+    ...a.task ? [{ ...link(a.task, ASKS, eid), [ASKS]: {} }] : [],
+  ]
+}
+
+// The places a key is kept, each a keeper's name and its address there.
+let placesOf = (keep: Place[] = []): Place[] =>
+  keep.map(({ via, at }) => {
+    if (!String(via ?? '').trim() || !String(at ?? '').trim()) {
+      throw new CallError(
+        'keep',
+        'each place names a keeper (via) and where (at)',
+      )
+    }
+    return { via: String(via).trim(), at: String(at).trim() }
+  })
+
+let asked = async (read: Read, a: Need): Promise<Bundle[]> => {
   let hosts = a.hosts ?? []
   let fields = a.fields?.length ? fielded(a.fields) : []
   let name = a.integration
@@ -1341,8 +1388,8 @@ export let connect = async (
       throw new Error(`${name} is connected by signing in, not with a key`)
     }
     return c.graph.apply([{
+      ...pasted(b, name, fieldsOf(i), given),
       ...stillHeld(b),
-      [SECRET]: { name: nameOf(b), value: keptOf(name, fieldsOf(i), given) },
       [CONNECTION]: now,
     }, ...await answered(c.graph.read, b, connection)])
   }
@@ -1557,32 +1604,6 @@ let marking = async (
     }
     throw e
   }
-}
-
-// What the vault keeps for a pasted credential: one field's value as it is,
-// so one key is kept as it always was, and several as a JSON object by name.
-let keptOf = (
-  name: string,
-  fields: Field[],
-  given: { key: string } | { fields: Record<string, string> },
-): string => {
-  let said = 'key' in given
-    ? fields.length == 1 ? { [fields[0].name]: given.key } : {}
-    : given.fields
-  let extra = Object.keys(said).filter((k) => !fields.some((f) => f.name == k))
-  let missing = fields.filter((f) => !said[f.name])
-  if (extra.length || missing.length) {
-    throw new Error(
-      `${name} is connected with ${fields.map((f) => f.label).join(', ')}; ${
-        missing.length
-          ? `${missing.map((f) => f.label).join(', ')} not given`
-          : `it has no ${extra.join(', ')}`
-      }`,
-    )
-  }
-  return fields.length == 1 ? said[fields[0].name] : JSON.stringify(
-    Object.fromEntries(fields.map((f) => [f.name, said[f.name]])),
-  )
 }
 
 // A connection's fields, as the vault keeps them. A voip.ms key pasted before

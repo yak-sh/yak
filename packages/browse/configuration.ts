@@ -34,3 +34,8 @@ export let signIn = (
   name?: string,
   callback?: string,
 ): Promise<AuthReply> => post('/web/authorize', { action, name, callback })
+
+/** A key pasted for a connection a task asks for (@yaks/connections
+ * `pasted`), sent once to the server, whose vault keeps it. */
+export let saveKey = (bundle: Bundle): Promise<Bundle[]> =>
+  post(hosting().apply, [bundle])

@@ -1447,15 +1447,15 @@ importers:
       '@yaks/hook':
         specifier: 0.2.28
         version: link:../hook
+      '@yaks/host':
+        specifier: 0.2.29
+        version: link:../host
       '@yaks/mcp-client':
         specifier: 0.2.28
         version: link:../mcp-client
       '@yaks/oauth':
         specifier: 0.2.23
         version: link:../oauth
-      '@yaks/platform':
-        specifier: 0.2.30
-        version: link:../platform
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
@@ -1471,9 +1471,15 @@ importers:
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools
+      '@yaks/ui':
+        specifier: 0.2.30
+        version: link:../ui
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
+      preact:
+        specifier: 10.29.7
+        version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -1484,6 +1490,9 @@ importers:
       '@yaks/kernel':
         specifier: 0.2.28
         version: link:../kernel
+      '@yaks/platform':
+        specifier: 0.2.30
+        version: link:../platform
       '@yaks/provenance':
         specifier: 0.2.28
         version: link:../provenance
@@ -1493,6 +1502,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      linkedom:
+        specifier: ^0.18.12
+        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
 
   packages/context:
     dependencies:
@@ -3996,6 +4008,9 @@ importers:
       '@yaks/code':
         specifier: 0.2.23
         version: link:../code
+      '@yaks/connections':
+        specifier: 0.2.28
+        version: link:../connections
       '@yaks/data-editor':
         specifier: 0.2.23
         version: link:../data-editor

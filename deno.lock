@@ -3690,6 +3690,7 @@
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/hook@0.2.28",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/kernel@0.2.28",
             "npm:@yaks/mcp-client@0.2.28",
             "npm:@yaks/oauth@0.2.23",
@@ -3702,7 +3703,10 @@
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tools@0.2.30",
-            "npm:@yaks/vocab@0.2.32"
+            "npm:@yaks/ui@0.2.30",
+            "npm:@yaks/vocab@0.2.32",
+            "npm:linkedom@~0.18.12",
+            "npm:preact@10.29.7"
           ]
         }
       },
@@ -4852,6 +4856,7 @@
             "npm:@yaks/cli@0.2.33",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/code@0.2.23",
+            "npm:@yaks/connections@0.2.28",
             "npm:@yaks/data-editor@0.2.23",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/draft@0.2.24",

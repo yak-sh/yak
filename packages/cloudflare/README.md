@@ -26,6 +26,9 @@ repository's.
   which is how renewal happens) and `zone` (the account's zone for a name, made
   where there is none). `answered(response)` in `./api` reads the
   `{success, errors, result}` envelope every call answers.
+- `./scripts`: `putSecret({CF_ACCOUNT, token}, script, name, value)` puts a
+  secret on a Worker script, which deploys its current version again with it.
+  Cloudflare never answers a secret's value back.
 - `./analytics`: `ask(env, query, variables)` posts a GraphQL query with the
   analytics token (`CF_ANALYTICS_TOKEN`, aimed at `ANALYTICS_API` when a probe
   sets it), and `said(answer)` reads its data or throws its errors, as

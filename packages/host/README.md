@@ -236,6 +236,16 @@ way: a provider plugin lends one from its graph facet's `texters(host, options)`
 (@yaks/phone/plugin builds it), and a texter that cannot send yet says why
 through `waiting()`.
 
+## Keepers
+
+`Host.keepers` lends named keepers: places a key goes besides the graph's own
+vault. A keeper puts a value at one of its own addresses (`keep(at, value)`),
+and a provider plugin lends one from its graph facet's `keepers(host,
+options)`.
+Whoever asks for a key names where it goes as data, each place a keeper's name
+and its address there (`@yaks/host/keepers` `Place`), and @yaks/connections
+hands a pasted key to each; it names no keeper itself.
+
 ## Payment providers
 
 A host that takes money itself asks for `payments` the same way: a provider

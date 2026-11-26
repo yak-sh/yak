@@ -1,5 +1,6 @@
 /** @jsxImportSource preact */
 import { Decision } from '../Decision.tsx'
+import { Keys } from '../Keys.tsx'
 import { useReference, useRepoUrl, useRows } from '../subscriptions.ts'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
@@ -726,6 +727,8 @@ export let Show = (
       <Entity eid={e.eid} view='Meta' id />
       <Entity eid={e.eid} view='Mail' />
       <Decision e={e} />
+      <Keys e={e} />
+      <Keys e={e} />
       <Entity eid={e.eid} view='Full.Body' />
       {stack.filter((v) => talkback || v != 'Comments').map((v) => (
         <Entity key={v} eid={e.eid} view={v} />
@@ -742,6 +745,7 @@ export let CardFull = ({ e }: { e: Ent }) => (
     <Entity eid={e.eid} view='Meta' />
     <Entity eid={e.eid} view='Mail' />
     <Decision e={e} />
+    <Keys e={e} />
     <Entity eid={e.eid} view='Full.Body' mod='bare' />
     {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
   </>

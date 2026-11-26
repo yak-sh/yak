@@ -9,7 +9,8 @@
     "./alarm-logs": "./alarm-logs.ts",
     "./deployed": "./deployed.ts",
     "./hook": "./hook.ts",
-    "./wrangler": "./wrangler.ts"
+    "./wrangler": "./wrangler.ts",
+    "./scripts": "./scripts.ts"
   },
   "license": "Apache-2.0",
   "description": "Cloudflare's account API, its registrar, analytics, Workers Builds deploy hooks and the pinned wrangler, as every Worker door and the box's admin share them.",
