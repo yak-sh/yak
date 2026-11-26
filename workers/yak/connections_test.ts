@@ -1772,3 +1772,59 @@ test('the Connections page restores a chosen old key after its connection was re
     'connected',
   )
 })
+
+test("a Gmail connect approved at Nango with no browser of the beginner's attaches nothing to their space", async () => {
+  let s = await setup()
+  await s.at.apply([brokerKey('nango', 'nk')], KERNEL)
+  // Nango: the sign-in each connect session was made for, by its tag, and
+  // whether anyone has finished it there.
+  let tagged = '', approved = false
+  let real = globalThis.fetch
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    let r = new Request(input, init)
+    let u = new URL(r.url)
+    if (u.host != 'api.nango.dev') return real(r)
+    if (r.method == 'POST' && u.pathname == '/connect/sessions') {
+      tagged = (await r.json()).tags.end_user_id
+      return Response.json({
+        data: { connect_link: 'https://connect.nango.dev/?session_token=s' },
+      })
+    }
+    if (u.pathname == '/connections') {
+      return Response.json({
+        connections: approved
+          ? [{
+            connection_id: 'n-1',
+            provider_config_key: 'google-mail',
+            tags: { end_user_id: tagged },
+          }]
+          : [],
+      })
+    }
+    return Response.json({
+      connection_config: { emailAddress: 'bob@example.com' },
+      credentials: {
+        access_token: 'G1',
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      },
+    })
+  }
+  try {
+    let sent = await s.post({ do: 'add', integration: 'gmail' }) as Response
+    // What the beginner holds is Nango's link, which opens anywhere.
+    assertEquals(
+      sent.headers.get('location'),
+      'https://connect.nango.dev/?session_token=s',
+    )
+    // Bob opens it and approves his mailbox; no browser of the beginner's
+    // takes any part. The beginner then opens their Connections page.
+    approved = true
+    let gmail = (await s.shown()).list.find((c) => c.integration == 'gmail')
+    assertEquals(
+      [gmail?.status, gmail?.account],
+      ['needed', undefined],
+    )
+  } finally {
+    globalThis.fetch = real
+  }
+})
