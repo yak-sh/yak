@@ -374,12 +374,30 @@ The prefix tells you the owner, and the owner tells you the endpoint. A
 at `/user/tokens/verify`. On the wrong endpoint a live token answers
 `401 1000`, and an account token answers `9109` from any `/user/…` path.
 
-**A user-owned token is the owner's to make.** Nothing on the box holds
-user-level auth that can create one. Our account tokens can't reach `/user/…`,
-and the `cloudflare-api-yak` OAuth has no scope for `/user/tokens`. Only a
-service that refuses account tokens needs one; the Workers Builds API is one
-(its API reference says so, and it answers 12006). Ask Jeff for that token
-with a task assigned to him, and name the exact permission and account.
+**User-owned tokens.** Only a service that refuses account tokens needs one;
+the Workers Builds API is one (its API reference says so, and it answers
+12006). The `cfut_` tokens in My Profile → API Tokens that agents made were
+minted in June and July 2026 with `POST /user/tokens` through the Cloudflare
+OAuth MCP (`cloudflare-api`, `https://mcp.cloudflare.com/mcp`, Jeff's login),
+from its `execute` tool's `cloudflare.request()`. That route is closed: on
+2026-11-26 the MCP answered `POST`, list and per-id `GET` on `/user/tokens`
+with `9109` and "No OAuth scope covers this endpoint"; the only token scope its
+OAuth offers is `account-api-tokens.write`. Our account tokens get `9109` from
+any `/user/…` path, and Wrangler's OAuth has no token scope.
+
+So an agent mints a user token only with a user token that holds **User › API
+Tokens › Edit** (the dashboard's "Create Additional Tokens" template). With one,
+the steps above apply to `/user/tokens` and `/user/tokens/permission_groups`,
+and the same credential lists and deletes user tokens. Until one is in
+1Password, ask Jeff with a task assigned to him that names the exact
+permission and account.
+
+To drive the MCP from a shell, use the saved login in
+`~/.claude/.credentials.json` (`mcpOAuth`, key `cloudflare-api-yak|…`): refresh
+at `https://mcp.cloudflare.com/token` with its `refreshToken` and `clientId`,
+send a `User-Agent` (Cloudflare refuses Python's default with 403), and write
+the new access and refresh tokens back into the file, or the next session's
+login breaks.
 
 Listing: `GET /accounts/<id>/tokens` with the minting credential gives each
 token's name, policies, `issued_on` and `last_used_on`. `last_used_on` does not
