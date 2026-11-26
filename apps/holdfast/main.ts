@@ -15,6 +15,7 @@ import { frameLoop } from '@yaks/stage/render'
 import { kits, themes } from '@yaks/ui/ui'
 import { wear } from '@yaks/ui/wear'
 import { kit as hudKit } from '@yaks/game/hud'
+import { screenStyle } from '@yaks/game/screen'
 import { createLook, type View } from './look.ts'
 import { type Actions, renderUI } from './ui.ts'
 import { ids, seed } from './seed.ts'
@@ -47,6 +48,7 @@ type Reply = { run: string; defender: string; message: string; at: number }
 
 async function boot() {
   void wear({ kits: { ...kits, hud: hudKit }, theme: themes.everforest })
+  screenStyle(document)
   let canvas = document.querySelector('canvas')!
   let root = document.querySelector<HTMLElement>('#hud')!
   let base = new URL('./api/', location.href)

@@ -9,9 +9,11 @@
   <title>Holdfast — hold the line together</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
-  <canvas class="Stage"
-    aria-label="Holdfast battlefield. Tap a round building site to select it."></canvas>
-  <div id="hud"></div>
-  <div id="loading" role="status">Raising the gates…</div>
-  <script type="module" src="main.ts"></script>
+  <body class="GameScreen">
+    <canvas class="GameScreen_Surface"
+      aria-label="Holdfast battlefield. Tap a round building site to select it."></canvas>
+    <div id="hud"></div>
+    <div id="loading" role="status">Raising the gates…</div>
+    <script type="module" src="main.ts"></script>
+  </body>
 </html>

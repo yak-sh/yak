@@ -12,9 +12,11 @@
     "./rules",
     "./controls",
     "./hud",
-    "./page"
+    "./page",
+    "./screen"
   ],
   "resources": [
-    "hud/*.css"
+    "hud/*.css",
+    "screen.css"
   ]
 }

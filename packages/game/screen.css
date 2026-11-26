@@ -1,0 +1,31 @@
+.GameScreen {
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.GameScreen_Surface,
+.GameScreen_Hud {
+  position: fixed;
+  inset: 0;
+}
+
+.GameScreen_Surface {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.GameScreen_Hud {
+  box-sizing: border-box;
+  padding:
+    max(var(--game-gutter, 0px), env(safe-area-inset-top, 0px))
+    max(var(--game-gutter, 0px), env(safe-area-inset-right, 0px))
+    max(var(--game-gutter, 0px), env(safe-area-inset-bottom, 0px))
+    max(var(--game-gutter, 0px), env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
+
+.GameScreen_Control {
+  pointer-events: auto;
+}

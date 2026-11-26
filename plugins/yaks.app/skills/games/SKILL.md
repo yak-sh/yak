@@ -26,6 +26,54 @@ which values other players see, which survive a disconnect, and which the store
 keeps. App files and compilation are in <https://yaks.app/docs/code.md>; the
 page's graph API is in <https://yaks.app/docs/store.md>.
 
+## Fullscreen play
+
+Use the game screen by default. Give the canvas or SVG the full viewport, with
+the game's controls over the play surface and inside the phone's safe areas.
+Keep menus and game information in the HUD. Use `@yaks/stage` for a lit 3D
+exploration scene with a camera that follows the player. Use a 2D canvas or SVG
+in the same screen when the player asks for 2D or the genre calls for it.
+
+```html
+<meta name="viewport"
+  content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="./manifest.webmanifest">
+<body class="GameScreen">
+  <canvas class="GameScreen_Surface" aria-label="Game world"></canvas>
+  <div class="GameScreen_Hud">
+    <button class="GameScreen_Control" id="fullscreen" type="button" hidden>
+      Enter fullscreen
+    </button>
+  </div>
+  <script type="module" src="./play.js"></script>
+</body>
+```
+
+Declare `"@yaks/game": "platform"` in package.json. In `play.js`, apply the
+screen stylesheet and attach the button to the browser's fullscreen API. The
+button stays hidden on unsupported browsers. The surface fills the available
+viewport in a regular browser tab too.
+
+```js ignore
+import { fullscreenButton, screenStyle } from '@yaks/game/screen'
+
+screenStyle(document)
+fullscreenButton(document.querySelector('#fullscreen'), console.error)
+```
+
+Size a canvas renderer from the canvas's rendered bounds and update it on
+resize. For SVG, set the `viewBox` so the board remains visible as the aspect
+ratio changes. Lay out the HUD within `GameScreen_Hud` and put
+`GameScreen_Control` on interactive parts. Set `--game-gutter` on the HUD for
+additional spacing from the edges.
+
+Ship `manifest.webmanifest` with `"display": "fullscreen"`, an app-scoped
+`start_url` and `scope`, and install icons at 192×192 and 512×512. When a
+private game's worker serves a signed-out play route, make its manifest and
+icons fetchable to that visitor as well. Use the app's stable manifest address
+when the page's base URL contains a temporary sandbox token. Check that a
+private game still requires its room invite to join an expedition.
+
 ## Inviting friends
 
 Offer an **Invite a friend** button beside the game's share link. Use

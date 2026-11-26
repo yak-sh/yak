@@ -181,10 +181,12 @@ Deeper: <https://yaks.app/docs/storage.md> — `sync`, `durable`, `pace` and
 
 ## Multiplayer Games
 
-A game's page reads the graph, computes rules and writes bundles. `@yaks/game`
-provides rules, controls and HUD parts; `@yaks/stage` draws ordinary geometry
-and sound, and `@yaks/voxel/three` supplies a voxel look. One elected page
-advances shared creatures; the others draw their relayed values.
+A game's page reads the graph, computes rules and writes bundles. Use
+`@yaks/game/screen` for edge-to-edge play and a safe-area HUD, and set the app
+manifest to fullscreen for installation. `@yaks/game` provides rules and
+controls. `@yaks/stage` supplies 3D rendering and sound, and `@yaks/voxel/three`
+supplies a voxel look. One elected page advances shared creatures while the
+others draw their relayed values.
 
 Deeper: <https://yaks.app/docs/games.md> — Holdfast's working multiplayer
 pattern, toolkit dependencies, shared time, owner handoff and dropped orders.

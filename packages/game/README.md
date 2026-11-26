@@ -1,9 +1,8 @@
 # @yaks/game
 
-Game rules, browser controls and HUD parts over values, without a graph or a
-game world. The root and `@yaks/game/rules` are the same pure API, safe in a
-browser or a worker. Each game reads its graph, passes values, and writes the
-result in its own batch.
+Game rules, a full-viewport screen, browser controls and HUD parts. The root and
+`@yaks/game/rules` are the same pure API, safe in a browser or a worker. Each
+game reads its graph, passes values, and writes the result in its own batch.
 
 The first parts come from Mossvale. The move keeps the random sequences, named
 entity ids, level curve and peer motion unchanged, so existing worlds and saved
@@ -115,6 +114,21 @@ returned remainder in the game's graph and draw using `alpha`. Whole steps
 beyond the bound are reported as `dropped`; the caller chooses how to handle a
 long suspension. Mossvale retains its existing frame-rate simulation; a new game
 can use this planner without adopting Mossvale's world or vocabulary.
+
+## Game screen
+
+`@yaks/game/screen` supplies the edge-to-edge viewport for both canvas and SVG
+games. Call `screenStyle(document)` and give the body `GameScreen`, the canvas
+or SVG `GameScreen_Surface`, and the overlay `GameScreen_Hud`. Use
+`viewport-fit=cover` in the viewport meta tag. The HUD pads to the device's safe
+areas, with `--game-gutter` as its minimum inset. Give an interactive HUD
+element `GameScreen_Control` so it can receive pointer events.
+
+`fullscreenButton(button, refused)` wires a native button, follows browser
+fullscreen changes, and returns a function that removes its listeners. For a
+custom control, use `fullscreen(document, refused, changed)` and draw from the
+returned `on` and `busy` values. Give an installable game a web app manifest
+with `"display": "fullscreen"` to launch in that mode where supported.
 
 ## Browser controls
 

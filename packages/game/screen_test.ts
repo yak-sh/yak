@@ -2,7 +2,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { fullscreen } from './ui/fullscreen.ts'
+import { fullscreen, fullscreenButton } from './screen.ts'
 
 test('full screen is offered only where supported', () => {
   let { document } = parseHTML('<html><body></body></html>')
@@ -44,11 +44,34 @@ test('full screen enters, exits, and follows browser Escape', async () => {
 
 test('a refused full-screen request is reported and can be retried', async () => {
   let { document } = parseHTML('<html><body></body></html>')
-  Object.assign(document, { fullscreenEnabled: true })
+  Object.assign(document, {
+    fullscreenEnabled: true,
+    exitFullscreen: () => Promise.resolve(),
+  })
   let error = new Error('refused'), reported: unknown
   document.documentElement.requestFullscreen = () => Promise.reject(error)
   let screen = fullscreen(document, (e) => reported = e, () => {})!
   await screen.toggle()
   assertEquals(reported, error)
   assertEquals([screen.on, screen.busy], [false, false])
+})
+
+test('the fullscreen button tracks the browser and detaches on disposal', () => {
+  let { document, window } = parseHTML('<button hidden></button>')
+  let button = document.querySelector('button')!
+  Object.assign(document, {
+    fullscreenEnabled: true,
+    exitFullscreen: () => Promise.resolve(),
+  })
+  document.documentElement.requestFullscreen = () => {
+    Object.assign(document, { fullscreenElement: document.documentElement })
+    document.dispatchEvent(new window.Event('fullscreenchange'))
+    return Promise.resolve()
+  }
+  let dispose = fullscreenButton(button, () => {})
+  assertEquals([button.hidden, button.textContent], [false, 'Enter fullscreen'])
+  button.click()
+  assertEquals(button.textContent, 'Exit fullscreen')
+  dispose()
+  assertEquals(button.hidden, true)
 })
