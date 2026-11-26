@@ -243,7 +243,7 @@ test('All updates sits above the space picker and opens with that space still se
   let group = picker.closest('.Sidebar_Space')!
   let badges = [...picker.querySelectorAll('[data-across]')]
     .map((b) => b.getAttribute('data-across'))
-  assertEquals(badges.sort(), ['', club.slug, own.slug].sort())
+  assertEquals(badges.sort(), [club.slug, own.slug].sort())
   assert(page.includes('_inbox-actions'))
   assert(group.closest('[data-side-view]'))
   let all = group.previousElementSibling?.querySelector('a')

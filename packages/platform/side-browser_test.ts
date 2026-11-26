@@ -194,7 +194,7 @@ test('the sidebar keeps its badge DOM until the count watch answers again', asyn
       if (counts.ada == 2) unchanged()
     }
     equal(said(root).badges, { all: '5', ada: '4', club: '1' })
-    equal(changes(), 3) // Ada and the two totals update once each.
+    equal(changes(), 2) // Ada and the All Updates total update once each.
     answer(UPDATE_WAITING, rows([ada, club], [], { ada: 0, club: 0 }).waiting!)
     equal(said(root).badges, {})
   } finally {
