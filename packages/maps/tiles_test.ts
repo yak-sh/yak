@@ -94,3 +94,15 @@ Deno.test('anything else is refused', async () => {
   assertEquals((await ask('/1/5/0.mvt', door)).status, 404)
   assertEquals((await ask('/0/0/0.mvt', door, 'POST')).status, 405)
 })
+
+Deno.test('an archive not copied in yet answers 503, kept by nobody', async () => {
+  let { cache, door } = setup({ '0/0/0': 'all' })
+  let none = {
+    ...door,
+    provider: { ...door.provider, archive: 'later.pmtiles' },
+  }
+  for (let path of ['/tiles.json', '/0/0/0.mvt']) {
+    assertEquals((await ask(path, none)).status, 503)
+  }
+  assertEquals(cache.size(), 0)
+})

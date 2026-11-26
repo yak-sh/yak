@@ -76,6 +76,14 @@ let missing = () =>
     headers: { ...HEADERS, 'content-type': 'text/plain; charset=utf-8' },
   })
 
+/** The archive is not in the bucket: a host that has not copied it in yet
+ * (refresh.ts). The door answers 503 until it is. */
+export class Absent extends Error {
+  constructor(key: string) {
+    super(`maps: ${key} is not in the bucket yet`)
+  }
+}
+
 /** A key in a bucket read as a PMTiles source. A range whose etag differs
  * from the one the archive's header was read with means the archive was
  * replaced under it, which pmtiles answers by reading the header again. */
@@ -83,7 +91,7 @@ export let source = (bucket: Bucket, key: string): Source => ({
   getKey: () => key,
   getBytes: async (offset, length, _signal, etag) => {
     let got = await bucket.get(key, { range: { offset, length } })
-    if (!got) throw new Error(`maps: ${key} is not in the bucket`)
+    if (!got) throw new Absent(key)
     if (etag && got.etag != etag) {
       throw new EtagMismatch(`maps: ${key} changed while it was read`)
     }
@@ -167,7 +175,20 @@ export let serve = async (
   return made
 }
 
-let make = async (what: Asked, door: Door): Promise<Response> => {
+let make = (what: Asked, door: Door): Promise<Response> =>
+  made(what, door).catch((e) => {
+    if (!(e instanceof Absent)) throw e
+    return new Response('The map archive is not here yet.\n', {
+      status: 503,
+      headers: {
+        ...HEADERS,
+        'content-type': 'text/plain; charset=utf-8',
+        'retry-after': '3600',
+      },
+    })
+  })
+
+let made = async (what: Asked, door: Door): Promise<Response> => {
   let { provider, bucket, base } = door
   if ('font' in what) {
     if (!provider.glyphs) return missing()
