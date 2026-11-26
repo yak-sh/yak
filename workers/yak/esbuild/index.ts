@@ -5,9 +5,9 @@
 // supplies the catalog; an app never does. What the container answers is
 // what this answers.
 //
-// One container serves every compile. Releases are rare, so it stays up a
-// little after a compile for the next one, then sleeps, and asleep it costs
-// nothing. A compile that outgrows its memory is killed with it: the
+// One container normally serves every compile. A second can start if the
+// first is replaced. Each stays up a little for the next compile, then
+// sleeps. A compile that outgrows its memory is killed with it: the
 // container ends mid-request, and this answers 507, which the kernel says as
 // a compile too big for the compiler (../esbuild.ts). When the killer takes
 // esbuild's process instead, the container answers that 507 itself. When the
@@ -24,6 +24,7 @@ import { WorkerEntrypoint } from 'cloudflare:workers'
 import { Container, getContainer } from '@cloudflare/containers'
 import { strip } from '@yaks/esbuild/strip'
 import { disconnected, forwarded, REPLACED } from './forward.ts'
+import { timed } from '../../../packages/esbuild/timing.ts'
 
 // The compilers' Durable Object namespace, as getContainer takes it.
 type Env = { COMPILER: Parameters<typeof getContainer<Compiler>>[0] }
@@ -40,16 +41,27 @@ export class Compiler extends Container<Env> {
   override defaultPort = 8080
   // How long the container stays up after its last compile.
   override sleepAfter = '2m'
+  #started = -Infinity
+
+  override onStart() {
+    this.#started = Date.now()
+  }
 
   // esbuild's process ending, or the container's, is the compile's own
   // memory only while the container runs on or was killed; a container that
   // stopped otherwise was stopped under it.
   override async fetch(req: Request): Promise<Response> {
+    let began = Date.now()
     let answer: Response | undefined
     let error: unknown
     try {
       answer = await this.containerFetch(req)
-      if (answer.status != OUTGREW && !await disconnected(answer)) return answer
+      if (answer.status != OUTGREW && !await disconnected(answer)) {
+        return timed(answer, {
+          container: Date.now() - began,
+          ...(this.#started >= began ? { start: this.#started - began } : {}),
+        })
+      }
     } catch (e) {
       error = e
     }
@@ -90,7 +102,12 @@ export default class extends WorkerEntrypoint {
   declare env: Env
 
   override fetch(req: Request): Promise<Response> {
-    return forwarded(req, (job) => getContainer(this.env.COMPILER).fetch(job))
+    return forwarded(
+      req,
+      (job, retry) =>
+        getContainer(this.env.COMPILER, retry ? 'replacement' : undefined)
+          .fetch(job),
+    )
   }
 
   strip(path: string, source: string): string | Promise<string> {

@@ -2094,6 +2094,7 @@ let published = async (
           bytesAt,
           parsed,
           made.worker,
+          c,
         ),
     )
   if (!deployed.ready) {

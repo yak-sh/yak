@@ -471,7 +471,10 @@ export let compiled = async (
   let assets = pending.worker || !ask.worker && pending.pages.length
     ? Object.keys(answer.assets ?? {})
     : old?.assets ?? []
-  await writeResources(blobs, prefix, paths, assets, answer)
+  let resources = () => writeResources(blobs, prefix, paths, assets, answer)
+  await (ctx.clock
+    ? ctx.clock.time('compiler_resources', resources)
+    : resources())
   let builtWorker = answer.worker
     ? { main: answer.worker.main, bytes: encode(answer.worker.code) }
     : oldWorker && old?.worker?.main

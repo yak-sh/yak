@@ -44,7 +44,9 @@ test('compiler jobs carry the kernel catalog and preserve container refusals', a
 // was sent.
 let compiler = (...answers: (number | Response | (() => never))[]) => {
   let jobs: string[] = []
-  let send = async (req: Request) => {
+  let retries: boolean[] = []
+  let send = async (req: Request, retry: boolean) => {
+    retries.push(retry)
     jobs.push(await req.text())
     let next = answers.shift()!
     return typeof next == 'number'
@@ -53,7 +55,7 @@ let compiler = (...answers: (number | Response | (() => never))[]) => {
       ? next()
       : next
   }
-  return { jobs, send }
+  return { jobs, send, retries }
 }
 
 let job = () =>
@@ -69,9 +71,15 @@ let reset = () => {
 
 test('a compile the compiler restarted under is sent once more, whole', async () => {
   for (let first of [REPLACED, reset]) {
-    let { jobs, send } = compiler(first, 200)
-    equal((await forwarded(job(), send)).status, 200)
+    let { jobs, send, retries } = compiler(first, 200)
+    let answer = await forwarded(job(), send)
+    equal(answer.status, 200)
+    equal(
+      answer.headers.get('server-timing')?.startsWith('compiler_retry;dur='),
+      true,
+    )
     equal(jobs, ['{"ask":{}}', '{"ask":{}}'])
+    equal(retries, [false, true])
   }
   let { jobs, send } = compiler(REPLACED, REPLACED)
   equal((await forwarded(job(), send)).status, REPLACED)

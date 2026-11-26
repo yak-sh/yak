@@ -2,10 +2,10 @@
 // from the registry, as @cloudflare/worker-bundler's own installer did. That
 // installer decoded every text file of every tarball into the file system a
 // build reads: three.js ships 20 MB of sources and a page reads 2 MB of them.
-// Here a package stays in its gzipped tarball, and a file comes out of it the
-// first time a build reads it, so a compile holds what its builds read.
+// Each compile indexes a tarball in one pass. It keeps a bounded amount of
+// its source bytes for random access, and decodes only files the build reads.
 import { Gunzip } from 'fflate'
-import { maxSatisfying } from 'semver'
+import { maxSatisfying, valid } from 'semver'
 import { REGISTRY, sha256, type Tarball } from './home.ts'
 import { rooted, untar } from './tar.ts'
 
@@ -90,6 +90,8 @@ let keep = (pack: Packed) => {
 }
 
 let PACKAGE = /^node_modules\/(?:@[^/]+\/)?[^/]+\//
+let SOURCES = /\.(?:[cm]?[jt]sx?|json|css)$/i
+let SOURCE_LIMIT = 32 << 20
 
 /**
  * A compile's files: the ones it was handed, and each installed package's,
@@ -98,7 +100,8 @@ let PACKAGE = /^node_modules\/(?:@[^/]+\/)?[^/]+\//
  */
 export class Files {
   #files: Map<string, string>
-  #packages = new Map<string, Packed>()
+  #packages = new Map<string, Packed & { sources?: Map<string, Uint8Array> }>()
+  #sourceBytes = 0
 
   constructor(files: Record<string, string> = {}) {
     this.#files = new Map(Object.entries(files))
@@ -119,6 +122,19 @@ export class Files {
       if (cached) keep(cached)
       return decoded
     }
+    if (SOURCES.test(rest)) pack.sources ??= this.#sources(pack)
+    let source = pack.sources?.get(pack.root + rest)
+    let out = source ? decode(source) : this.#extract(pack, rest)
+    if (out != null) {
+      this.#files.set(path, out)
+      pack.decoded.set(rest, out)
+      let cached = pack.key ? held.get(pack.key) : undefined
+      if (cached) keep(cached)
+    }
+    return out
+  }
+
+  #extract(pack: Packed, rest: string) {
     let out: string | null = null
     walk(
       pack.tgz,
@@ -128,13 +144,30 @@ export class Files {
         return true
       },
     )
-    if (out != null) {
-      this.#files.set(path, out)
-      pack.decoded.set(rest, out)
-      let cached = pack.key ? held.get(pack.key) : undefined
-      if (cached) keep(cached)
-    }
     return out
+  }
+
+  #retain(path: string, size: number) {
+    if (!SOURCES.test(path) || this.#sourceBytes + size > SOURCE_LIMIT) {
+      return false
+    }
+    this.#sourceBytes += size
+    return true
+  }
+
+  #sources(pack: Packed) {
+    let sources = new Map<string, Uint8Array>()
+    if (this.#sourceBytes >= SOURCE_LIMIT) return sources
+    walk(
+      pack.tgz,
+      (path, size, file) =>
+        file && !sources.has(path) &&
+        pack.holds.has(path.slice(pack.root.length)) &&
+        !pack.decoded.has(path.slice(pack.root.length)) &&
+        this.#retain(path, size),
+      (path, bytes) => void sources.set(path, bytes),
+    )
+    return sources
   }
 
   /** The registry tarball an installed package came out of, when it came
@@ -184,15 +217,20 @@ export class Files {
     let files: string[] = []
     let holds: string[] = []
     let manifests: Record<string, string> = {}
+    let sources = new Map<string, Uint8Array>()
     walk(tgz, (path, size, file) => {
       if (!file || !path) return false
       files.push(path)
       if (size && text(path)) holds.push(path)
-      return !!size && /^(?:[^/]+\/)?package\.json$/.test(path)
-    }, (path, bytes) => void (manifests[path] = decode(bytes)))
+      return !!size && (manifest(path) ||
+        !sources.has(path) && this.#retain(path, size))
+    }, (path, bytes) => {
+      if (manifest(path)) manifests[path] = decode(bytes)
+      else sources.set(path, bytes)
+    })
     let root = rooted(files)
-    let manifest = manifests[root + 'package.json']
-    if (manifest != null) this.#files.set(dir + 'package.json', manifest)
+    let own = manifests[root + 'package.json']
+    if (own != null) this.#files.set(dir + 'package.json', own)
     let pack: Packed = {
       tgz,
       from,
@@ -206,9 +244,11 @@ export class Files {
       key: from?.sha256,
     }
     keep(pack)
-    this.#packages.set(dir, { ...pack, holds: new Set(pack.holds) })
+    this.#packages.set(dir, { ...pack, sources, holds: new Set(pack.holds) })
   }
 }
+
+let manifest = (path: string) => /^(?:[^/]+\/)?package\.json$/.test(path)
 
 type Version = {
   dependencies?: Record<string, string>
@@ -217,6 +257,24 @@ type Version = {
 type Metadata = {
   'dist-tags': Record<string, string>
   versions: Record<string, Version>
+}
+
+type Release = { from: Tarball; dependencies: Record<string, string> }
+
+// Exact releases share the bounded tarball cache. Tags and ranges still ask
+// the registry which version they mean. Fetch implementations have separate
+// indexes so an injected registry cannot choose another registry's bytes.
+let releases = new WeakMap<typeof fetch, Map<string, Release>>()
+let exact = (get: typeof fetch) => {
+  let index = releases.get(get)
+  if (!index) releases.set(get, index = new Map())
+  return index
+}
+
+let remember = (index: Map<string, Release>, key: string, release: Release) => {
+  index.delete(key)
+  index.set(key, release)
+  if (index.size > 256) index.delete(index.keys().next().value!)
 }
 
 // The version a range asks for, as npm reads it: a tag, an exact version or
@@ -240,20 +298,81 @@ export let install = async (
   want: Record<string, string>,
   get: typeof fetch = fetch,
   registry = REGISTRY,
+  report?: (ms: number) => void,
 ) => {
   let installed: string[] = []
   let warnings: string[] = []
   let done = new Set<string>()
   let pending = new Map<string, Promise<void>>()
-  let fetched = async (url: string, init: RequestInit = {}) => {
+  let index = exact(get)
+  let fetching = 0, began = 0
+  let fetched = async <T>(
+    url: string,
+    read: (response: Response) => Promise<T>,
+    init: RequestInit = {},
+  ) => {
+    if (report && !fetching++) began = performance.now()
     try {
-      return await get(url, { ...init, signal: AbortSignal.timeout(WAIT) })
+      return await read(
+        await get(url, { ...init, signal: AbortSignal.timeout(WAIT) }),
+      )
     } catch (e) {
       if ((e as Error).name != 'TimeoutError') throw e
       throw new Error(
         `the registry did not answer ${url} within ${WAIT / 1000}s`,
       )
+    } finally {
+      if (report && !--fetching) report(performance.now() - began)
     }
+  }
+  let load = async (url: string, name: string, range: string) => {
+    let pin = valid(range)
+    let was = pin ? index.get(`${url}/${pin}`) : undefined
+    let packed = was && held.get(was.from.sha256)
+    if (was && packed) {
+      fs.hold(name, packed.tgz, was.from)
+      remember(index, `${url}/${pin}`, was)
+      return { version: pin!, dependencies: was.dependencies }
+    }
+    let meta = await fetched(url, async (r) => {
+      if (r.ok) return await r.json() as Metadata
+      await r.body?.cancel()
+      throw new Error(
+        `the registry answered ${r.status} for "${name}"` +
+          (r.status == 404
+            ? ' (no such package: check its name in package.json)'
+            : ''),
+      )
+    }, {
+      headers: {
+        accept:
+          'application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8',
+      },
+    })
+    let version = resolve(range, meta)
+    let release = version ? meta.versions[version] : undefined
+    if (!version || !release) return
+    let tarball = release.dist?.tarball
+    if (!tarball) throw new Error(`${name}@${version} names no tarball`)
+    let key = `${url}/${version}`
+    let known = index.get(key)
+    let ready = known?.from.url == tarball && held.get(known.from.sha256)
+    let from: Tarball
+    if (ready && known) {
+      fs.hold(name, ready.tgz, known.from)
+      from = known.from
+    } else {
+      let tgz = await fetched(tarball, async (r) => {
+        if (r.ok) return new Uint8Array(await r.arrayBuffer())
+        await r.body?.cancel()
+        throw new Error(`its tarball answered ${r.status} (${tarball})`)
+      })
+      from = { url: tarball, sha256: await sha256(tgz) }
+      fs.hold(name, tgz, from)
+    }
+    let dependencies = release.dependencies ?? {}
+    remember(index, key, { from, dependencies })
+    return { version, dependencies }
   }
   let one = (name: string, range: string): Promise<void> | void => {
     if (done.has(name)) return
@@ -268,37 +387,13 @@ export let install = async (
         let url = `${registry}/${
           name.startsWith('@') ? `@${encodeURIComponent(name.slice(1))}` : name
         }`
-        let r = await fetched(url, {
-          headers: {
-            accept:
-              'application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8',
-          },
-        })
-        if (!r.ok) {
-          throw new Error(
-            `the registry answered ${r.status} for "${name}"` +
-              (r.status == 404
-                ? ' (no such package: check its name in package.json)'
-                : ''),
-          )
-        }
-        let meta: Metadata = await r.json()
-        let version = resolve(range, meta)
-        let release = version ? meta.versions[version] : undefined
-        if (!version || !release) {
+        let release = await load(url, name, range)
+        if (!release) {
           warnings.push(`no version of ${name} satisfies ${range}`)
           return
         }
         done.add(name)
-        installed.push(`${name}@${version}`)
-        let tarball = release.dist?.tarball
-        if (!tarball) throw new Error(`${name}@${version} names no tarball`)
-        let t = await fetched(tarball)
-        if (!t.ok) {
-          throw new Error(`its tarball answered ${t.status} (${tarball})`)
-        }
-        let tgz = new Uint8Array(await t.arrayBuffer())
-        fs.hold(name, tgz, { url: tarball, sha256: await sha256(tgz) })
+        installed.push(`${name}@${release.version}`)
         await Promise.all(
           Object.entries(release.dependencies ?? {}).map(([dep, r]) =>
             one(dep, r)

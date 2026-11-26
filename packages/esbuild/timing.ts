@@ -3,6 +3,7 @@
 // never source text, package names or credentials.
 export type Phase =
   | 'install'
+  | 'registry'
   | 'worker'
   | 'carried'
   | 'used'
@@ -28,6 +29,20 @@ export let phase = (report: Report | undefined, name: Phase) => {
 }
 
 /** Fixed metric names keep compiler diagnostics distinct from host stages. */
-export let header = (timing: Timing) =>
+export let header = (timing: Record<string, number>) =>
   Object.entries(timing).filter(([name]) => name != 'hits' && name != 'misses')
     .map(([name, ms]) => `compiler_${name};dur=${ms.toFixed(3)}`).join(', ')
+
+/** Add compiler relay timings while streaming the original answer through. */
+export let timed = (
+  response: Response,
+  timing: Record<string, number>,
+): Response => {
+  let headers = new Headers(response.headers)
+  headers.append('server-timing', header(timing))
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}

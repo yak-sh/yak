@@ -22,6 +22,7 @@ import { connectedEnv } from './connections.ts'
 import { scriptName } from './dispatch.ts'
 import { barred } from '@yaks/tunnel/hosted'
 import { retirementRequested } from './durable-retirement.ts'
+import type { Clock } from './timing.ts'
 
 type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
 
@@ -61,6 +62,7 @@ export let deployWorker = async (
   read: Read,
   parsed: Parsed,
   compiled?: Compiled['worker'],
+  clock?: Clock,
 ) => {
   let store = storeName(space, app)
   let target = scriptOf(space, app)
@@ -136,15 +138,17 @@ export let deployWorker = async (
   // answered none: never empty once something is up, since an empty worker
   // is a release that built none, and its pages ask for no worker at all
   // (dispatch.ts `called`).
-  let uploaded = await upload(
-    env,
-    target,
-    modules,
-    compiled ? { ...config, main: compiled.main } : config,
-    bound,
-    target == store ? undefined : scriptName(store),
-    secrets,
-  )
+  let send = () =>
+    upload(
+      env,
+      target,
+      modules,
+      compiled ? { ...config, main: compiled.main } : config,
+      bound,
+      target == store ? undefined : scriptName(store),
+      secrets,
+    )
+  let uploaded = await (clock ? clock.time('worker_upload', send) : send())
   worker = uploaded.worker || scriptName(target)
   let retirement = await retirementRequested(
     env,

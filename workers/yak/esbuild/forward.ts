@@ -4,6 +4,7 @@
 // own restart cut short is sent once more, to the compiler that replaced it:
 // its container stopped under the compile, its connection was lost before an
 // exit was recorded, or the runtime marked its Durable Object reset retryable.
+import { timed } from '../../../packages/esbuild/timing.ts'
 
 /** What the compiler answers when its container stopped under a compile for
  * a reason other than the compile's own memory. */
@@ -18,7 +19,7 @@ export let disconnected = async (response: Response): Promise<boolean> =>
 
 export let forwarded = async (
   req: Request,
-  send: (req: Request) => Promise<Response>,
+  send: (req: Request, retry: boolean) => Promise<Response>,
 ): Promise<Response> => {
   if (req.method != 'POST') {
     return new Response('POST a compiler job', { status: 405 })
@@ -27,20 +28,23 @@ export let forwarded = async (
     return new Response('unsupported compiler job protocol', { status: 400 })
   }
   let job = await req.text()
-  let sent = () =>
+  let sent = (retry: boolean) =>
     send(
       new Request('http://compiler/', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: job,
       }),
+      retry,
     )
+  let began = Date.now()
   try {
-    let answer = await sent()
+    let answer = await sent(false)
     if (answer.status != REPLACED && !await disconnected(answer)) return answer
     await answer.body?.cancel()
   } catch (e) {
     if (!retryable(e)) throw e
   }
-  return await sent()
+  let retry = Date.now() - began
+  return timed(await sent(true), { retry })
 }

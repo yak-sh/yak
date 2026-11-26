@@ -73,6 +73,7 @@ let install = async (
   setup: Seed,
   catalog: Catalog,
   get?: typeof fetch,
+  report?: Report,
 ) => {
   let pkg = ask.files['package.json'] ?? null
   let ranges = dependencies(pkg)
@@ -80,7 +81,13 @@ let install = async (
     setup.dependencies,
     pins(ask.files['package-lock.json'] ?? null),
   )
-  let { installed, warnings } = await npm.install(fs, want, get)
+  let { installed, warnings } = await npm.install(
+    fs,
+    want,
+    get,
+    npm.REGISTRY,
+    report && ((ms) => report('registry', ms)),
+  )
   if (warnings.length) {
     throw new Error(warnings.map((w) => `npm: ${w}`).join('\n'))
   }
@@ -204,6 +211,7 @@ export let compile = async (
   let timing: Timing | undefined = options.timing
     ? {
       install: 0,
+      registry: 0,
       worker: 0,
       carried: 0,
       used: 0,
@@ -246,7 +254,10 @@ export let compile = async (
       ? setup.assets
       : {}
     fs = new npm.Files(setup.files)
-    Object.assign(answer, await install(fs, ask, setup, catalog, options.get))
+    Object.assign(
+      answer,
+      await install(fs, ask, setup, catalog, options.get, report),
+    )
   } catch (e) {
     installing()
     return done({ ...answer, errors: said(e) })

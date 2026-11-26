@@ -400,7 +400,8 @@ let built = async (
         'This platform has no app worker upload credential',
       )
     }
-    await upload(ctx.env, candidate.script!, modules, config)
+    let send = () => upload(ctx.env, candidate.script!, modules, config)
+    await (ctx.clock ? ctx.clock.time('worker_upload', send) : send())
   }
   // Only a branch is set up: a link with none shows what was released, whose
   // words and rows are the live app's own.

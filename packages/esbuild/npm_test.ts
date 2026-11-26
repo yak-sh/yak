@@ -58,6 +58,35 @@ test('a package the files already hold is not fetched', async () => {
   assertEquals(asked, ['game', 'game/-/1.0.0.tgz'])
 })
 
+test('pinned releases reuse tarballs while ranges keep following npm', async () => {
+  let versions = {
+    '1.0.0': { 'package.json': manifest({ kit: '1.0.0' }), 'index.js': 'old' },
+  } as Record<string, Record<string, string>>
+  let { get, asked } = registry({
+    game: versions,
+    kit: { '1.0.0': { 'package.json': manifest(), 'index.js': 'kept' } },
+  })
+  let root = 'https://registry.test'
+  await install(new Files(), { game: '^1' }, get, root)
+  asked.length = 0
+  versions['1.1.0'] = { 'package.json': manifest(), 'index.js': 'new' }
+
+  let locked = new Files()
+  let answer = await install(locked, { game: '1.0.0' }, get, root)
+  assertEquals(answer, { installed: ['game@1.0.0', 'kit@1.0.0'], warnings: [] })
+  assertEquals(locked.read('node_modules/game/index.js'), 'old')
+  assertEquals(locked.read('node_modules/kit/index.js'), 'kept')
+  assertEquals(asked, [])
+
+  let updated = new Files()
+  assertEquals(
+    (await install(updated, { game: '^1' }, get, root)).installed,
+    ['game@1.1.0'],
+  )
+  assertEquals(updated.read('node_modules/game/index.js'), 'new')
+  assertEquals(asked, ['game', 'game/-/1.1.0.tgz'])
+})
+
 test('what cannot be installed is said, package by package', async () => {
   let { get } = registry({
     game: { '1.0.0': { 'package.json': manifest(), 'a.js': '' } },

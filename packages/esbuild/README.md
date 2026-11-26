@@ -102,24 +102,29 @@ The server always includes `Answer.timing`, measured with `performance.now()` in
 the compiler process. Direct calls request it with the fourth argument
 `{timing: true}`; calls without it retain the same answer shape.
 
-`install`, `worker`, `carried`, `used`, `groups`, `cache`, `pages` and `total`
-are milliseconds. `install` includes seeding toolkit sources and making the
-lock. `carried` measures the consumer graph build and common-package analysis;
-`used` measures export trimming. `groups` measures shared-group work excluding
-`carried` and `used`; `cache` is the lookup and source-validation subset of
-`groups`, not another phase to add to it. `pages` sums all page entry builds.
-`hits` and `misses` count shared-group cache lookups, not milliseconds. A phase
-that did not run is zero; app errors retain timing for the work attempted. The
-timings contain no source text or package names.
+`install`, `registry`, `worker`, `carried`, `used`, `groups`, `cache`, `pages`
+and `total` are milliseconds. `install` includes seeding toolkit sources and
+making the lock. `registry` is the wall time spent on registry requests and
+their bodies during installation, counted once where requests overlap. `carried`
+measures the consumer graph build and common-package analysis; `used` measures
+export trimming. `groups` measures shared-group work excluding `carried` and
+`used`; `cache` is the lookup and source-validation subset of `groups`, not
+another phase to add to it. `pages` sums all page entry builds. `hits` and
+`misses` count shared-group cache lookups, not milliseconds. A phase that did
+not run is zero; app errors retain timing for the work attempted. The timings
+contain no source text or package names.
 
 The server's `Server-Timing` header names these durations `compiler_install`,
 `compiler_worker`, and so on. `compiler_parse` measures reading and parsing the
 job, `compiler_serialize` measures serializing the answer, and
 `compiler_request` spans both and the compile. These are separate from
 `compiler_total`, which measures only the compiler work. The yaks.app host
-forwards these metrics beside its own `compile` round-trip duration. Comparing
-those totals distinguishes compiler work from container startup, queueing and
-transport; hit/miss counts remain in the JSON answer, not duration metrics.
+forwards these metrics beside its own `compile` round-trip duration.
+`compiler_start` appears when the container starts during the call.
+`compiler_container` spans that startup and the wait for its response headers.
+`compiler_retry` measures the first attempt when a job is replayed. The host
+reports `compiler_resources` for writing compiled assets and `worker_upload` for
+uploading the executable. Hit and miss counts remain in the JSON answer.
 
 ## Platform toolkit sources
 

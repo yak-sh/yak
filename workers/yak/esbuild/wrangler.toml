@@ -40,21 +40,16 @@ new_sqlite_classes = ["Compiler"]
 # The image is built from packages/esbuild alone, so it changes only when the
 # compiler does (./Dockerfile).
 #
-# `basic`, 1/4 vCPU and 1 GiB, is the smallest that compiles Vale with room:
-# measured under these limits Vale peaks at about 300 MB and takes 11 s from a
-# cold container, 8 s warm; a small app 100-140 MB and 1-2 s. `lite`'s 256 MiB
-# runs out on Vale. At Cloudflare's rates an awake second costs about
-# $0.0000028 (memory and disk) and a CPU second $0.00002, so a release that
-# wakes the container costs about $0.0004, the two minutes it stays up after
-# (index.ts `sleepAfter`) most of it.
-#
-# One instance serves every compile (index.ts), so one is the most that runs.
+# Native esbuild and its JavaScript resolver share the instance's CPU. The
+# 1/4 vCPU basic instance took 12 s for the two browser analysis passes on
+# a 3D starter edit (T-3822). standard-1 gives those passes 1/2 vCPU.
+# The second instance is available for a retry during container replacement.
 [[containers]]
 class_name = "Compiler"
 image = "./Dockerfile"
 image_build_context = "../../../packages/esbuild"
-instance_type = "basic"
-max_instances = 1
+instance_type = "standard-1"
+max_instances = 2
 
 [env.staging]
 name = "yak-esbuild-staging"
@@ -77,5 +72,5 @@ new_sqlite_classes = ["Compiler"]
 class_name = "Compiler"
 image = "./Dockerfile"
 image_build_context = "../../../packages/esbuild"
-instance_type = "basic"
-max_instances = 1
+instance_type = "standard-1"
+max_instances = 2
