@@ -4,7 +4,7 @@ import { registration } from '@yaks/connections'
 import type { Comp } from '@yaks/graph'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
-import { ai, modelPage, platform } from './testing.ts'
+import { ai, modelPage, platform, signedInAs } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import { KERNEL, meta } from './meta.ts'
 import { CALLBACK, connecting, connectionsOf, ctxOf } from './connections.ts'
@@ -144,6 +144,7 @@ test('Slack OAuth lets a workspace mention and DM its Operator, receive threaded
     let callback = new Request(
       'https://yaks.app' + CALLBACK + '?code=ok&state=' +
         authorize.searchParams.get('state'),
+      { headers: { cookie: await signedInAs(p.env, person) } },
     )
     assertEquals((await atApex(callback, p.env))?.status, 303)
     let [row] = await ctxOf(p.env).graph.read(
