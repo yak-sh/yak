@@ -247,7 +247,7 @@ test('a picture and its replacement report one paired sample and use the picture
   await held.frame
   held.swapping()
   b.frame(620, 590)
-  held.waited(300)
+  held.waited(300, 240)
   equal(b.sent.length, 0)
   b.run()
   b.entries.set('yak-usable', { startTime: 980 })
@@ -262,7 +262,13 @@ test('a picture and its replacement report one paired sample and use the picture
   ])
   equal(timings[0].timing.counts.server, 300)
   equal(timings.map((row) => row.timing.counts.overBudget), [1, 0])
-  equal(rows.filter((row) => row.error).length, 1)
+  let errors = rows.filter((row) => row.error)
+  equal(
+    errors.map((row) =>
+      (row.error as { tags: { gateway?: number } }).tags.gateway
+    ),
+    [240],
+  )
 })
 
 test("an offline kept picture reports its paint and its worker's answer without pretending its scripts ran", () => {

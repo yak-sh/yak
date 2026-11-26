@@ -92,6 +92,9 @@ let OPENING = `(endpoint, source) => {
       if (open.usable != null) open.usable = Math.max(open.usable, open.paint ?? 0)
       if (!id) return
       open.navigation = navigation()
+      // A page from the network says the server's own time on it.
+      let timed = !picture && nav?.serverTiming?.find((t) => t.name == 'gateway')
+      if (timed && open.gateway == null) open.gateway = timed.duration
       let body = JSON.stringify({ id, at, points: [], open })
       if (!navigator.sendBeacon?.(endpoint, body)) {
         void fetch(endpoint, { method: 'POST', body, keepalive: true }).catch(() => {})
@@ -139,8 +142,9 @@ let OPENING = `(endpoint, source) => {
       // How far a picture's bootstrap came (@yaks/web/picture).
       step: (stage) => open.stage = stage,
       swapping: () => replaced = performance.now(),
-      waited: (ms) => {
+      waited: (ms, gateway) => {
         open.server = ms
+        if (gateway != null) open.gateway = gateway
         performance.mark('yak-open-server', { detail: ms })
       },
       ready: (painted = false) => {

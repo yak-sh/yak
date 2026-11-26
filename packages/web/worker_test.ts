@@ -6,6 +6,8 @@ import {
   type Keeping,
   keeping,
   PAGES,
+  type Route,
+  routes,
   type Scope,
 } from './worker.ts'
 import { FRESH, FRESH_URL, KEPT, SHELL } from './picture.ts'
@@ -116,6 +118,16 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
   let ask = async (...args: Parameters<typeof respond>) =>
     (await respond(...args))?.text() ?? null
   let open = (path: string) => ask(path, { mode: 'navigate' })
+  // Installs the worker in a browser that routes requests as `addRoutes`
+  // does, and says whether the install held.
+  let install = async (addRoutes?: (routes: Route[]) => Promise<void>) => {
+    let held: Promise<unknown>[] = []
+    hear.get('install')!({
+      addRoutes,
+      waitUntil: (p: Promise<unknown>) => held.push(p),
+    })
+    return await Promise.all(held).then(() => true, () => false)
+  }
   let activate = async () => {
     hear.get('activate')!({
       waitUntil: (p: Promise<unknown>) => void waiting.push(p),
@@ -153,6 +165,7 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
   }
   return {
     scope,
+    install,
     activate,
     settled,
     site,
@@ -367,6 +380,24 @@ test('a picture that could not be replaced opens next from the network, once', a
   assertEquals(w.failed('/checks#row-1'), [true])
   assertEquals(await w.open('/checks'), page('now'))
   assertEquals((await w.open('/checks'))!.includes(KEPT), true)
+})
+
+test('a stopped worker routes its opens to the kept pictures, the paths that forget to itself, and installs where routing is refused or missing', async () => {
+  let w = worker(2, { broke: '/api/report' })
+  let added: Route[] = []
+  equal(await w.install((r) => (added.push(...r), Promise.resolve())), true)
+  equal(added, routes(['/logout']))
+  w.site.set('/api/report', 'told')
+  equal(
+    await w.install(() => Promise.reject(new TypeError('no cache source'))),
+    true,
+  )
+  equal(w.asked, ['/api/report'])
+  equal(await w.install(), true)
+  let network = worker(2, { pictures: false })
+  let none: Route[] = []
+  await network.install((r) => (none.push(...r), Promise.resolve()))
+  equal(none, [])
 })
 
 test('a network-only upgrade drops old pictures without reopening any window', async () => {

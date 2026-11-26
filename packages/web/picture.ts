@@ -134,7 +134,12 @@ let boot = ({ opening, door }: Boot = {}) =>
   }).then((r) => {
     step('read')
     let wait = r.headers.get('${FRESH_WAIT}')
-    try { opened?.waited(wait == null ? performance.now() - began : Number(wait)) } catch {}
+    // The server's own time on it, beside the wait (Server-Timing).
+    let gateway = /(?:^|,)\\s*gateway;dur=([\\d.]+)/.exec(r.headers.get('server-timing') || '')
+    try {
+      opened?.waited(wait == null ? performance.now() - began : Number(wait),
+        gateway ? Number(gateway[1]) : undefined)
+    } catch {}
     if (!r.ok || !(r.headers.get('content-type') || '').includes('text/html')) {
       return network('answered ' + r.status)
     }

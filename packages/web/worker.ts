@@ -22,6 +22,10 @@
  *   every kept page, any snapshot taken by a page loaded before it, and the
  *   databases its pages kept (`databases`).
  *
+ * - Where the browser routes requests itself (Chromium's static routing), a
+ *   page opened while the worker is stopped is answered from the kept
+ *   pictures without starting it, which took 300 ms of a desktop open. The
+ *   paths that forget always come to the worker, and every open while it runs.
  * - A picture that cannot be replaced by its page sends its address
  *   (`NETWORK`) before it loads again, and that next open of it comes from
  *   the network; one the worker cannot draw does too. The browser can
@@ -149,6 +153,10 @@ export type Scope = {
     hear: (e: FetchLike) => void,
   ): void
   addEventListener(
+    type: 'install',
+    hear: (e: InstallLike) => void,
+  ): void
+  addEventListener(
     type: 'activate',
     hear: (e: { waitUntil(p: Promise<unknown>): void }) => void,
   ): void
@@ -174,6 +182,53 @@ export type FetchLike = {
   respondWith(r: Promise<Response>): void
   waitUntil(p: Promise<unknown>): void
 }
+
+/** A route the browser takes a request by without the worker
+ * (`InstallEvent.addRoutes`): to the worker's own fetch handler, or to a cache. */
+export type Route = {
+  condition: {
+    urlPattern?: { pathname: string }
+    requestMode?: RequestMode
+    requestMethod?: string
+    runningStatus?: 'running' | 'not-running'
+  }
+  source: 'fetch-event' | { cacheName: string }
+}
+
+/** An install event, as far as this worker reads it. */
+export type InstallLike = {
+  addRoutes?(routes: Route[]): Promise<void>
+  waitUntil(p: Promise<unknown>): void
+}
+
+/** The routes a stopped worker's opens take: the paths that forget to the
+ * worker, then a page opened from its picture, if it has one.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(routes(['/logout']), [
+ *   { condition: { urlPattern: { pathname: '/logout' } }, source: 'fetch-event' },
+ *   {
+ *     condition: { requestMode: 'navigate', requestMethod: 'GET', runningStatus: 'not-running' },
+ *     source: { cacheName: 'yak-pages' },
+ *   },
+ * ])
+ * ```
+ */
+export let routes = (forget: string[]): Route[] => [
+  ...forget.map((pathname): Route => ({
+    condition: { urlPattern: { pathname } },
+    source: 'fetch-event',
+  })),
+  {
+    condition: {
+      requestMode: 'navigate',
+      requestMethod: 'GET',
+      runningStatus: 'not-running',
+    },
+    source: { cacheName: PAGES },
+  },
+]
 
 /** A push event, as far as this worker reads it. */
 export type PushLike = {
@@ -228,6 +283,14 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       }),
     }).catch(() => {})
   }
+  scope.addEventListener('install', (e) => {
+    if (!pictures || !e.addRoutes) return
+    e.waitUntil(
+      e.addRoutes(routes(opts.forget)).catch((error) =>
+        tell(error, 'The worker could not route its kept pages')
+      ),
+    )
+  })
   scope.addEventListener('activate', (e) => {
     // A navigation can wait for activation. Activation must never open a page.
     let preload = scope.registration?.navigationPreload

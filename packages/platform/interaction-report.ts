@@ -65,6 +65,7 @@ let opening = (value: unknown): Open | undefined => {
     parsed,
     frame,
     unseen,
+    gateway,
   } = value as Partial<Open>
   if (
     !source || !OPEN_SOURCES.includes(source) ||
@@ -78,6 +79,7 @@ let opening = (value: unknown): Open | undefined => {
     hidden != null && typeof hidden != 'boolean' ||
     unseen != null && typeof unseen != 'boolean' ||
     parsed != null && !duration(parsed) || frame != null && !duration(frame) ||
+    gateway != null && !duration(gateway) ||
     !milestone(paint) || !milestone(usable) || !milestone(server) ||
     paint != null && usable != null && usable < paint
   ) return
@@ -99,6 +101,7 @@ let opening = (value: unknown): Open | undefined => {
     ...parsed == null ? {} : { parsed },
     ...frame == null ? {} : { frame },
     ...unseen ? { unseen } : {},
+    ...gateway == null ? {} : { gateway },
   }
 }
 
@@ -174,6 +177,7 @@ let slowOpen = (
         ms,
         budget,
         ...open.server == null ? {} : { server: open.server },
+        ...open.gateway == null ? {} : { gateway: open.gateway },
         estimated: open.estimated,
         ...open.parsed == null ? {} : { parsed: open.parsed },
         ...open.frame == null ? {} : { frame: open.frame },

@@ -73,6 +73,9 @@ export type Open = {
   parsed?: number
   frame?: number
   unseen?: boolean
+  // The server's own time on the page (Server-Timing `gateway`), within
+  // `server`.
+  gateway?: number
 }
 export type Batch = { id: string; at: number; points: Point[]; open?: Open }
 export type Phases = Pick<Point, 'input' | 'server' | 'script' | 'render'>
