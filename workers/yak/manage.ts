@@ -173,11 +173,12 @@ export let manage = async (
         null,
         person,
         at.view == 'operator' || at.view == 'updates' ||
-          at.view == 'matches' || at.view == 'dashboard',
+          at.view == 'matches' || at.view == 'dashboard' ||
+          at.view == 'versions',
       )
       page.catch(() => {})
       if (reads && !at.door) {
-        let drawn = !at.open && !at.logo && !at.manifest
+        let drawn = !at.open && !at.logo && !at.manifest && !at.version
         let chat = !!at.open && !url.searchParams.has('attachment')
         foresee(
           dir,
@@ -281,12 +282,12 @@ export let manage = async (
     null,
     person,
     view == 'operator' || view == 'updates' || view == 'matches' ||
-      view == 'dashboard',
+      view == 'dashboard' || view == 'versions',
   )
   if (!page && (req.method == 'GET' || req.method == 'HEAD') && !at.door) {
     // The page drawn on the dashboard, not a conversation in the chat app
     // or one of the space's files.
-    let drawn = !at.open && !at.logo && !at.manifest
+    let drawn = !at.open && !at.logo && !at.manifest && !at.version
     let chat = !!at.open && !url.searchParams.has('attachment')
     foresee(
       dir,
@@ -425,6 +426,19 @@ export let manage = async (
     let { matchesPage } = await import('./operator-page.ts')
     return matchesPage(req, env, space, who, await beside(env, dir, space, who))
   }
+  // A version of one of its apps, where its Dashboard's Recent work leads.
+  if (view == 'versions' && writes(who.role) && !space.trashed) {
+    if (!reading || !at.version) return nothingHere(env)
+    let { versionPage } = await import('./operator-page.ts')
+    return await versionPage(
+      env,
+      space,
+      who,
+      dir,
+      at.version,
+      await beside(env, dir, space, who),
+    ) ?? nothingHere(env)
+  }
   if (view == 'operator' && writes(who.role) && !space.trashed) {
     let { chatPage, openingChat, operatorAnswer, storeAnswer } = await c.time(
       'page_modules',
@@ -487,9 +501,10 @@ export let manage = async (
     return redirect(`https://${spaceHost(env, space.slug)}/`, 303)
   }
   // The Operator's own pages were answered above; the rest are settings.
-  if (view == 'updates' || view == 'matches' || view == 'dashboard') {
-    return nothingHere(env)
-  }
+  if (
+    view == 'updates' || view == 'matches' || view == 'dashboard' ||
+    view == 'versions'
+  ) return nothingHere(env)
   let softphone = url.searchParams.get('softphone')
   if (softphone && view == 'settings') {
     if (role != 'owner') return nothingHere(env)
@@ -779,7 +794,7 @@ let desk = async (
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
-  view: Exclude<SpaceView, Talk>,
+  view: Exclude<SpaceView, Talk | 'versions'>,
   said?: Said,
 ): Promise<Response> => {
   reached('desk', null)
@@ -1189,9 +1204,9 @@ let saved = async (
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
-  view: Exclude<SpaceView, Talk>,
+  view: Exclude<SpaceView, Talk | 'versions'>,
 ): Promise<Response> => {
-  let refused = (view: Exclude<SpaceView, Talk>, said: Said) =>
+  let refused = (view: Exclude<SpaceView, Talk | 'versions'>, said: Said) =>
     refusal(req, said, () => desk(req, env, dir, space, who, view, said))
   // The Logo form streams its picture to its own address (`logoUpload`):
   // Settings' Save posts a multipart form here too, and is read whole below.

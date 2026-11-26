@@ -172,6 +172,7 @@
     "./manifest": "./manifest.ts",
     "./released": "./released.ts",
     "./release-index": "./release-index.ts",
+    "./version-view": "./version-view.ts",
     "./versions": "./versions.ts",
     "./cli": "./cli.ts",
     "./plans": "./plans.ts",

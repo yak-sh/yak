@@ -196,9 +196,14 @@ export let summary = (text: string, most = 140): string => {
     : sentence.slice(0, sentence.lastIndexOf(' ', most - 1)).trimEnd() + '…'
 }
 
+/** What a line of Recent work opens: the conversation a fix was worked in,
+ * by its `request`, or the version of the app a release put out, by the
+ * app's eid. */
+export type Opens = { request: string } | { app: string; version: number }
+
 /** One line of Recent work: who did what (`does`) to which app, when, what
- * it said of it, whether it could not finish, and how many times running it
- * did the same. */
+ * it said of it, whether it could not finish, how many times running it did
+ * the same, and what it opens: the newest of those times. */
 export type Did = {
   who: string
   does: string
@@ -207,6 +212,7 @@ export type Did = {
   said?: string
   failed?: boolean
   times: number
+  opens?: Opens
 }
 
 // What a fix is said as, by how it went.
@@ -231,8 +237,11 @@ let fixed = (f: Fix) =>
  *     { app: 'r', version: 2, at: '2026-11-18T10:00:00Z', by: 'a', name: 'Claude Code' },
  *   ], [
  *     { request: 'q', app: 'r', at: '2026-11-20T09:59:00Z', said: 'Saves wait now.' },
- *   ], titles).map((d) => [d.who, d.does, d.app, d.times]),
- *   [['Hazel', 'fixed a break in', 'Roster', 1], ['Claude Code', 'updated', 'Roster', 2]],
+ *   ], titles).map((d) => [d.who, d.does, d.app, d.times, d.opens]),
+ *   [
+ *     ['Hazel', 'fixed a break in', 'Roster', 1, { request: 'q' }],
+ *     ['Claude Code', 'updated', 'Roster', 2, { app: 'r', version: 3 }],
+ *   ],
  * )
  * ```
  */
@@ -259,6 +268,7 @@ export let worked = (
       said: f.said,
       failed: f.failed,
       times: 1,
+      opens: { request: f.request },
     })),
     ...releases.filter((r) => !during(r)).map((r) => ({
       who: r.operator ? operator : r.name,
@@ -266,6 +276,7 @@ export let worked = (
       app: titles.get(r.app),
       at: r.at,
       times: 1,
+      ...r.version == null ? {} : { opens: { app: r.app, version: r.version } },
     })),
   ].filter((d) => d.app).sort((a, b) => b.at.localeCompare(a.at))
   let grouped: Did[] = []

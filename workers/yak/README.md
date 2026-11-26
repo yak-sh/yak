@@ -617,25 +617,29 @@ write, a release or the store mover (draft-move.ts) writes its row.
 has its own, on a Store of its own (`preview/<draft>`), so drafts preview side
 by side on separate test data. The code is twelve random letters and digits
 naming a directory
-`preview_link{code, app, space, person, draft, until, screen}` row: it opens
-with no sign-in, as its person, until `until`, and deleting the row revokes it.
-A link made before those is a sealed ticket, `/<app>/_preview/<ticket>/`, read
-the same way until it expires. A ticket sealed before drafts had links names
-`app.followed` and shows the draft with no author. Once a release takes the
-draft its link serves what was released. Each request serves the draft's newest
-`written` rows over the release as a release of their own, built the first time
-the link serves that state: what changed is compiled, and the worker, the link's
-own Store's vocabulary and seed rows are set up again only when a write changed
-them. From the first time its link is asked for (`app_draft.previewed`), each
-write to the draft, and its release, is told to the link's pages over that
-Store's socket (`{"draft":…}`), and public/release.js swaps a stylesheet in
-place or reloads. The Store's expiry alarm, thirty days after the draft's last
-change, suspends it in recoverable trash. Its data, script and private files
-remain; the kernel's `/revive` door restores it without rearming expiry. Browser
-screenshots are `yak-browser`'s, the sibling behind the `BROWSER` service
-binding, which holds Cloudflare's browser in production and staging; no Browser
-Run REST token or local browser is needed. Browser time spends the account's
-existing budget at $0.09/hour, including failed captures. See
+`preview_link{code, app, space, person, draft, version, until, screen}` row: it
+opens with no sign-in, as its person, until `until`, and deleting the row
+revokes it. A link naming a `version` instead of a draft serves that release of
+the app as it shipped, built the way a draft's state is, over the live rows and
+read-only: what a version's page (`/<space>/versions/<app>/<n>`, where the
+Dashboard's Recent work leads) hands its person. A link made before those is a
+sealed ticket, `/<app>/_preview/<ticket>/`, read the same way until it expires.
+A ticket sealed before drafts had links names `app.followed` and shows the draft
+with no author. Once a release takes the draft its link serves what was
+released. Each request serves the draft's newest `written` rows over the release
+as a release of their own, built the first time the link serves that state: what
+changed is compiled, and the worker, the link's own Store's vocabulary and seed
+rows are set up again only when a write changed them. From the first time its
+link is asked for (`app_draft.previewed`), each write to the draft, and its
+release, is told to the link's pages over that Store's socket (`{"draft":…}`),
+and public/release.js swaps a stylesheet in place or reloads. The Store's expiry
+alarm, thirty days after the draft's last change, suspends it in recoverable
+trash. Its data, script and private files remain; the kernel's `/revive` door
+restores it without rearming expiry. Browser screenshots are `yak-browser`'s,
+the sibling behind the `BROWSER` service binding, which holds Cloudflare's
+browser in production and staging; no Browser Run REST token or local browser is
+needed. Browser time spends the account's existing budget at $0.09/hour,
+including failed captures. See
 [Cloudflare Browser Run](https://developers.cloudflare.com/browser-run/).
 
 The connector's image content accompanies structured console messages,

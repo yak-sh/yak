@@ -7,7 +7,9 @@ import { seal } from './lib/token.ts'
 import { LASTS, mountOf, type Ticket, until } from '@yaks/platform/preview'
 import { system } from '@yaks/fp'
 import { tools } from './preview-tools.ts'
-import { ADA, ADA_OWNS, SECRET, seeded } from './serving-data-probe.ts'
+import { ADA, ADA_OWNS, as, SECRET, seeded } from './serving-data-probe.ts'
+import { manage } from './manage.ts'
+import { parseHTML } from 'linkedom'
 import { platform } from './directory-rows-probe.ts'
 import { operators } from './operator-service-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
@@ -520,6 +522,57 @@ test("an open link rides through its draft's release: its pages hear it and see 
     (await (await kernel(new Request(String(then.value!.url)), env)).text())
       .includes('After'),
   )
+})
+
+test("a version's page says what its release changed and opens that version as it shipped, read-only, beside the live app", async () => {
+  await write('index.html', '<html><head></head><body>Version A</body></html>')
+  await run('app_deploy', { app: 'draft', message: 'Says **A** now.' })
+  let shipped = (await dir.app(space, 'draft'))!.version!
+  await write('index.html', '<html><head></head><body>Version B</body></html>')
+  await run('app_deploy', { app: 'draft', message: 'Says B.' })
+  let page = async (n: number) => {
+    let res = await manage(
+      new Request(`https://yaks.app/ada/versions/draft/${n}`, {
+        headers: { cookie: await as(ADA) },
+      }),
+      env,
+    )
+    equal(res.status, 200)
+    return parseHTML(await res.text()).document
+  }
+  let then = await page(shipped)
+  equal(
+    then.querySelector('.Version_Notes')!.textContent,
+    'Says A now.',
+  )
+  let [view, open] = [...then.querySelectorAll('.Version_Acts a')]
+    .map((a) => a.getAttribute('href')!)
+  equal(open, 'https://ada.yaks.app/draft/')
+  let at = (path = '', init?: RequestInit) =>
+    kernel(new Request(new URL(path, view), init), env)
+  ok((await (await at()).text()).includes('Version A'))
+  let wrote = await at('api/apply', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      entities: [{ entity: { eid: '$x' }, doc: { title: 'Through' } }],
+    }),
+  })
+  equal(wrote.status, 403)
+  await wrote.body?.cancel()
+  let now = await page(shipped + 1)
+  equal(
+    [...now.querySelectorAll('.Version_Acts a')].map((a) => a.textContent),
+    ['Open the app'],
+  )
+  let missing = await manage(
+    new Request(`https://yaks.app/ada/versions/draft/${shipped + 2}`, {
+      headers: { cookie: await as(ADA) },
+    }),
+    env,
+  )
+  equal(missing.status, 404)
+  await missing.body?.cancel()
 })
 
 test('two drafts of one app preview side by side, each at its own link on its own branch', async () => {

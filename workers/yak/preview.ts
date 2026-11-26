@@ -102,7 +102,7 @@ import { headed } from '@yaks/workerd/upgrade'
 import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
 import { misfit } from '@yaks/graph/errors'
-import { addressed } from '@yaks/platform/versions'
+import { addressed, type Version } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
 import { unbase64 } from './bytes.ts'
 import { blobPrefix } from './blob-key.ts'
@@ -351,7 +351,7 @@ let built = async (
   app: App,
   link: string,
   branch: number | null,
-  d: Draft,
+  d: Pick<Draft, 'files' | 'rows'>,
   source: string,
   mount: string,
   who: Who,
@@ -453,7 +453,8 @@ let states = new Map<string, { worker: boolean }>()
 let HELD = 256
 
 /** The app as a draft stands now, built for the link where no isolate has
- * served this state before, or as released once it is closed. */
+ * served this state before, or as released once it is closed; or as an
+ * earlier `release` shipped it, built the same way over the live rows. */
 let following = async (
   ctx: Ctx,
   space: Space,
@@ -462,7 +463,30 @@ let following = async (
   link: string,
   mount: string,
   who: Who,
+  release: Version | null = null,
 ) => {
+  if (!of && release && release.version != app.version) {
+    let { files } = release
+    let source = stateOf(space.store, app.eid, link, files)
+    let state = sharing(
+      states,
+      source,
+      () =>
+        built(
+          ctx,
+          space,
+          app,
+          link,
+          null,
+          { files, rows: [] },
+          source,
+          mount,
+          who,
+        ),
+      HELD,
+    )
+    return previewing(app, link, source, mount, null, (await state).worker)
+  }
   // A closed draft's link shows what was released, which the app already
   // serves built: its release's files and its own worker. Building that
   // release again as a preview put a compile and a worker upload in front of
@@ -579,22 +603,27 @@ export let linkOf = async (
   }
 }
 
-/** The link to a draft by its id alone, marking nothing: a draft no longer
- * open shows what was released (`target`). It is a stored `preview_link`
- * whose random code its address carries, for the caller (`ctx.person`) and
- * the screen it is for, until the end of the window after this one
- * (`until`): one already standing for them in that window is the same link,
- * which a TV following it does not reload for, and a new one is written. */
+/** The link to a draft by its id alone, marking nothing, or to one
+ * `version` of the app: a draft no longer open shows what was released, and
+ * a version that release of the app, read-only (`target`). It is a stored
+ * `preview_link` whose random code its address carries, for the caller
+ * (`ctx.person`) and the screen it is for, until the end of the window after
+ * this one (`until`): one already standing for them in that window is the
+ * same link, which a TV following it does not reload for, and a new one is
+ * written. */
 export let issued = async (
   ctx: Pick<Ctx, 'env' | 'dir' | 'person'>,
   space: Space,
   app: App,
-  of: string,
+  of: string | { version: number },
   screen?: string,
 ) => {
   let exp = until((ctx.env.CLOCK ?? system).now())
   let at = new Date(exp * 1000).toISOString()
-  let held = (await ctx.dir.previewLinks(of)).find((l) =>
+  let shows = typeof of == 'string' ? { draft: of } : of
+  let held = (await ctx.dir.previewLinks(
+    typeof of == 'string' ? of : { app: app.eid, version: of.version },
+  )).find((l) =>
     l.app == app.eid && l.person == ctx.person &&
     l.screen == (screen ?? null) && Date.parse(l.until) == exp * 1000
   )
@@ -609,7 +638,7 @@ export let issued = async (
           app: app.eid,
           space: space.eid,
           person: ctx.person,
-          draft: of,
+          ...shows,
           until: at,
           ...screen ? { screen } : {},
         },
@@ -895,6 +924,7 @@ let ticketOf = (l: PreviewLink | null): Ticket | null =>
     space: l.space,
     person: l.person,
     of: l.draft,
+    ...l.version != null ? { version: l.version } : {},
     exp: Date.parse(l.until) / 1000,
     ...l.screen ? { screen: l.screen } : {},
   }
@@ -908,14 +938,17 @@ let target = async (req: Request, env: Env) => {
     ? ticketOf(await dir.previewLink(aim.code))
     : await opened<Ticket>('preview', aim.ticket!, env.SESSION_SECRET)
   if (!ticket) return null
-  let [found, paired, rows] = await Promise.all([
+  let [found, paired, rows, release] = await Promise.all([
     dir.target(ticket.space, ticket.person, ticket.app),
     ticket.screen ? screenAt(dir, ticket.screen) : null,
     dir.drafts({ eid: ticket.app } as App),
+    ticket.version == null
+      ? null
+      : dir.deployAt({ eid: ticket.app } as App, ticket.version),
   ])
   let { space, app: held, role } = found
   if (
-    !space || !held ||
+    !space || !held || (ticket.version != null && !release) ||
     !admits(ticket, { space, app: held, role }, {
       host: url.hostname,
       app: aim.app,
@@ -924,9 +957,9 @@ let target = async (req: Request, env: Env) => {
     }, env)
   ) return null
   // The draft it shows while that draft is open, and the release once it is
-  // closed, read-only.
-  let of = shows(ticket, withLegacy(held, rows))
-  let link = of ? linkFor(held, of) : ticket.of
+  // closed, read-only; or the release of the version it names.
+  let of = release ? null : shows(ticket, withLegacy(held, rows))
+  let link = of ? linkFor(held, of) : release?.eid ?? ticket.of
   let { mount } = aim
   // An open draft previewed before drafts had branches takes one now, as the
   // person whose link it is. One its store cannot make yet is made later, and
@@ -961,6 +994,7 @@ let target = async (req: Request, env: Env) => {
     app: held,
     person: ticket.person,
     of,
+    release,
     link,
     preview: app,
     who: viewer(ticket, role!, grant, !!of),
@@ -1011,13 +1045,17 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       found.link,
       mount,
       who,
+      found.release,
     )
   } catch (e) {
     // What stops a state being built is the draft's to fix, said where the
     // person watching it will read it.
     if (!(e instanceof CallError)) throw e
+    let what = found.release ? 'version' : 'draft'
     return privateResponse(
-      new Response(`This draft does not build: ${e.message}`, { status: 409 }),
+      new Response(`This ${what} does not build: ${e.message}`, {
+        status: 409,
+      }),
     )
   }
   let worker = bearing(req) ? null : await ran(env, space, app, req, who)

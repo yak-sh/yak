@@ -2,7 +2,8 @@
  * A space's Dashboard (T-3702), the view at its own address, yaks.app/<space>:
  * its apps to open, most opened first; a box to ask its Operator for something
  * new, with what the space could use next to try in it; what its agents did
- * lately; and its Updates. It is drawn from rows (./dashboard.ts), by the
+ * lately, each line opening what it made (a fix its conversation, a release its
+ * version's page, ./version-view.ts); and its Updates. It is drawn from rows (./dashboard.ts), by the
  * server for the first paint and by the browser as they move
  * (./dashboard-browser.ts).
  *
@@ -23,6 +24,7 @@ import type { Bundle } from '@yaks/graph'
 import {
   type Did,
   fixesOf,
+  type Opens,
   releasesOf,
   type Suggestion,
   suggestionsOf,
@@ -32,7 +34,7 @@ import {
 } from './dashboard.ts'
 import { type Broken, listedOf } from './space-apps.ts'
 import { type Update, updatesIn } from './update-rows.ts'
-import { appMarkImage, managePath } from './routes.ts'
+import { appMarkImage, chatPath, managePath, versionPath } from './routes.ts'
 
 /** What the Dashboard says beside its rows: whose it is, its space, where
  * its apps answer (`at`), and its Operator's chat and Updates. */
@@ -209,13 +211,26 @@ let askPart = (view: DashboardView, all: Suggestion[]) => {
   )
 }
 
-let didLine = (d: Did) =>
+// Where a line of Recent work leads: a fix to the conversation it was worked
+// in, a release to its version's page; none for an app no longer listed.
+let opening = (
+  view: DashboardView,
+  slugs: Map<string, string>,
+  o?: Opens,
+) => {
+  if (!o) return undefined
+  if ('request' in o) return chatPath(view.space.slug, o.request)
+  let slug = slugs.get(o.app)
+  return slug && versionPath(view.space.slug, slug, o.version)
+}
+
+let didLine = (d: Did, href?: string) =>
   h(
     'li',
     { class: 'Dash_Did' },
     h(
-      'span',
-      { class: 'Dash_DidTitle' },
+      href ? 'a' : 'span',
+      { class: 'Dash_DidTitle', href },
       `${d.who} ${d.does} ${d.app}`,
       d.times > 1
         ? [
@@ -237,8 +252,9 @@ let didLine = (d: Did) =>
     h(Time, { at: d.at, class: 'Dash_When' }),
   )
 
-let workPart = (view: DashboardView, read: Dashboard) =>
-  h(
+let workPart = (view: DashboardView, read: Dashboard) => {
+  let slugs = new Map(read.apps.map((a) => [a.eid, a.slug]))
+  return h(
     Card,
     {
       as: 'section',
@@ -255,13 +271,18 @@ let workPart = (view: DashboardView, read: Dashboard) =>
       )
       : null,
     read.did.length || read.pending
-      ? h('ul', { class: 'Dash_List' }, read.did.map(didLine))
+      ? h(
+        'ul',
+        { class: 'Dash_List' },
+        read.did.map((d) => didLine(d, opening(view, slugs, d.opens))),
+      )
       : h(
         'p',
         { class: 'Dash_None' },
         `What ${view.space.operator} and your other agents do here shows up here.`,
       ),
   )
+}
 
 // How many Updates the panel shows; the rest are a press away.
 let SHOWN = 4

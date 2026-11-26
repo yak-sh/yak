@@ -19,6 +19,7 @@ import {
   directoryOf,
   type Panes,
   type Space,
+  url as appUrl,
   walkTo,
 } from './directory.ts'
 import { chatRows } from './connections.ts'
@@ -53,6 +54,7 @@ import {
   rooted,
   type StoreDoor,
   talkPath,
+  versionPath,
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { CONTEXT } from './app-operator.ts'
@@ -91,6 +93,11 @@ import {
   type MatchesView,
   matchesView,
 } from '@yaks/platform/operator-matches-view'
+import {
+  versionTitle,
+  type VersionView,
+  versionView,
+} from '@yaks/platform/version-view'
 import { personRows } from './side.ts'
 import { wearing } from './operator-settings.ts'
 import { alertsRow, declinedRow, pushRow, vapidOf } from './operator-alerts.ts'
@@ -2436,6 +2443,59 @@ export let matchesPage = async (
         }),
       ),
     ),
+  })
+}
+
+/** A version of one of the space's apps (@yaks/platform/version-view),
+ * beside the chat app's side: who put it out and when, what its release says
+ * it changed, the live app, and a link of the person's own to the version as
+ * it shipped (preview.ts `issued`) where it is no longer live. Null where the
+ * space has no such app or version. */
+export let versionPage = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  dir: Directory,
+  asked: { app: string; version: number },
+  beside: Beside = {},
+) => {
+  let app = await dir.app(space, asked.app)
+  let release = app && await dir.deployAt(app, asked.version)
+  if (!app || !release) return null
+  let person = who.person ?? ''
+  let by = release.by
+  let [named, link] = await Promise.all([
+    by && by != space.eid ? dir.writers([by]) : null,
+    release.version == app.version ? null : import('./preview.ts').then((
+      { issued },
+    ) =>
+      issued({ env, dir, person }, space, app, { version: release.version })
+    ),
+  ])
+  let at = (n: number) => versionPath(space.slug, app.slug, n)
+  let view: VersionView = {
+    app: app.title || app.slug,
+    version: release.version,
+    live: app.version ?? null,
+    at: release.at,
+    by: by == space.eid ? space.operator : (by && named?.get(by)) || 'Someone',
+    message: release.message,
+    open: appUrl(space, app, env),
+    shipped: link?.at ?? null,
+    before: release.version > 1 ? at(release.version - 1) : null,
+    after: release.version < (app.version ?? 0)
+      ? at(release.version + 1)
+      : null,
+  }
+  return talkPage(env, space, who, beside, {
+    title: versionTitle(view),
+    status: 200,
+    waiting: 0,
+    listed: null,
+    current: ['dashboard'],
+    here: at(release.version),
+    skip: ['#content', 'Skip to content'],
+    main: versionView(view),
   })
 }
 

@@ -920,7 +920,8 @@ export type Row = MeteredRow & {
     app: Id
     space: Id
     person: Id
-    draft: string
+    draft?: string | null
+    version?: number | null
     until: string
     screen?: string | null
   }
@@ -1602,6 +1603,7 @@ export type PreviewLink = {
   space: string
   person: string
   draft: string
+  version: number | null
   until: string
   screen: string | null
 }
@@ -1615,7 +1617,8 @@ let linkOf = (r: Row | null | undefined): PreviewLink | null => {
       app: idOf(l.app),
       space: idOf(l.space),
       person: idOf(l.person),
-      draft: l.draft,
+      draft: l.draft ?? '',
+      version: l.version ?? null,
       until: l.until,
       screen: l.screen ?? null,
     }
@@ -4031,10 +4034,14 @@ export let directoryRows = (rows: {
       linkOf(
         await one(line`.preview_link.code=${code}`),
       ),
-    // The preview links that show a draft, by its eid: few, one a person, a
-    // screen and a window.
-    previewLinks: async (draft: string) =>
-      (await query(line`.preview_link.draft=${draft}`)).map(linkOf)
+    // The preview links that show a draft, by its eid, or one version of an
+    // app: few, one a person, a screen and a window.
+    previewLinks: async (shows: string | { app: string; version: number }) =>
+      (await query(
+        typeof shows == 'string'
+          ? line`.preview_link.draft=${shows}`
+          : line`.preview_link.app=${shows.app}&.preview_link.version=${shows.version}`,
+      )).map(linkOf)
         .filter((l): l is PreviewLink => !!l),
     draftAt: async (eid: string) => {
       let row = await one(line`.entity.eid=${eid}&.app_draft`)

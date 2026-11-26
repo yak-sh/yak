@@ -124,15 +124,16 @@ export let within = (value: unknown): string | null => {
   return parsed.pathname.slice(1) + parsed.search + parsed.hash
 }
 
-/** What a link's ticket names: the draft it shows (`of`), as whom, and the
- * unix second it stops opening at (`exp`). A ticket for a paired TV names its
- * `screen`: it reads the draft as a viewer, and only while that screen stays
- * paired with the person. */
+/** What a link's ticket names: the draft it shows (`of`), or else the
+ * `version` of its app, as whom, and the unix second it stops opening at
+ * (`exp`). A ticket for a paired TV names its `screen`: it reads the draft as
+ * a viewer, and only while that screen stays paired with the person. */
 export type Ticket = {
   app: string
   space: string
   person: string
   of: string
+  version?: number
   exp: number
   screen?: string
 }
@@ -171,7 +172,8 @@ export let linkFor = (app: Linked, d: Drafting): string =>
   !d.by && app.followed ? app.followed : d.eid
 
 /** The draft a ticket shows among the app's: the one it names; null once
- * that draft is closed, when the link shows what was released, read-only. */
+ * that draft is closed, when the link shows what was released, read-only, as
+ * a link to one version of the app always does. */
 export let shows = <D extends Drafting>(t: Ticket, drafts: D[]): D | null =>
   drafts.find((d) => d.eid == t.of) ?? null
 

@@ -1191,7 +1191,7 @@ export let previewDoc: VocabDoc = {
   $defs: {
     preview_link: {
       description:
-        "A draft's preview link: the random code its address carries, the draft it shows, as whom, and until when. Deleting it revokes the link.",
+        'A preview link: the random code its address carries, the draft it shows or else the version of its app, as whom, and until when. Deleting it revokes the link.',
       component: true,
       type: 'object',
       wire: false,
@@ -1202,6 +1202,7 @@ export let previewDoc: VocabDoc = {
         space: owned(ref('cascade')),
         person: owned(ref('cascade')),
         draft: owned({ ...text, index: true }),
+        version: owned(num),
         until: owned(time),
         screen: owned(text),
       },

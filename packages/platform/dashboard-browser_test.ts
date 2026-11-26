@@ -159,6 +159,16 @@ test('the Dashboard draws its apps most opened first, what its agents did, its s
   equal(texts('.Dash_Updates .Dash_Head .Badge'), ['1'])
 })
 
+test('each line of Recent work opens what it made: a fix its conversation, a release its newest version', () => {
+  let { root } = bound()
+  equal(
+    [...root.querySelectorAll('.Dash_DidTitle')].map((a) =>
+      a.getAttribute('href')
+    ),
+    ['/ada/operator/q', '/ada/versions/roster/5', '/ada/versions/packing/1'],
+  )
+})
+
 test('a pressed suggestion writes its longer request in the box, which sends to the Operator', () => {
   let { root } = bound()
   let box = root.querySelector<HTMLTextAreaElement>('.Dash_AskBox')!

@@ -1048,6 +1048,14 @@
     font-weight: 700;
     font-size: var(--small);
   }
+  a.Dash_DidTitle {
+    color: var(--text);
+    text-decoration: none;
+  }
+  a.Dash_DidTitle:hover,
+  a.Dash_DidTitle:focus-visible {
+    text-decoration: underline;
+  }
   .Dash_DidMeta {
     grid-column: 1;
     font-size: var(--fine);
@@ -1177,6 +1185,49 @@
     display: grid;
     align-content: start;
     gap: .75rem;
+  }
+  /* A version of an app (@yaks/platform/version-view): its release's notes,
+     the ways to it, and the versions beside it. */
+  .Version {
+    display: grid;
+    align-content: start;
+    gap: .75rem;
+  }
+  .Version_Card {
+    display: grid;
+    gap: .75rem;
+    min-width: 0;
+  }
+  .Version_Title {
+    margin: 0;
+  }
+  .Version_Meta,
+  .Version_None {
+    margin: 0;
+    font-size: var(--small);
+    color: var(--muted);
+  }
+  .Version_Notes {
+    overflow-wrap: anywhere;
+  }
+  .Version_Notes :is(p, li) {
+    color: var(--text);
+  }
+  .Version_Notes > :first-child {
+    margin-top: 0;
+  }
+  .Version_Notes > :last-child {
+    margin-bottom: 0;
+  }
+  .Version_Acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+  }
+  .Version_Nav {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--small);
   }
   /* The day's lines, drawn in the browser where Updates show in place
      (updates-day-browser): its cards stand in the column's grid. */

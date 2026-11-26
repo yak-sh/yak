@@ -75,6 +75,7 @@ export type SpaceView =
   | 'domains'
   | 'settings'
   | 'trash'
+  | 'versions'
 /** A page of the person's own, the same in every space. `space` makes one. */
 export type AccountView =
   | 'profile'
@@ -88,9 +89,10 @@ export type ManageView = SpaceView | AccountView
 export type Talk = 'updates' | 'matches' | 'dashboard'
 let TALK: string[] = ['updates', 'matches', 'dashboard'] satisfies Talk[]
 let talks = (view: string): view is Talk => TALK.includes(view)
-/** A settings page: every page of a person's spaces but their Operator's. */
-export type Setting = Exclude<ManageView, Talk>
-let SPACE_VIEWS: SpaceView[] = [
+/** A settings page: every page of a person's spaces but their Operator's
+ * and an app's versions'. */
+export type Setting = Exclude<ManageView, Talk | 'versions'>
+let SPACE_VIEWS: Exclude<SpaceView, 'versions'>[] = [
   'apps',
   'new',
   'operator',
@@ -119,7 +121,7 @@ export let accountView = (view: ManageView): view is AccountView =>
 // The pages before the space moved into the path, `/manage/<page>` with
 // `?space=` or none for the person's own, and what each is now: letters
 // already sent carry them.
-let LEGACY: Record<string, ManageView> = {
+let LEGACY: Record<string, Exclude<ManageView, 'versions'>> = {
   ...Object.fromEntries(SPACE_VIEWS.map((v) => [v, v])),
   connect: 'agents',
 }
@@ -229,6 +231,24 @@ export let chatPath = (space: string, open = 'new'): string =>
     : open == 'new'
     ? home(space)
     : `${managePath('operator', space)}/${open}`
+// A version's own page, under its space's: `versions/<app>/<version>`.
+let VERSIONS = 'versions'
+let shipped = (space: string, [app, n]: string[]) =>
+  SLUG.test(app) && /^[1-9][0-9]*$/.test(n)
+    ? { space, view: 'versions' as const, version: { app, version: +n } }
+    : null
+/** A version of an app's own page (operator-page.ts `versionPage`): what it
+ * changed, as its release says, and the way to it as it shipped.
+ *
+ * ```ts
+ * import { versionPath } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(versionPath('ada', 'roster', 4), '/ada/versions/roster/4')
+ * assertEquals(versionPath('yak', 'roster', 4), '/manage/yak/versions/roster/4')
+ * ```
+ */
+export let versionPath = (space: string, app: string, version: number) =>
+  `${home(space)}/${VERSIONS}/${app}/${version}`
 /** Where a space's logo is drawn from, or none where it has none: its bytes'
  * own address, so the address changes with the picture and nothing is ever
  * shown stale.
@@ -449,8 +469,9 @@ export type Managed =
     door?: StoreDoor
     logo?: string
     manifest?: true
+    version?: { app: string; version: number }
   }
-  | { legacy: ManageView }
+  | { legacy: Exclude<ManageView, 'versions'> }
   | { first: true }
   | { moved: string }
 // A page of a space's Operator under Manage, where it was before D-473: sent
@@ -473,6 +494,12 @@ export let managed = (path: string): Managed | null => {
       return { space: one, view: 'operator', door: rest[0] as StoreDoor }
     }
     return OPEN.test(rest[0]) ? talked(one, 'operator', rest[0]) : null
+  }
+  if (two == VERSIONS && rest.length == 2 && SLUG.test(one)) {
+    let at = shipped(one, rest)
+    return at && rooted(one)
+      ? { moved: versionPath(one, at.version.app, at.version.version) }
+      : at
   }
   if (two == MANIFEST && !rest.length && SLUG.test(one)) {
     return { space: one, view: 'operator', manifest: true }
@@ -517,6 +544,11 @@ export let managed = (path: string): Managed | null => {
  * assertEquals(spaced(`/ada/operator/${id}`), { space: 'ada', view: 'operator', open: id })
  * assertEquals(spaced(`/ada/${id}`), { moved: `/ada/operator/${id}` })
  * assertEquals(spaced('/ada/updates'), { space: 'ada', view: 'updates' })
+ * assertEquals(spaced('/ada/versions/roster/4'), {
+ *   space: 'ada',
+ *   view: 'versions',
+ *   version: { app: 'roster', version: 4 },
+ * })
  * assertEquals(spaced('/ada/dashboard'), { moved: '/ada' })
  * assertEquals(spaced('/pricing'), null)
  * ```
@@ -529,6 +561,7 @@ export let spaced = (path: string): Managed | null => {
     let open = rest[0] ?? 'new'
     return OPEN.test(open) ? { space: one, view: 'operator', open } : null
   }
+  if (two == VERSIONS && rest.length == 2) return shipped(one, rest)
   if (rest.length) return null
   if (two == null) return { space: one, view: 'dashboard' }
   if (two == 'dashboard') return { moved: dashboardPath(one) }
@@ -557,7 +590,7 @@ export let framed = (path: string): boolean => {
  * space was in the path) is now, for `space`: a page names its own, and none
  * is the space's chat. */
 export let landing = (
-  at: { first: true } | { legacy: ManageView },
+  at: { first: true } | { legacy: Exclude<ManageView, 'versions'> },
   space: string,
 ): string =>
   'first' in at
@@ -576,11 +609,19 @@ export let movedFor = (path: string, space: string): string | null => {
 }
 /** The same page of a space's at another name, where a rename moved it. */
 export let renamed = (
-  at: { view: SpaceView; open?: string },
+  at: {
+    view: SpaceView
+    open?: string
+    version?: { app: string; version: number }
+  },
   slug: string,
 ): string =>
   at.open
     ? chatPath(slug, at.open)
+    : at.view == 'versions'
+    ? at.version
+      ? versionPath(slug, at.version.app, at.version.version)
+      : dashboardPath(slug)
     : talks(at.view)
     ? talkPath(at.view, slug)
     : managePath(at.view, slug)
