@@ -1,5 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
+import { Interrupted } from '@yaks/tools/errors'
 import { gateway } from './gateway.ts'
 
 let stopping = new AbortController().signal
@@ -35,3 +36,19 @@ for (
     )
   })
 }
+
+test('a read the host stops is interrupted, not a gateway failure', async () => {
+  let host = new AbortController()
+  let read = gateway(
+    host.signal,
+    ((_url, init) =>
+      new Promise((_, reject) =>
+        init!.signal!.addEventListener(
+          'abort',
+          () => reject(init!.signal!.reason),
+        )
+      )) as typeof fetch,
+  )
+  host.abort()
+  await assertRejects(() => read, Interrupted)
+})
