@@ -176,6 +176,7 @@ for (let [name, make] of Object.entries(stores)) {
       let gs = pair(make, SEED, earlier)
       await agree(gs)
       let p = privacy(declarationsOf(keeping, {}, through))
+      equal(await p.current((line) => gs[0].read(whole(line))), false)
       let stale = (await Promise.all(p.stale.map((line) =>
         gs[0].read(whole(line))
       )))

@@ -23,6 +23,7 @@ import {
   and,
   type Built,
   eq,
+  joined,
   line,
   or,
   sub,
@@ -228,11 +229,14 @@ export let privacy = (declared: Declared): Privacy => {
     line`.${PRIVACY}.hash>${hash}`,
   ]
 
+  // A readiness check can look for one hit across all the stale lines.
+  let outstanding = [line`(${sub(joined(stale, '|'))})`]
+
   /** Whether a store, read through `read`, holds no entity whose privacy is
    * stale. */
   let current = (
     read: (line: Built) => Maybe<Bundle[]>,
-    lines = stale,
+    lines = outstanding,
   ): Maybe<boolean> =>
     !lines.length ||
     after(
