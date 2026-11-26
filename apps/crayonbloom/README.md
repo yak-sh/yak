@@ -31,10 +31,9 @@ buttons, Fredoka over Nunito. It is made of three things under `look/`:
 - `parts/`, the app's own parts (`Hero`, `Sheet`, `Band`, `Mast` and the rest),
   each a `Name.ts` beside its `Name.css`.
 
-`look/links.ts` defines the stylesheet order for the public pages and the
-studio. The app releases its theme, skin and part stylesheets as files. The kit
-stylesheets come from the platform's `__packages/@yaks/ui/` assets. The platform
-gives each linked stylesheet a content-addressed URL.
+`look/links.ts` puts the kit, skin and part styles in the HTML in cascade order
+for the public pages and the studio. The linked theme keeps its font URLs
+relative to the release, so browsers can reuse the theme and fonts.
 
 The worker draws every public page from those parts (`pages/`: the frame, the
 home page, the theme pages from `themes.json`, and the kept prose in `public/`)

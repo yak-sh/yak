@@ -1,3 +1,5 @@
+import { NAVIGATION_DETAILS } from '@yaks/timing/interaction'
+
 // The picture and its replacement share this state across document.open().
 // The small inline observer starts before either one's first frame.
 let PUSH_OPEN = '_yak_open'
@@ -54,6 +56,9 @@ let OPENING = `(endpoint, source) => {
         fetchStart: nav.fetchStart,
         requestStart: nav.requestStart,
         responseStart: nav.responseStart,
+        ...Object.fromEntries(${
+  JSON.stringify(NAVIGATION_DETAILS)
+}.map((key) => [key, nav[key]])),
       },
     }
     let id = !checked && crypto.randomUUID?.()

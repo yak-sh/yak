@@ -7,8 +7,16 @@ import type { Bundle } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
 
 let navigation = {
+  redirectCount: 1,
+  redirectStart: 2,
+  redirectEnd: 7,
   workerStart: 10,
   fetchStart: 20,
+  domainLookupStart: 23,
+  domainLookupEnd: 27,
+  connectStart: 28,
+  secureConnectionStart: 35,
+  connectEnd: 59,
   requestStart: 60,
   responseStart: 180,
 }

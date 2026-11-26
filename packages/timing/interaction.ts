@@ -30,12 +30,25 @@ export let OPEN_SOURCES = [
   'prerender',
 ] as const
 export let DEVICES = ['iphone-compact', 'phone', 'tablet', 'desktop'] as const
-export type Navigation = {
-  workerStart: number
-  fetchStart: number
-  requestStart: number
-  responseStart: number
-}
+export let NAVIGATION_DETAILS = [
+  'redirectCount',
+  'redirectStart',
+  'redirectEnd',
+  'domainLookupStart',
+  'domainLookupEnd',
+  'connectStart',
+  'secureConnectionStart',
+  'connectEnd',
+] as const
+
+export type Navigation =
+  & Partial<Record<typeof NAVIGATION_DETAILS[number], number>>
+  & {
+    workerStart: number
+    fetchStart: number
+    requestStart: number
+    responseStart: number
+  }
 export type Open = {
   source: typeof OPEN_SOURCES[number]
   picture: boolean

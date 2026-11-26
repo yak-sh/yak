@@ -9,6 +9,7 @@ import {
   MAX_MS,
   MAX_POINTS,
   type Navigation,
+  NAVIGATION_DETAILS,
   type Open,
   OPEN_SOURCES,
   openMilestones,
@@ -38,7 +39,19 @@ let navigationOf = (value: unknown): Navigation | undefined => {
   if (
     duration(workerStart) && duration(fetchStart) && duration(requestStart) &&
     duration(responseStart)
-  ) return { workerStart, fetchStart, requestStart, responseStart }
+  ) {
+    let navigation = {
+      workerStart,
+      fetchStart,
+      requestStart,
+      responseStart,
+    } as Navigation
+    for (let key of NAVIGATION_DETAILS) {
+      let n = value[key]
+      if (duration(n)) navigation[key] = n
+    }
+    return navigation
+  }
 }
 
 let opening = (value: unknown): Open | undefined => {

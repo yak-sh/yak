@@ -289,7 +289,7 @@ test('browse reads bounded visible text and both kinds of timing from the page',
       if (name == next) {
         return [{ serverTiming: [{ name: 'kernel', duration: 4.34 }] }]
       }
-      if (name == 'first-contentful-paint') return [{ startTime: 31.04 }]
+      if (name == 'first-contentful-paint') return [{ startTime: 71.04 }]
       if (name == 'yak-usable') return [{ startTime: 60.06 }]
       return name == 'yak-page'
         ? [{
@@ -323,7 +323,7 @@ test('browse reads bounded visible text and both kinds of timing from the page',
         read: 2.7,
         kb: 2,
         build: 8.1,
-        paint: 31,
+        paint: 71,
       },
       server: { kernel: 12.7 },
     },
@@ -341,7 +341,7 @@ test('browse reads bounded visible text and both kinds of timing from the page',
       parts: { files: 2, kb: 2, cached: 1, blocking: 0 },
       server: {},
     },
-    { name: 'usable', url, ms: 60.1, parts: {}, server: {} },
+    { name: 'usable', url, ms: 71, parts: { ready: 60.1 }, server: {} },
     {
       name: 'yak-page',
       url: next,

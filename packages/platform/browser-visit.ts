@@ -366,10 +366,11 @@ let TIMELINE = `(() => {
       server: {},
     })
   }
-  // When the page could first be used: its own yak-usable mark.
+  // As in the open report, both the mark and the first paint must have happened.
   let usable = performance.getEntriesByName('yak-usable')[0]
   let picture = performance.getEntriesByName('yak-picture-paint')[0]
   let fresh = performance.getEntriesByName('yak-open-server')[0]
+  let firstPaint = (picture ?? paint)?.startTime ?? 0
   if (picture) out.push({
     name: 'picture',
     url: location.href,
@@ -380,8 +381,11 @@ let TIMELINE = `(() => {
   if (usable) out.push({
     name: 'usable',
     url: location.href,
-    ms: round(usable.startTime),
-    parts: usable.detail ?? {},
+    ms: round(Math.max(usable.startTime, firstPaint)),
+    parts: {
+      ...usable.detail,
+      ...usable.startTime < firstPaint ? { ready: round(usable.startTime) } : {},
+    },
     server: {},
   })
   // The pages the navigator fetched (its yak-fetch marks), how many of

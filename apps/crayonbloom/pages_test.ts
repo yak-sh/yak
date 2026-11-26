@@ -22,11 +22,12 @@ test('the home page sends an idea to the studio under its mount', async () => {
       href!.startsWith('/preview/studio?prompt=')
     ),
   )
-  let css = hrefs(document, 'link[rel=stylesheet]')
-  equal(css[0], '/preview/look/crayon.css')
-  ok(css.includes('/preview/__packages/@yaks/ui/Button.css'))
-  ok(css.includes('/preview/look/skin/Button.css'))
-  ok(css.every((href) => href?.startsWith('/preview/')))
+  equal(hrefs(document, 'link[rel=stylesheet]'), ['/preview/look/crayon.css'])
+  let rules = document.querySelector('style')!.textContent!
+  ok(rules.includes('.Hero_Title'))
+  let kit = rules.indexOf('.Button {')
+  let skin = rules.indexOf('.Button-go')
+  ok(kit >= 0 && skin > kit)
 })
 
 test('a theme page offers each of its pages as a printable', async () => {
