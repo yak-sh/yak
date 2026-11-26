@@ -100,8 +100,9 @@ export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
   if (!store.env.RASTER || !store.env.BLOBS) return {}
   let env = store.env as Env
   let raw = r2RawObjects(env.BLOBS)
-  // One drawing at a time for each app, within this object.
-  let drawing = singleFlight(() => store)
+  // One drawing at a time for each app, within this object; its own group,
+  // so an app's icon and splash never join each other's.
+  let drawing = singleFlight(() => store), splashes = {}
   return {
     app_splash_draw: async ({ entity }, _tx, write, attempt) => {
       let record = (drawn: { key: string; dark: boolean }) => async () =>
@@ -128,7 +129,7 @@ export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
             throw e
           },
         )
-      await drawing(store, entity.eid, work)
+      await drawing(splashes, entity.eid, work)
     },
   }
 }
