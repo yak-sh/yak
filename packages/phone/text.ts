@@ -107,7 +107,8 @@ export class Denied extends Error {
   }
 }
 
-/** The keywords carriers require every business number to answer. */
+/** The keywords carriers require every business number to answer: `start`
+ * opts in (JOIN, START, YES), `stop` opts out, `help` asks who is texting. */
 export type Keyword = 'stop' | 'help' | 'start'
 
 let WORDS: Record<string, Keyword> = {
@@ -119,6 +120,7 @@ let WORDS: Record<string, Keyword> = {
   QUIT: 'stop',
   HELP: 'help',
   INFO: 'help',
+  JOIN: 'start',
   START: 'start',
   YES: 'start',
   UNSTOP: 'start',
@@ -135,6 +137,7 @@ let WORDS: Record<string, Keyword> = {
  * import { keyword } from '@yaks/phone'
  * equal(keyword(' Stop.'), 'stop')
  * equal(keyword('help'), 'help')
+ * equal(keyword('join'), 'start')
  * equal(keyword('YES'), 'start')
  * equal(keyword('YES', false), null)
  * equal(keyword('start', false), 'start')

@@ -66,6 +66,28 @@
         }
       }
     },
+    "keyword_replies": {
+      "component": true,
+      "type": "object",
+      "description": "the words a number answers carrier keywords with, as its 10DLC campaign registers them, on the row that holds the number beside its campaign. A keyword with no words here is answered in defaults naming the number's space (`replies`)",
+      "properties": {
+        "start": {
+          "type": "string",
+          "description": "the opt-in confirmation, answered to JOIN, START or YES",
+          "examples": [
+            "Locust Grove Church: You're signed up for church texts. Msg frequency varies. Msg&data rates may apply. Reply HELP for help, STOP to opt out."
+          ]
+        },
+        "stop": {
+          "type": "string",
+          "description": "the opt-out confirmation, answered to STOP, END, CANCEL, UNSUBSCRIBE or QUIT"
+        },
+        "help": {
+          "type": "string",
+          "description": "who is texting and how to reach them, answered to HELP or INFO"
+        }
+      }
+    },
     "sms_consent": {
       "component": true,
       "type": "object",

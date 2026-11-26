@@ -40,6 +40,7 @@ import {
   owned,
   phoneNumbers,
   phoneSend,
+  repliesOf,
   textedFor,
 } from './operator-line.ts'
 import type { Ctx } from './tool.ts'
@@ -444,6 +445,14 @@ await page('jeff@example.com', 'pw')
 let campaignRelisted = await campaignOf(env, '+12695550100')
 await setting({ number: '+12695550100', campaign: '' })
 let campaignTaken = await campaignOf(env, '+12695550100')
+let worded = home(
+  await setting({
+    number: '+12695550100',
+    replies: { start: 'Oak Hall: Welcome.', help: 'Oak Hall: Call us.' },
+  }),
+)
+await setting({ number: '+12695550100', replies: { help: '' } })
+let reworded = await repliesOf(env, '+12695550100')
 
 // A retained Operator upgrades its callbacks without a settings edit.
 let upgrade = operatorMemory()
@@ -793,6 +802,14 @@ test("a number's 10DLC campaign is recorded alone, kept when the account is list
   assertEquals(campaigned, { ...uncampaigned, campaign: 'CX7Y2ZQ' })
   assertEquals(campaignRelisted, 'CX7Y2ZQ')
   assertEquals(campaignTaken, null)
+})
+
+test("a number's keyword replies are recorded alone, and one emptied falls back to the default", () => {
+  assertEquals(worded, {
+    ...uncampaigned,
+    replies: { start: 'Oak Hall: Welcome.', help: 'Oak Hall: Call us.' },
+  })
+  assertEquals(reworded, { start: 'Oak Hall: Welcome.' })
 })
 
 // Last, since it ends the connection every test above reads.

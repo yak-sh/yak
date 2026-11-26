@@ -16,8 +16,8 @@ export let arrivalEid = (id: string, via?: string): string =>
  * The bundles that keep a text that arrived from the people at `people`
  * (everyone here with its number, often one, none when nobody has it): the
  * text itself, which stays as the record of what they said; the removal of
- * their consent when it says STOP; and their consent again, in the words they
- * sent, when it says START (or YES, from someone who is `stopped`).
+ * their consent when it says STOP; and their consent, in the words they sent,
+ * when it says JOIN or START (or YES, from someone who is `stopped`).
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -25,8 +25,8 @@ export let arrivalEid = (id: string, via?: string): string =>
  * let stop = { id: 'm1', from: '+12695550142', to: '+12695550100',
  *   text: 'STOP', at: '2026-11-04T00:00:00Z', rcs: false, media: [] }
  * equal(kept(stop, ['ana'])[1], { entity: { eid: consentEid('ana') }, sms_consent: null })
- * equal(kept({ ...stop, text: 'Start' }, ['ana'])[1].sms_consent,
- *   { person: 'ana', consent: 'Start', at: '2026-11-04T00:00:00Z' })
+ * equal(kept({ ...stop, text: 'Join' }, ['ana'])[1].sms_consent,
+ *   { person: 'ana', consent: 'Join', at: '2026-11-04T00:00:00Z' })
  * ```
  */
 export let kept = (

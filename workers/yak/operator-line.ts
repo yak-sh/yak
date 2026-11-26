@@ -26,7 +26,9 @@
 // that lets its texts to many people through, is recorded on its
 // `own_number` row (`phone_numbers`), or on the `phone_line` of a number a
 // space bought, where an app texting from it reads it
-// (`campaignOf`, app-texts.ts `lineAnswer`).
+// (`campaignOf`, app-texts.ts `lineAnswer`). Beside it are the words the
+// campaign registered for JOIN, STOP and HELP, `keyword_replies` on the same
+// row, which every text to the number is answered in (`repliesOf`).
 //
 // voip.ms's API answers only addresses its allowlist names, and a Worker
 // calls from Cloudflare's, which change: the person enters 0.0.0.0 there,
@@ -48,6 +50,7 @@ import {
   echo,
   type Held,
   type Own,
+  type Replies,
   shown,
 } from '@yaks/phone'
 import { caught } from './defects.ts'
@@ -169,6 +172,20 @@ export let campaignOf = async (env: Env, number: string) => {
   if (held?.line.campaign) return held.line.campaign
   return (await meta(env).query(q`.${OWN}.number=${number}&*`))
     .map((b) => String(comp(b, OWN).campaign ?? '')).find(Boolean) ?? null
+}
+
+/** The words `number` answers carrier keywords in, as its campaign
+ * registered them (@yaks/phone `keyword_replies`): kept on its `phone_line`
+ * or `own_number` row beside the campaign; none while nothing is. */
+export let repliesOf = async (env: Env, number: string): Promise<Replies> => {
+  let rows = await Promise.all([
+    meta(env).query(
+      q`.phone_line.number=${number} !phone_line.returned&.keyword_replies`,
+    ),
+    meta(env).query(q`.${OWN}.number=${number}&.keyword_replies`),
+  ])
+  let [row] = rows.flat()
+  return (row?.keyword_replies ?? {}) as Replies
 }
 
 /** How the Operator whose store `g` reads uses each of a connection's
@@ -690,7 +707,7 @@ export let phoneNumbers = (
     done: 'Checked your phone numbers',
   },
   description:
-    "List the numbers on the phone account the person you work for connected, and how you use each: outbound, your phone_send texts go from it; inbound, texts that reach it come to you. The two are independent. Give a number (or its label) to set either: set only what they asked for. \"Text from the church line\" is outbound on. When they have more than one number and have not said which, ask them. Inbound on points the number's SMS URL callback at yaks.app, in place of any it had (its email and forwarding stay as they are); off puts the callback back as it was. Turn inbound on only when they ask for texts to it to come to you. A number they connected from their own account is never cancelled by yaks.app: nothing here can cancel, release or reroute it. Once their provider approves the number's 10DLC registration, record the campaign id it gives as campaign: until then, carriers block the number's texts to many people.",
+    "List the numbers on the phone account the person you work for connected, and how you use each: outbound, your phone_send texts go from it; inbound, texts that reach it come to you. The two are independent. Give a number (or its label) to set either: set only what they asked for. \"Text from the church line\" is outbound on. When they have more than one number and have not said which, ask them. Inbound on points the number's SMS URL callback at yaks.app, in place of any it had (its email and forwarding stay as they are); off puts the callback back as it was. Turn inbound on only when they ask for texts to it to come to you. A number they connected from their own account is never cancelled by yaks.app: nothing here can cancel, release or reroute it. Once their provider approves the number's 10DLC registration, record the campaign id it gives as campaign: until then, carriers block the number's texts to many people. replies sets the words the number answers JOIN, STOP and HELP with, at once and before you see the text, as the campaign registered them.",
   parameters: {
     type: 'object',
     properties: {
@@ -713,6 +730,16 @@ export let phoneNumbers = (
         type: 'string',
         description:
           "The 10DLC campaign id their provider gave once it approved the number's registration; empty to take it away. Given alone, it changes nothing else about the number.",
+      },
+      replies: {
+        type: 'object',
+        description:
+          'The words the number answers carrier keywords with, as its 10DLC campaign registered them: start to JOIN, START or YES, stop to STOP, help to HELP. Each names the sender. One given replaces that one, and empty takes it back to the default, which names the space. Given alone, it changes nothing else about the number.',
+        properties: {
+          start: { type: 'string' },
+          stop: { type: 'string' },
+          help: { type: 'string' },
+        },
       },
     },
   },
@@ -773,8 +800,21 @@ export let phoneNumbers = (
           [OWN]: { campaign: args.campaign.trim() || null },
         }])
       }
-      // A campaign given alone leaves how the Operator uses the number.
-      let using = typeof args.campaign != 'string' ||
+      let replies = args.replies as Record<string, unknown> | undefined
+      if (replies && typeof replies == 'object') {
+        let words = Object.fromEntries(
+          (['start', 'stop', 'help'] as const)
+            .filter((k) => typeof replies[k] == 'string')
+            .map((k) => [k, String(replies[k]).trim() || null]),
+        )
+        await ctxOf(env).graph.apply([{
+          entity: { eid: identityEid(OWN, [connection, number.number]) },
+          keyword_replies: words,
+        }])
+      }
+      // A campaign or replies given alone leave how the Operator uses the
+      // number.
+      let using = (typeof args.campaign != 'string' && !replies) ||
         typeof args.outbound == 'boolean' || typeof args.inbound == 'boolean'
       if (using) {
         let was = used.find((u) => u.number == number.number)
@@ -805,7 +845,8 @@ export let phoneNumbers = (
       used = await chosen(store.g, held.line)
       numbers = await numbersOf(env, connection)
     }
-    return JSON.stringify(numbers.map((n) => {
+    let worded = await Promise.all(numbers.map((n) => repliesOf(env, n.number)))
+    return JSON.stringify(numbers.map((n, i) => {
       let u = used.find((u) => u.number == n.number)
       return {
         number: n.number,
@@ -814,6 +855,7 @@ export let phoneNumbers = (
         outbound: !!u?.outbound,
         inbound: !!u?.inbound,
         ...n.campaign ? { campaign: n.campaign } : {},
+        ...Object.keys(worded[i]).length ? { replies: worded[i] } : {},
       }
     }))
   },

@@ -317,22 +317,31 @@ export let personalArrived = async (
   await countedTexts(env, space, costOf(arrival.text))
 }
 
-/** The carrier's required keyword answer, outside the model's conversation. */
+/** The carrier's required keyword answer, outside the model's conversation,
+ * in the words of the number it reached (operator-line.ts `repliesOf`). */
 export let controlReply = async (
   env: Env,
   space: Space,
   arrival: Arrival & { via: string },
   word: Keyword,
 ) => {
-  let { answers } = await import('./app-texts.ts')
-  let { answerText } = await import('./operator-line.ts')
+  let { replies } = await import('@yaks/phone')
+  let { answerText, repliesOf } = await import('./operator-line.ts')
   try {
-    await answerText(env, space, {
-      address: arrival.from,
-      reply_to: arrival.to,
-      via: arrival.via,
-      channel: 'control',
-    }, answers(space.title || space.slug)[word])
+    await answerText(
+      env,
+      space,
+      {
+        address: arrival.from,
+        reply_to: arrival.to,
+        via: arrival.via,
+        channel: 'control',
+      },
+      replies(
+        space.title || space.slug,
+        await repliesOf(env, arrival.to),
+      )[word],
+    )
   } catch (error) {
     if (!(error instanceof Blocked)) throw error
   }

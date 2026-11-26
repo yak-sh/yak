@@ -2,7 +2,8 @@
 // the account is connected as the church's owners connect it, the app holds
 // its number, and voip.ms is faked at the fetch it is called through. A text
 // goes out from that number, a reply comes back by voip.ms's callback to the
-// inbox, the keywords are answered, and every way a send goes wrong says so
+// inbox, the keywords are answered at once in the church's own words, and
+// every way a send goes wrong says so
 // per person. No text leaves this process.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
@@ -13,7 +14,9 @@ import type { Env } from '../../workers/yak/env.ts'
 import { directoryOf } from '../../workers/yak/directory.ts'
 import { connecting } from '../../workers/yak/connections.ts'
 import { seal } from '../../workers/yak/lib/token.ts'
-import { answers } from '../../workers/yak/app-texts.ts'
+import { replies } from '@yaks/phone'
+import { identityEid } from '@yaks/graph'
+import { ctxOf } from '../../workers/yak/connections.ts'
 import {
   broadcastBundles,
   conversations,
@@ -308,7 +311,7 @@ test('Messages texts a list from the church’s voip.ms line, hears the replies,
     // The page keeps the directory's office number where the platform reads it.
     await office.applied({ entities: helpBundles(m) })
     assertEquals(helpBundles(await picture()), [])
-    let said = answers(held.title || held.slug, OFFICE)
+    let said = replies(held.title || held.slug, {}, OFFICE)
     asked.length = 0
     await textIn('in-2', BO, 'help')
     assertEquals(asked.length, 1)
@@ -361,7 +364,39 @@ test('Messages texts a list from the church’s voip.ms line, hears the replies,
     assertEquals(asked.map((a) => a.message), [said.start])
     assertEquals(recipients(m, general).to.map((p) => p.eid).includes(bo), true)
 
-    // A number nobody here has, and anyone who texts JOIN, reaches sign-up.
+    // JOIN from a number nobody here has is answered at once, in the words
+    // the church's campaign registered beside its number, and kept as
+    // someone at that number who agreed, in the words they sent; posted
+    // twice, it is answered once. A keyword the church gave no words for is
+    // answered in the default naming the space.
+    let ours = {
+      start:
+        "Locust Grove: You're signed up for church texts. Reply HELP for help, STOP to opt out.",
+      stop: 'Locust Grove: You are unsubscribed. Reply START to come back.',
+    }
+    await ctxOf(env).graph.apply([{
+      entity: {
+        eid: identityEid('own_number', [await connectionOf(env), LINE]),
+      },
+      keyword_replies: ours,
+    }])
+    let JOINER = '+12695550178'
+    asked.length = 0
+    await textIn('join-new', JOINER, 'Join')
+    await textIn('join-new', JOINER, 'Join')
+    assertEquals(asked.map((a) => [a.did, a.dst, a.message]), [
+      [ten(LINE), ten(JOINER), ours.start],
+    ])
+    let [joiner] = [...m.numbers].find(([, n]) => n == JOINER) ?? []
+    assertEquals(m.consent.get(joiner)?.consent, 'Join')
+    asked.length = 0
+    await textIn('stop-joiner', JOINER, 'stop')
+    await textIn('help-joiner', JOINER, 'HELP')
+    assertEquals(asked.map((a) => a.message), [ours.stop, said.help])
+    assertEquals(m.consent.get(joiner), undefined)
+
+    // A number nobody here has, and anyone who asks to JOIN something by
+    // name, reaches sign-up.
     // The Operator is the Builder behind the space; here it only records.
     let signups: string[] = []
     let builder = env.BUILDER
@@ -379,7 +414,7 @@ test('Messages texts a list from the church’s voip.ms line, hears the replies,
       }),
     } as unknown as typeof env.BUILDER
     await textIn('new-1', '+12695550177', 'I want to sign up')
-    await textIn('join-1', ANA, 'join')
+    await textIn('join-1', ANA, 'JOIN prayer list')
     await textIn('known-1', CY, 'See you at 6')
     assertEquals(signups, ['+12695550177', ANA])
     env.BUILDER = builder

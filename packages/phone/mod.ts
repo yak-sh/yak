@@ -39,6 +39,7 @@ export {
   type Text,
   thread,
 } from './text.ts'
+export { type Replies, replies } from './replies.ts'
 export { type Stash, stash } from './stash.ts'
 export { arrivalEid, kept, settled } from './received.ts'
 export { owed, sending, type Texting } from './send.ts'

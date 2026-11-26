@@ -20,15 +20,15 @@
 //
 // Every text that leaves spends from the space's one budget (text-spend.ts).
 import { line } from '@yaks/query'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, derivedEid } from '@yaks/graph'
 import { mode, reads } from '@yaks/member'
 import type { Answer } from './apps.ts'
 import {
   type Arrival,
   Blocked,
   kept,
-  type Keyword,
   keyword,
+  replies,
   type Sender,
   stoppedBy,
 } from '@yaks/phone'
@@ -41,21 +41,6 @@ import { charged, costOf } from './text-spend.ts'
 /** Why a text from an app without a number of its own did not go. */
 export let PILOT =
   'This app has no number of its own yet, so it texts only people who agreed to texts from yaks.app. It texts everyone else once its number is registered.'
-
-/** The words an app's number answers a keyword in, in its space's name, and
- * HELP with the office number the space gives, where it gives one. */
-export let answers = (
-  name: string,
-  office = '',
-): Record<Keyword, string> => ({
-  stop:
-    `${name}: You are unsubscribed and will get no more texts. Reply START to subscribe again.`,
-  start:
-    `${name}: You're subscribed to texts again. Msg & data rates may apply. Reply STOP to opt out.`,
-  help: `${name}: Reply here to reach us${
-    office ? ` or call ${office}` : ''
-  }. Msg & data rates may apply. Reply STOP to opt out.`,
-})
 
 /**
  * The texter an app's store sends through: from the app's own number, as
@@ -126,18 +111,27 @@ let contactOf = async (graph: Meta) => {
   }
 }
 
+/** The row a number that opted in is kept as when nobody in the app wore
+ * it, derived from it so a JOIN posted twice keeps one. */
+export let joinerEid = (number: string) =>
+  derivedEid(JSON.stringify(['texted-join', number]))
+
 /** Whether a text is for sign-up and not the office: from a number the app
- * does not know, or asking to JOIN, and not from a number that said STOP. */
+ * does not know, or asking to JOIN something by name ("JOIN prayer list";
+ * JOIN alone is a keyword), and not from a number that said STOP. */
 export let signsUp = (text: string, known: boolean, stopped: boolean) =>
   !stopped && (!known || /^\W*join\b/i.test(text))
 
 /**
  * A text that arrived at an app's own number, kept in its store: the text,
  * the end of consent for everyone there with the sender's number when it
- * says STOP and consent again when it says START, and the answer a keyword
- * is owed, sent from the app's number and kept beside it. Any other text from
- * a number the app does not know, or one that asks to JOIN, goes on to sign-up
- * (operator-signup.ts), unless the number said STOP.
+ * says STOP, and their consent when it says JOIN or START, a number nobody
+ * there has kept as a row of its own that wears it. A keyword is answered at
+ * once in the number's own words (operator-line.ts `repliesOf`), sent from
+ * the app's number and kept beside it, before the app's code or any Operator
+ * sees it. Any other text from a number the app does not know, or one that
+ * asks to JOIN something by name, goes on to sign-up (operator-signup.ts),
+ * unless the number said STOP.
  */
 export let appArrived = async (
   env: Env,
@@ -167,11 +161,20 @@ export let appArrived = async (
     line`.text.message_id=${arrival.id}&.text.from=${from}`,
     { trusted: true },
   )).length > 0
-  await graph.apply(
-    kept(arrival, people.map((p) => p.entity.eid), stopped),
-    KERNEL,
-  )
   let word = keyword(arrival.text, stopped)
+  // Someone who opts in is kept as the number they opted in from, so their
+  // consent has someone to be on.
+  let joining = word == 'start' && !people.length
+    ? [{ entity: { eid: joinerEid(from) }, phone: { number: from } }]
+    : []
+  await graph.apply([
+    ...joining,
+    ...kept(
+      arrival,
+      [...people, ...joining].map((p) => p.entity.eid),
+      stopped,
+    ),
+  ], KERNEL)
   if (!word) {
     if (!signsUp(arrival.text, people.length > 0, stopped)) return
     // A stranger, or anyone asking to join, is signing up (the Operator's
@@ -186,8 +189,10 @@ export let appArrived = async (
     return
   }
   if (again) return
-  let said = answers(
+  let { repliesOf } = await import('./operator-line.ts')
+  let said = replies(
     to.space.title || to.space.slug,
+    await repliesOf(env, arrival.to),
     await contactOf(graph),
   )[word]
   let answer: Bundle = {

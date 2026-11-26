@@ -87,12 +87,19 @@ export let directoryConfig: Config = {
     },
     // A person's mobile number beside their address, the words they agreed
     // to before being texted, and the numbers their own connected phone
-    // account holds (operator-line.ts). Texts themselves are kept by the
-    // Operator, not here, so `text` stays free for apps.
+    // account holds (operator-line.ts), with the words each answers carrier
+    // keywords in. Texts themselves are kept by the Operator, not here, so
+    // `text` stays free for apps.
     {
       use: '@yaks/phone',
       facets: ['vocab'],
-      words: ['phone', 'own_number', 'sms_consent', 'sender'],
+      words: [
+        'phone',
+        'own_number',
+        'keyword_replies',
+        'sms_consent',
+        'sender',
+      ],
     },
     // Where a place is, as a geocoder answered it once for every space
     // (places.ts, @yaks/maps/lookup).

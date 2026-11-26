@@ -44,6 +44,7 @@ let KEYWORDS = {
   QUIT: 'stop',
   HELP: 'help',
   INFO: 'help',
+  JOIN: 'start',
   START: 'start',
   YES: 'start',
   UNSTOP: 'start',

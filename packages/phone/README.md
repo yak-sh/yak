@@ -19,6 +19,11 @@ that keeps texts in memory.
   registered under. US carriers block those texts from a local number with no
   campaign, so `campaign` is absent until the provider approves one. Its eid is
   derived from `connection` and `number`, and it goes with its connection.
+- `keyword_replies{start, stop, help}` is the words a number answers carrier
+  keywords with, as its 10DLC campaign registers them, on the row that holds the
+  number beside its `campaign`: the opt-in confirmation to JOIN, START or YES,
+  the opt-out confirmation to STOP and its aliases, and who is texting to HELP
+  or INFO.
 - `sms_consent{person, consent, at, space}` records that `person` agreed to be
   texted at their `phone{number}`, in the words `consent` exactly as they were
   shown, at `at`, by the Operator of `space` when one is named. Its eid is
@@ -111,13 +116,19 @@ and @yaks/session's `session_texted` knocks the session that texted them.
 
 ## Receiving
 
-`keyword(text)` recognizes STOP, HELP and START. `echo(arrival)` says a text
-reached the number that sent it, which a host that answers texts leaves unread:
-its answer would come back the same way. `kept(arrival, people)` records the
-message and updates consent using the same shapes for every provider.
-`settled(outcome, sent)` records a failed delivery. An opaque `text.message_id`
-is scoped by `text.via`, so different providers cannot settle each other's
-texts. `arrivalEid(id, via)` derives a text's identity from both.
+`keyword(text)` recognizes the carrier keywords, each the whole text in any
+case: JOIN, START and YES opt in (`start`; YES only from a number that said
+STOP), STOP, STOPALL, END, CANCEL, UNSUBSCRIBE and QUIT opt out (`stop`), HELP
+and INFO ask who is texting (`help`). `replies(name, own, office)` is what a
+number answers each with: its own `keyword_replies`, and defaults naming `name`
+for any it lacks. A host answers a keyword at once, before anything else reads
+the text. `echo(arrival)` says a text reached the number that sent it, which a
+host that answers texts leaves unread: its answer would come back the same way.
+`kept(arrival, people)` records the message and updates consent using the same
+shapes for every provider. `settled(outcome, sent)` records a failed delivery.
+An opaque `text.message_id` is scoped by `text.via`, so different providers
+cannot settle each other's texts. `arrivalEid(id, via)` derives a text's
+identity from both.
 
 An arrival said in a group text carries `group`: everyone else in it, besides
 its sender and the number it reached (`othersIn` reads them from every number a

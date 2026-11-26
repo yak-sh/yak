@@ -8,7 +8,8 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { client, connector, fresh, seed } from '../../workers/yak/probe.ts'
 import { endpoints } from '../../workers/yak/endpoints.ts'
 import { texts } from '../../workers/yak/operator-texts.ts'
-import { answers, PILOT } from '../../workers/yak/app-texts.ts'
+import { PILOT } from '../../workers/yak/app-texts.ts'
+import { replies } from '@yaks/phone'
 import {
   broadcastBundles,
   conversations,
@@ -235,7 +236,7 @@ test('Messages texts a list from the church, keeps the replies, and answers STOP
 
     // HELP and STOP are answered at once in the church's name; STOP takes
     // Bo off every broadcast after it.
-    let said = answers(space)
+    let said = replies(space)
     await textIn('in-2', BO, 'help')
     await textIn('in-3', BO, 'STOP')
     assertEquals(texted.splice(0), [
