@@ -1755,8 +1755,15 @@ let appDoor = async (
     // The release a published app offers is anyone's, as installing it hands
     // it out (`offered`), so Site can keep it (@yaks/platform/kept
     // `keepable`). Every other release is its own people's, a stranger's
-    // sample visit included.
-    if (!mayUse && source != await offeredSource(dir, app)) {
+    // sample visit included, but for the files the live release made public
+    // (wrangler's `assets.public`), at this address as at their hash's: a
+    // compiled module is loaded here, since it names its siblings relatively.
+    let open = async () =>
+      source == app.source &&
+      !!releaseAsset(await releaseAssets(env, source), versioned.path)?.public
+    if (
+      !mayUse && source != await offeredSource(dir, app) && !await open()
+    ) {
       let url = new URL(req.url)
       url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
         versioned.path

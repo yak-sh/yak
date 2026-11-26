@@ -8,6 +8,7 @@ import { directory, type Row } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { EPOCH, type ServingCopyDoor, STALL } from './directory-copy.ts'
 import type { Env } from './env.ts'
+import { bucket } from './testing.ts'
 import { pageAt, SEEN } from '@yaks/platform/kept'
 import { sign } from './lib/token.ts'
 import { fetch as siteFetch } from './site.ts'
@@ -137,6 +138,7 @@ let fixture = (
       },
     },
     ASSETS: { fetch: () => Promise.resolve(new Response('platform module')) },
+    BLOBS: bucket().r2,
   } as unknown as Env
   return {
     ...f,
