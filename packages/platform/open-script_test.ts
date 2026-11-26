@@ -4,6 +4,7 @@ import { reportInteractions } from './interaction-report.ts'
 import type { Batch } from '@yaks/timing/interaction'
 import type { TimingRow } from '@yaks/timing'
 import type { Bundle } from '@yaks/graph'
+import { parseHTML } from 'linkedom'
 
 let navigation = {
   workerStart: 10,
@@ -18,7 +19,7 @@ let browser = (
 ) => {
   let document = Object.assign(new EventTarget(), {
     readyState: 'loading',
-    querySelector: (): object | null => null,
+    querySelector: (_selector: string): object | null => null,
   })
   let window = Object.assign(new EventTarget(), { origin })
   let sent: Batch[] = []
@@ -122,6 +123,18 @@ test('an Operator opening records the frame paint and waits for the composer to 
   b.document.readyState = 'complete'
   open.ready()
   equal(b.sent.map(({ open }) => [open?.paint, open?.usable]), [[220, 900]])
+})
+
+test('Updates reports readiness while its hidden Operator view is still opening', () => {
+  let b = browser('https://yaks.app/updates')
+  let { document } = parseHTML(
+    '<main><h1>Updates</h1><section hidden><div data-operator-opening></div></section></main>',
+  )
+  b.document.querySelector = (selector) => document.querySelector(selector)
+  b.run()
+  b.parsed(200)
+  b.frame(250, 220)
+  equal(b.sent.map(({ open }) => [open?.paint, open?.usable]), [[220, 220]])
 })
 
 test('the streamed composer can take typing before the document finishes', () => {

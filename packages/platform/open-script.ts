@@ -2,6 +2,10 @@
 // The small inline observer starts before either one's first frame.
 let PUSH_OPEN = '_yak_open'
 
+/** The main Operator view waiting for the rest of its document. */
+export let visibleOperatorOpening =
+  '[data-operator-opening]:not([hidden], [hidden] *)'
+
 export let pushAddress = (address: string): string => {
   let url = new URL(address)
   url.searchParams.set(PUSH_OPEN, 'push')
@@ -123,7 +127,7 @@ let OPENING = `(endpoint, source) => {
       ready: (painted = false) => {
         let usable = () => {
           let mark = performance.getEntriesByName('yak-usable')[0]
-          if (!mark && document.querySelector('[data-operator-opening], script[data-operator-chat]:not([hidden] *)')) return
+          if (!mark && document.querySelector('${visibleOperatorOpening}, script[data-operator-chat]:not([hidden] *)')) return
           open.usable = mark?.startTime ?? performance.now()
           if (!mark) performance.mark('yak-usable')
           ready = true
