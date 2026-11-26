@@ -210,10 +210,7 @@ export let kept = (
     !settled(req, Date.now(), env)
   ) return null
   if (host == apex(env)) {
-    if (
-      !isListing(path) || (path == LOGIN && !stranger(req)) ||
-      (homed(path) && session(req, env))
-    ) return null
+    if (!isListing(path) || (path == LOGIN && !stranger(req))) return null
     return listing(req, env.SITE, apex(env), path).then(
       async (page) => {
         if (page.status >= 500) return null

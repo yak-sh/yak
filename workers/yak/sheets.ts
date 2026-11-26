@@ -109,7 +109,8 @@ let NAMING = /\b(src|href)=(["'])\/?([\w.-]+)\2/g
  * nav's island beside it, beside its Sign in the link the island shows a
  * person signed in instead, and every other file of the site it
  * names at its content-made address. A page the home app served wears the
- * reporter already (`links`). */
+ * reporter already (`links`), and its island draws the pencil for a person
+ * who may write it. */
 export let sheeted = (html: string, env: Host, names = NAMES) =>
   html.replace(
     /<head>/i,
@@ -124,7 +125,10 @@ export let sheeted = (html: string, env: Host, names = NAMES) =>
       /<link rel="stylesheet" href="([\w-]+\.css)"\s*\/?>/,
       (_, sheet: string) =>
         `${links(env, sheet, names, undefined, WOVEN.test(html))}\n${
-          island(asset(env, '_ready.js', names))
+          island(
+            asset(env, '_ready.js', names),
+            WOVEN.test(html) ? asset(env, 'edit.js', names) : undefined,
+          )
         }`,
     ).replace(
       /<a class="[^"]*\bNav_SignIn\b[^"]*"[^>]*>Sign in<\/a>/,

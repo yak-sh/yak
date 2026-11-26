@@ -973,17 +973,18 @@ export let cornerOf = (space: Space, app: App, env: Host, who: Who) => {
   }
 }
 
-/** Whether the person `req`'s session names would wear the pencil on the app
- * at `at` (`editOf`), from one read of the directory, the read a page of it
- * makes: Site serves such a person a page of the home app as it is served
- * them (site.ts `forward`), and everyone else the page it keeps. */
-export let editing = async (
+/** What the corner of the app at `at` offers the person `req`'s session
+ * names (`cornerOf`), from one read of the directory, the read a page of it
+ * makes: the site's sign-in check answers it for the home app, whose pages
+ * are the same for everyone (site.ts `pencil`). */
+export let cornerAt = async (
   req: Request,
   env: Env,
   at: { space: { slug: string }; app: { slug: string } },
 ) => {
+  let none = { edit: null, note: null }
   let person = await sessionPerson(req, env)
-  if (!person) return false
+  if (!person) return none
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
     copy: copyOf(env),
     time: env.CLOCK,
@@ -992,7 +993,7 @@ export let editing = async (
     dir.page(at.space.slug, at.app.slug, person),
     sessionReading(req, env, dir),
   ])
-  if (!space || !app) return false
+  if (!space || !app) return none
   let who = await whoIs(
     req,
     env,
@@ -1000,7 +1001,7 @@ export let editing = async (
     space.eid,
     dir,
   )
-  return !!editOf(space, app, env, who)
+  return cornerOf(space, app, env, who)
 }
 
 /** Whom a page is the same for, where it is not everyone (page-cache.ts

@@ -10,7 +10,7 @@ import { declared } from './directory-fixture.ts'
 import { directory, fetch as directoryDoor } from './directory.ts'
 import { listingAt } from '@yaks/platform/kept'
 import { ADA, ADA_OWNS as OWNS, as, platform } from './serving-probe.ts'
-import { fetch as siteFetch, forward, HOME } from './site.ts'
+import { fetch as siteFetch, forward, HOME, pencil } from './site.ts'
 import { answer } from './apex.ts'
 import { edged, fetch as appsFetch } from './apps.ts'
 import { unfound } from '@yaks/platform/asset-url'
@@ -188,32 +188,43 @@ let visit = async (path: string, cookie?: string) => {
     text: await got.text(),
   }
 }
-let owner = await as(ADA)
+let owner = await as(ADA), outsider = await as(crypto.randomUUID())
 let [mine, myPricing, strangers, outsiders] = await Promise.all([
   visit('/', owner),
   visit('/pricing', owner),
   visit('/'),
-  visit('/', await as(crypto.randomUUID())),
+  visit('/', outsider),
+])
+let penciled = (cookie?: string) =>
+  pencil(
+    new Request('https://yaks.app/login/who', {
+      headers: cookie ? { cookie } : {},
+    }),
+    home.env,
+  )
+let [myPencil, outsidersPencil, strangersPencil] = await Promise.all([
+  penciled(owner),
+  penciled(outsider),
+  penciled(),
 ])
 
-test('a member who may write the home app is served its pages at the apex wearing the pencil, never kept', () => {
-  for (let page of [mine, myPricing]) {
-    assertStringIncludes(page.text, 'data-yak-edit=')
-    // Its doors are the app's own `api/`, which the apex's `/api/` is not.
-    assertStringIncludes(page.text, 'data-yak-api="/home/"')
-    assertEquals(page.kept, 'private, no-store')
-    assertEquals(page.tags, null)
-  }
-  assertStringIncludes(mine.text, 'the app says hello')
-  assertStringIncludes(myPricing.text, 'the app prices')
-})
-
-test('a stranger and a person with no seat are answered the page everyone is', () => {
-  for (let page of [strangers, outsiders]) {
-    assertStringIncludes(page.text, 'the app says hello')
+test("the home app's pages at the apex are the page everyone is, its writers' too", () => {
+  for (let page of [mine, myPricing, strangers, outsiders]) {
     assert(!page.text.includes('data-yak-edit='), page.text)
     assertStringIncludes(page.kept, 'public')
   }
+  for (let page of [mine, strangers, outsiders]) {
+    assertStringIncludes(page.text, 'the app says hello')
+  }
+  assertStringIncludes(myPricing.text, 'the app prices')
+})
+
+test('a member who may write the home app is answered its pencil, whose doors are its own api', () => {
+  assertStringIncludes(myPencil?.['data-yak-edit'] ?? '', '?app=home')
+  // Its doors are the app's own `api/`, which the apex's `/api/` is not.
+  assertEquals(myPencil?.['data-yak-api'], '/home/')
+  assertEquals(myPencil?.['data-yak-at'], '/')
+  assertEquals([outsidersPencil, strangersPencil], [null, null])
 })
 
 // A release check from a tab left open on yaks.app, by a browser with no

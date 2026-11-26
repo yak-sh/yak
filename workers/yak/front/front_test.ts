@@ -581,9 +581,9 @@ test("a listing an ad's click opened keeps its arrival and hands the kernel the 
   assertEquals(again.headers.get('set-cookie'), null)
 })
 
-// A person signed in may be one who writes the home app, whose pages wear
-// them the pencil (site.ts `forward`), which only the kernel can tell.
-test("the home app's pages at the apex answer a browser from the edge, and go to the kernel for a person", async () => {
+// The home app's pages are the same for everyone: a person who may write
+// them is drawn the pencil by the page's sign-in check (site.ts `pencil`).
+test("the home app's pages at the apex answer a browser and a person from the edge", async () => {
   let browser = `yak_session=${body({ via: 'v', exp: days(80) })}`
   let person = `yak_session=${
     body({ person: 'p', space: null, via: 'v', exp: days(80) })
@@ -593,13 +593,11 @@ test("the home app's pages at the apex answer a browser from the edge, and go to
       headers: { cookie },
     })).text()
   assertEquals(
-    await Promise.all([
-      answered('/', browser),
-      answered('/', person),
-      answered('/pricing', person),
-      answered('/gallery', person),
-    ]),
-    ['<body>kept</body>', 'kernel', 'kernel', '<body>kept</body>'],
+    await Promise.all(
+      [['/', browser], ['/', person], ['/pricing', person], ['/games', person]]
+        .map(([path, cookie]) => answered(path, cookie)),
+    ),
+    Array(4).fill('<body>kept</body>'),
   )
 })
 

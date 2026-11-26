@@ -239,7 +239,7 @@ import {
   signedOut,
 } from './session.ts'
 import type { SessionSeed } from './browser-sessions.ts'
-import { CHAT, WHO } from '@yaks/platform/site-nav'
+import { CHAT, PENCIL, WHO } from '@yaks/platform/site-nav'
 import { versionOf } from './running.ts'
 import { background, caught, defect, failing, refusing } from './defects.ts'
 import { step } from './funnel.ts'
@@ -1613,24 +1613,36 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   }
 
   // The site's navigation can wake an existing Operator as soon as the
-  // browser's session is known. Deploy checks only need the sign-in answer.
+  // browser's session is known, and draws the pencil for a person who may
+  // write the site's pages (site.ts `pencil`). Deploy checks only need the
+  // sign-in answer.
   if (path == WHO && req.method == 'GET') {
     let person = await browser(env, req)
-    let chat: string | undefined
-    if (person && url.searchParams.has(CHAT)) {
+    let waking = async () => {
+      if (!person || !url.searchParams.has(CHAT)) return
       let own = (await dirOf(env).seats(person, 'owner').catch((error) => {
         caught(error, { request: 'home Operator wake' })
         return []
       })).find((s) => s.own)?.space
-      if (own && !own.trashed) {
-        woken(env, own.eid)
-        chat = chatPath(own.slug)
-      }
+      if (!own || own.trashed) return
+      woken(env, own.eid)
+      return chatPath(own.slug)
     }
+    let drawing = async () => {
+      if (!person || !url.searchParams.has(PENCIL)) return
+      return await (await import('./site.ts')).pencil(req, env).catch(
+        (error) => {
+          caught(error, { request: 'home pencil' })
+          return null
+        },
+      ) ?? undefined
+    }
+    let [chat, pencil] = await Promise.all([waking(), drawing()])
     return Response.json({
       signedIn: !!person,
       deploy: versionOf(env.CF_VERSION_METADATA),
       chat,
+      pencil,
     }, {
       headers: { 'cache-control': 'private, no-store' },
     })
