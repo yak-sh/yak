@@ -686,16 +686,21 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       let ended: (() => unknown) | undefined
       try {
         if (!s?.run) throw new Error(`no effect is handled as ${row.handler}`)
-        await s.run(
-          event,
-          tx,
-          ctx.writer(
-            Number(row.generation ?? 0),
-            span && peek(g) ? { graph: g, parent: span.id } : undefined,
-          ),
-          attempt,
-        )
-        if (peek(g) && span?.active) span.end({ counts: { runs: 1 } })
+        let eligible = !s.eligible || await s.eligible(entity.eid, tx)
+        if (eligible) {
+          await s.run(
+            event,
+            tx,
+            ctx.writer(
+              Number(row.generation ?? 0),
+              span && peek(g) ? { graph: g, parent: span.id } : undefined,
+            ),
+            attempt,
+          )
+        }
+        if (peek(g) && span?.active) {
+          span.end({ counts: { runs: Number(eligible) } })
+        }
         if (deferred != null) {
           let next = stamp(deferred)
           tries = Math.max(0, tries - 1)

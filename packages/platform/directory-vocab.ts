@@ -53,7 +53,7 @@ export let directoryDoc: VocabDoc = {
         'app_icon.drawn',
         'app_splash.requested',
       ],
-      target: '.app.version>0&!trashed',
+      eligible: '.app.version>0&!trashed&.app.space.space&!app.space.trashed',
       description:
         "Draw a released app's splash images from its icon and background.",
     },

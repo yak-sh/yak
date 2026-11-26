@@ -52,6 +52,7 @@ let TRIGGERS: Record<string, (io: Io, v: unknown) => ComponentChildren> = {
   removed: (io, v) => list(io, v as string[]),
   match: (io, v) => query(io, String(v)),
   target: (io, v) => query(io, String(v)),
+  eligible: (io, v) => query(io, String(v)),
   active: (io, v) => query(io, String(v)),
   start: () => 'each time a process starts working the effects',
 }

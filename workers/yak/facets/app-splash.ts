@@ -100,7 +100,7 @@ export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
   if (!store.env.RASTER || !store.env.BLOBS) return {}
   let env = store.env as Env
   let raw = r2RawObjects(env.BLOBS)
-  let pending = new Map<string, Promise<void>>()
+  let pending = new Map<string, Promise<unknown>>()
   return {
     app_splash_draw: async ({ entity }, _tx, write, attempt) => {
       let record = (drawn: { key: string; dark: boolean }) => async () =>
@@ -119,17 +119,7 @@ export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
             attempt?.retry ? attempt.retry(record(drawn)) : record(drawn)(),
           list: raw.list,
           delete: raw.delete,
-        }).then(
-          (said) => {
-            // Asked for by a release or the backfill, which both read the
-            // app released: one gone by now is worth knowing about.
-            if (said == 'gone') {
-              defect(new Error('A splash was asked for an app not released'), {
-                request: 'app splash',
-                app: entity.eid,
-              })
-            }
-          },
+        }).catch(
           // A run has no caller whose input could be refused, so a refusal
           // here is a failure too, and filed like one.
           (e) => {

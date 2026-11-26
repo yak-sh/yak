@@ -653,10 +653,12 @@ start-up work.
 Commit-triggered runs can be gated with `active`, a query that must match an
 entity. A `target` query limits triggers to subjects matching before or after
 the write, including removals, moves out of scope and what a cascade deletes. An
-`option` names the declaring plugin's boolean opt-in; the composing host passes
-disabled names to the registry so every writer agrees with its workers. Writes
-to pool entities owe no effects, preventing pool bookkeeping from producing more
-runs.
+`eligible` query selects subjects in the committed state and is checked again
+before a queued run invokes its handler. A run whose subject no longer matches
+is settled quietly. An `option` names the declaring plugin's boolean opt-in. The
+composing host passes disabled names to the registry so every writer agrees with
+its workers. Writes to pool entities owe no effects, preventing pool bookkeeping
+from producing more runs.
 
 Startup delivery and active gates are exercised in the
 [startup tests](./startup_test.ts) and [declaration tests](./registry_test.ts).

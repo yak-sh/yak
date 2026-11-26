@@ -137,6 +137,8 @@ export type Slot = Policy & {
   gone?: string[]
   /** the declaration, for a declared effect */
   effect?: EffectDecl
+  /** Whether this subject still owes the work at dispatch. */
+  eligible?: (eid: Eid, tx: ReadTx) => boolean | Promise<boolean>
   /** the code: always for an observer, once handled for an effect */
   run?: Handler
 }
@@ -511,8 +513,19 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // The declared effects, one slot per trigger, all under the effect's name.
   for (let effect of effectsIn(vocab.docs)) {
+    let query = effect.eligible
+    let eligible: Slot['eligible'] = query
+      ? (eid, tx) =>
+        after(subjects(query, [eid], tx), (found) => !!found.length)
+      : undefined
     let at = (s: Omit<Slot, 'id' | 'effect'>) =>
-      slots.push({ ...s, id: effect.name, effect, doc: effect.description })
+      slots.push({
+        ...s,
+        id: effect.name,
+        effect,
+        eligible,
+        doc: effect.description,
+      })
     for (let comp of effect.created ?? []) at({ comp, kind: 'created' })
     let changed = new Map<string, string[] | undefined>()
     for (let said of effect.changed ?? []) {
@@ -688,10 +701,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     )
     let targets = new Map<string, Set<Eid> | Promise<Set<Eid>>>()
     let priorTargets = (bundles[0]?.[TARGETS] ?? {}) as Targets
-    let inScope = (s: Slot, e: Event): boolean | Promise<boolean> => {
-      let query = s.effect?.target
+    let matchesNow = (query: string | undefined, eid: Eid) => {
       if (!query) return true
-      if (priorTargets[query]?.includes(e.entity.eid)) return true
       if (!targets.has(query)) {
         targets.set(
           query,
@@ -701,7 +712,13 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
           ),
         )
       }
-      return after(targets.get(query)!, (found) => found.has(e.entity.eid))
+      return after(targets.get(query)!, (found) => found.has(eid))
+    }
+    let inScope = (s: Slot, { entity: { eid } }: Event) => {
+      let { target, eligible } = s.effect ?? {}
+      let scoped = target && priorTargets[target]?.includes(eid) ||
+        matchesNow(target, eid)
+      return after(scoped, (yes) => yes && matchesNow(eligible, eid))
     }
     let active = new Map<string, boolean | Promise<boolean>>()
     let enabled = (s: Slot): boolean | Promise<boolean> => {
@@ -1001,6 +1018,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
           s.kind == row.kind && (s.kind == 'started' || s.comp == row.comp)
         )
         if (!candidates.length) return false
+        let eligible = candidates[0].eligible
+        if (eligible && !await eligible(String(row.target), g.outside)) {
+          return false
+        }
         // A removal's old scope is not recorded; preserve it conservatively.
         if (row.kind == 'removed') return true
         let query = candidates[0].effect?.target

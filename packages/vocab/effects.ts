@@ -35,6 +35,8 @@ export type EffectDecl = {
   /** commit triggers owe runs only for subjects matching this query before
    * or after the write, so removals and moves out still reconcile */
   target?: string
+  /** a query the subject must match after the write and when dispatched */
+  eligible?: string
   /** the components whose appearance on an entity owes a run */
   created?: string[]
   /** `comp` for any patch to that component, `comp.prop` for a patch that
@@ -91,6 +93,7 @@ export let effectsIn = (input: VocabDoc | VocabDoc[]): EffectDecl[] => {
           'description',
           'option',
           'target',
+          'eligible',
         ] as const
       ) {
         let said = entry[key]
