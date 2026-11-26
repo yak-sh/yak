@@ -5,23 +5,34 @@
     content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Exploration room</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="manifest" crossorigin="anonymous">
   <link rel="stylesheet" href="./style.css">
-  <canvas class="Stage" aria-label="Shared exploration world"></canvas>
-  <section class="RoomControls" aria-label="Room controls">
-    <p id="room-status" role="status">Connecting…</p>
-    <button id="host" type="button" hidden>Host room</button>
-    <button id="share" type="button" hidden>Copy invite</button>
-    <input id="invite-link" aria-label="Room invite link" readonly hidden>
-    <fieldset id="actions" disabled>
-      <legend>Turn actions</legend>
-      <button type="button" value="move" data-move="-1,0">West</button>
-      <button type="button" value="move" data-move="0,-1">North</button>
-      <button type="button" value="move" data-move="0,1">South</button>
-      <button type="button" value="move" data-move="1,0">East</button>
-      <button type="button" value="roll">Roll d6</button>
-      <button type="button" value="pass">Pass</button>
-    </fieldset>
-    <output id="roll"></output>
-  </section>
-  <script type="module" src="./room-page.ts"></script>
+  <body class="GameScreen">
+    <canvas class="GameScreen_Surface Stage"
+      aria-label="Shared exploration world"></canvas>
+    <div class="GameScreen_Hud StarterHud">
+      <button class="GameScreen_Control StarterHud_Button" id="fullscreen"
+        type="button" hidden>
+        Enter fullscreen
+      </button>
+      <section class="GameScreen_Control RoomControls"
+        aria-label="Room controls">
+        <p id="room-status" role="status">Connecting…</p>
+        <button id="host" type="button" hidden>Host room</button>
+        <button id="share" type="button" hidden>Copy invite</button>
+        <input id="invite-link" aria-label="Room invite link" readonly hidden>
+        <fieldset id="actions" disabled>
+          <legend>Turn actions</legend>
+          <button type="button" value="move" data-move="-1,0">West</button>
+          <button type="button" value="move" data-move="0,-1">North</button>
+          <button type="button" value="move" data-move="0,1">South</button>
+          <button type="button" value="move" data-move="1,0">East</button>
+          <button type="button" value="roll">Roll d6</button>
+          <button type="button" value="pass">Pass</button>
+        </fieldset>
+        <output id="roll"></output>
+      </section>
+    </div>
+    <script type="module" src="./room-page.ts"></script>
+  </body>
 </html>

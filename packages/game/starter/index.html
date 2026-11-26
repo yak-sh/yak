@@ -5,9 +5,19 @@
     content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Exploration starter</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="manifest" crossorigin="anonymous">
   <link rel="stylesheet" href="./style.css">
-  <canvas class="Stage" aria-label="Exploration world"></canvas>
-  <p class="Hint"
-    role="status">Move with WASD, arrow keys, or the touch stick.</p>
-  <script type="module" src="./main.ts"></script>
+  <body class="GameScreen">
+    <canvas class="GameScreen_Surface Stage"
+      aria-label="Exploration world"></canvas>
+    <div class="GameScreen_Hud StarterHud">
+      <p class="Hint"
+        role="status">Move with WASD, arrow keys, or the touch stick.</p>
+      <button class="GameScreen_Control StarterHud_Button" id="fullscreen"
+        type="button" hidden>
+        Enter fullscreen
+      </button>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
 </html>

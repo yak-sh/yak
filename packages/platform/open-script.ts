@@ -39,11 +39,12 @@ let OPENING = `(endpoint, source) => {
       : /Mobile|iPhone|Android/i.test(ua) ? 'phone' : 'desktop'
     let open = {
       source: pushed ? 'push' : source || 'cold', picture, device,
-      installed: !!navigator.standalone || matchMedia('(display-mode: standalone)').matches,
+      installed: !!navigator.standalone ||
+        matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches,
       paint: null, usable: null,
       server: picture || !nav || !nav.responseStart ? null : nav.responseStart - nav.requestStart,
       estimated: false,
-      controlled: !!navigator.serviceWorker?.controller,
+      controlled: self.origin !== 'null' && !!navigator.serviceWorker?.controller,
       navigation: picture || !nav ? undefined : {
         workerStart: nav.workerStart,
         fetchStart: nav.fetchStart,

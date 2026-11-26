@@ -9,11 +9,15 @@ import { themes } from '@yaks/ui/ui'
 import { wear } from '@yaks/ui/wear'
 import { look, type Pose } from './look.ts'
 import { move, words } from './movement.ts'
+import { screen } from './screen.ts'
 
 export let play = async (world: THREE.Object3D, actor: THREE.Object3D) => {
   let canvas = document.querySelector('canvas')!
   let hint = document.querySelector<HTMLElement>('.Hint')!
-  void wear({ kits: { hud: kit }, theme: themes.everforest }).catch(reportError)
+  let disposeScreen = screen()
+  void wear({ kits: { hud: kit }, theme: themes.everforest }).catch(
+    reportError,
+  )
   let front = await page({ words }).catch((error) => {
     hint.textContent = 'Could not load the game. Reload to try again.'
     reportError(error)
@@ -75,6 +79,7 @@ export let play = async (world: THREE.Object3D, actor: THREE.Object3D) => {
     view.draw(poseOf(poses.value[0]), { ...intent, snap: false }, dt)
   }
   frames(frame, () => {
+    disposeScreen()
     hands.dispose()
     front.close()
     view.dispose()

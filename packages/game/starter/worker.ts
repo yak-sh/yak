@@ -128,6 +128,12 @@ let action = async (
   }
 }
 
+let installFiles = new Set([
+  '/manifest.webmanifest',
+  '/icon-192.png',
+  '/icon-512.png',
+])
+
 export let rooms = async (req: Request, env: Env): Promise<Response> => {
   let { pathname, origin } = new URL(req.url)
   let mount = req.headers.get('x-yak-mount') ?? '/'
@@ -136,6 +142,12 @@ export let rooms = async (req: Request, env: Env): Promise<Response> => {
     : pathname
   if (path === '/room' && req.method === 'GET') {
     return env.FILES.fetch('/room.html')
+  }
+  if (installFiles.has(path) && ['GET', 'HEAD'].includes(req.method)) {
+    let file = await env.FILES.fetch(path, { method: req.method })
+    let headers = new Headers(file.headers)
+    headers.set('access-control-allow-origin', '*')
+    return new Response(file.body, { status: file.status, headers })
   }
   if (req.headers.get('origin') && req.headers.get('origin') !== origin) {
     return denied()

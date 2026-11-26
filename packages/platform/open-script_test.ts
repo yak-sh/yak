@@ -12,12 +12,15 @@ let navigation = {
   responseStart: 180,
 }
 
-let browser = (href = 'https://yaks.app/ada') => {
+let browser = (
+  href = 'https://yaks.app/ada',
+  origin = new URL(href).origin,
+) => {
   let document = Object.assign(new EventTarget(), {
     readyState: 'loading',
     querySelector: (): object | null => null,
   })
-  let window = new EventTarget()
+  let window = Object.assign(new EventTarget(), { origin })
   let sent: Batch[] = []
   let frames: (() => void)[] = []
   let entries = new Map<string, { startTime: number }>()
@@ -63,10 +66,22 @@ let browser = (href = 'https://yaks.app/ada') => {
       { width: 375, height: 812 },
       {
         userAgent: 'iPhone',
-        standalone: true,
+        standalone: origin != 'null',
+        get serviceWorker() {
+          if (origin == 'null') {
+            throw new DOMException(
+              'Sandboxed',
+              'SecurityError',
+            )
+          }
+          return { controller: null }
+        },
         sendBeacon: (_at: string, body: string) => sent.push(JSON.parse(body)),
       },
-      () => ({ matches: false }),
+      (query: string) => ({
+        matches: origin == 'null' &&
+          query.includes('(display-mode: fullscreen)'),
+      }),
       performance,
       (fn: () => void) => frames.push(fn),
       (fn: () => void) => fn(),
@@ -107,6 +122,17 @@ test('an Operator opening records the frame paint and waits for the composer to 
   b.document.readyState = 'complete'
   open.ready()
   equal(b.sent.map(({ open }) => [open?.paint, open?.usable]), [[220, 900]])
+})
+
+test('a sandboxed fullscreen app reports its opening without service worker access', () => {
+  let b = browser('https://ada.yaks.app/explore/', 'null')
+  b.run()
+  b.parsed(30)
+  b.frame(60, 50)
+  equal(b.sent.map(({ open }) => [open?.installed, open?.controlled]), [[
+    true,
+    false,
+  ]])
 })
 
 let reported = async (

@@ -7,7 +7,9 @@ import {
 } from './room-client.ts'
 import { motionId, roomId, roomPath, type Turn } from './room-model.ts'
 import { roomView } from './room-view.ts'
+import { screen } from './screen.ts'
 
+let disposeScreen = screen()
 let canvas = document.querySelector('canvas')!
 let status = document.querySelector<HTMLElement>('#room-status')!
 let host = document.querySelector<HTMLButtonElement>('#host')!
@@ -109,6 +111,7 @@ let playRoom = async (member: Joined) => {
     }])).catch(show)
   })
   frames((_now, dt) => view.draw(watch.value, dt), () => {
+    disposeScreen()
     front.close()
     view.dispose()
   })
