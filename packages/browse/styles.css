@@ -593,7 +593,8 @@ html {
 }
 .Row-task > .Dot {
   align-self: start;
-  margin-top: calc((1lh - 0.72em) / 2); /* pinned to the title's first line */
+  margin-top: calc((1lh - 0.72em) / 2 - var(--breath,
+    0em)); /* pinned to the title's first line */
 }
 .Row_Title {
   min-width: 0; /* wraps freely — a board card reads, it doesn't truncate */
@@ -835,7 +836,7 @@ html {
 }
 .Show_Heading .Dot {
   align-self: start;
-  margin-top: calc((1lh - 0.72em) / 2);
+  margin-top: calc((1lh - 0.72em) / 2 - var(--breath, 0em));
 }
 .Show_Title {
   flex: 1;

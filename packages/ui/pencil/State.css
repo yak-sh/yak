@@ -1,5 +1,5 @@
-/* How something stands, as a word in its role's colour beside a dot of the
-   same: -positive when it works, -negative when it needs the person. What
+/* How something stands, as a word in its role's colour beside a dot in its
+   tone: -positive when it works, -negative when it needs the person. What
    works is said in the accent, the colour of what is lit. */
 .State {
   gap: 0.35rem;
@@ -11,7 +11,6 @@
   width: 0.5rem;
   height: 0.5rem;
   border: 0;
-  background: currentColor;
 }
 .State-positive,
 .State-accent {

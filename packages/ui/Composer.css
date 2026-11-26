@@ -119,12 +119,30 @@
   margin-left: 0;
 }
 
-.Composer_Form {
-  gap: .75rem;
-  background: linear-gradient(transparent, var(--bg) 1rem);
+/* Where the form rides over what scrolls under it, it covers that with the
+   paper it lies on, faded in over its first rem: the floor's fill, its grain
+   too, so the band reads as the page and not a flat sheet over it. The paint
+   is a layer behind the form's own, masked, so the fade takes the grain with
+   the colour. A page may hold the form in place (sticky), so its position is
+   only a default. */
+:where(.Composer_Form) {
+  position: relative;
 }
-.Composer_Form-inline {
-  background: none;
+.Composer_Form {
+  isolation: isolate;
+  gap: .75rem;
+}
+.Composer_Form::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--floor-fill, var(--bg-fill, var(--bg)));
+  mask-image: linear-gradient(transparent, #000 1rem);
+  pointer-events: none;
+}
+.Composer_Form-inline::before {
+  content: none;
 }
 
 @container workspace (min-width:54rem) {

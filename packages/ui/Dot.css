@@ -28,8 +28,21 @@
 .Dot-half {
   background: linear-gradient(90deg, var(--dot) 50%, transparent 0);
 }
-/* Something happening right now: the full disc breathes. */
+/* Something happening right now: the full disc breathes. The breath is drawn
+   inside the pip's own box, in a padding as wide as the breath reaches, so no
+   container's overflow cuts it off. It is the only shape that draws with
+   both pseudo-elements free, so the breath is the ::after. */
 .Dot-pulse {
+  --breath: 0.3em;
+  box-sizing: content-box;
+  padding: var(--breath);
+  border: 0;
+  background-clip: content-box;
+}
+.Dot-pulse::after {
+  content: '';
+  inset: var(--breath);
+  border-radius: 50%;
   animation: DotPulse 2.2s ease-out infinite;
 }
 @keyframes DotPulse {
@@ -37,11 +50,12 @@
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--dot) 55%, transparent);
   }
   to {
-    box-shadow: 0 0 0 0.45em color-mix(in srgb, var(--dot) 0%, transparent);
+    box-shadow: 0 0 0 var(--breath) color-mix(in srgb, var(--dot) 0%,
+      transparent);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .Dot {
+  .Dot-pulse::after {
     animation: none; /* the full disc still says it; only the breath goes */
   }
 }
@@ -96,8 +110,10 @@
 .Dot-info {
   --dot: var(--info);
 }
+/* Under way: a theme may paint the pip apart from the text that says it
+   (linen's yellow is never text). */
 .Dot-active {
-  --dot: var(--active);
+  --dot: var(--dot-active, var(--active));
 }
 .Dot-positive {
   --dot: var(--positive);

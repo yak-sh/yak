@@ -8,10 +8,11 @@
    cream, coffee, clay, taupe, shell, bark, cocoa, night, meadow, moss,
    forest, oat). The other paints are clear, saturated hues, deep enough on
    linen and bright enough at night to read as text at WCAG AA: red, orange,
-   blue and raspberry, and a yellow and a grey for presence dots, which are
-   never text. A theme has more roles than a palette has hues, so roles
-   share them: meadow is what is lit, what went well and who; red a fault
-   and the language's words; orange what is under way and a number; blue
+   blue and raspberry; and a yellow and a grey for dots, which are never
+   text: yellow a pip at work and someone away, grey someone gone. A theme
+   has more roles than a palette has hues, so roles share them: meadow is
+   what is lit, what went well and who; red a fault and the language's
+   words; orange what is under way, said in words, and a number; blue
    something to know and a moment; raspberry what is set apart. yaks.app's
    own pages wear this theme (workers/yak/public). */
 :root {
@@ -45,6 +46,7 @@
   --positive: light-dark(#4c773e, #a7c080); /* meadow; moss */
   --negative: light-dark(#c4231c, #ff6b5e); /* red */
   --caution: light-dark(#c4231c, #ff6b5e); /* red */
+  --dot-active: light-dark(#f5b800, #ffcc33); /* yellow: a pip at work */
   --presence-away: light-dark(#f5b800, #ffcc33); /* yellow */
   --presence-offline: light-dark(#747170, #a4a09e); /* grey */
   --special: light-dark(#b52a6a, #ff8cc0); /* raspberry */
