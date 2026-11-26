@@ -1089,10 +1089,12 @@ let account = async (
     let made = {
       title: String(form.get('title') ?? '').trim().slice(0, 60),
       slug: String(form.get('slug') ?? '').trim().toLowerCase(),
+      operator: String(form.get('operator') ?? '').trim(),
     }
     let { said } = await pressed(env, dir, who, 'space_new', {
       slug: made.slug,
       title: made.title || made.slug,
+      ...made.operator ? { operator: made.operator } : {},
     })
     if (said) {
       return refusal(

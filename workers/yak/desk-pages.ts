@@ -7,6 +7,7 @@ import { frame, FRAMED } from './frame.ts'
 import { AGENT } from './docs.ts'
 import { Button, Card, Field } from '@yaks/ui/parts'
 import { h } from 'preact'
+import { LONGEST } from '@yaks/persona/name'
 import { FRAME, TITLE } from '@yaks/ui/navigate'
 import {
   type ConnectionsView,
@@ -297,8 +298,8 @@ let visitsPage = (at: DeskPage, site: string) => {
   )
 }
 
-// A new space (from the selector's + New space): its name and its address,
-// space_new as the assistant asks it.
+// A new space (from the selector's + New space): its name, its address and
+// its Operator's name, space_new as the assistant asks it.
 let newSpace = (at: DeskPage, env: Host) =>
   saving(
     managePath('space'),
@@ -324,6 +325,17 @@ let newSpace = (at: DeskPage, env: Host) =>
           'Address',
           addressBox('space-slug', 'slug', at.made?.slug ?? '', apex(env), {
             required: true,
+          }),
+        ),
+        labeled(
+          'space-operator',
+          "Operator's name",
+          h(Field, {
+            id: 'space-operator',
+            name: 'operator',
+            maxlength: LONGEST,
+            placeholder: 'Picked for you',
+            value: at.made?.operator ?? '',
           }),
         ),
       ),

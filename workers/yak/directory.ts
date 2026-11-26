@@ -19,7 +19,7 @@ import {
   regionOf,
 } from '@yaks/platform/regional-route'
 import type { Row as WhereaboutsRow } from '@yaks/notify/whereabouts'
-import { christened, pick } from '@yaks/persona/name'
+import { christened, named, pick } from '@yaks/persona/name'
 import { calledOf } from './operator-name.ts'
 import type { Door as Entry } from './arrival.ts'
 import {
@@ -2815,7 +2815,14 @@ export let decisions = (read: (q: Line) => Row[] | Promise<Row[]>) => {
         self.space(slug),
         (taken) => taken ? self.free(base, n + 1, `${base}${n}`) : slug,
       ),
-    minting: (person: string, slug: string, title: string, own = false) => {
+    // `operator` is the name its Operator was given (space_new `operator`),
+    // else one is picked clear of the Operators they already reach.
+    minting: (
+      person: string,
+      slug: string,
+      title: string,
+      { own = false, operator }: { own?: boolean; operator?: string } = {},
+    ) => {
       let eid = crypto.randomUUID()
       return after(
         together([
@@ -2824,10 +2831,13 @@ export let decisions = (read: (q: Line) => Row[] | Promise<Row[]>) => {
           one(line`.entity.eid=${person}&?started`),
         ]),
         ([claims, seats, row]) => {
-          let name = christened(
-            eid,
-            seats.map((s) => ({ eid: s.space.eid, name: s.space.operator })),
-          )
+          let others = seats.map((s) => ({
+            eid: s.space.eid,
+            name: s.space.operator,
+          }))
+          let name = operator
+            ? named(operator, others)
+            : christened(eid, others)
           let first = !row?.started && !seats.some((s) => s.role == 'owner')
           return {
             eid,
@@ -2881,7 +2891,7 @@ export let decisions = (read: (q: Line) => Row[] | Promise<Row[]>) => {
                 chosen && !taken ? want! : self.free(slugOf(row)),
                 (slug) =>
                   after(
-                    self.minting(person, slug, slug, true),
+                    self.minting(person, slug, slug, { own: true }),
                     (minted) => minted.entities,
                   ),
               ),
@@ -3356,8 +3366,9 @@ export let directoryRows = (rows: {
     // A space minted at `slug`, owned by `person`: the batch both doors that
     // make one write (tools.ts `space_new`, `own` below) — the person's own
     // row (they may have none yet), the space with its handle and its
-    // Operator's name, clear of the Operators they already reach, their seat,
-    // and the name taken from a space it still redirected for. The eid is
+    // Operator's name (the one given, else one picked), clear of the
+    // Operators they already reach, their seat, and the name taken from a
+    // space it still redirected for. The eid is
     // minted here rather than by a `$alias` the store resolves, because the
     // handle is made out of it and there is no second moment to write it in
     // (`spaceHandle`); a bundle mints at an eid its author chose (T-32455).
@@ -3371,9 +3382,9 @@ export let directoryRows = (rows: {
       slug: string,
       title: string,
       headers: Record<string, string>,
-      own = false,
+      as?: { own?: boolean; operator?: string },
     ) => {
-      let { eid, entities } = await self.minting(person, slug, title, own)
+      let { eid, entities } = await self.minting(person, slug, title, as)
       await self.stamp({ entities }, headers)
       return eid
     },
@@ -3384,8 +3395,8 @@ export let directoryRows = (rows: {
       person: string,
       slug: string,
       title: string,
-      own = false,
-    ) => await decided.minting(person, slug, title, own),
+      as?: { own?: boolean; operator?: string },
+    ) => await decided.minting(person, slug, title, as),
     // A space moved to another address, retitled, or made to forget one it
     // left: the one write behind both doors that do it (tools.ts `space_set`,
     // identity.ts `choose`). Nothing but directory rows change. The handle

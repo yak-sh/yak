@@ -311,12 +311,14 @@ specialists, each saying its home's common persona beside the checkout's
 ## Names
 
 A persona's name is its `doc{title}`, the name alone. `NAMES` are the ones a new
-persona is given, short, warm and plain to say aloud. `pick(eid, taken)` is the
-first from the entity's own place in them that `taken` lacks, and
-`christened(eid, others)` one clear of the names `others` go by (those its
-people already reach), so personas named in one pass, which cannot read each
-other's, still choose apart. `given(said)` is a name a person typed, its spaces
-closed up, refused when it is empty or longer than `LONGEST` (40) characters.
+persona is given: short, plain to say aloud, mostly trees and creatures.
+`pick(eid, taken)` is the first from the entity's own place in them that `taken`
+lacks, and `christened(eid, others)` one clear of the names `others` go by
+(those its people already reach), so personas named in one pass, which cannot
+read each other's, still choose apart. `given(said)` is a name a person typed,
+its spaces closed up, refused when it is empty or longer than `LONGEST` (40)
+characters. `named(said, others)` is a name given as a persona is made: what
+`given` takes, refused when one of `others` already goes by it.
 
 `@yaks/persona/ui`'s `NameCard` is where its people change it: a card of the
 kit's parts holding one field, `name`. The host's form holds the card, so where

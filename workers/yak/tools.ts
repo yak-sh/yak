@@ -3955,7 +3955,11 @@ let OURS: Row[] = [
     destructive: false,
     input: {
       type: 'object',
-      properties: { slug: str('the hostname label'), title: str('its name') },
+      properties: {
+        slug: str('the hostname label'),
+        title: str('its name'),
+        operator: str("its Operator's name, one short word"),
+      },
       required: ['slug', 'title'],
     },
     // A space it made would be a space outside the one a narrowed grant
@@ -3988,6 +3992,9 @@ let OURS: Row[] = [
         s,
         titled(args.title),
         vouched(asCaller(ctx, 'owner')),
+        args.operator == null
+          ? {}
+          : { operator: text(args.operator, 'operator') },
       )
       // The mint is committed; use its identity, not a slug that can be
       // renamed/reused while acquiring this new scope.
@@ -3999,13 +4006,14 @@ let OURS: Row[] = [
       }
       let at = `https://${spaceHost(ctx.env, s)}/`
       return {
-        text: `space ${s} (${space.eid}): ${at}` +
+        text: `space ${s} (${space.eid}): ${at}, its Operator is ` +
+          space.operator +
           (was
             ? ' — another space lived here before and moved away, so links ' +
               'and letters still aimed at it arrive here now'
             : ''),
         space,
-        value: { eid: space.eid, url: at },
+        value: { eid: space.eid, url: at, operator: space.operator },
       }
     },
   },

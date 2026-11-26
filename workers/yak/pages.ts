@@ -663,7 +663,7 @@ export type DeskPage = {
    * (`presence{hidden}`), on their profile */
   presenceHidden?: boolean
   /** what was typed into the new space form, when it was refused */
-  made?: { title: string; slug: string }
+  made?: { title: string; slug: string; operator?: string }
   /** the rows a page drawn from the page graph's reads was drawn from, which
    * it carries for its first paint (@yaks/platform/page-graph `drawnRows`) */
   drawn?: Bundle[]

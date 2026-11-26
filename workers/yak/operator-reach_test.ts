@@ -170,7 +170,7 @@ let createOwner = crypto.randomUUID()
 let createHome = await dir.mint(createOwner, 'creating', 'Creating', {
   'x-yak-person': createOwner,
   'x-yak-role': 'owner',
-}, true)
+}, { own: true })
 await dir.stamp({
   entities: [{
     entity: { eid: createOwner },

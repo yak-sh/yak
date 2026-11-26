@@ -62,9 +62,12 @@ space_new:
     Create another space, a group of apps sharing an address and membership,
     at <slug>.yaks.app, with the signed-in person as its owner. Signing in
     already gave them one; this makes a second. Pass a slug (the short name
-    in the URL) and a title (its name). Returns the space name,
-    entity id and URL. Other tools infer the space when only one fits;
-    specify space when more than one could match.
+    in the URL) and a title (its name). Returns the space name, entity id,
+    URL and its Operator's name. Other tools infer the space when only one
+    fits; specify space when more than one could match. Pass operator to
+    name the space's Operator: one short word that relates to the space in
+    an interesting way (its history, namesake, field or work), when there is
+    one. Otherwise leave it out, and one is picked.
 space_set:
   title: Name, address, logo or visitor spending
   step:

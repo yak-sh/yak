@@ -48,7 +48,7 @@ export {
   wear,
   wearLayers,
 } from './worn.ts'
-export { christened, given, LONGEST, NAMES, pick } from './name.ts'
+export { christened, given, LONGEST, named, NAMES, pick } from './name.ts'
 export {
   type As,
   carried,

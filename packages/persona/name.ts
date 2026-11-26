@@ -1,110 +1,89 @@
 // What a persona is called: its `doc{title}`, the name alone. A new one is
 // given one of NAMES, clear of the names of those its people already reach
-// (`christened`), and a person may give it another (`given`).
+// (`christened`), and a person may give it another (`given`), or give it one
+// of their own as it is made (`named`).
 import { CallError } from '@yaks/tools/errors'
 
-/** The names a new persona is given: short, warm and plain to say aloud. */
+/** The names a new persona is given: short, plain to say aloud, mostly trees
+ * and creatures. */
 export let NAMES = [
-  'Ada',
-  'Agnes',
+  'Acorn',
   'Alder',
-  'Alma',
+  'Amos',
   'Arden',
-  'Aster',
-  'Basil',
-  'Bea',
-  'Bertie',
+  'Ash',
+  'Aspen',
+  'Badger',
+  'Barley',
+  'Bear',
   'Birch',
+  'Bison',
+  'Boulder',
+  'Bracken',
   'Bram',
+  'Bramble',
   'Briar',
-  'Brook',
-  'Calla',
-  'Cass',
+  'Burr',
   'Cedar',
-  'Clem',
+  'Chestnut',
+  'Cinder',
+  'Clove',
   'Clover',
-  'Cora',
+  'Copper',
   'Cove',
-  'Dahlia',
-  'Daisy',
+  'Cypress',
   'Dell',
-  'Eden',
-  'Effie',
   'Elm',
-  'Elsie',
   'Ember',
-  'Etta',
   'Ezra',
-  'Faye',
+  'Felix',
   'Fern',
   'Finch',
-  'Flora',
-  'Gus',
-  'Gwen',
-  'Hattie',
-  'Hazel',
-  'Heath',
-  'Holly',
-  'Ines',
-  'Iris',
-  'Ivy',
+  'Flint',
+  'Ford',
+  'Granite',
+  'Hawthorn',
+  'Hickory',
   'Jasper',
-  'Jay',
-  'June',
   'Juniper',
+  'Kestrel',
   'Kip',
   'Kit',
+  'Larch',
   'Lark',
-  'Laurel',
-  'Lena',
+  'Levi',
   'Linden',
-  'Lottie',
-  'Lou',
-  'Mabel',
-  'Mae',
   'Maple',
-  'Marigold',
-  'Meadow',
-  'Mira',
+  'Milo',
+  'Moose',
   'Moss',
-  'Nell',
-  'Nora',
-  'Olive',
+  'Oak',
   'Ollie',
-  'Opal',
   'Otto',
-  'Pearl',
-  'Penn',
-  'Percy',
+  'Pine',
   'Pip',
-  'Poppy',
   'Quill',
-  'Quinn',
   'Reed',
-  'Robin',
-  'Rosa',
-  'Rosie',
+  'Ridge',
+  'Rook',
   'Rowan',
-  'Ruby',
-  'Sadie',
+  'Rusty',
+  'Rye',
   'Sage',
-  'Sorrel',
+  'Scout',
+  'Slate',
   'Sparrow',
-  'Tansy',
+  'Spruce',
   'Teal',
-  'Tess',
-  'Thea',
+  'Tern',
+  'Thatch',
   'Theo',
   'Thistle',
-  'Tilly',
-  'Vera',
-  'Wally',
-  'Willa',
+  'Tiller',
+  'Timber',
+  'Walnut',
   'Willow',
-  'Winnie',
-  'Wren',
   'Yarrow',
-  'Zinnia',
 ]
 
 // FNV-1a over the eid: where in the list an entity starts looking.
@@ -172,6 +151,34 @@ export let given = (said: string): string => {
   if (!name) throw new CallError('arguments', 'Give it a name.')
   if (name.length > LONGEST) {
     throw new CallError('arguments', `A name is up to ${LONGEST} characters.`)
+  }
+  return name
+}
+
+/** A name `said` for a new persona, as {@link given} takes it, refused when
+ * one of `others` (those its people already reach) goes by it, in any case.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { assertThrows } from '@std/assert'
+ * import { named, pick } from './name.ts'
+ * equal(named(' Menno ', [{ eid: 'a', name: 'Cedar' }]), 'Menno')
+ * assertThrows(() => named('cedar', [{ eid: 'a', name: 'Cedar' }]), Error)
+ * assertThrows(() => named(pick('a'), [{ eid: 'a' }]), Error)
+ * ```
+ */
+export let named = (
+  said: string,
+  others: { eid: string; name?: string | null }[],
+): string => {
+  let name = given(said)
+  let fold = name.toLowerCase()
+  if (others.some((o) => (o.name || pick(o.eid)).toLowerCase() == fold)) {
+    throw new CallError(
+      'conflict',
+      `Another of their Operators is called ${name}. Give another name, or ` +
+        'leave it out and one is picked.',
+    )
   }
   return name
 }

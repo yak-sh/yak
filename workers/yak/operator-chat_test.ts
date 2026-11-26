@@ -10,7 +10,12 @@ import { checked } from './operator-persona.ts'
 import type { Settings } from './operator-settings.ts'
 import { CallError } from '@yaks/tools/errors'
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { type Item, ModelError } from '@yaks/model'
 import { directoryOf } from './directory.ts'
@@ -818,6 +823,21 @@ test('a new Operator is given a name, clear of the Operators its person already 
   assertEquals(space.operator, pick(eid))
   for (let s of [orchard, pond]) assertEquals(NAMES.includes(s.operator), true)
   assertEquals(new Set([space, orchard, pond].map((s) => s.operator)).size, 3)
+})
+
+let grove = (await dir.at(
+  await dir.mint(person, 'grove', 'Grove', headers, { operator: ' Menno ' }),
+))!
+test("a new Operator wears the name it was given, unless another of its people's goes by it", async () => {
+  assertEquals(grove.operator, 'Menno')
+  await assertRejects(
+    () =>
+      dir.mint(person, 'grove2', 'Grove', headers, {
+        operator: orchard.operator.toLowerCase(),
+      }),
+    CallError,
+    `called ${orchard.operator.toLowerCase()}`,
+  )
 })
 
 // What the settings page's Save bar writes through its door (reach-door.ts):
