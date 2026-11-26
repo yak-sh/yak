@@ -80,8 +80,8 @@ export let roomSocket = async (
     if (frame && upstream.readyState === 1) upstream.send(frame)
   })
   let close = () => {
-    if (socket.readyState === 1) socket.close?.()
-    if (upstream.readyState === 1) upstream.close()
+    if (socket.readyState < WebSocket.CLOSED) socket.close?.(1000)
+    if (upstream.readyState < WebSocket.CLOSED) upstream.close(1000)
   }
   upstream.addEventListener('close', close)
   socket.addEventListener('close', close)
