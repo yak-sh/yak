@@ -76,7 +76,7 @@ let stamped = <N>(
   s: unknown,
   _month?: 'long' | 'short',
 ) => saying(h, stampOf(s), (ctx.writers ?? new Map()) as Writers) || 'never'
-// What a space pays: a paid plan, or the Personal plan given (a comp).
+// What a space pays: a paid plan, or the Plus plan given (a comp).
 let plan = (b: Record<string, unknown>) =>
   COMPED.includes(str((b.space as Comp)?.slug))
     ? `${NAMES.plus}, comped`

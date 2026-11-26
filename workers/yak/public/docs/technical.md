@@ -128,15 +128,15 @@ free plan allows five apps, 1 GB of app data, and 100 emails a month. A person
 owns one free space, and every other space they make is on a paid plan; a space
 somebody invited you into does not count toward yours, and spaces that were free
 before stay free. Each space has its own monthly AI budget. The Free plan
-includes limited AI use per month, and the allowance can change. The Personal
-plan includes $8 of AI use per month, unlimited apps, 10 GB of app data, 50 GB
-of photos and files, and 2,500 emails a month. The Pro plan includes $35 of AI
-use per month, 50 GB of app data, 250 GB of photos and files, and 10,000 emails
-a month. Visitors are never capped on any plan: an app is served to however many
+includes limited AI use per month, and the allowance can change. The Plus plan
+includes $8 of AI use per month, unlimited apps, 10 GB of app data, 50 GB of
+photos and files, and 2,500 emails a month. The Pro plan includes $35 of AI use
+per month, 50 GB of app data, 250 GB of photos and files, and 10,000 emails a
+month. Visitors are never capped on any plan: an app is served to however many
 people come. The hourly meter estimates each space's request units (an ordinary
 request uses one unit; incoming WebSocket messages use one unit per 20 messages,
 as Cloudflare bills them), and your assistant is told when a month passes 50,000
-on Free, 1,000,000 on the Personal plan or 5,000,000 on the Pro plan. Operations
+on Free, 1,000,000 on the Plus plan or 5,000,000 on the Pro plan. Operations
 that exceed a limit are refused, but existing apps and data are not deleted.
 Your assistant receives a notice when usage reaches 80% of a limit.
 
@@ -144,8 +144,8 @@ Every page an app serves on the free plan wears a small "Made with yaks.app"
 badge in a corner. On a published app it opens the app's own page on yaks.app,
 where a visitor can open the app and make their own copy; on any other app it
 opens yaks.app. The platform adds it as the page is served, so the app's files
-never change, and it keeps clear of the app's buttons and fields. The Personal
-plan removes it.
+never change, and it keeps clear of the app's buttons and fields. The Plus plan
+removes it.
 
 A member who may change an app's files (an owner or editor of its space) also
 sees a small pencil in the bottom-right corner of its pages, above the badge
@@ -164,8 +164,8 @@ such as Claude or ChatGPT uses its own subscription to build and change apps.
 
 Building credit is spent before the monthly AI budget and never expires. The
 first space gets a one-time $20 bonus at sign-up. A first paid subscription to
-the Personal plan adds $100 to the space it pays for. The first time a space
-takes the Pro plan, it gets $200.
+the Plus plan adds $100 to the space it pays for. The first time a space takes
+the Pro plan, it gets $200.
 
 Each person has a sandbox in each space: a private Linux container where the
 Operator or your agent runs commands and keeps files while it works, to run a
@@ -177,12 +177,11 @@ and Bun. Playwright 1.65.1 and headless Chromium are also installed. Anything
 else installs for that session with `apt` or a package manager; the container's
 network reaches the whole internet. One build gets **10 minutes** of container
 time; past that the build says so and keeps whatever it has already shipped. A
-month holds **1 hour** of compute time on Free and **10 hours** on the Personal
+month holds **1 hour** of compute time on Free and **10 hours** on the Plus
 plan, the container's and the compiling at `app_deploy` together, and one person
-has one container awake at a time on Free, two on the Personal plan. The
-container goes to sleep after one minute of inactivity once its processes have
-finished. The platform snapshots changed files and restores them on its next
-wake.
+has one container awake at a time on Free, two on the Plus plan. The container
+goes to sleep after one minute of inactivity once its processes have finished.
+The platform snapshots changed files and restores them on its next wake.
 
 [The pricing page](/pricing) has both plans in full.
 

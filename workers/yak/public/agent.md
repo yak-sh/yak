@@ -102,7 +102,7 @@ the web, not in the phone app:
 
 Building needs ChatGPT Business, Enterprise or Edu, with developer mode turned
 on by an admin. On Pro the connector can only read, so it can't build, and Free
-and Personal can't add it. If their plan can't build, tell them Claude works on
+and Plus can't add it. If their plan can't build, tell them Claude works on
 every plan, and give them this page's link to paste there.
 
 ## Grok

@@ -167,10 +167,10 @@ downloads its template (`npm create astro`), any registry and any API all work.
 ## Limits
 
 Your sandbox is private to you in each space, and a space can have one sandbox
-awake at a time on the free plan, two on the Personal plan and three on the Pro
+awake at a time on the free plan, two on the Plus plan and three on the Pro
 plan. The monthly compute time (the sandbox's, and compiling TypeScript and npm
 packages at `app_deploy`) is 1 hour for each free space, 10 hours for each space
-on the Personal plan and 50 hours on the Pro plan.
+on the Plus plan and 50 hours on the Pro plan.
 
 ## The `yak` CLI and `$YAKS_TOKEN`
 

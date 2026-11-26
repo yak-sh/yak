@@ -163,7 +163,7 @@ test('a plan change reaches the Operator in turn context', async () => {
   assertEquals(after.instructions, before.instructions)
   assertStringIncludes(
     promptOf(after),
-    'home is on the Personal plan: as many apps as it likes, 2,500 emails',
+    'home is on the Plus plan: as many apps as it likes, 2,500 emails',
   )
 })
 

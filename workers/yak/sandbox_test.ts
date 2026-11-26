@@ -916,10 +916,10 @@ test('a free space holds one sandbox awake, and each space counts its own', asyn
   assertEquals((no as { code?: string }).code, 'limit')
   assertStringIncludes(
     no.message,
-    'Putting ada on the Personal plan allows more',
+    'Putting ada on the Plus plan allows more',
   )
   await tool('sandbox_shell').run(bob, { space: 'ada2', command: 'ls' })
-  // On the Personal plan, two; and once a place has lapsed, another wakes.
+  // On the Plus plan, two; and once a place has lapsed, another wakes.
   let now = Date.now()
   await awake(env, { ...space, tier: 'plus' }, BOB, now)
   await awake(env, space, ADA, now + (HELD + 1) * 1000)

@@ -1378,7 +1378,7 @@ export type Track = {
   status?: string
 }
 
-/** Attaches `hostname` at the kernel's stand-in for Cloudflare, as a Personal plan
+/** Attaches `hostname` at the kernel's stand-in for Cloudflare, as a Plus plan
  * space's domain_attach would have. */
 export let attach = async (k: Pick<Kernel, 'cloudflare'>, hostname: string) => {
   let made = await fetch(k.cloudflare, {
@@ -1455,7 +1455,7 @@ export let apexPost =
 export let tagged = (space: string) => ({ space, apex: apex() })
 
 /**
- * A space on the Personal plan for a test whose subject is what the plan allows, not how it
+ * A space on the Plus plan for a test whose subject is what the plan allows, not how it
  * is bought: a signed `subscription.updated` carrying an active subscription
  * (@yaks/stripe/testing `fakeSub`) Stripe never held. Nothing is asked of the
  * sandbox, so nothing is left in it.

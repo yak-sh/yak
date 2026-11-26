@@ -114,7 +114,7 @@ let hostOf = (view: PaymentView): Host => ({ APEX: view.apex })
 // The meter's prices are whole US dollars, as on the public pricing page.
 let plusPrice = () => `$${count(PRICE.plus)}`
 let plusOffer = () =>
-  `The Personal plan includes ${
+  `The Plus plan includes ${
     aiUse('plus')
   }. If it is your first paid subscription, it adds $${SUBSCRIBED} of building credit.`
 
@@ -216,7 +216,7 @@ let planCard = (view: PaymentView, plan: PlanCard, payer?: Payer) => {
     : plan.invoice && open
     ? byInvoice(plan.invoice)
     : null
-  // What the Pro plan adds, for every space not on it yet: a paying Personal
+  // What the Pro plan adds, for every space not on it yet: a paying Plus
   // space moves to it from the billing portal.
   let more = tier == 'pro' ? null : h(
     Form.Hint,
@@ -541,7 +541,7 @@ let sellingPage = (view: PaymentView, rows: PaymentRows) => {
     // scroll back up.
     ready ? null : start(
       !paying
-        ? 'Start selling on the Personal plan'
+        ? 'Start selling on the Plus plan'
         : at.state == 'setup'
         ? `Finish setting up ${by}`
         : 'Start selling',
@@ -560,13 +560,13 @@ let leadOf = (at: Selling, paying: boolean) => {
       : at.state == 'ready'
       ? `Payments go to your ${by} account, and ${by} pays them into your bank. You manage refunds and disputes in your ${by} dashboard.`
       : !paying && at.state != 'none'
-      ? `Your ${by} account is connected. Upgrade to the Personal plan to take new payments.`
+      ? `Your ${by} account is connected. Upgrade to the Plus plan to take new payments.`
       : at.state == 'setup'
       ? `Finish connecting your ${by} account to start taking payments.`
       : `Your apps can take card payments, and ${by} pays the money into your bank account.${
         paying
           ? ''
-          : ` Selling comes with the Personal plan, ${plusPrice()} a month.`
+          : ` Selling comes with the Plus plan, ${plusPrice()} a month.`
       }`,
   )
 }
@@ -685,7 +685,7 @@ let costing = (
       Rows,
       { as: 'ul' },
       paying ? null : fact(
-        `The Personal plan: ${plusPrice()} a month`,
+        `The Plus plan: ${plusPrice()} a month`,
         `Selling comes with the ${NAMES.plus} and ${NAMES.pro} plans.`,
       ),
       fact(`${by}: ${card} a payment`, [

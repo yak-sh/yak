@@ -646,7 +646,7 @@ export let pointDomain = async (
   if (aim && aim != host.serves && !included(space)) {
     throw new CallError(
       'not_included',
-      'Attaching a domain comes with the Personal plan.',
+      'Attaching a domain comes with the Plus plan.',
     )
   }
   if (aim != host.serves) {

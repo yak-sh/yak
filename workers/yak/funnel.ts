@@ -174,7 +174,7 @@ export let CTAS = [
   { name: 'examples', say: 'See examples' },
   { name: 'walk', say: "Start free, beside a demo's walkthrough" },
   { name: 'walk-ask', say: "Ask for your own change to a demo's step" },
-  { name: 'plus', say: "The Personal plan's Get Started" },
+  { name: 'plus', say: "The Plus plan's Get Started" },
   { name: 'pro', say: "The Pro plan's Get Started" },
   { name: 'join', say: 'Start, in the closing card' },
 ] as const

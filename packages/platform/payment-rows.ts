@@ -38,7 +38,7 @@ export type PlanCard = {
   tier: Tier
   ends: string
   known: boolean
-  /** the day the Personal plan given free runs through, while it does */
+  /** the day the Plus plan given free runs through, while it does */
   free?: string
   sold: Record<Want['tier'], Per[]>
   /** the days an invoice gives to pay, where the yearly plan may be paid by

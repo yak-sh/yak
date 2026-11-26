@@ -99,7 +99,7 @@ export type Settings = {
       bug: string,
       said?: Explanation,
     ) => Promise<unknown>
-    /** The platform's trials of the Personal plan, in Markdown, for the
+    /** The platform's trials of the Plus plan, in Markdown, for the
      * day's digest (workers/yak admin.ts `trialsSince`). */
     trials?: (now: number) => Promise<string[]>
   }

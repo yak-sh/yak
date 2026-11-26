@@ -125,13 +125,13 @@ test('an invoice goes to an email address, made out to a name of reasonable leng
   )
 })
 
-// --- the Personal plan given free --------------------------------------------
+// --- the Plus plan given free --------------------------------------------
 
 let NOW = Date.parse('2026-11-05T15:00:00.000Z')
 let COMP = '2026-12-05T15:00:00.000Z'
 let paying = plan()
 
-test('a space given the Personal plan free is on it through that day, unless Stripe bills it', () => {
+test('a space given the Plus plan free is on it through that day, unless Stripe bills it', () => {
   assertEquals(tierOf('ana', null, COMP, NOW), 'plus')
   assertEquals(tierOf('ana', 'free', COMP, Date.parse(COMP) + 1), 'free')
   assertEquals(tierOf('ana', 'pro', COMP, NOW), 'pro')
@@ -144,7 +144,7 @@ test('a space given the Personal plan free is on it through that day, unless Str
   assertEquals(freeThrough({ plan: null }, 'plus', NOW), null)
 })
 
-test('subscribing during a trial keeps its days left on the Personal plan, never on the Pro plan', () => {
+test('subscribing during a trial keeps its days left on the Plus plan, never on the Pro plan', () => {
   let trial = begun(NOW)
   let day = 86_400_000
   assertEquals(

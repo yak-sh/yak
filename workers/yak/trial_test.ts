@@ -1,4 +1,4 @@
-// A trial of the Personal plan (D-476), through the whole kernel: a space
+// A trial of the Plus plan (D-476), through the whole kernel: a space
 // whose trial is over builds nothing new, while one whose trial waits for its
 // owner builds as it always did.
 import { test } from '@yaks/testing'

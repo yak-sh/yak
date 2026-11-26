@@ -459,12 +459,12 @@ test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
   let said = gauged(space({ bytes: PLUS.bytes }, 'plus'), 51, NOW)
   assertStringIncludes(said, '10 GB of 10 GB of app data')
   assertStringIncludes(said, 'at the limit for app data')
-  // The Personal plan sets no ceiling on apps, so the line counts none.
+  // The Plus plan sets no ceiling on apps, so the line counts none.
   assert(!/ of [\d,]+ apps/.test(said), said)
   assertEquals(JSON.parse(JSON.stringify(PLUS)).apps, null)
   assertStringIncludes(
     refusal(space({}, 'plus'), 'bytes'),
-    'the Personal plan, which is 10 GB',
+    'the Plus plan, which is 10 GB',
   )
 })
 
@@ -589,7 +589,7 @@ test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped 
   }, { 'x-yak-role': 'owner' })
   let jeff = (await dir.space('jeff'))!
   let notes = (await dir.app(jeff, 'notes'))!
-  // The space as the last hourly reading left it, on the Personal plan.
+  // The space as the last hourly reading left it, on the Plus plan.
   let plus = (bytes: number) => ({
     ...jeff,
     tier: 'plus' as Tier,
@@ -600,13 +600,13 @@ test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped 
   assertEquals(await full(env, plus(PLUS.bytes), 0, NOW), '')
   assertStringIncludes(
     await full(env, plus(PLUS.bytes), 1, NOW),
-    'the Personal plan, which is 10 GB',
+    'the Plus plan, which is 10 GB',
   )
   // Near the ceiling, what the store told since the reading is what counts,
   // and the refusal says which app holds it.
   await weighed(env, notes.eid, PLUS.bytes + 1)
   let said = await full(env, plus(PLUS.bytes * 0.9), 0, NOW)
-  assertStringIncludes(said, 'the Personal plan, which is 10 GB of app data')
+  assertStringIncludes(said, 'the Plus plan, which is 10 GB of app data')
   assertStringIncludes(said, 'holds 10 GB (notes 10 GB)')
   assertEquals(
     await full(env, { ...plus(PLUS.bytes), slug: 'yourname' }, PLUS.bytes, NOW),
@@ -894,7 +894,7 @@ test("each space answers to its own allowances and budget, never its owner's oth
   assertEquals(refusedSpend(b, 'emails', {}, 0, NOW), null)
   let no = refusedSpend(full, 'emails', {}, 0, NOW)!
   assert(!no.includes('shared'), no)
-  assertStringIncludes(no, 'Putting full on the Personal plan allows more')
+  assertStringIncludes(no, 'Putting full on the Plus plan allows more')
   // Pending compute time is added to the reading.
   assertEquals(refusedSpend(b, 'seconds', {}, 599, NOW), null)
   assert(refusedSpend(b, 'seconds', {}, 600, NOW))
@@ -902,7 +902,7 @@ test("each space answers to its own allowances and budget, never its owner's oth
   assertEquals(refusedSpend(a, 'models', {}, FREE_MONTH - 0.25, NOW), null)
   assert(refusedSpend(a, 'models', {}, FREE_MONTH - 0.125, NOW))
   assert(refusedSpend(full, 'realtime', {}, 0, NOW))
-  // The Personal plan space is held to its own plan's figures.
+  // The Plus plan space is held to its own plan's figures.
   assert(refusedSpend(paid, 'models', {}, 0.075, NOW))
   assertEquals(refusedSpend(paid, 'emails', {}, 0, NOW), null)
   // A budget the platform set stands in place of the plan's.

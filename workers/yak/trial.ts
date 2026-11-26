@@ -1,5 +1,5 @@
 // The trial sweep (D-476): each hour, every space owed a trial of the
-// Personal plan is given one, and every trial is kept: its clock stopped
+// Plus plan is given one, and every trial is kept: its clock stopped
 // while its owners are away and started again when they are back, and the
 // note it is owed sent by the space's Operator to its owners' own addresses.
 // What a trial is and when a note is due is @yaks/platform/trial's; this

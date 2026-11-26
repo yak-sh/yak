@@ -81,10 +81,10 @@ export type Metered = {
   // What this space pays (D-32751), a comp or a trial read as the plan it
   // gives (`tierOf`). Null for a space on no plan.
   tier: Tier | null
-  // Its trial of the Personal plan (./trial.ts), where it was given one: a
+  // Its trial of the Plus plan (./trial.ts), where it was given one: a
   // person's first space. Null on every other.
   trial?: Trial | null
-  // Whether that trial is all that gives it the Personal plan now: while it
+  // Whether that trial is all that gives it the Plus plan now: while it
   // does, the trial's AI use is the starter alone (`budgetOf`).
   trialing?: boolean
   // Its AI credit, where its owner ever set a cap or bought any; null on
@@ -176,7 +176,7 @@ export let meterOf = (r: MeteredRow): Meter | null =>
 export let trialRow = (r: Pick<MeteredRow, 'plan_trial'>): Trial | null =>
   r.plan_trial?.at && r.plan_trial.through ? r.plan_trial as Trial : null
 
-/** A space's row as its meter reads it. A trial gives the Personal plan as
+/** A space's row as its meter reads it. A trial gives the Plus plan as
  * a comped month does, and while nothing else gives it, the space is
  * `trialing`. */
 export let meteredOf = (r: MeteredRow, now: number = Date.now()): Metered => {
@@ -280,7 +280,7 @@ export let used = (m: Meter, what: Spend): number =>
     : m[what]
 
 /** A space on the free tier: not on a paid plan, and not comped
- * (`tierOf` reads a comp as the Personal plan). */
+ * (`tierOf` reads a comp as the Plus plan). */
 export let free = (space: Pick<Metered, 'tier'>): boolean => !paid(space.tier)
 
 /** Whether a space draws from the platform's Free plan allowance. */

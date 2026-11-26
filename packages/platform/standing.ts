@@ -184,7 +184,7 @@ export let trialSaid = (
  *
  * equal(
  *   planned({ slug: 'yourname', tier: 'plus' }),
- *   'yourname is on the Personal plan: as many apps as it likes, 2,500 emails and ' +
+ *   'yourname is on the Plus plan: as many apps as it likes, 2,500 emails and ' +
  *     '36,000 compute seconds a month.',
  * )
  * ```
@@ -228,7 +228,7 @@ export let planned = (
  *     new Date('2026-11-24'),
  *     { name: 'Ada', email: 'ada@example.com' },
  *   ),
- *   'ada is on the Personal plan, ending 2026-12-03, billed to Ada <ada@example.com>.',
+ *   'ada is on the Plus plan, ending 2026-12-03, billed to Ada <ada@example.com>.',
  * )
  * ```
  */
@@ -516,7 +516,7 @@ export let aiUse = (tier: 'plus' | 'pro'): string =>
   `$${BUDGET[tier]} of AI use per month`
 
 /**
- * What the Pro plan gives beyond the Personal plan, AI use first, from the
+ * What the Pro plan gives beyond the Plus plan, AI use first, from the
  * numbers it holds.
  *
  * ```ts

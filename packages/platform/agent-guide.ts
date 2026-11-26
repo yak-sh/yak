@@ -217,11 +217,11 @@ export let clients = (env: Host): Client[] => [
     // Who can, before anyone starts: OpenAI's help page on developer mode
     // (help.openai.com/en/articles/12584461) puts full MCP, writes included,
     // in beta for Business, Enterprise and Edu, turned on by an admin; Pro
-    // connects with read and fetch only; Free and Personal go unnamed; and MCP
+    // connects with read and fetch only; Free and Plus go unnamed; and MCP
     // apps are web only.
     intro: 'On ChatGPT Business, Enterprise or Edu, you can add yaks.app ' +
       'and build with it once an admin turns it on. On Pro it connects but ' +
-      'can only read, so it can’t build. Free and Personal can’t add it this ' +
+      'can only read, so it can’t build. Free and Plus can’t add it this ' +
       'way today, but Claude works on any plan. It works on the web, not in ' +
       'the phone app.',
     steps: [

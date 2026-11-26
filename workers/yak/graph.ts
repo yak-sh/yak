@@ -4731,7 +4731,7 @@ export class Store extends Durable {
   // Nothing outside this object can see how much it holds. Tell the directory
   // on the first write, then only after a MiB of movement: 0.1% of the free
   // space's 1 GiB allowance (at most 0.5% across its five apps), and 0.01%
-  // of the Personal plan's 10 GiB. No timer or alarm is owed by an idle store.
+  // of the Plus plan's 10 GiB. No timer or alarm is owed by an idle store.
   // One report per turn, with no catch-up loop: writes arriving while it is
   // in flight are folded into the next qualifying write. A failed report
   // likewise waits for a write, never retries on its own.

@@ -1,6 +1,6 @@
 // The month an invite gives (reward.ts), through the directory's own effect
 // (facets/directory-effects.ts) over a directory in memory, with Stripe
-// stood in by `fetch`: a free space is given the Personal plan free, a month a
+// stood in by `fetch`: a free space is given the Plus plan free, a month a
 // friend, and a space Stripe bills has its next charge moved a month later.
 import { clock, equal, test } from '@yaks/testing'
 import { stub } from '@std/testing/mock'
@@ -123,7 +123,7 @@ let credited = [
   await credit(dir, gus.person, 'nobody'),
 ]
 
-test("each friend who builds their first app gives the inviter's free space one more month of the Personal plan", () => {
+test("each friend who builds their first app gives the inviter's free space one more month of the Plus plan", () => {
   equal(free?.comped, monthOn(monthOn(now)))
   equal(free?.tier, 'plus')
   equal(

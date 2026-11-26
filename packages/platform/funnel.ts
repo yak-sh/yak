@@ -99,7 +99,7 @@ export type Funnel = {
    * line "Website by yaks.app", by the space it was on, busiest first. A
    * Worker older than these has none. */
   badges?: { space: string; n: number }[]
-  /** Every trial of the Personal plan (./trial.ts `tally`), read from the
+  /** Every trial of the Plus plan (./trial.ts `tally`), read from the
    * spaces' own rows. A Worker older than these has none. */
   trials?: Tally
 }

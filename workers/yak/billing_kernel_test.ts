@@ -225,7 +225,7 @@ test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
 })
 
 test('the billing doors say no before they say anything else', async () => {
-  // The Personal plan is on sale, so its Billing page offers it.
+  // The Plus plan is on sale, so its Billing page offers it.
   let k = await fresh({
     STRIPE_KEY: 'sk_test_probe',
     STRIPE_PRICE: 'price_plus',
@@ -262,8 +262,8 @@ test('the billing doors say no before they say anything else', async () => {
     let card = await mine.text()
     assert(card.includes('>Plan<'), 'the card is on the Billing page')
     assert(
-      card.includes('Get the Personal plan'),
-      'and it offers the Personal plan to a free space',
+      card.includes('Get the Plus plan'),
+      'and it offers the Plus plan to a free space',
     )
     assert(
       !card.includes('Manage billing'),
@@ -290,8 +290,8 @@ test('the billing doors say no before they say anything else', async () => {
     assertMatch(to, /^\/manage\/[a-z0-9-]+\/billing$/)
     assertEquals(landed.status, 200)
     assert(
-      (await landed.text()).includes('Get the Personal plan'),
-      'the Billing page offers the Personal plan',
+      (await landed.text()).includes('Get the Plus plan'),
+      'the Billing page offers the Plus plan',
     )
 
     // And the informational page is there for anybody, with no way to buy on

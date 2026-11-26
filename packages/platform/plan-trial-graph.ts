@@ -1,5 +1,5 @@
 // The directory's trial sweep, fired by its wake row: the platform's job
-// `plan_trial` (./lent.ts `job`): trials of the Personal plan begun and kept
+// `plan_trial` (./lent.ts `job`): trials of the Plus plan begun and kept
 // (D-476).
 import type { Plugin } from '@yaks/graph'
 import type { Options } from './lent.ts'

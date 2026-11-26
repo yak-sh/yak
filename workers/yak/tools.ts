@@ -3809,7 +3809,7 @@ let noteOf = (v: unknown) => {
  * their own allowance, else one person's (@yaks/platform/plans `freeSpaces`,
  * `SPACES`, T-131887). A space in the trash is on
  * its way out, so it does not count; one somebody else made and invited them
- * into is not theirs, and one on the Personal plan is paid for on its own. */
+ * into is not theirs, and one on the Plus plan is paid for on its own. */
 let roomFor = async (ctx: Ctx) => {
   let { held, allowed, canCreate } = await ctx.dir.spaceRoom(ctx.person)
   if (!canCreate) {
@@ -3885,7 +3885,7 @@ let sells = (space: Space, cut: string) => {
     ? `It takes payments, ${kept}.`
     : state == 'setup'
     ? `Selling waits on the owner finishing at Stripe (space_sell gives the link again); then ${kept}.`
-    : `It takes no payments yet (space_sell sets that up on the Personal plan; ${kept}).`
+    : `It takes no payments yet (space_sell sets that up on the Plus plan; ${kept}).`
 }
 
 /** An app's place among published apps: what it offers others, or what it
@@ -7401,7 +7401,7 @@ let OURS: Row[] = [
             : `No names found for ${query}.`) +
           '\n\n' +
           `Search and manage domains at ${settings}. ` +
-          'Domains come with the Personal plan. You pay the registrar’s price ' +
+          'Domains come with the Plus plan. You pay the registrar’s price ' +
           'for the first year, with no markup. ' + DOMAIN_RENEWAL +
           ' The space owns the domain and can attach it to an app at any time.',
         space,
@@ -7444,7 +7444,7 @@ let OURS: Row[] = [
           type: 'number',
           description:
             'what a copy costs, in dollars to the cent (40, or 4.99), from ' +
-            'a space on the Personal plan whose payment account is ready ' +
+            'a space on the Plus plan whose payment account is ready ' +
             '(space_sell). Kept when publishing again without one',
         },
         interval: {

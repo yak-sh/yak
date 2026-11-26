@@ -160,7 +160,7 @@ let courtesyNotice = (
       day(expires, 'UTC')
     }, is still covered. ` +
       'After that, it renews at the registrar’s price with no markup. ' +
-      'The Personal plan covers up to $12 a year toward one domain renewal when you pay yearly.',
+      'The Plus plan covers up to $12 a year toward one domain renewal when you pay yearly.',
   )
 
 export let prepareRenewal = async (

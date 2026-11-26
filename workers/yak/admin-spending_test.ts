@@ -362,11 +362,11 @@ let plans = new Map(
 test('spending shows effective plan names and distinguishes grants from payment', () => {
   assertEquals(plansPage.status, 200)
   assertEquals(plans.get('clerk')?.textContent, 'Free')
-  assertEquals(plans.get('paying-plus')?.textContent, 'Personal')
+  assertEquals(plans.get('paying-plus')?.textContent, 'Plus')
   assertEquals(plans.get('paying-pro')?.textContent, 'Pro')
   assertEquals(plans.get('paying-plus')?.getAttribute('title'), null)
   for (let slug of ['granted', 'yourname']) {
-    assertEquals(plans.get(slug)?.textContent, 'Personal')
+    assertEquals(plans.get(slug)?.textContent, 'Plus')
     assertEquals(
       plans.get(slug)?.getAttribute('title'),
       `${slug == 'granted' ? 'Test space. ' : ''}Plan granted without payment`,

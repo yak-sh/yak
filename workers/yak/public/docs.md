@@ -399,7 +399,7 @@ a page, opening dates and a capacity, and what a sign-up sets off.
 
 ## Payments
 
-A seller on the Personal plan connects a Stripe account to their space once, and
+A seller on the Plus plan connects a Stripe account to their space once, and
 after that any app in the space posts a cart to `./api/pay/checkout` and sends
 the buyer to the page it returns. A card number never reaches the app, and a
 paid order is written into the app's store as an `order` row.
@@ -413,8 +413,7 @@ A space, or one app of it, can also answer at a domain the person already owns,
 with the `.yaks.app` address still working. `domain_attach` gives the CNAME
 pointing at `origin.saas.yaks.app` and the ownership TXT record to add. The
 domain serves only after ownership is verified and Cloudflare is ready;
-`domain_status` says what is still needed. Custom domains need the Personal
-plan.
+`domain_status` says what is still needed. Custom domains need the Plus plan.
 
 Deeper: <https://yaks.app/docs/domains.md> — the records to add and where to
 type it at each registrar, the apex, moving DNS to Cloudflare, and what each

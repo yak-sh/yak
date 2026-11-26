@@ -1,7 +1,7 @@
 // The month an invite gives (D-136811 'Invites', T-138778). Each person who
 // signs up through someone's invite (referral.ts `credit`) and builds their
 // first app gives the person who invited them one more free month of the
-// Personal plan, on the space that is theirs (directory.ts `own`), months
+// Plus plan, on the space that is theirs (directory.ts `own`), months
 // stacking. Jeff: "free month of paid *per* invitee that signs up and builds
 // an app".
 //
@@ -9,8 +9,8 @@
 // payment provider bills, on a subscription paid as it should be, has its
 // next charge moved a month later (payments.ts, `postpone`), so the webhook
 // writes its plan as it writes every change (billing.ts). Any other space is
-// given the Personal plan free through a day (`comped{until}`), which
-// @yaks/platform/plans `tierOf` reads as the Personal plan and checkout carries
+// given the Plus plan free through a day (`comped{until}`), which
+// @yaks/platform/plans `tierOf` reads as the Plus plan and checkout carries
 // into a subscription as its trial. A subscription is made only through the
 // provider's checkout, so a free space cannot be handed one of its own.
 //

@@ -518,7 +518,7 @@ test('a person makes a space, opens it first, and signs out', async () => {
   let own = ada.email.split('@')[0]
   let mine = `https://yaks.app${chatPath(own)}`
   assertEquals(await opens(), mine)
-  // Her one free space on the Personal plan makes room for another.
+  // Her one free space on the Plus plan makes room for another.
   let [first] = await meta(k).query(`.space.slug=${own}`)
   await onPlus(k, first.entity.eid)
 

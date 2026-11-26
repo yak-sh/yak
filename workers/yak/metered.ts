@@ -33,7 +33,7 @@ export let charging = (
     if (no) throw new Undeliverable(no)
     let receipt = await sender.send(m)
     await counted({ STORE: bind.STORE }, space)
-    // A Personal plan space's first letter sets its subdomain up for mail.
+    // A Plus plan space's first letter sets its subdomain up for mail.
     await usedMail(bind, space)
     return receipt
   },

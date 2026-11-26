@@ -407,7 +407,7 @@ for the whole thing (${url(env, '/docs/home.md')}).
 Every app has a mailbox, at ${mailFrom('<space>', '<app>', env)} — ${
     mailFrom('<space>', null, env)
   } for the
-space's front page. A Personal plan space also has mail at its subdomain from its
+space's front page. A Plus plan space also has mail at its subdomain from its
 first letter: <app>@<space>.${apex(env)} is that app, and any other name there
 (clerk@) is the space's own mailbox. Mail in both directions lives in the store. Sending is one
 apply call — a list of bundles written in one transaction: the recipient as an
@@ -427,7 +427,7 @@ mailbox, which whatever mail tool they have connected answers and this one does
 not, and naming an app or its address is what makes it this one. Call guide with
 page mail for the whole thing (${url(env, '/docs/mail.md')}).
 
-A store on the Personal plan can take payments without keys or code. The seller connects
+A store on the Plus plan can take payments without keys or code. The seller connects
 an account of their own at the payment provider to their space once
 (space_sell, or the button on their space page). space_sell makes a new
 account; someone who already has one connects it from the Selling page instead,

@@ -198,8 +198,8 @@ test('the client by its bytes is kept for good, and an old name finds the client
 })
 
 // The badge is the platform's, decided as a page is served: the same file
-// wears it while its space is on the free plan and sheds it on the Personal plan.
-test('a free space wears the badge, and the Personal plan sheds it', async () => {
+// wears it while its space is on the free plan and sheds it on the Plus plan.
+test('a free space wears the badge, and the Plus plan sheds it', async () => {
   let space = (plan: object) =>
     spaceOf(
       {
@@ -217,7 +217,7 @@ test('a free space wears the badge, and the Personal plan sheds it', async () =>
       { badge: badgeOf(space(plan), cookbook, {}) },
     )).tags.includes('Made with ')
   assert(await badged({}), 'the free plan')
-  assert(!await badged({ plan: { tier: 'plus' } }), 'the Personal plan')
+  assert(!await badged({ plan: { tier: 'plus' } }), 'the Plus plan')
 })
 
 test('a paid space signs its pages "Website by yaks.app" only where its owner chose it', async () => {

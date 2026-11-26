@@ -121,7 +121,7 @@ export let inviteView = (
       h(
         'p',
         null,
-        `Each friend who signs up and builds their first app gives ${space} one more free month of the Personal plan.`,
+        `Each friend who signs up and builds their first app gives ${space} one more free month of the Plus plan.`,
         invite.joined
           ? ` ${invite.joined} ${
             invite.joined == 1 ? 'person has' : 'people have'

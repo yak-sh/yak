@@ -1347,7 +1347,7 @@ export let funnelDoor = async (req: Request, env: Env): Promise<Response> => {
     : refused(503, 'not_on', 'visitor counts are not switched on here')
 }
 
-/** Every trial of the Personal plan counted (@yaks/platform/trial `tally`),
+/** Every trial of the Plus plan counted (@yaks/platform/trial `tally`),
  * from the spaces' own rows, since `since`: admin_funnel's trials, and the
  * platform's daily digest (facets/kernel-worker.ts `Reruns`). */
 export let trialsSince = async (

@@ -238,7 +238,7 @@ export type Space = Metered & {
   plan: Plan | null
   domainChoice?: string | null
   domainCreditUsed?: UsedCredit | null
-  // The day the Personal plan given free runs through (`comped`, reward.ts),
+  // The day the Plus plan given free runs through (`comped`, reward.ts),
   // past or to come; absent or null where none was ever given.
   comped?: string | null
   comp?: Comp | null
@@ -247,7 +247,7 @@ export type Space = Metered & {
   // that has never asked to sell, which is almost all of them.
   seller: Seller | null
   // Where the space's own mail is beside `<space>@yaks.app`, and the provider
-  // carrying it: its subdomain, set up the first time a Personal plan space uses
+  // carrying it: its subdomain, set up the first time a Plus plan space uses
   // mail (space-mail.ts, D-415). Null until then.
   mail?: MailDomain | null
   // What the platform takes from a sale here, in basis points (sell.ts
@@ -4486,7 +4486,7 @@ export let directoryRows = (rows: {
     // Add the plan's building credit to what is left of the starter. A first
     // paid subscription marks its owners as subscribed on either tier, and
     // a space's trial (@yaks/platform/trial) as subscribed: what the trial
-    // turned into, counted once. Subscribing to the Personal plan while the
+    // turned into, counted once. Subscribing to the Plus plan while the
     // trial is still open gives SUBSCRIBED (D-476); a space with no trial
     // gives it on its owners' first paid subscription. The Pro plan gives
     // PRO_GRANT once per space, paid or comped. The guards make a repeated

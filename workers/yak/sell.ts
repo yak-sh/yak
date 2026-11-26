@@ -199,7 +199,7 @@ export let selling = (space: Space): 'none' | 'setup' | 'ready' =>
 export let refusedSell = (space: Space, env: Host = {}) =>
   paid(space.tier)
     ? null
-    : `Taking payments requires the Personal plan. Compare plans: ${
+    : `Taking payments requires the Plus plan. Compare plans: ${
       hostUrl(env, '/pricing')
     }`
 

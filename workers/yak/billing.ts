@@ -295,9 +295,9 @@ export let wanted = (form: FormData | null): Want => ({
 })
 
 /** The day the provider bills a space nothing through, while the platform
- * gives it the Personal plan free and it pays for nothing: a comped month
+ * gives it the Plus plan free and it pays for nothing: a comped month
  * (`comped`, one for each person its owner invited who built an app), and
- * for the Personal plan, its trial's days left (D-476), so subscribing early
+ * for the Plus plan, its trial's days left (D-476), so subscribing early
  * keeps them. The Pro plan is never a trial, so a trial adds nothing to it.
  * Null when neither is running. */
 export let freeThrough = (
@@ -390,7 +390,7 @@ export let checkout = async (
   }
   // One subscription per space: a second would charge twice. A change of
   // plan is the portal's, where the provider prorates it. A space on the
-  // Personal plan free, or trying it, subscribes for after it, the
+  // Plus plan free, or trying it, subscribes for after it, the
   // provider's trial lasting as long as the free time.
   let free = freeThrough(space, want.tier)
   if (awaiting(lent, space)) return json(409, 'awaiting', waitingOn(space))
@@ -1157,7 +1157,7 @@ let follow = async (
   return `${space.slug} is ${next.tier}`
 }
 
-// The building credit a plan gives (directory.ts `granting`): the Personal
+// The building credit a plan gives (directory.ts `granting`): the Plus
 // plan's to a space subscribing during its trial, or the Pro plan's once per
 // space, paid (here) or comped (comp.ts), and a trial's subscription marked,
 // which the funnel counts as the trial bought (D-476). A delivery that lost

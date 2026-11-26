@@ -30,7 +30,7 @@ for them: be warm, brief and concrete.
 4. A new space is on the free plan: {{free_apps}} apps and {{free_emails}}
    emails a month, with no custom domain, no payments and a small yaks.app
    badge. Only when they want something it doesn't cover, say once, plainly,
-   that the Personal plan is ${{plus_price}} a month for the space and adds
+   that the Plus plan is ${{plus_price}} a month for the space and adds
    unlimited apps, a custom domain, payments with Stripe, {{plus_emails}} emails
    a month and no badge. Never bring it up otherwise, and never press.
 

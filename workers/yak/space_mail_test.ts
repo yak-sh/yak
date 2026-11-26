@@ -1,4 +1,4 @@
-// A Personal plan space has mail at its subdomain from the first time it uses
+// A Plus plan space has mail at its subdomain from the first time it uses
 // mail (D-415): its first letter sets the mail domain up at the provider
 // (probe.ts `mailDomains`) and writes its records and the space's own AAAA
 // record in the zone (probe.ts `zoneRecords`). A free space keeps
@@ -36,7 +36,7 @@ let recordsOf = (name: string) =>
     `TXT send.${name} v=spf1 include:amazonses.com ~all`,
   ].sort()
 
-test("a Personal plan space's first letter sets its subdomain up for mail, and a free space's does not", async () => {
+test("a Plus plan space's first letter sets its subdomain up for mail, and a free space's does not", async () => {
   let k = await fresh()
   try {
     let plus = unique('plus'), free = unique('free'), sends = unique('sends')

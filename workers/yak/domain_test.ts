@@ -339,7 +339,7 @@ test('attaching a domain: what it refuses, and what it says', async () => {
     let agent = connector(k, cookie)
     let said = (p: Promise<string>) => p.then((t) => t, (e: Error) => e.message)
 
-    // A custom domain is the Personal plan's (@yaks/platform/plans `ceilings`). Free, the
+    // A custom domain is the Plus plan's (@yaks/platform/plans `ceilings`). Free, the
     // tool answers the upsell and nothing about a domain — which is an answer,
     // so the fields it has none of are not fields its reply is refused for
     // missing (tool_outputs.ts). The rest of the refusals are the ones a space
@@ -349,7 +349,7 @@ test('attaching a domain: what it refuses, and what it says', async () => {
         app: 'recipes',
         hostname: herbusiness103,
       })),
-      'Custom domains require the Personal plan',
+      'Custom domains require the Plus plan',
     )
     await onPlus(k, eids[jeff11])
 

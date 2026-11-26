@@ -17,7 +17,7 @@ guide:
 
 # Payments
 
-Apps on the Personal plan can accept payments through Stripe, the **payment
+Apps on the Plus plan can accept payments through Stripe, the **payment
 provider** yaks.app uses. The seller connects their own Stripe account to their
 space, once. After that any app in that space can post a cart to
 `./api/pay/checkout`, and that endpoint returns the URL of a Stripe payment page
@@ -61,9 +61,9 @@ only the platform can write an `order`'s properties.
 
 ## Connecting a Stripe account
 
-Connecting an account and creating new checkout sessions require the Personal
-plan. After a downgrade, existing orders, refunds and disputes still update, and
-the Stripe account stays connected. See <https://yaks.app/pricing> for plans.
+Connecting an account and creating new checkout sessions require the Plus plan.
+After a downgrade, existing orders, refunds and disputes still update, and the
+Stripe account stays connected. See <https://yaks.app/pricing> for plans.
 
 The seller connects once per space, not per app: with the `space_sell` tool, or
 the button on the space's Selling page. Either makes a new Stripe account and

@@ -869,7 +869,7 @@ test('free custom domains return plan settings before provisioning', async () =>
     })
     assertStringIncludes(
       result.text,
-      'Custom domains require the Personal plan',
+      'Custom domains require the Plus plan',
     )
     assertStringIncludes(
       result.text,
@@ -919,7 +919,7 @@ test('paid and comped domain attachment still provisions normally', async () => 
         hostname: slug + '.example.com',
       })
       assertStringIncludes(result.text, 'CNAME')
-      assertEquals(result.text.includes('require the Personal plan'), false)
+      assertEquals(result.text.includes('require the Plus plan'), false)
       assertEquals((await dir.serves(slug + '.example.com'))?.space.slug, slug)
     }
     assertEquals(provisions, 2)

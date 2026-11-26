@@ -1,6 +1,6 @@
 // Every allowance is the space's (D-131886), through the whole kernel: a
 // person owns one free space, a space somebody invited them into is not one
-// of them, a space on the Personal plan does not count, spaces that were free
+// of them, a space on the Plus plan does not count, spaces that were free
 // before the cap stay free, and a space that has sent its month's letters
 // stops only itself. usage_test.ts holds the readings at their seam; this
 // holds that the doors ask them.
@@ -95,7 +95,7 @@ test('one free space a person, and each space answers to its own allowances', as
     await send(old.slug, 'Its own hundredth')
     await letter(k, 'nobody@probe.invalid', 'Its own hundredth')
 
-    // Spaces on the Personal plan are paid for on their own, and make room.
+    // Spaces on the Plus plan are paid for on their own, and make room.
     await onPlus(k, first.eid)
     await onPlus(k, old.eid)
     assertEquals(await room(), capacity(1, 0, true))

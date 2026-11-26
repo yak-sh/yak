@@ -1,4 +1,4 @@
-// A space's trial of the Personal plan (D-476): thirty days of it, with no
+// A space's trial of the Plus plan (D-476): thirty days of it, with no
 // card, whose clock stops while its owners are away and starts again when
 // they come back. It is marks on the space, `plan_trial{at, through, paused,
 // resumed, subscribed, told}`, and whether it runs, waits or has ended is
@@ -110,12 +110,12 @@ export let trialOf = (
   }
 }
 
-/** Whether the trial still gives its space the Personal plan: running or
+/** Whether the trial still gives its space the Plus plan: running or
  * paused, read from its marks alone. */
 export let inTrial = (t: Trial | null | undefined, now: number): boolean =>
   !!t && trialOf(t, now).state != 'ended'
 
-/** The day the trial gives the Personal plan through, as of `now`: its end,
+/** The day the trial gives the Plus plan through, as of `now`: its end,
  * or for a paused one, its days left counted from now. None once ended.
  * It is the free time a subscription bought now starts after
  * (workers/yak billing.ts `freeThrough`). */
@@ -359,7 +359,7 @@ let dayWord = (n: number) => `${n} ${n == 1 ? 'day' : 'days'}`
  *   operator: 'Wren',
  *   left: 21,
  *   plans: 'https://yaks.app/manage/billing?space=ada',
- *   plan: 'the Personal plan',
+ *   plan: 'the Plus plan',
  *   price: 12,
  * }
  * equal(letter('paused', about).subject, 'Your trial is waiting for you')

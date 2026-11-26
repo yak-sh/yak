@@ -190,7 +190,7 @@ let lendingOf = (
   }
 }
 
-/** Past the space's limit. Said as the way out: wait, or the Personal plan. */
+/** Past the space's limit. Said as the way out: wait, or the Plus plan. */
 export let tooAwake = (space: Space, awake: number, env: Host = {}) =>
   `${space.slug} already has ${awake} sandbox${
     awake == 1 ? '' : 'es'
@@ -198,7 +198,7 @@ export let tooAwake = (space: Space, awake: number, env: Host = {}) =>
     space.tier == 'pro'
       ? 'Pro plan'
       : space.tier == 'plus'
-      ? 'Personal plan'
+      ? 'Plus plan'
       : 'free tier'
   } allows ${AWAKE[space.tier ?? 'free']} at a time — wait: a sandbox ` +
   `sleeps after a minute of inactivity. ${plans(space, env)}`
