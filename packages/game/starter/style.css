@@ -21,3 +21,17 @@
   font: 1rem system-ui, sans-serif;
   pointer-events: none;
 }
+
+.RoomControls {
+  position: fixed;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: max(1rem, env(safe-area-inset-left));
+  right: max(1rem, env(safe-area-inset-right));
+  width: fit-content;
+  max-width: calc(100% - 4rem);
+  padding: 0 .9rem .7rem;
+  border-radius: .5rem;
+  color: #fff5da;
+  background: #1c2e37;
+  font: 1rem system-ui, sans-serif;
+}

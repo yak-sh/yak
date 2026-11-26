@@ -1,10 +1,12 @@
 {
   "dependencies": {
     "@yaks/game": "platform",
+    "@yaks/graph": "platform",
     "@yaks/stage": "platform",
     "@yaks/ui": "platform",
     "@yaks/vocab": "platform",
     "@yaks/voxel": "platform",
+    "@yaks/workerd": "platform",
     "three": "^0.186.1"
   }
 }

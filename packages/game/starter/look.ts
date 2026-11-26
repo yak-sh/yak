@@ -37,6 +37,8 @@ export let look = (
   }
   let target = new THREE.Vector3()
   let width = 0, height = 0
+  let ray = new THREE.Raycaster()
+  let ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
   return {
     draw(pose: Pose, input: CameraIntent, dt: number) {
       let w = canvas.clientWidth, h = canvas.clientHeight
@@ -54,6 +56,18 @@ export let look = (
       target.set(pose.x, pose.y + 0.8, pose.z)
       aim(cam, camera, target, blocked, dt)
       gpu.render(scene, camera)
+    },
+    pick(x: number, y: number) {
+      let rect = canvas.getBoundingClientRect()
+      if (!rect.width || !rect.height) return null
+      ray.setFromCamera(
+        new THREE.Vector2(
+          2 * (x - rect.left) / rect.width - 1,
+          1 - 2 * (y - rect.top) / rect.height,
+        ),
+        camera,
+      )
+      return ray.ray.intersectPlane(ground, new THREE.Vector3())
     },
     dispose() {
       let resources = new Set<THREE.BufferGeometry | THREE.Material>()

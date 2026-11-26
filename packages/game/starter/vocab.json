@@ -1,0 +1,43 @@
+{
+  "$defs": {
+    "play_room": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "invite": { "type": "string" },
+        "seats": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "play_turn": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "seat": { "type": "string", "ref": "entity" },
+        "number": { "type": "integer" },
+        "roll": { "type": "integer" }
+      }
+    },
+    "play_pawn": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "room": { "type": "string", "ref": "entity", "index": true },
+        "x": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "play_motion": {
+      "component": true,
+      "type": "object",
+      "sync": "peers",
+      "durable": "connection",
+      "pace": "100ms",
+      "properties": {
+        "room": { "type": "string", "ref": "entity" },
+        "seat": { "type": "string", "ref": "entity" },
+        "x": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    }
+  }
+}

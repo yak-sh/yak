@@ -10,7 +10,8 @@
       "**/*_test.ts",
       "testing.ts",
       "conform.ts",
-      "workers.json"
+      "workers.json",
+      "browser.json"
     ]
   }
 }

@@ -1,0 +1,118 @@
+import { client } from '@yaks/client'
+import { equal, ok, test } from '@yaks/testing'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import {
+  motionId,
+  roomLine,
+  type Seat,
+  type Turn,
+} from './starter/room-model.ts'
+import { roomFrames } from './starter/room-wire.ts'
+import { rooms } from './starter/worker.ts'
+import words from './starter/vocab.json' with { type: 'json' }
+
+let store = client(loadVocab(words as VocabDoc))
+let app = {
+  APP: {
+    fetch: async (path: string, init?: RequestInit): Promise<Response> => {
+      if (path === '/apply') {
+        let batch = JSON.parse(init?.body as string)
+        try {
+          return Response.json(await store.mutate(batch))
+        } catch (error) {
+          if (!(error instanceof Error) || error.name !== 'Stale') throw error
+          return new Response(error.message, { status: 409 })
+        }
+      }
+      let url = new URL(path, 'https://store.test')
+      return Response.json(store.read(url.searchParams.get('q')!))
+    },
+  },
+  FILES: { fetch: () => Promise.resolve(new Response(null, { status: 404 })) },
+}
+
+let request = (who: string, path: string, body?: unknown) =>
+  rooms(
+    new Request('https://game.test/game/' + path, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: {
+        'x-yak-mount': '/game/',
+        'x-yak-via': who,
+        ...(who === 'host' ? { 'x-yak-role': 'editor' } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+    app,
+  )
+let open = async () => {
+  let response = await request('host', 'rooms', {})
+  equal(response.status, 200)
+  return await response.json() as Seat & { invite: string }
+}
+
+let first = await open()
+let other = await open()
+let path = `rooms/${first.room}/`
+let joined =
+  await (await request('guest', path + 'join', { invite: first.invite }))
+    .json() as Seat
+let state = () => store.ent(first.room)?.play_turn as Turn
+
+test('a guest resumes only the room they joined and reads its public components', async () => {
+  equal(
+    (await request('guest', `rooms/${other.room}/join`, {
+      invite: first.invite,
+    })).status,
+    403,
+  )
+  equal((await request('guest', `rooms/${other.room}/query`)).status, 403)
+  equal((await request('guest', path + 'join', {})).status, 200)
+  let snapshot = await (await request('guest', path + 'query')).json()
+  ok(snapshot.some((row: { play_turn?: unknown }) => row.play_turn))
+  ok(snapshot.every((row: { play_room?: unknown }) => !row.play_room))
+})
+
+test('only one accepted action advances a turn, and only for its active seat', async () => {
+  let turn = state()
+  let action = { number: turn.number, kind: 'pass' }
+  equal((await request('guest', path + 'action', action)).status, 409)
+  equal(state(), turn)
+  let results = await Promise.all([
+    request('host', path + 'action', action),
+    request('host', path + 'action', action),
+  ])
+  equal(results.map((r) => r.status).sort(), [204, 409])
+  equal(state().seat, joined.seat)
+  equal(state().number, turn.number + 1)
+  store.close()
+})
+
+test('a room socket scopes subscriptions and relays to the connected seat', () => {
+  let emit = roomFrames(joined)
+  let frame = (message: unknown) => JSON.parse(emit(JSON.stringify(message))!)
+  equal(
+    emit(JSON.stringify({ subscribe: roomLine(other.room), id: 's1' })),
+    undefined,
+  )
+  equal(frame({ subscribe: roomLine(first.room), id: 's1' }), {
+    id: 's1',
+    subscribe: roomLine(first.room),
+    acks: true,
+    frames: true,
+  })
+  equal(
+    frame({
+      relay: [{
+        entity: { eid: first.seat },
+        play_turn: { seat: first.seat, number: 100 },
+        play_motion: { room: other.room, seat: first.seat, x: 1, z: 4 },
+      }],
+    }),
+    {
+      relay: [{
+        entity: { eid: motionId(joined) },
+        play_motion: { room: first.room, seat: joined.seat, x: 1, z: 4 },
+      }],
+    },
+  )
+})

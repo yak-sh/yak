@@ -64,6 +64,21 @@ The exploration starter passes input and the current pose to its movement rule,
 then draws from a local watch on `PlayerPose{x, y, z, yaw}`. A turn-based game
 can use the same client to apply a batch on each action.
 
+## Live rooms
+
+The starter's `room.html` can host, join and reconnect to an invitation-only
+room. Deploy the app with private access and share the link from **Copy
+invite**. The app worker binds the browser to its seat, opens only that room's
+watch and exposes only the components needed to play. Keep the browser's
+invitation in the link fragment and its digest in the store.
+
+`room-client.ts` opens the room-scoped page graph. `room-wire.ts` carries the
+subscription and peer motion through the store's socket. The app's
+`room-rules.ts` checks turn order and returns the batch the worker saves. Moving
+the pointer on the field shares a transient aim marker. Moving a pawn requires
+an accepted turn action. The store pushes the new turn and position to each
+page.
+
 ## Paths
 
 `aStar` accepts nodes, stable keys, neighbours with costs, a goal and a

@@ -4,7 +4,7 @@ import { fixedStep } from '@yaks/game'
 import { type ControlsBundle, listen } from '@yaks/game/controls'
 import { kit } from '@yaks/game/hud'
 import { page } from '@yaks/game/page'
-import { frameLoop } from '@yaks/stage/render'
+import { frames } from './frames.ts'
 import { themes } from '@yaks/ui/ui'
 import { wear } from '@yaks/ui/wear'
 import { look, type Pose } from './look.ts'
@@ -74,19 +74,9 @@ export let play = async (world: THREE.Object3D, actor: THREE.Object3D) => {
     }
     view.draw(poseOf(poses.value[0]), { ...intent, snap: false }, dt)
   }
-  let pending: number
-  let schedule = (next: FrameRequestCallback) =>
-    pending = requestAnimationFrame(next)
-  let start = () => schedule(frameLoop(frame, performance.now(), schedule))
-  addEventListener('pagehide', (event) => {
-    cancelAnimationFrame(pending)
-    if (event.persisted) return
+  frames(frame, () => {
     hands.dispose()
     front.close()
     view.dispose()
   })
-  addEventListener('pageshow', (event) => {
-    if (event.persisted) start()
-  })
-  start()
 }

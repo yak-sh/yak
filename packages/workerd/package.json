@@ -10,7 +10,8 @@
     "./rate": "./rate.ts",
     "./cache": "./cache.ts",
     "./purge": "./purge.ts",
-    "./fetch": "./fetch.ts"
+    "./fetch": "./fetch.ts",
+    "./upgrade": "./upgrade.ts"
   },
   "license": "Apache-2.0",
   "description": "Makes a Cloudflare Worker from a plugin config, and serves the graph API from one with WebSocket upgrades, request authentication, and forwarding to Durable Objects.",
