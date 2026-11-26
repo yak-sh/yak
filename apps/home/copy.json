@@ -279,6 +279,10 @@
           "name": "In Discord",
           "note": "Mention your assistant in your server, and it answers there."
         },
+        "slack": {
+          "name": "In Slack",
+          "note": "Mention your assistant in your Slack workspace, and it answers there."
+        },
         "mail": {
           "name": "By email",
           "note": "Send your assistant the change and any files."

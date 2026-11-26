@@ -855,26 +855,33 @@
   gap: .55rem;
 }
 
+/* Each row's mark is centred on its heading's first line: the row's line box
+   is the heading's, so the mark's `1lh` box puts its middle on that line. */
 .Home_IllustrationRow {
+  --mark: 1.1rem;
   display: flex;
   align-items: start;
   gap: .65rem;
 }
 
-.Home_IllustrationRow .Icon {
+.Home_IllustrationRow :is(.Icon, .Home_Logo) {
   flex: none;
-  width: 1.1rem;
-  height: 1.1rem;
-  margin-block-start: .2rem;
+  width: var(--mark);
+  height: var(--mark);
+  margin-block: calc((1lh - var(--mark)) / 2) 0;
+}
+
+.Home_IllustrationRow .Icon {
   color: var(--accent);
 }
 
+/* An icon draws in 20 of its 24 units, a catalog logo in 44 of its 62 (the
+   rest is the tile's padding), so the logo grows until its art is as wide as
+   an icon's, still taking an icon's room in the row. */
 .Home_IllustrationRow .Home_Logo {
-  width: 1.1rem;
-  height: 1.1rem;
-  margin-block-start: .2rem;
   padding: 0;
   background: none;
+  scale: calc(20 / 24 * 62 / 44);
 }
 
 .Home_Scene {

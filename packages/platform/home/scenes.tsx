@@ -64,6 +64,7 @@ export let Services = ({ short = false }: { short?: boolean }) => (
 let CHANNELS = [
   ['chat', chat],
   ['discord', 'discord'],
+  ['slack', 'slack'],
   ['mail', ICONS.email],
   ['text', sms],
 ] as const
