@@ -35,6 +35,10 @@
 // (identity.ts `grants`), `vault_wait` on the vault's database (vault.ts),
 // `tracker_wait` on a space's tracker (app-errors.ts), `machine_wait` on a
 // person's machine through their space's tunnel (tunnel.ts `machine`).
+//
+// Every `at_<stage>` is when, in ms from the request's start, it first
+// reached that stage (hops.ts `reached`): the waits overlap, and these say
+// which one the request stood on.
 import { counts, type Tally, tallying } from './lib/hops.ts'
 import { headed } from '@yaks/workerd/upgrade'
 
@@ -111,9 +115,9 @@ export let clock = (now: () => number = Date.now) => {
         `stmts;dur=${tally.get('stmts') ?? 0}`,
         ...(tally.has('rows') ? [`rows;dur=${tally.get('rows')}`] : []),
         ...(tally.has('wake') ? [`wake;dur=${tally.get('wake')}`] : []),
-        ...[...tally].filter(([name]) => name.endsWith('_wait')).map((
-          [name, ms],
-        ) => `${name};dur=${ms}`),
+        ...[...tally].filter(([name]) =>
+          name.endsWith('_wait') || name.startsWith('at_')
+        ).map(([name, ms]) => `${name};dur=${ms}`),
         `r2;dur=${r2}`,
         `total;dur=${now() - born}`,
       ].map((mark) => mark.replace(/(^|, )(\w+);/g, `$1${prefix}$2;`)).join(

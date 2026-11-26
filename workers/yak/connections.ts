@@ -138,6 +138,7 @@ import {
 } from '@yaks/platform/routes'
 import { telling } from '@yaks/platform/cookie'
 import { background, caught } from './defects.ts'
+import { reached } from './lib/hops.ts'
 import { domainOf, lapsed, vouched, type Who, whoIs } from './session.ts'
 import { held as live } from './browser-sessions.ts'
 import { type Ctx as Asking, EID, refuse } from './tool.ts'
@@ -642,22 +643,28 @@ export let connectionsOf = async (
   let read = readOn(dir)
   let month = monthOf(Date.now())
   // Only what those answers name outside this space is asked after.
-  let [here, reached, ahead, listing, theirs, built, byName, own, mcpRead] =
-    await connectionsAsked(env, space, person, { ...at, dir })
+  let [here, walked, ahead, listing, theirs, built, byName, own, mcpRead] =
+    reached(
+      'connections_read',
+      await connectionsAsked(env, space, person, { ...at, dir }),
+    )
   // A service a built integration stands in for is added as that one.
   let wanted = at.add && standIn(built, at.add, BROKER) || byName
   let mcp = at.mcp?.(mcpRead)
   mcp?.catch(() => {})
   let mine = own ? theirs : []
   let [apps, held, out] =
-    !reached || reached.some((b) => b.entity.eid == here.eid)
+    !walked || walked.some((b) => b.entity.eid == here.eid)
       ? ahead
       : await ownedBy(dir, here.eid)
   let roster = apps.filter((app) => app.space == here.eid)
   let ours = new Set(roster.map((app) => app.eid))
-  let loans = await borrowed(
-    read,
-    out.filter((l) => ours.has(String(comp(l, 'edge').from))),
+  let loans = reached(
+    'connections_loans',
+    await borrowed(
+      read,
+      out.filter((l) => ours.has(String(comp(l, 'edge').from))),
+    ),
   )
   // The live apps of this space, which a connection of its own may be given.
   let available = roster.filter((app) => !app.trashed)
@@ -850,7 +857,8 @@ export let connectionsOf = async (
   // The one the page was opened to add, from a card's Connect or the
   // integration directory: a built one offered here, a custom one its owner
   // listed, or one the catalog offers here.
-  let [shelf, can] = await catalog
+  reached('connections_shown', shown)
+  let [shelf, can] = reached('connections_catalog', await catalog)
   let listedHere = wanted && !taken.has(wanted.name) &&
     (wanted.built
       ? await offered(wanted)
@@ -871,7 +879,8 @@ export let connectionsOf = async (
     : described
     ? { ...await card(described, false), available: false }
     : undefined
-  return {
+  reached('connections_asked', asked)
+  return reached('connections_drawn', {
     on: vaulted(env),
     ...at.trash
       ? {
@@ -912,7 +921,7 @@ export let connectionsOf = async (
     ...ceilings(here.tier, here.slug)?.connections == null
       ? {}
       : { plan: { tier: here.tier, held: holding(held, here.eid) } },
-  }
+  })
 }
 
 /** The Connections page of `space` as `ask` asks it (@yaks/platform/

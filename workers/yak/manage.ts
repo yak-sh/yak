@@ -75,6 +75,7 @@ import {
   visitsRows,
 } from './side.ts'
 import { warmApp, warmApps } from './app-warm.ts'
+import { reached } from './lib/hops.ts'
 import { background, caught } from './defects.ts'
 import { listedRows } from '@yaks/platform/space-apps'
 import { brokenOf } from './apps-reads.ts'
@@ -781,6 +782,7 @@ let desk = async (
   view: Exclude<SpaceView, Talk>,
   said?: Said,
 ): Promise<Response> => {
+  reached('desk', null)
   let owner = who.person
   let q = new URL(req.url).searchParams
   // Back from the payment provider's checkout (billing.ts): the page again
@@ -887,6 +889,7 @@ let desk = async (
       : null,
   ])
   let connected = await inHand(agentsRow)
+  reached('desk_read', null)
   let page = deskPage({
     person: who.person,
     // Apps' and New app's rows carry the agents connected, where in hand; a
