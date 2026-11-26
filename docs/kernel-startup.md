@@ -899,3 +899,82 @@ reported 290 ms of CPU, and the app's intake and alarm I/O clocks read 0 ms. The
 live comparison did not establish a latency reduction. The Builder test confirms
 that the cold receipt is sent before model work and that the caller's wake
 carries out the request.
+
+## App query Worker acquisition (T-3762)
+
+The Tokyo Recipes query in ray `a6048b319a2cdeb3` took 1,323 ms to first byte.
+The gateway GET span lasted 1,103 ms and Cloudflare reported 255 ms inside the
+invocation, leaving 848 ms outside it. The gateway's own timer measured 210 ms.
+The difference between the span and invocation includes dispatch, transport and
+response delivery. Cloudflare's trace gives no independent compile timer.
+
+The November 26 UTC experiment tested whether a smaller upload reduced this gap.
+A probe Worker without a placement hint served the same fixed `GET` for
+`yourname.yaks.app/recipes/api/query?.recipe&.limit=1` through a service binding
+to each of the production kernel and two binding-only Workers. The two uploads
+used the kernel's `aws:us-east-2` placement hint and 2025-05-08 compatibility
+date. Cloudflare compiles all uploaded modules under that date's legacy module
+registry.
+[Cloudflare's module registry implementation](https://blog.cloudflare.com/workers-module-registry-nodejs/)
+
+Both comparison Workers ran byte-identical JavaScript for the request. They
+called `kernel.ts`'s `wrap` and `atSpace` with the production directory, Store
+and rate limit bindings. The small build used `bundle.ts`'s esbuild options and
+replaced dynamic imports outside the measured route with modules that throw on
+import. It retained the vocabulary and lens modules required by the Recipes
+query. The larger build added every module from an `index.ts` build at the same
+revision under `control/`, unreferenced by the query entry. This isolates an
+upload-size difference while holding the code that answers the request constant.
+
+| Build                   | JavaScript modules | Raw bytes | Gzip bytes | Brotli bytes |
+| ----------------------- | -----------------: | --------: | ---------: | -----------: |
+| Small comparison Worker |                134 | 1,639,478 |    532,156 |      484,143 |
+| Kernel reference build  |                826 | 7,897,854 |  2,522,662 |    2,183,648 |
+| Large comparison Worker |                960 | 9,537,332 |  3,055,793 |    2,569,094 |
+
+Raw sizes sum the JavaScript files. Compressed sizes use concatenated modules
+with gzip level 9 and Brotli quality 6. The reference build uses the kernel's
+esbuild options before production's Rollup grouping pass, at `1ccb6576b`.
+
+The probe admitted only the fixed anonymous query. It returned 404 to requests
+with cookies or authorization headers, dropped `Set-Cookie` from the answer, and
+set `Cache-Control: private, no-store`. The comparison Workers took no session
+secret, so this measures the public read with anonymous standing.
+
+### Tokyo trace results
+
+All 34 requests returned 200 at NRT with the same response body hash. The
+gateway's `cold` timing marker identifies an isolate's first request. The
+outside-invocation column takes the median of each trace's GET span duration
+minus its invocation wall time. Small negative warm values reflect the trace
+timers' different scope. All timings are milliseconds.
+
+| Worker      | Isolate | Requests | First byte | Binding | GET span | Invocation wall | Outside invocation | Gateway | Store wait |
+| ----------- | ------- | -------: | ---------: | ------: | -------: | --------------: | -----------------: | ------: | ---------: |
+| Large       | Cold    |        7 |        707 |     677 |      509 |              83 |                421 |      49 |         39 |
+| Small       | Cold    |        9 |        398 |     368 |      205 |              93 |                104 |      55 |         44 |
+| Large       | Warm    |        7 |        232 |     199 |       43 |              50 |                 −4 |      43 |         33 |
+| Small       | Warm    |        5 |        237 |     205 |       48 |              54 |                 −6 |      48 |         36 |
+| Live kernel | Warm    |        6 |      272.5 |     218 |     68.5 |              76 |                 −8 |    54.5 |         43 |
+
+The smaller upload reduced median cold time outside the invocation by 317 ms.
+The large upload's cold gap ranged from 322 to 697 ms, and the small upload's
+ranged from 88 to 159 ms. The median warm first byte differed by 5 ms. The
+matched uploads establish a size effect on acquisition for this query. The
+larger control carried 1.64 MB more than the kernel reference build. The traces
+leave the attribution between compilation and the rest of Cloudflare's
+acquisition path unresolved.
+
+Representative NRT rays are `a60501f0f942980b` and `a60500ef0837592c` for the
+large Worker, and `a60500d8ea9aca08` and `a60502119e7f6506` for the small
+Worker, in cold and warm order. `a60500fd4b08c170` is a warm request through the
+probe's live kernel binding. Direct production requests `a604faa9691c6468` and
+`a604fabd4a1c354b` took 1,321 and 326 ms to first byte with outside-invocation
+gaps of 358 and −13 ms and Store waits of 683 and 66 ms.
+
+The small Worker's cold ray `a60501d4abc82623` still took 961 ms to first byte,
+including 627 ms of Store wait and a 104 ms acquisition gap. T-151187 tracks the
+Store Durable Object and page-triggered wakes. T-126130 measured the separate
+Site and Files page-serving path. Production app queries continued through the
+existing kernel, which returned 401 to a request with an invalid bearer token.
+The three probe Workers were deleted after collecting the traces.
