@@ -177,7 +177,9 @@ export let personChanges = (bundles: Bundle[]) => {
     relevant.some((b) => DIRECTORY_VIEWS.some((key) => key in b))
   let connections = reachability ||
     relevant.some((b) =>
-      ['$delete', 'connection', 'uses', 'mcp_server'].some((key) => key in b)
+      ['$delete', 'connection', 'uses', 'mcp_server', 'app_permission'].some(
+        (key) => key in b,
+      )
     )
   // Model reservations and settlements move the paying space's month.
   // Its payment views read the meter and credit. Other directory views do

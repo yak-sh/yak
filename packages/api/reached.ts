@@ -93,6 +93,8 @@ export let reached = (opts: {
   clock?: Clock
   /** The local revision at which a derived read starts. */
   revision?: () => number
+  /** Watches whose rows signal an upstream change on every refresh. */
+  signals?: (line: string) => boolean
 }): Reached => {
   let held = new Map<Sink, Map<string, Watch>>()
   let clock = opts.clock ?? system
@@ -118,7 +120,7 @@ export let reached = (opts: {
         ? { id, bundles: answer, reset: true }
         : { id, ...answer }
       let said = JSON.stringify(frame)
-      if (said == watch.said) return
+      if (said == watch.said && !opts.signals?.(watch.line)) return
       watch.said = said
       if (revision !== undefined) {
         frame.revision = revision

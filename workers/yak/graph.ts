@@ -462,6 +462,7 @@ import {
   personLine,
   presenceWatches,
 } from '@yaks/platform/person-lines'
+import { movedSpace } from '@yaks/platform/connections-page'
 import { spaceLine } from '@yaks/platform/space-pages'
 import {
   isRetired,
@@ -2287,6 +2288,7 @@ export class Store extends Durable {
     let directory = branch == null && name == PLATFORM_STORE
     if (directory) {
       let pending = computed(g, {
+        signals: (line) => movedSpace(line) != undefined,
         affects: (bundles) => {
           let changes = personChanges(bundles)
           let apps = changes.releases.length

@@ -12,7 +12,10 @@ let book = (eid: string) => ({ entity: { eid }, book: {} })
 
 // A reach whose answer is whatever `answer` holds now, counting its reads,
 // with one listener's frames; `answer` may also be a promise to hold a read.
-let reach = (start: Bundle[] | Reduced | Error = []) => {
+let reach = (
+  start: Bundle[] | Reduced | Error = [],
+  signals?: (line: string) => boolean,
+) => {
   let state = { answer: start as unknown, reads: 0 }
   let refused: string[] = []
   let subs = reached({
@@ -25,6 +28,7 @@ let reach = (start: Bundle[] | Reduced | Error = []) => {
         : now as Bundle[]
     },
     refused: (_, line) => void refused.push(line),
+    signals,
   })
   let frames: Frame[] = []
   let sink = (f: Frame) => void frames.push(f)
@@ -61,6 +65,16 @@ test('a change that names its lines asks only those again', async () => {
   r.state.answer = [book('dune'), book('emma')]
   await r.subs.hear((line) => line == '.book.count')
   equal([r.taken(), r.state.reads], [[{ id: 'n', count: 2 }], 3])
+})
+
+test('an upstream change notifies signal watchers even when their rows stay the same', async () => {
+  let r = reach([book('dune')], (line) => line == '.changed')
+  r.subs.open(r.sink, 'signal', '.changed')
+  r.subs.open(r.sink, 'data', '.book')
+  await tick()
+  r.taken()
+  await r.subs.hear()
+  equal(r.taken(), [{ id: 'signal', bundles: [book('dune')], reset: true }])
 })
 
 test('a change can refresh only selected readers of the same line', async () => {
