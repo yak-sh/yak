@@ -1,7 +1,8 @@
 // How a map looks around its canvas: the few of MapLibre's own rules a map
 // drawn here needs (it draws no controls; maplibre-gl.css is 70 KB of them),
-// the pin and its label, and the credit line. Every colour and the type are
-// the theme's own custom properties, so a map's frame wears the app's look.
+// the pin and its label, the credits behind their ⓘ, and the links under the
+// map. Every colour and the type are the theme's own custom properties, so a
+// map's frame wears the app's look.
 
 /** The maps stylesheet, as text a page puts in a `<style>` once. */
 export let LOOK: string = `
@@ -20,7 +21,13 @@ export let LOOK: string = `
 }
 .MapFrame{display:grid;gap:calc(var(--gap,16px)/2);margin:0}
 .MapView{aspect-ratio:var(--map-ratio,16/10);width:100%;border:1px solid var(--border,#cfc5b3);border-radius:var(--radius,8px);background:var(--bg,#f6f1e7);overflow:hidden}
-.MapFrame figcaption{display:flex;flex-wrap:wrap;gap:.25em 1em;justify-content:space-between;color:var(--muted,#6f665a);font-family:var(--font,inherit);font-size:var(--small,13px)}
+.MapBox{position:relative}
+.MapCredit{position:absolute;right:6px;bottom:6px;z-index:2;display:flex;flex-direction:row-reverse;align-items:center;gap:.25em;max-width:calc(100% - 12px);border-radius:12px;background:var(--bg,#fff);color:var(--muted,#6f665a);font-family:var(--font,inherit);font-size:var(--small,13px);line-height:1.3;box-shadow:0 1px 2px rgb(0 0 0/.2)}
+.MapCredit summary{display:grid;place-items:center;width:24px;height:24px;list-style:none;cursor:pointer;font-size:16px;line-height:1}
+.MapCredit summary::-webkit-details-marker{display:none}
+.MapCredit[open]{padding-left:.6em}
+.MapCredit a{color:inherit}
+.MapFrame figcaption{display:flex;flex-wrap:wrap;gap:.25em 1em;justify-content:flex-end;color:var(--muted,#6f665a);font-family:var(--font,inherit);font-size:var(--small,13px)}
 .MapFrame figcaption a{color:inherit}
 .MapPin{display:grid;justify-items:center;pointer-events:none}
 .MapPin svg{width:24px;height:32px;filter:drop-shadow(0 1px 1px rgb(0 0 0/.3))}

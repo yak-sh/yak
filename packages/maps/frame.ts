@@ -1,7 +1,8 @@
 // The frame both components draw: the map's box, which MapLibre fills once
-// the page is running, and the credit line under it. A map is drawn on the
-// page only: rendered elsewhere (a server, a test), the box stays empty and
-// the credit and links still say where the place is.
+// the page is running, its credits behind an ⓘ in the box's corner that
+// opens on tap, and the links under it. A map is drawn on the page only:
+// rendered elsewhere (a server, a test), the box stays empty and the credits
+// and links still say where the place is.
 import { type ComponentChildren, h, type VNode } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import type { Map as MapLibre } from 'maplibre-gl'
@@ -38,17 +39,28 @@ export let Frame = (p: Framed): VNode => {
   return h(
     'figure',
     { class: 'MapFrame' },
-    h('div', {
-      ref: box,
-      class: 'MapView',
-      role: 'img',
-      'aria-label': p.title,
-    }),
     h(
-      'figcaption',
-      null,
-      h('span', { dangerouslySetInnerHTML: { __html: provider.attribution } }),
-      p.links ? h('span', null, p.links) : null,
+      'div',
+      { class: 'MapBox' },
+      h('div', {
+        ref: box,
+        class: 'MapView',
+        role: 'img',
+        'aria-label': p.title,
+      }),
+      h(
+        'details',
+        { class: 'MapCredit' },
+        h(
+          'summary',
+          { 'aria-label': 'Map credits', title: 'Map credits' },
+          'ⓘ',
+        ),
+        h('span', {
+          dangerouslySetInnerHTML: { __html: provider.attribution },
+        }),
+      ),
     ),
+    p.links ? h('figcaption', null, p.links) : null,
   ) as VNode
 }

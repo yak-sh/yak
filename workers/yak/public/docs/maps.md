@@ -170,8 +170,9 @@ the element (or any element around it) for another shape, such as
 
 ## The credit
 
-OpenStreetMap's licence asks every map to credit it. `<Place>` and `<Map>` print
-"Protomaps © OpenStreetMap" under the map, linked; keep it visible.
+OpenStreetMap's licence asks every map to credit it. `<Place>` and `<Map>` put
+"Protomaps © OpenStreetMap", linked, behind a small ⓘ in the map's corner, which
+opens on tap; keep it there.
 
 ## Not yet
 

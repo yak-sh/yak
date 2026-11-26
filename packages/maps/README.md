@@ -60,14 +60,15 @@ a page, each custom property resolved to `#rrggbb` as the page draws it, so
 ## Drawing
 
 `<Place at label zoom directions>` (`@yaks/maps/Place`) is one place on a still
-map, with a pin in the accent colour, its label, the credit and a directions
-link to OpenStreetMap's planner. `<Map center zoom pins title>`
-(`@yaks/maps/Map`) is a map a person moves, with a pin for each `{at, label}`
-given; it moves with two fingers or a modifier key, so a page scrolls past it.
-Both hand the MapLibre map to `onMap` once drawn. `at` and `center` are
-`[longitude, latitude]`. `draw(el, drawing)` from `@yaks/maps/draw` is what both
-are made of. MapLibre is imported only when a page draws its first map, and the
-few rules it needs are put in the page then, with the frame's, as one `<style>`.
+map, with a pin in the accent colour, its label, the credits behind an ⓘ in the
+map's corner that opens on tap, and a directions link to OpenStreetMap's
+planner. `<Map center zoom pins title>` (`@yaks/maps/Map`) is a map a person
+moves, with a pin for each `{at, label}` given; it moves with two fingers or a
+modifier key, so a page scrolls past it. Both hand the MapLibre map to `onMap`
+once drawn. `at` and `center` are `[longitude, latitude]`. `draw(el, drawing)`
+from `@yaks/maps/draw` is what both are made of. MapLibre is imported only when
+a page draws its first map, and the few rules it needs are put in the page then,
+with the frame's, as one `<style>`.
 
 Apps name it `"@yaks/maps": "platform"` in package.json; yaks.app's guide page
 is workers/yak/public/docs/maps.md.
