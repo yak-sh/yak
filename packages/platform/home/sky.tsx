@@ -125,6 +125,7 @@ export const MOON = { x: 520, y: -188, r: 24 }
  * hardly moves at all. */
 export const DEPTH = {
   night: .95,
+  fog: .7,
   dusk: .5,
   Farthest: .15,
   Farther: .1,
@@ -174,6 +175,83 @@ let Drift = () => (
   </g>
 )
 
+/** A cloud lit from under by the low sun: puffs along its top, `w` across
+ * and `h` tall over a flat base whose middle is at x, y, and the light along
+ * that base. */
+let cloud = (r: () => number, x: number, y: number, w: number, h: number) => {
+  let n = 4 + Math.floor(r() * 3), left = x - w / 2, right = x + w / 2
+  let tops: [number, number][] = []
+  for (let i = 1; i < n; i++) {
+    let t = i / n
+    tops.push([
+      left + w * t + (r() - .5) * w / n * .35,
+      y - h * (.45 + .55 * Math.sin(Math.PI * t)) * (.75 + .25 * r()),
+    ])
+  }
+  let d = `M${n1(left)} ${y}`
+  let from: [number, number] = [left, y]
+  for (let to of [...tops, [right, y] as [number, number]]) {
+    let a = n1(.58 * Math.hypot(to[0] - from[0], to[1] - from[1]))
+    d += `A${a} ${a} 0 0 1 ${n1(to[0])} ${n1(to[1])}`
+    from = to
+  }
+  d += `Q${n1(x)} ${n1(y + h * .12)} ${n1(left)} ${y}Z`
+  let a = n1(left + w * .1), b = n1(right - w * .1)
+  return (
+    <>
+      <path class='Sky_Cloud' fill='url(#Sky-cloud)' d={d} />
+      <path
+        class='Sky_CloudLight'
+        d={`M${a} ${y}Q${n1(x)} ${n1(y + h * .12)} ${b} ${y}Q${n1(x)} ${
+          n1(y - h * .3)
+        } ${a} ${y}Z`}
+      />
+    </>
+  )
+}
+
+// Where the dusk's clouds stand, in his units: the middle of each one's base,
+// how wide it is and how tall, and the window it is drawn in when it would
+// stand behind the words in the other (style.css `.Sky_Cloud-wide`).
+const CLOUDS: [number, number, number, number, string?][] = [
+  [811, -583, 280, 42, 'wide'],
+  [489, -794, 420, 40, 'wide'],
+  [1200, -300, 620, 44],
+  [1500, -545, 300, 40],
+  [300, -1185, 380, 48, 'narrow'],
+]
+
+let Clouds = () => {
+  let r = rand(77)
+  return (
+    <g class='Sky_Drift'>
+      {CLOUDS.map(([x, y, w, h, only]) => (
+        <g class={only && `Sky_Cloud-${only}`}>{cloud(r, x, y, w, h)}</g>
+      ))}
+    </g>
+  )
+}
+
+// the night's fog: long faint wisps that the stars show through
+let fog = () => {
+  let r = rand(909), wisps: JSX.Element[] = []
+  for (let i = 0; i < 12; i++) {
+    let x = -400 + 2200 * r(), y = -1300 + 1100 * r()
+    for (let j = 0; j < 3; j++) {
+      wisps.push(
+        <ellipse
+          cx={n1(x + (r() - .5) * 300)}
+          cy={n1(y + (r() - .5) * 40)}
+          rx={n1(160 + 200 * r())}
+          ry={n1(16 + 22 * r())}
+          fill='url(#Sky-fog)'
+        />,
+      )
+    }
+  }
+  return wisps
+}
+
 let Luna = () => (
   <>
     <circle
@@ -197,6 +275,20 @@ let HillPaints = () => (
         <stop offset='1' class={`Sky_${name}Foot`} />
       </linearGradient>
     ))}
+  </>
+)
+
+let CloudPaints = () => (
+  <>
+    <linearGradient id='Sky-cloud' x2='0' y2='1'>
+      <stop class='Sky_Cloud0' />
+      <stop offset='.55' class='Sky_Cloud1' />
+      <stop offset='1' class='Sky_Cloud2' />
+    </linearGradient>
+    <radialGradient id='Sky-fog'>
+      <stop class='Sky_Fog0' />
+      <stop offset='1' class='Sky_Fog1' />
+    </radialGradient>
   </>
 )
 
@@ -289,6 +381,7 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
       <svg class='Sky_Far' viewBox='-3000 -800 6000 860' focusable='false'>
         <defs>
           {landscape && <HillPaints />}
+          {landscape && <CloudPaints />}
           <radialGradient id='Sky-glow'>
             <stop offset='0' class='Sky_Glow0' />
             <stop offset='.35' class='Sky_Glow1' />
@@ -309,7 +402,7 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
           </radialGradient>
         </defs>
         <g class='Sky_Day' data-depth={DEPTH.dusk}>
-          {landscape ? <Drift /> : (
+          {landscape ? <Clouds /> : (
             <Sol>
               <Drift />
             </Sol>
@@ -324,6 +417,11 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
           <g class='Sky_Stars'>{stars}</g>
           {!landscape && <Luna />}
         </g>
+        {landscape && (
+          <g class='Sky_Night Sky_Fog' data-depth={DEPTH.fog}>
+            <g class='Sky_Drift'>{fog()}</g>
+          </g>
+        )}
         {landscape && (
           <g class='Sky_Night Sky_Luna'>
             <Luna />

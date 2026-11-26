@@ -246,9 +246,21 @@ let mount = (root) => {
     tabHeight = contents.offsetHeight
   }
 
+  let phone = demo.querySelector('.Home_Phone')
+  let ask = demo.querySelector('.Home_Ask')
+  // On a wide screen the tabs span the page, but keep to the words' column
+  // while they pass beside the phone, its picks and its box.
+  let beside = () => {
+    if (narrow.matches) return false
+    let row = contents.getBoundingClientRect()
+    return row.bottom > phone.getBoundingClientRect().top &&
+      row.top < ask.getBoundingClientRect().bottom
+  }
+
   let draw = (motion = !calm.matches) => {
     let y = scrollY
     let at = reading(bounds, y + readingLine())
+    contents.toggleAttribute('data-beside', beside())
     // Cover the features as they scroll under the tabs.
     contents.toggleAttribute('data-cover', bounds[1].top <= y + tabHeight)
     reveal(lines[i], at, calm.matches)

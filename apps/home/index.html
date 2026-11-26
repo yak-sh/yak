@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <base href="https://yaks.app/">
-    <meta name="yak-drawing" content="a0becfd88d">
+    <meta name="yak-drawing" content="d44c5fa933">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title
@@ -178,6 +178,15 @@
             <stop class="Sky_NearTop"></stop>
             <stop offset="1" class="Sky_NearFoot"></stop>
           </linearGradient>
+          <linearGradient id="Sky-cloud" x2="0" y2="1">
+            <stop class="Sky_Cloud0"></stop>
+            <stop offset=".55" class="Sky_Cloud1"></stop>
+            <stop offset="1" class="Sky_Cloud2"></stop>
+          </linearGradient>
+          <radialGradient id="Sky-fog">
+            <stop class="Sky_Fog0"></stop>
+            <stop offset="1" class="Sky_Fog1"></stop>
+          </radialGradient>
           <radialGradient id="Sky-glow">
             <stop offset="0" class="Sky_Glow0"></stop>
             <stop offset=".35" class="Sky_Glow1"></stop>
@@ -199,16 +208,36 @@
         </defs>
         <g class="Sky_Day" data-depth="0.5">
           <g class="Sky_Drift">
-            <path class="Sky_Wisp Sky_Wisp-far"
-              d="M-480 -214Q-380 -225 -180 -216.2Q-292.5 -208.5 -480 -214Z"></path>
-            <path class="Sky_Wisp"
-              d="M85 -128Q195 -140 415 -130.4Q291.25 -122 85 -128Z"></path>
-            <path class="Sky_Wisp Sky_Wisp-far"
-              d="M610 -186Q763.3333333333334 -201 1070 -189Q897.5 -178.5 610 -186Z"></path>
-            <path class="Sky_Wisp"
-              d="M970 -112Q1096.6666666666667 -123 1350 -114.2Q1207.5 -106.5 970 -112Z"></path>
-            <path class="Sky_Wisp"
-              d="M-1110 -150Q-970 -163 -690 -152.6Q-847.5 -143.5 -1110 -150Z"></path>
+            <g class="Sky_Cloud-wide">
+              <path class="Sky_Cloud" fill="url(#Sky-cloud)"
+                d="M671 -583A32.4 32.4 0 0 1 718 -613A37.5 37.5 0 0 1 782.7 -614.8A36.6 36.6 0 0 1 845.4 -622.7A33.1 33.1 0 0 1 900.6 -607.8A32.6 32.6 0 0 1 951 -583Q811 -578 671 -583Z"></path>
+              <path class="Sky_CloudLight"
+                d="M699 -583Q811 -578 923 -583Q811 -595.6 699 -583Z"></path>
+            </g>
+            <g class="Sky_Cloud-wide">
+              <path class="Sky_Cloud" fill="url(#Sky-cloud)"
+                d="M279 -794A71.8 71.8 0 0 1 399 -824.1A52.2 52.2 0 0 1 488.8 -830.9A59.7 59.7 0 0 1 591.1 -819.6A64.3 64.3 0 0 1 699 -794Q489 -789.2 279 -794Z"></path>
+              <path class="Sky_CloudLight"
+                d="M321 -794Q489 -789.2 657 -794Q489 -806 321 -794Z"></path>
+            </g>
+            <g>
+              <path class="Sky_Cloud" fill="url(#Sky-cloud)"
+                d="M890 -300A78.7 78.7 0 0 1 1021.9 -331.5A103.7 103.7 0 0 1 1200.4 -343.7A76.2 76.2 0 0 1 1331 -330.3A105.3 105.3 0 0 1 1510 -300Q1200 -294.7 890 -300Z"></path>
+              <path class="Sky_CloudLight"
+                d="M952 -300Q1200 -294.7 1448 -300Q1200 -313.2 952 -300Z"></path>
+            </g>
+            <g>
+              <path class="Sky_Cloud" fill="url(#Sky-cloud)"
+                d="M1350 -545A41 41 0 0 1 1415.4 -571.9A44.8 44.8 0 0 1 1492.6 -575.1A52.6 52.6 0 0 1 1583.3 -574.5A42.3 42.3 0 0 1 1650 -545Q1500 -540.2 1350 -545Z"></path>
+              <path class="Sky_CloudLight"
+                d="M1380 -545Q1500 -540.2 1620 -545Q1500 -557 1380 -545Z"></path>
+            </g>
+            <g class="Sky_Cloud-narrow">
+              <path class="Sky_Cloud" fill="url(#Sky-cloud)"
+                d="M110 -1185A49.1 49.1 0 0 1 188.8 -1215.7A39.3 39.3 0 0 1 255.6 -1227A44.3 44.3 0 0 1 332 -1228.3A47 47 0 0 1 412.5 -1218.6A49 49 0 0 1 490 -1185Q300 -1179.2 110 -1185Z"></path>
+              <path class="Sky_CloudLight"
+                d="M148 -1185Q300 -1179.2 452 -1185Q300 -1199.4 148 -1185Z"></path>
+            </g>
           </g>
         </g>
         <g class="Sky_Day Sky_Sol">
@@ -702,6 +731,82 @@
               opacity="0.5"></circle>
           </g>
         </g>
+        <g class="Sky_Night Sky_Fog" data-depth="0.7">
+          <g class="Sky_Drift">
+            <ellipse cx="1440.7" cy="-212.7" rx="331.7" ry="28"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1523" cy="-221.3" rx="284.6" ry="18.9"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1514" cy="-236.7" rx="189.6" ry="29.5"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-162.7" cy="-1058.1" rx="186.5" ry="19.1"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-290.5" cy="-1038.5" rx="251.4" ry="27.2"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-66.8" cy="-1044.9" rx="307.5" ry="20.8"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1745.7" cy="-351.6" rx="248.6" ry="21.8"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1487.4" cy="-352.9" rx="332.1" ry="29.3"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1724.7" cy="-373" rx="355.6" ry="31.6"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1653.1" cy="-630.8" rx="235.6" ry="34.5"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1565.3" cy="-661.3" rx="178.4" ry="25.8"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1476" cy="-636.5" rx="262" ry="31.4"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="842.6" cy="-956.4" rx="270.5" ry="34.3"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="778.2" cy="-940.3" rx="187.4" ry="36.9"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="820.8" cy="-948.1" rx="273.1" ry="20.1"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-281.7" cy="-215.4" rx="222.9" ry="17.9"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-338.3" cy="-221.9" rx="342.6" ry="36.6"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-133.5" cy="-201.8" rx="182.4" ry="19.9"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1097.4" cy="-416" rx="278.4" ry="17.2"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1325.5" cy="-401.4" rx="312.6" ry="28.9"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1259.5" cy="-390.4" rx="169.6" ry="24.1"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1843.1" cy="-536.9" rx="193.1" ry="19.8"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1843.6" cy="-519.2" rx="341.1" ry="27.8"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="1679.7" cy="-526" rx="303.7" ry="30.7"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="417.6" cy="-1202.2" rx="221.7" ry="36.9"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="459.8" cy="-1202.8" rx="241.9" ry="25.3"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="429.8" cy="-1214.6" rx="205.3" ry="32.5"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-165.7" cy="-783.6" rx="163.2" ry="30.6"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-390" cy="-800.2" rx="212.8" ry="25.1"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-369.7" cy="-814.2" rx="251.3" ry="22.6"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="178.8" cy="-499.1" rx="220.2" ry="21.6"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="263.5" cy="-492.4" rx="229.5" ry="36.5"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="343.2" cy="-520.9" rx="219.2" ry="30"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="106.7" cy="-291.9" rx="192.4" ry="19.3"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-58.9" cy="-296.2" rx="311.1" ry="26.9"
+              fill="url(#Sky-fog)"></ellipse>
+            <ellipse cx="-59.5" cy="-315.8" rx="262.4" ry="19.1"
+              fill="url(#Sky-fog)"></ellipse>
+          </g>
+        </g>
         <g class="Sky_Night Sky_Luna">
           <circle class="Sky_Halo" fill="url(#Sky-halo)" cx="520" cy="-188"
             r="80"></circle>
@@ -772,7 +877,7 @@
         class="Sky_Day Sky_Motes"><span class="Sky_Mote" style="--x-at:2%;--y-at:-18;--time:11s;--lead:-0s;"></span><span class="Sky_Mote" style="--x-at:15%;--y-at:8;--time:13s;--lead:-2.6s;"></span><span class="Sky_Mote" style="--x-at:32%;--y-at:-27;--time:15s;--lead:-5.2s;"></span><span class="Sky_Mote" style="--x-at:51%;--y-at:6;--time:17s;--lead:-7.8s;"></span><span class="Sky_Mote" style="--x-at:62%;--y-at:-13;--time:11s;--lead:-10.4s;"></span><span class="Sky_Mote" style="--x-at:83%;--y-at:14;--time:13s;--lead:-13s;"></span><span class="Sky_Mote" style="--x-at:96%;--y-at:-8;--time:15s;--lead:-15.6s;"></span></div>
     </div>
     <header
-      class="Top"><a class="Top_Name" href="/" aria-current="page" aria-label="yaks.app, home" data-copy-aria-label="frame.top.home"><span data-copy="frame.top.name">yaks.app</span></a><nav class="Nav" aria-label="Site" data-copy-aria-label="frame.nav.label"><a class="Nav_Link" href="#how" data-copy="frame.nav.features">Features</a><a class="Nav_Link" href="#integrations" data-copy="frame.nav.integrations">Integrations</a><a class="Nav_Link" href="/gallery" data-copy="frame.nav.gallery">Gallery</a><a class="Nav_Link" href="#cost" data-copy="frame.nav.pricing">Pricing</a><a class="Nav_Link" href="/docs" data-copy="frame.nav.docs">Documentation</a><a class="Nav_SignIn Nav_Link" href="/login" data-copy="frame.nav.sign-in">Sign in</a></nav></header>
+      class="Top"><a class="Top_Name" href="/" aria-current="page" aria-label="yaks.app, home" data-copy-aria-label="frame.top.home"><span data-copy="frame.top.name">yaks.app</span></a><nav class="Nav" aria-label="Site" data-copy-aria-label="frame.nav.label"><a class="Nav_Link" href="/gallery" data-copy="frame.nav.gallery">Gallery</a><a class="Nav_Link" href="#cost" data-copy="frame.nav.pricing">Pricing</a><a class="Nav_Link" href="/docs" data-copy="frame.nav.docs">Documentation</a><a class="Nav_SignIn Nav_Link" href="/login" data-copy="frame.nav.sign-in">Sign in</a></nav></header>
     <main class="Page">
       <div class="Home_Story" data-story>
         <div class="Home_SkySpace"

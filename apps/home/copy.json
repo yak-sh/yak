@@ -6,8 +6,6 @@
       "name": "yaks.app"
     },
     "nav": {
-      "features": "Features",
-      "integrations": "Integrations",
       "how": "How it works",
       "how-home": "How yaks.app works",
       "gallery": "Gallery",

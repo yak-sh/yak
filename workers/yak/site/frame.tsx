@@ -115,8 +115,6 @@ let NAV = [
 ]
 
 let HOME_NAV = [
-  ['#how', 'features'],
-  ['#integrations', 'integrations'],
   ['/gallery', 'gallery'],
   ['#cost', 'pricing'],
   ['/docs', 'docs'],

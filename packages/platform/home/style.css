@@ -341,6 +341,54 @@
   contain: layout paint;
 }
 
+/* The dusk's clouds (sky.tsx `cloud`): cool on top, warm toward the base,
+   and lit gold along it by the low sun. */
+.Sky_Cloud {
+  opacity: .85;
+}
+
+.Sky_Cloud0 {
+  stop-color: #d6c8e0;
+  stop-opacity: .55;
+}
+
+.Sky_Cloud1 {
+  stop-color: #efc6cb;
+  stop-opacity: .85;
+}
+
+.Sky_Cloud2 {
+  stop-color: #f9cca4;
+}
+
+.Sky_CloudLight {
+  fill: #ffe0b0;
+  opacity: .6;
+}
+
+@media (width < 64rem) {
+  .Sky_Cloud-wide {
+    display: none;
+  }
+}
+
+@media (width >= 64rem) {
+  .Sky_Cloud-narrow {
+    display: none;
+  }
+}
+
+/* The night's fog, faint enough for the stars to show through it. */
+.Sky_Fog0 {
+  stop-color: #b4bedd;
+  stop-opacity: .16;
+}
+
+.Sky_Fog1 {
+  stop-color: #b4bedd;
+  stop-opacity: 0;
+}
+
 .Sky_SunSlot {
   left: 58.5%;
   top: calc(var(--feet) - clamp(9.5rem, 14.5vw, 14rem));
@@ -1146,6 +1194,22 @@
     margin-block-start: -5rem;
   }
 
+  /* The tabs span the page, but beside the phone they keep to the words'
+     column (story.js `beside`), and what they hold beyond it fades. */
+  .Home_Contents {
+    grid-column: 1 / -1;
+    pointer-events: none;
+  }
+
+  .Home_Jumps {
+    max-width: 100%;
+    pointer-events: auto;
+  }
+
+  .Home_Contents[data-beside] .Home_Jumps {
+    max-width: calc(100% - var(--phone-width) - var(--story-gap));
+  }
+
   .Home_Contents[data-cover]::after {
     content: '';
     position: absolute;
@@ -1237,6 +1301,12 @@
   @media (width < 64rem) {
     .Story_Page .Home_Demo {
       transition: translate .3s ease;
+    }
+  }
+
+  @media (width >= 64rem) {
+    .Home_Jumps {
+      transition: max-width .35s ease;
     }
   }
 }
