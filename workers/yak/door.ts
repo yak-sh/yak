@@ -16,10 +16,10 @@
 import type { Caller } from '@yaks/egress'
 import { apart, elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { background, caught, defect } from './defects.ts'
-import { behind, settled, stamp, unserved } from './running.ts'
+import { behind, refuses, settled, stamp, unserved } from './running.ts'
 import { confirmedRefusal } from './query-line.ts'
 import { type Refusal, refuse } from '@yaks/api'
-import { FILED, staleRefusal } from '@yaks/api/refuse'
+import { FILED } from '@yaks/api/refuse'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { evicted, retried } from '@yaks/durable-object/resets'
 import {
@@ -361,16 +361,18 @@ let storeAnswer = async (name: string, req: Request, answer: Response) => {
   if (answer.status != 503) return answer
   let url = new URL(req.url)
   let directoryQuery = name == PLATFORM_STORE && url.pathname == '/query'
-  if (!directoryQuery && url.pathname != '/apply') return answer
   let said = await answer.clone().json().catch(() => null) as {
     error?: string
     refusal?: { status?: number; body?: Partial<Refusal> }
   } | null
   if (said?.error != 'Skewed') return answer
   let { status, body: old } = said.refusal ?? {}
-  // A store from before T-3725 can still wrap a stale write during rollout.
-  // Hand the conflict to its caller before the door resends the same write.
-  if (status != null && staleRefusal(status, old)) {
+  // An older Store could wrap any refusal in a skew response. Return ordinary
+  // refusals and stale-write conflicts before the door resends the call.
+  if (
+    old && status != null && status >= 400 && status < 500 &&
+    !refuses(status, old)
+  ) {
     return Response.json(old, { status })
   }
   // A directory query can be checked against this deploy's vocabulary without

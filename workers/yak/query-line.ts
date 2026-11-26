@@ -54,9 +54,10 @@ export let confirmedRefusal = (
     }
     if (
       e instanceof Unsupported && old.error == e.name &&
-      old.feature == e.feature &&
-      e.feature == 'a component where a property belongs'
-    ) return e
+      old.feature == e.feature
+    ) {
+      return e
+    }
   }
 }
 

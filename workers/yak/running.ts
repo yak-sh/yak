@@ -35,8 +35,7 @@
 // invocation's is everyone's (defects-runtime.ts `entry`). Under `wrangler
 // dev` and the test kernels there is none, and nothing is stamped or compared.
 
-import { type Refusal as RefusalBody, staleRefusal } from '@yaks/api/refuse'
-import { STATUS } from '@yaks/graph/errors'
+import type { Refusal as RefusalBody } from '@yaks/api/refuse'
 
 /** A Worker version: the runtime's id for it and when it was uploaded. */
 // The platform's release, as a person reads it: what a connector says it runs
@@ -249,16 +248,25 @@ let refusalOf = (answer: Response): Promise<Partial<RefusalBody> | null> =>
     Partial<RefusalBody> | null
   >
 
-/** Whether a refusal may be due to older code. A pacing response asks for
- * time and a stale precondition asks for a new read. */
-export let refuses = (code: number, body?: unknown): boolean =>
-  code >= 400 && code < 500 && code != 429 && !staleRefusal(code, body)
+// Older write doors report an undeclared name as a plain Refused.
+let UNKNOWN = /^unknown (?:prop: \.|property: |component:? )([\w$-]+)/
+
+/** Whether the older code names a compiler refusal or a missing route. */
+export let refuses = (
+  code: number,
+  body: Partial<RefusalBody> | null,
+): boolean => {
+  let message = typeof body?.message == 'string' ? body.message : ''
+  return code == 400 &&
+      (body?.error == 'Unknown' || body?.error == 'Unsupported' ||
+        body?.error == 'Refused' && UNKNOWN.test(message)) ||
+    code == 404 && body?.error == 'NotFound' &&
+      (message == 'no route' || message.startsWith('no route for '))
+}
 
 export let refused = async (answer: Response): Promise<boolean> =>
-  refuses(
-    answer.status,
-    answer.status == STATUS.Stale ? await refusalOf(answer) : undefined,
-  )
+  (answer.status == 400 || answer.status == 404) &&
+  refuses(answer.status, await refusalOf(answer))
 
 /** How long an object's work behind an answer waits once its caller has read
  * the answer through (`onceRead`), so the runtime has sent it on: the runtime
@@ -367,7 +375,7 @@ export let skewed = async (
   | null
 > => {
   let theirs = caller(headers), here = versionOf(mine)
-  if (!refuses(answer.status)) return null
+  if (answer.status != 400 && answer.status != 404) return null
   if (!theirs || !here || !newer(theirs, here)) return null
   let said = await refusalOf(answer)
   if (!refuses(answer.status, said)) return null
@@ -427,10 +435,6 @@ export let settled = (
   })
 }
 
-// The word a refusal of a name the vocabulary does not know quotes
-// (@yaks/vocab `unknownName`, `unknownWord`).
-let UNKNOWN = /\bunknown (?:prop: \.|component:? )([\w$-]+)/
-
 /**
  * The fault a store still behind its caller is reported under: the path,
  * and the word its older code refused, so each new word a deploy brings is
@@ -449,6 +453,7 @@ let UNKNOWN = /\bunknown (?:prop: \.|component:? )([\w$-]+)/
  */
 export let behind = (failure: unknown, path: string): string => {
   let at = path.split('?')[0]
-  let word = failure instanceof Error && failure.message.match(UNKNOWN)?.[1]
+  let word = failure instanceof Error &&
+    failure.message.slice(SKEWED.length).trim().match(UNKNOWN)?.[1]
   return word ? `behind:${at} .${word}` : `behind:${at}`
 }

@@ -593,6 +593,34 @@ test('the trusted Directory read that wakes a restored app carries the kernel vo
   assertEquals(sent, 1)
 })
 
+test('a trusted query without the kernel vouch is refused once across a rollout', async () => {
+  learn(B)
+  let old = older(object())
+  let no = { error: 'Refused', message: 'trusted queries require the kernel' }
+  let legacy = () =>
+    Promise.resolve(Response.json({
+      error: 'Skewed',
+      message:
+        `Durable Object on an older deploy refused a caller on a newer one: ${no.message}`,
+      retryable: true,
+      refusal: { status: 400, body: no },
+    }, { status: 503 }))
+  for (let first of [(req: Request) => old.fetch(req), legacy]) {
+    let sent = 0
+    let door = storeOf(
+      {
+        idFromName: (name) => name,
+        get: () => ({ fetch: (req) => (sent++, first(req)) }),
+      },
+      PLATFORM_STORE,
+      undefined,
+      unpaused,
+    )
+    let answer = await door('/query?q=.space&trusted=1')
+    assertEquals([sent, answer.status, await answer.json()], [1, 400, no])
+  }
+})
+
 test("a refused subscription on a newer caller's directory socket leaves the socket and the directory running", async () => {
   let undo = installPair()
   try {
