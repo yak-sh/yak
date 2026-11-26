@@ -6,16 +6,17 @@ type Early = {
 
 type Field = HTMLTextAreaElement & { [key: symbol]: Early | undefined }
 
-// This function runs inline with the field, before any of the chat modules.
-let arm = (root: HTMLElement, browser: Window & typeof globalThis) => {
-  let field = root.querySelector<Field>('textarea[name=say]')
+// Keep this source literal. It runs in the page and has no access to any
+// helpers introduced by the Worker's bundler.
+let ARM = `(root, browser) => {
+  let field = root.querySelector('textarea[name=say]')
   if (!field) return
   let key = Symbol.for('yaks.operator.early')
-  let button = root.querySelector<HTMLButtonElement>('button[type=submit]')
+  let button = root.querySelector('button[type=submit]')
   if (button) button.disabled = true
   if (!field[key]) {
     let prefix = 'yak:operator-early:' + root.dataset.earlyDraft + ':'
-    let entry: string | undefined, text = '', composing = false
+    let entry, text = '', composing = false
     let edited = () => {
       text = field.value
       try {
@@ -41,7 +42,7 @@ let arm = (root: HTMLElement, browser: Window & typeof globalThis) => {
     field[key] = {
       composing: () => composing,
       take: (restore) => {
-        let saved: [string, string][] = []
+        let saved = []
         try {
           let disk = browser.localStorage
           for (let i = 0; i < disk.length; i++) {
@@ -70,7 +71,7 @@ let arm = (root: HTMLElement, browser: Window & typeof globalThis) => {
         field.removeEventListener('compositionstart', start)
         field.removeEventListener('compositionend', end)
         delete field[key]
-        let send = root.querySelector<HTMLButtonElement>('button[type=submit]')
+        let send = root.querySelector('button[type=submit]')
         if (send) send.disabled = false
       },
     }
@@ -83,24 +84,21 @@ let arm = (root: HTMLElement, browser: Window & typeof globalThis) => {
       let { performance } = browser
       if (!performance.getEntriesByName('yak-usable').length) {
         performance.mark('yak-usable')
-        let opening = browser as unknown as {
-          [key: symbol]: { ready(painted: boolean): void } | undefined
-        }
-        opening[Symbol.for('yaks.open')]?.ready(true)
+        browser[Symbol.for('yaks.open')]?.ready(true)
       }
     }, 0)
   )
-}
+}`
 
 /** The script stands immediately after its box. */
 export let earlyDraftScript = (): string =>
-  `(${arm})(document.currentScript.previousElementSibling,window)`
+  `(${ARM})(document.currentScript.previousElementSibling,window)`
 
 /** The service worker supplies the same handoff to its scriptless pictures. */
 export let keptDraftScript = (): string =>
   `document.addEventListener('DOMContentLoaded', () => {
     for (let root of document.querySelectorAll('[data-early-draft]')) {
-      (${arm})(root, window)
+      (${ARM})(root, window)
     }
   }, { once: true })`
 
