@@ -437,6 +437,38 @@ test("the apex's static pages and the guide's come from Site", async () => {
   }
 })
 
+test('a signed-out Manage read redirects at the edge with its return URL', async () => {
+  let f = front(() => page())
+  let url = 'https://yaks.app/manage/ada/connections?detail=a%2Fb'
+  for (let method of ['GET', 'HEAD']) {
+    let res = await f.go(url, { method })
+    assertEquals(res.status, 303)
+    assertEquals(
+      new URL(res.headers.get('location')!).searchParams.get('return'),
+      url,
+    )
+    assertEquals(res.headers.get('cache-control'), 'private, no-store')
+  }
+  for (
+    let [name, value] of [
+      [
+        'cookie',
+        `__Host-yak_session=${body({ person: 'p', via: 'v', exp: days(89) })}`,
+      ],
+      ['cookie', 'yak_session=expired'],
+      ['authorization', 'Bearer grant'],
+      ['upgrade', 'websocket'],
+    ]
+  ) {
+    await f.go(url, { headers: { [name]: value } })
+  }
+  await f.go(url, { method: 'POST' })
+  await f.go('https://yaks.app/manage/updates')
+  await f.go('https://yaks.app/manage/ada/no/such/page')
+  assertEquals(f.forwarded.length, 7)
+  assertEquals(f.asked, [])
+})
+
 test("a stranger's sign-in card comes from Site and keeps the ad's arrival", async () => {
   let f = front(() =>
     new Response('card', {

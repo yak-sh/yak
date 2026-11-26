@@ -29,10 +29,11 @@ import {
   recordsUse,
   scope,
   sealed,
+  shareable,
   stranger,
   UNKEPT_AT,
 } from '@yaks/platform/kept'
-import { cookieValue } from '@yaks/platform/cookie'
+import { cookieValue, HOST_COOKIE } from '@yaks/platform/cookie'
 import {
   badgeFollowed,
   isHome,
@@ -44,13 +45,16 @@ import {
 } from '../view-point.ts'
 import { type Conversion, conversionOf, keep } from '../arrival.ts'
 import {
+  collapsed,
   foreign,
   guarded,
   handedOff,
   hostOf,
   loopback,
+  managed,
   platform,
   sameOrigin,
+  signInReturn,
   spaceDoor,
   timedOut,
 } from '@yaks/platform/routes'
@@ -105,8 +109,14 @@ let claimed = (token: string) => {
  * out: past half its life it is re-minted (session.ts `browsing`, `slid`), and
  * a session with no browser in it gains one. No cookie owes nothing here: a
  * visitor gets their instrument at the first door that uses one. */
-export let settled = (req: Request, now = Date.now()) => {
-  let token = cookieValue(req.headers.get('cookie'))
+let routedCookie = (req: Request, env: Host) => {
+  let header = req.headers.get('cookie')
+  let own = hostOf(req, env) == apex(env)
+  return (own ? cookieValue(header, HOST_COOKIE) : null) ?? cookieValue(header)
+}
+
+export let settled = (req: Request, now = Date.now(), env: Host = {}) => {
+  let token = routedCookie(req, env)
   if (!token) return true
   let claims = claimed(token)
   return !!claims?.via && typeof claims.exp == 'number' &&
@@ -117,8 +127,8 @@ export let settled = (req: Request, now = Date.now()) => {
  * to route: a page kept for strangers is not theirs, and Site answers the
  * session its own copy only once the kernel verified it (kept-page.ts
  * `asked`). */
-let session = (req: Request) => {
-  let token = cookieValue(req.headers.get('cookie'))
+let session = (req: Request, env: Host) => {
+  let token = routedCookie(req, env)
   return token && claimed(token)?.person ? token : null
 }
 
@@ -188,12 +198,12 @@ export let kept = (
         env,
         req.headers.get('sec-fetch-site'),
       ) ||
-    !settled(req)
+    !settled(req, Date.now(), env)
   ) return null
   if (host == apex(env)) {
     if (
       !isListing(path) || (path == LOGIN && !stranger(req)) ||
-      (homed(path) && session(req))
+      (homed(path) && session(req, env))
     ) return null
     return listing(req, env.SITE, apex(env), path).then(
       async (page) => {
@@ -257,7 +267,7 @@ export let kept = (
         ),
       )
     }
-  }, session(req))
+  }, session(req, env))
 }
 
 let report = (
@@ -307,6 +317,15 @@ let serving = async (
     if (cli(req, env)) {
       waiting('cli_wait')
       return await env.CLI.fetch(req)
+    }
+    if (
+      hostOf(req, env) == apex(env) && shareable(req) && !routedCookie(req, env)
+    ) {
+      let page = collapsed(req)
+      let manage = managed(new URL(page.url).pathname)
+      if (manage && !('moved' in manage) && !('door' in manage)) {
+        return finished(signInReturn(page, env), env, at, cold, said)
+      }
     }
     waiting('site_wait')
     let page = await kept(req, env, ctx, said)

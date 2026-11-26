@@ -60,7 +60,7 @@ import { matches } from '@yaks/blob/serve'
 import { addressed } from '@yaks/blob'
 import { sha256 } from '@yaks/graph/sha256'
 import { mode } from '@yaks/member/words'
-import { COOKIE, cookieValue } from './cookie.ts'
+import { COOKIE, cookieValue, HOST_COOKIE } from './cookie.ts'
 import { decoded } from './files.ts'
 import { apex, type Host, url } from './host.ts'
 import { offered, sandboxed } from './installs.ts'
@@ -604,5 +604,6 @@ export let listingAt = (apex: string, path: string): string =>
  * for everyone, so Site keeps it. */
 export let stranger = (req: Request): boolean =>
   !cookieValue(req.headers.get('cookie')) &&
+  !cookieValue(req.headers.get('cookie'), HOST_COOKIE) &&
   !req.headers.has('authorization') &&
   !new URL(req.url).searchParams.has('return')

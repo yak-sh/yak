@@ -2,6 +2,7 @@
 // (workers/yak lib/token.ts) seals and opens what's in it, yak-front only reads
 // its way past one, and `yak admin` sends one it was handed.
 export let COOKIE = 'yak_session'
+export let HOST_COOKIE = '__Host-yak_session'
 
 // One cookie's value out of a Cookie header, or null.
 export let cookieValue = (

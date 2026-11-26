@@ -1,10 +1,10 @@
-import { COOKIE, cookieValue } from '@yaks/platform/cookie'
+import { COOKIE, cookieValue, HOST_COOKIE } from '@yaks/platform/cookie'
 import { apex, type Host } from '@yaks/platform/host'
 import { hostOf } from '@yaks/platform/routes'
 import { cookie, opened, verify } from './lib/token.ts'
 import type { Env } from './env.ts'
 
-export let HOST_COOKIE = '__Host-yak_session'
+export { HOST_COOKIE } from '@yaks/platform/cookie'
 // Every shared cookie issued before this migration has expired by then.
 export let SHARED_UNTIL = Date.parse('2027-02-16T00:00:00Z')
 

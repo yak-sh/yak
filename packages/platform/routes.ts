@@ -621,6 +621,15 @@ export let signInAt = (page: string, env: Host): string => {
   to.searchParams.set('return', page)
   return to.href
 }
+
+/** Send a signed-out visitor to sign-in with the requested platform page. */
+export let signInReturn = (req: Request, env: Host): Response => {
+  let { pathname, search } = new URL(req.url)
+  return new Response(null, {
+    status: 303,
+    headers: { location: signInAt(url(env, pathname + search), env) },
+  })
+}
 /** Where a paid plan's Get Started sends a stranger (site/home.tsx,
  * site/pricing.tsx): signing in, then the Billing page of the space they open
  * first, whose plan card is the button that buys the plan. Not the connector

@@ -46,7 +46,7 @@ import {
   managePath,
   type ManageView,
   renamed,
-  signInAt,
+  signInReturn,
   spaced,
   type SpaceView,
   type Talk,
@@ -216,7 +216,7 @@ export let manage = async (
     ? { person: null, until: undefined, session: undefined }
     : await whoIs(req, env, ahead, null, dir)
   if (!person && socket) return json(401, 'signed_out', 'Sign in again.')
-  if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
+  if (!person) return signInReturn(req, env)
   if (url.searchParams.has('settings-draft')) {
     let { settingsDraft } = await import('./settings-draft.ts')
     return settingsDraft(req, dir, { person, role: null, until })
