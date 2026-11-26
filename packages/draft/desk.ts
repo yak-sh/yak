@@ -70,8 +70,9 @@ export type Drafts = {
    * (the send it went into) */
   spend: (place: string, also?: Bundle[]) => Promise<boolean>
   /** Restore text from another source, preserving subsequent typing.
-   * `over` is the source text already imported (default: empty). */
-  restore: (place: string, text: string, over?: string) => void
+   * `over` is the source text already imported (default: empty).
+   * Returns whether the restored draft is durable across reload. */
+  restore: (place: string, text: string, over?: string) => boolean
 }
 
 /** What a desk is bound with. */
@@ -204,7 +205,10 @@ export let desk = (
     let key = STASH + place
     try {
       let spent = [...recovery.get(place)?.values() ?? []]
-      if (!behind(h) && !spent.length) return opts.stash?.removeItem(key)
+      if (!behind(h) && !spent.length) {
+        opts.stash?.removeItem(key)
+        return true
+      }
       let kept: Kept = {
         text: spent.reduce((text, copy) => merge('', copy, text), h.local),
         over: spent.length ? '' : h.base,
@@ -213,8 +217,10 @@ export let desk = (
       let value = JSON.stringify(kept)
       opts.stash?.setItem(key, value)
       stashed.set(place, value)
+      return !!opts.stash
     } catch (err) {
       opts.report?.(err)
+      return false
     }
   }
 
@@ -224,12 +230,13 @@ export let desk = (
       held.set(place, h)
       seen(place).value = h.local
     })
-    keep(place, h)
+    return keep(place, h)
   }
 
   let step = (place: string, f: (h: Held) => Held) => {
-    hold(place, f(get(place)))
+    let kept = hold(place, f(get(place)))
     schedule(place)
+    return kept
   }
 
   let forward = (bundles: Bundle[]) => {

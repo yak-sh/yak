@@ -120,14 +120,20 @@ let OPENING = `(endpoint, source) => {
         open.server = ms
         performance.mark('yak-open-server', { detail: ms })
       },
-      ready: () => parsed(() => {
-        let mark = performance.getEntriesByName('yak-usable')[0]
-        if (!mark && document.querySelector('[data-operator-opening], script[data-operator-chat]:not([hidden] *)')) return
-        open.usable = mark?.startTime ?? performance.now()
-        if (!mark) performance.mark('yak-usable')
-        ready = true
-        send()
-      }),
+      ready: (painted = false) => {
+        let usable = () => {
+          let mark = performance.getEntriesByName('yak-usable')[0]
+          if (!mark && document.querySelector('[data-operator-opening], script[data-operator-chat]:not([hidden] *)')) return
+          open.usable = mark?.startTime ?? performance.now()
+          if (!mark) performance.mark('yak-usable')
+          ready = true
+          send()
+        }
+        if (!painted) return parsed(usable)
+        let seen = saw()
+        if (seen != null || !observer) paint(seen ?? performance.now(), seen == null)
+        usable()
+      },
       offline: () => {
         ready = true
         send()

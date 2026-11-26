@@ -32,6 +32,7 @@ import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { type Ways, Ways as Reaching } from './operator-ways.ts'
 import { frame, FRAMED } from './frame.ts'
 import { apex, spaceHost, url } from '@yaks/platform/host'
+import { earlyDraftScript } from '@yaks/platform/operator-early-draft'
 import {
   backTo,
   chatPath,
@@ -1705,6 +1706,41 @@ export let openingChat = async (...args: Parameters<typeof chatPage>) => {
   )
 }
 
+let askingAt = (
+  env: Env,
+  space: Space,
+  here: string,
+  app?: MarkedApp,
+): Asking => ({
+  at: managePath('operator', space.slug),
+  here,
+  operator: space.operator,
+  ...(app && { app: { slug: app.slug, title: app.title } }),
+  base: url(env),
+  request: crypto.randomUUID(),
+  count: COUNT,
+  reads: READ,
+})
+
+let askBox = (
+  space: Space,
+  who: Who,
+  conversation: string,
+  asking: Asking,
+  place: string,
+) => {
+  let scope = `${space.eid}:${who.person}:${conversation}`
+  return [
+    h('div', {
+      class: 'Talk_Ask',
+      'data-key': scope,
+      'data-ask': '',
+      'data-early-draft': scope,
+    }, h(Ask, { asking, place })),
+    h('script', { dangerouslySetInnerHTML: { __html: earlyDraftScript() } }),
+  ]
+}
+
 let openingParts = (
   env: Env,
   space: Space,
@@ -1731,25 +1767,28 @@ let openingParts = (
     current: [open],
     here,
     chat,
-    main: column(
-      '',
-      h(
-        'div',
-        {
-          'data-operator-opening': full,
-          'data-operator-stream': streaming ? '' : undefined,
-          'data-person': who.person,
-          'data-space': space.eid,
-        },
+    main: [
+      column(
+        '',
         h(
-          Loading,
-          { 'data-operator-loading': '' },
-          'Loading conversation…',
+          'div',
+          {
+            'data-operator-opening': full,
+            'data-operator-stream': streaming ? '' : undefined,
+            'data-person': who.person,
+            'data-space': space.eid,
+          },
+          h(
+            Loading,
+            { 'data-operator-loading': '' },
+            'Loading conversation…',
+          ),
+          h('noscript', null, h('a', { href: full }, 'Open conversation')),
         ),
-        h('noscript', null, h('a', { href: full }, 'Open conversation')),
       ),
-    ),
-    skip: ['#content', 'Skip to content'],
+      askBox(space, who, open, askingAt(env, space, here, app), ''),
+    ],
+    skip: ['#ask', 'Skip to the message box'],
     script: `<script type="module" async src="${
       asset(env, '_operator-opening.js')
     }"></script>`,
@@ -1861,16 +1900,9 @@ let chatParts = async (
     }
     : undefined
   let asking: Asking = {
-    at,
-    here,
-    operator,
-    ...app ? { app: { slug: app.slug, title: app.title } } : {},
+    ...askingAt(env, space, here, app),
     ...talked.helper ? { to: chatPath(space.slug) } : {},
     inline: fresh,
-    base: url(env),
-    request: crypto.randomUUID(),
-    count: COUNT,
-    reads: READ,
   }
   let place = 'operator:' + (talked.begun || open)
   let reach = !talked.helper && !!beside.ways
@@ -1920,13 +1952,7 @@ let chatParts = async (
           !!declined,
         )
         : null,
-      boxed
-        ? h(
-          'div',
-          { class: 'Talk_Ask', 'data-ask': '' },
-          h(Ask, { asking, place }),
-        )
-        : null,
+      boxed ? askBox(space, who, shown, asking, place) : null,
     ],
     // What it is doing now and the helpers it set going, at the top of the
     // aside (operator-aside.ts), and below them the ways to reach it
@@ -2298,7 +2324,7 @@ let chatScript = (
   `<script type="module" data-operator-chat="${visit}">
 import { follow } from '${file('follow.js')}'
 import { frames } from '${file('frames.js')}'
-import { asideHtml, browserDrafts, covers, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, rememberChat, selfHtml, showing, sleep, turnHtml } from '${
+import { asideHtml, browserDrafts, covers, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, rememberChat, selfHtml, showing, sleep, takeEarlyDraft, turnHtml } from '${
     file('_talk.js')
   }'
 import words from '${file('_words.js')}'
@@ -2395,14 +2421,23 @@ if (given && selectedApp?.slug != given.asking.app?.slug) {
   given.asking = { ...given.asking, here: pathname + search, app: selectedApp }
 }
 let place = given?.place
+let askRoot = given && started.closest('[data-talk-view]').querySelector('[data-ask]')
+let field = askRoot?.querySelector('textarea')
+let handed = askRoot && takeEarlyDraft(askRoot, (text) => drafts.restore(place, text), signal)
+if (handed) await handed
+if (!signal.aborted) {
+let selection = field && field == document.activeElement
+  ? [field.selectionStart, field.selectionEnd, field.selectionDirection]
+  : null
 boxed = given && mountAsk({
-  root: document.querySelector('[data-ask]'),
+  root: askRoot,
   ...given,
   drafts,
   onSend: (b) => send(b),
   onStop: (b) => stop(b),
   onNewest: () => talk.newest(),
 })
+if (selection) field.setSelectionRange(...selection)
 document.addEventListener(${JSON.stringify(CANVAS_CHANGED)}, (e) => {
   boxed?.about(e.detail)
 }, { signal })
@@ -2897,5 +2932,6 @@ signal.addEventListener('abort', () => {
   talk.close()
   drafts.close()
 }, { once: true })
+} else drafts.close()
 }
 </script>`

@@ -16,6 +16,7 @@ import { failurePage, OPENING } from '@yaks/web/opening'
 import { opening } from '@yaks/platform/opening'
 import { OPEN_PATH } from '@yaks/timing/interaction'
 import { openScript, plainAddress } from '@yaks/platform/open-script'
+import { keptDraftScript } from '@yaks/platform/operator-early-draft'
 import { framed, LOGOUT } from '@yaks/platform/routes'
 
 // @yaks/platform's page report door (workers/yak/page-report.ts `PATH`).
@@ -28,7 +29,8 @@ keeping(globalThis as unknown as Scope, {
   opens,
   address: plainAddress,
   shelled: (url) => framed(new URL(url).pathname),
-  opening: (source) => openScript(OPEN_PATH, source),
+  opening: (source) =>
+    `(${keptDraftScript()}, ${openScript(OPEN_PATH, source)})`,
   report: OPEN_PATH,
   broke: BROKE,
   failed: (why) => failurePage(opening('/apple-touch-icon.png', BROKE), why),

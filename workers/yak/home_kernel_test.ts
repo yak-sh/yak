@@ -487,8 +487,8 @@ test('a dashboard page reads the directory in one trip', async () => {
   let settings = await timing(managePath('operator', slug))
   assertEquals(/hops;dur=(\d+)/.exec(settings)?.[1], '2')
   assertMatch(settings, /operator_wait;dur=\d+/)
-  // The opening frame arrives first. The same response brings the
-  // conversation and its composer once the Operator answers.
+  // The first chunk has the editor. The same response fills in the
+  // conversation around it.
   let opening = await k.at('yaks.app', chatPath(slug), { headers: { cookie } })
   assertEquals(opening.status, 200)
   let stream = opening.body!.getReader()
@@ -496,6 +496,8 @@ test('a dashboard page reads the directory in one trip', async () => {
   let shell = parseHTML(first).document
   let pending = shell.querySelector('[data-operator-opening]')!
   assert(pending.hasAttribute('data-operator-stream'))
+  let early = shell.querySelector('#ask textarea[name=say]')!
+  assert(early && !early.hasAttribute('readonly'))
   assertEquals(shell.querySelector('script[data-operator-answer]'), null)
   let tail = parseHTML(new TextDecoder().decode((await stream.read()).value))
     .document
@@ -505,7 +507,11 @@ test('a dashboard page reads the directory in one trip', async () => {
       tail.querySelector('script[data-operator-answer]')!.textContent!,
     ),
   ).document
-  assert(streamed.querySelector('#ask textarea'))
+  assertEquals(
+    streamed.querySelector('#ask textarea')?.closest('[data-early-draft]')
+      ?.getAttribute('data-key'),
+    early.closest('[data-early-draft]')?.getAttribute('data-key'),
+  )
   assertEquals(
     streamed.querySelector('[data-operator-opening]'),
     null,

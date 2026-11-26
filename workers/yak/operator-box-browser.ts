@@ -75,7 +75,9 @@ export let mountAsk = (
       }),
       root,
     )
+  let picked = [...input?.files ?? []]
   draw(hydrate)
+  if (picked.length) hold(picked)
   let field = () => root.querySelector('textarea')
   return {
     close: () => {

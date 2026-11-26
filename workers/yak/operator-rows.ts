@@ -23,6 +23,7 @@ export { rememberChat } from '@yaks/platform/operator-copy-browser'
 // the same bundle, so a draft changed anywhere draws the box again.
 export { mountAsk } from './operator-box-browser.ts'
 export { browserDrafts } from '@yaks/draft/browser'
+export { takeEarlyDraft } from '@yaks/platform/operator-early-draft'
 
 // The aside beside the lines, drawn the same way (operator-aside.ts).
 export { long, ordered, showing } from './operator-aside.ts'

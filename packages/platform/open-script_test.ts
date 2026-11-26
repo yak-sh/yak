@@ -124,6 +124,16 @@ test('an Operator opening records the frame paint and waits for the composer to 
   equal(b.sent.map(({ open }) => [open?.paint, open?.usable]), [[220, 900]])
 })
 
+test('the streamed composer can take typing before the document finishes', () => {
+  let b = browser()
+  b.document.querySelector = () => ({})
+  let open = b.run()
+  b.frame(340, 325)
+  b.entries.set('yak-usable', { startTime: 340 })
+  open.ready(true)
+  equal(b.sent.map(({ open }) => [open?.paint, open?.usable]), [[325, 340]])
+})
+
 test('a sandboxed fullscreen app reports its opening without service worker access', () => {
   let b = browser('https://ada.yaks.app/explore/', 'null')
   b.run()
