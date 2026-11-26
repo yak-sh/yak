@@ -275,6 +275,10 @@
           "name": "In chat",
           "note": "Ask here, in Claude or in ChatGPT."
         },
+        "discord": {
+          "name": "In Discord",
+          "note": "Mention your assistant in your server, and it answers there."
+        },
         "mail": {
           "name": "By email",
           "note": "Send your assistant the change and any files."

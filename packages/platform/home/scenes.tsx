@@ -58,8 +58,12 @@ export let Services = ({ short = false }: { short?: boolean }) => (
   </ul>
 )
 
+// The ways to ask for a change: each by its name under
+// `home.story.change`, and its icon or, for a chat platform, its logo's
+// slug.
 let CHANNELS = [
   ['chat', chat],
+  ['discord', 'discord'],
   ['mail', ICONS.email],
   ['text', sms],
 ] as const
@@ -67,9 +71,11 @@ let CHANNELS = [
 export let Change = ({ copy }: { copy: Copy }) => (
   <Card class='Home_Illustration'>
     <ul class='Home_IllustrationRows'>
-      {CHANNELS.map(([channel, icon], i) => (
+      {CHANNELS.map(([channel, mark], i) => (
         <li class='Home_IllustrationRow Home_In' {...In(i)}>
-          <Icon of={icon} />
+          {typeof mark == 'string'
+            ? <ServiceLogo slug={mark} />
+            : <Icon of={mark} />}
           <div class='Home_IllustrationCopy'>
             <b {...copy.text(`home.story.change.${channel}.name`)} />
             <p
