@@ -424,7 +424,7 @@ export let seedTree = async (
   ref: SandboxRef,
   folder: string,
   files: SandboxFile[],
-) => {
+): Promise<boolean> => {
   let packet = `/tmp/yak-seed-${crypto.randomUUID()}.json`
   let body = {
     folder,
