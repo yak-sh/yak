@@ -3,6 +3,7 @@
   "version": "0.2.30",
   "type": "module",
   "exports": {
+    "./app-outbound": "./app-outbound.ts",
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./names": "./names.ts",

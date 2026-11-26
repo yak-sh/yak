@@ -9,6 +9,7 @@
 // first imported: an isolate that wakes a Store evaluates the Store's code, one
 // that answers a page from Site evaluates Site's, and neither the other's.
 // The legacy module registry loads them (wrangler.toml, T-148980).
+import { incoming } from '@yaks/platform/app-outbound'
 import {
   DurableObject,
   RpcTarget,
@@ -311,19 +312,18 @@ export let classes: Record<string, Deferred> = {
   }),
   // An app's worker calling out (outbound.ts): the namespace's outbound
   // Worker, yak-out (outbound/), hands each fetch back here with the CALLER
-  // dispatch.ts said. It answers RPC and no fetch.
-  Outbound: entered(WorkerEntrypoint, ['send'], async (_ctx, env) => {
+  // dispatch.ts said. Fetch carries the WebSocket on an upgrade response.
+  Outbound: entered(WorkerEntrypoint, ['send', 'fetch'], async (_ctx, env) => {
     let { fromApp } = await import('../outbound.ts')
-    return {
-      send: (req: Request, caller: Caller) =>
-        fromApp(
-          req,
-          env,
-          caller,
-          async (asked) =>
-            (await import('../index.ts')).default.fetch(asked, env),
-        ),
-    }
+    let send = (req: Request, caller: Caller) =>
+      fromApp(
+        req,
+        env,
+        caller,
+        async (asked) =>
+          (await import('../index.ts')).default.fetch(asked, env),
+      )
+    return { send, fetch: (req: Request) => incoming(req, send) }
   }),
   // A sandbox container's calls to this platform and its spaces, handed here
   // by yak-sandbox (sandbox/index.ts), which holds the container but not the

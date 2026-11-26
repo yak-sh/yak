@@ -7,7 +7,8 @@
  * always ignore the header. Pure: only the configured host, no store.
  *
  * ```ts
- * import { route } from '@yaks/platform/routes'
+ * import { upgrading } from './app-outbound.ts'
+import { route } from '@yaks/platform/routes'
  * import { assertEquals } from '@std/assert'
  * assertEquals(route('ada.yaks.app', '/menu/soup'), {
  *   space: 'ada',
@@ -1002,10 +1003,6 @@ export let guarded = (req: Request): boolean => {
     path != OAUTH.token && path != OAUTH.register) ||
     path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path) || upgrading(req)
 }
-
-/** Whether a request asks to become a WebSocket. */
-let upgrading = (req: Request): boolean =>
-  (req.headers.get('upgrade') ?? '').toLowerCase() == 'websocket'
 
 // The browser's own word for the page that asked, against the hostname it
 // asked at. Every space is a subdomain of one registrable domain, so sibling

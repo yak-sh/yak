@@ -5,12 +5,14 @@
 // Worker only because a Worker cannot be its own namespace's outbound; it
 // holds nothing and decides nothing.
 
+import { outgoing } from '@yaks/platform/app-outbound'
+
 type Env = {
-  YAK: { send: (req: Request, caller: unknown) => Promise<Response> }
+  YAK: Parameters<typeof outgoing>[2]
   CALLER: unknown
 }
 
 export default {
   fetch: (req: Request, env: Env): Promise<Response> =>
-    env.YAK.send(req, env.CALLER),
+    outgoing(req, env.CALLER, env.YAK),
 }
