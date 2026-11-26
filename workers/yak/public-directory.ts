@@ -9,7 +9,7 @@ import {
   ServingCopy,
   type ServingCopyState,
   ServingCopyUnavailable,
-} from './serving-copy.ts'
+} from '@yaks/platform/serving-copy'
 
 // The one row the copy keeps: its ceiling.
 let COPY: CreateTable = {

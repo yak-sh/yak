@@ -10,7 +10,7 @@ import {
   type ServingCopyDoor,
 } from './directory-copy.ts'
 import { connector, fresh, owned, txt, vocabFile } from './probe.ts'
-import { ServingCopy } from './serving-copy.ts'
+import { ServingCopy } from '@yaks/platform/serving-copy'
 
 // A copy behind an RPC-shaped door, saying what it was told.
 let copied = () => {

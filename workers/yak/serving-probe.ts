@@ -2,7 +2,7 @@ import type { Env } from './env.ts'
 import { platform as inMemory } from './testing.ts'
 import { SECRET } from './serving-data-probe.ts'
 import type { ServingCopyDoor } from './directory-copy.ts'
-import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
+import { ServingCopy, type ServingCopyState } from '@yaks/platform/serving-copy'
 export { ADA, ADA_OWNS, as, seeded, visit } from './serving-data-probe.ts'
 
 /** The platform in memory, with `vars` beside its own. */

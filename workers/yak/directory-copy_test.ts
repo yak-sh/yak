@@ -14,7 +14,7 @@ import {
   STALL,
 } from './directory-copy.ts'
 import { within } from './defects.ts'
-import { RETIRED, ServingCopy } from './serving-copy.ts'
+import { RETIRED, ServingCopy } from '@yaks/platform/serving-copy'
 import { directory } from './directory.ts'
 import { storeOf } from './door.ts'
 import { tallying } from './lib/hops.ts'

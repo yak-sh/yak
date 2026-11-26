@@ -11,7 +11,7 @@ import { blobPrefix } from './blob-key.ts'
 import { cardTag, KEPT, SITE_TAG } from '@yaks/platform/kept'
 import { seal, verify } from './lib/token.ts'
 import { browserOf } from './session.ts'
-import { ServingCopy } from './serving-copy.ts'
+import { ServingCopy } from '@yaks/platform/serving-copy'
 import * as site from './site.ts'
 import { ADA, ADA_OWNS, as, platform, seeded } from './serving-probe.ts'
 

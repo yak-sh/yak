@@ -4,7 +4,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { PublicDirectoryStore } from './public-directory.ts'
-import { LEASE } from './serving-copy.ts'
+import { LEASE } from '@yaks/platform/serving-copy'
 import type { Env } from './env.ts'
 
 test('a copy keeps its ceiling past its instance', async () => {

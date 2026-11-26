@@ -26,7 +26,7 @@ import {
   ServingCopy,
   type ServingCopyState,
   ServingCopyUnavailable,
-} from './serving-copy.ts'
+} from '@yaks/platform/serving-copy'
 import { ADA_OWNS, seeded, visit } from './serving-probe.ts'
 import { preparedPlatform } from './testing.ts'
 

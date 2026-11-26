@@ -3,7 +3,7 @@ import { appStore, directoryOf } from './directory.ts'
 import { type ServingCopyDoor } from './directory-copy.ts'
 import { collected } from './erase.ts'
 import { declared } from './testing.ts'
-import { ServingCopy } from './serving-copy.ts'
+import { ServingCopy } from '@yaks/platform/serving-copy'
 import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
 
 let copy = new ServingCopy({

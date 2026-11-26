@@ -6,7 +6,7 @@ import {
 } from '@std/assert'
 import { test } from '@yaks/testing'
 import { connector, fresh, letter, owned, signIn, vocabFile } from './probe.ts'
-import { ServingCopy } from './serving-copy.ts'
+import { ServingCopy } from '@yaks/platform/serving-copy'
 import type { ServingCopyDoor } from './directory-copy.ts'
 import { directoryOf } from './directory.ts'
 

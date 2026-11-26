@@ -61,7 +61,7 @@ import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
 import { running } from './agent.ts'
 import { copyOf, type ServingCopyDoor } from './directory-copy.ts'
-import { ServingCopy } from './serving-copy.ts'
+import { ServingCopy } from '@yaks/platform/serving-copy'
 import { within } from './defects.ts'
 
 // Every app app_list answered as data, across its spaces.

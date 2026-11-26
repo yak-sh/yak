@@ -91,6 +91,7 @@
     "./domain-settings": "./domain-settings.ts",
     "./domain-transfer": "./domain-transfer.ts",
     "./ladder": "./ladder.ts",
+    "./serving-copy": "./serving-copy.ts",
     "./preview": "./preview.ts",
     "./draft-choice": "./draft-choice.ts",
     "./home": "./home/mod.tsx",

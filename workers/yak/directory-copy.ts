@@ -14,7 +14,7 @@ import { apart, elapsed, spanned } from './lib/hops.ts'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object/resets'
 import { type Clock, system, within } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
-import { RETIRED } from './serving-copy.ts'
+import { RETIRED } from '@yaks/platform/serving-copy'
 import { readable } from './query-line.ts'
 
 export type ServingCopyDoor = {

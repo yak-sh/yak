@@ -22,7 +22,7 @@ import {
   ServingCopy,
   type ServingCopyState,
   ServingCopyUnavailable,
-} from './serving-copy.ts'
+} from '@yaks/platform/serving-copy'
 import { db, slot, state } from './testing.ts'
 import { mint, spend } from './signin.ts'
 import { metaKeywords } from './vocab.ts'

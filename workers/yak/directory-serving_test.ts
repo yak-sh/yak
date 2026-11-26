@@ -10,7 +10,7 @@ import type { Env } from './env.ts'
 import { pageAt, SEEN } from '@yaks/platform/kept'
 import { sign } from './lib/token.ts'
 import { fetch as siteFetch } from './site.ts'
-import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
+import { ServingCopy, type ServingCopyState } from '@yaks/platform/serving-copy'
 import { ADA_OWNS, platform, seeded, visit } from './serving-probe.ts'
 
 let copyFixture = () => {

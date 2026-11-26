@@ -17,7 +17,10 @@ import {
   signedDirectory,
 } from './directory-copy.ts'
 import type { Env } from './env.ts'
-import { ServingCopy, ServingCopyUnavailable } from './serving-copy.ts'
+import {
+  ServingCopy,
+  ServingCopyUnavailable,
+} from '@yaks/platform/serving-copy'
 import { vouched } from './session.ts'
 import { type Ctx, inApp, reacquire, renew, type Tool } from './tool.ts'
 
