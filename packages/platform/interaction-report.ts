@@ -150,12 +150,15 @@ type Reporting = {
   failed: (error: unknown) => void
 }
 
+// An open begun hidden (a tab opened behind the one in front) paints only
+// once it is shown: its times are how long it stood unseen, which nobody
+// waited for, so they are counted but never judged against a budget.
 let slowOpen = (
   seen: Batch,
   { sink, commit, environment, opened }: Reporting,
 ): Bundle[] => {
   let open = seen.open
-  if (!open || !opened) return []
+  if (!open || !opened || open.unseen) return []
   return openMilestones(open).flatMap(({ name, ms, budget }) => {
     if (ms == null || ms <= budget) return []
     let kind = openName(opened.page, open, name)

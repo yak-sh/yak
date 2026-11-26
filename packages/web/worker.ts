@@ -39,7 +39,7 @@
  * @module
  */
 import { FRESH, FRESH_URL, FRESH_WAIT, NETWORK, picture } from './picture.ts'
-import { pictureSheets } from './picture-sheets.ts'
+import { carried, pictureSheets } from './picture-sheets.ts'
 import { keptReports } from './kept-reports.ts'
 import type { Failure } from './opening.ts'
 
@@ -344,22 +344,25 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     let atUrl = new URL(url)
     if (atUrl.origin != location.origin) return
     let sheets = new Map<string, Promise<string>>()
+    let text = async (res: Response, href: string) => {
+      if (res.ok) return await res.text()
+      void res.body?.cancel()
+      throw new Error(
+        `A picture's sheet answered ${res.status} at ${new URL(href).pathname}`,
+      )
+    }
+    // A sheet kept before only a file's own bytes were (`whole`) may be another
+    // address's: it is dropped and read again.
+    let sheet = async (href: string) => {
+      let css = await text(await file(new Request(href)), href)
+      if (carried(css)) return css
+      await (await caches.open(FILES)).delete(href)
+      return await text(await file(new Request(href)), href)
+    }
     let read = (href: string) => {
-      let held = sheets.get(href)
-      if (held) return held
-      let opening = file(new Request(href)).then((res) => {
-        if (!res.ok) {
-          void res.body?.cancel()
-          throw new Error(
-            `A picture's sheet answered ${res.status} at ${
-              new URL(href).pathname
-            }`,
-          )
-        }
-        return res.text()
-      })
-      sheets.set(href, opening)
-      return opening
+      let held = sheets.get(href) ?? sheet(href)
+      sheets.set(href, held)
+      return held
     }
     let styled = (markup: string) =>
       pictureSheets(markup, atUrl, opts.named, read)
@@ -506,12 +509,18 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     asked.delete(key)
     return held ?? timed(scope.fetch(req), performance.now())
   }
+  // A file named by its bytes is kept only as its own bytes: never another
+  // address's it was sent on to, nor bytes its site says not to keep (an
+  // earlier release's name answered with the current sheet).
+  let whole = (res: Response) =>
+    res.ok && !res.redirected &&
+    !/\bno-store\b/.test(res.headers.get('cache-control') ?? '')
   let file = async (req: Request) => {
     let files = await caches.open(FILES)
     let kept = await files.match(req, { ignoreVary: true })
     if (kept) return kept
     let got = await scope.fetch(req)
-    if (got.ok) await files.put(req, got.clone())
+    if (whole(got)) await files.put(req, got.clone())
     return got
   }
   scope.addEventListener('fetch', (e) => {

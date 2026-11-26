@@ -34,6 +34,11 @@ let value = (tag: string, attr: RegExp) =>
     (s) => s != null,
   )
 
+/** Whether a picture can carry `css` written into its document: a sheet
+ * that imports another, or would end the `<style>` it is written in, cannot
+ * be. */
+export let carried = (css: string): boolean => !/@import\b|<\/style/i.test(css)
+
 export let pictureSheets = async (
   html: string,
   at: URL,
@@ -56,7 +61,7 @@ export let pictureSheets = async (
   let styles = new Map(
     await Promise.all(links.map(async ({ tag, url }) => {
       let css = await read(url.href)
-      if (/@import\b|<\/style/i.test(css)) {
+      if (!carried(css)) {
         throw new Error('The picture cannot carry the sheet at ' + url.pathname)
       }
       return [

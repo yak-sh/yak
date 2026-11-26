@@ -239,6 +239,17 @@ test('a slow network open reports the browser navigation timestamps with the inc
   ])
 })
 
+test('a slow open begun hidden is counted but never filed as slow', async () => {
+  let b = browser()
+  b.run()
+  b.parsed(4000)
+  b.frame(4100)
+  b.sent[0].open!.unseen = true
+  let rows = await reported(b, { page: 'dashboard' })
+  equal(rows.filter((row) => row.error), [])
+  equal(rows.some((row) => row.timing), true)
+})
+
 test('a picture and its replacement report one paired sample and use the picture paint budget', async () => {
   let b = browser()
   let held = b.run('push')

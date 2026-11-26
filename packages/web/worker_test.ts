@@ -329,6 +329,45 @@ test('a file named by its bytes is answered from what was kept, the newest few o
   assertEquals(await w.ask('/api/query'), null)
 })
 
+test("a file is kept only as its own bytes, never a redirect's or bytes said not to be kept", async () => {
+  let w = worker(4)
+  let answered = (body: string, init: ResponseInit, redirected = false) => () =>
+    Promise.resolve(
+      Object.defineProperty(new Response(body, init), 'redirected', {
+        value: redirected,
+      }),
+    )
+  w.site.set('/_yak/own.css', answered('own', {}))
+  w.site.set('/_yak/sent.css', answered('source', {}, true))
+  w.site.set(
+    '/_yak/old.css',
+    answered('current', { headers: { 'cache-control': 'no-store' } }),
+  )
+  for (let name of ['own', 'sent', 'old']) await w.ask(`/_yak/${name}.css`)
+  assertEquals([...w.stores.get(FILES)!.keys()], [
+    'https://yaks.app/_yak/own.css',
+  ])
+})
+
+test('a kept sheet a picture cannot carry is dropped and read again', async () => {
+  let w = worker()
+  await (await w.scope.caches.open(FILES)).put(
+    'https://yaks.app/_yak/pages.css',
+    new Response("@import url('_ui.css');"),
+  )
+  w.site.set('/_yak/pages.css', 'body{color:red}')
+  let html = page('seen').replace(
+    '<head>',
+    '<head><link rel="stylesheet" href="/_yak/pages.css">',
+  )
+  await w.leave('/checks', html)
+  w.site.set('/checks', () => new Promise(() => {}))
+  equal(
+    (await w.open('/checks'))?.includes('<style>body{color:red}</style>'),
+    true,
+  )
+})
+
 test('a push keeps the page its notification opens as it is then, to draw at once even offline', async () => {
   let w = worker()
   w.site.set('/checks/c1', (_, init) =>
