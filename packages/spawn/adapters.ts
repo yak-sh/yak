@@ -280,8 +280,8 @@ export let codex: Adapter = {
 /**
  * `grok -p --output-format streaming-messages-json`, carrying on its thread
  * with `--resume` (xAI's Grok Build, docs.x.ai/build/cli/headless-scripting).
- * That format is Claude Code's stream-json wire format, so Claude's reader
- * reads it. Grok signs in only with an offered account (`GROK_HOME`), a Grok
+ * That format is Claude Code's stream-json wire format, read by
+ * @yaks/session `grokStream`. Grok signs in only with an offered account (`GROK_HOME`), a Grok
  * subscription or an API key, and connects the MCP servers its own
  * configuration names, Claude Code's `~/.claude.json` among them; the session
  * reaches a server run as `yak mcp` through `TASKS_SESSION`, and a run asked
@@ -320,7 +320,7 @@ export let grok: Adapter = {
       j.instruction,
     ]
   },
-  read: readers.claude,
+  read: readers.grok,
   file: 'AGENTS.md',
   env: { GROK_DISABLE_AUTOUPDATER: '1' },
   account: 'grok',

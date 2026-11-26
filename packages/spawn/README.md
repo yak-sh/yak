@@ -75,10 +75,11 @@ explicitly to the CLI, including on resumed runs. Claude's transcript also
 records the release that answered; Codex's JSON output never says which model
 answered. Grok (xAI's Grok Build,
 `grok -p --output-format streaming-messages-json`) prints Claude Code's
-stream-json format, read by Claude's reader, and signs in with its own account
-(`GROK_HOME`), a Grok subscription (`grok login --device-auth`) or an API key.
-Providers handled over HTTP have no command adapter and remain the
-responsibility of the in-process `@yaks/session` daemon.
+stream-json format, read by @yaks/session `grokStream` (a shell call's result as
+the text the model saw), and signs in with its own account (`GROK_HOME`), a Grok
+subscription (`grok login --device-auth`) or an API key. Providers handled over
+HTTP have no command adapter and remain the responsibility of the in-process
+`@yaks/session` daemon.
 
 A CLI signs in with an **account**, an `account{home, provider}` row naming its
 config directory (`~/.claude`, `~/.claude-teams-bob`); a second account is one

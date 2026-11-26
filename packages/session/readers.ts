@@ -517,8 +517,54 @@ export let codex: Reader = (e) => {
     : { entries }
 }
 
-/** The readers this package ships, by the harness's name. */
-export let readers: Record<string, Reader> = { claude, codex }
+// What a Grok Build tool's result showed the model: its stream answers a call
+// with the tool's own result as JSON, a shell call's output in bytes beside
+// `output_for_prompt`, the text the model read.
+let prompted = (b: Event): Event => {
+  if (b.type != 'tool_result' || typeof b.content != 'string') return b
+  let shown: unknown
+  try {
+    shown = obj(JSON.parse(b.content)).output_for_prompt
+  } catch {
+    return b
+  }
+  return typeof shown == 'string' ? { ...b, content: shown } : b
+}
+
+/**
+ * Grok Build's stream, `grok -p --output-format streaming-messages-json`:
+ * Claude Code's stream-json, read as {@link claude} reads it, except that a
+ * tool's result is the tool's own JSON. A shell call's is read as the text
+ * the model was shown (`output_for_prompt`); its history file (`grok`) keeps
+ * only that text.
+ *
+ * ```ts
+ * import { grokStream } from '@yaks/session'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let ran = JSON.stringify({ type: 'Bash', output: [104, 105], output_for_prompt: 'exit: 0\nhi' })
+ * let answer = { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'c1', content: ran }] } }
+ * assertEquals(grokStream(answer).entries, [
+ *   { result: { call: 'c1' }, content: { body: 'exit: 0\nhi' }, execution: {} },
+ * ])
+ * ```
+ */
+export let grokStream: Reader = (e) => {
+  let m = obj(e.message)
+  return claude(
+    e.type == 'user' && Array.isArray(m.content)
+      ? { ...e, message: { ...m, content: m.content.map(prompted) } }
+      : e,
+  )
+}
+
+/** The readers this package ships for the stream each harness prints, by the
+ * harness's name. */
+export let readers: Record<string, Reader> = {
+  claude,
+  codex,
+  grok: grokStream,
+}
 
 // Codex rollouts repeat their visible messages in event_msg notifications.
 // Read response_item once; event_msg only supplies turn boundaries and usage.
