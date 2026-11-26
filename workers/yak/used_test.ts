@@ -17,6 +17,7 @@ import {
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_OBJECT, storeOf } from './door.ts'
 import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
+import { backoff } from '@yaks/durable-object/resets'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { KERNEL, meta } from './meta.ts'
 import { platform } from './testing.ts'
@@ -435,23 +436,30 @@ test('a receipt whose answer a deploy cuts off is sent again and reported nowher
   equal(reports, [])
 })
 
-test('a receipt an overloaded store refuses is reported once and held back a minute', async () => {
+// A receipt an overloaded store refuses is sent again on the receipt's clock
+// (resets.ts `backoff.crowded`): `asked` is answered once every resend's pause
+// has passed.
+let resent = async <T>(time: ReturnType<typeof clock>, asked: Promise<T>) => {
+  for (let pause of backoff.crowded) await time.advance(pause)
+  return await asked
+}
+
+test('a receipt an overloaded store refuses through every resend is reported once and held back a minute', async () => {
   let sends = 0, reports: unknown[] = []
+  let refusals = backoff.crowded.length + 1
   let time = clock()
   let ns = {
     idFromName: (name: string) => name,
     get: () => ({
-      fetch: () => {
-        sends++
-        return sends == 1
+      fetch: () =>
+        ++sends <= refusals
           ? Promise.reject(Object.assign(
             Error(
               'Durable Object is overloaded. Requests queued for too long.',
             ),
             { overloaded: true },
           ))
-          : Promise.resolve(Response.json({ at: '2099-01-01T00:00:00.000Z' }))
-      },
+          : Promise.resolve(Response.json({ at: '2099-01-01T00:00:00.000Z' })),
     }),
   } as unknown as Namespace
   let env = {
@@ -460,7 +468,7 @@ test('a receipt an overloaded store refuses is reported once and held back a min
     },
   } as unknown as Parameters<typeof within>[0]
   let use = () => within(env, {}, () => recordUse(ns, 'busy-app', time))
-  let answers = [await use(), await use()]
+  let answers = [await resent(time, use()), await use()]
   await time.advance(REST)
   answers.push(await use(), await use())
   equal({ answers, sends, reports: reports.length }, {
@@ -470,7 +478,7 @@ test('a receipt an overloaded store refuses is reported once and held back a min
       '2099-01-01T00:00:00.000Z',
       '2099-01-01T00:00:00.000Z',
     ],
-    sends: 2,
+    sends: refusals + 1,
     reports: 1,
   })
 })
@@ -610,18 +618,30 @@ test('isolates of one colo send an app one use receipt an hour between them', as
   })
 })
 
-test('a colo holds back a receipt an overloaded store refused for a minute', async () => {
+test('a colo holds back a receipt an overloaded store refused through every resend for a minute', async () => {
   let down = true
   let c = colo(() => down)
-  for (let i = 0; i < 5; i++) await c.use(c.isolate())
+  await resent(c.time, c.use(c.isolate()))
+  for (let i = 0; i < 4; i++) await c.use(c.isolate())
   let refused = c.sent()
   down = false
   await c.time.advance(REST)
   let at = await c.use(c.isolate())
   equal({ refused, sent: c.sent(), took: at != null }, {
-    refused: 1,
-    sent: 2,
+    refused: backoff.crowded.length + 1,
+    sent: backoff.crowded.length + 2,
     took: true,
+  })
+})
+
+test('a receipt an overloaded store refused once is taken by its resend', async () => {
+  let refusals = 1
+  let c = colo(() => refusals-- > 0)
+  let at = await resent(c.time, c.use(c.isolate()))
+  equal({ took: at != null, sent: c.sent(), reports: c.reports.length }, {
+    took: true,
+    sent: 2,
+    reports: 0,
   })
 })
 

@@ -10,7 +10,7 @@ import type { Plugin } from '@yaks/graph'
 import { parse, retired } from '@yaks/query'
 import { ahead, storeOf, WAKE, WARM } from './door.ts'
 import { type Namespace } from '@yaks/durable-object/door'
-import { overloaded } from '@yaks/durable-object/resets'
+import { jittered, overloaded } from '@yaks/durable-object/resets'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { answered, KERNEL } from './meta.ts'
 import { background, defect, within } from './defects.ts'
@@ -46,9 +46,9 @@ export let returned = (previous: unknown, at: string) =>
 
 // What an isolate holds for each key: the answer it may give again without
 // asking, until when. A receipt the store took holds its hour's end. One an
-// overloaded store refused (as a deploy restarts it, bug dbe06394) holds
-// nothing for `REST`, so that store is asked once a minute from each colo,
-// not once for every request behind the refusal. The colo's cache holds the
+// overloaded store refused through every resend (as a deploy restarts it, bug
+// dbe06394) holds nothing for `REST`, so that store is asked once a minute
+// from each colo, not once for every request behind the refusal. The colo's cache holds the
 // same, for every isolate there.
 type Held = { at: string | null; until: number }
 let receipts = new WeakMap<Namespace, Map<string, Held>>()
@@ -162,18 +162,19 @@ let receipt = (
     let colo = shelf && await glance(shelf, r, clock)
     if (colo) return hold(colo.at, colo.until)
     try {
-      let at = await storeOf(ns, PLATFORM_STORE).consume(
-        r.door,
-        async (response) => {
-          if (!response.ok) throw await answered(response)
-          return (await response.json() as { at: string }).at
-        },
-        {
-          method: 'POST',
-          body: JSON.stringify(r.body),
-        },
-        KERNEL,
-      )
+      let at = await storeOf(ns, PLATFORM_STORE, undefined, jittered(clock))
+        .consume(
+          r.door,
+          async (response) => {
+            if (!response.ok) throw await answered(response)
+            return (await response.json() as { at: string }).at
+          },
+          {
+            method: 'POST',
+            body: JSON.stringify(r.body),
+          },
+          KERNEL,
+        )
       return await took(at, Date.parse(at))
     } catch (error) {
       defect(error, { request: r.request, app: r.app })
