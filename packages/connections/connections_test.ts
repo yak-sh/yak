@@ -50,6 +50,7 @@ import {
   disconnect,
   envOf,
   type Given,
+  type HeldCatalog,
   install,
   installed,
   type Integration,
@@ -642,6 +643,28 @@ test('the catalog is read whole once, and again only once it changed', async () 
   // A space's own integration is no catalog's.
   await needs(ESV)
   assertEquals((await view())[0], 0)
+})
+
+test('a fresh holder takes the kept catalog where its stamp still stands, and keeps the one it reads whole', async () => {
+  let { g } = await setup()
+  let lines: string[] = []
+  let read: Read = (q) => (lines.push(String(q)), g.read(q as Taken))
+  let put: HeldCatalog[] = []
+  // How many whole reads a fresh holder made, given what was kept.
+  let fresh = async (was?: HeldCatalog) => {
+    lines.length = 0
+    let rows = await catalogHeld({
+      get: () => Promise.resolve(was),
+      put: (c) => put.push(c),
+    })(read)
+    return [lines.filter((l) => l.includes('.built=true')).length, rows.length]
+  }
+  let [whole, count] = await fresh()
+  let kept = put[0]
+  assertEquals([whole, count, kept.rows.length], [1, count, count])
+  assertEquals(await fresh(kept), [0, count])
+  assertEquals(await fresh({ ...kept, stamp: 'moved' }), [1, count])
+  assertEquals(put.length, 2)
 })
 
 test('the integration directory: every built one but those in testing, and each custom one its owner listed', async () => {

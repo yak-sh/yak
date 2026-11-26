@@ -62,6 +62,7 @@ import {
   brokerOf,
   carry,
   catalogHeld,
+  type CatalogKept,
   catalogued,
   chatConnections,
   connect,
@@ -138,7 +139,9 @@ import {
 } from '@yaks/platform/routes'
 import { telling } from '@yaks/platform/cookie'
 import { background, caught } from './defects.ts'
-import { reached } from './lib/hops.ts'
+import { apart, elapsed, reached } from './lib/hops.ts'
+import { running } from './running.ts'
+import { within } from '@yaks/fp'
 import { domainOf, lapsed, vouched, type Who, whoIs } from './session.ts'
 import { held as live } from './browser-sessions.ts'
 import { type Ctx as Asking, EID, refuse } from './tool.ts'
@@ -566,13 +569,51 @@ let ownedBy = (dir: ReturnType<typeof dirOf>, owner: string | Path) =>
   ])
 
 // The host catalog this isolate holds, by the directory it was read from,
-// read again only once it changed (@yaks/connections `catalogHeld`).
+// read again only once it changed (@yaks/connections `catalogHeld`). A fresh
+// isolate takes the one its place's cache keeps for this deploy where the
+// catalog has not moved since: reading the whole is a thousand integrations,
+// which held a cold Connections page 650 ms (T-3901).
 let catalogs = new WeakMap<object, ReturnType<typeof catalogHeld>>()
 let catalogOf = (env: Env) => {
   let key = env.DIRECTORY ?? env
   let held = catalogs.get(key)
-  if (!held) catalogs.set(key, held = catalogHeld())
+  if (!held) catalogs.set(key, held = catalogHeld(keptCatalog()))
   return held
+}
+
+// How long a fresh isolate waits on the cache before reading the whole: a
+// match answers in milliseconds, but Cloudflare's Cache API now and then holds
+// one for seconds (@yaks/workerd/cache `stored`).
+let GLANCE = 500
+
+// The catalog kept in this place's cache for the deploy running, each wait on
+// it a `catalog_wait` (timing.ts). None where no deploy is named, as in a test
+// kernel, or no cache is.
+let keptCatalog = (): CatalogKept | undefined => {
+  let deploy = running()?.id
+  if (!deploy || typeof caches == 'undefined') return
+  let key = new Request(`https://yaks.app/_catalog/${deploy}`)
+  let shelf = () => caches.open('Catalog')
+  return {
+    get: () =>
+      elapsed('catalog_wait', async () => {
+        let found = await within(shelf().then((c) => c.match(key)), GLANCE)
+        return found ? await found.json() : undefined
+      }),
+    put: (catalog) =>
+      background(
+        apart(() =>
+          shelf().then((c) =>
+            c.put(
+              key,
+              Response.json(catalog, {
+                headers: { 'cache-control': 'public, max-age=86400' },
+              }),
+            )
+          )
+        ).catch((error) => caught(error, { request: 'catalog kept' })),
+      ),
+  }
 }
 
 let mcpRows = async (read: Read, person: string): Promise<McpRows> => {

@@ -34,7 +34,9 @@
 // counts (views.ts), `oauth_wait` on the OAuth provider's grants and clients
 // (identity.ts `grants`), `vault_wait` on the vault's database (vault.ts),
 // `tracker_wait` on a space's tracker (app-errors.ts), `machine_wait` on a
-// person's machine through their space's tunnel (tunnel.ts `machine`).
+// person's machine through their space's tunnel (tunnel.ts `machine`),
+// `catalog_wait` on the integration catalog a place's cache keeps
+// (connections.ts `keptCatalog`).
 //
 // Every `at_<stage>` is when, in ms from the request's start, it first
 // reached that stage (hops.ts `reached`): the waits overlap, and these say

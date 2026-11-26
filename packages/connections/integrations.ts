@@ -333,22 +333,63 @@ let STAMP = [
   line`${sub(SHOWN)}&.${FEATURED}&.fields=${FEATURED}.at`,
 ]
 
+/** A catalog as it was read, and the stamp it was read at. */
+export type HeldCatalog = { stamp: string; rows: Marked[] }
+
+/** Where a catalog is kept beyond the one that holds it, such as a cache
+ * every process in a place shares. */
+export type CatalogKept = {
+  get(): Promise<HeldCatalog | undefined>
+  put(catalog: HeldCatalog): void
+}
+
 /** The host catalog (`catalogued`), read again only once it changed: each
  * call reads a stamp of a few rows beside the rest of its moment, and the
- * whole only when the stamp moved, or beside the stamp when none is held yet.
- * The rows are shared by every caller, so none changes them. */
-export let catalogHeld = (): (read: Read) => Promise<Marked[]> => {
+ * whole only when the stamp moved. With none held yet, it reads the one
+ * `kept` holds beside the stamp, and the whole only where that is not the
+ * stamp's; with nothing kept, the whole beside the stamp. The rows are
+ * shared by every caller, so none changes them.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { catalogHeld } from '@yaks/connections'
+ * let asked: string[] = []
+ * let read = (q: unknown) => (asked.push(String(q)), Promise.resolve([]))
+ * let stamp = '[[],[],[]]'
+ * let kept = { get: () => Promise.resolve({ stamp, rows: [] }), put() {} }
+ * assertEquals(await catalogHeld(kept)(read), [])
+ * assertEquals(asked.length, 3, 'the stamp alone')
+ * ```
+ */
+export let catalogHeld = (
+  kept?: CatalogKept,
+): (read: Read) => Promise<Marked[]> => {
   // Values, never the reads' promises, which settle only in the request that
   // made them (@yaks/fp `Scope`).
-  let held: { stamp: string; rows: Marked[] } | undefined
+  let held: HeldCatalog | undefined
+  let whole = async (read: Read, stamp: string) => {
+    held = { stamp, rows: await catalogued(read) }
+    kept?.put(held)
+    return held.rows
+  }
   return async (read: Read): Promise<Marked[]> => {
     let stamping = Promise.all(STAMP.map((q) => read(q))).then(JSON.stringify)
-    let [stamp, rows] = held
-      ? [await stamping, undefined]
-      : await Promise.all([stamping, catalogued(read)])
-    if (held?.stamp == stamp) return held.rows
-    held = { stamp, rows: rows ?? await catalogued(read) }
-    return held.rows
+    if (held) {
+      let stamp = await stamping
+      return held.stamp == stamp ? held.rows : await whole(read, stamp)
+    }
+    if (kept) {
+      let [stamp, was] = await Promise.all([
+        stamping,
+        kept.get().catch(() => undefined),
+      ])
+      if (was?.stamp != stamp) return await whole(read, stamp)
+      held = was
+      return held.rows
+    }
+    let [stamp, rows] = await Promise.all([stamping, catalogued(read)])
+    held = { stamp, rows }
+    return rows
   }
 }
 
