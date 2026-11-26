@@ -7,8 +7,7 @@
  * always ignore the header. Pure: only the configured host, no store.
  *
  * ```ts
- * import { upgrading } from './app-outbound.ts'
-import { route } from '@yaks/platform/routes'
+ * import { route } from '@yaks/platform/routes'
  * import { assertEquals } from '@std/assert'
  * assertEquals(route('ada.yaks.app', '/menu/soup'), {
  *   space: 'ada',
@@ -20,6 +19,7 @@ import { route } from '@yaks/platform/routes'
  * @module
  */
 import { knocks } from '@yaks/git/door'
+import { upgrading } from './app-outbound.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { letter, monogram } from './monogram.ts'
 import { PLATFORM, RESERVED, ROOT, SLUG } from './names.ts'
