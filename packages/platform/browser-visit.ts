@@ -10,6 +10,7 @@ import { CallError } from '@yaks/tools/errors'
 import { audit, type Axe, type Checked, interruption } from './preview-audit.ts'
 import { FIT, type Fit } from './preview-fit.ts'
 import { bounded, BrowserTimeout } from './browser-time.ts'
+import { tracing } from './browser-trace.ts'
 import {
   HTML_BYTES,
   HTML_LIMIT,
@@ -44,7 +45,8 @@ export { bounded, BrowserTimeout } from './browser-time.ts'
  * the dark theme. `cpu` slows the processor by that factor and `network`
  * holds the connection to a mobile one (`NETWORKS`), as a slower phone
  * opens the page; `cold` opens it with no cache, service worker or stored
- * data from an earlier visit, as a first open does. */
+ * data from an earlier visit, as a first open does. `trace` records what
+ * the page's main thread did while the steps ran (./browser-trace.ts). */
 export type View = {
   width: number
   height: number
@@ -54,6 +56,7 @@ export type View = {
   cpu?: number
   network?: Network
   cold?: boolean
+  trace?: boolean
 }
 /** Chrome DevTools' own mobile presets: round trip in ms, and bytes a
  * second each way. */
@@ -852,6 +855,7 @@ type Loaded =
   & Omit<Rendered, 'duration' | 'accessibility' | 'fit' | 'text' | 'timings'>
   & {
     page: Page
+    traced?: Timing[]
   }
 
 class BrowserClosed extends Error {
@@ -1021,6 +1025,9 @@ let loaded = async (
           encoding: 'base64',
           optimizeForSpeed: audit === false,
         })
+      let traced = view.trace
+        ? await tracing(await page.createCDPSession())
+        : undefined
       for (let [i, step] of steps.entries()) {
         signal.throwIfAborted()
         if (!('wait' in step)) await ready()
@@ -1076,6 +1083,9 @@ let loaded = async (
       }
       signal.throwIfAborted()
       await ready()
+      waitingFor('reading the trace')
+      let tasks = await traced?.()
+      signal.throwIfAborted()
       waitingFor('taking the final screenshot')
       let image = await shoot()
       signal.throwIfAborted()
@@ -1089,6 +1099,17 @@ let loaded = async (
         dialogs,
         errors,
         status,
+        ...tasks
+          ? {
+            traced: tasks.map((t) => ({
+              name: 'task',
+              url,
+              ms: t.ms,
+              parts: { at: t.at, ...Object.fromEntries(t.spent) },
+              server: {},
+            })),
+          }
+          : {},
       }
     },
   )
@@ -1126,7 +1147,7 @@ export let capture = async (
       progress: screens?.progress,
     }, async (browser) => {
       await screens?.reset()
-      let { page, ...shot } = await loaded(
+      let { page, traced = [], ...shot } = await loaded(
         browser,
         visit,
         Math.min(render, left()),
@@ -1135,17 +1156,19 @@ export let capture = async (
         files,
       )
       screens?.progress("reading the page's text and timings")
+      let read = await checked(
+        page,
+        visit.audit === false ? null : browsing.axe,
+        time,
+        (e) => {
+          report(e)
+          if (shot.errors.length < 100) shot.errors.push(message(e))
+        },
+      )
       return {
         ...shot,
-        ...await checked(
-          page,
-          visit.audit === false ? null : browsing.axe,
-          time,
-          (e) => {
-            report(e)
-            if (shot.errors.length < 100) shot.errors.push(message(e))
-          },
-        ),
+        ...read,
+        ...traced.length ? { timings: [...read.timings ?? [], ...traced] } : {},
       }
     })
   let result: Omit<Rendered, 'duration'>

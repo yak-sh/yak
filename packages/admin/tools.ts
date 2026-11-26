@@ -483,6 +483,7 @@ export let runs = (
           'cpu',
           'network',
           'cold',
+          'trace',
         ] as const)
           .filter((k) => a[k] != null)
           .map((k) => [k, a[k]]),
