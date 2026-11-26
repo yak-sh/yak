@@ -23,7 +23,7 @@ let { reply, lines, using } = await (async () => {
   let routes = [
     ['openai', 'gpt-6-astra'],
     ['grok', 'grok-4.6'],
-    ['gemini', 'gemini-3.8-flash-medium'],
+    ['antigravity', 'gemini-3.8-flash-medium'],
   ]
   await h.g.apply(
     routes.flatMap(([provider, model], ord) => {
@@ -60,8 +60,8 @@ let { reply, lines, using } = await (async () => {
           stderr: 'You’ve hit the rate limit for your plan.',
         })
       }),
-      gemini: cliModel('gemini', {}, env, (job) => {
-        asked.push('gemini')
+      antigravity: cliModel('antigravity', {}, env, (job) => {
+        asked.push('antigravity')
         let { items } = JSON.parse(JSON.parse(job.stdin!).message.content)
         assertEquals(
           items.some((i: { text?: string }) =>
@@ -123,11 +123,11 @@ let { reply, lines, using } = await (async () => {
 test('spent plans move the conversation once through each routed provider', () => {
   assertEquals(
     asked,
-    ['openai', 'grok', 'gemini', 'gemini'],
+    ['openai', 'grok', 'antigravity', 'antigravity'],
     JSON.stringify({ lines, reply }),
   )
   assertStringIncludes(reply, 'Task found.')
-  assertEquals(using.provider, identityEid('provider', ['gemini']))
+  assertEquals(using.provider, identityEid('provider', ['antigravity']))
   assertEquals(using.model, identityEid('model', ['gemini-3.8-flash-medium']))
   assertEquals(lines.filter((l) => l.startsWith('Moved on')), [
     "Moved on: gpt-6-astra's plan is spent; grok-4.6 is next.",

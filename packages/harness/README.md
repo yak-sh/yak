@@ -371,7 +371,7 @@ another model. Where the default routes nothing else, or every other plan is
 spent too, the request waits for its plan to reset as before.
 
 Grok Build and Google Antigravity are subscription-backed providers on a local
-effects host. Configure `grok` and `gemini` and add their offerings to this
+effects host. Configure `grok` and `antigravity` and add their offerings to this
 default as shown in [@yaks/model-cli](../model-cli/README.md). A host can move
 onto the provider implementations it has configured.
 

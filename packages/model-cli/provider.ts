@@ -12,7 +12,7 @@ export let providers = (
   options: Config = {},
 ): Record<string, Model> =>
   Object.fromEntries(
-    (['grok', 'gemini'] as const).flatMap((name) =>
+    (['grok', 'antigravity'] as const).flatMap((name) =>
       options[name] ? [[name, cliModel(name, options[name], lent.env)]] : []
     ),
   )

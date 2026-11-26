@@ -41,7 +41,7 @@ let stdout = (vendor: Vendor, turn: unknown) =>
       },
     ].map((frame) => JSON.stringify(frame)).join('\n')
 
-for (let vendor of ['grok', 'gemini'] as const) {
+for (let vendor of ['grok', 'antigravity'] as const) {
   test(`${vendor} replays graph history and returns calls for the harness`, async () => {
     let seen: string[] = []
     let model = cliModel(vendor, {}, (name) =>
@@ -119,14 +119,19 @@ test('only CLI plan exhaustion is routed away as spent', async () => {
     message:
       'You’ve hit the rate limit for your plan. Upgrade your account or try again later.',
   })
-  let gemini = JSON.stringify({
+  let antigravity = JSON.stringify({
     event: 'result',
     result: {
       status: 'ERROR',
       error: 'You have exhausted your quota',
     },
   })
-  for (let [vendor, payload] of [['grok', grok], ['gemini', gemini]] as const) {
+  for (
+    let [vendor, payload] of [['grok', grok], [
+      'antigravity',
+      antigravity,
+    ]] as const
+  ) {
     for (
       let [output, wanted] of [
         [{ stdout: payload, stderr: '', code: 1 }, 'usage_limit_reached'],

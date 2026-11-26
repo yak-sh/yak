@@ -3,7 +3,7 @@ import type { Invocation, Output } from './process.ts'
 import { instructions, json, object, prompt, schema } from './turn.ts'
 
 /** Vendor CLI name under which the harness serves the model. */
-export type Vendor = 'grok' | 'gemini'
+export type Vendor = 'grok' | 'antigravity'
 
 type Command = Pick<Invocation, 'args' | 'files' | 'stdin'>
 type Turn = { id: string; model?: string; output: unknown; usage?: Usage }
@@ -154,7 +154,7 @@ let agent = [
   '',
 ].join('\n')
 
-let gemini: Protocol = {
+let antigravity: Protocol = {
   command: 'agy',
   invocation: (req) => ({
     args: [
@@ -219,4 +219,4 @@ let gemini: Protocol = {
   },
 }
 
-export let protocols: Record<Vendor, Protocol> = { grok, gemini }
+export let protocols: Record<Vendor, Protocol> = { grok, antigravity }

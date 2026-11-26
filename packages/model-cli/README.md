@@ -17,7 +17,7 @@ Add the plugin entry to the host's `plugins` list alongside `@yaks/harness`.
   "use": "@yaks/model-cli",
   "with": {
     "grok": { "models": ["grok-4.6"] },
-    "gemini": { "models": ["gemini-3.8-flash-medium"] }
+    "antigravity": { "models": ["gemini-3.8-flash-medium"] }
   }
 }
 ```
@@ -32,7 +32,7 @@ A new session or a follow-up can select either provider by name.
 
 ```sh
 yak session new 'Summarize the task' --provider grok --model grok-4.6
-yak session send S-123 'Continue the work' --provider gemini --model gemini-3.8-flash-medium
+yak session send S-123 'Continue the work' --provider antigravity --model gemini-3.8-flash-medium
 ```
 
 ## Routes for subscription failover
@@ -49,10 +49,10 @@ yak graph apply --bundles '[
   {"entity":{"eid":"$grok_model"},"model":{"name":"grok-4.6"}},
   {"entity":{"eid":"$grok_offer"},"edge":{"from":"$grok","to":"$grok_model"},"serves":{"name":"grok-4.6"}},
   {"edge":{"from":"8b429c76-beb1-8dcf-82fc-c68f7f0e5c73","to":"$grok_offer","ord":100},"routes":{}},
-  {"entity":{"eid":"$gemini"},"provider":{"name":"gemini"}},
-  {"entity":{"eid":"$gemini_model"},"model":{"name":"gemini-3.8-flash-medium"}},
-  {"entity":{"eid":"$gemini_offer"},"edge":{"from":"$gemini","to":"$gemini_model"},"serves":{"name":"gemini-3.8-flash-medium"}},
-  {"edge":{"from":"8b429c76-beb1-8dcf-82fc-c68f7f0e5c73","to":"$gemini_offer","ord":101},"routes":{}}
+  {"entity":{"eid":"$antigravity"},"provider":{"name":"antigravity"}},
+  {"entity":{"eid":"$antigravity_model"},"model":{"name":"gemini-3.8-flash-medium"}},
+  {"entity":{"eid":"$antigravity_offer"},"edge":{"from":"$antigravity","to":"$antigravity_model"},"serves":{"name":"gemini-3.8-flash-medium"}},
+  {"edge":{"from":"8b429c76-beb1-8dcf-82fc-c68f7f0e5c73","to":"$antigravity_offer","ord":101},"routes":{}}
 ]'
 ```
 
