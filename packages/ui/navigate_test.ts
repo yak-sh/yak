@@ -629,6 +629,19 @@ test('a press on a page under a frame draws its frame at once, titled as the lin
   assertEquals(b.doc.querySelector('.Body > p')?.textContent, 'rows of b')
 })
 
+test('a press on a page under a frame keeps the look ahead it started, though its frame takes the focus', async () => {
+  let b = browsing(desks, '/desk/a')
+  b.slow()
+  let side = `a[${HOLD}][href="/desk/b"]`
+  b.press('mousedown', side)
+  b.doc.addEventListener(LEAVE, () => b.press('focusout', side), { once: true })
+  b.click(side)
+  await b.answer()
+  assertEquals(b.stopped, [])
+  assertEquals(b.loaded, [])
+  assertEquals(b.drawn.map((d) => d.from), ['framed', 'fresh'])
+})
+
 test('a link under a frame is not held as the browser idles, but one looked ahead at draws whole', async () => {
   let b = browsing(desks, '/desk/a')
   await settled()

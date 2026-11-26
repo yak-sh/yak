@@ -811,7 +811,6 @@ export let start = (
   // The page at `to` laid over its frame as it comes, pressed at `began`, or
   // loaded where it cannot be; left be where another press came since.
   let laid = async (to: URL, using: Held, began: number, mine: number) => {
-    using.used = true
     let answer = await using.answer
     if (mine != turn) return
     let wait = answer ? Math.max(0, answer.received - began) : 0
@@ -854,6 +853,10 @@ export let start = (
       return load(to, pop)
     }
     let from: Entering['from'] = held?.received ? 'held' : 'fetch'
+    // Taken up before anything moves the focus, which lets go of a look
+    // ahead nobody took up (`left`).
+    let using = held ?? ask(to)
+    using.used = true
     // Its frame now, and the page laid over it as it comes, the address
     // already moved.
     let frame = !win.enter && !held?.received && frameOf(doc, to)
@@ -862,10 +865,8 @@ export let start = (
       land(new URL(to), () => framed(frame, names), 'framed', began, 0, pop)
     ) {
       pressed?.drawn(0)
-      return laid(to, held ?? ask(to), began, mine)
+      return laid(to, using, began, mine)
     }
-    let using = held ?? ask(to)
-    using.used = true
     let answer = await using.answer
     if (mine != turn) return pressed?.cancel()
     let wait = answer ? Math.max(0, answer.received - began) : 0
