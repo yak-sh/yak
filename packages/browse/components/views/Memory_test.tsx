@@ -3,7 +3,8 @@
 // promises.
 import { test } from '@yaks/testing'
 import '../../testing.ts'
-import { type ComponentChildren, type VNode } from 'preact'
+import { render, type VNode } from 'preact'
+import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
@@ -29,21 +30,24 @@ let children = (v: VNode) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
     .filter((x) => x !== undefined && x !== false) as VNode[]
 
-// The words a node reads as, its components drawn.
-let words = (c: ComponentChildren): string =>
-  c == null || typeof c == 'boolean'
-    ? ''
-    : typeof c != 'object'
-    ? String(c)
-    : Array.isArray(c)
-    ? c.map(words).join('')
-    : typeof (c as VNode).type == 'function'
-    ? words(((c as VNode).type as (p: unknown) => ComponentChildren)(
-      (c as VNode).props,
-    ))
-    : words((c as VNode<{ children?: ComponentChildren }>).props.children)
-
-let text = (v: VNode): string => words(v.props.children)
+// The words a node reads as, drawn into a document of its own, so its
+// components run as they do on a page, hooks included.
+let text = (v: VNode): string => {
+  let { document } = parseHTML('<main></main>')
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  try {
+    render(v, root)
+    return root.textContent ?? ''
+  } finally {
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+}
 
 test('memory owns its list tile', () => {
   assertEquals(resolve(memory, 'List.Tile').Render, MemoryTile)
