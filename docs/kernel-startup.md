@@ -1030,3 +1030,83 @@ All 12 live access checks passed again on `e00f351e`, including private cookie
 and OAuth authorization (rays `a60544675c27cf83` and `a6054468ee31cf83`),
 sandbox token in the path and as a bearer (`a60544743b89cf83` and
 `a60544759d57cf83`), and the wrong-app token refusal (`a6054476deebcf83`).
+
+## Store acquisition on an authorized app page (T-151187)
+
+In production trace `9b6463d362afc5a08f539195f4ba2bfa` at 01:43:30 UTC on
+November 26, 2026, the kernel sent Township's `GET /wake` at the start of app
+dispatch. Both began at 01:43:30.517. The Store handler started 926 ms later and
+returned 204. This wake goes straight to `yak:Store` after app authorization.
+The smaller query Worker reaches the same namespace. The `Uses.wake` RPC belongs
+to the separate path for pages kept at the edge.
+
+### Isolated Store upload
+
+Using `9941f5418`, a temporary caller Worker exercised two private Workers
+through cross-Worker Durable Object bindings. Each bound a freshly provisioned
+SQLite namespace with class name `Store`. The full upload used the kernel's
+normal esbuild and Rollup production build. The Store-only entry used the same
+deferred Store methods, Store implementation, tracker instrumentation and
+`FILE_CACHE` adapter, built with the kernel's esbuild options and dynamic
+imports. Its upload includes all transitive modules the entry can reach,
+including deferred directory and app facets. Both Workers used the kernel's
+compatibility flags, legacy registry and ENAM object location hint.
+
+For each upload the caller alternated between new object names and repeated each
+request immediately. All 64 requests returned a 204 wake and a 200 query with
+the same empty result. Wake times measure the binding round trip. The trace
+residual subtracts the Store response span from the caller's fetch span and
+includes dispatch, transport and response delivery. These samples cover new,
+empty SQLite objects across five US colos.
+
+| Upload      | JS modules |  JS bytes | First wake median (range), ms | First wake trace residual median, ms | Repeat wake median, ms |
+| ----------- | ---------: | --------: | ----------------------------: | -----------------------------------: | ---------------------: |
+| Full kernel |        702 | 7,968,341 |               637 (162–1,104) |                                  506 |                   31.5 |
+| Store only  |        631 | 6,795,028 |               683 (510–1,139) |                                  554 |                     37 |
+
+Each row has 16 first wakes and 16 repeats. Representative cold IAD rays are
+`a6055817df641011` and `a605581f5a1b1011`, respectively. The smaller upload
+saved 14.7% of the JavaScript bytes. The measured wakes showed no reduction.
+
+### In-place bundle changes
+
+A second comparison used the same kernel build with Rollup's
+`hoistTransitiveImports: false`, and a one-module esbuild build. The Rollup
+variant removed 2,921 redundant direct imports and kept every module's
+transitive dependencies, exports and dynamic imports. The esbuild variant
+replaced the local-only MCP filesystem reader with a throwing stub for this
+experiment. All 72 timed requests returned 204 then 200 with matching empty
+query results.
+
+| Upload                    | JS modules |  JS bytes | First wake median (range), ms | Repeat wake median, ms |
+| ------------------------- | ---------: | --------: | ----------------------------: | ---------------------: |
+| Full kernel               |        702 | 7,968,341 |               654 (561–1,281) |                   26.5 |
+| Removed redundant imports |        702 | 7,869,952 |               816 (534–1,191) |                   29.5 |
+| One module                |          1 | 6,977,182 |               880 (744–1,887) |                   19.5 |
+
+Each row has 12 first wakes and 12 repeats. Representative cold IAD rays are
+`a6055b5bfb8ada52`, `a6055b55c9ddda52` and `a6055b615b46da52`. Both build
+changes can use the existing Worker and class names. The measured wakes showed
+no improvement. A measurement on an evicted, populated Store remains open.
+
+### Binding and authorization
+
+The isolated caller bound `class_name = "Store"` with the temporary owning
+Worker as `script_name`. The owning Worker used a local `STORE` binding and a
+fresh SQLite class declaration. Cloudflare accepted both uploads and the
+cross-Worker bindings. All temporary Workers were removed after the probes.
+
+A production split would keep authorization in the existing kernel, Site and
+query entrypoints. Public route and publication checks, session and OAuth
+standing, sandbox page tokens, and the app worker's visitor and app grants would
+still control which requests reach the Store. Only trusted platform Workers
+would bind its namespace and supply the existing internal headers. The Store
+needs its directory and peer-Store calls, lifecycle bindings, and alarm and
+hibernating socket handlers. The directory (`yak/platform`) and `yak/git` share
+the same Store class as the apps. Moving ownership therefore requires
+coordinating the whole namespace and distinguishing the sibling Workers' release
+IDs from the Store's deployment-skew lineage.
+[Cloudflare Durable Object class transfers](https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/).
+
+The experiment used its own namespaces. Production continues to serve the same
+authorization paths and Store namespace. The 926 ms Township gap remains open.
