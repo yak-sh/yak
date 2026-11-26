@@ -2,14 +2,15 @@
  * A page's part in being kept (./worker.ts): it registers its site's worker
  * once it has loaded. It sends a snapshot when the loaded page is first
  * controlled, again once it has stood unchanged for a moment (`QUIET`), and
- * when it is hidden, left in place (`yak-leave`), or unloaded, if it changed
- * since. A page with parts of its own (`OWN`) sends its shell beside it:
+ * when it is left (hidden or unloaded, once for both) or left in place
+ * (`yak-leave`), if it changed since. A part that moves by itself (`MOVES`)
+ * changes nothing. A page with parts of its own (`OWN`) sends its shell beside it:
  * the same document with those parts empty. The fresh page that replaces
  * a picture sends its own snapshot.
  *
  * @module
  */
-import { KEPT, OWN, SCROLL } from './picture.ts'
+import { KEPT, MOVES, OWN, SCROLL } from './picture.ts'
 import { LEAVE, PAGE } from '@yaks/ui/navigate'
 import type { Snapshot } from './worker.ts'
 import { absolute } from './picture-sheets.ts'
@@ -324,6 +325,15 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
   // taken again only when what it shows changed since the last.
   let changed = true
   let quiet: number | undefined
+  let moving = (r: MutationRecord) => {
+    let at = r.target.nodeType == 1
+      ? r.target as Element
+      : r.target.parentElement
+    return !!at?.closest(`[${MOVES}]`)
+  }
+  let changes = new win.MutationObserver((records) => {
+    if (!records.every(moving)) change()
+  })
   let change = () => {
     changed = true
     win.clearTimeout(quiet)
@@ -335,7 +345,6 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
       win.requestIdleCallback(send, { timeout: QUIET })
     } else send()
   }
-  let changes = new win.MutationObserver(change)
   changes.observe(win.document.documentElement, {
     subtree: true,
     childList: true,
@@ -346,7 +355,7 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
   win.addEventListener('resize', change)
   let send = () => {
     let root = win.document.documentElement
-    if (changes.takeRecords().length) changed = true
+    if (!changes.takeRecords().every(moving)) changed = true
     if (
       !changed || !workers.controller || root.hasAttribute(KEPT) ||
       pending && root.querySelector(pending)
@@ -369,10 +378,20 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
   if (win.document.readyState == 'complete') start()
   else win.addEventListener('load', start)
   win.document.addEventListener(PAGE, seed)
-  // Taken and sent at once: a page being hidden may not run again.
+  // Taken and sent at once: a page being hidden may not run again. A page
+  // going away is hidden and unloaded in turn, while the next page waits to
+  // parse: it is taken once for both, until it shows again.
+  let left = false
+  let leave = () => {
+    if (left) return
+    left = true
+    send()
+  }
   win.document.addEventListener('visibilitychange', () => {
-    if (win.document.visibilityState == 'hidden') send()
+    if (win.document.visibilityState == 'hidden') leave()
+    else left = false
   })
   win.document.addEventListener(LEAVE, send)
-  win.addEventListener('pagehide', send)
+  win.addEventListener('pagehide', leave)
+  win.addEventListener('pageshow', () => left = false)
 }

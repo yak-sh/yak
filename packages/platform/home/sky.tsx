@@ -358,7 +358,9 @@ export let Walk = () => (
 )
 
 /** The sky, laid behind the page from its top to the pencil line under the
- * hero. It is drawing only, so a screen reader passes over it. */
+ * hero. It is drawing only, so a screen reader passes over it. Its birds move
+ * every frame, which is no change to keep the page again for
+ * (`data-kept-moves`, @yaks/web/picture `MOVES`). */
 export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
   let { stars, flies } = night()
   let ground = under(G, 240)
@@ -368,6 +370,7 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
       class='Sky'
       data-landscape={landscape ? '' : undefined}
       aria-hidden='true'
+      data-kept-moves=''
       data-sink={SINK}
       data-birds={BIRDS}
       data-shoot={SHOOT}

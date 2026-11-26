@@ -66,6 +66,7 @@ let tab = (html: string, controlled = true, pending?: string) => {
   }
   let leave = () => document.dispatchEvent(new window.Event(LEAVE))
   let load = () => window.dispatchEvent(new window.Event('load'))
+  let unload = () => window.dispatchEvent(new window.Event('pagehide'))
   let arrive = () => document.dispatchEvent(new window.Event(PAGE))
   // The page stands unchanged as long as it waits for.
   let wait = async () => {
@@ -83,6 +84,7 @@ let tab = (html: string, controlled = true, pending?: string) => {
     hide,
     leave,
     load,
+    unload,
     claim,
     arrive,
     wait,
@@ -130,6 +132,36 @@ test('a page is kept once it stands unchanged, so leaving it takes nothing, and 
   p.textContent = 'Changed while hidden'
   await t.wait()
   assertEquals(t.sent.length, 2)
+})
+
+test('a part that moves by itself changes nothing, so a page of birds is kept once still', async () => {
+  let t = tab(
+    '<html><body><p>Seen</p><svg data-kept-moves=""><path d="M0"/></svg></body></html>',
+  )
+  t.load()
+  let bird = t.document.querySelector('path')!
+  bird.setAttribute('d', 'M1')
+  await t.wait()
+  t.hide()
+  assertEquals(t.sent.length, 1)
+  t.document.querySelector('p')!.textContent = 'Seen, changed'
+  bird.setAttribute('d', 'M2')
+  t.leave()
+  assertEquals(t.sent.length, 2)
+})
+
+test('a page going away is taken once as it is unloaded and hidden', () => {
+  let t = tab('<html><body><p>Seen</p></body></html>')
+  t.load()
+  let p = t.document.querySelector('p')!
+  p.textContent = 'Seen, changed'
+  t.unload()
+  p.textContent = 'Seen, changed again'
+  t.hide()
+  assertEquals(t.sent.map((s) => /<p>(.*?)<\/p>/.exec(s.html)?.[1]), [
+    'Seen',
+    'Seen, changed',
+  ])
 })
 
 test('a first visit is kept as soon as its worker takes control, before the page is hidden', () => {

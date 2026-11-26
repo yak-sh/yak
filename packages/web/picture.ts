@@ -34,6 +34,11 @@ export let SHELL = 'data-kept-shell'
 /** A pane's starting scroll position in a picture, in pixels or at its end. */
 export let SCROLL = 'data-kept-scroll'
 
+/** The attribute on a part of a page that moves by itself, an animation: its
+ * motion is no change worth keeping the page again for (@yaks/web/keep), and
+ * a picture shows it as it stood when taken. */
+export let MOVES = 'data-kept-moves'
+
 /** The header the bootstrap's fetch carries, which a service worker may
  * answer with the page it already asked the network for (`@yaks/web/worker`). */
 export let FRESH = 'x-yak-fresh'
