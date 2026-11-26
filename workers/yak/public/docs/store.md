@@ -646,6 +646,9 @@ How seeding behaves:
 - It runs once per store, after the app's own `vocab.json` is installed (so a
   seed may write the app's own components), and it is then marked as done.
   Deploying again seeds nothing, so changes the person has made since are kept.
+  A store that was never seeded runs the first seed it is given, even one added
+  to an app whose store already holds rows: give a live app a seed of rows it
+  already has, and the deploy writes a second copy of each beside them.
 - `app_install` gives the copy its own store, so the seed runs again there. That
   is how a published app installed in somebody else's space starts with its seed
   data.

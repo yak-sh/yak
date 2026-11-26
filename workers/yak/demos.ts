@@ -17,7 +17,7 @@ export let HOME: Example[] = [
   [
     'menu',
     'Wren’s Bakery',
-    'A farmer’s market bakery menu with prices, marked sold out from a phone.',
+    'A farmer’s market bakery menu with prices and photos, marked sold out from a phone.',
   ],
   [
     'directory',
@@ -61,7 +61,7 @@ export let BUILD: Example[] = [
   [
     'menu',
     'Wren’s Bakery',
-    'A farmer’s market bakery menu with prices, marked sold out from a phone.',
+    'A farmer’s market bakery menu with prices and photos, marked sold out from a phone.',
   ],
   [
     'directory',

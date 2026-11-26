@@ -59,7 +59,7 @@ export const DEMOS: Demo[] = [
   d(
     'menu',
     'Bakery',
-    '09f6250e-6a17-4090-a1a3-321dc8c06c3b/8a36b2e856af08517ebfa8ddf765e9deab575b9cce3a6b8d106af75c40fc2117',
+    '09f6250e-6a17-4090-a1a3-321dc8c06c3b/0173180e394496aa623111f3c9cef9df10c2480ef99a205b26a4f6f03e7b5cba',
     (a) => [
       [
         you(
