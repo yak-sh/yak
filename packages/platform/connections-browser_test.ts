@@ -44,13 +44,20 @@ let windowAt = (at: string) => {
 // The page bound to a page graph holding `c` on its line, each press
 // answered by `answer`, its address `at`.
 let bound = (
-  { c = connections(), answer = ok, at = '' }: {
+  { c = connections(), answer = ok, at = '', places = [] }: {
     c?: Connections
     answer?: (b: Bundle[]) => Promise<Bundle[]>
     at?: string
+    /** the ids of the page's places beside the view: its side, its body */
+    places?: string[]
   } = {},
 ) => {
   let root = page(connectionsViewOf(), c)
+  for (let id of places) {
+    let place = root.ownerDocument.createElement('nav')
+    place.id = id
+    root.before(place)
+  }
   let dialog = root.querySelector('dialog')!
   Object.assign(dialog, {
     close: () => dialog.removeAttribute('open'),
@@ -115,6 +122,13 @@ test('the hash opens what the row holds at once, and asks the server for the res
   }
   b.held('detail=hubspot', connections({ open: 'hubspot', asked: hubspot }))
   equal(b.shownBody(), 'Connect HubSpot')
+})
+
+test('a hash naming a place on the page, as the frame’s menu does, opens nothing', () => {
+  for (let at of ['#menu', '#main']) {
+    let { asked, shownBody } = bound({ at, places: ['menu', 'main'] })
+    equal([shownBody(), asked.length], [null, 1])
+  }
 })
 
 test('a dialog keeps its very fields when it closes and opens again, so what is typed stays', () => {

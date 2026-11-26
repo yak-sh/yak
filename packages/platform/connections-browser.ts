@@ -5,7 +5,8 @@
  * tab, an app given a connection by an agent, a server signed in to.
  *
  * What the page shows follows its address. The hash opens one thing in the
- * page's dialog, drawn from the row at once; one the row does not hold (a
+ * page's dialog, drawn from the row at once, unless it names a place on the
+ * page; one the row does not hold (a
  * service from the integration directory) is asked of the server
  * (`?detail=`). The search, a kind of service and the trash ask the row
  * again, as the page's line names them (./connections-page.ts `askOf`).
@@ -60,11 +61,16 @@ let KEPT = {
   },
 }
 
-/** What the address's hash opens, if anything: `#find` is the search. */
-export let openedIn = (hash: string): string | undefined => {
+/** What the address's hash opens, if anything: `#find` is the search, and
+ * a place on the page (`placed`: the frame's `#menu`, a skip link's
+ * `#main`, a contents link to a heading) opens nothing. */
+export let openedIn = (
+  hash: string,
+  placed: (id: string) => boolean = () => false,
+): string | undefined => {
   try {
     let key = decodeURIComponent(hash.slice(1))
-    return key && key != 'find' ? key : undefined
+    return key && key != 'find' && !placed(key) ? key : undefined
   } catch {
     return undefined
   }
@@ -125,6 +131,7 @@ export let bindConnections = (
     & Partial<Pick<Window, 'removeEventListener'>> = globalThis,
 ): () => void => {
   let view = JSON.parse(root.dataset.connectionsView!) as ConnectionsView
+  let placed = (id: string) => !!root.ownerDocument.getElementById(id)
   let space = view.space.eid
   // What the address asks, and what the watch asks: the same, or with the
   // one thing the dialog opened that the row was not read for.
@@ -148,7 +155,7 @@ export let bindConnections = (
     if (!held) return
     // The address alone says what is open: its hash, or the `detail` the
     // server drew it opened on.
-    let key = openedIn(win.location.hash) ??
+    let key = openedIn(win.location.hash, placed) ??
       new URLSearchParams(win.location.search).get('detail') ?? undefined
     // One the row was not read for is asked of the server, drawn loading
     // until it answers.
