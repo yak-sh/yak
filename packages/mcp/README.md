@@ -470,9 +470,9 @@ let agents = mcp({
 Supply an explicit repository id for graph-backed skills, or a `cwd` for a
 read-only checkout view. No scope means no skills: it never exposes every
 repository in a shared graph. The box's `/mcp` facet uses its process checkout.
-Local changes and deletions are reflected on the next consuming request, without
-graph imports. Tool-only HTTP exchanges do not snapshot skills; discovery,
-resources and prompts each retain their fresh immutable snapshot. Graph-backed
+Local changes and deletions appear on the next consuming request without a graph
+import. HTTP discovery advertises the Skills capabilities. Each request for
+skills, resources or prompts reads a fresh immutable snapshot. Graph-backed
 documents are rendered by the shared persona codec.
 
 A host with another file store can supply a callback instead of graph/checkout
