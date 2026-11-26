@@ -263,10 +263,9 @@ let covers = (map: string[], spec: string) =>
  * Throws {@link Unplanned} when package.json cannot be read.
  */
 export let plan = async (app: App): Promise<Plan | null> => {
+  let main = app.main && app.paths.includes(app.main) ? app.main : undefined
   // Skip file-only apps that have no inputs to the compiler.
-  if (
-    !app.main && !app.paths.includes('package.json') && !app.paths.some(typed)
-  ) {
+  if (!main && !app.paths.includes('package.json') && !app.paths.some(typed)) {
     return null
   }
   let has = new Set(app.paths)
@@ -299,14 +298,14 @@ export let plan = async (app: App): Promise<Plan | null> => {
   }
   let walk = sources(app.strip)
   let worker: Ask['worker']
-  if (app.main && has.has(app.main)) {
-    let graph = await walk(readApp, app.main)
+  if (main) {
+    let graph = await walk(readApp, main)
     let { files: reached, named: specs, texts, linked } = graph
     let packages = specs.filter((s) => packageOf(s))
     if ([...reached.keys()].some(typed) || packages.length || texts.size) {
       inputs.worker = send(graph)
       worker = {
-        entry: app.main,
+        entry: main,
         flags: app.flags ?? [],
         carry: [...reached.keys()].filter((p) =>
           !COMPILED.test(p) && (!texts.has(p) || linked.has(p))

@@ -1,4 +1,4 @@
-import { equal, ok, test } from '@yaks/testing'
+import { equal, match, test } from '@yaks/testing'
 import { connector, kernel, seed } from './probe.ts'
 
 let k = await kernel()
@@ -26,8 +26,10 @@ for (
       name,
       arguments: { ...args, space: injected, app: 'notes' },
     })
-    equal(out.isError, true)
-    ok(out.content[0].text.includes(`no space ${injected}`))
+    match(out, {
+      isError: true,
+      content: [{ text: /space: pass a space slug or eid/ }],
+    })
   })
 }
 
