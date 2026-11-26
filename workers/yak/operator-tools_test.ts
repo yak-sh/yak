@@ -1,6 +1,6 @@
 // Both connector names enter the same Operator door with the caller's seat.
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { CallError } from '@yaks/tools/errors'
 import { owned } from './directory-fixture.ts'
 import { platform } from './directory-rows-probe.ts'
@@ -84,4 +84,33 @@ test('the spaces a person may talk in are those where their seat writes', async 
     owner: ctx.person,
     projects: [{ id: space, title: 'operator-tools' }],
   })
+})
+
+let numberedCtx = { ...ctx, person: crypto.randomUUID() }
+let numberedSlug = 'p-42'
+let numberedSpace = await owned(numberedCtx, numberedSlug)
+
+test('conversation_read takes a space slug or a project ID from conversation_projects', async () => {
+  for (let project of [numberedSlug, numberedSpace]) {
+    let out = await call(numberedCtx, 'conversation_read', {
+      project,
+      session: 'session',
+    })
+    assertEquals(out.space?.eid, numberedSpace)
+    assertEquals(requests.at(-1)!.headers.get('x-space-eid'), numberedSpace)
+  }
+})
+
+test('conversation_read names the alternatives to a numbered project ID', async () => {
+  let before = requests.length
+  let error = await assertRejects(
+    () =>
+      call(ctx, 'conversation_read', { project: 'P-42', session: 'session' }),
+    CallError,
+    'P-42 is a numbered project ID',
+  )
+  assertEquals(error.code, 'arguments')
+  assertStringIncludes(error.message, 'conversation_projects')
+  assertStringIncludes(error.message, 'operator-tools')
+  assertEquals(requests.length, before)
 })

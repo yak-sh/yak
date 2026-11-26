@@ -13,6 +13,7 @@ import { chatPath, managePath } from '@yaks/platform/routes'
 import { answered } from './meta.ts'
 import { type Call, type Door, finite } from '@yaks/durable-object/door'
 import { system } from '@yaks/fp'
+import { rejected } from './tool.ts'
 
 /** What a socket remembers about itself across a hibernation: who is on the
  * other end, and which space they opened it in. The attachment is the only
@@ -330,6 +331,11 @@ export let resultDoor = async (
       body: JSON.stringify({ ...args, reader }),
     })
   )
-  if (!response.ok) throw await answered(response)
+  if (!response.ok) {
+    let error = await answered(response)
+    throw response.status < 500
+      ? rejected(response.status, error.message)
+      : error
+  }
   return response.json()
 }

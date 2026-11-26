@@ -3755,14 +3755,6 @@ let roomFor = async (ctx: Ctx) => {
 let SLUGS = PAGES.map((p) => p.slug).join(', ')
 let COVERING = PAGES.map((p) => `${p.slug} (${p.brief})`).join(', ')
 
-// The caller's seat in the space at `slug`, out of their listing, or else
-// asked as every tool asks it (tool.ts `seatIn`): an address the space has
-// left, or the refusal of a space they do not sit in.
-let seatAmong = async (ctx: Ctx, listing: Listing, slug: string) => {
-  let seat = listing.seats.find((s) => s.space.slug == slug)
-  return seat ? [seat] : await seatIn(ctx, slug)
-}
-
 // The caller's spaces holding a live app at `app`, out of their listing: what
 // tool.ts `ownSpace` asks them for.
 let holdingIn = (listing: Listing, app: string) =>
@@ -6491,8 +6483,8 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         space: str(
-          'one space slug to list; omit for every space the caller belongs ' +
-            'to, or with app, the space holding it',
+          'one of the space slugs returned by app_list() with no arguments. ' +
+            'Omit to list all your spaces, or with app, the space holding it.',
         ),
         app: str(
           'one app slug or <space>/<app> to list in full: email, version, ' +
@@ -6534,12 +6526,12 @@ let OURS: Row[] = [
       }
       tracking(ctx, listing)
       let seats = namedSpace != null
-        ? await seatAmong(ctx, listing, namedSpace)
+        ? await seatIn(ctx, namedSpace, listing.seats)
         : named != null
-        ? await seatAmong(
+        ? await seatIn(
           ctx,
-          listing,
           (await ownSpace(ctx, named, holdingIn(listing, named))).slug,
+          listing.seats,
         )
         : listing.seats
       let held = new Set(seats.map((s) => s.space.eid))

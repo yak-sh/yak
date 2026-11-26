@@ -229,6 +229,81 @@ test('app_list reads the directory once', async () => {
   }
 })
 
+test('app_list on another space offers the spaces the caller can list', async () => {
+  let k = await kernel()
+  try {
+    let { cookie, person, name: home } = await signIn(k)
+    let [first, second, elsewhere] = ['list-a', 'list-b', 'list-other'].map(
+      unique,
+    )
+    await owned(k, person, first)
+    await owned(k, person, second)
+    await owned(k, k.owner.person, elsewhere)
+    let agent = connector(k, cookie)
+    let error = await assertRejects(
+      () => agent.tool('app_list', { space: elsewhere }),
+      Error,
+      `not a member of ${elsewhere}`,
+    )
+    assertStringIncludes(error.message, 'call app_list() without arguments')
+    assertStringIncludes(
+      error.message,
+      `Your spaces are ${first}, ${second}, ${home}.`,
+    )
+    assertStringIncludes(
+      await agent.tool('app_list', { space: second }),
+      second,
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+test('result_query carries the kept result refusal through the connector', async () => {
+  let k = await kernel()
+  try {
+    let owner = await signIn(k)
+    let guest = await signIn(k)
+    let space = unique('result'), eid = await owned(k, owner.person, space)
+    await meta(k).apply([{
+      entity: { eid: '$seat' },
+      member: { space: eid, person: guest.person, role: 'viewer' },
+    }])
+    let kept = await k.builder(eid).fetch(
+      new Request('https://builder/result/keep', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-space-eid': eid,
+          'x-yak-kernel': '1',
+        },
+        body: JSON.stringify({ value: { count: 7 }, reader: owner.person }),
+      }),
+    )
+    assertEquals(kept.status, 200)
+    let { id } = await kept.json()
+    let args = { space, id, query: '.count' }
+    let caller = connector(k, owner.cookie), other = connector(k, guest.cookie)
+    let answer = await caller.call('tools/call', {
+      name: 'result_query',
+      arguments: args,
+    })
+    assertEquals(answer.structuredContent, { values: [7] })
+    await assertRejects(
+      () => caller.tool('result_query', { ...args, id: crypto.randomUUID() }),
+      Error,
+      'run the original query again',
+    )
+    await assertRejects(
+      () => other.tool('result_query', args),
+      Error,
+      'Retry from the session that made it',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 test(
   'a platform secret alias derives before the reach hands it to the store',
   async () => {

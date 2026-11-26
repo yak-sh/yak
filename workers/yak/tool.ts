@@ -28,6 +28,7 @@ import {
   META_STORE,
   type Page,
   type Role,
+  type Seat,
   type Space,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -257,20 +258,26 @@ let listed = (names: string[]) => [...names].sort().join(', ')
 export let notMember = async (
   ctx: Pick<Ctx, 'dir' | 'person'>,
   space: Space,
+  seats?: Seat[],
 ) =>
   refuse(
     'access',
-    `not a member of ${space.slug} — ${await yours(ctx)} Or connect with ` +
+    `not a member of ${space.slug} — ${await yours(
+      ctx,
+      seats,
+    )} Or connect with ` +
       `an account that belongs to ${space.slug} before naming it.`,
   )
 
 // The spaces the caller holds a seat in and the next call naming one, or,
 // holding none, how to get one.
-let yours = async (ctx: Pick<Ctx, 'dir' | 'person'>) => {
-  let mine = ctx.person ? await ctx.dir.seats(ctx.person) : []
+let yours = async (ctx: Pick<Ctx, 'dir' | 'person'>, seats?: Seat[]) => {
+  let mine = seats ?? (ctx.person ? await ctx.dir.seats(ctx.person) : [])
   return mine.length
-    ? `your spaces are ${listed(mine.map((s) => s.space.slug))}. ` +
-      "Send space: '<one of your spaces>'; app_list() lists their apps."
+    ? 'call app_list() without arguments to list all your spaces, or pass ' +
+      `one of your space slugs as space. Your spaces are ${
+        listed(mine.map((s) => s.space.slug))
+      }.`
     : 'you are a member of no space yet. Get one by signing up at ' +
       "https://yaks.app, or by accepting an invitation to someone's space."
 }
@@ -582,7 +589,7 @@ export let EID =
 // `nottawatownship`), so the refusal names theirs, as `notMember` does.
 // It names it by its slug, or by its id as conversation_projects lists it;
 // an id is read as its slug, so a narrowed directory still decides.
-let named = async (ctx: Ctx, slug: string) => {
+let named = async (ctx: Ctx, slug: string, seats?: Seat[]) => {
   let space = await ctx.dir.space(
     EID.test(slug) ? (await ctx.dir.at(slug))?.slug ?? slug : slug,
   )
@@ -593,7 +600,7 @@ let named = async (ctx: Ctx, slug: string) => {
   if (moved) return moved
   throw refuse(
     'missing',
-    `no space ${slug} — ${await yours(ctx)}`,
+    `no space ${slug} — ${await yours(ctx, seats)}`,
   )
 }
 
@@ -795,13 +802,14 @@ export let owns = async (ctx: Ctx, args: Args) =>
 export let spaceBin = (ctx: Ctx, args: Args) =>
   seated(ctx, args, true, false, true)
 
-// One named space as a seat — the shape `directory.seats` answers in, so a
-// listing over one space and a listing over all of them read the same
-// (tools.ts `app_list`).
-export let seatIn = async (ctx: Ctx, slug: string) => {
-  let space = await named(ctx, slug)
+// A listing already has the caller's seats. Look up addresses it lacks,
+// including former slugs, and reuse its seats for the refusal's alternatives.
+export let seatIn = async (ctx: Ctx, slug: string, seats?: Seat[]) => {
+  let seat = seats?.find((s) => s.space.slug == slug)
+  if (seat) return [seat]
+  let space = await named(ctx, slug, seats)
   let role = await ctx.dir.role(space, ctx.person)
-  if (!role) throw await notMember(ctx, space)
+  if (!role) throw await notMember(ctx, space, seats)
   return [{ space, role }]
 }
 

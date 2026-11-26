@@ -1727,9 +1727,7 @@ test(
           () => '',
           (e: Error) => e.message,
         ),
-        `not a member of ${jeff54} — your spaces are ${
-          made.match(/^app ([^/]+)\//)![1]
-        }`,
+        `Your spaces are ${made.match(/^app ([^/]+)\//)![1]}.`,
       )
       // And the generic tier is his reach and nobody else's: jeff's rows are
       // not in it, whatever he asks for.

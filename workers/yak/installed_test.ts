@@ -56,7 +56,7 @@ test('an installed copy runs like its space, or sandboxed', async () => {
         () => agent.tool('app_install', { space: offer, name: offer }),
         Error,
       )).message,
-      new RegExp(`^no space ${offer} — your spaces are ${home}, .*${pub}`),
+      new RegExp(`^no space ${offer} .*Your spaces are ${home}, .*${pub}`),
     )
     let host = `${home}.yaks.app`
     let cookie = { cookie: me.cookie }

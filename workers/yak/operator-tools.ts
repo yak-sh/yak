@@ -122,7 +122,7 @@ let chat: Omit<Tool, 'title' | 'description'> = {
 // `conversation_start`, `conversation_send`).
 let PROJECT = {
   ...str(
-    'The space to talk with: its slug, as in <space>.yaks.app, or its id as conversation_projects lists it.',
+    'The space to talk with. Use its slug, as in <space>.yaks.app, or the UUID returned by conversation_projects.',
   ),
   minLength: 1,
 }
@@ -155,6 +155,27 @@ let given = {
       'SHA-256 addresses of files already sent to your Operator, as attachment.artifact names them.',
   },
 }
+
+let conversationSpaces = async (ctx: Ctx) =>
+  (await ctx.dir.seats(ctx.person))
+    .filter((s) => writes(s.role) && !s.space.trashed)
+    .map((s) => s.space)
+
+let conversationProject = async (ctx: Ctx, project: unknown) => {
+  if (typeof project == 'string' && /^P-\d+$/.test(project)) {
+    let slugs = (await conversationSpaces(ctx)).map((s) => s.slug).sort()
+    throw refuse(
+      'arguments',
+      `${project} is a numbered project ID. Pass a space UUID from ` +
+        'conversation_projects as project' +
+        (slugs.length
+          ? `, or use one of your space slugs (${slugs.join(', ')}).`
+          : '.'),
+    )
+  }
+  return project
+}
+
 // A conversation tool of @yaks/harness's, run in the space's Operator store
 // as the person (operator-conversations.ts `converse`).
 let conversing = (
@@ -170,10 +191,10 @@ let conversing = (
     properties: { project: PROJECT, ...properties },
     required: ['project', ...required],
   },
-  run: (ctx, { project, ...args }) =>
+  run: async (ctx, { project, ...args }) =>
     ask(
       ctx,
-      { space: project, tool: name, args },
+      { space: await conversationProject(ctx, project), tool: name, args },
       '/operator/talk',
       !readOnly,
     ),
@@ -191,11 +212,10 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
       text: '',
       value: {
         owner: ctx.person,
-        projects: (await ctx.dir.seats(ctx.person))
-          .filter((s) => writes(s.role) && !s.space.trashed)
-          .map((s) => ({
-            id: s.space.eid,
-            title: s.space.title ?? s.space.slug,
+        projects: (await conversationSpaces(ctx))
+          .map((space) => ({
+            id: space.eid,
+            title: space.title ?? space.slug,
           })),
       },
     }),

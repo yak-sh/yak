@@ -48,10 +48,22 @@ export let readResult = async (
   let output = row?.context_output as
     | { reader?: string; body: string }
     | undefined
-  if (!output || output.reader != person) {
+  // A public result scope cannot discover results kept for another reader.
+  if (
+    !output?.reader || person.startsWith('public:') && output.reader != person
+  ) {
     throw refuse(
       'missing',
-      'That kept result is missing or belongs to another caller.',
+      'That kept result is missing from this scope. Use the space, app, or ' +
+        'catalogue scope from its summary. If the scope is already correct, ' +
+        'run the original query again.',
+    )
+  }
+  if (output.reader != person) {
+    throw refuse(
+      'access',
+      'That kept result belongs to another caller. Retry from the session ' +
+        'that made it, using the same account.',
     )
   }
   return JSON.parse(output.body)

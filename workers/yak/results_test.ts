@@ -82,14 +82,27 @@ test('a jq escape refusal names the replacement and returns a filter that runs',
   )
 })
 
-test('a kept result is private to the reader who produced it', async () => {
-  let error
-  try {
-    await readResult(g, summary.id, crypto.randomUUID())
-  } catch (e) {
-    error = e
-  }
-  ok(error)
+test('a private result query names the recovery for a missing result or a different caller', async () => {
+  let withReader = (id: string, reader: string) =>
+    assertRejects(() => queryResult(g, id, '.', source, reader), CallError)
+  let missing = await withReader(crypto.randomUUID(), person)
+  equal(missing.code, 'missing')
+  ok(missing.message.includes('run the original query again'))
+  let denied = await withReader(summary.id, crypto.randomUUID())
+  equal(denied.code, 'access')
+  ok(denied.message.includes('session that made it'))
+})
+
+test('a public result query cannot discover private results', async () => {
+  let publicly = (id: string) =>
+    assertRejects(
+      () => queryResult(g, id, '.', source, 'public:catalogue'),
+      CallError,
+    )
+  let present = await publicly(summary.id)
+  let missing = await publicly(crypto.randomUUID())
+  equal(present.code, missing.code)
+  equal(present.message, missing.message)
 })
 
 test('retained custom answers preserve all accompanying prose', async () => {
