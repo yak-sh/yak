@@ -3,6 +3,7 @@
 // credential ids derive the same eid at every authenticated door.
 import type { Actor } from '@yaks/graph/bundle'
 import { identityEid, minted } from '@yaks/graph/identity'
+import { agentCalled } from './agents.ts'
 
 export let instrumentEid = (via: string): string =>
   minted(via) ? via : identityEid('yak/instrument', [via])
@@ -34,17 +35,21 @@ export let agentRow = (person: string, name: string): {
 export let UNNAMED = 'agent'
 
 /**
- * What an agent row is called on a stamp: its name, or null where its client
+ * What an agent row is called on a stamp: its name as the person's
+ * connections say it (./agents.ts `agentCalled`), or null where its client
  * named nothing (`UNNAMED`).
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(agentName(agentRow('p', 'Claude')), 'Claude')
+ * assertEquals(agentName(agentRow('p', 'claude-code')), 'Claude Code')
  * assertEquals(agentName(agentRow('p', UNNAMED)), null)
  * assertEquals(agentName({}), null)
  * ```
  */
 export let agentName = (row: object): string | null => {
   let title = (row as { doc?: { title?: unknown } }).doc?.title
-  return typeof title == 'string' && title && title != UNNAMED ? title : null
+  return typeof title == 'string' && title != UNNAMED
+    ? agentCalled(undefined, title).name ?? null
+    : null
 }
