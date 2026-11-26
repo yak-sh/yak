@@ -155,17 +155,21 @@ let restored = (
   // the delivery that fires it.
   let alarm = saved?.alarm ?? null
   let kept = saved ? structuredClone(saved.kept) : new Map<string, unknown>()
-  let db = textual(limits, from)
+  let db: ReturnType<typeof textual> | undefined
   let closed = false
   let depth = 0
-  // The runtime takes an ArrayBuffer; the engine underneath takes bytes.
-  let run = (query: string, bindings: (SqlValue | Param)[]) => {
+  // Objects that only use alarms or asynchronous key-value storage need
+  // no SQLite connection. Open one when a SQL operation first needs it.
+  let database = () => {
     if (closed) throw new Error('storage is disposed')
-    return db.run(
+    return db ??= textual(limits, from)
+  }
+  // The runtime takes an ArrayBuffer; the engine underneath takes bytes.
+  let run = (query: string, bindings: (SqlValue | Param)[]) =>
+    database().run(
       query,
       bindings.map((b) => b instanceof ArrayBuffer ? new Uint8Array(b) : b),
     )
-  }
   // What the stand-in says itself, as the runtime does below the authorizer.
   let said = (s: Stmt) => {
     let { sql, params } = render(s)
@@ -176,14 +180,14 @@ let restored = (
     // private storage with its own lineage, ready for a fresh incarnation.
     checkpoint: () => {
       if (closed || depth) throw new Error('storage must be open and settled')
-      let from = db.snapshot()
+      let image = db?.snapshot() ?? from
       let saved = { alarm, kept: structuredClone(kept) }
-      return () => restored(from, limits, saved)
+      return () => restored(image, limits, saved)
     },
     // Native SQLite allocations are invisible to the JS heap's GC pressure.
     // A scenario that owns this storage can release it at the end of the test.
     [Symbol.dispose]: () => {
-      if (!closed) db.close()
+      if (!closed) db?.close()
       closed = true
     },
     sql: {

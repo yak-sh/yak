@@ -23,7 +23,14 @@ import { RETRY } from '@yaks/durable-object/alarm'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
-import { ai, modelPage, platform, state, type Turn } from './testing.ts'
+import {
+  ai,
+  modelPage,
+  platform,
+  preparedPlatform,
+  state,
+  type Turn,
+} from './testing.ts'
 import { rootOf } from './operator-root.ts'
 import { clock, test, until } from '@yaks/testing'
 import { line } from '@yaks/query'
@@ -70,7 +77,7 @@ let dirOf = (env: Env) =>
 // A space with Ada in it, and her Operator's object, which the kernel reaches
 // as the space's BUILDER.
 let seeded = async (script: Turn[] = [], vars: Partial<Env> = {}) => {
-  let { env, states } = platform(SECRET, {
+  let { env, states } = preparedPlatform(SECRET, {
     ...vars,
     AI: ai(script) as Env['AI'],
     MODEL_FETCH: () =>

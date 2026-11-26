@@ -276,7 +276,7 @@ let boot = async (
 ) => {
   let [
     { handler, email },
-    { ai, dataset, emailed, lasting, modelPage },
+    { ai, dataset, emailed, lasting, modelPage, PROBE_DEPLOY },
     { within },
   ] = await Promise
     .all([
@@ -289,28 +289,37 @@ let boot = async (
   let cf = cloudflare(log, bindings.REGISTRAR_EXPIRY as string | undefined)
   let domains = domainsApi('a-token')
   let views = dataset()
-  let p = lasting(secret, {
-    ...vars(secret, cf.url),
-    // What the runtime binds beside the config: this deploy's id, and the
-    // `send_email` binding an app's letters leave through.
-    CF_VERSION_METADATA: { id: crypto.randomUUID() },
-    MAIL: cf.binding,
-    // Resend's Domains API, stood in for; every other call a mail provider
-    // makes goes where it always went.
-    MAIL_FETCH: (url: string, init: RequestInit) =>
-      new URL(url).pathname.startsWith('/domains')
-        ? domains.fetch(url, init)
-        : fetch(url, init),
-    // The Visits dataset, kept in memory: what the kernel counts (views.ts,
-    // funnel.ts) is read off `views`.
-    VIEWS: views,
-    // A model that says nothing, priced from a page of our own: an app's
-    // break starts its space's Operator (unseen.ts `fix`), and no test
-    // reaches Workers AI or its catalogue.
-    AI: ai([]) as Env['AI'],
-    MODEL_FETCH: () => Promise.resolve(modelPage(0.15, 0.5)),
-    ...bindings,
-  }, load)
+  let model = ai([]) as Env['AI']
+  let prepared = (env: Env) =>
+    !load && !env.CLOCK && env.AI == model &&
+    env.CF_VERSION_METADATA?.id == PROBE_DEPLOY
+  let p = lasting(
+    secret,
+    {
+      ...vars(secret, cf.url),
+      // What the runtime binds beside the config: this deploy's id, and the
+      // `send_email` binding an app's letters leave through.
+      CF_VERSION_METADATA: { id: PROBE_DEPLOY },
+      MAIL: cf.binding,
+      // Resend's Domains API, stood in for; every other call a mail provider
+      // makes goes where it always went.
+      MAIL_FETCH: (url: string, init: RequestInit) =>
+        new URL(url).pathname.startsWith('/domains')
+          ? domains.fetch(url, init)
+          : fetch(url, init),
+      // The Visits dataset, kept in memory: what the kernel counts (views.ts,
+      // funnel.ts) is read off `views`.
+      VIEWS: views,
+      // A model that says nothing, priced from a page of our own: an app's
+      // break starts its space's Operator (unseen.ts `fix`), and no test
+      // reaches Workers AI or its catalogue.
+      AI: model,
+      MODEL_FETCH: () => Promise.resolve(modelPage(0.15, 0.5)),
+      ...bindings,
+    },
+    load,
+    prepared,
+  )
   prepare?.(p.env)
   let reported: Bundle[] = []
   let reportClock = clock()
@@ -1015,19 +1024,16 @@ export let seed = async (
   // Each of those tools answers the eid of what it made.
   let made = async (tool: string, args: Record<string, unknown>) =>
     String((await agent.answer(tool, args)).value?.eid)
-  let eids: Record<string, string> = {}
   let owns = await ownedAll(k, them.person, spaces)
-  for (let [i, s] of spaces.entries()) {
-    eids[s.slug] = owns[i]
-    for (let a of s.apps) {
-      eids[`${s.slug}/${a}`] = await made('app_new', {
-        space: s.slug,
-        slug: a,
-        title: a,
-      })
+  let entries = await Promise.all(spaces.map(async ({ slug, apps }, i) => {
+    let eids: [string, string][] = [[slug, owns[i]]]
+    for (let app of apps) {
+      let eid = await made('app_new', { space: slug, slug: app, title: app })
+      eids.push([`${slug}/${app}`, eid])
     }
-  }
-  return { ...them, eids }
+    return eids
+  }))
+  return { ...them, eids: Object.fromEntries(entries.flat()) }
 }
 
 // ---- Cloudflare's account API, stood in for (mail, domains, rtc, workers) --

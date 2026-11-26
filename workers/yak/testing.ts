@@ -299,6 +299,9 @@ export let preparedPlatform = (secret: string, vars: Partial<Env> = {}) => {
   return p
 }
 
+/** All standard probe kernels serve the same version of this checkout. */
+export const PROBE_DEPLOY = '00000000-0000-4000-8000-000000000001'
+
 let deployDirectory = (store: Store) =>
   store.fetch(
     new Request('http://store/vocab', {
@@ -315,14 +318,24 @@ let deployDirectory = (store: Store) =>
     await response.body?.cancel()
   })
 
-let directoryImage: Promise<Checkpoint> | undefined
-let seededDirectory = (): Promise<Checkpoint> =>
-  directoryImage ??= (async () => {
-    await using p = lasting('directory fixture')
-    await deployDirectory(p.object(PLATFORM_OBJECT))
-    await p.settled()
-    return p.states.get(PLATFORM_OBJECT)!.storage.checkpoint()
-  })()
+let directoryImages = new Map<string | undefined, Promise<Checkpoint>>()
+let seedDirectory = async (version: string | undefined) => {
+  await using p = lasting(
+    'directory fixture',
+    version
+      ? { CF_VERSION_METADATA: { id: version }, AI: ai([]) as Env['AI'] }
+      : {},
+  )
+  await deployDirectory(p.object(PLATFORM_OBJECT))
+  await p.settled()
+  return p.states.get(PLATFORM_OBJECT)!.storage.checkpoint()
+}
+
+let seededDirectory = (version: string | undefined): Promise<Checkpoint> => {
+  let saved = directoryImages.get(version)
+  if (!saved) directoryImages.set(version, saved = seedDirectory(version))
+  return saved
+}
 
 /** A platform that lasts until its holder closes it, as the kernel a test
  * process shares does (probe.ts). */
@@ -330,7 +343,7 @@ export let lasting = (
   secret: string,
   vars: Partial<Env> = {},
   load?: Load,
-  prepared = false,
+  prepared: boolean | ((env: Env) => boolean) = false,
 ) => {
   let stores: ReturnType<typeof state>[] = []
   let ownedState = (name?: string, open?: Checkpoint) => {
@@ -433,11 +446,16 @@ export let lasting = (
     return held
   }
   let initialize = async () => {
-    if (!prepared || objects.has(PLATFORM_OBJECT)) {
+    let version = env.CF_VERSION_METADATA?.id
+    if (
+      !(typeof prepared == 'function' ? prepared(env) : prepared) ||
+      (version != null && version != PROBE_DEPLOY) ||
+      objects.has(PLATFORM_OBJECT)
+    ) {
       await deployDirectory(object(PLATFORM_OBJECT))
       return
     }
-    let open: Checkpoint = await seededDirectory()
+    let open = await seededDirectory(version)
     if (objects.has(PLATFORM_OBJECT)) {
       await deployDirectory(object(PLATFORM_OBJECT))
       return

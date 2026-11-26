@@ -87,23 +87,14 @@ export let plan = (
     })
   )
 
-// Loads one compiled example; one that cannot load fails as a test.
-let load = async (
-  page: string,
-  tag: string,
-  code: string,
-  lang?: string,
-) => {
-  let path = beside(page, tag, lang)
-  await io.writeTextFile(path, code)
+// Imports one compiled example; one that cannot load fails as a test.
+let load = async (page: string, tag: string, path: string) => {
   try {
     await import(url(path))
   } catch (error) {
     test(`${page}:${tag} loads`, () => {
       throw error
     })
-  } finally {
-    await io.remove(path).catch(() => {})
   }
 }
 
@@ -115,20 +106,34 @@ let exported = async (page: string): Promise<string[]> =>
 export let examples = async (page: string, parsed?: Examples) => {
   let { fenced, lines } = parsed ?? scan(io.readTextFileSync(page), page)
   let exports = module(page) ? await exported(page) : []
-  for (let f of fenced) {
-    let name = await fenceName(page, f)
-    await load(
-      page,
-      `${f.line}`,
-      compileFence(name, page, f, exports),
-      f.lang,
-    )
-  }
+  let files = fenced.map((f) => ({
+    tag: String(f.line),
+    path: beside(page, String(f.line), f.lang),
+    code: fenceName(page, f).then((name) =>
+      compileFence(name, page, f, exports)
+    ),
+  }))
   if (lines.length) {
-    await load(
-      page,
-      'doctests',
-      compileDoctests(page, lines, exports),
+    files.push({
+      tag: 'doctests',
+      path: beside(page, 'doctests'),
+      code: Promise.resolve(compileDoctests(page, lines, exports)),
+    })
+  }
+  try {
+    // The sources can be prepared together. Import in page order, since
+    // evaluation can register tests or initialize shared modules.
+    let writes = await Promise.allSettled(
+      files.map(async ({ path, code }) =>
+        await io.writeTextFile(path, await code)
+      ),
     )
+    for (let [i, { tag, path }] of files.entries()) {
+      let wrote = writes[i]
+      if (wrote.status == 'rejected') throw wrote.reason
+      await load(page, tag, path)
+    }
+  } finally {
+    await Promise.allSettled(files.map(({ path }) => io.remove(path)))
   }
 }
