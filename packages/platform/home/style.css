@@ -508,14 +508,20 @@
   z-index: -1;
 }
 
-.Home_MessageLink {
+.Home_MessageLink,
+.Home_AppLink {
   display: flow-root;
   color: inherit;
   text-decoration: none;
 }
 
-.Home_MessageLink:focus-visible {
+.Home_MessageLink:focus-visible,
+.Home_AppLink:focus-visible {
   text-decoration: underline;
+}
+
+.Home_AppLink {
+  display: none;
 }
 
 .Home_MessageLink .Home_Logo {
@@ -1188,8 +1194,13 @@
   .Home_Picks,
   .Home_Demo .Home_Ask,
   .Home_Phone::before,
-  .Home_Shot {
+  .Home_Shot,
+  .Home_MessageLink:has(+ .Home_AppLink) {
     display: none;
+  }
+
+  .Home_AppLink {
+    display: flow-root;
   }
 
   .Home_Log {

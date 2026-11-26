@@ -36,6 +36,11 @@ let Message = (
         {line.text}
       </a>
       {line.app && (
+        // Where the phone is too small for the picture, the words open the
+        // demo instead.
+        <a class='Home_AppLink' href={line.app.href}>{line.text}</a>
+      )}
+      {line.app && (
         <a class='Home_Shot' href={line.app.href}>
           <img
             class='Home_Image'
