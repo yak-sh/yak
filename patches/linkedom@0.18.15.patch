@@ -37,3 +37,45 @@ index fa7dc792b82e558ed5265cbe5b175e7a859264cf..6d4cd62298492338c241b7123fef031c
    else
      listener.handleEvent(event);
    return event._stopImmediatePropagationFlag;
+@@ -2903,6 +2903,11 @@
+   toString() { return ''; }
+   /* c8 ignore stop */
+ 
++  // Its properties link the whole document, so showing them never ends.
++  // Inspection shows the markup instead.
++  [Symbol.for('Deno.customInspect')]() { return this.toString(); }
++  [Symbol.for('nodejs.util.inspect.custom')]() { return this.toString(); }
++
+   hasChildNodes() { return !!this.lastChild; }
+   isSameNode(node) { return this === node; }
+ 
+diff --git a/cjs/interface/node.js b/cjs/interface/node.js
+--- a/cjs/interface/node.js
++++ b/cjs/interface/node.js
+@@ -133,6 +133,11 @@
+   toString() { return ''; }
+   /* c8 ignore stop */
+ 
++  // Its properties link the whole document, so showing them never ends.
++  // Inspection shows the markup instead.
++  [Symbol.for('Deno.customInspect')]() { return this.toString(); }
++  [Symbol.for('nodejs.util.inspect.custom')]() { return this.toString(); }
++
+   hasChildNodes() { return !!this.lastChild; }
+   isSameNode(node) { return this === node; }
+ 
+diff --git a/esm/interface/node.js b/esm/interface/node.js
+--- a/esm/interface/node.js
++++ b/esm/interface/node.js
+@@ -132,6 +132,11 @@
+   toString() { return ''; }
+   /* c8 ignore stop */
+ 
++  // Its properties link the whole document, so showing them never ends.
++  // Inspection shows the markup instead.
++  [Symbol.for('Deno.customInspect')]() { return this.toString(); }
++  [Symbol.for('nodejs.util.inspect.custom')]() { return this.toString(); }
++
+   hasChildNodes() { return !!this.lastChild; }
+   isSameNode(node) { return this === node; }
+ 

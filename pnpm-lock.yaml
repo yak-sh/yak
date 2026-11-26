@@ -190,7 +190,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  linkedom@0.18.15: d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9
+  linkedom@0.18.15: ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5
 
 importers:
   .:
@@ -332,7 +332,7 @@ importers:
         version: 0.4.1
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       lucide:
         specifier: 1.31.0
         version: 1.31.0
@@ -826,7 +826,7 @@ importers:
         version: 11.11.1
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       lucide:
         specifier: 1.31.0
         version: 1.31.0
@@ -1504,7 +1504,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/context:
     dependencies:
@@ -1597,7 +1597,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/design:
     dependencies:
@@ -1641,7 +1641,7 @@ importers:
         version: link:../vocab
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/discord:
     dependencies:
@@ -1938,7 +1938,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
@@ -2117,7 +2117,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/feedback:
     dependencies:
@@ -2203,7 +2203,7 @@ importers:
         version: link:../tui
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       preact:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
@@ -2270,7 +2270,7 @@ importers:
         version: link:../tui
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/fp: {}
 
@@ -2325,7 +2325,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
@@ -2837,7 +2837,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       preact:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
@@ -2962,7 +2962,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/inspect:
     dependencies:
@@ -3026,7 +3026,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
@@ -3805,7 +3805,7 @@ importers:
         version: link:../vocab
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -3955,7 +3955,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
@@ -4201,7 +4201,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/preact:
     dependencies:
@@ -4241,7 +4241,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/process:
     dependencies:
@@ -4898,7 +4898,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
@@ -5242,7 +5242,7 @@ importers:
         version: link:../tools
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/telnyx:
     dependencies:
@@ -5286,7 +5286,7 @@ importers:
     devDependencies:
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/text:
     dependencies:
@@ -5311,7 +5311,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       marked:
         specifier: 18.2.0
         version: 18.2.0
@@ -5565,7 +5565,7 @@ importers:
         version: link:../tools
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
@@ -5771,7 +5771,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/tui:
     dependencies:
@@ -5946,7 +5946,7 @@ importers:
         version: link:../tui
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
@@ -6174,7 +6174,7 @@ importers:
         version: link:../testing
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
 
   packages/workerd:
     dependencies:
@@ -6669,7 +6669,7 @@ importers:
         version: 0.4.1
       linkedom:
         specifier: ^0.18.12
-        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
       lucide:
         specifier: 1.31.0
         version: 1.31.0
@@ -12020,7 +12020,7 @@ snapshots:
 
   lines-and-columns@1.2.4: {}
 
-  linkedom@0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9):
+  linkedom@0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5):
     dependencies:
       css-select: 7.0.0
       cssomnom: 0.1.11

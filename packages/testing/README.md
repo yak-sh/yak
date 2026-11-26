@@ -116,6 +116,10 @@ Regular expressions check a value's text; classes check instances. Empty objects
 and arrays require empty values. Other values, including class instances and
 arrow functions, compare by deep equality.
 
+A linkedom node inspects as its markup. `assertEquals` from `@std/assert`
+formats a value with `Deno.inspect`, which would otherwise walk the node's
+document; a failure shows the markup and returns at once.
+
 ## Waiting
 
 `tick` yields one macrotask. `until` polls a function until its return value is

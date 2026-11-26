@@ -1,5 +1,6 @@
 // A failing assertion fails at once with the difference shown, whatever it
 // compares: DOM nodes show as their markup, and a cycle as `[Circular]`.
+import { assertEquals } from '@std/assert'
 import { equal, match, test, throws } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 
@@ -43,4 +44,28 @@ test('equal over nodes alike in markup says so', () => {
 
 test('equal passes over the same nodes', () => {
   equal(links, [...page.querySelectorAll('a')])
+})
+
+// `assertEquals` formats through inspection. A linkedom node inspects as its
+// markup, so a failure on a large page names the element instead of walking
+// the document.
+test('assertEquals over a linkedom node fails showing its markup', async () => {
+  let markup = '<textarea name="say"></textarea>'
+  let wide = parseHTML(
+    `<html><body>${'<div><p>x</p></div>'.repeat(2000)}${markup}</body></html>`,
+  ).document
+  let field = wide.querySelector('[name=say]')!
+  let read = (name: string) => {
+    let show = Reflect.get(field, Symbol.for(name))
+    return typeof show == 'function' ? show.call(field) : show
+  }
+  equal(read('Deno.customInspect'), markup)
+  equal(read('nodejs.util.inspect.custom'), markup)
+  let error = await throws(
+    () => assertEquals(field, null),
+    'Values are not equal',
+  )
+  let message = (error as Error).message
+  equal(message.includes(markup), true)
+  equal(message.includes('ownerDocument'), false)
 })
