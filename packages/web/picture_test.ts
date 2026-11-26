@@ -8,7 +8,7 @@ import { picture } from './picture.ts'
 // runs every timer it set.
 let opened = (
   answer: () => Promise<Response>,
-  o: { shell?: boolean } = {},
+  o: { shell?: boolean; offline?: boolean } = {},
 ) => {
   let html = picture(
     '<!doctype html><html><head></head><body><p>kept</p></body></html>',
@@ -19,7 +19,11 @@ let opened = (
   let said = { written: '', told: [] as string[], network: [] as string[] }
   let reloads = 0
   let timers: (() => void)[] = []
-  let status = { textContent: '' }
+  let retry = { type: '', textContent: '', style: {}, onclick: () => {} }
+  let status = {
+    textContent: '',
+    replaceChildren: (words: string) => void (status.textContent = words),
+  }
   let document = {
     documentElement: {
       hasAttribute: (a: string) => a == 'data-kept-shell' && !!o.shell,
@@ -27,12 +31,14 @@ let opened = (
     },
     readyState: 'interactive',
     visibilityState: 'visible',
+    createElement: () => retry,
     querySelector: () => status,
     open: () => {},
     write: (h: string) => void (said.written += h),
     close: () => {},
   }
   let navigator = {
+    onLine: !o.offline,
     sendBeacon: (_: string, b: Blob) => {
       void b.text().then((t) => said.told.push(JSON.parse(t).message))
       return true
@@ -76,6 +82,7 @@ let opened = (
   return {
     said,
     status,
+    retry,
     reloads: () => reloads,
     settle,
     later: async () => {
@@ -115,25 +122,36 @@ test('a picture whose page answers as no page tells why and loads once from the 
   assertEquals(o.reloads(), 1)
 })
 
-test('a picture whose page never comes gives up on it in a few seconds', async () => {
-  let o = opened(() => new Promise(() => {}))
-  await o.settle()
-  assertEquals(o.reloads(), 0)
+test('a picture keeps waiting for a slow answer and replaces itself when it comes', async () => {
+  let response = Promise.withResolvers<Response>()
+  let o = opened(() => response.promise)
   await o.later()
-  assertEquals(o.said.told, [
-    'A kept picture fell back to the network: not replaced in 6000 ms',
-  ])
+  assertEquals(o.status.textContent, 'This is taking longer than usual. ')
+  assertEquals(o.reloads(), 0)
+  response.resolve(await html('<p>at last</p>')())
+  await o.settle()
+  assertEquals(o.said.written, '<p>at last</p>')
+  assertEquals(o.said.told, [])
+})
+
+test('the reload button on a stalled picture asks the network once', async () => {
+  let o = opened(() => new Promise(() => {}))
+  await o.later()
+  o.retry.onclick()
+  o.retry.onclick()
+  await o.settle()
+  assertEquals(o.said.network, ['https://yaks.app/manage/chat'])
   assertEquals(o.reloads(), 1)
 })
 
 test('offline, a picture stays and says when it was taken, and a shell, with nothing of its own, loads again', async () => {
   let gone = () => Promise.reject(new TypeError('Load failed'))
-  let kept = opened(gone)
+  let kept = opened(gone, { offline: true })
   await kept.settle()
   await kept.later()
   assertEquals(kept.reloads(), 0)
   assertEquals(kept.status.textContent.startsWith('Offline.'), true)
-  let shell = opened(gone, { shell: true })
+  let shell = opened(gone, { shell: true, offline: true })
   await shell.settle()
   assertEquals(shell.said.told, [
     'A kept shell fell back to the network: offline',

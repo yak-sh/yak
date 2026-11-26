@@ -1706,7 +1706,7 @@ export let openingChat = async (...args: Parameters<typeof chatPage>) => {
           ),
         ),
         skip: ['#content', 'Skip to content'],
-        script: `<script type="module" src="${
+        script: `<script type="module" async src="${
           asset(env, '_operator-opening.js')
         }"></script>`,
         aside: beside.ways && h(Aside, {

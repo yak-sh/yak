@@ -12,7 +12,7 @@ let open = (slot: HTMLElement) => {
   let frame = view?.closest('[data-site-frame]')
   let signal = leaving(doc)
   let visible = () =>
-    !signal.aborted && !view?.hidden &&
+    slot.isConnected && !signal.aborted && !view?.hidden &&
     !frame?.hasAttribute('inert')
   let { operatorOpening: path, person, space } = slot.dataset
   if (!path || !person || !space) return

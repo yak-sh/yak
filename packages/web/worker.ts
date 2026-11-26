@@ -3,8 +3,8 @@
  * again draws at once (./picture.ts).
  *
  * - A page a person opens that was kept is answered with its picture at
- *   once, and the page as it is now is asked for at the same moment, for the
- *   picture's bootstrap to take (`FRESH`).
+ *   once. The network request starts independently of the cache read, for
+ *   the picture's bootstrap to take (`FRESH`).
  * - A page opened with no picture of its own, at an address the site's
  *   shell stands for (`shelled`), is answered with the shell the same way:
  *   the newest one a page sent as it was left.
@@ -138,7 +138,7 @@ export type Scope = {
   location: { origin: string }
   clients: { claim(): Promise<void> }
   registration?: {
-    navigationPreload?: { enable(): Promise<void> }
+    navigationPreload?: { enable(): Promise<void>; disable?(): Promise<void> }
   }
   indexedDB?: Pick<IDBFactory, 'databases' | 'deleteDatabase'>
   navigator?: { onLine: boolean }
@@ -226,15 +226,18 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   }
   scope.addEventListener('activate', (e) => {
     // A navigation can wait for activation. Activation must never open a page.
+    let preload = scope.registration?.navigationPreload
+    // WebKit can leave a preload pending when the navigation answers with
+    // a picture. Only network-only navigations consume their own preload.
+    let change = pictures ? preload?.disable?.() : preload?.enable()
+    if (change) {
+      e.waitUntil(
+        change.catch((error) =>
+          tell(error, 'The worker could not set navigation preload')
+        ),
+      )
+    }
     if (!pictures) {
-      let preload = scope.registration?.navigationPreload
-      if (preload) {
-        e.waitUntil(
-          preload.enable().catch((error) =>
-            tell(error, 'The worker could not enable navigation preload')
-          ),
-        )
-      }
       e.waitUntil(
         caches.delete(PAGES).catch((error) =>
           tell(error, 'The worker could not clear its old pictures')
@@ -305,7 +308,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     }
     let headers = new Headers(res.headers)
     headers.set(FRESH_WAIT, String(performance.now() - began))
-    if (res.url) headers.set(FRESH_URL, res.url)
+    if (res.url) headers.set(FRESH_URL, address(res.url))
     return new Response(res.body, {
       status: res.status,
       statusText: res.statusText,
@@ -347,30 +350,39 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     if (got.status < 500 || opts.drew?.(await got.clone().text())) return got
     return said({ state: 'failed', said: `The server answered ${got.status}` })
   }
-  let page = async (req: Request) => {
+  let requested = ({ request, preloadResponse }: FetchLike) =>
+    preloadResponse?.then((preloaded) => preloaded ?? scope.fetch(request)) ??
+      scope.fetch(request)
+  let page = async (e: FetchLike) => {
+    let req = e.request
     let key = keyOf(req.url)
-    if (unpictured.delete(key)) return reached(scope.fetch(req))
+    let began = performance.now()
+    let now = scope.fetch(req)
+    if (unpictured.delete(key)) return reached(now)
+    now.catch(() => {})
     let drawn = await kept(req, key).catch((e) => {
       tell(e)
       return undefined
     })
-    if (!drawn) return reached(scope.fetch(req))
-    let now = timed(
-      scope.fetch(key, {
-        credentials: 'same-origin',
-        headers: { accept: 'text/html' },
-        cache: 'no-store',
-      }),
-      performance.now(),
+    if (!drawn) return reached(now)
+    // A navigation preserves redirects for the browser to follow. The
+    // bootstrap needs the page at the final address.
+    let fresh = timed(
+      now.then((res) =>
+        res.type != 'opaqueredirect' ? res : scope.fetch(key, {
+          credentials: 'same-origin',
+          headers: { accept: 'text/html' },
+          cache: 'no-store',
+        })
+      ),
+      began,
     )
-    // Nobody may come for it: the picture is closed before its bootstrap ran.
-    now.catch(() => {})
-    asked.set(key, now)
+    // Keep the request alive until the bootstrap can take it. A picture may
+    // also close before its bootstrap runs, in which case nobody takes it.
+    e.waitUntil(fresh.then(() => {}, () => {}))
+    asked.set(key, fresh)
     return drawn
   }
-  let requested = ({ request, preloadResponse }: FetchLike) =>
-    preloadResponse?.then((preloaded) => preloaded ?? scope.fetch(request)) ??
-      scope.fetch(request)
   // The page at `url` as it is now, kept as if it had just been left. One
   // that sends elsewhere (signed out) or fails is not kept.
   let refresh = async (url: string) => {
@@ -391,8 +403,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     let key = keyOf(req.url)
     let held = asked.get(key)
     asked.delete(key)
-    let fetch = () => timed(scope.fetch(req), performance.now())
-    return held?.catch(fetch) ?? fetch()
+    return held ?? timed(scope.fetch(req), performance.now())
   }
   let file = async (req: Request) => {
     let files = await caches.open(FILES)
@@ -412,7 +423,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       e.waitUntil(forget())
       if (!pictures && e.request.method == 'GET') e.respondWith(requested(e))
     } else if (how == 'page') {
-      e.respondWith(pictures ? page(e.request) : reached(requested(e)))
+      e.respondWith(pictures ? page(e) : reached(requested(e)))
     } else if (how == 'fresh') e.respondWith(fresh(e.request))
     else if (how == 'file') e.respondWith(file(e.request))
   })

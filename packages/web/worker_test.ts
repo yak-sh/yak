@@ -7,7 +7,7 @@ import {
   keeping,
   type Scope,
 } from './worker.ts'
-import { FRESH, KEPT, SHELL } from './picture.ts'
+import { FRESH, FRESH_URL, KEPT, SHELL } from './picture.ts'
 
 // The address a request names, a Request or a string.
 let key = (r: RequestInfo | URL) =>
@@ -82,9 +82,7 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
   let settled = async () => {
     while (waiting.length) await waiting.shift()
   }
-  // What the worker answers a request with: its body, or null where it
-  // leaves the request to the network.
-  let ask = async (
+  let respond = (
     path: string,
     o: {
       mode?: RequestMode
@@ -107,9 +105,12 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
       waitUntil: (p) => void waiting.push(p),
     }
     hear.get('fetch')!(e)
-    await settled()
-    return answer ? await (await answer).text() : null
+    return answer
   }
+  // What the worker answers a request with: its body, or null where it
+  // leaves the request to the network.
+  let ask = async (...args: Parameters<typeof respond>) =>
+    (await respond(...args))?.text() ?? null
   let open = (path: string) => ask(path, { mode: 'navigate' })
   let activate = async () => {
     hear.get('activate')!({
@@ -149,9 +150,11 @@ let worker = (files = 2, more: Partial<Keeping> = {}) => {
   return {
     scope,
     activate,
+    settled,
     site,
     navigator,
     asked,
+    respond,
     ask,
     open,
     leave,
@@ -171,7 +174,9 @@ test('a page left is drawn again at once as a kept picture, and its bootstrap ge
   assertEquals(await w.open('/checks'), page('now'))
   await w.leave('/checks', page('as last seen'))
   w.asked.length = 0
-  let drawn = (await w.open('/checks'))!
+  let opening = w.open('/checks')
+  assertEquals(w.asked, ['/checks'])
+  let drawn = (await opening)!
   assertEquals(drawn.includes('as last seen'), true)
   assertEquals(drawn.includes(`${KEPT}="1"`), true)
   assertEquals(drawn.includes('<script type="module"'), false)
@@ -180,6 +185,55 @@ test('a page left is drawn again at once as a kept picture, and its bootstrap ge
   assertEquals(w.asked, ['/checks'])
   assertEquals(await w.ask('/checks', { fresh: true }), page('now'))
   assertEquals(w.asked, ['/checks'])
+})
+
+test('a kept picture draws while its fresh request is pending and takes its answer once', async () => {
+  let w = worker()
+  let enabled = true
+  w.scope.registration = {
+    navigationPreload: {
+      enable: () => Promise.resolve(),
+      disable: () => {
+        enabled = false
+        return Promise.resolve()
+      },
+    },
+  }
+  await w.activate()
+  equal(enabled, false)
+  await w.leave('/checks', page('as last seen'))
+  let network = Promise.withResolvers<Response>()
+  w.site.set('/checks', () => network.promise)
+  let drawn = await w.open('/checks')
+  equal(drawn?.includes('as last seen'), true)
+  let fresh = w.ask('/checks', { fresh: true })
+  network.resolve(new Response(page('fresh')))
+  equal(await fresh, page('fresh'))
+  await w.settled()
+  equal(w.asked, ['/checks'])
+})
+
+test('a pushed opening takes the fresh page at its address without the push marker', async () => {
+  let address = (url: string) => {
+    let at = new URL(url)
+    at.searchParams.delete('_yak_open')
+    return at.href
+  }
+  let w = worker(2, { opening: () => '', address })
+  let pushed = '/checks?_yak_open=push'
+  w.site.set('/checks', () => {
+    let response = new Response(page('fresh'))
+    Object.defineProperty(response, 'url', {
+      value: 'https://yaks.app' + pushed,
+    })
+    return Promise.resolve(response)
+  })
+  await w.leave('/checks', page('kept'))
+  equal((await w.open(pushed))?.includes(KEPT), true)
+  let fresh = await w.respond('/checks', { fresh: true })
+  equal(fresh?.headers.get(FRESH_URL), 'https://yaks.app/checks')
+  equal(await fresh?.text(), page('fresh'))
+  equal(w.asked, ['/checks'])
 })
 
 test('signing out forgets every kept page and page graph, and a page loaded before it keeps nothing after', async () => {
@@ -191,6 +245,7 @@ test('signing out forgets every kept page and page graph, and a page loaded befo
     await w.ask('/logout', { mode: 'navigate', method: 'POST' }),
     null,
   )
+  await w.settled()
   assertEquals(w.databases(), ['yaks'])
   // The page being left as it signs out sends its snapshot after.
   await w.leave('/checks', page('mine, again'), loaded)
@@ -249,6 +304,7 @@ test('a page with no picture of its own opens at once as the shell where the she
   // Not where the site says the shell does not stand.
   assertEquals(await w.open('/pricing'), page('prices'))
   await w.ask('/logout', { mode: 'navigate', method: 'POST' })
+  await w.settled()
   assertEquals(await w.open('/manage/updates'), page('the updates'))
 })
 

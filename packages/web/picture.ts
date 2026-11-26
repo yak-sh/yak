@@ -43,8 +43,8 @@ export let FRESH_URL = 'x-yak-fresh-url'
  * page come from the network (`@yaks/web/worker`). */
 export let NETWORK = 'network'
 
-/** How long a picture waits for its page before it gives up on it, and how
- * long the page written over it may take to finish parsing. */
+/** When to show that a picture is waiting on a slow page, and how long the
+ * page written over it may take to finish parsing. */
 export let LATE = 6_000
 export let WRITTEN = 8_000
 
@@ -56,9 +56,9 @@ export type Boot = { opening?: string; door?: string }
 // would not come along with a function's own text. It asks for the page as
 // it is now, and writes it over the picture once both are in. A picture
 // that cannot be had offline stays, marked as kept. Any other way it cannot
-// be replaced (an answer that is no page, a throw, a step that never ends,
-// a shell offline) reports why and loads the page from the network, once: a
-// picture is never what a person is left with.
+// be replaced (an answer that is no page, a throw, a shell offline) reports
+// why and loads the page from the network, once. While the original request
+// is still running, the person can keep waiting or ask to reload.
 let boot = ({ opening, door }: Boot = {}) =>
   `(() => {
   let opened = null
@@ -100,8 +100,17 @@ let boot = ({ opening, door }: Boot = {}) =>
     tell(why)
     reload()
   }
-  let late = setTimeout(() => network('not replaced in ${LATE} ms'), ${LATE})
   let status = () => document.querySelector('[data-kept-status]')
+  let late = setTimeout(() => {
+    let said = status()
+    if (settled || !said) return
+    let again = document.createElement('button')
+    again.type = 'button'
+    again.textContent = 'Reload'
+    again.style.pointerEvents = 'auto'
+    again.onclick = () => network('reload requested while ' + stage)
+    said.replaceChildren('This is taking longer than usual. ', again)
+  }, ${LATE})
   let offline = () => {
     if (shell) return network('offline')
     settled = true
@@ -167,7 +176,10 @@ let boot = ({ opening, door }: Boot = {}) =>
         reload()
       }, ${WRITTEN})
     })
-  }, offline).catch((e) => network('threw ' + ((e && e.message) || e)))
+  }, (e) => {
+    if (navigator.onLine === false) offline()
+    else network('request failed: ' + ((e && e.message) || e))
+  }).catch((e) => network('threw ' + ((e && e.message) || e)))
 })()`
 export let BOOT: string = boot()
 
