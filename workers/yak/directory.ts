@@ -1054,11 +1054,20 @@ export let clamped = (s: string) =>
   Array.from(folded(s)).slice(0, TITLE).join('')
 
 let TTL = 30_000
-let caches = new WeakMap<Meta, Map<string, { at: number; body: string }>>()
+// Each store's kept answers, and how many times a write has cleared them: a
+// read keeps its answer only if no write landed while it was under way, or
+// one begun before a write would keep what the write changed.
+type Cache = Map<string, { at: number; body: string }> & { writes: number }
+let caches = new WeakMap<Meta, Cache>()
 let cached = (store: Meta) => {
   let held = caches.get(store)
-  if (!held) caches.set(store, held = new Map())
+  if (!held) caches.set(store, held = Object.assign(new Map(), { writes: 0 }))
   return held
+}
+let cleared = (store: Meta) => {
+  let cache = cached(store)
+  cache.clear()
+  cache.writes++
 }
 
 // One seed per isolate, awaited by the write door and by nothing else
@@ -1200,7 +1209,7 @@ export let part = (store: Meta) => ({
       throw new Refused('this directory cannot restore trash')
     }
     let applied = await store.restoreTrash(id, eids, headers)
-    cached(store).clear()
+    cleared(store)
     return applied
   },
   purgeTrash: async (id: string, eids: string[]) => {
@@ -1219,8 +1228,11 @@ export let part = (store: Meta) => ({
     let cache = cached(store)
     let hit = fresh ? null : cache.get(asked)
     if (hit && hit.at > Date.now() - TTL) return hit.body
+    let writes = cache.writes
     let body = JSON.stringify(await store.query(asked))
-    if (body != '[]') cache.set(asked, { at: Date.now(), body })
+    if (body != '[]' && cache.writes == writes) {
+      cache.set(asked, { at: Date.now(), body })
+    }
     return body
   },
   apply: async (bundles: Bundle[], headers: Record<string, string> = {}) => {
@@ -1234,7 +1246,7 @@ export let part = (store: Meta) => ({
         .map((name) => [name, headers[name]]),
     )
     let applied = await store.apply(bundles, admitted)
-    cached(store).clear()
+    cleared(store)
     return applied
   },
 })
@@ -1388,7 +1400,7 @@ export let stamp = async (
     ...(actor?.via ? { 'x-yak-via': actor.via } : {}),
   }
   let applied = await metaStore(env).apply(mutation.entities, headers, apply)
-  cached(metaStore(env)).clear()
+  cleared(metaStore(env))
   return applied
 }
 

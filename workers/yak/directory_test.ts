@@ -841,6 +841,23 @@ test('the directory part shares its cache, refreshes and clears it after a write
   assertEquals(reads, 3)
 })
 
+test('a read under way while a write lands keeps nothing from before the write', async () => {
+  let version = 1, answer = (_: Bundle[]) => {}
+  let store: Meta = {
+    query: () =>
+      version == 1
+        ? new Promise((yes) => answer = yes)
+        : Promise.resolve([{ entity: { eid: 'row' }, app: { version } }]),
+    apply: () => (version = 2, Promise.resolve([])),
+  }
+  let dir = dirPart.part(store)
+  let before = dir.query(line`app`)
+  await dir.apply([])
+  answer([{ entity: { eid: 'row' }, app: { version: 1 } }])
+  assertEquals(JSON.parse(await before)[0].app.version, 1)
+  assertEquals(JSON.parse(await dir.query(line`app`))[0].app.version, 2)
+})
+
 test('the directory HTTP door carries only admitted write headers to its part', async () => {
   let headers: Record<string, string> | undefined
   let store: Meta = {
