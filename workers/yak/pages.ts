@@ -409,6 +409,7 @@ export let shell = (
   headers: Record<string, string> = {},
   layout = '',
   head = '',
+  later?: Promise<string>,
 ) =>
   documented(
     env,
@@ -418,6 +419,7 @@ export let shell = (
     headers,
     layout,
     head,
+    later,
   )
 
 export let lost = (env: Host = {}) =>

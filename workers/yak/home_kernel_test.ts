@@ -487,16 +487,28 @@ test('a dashboard page reads the directory in one trip', async () => {
   let settings = await timing(managePath('operator', slug))
   assertEquals(/hops;dur=(\d+)/.exec(settings)?.[1], '2')
   assertMatch(settings, /operator_wait;dur=\d+/)
-  // The opening frame only needs the directory. The read started after paint
-  // gets the conversation and Updates from the Operator in one trip.
+  // The opening frame arrives first. The same response brings the
+  // conversation and its composer once the Operator answers.
   let opening = await k.at('yaks.app', chatPath(slug), { headers: { cookie } })
-  let shell = parseHTML(await opening.text()).document
-  let pending = shell.querySelector('[data-operator-opening]')!
   assertEquals(opening.status, 200)
-  assert(pending)
+  let stream = opening.body!.getReader()
+  let first = new TextDecoder().decode((await stream.read()).value)
+  let shell = parseHTML(first).document
+  let pending = shell.querySelector('[data-operator-opening]')!
+  assert(pending.hasAttribute('data-operator-stream'))
+  assertEquals(shell.querySelector('script[data-operator-answer]'), null)
+  let tail = parseHTML(new TextDecoder().decode((await stream.read()).value))
+    .document
+  assertEquals((await stream.read()).done, true)
+  let streamed = parseHTML(
+    JSON.parse(
+      tail.querySelector('script[data-operator-answer]')!.textContent!,
+    ),
+  ).document
+  assert(streamed.querySelector('#ask textarea'))
   assertEquals(
-    opening.headers.get('server-timing')?.includes('operator_wait'),
-    false,
+    streamed.querySelector('[data-operator-opening]'),
+    null,
   )
   let path = pending.getAttribute('data-operator-opening')!
   let drawn = await k.at('yaks.app', path, { headers: { cookie } })

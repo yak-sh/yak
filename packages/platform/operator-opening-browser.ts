@@ -6,6 +6,30 @@ import { VIEW, VIEWED } from './talk-views.ts'
 let afterPaint = (fn: FrameRequestCallback) =>
   requestAnimationFrame(() => requestAnimationFrame(fn))
 
+let delivered = async (doc: Document, signal: AbortSignal) => {
+  // Let the parser finish appending the shell's nodes before swapping them.
+  if (doc.readyState == 'loading' && !signal.aborted) {
+    let parsed = new AbortController()
+    await new Promise<void>((done) => {
+      doc.addEventListener('readystatechange', () => done(), {
+        once: true,
+        signal: parsed.signal,
+      })
+      signal.addEventListener('abort', () => done(), {
+        once: true,
+        signal: parsed.signal,
+      })
+    })
+    parsed.abort()
+  }
+  if (signal.aborted) return
+  let data = doc.querySelector('script[data-operator-answer]')
+  if (!data) return
+  let text = data.textContent
+  data.remove()
+  return JSON.parse(text ?? 'null') as string | null
+}
+
 let open = (slot: HTMLElement) => {
   let doc = slot.ownerDocument
   let view = slot.closest<HTMLElement>(`[${VIEW}]`)
@@ -44,11 +68,20 @@ let open = (slot: HTMLElement) => {
     if (answer) return show()
     reading = true
     try {
-      let res = await fetch(url, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
-      })
-      if (!res.ok) throw new Error(`Operator conversation open: ${res.status}`)
-      let page = new DOMParser().parseFromString(await res.text(), 'text/html')
+      let text = slot.hasAttribute('data-operator-stream')
+        ? await delivered(doc, signal)
+        : undefined
+      if (text == null) {
+        if (!visible()) return
+        let res = await fetch(url, {
+          signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+        })
+        if (!res.ok) {
+          throw new Error(`Operator conversation open: ${res.status}`)
+        }
+        text = await res.text()
+      }
+      let page = new DOMParser().parseFromString(text, 'text/html')
       if (!page.querySelector('script[data-operator-chat]')) {
         throw new Error(
           'The Operator conversation response was missing its chat',

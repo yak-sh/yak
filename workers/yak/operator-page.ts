@@ -1359,6 +1359,7 @@ let talkPage = (
   beside: Beside,
   page: TalkPage,
   others: TalkPage[] = [],
+  rest?: Promise<string>,
 ) => {
   let at = managePath('operator', space.slug)
   let { listed } = page
@@ -1449,6 +1450,7 @@ let talkPage = (
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     FRAMED,
     installable(space) + (page.chat ? chatPreloads(env) : ''),
+    rest,
   )
 }
 
@@ -1662,9 +1664,22 @@ export let chatPage = async (
   return c.measure('render', () => talkPage(env, space, who, beside, chat))
 }
 
-/** The main chat's frame, before the browser asks for its conversation. */
+/** The main chat's frame and conversation in one response, with the frame
+ * first so the browser can draw it and start loading the chat's modules. */
 export let openingChat = async (...args: Parameters<typeof chatPage>) => {
   let [env, space, who, open, side, chosen, from, c] = args
+  let later = chatPage(...args).then(async (res) => {
+    if (!res.ok) {
+      await res.body?.cancel()
+      return ''
+    }
+    return `<script type="application/json" data-operator-answer>${
+      script(await res.text())
+    }</script>`
+  }).catch((error) => {
+    caught(error, { request: 'Operator conversation open', space: space.eid })
+    return ''
+  })
   let beside = await side ?? {}
   return (c ?? clock()).measure(
     'render',
@@ -1682,7 +1697,10 @@ export let openingChat = async (...args: Parameters<typeof chatPage>) => {
           beside,
           chosen,
           from,
+          true,
         ),
+        [],
+        later,
       ),
   )
 }
@@ -1695,6 +1713,7 @@ let openingParts = (
   beside: Beside,
   chosen?: string | null,
   from?: number,
+  streaming = false,
 ): TalkPage => {
   let app = chosen ? beside.apps?.find((a) => a.slug == chosen) : undefined
   let chat = chatPath(space.slug, open)
@@ -1718,6 +1737,7 @@ let openingParts = (
         'div',
         {
           'data-operator-opening': full,
+          'data-operator-stream': streaming ? '' : undefined,
           'data-person': who.person,
           'data-space': space.eid,
         },
