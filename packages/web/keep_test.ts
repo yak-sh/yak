@@ -52,6 +52,7 @@ let tab = (html: string, controlled = true, pending?: string) => {
     performance: { timeOrigin: 0 },
     innerHeight: 800,
     getComputedStyle,
+    MutationObserver: window.MutationObserver,
     addEventListener: window.addEventListener.bind(window),
   } as unknown as Window
   keep(win, '/worker.js', pending)
@@ -81,7 +82,7 @@ let tab = (html: string, controlled = true, pending?: string) => {
   }
 }
 
-test('a page registers its worker once loaded, and sends it what it shows as it is hidden or left in place, without what it does not', () => {
+test('a page registers its worker once loaded, and sends it what it shows as it is hidden or left in place, without what it does not, and only once unchanged', () => {
   let t = tab(
     '<html><body><p>Seen last</p><section hidden><p>Not shown</p></section><script>go()</script></body></html>',
   )
@@ -91,8 +92,11 @@ test('a page registers its worker once loaded, and sends it what it shows as it 
   assertEquals(t.sent.map((s) => s.keep), ['https://yaks.app/checks'])
   t.hide()
   t.leave()
+  assertEquals(t.sent.length, 1)
+  t.document.querySelector('p')!.textContent = 'Seen last, changed'
+  t.leave()
+  t.hide()
   assertEquals(t.sent.map((s) => s.keep), [
-    'https://yaks.app/checks',
     'https://yaks.app/checks',
     'https://yaks.app/checks',
   ])
@@ -252,7 +256,7 @@ let group = (prelude: string, rules: object[], named = false) => ({
 })
 let whole = (cssText: string) => ({ cssText })
 
-test('a picture carries only the rules of its sheets that something in it matches', () => {
+test('a picture carries only the rules of its sheets that may match something in it', () => {
   let t = tab(
     '<html><head><link rel="stylesheet" href="/_yak/pages.css"><link rel="stylesheet" href="https://elsewhere.example/a.css"></head>' +
       '<body><p class="row md:wide">Hi</p></body></html>',
@@ -291,8 +295,8 @@ test('a picture carries only the rules of its sheets that something in it matche
     t.sent[0].html,
     '<!doctype html><html><head><style>' +
       red(':root') + red('.row') + red('.row:not(.gone)') +
-      red('.md\\:wide') + red('.row::before') +
-      red('.menu:target') + `@media (width < 700px) {${red('.row')}}` +
+      red('.md\\:wide') + red('.row:hover') + red('.row::before') +
+      `@media (width < 700px) {${red('.row')}}` +
       '@layer base {}' +
       '@font-face { src: url("https://yaks.app/_yak/face.woff2"); }</style>' +
       '<link rel="stylesheet" href="https://elsewhere.example/a.css"></head>' +

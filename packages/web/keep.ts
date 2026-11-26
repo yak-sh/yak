@@ -38,7 +38,12 @@ export type Window = {
   performance: { timeOrigin: number }
   innerHeight: number
   getComputedStyle(e: Element): CSSStyleDeclaration
-  addEventListener(type: string, hear: () => void): void
+  MutationObserver: typeof MutationObserver
+  addEventListener(
+    type: string,
+    hear: () => void,
+    options?: AddEventListenerOptions,
+  ): void
   reportError?: (error: unknown) => void
 }
 
@@ -146,18 +151,15 @@ let unshift = (copy: Element, pane: Reach) => {
 
 // A picture carries its page's sheets, and matches every rule in them against
 // every element before it paints: most of a sheet styles other pages. Only the
-// rules something in the picture matches are carried, read from the sheets the
-// page has parsed. A rule for a state the picture can't be in (hovered,
-// focused) is left out. One for the address's target stays, as does every
-// rule no selector picks (a font, a keyframe). A sheet the page can't read
-// stays linked, for the worker to carry whole (./picture-sheets.ts).
+// rules that may match something in the picture are carried, read from the
+// sheets the page has parsed: those with a branch whose every class and id
+// the picture holds. Every rule no selector picks (a font, a keyframe) stays.
+// A sheet the page can't read stays linked, for the worker to carry whole
+// (./picture-sheets.ts).
 let SHEETS = 'link[rel~="stylesheet"]'
-let PSEUDO =
-  /::?(?:before|after|first-line|first-letter)\b|::[\w-]+(?:\([^)]*\))?/g
 // The classes and ids each branch of a selector asks every match to hold:
 // those outside brackets and parentheses, where :not() and :is() can ask
-// for less. Most rules name one the picture holds nowhere, found without
-// matching them.
+// for less.
 let needs = (selector: string) => {
   let flat = '', depth = 0
   for (let c of selector) {
@@ -182,8 +184,8 @@ let held = (shown: Element) => {
 
 // A sheet's rules as read once: reading them is most of the time a picture
 // takes, and a page's sheets don't change while it is open. A rule's text is
-// read once something in a picture matches it.
-type Styled = { selector: string; needs: string[][]; rule: CSSRule }
+// read once a picture carries it.
+type Styled = { needs: string[][]; rule: CSSRule }
 type Rule =
   | Styled
   | { group: string; rules: Rule[]; layer: boolean }
@@ -191,8 +193,7 @@ type Rule =
 let read = (rules: CSSRuleList): Rule[] =>
   [...rules].map((rule) => {
     if ('selectorText' in rule) {
-      let selector = rule.selectorText as string
-      return { selector, needs: needs(selector), rule }
+      return { needs: needs(rule.selectorText as string), rule }
     }
     if (!('cssRules' in rule) || 'findRule' in rule) return { rule }
     // A group (@media, @supports, @layer, @container) and what is in it.
@@ -209,25 +210,14 @@ let text = (rule: CSSRule) => {
   return said
 }
 let readings = new WeakMap<CSSStyleSheet, Rule[]>()
-let hits = (shown: Element, names: Set<string>, rule: Styled) => {
-  let { selector } = rule
-  if (selector.includes(':target')) return true
-  if (!rule.needs.some((branch) => branch.every((n) => names.has(n)))) {
-    return false
-  }
-  let s = selector.replace(PSEUDO, '').replace(/:root\b/g, 'html') || '*'
-  try {
-    return shown.matches(s) || !!shown.querySelector(s)
-  } catch {
-    return true // a selector this engine can't match here
-  }
-}
+let hits = (names: Set<string>, { needs }: Styled) =>
+  needs.some((branch) => branch.every((n) => names.has(n)))
 // A layer keeps its place in the order of layers even when empty.
-let used = (shown: Element, names: Set<string>, rules: Rule[]): string =>
+let used = (names: Set<string>, rules: Rule[]): string =>
   rules.map((r) => {
-    if ('selector' in r) return hits(shown, names, r) ? text(r.rule) : ''
+    if ('needs' in r) return hits(names, r) ? text(r.rule) : ''
     if (!('group' in r)) return text(r.rule)
-    let kept = used(shown, names, r.rules)
+    let kept = used(names, r.rules)
     return kept || r.layer ? `${r.group}{${kept}}` : ''
   }).join('')
 let carry = (
@@ -248,7 +238,7 @@ let carry = (
     let style = win.document.createElement('style')
     let media = copy.getAttribute('media')
     if (media) style.setAttribute('media', media)
-    style.textContent = absolute(used(shown, names, rules), sheet.href)
+    style.textContent = absolute(used(names, rules), sheet.href)
     copy.replaceWith(style)
   }
 }
@@ -320,14 +310,31 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
   let workers = win.navigator.serviceWorker
   if (!workers || win.document.documentElement.hasAttribute(KEPT)) return
   let loaded = false, seeded = false
+  // A page going away is left, hidden and unloaded in turn. Its snapshot is
+  // taken again only when what it shows changed since the last.
+  let changed = true
+  let change = () => {
+    changed = true
+  }
+  let changes = new win.MutationObserver(change)
+  changes.observe(win.document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    characterData: true,
+  })
+  win.addEventListener('scroll', change, { capture: true, passive: true })
+  win.addEventListener('resize', change)
   let send = () => {
     let root = win.document.documentElement
+    if (changes.takeRecords().length) changed = true
     if (
-      !workers.controller || root.hasAttribute(KEPT) ||
+      !changed || !workers.controller || root.hasAttribute(KEPT) ||
       pending && root.querySelector(pending)
     ) return
     workers.controller.postMessage(snapshot(win))
     seeded = true
+    changed = false
   }
   let seed = () => {
     if (loaded && !seeded) send()
