@@ -291,6 +291,12 @@ test('a search voip.ms is slow to answer is asked once more, and a second slow a
   assertEquals(twice.time.pending(), 0)
 })
 
+// Time on the test's clock, a second at a time, so what each step starts
+// is due by the next.
+let pass = async (time: ReturnType<typeof clock>, ms: number) => {
+  for (let at = 0; at < ms; at += 1_000) await time.advance(1_000)
+}
+
 // An account whose API never answers, on a clock the test holds.
 let silent = (ms?: number) => {
   let time = clock()
@@ -333,12 +339,71 @@ test('a method voip.ms is slow to answer is Unsent, but a text it may have taken
   let sending = silent()
   let sent = sending.line.send({ to: '+12695550142', text: 'Hi' })
     .then(() => null, (e) => e)
-  await sending.time.advance(16_000)
+  await pass(sending.time, 60_000)
   let error = await sent
   assertEquals(
     [error instanceof Unsent, error.message],
     [false, 'voip.ms did not answer sendSMS in time'],
   )
+  assertEquals(sending.asked.filter((m) => m == 'sendSMS').length, 1)
+})
+
+// voip.ms takes the text and answers late; its sent texts say whether the
+// text went, and only those since it was asked count.
+let late = (listed: (since: string) => Record<string, string>[]) => {
+  let time = clock(Date.parse('2026-11-26T23:12:02Z'))
+  let asked: string[] = []
+  let at = (ms: number) =>
+    new Date(time.now() + ms).toISOString().slice(0, 19).replace('T', ' ')
+  let line = voipms({
+    user: 'u',
+    key: 'k',
+    number: '+12695550100',
+    fetch: (url, init) => {
+      let q = new URL(String(url)).searchParams
+      asked.push(q.get('method')!)
+      if (q.get('method') == 'getSMS') {
+        let sms = listed(at(0))
+        return Promise.resolve(Response.json(
+          sms.length ? { status: 'success', sms } : { status: 'no_sms' },
+        ))
+      }
+      let signal = init!.signal!
+      return new Promise((_, no) =>
+        signal.addEventListener('abort', () => no(signal.reason))
+      )
+    },
+  }, time)
+  let sent = line.send({ to: '+12695550142', text: 'Join' })
+    .then((r) => r, (e: Error) => e.message)
+  return { sent, time, asked, at }
+}
+
+test('a text voip.ms answers late is delivered when it lists it as sent, and never asked again', async () => {
+  let row = (id: string, date: string, message = 'Join') => ({
+    id,
+    date,
+    type: '0',
+    did: '2695550100',
+    contact: '2695550142',
+    message,
+  })
+  let listed = late((
+    now,
+  ) => [row('9001', now), row('9000', '2026-11-26 09:00:00')])
+  await pass(listed.time, 60_000)
+  assertEquals(await listed.sent, { id: '9001' })
+  assertEquals(listed.asked, ['sendSMS', 'getSMS'])
+
+  let older = late(() => [row('9000', '2026-11-26 09:00:00')])
+  await pass(older.time, 60_000)
+  assertEquals(await older.sent, 'voip.ms did not answer sendSMS in time')
+  assertEquals(older.asked, ['sendSMS', 'getSMS', 'getSMS'])
+
+  let later = 0
+  let second = late((now) => later++ ? [row('9002', now)] : [])
+  await pass(second.time, 60_000)
+  assertEquals(await second.sent, { id: '9002' })
 })
 
 test("pointing a number's texts where they already go asks voip.ms nothing more", async () => {

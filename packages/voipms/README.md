@@ -8,6 +8,13 @@ callback, or turns it off without a `url`, while preserving the account's other
 forwarding settings. `called(query)` translates the callback to an `Arrival`
 after the host authenticates its URL.
 
+A text goes at most once. voip.ms often takes a text and answers after the
+call's 15 seconds are up. The text is then never handed over again: whether it
+went is what voip.ms lists as sent from that number to that person since the
+send began (`getSMS`, or `getMMS` for a long one, in UTC), asked at once and
+again ten seconds later. A text it lists is delivered with its id; one it does
+not, or cannot say, fails as an error.
+
 [voip.ms API](https://voip.ms/m/apidocs.php)
 
 `numbers({ user, key })` sells local US numbers from our own account

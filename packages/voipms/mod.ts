@@ -88,9 +88,49 @@ let point = async (call: Call, at: string, url?: string, before?: string) => {
   })
 }
 
-/** What a voip.ms {@link Account} asks for: its numbers, a text sent, and
- * where a number's texts go. */
-export let TEXTING = ['getDIDsInfo', 'sendSMS', 'sendMMS', 'setSMS']
+/** What a voip.ms {@link Account} asks for: its numbers, a text sent, the
+ * texts it sent, and where a number's texts go. */
+export let TEXTING = [
+  'getDIDsInfo',
+  'sendSMS',
+  'sendMMS',
+  'getSMS',
+  'getMMS',
+  'setSMS',
+]
+
+/**
+ * The id voip.ms gives a text `did` sent `dst` in exactly these words since
+ * `since`, as its sent texts list them (`getSMS`, or `getMMS` for a long one,
+ * in UTC); null when it lists none, and an error when it cannot say.
+ */
+let sentSince = async (
+  call: Call,
+  sms: boolean,
+  { did, dst, message }: Params,
+  since: number,
+  now: number,
+): Promise<string | null> => {
+  let day = (t: number) => new Date(t).toISOString().slice(0, 10)
+  let said: Record<string, unknown> = await call(sms ? 'getSMS' : 'getMMS', {
+    from: day(since - 60_000),
+    to: day(now),
+    did,
+    contact: dst,
+    type: '0',
+    timezone: '0',
+    limit: '50',
+  }).catch((error) => {
+    if (/no_(sms|mms)\b/.test(String(error))) return {}
+    throw error
+  })
+  let list = (said[sms ? 'sms' : 'mms'] ?? []) as Record<string, unknown>[]
+  let hit = list.find((t) =>
+    String(t.message) == message &&
+    Date.parse(String(t.date).replace(' ', 'T') + 'Z') >= since - 60_000
+  )
+  return hit ? String(hit.id) : null
+}
 
 /**
  * A voip.ms {@link Account}, which can only read its numbers, text from them
@@ -102,7 +142,9 @@ export let TEXTING = ['getDIDsInfo', 'sendSMS', 'sendMMS', 'setSMS']
  * {@link VOIPMS}.blocked rejects with {@link Blocked}; one in `denied`, which
  * the account's owner mends, with {@link Denied}; a connection that failed
  * or a 5xx with `Unsent`; anything else with an Error carrying voip.ms's
- * words.
+ * words. voip.ms often takes a text and answers after the call's time is
+ * up: the text is then never handed over again, and whether it went is what
+ * voip.ms lists as sent, asked at once and again ten seconds later.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -163,15 +205,21 @@ export let voipms = (
       let method = sms ? 'sendSMS' : 'sendMMS'
       // A text goes at most once: one voip.ms may have taken before its
       // answer timed out is never handed over again, so it is no Unsent.
-      let said = await call(method, {
+      // Whether it went is what voip.ms lists as sent since it was asked.
+      let asked = {
         did: ten(given ?? await from()),
         dst: ten(to),
         message: text,
-      }).catch((error) => {
-        if (error instanceof TimedOut) {
-          throw new Error(`voip.ms did not answer ${method} in time`)
-        }
-        throw error
+      }
+      let since = time.now()
+      let said = await call(method, asked).catch(async (error) => {
+        if (!(error instanceof TimedOut)) throw error
+        let look = () => sentSince(call, sms, asked, since, time.now())
+        let id = await look().catch(() => null) ??
+          await new Promise((go) => time.after(10_000, () => go(null)))
+            .then(look).catch(() => null)
+        if (id) return { [sms ? 'sms' : 'mms']: id }
+        throw new Error(`voip.ms did not answer ${method} in time`)
       })
       let id = said[sms ? 'sms' : 'mms']
       return id == null ? {} : { id: String(id) }
