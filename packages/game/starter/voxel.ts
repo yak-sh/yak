@@ -15,4 +15,4 @@ let boxes: Box[] = [
 let shape = geometry(pack(cuboids(out(), boxes, 0.25)))
 let material = soft({ speckle: 0.1 })
 
-play(field(() => new THREE.Mesh(shape, material)), traveler())
+await play(field(() => new THREE.Mesh(shape, material)), traveler())

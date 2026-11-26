@@ -11,7 +11,8 @@
     ".",
     "./rules",
     "./controls",
-    "./hud"
+    "./hud",
+    "./page"
   ],
   "resources": [
     "hud/*.css"

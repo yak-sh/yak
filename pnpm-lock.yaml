@@ -2286,6 +2286,9 @@ importers:
 
   packages/game:
     dependencies:
+      '@yaks/client':
+        specifier: 0.2.24
+        version: link:../client
       '@yaks/tui':
         specifier: 0.2.24
         version: link:../tui
@@ -2302,9 +2305,6 @@ importers:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
-      '@yaks/client':
-        specifier: 0.2.24
-        version: link:../client
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing

@@ -8,11 +8,13 @@
     "./controls": "./controls.ts",
     "./hud": "./hud.ts",
     "./vocab": "./vocab.ts",
-    "./ui": "./ui.ts"
+    "./ui": "./ui.ts",
+    "./page": "./page.ts"
   },
   "license": "Apache-2.0",
   "description": "Game rules, browser controls and HUD parts over values, without a graph or a game world.",
   "dependencies": {
+    "@yaks/client": "0.2.24",
     "@yaks/tui": "0.2.24",
     "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",
@@ -20,7 +22,6 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/client": "0.2.24",
     "@yaks/testing": "0.2.30",
     "linkedom": "^0.18.12",
     "preact-render-to-string": "6.7.0"

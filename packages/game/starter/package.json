@@ -3,6 +3,7 @@
     "@yaks/game": "platform",
     "@yaks/stage": "platform",
     "@yaks/ui": "platform",
+    "@yaks/vocab": "platform",
     "@yaks/voxel": "platform",
     "three": "^0.186.1"
   }

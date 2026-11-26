@@ -52,6 +52,19 @@ the player's pose, and `look` draws from that pose. The voxel entry uses
 `@yaks/voxel/three` to build meshes from the app's boxes. Keep that entry and
 dependency when building a voxel world.
 
+## Page graph
+
+`page` from `@yaks/game/page` loads the app's `./api/vocab.json` and composes
+the page-only `Controls` component and any vocabulary passed as `words`. It
+returns the `@yaks/client` client. Use `ent(eid)` for indexed reads and
+`watch(query, { remote: false })` for a compiled local watch. Apply one bundle
+batch per simulation step with `mutate`. Components declared as `sync: none`
+stay in RAM. Stored components go through the app store.
+
+The exploration starter passes input and the current pose to its movement rule,
+then draws from a local watch on `PlayerPose{x, y, z, yaw}`. A turn-based game
+can use the same client to apply a batch on each action.
+
 ## Paths
 
 `aStar` accepts nodes, stable keys, neighbours with costs, a goal and a
