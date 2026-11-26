@@ -133,7 +133,7 @@ import {
   signInAt,
 } from '@yaks/platform/routes'
 import { telling } from '@yaks/platform/cookie'
-import { caught } from './defects.ts'
+import { background, caught } from './defects.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import { held as live } from './browser-sessions.ts'
 import { type Ctx as Asking, EID, refuse } from './tool.ts'
@@ -287,10 +287,9 @@ let settled = async (
     let i = await named(integrationOf(b))
     if (!i?.broker) return 0
     try {
-      let apps = await usersOf(env, b.entity.eid)
       if (!(await settle(c, b.entity.eid)).length) return 0
       await ready(env, b.entity.eid)
-      await rebound(env, apps)
+      await rebound(env, await usersOf(env, b.entity.eid))
       return 1
     } catch (e) {
       caught(e, { request: 'settle', integration: i.name })
@@ -500,6 +499,8 @@ export let enabled = (req: Request): string[] =>
 /** Who is asking for a space's connections, and about what. */
 type Asked = {
   trash?: boolean
+  /** A general page can draw while the broker checks pending sign-ins. */
+  deferSettlement?: boolean
   /** whether it is the person's own space; still being read, what they
    * connected is asked beside the rest and kept only if it is */
   own?: boolean | Promise<boolean>
@@ -634,22 +635,49 @@ export let connectionsOf = async (
   let all = [...held, ...mine]
   // A sign-in finished at a broker shows as connected on this very read:
   // settled from the rows just read, and read again only once one connected.
-  let settledHere = await settled(
+  let settlement = settled(
     env,
     all,
     (name) => knownIn(all, name) ?? built.find((i) => i.name == name),
   )
-  if (settledHere) {
+  if (at.deferSettlement) {
+    background(
+      settlement.then(
+        () => {},
+        (error) =>
+          caught(error, { request: 'settle connections', space: here.slug }),
+      ),
+    )
+  } else if (await settlement) {
     return await connectionsOf(env, here, person, { ...at, by: undefined })
   }
   let taken = new Set(
     all.filter((b) => b[CONNECTION])
       .map((b) => String(comp(b, CONNECTION).integration)),
   )
-  // A client is kept in the vault, so a deploy with none has no client either.
-  let offered = async (i: Integration) =>
-    !taken.has(i.name) && (!i.testing || enable.includes(i.name)) &&
-    connectable(i, vaulted(env) && await signsInWith(vaultOf(env), read, i))
+  let vault = vaulted(env) ? vaultOf(env) : null
+  // Built integrations can use the same broker. Its credential is read once
+  // for this view, including for the catalogue below.
+  let brokers = new Map<string, Promise<boolean>>()
+  let hasBroker = (name: string) => {
+    let found = brokers.get(name)
+    if (found) return found
+    let ready = vault
+      ? brokerOf(vault, name).then(Boolean)
+      : Promise.resolve(false)
+    brokers.set(name, ready)
+    return ready
+  }
+  let offered = async (i: Integration) => {
+    if (taken.has(i.name) || i.testing && !enable.includes(i.name)) return false
+    if (connectable(i) || !vault) return connectable(i)
+    return connectable(
+      i,
+      i.broker
+        ? await hasBroker(i.broker.name)
+        : await signsInWith(vault, read, i),
+    )
+  }
   let card = async (i: Integration, brief = true): Promise<Offered> => ({
     name: i.name,
     keyed: keyed(i),
@@ -666,9 +694,12 @@ export let connectionsOf = async (
   // The catalog, beside them: a built one is offered as above, and one only
   // the catalog lists where its broker or the vault can take it.
   let catalog = (async (): Promise<[Catalog, Offer[]]> => {
-    let all = await offersOf(env, built)
-    let ready = new Set((await offers).map((b) => b.name))
-    let brokered = vaulted(env) && !!await brokerOf(vaultOf(env), BROKER)
+    let [all, offered, brokered] = await Promise.all([
+      offersOf(env, built),
+      offers,
+      hasBroker(BROKER),
+    ])
+    let ready = new Set(offered.map((b) => b.name))
     let can = all.filter((o) =>
       o.built ? ready.has(o.name) : !taken.has(o.name) &&
         (o.broker ? brokered : vaulted(env))
@@ -879,6 +910,7 @@ export let connectionsRow = async (
     find: asked('q'),
     open: asked('detail'),
     trash: q.has('trash'),
+    deferSettlement: !q.has('detail'),
   })
   return pageRow(space.eid, ask, c)
 }
