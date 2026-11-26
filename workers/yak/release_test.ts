@@ -92,7 +92,7 @@ test('a release names the shas it is made of, and copies none', async () => {
   assertEquals(text(await stage.files.read(`${next}/keep.js`)), 'kept code')
   await stage.files.put(`${next}/esbuild/keep.js`, bytes('compiled'))
   await stage.files.delete(`${next}/esbuild/stale.js`)
-  assertEquals(await stage.finish(), {
+  assertEquals((await stage.finish()).files, {
     'index.html': PAGE,
     'keep.js': KEPT,
   })

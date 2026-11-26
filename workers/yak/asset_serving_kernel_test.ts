@@ -7,8 +7,54 @@ import { addressed } from '@yaks/platform/versions'
 import { bucket } from './binding-probe.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { KERNEL } from './meta.ts'
-import { encode, META } from './release_index.ts'
+import { encode, META } from '@yaks/platform/release-index'
 import { connector, fresh, kernel, seed } from './probe.ts'
+import { edged } from './apps.ts'
+import type { Env } from './env.ts'
+
+test('Site reads a fresh release page through its directory route', async () => {
+  let { r2, gets } = bucket()
+  let edge: Env
+  // Site has a cold isolate's release index cache, over the same bucket.
+  let k = await fresh({ BLOBS: r2 }, (env) => {
+    edge = { ...env, BLOBS: { ...r2 } }
+  })
+  try {
+    let app = { space: 'coldrelease', app: 'page' }
+    let { cookie } = await seed(k, [{ slug: app.space, apps: [app.app] }])
+    let agent = connector(k, cookie)
+    let visit = (path: string) =>
+      edged(new Request(`https://coldrelease.yaks.app/page/${path}`), edge)
+    let release = async (version: string) => {
+      await agent.tool('app_files', {
+        ...app,
+        files: [
+          { path: 'dist/index.html', content: `<h1>${version}</h1>` },
+          { path: 'source.html', content: '<h1>source only</h1>' },
+          {
+            path: 'wrangler.jsonc',
+            content:
+              '{"assets":{"directory":"dist","not_found_handling":"none"}}',
+          },
+        ],
+      })
+      await agent.tool('app_deploy', app)
+      await k.settled()
+      gets.length = 0
+      let page = await visit('')
+      assertEquals(page.status, 200)
+      assertStringIncludes(await page.text(), `<h1>${version}</h1>`)
+      let source = await visit('source.html')
+      assertEquals(source.status, 404)
+      await source.body?.cancel()
+      assertEquals(gets, [])
+    }
+    await release('first release')
+    await release('second release')
+  } finally {
+    await k.stop()
+  }
+})
 
 test('a private app icon from an older release revalidates on both domains', async () => {
   let { r2 } = bucket()

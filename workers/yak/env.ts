@@ -353,6 +353,10 @@ export type Env = {
   FILES?: Fetcher
   // The same named cache, opened in the invocation that needs the bytes.
   FILE_CACHE?: () => Promise<Stored>
+  RELEASE_VIEWS?: ReadonlyMap<
+    string,
+    import('@yaks/platform/release-index').ServingIndex
+  >
   // The cached public pages behind the uncached gateway (site.ts): the apex's
   // home and gallery, and every public page an app serves. Its `purge` takes
   // pages out of its cache (@yaks/workerd/purge); the in-process stand-in has

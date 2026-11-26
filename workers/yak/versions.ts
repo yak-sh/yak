@@ -228,6 +228,7 @@ export let record = async (
     message,
     head,
     accessWas,
+    view = null,
   }: {
     homes?: { app: App; release: string }[]
     sourceWas?: string | null
@@ -247,6 +248,7 @@ export let record = async (
     head?: Awaited<ReturnType<Directory['deployHead']>>
     /** A release without a fence commits only while the app stays private. */
     accessWas?: App['access']
+    view?: import('@yaks/platform/release-index').ReleaseView | null
   } = {},
 ) => {
   head ??= await dir.deployHead(app)
@@ -277,6 +279,7 @@ export let record = async (
           ...(app.lenses ? { lenses: app.lenses } : {}),
         },
         last_deploy: moved,
+        release_view: view,
         ...join === undefined ? {} : { join: { declared: join } },
         ...seeded ? { seeded: { at, version } } : {},
         $was: {

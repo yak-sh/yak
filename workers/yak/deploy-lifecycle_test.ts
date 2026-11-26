@@ -56,7 +56,7 @@ let fixture = async (env: Env, dir: Directory) => {
       let bytes = new TextEncoder().encode(content)
       await stage.files.put(`${source}/${path}`, bytes)
     }
-    let files = await stage.finish()
+    let { files } = await stage.finish()
     let next = { ...app, source }
     await declared(env, space, {
       ...next,

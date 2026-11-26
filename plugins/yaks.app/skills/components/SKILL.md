@@ -874,8 +874,8 @@ The complete list of reserved names:
     rating reads recalled recipient reconnecting ref referenced
     refund_failed refund_request refund_retry refund_sale refund_sent
     refusal refusal_report register_domain register_writes registration
-    relationship release_remake renew_domain_order renew_domains
-    renew_transferred_domain report report_refusals repository
+    relationship release_remake release_view renew_domain_order
+    renew_domains renew_transferred_domain report report_refusals repository
     representation requires restored result retired revision
     role_free_spaces rtc rtc_lapse sale_access sale_artifact satisfies
     screen screenshot secret seeded seller sender sending serves

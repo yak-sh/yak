@@ -16,7 +16,7 @@ import { toolkitOf, type Toolkits, toolkits } from '@yaks/esbuild'
 import type { Env } from './env.ts'
 import { url } from '@yaks/platform/host'
 import { filesIn } from './release.ts'
-import { r2Objects, r2RawObjects } from './lib/objects.ts'
+import { r2RawObjects, releaseIndex, servedObjects } from './lib/objects.ts'
 import { BUILT } from '@yaks/platform/versions'
 import { sharing } from './lib/shared.ts'
 
@@ -76,10 +76,15 @@ export let stale = async (
   env: Pick<Env, 'ASSETS' | 'BLOBS'> & Partial<Env>,
   source: string,
 ): Promise<boolean> => {
-  let files = await filesIn(r2RawObjects(env.BLOBS), source)
+  let files = await filesIn(
+    r2RawObjects(env.BLOBS),
+    source,
+    releaseIndex(env),
+    env.RELEASE_VIEWS?.get(source),
+  )
   if (!files?.[COMPILED]) return false
   let bytes = files[RECORD]
-    ? await r2Objects(env.BLOBS).read(`${source}/${RECORD}`)
+    ? await servedObjects(env).read(`${source}/${RECORD}`)
     : null
   let record = bytes ? JSON.parse(new TextDecoder().decode(bytes)) : null
   return behind(record, await current(env))

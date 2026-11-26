@@ -164,6 +164,7 @@
     "./facets": "./facets.ts",
     "./manifest": "./manifest.ts",
     "./released": "./released.ts",
+    "./release-index": "./release-index.ts",
     "./versions": "./versions.ts",
     "./cli": "./cli.ts",
     "./plans": "./plans.ts",

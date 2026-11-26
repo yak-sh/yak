@@ -682,6 +682,7 @@ export let walkTo = (slug: string, eid: string | Promise<string>): Walk => ({
  * each optional, since a row is whichever of them it wears, a space's plan
  * and meter among them (@yaks/platform/meter `MeteredRow`). */
 export type Row = MeteredRow & {
+  release_view?: import('@yaks/platform/release-index').ReleaseView
   free_ai_budget?: { dollars?: number | null }
   app_transfer?: TransferOffer
   app_transfer_answer?: { answer: TransferAnswer; at: string; slugs?: string }
@@ -2996,6 +2997,7 @@ export let directoryRows = (rows: {
       person?: string | null,
       over = false,
       every = !app,
+      files = false,
     ) => {
       let at = line`.app.space.space.slug=${slug}`
       let which = every
@@ -3017,10 +3019,11 @@ export let directoryRows = (rows: {
         ])
         : NONE
       let epoch = wrote(META_STORE)
+      let views = files && !every
       let rows = await query(
         line`(.space.slug=${slug}&${sub(SPACE_ABOUT)})|(${sub(which)}&${
           sub(ABOUT)
-        })${sub(seat)}`,
+        }${sub(views ? line`&?release_view` : NONE)})${sub(seat)}`,
       )
       let mine = epoch != null && epoch == wrote(META_STORE)
         ? found()
@@ -3053,10 +3056,24 @@ export let directoryRows = (rows: {
       }
       // The browsers whose guest work the person claimed (attribution.ts
       // `browsersOf`), read in this same trip.
-      let said: Page & { browsers?: string[] } = page
+      let said: Page & {
+        browsers?: string[]
+        releaseViews?: NonNullable<Row['release_view']>[]
+      } = page
+      if (views) {
+        said = {
+          ...said,
+          releaseViews: rows.flatMap(({ app, release_view: view }) =>
+            view?.source && view.source == app?.source &&
+              (app.access == 'public' || app.access == 'open')
+              ? [view]
+              : []
+          ),
+        }
+      }
       if (person) {
         said = {
-          ...page,
+          ...said,
           browsers: rows.filter((row) =>
             row.browser?.by && idOf(row.browser.by) == person
           ).map((row) => instrumentEid(row.entity.eid)),

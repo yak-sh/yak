@@ -76,7 +76,15 @@ import {
 } from '@yaks/blob'
 import { blobPrefix, shaOf } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { assetsIn, departed, filesAt, staged, viewOf } from './release.ts'
+import {
+  assetsIn,
+  atRelease,
+  departed,
+  filesAt,
+  staged,
+  viewOf,
+} from './release.ts'
+import { releaseView } from '@yaks/platform/release-index'
 import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
 import { CallError } from '@yaks/tools'
@@ -2097,7 +2105,10 @@ let published = async (
   // beside them, and Cloudflare's name for the script this uploaded. The
   // app's live pointer and its move record commit together, once the
   // declaration and the release's index sent above have landed.
-  let [, pinned] = await Promise.all([declare, snapshot])
+  let [, { files: pinned, index }] = await Promise.all([declare, snapshot])
+  let view = index && stagedApp.access != 'private'
+    ? await releaseView(release, index, parsed.config)
+    : null
   await c.time(
     'record',
     () =>
@@ -2124,6 +2135,7 @@ let published = async (
           ),
           message,
           head,
+          view,
         },
       ),
   )
@@ -2515,7 +2527,10 @@ export let released = async (
             previous,
             await assetsIn(blobs, kept.source!),
           )
-          return kept.files
+          return {
+            files: kept.files,
+            index: await atRelease(blobs, kept.source!),
+          }
         },
       }
       : staged(

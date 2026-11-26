@@ -16,6 +16,14 @@ export let directoryDoc: VocabDoc = {
   title: 'directory',
   $defs: {
     ...supportWords,
+    release_view: {
+      description:
+        'Serving settings and a compressed Files index for the live source.',
+      component: true,
+      type: 'object',
+      journal: false,
+      properties: { source: owned(text), body: owned(text) },
+    },
     app_icon: {
       description: 'The platform artwork requested and drawn for an app.',
       component: true,

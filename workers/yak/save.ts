@@ -144,7 +144,7 @@ let savedPrivately = async (
       await c.time(
         'record',
         () =>
-          record(ctx.dir, who, candidate, version, pinned, '', {
+          record(ctx.dir, who, candidate, version, pinned.files, '', {
             head,
             declaration: live.declaration!,
             sourceWas: live.source,

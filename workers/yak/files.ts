@@ -145,9 +145,10 @@ export let holding = async (
   env: Env,
   source: string,
 ): Promise<(path: string) => boolean> => {
+  let view = env.RELEASE_VIEWS?.get(source)
   let [files, config] = await Promise.all([
-    filesIn(r2RawObjects(env.BLOBS), source, releaseIndex(env)),
-    configOf(servedObjects(env), source),
+    filesIn(r2RawObjects(env.BLOBS), source, releaseIndex(env), view),
+    view?.config ?? configOf(servedObjects(env), source),
   ])
   let root = rootOf('', config).slice(1)
   let at = root ? `${root}/` : ''
@@ -211,11 +212,19 @@ let trip = async (env: Env, req: Request) => {
     )
   }
   return relayed(
-    await through(req.cache == 'no-store' ? undefined : env.FILES, req, draw, {
-      clock: env.CLOCK,
-      failed: unanswered,
-      patience: Infinity,
-    }),
+    await through(
+      req.cache == 'no-store' ||
+        env.RELEASE_VIEWS?.has(req.headers.get(PREFIX) ?? '')
+        ? undefined
+        : env.FILES,
+      req,
+      draw,
+      {
+        clock: env.CLOCK,
+        failed: unanswered,
+        patience: Infinity,
+      },
+    ),
   )
 }
 
@@ -589,7 +598,13 @@ let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let at = decodedPath(path)
   if (at == null) return missing()
   let blobs = servedObjects(env)
-  let config = await c.time('config', () => configOf(blobs, prefix))
+  let config = await c.time(
+    'config',
+    () =>
+      Promise.resolve(
+        env.RELEASE_VIEWS?.get(prefix)?.config ?? configOf(blobs, prefix),
+      ),
+  )
   let root = rootOf(prefix, config)
   let key = keyed(root, path)
   // Server source is not a public asset, even when `main` names a nested build

@@ -15,7 +15,14 @@ import { rootOf, type Serving, serving } from '@yaks/platform/files'
 import { elapsed } from './lib/hops.ts'
 import { background } from './defects.ts'
 import { addressed, BUILT, type Files, own, SHA } from '@yaks/platform/versions'
-import { decode, encode, type File, type Index, META } from './release_index.ts'
+import {
+  decode,
+  encode,
+  type File,
+  type Index,
+  META,
+  type ServingIndex,
+} from '@yaks/platform/release-index'
 import { sharing } from './lib/shared.ts'
 
 type Named = Pick<File, 'key'> & Partial<File>
@@ -143,8 +150,9 @@ export let filesIn = async (
   raw: Objects,
   source: string,
   read?: Objects['read'],
+  carried?: ServingIndex,
 ): Promise<Files | null> => {
-  let index = await indexAt(raw, `${source}/`, read)
+  let index = carried?.index ?? await indexAt(raw, `${source}/`, read)
   return index && filesOf(index)
 }
 
@@ -177,13 +185,16 @@ export let assetsIn = async (
   raw: Objects,
   source: string,
   read?: Objects['read'],
+  carried?: ServingIndex,
 ): Promise<Assets> => {
-  let index = await indexAt(raw, `${source}/`, read)
+  let index = carried?.index ?? await indexAt(raw, `${source}/`, read)
   return index
     ? sharing(assetsByIndex, index, () => {
       let assets = assetsOf(index)
       return Object.keys(assets).length
         ? Promise.resolve(assets)
+        : carried
+        ? Promise.resolve(plainAssets(filesOf(index), carried.config))
         : unrewritten(raw, index)
     })
     : {}
@@ -298,14 +309,19 @@ export let filesAt = async (raw: Objects, source: string): Promise<Files> => {
 export let releaseFiles = (
   blobs: Objects,
   indexRead?: Objects['read'],
+  view?: (source: string) => ServingIndex | undefined,
 ): Objects => {
-  let index = (prefix: string) => indexAt(blobs, prefix, indexRead)
+  let index = async (prefix: string) =>
+    view?.(prefix.slice(0, -1))?.index ??
+      await indexAt(blobs, prefix, indexRead)
   // The file a key names: the bucket's own key outside a release, and null
   // for a path its release does not hold.
   let named = async (key: string): Promise<Named | null> => {
     let prefix = release(key)
     if (!prefix) return { key }
-    return (await index(prefix))?.[key.slice(prefix.length)] ?? null
+    let files = await index(prefix)
+    let path = key.slice(prefix.length)
+    return files && Object.hasOwn(files, path) ? files[path] : null
   }
   let versioned = <T extends { version: string }>(file: Named, found: T) =>
     file.sha ? { ...found, version: file.sha.slice(0, 24) } : found
@@ -456,13 +472,14 @@ export let staged = (raw: Objects, from: Files, prefix: string) => {
     config: Serving = {},
     previous?: string | null,
     texts?: Record<string, string>,
-  ): Promise<Files> => {
+  ): Promise<{ files: Files; index: Index | null }> => {
     let prior = previous ? await atRelease(raw, previous) : null
     let index = await withAssets(raw, files, config, prior)
-    await Promise.all([
-      packed(raw, index, prior, texts).then((next) =>
-        written(raw, prefix, next)
-      ),
+    let [finished] = await Promise.all([
+      packed(raw, index, prior, texts).then(async (next) => {
+        await written(raw, prefix, next)
+        return next
+      }),
       departed(
         raw,
         prefix.slice(0, prefix.lastIndexOf('/') + 1),
@@ -470,7 +487,7 @@ export let staged = (raw: Objects, from: Files, prefix: string) => {
         assetsOf(index),
       ),
     ])
-    return manifest()
+    return { files: manifest(), index: finished }
   }
   return { files: view, manifest, finish }
 }

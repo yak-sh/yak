@@ -67,6 +67,7 @@ import { etagOf, otherThanAsset } from '@yaks/platform/asset-response'
 import { assetsIn, keptAsset } from './release.ts'
 import * as files from './files.ts'
 import * as fence from '@yaks/platform/files'
+import { readView, type ServingIndex } from '@yaks/platform/release-index'
 import { parse as parseRedirects, sentOn } from './redirects.ts'
 import { prefixOf, VERSION } from './files.ts'
 import { appCopy, type Copy, filled } from './page-copy.ts'
@@ -1267,7 +1268,12 @@ let releaseAssets = (
   source: string | null | undefined,
 ): Promise<Assets> =>
   releaseId(source)
-    ? assetsIn(r2RawObjects(env.BLOBS), source!, releaseIndex(env))
+    ? assetsIn(
+      r2RawObjects(env.BLOBS),
+      source!,
+      releaseIndex(env),
+      env.RELEASE_VIEWS?.get(source!),
+    )
     : Promise.resolve({})
 
 let releaseAsset = (assets: Assets, path: string) => {
@@ -2789,7 +2795,11 @@ let served = async (
           uploaded(url.pathname)
         ? directory(direct, { copy: serving, time: env.CLOCK, copyFirst: true })
         : dir
-      let read = c.time('route', () => route.page(space, app, person))
+      let views = edge && fence.page(url.pathname)
+      let read = c.time(
+        'route',
+        () => route.page(space, app, person, false, undefined, views),
+      )
       let credential = sessionReading(req, env, dir)
       // The name `/who` tells a person beside their standing (api `/who`, and
       // `/me`, its shipped name), asked with the route so a page's first
@@ -2819,6 +2829,17 @@ let served = async (
   }
   if (step.to == 'sent') return redirect(step.href, step.status)
   let { space, read: routing } = step
+  if (routing.releaseViews?.length) {
+    let views = new Map<string, ServingIndex>()
+    await Promise.all(routing.releaseViews.map(async (view) => {
+      try {
+        views.set(view.source, await readView(view))
+      } catch (error) {
+        caught(error, { request: 'read release view', source: view.source })
+      }
+    }))
+    env = { ...env, RELEASE_VIEWS: views }
+  }
   let { person, authenticated } = await identity()
   // A seat, from that read for the person it asked about, else the directory.
   let seatOf = (p: string) =>

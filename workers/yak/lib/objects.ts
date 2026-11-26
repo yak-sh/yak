@@ -89,7 +89,7 @@ export let r2RawObjects = (bucket: Bucket, pause = sleep): Objects => {
 export let r2Objects = (bucket: Bucket): Objects =>
   releaseFiles(r2RawObjects(bucket))
 
-type ReleaseEnv = Pick<Env, 'BLOBS' | 'FILE_CACHE' | 'CLOCK'>
+type ReleaseEnv = Pick<Env, 'BLOBS' | 'FILE_CACHE' | 'CLOCK' | 'RELEASE_VIEWS'>
 
 /** Site and Files read the same immutable index across isolates in a colo. */
 export let releaseIndex = (env: ReleaseEnv): Objects['read'] => {
@@ -112,4 +112,8 @@ export let releaseIndex = (env: ReleaseEnv): Objects['read'] => {
 
 /** App files with the serving door's index cache. */
 export let servedObjects = (env: ReleaseEnv): Objects =>
-  releaseFiles(r2RawObjects(env.BLOBS), releaseIndex(env))
+  releaseFiles(
+    r2RawObjects(env.BLOBS),
+    releaseIndex(env),
+    (source) => env.RELEASE_VIEWS?.get(source),
+  )

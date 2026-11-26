@@ -286,7 +286,7 @@ test('pruning keeps the bytes the serving release names', async () => {
   let files = await stored(blobs, { 'index.html': 'kept' })
   let release = staged(blobs, files, current)
   await release.files.put(`${current}/esbuild/app.js`, bytes('compiled'))
-  await record(dir, WHO, APP, 2, await release.finish(), '')
+  await record(dir, WHO, APP, 2, (await release.finish()).files, '')
   assertEquals(
     await pruned(dir, blobs, [{
       prefix: PREFIX,
