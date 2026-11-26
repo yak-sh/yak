@@ -79,13 +79,13 @@ export let versionView = (v: VersionView) => {
         v.shipped
           ? h(
             Button,
-            { mod: 'go', href: v.shipped, target: '_blank' },
+            { mod: 'go', href: v.shipped },
             'View this version',
           )
           : null,
         h(
           Button,
-          { mod: v.shipped ? undefined : 'go', href: v.open, target: '_blank' },
+          { mod: v.shipped ? undefined : 'go', href: v.open },
           live ? 'Open the app' : 'Open the live app',
         ),
       ),
