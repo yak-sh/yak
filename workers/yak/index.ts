@@ -18,6 +18,7 @@ export let {
   Lexicon,
   Chats,
   Files,
+  ReleaseIndex,
   Site,
   Uses,
   Ads,

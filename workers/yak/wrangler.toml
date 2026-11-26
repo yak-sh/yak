@@ -503,6 +503,12 @@ type = "worker"
   [exports.Files.cache]
   enabled = false
 
+[exports.ReleaseIndex]
+type = "worker"
+
+[exports.ReleaseIndex.cache]
+enabled = true
+
 [exports.Site]
 type = "worker"
 
@@ -518,6 +524,11 @@ type = "worker"
 binding = "FILES"
 service = "yak"
 entrypoint = "Files"
+
+[[services]]
+binding = "RELEASE_INDEX"
+service = "yak"
+entrypoint = "ReleaseIndex"
 
 [[services]]
 binding = "SITE"
@@ -867,6 +878,12 @@ type = "worker"
 [env.staging.exports.Files.cache]
 enabled = false
 
+[env.staging.exports.ReleaseIndex]
+type = "worker"
+
+[env.staging.exports.ReleaseIndex.cache]
+enabled = true
+
 [env.staging.exports.Site]
 type = "worker"
 
@@ -877,6 +894,11 @@ enabled = true
 binding = "FILES"
 service = "yak-staging"
 entrypoint = "Files"
+
+[[env.staging.services]]
+binding = "RELEASE_INDEX"
+service = "yak-staging"
+entrypoint = "ReleaseIndex"
 
 [[env.staging.services]]
 binding = "SITE"

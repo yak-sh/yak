@@ -7,7 +7,7 @@ import { addressed } from '@yaks/platform/versions'
 import { bucket } from './binding-probe.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { KERNEL } from './meta.ts'
-import { encode, META } from './release_index.ts'
+import { encode, META } from '@yaks/platform/release-index'
 import { connector, fresh, kernel, seed } from './probe.ts'
 
 test('a private app icon from an older release revalidates on both domains', async () => {

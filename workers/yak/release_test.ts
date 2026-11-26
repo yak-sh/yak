@@ -18,6 +18,7 @@ import { holding } from './written.ts'
 import type { App, Directory } from './directory.ts'
 import { addressed, BUILT } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
+import { indexKey } from '@yaks/platform/release-index'
 
 let memory = () => {
   let held = new Map<string, Uint8Array<ArrayBuffer>>()
@@ -200,7 +201,11 @@ test('a release keeps a pointer only for the assets leaving the release before i
 // then its bytes, as is a page that is not UTF-8, served as it was stored.
 type Body = string | Uint8Array
 let made = 0
-let first = async (written: Record<string, Body>, path: string) => {
+let first = async (
+  written: Record<string, Body>,
+  path: string,
+  tier = false,
+) => {
   let b = bucket()
   // Each its own release, as every deploy's is: what a release's config says
   // is kept by its name (files.ts `configOf`).
@@ -214,6 +219,19 @@ let first = async (written: Record<string, Body>, path: string) => {
   }
   await stage.finish()
   let env = { BLOBS: b.r2 } as unknown as Env
+  if (tier) {
+    env.RELEASE_INDEX = {
+      fetch: (req) => {
+        let key = indexKey(req)
+        let index = key && b.held.get(key)
+        return Promise.resolve(
+          index
+            ? new Response(new Uint8Array(index))
+            : new Response(null, { status: 404 }),
+        )
+      },
+    }
+  }
   let r = await fileBytes(env, 'eid', source, path, source)
   let timing = r.headers.get('server-timing') ?? ''
   return [
@@ -247,3 +265,11 @@ for (let [what, files, path, status, body, trips] of views) {
     assertEquals(await first(files, path), [status, [...expected], trips])
   })
 }
+
+test('a first view serves the release config and HTML without a local bucket read if held in the shared tier', async () => {
+  assertEquals(await first(built, '/', true), [
+    200,
+    [...bytes('built home')],
+    0,
+  ])
+})

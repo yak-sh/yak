@@ -4,6 +4,7 @@ import { test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import { fileAt } from '@yaks/platform/kept'
+import { indexAddress, META } from '@yaks/platform/release-index'
 import { warm } from './files.ts'
 import { platform } from './serving-probe.ts'
 
@@ -20,7 +21,7 @@ let warmed = async (answer: (req: Request) => Promise<Response>) => {
   env.ERRORS = {
     send: (batch: Bundle[]) => Promise.resolve(void rows.push(...batch)),
   }
-  env.FILES = {
+  env.FILES = env.RELEASE_INDEX = {
     fetch: (req) => (asked.push(req.url), answer(req)),
   }
   await warm(env, eid, source, paths, 20)
@@ -32,8 +33,10 @@ let warmed = async (answer: (req: Request) => Promise<Response>) => {
   }
 }
 
-let all = ['/', '/a.png', '/b.png', '/c.png'].map((p) => fileAt(eid, p, source))
-  .sort()
+let all = [
+  ...['/', '/a.png', '/b.png', '/c.png'].map((p) => fileAt(eid, p, source)),
+  indexAddress(source + META),
+].sort()
 let bytes = () => Promise.resolve(new Response('bytes'))
 let hung = <T>(req: Request) =>
   new Promise<T>((_, reject) =>

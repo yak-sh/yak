@@ -1,3 +1,4 @@
+import { indexAddress, META } from '@yaks/platform/release-index'
 import { type Line } from '@yaks/query'
 import { decodedPath } from './request-path.ts'
 import { type Clock, clock, timed } from './timing.ts'
@@ -327,18 +328,31 @@ export let warm = async (
         .map((p) => p.slice(dir.length + 1))
       : paths,
   )
+  let drain = (cache: Fetcher, req: Request) =>
+    cache.fetch(req)
+      .then((got) =>
+        got.body?.pipeTo(new WritableStream(), { signal: req.signal })
+      )
+      .catch(() => {})
+  // Seed the shared tier for the first view of a new release in another
+  // location. Like the file guesses, this runs after the release answers.
+  let index = env.RELEASE_INDEX && drain(
+    env.RELEASE_INDEX,
+    new Request(indexAddress(source + META), {
+      signal: AbortSignal.timeout(wait),
+    }),
+  )
   let next = 0
   let run = async () => {
     while (next < asked.length) {
       let signal = AbortSignal.timeout(wait)
-      let req = fileRequest(eid, source, asked[next++], source, { signal })
-      // Read through, never held: the cache keeps what passes it whole.
-      await cache.fetch(req)
-        .then((got) => got.body?.pipeTo(new WritableStream(), { signal }))
-        .catch(() => {})
+      await drain(
+        cache,
+        fileRequest(eid, source, asked[next++], source, { signal }),
+      )
     }
   }
-  await Promise.all(Array.from({ length: AT_ONCE }, run))
+  await Promise.all([index, ...Array.from({ length: AT_ONCE }, run)])
 }
 
 // The gateway calls this only after checking access and resolving the blob's
