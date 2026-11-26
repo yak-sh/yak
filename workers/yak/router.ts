@@ -14,24 +14,13 @@
 // store, no directory — so it is the same rule in a test, in `app_set`, and in
 // the router.
 
+import { covers, globbed } from '@yaks/platform/files'
 import { OURS } from '@yaks/platform/routes'
 import { refuse } from './tool.ts'
 
-// Everything between the wildcards, as itself: a glob's own `.` is a dot and
-// not the regex's any-character.
-let literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-let pattern = (glob: string) =>
-  new RegExp(`^${glob.split('*').map(literal).join('.*')}$`)
-
-/// covers('/recipes/*', '/recipes/lemon') -> true
-/// covers('/recipes/*', '/garden') -> false
-/// covers('/*/print', '/recipes/lemon/print') -> true
-/// covers('/recipes', '/recipes/lemon') -> false
-/** Does this glob answer that path? `*` is any run of characters, slashes
- * included — one wildcard, no second syntax to learn. */
-export let covers = (glob: string, path: string): boolean =>
-  glob.includes('*') ? pattern(glob).test(path) : glob == path
+// A glob is read as an app's declared routes are (@yaks/platform/files
+// `covers`): `*` is any run of characters, slashes included.
+export { covers }
 
 /**
  * The paths no `first` glob may name, and which the home app's router is never
@@ -70,7 +59,7 @@ let MARK = '\u0000'
 let prepared = (glob: string) => ({
   glob,
   witness: glob.replaceAll('*', MARK),
-  pattern: pattern(glob),
+  pattern: globbed(glob),
 })
 let platformPaths = PLATFORM_PATHS.map(prepared)
 let overlaps = (

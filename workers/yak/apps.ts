@@ -1296,6 +1296,14 @@ let releaseServing = (env: Env, source: string) =>
     env.RELEASE_VIEWS?.get(source),
   )
 
+/** What an app's release says of the paths its worker is asked about
+ * (@yaks/platform/files `workerFirst`): read only for an app with a worker,
+ * from the index its release's files are read by. */
+let declaredOf = async (env: Env, app: App) =>
+  app.worker !== '' && releaseId(app.source)
+    ? (await releaseServing(env, app.source!)).assets
+    : undefined
+
 let releaseAsset = (assets: Assets, path: string) => {
   let name = fence.decoded(path)?.slice(1)
   return name && Object.hasOwn(assets, name) ? assets[name] : null
@@ -2801,7 +2809,10 @@ export let query = (req: Request, env: Env): Promise<Response> =>
     if (step.to == 'nothing') return nothingAt(url.pathname, env)
     if (step.to == 'sent') return redirect(step.href, step.status)
     if (step.to != 'app' || !queryPath(step.path)) return queryPass()
-    if (!keepable(step.app)) unkept(request, env, step.bare, c)
+    if (
+      !keepable(step.app) &&
+      !keepable(step.app, undefined, await declaredOf(env, step.app))
+    ) unkept(request, env, step.bare, c)
     let access = await appAccess(
       request,
       env,
@@ -2893,10 +2904,16 @@ let routeApp = (
     // The space, the app at the address, the front page and the seat of the
     // person the cookie names, in one read of the directory: every rung asks
     // one of them, and asking each in turn was a round trip apiece.
+    // A read that names nobody, or an upload's, asks the serving copy first:
+    // a page's every file, and a crawler's every address, read the same line
+    // for the same app, which the copy answers only while it holds its
+    // revision current and no write's fence is up (directory-copy.ts
+    // `signedDirectory`), so the directory is asked once for them all. Site's
+    // fill keeps its own reading, which says what it kept from a copy.
     page: async (space, app) => {
       let { person } = await identity()
       let route = (req.method == 'GET' || req.method == 'HEAD') &&
-          uploaded(url.pathname)
+          (uploaded(url.pathname) || !person && !edge)
         ? directory(direct, { copy: serving, time: env.CLOCK, copyFirst: true })
         : dir
       let views = edge && fence.page(url.pathname)
@@ -3364,8 +3381,8 @@ let served = async (
   // and the release
   // files of one anyone may install. From a directory copy a moment old it
   // keeps only a public app's.
-  let keeps = (app: App, path: string) =>
-    keepable(app, path) && !(dir.stale && app.access != 'public')
+  let keeps = (app: App, path: string, assets?: fence.Assets) =>
+    keepable(app, path, assets) && !(dir.stale && app.access != 'public')
   if (step.to == 'closed') return closed(req, env, dir, space)
   // The space's old builder door, still posted to by a page drawn before
   // the New app screen asked the Operator (M-37853): its line is forwarded
@@ -3504,10 +3521,12 @@ let served = async (
     return page
   }
   // Nor does the gateway ask Site about the addresses of an app it keeps
-  // nothing of for a while.
+  // nothing of for a while. An app with a worker may declare the paths it is
+  // asked about (its release's `assets`), and every other path is its files'.
   if (published) wakePage?.()
-  if (edge && !keeps(app, path)) return passed()
-  if (!edge && !keepable(app)) unkept(req, env, bare, c)
+  let assets = await declaredOf(env, app)
+  if (edge && !keeps(app, path, assets)) return passed()
+  if (!edge && !keepable(app, undefined, assets)) unkept(req, env, bare, c)
   let calendarToken = /^\/calendar\/([a-zA-Z0-9_-]+)\.ics$/.exec(path)?.[1]
   if (path == '/calendar.ics' || calendarToken) {
     if (edge) return passed()
@@ -3790,13 +3809,15 @@ let served = async (
   // What it may do as the app is `env.APP` and nothing else; its `env.STORE`
   // is still the visitor, so a worker that only passes a store read on
   // refuses exactly what the page would have.
+  let working = app.worker !== '' && fence.workerFirst(assets, path)
   if (
-    mayRead && !itself && app.worker && req.method == 'GET' && fence.page(path)
+    mayRead && !itself && app.worker && working && req.method == 'GET' &&
+    fence.page(path)
   ) {
     // The worker can query its store before the page is sent.
     wake(env, storeName(space, app))
   }
-  let own = itself
+  let own = itself || !working
     ? null
     : await c.time('worker', () =>
       ran(env, space!, app!, req, who, browserClaims(routing, person, who)))

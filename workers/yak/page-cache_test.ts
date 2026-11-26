@@ -234,6 +234,19 @@ test('a page made private leaves the edge, and is no longer asked of Site', asyn
   assertEquals(g.site.asks(), 1)
 })
 
+test('an app none of whose pages is kept still has its release bytes asked of Site', async () => {
+  let g = gateway(() => keep(page('bytes'), space, app))
+  unkept(
+    new Request('https://ada.yaks.app/cookbook/'),
+    g.env,
+    '/cookbook/',
+    clock(),
+  )
+  assertEquals(await g.get(), null)
+  let client = await g.get('https://ada.yaks.app/cookbook/api/client.js')
+  assertStringIncludes(await client!.text(), 'bytes')
+})
+
 test('an address Site passed is not asked of it again', async () => {
   let g = gateway(() => passed())
   assertEquals(await g.get(), null)

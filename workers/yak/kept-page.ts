@@ -9,6 +9,7 @@ import { EDGE_REGION, edgeRegion } from '@yaks/platform/regional-route'
 import { hit } from '@yaks/workerd/cache'
 import {
   BROWSER,
+  fixed,
   FRESH,
   KEPT,
   listingAt,
@@ -87,11 +88,14 @@ export let asked = async (
   let first = /^\/[^/]+\//.exec(path)?.[0]
   let mounts = [mount ?? '/', ...first && !mount ? [first] : []]
   // A worker's pages may go straight to the gateway while the platform's
-  // upload door is still served by Site.
+  // doors no worker is asked about, its uploads and its release's assets, are
+  // still served by Site.
   if (
     passes(site, [
       key,
-      ...uploaded(path) ? [] : mounts.map((at) => scope(host, mount, at)),
+      ...uploaded(path) || fixed(path)
+        ? []
+        : mounts.map((at) => scope(host, mount, at)),
     ])
   ) {
     return null

@@ -401,3 +401,14 @@ test('assets.not_found_handling is read from wrangler.jsonc and refuses other va
     true,
   )
 })
+
+test('assets.run_worker_first declares the routes, and refuses what is no path', () => {
+  assertEquals(
+    parse('{"assets":{"run_worker_first":["/p/*","!/p/a.css"]}}').config.assets,
+    { run_worker_first: ['/p/*', '!/p/a.css'] },
+  )
+  for (let no of ['false', '["p/*"]', '"/p/*"', '[1]']) {
+    let { refused } = parse(`{"assets":{"run_worker_first":${no}}}`)
+    assertEquals(refused.length > 0, true, no)
+  }
+})

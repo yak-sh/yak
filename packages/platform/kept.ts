@@ -33,10 +33,10 @@
  *
  * Site keeps whole pages, so it keeps only an answer that is the same for
  * everyone it could be sent to (`keepable`, `keep`): the own file or 404 of
- * an app anyone may read, with no worker of its own, no sandbox, no router
- * claiming the path and no cookie, the release files of a private one anyone
- * may install, a space's 404 where no app answers, or its index as a stranger
- * sees it. A person signed in who holds no seat in the space is shown its
+ * an app anyone may read at a path no worker of its own is asked about, with
+ * no sandbox, no router claiming the path and no cookie, the release files
+ * of a private one anyone may install, a space's 404 where no app answers, or
+ * its index as a stranger sees it. A person signed in who holds no seat in the space is shown its
  * index as such an outsider, kept under their own session (`pageAt`); a
  * member's is never kept. Anything else is a pass, kept as briefly as a page.
  *
@@ -61,7 +61,7 @@ import { addressed } from '@yaks/blob'
 import { sha256 } from '@yaks/graph/sha256'
 import { mode } from '@yaks/member/words'
 import { COOKIE, cookieValue, HOST_COOKIE } from './cookie.ts'
-import { decoded, page } from './files.ts'
+import { type Assets, declared, decoded, page, workerFirst } from './files.ts'
 import { apex, type Host, url } from './host.ts'
 import { offered, sandboxed } from './installs.ts'
 import { bearing, MOUNT, previews } from './routes.ts'
@@ -555,7 +555,10 @@ export type Keepable = {
  * open), and the `fixed` bytes of one anyone may install (`offered`), which
  * its pages load first. A private app's pages and data are its members', a
  * sandboxed page carries its visitor's token, and an app's worker may answer
- * each visitor differently.
+ * each visitor differently: so of an app with a worker, only what no worker
+ * is asked about, its `fixed` bytes and uploads (the platform's `/api/`
+ * answers those before any worker), and every path its release's config
+ * (`assets`) leaves its files (./files.ts `workerFirst`).
  *
  * ```ts
  * import { keepable } from '@yaks/platform/kept'
@@ -566,11 +569,24 @@ export type Keepable = {
  * assert(keepable(app, css) && keepable(app, '/api/client.js'))
  * assert(keepable(app) && !keepable(app, '/') && !keepable(app, '/api/who'))
  * assert(!keepable({ ...app, published: null }))
+ * // A public app's worker is asked about every path, unless its config
+ * // declares its routes.
+ * let worked = { access: 'public', worker: 'w' }
+ * assert(keepable(worked, css) && !keepable(worked, '/data.json'))
+ * let routes = { run_worker_first: ['/p/*'] }
+ * assert(keepable(worked, '/data.json', routes) && !keepable(worked, '/p/1', routes))
  * ```
  */
-export let keepable = (app: Keepable, path?: string): boolean =>
+export let keepable = (
+  app: Keepable,
+  path?: string,
+  assets?: Assets,
+): boolean =>
   !sandboxed(app) &&
-  (app.worker === '' || !!path && uploaded(path)) &&
+  (app.worker === '' ||
+    (path == null
+      ? declared(assets)
+      : uploaded(path) || fixed(path) || !workerFirst(assets, path))) &&
   (mode(app.access) != 'private' ||
     offered(app) && (path == null || fixed(path)))
 

@@ -96,7 +96,11 @@ packages together (M-17).
   the directory only for a request older than one it already acted on. Every
   call on a request's path is a round trip someone waits for: the copy once cost
   more than the directory reads it checked (T-132705), so keep its calls behind
-  the answer, and ask it only after a read has gone `STALL` without one.
+  the answer, and ask it only after a read has gone `STALL` without one. The
+  exception is a route read that names nobody, or an upload's (apps.ts
+  `routeApp`): a page's every file and a crawler's every address ask the same
+  line, so it asks the copy first, which answers only at a revision it holds
+  unfenced (T-3848).
 - **Asking the directory**: the reads a request starts in one turn travel as one
   trip (directory-copy.ts `gathered`, the store's `/reads`), each answered its
   own line. So a page starts everything it needs at once and awaits it together

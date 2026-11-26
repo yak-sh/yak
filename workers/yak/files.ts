@@ -26,6 +26,7 @@ import { servable } from '@yaks/blob/upload'
 import { uploads } from '@yaks/platform/uploads'
 import {
   inside,
+  missingOf,
   pretty,
   resolve,
   rootOf,
@@ -652,7 +653,7 @@ let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     resolve(
       at,
       (p) => blobs.load(`${root}${p}`),
-      config.assets?.not_found_handling,
+      missingOf(config.assets),
       url.searchParams.get('asset') == '1',
     ))
   if (found && 'to' in found) {

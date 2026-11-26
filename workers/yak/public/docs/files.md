@@ -330,8 +330,10 @@ stylesheet, script or picture is a 404, never a page.
 - `"none"`: a plain 404.
 
 When it is unset, the default above applies: the root's `404.html`, else
-`index.html` for a route. A missing file with an extension is a 404 in every
-mode.
+`index.html` for a route. An app whose config declares its worker's routes
+(`assets.run_worker_first`, [Backend Code](./code.md)) has no other routes:
+unset, a page that is not there answers as `"404-page"` does. A missing file
+with an extension is a 404 in every mode.
 
 **Redirects.** A `_redirects` file beside `index.html`, in Cloudflare's own
 format, sends a page's old address to its new one. Each line is a rule,

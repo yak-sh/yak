@@ -22,6 +22,7 @@ import { loadsAsset } from './kept.ts'
 import {
   decoded,
   inside,
+  missingOf,
   resolve,
   rootOf,
   type Serving,
@@ -105,7 +106,7 @@ export let fileAt = async (
   let found = await resolve(
     at,
     (p) => file(`${root}${p}`),
-    config.assets?.not_found_handling,
+    missingOf(config.assets),
     loadsAsset(req),
   )
   if (!found) return missing()

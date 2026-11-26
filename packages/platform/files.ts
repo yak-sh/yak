@@ -21,6 +21,11 @@ export type Assets = {
   directory?: string
   not_found_handling?: NotFound
   public?: string[]
+  /** Cloudflare's `assets.run_worker_first`: the paths the app's worker is
+   * asked about before its files (`workerFirst`). Unset or true, every path.
+   * A list declares the app's routes: every other path is its files', and a
+   * page with no file there is no route (`missingOf`). */
+  run_worker_first?: true | string[]
 }
 
 /** What serving reads of an app's wrangler config: its server source
@@ -47,6 +52,68 @@ export let pretty = (path: string): boolean =>
 /// page('/app.css') -> false
 export let page = (path: string): boolean =>
   pretty(path) || /\.html?$/i.test(path)
+
+// A glob's own characters, as themselves: its `.` is a dot.
+let literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** A path glob as a pattern: `*` is any run of characters, slashes
+ * included, the way Cloudflare's `run_worker_first` reads one. */
+export let globbed = (glob: string): RegExp =>
+  new RegExp(`^${glob.split('*').map(literal).join('.*')}$`)
+
+/// covers('/recipes/*', '/recipes/lemon') -> true
+/// covers('/recipes/*', '/garden') -> false
+/// covers('/*/print', '/recipes/lemon/print') -> true
+/// covers('/recipes', '/recipes/lemon') -> false
+/** Does this glob answer that path? One wildcard, no second syntax. */
+export let covers = (glob: string, path: string): boolean =>
+  glob.includes('*') ? globbed(glob).test(path) : glob == path
+
+/** The routes a config may declare (`run_worker_first`): true, or a list
+ * of path globs, each led by `/`, or by `!/` for what the others match and
+ * the worker is not asked; null for anything else. */
+/// firsts(['/p/*', '!/p/static/*']) -> ['/p/*', '!/p/static/*']
+/// firsts(true) -> true
+/// firsts(['p/*']) -> null
+/// firsts(false) -> null
+export let firsts = (value: unknown): true | string[] | null =>
+  value === true ? true : Array.isArray(value) && value.length <= 100 &&
+      value.every((g) =>
+        typeof g == 'string' && /^!?\/[^\s?#]*$/.test(g) && g.length <= 200
+      )
+    ? value
+    : null
+
+/** Whether the app's worker is asked about a path (below the app's address)
+ * before its files: every path, unless its config declares its routes
+ * (`run_worker_first`), where only one a glob covers and no `!` glob does. */
+/// workerFirst(undefined, '/x') -> true
+/// workerFirst({ run_worker_first: ['/p/*', '!/p/a.css'] }, '/p/42') -> true
+/// workerFirst({ run_worker_first: ['/p/*', '!/p/a.css'] }, '/p/a.css') -> false
+/// workerFirst({ run_worker_first: ['/p/*'] }, '/data/index.json') -> false
+export let workerFirst = (
+  assets: Assets | undefined,
+  path: string,
+): boolean => {
+  let globs = assets?.run_worker_first
+  if (!Array.isArray(globs)) return true
+  let no = (g: string) => g.startsWith('!')
+  return globs.some((g) => !no(g) && covers(g, path)) &&
+    !globs.some((g) => no(g) && covers(g.slice(1), path))
+}
+
+/** Whether a config declares the app's routes (`run_worker_first`). */
+export let declared = (assets: Assets | undefined): boolean =>
+  Array.isArray(assets?.run_worker_first)
+
+/** What answers a page with no file (`resolve`): the config's own
+ * `not_found_handling`, and where it says none but declares the app's routes,
+ * the nearest 404.html, since a path no route names is no page of the app. */
+/// missingOf({ run_worker_first: ['/p/*'] }) -> '404-page'
+/// missingOf({ run_worker_first: ['/p/*'], not_found_handling: 'single-page-application' }) -> 'single-page-application'
+/// missingOf({}) -> undefined
+export let missingOf = (assets: Assets | undefined): NotFound | undefined =>
+  assets?.not_found_handling ?? (declared(assets) ? '404-page' : undefined)
 
 /** Where an app's served files live: its folder `assets.directory` names,
  * else its root. Nothing outside it answers a request. */
@@ -262,6 +329,7 @@ export let publicAssets = (value: unknown): string[] | null => {
  * only these, leaving out what is not one. */
 /// serving('{"assets": {"directory": "./dist/"}}') -> { assets: { directory: 'dist' } }
 /// serving('{"main": "src/w.js", "assets": {"not_found_handling": "none"}}') -> { main: 'src/w.js', assets: { not_found_handling: 'none' } }
+/// serving('{"assets": {"run_worker_first": ["/p/*"]}}') -> { assets: { run_worker_first: ['/p/*'] } }
 /// serving('{"assets": {"directory": "../up"}}') -> {}
 /// serving('not json') -> {}
 export let serving = (text: string): Serving => {
@@ -275,14 +343,17 @@ export let serving = (text: string): Serving => {
   if (typeof value.main == 'string') {
     config.main = value.main.replace(/^(?:\.\/)+/, '')
   }
-  let { directory, not_found_handling, public: paths } = value.assets ?? {}
+  let { directory, not_found_handling, public: paths, run_worker_first } =
+    value.assets ?? {}
   let dir = folder(directory)
   let handling = NOT_FOUND.find((n) => n == not_found_handling)
   let open = publicAssets(paths)
+  let first = firsts(run_worker_first)
   let assets: Assets = {
     ...(dir ? { directory: dir } : {}),
     ...(handling ? { not_found_handling: handling } : {}),
     ...(open?.length ? { public: open } : {}),
+    ...(first ? { run_worker_first: first } : {}),
   }
   if (Object.keys(assets).length) config.assets = assets
   return config

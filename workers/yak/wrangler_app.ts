@@ -4,6 +4,7 @@
 import { migrationMetadata } from './app_migrations.ts'
 import {
   type Assets,
+  firsts,
   folder,
   jsonc,
   NOT_FOUND,
@@ -302,7 +303,11 @@ export let allowlist = (value: unknown): Parsed => {
     if (!object(assets)) {
       no('assets', 'expected an object: { "directory": "dist" }')
     } else {
-      keys(assets, ['directory', 'not_found_handling', 'public'], 'assets.')
+      keys(
+        assets,
+        ['directory', 'not_found_handling', 'public', 'run_worker_first'],
+        'assets.',
+      )
       let handling = NOT_FOUND.find((n) => n == assets.not_found_handling)
       if (handling) config.assets = { not_found_handling: handling }
       else if ('not_found_handling' in assets) {
@@ -334,6 +339,17 @@ export let allowlist = (value: unknown): Parsed => {
         } else if (paths.length) {
           config.assets = { ...config.assets, public: paths }
         }
+      }
+      // The app's routes: the paths its worker is asked about, every other
+      // one its files' (@yaks/platform/files `workerFirst`).
+      if ('run_worker_first' in assets) {
+        let first = firsts(assets.run_worker_first)
+        if (first == null) {
+          no(
+            'assets.run_worker_first',
+            'expected true, or a list of paths of the app such as ["/p/*", "/do/*"], each starting with / (or !/ for one the worker is not asked about)',
+          )
+        } else config.assets = { ...config.assets, run_worker_first: first }
       }
     }
   }

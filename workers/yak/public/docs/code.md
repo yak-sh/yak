@@ -7,7 +7,8 @@ guide:
   description: >-
     Backend code for an app: worker.js, the server module that answers an
     app's requests before its static files. Which routes it receives (a 404
-    falls through to the files, /api/ is reserved), what env holds (STORE, APP,
+    falls through to the files, /api/ is reserved, assets.run_worker_first
+    declares them), what env holds (STORE, APP,
     FILES, the keys the person connected, and wrangler.jsonc bindings such as
     D1, R2, Vectorize, vpc_services and ai), API keys through sentinels and
     ./api/fetch, the request headers that identify the visitor (x-yak-person,
@@ -227,6 +228,23 @@ the worker meant as a response. If a route must report "no such recipe", use a
 status that means that, because a 404 sends the caller to `index.html` instead.
 Use 400, or answer 200 with a body that explains, or serve your own not-found
 page.
+
+**Declaring the worker's routes.** A `wrangler.jsonc` beside `index.html` can
+name the paths the worker is asked about, with Cloudflare's own key,
+`assets.run_worker_first`: a list of paths of the app, where `*` matches any run
+of characters, slashes included, and a path led by `!` is one the worker is not
+asked about even where another matches it.
+
+    { "assets": { "run_worker_first": ["/p/*", "/do/*", "!/p/static/*"] } }
+
+Every other path is the app's files alone: the worker is not run for it, and a
+public app's files are then answered from the edge cache, as an app with no
+worker is. A page that names no route and no file answers the nearest
+`404.html`, or a plain 404, instead of `index.html`, so a crawler that follows
+relative links into addresses the app never made stops at the first one. Set
+`assets.not_found_handling` to `"single-page-application"` as well to keep
+answering `index.html` for those ([Files and Uploads](./files.md), "Page URLs
+and 404 handling"). Unset, or `true`, the worker is asked about every path.
 
 ## Request paths and the reserved `/api/` routes
 

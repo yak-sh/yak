@@ -2508,9 +2508,11 @@ export let released = async (
   // the app's pages, and answers once the purge has spread. An editor save
   // confirms the committed release and leaves its purge to run in the
   // background. The release commit itself owes no app purge (pages-graph.ts).
-  // A first release also purges the space's cached 404s.
+  // A first release also purges the space's cached 404s. Site may keep an
+  // app's files whatever its worker, at the paths its release leaves the
+  // files (@yaks/platform/kept `keepable`), so its worker decides nothing.
   let tags = reviewing ? [] : [
-    ...keepable(standing) ? [appTag(standing.eid)] : [],
+    ...keepable({ ...standing, worker: '' }) ? [appTag(standing.eid)] : [],
     ...standing.version ? [] : [spaceTag(space.eid)],
   ]
   let purgePages = (spread: boolean) =>
