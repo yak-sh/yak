@@ -29,6 +29,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import { type Line, line } from '@yaks/query'
 import { after, type Clock, system } from '@yaks/fp'
+import { recall } from './lib/hops.ts'
 import {
   type Answer,
   type Basics,
@@ -429,6 +430,19 @@ let signing = async (env: Env, via: string) => {
 
 let keptOn = async (env: Env, p: Platform) =>
   !!await (p.hook ? signing(env, p.name) : platformBot(env, p.name))
+
+// Whether yaks.app's own bot is kept for `p`, asked once a request
+// (hops.ts `recall`), so a page asks it as it starts (`keptAhead`).
+let botKept = (env: Env, p: Platform) =>
+  recall('vault', `chat kept ${p.name}`, () => keptOn(env, p))
+
+/** Ask the vault which platforms yaks.app's own bots are kept for, which
+ * says where an Operator can be added (`reached`), as a page starts: the
+ * answer is the platform's, not the space's, so it need not wait on the
+ * read that learns the space. A failure is the page's to meet when it asks. */
+export let keptAhead = (env: Env): void => {
+  for (let p of PLATFORMS.values()) botKept(env, p).catch(() => {})
+}
 
 /** A platform's HTTPS intake. The provider verifies the envelope; the
  * installation account selects the same connection as socket messages. */
@@ -954,7 +968,7 @@ export let reached = async (
     )
     if (!theirs.length) {
       let bot = seeds().find((i) => i.chat == p.name && !keyed(i))
-      return bot && await keptOn(env, p)
+      return bot && await botKept(env, p)
         ? {
           places: [],
           unset: [{

@@ -594,6 +594,11 @@ let foresee = (
       ? [chatRows(dir, walkTo(here.slug, here.space.then((s) => s?.eid ?? '')))]
       : [],
   ])
+  // The side's ways to reach the Operator (operator-ways.ts `waysOf`) say
+  // where it can be added, which the vault says of the platform as a whole.
+  if (here && sided) {
+    void import('./chat.ts').then((chat) => chat.keptAhead(here.env), () => {})
+  }
 }
 
 // The space a page of one is at, while the read that learns it is in flight,
