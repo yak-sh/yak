@@ -1601,13 +1601,14 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
   let answer = (to: string) =>
     new Response(null, { status: 303, headers: { location: to } })
   let params = new URL(req.url).searchParams
-  if (!params.has('state')) {
+  let states = params.getAll('state')
+  let [state] = states
+  if (!state && states.length <= 1) {
     return req.method == 'GET' && params.has('code')
       ? (await import('./connection-install.ts')).outside(req, env, params)
       : answer(url(env, MANAGE))
   }
-  let state = params.get('state')
-  let held = await take<Held>(env, ATTEMPT, state)
+  let held = await take<Held>(env, ATTEMPT, states.length == 1 ? state : null)
   let dir = dirOf(env)
   let at = held ? await dir.space(held.space) : null
   let here = at && await whoIs(req, env, (p) => dir.role(at, p), at.eid)

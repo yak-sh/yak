@@ -304,7 +304,12 @@ test('a Slack-started install waits for an entitled owner to confirm a destinati
     })
     assertEquals(redeem, 1)
     assertEquals(returned.headers.get('location'), host + CONNECTION_INSTALL)
-    let pending = returned.headers.get('set-cookie')!.split(';')[0]
+    let empty = await apex(CALLBACK + '?code=provider-started&state=', {
+      headers: { cookie: owner },
+    })
+    assertEquals(redeem, 2)
+    assertEquals(empty.headers.get('location'), host + CONNECTION_INSTALL)
+    let pending = empty.headers.get('set-cookie')!.split(';')[0]
     let state = pending.slice(pending.indexOf('=') + 1)
     assertEquals(await saved(), [])
     let get = (who: string) =>
