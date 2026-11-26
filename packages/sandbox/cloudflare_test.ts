@@ -15,6 +15,7 @@ import {
   hold,
   lending,
   POOL_BUSY,
+  processStatus,
   slept,
 } from './cloudflare.ts'
 
@@ -22,6 +23,40 @@ let full = () =>
   new Error(
     'Maximum number of running container instances exceeded. Try again later, or try configuring a higher value for max_instances',
   )
+
+test('a stalled process status read is cancelled before a fresh read', async () => {
+  let time = clock()
+  let requests: Request[] = []
+  let said = processStatus(new Request('http://box/api/process/a'), (req) => {
+    requests.push(req)
+    if (requests.length == 2) {
+      return Promise.resolve(Response.json({ status: 'running' }))
+    }
+    return new Promise((_, fail) => {
+      req.signal.addEventListener('abort', () => fail(req.signal.reason), {
+        once: true,
+      })
+    })
+  }, time)
+  await time.advance(5_000)
+  equal(await (await said).json(), { status: 'running' })
+  equal(requests.map((req) => req.signal.aborted), [true, false])
+})
+
+test('a proxy 500 is retried while a sandbox API error is returned', async () => {
+  let req = new Request('http://box/api/process/a')
+  let responses = [
+    new Response('Container suddenly disconnected, try again', { status: 500 }),
+    Response.json({ code: 'PROCESS_NOT_FOUND' }, { status: 404 }),
+  ]
+  let answer = await processStatus(
+    req,
+    () => Promise.resolve(responses.shift()!),
+  )
+  equal(responses.length, 0)
+  equal(answer.status, 404)
+  equal(await answer.json(), { code: 'PROCESS_NOT_FOUND' })
+})
 
 test('a full pool waits for a slot before the workspace operation runs', async () => {
   let time = clock()

@@ -13,7 +13,12 @@ import { env } from 'cloudflare:workers'
 import * as sdk from '@cloudflare/sandbox'
 import { outgoing } from '@yaks/platform/app-outbound'
 import { apex, type Host } from '@yaks/platform/host'
-import { admitted, SLEEP, TIMEOUT } from '@yaks/sandbox/cloudflare'
+import {
+  admitted,
+  processStatus,
+  SLEEP,
+  TIMEOUT,
+} from '@yaks/sandbox/cloudflare'
 import {
   ARCHIVE_PATH,
   filesystem,
@@ -65,8 +70,8 @@ export class Workbench extends sdk.Sandbox<Env> {
     Object.assign(this, { allowedHostsOverride: undefined })
   }
   static {
-    // Prototype methods remain RPC methods. Every workspace operation and
-    // shutdown shares one queue, including a call arriving during idle stop.
+    // Prototype methods remain RPC methods. Workspace operations share
+    // preparation and wait for a snapshot or shutdown already underway.
     for (
       let method of [
         'exec',
@@ -100,6 +105,23 @@ export class Workbench extends sdk.Sandbox<Env> {
   }
   prepare() {
     return this.use(() => Promise.resolve())
+  }
+  override containerFetch(
+    ...args: Parameters<sdk.Sandbox<Env>['containerFetch']>
+  ): Promise<Response> {
+    // The SDK's HTTP control client uses the (URL, init, port) signature.
+    let [url, init, port] = args
+    if (
+      typeof url == 'string' && port == 3000 && typeof init == 'object' &&
+      init.method == 'GET' &&
+      /^\/api\/process\/[^/]+$/.test(new URL(url).pathname)
+    ) {
+      return processStatus(
+        new Request(url, init),
+        (req) => super.containerFetch(req, port),
+      )
+    }
+    return super.containerFetch(...args)
   }
   override async destroy() {
     await this.files.stop(() => super.destroy())

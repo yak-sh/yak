@@ -96,6 +96,52 @@ export let admitted = async <T>(
   }
 }
 
+let STATUS_WAIT = 5_000
+
+/** Process status is a short, read-only control request. The HTTP SDK bounds
+ * startup retries, but one unresponsive container read can consume minutes.
+ * Cancel that read at the transport and try again. The container proxy's
+ * plain 500 also means it could not reach the container. Sandbox API errors
+ * carry JSON, including a missing process. */
+export let processStatus = async (
+  req: Request,
+  send: (req: Request) => Promise<Response>,
+  clock: Clock = system,
+): Promise<Response> => {
+  let timeout = new DOMException(
+    'Sandbox process status timed out',
+    'TimeoutError',
+  )
+  let read = async () => {
+    let stop = new AbortController()
+    let cancel = clock.after(STATUS_WAIT, () => stop.abort(timeout))
+    try {
+      return await send(
+        new Request(req, {
+          signal: AbortSignal.any([req.signal, stop.signal]),
+        }),
+      )
+    } catch (error) {
+      throw stop.signal.aborted && !req.signal.aborted ? timeout : error
+    } finally {
+      cancel()
+    }
+  }
+  try {
+    let response = await read()
+    if (
+      response.status != 500 || req.signal.aborted ||
+      response.headers.get('content-type')?.includes('application/json')
+    ) {
+      return response
+    }
+    await response.body?.cancel()
+  } catch (error) {
+    if (error !== timeout || req.signal.aborted) throw error
+  }
+  return read()
+}
+
 /** The container a group lends one person, by name: one each, so the
  * person's every way in reaches one workbench. The group's id rather than a
  * name of it, since a renamed group keeps its containers. */

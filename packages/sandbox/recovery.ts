@@ -184,11 +184,14 @@ export let recovery = (
   let { run } = box
   let prepared: Promise<void> | undefined
   let checkpoint: Promise<void> | undefined
-  let tail = Promise.resolve()
+  let fence = Promise.resolve()
+  let active = new Set<Promise<unknown>>()
   let activity = 0
+  // Restore is shared by workspace calls. Snapshot and shutdown wait for
+  // those calls, and later calls wait for the snapshot and shutdown.
   let locked = <T>(act: () => Promise<T>) => {
-    let result = tail.then(act, act)
-    tail = result.then(() => {}, () => {})
+    let result = Promise.allSettled([fence, ...active]).then(act)
+    fence = result.then(() => {}, () => {})
     return result
   }
   let prepare = () =>
@@ -246,17 +249,23 @@ export let recovery = (
   }
   return {
     prepare,
-    save,
-    use: <T>(act: () => Promise<T>) =>
-      locked(async () => {
+    save: () => locked(save),
+    use: <T>(act: () => Promise<T>) => {
+      let result = fence.then(async () => {
         try {
           await prepare()
           return await act()
         } finally {
           activity++
         }
-      }),
+      })
+      active.add(result)
+      let ended = () => active.delete(result)
+      result.then(ended, ended)
+      return result
+    },
     idle: (busy, shutdown) => {
+      if (active.size) return Promise.resolve()
       let seen = activity
       return locked(async () => {
         if (seen == activity && await box.live() && !await busy()) {

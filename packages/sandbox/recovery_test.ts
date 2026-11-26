@@ -269,6 +269,29 @@ test('a workspace call arriving during shutdown restores before reading', async 
   equal(await reading, 'unique')
 })
 
+test('a slow workspace operation leaves other calls free and defers snapshots', async () => {
+  let bench = fixture()
+  let started = Promise.withResolvers<void>()
+  let resume = Promise.withResolvers<void>()
+  let writing = bench.use(async () => {
+    started.resolve()
+    await resume.promise
+    bench.files.set('/workspace/note', 'kept')
+  })
+  await started.promise
+  await bench.use(() => Promise.resolve())
+  await bench.idle(() => Promise.resolve(false), bench.stop)
+  equal(bench.awake, true)
+  let stopping = bench.shutdown(bench.stop)
+  resume.resolve()
+  await Promise.all([writing, stopping])
+  equal(bench.awake, false)
+  equal(
+    await bench.use(() => Promise.resolve(bench.files.get('/workspace/note'))),
+    'kept',
+  )
+})
+
 test('idle shutdown skips running processes and restores files after they finish', async () => {
   let bench = fixture()
   let busy = true
