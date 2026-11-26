@@ -626,8 +626,8 @@ export let shapeOf = (v: Vocab, comp: string): string => {
     ...v.props(comp).map((p) => `${p} (${declared(v.prop(comp, p)!)})`),
   ]
   if (!said.length) {
-    return `${comp} has no properties, so it is present (.${comp}) or absent ` +
-      `(!${comp})`
+    return `${comp} is a marker with no properties. Use .${comp} to test for ` +
+      `presence or !${comp} to test for absence`
   }
   return `${comp} has ${said.join(', ')}`
 }
@@ -833,7 +833,7 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
   })
   // A component named as a property (`person.email`) is worn beside it.
   let worn = through.length ? [] : props.flatMap((p) => {
-    if (!v.comp(p)) return []
+    if (p == comp || !v.comp(p)) return []
     let f = first(p)
     let presence = `.${comp}&.${p}`
     return [
@@ -858,9 +858,9 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
     near.length
       ? ` (closest declared: ${near.map((p) => `${comp}.${p}`).join(', ')})`
       : ''
-  } — ${named.map((t) => `${t}. `).join('')}${
-    through.map((t) => `${t}; `).join('')
-  }${
+  } — ${props.includes(comp) ? `Use .${comp} to test for presence. ` : ''}${
+    named.map((t) => `${t}. `).join('')
+  }${through.map((t) => `${t}; `).join('')}${
     worn.length
       ? `a component is no property of another, so an entity wearing both ` +
         `is ${worn.join(' or ')}; `

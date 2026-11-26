@@ -134,6 +134,39 @@ test('graph_query explains how to scope a query with .in', async () => {
   ok(Array.isArray(JSON.parse(await owner.tool('graph_query', { q }))))
 })
 
+test('graph_query suggests one presence check for a repeated component', async () => {
+  let ask = (q: string) => admin.tool('graph_query', { q })
+  let { message } = await throws(
+    () => ask('.effect.effect&.count&.in=yak/platform'),
+    'unknown property: effect.effect',
+  ) as Error
+  let q = '.effect&.count&.in=yak/platform'
+  ok(message.includes(`Try q: "${q}"`), message)
+  ok(!message.includes('.effect&.effect'), message)
+  ok(Number.isInteger(JSON.parse(await ask(q)).count))
+})
+
+let shelf = `${other}/shelf`
+let alias = 'recipe:lemon-cakes'
+let [recipe] = (await owner.answer('graph_apply', {
+  app: shelf,
+  bundles: [{ entity: { eid: '$recipe' }, alias: { name: alias } }],
+})).rows
+
+test('graph_query explains how to read an entity by its alias', async () => {
+  let ask = (q: string) => owner.answer('graph_query', { app: shelf, q })
+  let { message } = await throws(
+    () => ask(`.alias.name=${alias}`),
+    'unknown property: alias.name',
+  ) as Error
+  ok(message.includes('alias is a marker'), message)
+  ok(message.includes('.alias to test for presence'), message)
+  ok(message.includes('.entity.eid=recipe:lemon-cakes'), message)
+  equal((await ask(`.entity.eid=${alias}`)).rows.map((r) => r.entity.eid), [
+    recipe.entity.eid,
+  ])
+})
+
 test('app tools share short ids for live and trashed apps', async () => {
   let app = short(them.eids[`${other}/shelf`])
   let bare = app.slice(1)

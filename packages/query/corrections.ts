@@ -14,8 +14,11 @@ let alternatives = (vocab: Vocab, path: string): string[][] => {
   if (!vocab.comp(first) || !vocab.comp(second) || vocab.prop(first, second)) {
     return []
   }
-  // A reference to the second component can put it on a different entity.
-  if (vocab.props(first).some((p) => vocab.prop(first, p)?.ref == second)) {
+  // A reference to a different component can put it on a different entity.
+  if (
+    first != second &&
+    vocab.props(first).some((p) => vocab.prop(first, p)?.ref == second)
+  ) {
     return []
   }
   return [[second]]
@@ -31,7 +34,8 @@ let beside = (vocab: Vocab, c: Pred, comp: string): Clause => {
     if (props.length != 1) return c
     path.push(props[0])
   }
-  return and(present(c.path[0]), { ...c, path })
+  let next = { ...c, path }
+  return c.path[0] == comp ? next : and(present(c.path[0]), next)
 }
 
 /** Rewrite a refused predicate while keeping its value and the surrounding
