@@ -454,10 +454,12 @@ export let gauged = (
 // signed-in web page's door (billing.ts).
 export let atCeiling = (
   space: Metered,
-  what: 'apps' | Spend,
+  what: 'apps' | 'connections' | Spend,
   env: Host = {},
 ): string => {
-  if (space.newcomer && what != 'apps' && budgeted(what)) return UNKEPT
+  if (
+    space.newcomer && what != 'apps' && what != 'connections' && budgeted(what)
+  ) return UNKEPT
   let free = ceilings(space.tier, space.slug)!
   let said = {
     apps: () =>
@@ -465,6 +467,9 @@ export let atCeiling = (
         planName(space.tier)
       }, which is ${free.apps} apps` +
       ` — delete one (app_delete) to make another`,
+    // Only the connect that would make one more stops here: a space holding
+    // more from before the limit keeps every one.
+    connections: () => connectionsFull(space),
     // The one refusal both tiers can hit, and the one a person cannot clear
     // by deleting something: the month is what lifts it. An arrival is never
     // refused — a letter turned away at the door is somebody else's words
@@ -556,17 +561,37 @@ export let plans = (space: Metered, env: Host): string =>
         `Manage usage and plan settings`
       : space.trial
       ? `Subscribing to ${planName('plus')} keeps ${space.slug} building, ` +
-        `with as many apps as it likes, more storage and ` +
+        `with as many apps and connections as it likes, more storage and ` +
         `${aiUse('plus')}. The Pro plan includes ${aiUse('pro')} and ` +
         `adds $${PRO_GRANT} of building credit once per space. Compare ` +
         `paid plans in its settings`
-      : `Putting ${space.slug} on ${planName('plus')} allows more apps and ` +
-        `storage and includes ${aiUse('plus')}. A first paid ` +
+      : `Putting ${space.slug} on ${planName('plus')} allows more apps, ` +
+        `connections and storage and includes ${aiUse('plus')}. A first paid ` +
         `subscription to ${planName('plus')} adds $${SUBSCRIBED} of ` +
         `building credit. The Pro plan includes ${aiUse('pro')} and adds ` +
         `$${PRO_GRANT} of building credit once per space. Compare ` +
         `paid plans in its settings`
   }: ${planSettings(space.slug, env)}`
+
+/**
+ * What a space at its plan's connections says, before what a plan would
+ * give: the limit, and what lifts it.
+ *
+ * ```ts
+ * import { connectionsFull } from '@yaks/platform/standing'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(
+ *   connectionsFull({ slug: 'ada', tier: null }),
+ *   'ada is on the free plan, which is 3 connections — disconnect one to ' +
+ *     'connect another',
+ * )
+ * ```
+ */
+export let connectionsFull = (space: Pick<Metered, 'slug' | 'tier'>): string =>
+  `${space.slug} is on ${planName(space.tier)}, which is ${
+    ceilings(space.tier, space.slug)?.connections
+  } connections — disconnect one to connect another`
 
 /** The words that say building has paused, on every page and refusal that
  * says it (D-476). */

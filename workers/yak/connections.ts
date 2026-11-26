@@ -122,6 +122,8 @@ import {
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
+import { ceilings } from '@yaks/platform/plans'
+import { atCeiling } from '@yaks/platform/standing'
 import { apex, url } from '@yaks/platform/host'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Answer } from './apps.ts'
@@ -225,7 +227,36 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
     vault: vaultOf(env),
     redirect: url(env, CALLBACK),
     report: (e) => caught(e, { request: 'connections' }),
+    admit: (owner) => admitted(env as Env, owner),
   }
+}
+
+// The connections of `owner` among `rows` that hold a key or a grant, of any
+// integration: a needed one counts once it is given.
+let holding = (rows: Bundle[], owner: string) =>
+  rows.filter((b) =>
+    b[CONNECTION] && comp(b, CONNECTION).owner == owner &&
+    comp(b, CONNECTION).status != 'needed'
+  ).length
+
+// How many connections `space` holds with a key or a grant.
+let heldBy = async (
+  env: Partial<Env> & Pick<Env, 'STORE'>,
+  space: string,
+): Promise<number> =>
+  holding(
+    await readOf(env)(line`.${CONNECTION}.owner=${space}&.${CONNECTION}`),
+    space,
+  )
+
+// One more connection for `owner`, refused where it is a space whose plan
+// holds it to fewer (plans.ts `connections`). A person's own are not a
+// space's, and a space already holding more keeps every one.
+let admitted = async (env: Env, owner: string) => {
+  let space = await dirOf(env).at(owner)
+  let limit = space && ceilings(space.tier, space.slug)?.connections
+  if (limit == null || await heldBy(env, owner) < limit) return
+  throw refuse('limit', atCeiling(space!, 'connections', env))
 }
 
 /** Settle each needed connection `owners` hold through a brokered
@@ -878,6 +909,9 @@ export let connectionsOf = async (
     ...at.open ? { open: at.open } : {},
     enable,
     ...asked ? { asked } : {},
+    ...ceilings(here.tier, here.slug)?.connections == null
+      ? {}
+      : { plan: { tier: here.tier, held: holding(held, here.eid) } },
   }
 }
 
@@ -1410,10 +1444,13 @@ export let connecting = async (
       }
       // A person's own account says who they are, so it is theirs wherever
       // they connect it: a space's would stand for whichever of its owners
-      // there is, and for nobody once it has two.
+      // there is, and for nobody once it has two. One the space's plan has
+      // no room for is refused before it is asked for.
+      let owner = existing?.personal ? who.person! : space.eid
+      await c.admit!(owner)
       let made = await c.graph.apply(
         await need(c.graph.read, {
-          owner: existing?.personal ? who.person! : space.eid,
+          owner,
           integration: name,
           hosts,
           // Said only by whoever makes it; adding a key says nothing of it.
@@ -1441,6 +1478,7 @@ export let connecting = async (
       let i = await known(c.graph.read, integration)
       let given = await pasted(integration)
       if ((!i || keyed(i)) && typeof given == 'string') return no(given)
+      await c.admit!(space.eid)
       let made = await c.graph.apply(
         await need(c.graph.read, {
           owner: space.eid,

@@ -114,6 +114,7 @@ export let Pricing = () => (
           <tbody>
             {Object.entries<Slots>({
               apps: {},
+              connections: noted('connections'),
               data: noted('data'),
               files: noted('files'),
               visits: noted('visits'),

@@ -165,6 +165,11 @@ export type Ctx = {
   /** where a failure is reported that the verb answering is not stopped by:
    * a broker's connection left behind by a disconnect */
   report?: (e: unknown) => void
+  /** asked before `owner` comes to hold one more connection with a key or a
+   * grant: before a needed one's sign-in begins, and before its key or grant
+   * is kept. It throws to refuse, as a host's plan limit does; signing in
+   * again, or a connection that already holds one, is not asked. */
+  admit?: (owner: Eid) => Promise<void>
 }
 
 /** Whose space each app is in, by its eid: who is asked for what it needs. The
@@ -1216,6 +1221,7 @@ export let begin = async (
   again = false,
 ): Promise<{ url: string; attempt?: Attempt & { verifier: string } }> => {
   let b = await held(c.graph.read, connection)
+  if (!again) await admitting(c, b)
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
   if (i?.broker) {
     // A broker's sign-in returns to the broker, not to us: `settle` finds
@@ -1331,6 +1337,13 @@ export let settle = async (
 
 let HOUR = 3_600_000
 
+// A needed connection given its key or grant is one more its owner holds,
+// which the host may refuse (`admit`).
+let admitting = async (c: Ctx, b: Bundle) => {
+  let { owner, status } = comp(b, CONNECTION)
+  if (status == 'needed') await c.admit?.(String(owner))
+}
+
 /** Exchange an installation begun at a provider. The grant is still unowned. */
 export let redeemInstallation = async (
   c: Ctx,
@@ -1387,6 +1400,7 @@ export let connect = async (
     if (!i || (!keyed(i) && name != 'yaks.app')) {
       throw new Error(`${name} is connected by signing in, not with a key`)
     }
+    await admitting(c, b)
     return c.graph.apply([{
       ...pasted(b, name, fieldsOf(i), given),
       ...stillHeld(b),
@@ -1457,6 +1471,7 @@ let keepGrant = async (
         strs(grant.scopes),
       )
       : b)
+  if (!existing) await admitting(c, different ? target : b)
   let transient = existing && grant.status != 'connected'
   let out = transient ? await links(c.graph.read, 'to', connection) : []
   return c.graph.apply([

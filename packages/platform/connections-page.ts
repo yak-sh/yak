@@ -3,7 +3,7 @@
  * the tab's page graph holds it (D-475 step 5), and what it writes there.
  *
  * - `connectionsPage{space, ask, on, list, borrowed, services, mcp, built,
- *   catalog, asked, open, trash, enable}`: everything the page shows, for the
+ *   catalog, asked, open, trash, enable, plan}`: everything the page shows, for the
  *   space and what its address asks (`ask`: the search, the service opened,
  *   the MCP server opened, the trash). No store holds it: the page graph's
  *   door reads it of the directory, the vault and the catalog
@@ -25,6 +25,7 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { line } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
+import type { Tier } from './plans.ts'
 
 /** One thing a person gives to connect a pasted-key service, and the one a
  * service that declares none asks for: its key (@yaks/connections `Field`). */
@@ -279,6 +280,9 @@ export type Connections = {
   open?: string
   /** what the apps of this space borrow from another space's lend */
   borrowed: Borrowed[]
+  /** where its plan limits its connections (./plans.ts `connections`): its
+   * tier, and how many it holds with a key or a grant */
+  plan?: { tier: Tier | null; held: number }
 }
 
 /** The page's address asks the read: the search (`q`), the service or
@@ -358,6 +362,7 @@ export let connectionsWords: VocabDoc = {
         open: strings,
         trash: lists,
         enable: lists,
+        plan: objects,
       },
       required: ['space', 'ask'],
     },

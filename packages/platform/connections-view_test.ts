@@ -55,3 +55,20 @@ test('a line names its space and what the address asks, read back whatever they 
   equal(asks[1], 'q=crm&detail=a%22b&trash=1')
   equal(pageAsked('.operatorSettings.space=x'), undefined)
 })
+
+test('a free space at its connections is offered the Plus plan at checkout, and none below', () => {
+  let offer = (held: number, tier: 'plus' | null = null) => {
+    let card = page(undefined, connections({ plan: { tier, held } }))
+      .querySelector('.Bill')
+    let go = card?.querySelector<HTMLElement>('.Bill_Go')
+    return card && [card.textContent, go?.dataset.door, go?.dataset.plan]
+  }
+  equal([offer(2), offer(4, 'plus')], [null, null])
+  let [said, door, plan] = offer(4)!
+  equal([door, plan], ['checkout', 'plus'])
+  equal(
+    said?.startsWith('ada is on the free plan, which is 3 connections'),
+    true,
+  )
+  equal(said?.includes('adds $100 of building credit'), true)
+})

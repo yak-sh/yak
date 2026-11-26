@@ -26,7 +26,7 @@ import { SAVE_THROUGH, type SavingForm } from './page-parts.ts'
 import {
   allowancesLine,
   billedLine,
-  type Door,
+  leaveTo,
   paymentWords,
   planLine,
   sellingLine,
@@ -143,17 +143,7 @@ export let bindPayment = (
     button.disabled = true
     say(button, view, 'One moment…')
     try {
-      let [answer] = await graph.mutate([{
-        entity: { eid: mint() },
-        leave: {
-          space,
-          door: button.dataset.door as Door,
-          ...button.dataset.plan
-            ? { tier: button.dataset.plan, per: button.dataset.per }
-            : {},
-        },
-      }], { optimistic: false })
-      let to = (answer?.leave as { url?: string } | undefined)?.url
+      let to = await leaveTo(graph, space, button)
       if (to) return go(to)
       say(button, view, lost, true)
     } catch (error) {

@@ -88,19 +88,28 @@ export let tierOf = (
 
 let GB = 1024 ** 3
 
-/** What a plan holds a space to: its apps (null for as many as it likes),
- * the month's request units, its app data and its photos and files. */
+/** What a plan holds a space to: its apps and its connections (null for as
+ * many as it likes), the month's request units, its app data and its photos
+ * and files. A connection counts once it holds a key or a grant. */
 export type Ceilings = {
   apps: number | null
+  connections: number | null
   requests: number
   bytes: number
   files: number
 }
 
 // The free tier, as decided (D-32751): what a space gets for nothing.
-export let FREE: Ceilings = { apps: 5, requests: 50_000, bytes: GB, files: GB }
+export let FREE: Ceilings = {
+  apps: 5,
+  connections: 3,
+  requests: 50_000,
+  bytes: GB,
+  files: GB,
+}
 export let PLUS: Ceilings = {
   apps: null,
+  connections: null,
   requests: 1_000_000,
   bytes: 10 * GB,
   files: 50 * GB,
@@ -109,6 +118,7 @@ export let PLUS: Ceilings = {
 // times. It also adds a larger model budget, the Operator and support.
 export let PRO: Ceilings = {
   apps: null,
+  connections: null,
   requests: 5_000_000,
   bytes: 50 * GB,
   files: 250 * GB,

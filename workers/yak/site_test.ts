@@ -446,6 +446,7 @@ let FEATURES = [
   'building credit',
   'AI use per month',
   'apps',
+  'connections',
   'visitors',
   'app data',
   'photos and files',
@@ -483,6 +484,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
   let hours = (s: number) => `${s / 3600} hour${s == 3600 ? '' : 's'}`
   let rows: [string, (t: Tier) => string][] = [
     ['Apps', (t) => String(LIMITS[t].apps ?? 'Unlimited')],
+    ['Connections', (t) => String(LIMITS[t].connections ?? 'Unlimited')],
     ['App data', (t) => size(LIMITS[t].bytes)],
     ['Photos and files', (t) => size(FILES[t])],
     ['Visits a month', (t) => count(LIMITS[t].requests)],

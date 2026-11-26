@@ -444,6 +444,7 @@ test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
   assertEquals(ceilings('plus'), PLUS)
   assertEquals(PLUS, {
     apps: null,
+    connections: null,
     requests: 1_000_000,
     bytes: 10 * 1024 ** 3,
     files: 50 * 1024 ** 3,

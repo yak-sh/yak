@@ -13,7 +13,9 @@
  * Each button the page's forms send writes a `connectionAct` through the
  * graph, which the door does as the person: what it says is said where the
  * button was pressed, and a sign-in sends the person to the service. A
- * sign-in into another tab (a broker's) is the form's own post.
+ * sign-in into another tab (a broker's) is the form's own post. A space at
+ * its plan's connections is offered the Plus plan, whose button writes a
+ * `leave` as the Billing page's does (./payment-rows.ts `leaveTo`).
  *
  * The view is `[data-view="connections"]`, saying what it draws for in
  * `data-connections-view` (`ConnectionsView`).
@@ -29,6 +31,7 @@ import { CallError } from '@yaks/tools/errors'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
 import { refusal } from './account-browser.ts'
 import { pageGraph } from './page-graph.ts'
+import { leaveTo, paymentWords } from './payment-rows.ts'
 import { SAVE_THROUGH, type SavingForm } from './page-parts.ts'
 import {
   actedOf,
@@ -194,8 +197,29 @@ export let bindConnections = (
     return acted?.say ?? ''
   }
   let here = () => new URL(win.location.href)
+  // The plan offered at the space's connections leaves for its checkout.
+  let checkout = async (button: HTMLButtonElement) => {
+    let said = button.closest('.Bill')?.querySelector<HTMLElement>('.Bill_Say')
+    let refused = (words: string) => {
+      if (!said) return
+      said.textContent = words
+      said.classList.add('Notice-negative')
+    }
+    let lost = "That didn't go through. Try again?"
+    button.disabled = true
+    try {
+      let to = await leaveTo(graph, space, button)
+      if (to) return win.location.assign(to)
+      refused(lost)
+    } catch (error) {
+      refused(refusal(error, lost))
+    }
+    button.disabled = false
+  }
   let click = (e: Event) => {
     let event = e as MouseEvent
+    let buy = (e.target as Element).closest<HTMLButtonElement>('.Bill_Go')
+    if (buy) return void checkout(buy)
     let link = (e.target as Element).closest<HTMLAnchorElement>('a[href]')
     if (
       !link || event.defaultPrevented || event.button > 0 || event.metaKey ||
@@ -290,7 +314,10 @@ let start = (doc: Document = document) => {
       let { person } = JSON.parse(
         root.dataset.connectionsView!,
       ) as ConnectionsView
-      let stop = bindConnections(root, pageGraph([connectionsWords], person))
+      let stop = bindConnections(
+        root,
+        pageGraph([connectionsWords, paymentWords], person),
+      )
       leaving(doc).addEventListener('abort', () => {
         bound.delete(root)
         stop()

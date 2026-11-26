@@ -38,6 +38,7 @@ import {
   hook as receiveHook,
   outsiders,
   own,
+  type Said,
   spaceKeeps,
 } from './connections.ts'
 import { call, TOOLS } from './tools.ts'
@@ -145,6 +146,51 @@ test(
     assert(!s.dump().includes('sk-live-0123456789'))
   },
 )
+
+test('a free space connects three services, refuses a fourth and keeps more it held before', async () => {
+  let s = await setup()
+  // What the page says of a press, which here is never a sign-in's redirect.
+  let said = async (sent: Promise<Response | Said>) => {
+    let answer = await sent
+    assert(!(answer instanceof Response))
+    return answer
+  }
+  let add = (n: number) =>
+    said(s.post({
+      do: 'add',
+      integration: `Weather ${n}`,
+      hosts: `api${n}.weather.test`,
+      key: `sk-${n}`,
+    }))
+  for (let n of [1, 2, 3]) assertEquals((await add(n)).no, false)
+  let refused = await add(4)
+  assertEquals(refused.no, true)
+  assertStringIncludes(
+    refused.say,
+    'ada is on the free plan, which is 3 connections',
+  )
+  assertStringIncludes(refused.say, 'adds $100 of building credit')
+  // A sign-in is refused before the person is sent to the service.
+  await s.at.apply(
+    [registration('google', { id: 'yaks', secret: 's' })],
+    KERNEL,
+  )
+  let signin = await said(s.post(
+    { do: 'add', integration: 'google-search-console' },
+    '?space=ada&enable=google-search-console',
+  ))
+  assertEquals(signin.say, refused.say)
+  assertEquals((await s.shown()).plan?.held, 3)
+  let plan = (tier: string) =>
+    s.at.apply([{ entity: { eid: s.space.eid }, plan: { tier } }], KERNEL)
+  await plan('plus')
+  assertEquals((await add(4)).no, false)
+  await plan('free')
+  assertEquals((await add(5)).no, true)
+  let page = await s.shown()
+  assertEquals(page.list.map((c) => c.status), Array(4).fill('connected'))
+  assertEquals(page.plan?.held, 4)
+})
 
 test('without a vault no key is taken, and the page says so', async () => {
   let s = await setup(false)
@@ -1429,7 +1475,7 @@ test('connection_list reads the directory in one trip, whatever the space holds'
       key: 'sk-0123456789',
     })
   assertEquals(await listed({ space: 'ada' }), [null, 1])
-  for (let n of [0, 1, 2, 3]) await add(n)
+  for (let n of [0, 1, 2]) await add(n)
   let app = await liveApp(s)
   let w0 = (await s.shown()).list.find((c) => c.integration == 'W0')!
   await s.post({ do: 'attach', connection: w0.eid, app: app.eid })
@@ -1454,7 +1500,6 @@ test('connection_list reads the directory in one trip, whatever the space holds'
     'notes reads it as env.W0',
     'W1',
     'W2',
-    'W3',
   ], 1]
   assertEquals(await listed({ space: 'ada' }), held)
   assertEquals(await listed({}), held)
@@ -1464,7 +1509,7 @@ test('connection_list reads the directory in one trip, whatever the space holds'
     (await connectionsOf(s.p.env, Promise.resolve(s.space), s.person, {
       by: line`.space.slug=bea`,
     })).list.map((c) => c.integration),
-    ['W0', 'W1', 'W2', 'W3'],
+    ['W0', 'W1', 'W2'],
   )
 })
 

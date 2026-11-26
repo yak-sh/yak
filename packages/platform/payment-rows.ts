@@ -20,7 +20,9 @@
  * @module
  */
 import type { Bundle } from '@yaks/graph'
+import type { Client } from '@yaks/client'
 import { derivedEid } from '@yaks/graph/identity'
+import { mint } from '@yaks/graph'
 import type { Costs, Per } from '@yaks/host/payments'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Budget } from './meter.ts'
@@ -225,6 +227,22 @@ export type PaymentAct = Bundle & {
 }
 
 let ACTS = ['creditCap', 'invoiceAsk', 'sellStop', 'leave']
+
+/** Where the provider's page a button leaves for is, as `space`'s owner
+ * writes its `leave` through `graph`: the button says its `door`, and the
+ * plan it buys in `plan` and `per`. Undefined where nothing said. */
+export let leaveTo = async (
+  graph: Pick<Client, 'mutate'>,
+  space: string,
+  button: HTMLElement,
+): Promise<string | undefined> => {
+  let { door, plan, per } = button.dataset
+  let [answer] = await graph.mutate([{
+    entity: { eid: mint() },
+    leave: { space, door: door as Door, ...plan ? { tier: plan, per } : {} },
+  }], { optimistic: false })
+  return (answer?.leave as { url?: string } | undefined)?.url
+}
 
 /** The space a write of `bundles` acts on and the act, when it is one act on
  * a space's payments, else undefined. */

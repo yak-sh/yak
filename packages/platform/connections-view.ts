@@ -38,7 +38,15 @@ import { Time } from '@yaks/ui/Time'
 import { type Host, spaceHost, url } from './host.ts'
 import { FRIENDS_ACCESS } from './app-friends.ts'
 import { enabling, managePath } from './routes.ts'
-import { count } from './standing.ts'
+import { aiUse, connectionsFull, count } from './standing.ts'
+import {
+  ceilings,
+  NAMES,
+  planName,
+  PRICE,
+  SUBSCRIBED,
+  type Tier,
+} from './plans.ts'
 import { choice } from './side-parts.ts'
 import type { Picked } from './side-rows.ts'
 import {
@@ -84,6 +92,40 @@ export type ConnectionsView = {
   spaces: Picked[]
   /** what its address asks the read (./connections-page.ts `askOf`) */
   ask: string
+}
+
+// A space at its plan's connections, where another would be refused
+// (yaks.app connections.ts `admitted`): the limit, what the Plus plan gives,
+// and its checkout, the Billing page's button (./payment-view.ts), which
+// ./connections-browser.ts presses the same way. None below the limit.
+let full = (slug: string, plan: { tier: Tier | null; held: number }) => {
+  let limit = ceilings(plan.tier, slug)?.connections
+  if (limit == null || plan.held < limit) return null
+  return h(
+    Card,
+    { class: 'Bill' },
+    h(
+      Card.Sub,
+      null,
+      `${connectionsFull({ slug, tier: plan.tier })}. The ${NAMES.plus} ` +
+        `plan connects as many as you like and includes ${aiUse('plus')}. ` +
+        `A first paid subscription to it adds $${SUBSCRIBED} of building ` +
+        'credit.',
+    ),
+    h(
+      Form.Actions,
+      null,
+      h(Button, {
+        type: 'button',
+        mod: 'go',
+        class: 'Bill_Go',
+        'data-door': 'checkout',
+        'data-plan': 'plus',
+        'data-per': 'month',
+      }, `Get ${planName('plus')} — $${count(PRICE.plus)} a month`),
+    ),
+    h(Notice, { class: 'Bill_Say', role: 'status' }),
+  )
 }
 
 // The integration directory, which lists services others added.
@@ -1597,6 +1639,7 @@ export let connectionsView = (
       'data-connections': '',
     }, [
       told(),
+      c.plan ? full(view.space.slug, c.plan) : null,
       c.mcp?.ask ? sourceAsk(c.mcp.ask, action, env) : null,
       c.mcp?.friends?.length ? friendsAccess(c.mcp.friends, action) : null,
       c.on ? null : h(
