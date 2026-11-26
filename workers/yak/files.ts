@@ -328,20 +328,24 @@ export let warm = async (
         .map((p) => p.slice(dir.length + 1))
       : paths,
   )
-  let drain = (cache: Fetcher, req: Request) =>
-    cache.fetch(req)
-      .then((got) =>
-        got.body?.pipeTo(new WritableStream(), { signal: req.signal })
-      )
-      .catch(() => {})
+  let drain = async (cache: Fetcher, req: Request) => {
+    let got = await cache.fetch(req)
+    await got.body?.pipeTo(new WritableStream(), { signal: req.signal })
+    return got.status
+  }
   // Seed the shared tier for the first view of a new release in another
   // location. Like the file guesses, this runs after the release answers.
+  let indexSignal = AbortSignal.timeout(wait)
   let index = env.RELEASE_INDEX && drain(
     env.RELEASE_INDEX,
-    new Request(indexAddress(source + META), {
-      signal: AbortSignal.timeout(wait),
-    }),
-  )
+    new Request(indexAddress(source + META), { signal: indexSignal }),
+  ).then((status) => {
+    if (status != 200 && status != 404) {
+      throw new Error(`release index cache returned ${status}`)
+    }
+  }).catch((error) => {
+    if (!indexSignal.aborted) failing('warming release index')(error)
+  })
   let next = 0
   let run = async () => {
     while (next < asked.length) {
@@ -349,7 +353,7 @@ export let warm = async (
       await drain(
         cache,
         fileRequest(eid, source, asked[next++], source, { signal }),
-      )
+      ).catch(() => {})
     }
   }
   await Promise.all([index, ...Array.from({ length: AT_ONCE }, run)])

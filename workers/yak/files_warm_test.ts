@@ -7,6 +7,7 @@ import { fileAt } from '@yaks/platform/kept'
 import { indexAddress, META } from '@yaks/platform/release-index'
 import { warm } from './files.ts'
 import { platform } from './serving-probe.ts'
+import { within } from './defects.ts'
 
 let eid = '11111111-1111-4111-8111-111111111111'
 let source = 'ada/.releases/r1'
@@ -24,7 +25,7 @@ let warmed = async (answer: (req: Request) => Promise<Response>) => {
   env.FILES = env.RELEASE_INDEX = {
     fetch: (req) => (asked.push(req.url), answer(req)),
   }
-  await warm(env, eid, source, paths, 20)
+  await within(env, {}, () => warm(env, eid, source, paths, 20))
   return {
     asked: asked.sort(),
     reported: rows.length,
@@ -65,4 +66,12 @@ test('a body the cache stops sending is given up at the deadline', async () => {
       new Response(new ReadableStream({ pull: () => hung<void>(req) })),
     )
   assertEquals(await warmed(stalled), { asked: all, reported: 0, read: 0 })
+})
+
+test('an unexpected shared-index fill failure is reported behind the release', async () => {
+  let reply = (req: Request) =>
+    req.url == indexAddress(source + META)
+      ? Promise.reject(new Error('index cache connection reset'))
+      : bytes()
+  assertEquals(await warmed(reply), { asked: all, reported: 1, read: 0 })
 })
