@@ -2012,7 +2012,7 @@ test('unmuting reopened regression starts a fresh fixer instead of continuing it
 // model it ran on recorded (`resumable`), or over with none (`ended`). The
 // bug is resolved and comes back once, and the finished task stays as it was.
 let ran = { provider, model, effort: 'max' }
-let raised = async (state: 'up' | 'resumable' | 'ended') => {
+let raised = async (state: 'up' | 'resumable' | 'ended', kind = 'ci') => {
   let f = await fixture()
   f.g.use(sessions())
   let session = crypto.randomUUID(), work = crypto.randomUUID()
@@ -2041,7 +2041,7 @@ let raised = async (state: 'up' | 'resumable' | 'ended') => {
   ])
   await put(f.tracker, [{
     entity: { eid: bug },
-    during: { session, entity: work },
+    during: { session, entity: work, kind },
   }])
   f.commits.length = 0
   await f.replay()
@@ -2090,6 +2090,7 @@ let raised = async (state: 'up' | 'resumable' | 'ended') => {
 }
 let atWork = await raised('up'), ended = await raised('ended')
 let resumable = await raised('resumable')
+let witness = await raised('resumable', 'call')
 test('a bug goes to the session at work that raised it, on its own task', () => {
   let { session, done, task, opened, knocks, fixers, about } = atWork
   equal(comp(task, 'completed').at, done.at)
@@ -2113,6 +2114,12 @@ test('a bug whose session ended starts it again where it ran, once per opening',
   equal(replayed.length, 1)
   equal(again.length, 2)
   equal(comp(own, 'claim').session, session)
+})
+test('a bug a session only saw does not start it again once it ended', () => {
+  let { opened, knocks, fixers, told } = witness
+  equal([told, fixers.length], [[], 1])
+  equal(comp(opened, 'claim').session, fixers[0].entity.eid)
+  equal(knocks.map((k) => comp(k, 'knock').target), [project])
 })
 test('a bug whose session ended with no provider on record starts a fixer on its own task', () => {
   let { done, task, opened, knocks, fixers, about } = ended

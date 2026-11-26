@@ -81,7 +81,8 @@ let knock = (
     : []
 
 /** Whom a bug's opening names (`during`): the session whose work raised it,
- * at work (`session`) or over and not stopped (`ended`), and the task that
+ * at work (`session`) or, for a commit CI blamed (`kind: ci`), over and not
+ * stopped (`ended`), and the task that
  * work was on, unless that was cancelled. The task only names the work in the
  * session's knock; the bug's own task holds the fix. */
 type Owner = { session?: string; ended?: string; task?: Bundle }
@@ -220,10 +221,14 @@ export let follow = (
       if (!ids.length) return {}
       let rows = new Map((await g.get(ids)).map((row) => [row.entity.eid, row]))
       let s = rows.get(session), t = rows.get(task)
+      // Only a commit CI blamed is the session's own breakage, worth starting
+      // it again for; any other session only saw the failure (a slow read
+      // during its hook), and a knock is all it gets while it can hear.
+      let blamed = during?.kind == 'ci'
       return {
         ...s?.session && live(s)
           ? { session }
-          : s?.session && !s.stop
+          : s?.session && !s.stop && blamed
           ? { ended: session }
           : {},
         ...t?.task && !t.cancelled ? { task: t } : {},

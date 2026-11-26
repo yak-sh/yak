@@ -186,10 +186,12 @@ grouping reads what it reads for one, then writes only the probe's receipt,
 sender reads the receipt. Each probe's grouping deletes the probes grouped over
 an hour before, so they do not accumulate.
 
-A bug wears `during{session, entity}` from the occurrence that opened it, first
-or reopening, when that occurrence names a session: the session whose work
-raised it and the work it was doing, so the bug goes to them (@yaks/heal). An
-opening that names none clears it.
+A bug wears `during{session, entity, kind}` from the occurrence that opened it,
+first or reopening, when that occurrence names a session: the session whose work
+raised it, the work it was doing and its kind, so the bug goes to them
+(@yaks/heal). A `ci` kind says CI on main blamed the commit that session landed
+(`bench/ci.ts`); any other names a session that only saw the failure. An opening
+that names none clears it.
 
 ## Browsing
 

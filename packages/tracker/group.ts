@@ -92,12 +92,19 @@ let counts = (old: Comp, e: Comp): Comp => {
   }
 }
 
-// The session whose work opened the bug, and the work it was doing: a new
-// bug's first occurrence, or the occurrence that reopened it. An opening that
-// names no session clears an earlier one's.
+// The session whose work opened the bug, the work it was doing, and what kind
+// of work that was (`ci`: CI on main blamed the commit it landed): a new bug's
+// first occurrence, or the occurrence that reopened it. An opening that names
+// no session clears an earlier one's.
 let whose = (during: Comp, before: boolean): Record<string, unknown> =>
   during.session
-    ? { during: { session: during.session, entity: during.entity ?? null } }
+    ? {
+      during: {
+        session: during.session,
+        entity: during.entity ?? null,
+        kind: during.kind ?? null,
+      },
+    }
     : before
     ? { during: null }
     : {}
