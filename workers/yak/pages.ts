@@ -257,6 +257,10 @@ ${
       ? `<script type="module" src="${file('_matches.js')}"></script>`
       : ''
   }${
+    main.includes('data-dashboard-view=')
+      ? `<script type="module" src="${file('_dashboard.js')}"></script>`
+      : ''
+  }${
     main.includes('data-visits-view=')
       ? `<script type="module" src="${file('_visits.js')}"></script>`
       : ''
@@ -603,9 +607,9 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
 }
 `)
 
-// A space's front door shows the apps whoever is asking may open, and to
-// its owner the way to the dashboard; account controls never enter it. The
-// dashboard (`desk`) is the owner's alone, at the apex.
+// A space's front door shows the apps whoever is asking may open; account
+// controls never enter it. A member who may change the space is sent to its
+// Dashboard at the apex instead (apps.ts `index`).
 export type SpacePage = {
   space: string
   title: string
@@ -615,8 +619,6 @@ export type SpacePage = {
   role: string | null
   person: boolean
   signIn: string
-  /** the dashboard's address, shown to the space's owner */
-  manage?: string
 }
 
 type Listed = MarkedApp & {
@@ -788,28 +790,20 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
       } private. Ask whoever runs this space to let you in.`,
     )
     : null
-  let pitch = at.manage
-    ? h(
-      'p',
+  let pitch = at.person ? home(env) : [
+    h('p', null, h(Button, { mod: 'go', href: at.signIn }, 'Sign in')),
+    h(
+      Card,
       null,
-      h(Button, { mod: 'go', href: at.manage }, 'Manage your apps'),
-    )
-    : at.person
-    ? home(env)
-    : [
-      h('p', null, h(Button, { mod: 'go', href: at.signIn }, 'Sign in')),
+      heading('What is yaks.app?'),
       h(
-        Card,
+        Card.Sub,
         null,
-        heading('What is yaks.app?'),
-        h(
-          Card.Sub,
-          null,
-          'Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.',
-        ),
-        h('p', null, h('a', { href: url(env, '/') }, 'Make one of your own')),
+        'Ask an assistant like Claude or ChatGPT for an app, and it builds one here — a page of your own you can send to anyone.',
       ),
-    ]
+      h('p', null, h('a', { href: url(env, '/') }, 'Make one of your own')),
+    ),
+  ]
   return page(
     env,
     {

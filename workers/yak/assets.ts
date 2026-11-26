@@ -203,6 +203,13 @@ export let ASSETS: Asset[] = [
     ...operator,
     named: true,
   },
+  // A space's Dashboard kept current (@yaks/platform/dashboard-browser).
+  {
+    name: '_dashboard.js',
+    bundle: of('@yaks/platform/dashboard-browser'),
+    ...operator,
+    named: true,
+  },
   // An Operator page's views shown in place (@yaks/platform/talk-views).
   {
     name: '_talk-views.js',

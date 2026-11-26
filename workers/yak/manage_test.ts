@@ -24,6 +24,7 @@ import {
 } from './probe.ts'
 import {
   chatPath,
+  dashboardPath,
   LOGOUT,
   MANAGE,
   managePath,
@@ -113,9 +114,16 @@ test('the apex opens a chat with the space’s Operator, whose Manage opens its 
   let first = await get(MANAGE)
   assertEquals(first.status, 302)
   assertEquals(first.headers.get('location'), to(home))
-  // The space's own address is a new chat with its Operator, and Manage its
-  // settings (D-473).
-  assertEquals(home, `/${slug}`)
+  // The space's own address is its Dashboard (T-3702), its Operator's new
+  // chat is under it, and Manage is its settings (D-473).
+  assertEquals(home, `/${slug}/operator`)
+  let dashboard = await get(dashboardPath(slug))
+  assertEquals(dashboard.status, 200)
+  assert(
+    parseHTML(await dashboard.text()).document.querySelector(
+      '.Talk_View:not([hidden]) [data-dashboard-view]',
+    ),
+  )
   let landed = await get(home)
   assertEquals(landed.status, 200)
   let { document } = parseHTML(await landed.text())
@@ -237,11 +245,21 @@ test('the dashboard’s old addresses move to their pages', async () => {
       // The Operator's pages moved to the space's own address (D-473).
       ['yaks.app', `/manage/${slug}?app=site`, `${home}?app=site`],
       ['yaks.app', `/manage/${slug}/operator/new`, home],
-      ['yaks.app', `/manage/${slug}/operator/${ID}`, `${home}/${ID}`],
-      ['yaks.app', `/manage/${slug}/updates`, `${home}/updates`, 'POST'],
+      ['yaks.app', `/manage/${slug}/operator/${ID}`, chatPath(slug, ID)],
+      [
+        'yaks.app',
+        `/manage/${slug}/updates`,
+        talkPath('updates', slug),
+        'POST',
+      ],
+      // The chat moved under the space's address (T-3702): a link to a
+      // conversation from before still opens it.
+      ['yaks.app', `/${slug}?app=site`, `${home}?app=site`],
+      ['yaks.app', `/${slug}/${ID}`, chatPath(slug, ID)],
+      ['yaks.app', `/${slug}/dashboard`, dashboardPath(slug)],
       ['yaks.app', '/manage/updates?waiting', '/updates?waiting'],
       ['yaks.app', `/manage/updates?space=${slug}`, `/updates?space=${slug}`],
-      ['yaks.app', `/updates?space=${slug}`, `${home}/updates`],
+      ['yaks.app', `/updates?space=${slug}`, talkPath('updates', slug)],
     ]
   ) {
     let res = await k.at(from, was, {

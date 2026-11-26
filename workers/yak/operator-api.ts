@@ -33,6 +33,7 @@ import {
   matchesAsked,
   matchesRow,
 } from '@yaks/platform/operator-matches'
+import { fixesSpace, fixRows } from '@yaks/platform/dashboard'
 import { trialDoc } from '@yaks/trial/vocab'
 import { line } from '@yaks/query'
 import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
@@ -213,6 +214,24 @@ export let operatorApi = (
     },
     tags: { request: 'Operator matches' },
   })
+  // The breaks the Operator took up on its own and what it is on now, as a
+  // space's Dashboard draws them (@yaks/platform/dashboard): read again as
+  // a request is made or answered.
+  let fixes = computed(store.g, {
+    affects: (bundles) =>
+      bundles.some((b) =>
+        'operator_request' in b || 'operator_answer' in b || 'failed' in b
+      ),
+    hold,
+    clock,
+    read: async (asked, read) => {
+      let person = read?.person, space = await spaceOf(store)
+      if (!person || !space || fixesSpace(asked) != space) return []
+      let { fixesIn } = await import('./operator-host.ts')
+      return fixRows(person, space, await fixesIn(store, person, clock.now()))
+    },
+    tags: { request: 'Operator fixes' },
+  })
   // Whether each person holds a seat, as the directory last said for their
   // socket: what it is read with.
   let members = new Map<string, boolean>()
@@ -292,12 +311,13 @@ export let operatorApi = (
     matches,
     (asked) => matchesAsked(asked) != undefined,
   )
+  let shown = beside(theirs, fixes, (asked) => fixesSpace(asked) != undefined)
   let live = sockets(
     // Its chat pages' conversations, each socket carrying where its tab is
     // (build.ts).
     talks
-      ? beside(theirs, talks, (asked) => talkAsked(asked) != undefined)
-      : theirs,
+      ? beside(shown, talks, (asked) => talkAsked(asked) != undefined)
+      : shown,
     {
       acceptWebSocket: (ws) => ctx.acceptWebSocket(ws),
       getWebSockets: () =>

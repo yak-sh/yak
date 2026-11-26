@@ -26,7 +26,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { chatPath, managePath } from '@yaks/platform/routes'
+import { chatPath, dashboardPath, managePath } from '@yaks/platform/routes'
 import {
   accepted,
   connector,
@@ -113,20 +113,14 @@ test('a space with no front page lists what you may open', async () => {
   // block is about rather than the sentence it says it in.
   assert(!cold.includes('front page'), cold)
 
-  // The owner: both apps, the way to manage their apps at the apex, and no
-  // pitch or sign-in — they are home.
-  let mine = await (await at(them.cookie)).text()
-  assertStringIncludes(mine, 'href="/recipes/"')
-  assertStringIncludes(mine, 'href="/garden/"')
-  assertStringIncludes(
-    mine,
-    `href="https://yaks.app${managePath('apps', jeff21)}"`,
+  // The owner is sent to the space's Dashboard at the apex, where its apps
+  // and its Operator are, and no app's code here can reach them.
+  let mine = await at(them.cookie)
+  assertEquals(mine.status, 302)
+  assertEquals(
+    mine.headers.get('location'),
+    `https://yaks.app${dashboardPath(jeff21)}`,
   )
-  assert(!mine.includes('name="name"'), mine)
-  assert(!mine.includes('What is yaks.app?'), mine)
-  assert(!mine.includes('login?return='), mine)
-  // And nothing is being held back from them, so nothing says so.
-  assert(!mine.includes('private. Ask'), mine)
 
   // Someone signed in who is nobody here sees what the stranger sees, minus
   // the sign-in and the pitch: they have an account already.
@@ -144,10 +138,12 @@ test('a space with no front page lists what you may open', async () => {
   assertStringIncludes(await empty.text(), 'Nothing here is open')
   let ready = await k.at(`${bare21Space}.yaks.app`, '/', {
     headers: { cookie: them.cookie },
+    redirect: 'manual',
   })
-  assertStringIncludes(
-    await ready.text(),
-    `href="https://yaks.app${managePath('apps', bare21Space)}"`,
+  await ready.body?.cancel()
+  assertEquals(
+    ready.headers.get('location'),
+    `https://yaks.app${dashboardPath(bare21Space)}`,
   )
 
   // An API address is still a machine door when no app answers there: a
@@ -539,15 +535,23 @@ test('a dashboard page reads the directory in one trip', async () => {
   assertMatch(said, /oauth_wait;dur=\d+/)
 })
 
-// A space with no front page answers its bare address with its listing, from
-// the one read that routed it, for a stranger and for its owner alike.
+// A space with no front page answers its bare address from the one read that
+// routed it: its listing to a stranger, and its owner sent to its Dashboard.
 test("a space's listing reads the directory in one trip", async () => {
   let { k, at: { shown: slug }, them: { cookie } } = await world()
   for (let headers of [{}, { cookie }] as Record<string, string>[]) {
     await k.settled()
-    let page = await k.at(`${slug}.yaks.app`, '/', { headers })
-    assertEquals(page.status, 200)
-    assertStringIncludes(await page.text(), 'href="/recipes/"')
+    let page = await k.at(`${slug}.yaks.app`, '/', {
+      headers,
+      redirect: 'manual',
+    })
+    if (headers.cookie) {
+      assertEquals(page.status, 302)
+      await page.body?.cancel()
+    } else {
+      assertEquals(page.status, 200)
+      assertStringIncludes(await page.text(), 'href="/recipes/"')
+    }
     assertEquals(
       /hops;dur=(\d+)/.exec(page.headers.get('server-timing') ?? '')?.[1],
       '1',

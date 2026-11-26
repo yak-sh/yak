@@ -43,11 +43,13 @@ import { earlyDraftScript } from '@yaks/platform/operator-early-draft'
 import {
   backTo,
   chatPath,
+  dashboardPath,
   logoPath,
   MANAGE,
   managePath,
   manifestPath,
   type MarkedApp,
+  rooted,
   type StoreDoor,
   talkPath,
 } from '@yaks/platform/routes'
@@ -161,6 +163,20 @@ import {
   SLOT,
 } from '@yaks/platform/app-canvas-view'
 import { appRows } from '@yaks/platform/side-rows'
+import {
+  agentWork,
+  type Fix,
+  fixRows,
+  suggestions,
+} from '@yaks/platform/dashboard'
+import {
+  dashboardOf,
+  type DashboardView,
+  dashboardView,
+  VIEW_ATTR as DASHBOARD,
+} from '@yaks/platform/dashboard-view'
+import { spaceApps } from '@yaks/platform/space-apps'
+import { offerRows, updateRows } from '@yaks/platform/update-rows'
 
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
@@ -1276,7 +1292,9 @@ let installable = (space: Space) =>
 export let installing = (space: Space) => {
   let at = chatPath(space.slug)
   return Response.json({
-    id: at,
+    // What it was installed as before the chat moved under `/operator`, so
+    // a home screen's app stays the same one.
+    id: rooted(space.slug) ? dashboardPath(space.slug) : at,
     name: whoseOf(space),
     short_name: space.operator,
     start_url: at,
@@ -1311,6 +1329,8 @@ export let installing = (space: Space) => {
 /** What a page of the chat app draws (`talkPage`). */
 type TalkPage = {
   title: string
+  // what the bar says under the title, where it is not whose Operator it is
+  sub?: string
   status: number
   // how many Updates wait on the person (updates.ts `updatesOf`)
   waiting: number
@@ -1381,6 +1401,9 @@ let talkPage = (
   if (!held(allAt(space))) {
     views.push(allBeside(env, space, who, beside))
   }
+  if (!held(dashboardPath(space.slug))) {
+    views.push(dashboardOn(env, space, who, null))
+  }
   let slot = views.find((v) => v.canvasSlot)?.canvasSlot
   // The column stands, hidden, around a slot for lists not in yet, and shows
   // once one of them has something in it.
@@ -1426,7 +1449,7 @@ let talkPage = (
       }),
       back: own(page.back),
       title: page.heading ?? page.title,
-      sub: whoseOf(space),
+      sub: shown.sub,
       waiting,
       tools: page.app ? showing(page.app) : null,
       content,
@@ -1478,8 +1501,11 @@ let viewOf = (space: Space, page: TalkPage, aside: boolean): TalkView => {
       ? page.here
       : page.current.includes('updates')
       ? talkPath('updates', space.slug)
+      : page.current.includes('dashboard')
+      ? dashboardPath(space.slug)
       : chatPath(space.slug),
     title: page.title,
+    sub: page.sub ?? whoseOf(space),
     page: `${page.title} · ${space.operator} · yaks.app`,
     skip: page.skip,
     aside,
@@ -2249,6 +2275,116 @@ export let allUpdatesPage = async (
       },
       [chat],
       { marker: html(slot), contents: cards },
+    ))
+}
+
+// The space's Dashboard as one of its page's views (@yaks/platform/
+// dashboard-view): drawn from `rows`, which the page carries for the browser
+// to draw it again from as they move; or, standing beside another view, its
+// frame alone, which the browser fills once it is shown.
+let dashboardOn = (
+  env: Env,
+  space: Space,
+  who: Who,
+  rows: Bundle[] | null,
+  waiting = 0,
+): TalkPage => {
+  let person = who.person ?? ''
+  let view: DashboardView = {
+    person,
+    space: {
+      eid: space.eid,
+      slug: space.slug,
+      title: space.title,
+      operator: space.operator,
+    },
+    at: `https://${spaceHost(env, space.slug)}`,
+    chat: chatPath(space.slug),
+    updates: talkPath('updates', space.slug),
+  }
+  return {
+    title: 'Dashboard',
+    sub: spaceHost(env, space.slug),
+    status: 200,
+    waiting,
+    listed: null,
+    current: ['dashboard'],
+    here: dashboardPath(space.slug),
+    skip: ['#content', 'Skip to content'],
+    main: h(
+      'div',
+      {
+        class: 'Dash',
+        'data-view': 'dashboard',
+        [DASHBOARD]: JSON.stringify(view),
+      },
+      dashboardView(view, dashboardOf(view, rows ?? [], !rows)),
+      rows
+        ? h('script', {
+          type: 'application/json',
+          'data-page-graph': '',
+          dangerouslySetInnerHTML: { __html: drawnRows(person, rows) },
+        })
+        : null,
+    ),
+  }
+}
+
+/** A space's Dashboard (@yaks/platform/dashboard-view), at its own address,
+ * beside the chat app's side: its apps to open, what it could use next, what
+ * its agents did and its Updates, drawn from the rows the page carries for
+ * the browser to draw again as they move. A part that could not be read is
+ * drawn empty, reported, and filled as its watch answers. */
+export let dashboardPage = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  dir: Directory,
+  side: Beside | Promise<Beside> = {},
+  c: Clock = clock(),
+) => {
+  let person = who.person ?? ''
+  let spared = <T>(read: Promise<T>, none: T, request: string) =>
+    read.catch((error) => {
+      caught(error, { request, space: space.slug })
+      return none
+    })
+  let [apps, work, offered, fixes, news, beside] = await Promise.all([
+    spared(personRows(dir, person, spaceApps(space.eid)), [], 'dashboard apps'),
+    spared(personRows(dir, person, agentWork(space.eid)), [], 'dashboard work'),
+    spared(
+      personRows(dir, person, suggestions(space.eid)),
+      [],
+      'dashboard suggestions',
+    ),
+    spared(
+      operatorDoor(env, space, who, 'fixes', {}) as Promise<Fix[]>,
+      [],
+      'dashboard fixes',
+    ),
+    spared(updatesOf(env, space, who, false, dir), null, 'dashboard updates'),
+    side,
+  ])
+  let rows = [
+    ...apps,
+    ...work,
+    ...offered,
+    ...fixRows(person, space.eid, fixes),
+    ...(news?.read ?? []).flatMap((r) => [
+      ...updateRows(person, r.space.eid, r.cards),
+      ...offerRows(person, r.space.eid, r.offers),
+    ]),
+  ]
+  let waiting = news?.updates.filter((u) => u.needs).length ?? 0
+  let chat = openingParts(env, space, who, 'new', beside)
+  return c.measure('render', () =>
+    talkPage(
+      env,
+      space,
+      who,
+      beside,
+      dashboardOn(env, space, who, rows, waiting),
+      [chat],
     ))
 }
 

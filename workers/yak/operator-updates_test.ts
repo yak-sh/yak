@@ -718,7 +718,9 @@ test('dismissing from every space’s Updates comes back there, and never off ya
   )
 })
 
-test('every Operator page holds the chat, its Updates and every space’s as views: the one opened shown, the others hidden, each with its own script', async () => {
+let ALL_AT = '/updates?in=club'
+
+test('every Operator page holds the chat, its Updates, every space’s and its Dashboard as views: the one opened shown, the others hidden, each with its own script', async () => {
   let space = (await directoryOf(p.env.STORE).at(eid))!
   let who = { person: ada, role: 'owner' as const, space: eid }
   let other = crypto.randomUUID()
@@ -739,18 +741,22 @@ test('every Operator page holds the chat, its Updates and every space’s as vie
       v.hasAttribute('hidden') ? 'hidden' : 'shown',
       v.querySelector('[data-operator-chat]')
         ? 'chat'
+        : v.querySelector('[data-dashboard-view]')
+        ? 'dashboard'
         : v.querySelector('[data-operator-opening]')
           ?.getAttribute('data-operator-opening') ?? 'news',
     ])
   assertEquals(await views(chatPage(p.env, space, who, 'new', beside)), [
-    ['/club', 'shown', 'chat'],
+    ['/club/operator', 'shown', 'chat'],
     ['/club/updates', 'hidden', 'news'],
     ['/updates?in=club', 'hidden', 'news'],
+    ['/club', 'hidden', 'dashboard'],
   ])
   assertEquals(await views(updatesPage(p.env, space, who, beside)), [
     ['/club/updates', 'shown', 'news'],
-    ['/club', 'hidden', '/club?conversation=1'],
+    ['/club/operator', 'hidden', '/club/operator?conversation=1'],
     ['/updates?in=club', 'hidden', 'news'],
+    ['/club', 'hidden', 'dashboard'],
   ])
   let seat = { space, who }
   assertEquals(
@@ -759,8 +765,9 @@ test('every Operator page holds the chat, its Updates and every space’s as vie
     ),
     [
       ['/updates?in=club', 'shown', 'news'],
-      ['/club', 'hidden', '/club?conversation=1'],
+      ['/club/operator', 'hidden', '/club/operator?conversation=1'],
       ['/club/updates', 'hidden', 'news'],
+      ['/club', 'hidden', 'dashboard'],
     ],
   )
   // A page that is none of them holds them too.
@@ -768,10 +775,13 @@ test('every Operator page holds the chat, its Updates and every space’s as vie
     ['/club/updates?dismissed', 'shown', 'news'],
     ['/club/updates', 'hidden', 'news'],
     ['/updates?in=club', 'hidden', 'news'],
+    ['/club', 'hidden', 'dashboard'],
   ])
   // Every space's cards are drawn in the browser, from each one the side
   // offers.
-  let all = (await page(chatPage(p.env, space, who, 'new', beside))).at(-1)!
+  let all = (await page(chatPage(p.env, space, who, 'new', beside))).find(
+    (v) => JSON.parse(v.getAttribute('data-talk-view')!).here == ALL_AT,
+  )!
   assertEquals(
     JSON.parse(
       all.querySelector<HTMLElement>('[data-updates-view]')!.dataset

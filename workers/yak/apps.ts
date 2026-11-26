@@ -135,10 +135,10 @@ import {
   APP_WARM,
   appWarmAt,
   chatPath,
+  dashboardPath,
   hostOf,
   iconAt,
   iconVersion,
-  manageAt,
   managePath,
   MANIFEST,
   markVersion,
@@ -2579,7 +2579,10 @@ export let shelf = (apps: App[], space: Space, who: Who) => {
 // (directory.ts `page`), so the listing waits on no directory read of its own.
 // It says whom it is the same page for (page-cache.ts `keep`): every
 // stranger, or every person signed in with no seat here, who are shown only
-// what a stranger is; a member's is theirs.
+// what a stranger is; a member's is theirs. A member who may change the
+// space is sent to its Dashboard at the apex (T-3702), the same page as
+// yaks.app/<space>: what touches their Operator and Updates is drawn there,
+// where no app's code on this origin can reach it.
 export let index = async (
   req: Request,
   env: Env,
@@ -2589,31 +2592,38 @@ export let index = async (
   dir?: Directory,
 ): Promise<{ page: Response; alone: Alone | null }> => {
   let who = await whoIs(req, env, seatOf, space.eid, dir)
+  if (
+    who.person && writes(who.role) && !space.trashed &&
+    (req.method == 'GET' || req.method == 'HEAD')
+  ) {
+    return {
+      page: redirect(hostUrl(env, dashboardPath(space.slug))),
+      alone: null,
+    }
+  }
   let { all, mine } = shelf(apps, space, who)
   let warming = warmable(mine).filter((app) => app.worker !== '')
   if (req.method == 'GET') { for (let app of warming) warmApp(env, space, app) }
-  let owner = who.role == 'owner'
   let alone = aloneOf(who)
   let page = spaceIndex({
     space: space.slug,
     title: space.title,
-    // What the pill says about the gallery (gallery.ts, T-34476). Listed is
-    // said to anybody — it is a public page — and waiting only to the owner,
-    // who is the one it is news for.
+    // What the pill says about the gallery (gallery.ts, T-34476): listed,
+    // said to anybody, since it is a public page. Waiting is news for its
+    // owner alone, who is sent to the Dashboard.
     apps: mine.map((a) => ({
       eid: a.eid,
       slug: a.slug,
       title: a.title,
       home: a.home,
       access: a.access,
-      gallery: owner || standing(a) == 'listed' ? pilled(standing(a)) : '',
+      gallery: standing(a) == 'listed' ? pilled(standing(a)) : '',
     })),
     hidden: all.length - mine.length,
     warm: warming.map((app) => appWarmAt(`/${app.slug}`)),
     role: who.role,
     person: !!who.person,
     signIn: signInAt(req.url, env),
-    manage: owner ? manageAt(space.slug, 'apps', env) : undefined,
   }, env)
   return { page, alone }
 }

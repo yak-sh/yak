@@ -17,6 +17,7 @@ import { endpoints } from './endpoints.ts'
 import { PER_SEGMENT } from './text-spend.ts'
 import { vapidKey } from '@yaks/push'
 import { browser } from '@yaks/push/testing'
+import { chatPath } from '@yaks/platform/routes'
 
 // A space's Operator tells its person something away from the page, the way
 // they chose to be alerted (T-145056).
@@ -399,7 +400,7 @@ test('a person allows browser notifications on the Operator page, one subscripti
 })
 test('a notification for a reply in the main conversation opens its canonical page at that line', () => {
   let at = new URL(replyPush.url)
-  assertEquals(at.pathname, '/ana')
+  assertEquals(at.pathname, chatPath('ana'))
   assertEquals(
     at.searchParams.get('from'),
     String(Number((repliedTo.entry as Comp).seq) - 1),

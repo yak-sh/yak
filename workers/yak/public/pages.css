@@ -849,6 +849,256 @@
   .Frame_AsideTools[hidden] {
     display: none;
   }
+  /* A space's Dashboard (@yaks/platform/dashboard-view): its apps across
+     the top, what it could use next under them, then what its agents did
+     beside its Updates on a wide screen, and one above the other on a
+     phone, Updates first. */
+  .Dash {
+    display: grid;
+    gap: 1rem;
+    width: 100%;
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: 1rem;
+    text-align: left;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "apps" "suggests" "updates" "work";
+  }
+  @media (min-width: 1000px) {
+    .Dash {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas: "apps apps" "suggests suggests" "work updates";
+      padding: 1.5rem 2rem;
+    }
+  }
+  .Dash_Apps {
+    grid-area: apps;
+  }
+  .Dash_Suggests {
+    grid-area: suggests;
+  }
+  .Dash_Work {
+    grid-area: work;
+  }
+  .Dash_Updates {
+    grid-area: updates;
+  }
+  .Dash_Head {
+    font-size: 1rem;
+    font-weight: 800;
+    margin: 0;
+    line-height: 1.3;
+  }
+  .Dash_AppsHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0 0 .6rem;
+  }
+  .Dash_EditAll {
+    font-size: var(--small);
+  }
+  .Dash_AppGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+    gap: .5rem;
+  }
+  @media (min-width: 1000px) {
+    .Dash_AppGrid {
+      grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+    }
+  }
+  .Dash_App {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    align-content: start;
+    gap: .3rem;
+    padding: .8rem .4rem .7rem;
+    border-radius: var(--radius);
+    color: var(--text);
+    text-decoration: none;
+    text-align: center;
+    background: var(--card);
+    border: 1px solid var(--border);
+  }
+  .Dash_App:hover {
+    background: var(--soft);
+  }
+  .Dash_Opens {
+    position: absolute;
+    top: .45rem;
+    right: .45rem;
+    width: 14px;
+    height: 14px;
+    color: var(--muted);
+  }
+  .Dash_Icon {
+    display: block;
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+  }
+  .Dash_AppName {
+    font-weight: 700;
+    font-size: var(--small);
+    line-height: 1.25;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .Dash_AppSub {
+    font-size: var(--fine);
+    color: var(--muted);
+    line-height: 1.2;
+  }
+  .Dash_Suggests {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+  }
+  @media (max-width: 999px) {
+    .Dash_Suggests {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      margin: 0 -1rem;
+      padding: 0 1rem;
+    }
+    .Dash_Suggest,
+    .Dash_SuggestLead {
+      flex: none;
+    }
+  }
+  .Dash_SuggestLead {
+    font-size: var(--small);
+    color: var(--muted);
+    margin-right: .2rem;
+  }
+  .Dash_Suggest {
+    display: inline-flex;
+    align-items: center;
+    gap: .15rem;
+    border: 1px dashed var(--border2);
+    border-radius: 999px;
+    padding: .15rem .25rem .15rem .7rem;
+    font-size: var(--small);
+    background: var(--bg);
+  }
+  .Dash_Suggest a {
+    text-decoration: none;
+  }
+  .Dash_Suggest button {
+    border: 0;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    padding: 0 .35rem;
+  }
+  .Dash_Panel {
+    padding: 1rem;
+    margin: 0;
+  }
+  .Dash_PanelHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    margin: 0 0 .5rem;
+  }
+  .Dash_Now {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: var(--small);
+    color: var(--text);
+    margin: 0 0 .5rem;
+  }
+  .Dash_Pip {
+    flex: none;
+    width: .55rem;
+    height: .55rem;
+    border-radius: 50%;
+    background: var(--positive, #3a8a4a);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--positive, #3a8a4a) 25%,
+      transparent);
+  }
+  .Dash_List {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+  }
+  .Dash_List li {
+    border-top: 1px solid var(--border);
+    padding: .55rem 0;
+  }
+  .Dash_None {
+    margin: 0;
+    font-size: var(--small);
+    color: var(--muted);
+  }
+  .Dash_Did {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: .75rem;
+  }
+  .Dash_DidTitle {
+    font-weight: 700;
+    font-size: var(--small);
+  }
+  .Dash_DidMeta {
+    grid-column: 1;
+    font-size: var(--fine);
+    color: var(--muted);
+  }
+  .Dash_DidMeta b {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .Dash_When {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: var(--fine);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .Dash_Update {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+  }
+  .Dash_UpdateText {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+  }
+  .Dash_UpdateTitle {
+    font-size: var(--small);
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .Dash_Needs {
+    flex: none;
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .Dash_Update:not(:has(.Dash_Needs)) .Dash_UpdateText {
+    padding-left: 1.1rem;
+  }
+  .Dash_UpdateActs .Button {
+    font-size: var(--small);
+  }
+  .Dash_UpdateActs .Page_Form {
+    margin: 0;
+  }
   /* The conversation, at a reading width in the middle of the page. */
   .Talk_Column,
   .Talk_Keep,
@@ -1533,7 +1783,7 @@
 }
 
 @layer sections {
-  :is(.Rows_Mark, .Sidebar_Icon)[data-app-mark]:not(:has(.AppMark_Image[data-app-mark-ready])) {
+  :is(.Rows_Mark, .Sidebar_Icon, .Dash_Icon)[data-app-mark]:not(:has(.AppMark_Image[data-app-mark-ready])) {
     background: var(--app-mark) center / cover no-repeat;
   }
   .AppMark_Image {

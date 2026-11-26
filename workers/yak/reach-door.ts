@@ -73,6 +73,12 @@ import {
 } from '@yaks/platform/operator-matches'
 import { matchesOf } from './matches.ts'
 import { brokenSpace } from '@yaks/platform/space-apps'
+import {
+  dismissing,
+  type Fix,
+  fixesSpace,
+  fixRows,
+} from '@yaks/platform/dashboard'
 import { brokenOf } from './apps-reads.ts'
 import { AGENTS, disconnecting, GRANTS } from '@yaks/platform/agents'
 import { agentsIn, disconnected } from './agent-rows.ts'
@@ -248,6 +254,19 @@ export let reachDoor = async (
     if (door == '/query' && req.method == 'GET') {
       let q = new URL(req.url).searchParams
       let line = q.get('q') ?? ''
+      let fixing = fixesSpace(line)
+      if (fixing != undefined) {
+        let seat = await seatIn(fixing)
+        if (!seat) return Response.json([])
+        let fixes = await operatorDoor(
+          env,
+          seat.space,
+          { ...who, role: seat.role },
+          'fixes',
+          {},
+        ) as Fix[]
+        return Response.json(fixRows(person, fixing, fixes))
+      }
       let cards = cardsSpace(line)
       if (cards != undefined) {
         let seat = await seatIn(cards)
@@ -402,6 +421,20 @@ export let reachDoor = async (
         }
         let { checked } = await import('./operator-persona.ts')
         return Response.json([await settingsOf(seat, checked(setting.set))])
+      }
+      // A suggestion dismissed on a space's Dashboard, kept for good on the
+      // person's row; the page graph holds the dismissal it wrote.
+      let dismissed = dismissing(bundles)
+      if (dismissed) {
+        let seat = await seatIn(dismissed.space)
+        if (!seat) {
+          return Response.json(
+            { error: 'Forbidden', message: 'You do not write in that space.' },
+            { status: 403 },
+          )
+        }
+        await dir.dismiss(person, dismissed.space, dismissed.name)
+        return Response.json(bundles)
       }
       // A pick on the Matches page, made as the person, answered with the
       // round as it then stands.
@@ -659,7 +692,8 @@ export let reachDoor = async (
             // conversation of theirs there carries where the tab is.
             let talk = talkAsked(line)
             let operator = cardsSpace(line) ?? draftsSpace(line) ??
-              settingsSpace(line) ?? matchesAsked(line)?.space ?? talk?.space
+              settingsSpace(line) ?? matchesAsked(line)?.space ??
+              fixesSpace(line) ?? talk?.space
             if (operator != undefined) {
               let closed = false
               let stop: (() => void) | undefined

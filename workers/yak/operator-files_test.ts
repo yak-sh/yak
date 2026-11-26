@@ -117,7 +117,7 @@ test('a picture and a PDF sent from the page reach Claude as they are', () => {
   // drawn before it named its page sent them.
   assertEquals(
     JSON.stringify(ask.items).includes(
-      onPage('https://yaks.app/clerk') + 'When is the meeting?',
+      onPage('https://yaks.app/clerk/operator') + 'When is the meeting?',
     ),
     true,
   )
@@ -140,7 +140,7 @@ test('the entry keeps only the words, with no separate source for the model to r
   assertEquals(entry.intake, { item: request, source: '' })
   // The words name their speaker before the page they were written on.
   let framing = 'From someone (verified: signed in; owner of clerk). ' +
-    onPage('https://yaks.app/clerk')
+    onPage('https://yaks.app/clerk/operator')
   assertEquals(entry.channel, { name: 'chat', framing })
   let prose = ask.items.find((item) =>
     item.kind == 'user' &&

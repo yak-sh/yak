@@ -22,6 +22,7 @@ import {
   vocabFile,
 } from './probe.ts'
 import { cards } from './testing.ts'
+import { managePath } from '@yaks/platform/routes'
 
 // Across spaces a word means what its space says (T-32728): one name, two
 // vocabularies. A bundle merges by name only where the shapes agree, and
@@ -561,8 +562,8 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       ),
       'nothing in the gallery answers',
     )
-    // And the owner's own page says where it stands.
-    let space = await k.at(`${mine}.yaks.app`, '/', {
+    // And the owner's Apps page says where it stands.
+    let space = await k.at('yaks.app', managePath('apps', mine), {
       headers: { cookie: jeff.cookie },
     }).then((r) => r.text())
     assertStringIncludes(space, 'in the gallery')

@@ -7,6 +7,7 @@ import type { DeskPage } from './pages.ts'
 import { type Host, spaceHost, url } from '@yaks/platform/host'
 import {
   chatPath,
+  dashboardPath,
   LOGOUT,
   managePath,
   type Setting,
@@ -52,7 +53,7 @@ export let deskSide = (at: DeskPage, view: Setting, env: Host) => {
   let side: SideView = { person: at.person ?? '', here, desk: { view } }
   return h(Sidebar, {
     base: url(env),
-    home: chatPath(at.space),
+    home: dashboardPath(at.space),
     label: 'Manage',
     title: 'Manage',
     view: at.person ? side : undefined,

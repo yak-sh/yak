@@ -35,6 +35,7 @@ import {
   appMarkImage,
   appWarmAt,
   chatPath,
+  dashboardPath,
   managePath,
   type MarkedApp,
   type Setting,
@@ -384,7 +385,7 @@ export let sideParts = (
     picker: choice(
       here,
       all,
-      (s) => chatPath(s.slug),
+      (s) => dashboardPath(s.slug),
       null,
       (s) => s.operator ?? '',
       undefined,

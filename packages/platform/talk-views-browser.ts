@@ -2,7 +2,8 @@
  * An Operator page's views shown in place (./talk-views.ts): a press on the
  * side's link to another view of the page, or Back to one, is drawn by
  * showing it (@yaks/ui/navigate `DRAW`), with nothing fetched. Showing a
- * view hides the others, names the page, lights the side's link to it,
+ * view hides the others, names the page and says what its bar says under
+ * the name, lights the side's link to it,
  * stands the aside and the frame's parts that are its own (`PART`) beside it
  * or not, marks the frame as it, points the page's back fields at it, and
  * puts back where it was scrolled: at its foot where it was left at its
@@ -123,6 +124,8 @@ export let show = (
   doc.title = view.page
   let bar = doc.querySelector('[data-title]')
   if (bar) title(bar, was, next)
+  let sub = doc.querySelector('.Frame_Sub')
+  if (sub && view.sub) sub.textContent = view.sub
   let skip = doc.querySelector('a.Skip')
   if (skip) {
     skip.setAttribute('href', view.skip[0])

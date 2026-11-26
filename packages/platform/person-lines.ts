@@ -9,8 +9,9 @@
  * space's payments (./payment-rows.ts), of a space they own, its
  * Settings, Domains and Trash pages' (./space-pages.ts), where an app's
  * drafts stand (./app-canvas.ts `appDrafted`), the grants they hold
- * (./agents.ts `GRANTS`), and when a space's Connections page moved
- * (./connections-page.ts `connectionsMoved`).
+ * (./agents.ts `GRANTS`), when a space's Connections page moved
+ * (./connections-page.ts `connectionsMoved`), and a space's Dashboard's
+ * agents' work and suggestions (./dashboard.ts).
  *
  * @module
  */
@@ -29,6 +30,7 @@ import { draftedApp } from './app-canvas.ts'
 import { GRANTS } from './agents.ts'
 import { movedSpace } from './connections-page.ts'
 import { confirmedFriends } from './friends.ts'
+import { suggestedSpace, workSpace } from './dashboard.ts'
 
 /** A directory socket following the lifetime of a signed-in page. */
 export let PAGE_PRESENCE = 'x-yak-page-presence'
@@ -39,12 +41,14 @@ export let personLine = (line: string): boolean =>
   offersSpace(line) != undefined || reachedLine(line) ||
   listedSpace(line) != undefined || peopleLine(line) || paymentLine(line) ||
   !!spaceLine(line) || draftedApp(line) != undefined || line == GRANTS ||
-  movedSpace(line) != undefined
+  movedSpace(line) != undefined || workSpace(line) != undefined ||
+  suggestedSpace(line) != undefined
 
 /** The space whose release files or version a personal watch draws. */
 export let releaseSpace = (line: string): string | undefined =>
   appsSpace(line) ?? listedSpace(line) ?? offersSpace(line) ??
-    spaceLine(line)?.space ?? movedSpace(line)
+    spaceLine(line)?.space ?? movedSpace(line) ?? workSpace(line) ??
+    suggestedSpace(line)
 
 type Watch = (line: string, read?: ReadOpts) => boolean
 
@@ -100,6 +104,8 @@ let DIRECTORY_VIEWS = [
   // changed, so its end is `cancelled` alone.
   'browser_session',
   'cancelled',
+  // A suggestion dismissed on a space's Dashboard (./dashboard.ts).
+  'dismissed_suggestions',
   // A chat account they linked (account-rows `chatLink`).
   'connection',
   // An agent connected or disconnected (agents).

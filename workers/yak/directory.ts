@@ -81,6 +81,7 @@ import { inTrial } from '@yaks/platform/trial'
 import { type Price, priceOf } from '@yaks/platform/price'
 import { token } from '@yaks/graph/sha256'
 import type { Sample } from '@yaks/platform/visits'
+import type { Release, Uses } from '@yaks/platform/dashboard'
 import type { Join } from '@yaks/platform/manifest'
 import type { Tunnel } from '@yaks/tunnel/hosted'
 import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
@@ -954,6 +955,7 @@ export type Row = MeteredRow & {
   operator_alerts?: { channel?: Alerting | null; declined?: string | null }
   desk_sidebar?: { collapsed?: boolean | null }
   desk_aside?: { shut?: boolean | null }
+  dismissed_suggestions?: { keys?: string[] | null }
   presence?: { hidden?: boolean | null }
   free_spaces?: { count?: number | null }
   role_free_spaces?: Partial<Record<Role, Allowance>>
@@ -4168,6 +4170,92 @@ export let directoryRows = (rows: {
         by.has(r.entity.eid) || theirs.has(r.entity.eid)
       )
       return { of, writers: writers(named) }
+    },
+    // The releases agents put out in `space` (T-3702), newest first, at most
+    // `count`: its Operator's, which writes as the space (operator.ts
+    // `opened`), and an agent's writing for a person (@yaks/platform/
+    // instrument `agentRow`), named as itself. A person's own are left out.
+    agentWork: async (
+      space: Pick<Space, 'eid' | 'slug' | 'operator'>,
+      count = 40,
+    ): Promise<Release[]> => {
+      let apps = line`app.space=${space.eid}`
+      let releases = await query(
+        line`.deploy.app.${
+          sub(apps)
+        }&?created&.order=-created.at&.limit=${count}&.fields=${[
+          'deploy.app',
+          'deploy.version',
+          'created.at',
+          'created.by',
+        ]}`,
+      )
+      let stamps = releases.flatMap((r) => {
+        let at = stampOf(r.created)
+        return r.deploy && at?.by
+          ? [{ app: idOf(r.deploy.app)!, version: r.deploy.version, ...at }]
+          : []
+      })
+      let others = [...new Set(stamps.map((s) => s.by!))]
+        .filter((by) => by != space.eid)
+      let agents = new Map(
+        (others.length
+          ? await query(line`.entity.eid=${others}&.acts_for&?doc`)
+          : []).map((r) => [r.entity.eid, r.doc?.title || 'An agent']),
+      )
+      return stamps.flatMap(({ app, version, at, by }) =>
+        by == space.eid
+          ? [{ app, version, at, by, name: space.operator, operator: true }]
+          : agents.has(by!)
+          ? [{ app, version, at, by: by!, name: agents.get(by!)! }]
+          : []
+      )
+    },
+    // The facts the suggestions on `space`'s Dashboard are picked by
+    // (@yaks/platform/dashboard `Uses`), for `person`, and the suggestions
+    // they dismissed there.
+    suggesting: async (
+      space: Space,
+      apps: Pick<App, 'eid' | 'phone'>[],
+      person: string,
+    ): Promise<{ uses: Uses; dismissed: string[] }> => {
+      let served = apps.map((a) => a.eid)
+      let [named, members, me] = await Promise.all([
+        query(
+          served.length
+            ? line`.hostname.serves=${served}&!trashed`
+            : line`.hostname.space=${space.eid}&!trashed`,
+        ),
+        self.members(space),
+        one(line`.entity.eid=${person}&?phone&?dismissed_suggestions`),
+      ])
+      let prefix = `${space.eid} `
+      return {
+        uses: {
+          domain: named.length > 0,
+          people: members.length > 1,
+          selling: !!space.seller,
+          texts: apps.some((a) => !!a.phone),
+          phoned: !!me?.phone?.number,
+        },
+        dismissed: (me?.dismissed_suggestions?.keys ?? []).flatMap((key) =>
+          key.startsWith(prefix) ? [key.slice(prefix.length)] : []
+        ),
+      }
+    },
+    // Dismisses `name` of the suggestions on the Dashboard of the space
+    // `space` for `person`, for good.
+    dismiss: async (person: string, space: string, name: string) => {
+      let me = await one(line`.entity.eid=${person}&?dismissed_suggestions`)
+      let keys = me?.dismissed_suggestions?.keys ?? []
+      let key = `${space} ${name}`
+      if (keys.includes(key)) return
+      await write({
+        entities: [{
+          entity: { eid: person },
+          dismissed_suggestions: { keys: [...keys, key] },
+        }],
+      }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
     },
     // What each writer is called (stamps.ts `writers`): a person, or an agent
     // for its person, whose row is read beside it.

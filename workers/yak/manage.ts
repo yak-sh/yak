@@ -171,7 +171,8 @@ export let manage = async (
         at.space,
         null,
         person,
-        at.view == 'operator' || at.view == 'updates' || at.view == 'matches',
+        at.view == 'operator' || at.view == 'updates' ||
+          at.view == 'matches' || at.view == 'dashboard',
       )
       page.catch(() => {})
       if (reads && !at.door) {
@@ -278,7 +279,8 @@ export let manage = async (
     at.space,
     null,
     person,
-    view == 'operator' || view == 'updates' || view == 'matches',
+    view == 'operator' || view == 'updates' || view == 'matches' ||
+      view == 'dashboard',
   )
   if (!page && (req.method == 'GET' || req.method == 'HEAD') && !at.door) {
     // The page drawn on the dashboard, not a conversation in the chat app
@@ -399,6 +401,20 @@ export let manage = async (
       ),
     ))
   }
+  // Its Dashboard is the space's own address (T-3702). A link to that
+  // address from before the chat moved under `/operator` names the chat by
+  // its query (`?app=`, `?from=`, `?say=`), and opens it there still.
+  if (view == 'dashboard' && writes(who.role) && !space.trashed) {
+    if (!reading) return nothingHere(env)
+    if (url.search) {
+      return moved(req, hostUrl(env, chatPath(space.slug)) + url.search)
+    }
+    let { dashboardPage } = await c.time(
+      'page_modules',
+      () => import('./operator-page.ts'),
+    )
+    return ready(dashboardPage(env, space, who, dir, sidebar(), c))
+  }
   // Its Matches are its members' to pick in (matches.ts).
   if (view == 'matches' && writes(who.role) && !space.trashed) {
     if (!reading) return nothingHere(env)
@@ -470,7 +486,9 @@ export let manage = async (
     return redirect(`https://${spaceHost(env, space.slug)}/`, 303)
   }
   // The Operator's own pages were answered above; the rest are settings.
-  if (view == 'updates' || view == 'matches') return nothingHere(env)
+  if (view == 'updates' || view == 'matches' || view == 'dashboard') {
+    return nothingHere(env)
+  }
   let softphone = url.searchParams.get('softphone')
   if (softphone && view == 'settings') {
     if (role != 'owner') return nothingHere(env)
@@ -526,7 +544,8 @@ let foresee = (
   chat = false,
 ) => {
   let seats = dir.seated(person)
-  let sided = view == 'matches' || view == 'operator' && chat
+  let sided = view == 'matches' || view == 'dashboard' ||
+    view == 'operator' && chat
   void Promise.allSettled([
     dir.nameAt(person),
     seats,

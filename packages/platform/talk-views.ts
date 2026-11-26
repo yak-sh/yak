@@ -18,7 +18,8 @@
  */
 
 /** How a view is shown: the address it stands for, the side's link lit while
- * it shows, the bar's title, the document's title, where the skip link goes
+ * it shows, the bar's title and what it says under it (`sub`), the
+ * document's title, where the skip link goes
  * and what it says, whether the frame's aside stands beside it, whether it
  * is every space's Updates (`all`), which the side lights apart, and the
  * frame's own classes while it shows (`marks`). */
@@ -26,6 +27,7 @@ export type TalkView = {
   here: string
   link: string
   title: string
+  sub?: string
   page: string
   skip: [string, string]
   aside: boolean

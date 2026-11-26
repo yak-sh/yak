@@ -400,12 +400,17 @@ test('testing integration context stays in the query before the modal hash', () 
   )
 })
 
-// A space's Operator is at its own address, and its old addresses under
-// Manage send a person there; settings stay under Manage (D-473).
+// A space's Dashboard is at its own address and its Operator under it
+// (T-3702), and their old addresses send a person there; settings stay
+// under Manage (D-473).
 let ID = '0b5e6a52-3c1d-4f2e-9a8b-7c6d5e4f3a2b'
 let addresses: [string, ReturnType<typeof managed>][] = [
-  ['/ada', { space: 'ada', view: 'operator', open: 'new' }],
-  [`/ada/${ID}`, { space: 'ada', view: 'operator', open: ID }],
+  ['/ada', { space: 'ada', view: 'dashboard' }],
+  ['/ada/operator', { space: 'ada', view: 'operator', open: 'new' }],
+  [`/ada/operator/${ID}`, { space: 'ada', view: 'operator', open: ID }],
+  [`/ada/${ID}`, { moved: `/ada/operator/${ID}` }],
+  ['/ada/dashboard', { moved: '/ada' }],
+  ['/ada/operator/x', null],
   ['/ada/updates', { space: 'ada', view: 'updates' }],
   ['/ada/matches', { space: 'ada', view: 'matches' }],
   ['/updates', { updates: true }],
@@ -414,9 +419,10 @@ let addresses: [string, ReturnType<typeof managed>][] = [
   ['/gallery', null],
   ['/admin', null],
   ['/404', null],
-  ['/manage/ada', { moved: '/ada' }],
-  [`/manage/ada/operator/${ID}`, { moved: `/ada/${ID}` }],
-  ['/manage/ada/operator/new', { moved: '/ada' }],
+  ['/manage/ada', { moved: '/ada/operator' }],
+  [`/manage/ada/operator/${ID}`, { moved: `/ada/operator/${ID}` }],
+  ['/manage/ada/operator/new', { moved: '/ada/operator' }],
+  ['/manage/ada/dashboard', { moved: '/ada' }],
   ['/manage/ada/updates', { moved: '/ada/updates' }],
   ['/manage/ada/matches', { moved: '/ada/matches' }],
   ['/manage/updates', { moved: '/updates' }],
@@ -426,6 +432,7 @@ let addresses: [string, ReturnType<typeof managed>][] = [
   // A space holding a name the apex keeps is still served under Manage.
   ['/manage/yak', { space: 'yak', view: 'operator', open: 'new' }],
   ['/manage/yak/updates', { space: 'yak', view: 'updates' }],
+  ['/manage/yak/dashboard', { space: 'yak', view: 'dashboard' }],
   [`/manage/admin/operator/${ID}`, {
     space: 'admin',
     view: 'operator',

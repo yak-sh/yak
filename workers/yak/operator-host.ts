@@ -102,6 +102,8 @@ import {
   type Naming,
 } from '@yaks/session/conversation'
 
+import { type Fix, summary } from '@yaks/platform/dashboard'
+
 type Store = OperatorStore
 let roomsBy = async (store: Store, entries: Bundle[]) => {
   let { roomsBy } = await import('./operator-rooms.ts')
@@ -707,6 +709,48 @@ export let answering = async (store: Store, requests: Bundle[]) => {
 }
 let requested = async (store: Store, query: Line = REQUESTS) =>
   answering(store, await store.g.read(query))
+
+// How long a request stands as what the Operator is on now, unanswered:
+// longer, and it is one that will not be answered.
+let WORKING = 60 * 60_000
+
+/** What a space's Dashboard says its Operator did (@yaks/platform/dashboard
+ * `Fix`), newest first: each break it took up on its own (unseen.ts `fix`),
+ * which every member who writes in the space sees, with the first of what
+ * it said of it; and the request it is on now, a break or `person`'s own. */
+export let fixesIn = async (
+  store: Store,
+  person: string,
+  now = Date.now(),
+): Promise<Fix[]> =>
+  (await requested(store)).flatMap((row): Fix[] => {
+    let asked = comp(row, 'operator_request') as
+      | { channel?: string; app?: string; person?: string }
+      | undefined
+    let at = String(comp(row, 'created')?.at ?? '')
+    let text = comp(row, 'operator_answer')?.text
+    let failed = !!row.failed
+    let working = text == null && !failed &&
+      now - Date.parse(at) < WORKING
+    if (asked?.channel == 'error') {
+      return text == null && !working && !failed ? [] : [{
+        request: row.entity.eid,
+        app: asked.app,
+        at,
+        ...text != null ? { said: summary(String(text)) } : {},
+        ...failed ? { failed } : {},
+        ...working ? { working } : {},
+      }]
+    }
+    return working && asked?.person == person
+      ? [{
+        request: row.entity.eid,
+        at,
+        working,
+        asked: summary(String(comp(row, 'doc')?.body ?? '')),
+      }]
+      : []
+  })
 
 // What the chat app opens a session by: the task holding it, or the session
 // itself when it is a person's conversation or a helper of one.
@@ -2335,6 +2379,10 @@ export let operatorRequest = async (
         )).filter((row): row is Bundle => !!row?.operator_request),
       ),
     )
+  }
+  // What the space's Dashboard says it did (`fixesIn`).
+  if (path == '/operator/fixes') {
+    return Response.json(await fixesIn(store, person ?? ''))
   }
   if (path == '/operator/messages') {
     let rows = (await requested(store)).reverse()

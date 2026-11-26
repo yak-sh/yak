@@ -31,6 +31,13 @@ import { visitDayRows, visitRows } from './views.ts'
 import { type App, type Directory, type Space, walkTo } from './directory.ts'
 import { warmApps } from './app-warm.ts'
 import { type Listed, listedRows, listedSpace } from '@yaks/platform/space-apps'
+import {
+  suggested,
+  suggestedSpace,
+  suggestionRows,
+  workRows,
+  workSpace,
+} from '@yaks/platform/dashboard'
 import { pilled, standing } from './gallery-row.ts'
 import {
   ACCOUNT,
@@ -294,9 +301,21 @@ export let listedApps = async (
     home: a.home || undefined,
     access: a.access,
     gallery: pilled(standing(a)) || undefined,
+    installed: !!a.installed || undefined,
+    visits: a.meter?.visits || undefined,
     made: named(made.of.get(a.eid)?.made),
     deployed: named(made.of.get(a.eid)?.deployed),
   }))
+}
+
+/** What the Dashboard of `space` suggests to `who`
+ * (@yaks/platform/dashboard `suggested`): by its facts, about its apps most
+ * opened first, but what they dismissed. */
+let suggestionsFor = async (dir: Directory, space: Space, who: Who) => {
+  let apps = (await appsFor(dir, space, who))
+    .toSorted((a, b) => (b.meter?.visits ?? 0) - (a.meter?.visits ?? 0))
+  let { uses, dismissed } = await dir.suggesting(space, apps, who.person!)
+  return suggested({ operator: space.operator, uses, apps, dismissed })
 }
 
 /** The space `eid` when `person` owns it, out of the trash. */
@@ -357,7 +376,9 @@ let sideRows = async (
   let apps = appsSpace(line)
   let offers = offersSpace(line)
   let listed = listedSpace(line)
-  let eid = apps ?? offers ?? listed
+  let work = workSpace(line)
+  let offered = suggestedSpace(line)
+  let eid = apps ?? offers ?? listed ?? work ?? offered
   if (!eid) return []
   let seat = (await dir.seated(person)).find((s) =>
     s.space.eid == eid && !s.space.trashed && writes(s.role)
@@ -366,6 +387,10 @@ let sideRows = async (
   let { space, role } = seat
   let who = { person, role }
   if (listed) return listedRows(person, eid, await listedApps(dir, space, who))
+  if (work) return workRows(person, eid, await dir.agentWork(space))
+  if (offered) {
+    return suggestionRows(person, eid, await suggestionsFor(dir, space, who))
+  }
   if (!apps) return offerRows(person, eid, await offersIn(dir, space, who))
   // Drawn in the side, each is a press away (app-warm.ts).
   let mine = await appsFor(dir, space, who)

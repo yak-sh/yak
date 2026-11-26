@@ -48,6 +48,10 @@ export type Listed = MarkedApp & {
   access?: string | null
   /** how it stands with the gallery, said to its owner */
   gallery?: string
+  /** whether it was installed from the gallery */
+  installed?: boolean
+  /** how often it was opened in the last 30 days */
+  visits?: number
   made?: Named | null
   deployed?: Named | null
 }
@@ -93,6 +97,8 @@ export let spaceAppsWords: VocabDoc = {
         home: { type: 'boolean' },
         access: { type: ['string', 'null'] },
         gallery: strings,
+        installed: { type: 'boolean' },
+        visits: { type: 'integer' },
         made: stamp,
         deployed: stamp,
       },
