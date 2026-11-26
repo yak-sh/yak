@@ -479,7 +479,7 @@ export let resolvers = <T>(): Resolvers<T> => {
 
 /** A FIFO turn for each caller. The queue holds wake callbacks, so every
  * caller awaits a promise created in its own execution context. */
-export let turns = () => {
+export let turns = (): () => { ready: Promise<void>; end: () => void } => {
   let waiting = new Set<() => void>()
   let busy = false
   return () => {
@@ -704,7 +704,10 @@ export type Hold = (work: Promise<void>) => void
 
 /** Deduplicate work by group and key within the caller's scope. A call with
  * no scope runs independently. A host may keep the scoped work alive. */
-export let singleFlight = (scope: () => object | undefined, hold?: Hold) => {
+export let singleFlight = (
+  scope: () => object | undefined,
+  hold?: Hold,
+): <K, T>(group: object, key: K, read: () => Promise<T>) => Promise<T> => {
   let scopes = new WeakMap<object, WeakMap<object, Map<unknown, unknown>>>()
   return <K, T>(group: object, key: K, read: () => Promise<T>): Promise<T> => {
     let owner = scope()
