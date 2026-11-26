@@ -62,6 +62,9 @@ let opening = (value: unknown): Open | undefined => {
     stage,
     left,
     hidden,
+    parsed,
+    frame,
+    unseen,
   } = value as Partial<Open>
   if (
     !source || !OPEN_SOURCES.includes(source) ||
@@ -73,6 +76,8 @@ let opening = (value: unknown): Open | undefined => {
     stage != null && !(typeof stage == 'string' && STAGE.test(stage)) ||
     left != null && typeof left != 'boolean' ||
     hidden != null && typeof hidden != 'boolean' ||
+    unseen != null && typeof unseen != 'boolean' ||
+    parsed != null && !duration(parsed) || frame != null && !duration(frame) ||
     !milestone(paint) || !milestone(usable) || !milestone(server) ||
     paint != null && usable != null && usable < paint
   ) return
@@ -91,6 +96,9 @@ let opening = (value: unknown): Open | undefined => {
     ...stage == null ? {} : { stage },
     ...left ? { left } : {},
     ...hidden ? { hidden } : {},
+    ...parsed == null ? {} : { parsed },
+    ...frame == null ? {} : { frame },
+    ...unseen ? { unseen } : {},
   }
 }
 
@@ -166,6 +174,10 @@ let slowOpen = (
         ms,
         budget,
         ...open.server == null ? {} : { server: open.server },
+        estimated: open.estimated,
+        ...open.parsed == null ? {} : { parsed: open.parsed },
+        ...open.frame == null ? {} : { frame: open.frame },
+        ...open.unseen ? { unseen: true } : {},
         ...open.navigation,
         ...open.controlled == null ? {} : { controlled: open.controlled },
         ...open.usable == null ? { usable: null } : {},

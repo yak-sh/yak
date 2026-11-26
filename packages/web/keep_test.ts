@@ -45,7 +45,11 @@ let tab = (html: string, controlled = true, pending?: string) => {
     ),
   })
   let location = { href: 'https://yaks.app/checks' }
+  let timers = new Map<number, () => void>()
+  let timer = 0
   let win = {
+    setTimeout: (run: () => void) => (timers.set(++timer, run), timer),
+    clearTimeout: (id: number) => timers.delete(id),
     document,
     location,
     navigator: { serviceWorker: workers },
@@ -63,6 +67,11 @@ let tab = (html: string, controlled = true, pending?: string) => {
   let leave = () => document.dispatchEvent(new window.Event(LEAVE))
   let load = () => window.dispatchEvent(new window.Event('load'))
   let arrive = () => document.dispatchEvent(new window.Event(PAGE))
+  // The page stands unchanged as long as it waits for.
+  let wait = async () => {
+    await Promise.resolve()
+    for (let [id, run] of timers) timers.delete(id), run()
+  }
   let claim = () => {
     workers.controller = { postMessage: (said: never) => sent.push(said) }
     window.dispatchEvent(new window.Event('controllerchange'))
@@ -76,6 +85,7 @@ let tab = (html: string, controlled = true, pending?: string) => {
     load,
     claim,
     arrive,
+    wait,
     set href(at: string) {
       location.href = at
     },
@@ -104,6 +114,22 @@ test('a page registers its worker once loaded, and sends it what it shows as it 
     t.sent[0].html,
     '<!doctype html><html><body><p>Seen last</p></body></html>',
   )
+})
+
+test('a page is kept once it stands unchanged, so leaving it takes nothing, and never while hidden', async () => {
+  let t = tab('<html><body><p>Seen</p></body></html>')
+  t.load()
+  let p = t.document.querySelector('p')!
+  p.textContent = 'Seen, changed'
+  await t.wait()
+  assertEquals(t.sent.length, 2)
+  assertEquals(t.sent[1].html.includes('Seen, changed'), true)
+  t.leave()
+  t.hide()
+  assertEquals(t.sent.length, 2)
+  p.textContent = 'Changed while hidden'
+  await t.wait()
+  assertEquals(t.sent.length, 2)
 })
 
 test('a first visit is kept as soon as its worker takes control, before the page is hidden', () => {

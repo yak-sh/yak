@@ -52,6 +52,8 @@ let OPENING = `(endpoint, source) => {
       estimated: false,
       controlled: self.origin !== 'null' && !!navigator.serviceWorker?.controller,
     }
+    // Begun hidden: a page has no frame to paint until it shows.
+    if (document.visibilityState == 'hidden') open.unseen = true
     // Read as it is sent, when the response has ended. A picture's says how
     // long its worker took to start and to answer with it.
     let navigation = () => nav && {
@@ -117,16 +119,21 @@ let OPENING = `(endpoint, source) => {
         document.addEventListener('DOMContentLoaded', run, { once: true })
       } else run()
     }
-    let frame = new Promise((done) => parsed(() =>
-      requestAnimationFrame(() => setTimeout(() => {
-        // Timing never holds what waits on the frame (@yaks/web/picture).
-        try {
-          let seen = saw()
-          if (seen != null || !observer || picture) paint(seen ?? performance.now(), seen == null)
-        } finally {
-          done()
-        }
-      }, 0))))
+    let frame = new Promise((done) => parsed(() => {
+      open.parsed ??= performance.now()
+      requestAnimationFrame(() => {
+        open.frame ??= performance.now()
+        setTimeout(() => {
+          // Timing never holds what waits on the frame (@yaks/web/picture).
+          try {
+            let seen = saw()
+            if (seen != null || !observer || picture) paint(seen ?? performance.now(), seen == null)
+          } finally {
+            done()
+          }
+        }, 0)
+      })
+    }))
     held = {
       frame,
       // How far a picture's bootstrap came (@yaks/web/picture).

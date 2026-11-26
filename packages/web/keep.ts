@@ -1,8 +1,9 @@
 /**
  * A page's part in being kept (./worker.ts): it registers its site's worker
  * once it has loaded. It sends a snapshot when the loaded page is first
- * controlled, and again when it is hidden, left in place (`yak-leave`), or
- * unloaded. A page with parts of its own (`OWN`) sends its shell beside it:
+ * controlled, again once it has stood unchanged for a moment (`QUIET`), and
+ * when it is hidden, left in place (`yak-leave`), or unloaded, if it changed
+ * since. A page with parts of its own (`OWN`) sends its shell beside it:
  * the same document with those parts empty. The fresh page that replaces
  * a picture sends its own snapshot.
  *
@@ -37,6 +38,9 @@ export type Window = {
   }
   performance: { timeOrigin: number }
   innerHeight: number
+  setTimeout(run: () => void, ms: number): number
+  clearTimeout(id?: number): void
+  requestIdleCallback?(run: () => void, o: { timeout: number }): number
   getComputedStyle(e: Element): CSSStyleDeclaration
   MutationObserver: typeof MutationObserver
   addEventListener(
@@ -303,6 +307,12 @@ export let snapshot = (win: Window): Snapshot => {
   }
 }
 
+/** How long a page stands unchanged before it is kept. A snapshot taken as
+ * a page is left runs after the next page's answer arrives and before that
+ * page can paint, so it is taken while the page is quiet, and leaving finds
+ * nothing changed. */
+export let QUIET = 1_000
+
 /** Register `worker` for the page in `win`, and keep the page with it.
  * A page matching `pending` is still opening. Keep it after the navigator
  * delivers its contents. */
@@ -313,8 +323,17 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
   // A page going away is left, hidden and unloaded in turn. Its snapshot is
   // taken again only when what it shows changed since the last.
   let changed = true
+  let quiet: number | undefined
   let change = () => {
     changed = true
+    win.clearTimeout(quiet)
+    quiet = win.setTimeout(settled, QUIET)
+  }
+  let settled = () => {
+    if (!loaded || win.document.visibilityState == 'hidden') return
+    if (win.requestIdleCallback) {
+      win.requestIdleCallback(send, { timeout: QUIET })
+    } else send()
   }
   let changes = new win.MutationObserver(change)
   changes.observe(win.document.documentElement, {

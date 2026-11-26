@@ -68,6 +68,11 @@ export type Open = {
   stage?: string
   left?: boolean
   hidden?: boolean
+  // When the first document finished parsing and drew its first frame after,
+  // and whether it began hidden: what a slow paint waited on in the page.
+  parsed?: number
+  frame?: number
+  unseen?: boolean
 }
 export type Batch = { id: string; at: number; points: Point[]; open?: Open }
 export type Phases = Pick<Point, 'input' | 'server' | 'script' | 'render'>

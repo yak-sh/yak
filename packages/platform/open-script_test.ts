@@ -217,6 +217,8 @@ test('a cold document opened from a notification records paint, readiness and th
     server: 120,
     estimated: false,
     controlled: false,
+    parsed: 350,
+    frame: 375,
     navigation,
   }])
 })
@@ -279,6 +281,8 @@ test("an offline kept picture reports its paint and its worker's answer without 
     server: null,
     estimated: true,
     controlled: false,
+    parsed: 60,
+    frame: 90,
     navigation,
   }])
 })
@@ -326,7 +330,17 @@ test('a picture left before its page is usable says how far its bootstrap came',
   let [tags] = rows.flatMap((row) =>
     row.error ? [(row.error as { tags: Record<string, unknown> }).tags] : []
   )
-  equal([tags.usable, tags.stage, tags.left], [null, 'files', true])
+  equal(
+    [
+      tags.usable,
+      tags.stage,
+      tags.left,
+      tags.parsed,
+      tags.frame,
+      tags.estimated,
+    ],
+    [null, 'files', true, 30, 600, false],
+  )
 })
 
 test('a browser that leaves out navigation timestamps keeps those it gave', async () => {
