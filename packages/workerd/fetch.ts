@@ -1,11 +1,44 @@
 // A service hop can lose a request without answering or throwing. A read
-// unanswered after five seconds is sent once more; the second call can take
-// as long as it needs. Only the wait for headers is bounded, never a stream.
+// unanswered after five seconds is sent once more. Its caller owns the
+// overall response deadline.
 import { type Clock, system } from '@yaks/fp'
 
 /** A service binding's fetch door. */
 export type Bound = {
   fetch(req: Request, init?: Pick<RequestInit, 'signal'>): Promise<Response>
+}
+
+/** Answer by a wall-clock deadline. An answer that arrives later has no
+ * reader. A response that arrives in time keeps its own body lifetime. */
+export let answerBy = async (
+  run: (signal: AbortSignal) => Promise<Response>,
+  ms: number,
+  expired: (elapsed: number) => Response,
+  time: Clock = system,
+): Promise<Response> => {
+  let at = time.now()
+  let late = false
+  let stop = new AbortController()
+  let end = Promise.withResolvers<Response>()
+  let cancel = time.after(ms, () => {
+    late = true
+    try {
+      end.resolve(expired(time.now() - at))
+    } catch (error) {
+      end.reject(error)
+    } finally {
+      stop.abort()
+    }
+  })
+  try {
+    let answer = run(stop.signal).then((response) => {
+      if (late) void response.body?.cancel().catch(() => {})
+      return response
+    })
+    return await Promise.race([answer, end.promise])
+  } finally {
+    cancel()
+  }
 }
 
 /** Stop waiting and abort the forwarded request when its caller leaves or the

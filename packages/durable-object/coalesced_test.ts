@@ -1,4 +1,4 @@
-import { clock, equal, test } from '@yaks/testing'
+import { clock, equal, test, throws } from '@yaks/testing'
 import { coalesced, doorOf, IDEMPOTENCY, resending } from './door.ts'
 
 let fixture = () => {
@@ -271,4 +271,24 @@ test('callers in a batch its opener never sent board again once patience runs ou
     'sent',
     'sent',
   ])
+})
+
+test('a second lost trip fails its readers and the next request starts fresh', async () => {
+  let f = fixture()
+  let read = throws(
+    () => f.door('/query'),
+    'The store did not answer the read after a retry',
+  )
+  f.flush()
+  await f.time.advance(15_000)
+  f.flush()
+  await f.time.advance(15_000)
+  await read
+  equal(f.calls.length, 2)
+  equal(f.calls.map((call) => call.signal.aborted), [true, true])
+  await Promise.all(f.held)
+  let next = f.door('/query')
+  f.flush()
+  f.answer(2, 'fresh')
+  equal(await (await next).text(), 'fresh')
 })

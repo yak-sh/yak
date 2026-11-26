@@ -5,7 +5,7 @@ import type { Reply } from '@yaks/model'
 import { statusOf } from '@yaks/session'
 import { platform } from './directory-rows-probe.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
-import { watched, within } from './defects.ts'
+import { entry } from './defects-runtime.ts'
 
 let fixture = async (name: string) => {
   let time = clock(Date.now()), reports: Bundle[][] = []
@@ -32,27 +32,23 @@ let fixture = async (name: string) => {
       return reply.promise
     }),
   })
-  let retained: Promise<void>[] = []
-  let ask = (path: string, args: object) =>
-    within(
+  let ask = (path: string, args: object) => {
+    let req = new Request('https://builder/operator/' + path, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-space-eid': space,
+        'x-yak-person': person,
+      },
+      body: JSON.stringify(args),
+    })
+    return entry(
       p.env,
-      { request: 'Builder fetch' },
-      () =>
-        watched(() =>
-          service.binding.get(space).fetch(
-            new Request('https://builder/operator/' + path, {
-              method: 'POST',
-              headers: {
-                'content-type': 'application/json',
-                'x-space-eid': space,
-                'x-yak-person': person,
-              },
-              body: JSON.stringify(args),
-            }),
-          ), time),
-      time,
-      { retain: (work) => retained.push(work) },
+      'Builder fetch',
+      () => service.binding.get(space).fetch(req),
+      req,
     )
+  }
   let finish = () =>
     reply.resolve({
       id: mint(),
@@ -60,7 +56,7 @@ let fixture = async (name: string) => {
       items: [{ kind: 'assistant', text: 'Finished the work.' }],
       cost: 0.001,
     })
-  return { time, reports, began, service, retained, ask, finish }
+  return { time, reports, began, service, ask, finish }
 }
 
 let slow = await fixture('operator-slow-run')
@@ -86,7 +82,6 @@ test('a long connector run answers with its task while work continues and its fi
     await slow.time.advance(60_000)
     equal(slow.reports, [])
     slow.finish()
-    await Promise.all(slow.retained)
     await slow.service.drain()
     let read = await (await slow.ask('read', { task: progress.task })).json()
     equal(read.sessions[0].entity.eid, progress.session)
@@ -100,7 +95,6 @@ test('a long connector run answers with its task while work continues and its fi
   } finally {
     slow.finish()
     await pending
-    await Promise.all(slow.retained)
     await slow.service.drain()
   }
 })

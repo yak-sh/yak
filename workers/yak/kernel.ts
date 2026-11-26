@@ -107,6 +107,7 @@ import {
   foreign,
   handedOff,
   hostOf,
+  jsonDoor,
   platform,
   previews,
   ready,
@@ -446,11 +447,6 @@ let hosting = async (
     return oops(env, requestId, told)
   }
 }
-
-// The doors code calls, which answer JSON: /mcp and an app's or the
-// platform's /api/.
-let jsonDoor = (path: string) =>
-  path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path)
 
 // The third entry point, and the one no URL names: a letter (T-33684,
 // T-33687). Email Routing's catch-all on the yaks.app zone points every

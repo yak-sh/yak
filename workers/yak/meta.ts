@@ -191,6 +191,7 @@ export let metaOf = (
       { ...base, ...KERNEL },
     ),
   query: (line, opts) => {
+    // The Store requires the kernel header for a trusted read.
     return store.consume(
       `/query?q=${encodeURIComponent(line)}${opts?.names ? '' : '&names=0'}${
         opts?.live ? '&live=1' : ''
@@ -202,7 +203,7 @@ export let metaOf = (
         return await r.json() as Bundle[]
       },
       {},
-      base,
+      opts?.trusted ? { ...base, ...KERNEL } : base,
     )
   },
   apply: (bundles, headers = {}, opts = {}) => {

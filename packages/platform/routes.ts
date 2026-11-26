@@ -1130,6 +1130,19 @@ let PREVIEWS = new RegExp(`^/[^/]+/(?:${PREVIEW}|~[a-z0-9]{12})(?:/|$)`)
 /// previews('/_preview/t/') -> false
 export let previews = (pathname: string): boolean => PREVIEWS.test(pathname)
 
+/** The connector and app or platform API doors answer failures as JSON. */
+export let jsonDoor = (path: string) =>
+  path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path)
+
+/** A request waiting for a response reached its deadline. */
+export let timedOut = (req: Request): Response => {
+  let message = 'This request took too long. Try again shortly.'
+  let init = { status: 504, headers: { 'cache-control': 'no-store' } }
+  return jsonDoor(new URL(req.url).pathname)
+    ? Response.json({ error: { code: 'timeout', message } }, init)
+    : new Response(message, init)
+}
+
 // One page, one address: a doubled slash (`/printbound//refund`, from a typed
 // link or a crawler's join) names the page its single slash names. Collapsed
 // before anything routes on it, no part below and no app's code ever reads a

@@ -427,9 +427,10 @@ carries its request even once V8 optimizes the door, and a batch is sent from
 the request that opened it. What runs in another request is dropped once that
 request ends, so a caller whose seat is unanswered for `patience` ms (15 s by
 default, on `clock`) presumes its batch lost: the door forgets it and the caller
-boards again. `wait` wraps each caller's wait on its seat, so a host can name
-it. Wrap a resending door so reading the shared body participates in its
-retries.
+boards once more. A second lost trip fails the read. Once the last seat leaves a
+lost batch, the door aborts its trip and releases the hold. `wait` wraps the
+full wait, so a host can name it. Wrap a resending door so reading the shared
+body participates in its retries.
 
 `resending(door, { report?, wait? })` sends a call again, as `retried` paces it,
 when the runtime reset the object or lost the call: thrown, or answered as a

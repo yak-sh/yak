@@ -1,7 +1,7 @@
 // Runtime retention for tracker delivery and its bounded repeat windows.
 import { waitUntil } from 'cloudflare:workers'
 import { faults } from '@yaks/api'
-import { caught, defect, watched, within } from './defects.ts'
+import { caught, defect, within } from './defects.ts'
 import { instrument as tracked } from '@yaks/tracker/instrument'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
@@ -9,6 +9,8 @@ import { PLATFORM_OBJECT } from './door.ts'
 import { learn, restarting } from './running.ts'
 import { type Own, replaced, vacating } from '@yaks/durable-object/resets'
 import { bounded, type Report } from '@yaks/durable-object/ceiling'
+import { timedOut } from '@yaks/platform/routes'
+import { watching } from './lib/waits.ts'
 
 let clock = {
   now: Date.now,
@@ -49,21 +51,13 @@ export let entry = <T>(
   run: () => T,
   http?: Request,
   state?: unknown,
-): T => (
-  learn(env.CF_VERSION_METADATA),
+): T => {
+  learn(env.CF_VERSION_METADATA)
+  let invoke = <R>(work: () => R): R =>
     within(
       env,
       { request },
-      // A request whose instance the runtime replaced fails as evicted, so
-      // its caller's resend reaches the live one (@yaks/durable-object
-      // `vacating`).
-      http
-        ? () =>
-          watched(
-            own(state) ? () => vacating(run, state.storage, env.CLOCK) : run,
-            env.CLOCK,
-          )
-        : run,
+      work,
       clock,
       {
         retain: waitUntil,
@@ -78,7 +72,31 @@ export let entry = <T>(
           : undefined,
       },
     )
-)
+  if (!http) return invoke(run)
+  // Give the front time to fall through from Site to the gateway. The
+  // outer deadline also bounds time spent waiting for tracker delivery.
+  let limit = request == 'Site fetch' ? 20_000 : 50_000
+  return watching(
+    (signal) =>
+      Promise.resolve(
+        invoke(() =>
+          own(state)
+            ? vacating(run, state.storage, env.CLOCK, undefined, signal)
+            : run()
+        ),
+      ) as Promise<Response>,
+    limit,
+    (ms, waits) =>
+      invoke(() => {
+        defect(Error('The request reached its response deadline'), {
+          elapsed_ms: String(ms),
+          waiting: waits.length ? JSON.stringify(waits) : 'handler',
+        }, { fault: 'request timeout' })
+        return timedOut(http)
+      }),
+    env.CLOCK,
+  ) as T
+}
 
 // A statement that scans, and an object past the rows it may read or write,
 // told where the statement ran (@yaks/durable-object `bounded`): a scan is

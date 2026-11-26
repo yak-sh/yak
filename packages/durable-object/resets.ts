@@ -144,6 +144,7 @@ export let vacating = <T>(
   storage: Own,
   clock: Clock = system,
   every = LOOK,
+  signal?: AbortSignal,
 ): T => {
   let answer = run()
   if (!(answer instanceof Promise)) return answer
@@ -157,7 +158,12 @@ export let vacating = <T>(
       })
     }
     look()
-    answer.then(resolve, reject).finally(() => stop())
+    let done = () => {
+      stop()
+      signal?.removeEventListener('abort', done)
+    }
+    signal?.addEventListener('abort', done, { once: true })
+    void answer.then(resolve, reject).finally(done)
   }) as T
 }
 

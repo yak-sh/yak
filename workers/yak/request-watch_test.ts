@@ -1,15 +1,12 @@
-// A hung HTTP handler reaches the tracker before it returns or throws.
 import { clock, equal, ok, test, throws } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
-import { origin } from '@yaks/tracker/report'
-import { watched, within } from './defects.ts'
 import { apart, elapsed, tallying } from './lib/hops.ts'
-import { watch } from './lib/watch.ts'
 import { entry } from './defects-runtime.ts'
 
 let fixture = () => {
-  let rows: Bundle[][] = [], retained: Promise<void>[] = [], time = clock()
+  let rows: Bundle[][] = [], time = clock()
   let env = {
+    CLOCK: time,
     ERRORS: {
       send: (batch: Bundle[]) => {
         rows.push(batch)
@@ -18,85 +15,42 @@ let fixture = () => {
     },
     CF_VERSION_METADATA: { id: 'deploy' },
   }
-  let run = <T>(path: string, work: () => T) =>
-    within(
-      env,
-      { request: 'gateway fetch' },
-      () => watched(work, time),
-      time,
-      {
-        retain: (pending) => retained.push(pending),
-        origin: origin('yak', 'deploy', 'gateway fetch', new Request(path)),
-      },
-    )
-  return { rows, retained, time, run }
+  let run = (path: string, work: () => Promise<Response>) =>
+    entry(env, 'gateway fetch', work, new Request(path))
+  return { rows, time, run }
 }
 
-test('the runtime watches HTTP entrypoints while their handler is unanswered', async () => {
-  let f = fixture(), answer = Promise.withResolvers<Response>()
-  let result = entry(
-    {
-      ERRORS: {
-        send: (batch: Bundle[]) => {
-          f.rows.push(batch)
-          return Promise.resolve()
-        },
-      },
-      CLOCK: f.time,
-    },
-    'gateway fetch',
-    () => elapsed('vault_wait', () => answer.promise),
-    new Request('https://yaks.app/connections'),
-  )
-  try {
-    await f.time.advance(60_000)
-    equal(f.rows.length, 1)
-    equal(
-      (f.rows[0][1].request as { url: string }).url,
-      'https://yaks.app/connections',
-    )
-  } finally {
-    answer.resolve(new Response(null))
-    await result
-  }
-})
-
-test('an unanswered request files its pending waits and route before it finishes', async () => {
+test('an unanswered connector request returns a timeout and reports its pending waits', async () => {
   let f = fixture(), vault = Promise.withResolvers<Response>()
-  let answered = false
-  let result = f.run('https://yaks.app/connections?token=secret', async () => {
+  let result = f.run('https://yaks.app/mcp?token=secret', async () => {
     await elapsed('directory_wait', () => Promise.resolve())
     return tallying(new Map(), () => elapsed('vault_wait', () => vault.promise))
-  }).then((res) => (answered = true, res))
-  await f.time.advance(59_999)
+  })
+  await f.time.advance(49_999)
   equal(f.rows, [])
   await f.time.advance(1)
-  await Promise.all(f.retained)
-  equal(answered, false)
+  let answer = await result
+  equal(answer.status, 504)
+  equal(answer.headers.get('cache-control'), 'no-store')
+  equal((await answer.json()).error.code, 'timeout')
   equal(f.rows.length, 1)
   let [error, http] = f.rows[0]
   equal(
-    (error.exception as { value: string }).value,
-    'Request has not answered for 60 seconds',
-  )
-  equal(
     (error.error as { tags: Record<string, string> }).tags.waiting,
-    '[{"name":"vault_wait","ms":60000}]',
+    '[{"name":"vault_wait","ms":50000}]',
   )
-  equal((http.request as { url: string }).url, 'https://yaks.app/connections')
+  equal((http.request as { url: string }).url, 'https://yaks.app/mcp')
   equal(error.during, { request: http.entity.eid })
+  vault.resolve(new Response('late'))
   await f.time.advance(120_000)
   equal(f.rows.length, 1)
-  let answer = new Response('eventually answered')
-  vault.resolve(answer)
-  equal(await result, answer)
   equal(f.time.pending(), 0)
 })
 
 test('interleaved requests keep their waits apart and ignore detached work', async () => {
   let f = fixture(),
-    first = Promise.withResolvers<void>(),
-    second = Promise.withResolvers<void>(),
+    first = Promise.withResolvers<Response>(),
+    second = Promise.withResolvers<Response>(),
     detached = Promise.withResolvers<void>()
   let a = f.run(
     'https://yaks.app/first',
@@ -106,10 +60,10 @@ test('interleaved requests keep their waits apart and ignore detached work', asy
     void apart(() => elapsed('detached_wait', () => detached.promise))
     return elapsed('directory_wait', () => second.promise)
   })
-  first.resolve()
-  await a
-  await f.time.advance(60_000)
-  await Promise.all(f.retained)
+  first.resolve(new Response('first'))
+  equal(await (await a).text(), 'first')
+  await f.time.advance(50_000)
+  equal((await b).status, 504)
   equal(f.rows.length, 1)
   equal(
     (f.rows[0][1].request as { url: string }).url,
@@ -117,49 +71,31 @@ test('interleaved requests keep their waits apart and ignore detached work', asy
   )
   equal(
     (f.rows[0][0].error as { tags: Record<string, string> }).tags.waiting,
-    '[{"name":"directory_wait","ms":60000}]',
+    '[{"name":"directory_wait","ms":50000}]',
   )
-  second.resolve()
+  second.resolve(new Response('late'))
   detached.resolve()
-  await b
-  await f.time.advance(10_000)
-  equal(f.time.pending(), 0)
 })
 
-test('a handler with no named I/O still reports its pending response', async () => {
-  let f = fixture(), answer = Promise.withResolvers<Response>()
-  let result = f.run('https://yaks.app/loading', () => answer.promise)
-  await f.time.advance(60_000)
-  await Promise.all(f.retained)
-  equal(
-    (f.rows[0][0].error as { tags: Record<string, string> }).tags.waiting,
-    'handler',
-  )
-  answer.resolve(new Response(null))
-  await result
-  await f.time.advance(10_000)
-})
-
-test('completed and failed handlers cancel their watches, and streams finish at headers', async () => {
-  let time = clock(), reports: number[] = []
-  let run = <T>(work: () => T) => watch(work, (ms) => reports.push(ms), time)
-  equal(run(() => 42), 42)
+test('completed and failed handlers cancel the deadline and a stream keeps its lifetime', async () => {
+  let f = fixture()
+  let at = 'https://yaks.app/feed'
   await throws(() =>
-    run(() => {
+    f.run(at, () => {
       throw Error('synchronous')
     }), 'synchronous')
   await throws(
-    () => run(() => Promise.reject(Error('asynchronous'))),
+    () => f.run(at, () => Promise.reject(Error('asynchronous'))),
     'asynchronous',
   )
-  let body = new ReadableStream<Uint8Array>({ start() {} })
+  let body = new ReadableStream<Uint8Array>()
   let response = new Response(body, {
     headers: { 'content-type': 'text/event-stream' },
   })
-  equal(await run(() => Promise.resolve(response)), response)
-  equal(time.pending(), 0)
-  await time.advance(120_000)
-  equal(reports, [])
+  equal(await f.run(at, () => Promise.resolve(response)), response)
+  equal(f.time.pending(), 0)
+  await f.time.advance(120_000)
+  equal(f.rows.length, 2)
   ok(!body.locked)
   await body.cancel()
 })

@@ -99,7 +99,7 @@ let front = (
   }
 }
 
-test('a front request reports a pending kernel or Site without cutting off its answer', async () => {
+test('a front request returns a timeout and reports a pending kernel or Site', async () => {
   for (let service of ['kernel', 'site']) {
     let time = clock(), answer = Promise.withResolvers<Response>()
     let f = front(
@@ -110,7 +110,10 @@ test('a front request reports a pending kernel or Site without cutting off its a
     let result = f.go(
       service == 'site' ? at : 'https://yaks.app/connections?token=secret',
     )
-    await time.advance(60_000)
+    await time.advance(55_000)
+    let timeout = await result
+    assertEquals(timeout.status, 504)
+    assertEquals(timeout.headers.get('cache-control'), 'no-store')
     await Promise.all(f.retained)
     assertEquals(f.errors.length, 1)
     let [error, http] = f.errors[0] as {
@@ -131,7 +134,7 @@ test('a front request reports a pending kernel or Site without cutting off its a
         slug: 'cookbook',
       }),
     }))
-    assertEquals((await result).status, 200)
+    await time.advance(0)
     assertEquals(time.pending(), 0)
   }
 })

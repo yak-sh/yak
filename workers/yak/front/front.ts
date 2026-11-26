@@ -4,9 +4,9 @@
 // not, and a hit through a service binding runs no code of the Worker behind it,
 // so the gateway's first question lives here, in an upload of its own.
 //
-// Everything else goes on to the kernel unchanged, and that includes every
-// failure of this Worker: a visitor never gets an error from it. It holds no
-// secret and opens no store. What it can't decide from the request alone (a
+// Everything else goes on to the kernel unchanged. The front answers if the
+// request reaches its deadline. It holds no secret and opens no store.
+// What it can't decide from the request alone (a
 // signature, who someone is, whether a custom domain is anybody's) is the
 // kernel's, so a person's cookie it may rely on is read only to route: a forged
 // one earns the slow path, and the kernel verifies whatever comes to it. A
@@ -52,11 +52,11 @@ import {
   platform,
   sameOrigin,
   spaceDoor,
+  timedOut,
 } from '@yaks/platform/routes'
 import type { Clock } from '@yaks/fp'
-import { overdue, watch } from '../lib/watch.ts'
 import { VERSION } from '@yaks/workerd/worker'
-import { resending } from '@yaks/workerd/fetch'
+import { answerBy, resending } from '@yaks/workerd/fetch'
 import { workerWaits } from '@yaks/platform/app-worker'
 
 /** The header the front's own deploy is said in, beside the kernel's. */
@@ -280,7 +280,7 @@ let report = (
       ...source,
       ...tags && {
         tags: { ...source.tags, ...tags },
-        fault: 'request hang',
+        fault: 'request timeout',
       },
     }),
   )
@@ -359,13 +359,23 @@ export let serve = (
   ctx: Lent,
 ): Promise<Response> => {
   let waiting = 'front fetch'
-  return watch(
+  return answerBy(
     () => serving(req, env, ctx, (name) => waiting = name),
-    (ms) =>
-      report(overdue(), env, ctx, 'front fetch', req, {
-        waiting,
-        elapsed_ms: String(ms),
-      }),
+    55_000,
+    (ms) => {
+      report(
+        Error('The request reached its response deadline'),
+        env,
+        ctx,
+        'front fetch',
+        req,
+        {
+          waiting,
+          elapsed_ms: String(ms),
+        },
+      )
+      return timedOut(req)
+    },
     env.CLOCK,
   )
 }

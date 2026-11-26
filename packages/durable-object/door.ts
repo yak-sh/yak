@@ -135,10 +135,13 @@ type Seat = {
 // One read's callers, the trip that answers them, and `go`, which tells the
 // caller who opened it that the read ahead has landed.
 type Batch = {
-  seats: Seat[]
+  seats: Set<Seat>
   trip: () => Promise<() => Response>
   go: () => void
+  abandon: () => void
 }
+
+type Trip = (signal: AbortSignal) => Promise<() => Response>
 
 /** Share finite reads accepted by `reads` and queued before `turn` sends them,
  * each caller receiving its own bytes. A read already sent answers no later
@@ -165,7 +168,7 @@ type Batch = {
  * before it landed, would answer nobody, and every later caller would board
  * behind it. So a seat unanswered for `patience` ms (`heard` on `clock`)
  * presumes its batch lost: the door forgets the batch, and the caller boards
- * again from its own request. `wait` wraps each caller's wait on its seat, so
+ * again from its own request once. `wait` wraps the caller's full wait, so
  * a host can name it. */
 export let coalesced = (
   door: Door,
@@ -220,15 +223,26 @@ export let coalesced = (
     }
   }
   // A batch opened by this caller, which sends it now or once woken.
-  let board = (key: string, trip: Batch['trip']) => {
+  let board = (key: string, trip: Trip) => {
     let woken = resolvers<void>(), done = resolvers<void>()
-    let batch: Batch = { seats: [], trip, go: () => woken.resolve() }
+    let stop = new AbortController()
+    let batch: Batch = {
+      seats: new Set(),
+      trip: () => trip(stop.signal),
+      go: () => woken.resolve(),
+      abandon: () => {
+        stop.abort()
+        done.resolve()
+      },
+    }
     boarding.set(key, batch)
     let left = false
     let leave = () => {
       if (left) return
       left = true
-      turn(() => void send(key, batch).finally(() => done.resolve()))
+      turn(() => {
+        if (!stop.signal.aborted) void send(key, batch).finally(done.resolve)
+      })
     }
     void woken.promise.then(leave)
     if (!moving.has(key)) leave()
@@ -246,26 +260,35 @@ export let coalesced = (
       moving.delete(key)
       boarding.get(key)?.go()
     }
+    if (!batch.seats.size) batch.abandon()
   }
-  // This caller's seat in the batch boarding for `key`, boarding again when
-  // its batch is lost.
-  let ride = async (
-    key: string,
-    trip: Batch['trip'],
-  ): Promise<Response> => {
-    let batch = boarding.get(key) ?? board(key, trip)
-    let seat = resolvers<(() => Response) | null>()
-    let cancel = heard(patience, () => seat.resolve(null), clock)
-    batch.seats.push(seat)
-    let answer: (() => Response) | null
+  // Leave an expired seat behind so a lost trip holds no callers.
+  let seated = async (batch: Batch) => {
+    let answer = resolvers<(() => Response) | null>()
+    let seat = { resolve: answer.resolve, reject: answer.reject }
+    let cancel = heard(patience, () => answer.resolve(null), clock)
+    batch.seats.add(seat)
     try {
-      answer = await wait(() => seat.promise)
+      return await answer.promise
     } finally {
       cancel()
+      batch.seats.delete(seat)
     }
-    if (answer) return answer()
-    lost(key, batch)
-    return await ride(key, trip)
+  }
+  let ride = async (
+    key: string,
+    trip: Trip,
+  ): Promise<Response> => {
+    for (let sent = 0; sent < 2; sent++) {
+      let batch = boarding.get(key) ?? board(key, trip)
+      let answer = await seated(batch)
+      if (answer) return answer()
+      lost(key, batch)
+    }
+    throw Object.assign(
+      new Error('The store did not answer the read after a retry'),
+      { status: 504 },
+    )
   }
   let ask = async (
     path: string,
@@ -292,9 +315,18 @@ export let coalesced = (
       ])
       // The call's own headers are set again past the inner door's scrub, as
       // an uncoalesced call sets them.
-      return await ride(
-        key,
-        () => door.consume(path, copied, request, headers, options),
+      return await wait(() =>
+        ride(
+          key,
+          (signal) =>
+            door.consume(
+              path,
+              copied,
+              new Request(request, { signal }),
+              headers,
+              options,
+            ),
+        )
       )
     })(path, init, headers)
   }
@@ -433,6 +465,7 @@ export let resending = (door: Door, o: Resend = {}): Door => {
     let resent = (e: unknown) => evicted(e) || (!!read && safe && opaque(e))
     let sent = retried(
       async () => {
+        if (init instanceof Request) init.signal.throwIfAborted()
         try {
           return await take(await thrown(await door(path, init, once)))
         } catch (e) {

@@ -1,5 +1,5 @@
 import { parseHTML } from 'linkedom'
-import { whole } from '@yaks/query'
+import { line, whole } from '@yaks/query'
 import { assert, assertEquals as equal } from '@std/assert'
 import { test } from '@yaks/testing'
 import { type Comp, mint } from '@yaks/graph'
@@ -55,6 +55,10 @@ test('internal graph reads retain canonical references while public named reads 
   let connect = (url: string, init?: RequestInit) =>
     serviceConsent(new Request(new URL(url, 'https://yaks.app'), init), env)
   let graph = meta(env), read = (q: unknown) => graph.query(whole(String(q)))
+  let [trusted] = await graph.query(line`.entity.eid=${person}`, {
+    trusted: true,
+  })
+  equal(trusted.entity.eid, person)
   let source = await dir.appAt(consumer)
   let seller = await dir.appAt(merchant)
   assert(source && seller)

@@ -2,7 +2,7 @@
 // Completed waits leave immediately; detached work runs outside this scope.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { type Clock, system } from '@yaks/fp'
-import { watch } from './watch.ts'
+import { answerBy } from '@yaks/workerd/fetch'
 
 export type Wait = { name: string; ms: number }
 type Scope = { time: Clock; pending: Map<object, { name: string; at: number }> }
@@ -24,20 +24,24 @@ export let waiting = async <T>(
   }
 }
 
-/** Report once while work is still pending, without changing its answer. */
-export let watching = <T>(
-  run: () => T,
-  report: (ms: number, waits: Wait[]) => void,
+/** Answer with the elapsed time and pending waits if the handler stalls. */
+export let watching = (
+  run: (signal: AbortSignal) => Promise<Response>,
+  ms: number,
+  expired: (elapsed: number, waits: Wait[]) => Response,
   time: Clock = system,
-): T => {
+): Promise<Response> => {
   let pending: Scope['pending'] = new Map()
-  return here.run({ time, pending }, () =>
-    watch(run, (ms) =>
-      report(
-        ms,
-        [...pending.values()].map((w) => ({
-          name: w.name,
-          ms: time.now() - w.at,
-        })),
-      ), time))
+  return here.run(
+    { time, pending },
+    () =>
+      answerBy(run, ms, (elapsed) =>
+        expired(
+          elapsed,
+          [...pending.values()].map((w) => ({
+            name: w.name,
+            ms: time.now() - w.at,
+          })),
+        ), time),
+  )
 }
