@@ -13,6 +13,7 @@ import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { narrowed } from './grants.ts'
 import { type Asked, type Ended, type Heard, outlasting } from './outlast.ts'
+import { PUBLISHED } from './published.ts'
 import type { Ctx } from './tool.ts'
 import { TOOLS } from './tools.ts'
 
@@ -21,7 +22,8 @@ let ran = async (
   asked: Asked,
   doing: (step: string) => void,
 ): Promise<Ended> => {
-  let t = TOOLS.find((one) => one.name == asked.tool)
+  let named = (tool: { name: string }) => tool.name == asked.tool
+  let t = TOOLS.find(named) ?? PUBLISHED.find(named)
   if (!t) return { refused: { code: 'missing', text: `no tool ${asked.tool}` } }
   let { space, spaceEid } = asked.who ?? {}
   let reopen = () => {

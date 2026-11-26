@@ -3606,7 +3606,7 @@ let WAKING = 'the sandbox is waking: starting its container and restoring ' +
 
 // Preparation is shared by every sandbox operation. The command's own timeout
 // can only start once the workbench can answer.
-let sandboxJob = (
+export let sandboxJob = (
   args: Args,
   { who }: Ctx,
   fields: unknown[] = Object.keys(args).sort().map((key) => [key, args[key]]),

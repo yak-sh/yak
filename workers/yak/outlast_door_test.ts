@@ -53,12 +53,13 @@ test('app_deploy through the door runs in its object and answers its release', a
   }
 })
 
-test('sandbox_wait reports progress during preparation and resumes the original wait', async () => {
+test('sandbox_wait and sandbox_exec report progress and resume after workbench preparation', async () => {
   let time = clock(Date.now())
-  let { WORKBENCH } = sandboxes(() => ({ stdout: 'complete output\n' }))
-  let wake = Promise.withResolvers<void>()
-  let preparing = Promise.withResolvers<void>()
-  let blocked = false
+  let { WORKBENCH, ran } = sandboxes(() => ({ stdout: 'complete output\n' }))
+  let gate: {
+    wake: PromiseWithResolvers<void>
+    preparing: PromiseWithResolvers<void>
+  } | undefined
   let lookups = 0
   let k = await fresh({}, (env) => {
     outlasts(env, undefined, time)
@@ -69,14 +70,14 @@ test('sandbox_wait reports progress during preparation and resumes the original 
         return {
           ...box,
           prepare: async () => {
-            if (blocked) {
-              preparing.resolve()
-              await wake.promise
+            if (gate) {
+              gate.preparing.resolve()
+              await gate.wake.promise
             }
             await box.prepare()
           },
           getProcess: (process) => {
-            if (blocked) lookups++
+            lookups++
             return box.getProcess(process)
           },
         }
@@ -87,27 +88,33 @@ test('sandbox_wait reports progress during preparation and resumes the original 
     let space = unique('outlast')
     let { cookie } = await seed(k, [{ slug: space, apps: [] }])
     let agent = connector(k, cookie)
-    let shell = await agent.tool('sandbox_shell', {
-      space,
-      command: 'echo complete output',
-    })
+    let pause = async (tool: string, args: Record<string, unknown>) => {
+      let wake = Promise.withResolvers<void>()
+      let preparing = Promise.withResolvers<void>()
+      gate = { wake, preparing }
+      let first = agent.answer(tool, args)
+      await Promise.race([
+        preparing.promise,
+        first.then((out) => {
+          throw new Error(out.text)
+        }),
+      ])
+      await time.advance(6_000)
+      time.after(1_000, wake.resolve)
+      await time.advance(1_000)
+      let progress = await first
+      assertEquals(progress.value?.running, true)
+      assertStringIncludes(progress.text, 'the sandbox is waking')
+      assertStringIncludes(progress.text, `Call ${tool} again`)
+    }
+    let cmd = 'echo complete output'
+    await pause('sandbox_exec', { cmd, space, timeout: 5 })
+    let shell = await agent.tool('sandbox_exec', { space, timeout: 5, cmd })
+    assertEquals(ran.filter((line) => line == cmd), [cmd])
     let process = shell.match(/process ([\w-]+)/)?.[1]
     if (!process) throw new Error(shell)
-    blocked = true
-    let args = { process, timeout: 5000, space }
-    let first = agent.answer('sandbox_wait', args)
-    await Promise.race([
-      preparing.promise,
-      first.then((out) => {
-        throw new Error(out.text)
-      }),
-    ])
-    await time.advance(6_000)
-    time.after(1_000, wake.resolve)
-    await time.advance(1_000)
-    let progress = await first
-    assertEquals(progress.value?.running, true)
-    assertStringIncludes(progress.text, 'the sandbox is waking')
+    lookups = 0
+    await pause('sandbox_wait', { process, timeout: 5000, space })
     let resumed = await agent.tool('sandbox_wait', {
       space,
       process,
@@ -119,7 +126,7 @@ test('sandbox_wait reports progress during preparation and resumes the original 
     )
     assertEquals(lookups, 1)
   } finally {
-    wake.resolve()
+    gate?.wake.resolve()
     await k.stop()
   }
 })

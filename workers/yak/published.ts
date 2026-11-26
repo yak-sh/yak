@@ -49,7 +49,7 @@ import {
   type Tool,
 } from './tool.ts'
 import { type Row, worded } from './tool-words.ts'
-import { call } from './tools.ts'
+import { call, sandboxJob } from './tools.ts'
 import type { Supply } from '@yaks/builders'
 import type { Ask } from '@yaks/builders/tools'
 import { edgeEid } from '@yaks/edge'
@@ -141,6 +141,7 @@ let ROWS: Row[] = [
     name: 'sandbox_exec',
     destructive: true,
     openWorld: true,
+    outlasts: sandboxJob,
     input: {
       type: 'object',
       properties: {
