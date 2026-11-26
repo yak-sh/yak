@@ -381,8 +381,10 @@ minted in June and July 2026 with `POST /user/tokens` through the Cloudflare
 OAuth MCP (`cloudflare-api`, `https://mcp.cloudflare.com/mcp`, Jeff's login),
 from its `execute` tool's `cloudflare.request()`. That route is closed: on
 2026-11-26 the MCP answered `POST`, list and per-id `GET` on `/user/tokens`
-with `9109` and "No OAuth scope covers this endpoint"; the only token scope its
-OAuth offers is `account-api-tokens.write`. Our account tokens get `9109` from
+with `9109` and "No OAuth scope covers this endpoint", through this repo's
+`cloudflare-api-yak` login and through homelab's `cloudflare-api` login alike.
+The only token scope its OAuth offers is `account-api-tokens.write`, which
+mints account tokens. Our account tokens get `9109` from
 any `/user/…` path, and Wrangler's OAuth has no token scope.
 
 So an agent mints a user token only with a user token that holds **User › API
