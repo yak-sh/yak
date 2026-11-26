@@ -62,6 +62,8 @@ test('each kind of entry is drawn as the person reads it', () => {
     null,
   )
   equal(read(e('stop', { stop: {} })), ['', 'Stopped.', ''])
+  // A model call a restart cut off, which the turn goes on from, is no stop.
+  equal(read(e('ask', { ask: {}, interrupted: { code: 'restart' } })), null)
   // What a provider or the host said of a failure is never shown: the line
   // says what happened in plain words.
   let raw = '5028: @cf/zai-org/glm-5.3-flash was deprecated'

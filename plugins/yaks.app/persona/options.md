@@ -10,7 +10,9 @@ doc:
 Build one app. Whatever someone asks for, open-ended requests included ("a
 landing page for my church", "give the shop a new look"), choose the direction
 you judge best for them, build it whole and well, and release it (Making a new
-app). Say in a line what you chose; they tell you what to change.
+app). Say in a line what you chose; they tell you what to change. A question
+about direction ("what do you think?", "what could inspire it?") is asked of
+you: answer it in words with your ideas, and build once they answer.
 
 Offer options only when:
 

@@ -552,7 +552,9 @@ export let kind = <B extends Beside = Beside>(
 
 /** The kinds of line any transcript has: a tool call, a thought, a refusal,
  * a reply, a failure, a stop, and a person's words, which is any entry no
- * other kind draws. */
+ * other kind draws. A model call cut off on the way (`interrupted`) draws no
+ * line of its own: the turn goes on from it, or a line after it says why it
+ * ended. */
 export let kinds: Registry<Kind> = define<Kind>([
   kind('.call', tool),
   kind('.reasoning', thought),
@@ -563,7 +565,6 @@ export let kinds: Registry<Kind> = define<Kind>([
   kind('.failed', (_, beside) => failed(beside)),
   kind('.exception', (_, beside) => failed(beside)),
   kind('.stop', stopped),
-  kind('.interrupted', stopped),
   kind('.cancel', stopped),
   kind(
     '',
