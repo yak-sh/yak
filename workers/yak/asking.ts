@@ -125,13 +125,13 @@ export let asking = async (
         tried,
       }
     }
-    // Only an agent's token needs the provider, which loads with the sign-in
-    // door it belongs to (identity.ts). Whether its grant still stands is the
-    // directory's word, read with the person's row (grant-rows.ts `stands`):
+    // Only an agent's token needs the provider's verifier. Whether its grant
+    // still stands is the directory's word, read with the person's row:
     // KV, which the provider reads the token from, keeps a revoked one
     // answering wherever it was read.
-    let { person: id, grant, until } = await (await import('./identity.ts'))
-      .unwrapped(env, token)
+    let { person: id, grant, until } =
+      await (await import('./oauth-provider.ts'))
+        .unwrapped(env, token)
     return {
       who: id && grant
         ? await person({

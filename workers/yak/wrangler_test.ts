@@ -20,6 +20,7 @@ import {
   modelBound,
   preflight,
   prepareSibling,
+  QUERY,
   readiness,
   runStep,
   runWrangler,
@@ -437,33 +438,49 @@ test('executor activation preserves the prepared upload and removes its disposab
     }
   }))
 
-test("a local dev run puts yak-front before the kernel, which keeps the run's vars", () => {
+test('a local dev run puts yak-front first and shares its vars with both bound Workers', () => {
   let root = Deno.makeTempDirSync()
   try {
+    Deno.mkdirSync(join(root, 'query'))
     Deno.writeTextFileSync(
       join(root, 'wrangler.toml'),
       'name="yak"\n[vars]\nAPEX="yaks.app"\n[env.staging]\nname="yak-staging"',
     )
+    Deno.writeTextFileSync(
+      join(root, QUERY),
+      'name="yak-query"\n[vars]\nAPEX="yaks.app"\n[env.staging]\nname="yak-query-staging"',
+    )
     let args = ['dev', '--var', 'LOCAL_DEV:1', '--env', 'staging']
     let dev = fronted(args, root)
-    let copy = dev.args.at(-1)!
-    assertEquals(dev.args, [...args, '-c', 'front/wrangler.toml', '-c', copy])
-    let config = parse(Deno.readTextFileSync(join(root, copy))) as {
-      vars: unknown
-      env: { staging: { vars: unknown } }
+    let [kernel, query] = [dev.args.at(-3)!, dev.args.at(-1)!]
+    assertEquals(dev.args, [...args, '-c', FRONT, '-c', kernel, '-c', query])
+    for (let copy of [kernel, query]) {
+      let config = parse(Deno.readTextFileSync(join(root, copy))) as {
+        vars: unknown
+        env: { staging: { vars: unknown } }
+      }
+      assertEquals(config.vars, { APEX: 'yaks.app', LOCAL_DEV: '1' })
+      assertEquals(config.env.staging.vars, { LOCAL_DEV: '1' })
     }
-    assertEquals(config.vars, { APEX: 'yaks.app', LOCAL_DEV: '1' })
-    assertEquals(config.env.staging.vars, { LOCAL_DEV: '1' })
     dev.remove()
-    assertEquals([...Deno.readDirSync(root)].map((e) => e.name), [
+    assertEquals([...Deno.readDirSync(root)].map((e) => e.name).sort(), [
+      'query',
       'wrangler.toml',
     ])
+    assertEquals(
+      [...Deno.readDirSync(join(root, 'query'))].map((e) => e.name),
+      [
+        'wrangler.toml',
+      ],
+    )
     assertEquals(fronted(['dev'], root).args, [
       'dev',
       '-c',
       'front/wrangler.toml',
       '-c',
       'wrangler.toml',
+      '-c',
+      QUERY,
     ])
     for (let same of [['deploy'], ['dev', '-c', 'front/wrangler.toml']]) {
       assertEquals(fronted(same, root).args, same)
@@ -584,7 +601,7 @@ for (let failed of ['web', 'catalog', 'cli', 'client'] as const) {
   })
 }
 
-test('wrangler: a deploy of the kernel deploys its siblings first, and nothing else does', () => {
+test('wrangler: a deploy of the kernel also deploys its siblings', () => {
   for (
     let argv of [
       ['deploy', '--message', 'm'],
@@ -649,19 +666,25 @@ test("a sibling's images are its Dockerfiles and their build contexts", async ()
   await checkSiblingPreparation()
 })
 
-test('dependencies overlap, then the kernel finishes promotion before the public gateway deploys', async () => {
+test('dependencies overlap, then the kernel and query Worker promote in order before the public gateway', async () => {
   let started: { args: string[]; unpinned?: boolean }[] = []
   let dependencies = siblings(['deploy', '--env', 'staging']).filter((args) =>
-    args.at(-1) != FRONT
+    args.at(-1) != QUERY && args.at(-1) != FRONT
   )
   let waits = dependencies.map(() => Promise.withResolvers<number>())
   let kernel = Promise.withResolvers<number>(),
-    promoting = Promise.withResolvers<void>()
+    promoting = Promise.withResolvers<void>(),
+    query = Promise.withResolvers<number>(),
+    querying = Promise.withResolvers<void>()
   let deploy = runWrangler(['deploy', '--env', 'staging'], (args, unpinned) => {
     started.push({ args, unpinned })
     if (!unpinned) {
       promoting.resolve()
       return kernel.promise
+    }
+    if (args.at(-1) == QUERY) {
+      querying.resolve()
+      return query.promise
     }
     return args.at(-1) == FRONT
       ? Promise.resolve(0)
@@ -688,6 +711,13 @@ test('dependencies overlap, then the kernel finishes promotion before the public
       unpinned: undefined,
     })
     kernel.resolve(0)
+    await querying.promise
+    assertEquals(started.length, dependencies.length + 2)
+    assertEquals(started.at(-1), {
+      args: ['deploy', '--env', 'staging', '-c', QUERY],
+      unpinned: true,
+    })
+    query.resolve(0)
     assertEquals(await deploy, 0)
     assertEquals(started.at(-1), {
       args: ['deploy', '--env', 'staging', '-c', FRONT],
@@ -696,6 +726,7 @@ test('dependencies overlap, then the kernel finishes promotion before the public
   } finally {
     for (let wait of waits) wait.resolve(0)
     kernel.resolve(0)
+    query.resolve(0)
     await deploy
   }
 })
@@ -718,7 +749,7 @@ for (let failure of [7, Error('process wait failed')]) {
     })
     try {
       await Promise.resolve()
-      assertEquals(starts, SIBLINGS.length - 1)
+      assertEquals(starts, SIBLINGS.length - 2)
       assertEquals(ended, false)
       other.resolve(0)
       assertEquals(
@@ -732,14 +763,17 @@ for (let failure of [7, Error('process wait failed')]) {
   })
 }
 
-test('a failed kernel promotion leaves the public gateway deployment alone', async () => {
-  let front = false
-  let code = await runWrangler(['deploy'], (args, sibling) => {
-    if (args.at(-1) == FRONT) front = true
-    return Promise.resolve(sibling ? 0 : 7)
+for (let failing of ['kernel', QUERY]) {
+  test(`a failed ${failing} promotion leaves the public gateway deployment alone`, async () => {
+    let front = false
+    let code = await runWrangler(['deploy'], (args, sibling) => {
+      let worker = sibling ? args.at(-1) : 'kernel'
+      if (worker == FRONT) front = true
+      return Promise.resolve(worker == failing ? 7 : 0)
+    })
+    assertEquals({ code, front }, { code: 7, front: false })
   })
-  assertEquals({ code, front }, { code: 7, front: false })
-})
+}
 
 test('a wrangler command with no sibling deploy runs once with its own pinned identity', async () => {
   let called: unknown[] = []

@@ -1,0 +1,120 @@
+# App data queries use the same Store classes and OAuth grants as the kernel,
+# with an upload of their own. Only yak-front sends requests here.
+name = "yak-query"
+main = "index.ts"
+account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
+compatibility_date = "2025-05-08"
+compatibility_flags = [
+  "nodejs_compat",
+  "global_fetch_strictly_public",
+  "enable_nodejs_process_v2",
+  "enable_request_signal",
+]
+workers_dev = false
+preview_urls = false
+minify = true
+upload_source_maps = true
+tsconfig = "tsconfig.json"
+
+[placement]
+region = "aws:us-east-2"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
+[vars]
+APEX = "yaks.app"
+WORKER_NAME = "yak-query"
+ENVIRONMENT = "production"
+
+# SESSION_SECRET is provisioned to match the serving kernel.
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "Store"
+script_name = "yak"
+
+[[durable_objects.bindings]]
+name = "SERVING_COPY"
+class_name = "PublicDirectory"
+script_name = "yak"
+
+[[queues.producers]]
+binding = "ERRORS"
+queue = "yak-errors"
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "yak-blobs"
+
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "64fa009267934abe8bc0c9d23ae01b17"
+
+[[ratelimits]]
+name = "API_RATE"
+namespace_id = "1005"
+simple = { limit = 300, period = 60 }
+
+[[ratelimits]]
+name = "BIRTH_RATE"
+namespace_id = "1007"
+simple = { limit = 10, period = 60 }
+
+[env.staging]
+name = "yak-query-staging"
+workers_dev = false
+preview_urls = false
+
+[env.staging.observability.logs]
+enabled = true
+invocation_logs = true
+
+[env.staging.observability.traces]
+enabled = true
+
+[env.staging.version_metadata]
+binding = "CF_VERSION_METADATA"
+
+[env.staging.vars]
+APEX = "yaks.fyi"
+WORKER_NAME = "yak-query-staging"
+ENVIRONMENT = "staging"
+
+[[env.staging.durable_objects.bindings]]
+name = "STORE"
+class_name = "Store"
+script_name = "yak-staging"
+
+[[env.staging.durable_objects.bindings]]
+name = "SERVING_COPY"
+class_name = "PublicDirectory"
+script_name = "yak-staging"
+
+[[env.staging.queues.producers]]
+binding = "ERRORS"
+queue = "yak-errors"
+
+[[env.staging.r2_buckets]]
+binding = "BLOBS"
+bucket_name = "yak-blobs-staging"
+
+[[env.staging.kv_namespaces]]
+binding = "OAUTH_KV"
+id = "667f6be792cb4941b4faace195e6c726"
+
+[[env.staging.ratelimits]]
+name = "API_RATE"
+namespace_id = "2005"
+simple = { limit = 300, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "BIRTH_RATE"
+namespace_id = "2007"
+simple = { limit = 10, period = 60 }

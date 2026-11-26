@@ -6,7 +6,7 @@
 // email reaching the Operator. Only a person's own Operator reads theirs.
 
 import type { Bundle } from '@yaks/graph'
-import { line } from '@yaks/query'
+import { type Line, line } from '@yaks/query'
 import {
   ago,
   fresh,
@@ -22,6 +22,7 @@ import {
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import { type Directory, directory, fetch, url } from './directory.ts'
+import { KERNEL, meta } from './meta.ts'
 import type { Host as HostEnv } from '@yaks/platform/host'
 
 /** The directory as whereabouts reads and writes it. */
@@ -32,12 +33,11 @@ export type Kept = {
 }
 
 /** The directory, read and written as the kernel. */
-export let kept = async (env: Pick<Env, 'STORE'>): Promise<Kept> => {
-  let { ctxOf } = await import('./connections.ts')
-  let { graph } = ctxOf(env)
+export let kept = (env: Pick<Env, 'STORE'>): Kept => {
+  let store = meta(env)
   return {
-    read: (q) => graph.read(q as never),
-    apply: graph.apply,
+    read: (q) => store.query(q as Line) as Promise<Bundle[]>,
+    apply: (bundles) => store.apply(bundles, KERNEL),
     whereabouts: directory({ fetch: (req) => fetch(req, env) }).whereabouts,
   }
 }
@@ -49,7 +49,7 @@ export let present = async (
   now: number = Date.now(),
   dir?: Kept,
 ): Promise<void> => {
-  dir ??= await kept(env)
+  dir ??= kept(env)
   let eid = whereaboutsEid(said.person, said.channel, said.place)
   let [row] = await dir.read(line`.entity.eid=${eid}&.whereabouts&*`)
   let next = noted(row, said, now)
@@ -62,7 +62,7 @@ export let whereaboutsOf = async (
   person: string,
   dir?: Kept,
 ): Promise<Bundle[]> => {
-  dir ??= await kept(env)
+  dir ??= kept(env)
   return await (dir.whereabouts?.([person]) ??
     dir.read(line`.whereabouts.person=${person}&*`))
 }
@@ -88,7 +88,7 @@ export let whereaboutsItem = async (
   place: string,
   dir?: Kept,
 ): Promise<string | undefined> => {
-  dir ??= await kept(env)
+  dir ??= kept(env)
   let [g, [row]] = await Promise.all([
     seen(env, person, place, Date.now(), dir),
     dir.read(line`.entity.eid=${person}&.fields=entity.eid,doc.title`),

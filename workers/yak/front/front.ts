@@ -55,6 +55,8 @@ import {
   loopback,
   managed,
   platform,
+  QUERY_PASS,
+  queryRequest,
   sameOrigin,
   signInReturn,
   spaceDoor,
@@ -74,6 +76,7 @@ export type FrontEnv = Host & {
   // The kernel's uncached gateway, its cached Site, its use receipts, and the
   // ad networks it tells (index.ts `Ads`).
   KERNEL: Pick<Fetcher, 'fetch'>
+  QUERY?: Pick<Fetcher, 'fetch'>
   SITE: Pick<Fetcher, 'fetch'>
   USES: {
     used(eid: string): Promise<void> | void
@@ -379,7 +382,6 @@ let serving = async (
   } catch (error) {
     report(error, env, ctx, 'front fetch', req)
   }
-  waiting('kernel_wait')
   // Give app pages time to finish or reach their deadline before resending a
   // lost kernel hop. Platform doors keep the shorter retry interval.
   let app = hostOf(req, env) != apex(env) || homed(path) ||
@@ -392,7 +394,21 @@ let serving = async (
     if (appPage) headers.set(SITE_CHECKED, '1')
     forwarded = new Request(req, { headers })
   }
-  let res = await resending(env.KERNEL, forwarded, env.CLOCK, retry)
+  let query: Response | undefined
+  if (env.QUERY && queryRequest(forwarded, env)) {
+    waiting('query_wait')
+    try {
+      let answer = await resending(env.QUERY, forwarded, env.CLOCK, retry)
+      if (answer.status != 204 || answer.headers.get(QUERY_PASS) != '1') {
+        query = answer
+      }
+    } catch (error) {
+      if (req.signal.aborted) throw error
+      report(error, env, ctx, 'front query', req)
+    }
+  }
+  if (!query) waiting('kernel_wait')
+  let res = query ?? await resending(env.KERNEL, forwarded, env.CLOCK, retry)
   if (path == VERSION) {
     let out = new Response(res.body, res)
     out.headers.set(FRONT_VERSION, env.CF_VERSION_METADATA?.id ?? '')

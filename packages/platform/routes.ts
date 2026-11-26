@@ -1077,6 +1077,29 @@ export let shared = (method: string, pathname: string): boolean =>
   (method == 'GET' || method == 'HEAD') &&
   /^(?:\/[^/]+)?\/api\/query$/.test(pathname)
 
+/** A read the query Worker can take on a space's hostname. The directory
+ * still decides which app owns the address and what its caller may read. */
+export let queryRequest = (req: Request, env: Host = {}): boolean => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return false
+  if (req.headers.has('upgrade')) return false
+  let path = collapsedPath(new URL(req.url).pathname)
+  let host = hostOf(req, env)
+  let at = route(host, path, env)
+  if (
+    !at.space || platform(host, path, env) || previews(path) ||
+    spaceDoor(path)
+  ) return false
+  return queryPath(path) || queryPath(at.path)
+}
+
+/** A store query at the app-relative address, with or without a page token. */
+export let queryPath = (path: string): boolean =>
+  /^(?:\/~[^/]+)?\/api\/query$/.test(path)
+
+/** A private binding response asking the front to send the original request
+ * to the kernel, where the address belongs to a different door. */
+export let QUERY_PASS = 'x-yak-query-pass'
+
 // The pages of ours at other addresses that ask the sign-in door for a code
 // (D-138669): yak.sh's "Get set up on yaks.app" section posts the address
 // typed there, and gets the letter any sign-in gets (signin.ts `codeLetter`).
@@ -1154,9 +1177,11 @@ export let timedOut = (req: Request): Response => {
 // before anything routes on it, no part below and no app's code ever reads a
 // path that starts `//`, which `new URL` takes for a host and throws on
 // (T-153266, T-153429).
+let collapsedPath = (path: string) => path.replace(/\/{2,}/g, '/')
+
 export let collapsed = (req: Request): Request => {
   let url = new URL(req.url)
-  let path = url.pathname.replace(/\/{2,}/g, '/')
+  let path = collapsedPath(url.pathname)
   if (path == url.pathname) return req
   url.pathname = path
   return new Request(url, req)

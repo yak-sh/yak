@@ -57,7 +57,7 @@ import { linked } from './preview-route.ts'
 // `asking` opens it (asking.ts) — and it resolves to the same eid the other two do,
 // with a life of hours and a row that can be deleted to end it.
 //
-// Whether we claim CIMD at all is the `CIMD` env var (`cimd` below), on
+// Whether we claim CIMD at all is the `CIMD` env var (oauth-provider.ts), on
 // unless it says `off`. It works for both: Claude's hosted document signs a
 // person in through it (T-32465), and ChatGPT's — chatgpt.com/oauth/client.json,
 // a 404 when T-33027 looked and published since — renders our consent page
@@ -89,7 +89,6 @@ import {
   type ListOptions,
   type OAuthHelpers,
   OAuthProvider,
-  type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
 import { opened, seal } from './lib/token.ts'
 import {
@@ -256,9 +255,8 @@ import { unauthorized, withAuth } from './asking.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import * as oidc from './oidc.ts'
 
-// What a grant carries and a token gives back: the person, nothing else.
-// Membership is read from the directory at request time, never a claim.
-type Props = { person: string }
+import { forUs, type Props, providerOptions } from './oauth-provider.ts'
+export { unwrapped } from './oauth-provider.ts'
 
 // Who is asking, and how they got in: session.ts's word, beside `Who`. Said
 // again here because this door is what mints one, and every caller of it
@@ -290,35 +288,7 @@ let provided = (env: Env): Env =>
     })
     : env
 
-// Whether the resources an authorize request, a token request or a token
-// names are this platform: every one on its own origin (`/mcp`, `/oauth/me`,
-// or the origin bare, which our protected-resource metadata names). None
-// named is ours too, as every token from before clients named one is. Any
-// other is a server that named yaks.app as where it signs in, and a token
-// for it would be a credential for the person's whole account in that
-// server's hands (T-803). The provider is told no resource of its own:
-// pinned, it would refuse a grant bound to the origin where a client names
-// `/mcp`, and every connector holding one would be signed out (M-37923).
-let forUs = (resource: string | string[] | undefined, env: Host) =>
-  [resource ?? []].flat().every((r) =>
-    URL.canParse(r) && new URL(r).origin == new URL(hostUrl(env, '/')).origin
-  )
-
 let NOT_US = 'yaks.app grants access to yaks.app and to no other resource'
-
-/** The person an OAuth access token was granted for, the grant, and when it
- * ends, as the provider reads them from KV (asking.ts `asking`, which asks
- * the directory whether the grant still stands: grant-rows.ts `stands`). A
- * token for another resource is nobody here. */
-export let unwrapped = async (env: Env, token: string) => {
-  let held = await api(env).unwrapToken<Props>(token)
-  if (!held || !forUs(held.audience, env)) return {}
-  return {
-    person: held.grant.props?.person,
-    grant: held.grantId,
-    until: held.expiresAt,
-  }
-}
 
 // Every credential the platform gave a person, taken back: their connectors'
 // and the box's OAuth grants, the CLI's grants and their standing sign-in
@@ -2001,63 +1971,25 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   return lost(env)
 }
 
-// Do we claim Client ID Metadata Documents? On unless the env says `off`.
-// Read here, per request, rather than baked into a module constant, so the
-// claim can be dropped and restored with one `wrangler secret put CIMD` —
-// the header explains why a working feature has a lever at all.
-let cimd = (env: Env) => env.CIMD != 'off'
-
-// A year, in seconds: the access token's life (`opts` below says why).
-let YEAR = 365 * 24 * 60 * 60
-
-// The provider's configuration over this env, one value: `withAuth` reads it
-// to unwrap a bearer, and `fetch` runs it. `/oauth/me` is the one protected
-// resource the identity part serves itself — the door an agent calls to learn
-// which person its token stands for, and the proof that `withAuth` and the
-// provider agree. The MCP door at /mcp is protected the same way, through
-// `withAuth` and `unauthorized`, in its own part.
-let opts = (env: Env): OAuthProviderOptions<Env> => ({
-  defaultHandler: { fetch: ours },
-  apiRoute: '/oauth/me',
-  apiHandler: {
-    fetch: async (req: Request, env: Env) => {
-      let who = await withAuth(env, req)
-      return who ? Response.json(who) : unauthorized(req, env)
+// Identity supplies the HTTP doors and the effect a reauthorization owes.
+// A query can unwrap a bearer without loading any of them.
+let opts = (env: Env) =>
+  providerOptions(env, {
+    defaultHandler: { fetch: ours },
+    apiHandler: {
+      fetch: async (req: Request, env: Env) => {
+        let who = await withAuth(env, req)
+        return who ? Response.json(who) : unauthorized(req, env)
+      },
     },
-  },
-  authorizeEndpoint: OAUTH.authorize,
-  tokenEndpoint: OAUTH.token,
-  clientRegistrationEndpoint: OAUTH.register,
-  clientIdMetadataDocumentEnabled: cimd(env),
-  // The owner, 2026-09-05: "the oauth should never expire". A connector is a
-  // door a person opened, and it closes when they close it and not before —
-  // so the refresh token has no expiry (the library's own way of saying never
-  // is an explicit `undefined`, which leaves the grant's KV row with no
-  // expiration at all) and the access token lives a year, which is as near to
-  // never as an integer TTL gets: the library will not take a value under a
-  // minute and has no word for forever.
-  //
-  // Neither ceiling weakens revoking, which is what a person actually does:
-  // `revokeGrant` deletes every token row along with the grant, so a
-  // disconnected connector is refused on its next call whatever its token
-  // said. The CLI's grants are the opposite by design and stay hours
-  // (grants.ts) — those are pasted into a terminal, not held by a connector.
-  accessTokenTTL: YEAR,
-  refreshTokenTTL: undefined,
-  clientRegistrationTTL: undefined,
-  // A re-authorization replaces the person's older grant for that client only
-  // now, when the client holds the new grant (connected.ts `replace`).
-  tokenExchangeCallback: async (o) => {
-    if (o.grantType == 'authorization_code') {
-      await replace(grants(env), o.userId, o.grantId)
-    }
-  },
-  scopesSupported: [OAUTH.scope],
-  resourceMetadata: {
-    scopes_supported: [OAUTH.scope],
-    resource_name: 'yaks.app',
-  },
-})
+    // A re-authorization replaces the person's older grant for that client only
+    // now, when the client holds the new grant (connected.ts `replace`).
+    tokenExchangeCallback: async (o) => {
+      if (o.grantType == 'authorization_code') {
+        await replace(grants(env), o.userId, o.grantId)
+      }
+    },
+  })
 
 // The Worker runtime hands a fetch handler an ExecutionContext; a kernel part
 // is given only its request and its env (env.ts). The provider wants one to

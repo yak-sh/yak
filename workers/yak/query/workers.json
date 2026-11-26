@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "strict": true
+  },
+  "entries": ["index.ts"],
+  "nodeModules": ["node:async_hooks", "node:process", "node:timers"],
+  "hostOnly": ["../../../packages/mcp/skills-host.ts"]
+}

@@ -1,12 +1,12 @@
 // A stranger at a private published app (D-134327), as yaks.app's Worker
 // serves one. Who is served which store, when a visit becomes a store of
 // one's own and what the directory keeps of it are @yaks/platform/visits';
-// this is what the Worker lends them: the directory (`ledgerOf`), the copy a
-// birth makes of the sample's Durable Object, the cookies a browser is told
-// its stores in, and the published release a stranger is served.
+// this is what the Worker lends them: the directory (`ledgerOf`), the cookies
+// a browser is told its stores in, and the published release a stranger is
+// served.
 //
 // The door (apps.ts) asks `visiting` right after it knows who is asking, and
-// a birth (`born`) is bounded there: a source makes at most BIRTH_RATE stores
+// a birth (visit-birth.ts) is bounded there: a source makes at most BIRTH_RATE stores
 // a minute, and an app's strangers hold at most `CAP`. Visitor data remains
 // recoverable until its owner confirms a purge (erase.ts `unvisited`). The app's own
 // schedule runs in each store as it does in the app's, and stops with it.
@@ -15,25 +15,17 @@
 // installer's own (@yaks/platform/visits `adopt`).
 import { type Line } from '@yaks/query'
 import {
-  claim,
   holder,
   holding,
   type Ledger,
-  settled,
   storeCookie,
   type Visit,
-  visitAt,
 } from '@yaks/platform/visits'
-import { type App, type Directory, type Space, storeName } from './directory.ts'
-import { storeOf } from './door.ts'
+import type { App, Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Host } from '@yaks/platform/host'
-import { instrumentEid } from '@yaks/platform/instrument'
 import { KERNEL, meta } from './meta.ts'
-import { COPY } from './relocate.ts'
-import { cleared } from './sample.ts'
 import { domainOf, newcomer, SESSION } from './session.ts'
-import { background } from './defects.ts'
 import { sharing } from './lib/shared.ts'
 import { offered } from '@yaks/platform/installs'
 
@@ -101,65 +93,6 @@ export let toldStores = (req: Request, res: Response, env: Host): Response => {
     )
   }
   return out
-}
-
-// The births under way in this isolate, by app and browser: a page that sends
-// two writes at once makes one store.
-let births = new Map<string, Promise<Visit>>()
-
-/**
- * A store of this browser's own, copied from the app's sample at one instant,
- * then written on its edge (@yaks/platform/visits `settled`). Answers the
- * store the edge holds, which is another birth's where one won the race; the
- * loser's copy is emptied. A browser someone is signed in on is theirs before
- * the copy is made (`claim`, the way attribution.ts `claimed` writes it at
- * sign-in), so what they make there is claimed from its first write, and no
- * sweep takes it for nobody's.
- */
-export let born = (
-  env: Env,
-  space: Space,
-  app: App,
-  via: string,
-  by: string | null,
-  now = new Date(),
-): Promise<Visit> => {
-  let key = `${app.eid} ${instrumentEid(via)}`
-  let held = births.get(key)
-  if (held) return held
-  let birth = bear(env, space, app, via, by, now)
-    .finally(() => births.delete(key))
-  births.set(key, birth)
-  // Another request may await this birth: held to its end (lib/shared.ts).
-  background(birth.then(() => {}, () => {}))
-  return birth
-}
-
-let bear = async (
-  env: Env,
-  space: Space,
-  app: App,
-  via: string,
-  by: string | null,
-  now: Date,
-): Promise<Visit> => {
-  let l = ledgerOf(env)
-  if (by) await claim(l, via, by)
-  let visit: Visit = {
-    ...visitAt(storeName(space, app), crypto.randomUUID()),
-    seen: now.toISOString(),
-    adopted: null,
-  }
-  let copy = await storeOf(env.STORE, app.demo!.store)(
-    `${COPY}?to=${encodeURIComponent(visit.store)}`,
-    { method: 'POST' },
-    KERNEL,
-  )
-  if (!copy.ok) throw new Error(`visit copy: ${await copy.text()}`)
-  await copy.body?.cancel()
-  let kept = await settled(l, via, app.eid, visit)
-  if (kept.store != visit.store) await cleared(env, visit.store)
-  return kept
 }
 
 /** One release of the app, by its version, read once per isolate: a release

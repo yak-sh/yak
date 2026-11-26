@@ -1,7 +1,7 @@
 // One app's stored commands and the effect boundary that runs one. The MCP
 // command and a page's /api/command supply the same caller-scoped store acts;
 // what a command answers is @yaks/platform/app-command's.
-import type { ToolDef, Tools } from '@yaks/tools/declared'
+import type { ToolDef } from '@yaks/tools/declared'
 import { CallError } from '@yaks/tools/errors'
 import {
   type Acts,
@@ -13,16 +13,10 @@ import {
 import { type App, type Space } from './directory.ts'
 import { commandWorker, workerBreak } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { declarationOf } from './declaration.ts'
+import { toolsOf } from './declaration.ts'
 import type { Who } from './session.ts'
 
-export let toolsOf = async (
-  env: Env,
-  space: Space,
-  app: App,
-): Promise<Tools> => {
-  return (await declarationOf(env, space, app)).tools
-}
+export { toolsOf } from './declaration.ts'
 
 /** Commands this page caller can discover. Access is decided here, beside
  * commandIn. */

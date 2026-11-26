@@ -41,18 +41,15 @@ let own = (state: unknown): state is { storage: Own } =>
   typeof (state as { storage?: Own } | undefined)?.storage?.transactionSync ==
     'function'
 
-// Every invocation enters here, the Worker's and each object's, so this is
-// also where an isolate learns which deploy it runs (running.ts). An object's
-// invocation can ask whether the runtime has since moved it off this instance
-// (@yaks/durable-object `replaced`).
-export let entry = <T>(
+// An object's invocation can ask whether the runtime moved it off this
+// instance (@yaks/durable-object `replaced`).
+export let observed = <T>(
   env: Partial<Env>,
   request: string,
   run: () => T,
   http?: Request,
   state?: unknown,
 ): T => {
-  learn(env.CF_VERSION_METADATA)
   let invoke = <R>(work: () => R): R =>
     within(
       env,
@@ -96,6 +93,18 @@ export let entry = <T>(
       }),
     env.CLOCK,
   ) as T
+}
+
+/** The kernel includes its own deploy in calls to its objects. */
+export let entry = <T>(
+  env: Partial<Env>,
+  request: string,
+  run: () => T,
+  http?: Request,
+  state?: unknown,
+): T => {
+  learn(env.CF_VERSION_METADATA)
+  return observed(env, request, run, http, state)
 }
 
 // A statement that scans, and an object past the rows it may read or write,

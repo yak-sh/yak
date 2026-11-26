@@ -140,6 +140,8 @@ import {
   markVersion,
   MOUNT,
   paged as pagePath,
+  QUERY_PASS,
+  queryPath,
   signInAt,
 } from '@yaks/platform/routes'
 import { covers, platformPath } from './router.ts'
@@ -229,7 +231,6 @@ import {
   visitOf,
 } from '@yaks/platform/visits'
 import {
-  born,
   ledgerOf,
   offeredSource,
   ownOf,
@@ -238,6 +239,7 @@ import {
   tellBorn,
   toldStores,
 } from './visit.ts'
+import { born } from './visit-birth.ts'
 import { MOVED } from '@yaks/sync'
 import { full } from './usage.ts'
 import { scheduleBy } from './used.ts'
@@ -303,7 +305,7 @@ export type Answer = (
 // the path each owns, loaded when a request first reaches one so serving a
 // page compiles none of them (T-148886). Each still answers null to a path of
 // its segment it does not serve.
-let DOORS = new Map<string, () => Promise<Answer>>([
+let DOORS = /* @__PURE__ */ new Map<string, () => Promise<Answer>>([
   ['drafts', async () => (await import('./draft-door.ts')).draftDoor],
   ['pay', async () => (await import('./sale-door.ts')).saleDoor],
   ['stats', async () => (await import('./views.ts')).stats],
@@ -387,8 +389,9 @@ export let invitedHere = async (
     mayRead ? 'not_a_writer' : 'not_a_reader',
   )
 
-let joinable: typeof import('./join.ts').joinable = async (...asked) =>
-  (await import('./join.ts')).joinable(...asked)
+let joinable: typeof import('./join-eligibility.ts').joinable = async (
+  ...asked
+) => (await import('./join-eligibility.ts')).joinable(...asked)
 
 /** The page for a signed-in person an app's pages are shut to: that their
  * invitation waits, if the owner let them in, else Join where the app's own
@@ -2083,44 +2086,14 @@ let api = async (
       friendPage,
     )
 
-// The graph and its uploaded files use the store and standing of the visit.
-export let storeApi = async (
-  req: Request,
-  env: Env,
-  dir: ReturnType<typeof directory>,
-  space: Space,
-  app: App,
-  path: string,
-  who: Who,
+let pageVouch = async (
+  { req, env, space, app, who }: Asked,
+  dir: Directory,
   c: Clock,
-  mount: string,
-  friendPage = false,
+  lenses: boolean,
 ) => {
-  // The store client and its named modules come from the platform's assets.
-  if (path == '/client.js') return platformFile(req, env, '/_client.js')
-  if (NAMED_CLIENT.test(path)) return namedClient(req, env, path)
-  if (CLIENT.includes(path)) return platformFile(req, env, path)
-  let { refuse: refused } = apiAsk(req, env, dir, space, app, path, who)
-  let store = appStore(env.STORE, space, app, env)
-  // What the page (or the browser itself) says broke, filed as the app's
-  // (@yaks/tracker/report `door`). A no somebody answered on purpose is not a
-  // break, whoever answered it: the platform's own doors, or the app's worker
-  // relaying an outside service's refusal (unseen.ts `refusal` is the one
-  // rule). A break whose page named no version ran the one serving, read past
-  // the directory's cache.
-  if (path == '/report') {
-    return reportDoor({
-      refusal,
-      flooding: () => flooding(space, app),
-      serving: () => serving(env, space, app),
-      file: (broke) => noted(broke, { env, space, app, request: req }),
-    })(req)
-  }
   let headers = vouched(who)
-  if (
-    app.lenses &&
-    ['/apply', '/query', '/ws', '/vocab', '/vocab.json'].includes(path)
-  ) {
+  if (lenses && app.lenses) {
     try {
       Object.assign(
         headers,
@@ -2145,6 +2118,94 @@ export let storeApi = async (
       })
     }
   }
+  return headers
+}
+
+let queryStore = async (
+  ask: Asked,
+  dir: Directory,
+  c: Clock,
+  friendPage: boolean,
+) => {
+  let { req, env, space, app, who } = ask
+  let headers = await pageVouch(ask, dir, c, true)
+  if (headers instanceof Response) return headers
+  if (!reads(mode(app.access), who.role)) return ask.refuse('not_a_reader')
+  // The page writes its filter as the query string itself, or escaped once
+  // as `?q=`, and either way in the page's grammar (`id=`, `limit=`), which
+  // @yaks/platform/page-wire `lineOf` turns into the Store's line. The ask
+  // then carries the listing's own screen (listing.ts `asking`), so what a
+  // count counts is what a list lists.
+  try {
+    let url = new URL(req.url)
+    let line = lineOf(url)
+    if (line == null) throw new Refused('/query needs a query: ?q=…')
+    let friends = await queryFriends(
+      dir,
+      app,
+      friendPage ? who.person : null,
+      line,
+    )
+    if (friends) return friends
+    let live = url.searchParams.get('live') == '1'
+    return Response.json(
+      await queried(env, space, app, who, line, live, headers),
+    )
+  } catch (e) {
+    // A page's query is app code, even when the store answers its invalid
+    // grammar or unknown word with 400. Other refusals stay quiet; platform
+    // failures keep their own reporting.
+    await mistake(req, env, space, app, e, 'query')
+    return rejection(e, {
+      request: 'GET /api/query',
+      space: space.slug,
+      app: app.slug,
+    })
+  }
+}
+
+// The graph and its uploaded files use the store and standing of the visit.
+export let storeApi = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  app: App,
+  path: string,
+  who: Who,
+  c: Clock,
+  mount: string,
+  friendPage = false,
+) => {
+  // The store client and its named modules come from the platform's assets.
+  if (path == '/client.js') return platformFile(req, env, '/_client.js')
+  if (NAMED_CLIENT.test(path)) return namedClient(req, env, path)
+  if (CLIENT.includes(path)) return platformFile(req, env, path)
+  let ask = apiAsk(req, env, dir, space, app, path, who)
+  if (path == '/query') return queryStore(ask, dir, c, friendPage)
+  let { refuse: refused } = ask
+  let store = appStore(env.STORE, space, app, env)
+  // What the page (or the browser itself) says broke, filed as the app's
+  // (@yaks/tracker/report `door`). A no somebody answered on purpose is not a
+  // break, whoever answered it: the platform's own doors, or the app's worker
+  // relaying an outside service's refusal (unseen.ts `refusal` is the one
+  // rule). A break whose page named no version ran the one serving, read past
+  // the directory's cache.
+  if (path == '/report') {
+    return reportDoor({
+      refusal,
+      flooding: () => flooding(space, app),
+      serving: () => serving(env, space, app),
+      file: (broke) => noted(broke, { env, space, app, request: req }),
+    })(req)
+  }
+  let headers = await pageVouch(
+    ask,
+    dir,
+    c,
+    ['/apply', '/ws', '/vocab', '/vocab.json'].includes(path),
+  )
+  if (headers instanceof Response) return headers
   let mayRead = reads(mode(app.access), who.role)
   let mayPost = edits(mode(app.access), who.role)
   // Who is looking, before the first write (T-32679), as @yaks/api's `/who`
@@ -2206,10 +2267,16 @@ export let storeApi = async (
   if (path == '/join') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!who.person) return await refused('not_a_reader')
-    let { join, joinable } = await import('./join.ts')
     let role = await joinable(env, dir, space, app, who)
     if (!role) return json(403, 'not_listed')
-    await join(env, dir, space, app, who.person, role)
+    await (await import('./join.ts')).join(
+      env,
+      dir,
+      space,
+      app,
+      who.person,
+      role,
+    )
     return req.headers.get('accept')?.includes('text/html')
       ? redirect(mount, 303)
       : Response.json({ joined: role })
@@ -2253,40 +2320,6 @@ export let storeApi = async (
   if (path == '/vocab.json') {
     if (!mayRead) return refused('not_a_reader')
     return store('/vocab.json', {}, { ...headers, [ACROSS]: '1' })
-  }
-  if (path == '/query') {
-    if (!mayRead) return refused('not_a_reader')
-    // The page writes its filter as the query string itself, or escaped once
-    // as `?q=`, and either way in the page's grammar (`id=`, `limit=`), which
-    // @yaks/platform/page-wire `lineOf` turns into the Store's line. The ask
-    // then carries the listing's own screen (listing.ts `asking`), so what a
-    // count counts is what a list lists.
-    try {
-      let url = new URL(req.url)
-      let line = lineOf(url)
-      if (line == null) throw new Refused('/query needs a query: ?q=…')
-      let friends = await queryFriends(
-        dir,
-        app,
-        friendPage ? who.person : null,
-        line,
-      )
-      if (friends) return friends
-      let live = url.searchParams.get('live') == '1'
-      return Response.json(
-        await queried(env, space, app, who, line, live, headers),
-      )
-    } catch (e) {
-      // A page's query is app code, even when the store answers its invalid
-      // grammar or unknown word with 400. Other refusals stay quiet; platform
-      // failures keep their own reporting.
-      await mistake(req, env, space, app, e, 'query')
-      return rejection(e, {
-        request: 'GET /api/query',
-        space: space.slug,
-        app: app.slug,
-      })
-    }
   }
   // A page listens to its store, which answers a watch of another app's word
   // across that word's home, told by the home of each commit (graph.ts
@@ -2673,7 +2706,16 @@ export let edged = async (
 // longer treats as a stranger (@yaks/platform/kept `stranger`).
 let checking = (path: string) => /^(?:\/[^/]+)?\/api\/release$/.test(path)
 
-export let fetch = (req: Request, env: Env): Promise<Response> => {
+let appFetch = (
+  req: Request,
+  env: Env,
+  answer: (
+    req: Request,
+    c: Clock,
+    visitor: Request,
+    siteChecked: boolean,
+  ) => Promise<Response>,
+): Promise<Response> => {
   let c = clock()
   // Inside `counting`, so every store hop and bucket op the chain below makes
   // is counted on this request's own tally (hops.ts) and reported beside the
@@ -2702,8 +2744,7 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     let res = await browsing(
       req,
       env,
-      (r) =>
-        served(r, env, c, false, undefined, req, undefined, { siteChecked }),
+      (r) => answer(r, c, req, siteChecked),
       remember,
     )
     return timed(
@@ -2713,7 +2754,44 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
   })
 }
 
-// A store of a stranger's own, born for their first write (visit.ts `born`),
+export let fetch = (req: Request, env: Env): Promise<Response> =>
+  appFetch(
+    req,
+    env,
+    (r, c, visitor, siteChecked) =>
+      served(r, env, c, false, undefined, visitor, undefined, { siteChecked }),
+  )
+
+export let queryPass = () =>
+  new Response(null, { status: 204, headers: { [QUERY_PASS]: '1' } })
+
+/** Serve the query from the same route, standing and Store as the kernel.
+ * An ambiguous address can resolve to a different door, such as a file in
+ * an app named "api". Send that address on before opening the Store. */
+export let query = (req: Request, env: Env): Promise<Response> =>
+  appFetch(req, env, async (request, c, visitor) => {
+    let routed = routeApp(request, env, c, false, () => {}, visitor)
+    let { dir, identity, url } = routed
+    let step = await routed.step
+    if (step.to == 'nothing') return nothingAt(url.pathname, env)
+    if (step.to == 'sent') return redirect(step.href, step.status)
+    if (step.to != 'app' || !queryPath(step.path)) return queryPass()
+    if (!keepable(step.app)) unkept(request, env, step.bare, c)
+    let access = await appAccess(
+      request,
+      env,
+      c,
+      dir,
+      visitor,
+      step,
+      await identity(),
+    )
+    return access instanceof Response
+      ? access
+      : queryAnswer(env, dir, c, step, access)
+  })
+
+// A store of a stranger's own, born for their first write,
 // or null where it costs too much now: a store costs the platform until it is
 // installed, so a source makes only so many a minute, and an app's strangers
 // hold only so many.
@@ -2729,33 +2807,17 @@ let birth = async (
     ? await born(env, space, app, via, person)
     : null
 
-// Serving an app, with the stopwatch running (timing.ts): every stage below
-// that waits is named, so `Server-Timing` on the answer says where the time
-// went — the directory, the app's own worker, the bytes — instead of leaving
-// a second to guess at (T-33176).
-//
-// The order is a rule rather than an accident (@yaks/platform/ladder, which
-// decides where an address stops from what this reads for it). One rung is
-// opted into, between 1 and 2: the paths the home app named in `home.first`
-// are its worker's before they are the owning app's (`firstly` above). Empty
-// for almost every space, and it can only ever move a path from the app that
-// owns it to the home app — never off the platform's own (rung 1), and never
-// onto a space that asked for nothing.
-//
-// `edge` is the same order served for Site's cache (page-cache.ts): an
-// anonymous visitor, the directory read fresh, nothing counted, and every
-// answer that is not the same page for everyone passed back unfinished,
-// before any app's own code runs for it.
-let served = async (
+let routeApp = (
   req: Request,
   env: Env,
   c: Clock,
-  edge = false,
-  copied: () => void = () => {},
-  visitor = req,
+  edge: boolean,
+  copied: () => void,
+  visitor: Request,
   view?: Directory,
-  { siteChecked, region }: { siteChecked?: boolean; region?: Region } = {},
-): Promise<Response> => {
+  kept?: typeof asked,
+  region?: Region,
+) => {
   let url = new URL(req.url)
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
   let serving = copyOf(env)
@@ -2772,12 +2834,6 @@ let served = async (
       ? { region, door: nearby, spaces: env.REGIONAL_ROUTE_SPACES }
       : undefined,
   })
-  // What Site keeps from a directory copy says so, and is kept for now only
-  // (site.ts).
-  let marked = (answer: Response) => {
-    if (dir.stale) answer.headers.set('x-yak-directory-copy', '1')
-    return answer
-  }
   // The person the cookie names, and a machine's bearer at an `/api/` door,
   // read once, when a hostname names a space. Site's request carries a cookie
   // only at a session's own key (@yaks/platform/kept `visitor`), where it
@@ -2796,7 +2852,7 @@ let served = async (
       person: authenticated?.who?.person ?? cookied,
     }))
   let identity = () => ids ??= identify()
-  let step = await rung({
+  let step = rung({
     host: hostOf(req, env),
     method: req.method,
     pathname: url.pathname,
@@ -2804,10 +2860,10 @@ let served = async (
     mount: req.headers.get(MOUNT),
   }, {
     kept: async () => {
-      if (edge || siteChecked) return null
+      if (edge || !kept) return null
       let { cookied } = await identity()
       let session = cookied && sessionCookie(req, env)
-      return await asked(visitor, env, c, session || null)
+      return await kept(visitor, env, c, session || null)
     },
     // The space, the app at the address, the front page and the seat of the
     // person the cookie names, in one read of the directory: every rung asks
@@ -2839,6 +2895,405 @@ let served = async (
       return at ? { space: at.space.slug, slug: at.app.slug } : null
     },
   }, env)
+  return { step, identity, url, dir, direct }
+}
+
+type AppRoute = Extract<Awaited<ReturnType<typeof routeApp>['step']>, {
+  to: 'app'
+}>
+type Identity = Awaited<ReturnType<ReturnType<typeof routeApp>['identity']>>
+
+let seatOn = (
+  dir: Directory,
+  { space, read }: { space: Space; read: AppRoute['read'] },
+  person: string | null,
+) =>
+(p: string) =>
+  p == person && read.role !== undefined
+    ? Promise.resolve(read.role)
+    : dir.role(space, p)
+
+let browserClaims = (
+  route: AppRoute['read'],
+  person: string | null,
+  who: Who,
+) => who.person && who.person == person ? route.browsers : undefined
+
+let appAccess = async (
+  req: Request,
+  env: Env,
+  c: Clock,
+  dir: Directory,
+  visitor: Request,
+  step: AppRoute,
+  { person, authenticated }: Identity,
+  beforeGuest?: (
+    req: Request,
+    path: string,
+    who: Who,
+    paper: ReturnType<typeof tokenOf>,
+  ) => Promise<Response | null>,
+  newVisit?: typeof birth,
+) => {
+  let { app, path, space, bare, read: routing } = step
+  let url = new URL(req.url)
+  let walls = sandboxed(app)
+  let seatOf = seatOn(dir, step, person)
+  let paper = tokenOf(path)
+  if (paper) {
+    let reads = req.method == 'GET' || req.method == 'HEAD'
+    if (reads && req.headers.get('sec-fetch-mode') == 'navigate') {
+      return redirect(`${bare}${paper.rest.slice(1)}${url.search}`)
+    }
+    let clean = new URL(url)
+    clean.pathname = url.pathname.slice(0, -path.length) + paper.rest
+    req = new Request(clean, req)
+    url = clean
+    path = paper.rest
+  }
+  let appHandle = storeName(space, app)
+  let store = appHandle
+  // A page token opens its own sandboxed app, and the API of any app its app
+  // is attached to (attached.ts), sandboxed or not. On an app out of the
+  // sandbox, any other token names nothing.
+  let reaches = paper || walls ? reaching(env, app) : undefined
+  let opened = paper && env.SESSION_SECRET
+    ? await paged(paper.token, env, store, reaches)
+    : null
+  if (paper && !walls && !opened?.attached) return nothingHere(env)
+  if (paper && (!opened || (opened.attached && !opens(path)))) {
+    return json(401, 'not_a_reader', 'This page token does not open this app')
+  }
+  // A stranger's visit is served from the sample or from a store of their
+  // own, so the worker it ran comes back holding grants for that store and
+  // not the app's: it is served as the visit was (visit.ts `revisited`).
+  //
+  // The sample is every stranger's at once, so nothing writes there. The
+  // worker's first write for a stranger on it gives them a store of their
+  // own, as the page's does (`moved`), and from then on the worker is served
+  // from that store, its reads after the write included.
+  let theirs = app
+  let grant = bearing(req) && !walls
+    ? await grantedStore(req, env.SESSION_SECRET)
+    : null
+  // The store the grant must name: the app's own, or the one it revisits.
+  let minted = store
+  let moving = false
+  if (
+    grant && grant.store != store &&
+    revisited(storeName(space, app), app, grant.store)
+  ) {
+    let release = await releaseFor(dir, app)
+    app = revisited(storeName(space, app), app, grant.store, release)!
+    store = minted = grant.store
+    let visitor = onSample(app) ? grant!.visitor : null
+    let own = visitor
+      ? await visitOf(ledgerOf(env), visitor.via, theirs.eid)
+      : null
+    if (!own && visitor && newVisit && births(path, req.method)) {
+      own = await c.time(
+        'birth',
+        () => newVisit(env, req, space, theirs, visitor),
+      )
+      if (!own) {
+        await req.body?.cancel()
+        return unborn(req, env)
+      }
+    }
+    if (own && !own.adopted) {
+      app = revisited(storeName(space, theirs), theirs, own.store, release)!
+      store = own.store
+      moving = true
+    }
+  }
+  // The app acting as itself (`owning`) has no seat: its standing is its own.
+  let itself = await granted(
+    req,
+    env.SESSION_SECRET,
+    minted,
+    app.policy,
+    (p) => p == app!.eid ? Promise.resolve('editor') : seatOf(p),
+  )
+  if (bearing(req) && !itself) {
+    return json(
+      401,
+      'not_a_reader',
+      'This worker grant does not open this app',
+    )
+  }
+  // On the sample the worker reads and writes nothing, as the app no more
+  // than as its visitor; in the visitor's own store both are its editors.
+  if (itself && onSample(app)) itself.role = 'viewer'
+  if (itself && moving) itself.role = 'editor'
+  if (itself?.service) {
+    let { verifyService } = await import('./service-authority.ts')
+    if (
+      itself.service.service != app.eid ||
+      itself.person != itself.service.person ||
+      !await verifyService(env, dir, itself.service)
+    ) {
+      return json(403, 'access', 'This service authority was revoked')
+    }
+    itself.role = null
+  }
+  // Machine clients use the same login bearer as the connector. Verify it
+  // at the app door too, before the cookie/page-token path, and read the
+  // caller's membership live. A narrowed CLI grant never crosses spaces;
+  // an invalid credential never falls back to a public read or a cookie.
+  let bearer: Who | undefined
+  // A sandboxed app already accepts its one-app page bearer. Keep that
+  // credential on its existing path rather than treating it as a CLI login.
+  let pageBearer = walls && env.SESSION_SECRET && bearerOf(req)
+    ? await paged(bearerOf(req)!, env, store, reaches)
+    : null
+  if (
+    !itself && !pageBearer && path.startsWith('/api/') &&
+    req.headers.has('authorization')
+  ) {
+    let { who: caller } = authenticated ?? await asking(env, req)
+    if (
+      !caller ||
+      (caller.spaceEid
+        ? caller.spaceEid != space.eid
+        : caller.space && caller.space != space.slug)
+    ) {
+      return json(401, 'not_a_reader', 'Sign in with yak login for this app')
+    }
+    bearer = {
+      person: caller.person,
+      role: await seatOf(caller.person),
+      until: caller.until,
+      ...(caller.instrument ? { via: caller.instrument } : {}),
+    }
+  }
+  let who = itself ?? bearer ??
+    await c.time(
+      'who',
+      () =>
+        walls || paper
+          ? presented(
+            req,
+            env,
+            seatOf,
+            space!,
+            store,
+            paper?.token,
+            path,
+            dir,
+            reaches,
+          )
+          : whoIs(req, env, seatOf, space!.eid, dir),
+    )
+  if (path.startsWith('/api/') && !itsApp(who, app)) {
+    let browsers = browserClaims(routing, person, who)
+    who = browsers ? { ...who, browsers } : await browsersOf(env, who)
+  }
+  // And the page's own address for its relative URLs: a sandboxed page's
+  // carries a token for whoever loaded it, dying with their cookie.
+  let at = paper
+    ? `${bare}~${paper.token}/`
+    : walls && !path.startsWith('/api/') && env.SESSION_SECRET
+    ? `${bare}~${await paging(
+      env.SESSION_SECRET,
+      store,
+      app.eid,
+      who.person,
+      lasting(who.until),
+      who.via,
+      who.session,
+    )}/`
+    : bare
+  let earlier = await beforeGuest?.(req, path, who, paper)
+  if (earlier) return earlier
+  // A guest of this one app (T-37615). The roster is read space-wide, so
+  // somebody invited to a single app holds no seat and the answer above is
+  // null; what they hold is a grant on this app, and from here on they are
+  // that level — the app's page, its data, its `me()`, and the vouch its store
+  // mirrors. Here rather than beside the seat, because rung 1.5 above hands
+  // `who` to the HOME app's router: a guest of one app must not arrive at
+  // another app's worker wearing a level. Asked only of a signed-in caller
+  // with no seat, so a member pays nothing for it and a stranger nothing.
+  if (who.person && !who.role) {
+    let { grants } = routing
+    let held = who.person == person && grants
+      ? grants.has(app.eid) ? { access: grants.get(app.eid)! } : null
+      : await c.time('guest', () => dir.grant(app!, who.person!))
+    if (held) who = { ...who, role: held.access, guest: true }
+  }
+  // A stranger at a private published app is served the app from its sample,
+  // or from a store of their own once they have written (visit.ts, D-134327),
+  // unless the owner already let them in: then their way through is the
+  // click in the letter, as it was. So too for somebody the app's own rows
+  // list (join.ts): theirs is the Join button, not a copy (T-153688). Never the app's own worker coming back,
+  // nor a sandboxed app, whose page tokens each open one store, nor the form
+  // door: a form is the app's own, shown and filled by anyone (forms.ts), and
+  // a sample or a copy holds none of the app's forms.
+  let visit: Visiting | null = null
+  let stranger = { app: theirs, who, release: null as Release | null }
+  if (!itself && !walls && visitable(app, who) && !formPath(path, req)) {
+    let [own, release, invited] = await c.time('visit', () =>
+      Promise.all([
+        ownOf(env, visitor, who.via!, app!.eid),
+        releaseFor(dir, app!),
+        who.person
+          ? Promise.all([
+            waiting(dir, space!, app!, who.person, 'not_a_reader'),
+            joinable(env, dir, space!, app!, who),
+          ]).then(([letter, listed]) => !!letter || !!listed)
+          : false,
+      ]))
+    if (!invited) {
+      stranger.release = release
+      ;({ app, who, visit } = visiting(
+        storeName(space, app),
+        app,
+        who,
+        own,
+        release,
+      ))
+    }
+    if (own && due(own.seen)) background(used(ledgerOf(env), who.via!, app.eid))
+    // Their store is an app of their own now: the page they open is there.
+    let mine = visit == 'kept' && req.method == 'GET' &&
+        req.headers.get('sec-fetch-mode') == 'navigate'
+      ? await dir.appAt(own!.adopted!)
+      : null
+    if (mine && !mine.app.trashed && !mine.space.trashed) {
+      return redirect(
+        `${urlOf(mine.space, mine.app, env)}${path.slice(1)}${url.search}`,
+        303,
+      )
+    }
+  }
+  return {
+    req,
+    url,
+    path,
+    app,
+    who,
+    itself,
+    opened,
+    at,
+    visit,
+    stranger,
+    minted,
+    appHandle,
+  }
+}
+
+let queryAnswer = async (
+  env: Env,
+  dir: Directory,
+  c: Clock,
+  { space, app: original }: AppRoute,
+  { req, app, path, who, itself, at, opened }: Exclude<
+    Awaited<ReturnType<typeof appAccess>>,
+    Response
+  >,
+) => {
+  let walls = sandboxed(original)
+  let answer = await apiAllowed(req, path, who.person, !!itself, env.API_RATE)
+    ? await c.time('api', () =>
+      queryStore(
+        apiAsk(req, env, dir, space, app, '/query', who),
+        dir,
+        c,
+        !itself && !opened?.attached && (!walls || !!opened),
+      ))
+    : tooMany()
+  if (answer.ok && !who.administrative && recordsUse(req)) {
+    scheduleBy(env, who, app.eid)
+  }
+  let reported = reporting(answer, req, at, app)
+  return walls ? walled(reported) : reported
+}
+
+let aheadOfApp = async (
+  env: Env,
+  { space, read: { home } }: AppRoute,
+  req: Request,
+  who: Who,
+  c: Clock,
+  edge: boolean,
+) => {
+  let url = new URL(req.url)
+  if (edge && claims(home, url.pathname)) return passed()
+  let early = await firstly(env, space, home, req, who, c)
+  // The answer is the home app's, so it reports as the home app — and is
+  // counted as the home app's page view — at the bare hostname, which is
+  // where the home app is mounted.
+  if (early) {
+    shown(env, req, early.page, seen(space, early.app))
+    let page = early.page
+    if (
+      page.body &&
+      page.headers.get('content-type')?.startsWith('text/html')
+    ) {
+      page = await reported(
+        env,
+        '/',
+        filled(page, await copyFor(env, space, early.app)),
+        early.app.version ?? 0,
+        {
+          ...badged(space, early.app, env),
+          ...cornerOf(space, early.app, env, who),
+        },
+        appPreview(early.app, '/'),
+        req.headers.get(ADDRESS) ?? req.url,
+      )
+    }
+    let res = reporting(page, req, '/', early.app)
+    return sandboxed(early.app) ? walled(res) : res
+  }
+  return null
+}
+
+// Serving an app, with the stopwatch running (timing.ts): every stage below
+// that waits is named, so `Server-Timing` on the answer says where the time
+// went — the directory, the app's own worker, the bytes — instead of leaving
+// a second to guess at (T-33176).
+//
+// The order is a rule rather than an accident (@yaks/platform/ladder, which
+// decides where an address stops from what this reads for it). One rung is
+// opted into, between 1 and 2: the paths the home app named in `home.first`
+// are its worker's before they are the owning app's (`firstly` above). Empty
+// for almost every space, and it can only ever move a path from the app that
+// owns it to the home app — never off the platform's own (rung 1), and never
+// onto a space that asked for nothing.
+//
+// `edge` is the same order served for Site's cache (page-cache.ts): an
+// anonymous visitor, the directory read fresh, nothing counted, and every
+// answer that is not the same page for everyone passed back unfinished,
+// before any app's own code runs for it.
+let served = async (
+  req: Request,
+  env: Env,
+  c: Clock,
+  edge = false,
+  copied: () => void = () => {},
+  visitor = req,
+  view?: Directory,
+  { siteChecked, region }: { siteChecked?: boolean; region?: Region } = {},
+): Promise<Response> => {
+  let routed = routeApp(
+    req,
+    env,
+    c,
+    edge,
+    copied,
+    visitor,
+    view,
+    siteChecked ? undefined : asked,
+    region,
+  )
+  let { url, dir, direct, identity } = routed
+  let step = await routed.step
+  // What Site keeps from a directory copy says so, and is kept for now only
+  // (site.ts).
+  let marked = (answer: Response) => {
+    if (dir.stale) answer.headers.set('x-yak-directory-copy', '1')
+    return answer
+  }
   if (step.to == 'manage') {
     return (await import('./manage.ts')).manage(req, env, c)
   }
@@ -2863,14 +3318,9 @@ let served = async (
     }))
     env = { ...env, RELEASE_VIEWS: views }
   }
-  let { person, authenticated } = await identity()
-  let browserClaims = (who: Who) =>
-    who.person && who.person == person ? routing.browsers : undefined
-  // A seat, from that read for the person it asked about, else the directory.
-  let seatOf = (p: string) =>
-    p == person && routing.role !== undefined
-      ? Promise.resolve(routing.role)
-      : dir.role(space, p)
+  let identified = await identity()
+  let { person } = identified
+  let seatOf = seatOn(dir, step, person)
   // Site keeps what is the same for everyone (@yaks/platform/kept
   // `keepable`): the own files of an app anyone may read (public or open),
   // and the release
@@ -2948,7 +3398,6 @@ let served = async (
       : passed()
   }
   let { front, bare } = step
-  let { home } = routing
   let app = step.app
   let path = step.path
   if (path == APP_WARM && (req.method == 'HEAD' || req.method == 'GET')) {
@@ -3044,270 +3493,35 @@ let served = async (
     let { calendarOut } = await import('./calendar.ts')
     return calendarOut(req, env, space, app, calendarToken)
   }
-  let paper = tokenOf(path)
-  if (paper) {
-    let reads = req.method == 'GET' || req.method == 'HEAD'
-    if (reads && req.headers.get('sec-fetch-mode') == 'navigate') {
-      return redirect(`${bare}${paper.rest.slice(1)}${url.search}`)
-    }
-    let clean = new URL(url)
-    clean.pathname = url.pathname.slice(0, -path.length) + paper.rest
-    req = new Request(clean, req)
-    url = clean
-    path = paper.rest
-  }
-  let appHandle = storeName(space, app)
-  let store = appHandle
-  // A page token opens its own sandboxed app, and the API of any app its app
-  // is attached to (attached.ts), sandboxed or not. On an app out of the
-  // sandbox, any other token names nothing.
-  let reaches = paper || walls ? reaching(env, app) : undefined
-  let opened = paper && env.SESSION_SECRET
-    ? await paged(paper.token, env, store, reaches)
-    : null
-  if (paper && !walls && !opened?.attached) return nothingHere(env)
-  if (paper && (!opened || (opened.attached && !opens(path)))) {
-    return json(401, 'not_a_reader', 'This page token does not open this app')
-  }
-  // A stranger's visit is served from the sample or from a store of their
-  // own, so the worker it ran comes back holding grants for that store and
-  // not the app's: it is served as the visit was (visit.ts `revisited`).
-  //
-  // The sample is every stranger's at once, so nothing writes there. The
-  // worker's first write for a stranger on it gives them a store of their
-  // own, as the page's does (`moved`), and from then on the worker is served
-  // from that store, its reads after the write included.
-  let theirs = app
-  let grant = bearing(req) && !walls
-    ? await grantedStore(req, env.SESSION_SECRET)
-    : null
-  // The store the grant must name: the app's own, or the one it revisits.
-  let minted = store
-  let moving = false
-  if (
-    grant && grant.store != store &&
-    revisited(storeName(space, app), app, grant.store)
-  ) {
-    let release = await releaseFor(dir, app)
-    app = revisited(storeName(space, app), app, grant.store, release)!
-    store = minted = grant.store
-    let visitor = onSample(app) ? grant!.visitor : null
-    let own = visitor
-      ? await visitOf(ledgerOf(env), visitor.via, theirs.eid)
-      : null
-    if (!own && visitor && births(path, req.method)) {
-      own = await c.time(
-        'birth',
-        () => birth(env, req, space!, theirs, visitor),
-      )
-      if (!own) {
-        await req.body?.cancel()
-        return unborn(req, env)
-      }
-    }
-    if (own && !own.adopted) {
-      app = revisited(storeName(space, theirs), theirs, own.store, release)!
-      store = own.store
-      moving = true
-    }
-  }
-  // The app acting as itself (`owning`) has no seat: its standing is its own.
-  let itself = await granted(
+  let access = await appAccess(
     req,
-    env.SESSION_SECRET,
-    minted,
-    app.policy,
-    (p) => p == app!.eid ? Promise.resolve('editor') : seatOf(p),
+    env,
+    c,
+    dir,
+    visitor,
+    step,
+    identified,
+    (request, path, who, paper) =>
+      !front && !bearing(request) && !paper && !webPath(path)
+        ? aheadOfApp(env, step, request, who, c, edge)
+        : Promise.resolve(null),
+    birth,
   )
-  if (bearing(req) && !itself) {
-    return json(
-      401,
-      'not_a_reader',
-      'This worker grant does not open this app',
-    )
-  }
-  // On the sample the worker reads and writes nothing, as the app no more
-  // than as its visitor; in the visitor's own store both are its editors.
-  if (itself && onSample(app)) itself.role = 'viewer'
-  if (itself && moving) itself.role = 'editor'
-  if (itself?.service) {
-    let { verifyService } = await import('./service-call.ts')
-    if (
-      itself.service.service != app.eid ||
-      itself.person != itself.service.person ||
-      !await verifyService(env, dir, itself.service)
-    ) {
-      return json(403, 'access', 'This service authority was revoked')
-    }
-    itself.role = null
-  }
-  // Machine clients use the same login bearer as the connector. Verify it
-  // at the app door too, before the cookie/page-token path, and read the
-  // caller's membership live. A narrowed CLI grant never crosses spaces;
-  // an invalid credential never falls back to a public read or a cookie.
-  let bearer: Who | undefined
-  // A sandboxed app already accepts its one-app page bearer. Keep that
-  // credential on its existing path rather than treating it as a CLI login.
-  let pageBearer = walls && env.SESSION_SECRET && bearerOf(req)
-    ? await paged(bearerOf(req)!, env, store, reaches)
-    : null
-  if (
-    !itself && !pageBearer && path.startsWith('/api/') &&
-    req.headers.has('authorization')
-  ) {
-    let { who: caller } = authenticated ?? await asking(env, req)
-    if (
-      !caller ||
-      (caller.spaceEid
-        ? caller.spaceEid != space.eid
-        : caller.space && caller.space != space.slug)
-    ) {
-      return json(401, 'not_a_reader', 'Sign in with yak login for this app')
-    }
-    bearer = {
-      person: caller.person,
-      role: await seatOf(caller.person),
-      until: caller.until,
-      ...(caller.instrument ? { via: caller.instrument } : {}),
-    }
-  }
-  let who = itself ?? bearer ??
-    await c.time(
-      'who',
-      () =>
-        walls || paper
-          ? presented(
-            req,
-            env,
-            seatOf,
-            space!,
-            store,
-            paper?.token,
-            path,
-            dir,
-            reaches,
-          )
-          : whoIs(req, env, seatOf, space!.eid, dir),
-    )
-  if (path.startsWith('/api/') && !itsApp(who, app)) {
-    let browsers = browserClaims(who)
-    who = browsers ? { ...who, browsers } : await browsersOf(env, who)
-  }
-  // And the page's own address for its relative URLs: a sandboxed page's
-  // carries a token for whoever loaded it, dying with their cookie.
-  let at = paper
-    ? `${bare}~${paper.token}/`
-    : walls && !path.startsWith('/api/') && env.SESSION_SECRET
-    ? `${bare}~${await paging(
-      env.SESSION_SECRET,
-      store,
-      app.eid,
-      who.person,
-      lasting(who.until),
-      who.via,
-      who.session,
-    )}/`
-    : bare
-  // Rung 1½: the home app's router, where it named this path. Ahead of the app
-  // whose slug owns it — and ahead of that app's own access rule, since what
-  // answers is the HOME app's page and not this one's. Not for the home app's
-  // own addresses, where its worker is already what rungs 3 and 5 ask, and
-  // never for a request an app's worker made: the router's own onward call
-  // carries the grant it was handed, and without that guard it would arrive
-  // back at the path it just intercepted (dispatch.ts `bearing`).
-  //
-  // Nor for a sandboxed page's own request: its token is its app's alone,
-  // and the router would be acting as the person who holds it.
-  if (!front && !bearing(req) && !paper && !webPath(path)) {
-    if (edge && claims(home, url.pathname)) return passed()
-    let early = await firstly(env, space, home, req, who, c)
-    // The answer is the home app's, so it reports as the home app — and is
-    // counted as the home app's page view — at the bare hostname, which is
-    // where the home app is mounted.
-    if (early) {
-      shown(env, req, early.page, seen(space, early.app))
-      let page = early.page
-      if (
-        page.body &&
-        page.headers.get('content-type')?.startsWith('text/html')
-      ) {
-        page = await reported(
-          env,
-          '/',
-          filled(page, await copyFor(env, space, early.app)),
-          early.app.version ?? 0,
-          {
-            ...badged(space, early.app, env),
-            ...cornerOf(space, early.app, env, who),
-          },
-          appPreview(early.app, '/'),
-          req.headers.get(ADDRESS) ?? req.url,
-        )
-      }
-      let res = reporting(page, req, '/', early.app)
-      return sandboxed(early.app) ? walled(res) : res
-    }
-  }
-  // A guest of this one app (T-37615). The roster is read space-wide, so
-  // somebody invited to a single app holds no seat and the answer above is
-  // null; what they hold is a grant on this app, and from here on they are
-  // that level — the app's page, its data, its `me()`, and the vouch its store
-  // mirrors. Here rather than beside the seat, because rung 1.5 above hands
-  // `who` to the HOME app's router: a guest of one app must not arrive at
-  // another app's worker wearing a level. Asked only of a signed-in caller
-  // with no seat, so a member pays nothing for it and a stranger nothing.
-  if (who.person && !who.role) {
-    let { grants } = routing
-    let held = who.person == person && grants
-      ? grants.has(app.eid) ? { access: grants.get(app.eid)! } : null
-      : await c.time('guest', () => dir.grant(app!, who.person!))
-    if (held) who = { ...who, role: held.access, guest: true }
-  }
-  // A stranger at a private published app is served the app from its sample,
-  // or from a store of their own once they have written (visit.ts, D-134327),
-  // unless the owner already let them in: then their way through is the
-  // click in the letter, as it was. So too for somebody the app's own rows
-  // list (join.ts): theirs is the Join button, not a copy (T-153688). Never the app's own worker coming back,
-  // nor a sandboxed app, whose page tokens each open one store, nor the form
-  // door: a form is the app's own, shown and filled by anyone (forms.ts), and
-  // a sample or a copy holds none of the app's forms.
-  let visit: Visiting | null = null
-  let stranger = { app: theirs, who, release: null as Release | null }
-  if (!itself && !walls && !formPath(path, req) && visitable(app, who)) {
-    let [own, release, invited] = await c.time('visit', () =>
-      Promise.all([
-        ownOf(env, visitor, who.via!, app!.eid),
-        releaseFor(dir, app!),
-        who.person
-          ? Promise.all([
-            waiting(dir, space!, app!, who.person, 'not_a_reader'),
-            joinable(env, dir, space!, app!, who),
-          ]).then(([letter, listed]) => !!letter || !!listed)
-          : false,
-      ]))
-    if (!invited) {
-      stranger.release = release
-      ;({ app, who, visit } = visiting(
-        storeName(space, app),
-        app,
-        who,
-        own,
-        release,
-      ))
-    }
-    if (own && due(own.seen)) background(used(ledgerOf(env), who.via!, app.eid))
-    // Their store is an app of their own now: the page they open is there.
-    let mine = visit == 'kept' && req.method == 'GET' &&
-        req.headers.get('sec-fetch-mode') == 'navigate'
-      ? await dir.appAt(own!.adopted!)
-      : null
-    if (mine && !mine.app.trashed && !mine.space.trashed) {
-      return redirect(
-        `${urlOf(mine.space, mine.app, env)}${path.slice(1)}${url.search}`,
-        303,
-      )
-    }
-  }
+  if (access instanceof Response) return access
+  ;({ req, url, path, app } = access)
+  let {
+    who: visitorWho,
+    itself,
+    opened,
+    at,
+    visit: stayed,
+    stranger,
+    minted,
+    appHandle,
+  } = access
+  let who = visitorWho
+  let visit = stayed
+  let theirs = step.app
   let to = door({
     path,
     method: req.method,
@@ -3355,6 +3569,9 @@ let served = async (
   let wall = (res: Response) => walls ? walled(res) : res
   if (to.to == 'api') {
     let apiPath = to.door
+    if (!edge && apiPath == '/query') {
+      return queryAnswer(env, dir, c, step, access)
+    }
     // A worker coming back with a grant for a visit's store holds no app
     // role, just like the browser it answered.
     let answerApi = () =>
@@ -3537,7 +3754,7 @@ let served = async (
   let own = itself
     ? null
     : await c.time('worker', () =>
-      ran(env, space!, app!, req, who, browserClaims(who)))
+      ran(env, space!, app!, req, who, browserClaims(routing, person, who)))
   // A write the worker made for a stranger on the sample gave them a store of
   // their own (above): their browser is told it holds one, and the page that
   // asked that its store moved, as the page's own write tells them.

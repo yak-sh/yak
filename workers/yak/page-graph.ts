@@ -62,7 +62,7 @@ export let queryFriends = async (
   let rows: Bundle[] = []
   if (line == APP_FRIENDS) rows = [friendsStatus(app.eid, person, allowed)]
   else if (person && allowed) {
-    let { friendsOf, friendWhereabouts } = await import('./friends.ts')
+    let { friendsOf, friendWhereabouts } = await import('./friend-reads.ts')
     let friends = (await friendsOf(dir, person)).filter((f) =>
       f.standing == 'friend'
     )

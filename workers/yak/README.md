@@ -17,16 +17,17 @@ allows `x-yak-host` to select a hostname on loopback requests. A direct
 `wrangler dev` needs `--var LOCAL_DEV:1` to enable the same local override.
 Deployed requests ignore the header. Production and staging disable both
 workers.dev routes and preview URLs; callers use the zone or service bindings. A
-local dev run is composed as yaks.app is: `yak-front` takes the port and the
-kernel runs behind it (wrangler.ts `fronted`), so the apex's `/_cli/` answers
+local dev run gives the port to `yak-front`, with the query Worker and kernel
+behind its service bindings (wrangler.ts `fronted`). The apex's `/_cli/` answers
 from front's assets there too.
 
-yaks.app's routes belong to `yak-front` (`front/`), not to this Worker: it
-answers what Site's cache holds and hands everything else to the kernel's
-default entrypoint over a service binding. Its upload is what a cold request to
-it pays for, so what it imports stays free of the graph stack. Moving a route
-takes an API call on the route, since Wrangler refuses one held by another
-Worker.
+yaks.app's routes belong to `yak-front` (`front/`). It answers what Site's cache
+holds, sends app query reads on space hostnames to `yak-query` (`query/`), and
+sends other requests to the kernel. Query and kernel use the same app routing,
+session and access checks and Store namespace. Each environment's query Worker
+requires the kernel's existing `SESSION_SECRET` so cookies and page tokens work
+across both Workers. Front falls through to the kernel when the query Worker
+cannot take a request.
 
 A deploy of the kernel deploys its sibling Workers from the same commit and to
 the same environment: `yak-front`, `yak-out` (`outbound/`, the dispatch
@@ -45,9 +46,9 @@ Worker in front of a container running native esbuild; its image is
 the image when its inputs change. Sibling preparation runs concurrently with the
 kernel bundle. Dependencies must finish successfully before the kernel upload
 begins; a failure waits for the other work and refuses the kernel upload.
-`yak-front`, which calls the kernel, deploys last. The pinned Wrangler bundles
-once, including node compatibility code and source maps; the upload reads those
-generated modules without bundling again.
+`yak-query` deploys after the kernel and `yak-front` deploys last. The pinned
+Wrangler bundles once, including node compatibility code and source maps; the
+upload reads those generated modules without bundling again.
 
 Hosted model execution has its own [executor release](../model/README.md),
 independently deployed by Workers Builds. A production kernel build adds its

@@ -1,21 +1,20 @@
 // The service door admits one operation, carrying no merchant membership.
-import { line, stringify, whole } from '@yaks/query'
-import { type Bundle, type Comp, type Taken } from '@yaks/graph'
+import { line } from '@yaks/query'
+import type { Comp } from '@yaks/graph'
 import {
   grantService,
   known,
   need,
-  type Read,
   serviceAt,
   type ServiceAuthority,
-  serviceAuthority,
   serviceName,
   using,
 } from '@yaks/connections'
 import { mayCall, schemaOf } from '@yaks/tools/declared'
-import { commandAt, toolsOf } from './app-command.ts'
+import { commandAt } from './app-command.ts'
+import { toolsOf } from './declaration.ts'
 import { acting } from './apps.ts'
-import type { App, Directory, Space } from './directory.ts'
+import type { App, Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { meta } from './meta.ts'
 import { asCaller, type Ctx, refuse } from './tool.ts'
@@ -24,18 +23,14 @@ import type { Command } from './declared.ts'
 import { opened, seal } from './lib/token.ts'
 import { mode, reads } from '@yaks/member'
 import { atApp } from '@yaks/platform/visits'
+import {
+  serviceRead as read,
+  serviceRole,
+  type Source,
+  verifyService,
+} from './service-authority.ts'
 
-type Source = { space: Space; app: App }
-
-/** A service customer uses the source app under a seat or an app grant
- * when the source is private. */
-export let serviceRole = async (
-  dir: Pick<Directory, 'role' | 'grant'>,
-  source: Source,
-  person: string,
-) =>
-  await dir.role(source.space, person) ??
-    (await dir.grant(source.app, person))?.access ?? null
+export { serviceRole, verifyService } from './service-authority.ts'
 
 export let serviceUser = (app: App, who: Who) => {
   let caller = atApp(who)
@@ -44,37 +39,6 @@ export let serviceUser = (app: App, who: Who) => {
     !reads(mode(app.access), caller.role)
   ) throw refuse('access', 'Use the source app as a signed-in person')
   return { ...caller, person: caller.person }
-}
-
-// A tree is printed as the line it parses back from.
-let read = (env: Env): Read => (said) => {
-  let q = said as Taken
-  return meta(env).query(
-    typeof q == 'string' ? q : whole(stringify(q)),
-  ) as Promise<Bundle[]>
-}
-
-/** Recheck after a queue delay as well as at the initial dispatch. */
-export let verifyService = async (
-  env: Env,
-  dir: Directory,
-  a: ServiceAuthority,
-) => {
-  if (!await serviceAuthority(read(env), a)) return false
-  let source = await dir.appAt(a.app)
-  if (
-    !source || source.app.trashed || source.space.trashed ||
-    source.space.eid != a.space
-  ) return false
-  let access = mode(source.app.access)
-  if (!reads(access, null) && !await serviceRole(dir, source, a.person)) {
-    return false
-  }
-  let target = await dir.appAt(a.service)
-  if (!target || target.app.trashed || target.space.trashed) return false
-  let tool = (await toolsOf(env, target.space, target.app))[a.operation]
-  return !!tool?.service && !!tool.worker &&
-    mayCall(tool.floor, a.person, null)
 }
 
 export let serviceToken = (env: Env, a: ServiceAuthority) =>

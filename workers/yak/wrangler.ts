@@ -193,9 +193,9 @@ let logTail = (path: string) => {
 // yak-raster (raster/) is what the RASTER binding draws an app's icon.svg
 // with; yak-browser (browser/) is what the BROWSER binding renders a draft
 // with for app_preview; yak-sandbox (sandbox/) holds the Sandbox object and
-// container the WORKBENCH binding names; and yak-front (front/) is what answers the cached
-// pages in front of this Worker. Dependencies deploy first; yak-front deploys
-// last, so its service bindings pick up the promoted kernel.
+// container the WORKBENCH binding names. After the kernel, yak-query binds
+// its Store classes and yak-front binds both Workers.
+export let QUERY = 'query/wrangler.toml'
 export let FRONT = 'front/wrangler.toml'
 export let SIBLINGS = [
   'outbound/wrangler.toml',
@@ -203,6 +203,7 @@ export let SIBLINGS = [
   'raster/wrangler.toml',
   'browser/wrangler.toml',
   'sandbox/wrangler.toml',
+  QUERY,
   FRONT,
 ]
 
@@ -302,18 +303,18 @@ let imageInputs = (
   return out
 }
 
-/** Deploy dependencies together, then the kernel, then its public gateway.
- * Settle every dependency before proceeding, including when one fails. */
+/** Deploy dependencies together, then the kernel, its query Worker and its
+ * public gateway. Settle every dependency before proceeding. */
 export let runWrangler = async (
   argv: string[],
   run: (args: string[], unpinned?: boolean) => Promise<number>,
   prepare: () => Promise<string[]> = () => Promise.resolve(argv),
 ): Promise<number> => {
   let all = siblings(argv)
-  let front = all.find((args) => args[args.indexOf('-c') + 1] == FRONT)
+  let downstream = all.filter((args) => [QUERY, FRONT].includes(args.at(-1)!))
   let completed = await Promise.allSettled(
     [
-      ...all.filter((args) => args != front).map((args) =>
+      ...all.filter((args) => !downstream.includes(args)).map((args) =>
         Promise.resolve().then(() => run(args, true))
       ),
       Promise.resolve().then(prepare),
@@ -326,7 +327,11 @@ export let runWrangler = async (
   let code = await run(
     (completed.at(-1) as PromiseFulfilledResult<string[]>).value,
   )
-  return code || !front ? code : await run(front, true)
+  for (let args of downstream) {
+    if (code) break
+    code = await run(args, true)
+  }
+  return code
 }
 
 /** Prepare a disposable artifact while the read-only guard runs. Uploads may
@@ -749,46 +754,51 @@ let cliVars = (args: string[]) => {
   return out
 }
 
-/** A local `dev` composed as yaks.app is: yak-front first, which takes the
- * port and answers what it answers there (the apex's /_cli/ among it), and
- * the kernel behind it, reached through front's service bindings. Wrangler
- * hands a second config only its own vars and `--env`, so the kernel runs
- * from a disposable copy beside it that carries this run's `--var`s.
- * Unchanged for any other command, or one that names its own config. */
+/** A local `dev` gives the port to yak-front, with the kernel and query Worker
+ * behind its service bindings. Wrangler gives `--var` overrides only to the
+ * first config, so the other Workers run from copies with those overrides. */
 export let fronted = (args: string[], root = dir) => {
   if (
     command(args) != 'dev' ||
     args.some((a) => /^(-c|--config)(=|$)/.test(a))
   ) return { args, remove: () => {} }
   let vars = cliVars(args)
-  let front = ['-c', 'front/wrangler.toml']
-  if (!Object.keys(vars).length) {
-    return {
-      args: [...args, ...front, '-c', 'wrangler.toml'],
-      remove: () => {},
+  let copies: string[] = []
+  let remove = () => copies.forEach((file) => io.removeSync(file))
+  let overridden = (file: string) => {
+    if (!Object.keys(vars).length) return file
+    let path = join(root, file)
+    let parsed = parse(io.readTextFileSync(path)) as Vars & {
+      env?: Record<string, Vars>
     }
-  }
-  let path = join(root, 'wrangler.toml')
-  let parsed = parse(io.readTextFileSync(path)) as Vars & {
-    env?: Record<string, Vars>
-  }
-  for (let part of [parsed, ...Object.values(parsed.env ?? {})]) {
-    part.vars = { ...part.vars, ...vars }
-  }
-  let config = io.makeTempFileSync({
-    dir: root,
-    prefix: '.dev-',
-    suffix: '.toml',
-  })
-  try {
+    for (let part of [parsed, ...Object.values(parsed.env ?? {})]) {
+      part.vars = { ...part.vars, ...vars }
+    }
+    let config = io.makeTempFileSync({
+      dir: dirname(path),
+      prefix: '.dev-',
+      suffix: '.toml',
+    })
+    copies.push(config)
     io.writeTextFileSync(config, stringify(parsed))
-  } catch (error) {
-    io.removeSync(config)
-    throw error
+    return relative(root, config)
   }
-  return {
-    args: [...args, ...front, '-c', relative(root, config)],
-    remove: () => io.removeSync(config),
+  try {
+    return {
+      args: [
+        ...args,
+        '-c',
+        FRONT,
+        '-c',
+        overridden('wrangler.toml'),
+        '-c',
+        overridden(QUERY),
+      ],
+      remove,
+    }
+  } catch (error) {
+    remove()
+    throw error
   }
 }
 
@@ -946,37 +956,55 @@ export let prepareSibling = async (
 ): Promise<PreparedSibling> => {
   let config = args[args.indexOf('-c') + 1]
   let started = performance.now()
-  if (args.includes('--dry-run')) {
+  let dry = args.includes('--dry-run')
+  let queryWorker = config == QUERY
+  if (dry && !queryWorker) {
     return { args, config, root, started, remove: () => {} }
   }
   let output = scratch(root, 'sibling-')
   let remove = () => io.removeSync(output, { recursive: true })
   let meta = join(output, 'metafile.json')
-  try {
+  let compile = async () => {
+    if (queryWorker) {
+      await generated('Query modules', [
+        join(root, 'bundle.ts'),
+        output,
+        meta,
+        'query',
+      ])
+      return 0
+    }
     // A dry run with no rollout bundles the Worker and builds no image: the
     // image's inputs are read below instead.
+    let built = await query([
+      ...without('--containers-rollout', args),
+      '--dry-run',
+      '--outdir',
+      output,
+      '--metafile',
+      meta,
+      '--containers-rollout=none',
+    ])
+    if (!built.success) console.error(new TextDecoder().decode(built.stderr))
+    return built.code
+  }
+  try {
     let [bundled, serving] = await Promise.allSettled([
+      compile(),
       Promise.resolve().then(() =>
-        query([
-          ...without('--containers-rollout', args),
-          '--dry-run',
-          '--outdir',
-          output,
-          '--metafile',
-          meta,
-          '--containers-rollout=none',
-        ])
+        dry ? undefined : read.deployments(config, envs(args))
       ),
-      Promise.resolve().then(() => read.deployments(config, envs(args))),
     ])
     if (bundled.status == 'rejected') throw bundled.reason
-    let built = bundled.value
+    let code = bundled.value
     let deployments = serving.status == 'fulfilled' ? serving.value : undefined
-    if (!built.success) {
-      console.error(new TextDecoder().decode(built.stderr))
-      return { args, config, root, started, code: built.code, remove }
-    }
-    let bundle = bundleEntry(output, meta, dirname(join(root, config)))
+    if (code) return { args, config, root, started, code, remove }
+    let bundle = bundleEntry(
+      output,
+      meta,
+      queryWorker ? root : dirname(join(root, config)),
+    )
+    if (dry) return { args, config, root, started, bundle, remove }
     let modules: Record<string, Uint8Array> = {}
     for (let file of io.readDirSync(output)) {
       // Wrangler emits these beside the actual multipart upload modules.
@@ -1060,7 +1088,7 @@ export let uploadSibling = async (
 ) => {
   if (code != null) return code
   if (refresh) return await run(refresh, true)
-  if (args.includes('--dry-run')) return await run(args, true)
+  if (!bundle && args.includes('--dry-run')) return await run(args, true)
   let image = /(^| )--containers-rollout[= ]none( |$)/.test(args.join(' '))
     ? { config, remove: () => {} }
     : await siblingImages(config, ensure, root, wrangler)

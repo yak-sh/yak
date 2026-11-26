@@ -127,6 +127,29 @@ export let options = (
   },
 })
 
+/** The query Worker has one entry and no asset manifest. A single module
+ * lets esbuild discard unused exports across its shared app-serving code. */
+export let bundleQuery = async (root: string, output: string, meta: string) => {
+  try {
+    let result = await build({
+      ...options(root),
+      entryPoints: ['query/index.ts'],
+      splitting: false,
+      outdir: output,
+    })
+    let source = result.metafile!
+    let missing = lacking(source)
+    if (Object.keys(missing).length) {
+      throw new Error(
+        `Query Worker uses unavailable modules: ${JSON.stringify(missing)}`,
+      )
+    }
+    io.writeTextFileSync(meta, JSON.stringify(source))
+  } finally {
+    stop()
+  }
+}
+
 /** Build the source once, then group its eager closure without duplicating
  * the modules shared with a deferred door. Both passes compose source maps. */
 export let bundle = async (root: string, output: string, meta: string) => {
@@ -212,6 +235,7 @@ export let bundle = async (root: string, output: string, meta: string) => {
 
 if (import.meta.main) {
   let root = dirname(fileURLToPath(import.meta.url))
-  let [output, meta] = system.args.map((arg) => resolve(arg))
-  await bundle(root, output, meta)
+  let [output, meta, entry] = system.args
+  let make = entry == 'query' ? bundleQuery : bundle
+  await make(root, resolve(output), resolve(meta))
 }

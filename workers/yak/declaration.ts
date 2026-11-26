@@ -91,3 +91,11 @@ export let declarationOf = (
     HELD,
   ).then((text): Declaration => JSON.parse(text))
 }
+
+export let toolsOf = async (
+  env: Env,
+  space: Space,
+  app: App,
+): Promise<Tools> => {
+  return (await declarationOf(env, space, app)).tools
+}
