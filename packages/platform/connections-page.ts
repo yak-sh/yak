@@ -235,6 +235,8 @@ export type McpServer = {
  * whether it holds it. */
 export type McpPage = {
   servers: McpServer[]
+  /** Apps allowed to read this person's friends and send play invitations. */
+  friends?: Grantee[]
   /** where a sign-in returns, the redirect URI a server's own OAuth client
    * names */
   redirect?: string

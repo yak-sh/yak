@@ -56,7 +56,7 @@ export type Update = {
   /** A friend request or suggestion from this person (friends.ts). */
   friend?: { person: string; suggested: boolean }
   /** A message from a friend, answered by a reply to them (friends.ts). */
-  message?: { friend: string; name: string }
+  message?: { friend: string; name: string; invite?: string }
   choices?: Choice[]
   recommended?: string
   /** What its choices show, in the order they show it. */

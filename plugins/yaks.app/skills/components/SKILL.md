@@ -834,13 +834,14 @@ one is refused entirely:
 The complete list of reserved names:
 
     _change _pace _privacy _tx about access account_alert account_usage
-    acts_for admin_action agent_step alias answer app app_draft app_icon
-    app_icon_draw app_splash app_splash_draw app_transfer
-    app_transfer_answer archetype archived arrived artifact ask attachment
-    attempt attribute_writes authorship belief binding blob bounced browser
-    browser_session budget build build_of builder builder_answer builder_dep
-    builder_edit builder_model_answer builder_open builder_ring built byline
-    call call_ready call_woken called calls cancel cancelled chat_account
+    acts_for admin_action agent_step alias answer app app_draft app_friend
+    app_friends app_icon app_icon_draw app_permission app_splash
+    app_splash_draw app_transfer app_transfer_answer archetype archived
+    arrived artifact ask attachment attempt attribute_writes authorship
+    belief binding blob bounced browser browser_session budget build
+    build_of builder builder_answer builder_dep builder_edit
+    builder_model_answer builder_open builder_ring built byline call
+    call_ready call_woken called calls cancel cancelled chat_account
     chat_hears chat_message chat_post chat_private chat_room chat_serves
     checkout chosen cites cli_grant code_review comment commit comp compat
     completed connection contains content conversation cost counted created
@@ -854,9 +855,9 @@ The complete list of reserved names:
     edge effect email entity entry error event exception execution failed
     favorite featured fee feed feedback file file_retirement filed finding
     fired form form_guest form_mail form_phone form_post former
-    free_ai_budget free_spaces fund fund_receipt gallery gift gitobj grant
-    grants_listed handoff_spent heard heard_turn hearing held home hook
-    hostname image inference install installed integration
+    free_ai_budget free_spaces friend_invite fund fund_receipt gallery gift
+    gitobj grant grants_listed handoff_spent heard heard_turn hearing held
+    home hook hostname image inference install installed integration
     integration_install interrupted invite inviting key knock last_deploy
     lease lent lines located mail mail_answered mail_dismissed mail_domain
     mail_post mail_task mcp_list mcp_server member memory mentions meter
@@ -867,28 +868,28 @@ The complete list of reserved names:
     operator_alerts operator_reach order output output_of outreach_batch
     outreach_letter outreach_read outreach_trial outreach_write
     outreach_written own_number parent pending person person_name persona
-    phone phone_line phone_login phone_release phone_slow plan preview price
-    pro_grant product project proposed provider provisional public_file
-    published push_subscription quarantined question questions rating reads
-    recalled recipient reconnecting ref referenced refund_failed
-    refund_request refund_retry refund_sale refund_sent refusal
-    refusal_report register_domain register_writes registration relationship
-    release_remake renew_domain_order renew_domains renew_transferred_domain
-    report report_refusals repository representation requires restored
-    result retired revision role_free_spaces rtc rtc_lapse sale_access
-    sale_artifact satisfies screen screenshot secret seeded seller sender
-    sending serves service_checkout service_quote session session_input
-    session_result session_resume session_run sessions_ended sfu shared
-    signed_in signin signin_miss skill sms_consent space space_logo
-    speech_hear spend staged standing_link started starter stop stream_item
-    submitted subscribed subscription supersedes supervises support
-    support_contract support_contract_billing support_contract_pending
-    support_contract_time sweep switched task text text_post theme told tool
-    tool_refusal topic trashed tree_entry trend tunnel tunnel_trashed typed
-    unchecked untrashed updated upstream usage uses using verified visit
-    visitor_build visitor_calls visitor_share volume waitlisted wake
-    wake_run wants watch web whereabouts withdrawn worked worktree written
-    yaks_account
+    phone phone_line phone_login phone_release phone_slow plan play_invite
+    preview price pro_grant product project proposed provider provisional
+    public_file published push_subscription quarantined question questions
+    rating reads recalled recipient reconnecting ref referenced
+    refund_failed refund_request refund_retry refund_sale refund_sent
+    refusal refusal_report register_domain register_writes registration
+    relationship release_remake renew_domain_order renew_domains
+    renew_transferred_domain report report_refusals repository
+    representation requires restored result retired revision
+    role_free_spaces rtc rtc_lapse sale_access sale_artifact satisfies
+    screen screenshot secret seeded seller sender sending serves
+    service_checkout service_quote session session_input session_result
+    session_resume session_run sessions_ended sfu shared signed_in signin
+    signin_miss skill sms_consent space space_logo speech_hear spend staged
+    standing_link started starter stop stream_item submitted subscribed
+    subscription supersedes supervises support support_contract
+    support_contract_billing support_contract_pending support_contract_time
+    sweep switched task text text_post theme told tool tool_refusal topic
+    trashed tree_entry trend tunnel tunnel_trashed typed unchecked untrashed
+    updated upstream usage uses using verified visit visitor_build
+    visitor_calls visitor_share volume waitlisted wake wake_run wants watch
+    web whereabouts withdrawn worked worktree written yaks_account
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as

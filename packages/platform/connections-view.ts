@@ -36,6 +36,7 @@ import { Notice } from '@yaks/ui/Notice'
 import { Rows } from '@yaks/ui/Rows'
 import { Time } from '@yaks/ui/Time'
 import { type Host, spaceHost, url } from './host.ts'
+import { FRIENDS_ACCESS } from './app-friends.ts'
 import { enabling, managePath } from './routes.ts'
 import { count } from './standing.ts'
 import { choice } from './side-parts.ts'
@@ -713,15 +714,28 @@ let granting = (
 
 // An app asking the person for what they connected (`./api/allow`), at the
 // top of their connections page: each source it asks for, allowed or not.
-let sourceAsk = (ask: NonNullable<McpPage['ask']>, action: string, env: Host) =>
-  h(
+let sourceAsk = (
+  ask: NonNullable<McpPage['ask']>,
+  action: string,
+  env: Host,
+) => {
+  let friends = ask.at == FRIENDS_ACCESS
+  return h(
     Card,
     { id: 'grant' },
-    h(Card.Title, null, `${ask.app.title} asks to use what you connected`),
+    h(
+      Card.Title,
+      null,
+      friends
+        ? `Let ${ask.app.title} see your friends?`
+        : `${ask.app.title} asks to use what you connected`,
+    ),
     h(
       Card.Sub,
       null,
-      `Whenever you use ${ask.app.title}, its code may call the tools of what you allow here, as you. Nobody else who uses it reaches them.`,
+      friends
+        ? `${ask.app.title} can read your confirmed friends and their visible online status, and send play invitations on your behalf. You can remove access in Connections.`
+        : `Whenever you use ${ask.app.title}, its code may call the tools of what you allow here, as you. Nobody else who uses it reaches them.`,
     ),
     ask.sources.length
       ? ask.sources.map((src) =>
@@ -748,6 +762,22 @@ let sourceAsk = (ask: NonNullable<McpPage['ask']>, action: string, env: Host) =>
         { href: `https://${spaceHost(env, ask.app.space)}/${ask.app.slug}/` },
         `Back to ${ask.app.title}`,
       ),
+    ),
+  )
+}
+
+let friendsAccess = (apps: Grantee[], action: string) =>
+  h(
+    Card,
+    null,
+    heading('Friends access'),
+    apps.map((app) =>
+      h(
+        Card.Sub,
+        { key: app.eid },
+        app.title,
+        granting(action, app, FRIENDS_ACCESS, 'source-revoke', 'Remove access'),
+      )
     ),
   )
 
@@ -1529,6 +1559,7 @@ export let connectionsView = (
     }, [
       told(),
       c.mcp?.ask ? sourceAsk(c.mcp.ask, action, env) : null,
+      c.mcp?.friends?.length ? friendsAccess(c.mcp.friends, action) : null,
       c.on ? null : h(
         Card,
         null,

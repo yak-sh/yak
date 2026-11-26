@@ -84,21 +84,30 @@ export let presencesOf = async (
   friends: string[],
   now: number = Date.now(),
 ): Promise<Map<string, Seen>> => {
+  let visible = await friendWhereabouts(dir, reader, friends)
+  let seen = await Promise.all(
+    [...visible].map(async ([friend, rows]) =>
+      [friend, await presenceOf(dir, reader, rows, now)] as const
+    ),
+  )
+  return new Map(seen)
+}
+
+/** A friend's whereabouts when both people share presence. */
+export let friendWhereabouts = async (
+  dir: Directory,
+  reader: string,
+  friends: string[],
+): Promise<Map<string, Row[]>> => {
   if (!friends.length || await dir.presenceHidden(reader)) return new Map()
   let hidden = await Promise.all(friends.map((f) => dir.presenceHidden(f)))
   let visible = friends.filter((_, i) => !hidden[i])
-  let rows = await dir.whereabouts(visible)
-  let seen = await Promise.all(
-    visible.map((f) =>
-      presenceOf(
-        dir,
-        reader,
-        rows.filter((r) => r.whereabouts?.person == f),
-        now,
-      )
-    ),
-  )
-  return new Map(visible.map((f, i) => [f, seen[i]]))
+  let seen = new Map(visible.map((f) => [f, [] as Row[]]))
+  for (let row of await dir.whereabouts(visible)) {
+    let person = row.whereabouts?.person
+    if (person) seen.get(person)?.push(row)
+  }
+  return seen
 }
 
 let presenceOf = async (
@@ -430,6 +439,7 @@ export type Message = {
   words: string
   at: string
   read: boolean
+  invite?: string
 }
 
 // What a message is: a knock aimed at the person it is for, from the person
@@ -446,7 +456,7 @@ export let messagesOf = async (
 ): Promise<Message[]> => {
   let [rows, friends] = await Promise.all([
     dir.read(
-      line`(.knock.target=${person}|.knock.from=${person})&.knock.from&.doc&?opened&?created&.order=-created.at&.limit=${limit}`,
+      line`(.knock.target=${person}|.knock.from=${person})&.knock.from&.doc&?play_invite&?opened&?created&.order=-created.at&.limit=${limit}`,
     ),
     friendsOf(dir, person),
   ])
@@ -460,6 +470,7 @@ export let messagesOf = async (
     let friend = named.get(outgoing ? to : from)
     if (!friend) return []
     let created = r.created as { at?: string; by?: unknown } | undefined
+    let invite = (r.play_invite as { url?: string } | undefined)?.url
     return [{
       eid: r.entity.eid,
       friend: friend.person,
@@ -469,6 +480,7 @@ export let messagesOf = async (
       words: String((r.doc as { body?: string }).body ?? ''),
       at: String(created?.at ?? ''),
       read: outgoing || !!r.opened,
+      ...invite ? { invite } : {},
     }]
   })
 }
@@ -482,12 +494,15 @@ let idOf = (v: unknown) =>
 let sent = async (
   dir: Directory,
   who: Who,
-  { from, to, words, eid = crypto.randomUUID() }: {
+  { from, to, words, invite, app, eid = crypto.randomUUID() }: {
     from: string
     to: string
     words: string
     eid?: string
+    invite?: string
+    app?: string
   },
+  check = false,
 ) => {
   let friend = EID.test(to)
     ? (await friendsOf(dir, from)).find((f) => f.person == to)
@@ -506,8 +521,14 @@ let sent = async (
     if (idOf(knock?.from) == from && idOf(knock?.target) == to) return friend
     throw refuse('arguments', 'Name the message by a UUID of its own.')
   }
+  if (check) return friend
   await dir.stamp({
-    entities: [{ entity: { eid }, knock: { target: to, from }, doc: { body } }],
+    entities: [{
+      entity: { eid },
+      knock: { target: to, from, ...app ? { about: app } : {} },
+      doc: { body },
+      ...invite ? { play_invite: { url: invite } } : {},
+    }],
   }, vouched(who))
   return friend
 }
@@ -517,8 +538,15 @@ let sent = async (
 export let sendFriend = (
   dir: Directory,
   who: Who & { person: string },
-  message: { eid: string; to: string; words: string },
-) => sent(dir, who, { from: who.person, ...message })
+  message: {
+    eid: string
+    to: string
+    words: string
+    invite?: string
+    app?: string
+  },
+  check = false,
+) => sent(dir, who, { from: who.person, ...message }, check)
 
 /** The person's messages from `friend` read: each marked `opened`, for
  * every interface that shows them. One that is not to them is left. */
@@ -562,14 +590,20 @@ export let messageUpdates = async (
   return incoming.map((m) => ({
     eid: m.eid,
     at: m.at,
-    subject: m.operator
+    subject: m.invite
+      ? `Play invitation from ${m.name}`
+      : m.operator
       ? `${possessive(m.name)} Operator`
       : `Message from ${m.name}`,
     words: m.words,
     needs: false,
     unread: !m.read,
     dismissed: false,
-    message: { friend: m.friend, name: m.name },
+    message: {
+      friend: m.friend,
+      name: m.name,
+      ...m.invite ? { invite: m.invite } : {},
+    },
   }))
 }
 

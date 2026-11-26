@@ -373,7 +373,7 @@ let messageCard = (
   at: At,
   u: Update,
   where: ComponentChildren,
-  { friend, name }: NonNullable<Update['message']>,
+  { friend, name, invite }: NonNullable<Update['message']>,
 ) =>
   h(
     Card,
@@ -385,6 +385,7 @@ let messageCard = (
       u.unread ? h(State, { mod: 'positive' }, 'New') : null,
     ),
     h('p', { class: 'Update_Words' }, u.words),
+    invite ? h('a', { href: invite, rel: 'noreferrer' }, 'Join game') : null,
     form(
       at,
       [['message', friend]],

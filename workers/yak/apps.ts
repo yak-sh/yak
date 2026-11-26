@@ -154,7 +154,7 @@ import {
   whoIs,
 } from './session.ts'
 import { asking } from './asking.ts'
-import { queried } from './page-graph.ts'
+import { inviteFriend, queried, queryFriends } from './page-graph.ts'
 import { local } from './homes.ts'
 import { dataAsset, webAsset, webPage } from './web.ts'
 import {
@@ -2050,6 +2050,7 @@ let api = async (
   path: string,
   c: Clock,
   mount: string,
+  friendPage: boolean,
 ) =>
   await appDoor(
     apiAsk(req, env, dir, space, source.app, path, source.who),
@@ -2060,7 +2061,18 @@ let api = async (
     // just as if the browser requested it directly.
     (request) => ran(env, space, served.app, request, served.who),
   ) ??
-    await storeApi(req, env, dir, space, served.app, path, served.who, c, mount)
+    await storeApi(
+      req,
+      env,
+      dir,
+      space,
+      served.app,
+      path,
+      served.who,
+      c,
+      mount,
+      friendPage,
+    )
 
 // The graph and its uploaded files use the store and standing of the visit.
 export let storeApi = async (
@@ -2073,6 +2085,7 @@ export let storeApi = async (
   who: Who,
   c: Clock,
   mount: string,
+  friendPage = false,
 ) => {
   // The store client and its named modules come from the platform's assets.
   if (path == '/client.js') return platformFile(req, env, '/_client.js')
@@ -2242,6 +2255,13 @@ export let storeApi = async (
       let url = new URL(req.url)
       let line = lineOf(url)
       if (line == null) throw new Refused('/query needs a query: ?q=…')
+      let friends = await queryFriends(
+        dir,
+        app,
+        friendPage ? who.person : null,
+        line,
+      )
+      if (friends) return friends
       let live = url.searchParams.get('live') == '1'
       return Response.json(
         await queried(env, space, app, who, line, live, headers),
@@ -2305,8 +2325,9 @@ export let storeApi = async (
       return refusedOptions(e)
     }
     if (req.method != 'POST') return json(405, 'method_not_allowed')
-    if (!mayPost) return refused()
+    if (!mayPost && (!mayRead || !who.person || !friendPage)) return refused()
     if (req.headers.get('content-type')?.split(';')[0].trim() == BINARY) {
+      if (!mayPost) return refused()
       let body = await req.arrayBuffer()
       let stopped = await full(env, space, body.byteLength)
       if (stopped) return json(413, 'space_full', stopped)
@@ -2328,6 +2349,7 @@ export let storeApi = async (
     // the page's envelope is a shape for one batch, and this is a file. So this
     // door only counts the bytes, which is the one thing the store cannot.
     if ((req.headers.get('content-type') ?? '').includes('ndjson')) {
+      if (!mayPost) return refused()
       return store(`/apply${check ? '?check=1' : ''}`, {
         method: 'POST',
         body,
@@ -2343,8 +2365,19 @@ export let storeApi = async (
     // batch as applied.
     let sent: unknown
     try {
-      sent = JSON.parse(body)
-      let applied = await metaOf(store).apply(batched(sent), {
+      let bundles
+      try {
+        sent = JSON.parse(body)
+        bundles = batched(sent)
+      } catch (e) {
+        if (!mayPost) return refused()
+        throw e
+      }
+      let invited = mayRead && friendPage &&
+        await inviteFriend(env, dir, space, app, who, bundles, check)
+      if (invited) return Response.json(receipt(sent, invited))
+      if (!mayPost) return refused()
+      let applied = await metaOf(store).apply(bundles, {
         ...headers,
         ...(await named(env, who, app)),
         ...resend(req),
@@ -3293,6 +3326,7 @@ let served = async (
         apiPath,
         c,
         at,
+        !itself && !opened?.attached && (!walls || !!opened),
       )
     // Upload representations get a short keep revalidated against their rows;
     // release assets and platform modules are kept as pages are.

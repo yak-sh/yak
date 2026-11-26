@@ -5,6 +5,7 @@ import { joinSchema } from './manifest.ts'
 import { bool, num, owned, ref, text, time, unique } from './schema.ts'
 import { NAME_SOURCES } from './named.ts'
 import { supportWords } from './support-contract.ts'
+import { appPermissionsWords } from './app-friends.ts'
 // A server-owned property and what it holds.
 let described = (s: PropSchema, description: string) => ({
   ...owned(s),
@@ -1207,6 +1208,7 @@ let presenceDoc: VocabDoc = {
   },
 }
 export let docs: VocabDoc[] = [
+  appPermissionsWords,
   directoryDoc,
   presenceDoc,
   previewDoc,

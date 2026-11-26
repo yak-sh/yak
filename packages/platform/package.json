@@ -25,6 +25,7 @@
     "./side-parts": "./side-parts.ts",
     "./side-browser": "./side-browser.ts",
     "./account-rows": "./account-rows.ts",
+    "./app-friends": "./app-friends.ts",
     "./app-tile": "./app-tile.ts",
     "./page-parts": "./page-parts.ts",
     "./friends-view": "./friends-view.ts",

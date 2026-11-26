@@ -26,6 +26,39 @@ which values other players see, which survive a disconnect, and which the store
 keeps. App files and compilation are in <https://yaks.app/docs/code.md>; the
 page's graph API is in <https://yaks.app/docs/store.md>.
 
+## Inviting friends
+
+Offer an **Invite a friend** button beside the game's share link. Use
+`query('.app_friends')` from `./api/client.js` to read
+`app_friends{signed_in, allowed}`. If the player is signed out, use the sign-in
+link from `me()`. If they are signed in and `allowed` is false, link to
+`./api/allow?at=friends`. yaks.app asks whether this app may see their friends.
+The permission applies to this player and app, and the player can remove it
+under **Connections → Friends access**.
+
+After permission is granted, `query('.app_friend')` returns one row per
+confirmed friend. The recipient ID is `entity.eid`. The
+`app_friend{name, avatar, presence}` component holds the display name, a
+monogram image URL, and `online`, `building`, `away`, or `unknown`. Hidden
+presence is `unknown`. Read the list when opening the picker and keep the result
+in the current page.
+
+When the player chooses a friend, send one bundle with `apply`.
+
+```js
+await apply({
+  entity: { eid: crypto.randomUUID() },
+  friend_invite: { to: friend.entity.eid, path: 'play#' + roomCode },
+})
+```
+
+The optional `path` is relative to the app's root. It can include a room code in
+the query or fragment. An omitted path opens the app's main page. The invitation
+appears in the friend's Friends conversation and Updates with a link to join.
+The link uses the game's existing access rules, so a private game needs a
+working guest link or a share for the recipient. Keep the same invitation UUID
+if the write needs to be retried.
+
 ## Platform dependencies and vocabulary
 
 A **platform dependency** is a package supplied by the running yaks.app release,

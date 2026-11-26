@@ -225,6 +225,7 @@ export let personRows = async (
         at: m.at,
         read: m.read,
         operator: m.operator,
+        ...m.invite ? { invite: m.invite } : {},
       })),
     )
   }

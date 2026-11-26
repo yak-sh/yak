@@ -306,7 +306,14 @@ let line = (
   return h(
     Transcript.Entry,
     { mod: mine ? 'theirs' : 'other', 'data-key': m.eid },
-    h(Transcript.Bubble, null, m.words),
+    h(
+      Transcript.Bubble,
+      null,
+      m.words,
+      m.invite
+        ? [' ', h('a', { href: m.invite, rel: 'noreferrer' }, 'Join game')]
+        : null,
+    ),
     end || m.operator
       ? h(
         Transcript.Meta,

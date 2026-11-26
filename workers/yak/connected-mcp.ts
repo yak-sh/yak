@@ -1,6 +1,11 @@
 import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
 import { url } from '@yaks/platform/host'
+import {
+  friendPermissionPatch,
+  friendPermissions,
+  FRIENDS_ACCESS,
+} from '@yaks/platform/app-friends'
 import { writes } from '@yaks/member'
 import { manageAt } from '@yaks/platform/routes'
 import {
@@ -29,10 +34,15 @@ import {
 import type { Grantee, McpPage } from '@yaks/platform/connections-page'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
-import type { Who } from './session.ts'
+import { vouched, type Who } from './session.ts'
 import type { Row } from './tool-words.ts'
 import type { Calling } from '@yaks/tunnel/hosted'
-import { argsOf, type Bundle, type Tool as GraphTool } from '@yaks/graph'
+import {
+  argsOf,
+  type Bundle,
+  type Comp,
+  type Tool as GraphTool,
+} from '@yaks/graph'
 import { MCPError, nameOf } from '@yaks/mcp-client'
 import { CallError } from '@yaks/tools/errors'
 
@@ -138,7 +148,10 @@ export let mcpPage = async (
   let { read } = ctxOf(env).graph
   let person = who.person ?? ''
   let remote = pageServers(env, dir, who, space)
-  let shown = await remote.shown(kept)
+  let [shown, permissions] = await Promise.all([
+    remote.shown(kept),
+    person ? dir.read(friendPermissions(person)) : [],
+  ])
   let by = await grantees(read, shown.map((s) => s.id))
   let named = new Map<string, Grantee | null>()
   let name = async (eid: string) => {
@@ -151,17 +164,29 @@ export let mcpPage = async (
       a != null
     ),
   })))
-  let app = grant && at && addressed(at) ? await name(grant) : null
+  let friends = (await Promise.all(
+    permissions.map((b) => name(String((b.app_permission as Comp).app))),
+  )).filter((a) => a != null)
+  let app = grant && at && (at == FRIENDS_ACCESS || addressed(at))
+    ? await name(grant)
+    : null
   let ask = app && at
     ? {
       app,
       at,
-      sources: await Promise.all(
-        (await grantable(read, person, at)).map(async (g) => ({
-          ...g,
-          granted: await granted(read, { app: app.eid, person, at: g.at }),
-        })),
-      ),
+      sources: at == FRIENDS_ACCESS
+        ? [{
+          at,
+          title: 'Friends',
+          about: '',
+          granted: friends.some((f) => f.eid == app.eid),
+        }]
+        : await Promise.all(
+          (await grantable(read, person, at)).map(async (g) => ({
+            ...g,
+            granted: await granted(read, { app: app.eid, person, at: g.at }),
+          })),
+        ),
     }
     : undefined
   let tools = open
@@ -180,6 +205,7 @@ export let mcpPage = async (
     : undefined
   return {
     servers,
+    ...friends.length ? { friends } : {},
     redirect: ctxOf(env).redirect,
     ...tools ? { tools } : {},
     ...ask ? { ask } : {},
@@ -202,6 +228,17 @@ export let sourceActed = async (
   let app = await granteeOf(dir, field('app'))
   if (!app) throw refuse('missing', 'That app is not there anymore.')
   let at = field('at')
+  if (at == FRIENDS_ACCESS) {
+    if (!who.person) throw refuse('access', 'Sign in to change friends access.')
+    let allowed = act == 'source-grant'
+    await dir.stamp(
+      { entities: [friendPermissionPatch(app.eid, who.person, allowed)] },
+      vouched(who),
+    )
+    return allowed
+      ? `${app.title} can now see your friends.`
+      : `${app.title} can no longer see your friends.`
+  }
   if (act == 'source-revoke') {
     await c.graph.apply(revoke({ app: app.eid, at }))
     return `${app.title} no longer uses it.`

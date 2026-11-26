@@ -115,6 +115,7 @@ export type FriendMessage = {
   at: string
   read: boolean
   operator: boolean
+  invite?: string
 }
 
 let strings = { type: 'string' }
@@ -237,6 +238,7 @@ export let accountWords: VocabDoc = {
         at: strings,
         read: { type: 'boolean' },
         operator: { type: 'boolean' },
+        invite: strings,
       },
       required: ['to', 'words'],
     },

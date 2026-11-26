@@ -5,6 +5,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { archetypeDoc } from '@yaks/archetype/vocab'
 import { num, owned, ref, text, time } from './schema.ts'
 import { noticesDoc } from './notices-vocab.ts'
+import { appFriendsWords } from './app-friends.ts'
 let referencedDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true, [edgeKeywords.uri]: true },
   title: 'relations',
@@ -403,6 +404,7 @@ export let classificationDoc: VocabDoc = {
   ),
 }
 export let docs: VocabDoc[] = [
+  appFriendsWords,
   noticesDoc,
   referencedDoc,
   exceptionDoc,

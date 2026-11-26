@@ -11,6 +11,7 @@ import { noted } from '@yaks/notify/whereabouts'
 import { connector, kernel, pressPeople, saveAccount, signIn } from './probe.ts'
 import { managePath, talkPath } from '@yaks/platform/routes'
 import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
+import { APP_FRIEND, APP_FRIENDS } from '@yaks/platform/app-friends'
 
 let k = await kernel()
 let [ann, bo, cy, dee, eve, fay] = await Promise.all(
@@ -385,4 +386,91 @@ test('a message to someone not a friend, or named as another thing, is refused',
   let taken = await message(eve, fay, 'Hi', gift!.eid)
   assertEquals(taken.status, 400)
   assertStringIncludes(await taken.text(), 'of its own')
+})
+
+test('app friends require the player’s consent and a play invite reaches both friend surfaces', async () => {
+  let host = `${eveSpace.slug}.${k.host}`
+  let api = (path: string, p = eve, init: RequestInit = {}) =>
+    k.at(host, `/gift/api${path}`, {
+      ...init,
+      headers: { cookie: p.cookie, 'content-type': 'application/json' },
+    })
+  let read = async (q: string, p = eve) => {
+    let res = await api(`/query?q=${q}`, p)
+    assertEquals(res.status, 200)
+    return await res.json()
+  }
+  let change = (act: 'source-grant' | 'source-revoke') =>
+    k.at(k.host, `/manage/${eveSpace.slug}/connections`, {
+      method: 'POST',
+      headers: {
+        cookie: eve.cookie,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ do: act, app: gift!.eid, at: 'friends' })
+        .toString(),
+    })
+  let eid = crypto.randomUUID()
+  let invite = (to: string, path = 'play#expedition', check = '') =>
+    api('/apply' + check, eve, {
+      method: 'POST',
+      body: JSON.stringify({
+        entities: [{ entity: { eid }, friend_invite: { to, path } }],
+      }),
+    })
+  assertEquals((await read(APP_FRIENDS))[0].app_friends, {
+    signed_in: true,
+    allowed: false,
+  })
+  assertEquals(await read(APP_FRIEND), [])
+  assertEquals((await invite(fay.person)).status, 403)
+  let allow = new URL((await api('/allow?at=friends')).headers.get('location')!)
+  assertEquals(allow.searchParams.get('grant'), gift!.eid)
+  let prompt = await k.at(
+    k.host,
+    `/manage/${eveSpace.slug}/connections${allow.search}`,
+    {
+      headers: { cookie: eve.cookie },
+    },
+  )
+  assertStringIncludes(await prompt.text(), 'Let Gift see your friends?')
+  assertEquals((await change('source-grant')).status, 303)
+  assertEquals((await read(APP_FRIENDS))[0].app_friends, {
+    signed_in: true,
+    allowed: true,
+  })
+  assertEquals(await read(APP_FRIEND, fay), [])
+  let rows = await read(APP_FRIEND)
+  assertEquals(rows.map((b: { entity: { eid: string } }) => b.entity.eid), [
+    fay.person,
+  ])
+  assertEquals(rows[0].app_friend.presence, 'building')
+  assertStringIncludes(rows[0].app_friend.avatar, 'data:image/svg+xml,')
+  try {
+    await saveAccount(k, fay, { hidden: true })
+    assertEquals((await read(APP_FRIEND))[0].app_friend.presence, 'unknown')
+  } finally {
+    await saveAccount(k, fay, { hidden: false })
+  }
+  assertEquals((await invite(ann.person)).status, 400)
+  assertEquals((await invite(fay.person, '../elsewhere')).status, 400)
+  assertEquals(
+    (await invite(fay.person, 'play#expedition', '?check=1')).status,
+    200,
+  )
+  assertEquals((await said(fay)).filter((m) => m.invite).length, 0)
+  assertEquals((await invite(fay.person)).status, 200)
+  assertEquals((await invite(fay.person)).status, 200)
+  let link = `https://${host}/gift/play#expedition`
+  assertEquals((await said(fay)).flatMap((m) => m.invite ?? []), [link])
+  assertStringIncludes(
+    await (await updates(fay, faySpace.slug)).text(),
+    `href="${link}"`,
+  )
+  assertEquals((await change('source-revoke')).status, 303)
+  assertEquals(await read(APP_FRIEND), [])
+  assertEquals((await invite(fay.person)).status, 403)
+  assertEquals((await change('source-grant')).status, 303)
+  assertEquals((await read(APP_FRIEND)).length, 1)
+  await change('source-revoke')
 })
