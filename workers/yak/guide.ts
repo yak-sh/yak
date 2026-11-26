@@ -120,6 +120,10 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
    {"properties": {"serves": {"type": "number"}}}}} gives the app a recipe
    component of its own, filterable like doc, and two commands of its own,
    add_recipe and find_recipe, so any agent finds the app later.
+   A reference property declares {"type": "string", "ref": "entity", "death": "detach"}
+   to clear its value when the target is deleted. See ${
+    url(env, '/docs/components.md')
+  } for the other deletion behaviors.
 5. Give the person the URL app_deploy answered: that is when the app exists
    for them, and the first time to say it was made.
 

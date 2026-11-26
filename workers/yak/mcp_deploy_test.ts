@@ -22,6 +22,48 @@ import {
 import { deployedOver, type Version } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
 
+test('a vocabulary refusal tells preview and deploy callers how to repair a reference', async () => {
+  let k = await kernel()
+  try {
+    let space = unique('reference-death')
+    let app = { space, app: 'loans' }
+    let { cookie } = await seed(k, [{ slug: space, apps: [app.app] }])
+    let agent = connector(k, cookie)
+    let reference = { type: 'string', ref: 'entity' }
+    let write = (item: object) =>
+      agent.tool('app_files', {
+        ...app,
+        files: [
+          { path: 'index.html', content: '<h1>Loans</h1>' },
+          { path: 'vocab.json', content: vocabFile({ loan: { item } }) },
+        ],
+      })
+    await write(reference)
+    for (
+      let [tool, args] of [
+        ['app_preview', { ...app, screenshot: false }],
+        ['app_deploy', app],
+      ] as const
+    ) {
+      let refused = await assertRejects(
+        () => agent.tool(tool, args),
+        Error,
+        'vocab.json: loan.item',
+      )
+      assertStringIncludes(
+        refused.message,
+        'set "death": "detach" alongside "ref"',
+      )
+    }
+    await write({ ...reference, death: 'detach' })
+    await agent.tool('app_deploy', app)
+    let page = await k.at(`${space}.yaks.app`, '/loans/')
+    assertStringIncludes(await page.text(), '<h1>Loans</h1>')
+  } finally {
+    await k.stop()
+  }
+})
+
 test('a trashed app releases its component to another app in the space', async () => {
   let k = await kernel()
   try {

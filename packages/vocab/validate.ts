@@ -92,10 +92,14 @@ let storableProp = (
   }
   if (s.ref != null) {
     let words = ['cascade', 'detach', 'release', 'keep']
-    return words.includes(s.death ?? '') ? [] : [
-      `${comp}.${prop} is a reference without a death word (${
-        words.join('|')
-      })`,
+    if (words.includes(s.death ?? '')) return []
+    let why = s.death == null
+      ? 'is a reference without a death word'
+      : `has invalid "death" value ${JSON.stringify(s.death)}`
+    return [
+      `${comp}.${prop} ${why} — ` +
+      'set "death": "detach" alongside "ref" to clear the property when its target is deleted. ' +
+      'Use "cascade" to delete the referencing entity, "release" to remove its component, or "keep" to retain the reference.',
     ]
   }
   return []

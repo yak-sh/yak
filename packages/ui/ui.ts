@@ -1,2 +1,2 @@
-/** The base UI contributions, available wherever this plugin is installed. */
-export { kits, skins, themes } from './kit.ts'
+/** The base UI contributions and their default composition. */
+export { composition, kits, skins, themes } from './kit.ts'

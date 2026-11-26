@@ -15,7 +15,9 @@ import {
 import type { Answer, Ask } from '@yaks/esbuild'
 import { strip } from '@yaks/esbuild/strip'
 import { unheard } from '@yaks/graph/errors'
+import * as ui from '@yaks/ui/ui'
 import type { Catalog } from '../../packages/esbuild/platform.ts'
+import { unexported } from '../../packages/esbuild/shared.ts'
 import * as apps from './apps.ts'
 import { writeResources } from './esbuild.ts'
 import type { Env } from './env.ts'
@@ -145,6 +147,31 @@ let compiles = (ask: Ask): Partial<Answer> => ({
   pages: Object.fromEntries(ask.pages.map((p) => [p, `/* ${p} */`])),
   lock: '{"lockfileVersion": 3}\n',
   installed: ['three@0.186.1'],
+})
+
+test('a UI Kits page can deploy with the default composition', async () => {
+  let spec = '@yaks/ui/ui'
+  let origin = 'https://yaks.app'
+  let path = `__packages/${'a'.repeat(64)}/ui.js`
+  let url = `${origin}/${path}`
+  // The compiler boundary checks the names the browser entry really exports.
+  let shared = { [path]: `export let ${Object.keys(ui).join(', ')}` }
+  await using s = await scenario((ask) => {
+    let [entry] = ask.pages
+    let source = ask.files[entry].replace(spec, url)
+    return {
+      errors: unexported(source, shared, origin, { [spec]: url }),
+      pages: { [entry]: source },
+    }
+  })
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': `import { composition } from '${spec}'
+export default composition`,
+    'package.json': '{"dependencies":{"@yaks/ui":"platform"}}',
+  })
+  assertStringIncludes(await s.tool('app_deploy'), 'compiled main.ts')
+  assertStringIncludes((await s.served('main.ts')).body, url)
 })
 
 test('TypeScript and npm imports compile at deploy, and serve as JavaScript', async () => {

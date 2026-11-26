@@ -107,9 +107,17 @@ list them in `assets.public` ([Files and Uploads](files.md)).
 Every part paints with the same CSS custom properties. A **theme** sets them
 all; `wear({ kits, theme: themes.linen })` from `@yaks/ui/wear` links the
 theme's and the kit's stylesheets ahead of the page's own and resolves once they
-have loaded, so render after it. Then the app's `style.css` sets the ones its
-design plan chose (<https://yaks.app/docs/design.md>, Plan before code), and
-every part wears them:
+have loaded, so render after it. For the default Gouache theme and Paper skin,
+use the default composition:
+
+```ts ignore
+import { composition } from '@yaks/ui/ui'
+import { wear } from '@yaks/ui/wear'
+await wear(composition)
+```
+
+Each part reads the properties the app sets in `style.css` according to its
+design plan (<https://yaks.app/docs/design.md>, Plan before code).
 
 | Property                      | What it colours or sets                       |
 | ----------------------------- | --------------------------------------------- |

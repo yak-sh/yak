@@ -60,7 +60,7 @@ equal(
 | Import                   | Offers                                                                                                                                                                                  |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/ui`               | Parts below; `el`, `block`, `Surround`, `Props`, `Part`; `relative`; browser placement; kits, themes, skins, composition helpers and their types; `Guide`, `Specimens`                  |
-| `@yaks/ui/ui`            | Base `kits`, `themes`, `skins` for a host's UI facet                                                                                                                                    |
+| `@yaks/ui/ui`            | Base `kits`, `themes`, `skins` and their default `composition`                                                                                                                          |
 | `@yaks/ui/chart`         | A chart's marks through any `h`: `sparkline`, `columns`, and the days a row keeps (`kept`, `series`, `summed`)                                                                          |
 | `@yaks/ui/contents`      | Browser: `start`, `fill`, `watch` a page's `Contents`, lighting the section in view; pure `current`, `anchor`, `headings`                                                               |
 | `@yaks/ui/wear`          | Browser: `wear(composition)` links its sheets (`addresses`) ahead of the page's own and settles once they load                                                                          |

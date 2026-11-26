@@ -86,8 +86,6 @@ test('storable refuses what a table cannot lower', () => {
         linked: { $ref: '#/$defs/recipe' },
         eid: { type: 'string' },
         bellTwo: { type: 'string' },
-        aim: { type: 'string', ref: 'entity' },
-        dead: { type: 'string', ref: 'entity', death: 'explode' },
         numbered: { type: 'number', enum: ['1'] },
       },
     },
@@ -102,11 +100,27 @@ test('storable refuses what a table cannot lower', () => {
   assert(said.includes('recipe."eid" uses the reserved name "eid"'))
   assert(said.includes('starting with a lowercase letter'))
   assert(said.includes('Name it "bell_two".'))
-  assert(said.includes('recipe.aim is a reference without a death word'))
-  assert(said.includes('recipe.dead is a reference without a death word'))
   assert(
     said.includes('recipe.numbered is a closed set — its type is "string"'),
   )
+})
+
+test('a reference refusal shows how to spell its deletion behavior', () => {
+  let cited = (death?: string) =>
+    storable(doc({
+      loan: {
+        properties: { item: { type: 'string', ref: 'entity', death } },
+      },
+    }))
+  for (let death of ['detach', 'cascade', 'release', 'keep']) {
+    assertEquals(cited(death), [])
+  }
+  let [missing] = cited()
+  assert(missing.startsWith('loan.item is a reference without a death word'))
+  assert(missing.includes('set "death": "detach" alongside "ref"'))
+  let [invalid] = cited('explode')
+  assert(invalid.startsWith('loan.item has invalid "death" value "explode"'))
+  assert(invalid.includes('set "death": "detach" alongside "ref"'))
 })
 
 test("a CamelCase component is a UX component's, and stays in the page", () => {

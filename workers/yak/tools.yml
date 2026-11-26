@@ -502,7 +502,10 @@ app_deploy:
     to use; optional (or none) derives severity from what changed. Open pages
     are notified after the release and never reload on their own. It creates
     the components the app's vocab.json declares ({{vocab}}): a component is
-    a named group of typed fields on a stored record, an entity. The
+    a named group of typed fields on a stored record, an entity. A reference
+    property declares {"type": "string", "ref": "entity", "death": "detach"}
+    to clear its value when the target is deleted. Choose the death word for
+    the behavior the app needs (Components and vocab.json in the guide). The
     platform's own component names are reserved, since every app's store
     already holds those components and a name means one thing in every store:
     doc, comment, email, event, cost, error, deploy, file and the rest the
