@@ -571,7 +571,7 @@ test('a new chat greets the person by name, with ways to start over the box', ()
     fresh.document.querySelector('.Talk_Hello')!.textContent!,
     'What can I do for you?',
   )
-  assertEquals(fresh.document.querySelector('[name=say]') != null, true)
+  assertEquals(fresh.document.querySelector('#ask [name=say]') != null, true)
   assertEquals(
     fresh.document.querySelector('.Talk_Starts button')?.textContent,
     'Make a new app',
@@ -580,7 +580,7 @@ test('a new chat greets the person by name, with ways to start over the box', ()
 
 test('a chat that is gone says so, with no box', () => {
   assertEquals(gone.code, 404)
-  assertEquals(gone.document.querySelector('[name=say]'), null)
+  assertEquals(gone.document.querySelector('#ask [name=say]'), null)
 })
 
 test('an app chosen in the side opens a chat about it, with the app live beside it', () => {

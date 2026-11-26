@@ -452,7 +452,7 @@ let load = async (
     return url.includes('?talk=') ? conversation(answer) : answer
   }
   // linkedom keeps no focus or selection: the box records being given it.
-  let say = document.querySelector('[name=say]') as HTMLTextAreaElement
+  let say = document.querySelector('#ask [name=say]') as HTMLTextAreaElement
   let focused = false
   say.focus = () => void (focused = true)
   say.setSelectionRange = () => {}
