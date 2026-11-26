@@ -481,6 +481,13 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
             class='Note Note-small'
             {...own.text('home.hello.note', {
               price: <a href='#cost' {...own.text('home.hello.price')} />,
+              examples: (
+                <a
+                  href='#examples'
+                  data-cta='examples'
+                  {...own.text('home.hello.examples')}
+                />
+              ),
             })}
           />
         </div>

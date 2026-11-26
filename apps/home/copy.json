@@ -37,7 +37,8 @@
       "hint": "Type what you need, like “Make me a menu for my farmer’s market bakery”",
       "go": "Build it",
       "note": "Free, no card: 5 apps and $20 of building credit for the AI. The Plus plan is %{price}.",
-      "price": "$12 a month"
+      "price": "$12 a month",
+      "examples": "See examples"
     },
     "yak": {
       "wave": "Oh! Hi there.",
