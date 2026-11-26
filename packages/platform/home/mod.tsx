@@ -49,12 +49,11 @@ let pictured = (feature: string): feature is Pictures =>
   PICTURED.some((id) => id == feature)
 
 let Ask = (
-  { copy, action, id, cta, children }: {
+  { copy, action, id, cta }: {
     copy: Copy
     action: string
     id: string
     cta: string
-    children?: ComponentChildren
   },
 ) => {
   let main = id == 'say'
@@ -84,7 +83,6 @@ let Ask = (
         data-cta={cta}
         {...copy.text('home.hello.go')}
       />
-      {children}
     </form>
   )
 }
@@ -128,14 +126,7 @@ let Hero = (
         <label for='say' {...copy.text('home.hello.title')} />
       </h1>
       <p class='Note Note-lead Home_Lead' {...copy.text('home.story.lead')} />
-      <Ask copy={copy} action={action} id='say' cta='start'>
-        <a
-          class='Home_More'
-          href='#examples'
-          data-cta='examples'
-          {...copy.text('home.hello.examples')}
-        />
-      </Ask>
+      <Ask copy={copy} action={action} id='say' cta='start' />
       {offer && (
         <p class='Note Home_Lead'>
           <b {...copy.text('home.hello.offer')} />

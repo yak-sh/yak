@@ -99,14 +99,6 @@
   align-items: end;
 }
 
-.Home_More {
-  grid-column: 1;
-  align-self: center;
-  font-size: var(--small);
-  font-weight: 700;
-  color: var(--sky-accent);
-}
-
 .Home_Field {
   width: 100%;
   --well: light-dark(#fafbff, #222e40);
@@ -1212,10 +1204,6 @@
 
   .Home_Ask-hero .Home_Build {
     grid-column: 2;
-  }
-
-  .Home_More {
-    grid-row: 2;
   }
 }
 
