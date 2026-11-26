@@ -32,7 +32,7 @@ type Giving = {
   link: string
   provider: string
   mode: 'test' | 'live' | undefined
-  connected: boolean
+  connected: (test: boolean) => Promise<boolean>
   rates: Rates
   page: (page: Page, ...parts: ComponentChildren[]) => Response
 }
@@ -94,7 +94,7 @@ export let givingPage = async (
   let urlFor = new URL(at.link)
   urlFor.searchParams.set('fund', eid)
   let test = fund.test || mode == 'test'
-  let available = at.connected && (!fund.test || mode == 'test')
+  let available = await at.connected(test)
   let draw = (part: ComponentChildren, status = 200) =>
     at.page({
       title: fund.title,
@@ -188,7 +188,7 @@ export let donationSettings = async (
   let configured = await funds(store)
   let today = new Date(now).getUTCFullYear()
   let year = yearOf(new URL(request.url).searchParams.get('year'), today)
-  let canLive = at.connected && at.mode == 'live'
+  let canLive = at.mode == 'live' && await at.connected(false)
   let view = async (say?: string, status = 200) => {
     let { live, test } = await totals(store, year)
     return at.page(

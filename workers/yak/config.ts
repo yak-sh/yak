@@ -395,6 +395,19 @@ export let payments: Config & { via: string } = {
   }],
 }
 
+export let sandboxPayments: typeof payments = {
+  via: payments.via,
+  plugins: [{
+    use: '@yaks/stripe',
+    facets: ['graph'],
+    with: {
+      key: { secret: 'STRIPE_SANDBOX_KEY' },
+      clock: { binding: 'CLOCK' },
+      doors: { connect: { secret: 'STRIPE_SANDBOX_WEBHOOK_SECRET' } },
+    },
+  }],
+}
+
 /** The Workers AI models Cloudflare retired, each with the current model of
  * nearest price and ability that answers a caller still naming it: a shipped
  * app, a builder row, a transcript's `using`. */

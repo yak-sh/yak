@@ -19,8 +19,8 @@ import {
   namedPayer,
   renewalBought,
 } from './billing.ts'
-import { apply as shopped } from './sell.ts'
-import { payments, via } from './payments.ts'
+import { apply as shopped, sandboxGift } from './sell.ts'
+import { payments, sandboxPayments, via } from './payments.ts'
 import { defect } from './defects.ts'
 import type { Env } from './env.ts'
 
@@ -79,13 +79,15 @@ export let paymentDoor = async (
   let path = new URL(req.url).pathname
   let name = path.slice(PREFIX.length)
   if (!path.startsWith(PREFIX) || name.includes('/')) return null
-  let { doors } = await payments(env)
-  if (!Object.hasOwn(doors, name)) return null
+  let test = name == 'connect-test'
+  let { doors } = await (test ? sandboxPayments(env) : payments(env))
+  let door = test ? 'connect' : name
+  if (!Object.hasOwn(doors, door)) return null
   if (req.method != 'POST') {
     return json(405, 'method_not_allowed', 'post the event here')
   }
   let where = `POST ${path}`
-  let said = await doors[name](req)
+  let said = await doors[door](req)
   if (!said) {
     if (!hushed(`${name} unset`)) {
       defect(
@@ -106,5 +108,9 @@ export let paymentDoor = async (
   // A failure past this line is ours, so it throws: index.ts files it and
   // answers a 5xx, and the provider delivers again. That is exactly what we
   // want for a store that was busy or a call to the provider that timed out.
-  return Response.json({ received: true, did: await applied(env, said.heard) })
+  let heard = said.heard
+  let did = test
+    ? 'account' in heard ? await sandboxGift(env, heard) : 'not a test gift'
+    : await applied(env, heard)
+  return Response.json({ received: true, did })
 }

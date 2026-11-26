@@ -965,6 +965,19 @@ that delivers and does nothing.
 down in the same breath (sell.ts `connect`), or are handed one a seller
 connected (sell.ts `callback`), so there is nothing to be told.
 
+### Test donations alongside live payments
+
+Give the Worker a dedicated restricted sandbox key in `STRIPE_SANDBOX_KEY`, with
+Checkout Sessions and Customer Portal write permissions on connected accounts.
+Set `STRIPE_SANDBOX_ACCOUNT` to a connected sandbox account with card payments
+enabled. In the same Stripe sandbox, create a Connected accounts webhook at
+`https://yaks.app/stripe/connect-test` for `checkout.session.completed` and
+`invoice.paid`. Keep its signing secret in `STRIPE_SANDBOX_WEBHOOK_SECRET`.
+
+A test fund uses this account for Checkout and its receipt's cancel link.
+Selling shows test totals separately and excludes them from live year-end
+statements. A live fund uses the space's own connected account.
+
 ## Verifying a deploy
 
 ```sh

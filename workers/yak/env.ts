@@ -68,6 +68,8 @@ export type Images = { input(stream: ReadableStream<Uint8Array>): ImageInput }
 export type Vars = Partial<Env> & Record<string, unknown>
 
 export type Env = {
+  // Connected account used for test-mode donations alongside live payments.
+  STRIPE_SANDBOX_ACCOUNT?: string
   LOADER?: import('./code-runtime.ts').Loader
   CODE_MODE?: import('@yaks/code-mode').Evaluate
   // Platform defects and triggered Store traces, through independent intake.

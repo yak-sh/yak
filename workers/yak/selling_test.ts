@@ -247,7 +247,7 @@ let WHSEC = 'whsec_a_connect_probe_secret'
 // What the provider's Connect door did with one signed event about `on`'s
 // account (payment-doors.ts), as Stripe would deliver it.
 let connected =
-  (env: Vars) =>
+  (env: Vars, path = '/stripe/connect', secret = WHSEC) =>
   async (type: string, object: Record<string, unknown>, on: string) =>
     (JSON.parse(
       await delivered(
@@ -256,8 +256,8 @@ let connected =
             new Request(`https://yaks.app${path}`, init),
             env as Env,
           ))!,
-        '/stripe/connect',
-        WHSEC,
+        path,
+        secret,
         type,
         object,
         on,
@@ -741,16 +741,23 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
   }])
 
   let real = globalThis.fetch
-  let asked: { path: string; on: string | null; body: string }[] = []
+  let asked: {
+    path: string
+    on: string | null
+    key: string | null
+    body: string
+  }[] = []
   let answers: unknown[] = []
   using _ = stub(globalThis, 'fetch', (url, init) => {
     if (!String(url).startsWith('https://api.stripe.com/')) {
       return real(url, init)
     }
     let at = new URL(String(url))
+    let headers = new Headers(init?.headers)
     asked.push({
       path: at.pathname + at.search,
-      on: new Headers(init?.headers).get('stripe-account'),
+      on: headers.get('stripe-account'),
+      key: headers.get('authorization'),
       body: decodeURIComponent(String(init?.body ?? '')),
     })
     return Promise.resolve(
@@ -760,7 +767,13 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
     )
   })
   let space = { ...(await k.dir.space('ada'))!, tier: 'plus' as const }
-  let env = { ...k.env, STRIPE_KEY: 'rk_test_probe' }
+  let live = { ...k.env, STRIPE_KEY: 'rk_live_fixture' }
+  let env = {
+    ...live,
+    STRIPE_SANDBOX_KEY: 'rk_test_probe',
+    STRIPE_SANDBOX_ACCOUNT: 'acct_sandbox',
+    STRIPE_SANDBOX_WEBHOOK_SECRET: 'whsec_sandbox_test',
+  }
   let page = await apps.fetch(visit('/shop/api/pay/give?fund=' + FUND), env)
   let html = await page.text()
   assertEquals(page.status, 200, html.slice(0, 500))
@@ -784,7 +797,6 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
   assertEquals(ready.status, 200, await ready.clone().text())
   assertStringIncludes(await ready.text(), 'Giving totals')
 
-  let live = { ...env, STRIPE_KEY: 'rk_live_fixture' }
   let blocked = await sell.giving(live, {
     space,
     app: 'shop',
@@ -830,7 +842,8 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
 
   assertEquals((await give({ cents: 10000, cover: true })).status, 200)
   let once = asked.at(-1)!
-  assertEquals(once.on, 'acct_shop')
+  assertEquals(once.on, 'acct_sandbox')
+  assertEquals(once.key, 'Bearer rk_test_probe')
   assertStringIncludes(once.body, 'mode=payment')
   assertStringIncludes(once.body, '[unit_amount]=10330')
   assertStringIncludes(once.body, '[name]=Gift+to+The+Roof')
@@ -848,12 +861,12 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
   assert(!monthly.body.includes('application_fee'))
 
   let heard = (type: string, object: Record<string, unknown>) =>
-    connected({ ...env, STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })(
+    connected(env, '/stripe/connect-test', env.STRIPE_SANDBOX_WEBHOOK_SECRET)(
       type,
       object,
-      'acct_shop',
+      'acct_sandbox',
     )
-  let tags = { space: k.space.eid, app: 'shop', fund: FUND }
+  let tags = { space: k.space.eid, app: 'shop', fund: FUND, gift_mode: 'test' }
   let paid = {
     id: 'cs_gift',
     payment_intent: 'pi_gift',
@@ -862,6 +875,10 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
     customer_details: { email: 'ana@example.com', name: 'Ana' },
     metadata: { ...tags, covered: '330' },
   }
+  assertEquals(
+    await heard('checkout.session.completed', { ...paid, livemode: true }),
+    'not a test payment',
+  )
   assertEquals(
     await heard('checkout.session.completed', paid),
     'shop: gift 10330',
@@ -905,7 +922,8 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
   let [one, month] = ['$103.30', '$25.00'].map((m) =>
     letters.find((l) => l.body.includes(m))!
   )
-  assertEquals(one.title, 'Your gift to The Roof')
+  assertEquals(one.title, 'Test receipt: Your gift to The Roof')
+  assertStringIncludes(one.body, 'No money moved.')
   assertStringIncludes(one.body, 'Grace Hall Inc. received your gift of')
   assertStringIncludes(
     one.body,
@@ -935,11 +953,17 @@ test('a gift is given, received, receipted, cancellable and stated', async () =>
   assertEquals(made.path, '/v1/billing_portal/configurations')
   assertStringIncludes(session.body, 'customer=cus_1')
   assertStringIncludes(session.body, 'configuration=bpc_1')
-  assertEquals(session.on, 'acct_shop')
+  assertEquals(session.on, 'acct_sandbox')
+  assertEquals(session.key, 'Bearer rk_test_probe')
 
   // One statement per donor and year, sent once.
+  let onlySandbox = { ...env, STRIPE_KEY: 'rk_test_probe' }
   let stated = async (year: number) =>
-    await (await sell.statements(env, at, { year })).json()
+    await (await sell.statements(onlySandbox, at, { year })).json()
+  assertEquals(await (await sell.statements(env, at, { year: 2026 })).json(), {
+    year: 2026,
+    letters: 0,
+  })
   assertEquals(await stated(2026), { year: 2026, letters: 1 })
   assertEquals(await stated(2026), { year: 2026, letters: 0 })
   let statement = (await store.query(line`.mail&?doc`) as unknown as {

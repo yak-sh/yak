@@ -21,7 +21,7 @@ import {
   statements,
 } from './sell.ts'
 import { donationSettings, givingPage } from '@yaks/platform/giving-pages'
-import { payments } from './payments.ts'
+import { donationAccount, payments } from './payments.ts'
 import { page } from './pages.ts'
 import { asset } from './sheets.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
@@ -328,15 +328,14 @@ let pagesOf = async (at: Asked) => {
   let { name: provider, shops } = await payments(env)
   let root = appUrl(space, app, env)
   let store = storeOf(at)
-  let connected = shops.on() && !refusedSell(space, env) &&
-    !!space.seller?.account &&
-    space.seller.ready && !space.seller.house
   return {
     request: req,
     link: new URL('api/pay/give', root).href,
     provider,
     mode: shops.mode(),
-    connected,
+    connected: async (test: boolean) =>
+      (test || !refusedSell(space, env)) &&
+      !!await donationAccount(env, space, test),
     rates: {
       card: shops.costs.card,
       recurring: shops.costs.recurring,

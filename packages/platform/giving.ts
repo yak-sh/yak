@@ -144,11 +144,12 @@ export type Received = {
  */
 export let receipt = (
   fund: Fund,
-  gift: Received,
+  gift: Received & { test?: boolean },
   cancel?: string,
 ) => ({
-  title: `Your gift to ${fund.title}`,
+  title: `${gift.test ? 'Test receipt: ' : ''}Your gift to ${fund.title}`,
   body: [
+    ...(gift.test ? ['This was a test gift. No money moved.', ''] : []),
     `Thank you. ${fund.holder} received your ${
       gift.monthly ? 'monthly ' : ''
     }gift of **${money(gift.total)}** on ${day(gift.at)}${

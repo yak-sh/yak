@@ -41,7 +41,13 @@ import { line } from '@yaks/query'
 import { sha256 } from '@yaks/graph/sha256'
 import { derivedEid } from '@yaks/graph/identity'
 import { moved } from './billing.ts'
-import { payments, shops, via } from './payments.ts'
+import {
+  donationAccount,
+  payments,
+  sandboxPayments,
+  shops,
+  via,
+} from './payments.ts'
 import type {
   Line,
   Paid,
@@ -932,13 +938,8 @@ export let apply = async (env: Env, heard: Shopped): Promise<string> => {
     return `${space.slug} disconnected`
   }
   if (heard.about == 'sale') return await sold(env, space, on, heard.sale)
-  let bill = heard.about == 'term' ? heard.invoice : undefined
-  if (bill?.tags.fund) {
-    return await gave(env, space, on, {
-      ...bill,
-      key: bill.id,
-      invoice: bill.id,
-    })
+  if (heard.about == 'term' && heard.invoice?.tags.fund) {
+    return await giftInvoice(env, space, on, heard.invoice)
   }
   if (heard.about == 'refund') {
     let refund = heard.refund
@@ -957,6 +958,39 @@ export let apply = async (env: Env, heard: Shopped): Promise<string> => {
     return await settled(env, space, heard.to, payment)
   }
   return 'nothing to do'
+}
+
+let giftInvoice = (
+  env: Env,
+  space: Space,
+  account: string,
+  invoice: NonNullable<Extract<Shopped, { about: 'term' }>['invoice']>,
+) =>
+  gave(env, space, account, {
+    ...invoice,
+    key: invoice.id,
+    invoice: invoice.id,
+  })
+
+/** The sandbox carries only test gifts. Its signed checkout or invoice names
+ * the destination space, since the test account can stand in for many spaces. */
+export let sandboxGift = async (env: Env, heard: Shopped) => {
+  let account = heard.account
+  if (!account || account != env.STRIPE_SANDBOX_ACCOUNT) {
+    return 'not a test gift'
+  }
+  let sale = heard.about == 'sale' ? heard.sale : undefined
+  let bill = heard.about == 'term' ? heard.invoice : undefined
+  let tags = sale?.tags ?? bill?.tags
+  if (!tags?.fund || !tags.space || tags.gift_mode != 'test') {
+    return 'not a test gift'
+  }
+  if ((sale?.gift?.live ?? bill?.live) !== false) return 'not a test payment'
+  let space = await dirOf(env).at(tags.space)
+  if (!space) return 'no space for this gift'
+  return sale
+    ? await sold(env, space, account, sale)
+    : await giftInvoice(env, space, account, bill!)
 }
 
 // What an event about a sale carries: the checkout's tags, a refund's, or
@@ -1189,8 +1223,8 @@ export let giving = async (
   },
   body: unknown,
 ) => {
-  let lent = await shops(env)
   let made: Sale
+  let target: NonNullable<Awaited<ReturnType<typeof donationAccount>>>
   try {
     let app = await inApp(env, at.space, at.app)
     if (!app) throw refuse('missing', 'app not found')
@@ -1201,23 +1235,26 @@ export let giving = async (
       : []
     if (!row?.fund) throw refuse('missing', `no fund ${id || '?'} in this app`)
     let fund = fundOf(row as Parameters<typeof fundOf>[0])
-    let mode = lent.mode()
-    if (fund.test && mode != 'test') {
+    let connection = await donationAccount(env, at.space, fund.test === true)
+    if (fund.test && !connection) {
       return json(
         409,
         'test_only',
         'This fund is in test mode. A sandbox connection is required.',
       )
     }
-    if (!at.space.seller?.account || at.space.seller.house) {
+    if (!connection) {
       return json(
         409,
         'not_connected',
         'This fund needs its own connected payment account.',
       )
     }
-    let shut = await closed(env, at.space)
-    if (shut) return shut
+    target = connection
+    let lent = target.shops
+    let mode = lent.mode()
+    let upgrade = mode != 'test' && refusedSell(at.space, env)
+    if (upgrade) return json(403, 'plus_required', upgrade)
     let priced = charge(
       asked,
       lent.costs.card,
@@ -1254,7 +1291,7 @@ export let giving = async (
     }
     if (typeof asked.key == 'string' && /^[0-9a-f-]{36}$/i.test(asked.key)) {
       made.key = sha256(
-        JSON.stringify([at.space.seller.account, asked.key, made]),
+        JSON.stringify([target.account, asked.key, made]),
       )
     }
   } catch (e) {
@@ -1266,7 +1303,7 @@ export let giving = async (
   }
   try {
     return Response.json({
-      url: await lent.checkout(at.space.seller!.account, made),
+      url: await target.shops.checkout(target.account, made),
     })
   } catch (e) {
     defect(e, { request: `POST /${at.app}/api/pay/give` })
@@ -1321,7 +1358,7 @@ export let giftEid = (key: string) => derivedEid(`gift\x00${key}`)
  * gift is, since a donor finds it months later.
  */
 let gave = async (env: Env, space: Space, account: string, g: Given) => {
-  if (!account || space.seller?.house || g.tags.space != space.eid) {
+  if (!account || g.tags.space != space.eid) {
     return 'not a connected gift'
   }
   if (!g.key || !(g.total > 0)) return 'a gift of nothing'
@@ -1352,7 +1389,7 @@ let gave = async (env: Env, space: Space, account: string, g: Given) => {
     : undefined
   let letter = giftReceipt(
     fund,
-    { total: g.total, covered, at: g.at, monthly },
+    { total: g.total, covered, at: g.at, monthly, test },
     cancel,
   )
   await store.apply(protectedSale([
@@ -1445,6 +1482,7 @@ export let giftPortal = async (
   }
   try {
     let lent = await shops(env)
+    if (test && lent.mode() != 'test') lent = (await sandboxPayments(env)).shops
     if (test ? lent.mode() != 'test' : lent.mode() == 'test') {
       return json(
         409,
