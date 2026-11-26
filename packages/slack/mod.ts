@@ -140,6 +140,16 @@ let server = async (
   return id(channel.context_team_id)
 }
 
+/** The domain of the workspace the bot with `credential` was installed in,
+ * as Slack's `auth.test` says it: `acme.slack.com`. */
+export let domain = async (
+  credential: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string | undefined> => {
+  let answer = await call(fetcher, credential, 'auth.test')
+  if (answer.ok === true) return URL.parse(String(answer.url))?.hostname
+}
+
 export let slack: Platform = {
   name: 'slack',
   title: 'Slack',

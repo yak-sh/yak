@@ -279,6 +279,15 @@ test('a Slack-started install waits for an entitled owner to confirm a destinati
   let fetch = globalThis.fetch
   globalThis.fetch = async (input, init) => {
     let r = new Request(input, init)
+    if (r.url == 'https://slack.com/api/auth.test') {
+      assertEquals(r.headers.get('authorization'), 'Bearer xoxb-install')
+      return Response.json({
+        ok: true,
+        url: 'https://checks.slack.com/',
+        team: 'Checks <Slack>',
+        team_id: 'TCHECKS',
+      })
+    }
     if (r.url != 'https://slack.com/api/oauth.v2.access') {
       return fetch(input, init)
     }
@@ -326,6 +335,9 @@ test('a Slack-started install waits for an entitled owner to confirm a destinati
     let html = await screen.text()
     assertStringIncludes(html, 'Checks &lt;Slack')
     assertEquals(html.includes('Checks <Slack>'), false)
+    assertStringIncludes(html, 'installed from Slack, not from this browser')
+    assertStringIncludes(html, 'checks.slack.com')
+    assertStringIncludes(html, 'TCHECKS')
     assertStringIncludes(html, `value="${checks}"`)
     assertStringIncludes(html, `value="${spare}"`)
     assertEquals(html.includes(hidden), false)

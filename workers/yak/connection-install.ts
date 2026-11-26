@@ -12,6 +12,7 @@ import { cookieValue } from '@yaks/platform/cookie'
 import { url } from '@yaks/platform/host'
 import { CONNECTION_INSTALL, MANAGE, signInAt } from '@yaks/platform/routes'
 import { CallError } from '@yaks/tools/errors'
+import { domain as slackDomain } from '@yaks/slack'
 import { h } from 'preact'
 import { finish, hold, waiting } from './attempts.ts'
 import { ctxOf, finishConnection, pageOf } from './connections.ts'
@@ -29,6 +30,8 @@ let MINUTES = 30
 type Pending = {
   integration: string
   grant: Tokens
+  /** the workspace's domain, as Slack says it */
+  domain?: string
   person: string | null
   until: number
 }
@@ -72,6 +75,16 @@ let refused = (e: unknown) =>
   e instanceof CallError || (e instanceof OAuthError &&
     ['invalid_code', 'code_already_used', 'invalid_grant'].includes(e.code))
 
+// The workspace's domain, which its installer cannot make another's; none
+// where Slack does not say it.
+let domainOf = (grant: Tokens) =>
+  grant.access_token
+    ? slackDomain(grant.access_token).catch((e) => {
+      caught(e, { request: 'installed workspace' })
+      return undefined
+    })
+    : undefined
+
 /** Accept a code from Slack's dashboard or its direct installation link. */
 export let outside = async (
   req: Request,
@@ -94,6 +107,7 @@ export let outside = async (
       redeemInstallation(c, i, code),
       account(req, env, dirOf(env)),
     ])
+    let domain = await domainOf(grant)
     let state = crypto.randomUUID()
     await hold(
       env,
@@ -102,6 +116,7 @@ export let outside = async (
       {
         integration: i.name,
         grant,
+        domain,
         person: who.person,
         until: Date.now() + MINUTES * 60_000,
       } satisfies Pending,
@@ -132,13 +147,17 @@ export let choose = async (req: Request, env: Env): Promise<Response> => {
   if (!available(pending, person)) return retry(env)
   let seats = (await dir.seats(person, 'owner')).filter((s) => !s.space.trashed)
   let spaces = seats.map((s) => s.space)
-  let name = pending.grant.account_title || pending.grant.account
+  let { grant, domain } = pending
+  let named = [domain, `team ${grant.account}`].filter(Boolean).join(', ')
+  let name = `${grant.account_title || grant.account} (${named})`
   if (req.method == 'GET') {
     return page(
       env,
       {
         title: 'Connect Slack',
-        lead: `Choose the yaks.app space to connect to ${name}.`,
+        lead: `${name} was installed from Slack, not from this browser. ` +
+          'Connect it only if it is your workspace, and choose the yaks.app ' +
+          'space to connect it to.',
         headers: privatePage,
       },
       spaces.length
