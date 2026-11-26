@@ -1,10 +1,8 @@
 /**
  * What a space's Updates say at their head, of the day: the visits to the
  * person's apps in the last day and the busiest of them, and which of their
- * friends are on yaks.app now. The server says them as it draws the page
- * opened at Updates (yaks.app's updates.ts), and the browser from the tab's
- * page graph where Updates show in place of the chat
- * (./updates-day-browser.ts), so both say the same.
+ * friends are on yaks.app now. The browser draws them from the tab's page
+ * graph when Updates first show (./updates-day-browser.ts).
  *
  * ```ts
  * import { dayLine, friendsLine } from '@yaks/platform/updates-day'
@@ -28,6 +26,9 @@ export type Day = { person: string; space: string; friends: boolean }
 
 /** The slot the day's lines stand in, holding its `Day`. */
 export let DAY = 'data-updates-day'
+
+export let daySlot = (day: Day) =>
+  h('div', { class: 'Update_Day', [DAY]: JSON.stringify(day) })
 
 /** An app a day's visits are counted for. */
 export type Counted = { eid: string; slug: string; title?: string }

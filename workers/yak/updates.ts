@@ -39,7 +39,7 @@ import { newsOrder, offerRows, updateRows } from '@yaks/platform/update-rows'
 import { appRows } from '@yaks/platform/side-rows'
 import type { MarkedApp } from '@yaks/platform/routes'
 import { drawnRows } from '@yaks/platform/page-graph'
-import { DAY, type Day, dayCards, dayLine } from '@yaks/platform/updates-day'
+import { daySlot } from '@yaks/platform/updates-day'
 
 export { type Apps, bySha, chatAt, draftAt }
 import { lastDay } from './views.ts'
@@ -264,20 +264,30 @@ export let visitsOf = async (
 export let updates = (
   env: Env,
   space: Space,
-  news: Updates & { read?: Read[] },
-  lists: ComponentChildren = null,
-  apps: MarkedApp[] = [],
-  views?: Map<string, number>,
-  friends?: string,
-  person = '',
+  {
+    person,
+    friends,
+    lists,
+    apps = [],
+    news,
+  }: {
+    person: string
+    friends: boolean
+    lists: ComponentChildren
+    apps?: MarkedApp[]
+    news?: Updates & { read?: Read[] }
+  },
 ) =>
   h(
     Fragment,
     null,
     about(space),
-    dayCards(dayLine(apps, views), friends ?? ''),
+    daySlot({ person, space: space.eid, friends }),
     lists,
-    listed(env, person, [space], news, () => apps),
+    listed(env, person, [space], news ?? { updates: [], waiting: 0 }, () =>
+      apps, {
+      drawn: news != null,
+    }),
     dismissedLink(space),
   )
 
@@ -297,35 +307,6 @@ let dismissedLink = (space: Space) =>
       { href: talkPath('updates', space.slug) + '?dismissed' },
       'See what you dismissed',
     ),
-  )
-
-/** The Updates page's view on a page opened at another of its views
- * (@yaks/platform/talk-views): its cards are drawn in the browser from the
- * tab's page graph as its watches answer, and the day's lines once it first
- * shows (@yaks/platform/updates-day-browser), the friends line where
- * `friends` says it is said. */
-export let updatesLater = (
-  env: Env,
-  space: Space,
-  lists: ComponentChildren,
-  person: string,
-  friends: boolean,
-) =>
-  h(
-    Fragment,
-    null,
-    about(space),
-    h('div', {
-      class: 'Update_Day',
-      [DAY]: JSON.stringify(
-        { person, space: space.eid, friends } satisfies Day,
-      ),
-    }),
-    lists,
-    listed(env, person, [space], { updates: [], waiting: 0 }, () => [], {
-      drawn: false,
-    }),
-    dismissedLink(space),
   )
 
 /** The person's Updates from every space's Operator, at `/updates`. */

@@ -737,7 +737,10 @@ test('every Operator page holds the chat, its Updates and every space’s as vie
     (await page(r)).map((v) => [
       JSON.parse(v.getAttribute('data-talk-view')!).here,
       v.hasAttribute('hidden') ? 'hidden' : 'shown',
-      v.querySelector('[data-operator-chat]') ? 'chat' : 'news',
+      v.querySelector('[data-operator-chat]')
+        ? 'chat'
+        : v.querySelector('[data-operator-opening]')
+          ?.getAttribute('data-operator-opening') ?? 'news',
     ])
   assertEquals(await views(chatPage(p.env, space, who, 'new', beside)), [
     ['/club', 'shown', 'chat'],
@@ -746,7 +749,7 @@ test('every Operator page holds the chat, its Updates and every space’s as vie
   ])
   assertEquals(await views(updatesPage(p.env, space, who, beside)), [
     ['/club/updates', 'shown', 'news'],
-    ['/club', 'hidden', 'chat'],
+    ['/club', 'hidden', '/club?conversation=1'],
     ['/updates?in=club', 'hidden', 'news'],
   ])
   // A page that is none of them holds them too.

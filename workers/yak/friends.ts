@@ -22,7 +22,6 @@ import {
 } from '@yaks/notify/whereabouts'
 import { line } from '@yaks/query'
 import { ordered } from '@yaks/platform/presence'
-import { friendsLine } from '@yaks/platform/updates-day'
 import { canon } from './signin.ts'
 import { nameOf } from './names.ts'
 import { type Directory, directory, fetch, type Space } from './directory.ts'
@@ -177,27 +176,6 @@ export let friendList = async (
     }
   })
   return ordered(listed, (f) => f.seen)
-}
-
-// One friend's presence in words: "Fay is building in gift-shop".
-/** Which of a person's friends are on yaks.app now, in a line for their
- * Updates in their own space; none when nobody is. */
-export let friendsHere = async (
-  env: Env,
-  space: Space,
-  who: Who,
-): Promise<string | undefined> => {
-  if (!who.person || who.role != 'owner') return
-  let dir = open(env)
-  let [seats, friends] = await Promise.all([
-    dir.seats(who.person, 'owner'),
-    friendsOf(dir, who.person),
-  ])
-  if (ownOf(seats)?.space.eid != space.eid) return
-  let mine = friends.filter((f) => f.standing == 'friend')
-  let seen = await presencesOf(dir, who.person, mine.map((f) => f.person))
-  return friendsLine(mine.map((f) => ({ ...f, seen: seen.get(f.person) }))) ||
-    undefined
 }
 
 // A person's own space among their owner seats, as `dir.own` chooses it

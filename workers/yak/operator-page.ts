@@ -129,12 +129,9 @@ import {
   type Updates,
   updates,
   updatesAcross,
-  updatesLater,
   updatesOf,
-  visitsOf,
 } from './updates.ts'
 import { PART, type TalkView, viewAttrs } from '@yaks/platform/talk-views'
-import { friendsHere } from './friends.ts'
 import {
   answered,
   type Listed,
@@ -1669,6 +1666,36 @@ export let chatPage = async (
 export let openingChat = async (...args: Parameters<typeof chatPage>) => {
   let [env, space, who, open, side, chosen, from, c] = args
   let beside = await side ?? {}
+  return (c ?? clock()).measure(
+    'render',
+    () =>
+      talkPage(
+        env,
+        space,
+        who,
+        beside,
+        openingParts(
+          env,
+          space,
+          who,
+          open,
+          beside,
+          chosen,
+          from,
+        ),
+      ),
+  )
+}
+
+let openingParts = (
+  env: Env,
+  space: Space,
+  who: Who,
+  open: string,
+  beside: Beside,
+  chosen?: string | null,
+  from?: number,
+): TalkPage => {
   let app = chosen ? beside.apps?.find((a) => a.slug == chosen) : undefined
   let chat = chatPath(space.slug, open)
   let here = app ? aboutPath(space.slug, app.slug, open) : chat
@@ -1677,49 +1704,45 @@ export let openingChat = async (...args: Parameters<typeof chatPage>) => {
   if (from != null) query.set('from', String(from))
   let full = `${chat}?${query}`
   let aside = { turn: null, helpers: [] }
-  return (c ?? clock()).measure(
-    'render',
-    () =>
-      talkPage(env, space, who, beside, {
-        title: space.operator,
-        status: 200,
-        waiting: 0,
-        listed: [],
-        current: [open],
-        here,
-        chat,
-        main: column(
-          '',
-          h(
-            'div',
-            {
-              'data-operator-opening': full,
-              'data-person': who.person,
-              'data-space': space.eid,
-            },
-            h(
-              Loading,
-              { 'data-operator-loading': '' },
-              'Loading conversation…',
-            ),
-            h('noscript', null, h('a', { href: full }, 'Open conversation')),
-          ),
+  return {
+    title: space.operator,
+    status: 200,
+    waiting: 0,
+    listed: [],
+    current: [open],
+    here,
+    chat,
+    main: column(
+      '',
+      h(
+        'div',
+        {
+          'data-operator-opening': full,
+          'data-person': who.person,
+          'data-space': space.eid,
+        },
+        h(
+          Loading,
+          { 'data-operator-loading': '' },
+          'Loading conversation…',
         ),
-        skip: ['#content', 'Skip to content'],
-        script: `<script type="module" async src="${
-          asset(env, '_operator-opening.js')
-        }"></script>`,
-        aside: beside.ways && h(Aside, {
-          aside,
-          now: Date.now(),
-          reach: h(Reaching, { space, ways: beside.ways, here }),
-        }),
-        app,
-        canvas: app && who.person
-          ? canvasOf(env, space, who.person, beside, app)
-          : undefined,
-      }),
-  )
+        h('noscript', null, h('a', { href: full }, 'Open conversation')),
+      ),
+    ),
+    skip: ['#content', 'Skip to content'],
+    script: `<script type="module" async src="${
+      asset(env, '_operator-opening.js')
+    }"></script>`,
+    aside: beside.ways && h(Aside, {
+      aside,
+      now: Date.now(),
+      reach: h(Reaching, { space, ways: beside.ways, here }),
+    }),
+    app,
+    canvas: app && who.person
+      ? canvasOf(env, space, who.person, beside, app)
+      : undefined,
+  }
 }
 
 // What a chat draws, or where its address sends the person: the conversation
@@ -1973,30 +1996,20 @@ export let updatesPage = async (
   opened = true,
   c: Clock = clock(),
 ) => {
-  // Opening them reads them, and the count beside them goes with it. The
-  // rows of their servers' lists that wait on them are here too, before
-  // their Updates.
-  let lists = reading(env, space, who)
-  let [news, views, , put, friends, chat, beside] = await Promise.all([
+  // Opening the visible Updates reads them. The other view and the day's
+  // cards fetch through their usual browser doors when shown.
+  let [news, put, beside] = await Promise.all([
     updatesOf(env, space, who, opened && !dismissed),
-    Promise.resolve(side).then((beside) => visitsOf(env, beside.apps ?? [])),
-    lists.listing,
     dismissed ? dismissedOf(env, space, who) : undefined,
-    dismissed ? undefined : friendsHere(env, space, who).catch((e) => {
-      caught(e, { request: 'friends here', space: space.slug })
-      return undefined
-    }),
-    dismissed ? undefined : chatBeside(env, space, who, side, lists),
     side,
   ])
-  let listed = await lists.drawn()
   if (put) {
     return c.measure('render', () =>
       talkPage(env, space, who, beside, {
         title: `Dismissed updates from ${space.operator}`,
         status: 200,
         waiting: news.updates.filter((u) => u.needs).length,
-        listed,
+        listed: null,
         current: ['updates'],
         here: talkPath('updates', space.slug) + '?dismissed',
         skip: ['#content', 'Skip to content'],
@@ -2008,36 +2021,33 @@ export let updatesPage = async (
       }))
   }
   let here = talkPath('updates', space.slug)
-  let at = managePath('operator', space.slug)
+  let chat = openingParts(env, space, who, 'new', beside)
   return c.measure('render', () =>
     talkPage(env, space, who, beside, {
       title: 'Updates',
       status: 200,
       waiting: news.updates.filter((u) => u.needs).length,
-      listed,
+      listed: null,
       current: ['updates'],
       here,
       skip: ['#content', 'Skip to content'],
       main: h(
         'div',
         updateColumn(space, who),
-        updates(
-          env,
-          space,
+        updates(env, space, {
           news,
-          listed ? besides(listed, at, here, true) : later('waits'),
-          beside.apps,
-          views,
-          friends,
-          who.person ?? '',
-        ),
+          lists: later('waits'),
+          apps: beside.apps,
+          friends: ownSpace(space, who, beside),
+          person: who.person ?? '',
+        }),
       ),
-    }, chat ? [chat] : []))
+    }, [chat]))
 }
 
 // The space's Updates as a view of a page opened at another of its views:
-// their cards drawn in the browser from the tab's page graph (updates.ts
-// `updatesLater`), their lists put in their slot with the page's.
+// their cards drawn in the browser from the tab's page graph, their lists
+// put in their slot with the page's.
 let updatesBeside = (
   env: Env,
   space: Space,
@@ -2058,19 +2068,17 @@ let updatesBeside = (
     main: h(
       'div',
       updateColumn(space, who),
-      updatesLater(
-        env,
-        space,
-        listed ? besides(listed, at, here, true) : later('waits'),
-        who.person ?? '',
-        ownSpace(space, who, beside),
-      ),
+      updates(env, space, {
+        lists: listed ? besides(listed, at, here, true) : later('waits'),
+        person: who.person ?? '',
+        friends: ownSpace(space, who, beside),
+      }),
     ),
   }
 }
 
 // Whether `space` is the person's own, which their Updates there say their
-// friends on yaks.app now in (friends.ts `friendsHere`): the one they own
+// friends on yaks.app now in: the one they own
 // and open first, else the first they own.
 let ownSpace = (space: Space, who: Who, beside: Beside) => {
   let owned = (beside.spaces ?? []).filter((s) => s.owner)

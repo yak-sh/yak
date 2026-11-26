@@ -89,28 +89,33 @@ test('an update’s words, and a question that needs the person, are drawn from 
     {} as Env,
     space,
     {
-      waiting: 1,
-      updates: [
-        {
-          eid: 'n',
-          needs: false,
-          unread: false,
-          dismissed: false,
-          at,
-          words: 'Fixed **Chores**:\n\n- `due` dates',
-          space,
-        },
-        {
-          eid: 'd',
-          needs: true,
-          unread: false,
-          dismissed: false,
-          at,
-          words: 'Keep *both*?',
-          choices: [],
-          space,
-        },
-      ],
+      person: '',
+      friends: false,
+      lists: null,
+      news: {
+        waiting: 1,
+        updates: [
+          {
+            eid: 'n',
+            needs: false,
+            unread: false,
+            dismissed: false,
+            at,
+            words: 'Fixed **Chores**:\n\n- `due` dates',
+            space,
+          },
+          {
+            eid: 'd',
+            needs: true,
+            unread: false,
+            dismissed: false,
+            at,
+            words: 'Keep *both*?',
+            choices: [],
+            space,
+          },
+        ],
+      },
     },
   ))).document
   let drawn = (eid: string, css: string) =>
