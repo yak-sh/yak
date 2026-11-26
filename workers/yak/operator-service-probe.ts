@@ -1,4 +1,5 @@
 import { assert, assertEquals } from '@std/assert'
+import { SEATED } from './build-door.ts'
 import type { Env } from './env.ts'
 
 /** The spaces whose Operators an app told of a commit (`/heard`), and
@@ -16,6 +17,12 @@ export let operators: Env['BUILDER'] = {
         assertEquals(req.headers.get('x-yak-kernel'), '1')
         heard.spaces.push(String(space))
         return Promise.resolve(new Response(null, { status: heard.status }))
+      }
+      // A seat moved in the space (build.ts `SEATED`): no page here holds
+      // one, and the Builder answers 204 whatever it re-reads.
+      if (req.method == 'POST' && path == SEATED) {
+        assertEquals(req.headers.get('x-yak-kernel'), '1')
+        return Promise.resolve(new Response(null, { status: 204 }))
       }
       if (req.method == 'POST' && path == '/wipe') {
         assertEquals(req.headers.get('x-yak-kernel'), '1')

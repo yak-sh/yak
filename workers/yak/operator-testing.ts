@@ -191,14 +191,16 @@ export let operatorService = (
     let path = new URL(req.url).pathname
     // What a commit the space's subscriptions read stirs them with, as the
     // Builder answers it (build.ts `HEARD`), and a seat moving in the space
-    // (build.ts `SEATED`), which has no page sockets to hold seats here.
+    // (build.ts `SEATED`), which has no page sockets to hold seats here and
+    // is answered 204 whether or not anything watches, as the Builder does.
     if (
       (path == HEARD || path == SEATED) &&
       req.headers.get('x-yak-kernel') == '1'
     ) {
       let { heard } = await import('./operator-schedules.ts')
       let at = await heard(store, false)
-      return new Response(null, { status: at == null ? 410 : 204 })
+      let gone = at == null && path == HEARD
+      return new Response(null, { status: gone ? 410 : 204 })
     }
     assertEquals(req.headers.get('x-space-eid'), held.space)
     // A reply to the Operator's letter, which the kernel brings for its
