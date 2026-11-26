@@ -692,8 +692,8 @@ let FILES_INPUT: Shape = {
     starter: {
       type: 'object',
       description:
-        'Write a runnable game starter into this draft before editing its files. ' +
-        'For sandbox editing, set into to write the starter straight to a new sandbox folder instead. ' +
+        'Start a runnable game. In an Operator conversation the first starter for an unreleased app goes straight into a sandbox folder named for the app. ' +
+        'Set into to name a new sandbox folder explicitly, or draft to write to a draft. ' +
         'Pass {} for 3D, or set multiplayer and view as needed. Files supplied with a draft starter replace starter files with those paths.',
       properties: {
         view: {
@@ -4488,15 +4488,14 @@ let OURS: Row[] = [
       let starter = args.starter as
         | (GameStarter & { into?: string })
         | undefined
+      let stages = ['draft', 'path', 'content', 'base64', 'files', 'drafts']
+        .some(
+          (key) => args[key] != null,
+        )
       let folder = starter?.into == null
         ? undefined
         : appFolder(text(starter.into, 'starter.into'))
-      if (
-        folder !== undefined && (!folder ||
-          ['draft', 'path', 'content', 'base64', 'files', 'drafts'].some((
-            key,
-          ) => args[key] != null))
-      ) {
+      if (folder !== undefined && (!folder || stages)) {
         throw refuse(
           'arguments',
           'starter.into takes a new sandbox folder without draft or file arguments.',
@@ -4523,6 +4522,10 @@ let OURS: Row[] = [
         'inApp',
         () => inApp(ctx, args, write, !write),
       )
+      if (
+        starter && !stages && !app.version && ctx.env.WORKBENCH &&
+        ctx.who?.agent == 'operator'
+      ) folder ??= app.slug
       if (folder) {
         let seeded = await bench(
           ctx,

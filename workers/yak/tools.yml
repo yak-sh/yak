@@ -228,7 +228,9 @@ app_files:
     base64 (bytes) for one file, or files: [{path, content}, …] for several.
     For a game, pass starter with optional view and multiplayer. Set
     starter.into to write the files to a new sandbox folder. Edit there
-    with sandbox_shell and stage the folder with sandbox_ship.
+    with sandbox_shell and stage the folder with sandbox_ship. An Operator
+    starts a new game in the sandbox by default. Pass draft to stage there
+    directly.
     For separate drafts, pass drafts: [{files: [{path, content}, …]}, …];
     list: requires only app. An optional draft chooses which files to list.
     The answer gives each path and

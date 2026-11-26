@@ -20,16 +20,12 @@ another page can read the same game state and a different renderer can draw it.
 
 ## Start with a game starter
 
-Create an app with `app_new`. Call `app_files({app, starter: {into: app}})` to
-put the starter files in `/workspace/<app>` in the sandbox. The default is a lit
-Three.js scene with a camera that follows the player. Use it for a low-poly
-world to explore.
-
-| Request                                     | Additional starter options |
-| ------------------------------------------- | -------------------------- |
-| Voxel game                                  | `view: 'voxel'`            |
-| Card game, puzzle grid or requested 2D view | `view: '2d'`               |
-| Multiplayer game                            | `multiplayer: true`        |
+Create an app with `app_new`. For a multiplayer game, call
+`app_files({app, starter: {multiplayer: true, into: app}})` to put the starter
+files in `/workspace/<app>` in the sandbox. For a solo game, omit `multiplayer`.
+The default view is a lit Three.js scene with a camera that follows the player.
+Use `view: 'voxel'` for voxels, or `view: '2d'` for card games, puzzle grids or
+a requested 2D view.
 
 For multiplayer, create the app with `access: 'private'`. You can combine
 `multiplayer: true` with any view.
@@ -38,8 +34,9 @@ Read and edit the files in the sandbox with `sandbox_shell`. Start with
 `room-model.ts`, `room-rules.ts` and `room-page.ts` for multiplayer, and
 `world.ts` for 3D terrain. Reuse the page graph, game loop and room wiring. Name
 the game and update its manifest and icon. Then stage the folder with
-`sandbox_ship({app, paths: [app]})`. Without `into`, the starter goes directly
-into a draft, where you can read and patch individual files with `app_files`.
+`sandbox_ship({app, paths: [app]})`. To start directly in a draft, pass
+`draft: 'new'` instead of `starter.into`. Edit individual files in that draft
+with `app_files`.
 
 The starter opens the app vocabulary with `@yaks/game/page`. Use `ent(eid)` for
 indexed reads, `watch` for projections and `mutate` for batches. Declare

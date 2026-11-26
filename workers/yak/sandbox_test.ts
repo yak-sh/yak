@@ -155,20 +155,23 @@ let bench = async (answer: (cmd: string) => Ran | void = () => {}) => {
 
 let starter = await bench()
 
-test('a multiplayer starter can go directly to the sandbox as text and binary files', async () => {
+test('the Operator gets its first multiplayer starter as text and binary sandbox files', async () => {
   await using fixture = starter
   let { ctx, box } = fixture
-  let seeded = await tool('app_files').run(ctx, {
+  let seeded = await tool('app_files').run({
+    ...ctx,
+    who: { person: ADA, via: 'session', agent: 'operator' },
+  }, {
     app: 'chess',
-    starter: { multiplayer: true, into: 'games/chess' },
+    starter: { multiplayer: true },
   })
-  assertStringIncludes(seeded.text, '/workspace/games/chess')
+  assertStringIncludes(seeded.text, '/workspace/chess')
   let data = [...box.files].find(([path]) => path.startsWith('/tmp/yak-seed-'))!
   let { folder, files } = JSON.parse(data[1]) as {
     folder: string
     files: [string, string][]
   }
-  assertEquals(folder, 'games/chess')
+  assertEquals(folder, 'chess')
   let encoded = new Map(files)
   assertStringIncludes(atob(encoded.get('room-client.ts')!), 'connectRoom')
   assertEquals(atob(encoded.get('icon-192.png')!).slice(1, 4), 'PNG')
