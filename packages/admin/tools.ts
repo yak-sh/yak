@@ -516,6 +516,7 @@ export let runs = (
             ]
             : [],
           ...(got.timings ?? []).map((t) => `timing    ${timed(t)}`),
+          ...(got.evaluated ?? []).map((v) => `eval      ${v}`),
           ...got.dialogs.map((d) => `dialog    ${d.type}: ${d.message}`),
           ...got.errors.map((e) => `error     ${e.split('\n')[0]}`),
           ...got.console.filter((m) => m.type == 'error' || m.type == 'warn')

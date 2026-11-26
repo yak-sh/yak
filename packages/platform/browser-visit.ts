@@ -100,6 +100,9 @@ export type Cookie = {
  *             service would
  *   offline   take the page and its service worker off the network (true),
  *             or back onto it at the view's speed (false)
+ *   eval      run this expression in the page, as its own scripts run, and
+ *             say what it came to (awaited, as JSON): a measure taken or a
+ *             change tried in place
  */
 export type Step =
   | { tap: string }
@@ -114,6 +117,7 @@ export type Step =
   | { open: string }
   | { push: unknown }
   | { offline: boolean }
+  | { eval: string }
 
 /** The interaction steps accepted by an app preview. */
 export let previewSteps = (value: unknown): Step[] => {
@@ -288,6 +292,9 @@ export type Rendered = {
   /** The page's visible text, its start and end within `TEXT` characters. */
   text: string
   console: { type: string; text: string }[]
+  /** What each `eval` step came to, in order, as JSON or the error it
+   * threw. */
+  evaluated?: string[]
   /** The dialogs the page opened, each dismissed as it opened: a confirm
    * answers false and a prompt null. */
   dialogs: { type: string; message: string }[]
@@ -504,6 +511,25 @@ let message = (error: unknown) => {
     ? stack
     : [message, stack].filter(Boolean).join('\n'))
     .slice(0, 2000)
+}
+
+// What `expression` came to in the page's own world, as JSON, or the error
+// it threw.
+let evaluate = async (page: Page, expression: string) => {
+  let cdp = await page.createCDPSession()
+  let { result, exceptionDetails } = await cdp.send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+    userGesture: true,
+  })
+  if (exceptionDetails) {
+    return `error: ${
+      exceptionDetails.exception?.description?.split('\n')[0] ??
+        exceptionDetails.text
+    }`
+  }
+  return JSON.stringify(result.value) ?? 'undefined'
 }
 
 // The audit runs in its own JavaScript world over the page's DOM, so what a
@@ -1019,6 +1045,7 @@ let loaded = async (
         )
       }
       let shots: Rendered['shots'] = []
+      let evaluated: string[] = []
       let shoot = () =>
         page.screenshot({
           type: 'png',
@@ -1053,6 +1080,11 @@ let loaded = async (
         }
         if ('offline' in step) {
           await network(page, view, step.offline)
+          continue
+        }
+        if ('eval' in step) {
+          waitingFor(`taking step ${i + 1} (evaluating)`)
+          evaluated.push(await evaluate(page, step.eval))
           continue
         }
         if ('shot' in step) {
@@ -1099,6 +1131,7 @@ let loaded = async (
         dialogs,
         errors,
         status,
+        ...evaluated.length ? { evaluated } : {},
         ...trace
           ? {
             traced: [

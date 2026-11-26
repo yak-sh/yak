@@ -85,8 +85,8 @@ let page = (
   options: {
     loading?: Error
     screenshot?: Error
-    main?: typeof axe
-    world?: typeof axe
+    main?: (expression: string) => unknown
+    world?: (expression: string) => unknown
     missing?: string
     /** A selector whose press opens a confirm, as input does, returning only
      * once it is dismissed. */
@@ -431,6 +431,22 @@ test("a visit pushes a message to its site's service worker, and takes it and th
     'Network.enable {}',
     offline,
   ])
+})
+
+test('an eval step says what its expression came to in the page, or what it threw', async () => {
+  let p = page({
+    main: (e) => {
+      if (e == 'boom') throw new Error('boom\n    at page')
+      return e == 'document.title' ? 'Checks' : axe(e)
+    },
+  })
+  let got = await capture(p.browsing, {
+    url: 'https://yaks.app/checks',
+    view,
+    steps: [{ eval: 'document.title' }, { eval: 'boom' }],
+    audit: false,
+  })
+  assertEquals(got.evaluated, ['"Checks"', 'error: Error: boom'])
 })
 
 test('a page brought from a checkout answers its first load, and the site the rest', async () => {
