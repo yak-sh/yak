@@ -105,7 +105,13 @@ import { whole } from '@yaks/query'
 import { CallError, refused as toolRefused } from '@yaks/tools/errors'
 import { workerUpgrade } from '@yaks/workerd'
 import { inReach } from './declared.ts'
-import { builderOf, operatorDoor, settingsAt, SPACE } from './build-door.ts'
+import {
+  builderOf,
+  operatorDoor,
+  seated,
+  settingsAt,
+  SPACE,
+} from './build-door.ts'
 import { wearing } from './operator-settings.ts'
 import { caught } from './defects.ts'
 import type { Directory } from './directory.ts'
@@ -561,6 +567,39 @@ export let reachDoor = async (
         sayers.add(told)
         return () => void sayers.delete(told)
       }
+      // A line the space's Operator store answers of the person, on the
+      // tab's socket there, opened with the seat read here: the object takes
+      // the kernel's word for it (build-door.ts `seated`), so a socket that
+      // opens again, as every tab's does when the object takes new code,
+      // costs the directory nothing. A space they do not write in is answered
+      // with nothing.
+      let operating = (
+        space: string,
+        line: string,
+        sink: (frame: Kept) => void,
+        saying?: (say: (frame: unknown) => void) => () => void,
+      ) => {
+        let closed = false
+        let stop: (() => void) | undefined
+        seatIn(space).then((seat) => {
+          if (closed) return
+          if (!seat) return sink({ bundles: [], reset: true })
+          let ask = builderOf(env, space)
+          stop = watching(
+            doorOf((req) => ask(() => req)),
+            seat.space.slug,
+            line,
+            sink,
+            seated(seat.space, { ...who, role: seat.role }),
+            '/api/waiting/ws',
+            saying,
+          )
+        }, (error) => closed || sink({ refused: error }))
+        return () => {
+          closed = true
+          stop?.()
+        }
+      }
       attach(
         watched({
           watch: (line, sink) => {
@@ -628,21 +667,10 @@ export let reachDoor = async (
             let app = makingApp(line)
             if (app != undefined) return watchMaking(env, dir, who, app, sink)
             if (line == UPDATE_WAITING) {
-              let headers = vouched(who)
               return watchWaiting(
                 personal,
-                (seat) => (emit) => {
-                  let { space, slug } = waitingFrom(seat)
-                  let ask = builderOf(env, space)
-                  return watching(
-                    doorOf((req) => ask(() => req)),
-                    slug,
-                    line,
-                    emit,
-                    { ...headers, [SPACE]: space },
-                    '/api/waiting/ws',
-                  )
-                },
+                (seat) => (emit) =>
+                  operating(waitingFrom(seat).space, line, emit),
                 sink,
               )
             }
@@ -695,26 +723,7 @@ export let reachDoor = async (
               settingsSpace(line) ?? matchesAsked(line)?.space ??
               fixesSpace(line) ?? talk?.space
             if (operator != undefined) {
-              let closed = false
-              let stop: (() => void) | undefined
-              seatIn(operator).then((seat) => {
-                if (closed) return
-                if (!seat) return sink({ bundles: [], reset: true })
-                let ask = builderOf(env, operator)
-                stop = watching(
-                  doorOf((req) => ask(() => req)),
-                  seat.space.slug,
-                  line,
-                  sink,
-                  { ...vouched(who), [SPACE]: operator },
-                  '/api/waiting/ws',
-                  talk && sayTab,
-                )
-              }, (error) => closed || sink({ refused: error }))
-              return () => {
-                closed = true
-                stop?.()
-              }
+              return operating(operator, line, sink, talk && sayTab)
             }
             let closed = false
             let stop: (() => void) | undefined

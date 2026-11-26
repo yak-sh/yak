@@ -121,3 +121,38 @@ test("the platform store's sockets that held come back over ten seconds, since e
     10_000,
   ])
 })
+
+test('a store that fails to open is tried again quietly, and its lines are told only once it has failed through the longest wait', async () => {
+  let c = clock()
+  let { door, sockets } = store()
+  let failing = 6, tries: number[] = []
+  let flaky = ((...args: Parameters<Door>) => {
+    tries.push(c.now())
+    return failing-- > 0
+      ? Promise.resolve(new Response('busy', { status: 504 }))
+      : door(...args)
+  }) as unknown as Door
+  let heard: Frame[] = []
+  socketsOf({ clock: c, random: () => 1 })(
+    flaky,
+    'at',
+    'line',
+    (f) => heard.push(f),
+    {},
+    '/api/waiting/ws',
+  )
+  let failed = async (n: number) => {
+    while (tries.length < n) await c.advance(100)
+    await c.advance(0)
+    return heard.length
+  }
+  let quiet = []
+  for (let n = 1; n <= 5; n++) quiet.push(await failed(n))
+  equal(quiet, [0, 0, 0, 0, 0])
+  equal(await failed(6), 1)
+  equal(heard[0].refused !== undefined, true)
+  equal(tries, [0, 1000, 3000, 7000, 15_000, 31_000])
+  // Still tried again, at the longest wait, and the socket then holds.
+  while (sockets.length == 0) await c.advance(100)
+  equal(tries.at(-1), 61_000)
+})

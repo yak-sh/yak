@@ -257,7 +257,8 @@ type Wire = {
 // held for `HELD`. Drawn at random, a deploy that closes every tab's socket
 // at once has them open again spread across the wait rather than together,
 // and one a store accepts and closes again (a refusal, an overload) backs off
-// rather than coming back four times a second.
+// rather than coming back four times a second. One the store fails to open
+// is tried again the same way, and said only once the wait is `MOST`.
 let FIRST = 1_000
 let MOST = 30_000
 let HELD = 10_000
@@ -286,7 +287,8 @@ type Watch = (
  * `MOST`, `HELD`), and each line's first answer then is said with `reset`,
  * since what left while it was away is said no other way. One the store
  * refuses to open is said to each line as the store's refusal and left
- * closed; one that failed is tried again. `saying`, when given, is handed
+ * closed; one that failed is tried again, quietly until it has failed through
+ * the longest wait. `saying`, when given, is handed
  * each socket as it opens, to say on it what the caller has to say (a tab's
  * whereabouts), and what it returns is called when that socket goes; lines
  * with something to say share a socket only with lines that do too. The last
@@ -419,11 +421,18 @@ let shared = (
     opening = true
     open().finally(() => opening = false).catch((e) => {
       if (!lines.size) return
-      each({ refused: e })
-      if (((e as { status?: number })?.status ?? status(e)) >= 500) {
-        caught(e, { request: 'reach member socket', store: at })
-        retry()
+      if (((e as { status?: number })?.status ?? status(e)) < 500) {
+        return each({ refused: e })
       }
+      // A store that failed to open (one taking new code, or one waiting on
+      // another that is) is tried again quietly, and its lines are told, and
+      // the failure reported, only once it has failed through the longest
+      // wait.
+      if (wait == MOST) {
+        each({ refused: e })
+        caught(e, { request: 'reach member socket', store: at })
+      }
+      retry()
     })
   }
   return (line: string, sink: (frame: Frame) => void) => {

@@ -105,7 +105,7 @@ import { ADA, ADA_OWNS, as, platform, seeded } from './serving-probe.ts'
 import { manage } from './manage.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import { KERNEL } from './meta.ts'
-import { SPACE } from './build-door.ts'
+import { SEAT, seatOf, SPACE } from './build-door.ts'
 import { connector, kernel, meta, pressPeople, seed, signIn } from './probe.ts'
 import {
   admitted,
@@ -872,10 +872,13 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       },
     }),
   }
+  // The seat each Operator socket was opened with, as the kernel read it.
+  let seats: (string | null)[] = []
   env.BUILDER = {
     idFromName: builders.idFromName,
     get: (id, options) => ({
       fetch: async (req) => {
+        if (req.headers.has('upgrade')) seats.push(req.headers.get(SEAT))
         let res = await builders.get(id, options).fetch(req)
         return res.status == 101
           ? join(`builder ${id}`, res, runtime.builder(String(id)))
@@ -1047,6 +1050,13 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       equal(
         sources.toSorted(),
         [PLATFORM_OBJECT, `builder ${home.eid}`, `builder ${club}`].sort(),
+      )
+      // Each opened with the seat the kernel read, which the object takes
+      // rather than asking the directory again as its sockets come back.
+      equal(
+        seats.map((s) => s && seatOf(new Headers({ [SEAT]: s }))?.space.eid)
+          .sort(),
+        [home.eid, club].sort(),
       )
 
       await tell(club, ADA)
