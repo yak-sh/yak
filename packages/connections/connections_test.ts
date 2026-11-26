@@ -65,6 +65,7 @@ import {
   refresh,
   registration,
   resolve,
+  seeds,
   set,
   settle,
   through,
@@ -648,21 +649,11 @@ test('the integration directory: every built one but those in testing, and each 
   await g.apply(
     await set(g.read, { owner: 'space', integration: 'esv', listed: true }),
   )
-  assertEquals(names(await listing(g.read)), [
-    'Anthropic',
-    'calendar',
-    'Canva',
-    'ElevenLabs',
-    'ESV API',
-    'Gmail',
-    'Google Calendar',
-    'Google Drive',
-    'Lulu',
-    'OpenAI',
-    'OpenRouter',
-    'texts',
-    'voip.ms',
-  ])
+  let built = [CALENDAR, TEXTS, ...seeds()].filter((i) => !i.testing)
+  assertEquals(
+    names(await listing(g.read)),
+    [...names(built), 'ESV API'].sort((a, b) => a.localeCompare(b)),
+  )
   let [esv] = await listing(g.read, 'API.ESV.org esv')
   assert(esv.published && esv.instructions == undefined)
 })
