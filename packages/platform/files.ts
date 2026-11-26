@@ -87,12 +87,13 @@ export type Found = { path: string; file: Loaded; status: 200 | 404 }
  * answers index.html. In every mode a path that repeats itself (`looped`) is
  * no route: the root's 404.html answers it 404, else a plain 404, so a
  * crawler following relative links from a route stops at its first loop.
- * `load` reads a path of the folder.
+ * `load` reads a path of the folder. An asset request uses its exact path.
  */
 export let resolve = async (
   path: string,
   load: (path: string) => Promise<Loaded | null>,
   notFound?: NotFound,
+  asset = false,
 ): Promise<Found | { to: string } | null> => {
   let first = async (paths: string[], status: 200 | 404 = 200) => {
     for (let p of paths) {
@@ -101,6 +102,7 @@ export let resolve = async (
     }
     return null
   }
+  if (asset) return await first([path])
   let own = path.endsWith('/')
     ? [`${path}index.html`]
     : pretty(path)

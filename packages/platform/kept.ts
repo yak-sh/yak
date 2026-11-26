@@ -61,7 +61,7 @@ import { addressed } from '@yaks/blob'
 import { sha256 } from '@yaks/graph/sha256'
 import { mode } from '@yaks/member/words'
 import { COOKIE, cookieValue, HOST_COOKIE } from './cookie.ts'
-import { decoded } from './files.ts'
+import { decoded, page } from './files.ts'
 import { apex, type Host, url } from './host.ts'
 import { offered, sandboxed } from './installs.ts'
 import { bearing, MOUNT, previews } from './routes.ts'
@@ -109,6 +109,10 @@ let LOADS = new Set([
 export let loadsAsset = (req: Request): boolean =>
   LOADS.has(req.headers.get('sec-fetch-dest') ?? '')
 
+/** Whether a request for an asset uses an address that can also serve HTML. */
+export let assetAtPage = (req: Request, path: string): boolean =>
+  loadsAsset(req) && page(decoded(path) ?? path)
+
 /** Whether a Cache-Control lets the browser keep the answer without asking
  * again: immutable, or fresh for a day or more. */
 /// keptLong('private, max-age=31536000, immutable') -> true
@@ -144,6 +148,7 @@ let generation = (address: string) =>
  * everything that tells one answer from another is in the path and query,
  * which are what the key is made of:
  * `/<app eid>/<the app's own path>?source=<release source>&g=<generation>`.
+ * An asset at a page address uses a separate key for its exact file lookup.
  *
  * The eid and not the slug, because an app answers at every address it has
  * ever had, a rename leaves the old one resolving, and a custom domain is a
@@ -153,11 +158,16 @@ let generation = (address: string) =>
  */
 /// fileAt('a', '/x.css', 'ada/.releases/1/r') -> 'https://files.invalid/a/x.css?source=ada%2F.releases%2F1%2Fr&g=4'
 /// fileAt('a', 'x.css') -> 'https://files.invalid/a/x.css?g=4'
-export let fileAt = (eid: string, path: string, source = ''): string =>
+export let fileAt = (
+  eid: string,
+  path: string,
+  source = '',
+  asset = false,
+): string =>
   generation(
-    `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}${
-      source ? `?source=${encodeURIComponent(source)}` : ''
-    }`,
+    `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}` +
+      (source ? `?source=${encodeURIComponent(source)}` : '') +
+      (asset ? `${source ? '&' : '?'}asset=1` : ''),
   )
 
 /** Where Files keeps a blob's bytes. A blob has no mutable file path, so its
@@ -450,7 +460,8 @@ export let shareable = (
   !req.headers.has('range') &&
   !req.headers.has('upgrade') && !bearing(req) &&
   (fixed(path) || uploaded(path) ||
-    !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path)) &&
+    !assetAtPage(req, path) &&
+      !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path)) &&
   !path.includes('/~') && !previews(path)
 
 /** What a page may say of itself as it answers from the edge: its app, its

@@ -12,6 +12,42 @@ import { connector, fresh, kernel, seed } from './probe.ts'
 import { edged } from './apps.ts'
 import type { Env } from './env.ts'
 
+test('a missing extensionless asset does not fall back to the app page', async () => {
+  let k = await kernel()
+  let app = { space: 'assetfallback', app: 'page' }
+  let { cookie } = await seed(k, [{ slug: app.space, apps: [app.app] }])
+  let agent = connector(k, cookie)
+  await agent.tool('app_files', {
+    ...app,
+    files: [
+      { path: 'index.html', content: '<h1>App page</h1>' },
+      { path: 'kept', content: 'extensionless file' },
+    ],
+  })
+  await agent.tool('app_deploy', app)
+  await k.settled()
+
+  let ask = (path: string, dest: string) =>
+    k.at('assetfallback.yaks.app', '/page/' + path, {
+      headers: { cookie, 'sec-fetch-dest': dest },
+    })
+  let page = await ask('null', 'document')
+  assertEquals(page.status, 200)
+  assertStringIncludes(await page.text(), '<h1>App page</h1>')
+  let missing = await ask('null', 'image')
+  assertEquals(missing.status, 404)
+  await missing.body?.cancel()
+  let moved = await ask('kept', 'image')
+  assertEquals(moved.status, 307)
+  let named = moved.headers.get('location')!
+  assertMatch(named, /^\/page\/api\/assets\/[^/]+\/kept$/)
+  let kept = await k.at('assetfallback.yaks.app', named, {
+    headers: { cookie },
+  })
+  assertEquals(kept.status, 200)
+  assertEquals(await kept.text(), 'extensionless file')
+})
+
 test('Site reads a fresh release page through its directory route', async () => {
   let { r2, gets } = bucket()
   let edge: Env

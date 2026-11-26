@@ -18,6 +18,7 @@ import type { Context } from '@yaks/tracker/report'
 import { door, flood, thrown } from '@yaks/tracker/report'
 import { script } from '@yaks/tracker/script'
 import type { Options } from './lent.ts'
+import { loadsAsset } from './kept.ts'
 import {
   decoded,
   inside,
@@ -105,6 +106,7 @@ export let fileAt = async (
     at,
     (p) => file(`${root}${p}`),
     config.assets?.not_found_handling,
+    loadsAsset(req),
   )
   if (!found) return missing()
   if ('to' in found) {

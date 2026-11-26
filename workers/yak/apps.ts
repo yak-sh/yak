@@ -198,6 +198,7 @@ import { asked, keep, shown, told, unkept } from './page-cache.ts'
 import { SITE_CHECKED } from './kept-page.ts'
 import {
   type Alone,
+  assetAtPage,
   assetKept,
   browserImmutable,
   CLIENT,
@@ -1107,6 +1108,7 @@ let asset = async (
         app.source ?? '',
         range,
         req.method,
+        assetAtPage(req, path),
       ),
     // Whether that trip stopped at the edge or went on to the bucket, in the
     // same Server-Timing entry as the time it took: a slow `bytes` stage and a

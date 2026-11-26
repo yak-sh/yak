@@ -253,8 +253,9 @@ export let fileBytes = (
   source: string,
   range?: string | null,
   method = 'GET',
+  asset = false,
 ) => {
-  let req = fileRequest(eid, prefix, path, source, { method, range })
+  let req = fileRequest(eid, prefix, path, source, { method, range, asset })
   return range || method == 'HEAD'
     ? fetch(req, env).then(relayed)
     : door(env).fetch(req)
@@ -269,13 +270,14 @@ let fileRequest = (
   prefix: string,
   path: string,
   source: string,
-  { method = 'GET', range, signal }: {
+  { method = 'GET', range, signal, asset }: {
     method?: string
     range?: string | null
     signal?: AbortSignal
+    asset?: boolean
   } = {},
 ) =>
-  new Request(fileAt(eid, path, source), {
+  new Request(fileAt(eid, path, source, asset), {
     method,
     headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
     redirect: 'manual',
@@ -651,6 +653,7 @@ let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       at,
       (p) => blobs.load(`${root}${p}`),
       config.assets?.not_found_handling,
+      url.searchParams.get('asset') == '1',
     ))
   if (found && 'to' in found) {
     return new Response(null, {
