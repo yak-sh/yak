@@ -374,8 +374,9 @@ Each environment has its own integrations and connections. Before replacing a
 key, configure the same integrations in the destination and inventory the people
 whose grants stay behind. Preserve those grants. Nango-managed OAuth apps retain
 Nango's callback URL; a custom callback requires an OAuth app of your own.
-yaks.app settles brokered sign-ins when it reads connections, so it does not
-require a Nango webhook URL.
+yaks.app settles brokered sign-ins when it reads connections. The Connections
+page and `connection_list` return the status held in the directory and check the
+broker in the background. The status updates after the broker confirms sign-in.
 
 - `begin` on a brokered integration answers the broker's sign-in link and no
   attempt: the sign-in returns to the broker, not to us.
@@ -383,8 +384,7 @@ require a Nango webhook URL.
   needed connection, found by the connection's eid, and connects it with its
   account and granted scopes. For one marked `reconnecting` it waits for a grant
   newer than the one kept, takes it in place, and has the broker forget the old
-  one; a mark left over an hour goes. Whoever reads a person's connections
-  settles them first, so nothing waits on the broker telling us.
+  one. A mark left over an hour is removed.
 - `credential` answers the kept token while it is good for a minute more, and
   otherwise the broker's. `refresh` asks the broker for a new one. A broker that
   says the grant is gone marks the connection `broken`.
