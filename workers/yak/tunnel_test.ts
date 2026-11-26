@@ -14,6 +14,7 @@ import type { Who } from './session.ts'
 import { platform } from './testing.ts'
 import * as tunnel from './tunnel.ts'
 import * as identity from './identity.ts'
+import { SEATED } from './build-door.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -432,9 +433,9 @@ let telling = async () => {
       get: () => ({
         fetch: async (r: Request) => {
           // A seat written in a space tells its Operator (build.ts
-          // `HEARD`), which none here watches.
-          if (new URL(r.url).pathname == '/heard') {
-            return new Response(null, { status: 410 })
+          // `SEATED`), which none here watches.
+          if (new URL(r.url).pathname == SEATED) {
+            return new Response(null, { status: 204 })
           }
           if (new URL(r.url).pathname == '/operator/read') {
             let { task } = await r.json()
