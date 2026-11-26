@@ -5,8 +5,8 @@
  * nothing (bin/test-budget.ts). Its report names what failed, read from the
  * run's log, and the commit that broke it. Each failing test or check is
  * blamed once, in the run it first fails in since main was last green: of the
- * commits after the run before that one up to it, the newest that changed
- * where the test lives, else that run's own. A run that leaves it out (a
+ * commits after the run before that one up to it, the one that changed where
+ * the most of that run's new failures live (`culprits`), else that run's own. A run that leaves it out (a
  * check failed before the tests ran) does not clear its blame, so a commit
  * that only came after it failed is never blamed for it, and a later report
  * names the run it first failed in. A run's failures report under the fault
@@ -268,23 +268,40 @@ export let changed = (log: string): Change[] =>
 let dir = (path: string) => path.replace(/\/?[^/]*$/, '')
 
 /// let a = { sha: 'a', subject: '', paths: ['w/x.ts'] }, b = { sha: 'b', subject: '', paths: ['p/y.ts'] }
-/// culprit([b, a], [{ name: 't', file: 'w/x_test.ts' }])?.sha -> 'a'
-/// culprit([b, a], [{ name: 'check:fmt' }])?.sha -> 'b'
-/// culprit([], [])?.sha -> undefined
-/** The commit that broke `failed`, among `changes` newest first: the newest
- * that changed where a failing test lives (its package, by `owner`), else the
- * newest. */
-export let culprit = (
+/// let both = { sha: 'c', subject: '', paths: ['w/y.ts', 'p/z.ts'] }
+/// culprits([b, a], [{ name: 't', file: 'w/x_test.ts' }]).get('t')?.sha -> 'a'
+/// culprits([b, a], [{ name: 'check:fmt' }]).get('check:fmt')?.sha -> 'b'
+/// [...culprits([b, both, a], [{ name: 't', file: 'w/t_test.ts' }, { name: 'u', file: 'p/u_test.ts' }]).values()].map((c) => c.sha) -> ['c', 'c']
+/// let two = culprits([b, a], [{ name: 't', file: 'w/t_test.ts' }, { name: 'u', file: 'p/u_test.ts' }])
+/// [two.get('t')?.sha, two.get('u')?.sha] -> ['a', 'b']
+/// culprits([], [{ name: 't' }]).size -> 0
+/** The commit that broke each of `failed`, among `changes` newest first. The
+ * commit that changed where the most failing tests live (their package, by
+ * `owner`) broke those, the newer winning a tie; the rest are blamed the same
+ * way, so two breakages in one run are two commits. A failure no commit
+ * reaches is the newest's. One commit breaking several tests is likelier than
+ * several each breaking one, and a newer commit beside a package another one
+ * broke does not take the blame for it. */
+export let culprits = (
   changes: Change[],
   failed: Failed[],
   owner: (path: string) => string | undefined = dir,
-): Change | undefined => {
-  let areas = failed.flatMap((f) =>
-    f.file ? [owner(f.file) ?? dir(f.file)] : []
-  )
-  let touches = (c: Change) =>
-    c.paths.some((p) => areas.some((a) => p == a || p.startsWith(`${a}/`)))
-  return changes.find(touches) ?? changes[0]
+): Map<string, Change> => {
+  let area = (f: Failed) => f.file && (owner(f.file) ?? dir(f.file))
+  let touches = (c: Change, f: Failed) => {
+    let a = area(f)
+    return !!a && c.paths.some((p) => p == a || p.startsWith(`${a}/`))
+  }
+  let blamed = new Map<string, Change>()
+  let left = failed
+  while (left.length && changes.length) {
+    let reach = changes.map((c) => left.filter((f) => touches(c, f)))
+    let most = reach.reduce((m, r, i) => r.length > reach[m].length ? i : m, 0)
+    let them = reach[most].length ? reach[most] : left
+    for (let f of them) blamed.set(f.name, changes[most])
+    left = left.filter((f) => !them.includes(f))
+  }
+  return blamed
 }
 
 let MOST = 5
@@ -348,17 +365,26 @@ export let reporting = (doors: Doors) => {
     }
     return logs.get(run.databaseId)!
   }
+  // What broke each of `now`, each commit's lander read once.
   let blame = async (run: Run, before: Run | undefined, now: Failed[]) => {
     let changes = await doors.history(before?.headSha, run.headSha)
       .then(changed, () => [])
-    let { sha, subject } = culprit(changes, now, member) ??
-      { sha: run.headSha, subject: run.displayTitle }
-    return {
+    let by = culprits(changes, now, member)
+    let own = { sha: run.headSha, subject: run.displayTitle }
+    let broke = new Map<string, Promise<Broke>>()
+    let of = async ({ sha, subject }: { sha: string; subject: string }) => ({
       sha,
       subject,
       first: run.url,
       ...await doors.landed(sha).catch(() => ({})),
+    })
+    let blamed: Blamed = {}
+    for (let f of now) {
+      let c = by.get(f.name) ?? own
+      if (!broke.has(c.sha)) broke.set(c.sha, of(c))
+      blamed[f.name] = await broke.get(c.sha)!
     }
+    return blamed
   }
   let fixed = predates(doors.fixOf, doors.has)
   return async (
@@ -369,11 +395,10 @@ export let reporting = (doors: Doors) => {
   ): Promise<Blamed> => {
     let all = await failed(run)
     let fresh = all.filter((f) => !blamed[f.name])
-    let broke = fresh.length ? await blame(run, before, fresh) : undefined
     // Blame outlasts a run that left its failure out, for the whole streak.
     let next: Blamed = {
       ...blamed,
-      ...Object.fromEntries(fresh.map((f) => [f.name, broke!])),
+      ...fresh.length ? await blame(run, before, fresh) : {},
     }
     let groups = Map.groupBy(all, (f) => next[f.name].sha)
     for (let [sha, them] of groups) {

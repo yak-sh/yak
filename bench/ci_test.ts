@@ -216,6 +216,33 @@ test('a breakage is blamed once, however long main stays red, and a new one is a
   ])
 })
 
+test('the commit that reaches every new failure is blamed, not a newer one beside one of them', async () => {
+  // Run 3 is on c; x before it changed both failing tests' packages, and y
+  // and c only the worker's, c last.
+  let sent = await told(
+    [['ok', 'red', 'red']],
+    {
+      2: ['lens w/lens_test.ts'],
+      3: [
+        'lens w/lens_test.ts',
+        'badge packages/platform/side-browser_test.ts',
+        'updates workers/yak/updates_test.ts',
+      ],
+    },
+    {
+      a: [],
+      b: ['w/x.ts'],
+      x: ['packages/platform/side-parts.ts', 'workers/yak/public/pages.css'],
+      y: ['workers/yak/view.ts'],
+      c: ['workers/yak/operator-draw.ts'],
+    },
+  )
+  equal(sent.slice(1), [
+    'gate failed on main: lens (w/lens_test.ts); since b (b) run/3; it first failed in run/2',
+    'gate failed on main: badge (packages/platform/side-browser_test.ts); updates (workers/yak/updates_test.ts); since x (x) run/3',
+  ])
+})
+
 test('a run that leaves a failure out keeps its blame, and a later commit is not blamed for it', async () => {
   // lens breaks at b; at c a check fails before the tests run, so run 3
   // names cog alone; lens fails again at d, which touched w/ after it broke.
