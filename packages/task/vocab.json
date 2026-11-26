@@ -632,7 +632,7 @@
             ],
             "additionalProperties": false
           },
-          "description": "Each choice has a label and explanation, and may show an entity."
+          "description": "Each choice has a label and a description, and may show an entity."
         },
         "recommended": {
           "type": "string"
