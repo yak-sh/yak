@@ -3,7 +3,13 @@
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { FRONT_VERSION, type FrontEnv, serve, settled } from './front.ts'
-import { pageAt, personal, SEEN } from '@yaks/platform/kept'
+import {
+  immutable,
+  packageAt,
+  pageAt,
+  personal,
+  SEEN,
+} from '@yaks/platform/kept'
 import type { Conversion } from '../arrival.ts'
 import { routes, VERSION } from '@yaks/workerd/worker'
 import { SITE_CHECKED } from '../kept-page.ts'
@@ -99,6 +105,31 @@ let front = (
     told,
   }
 }
+
+test('the front serves immutable public packages from Site without forwarding credentials', async () => {
+  let path = `/__packages/${'a'.repeat(64)}/entry.js`
+  let asked: Request[] = []
+  let f = front((req) => {
+    asked.push(req)
+    return new Response('export {}', {
+      headers: { ...immutable, 'access-control-allow-origin': '*' },
+    })
+  })
+  let resource = 'https://yaks.app' + path
+  let answer = await f.go(resource + '?unused', {
+    headers: { cookie: 'yak_session=test', origin: 'https://ada.yaks.app' },
+  })
+  assertEquals(await answer.text(), 'export {}')
+  assertEquals(answer.headers.get('access-control-allow-origin'), '*')
+  assertEquals(asked.map((req) => [req.url, [...req.headers]]), [
+    [packageAt(path), []],
+  ])
+  assertEquals(f.forwarded.length, 0)
+
+  let cond = await f.go(resource, { headers: { 'if-none-match': '"1"' } })
+  assertEquals(await cond.text(), 'kernel')
+  assertEquals(f.forwarded.map((req) => req.url), [resource])
+})
 
 test('a front request returns a timeout and reports a pending kernel or Site', async () => {
   for (let service of ['kernel', 'site']) {

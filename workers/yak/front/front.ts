@@ -28,6 +28,8 @@ import {
 import { page as documentPath } from '@yaks/platform/files'
 import {
   opens,
+  packageAt,
+  packagePath,
   recordsUse,
   scope,
   sealed,
@@ -347,6 +349,26 @@ let cli = (req: Request, env: FrontEnv) => {
     new URL(req.url).pathname.startsWith('/_cli/')
 }
 
+// Shared modules have the same bytes for every app and browser. On a hit,
+// Site's cache answers before the kernel or the Files handler starts.
+let shared = async (req: Request, site: FrontEnv['SITE'], path: string) => {
+  if (
+    req.method != 'GET' || req.cache == 'no-store' ||
+    [...req.headers.keys()].some((h) => h == 'range' || h.startsWith('if-'))
+  ) return null
+  let answer = await site.fetch(
+    new Request(packageAt(path), {
+      signal: req.signal,
+    }),
+  )
+  if (answer.ok && answer.status == 200) return answer
+  await answer.body?.cancel()
+  if (answer.status >= 500) {
+    throw new Error(`Site package cache answered ${answer.status}`)
+  }
+  return null
+}
+
 let serving = async (
   req: Request,
   env: FrontEnv,
@@ -363,6 +385,11 @@ let serving = async (
     if (cli(req, env)) {
       waiting('cli_wait')
       return await env.CLI.fetch(req)
+    }
+    if (host == apex(env) && packagePath(path)) {
+      waiting('site_package_wait')
+      let asset = await shared(req, env.SITE, path)
+      if (asset) return finished(asset, env, at, cold, said)
     }
     if (
       hostOf(req, env) == apex(env) && shareable(req) && !routedCookie(req, env)

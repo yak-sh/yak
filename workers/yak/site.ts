@@ -27,6 +27,7 @@ import {
   kept,
   listingAt,
   NOW,
+  packagePath,
   passed,
   personal,
   SEEN,
@@ -228,6 +229,11 @@ let sitePage = async (
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
+  let address = new URL(req.url)
+  if (
+    req.method == 'GET' && address.origin == 'https://files.invalid' &&
+    packagePath(address.pathname)
+  ) return (await import('./files.ts')).fetch(req, env)
   let asked = req.method == 'GET' ? visitor(req.url, req) : null
   if (asked) {
     let host = hostOf(asked, env)

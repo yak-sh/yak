@@ -14,17 +14,14 @@
 // again. Only a home a compile named is ever filled.
 import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
 import { REGISTRY } from '@yaks/esbuild'
-import { immutable } from '@yaks/platform/kept'
+import { immutable, packagePath } from '@yaks/platform/kept'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { openShared } from './shared-files.ts'
 
 export let PREFIX = '__packages/'
 
-export let valid = (path: string) =>
-  /^__packages\/[a-f0-9]{64}\/.+/.test(path) &&
-  !/[\\?#%]/.test(path) &&
-  !path.split('/').some((p) => !p || p == '.' || p == '..')
+export let valid = (path: string) => packagePath('/' + path)
 
 /** Where a home's tarball is, and once read, every path it holds. */
 type Home = { tarball: string; paths?: string[] }

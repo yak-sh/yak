@@ -208,6 +208,12 @@ export let servableAt = (
 export let packageAt = (path: string): string =>
   generation(`https://files.invalid${path}`)
 
+/** A compiler-owned public resource, named by its package's content hash. */
+export let packagePath = (path: string): boolean =>
+  /^\/__packages\/[a-f0-9]{64}\/.+/.test(path) &&
+  !/[\\?#%]/.test(path) &&
+  !path.slice(1).split('/').some((p) => !p || p == '.' || p == '..')
+
 // ── What the gateway sends ─────────────────────────────────────────────────
 
 /**
