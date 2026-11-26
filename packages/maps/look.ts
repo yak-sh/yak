@@ -23,9 +23,10 @@ export let LOOK: string = `
 .MapView{aspect-ratio:var(--map-ratio,16/10);width:100%;border:1px solid var(--border,#cfc5b3);border-radius:var(--radius,8px);background:var(--bg,#f6f1e7);overflow:hidden}
 .MapBox{position:relative}
 .MapCredit{position:absolute;right:6px;bottom:6px;z-index:2;display:flex;flex-direction:row-reverse;align-items:center;max-width:calc(100% - 12px);border-radius:12px;background:var(--bg,#fff);color:var(--muted,#6f665a);font-family:var(--font,inherit);font-size:var(--small,13px);line-height:1.3;box-shadow:0 1px 2px rgb(0 0 0/.2)}
-.MapCredit summary{display:grid;place-items:center;flex:none;box-sizing:border-box;width:24px;height:24px;padding:0;list-style:none;cursor:pointer;color:var(--text,#2b2620);line-height:0}
+.MapCredit summary{display:grid;place-items:center;flex:none;box-sizing:border-box;width:24px;height:24px;padding:0;border-radius:50%;list-style:none;cursor:pointer;-webkit-tap-highlight-color:transparent;color:var(--text,#2b2620);line-height:0}
 .MapCredit summary svg{display:block;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .MapCredit summary::-webkit-details-marker{display:none}
+.MapCredit summary:focus-visible{outline:2px solid var(--accent,#c2562f);outline-offset:1px}
 .MapCredit_Name{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .MapCredit[open]{gap:.25em;padding-left:.6em}
 .MapCredit a{color:inherit}
