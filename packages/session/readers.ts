@@ -517,26 +517,36 @@ export let codex: Reader = (e) => {
     : { entries }
 }
 
+// Text, given as a string or as its UTF-8 bytes.
+let utf8 = (v: unknown): string | undefined =>
+  typeof v == 'string'
+    ? v
+    : Array.isArray(v) && v.every(Number.isInteger)
+    ? new TextDecoder().decode(Uint8Array.from(v))
+    : undefined
+
 // What a Grok Build tool's result showed the model: its stream answers a call
-// with the tool's own result as JSON, a shell call's output in bytes beside
-// `output_for_prompt`, the text the model read.
+// with the tool's own result as JSON, its output in bytes, a shell call's
+// beside `output_for_prompt`, the text the model read, and a search's as
+// `stdout`.
 let prompted = (b: Event): Event => {
   if (b.type != 'tool_result' || typeof b.content != 'string') return b
-  let shown: unknown
+  let r: Event
   try {
-    shown = obj(JSON.parse(b.content)).output_for_prompt
+    r = obj(JSON.parse(b.content))
   } catch {
     return b
   }
-  return typeof shown == 'string' ? { ...b, content: shown } : b
+  let shown = utf8(r.output_for_prompt) ?? utf8(r.stdout)
+  return shown == null ? b : { ...b, content: shown }
 }
 
 /**
  * Grok Build's stream, `grok -p --output-format streaming-messages-json`:
  * Claude Code's stream-json, read as {@link claude} reads it, except that a
- * tool's result is the tool's own JSON. A shell call's is read as the text
- * the model was shown (`output_for_prompt`); its history file (`grok`) keeps
- * only that text.
+ * tool's result is the tool's own JSON. A shell call's and a search's are
+ * read as the text the model was shown (`output_for_prompt`, `stdout`); its
+ * history file (`grok`) keeps only that text.
  *
  * ```ts
  * import { grokStream } from '@yaks/session'
@@ -546,6 +556,10 @@ let prompted = (b: Event): Event => {
  * let answer = { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'c1', content: ran }] } }
  * assertEquals(grokStream(answer).entries, [
  *   { result: { call: 'c1' }, content: { body: 'exit: 0\nhi' }, execution: {} },
+ * ])
+ * let found = JSON.stringify({ type: 'GrepSearch', stdout: [70, 111, 117, 110, 100] })
+ * assertEquals(grokStream({ ...answer, message: { content: [{ type: 'tool_result', tool_use_id: 'c2', content: found }] } }).entries, [
+ *   { result: { call: 'c2' }, content: { body: 'Found' }, execution: {} },
  * ])
  * ```
  */
