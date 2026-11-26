@@ -13,7 +13,7 @@ import { background, defect, invocationKey } from './defects.ts'
 import { inFlight } from './lib/shared.ts'
 import { apart, elapsed, spanned } from './lib/hops.ts'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object/resets'
-import { type Clock, system, turns, within } from '@yaks/fp'
+import { type Clock, system, type Turn, turns, within } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
 import { RETIRED } from '@yaks/platform/serving-copy'
 import {
@@ -260,16 +260,22 @@ export class Unfenced extends Error {
 // directory in any order and a write could lose every try to newer ones
 // committing ahead of it (T-165084). The turn ends at the commit, not with
 // the effects after it, so an effect's own directory write takes the next one.
-let raising = 0
-let held = new Map<number, () => void>()
+//
+// A write whose request ends while it waits or writes never comes back to
+// pass its turn or lower its fence: the turn passes on once it has gone
+// unclaimed or been held for seconds (`turns`), and a turn gone so holds
+// no fence `mend` must spare.
+let raising = new Set<Turn>()
+let held = new Map<number, Turn>()
 // The wake carries no result. The next writer reads the committed revision
 // from storage in its own request before asking the copy for a fence.
 let nextTurn = turns()
+let writing = () => [...raising, ...held.values()].some((turn) => !turn.gone())
 
 /** The directory committed a write under this fence: it holds it no longer,
  * and the next write takes its turn. */
 export let released = (revision: number) => {
-  held.get(revision)?.()
+  held.get(revision)?.end()
   held.delete(revision)
 }
 
@@ -277,9 +283,9 @@ export let released = (revision: number) => {
  * answer is mended by the next read that finds the fence. */
 export let mend = async (copy: ServingCopyDoor, committed: () => number) => {
   try {
-    if (raising) return
+    if (writing()) return
     let revision = await copy.revision?.()
-    if (revision == null || raising || held.size) return
+    if (revision == null || writing()) return
     await copy.settle?.(revision, committed())
   } catch (e) {
     if (!moving(e)) defect(e, { request: 'serving fence mend' })
@@ -295,11 +301,11 @@ export let fenced = async <T>(
 ): Promise<T> => {
   let wait = jittered(clock)
   let failed = true
-  let { ready, end } = nextTurn()
+  let turn = nextTurn()
   try {
-    await elapsed('fence_turn_wait', () => ready)
+    await elapsed('fence_turn_wait', () => turn.ready)
     for (;; tries--) {
-      raising++
+      raising.add(turn)
       let revision: number
       try {
         revision = await retried(
@@ -308,9 +314,9 @@ export let fenced = async <T>(
           moving,
           wait,
         )
-        held.set(revision, end)
+        held.set(revision, turn)
       } finally {
-        raising--
+        raising.delete(turn)
       }
       let out: T
       try {
@@ -330,7 +336,7 @@ export let fenced = async <T>(
       return out
     }
   } finally {
-    end()
+    turn.end()
     if (failed) await mend(copy, committed)
   }
 }

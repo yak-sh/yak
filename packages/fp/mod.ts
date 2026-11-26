@@ -477,30 +477,75 @@ export let resolvers = <T>(): Resolvers<T> => {
   return { promise, resolve, reject }
 }
 
-/** A FIFO turn for each caller. The queue holds wake callbacks, so every
- * caller awaits a promise created in its own execution context. */
-export let turns = (): () => { ready: Promise<void>; end: () => void } => {
-  let waiting = new Set<() => void>()
-  let busy = false
+/** One caller's place in {@link turns}: `ready` once it holds the turn, `end`
+ * to pass it on, and `gone` once it holds it no longer. */
+export type Turn = {
+  ready: Promise<void>
+  end: () => void
+  gone: () => boolean
+}
+
+/**
+ * A FIFO turn for each caller, which a caller that never comes back for it
+ * cannot keep. Every caller awaits a promise created in its own execution
+ * context, and is woken from another's. A runtime that drops a wake into a
+ * request that has ended (Workers' `handle_cross_request_promise_resolution`)
+ * loses the turn there, and a caller ended between `ready` and `end` keeps it.
+ * So every waiter watches the turn ahead of it, in time it could hear
+ * ({@link heard}): one woken and not taken within `lapse` ms, or seen taken
+ * and still held `hold` ms later, is passed on.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { turns } from '@yaks/fp'
+ *
+ * let turn = turns()
+ * let order: string[] = []
+ * let a = turn(), b = turn()
+ * let done = Promise.all([
+ *   b.ready.then(() => order.push('b')),
+ *   a.ready.then(() => (order.push('a'), a.end())),
+ * ])
+ * await done
+ * b.end()
+ * assertEquals(order, ['a', 'b'])
+ * ```
+ */
+export let turns = (
+  clock: Clock = system,
+  lapse = 1_000,
+  hold = 5_000,
+): () => Turn => {
+  type Place = { wake: () => void; taken: boolean }
+  let queue: Place[] = []
+  let drop = (p: Place) => {
+    let at = queue.indexOf(p)
+    if (at < 0) return
+    queue.splice(at, 1)
+    if (at == 0) queue[0]?.wake()
+  }
   return () => {
-    let { promise: ready, resolve } = resolvers<void>()
-    if (busy) waiting.add(resolve)
-    else {
-      busy = true
-      resolve()
+    let { promise, resolve } = resolvers<void>()
+    let p: Place = { wake: resolve, taken: false }
+    queue.push(p)
+    let cancel = () => {}
+    // Watch the turn ahead until this one is woken.
+    let watch = () => {
+      let head = queue[0]
+      if (!head || head == p || !queue.includes(p)) return
+      let taken = head.taken
+      cancel = heard(taken ? hold : lapse, () => {
+        if (queue[0] == head && head.taken == taken) drop(head)
+        watch()
+      }, clock)
     }
-    let ended = false
-    let end = () => {
-      if (ended) return
-      ended = true
-      let next = waiting.values().next().value
-      if (!next) busy = false
-      else {
-        waiting.delete(next)
-        next()
-      }
-    }
-    return { ready, end }
+    if (queue[0] == p) resolve()
+    else watch()
+    let ready = promise.then(() => {
+      cancel()
+      p.taken = true
+    })
+    return { ready, end: () => drop(p), gone: () => !queue.includes(p) }
   }
 }
 

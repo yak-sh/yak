@@ -298,7 +298,11 @@ runtime's, which everything else in the runtime shares.
 resolves when the clock's timer expires or the signal aborts; aborting does not
 reject. An already aborted signal resolves without waiting.
 `within(asking, ms, clock?)` is what `asking` answers within `ms` of the clock's
-time (`heard`), or null once they lapse.
+time (`heard`), or null once they lapse. `turns(clock?, lapse?, hold?)` makes a
+first-come queue: each call takes a `Turn`, whose `ready` resolves when it holds
+the turn and whose `end` passes it on. A turn woken and not taken within `lapse`
+ms, or seen taken and still held `hold` ms later, passes on, so a caller that
+never comes back cannot keep it.
 
 ```ts
 import { backoff, sleep, within } from '@yaks/fp'
