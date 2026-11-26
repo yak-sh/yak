@@ -3,35 +3,42 @@ import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { keep, type Window } from './keep.ts'
 import { KEPT, OWN, picture, SCROLL } from './picture.ts'
-import { LEAVE } from '@yaks/ui/navigate'
+import { LEAVE, PAGE } from '@yaks/ui/navigate'
 
 // A page in a browser with a worker, and what it sent the worker.
-let tab = (html: string) => {
+let tab = (html: string, controlled = true, pending?: string) => {
   let { document, window } = parseHTML(html)
   let sent: { keep: string; html: string; shell?: string }[] = []
   let registered: string[] = []
   let shown = 'visible'
+  let workers = {
+    register: (at: string) => (registered.push(at), Promise.resolve()),
+    controller: controlled
+      ? { postMessage: (said: never) => sent.push(said) }
+      : null,
+    addEventListener: window.addEventListener.bind(window),
+  }
   Object.defineProperty(document, 'visibilityState', { get: () => shown })
   let win = {
     document,
     location: { href: 'https://yaks.app/checks' },
-    navigator: {
-      serviceWorker: {
-        register: (at: string) => (registered.push(at), Promise.resolve()),
-        controller: { postMessage: (said: never) => sent.push(said) },
-      },
-    },
+    navigator: { serviceWorker: workers },
     performance: { timeOrigin: 0 },
     addEventListener: window.addEventListener.bind(window),
   } as unknown as Window
-  keep(win, '/worker.js')
+  keep(win, '/worker.js', pending)
   let hide = () => {
     shown = 'hidden'
     document.dispatchEvent(new window.Event('visibilitychange'))
   }
   let leave = () => document.dispatchEvent(new window.Event(LEAVE))
   let load = () => window.dispatchEvent(new window.Event('load'))
-  return { document, sent, registered, hide, leave, load }
+  let arrive = () => document.dispatchEvent(new window.Event(PAGE))
+  let claim = () => {
+    workers.controller = { postMessage: (said: never) => sent.push(said) }
+    window.dispatchEvent(new window.Event('controllerchange'))
+  }
+  return { document, sent, registered, hide, leave, load, claim, arrive }
 }
 
 test('a page registers its worker once loaded, and sends it what it shows as it is hidden or left in place, without what it does not', () => {
@@ -41,9 +48,11 @@ test('a page registers its worker once loaded, and sends it what it shows as it 
   assertEquals(t.registered, [])
   t.load()
   assertEquals(t.registered, ['/worker.js'])
+  assertEquals(t.sent.map((s) => s.keep), ['https://yaks.app/checks'])
   t.hide()
   t.leave()
   assertEquals(t.sent.map((s) => s.keep), [
+    'https://yaks.app/checks',
     'https://yaks.app/checks',
     'https://yaks.app/checks',
   ])
@@ -51,6 +60,36 @@ test('a page registers its worker once loaded, and sends it what it shows as it 
     t.sent[0].html,
     '<!doctype html><html><body><p>Seen last</p></body></html>',
   )
+})
+
+test('a first visit is kept as soon as its worker takes control, before the page is hidden', () => {
+  let t = tab(
+    `<html><body><nav>Side</nav><main ${OWN}>Updates</main></body></html>`,
+    false,
+  )
+  t.load()
+  assertEquals(t.sent, [])
+  t.claim()
+  assertEquals(t.sent.length, 1)
+  assertEquals(t.sent[0].html.includes('Updates'), true)
+  assertEquals(t.sent[0].shell?.includes('Updates'), false)
+})
+
+test('a temporary opening frame never replaces the kept picture of its page', () => {
+  let t = tab(
+    '<html><body><main data-opening>Waiting</main></body></html>',
+    true,
+    '[data-opening]',
+  )
+  t.load()
+  t.hide()
+  t.leave()
+  assertEquals(t.sent, [])
+
+  t.document.querySelector('main')!.outerHTML = '<main>Conversation</main>'
+  t.arrive()
+  assertEquals(t.sent.length, 1)
+  assertEquals(t.sent[0].html.includes('Conversation'), true)
 })
 
 test('a page with parts of its own sends its shell beside it, those parts empty', () => {
