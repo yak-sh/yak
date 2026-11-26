@@ -1126,7 +1126,12 @@ let own: Kind<Heard>[] = [
   kind('.delivery&!result', delivered),
   kind(
     '.system',
-    (b) => said(b) ? { node: system(b, said(b)), is: 'step' } : undefined,
+    (b) =>
+      recovery(said(b))
+        ? null
+        : said(b)
+        ? { node: system(b, said(b)), is: 'step' }
+        : undefined,
   ),
   kind(
     '',
@@ -1169,6 +1174,10 @@ export let PERSON: Kind<Heard>[] = [
   ...conversation.renderers,
 ]
 let person = define(PERSON)
+
+// The platform's prompt to resume an interrupted turn is for the model only:
+// the person's conversation never draws it.
+let recovery = (body: string) => body.startsWith('System recovery:')
 
 // Words the platform wrote into the conversation (`system`): a recovery, an
 // error to fix. Never the person's: one quiet line, its words when opened.

@@ -370,12 +370,11 @@ test("words the platform wrote read as the system's in one closed line, never as
     ['Make it blue'],
   )
   let system = [...doc.querySelectorAll('details.More')]
-  assertEquals(system.map((d) => d.hasAttribute('open')), [false, false])
+  assertEquals(system.map((d) => d.hasAttribute('open')), [false])
   assertEquals(system.map((d) => d.querySelector('summary')!.textContent), [
-    'From the system: ' + recovery,
     'From an error: Fix this error in recipes: x is undefined',
   ])
-  assertStringIncludes(system[1].textContent!, 'It happened.')
+  assertStringIncludes(system[0].textContent!, 'It happened.')
 })
 
 // A reader whose server opens ids reads each as a link there; anyone else
