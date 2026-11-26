@@ -496,15 +496,14 @@ import {
 import { type Door, door } from '@yaks/api/receipts'
 import { keyed } from './writes.ts'
 import { apex, url } from '@yaks/platform/host'
+import { ELSEWHERE, inAppWords } from '@yaks/platform/app-words'
 
 import {
   appDerived,
   appDoc,
   appVocab,
-  ELSEWHERE,
   gitVocab,
   grew,
-  inAppWords,
   meant,
   metaKeywords,
   numbered,

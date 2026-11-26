@@ -203,7 +203,7 @@
       "input": {
         "q": {
           "type": "string",
-          "description": "Query, e.g. .task.status=open&.filed.priority<3."
+          "description": "Query, e.g. .task.status=open&.doc.title~=recipe; ~= matches part of a value, and there is no bare ~."
         },
         "filters": {
           "type": "array",

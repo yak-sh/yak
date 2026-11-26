@@ -130,7 +130,9 @@ export let deployDraftRefusal = (
     ? `To release an open draft, retry app_deploy with its id as draft. Open drafts: ${
       (open.length ? open : drafts).map((d) => d.eid).join(', ')
     }.`
-    : 'There are no open drafts. ' + WRITE_DRAFT
+    : 'There are no open drafts, so nothing waits to release. To change ' +
+      'the app, write the change with app_files first, without draft: that ' +
+      'opens a new draft, and app_deploy with its id releases it.'
   return new CallError(
     'missing',
     closed(app.slug, asked, app.version, released),
