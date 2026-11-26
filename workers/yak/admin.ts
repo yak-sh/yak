@@ -1377,13 +1377,7 @@ export let answer = async (
     })
   }
   if (!who || (req.method != 'GET' && req.method != 'HEAD')) return lost(env)
-  let rest = path.slice(PATH.length + 1)
-  if (!rest) {
-    return new Response(null, {
-      status: 302,
-      headers: { location: `${PATH}/people` },
-    })
-  }
+  let rest = path.slice(PATH.length + 1) || 'people'
   let census = await c.time('directory_read', () => dir.census())
   let d = c.measure(
     'directory_summary',

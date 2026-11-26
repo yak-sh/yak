@@ -15,7 +15,7 @@ import { plan, reading } from '@yaks/web/assets'
 import { ASSETS } from './assets.ts'
 import { PUBLIC, readAsset } from './site-assets-probe.ts'
 import { kit } from './sheet-assets.ts'
-import { asset, client, links, named, sheeted } from './sheets.ts'
+import { asset, assetFile, client, links, named, sheeted } from './sheets.ts'
 import { direct } from './wrangler.ts'
 import { dataAsset } from './web.ts'
 
@@ -133,6 +133,26 @@ test('sheets: a mounted skin keeps content-named filters on a space or custom or
       origin + mount + 'pages.css',
     )
   }
+})
+
+test('a stylesheet from a previous deploy answers flattened without a redirect or immutable cache', async () => {
+  let old = new Request('https://yaks.app/_yak/pages.0000000000.css')
+  let assets = {
+    fetch: (req: Request) => {
+      let held = files.get(new URL(req.url).pathname.slice(1))
+      return Promise.resolve(
+        held
+          ? new Response(new Uint8Array(held), {
+            headers: { 'cache-control': 'public, max-age=31536000, immutable' },
+          })
+          : new Response(null, { status: 404 }),
+      )
+    },
+  }
+  let page = await assetFile(old, assets, names)
+  assertEquals(page.status, 200)
+  assertEquals(page.headers.get('cache-control'), 'no-store')
+  assertEquals(await page.text(), sheet('pages.css'))
 })
 
 test('sheets: a static page, the home page and a kernel page wait on no other site, and wear the favicon', async () => {

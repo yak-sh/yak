@@ -143,3 +143,29 @@ export let named = (path: string) => {
   let [, name, ext] = path.match(/^\/_yak\/(.+)\.[0-9a-f]{10}(\.\w+)$/) ?? []
   return name ? `/${name}${ext}` : null
 }
+
+/** Serve the current flattened stylesheet when a page names one from an
+ * earlier deploy. Its relative URLs still resolve from the same directory.
+ * The browser must not keep these bytes under the old fingerprint. */
+export let assetFile = async (
+  req: Request,
+  files: { fetch(req: Request): Promise<Response> },
+  names = NAMES,
+): Promise<Response> => {
+  let at = new URL(req.url)
+  let page = await files.fetch(req)
+  if (page.status != 404) return page
+  let was = named(at.pathname)
+  let current = was?.endsWith('.css') && names[was.slice(1)]
+  if (!current || at.pathname == '/' + current) return page
+  at.pathname = '/' + current
+  let sheet = await files.fetch(new Request(at, req))
+  if (!sheet.ok) {
+    await sheet.body?.cancel()
+    return page
+  }
+  await page.body?.cancel()
+  let grown = new Response(sheet.body, sheet)
+  grown.headers.set('cache-control', 'no-store')
+  return grown
+}

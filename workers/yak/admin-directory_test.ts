@@ -89,7 +89,7 @@ let asking = (path: string, person?: string) =>
   ] as const
 let outsider = asking('/admin/people')
 let person = asking('/admin/people', 'ann')
-let entrance = asking('/admin', 'root')
+let entrance = asking('/admin?q=ann', 'root')
 let projected = read(env, records, false)
 assertEquals(projected.spaces.get('home')?.slug, 'ann')
 for (let row of [...records.people, ...records.spaces, ...records.apps]) {
@@ -121,7 +121,13 @@ test('the directory refusal page answers not found', () => {
 
 test('the admin directory entrance opens its people list', async () => {
   let door = (await answer(...entrance))!
-  assertEquals(door.headers.get('location'), '/admin/people')
+  assertEquals(door.status, 200)
+  assertEquals(
+    await door.text(),
+    await (await answer(
+      ...asking('/admin/people?q=ann', 'root'),
+    ))!.text(),
+  )
 })
 
 test("the admin's people list shows who a search finds", () => {

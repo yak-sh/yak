@@ -52,8 +52,10 @@ test('the home page links its studio, guides, look and pictures from the address
   for (let place of PLACES) {
     let home = await page('', place), base = place[0]
     ok(home.querySelector('h1')!.textContent!.includes('made real.'))
-    equal(css(home)[0], base + 'look/spellbound.css')
-    ok(css(home).includes(base + '__packages/@yaks/ui/Button.css'))
+    equal(css(home), [base + 'look/spellbound.css'])
+    let rules = home.querySelector('style')!.textContent!
+    let kit = rules.indexOf('.Button {')
+    ok(kit >= 0 && rules.indexOf('.Button-go,') > kit)
     let links = hrefs(home, 'body')
     for (let to of ['studio#new', 'make-a-picture-book-in-chatgpt', '#how']) {
       ok(links.includes(base + to), to)

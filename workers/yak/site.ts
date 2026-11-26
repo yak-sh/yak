@@ -58,7 +58,7 @@ import { INTEGRATIONS, page as integrations, rating } from './integrations.ts'
 import { apex, type Host, hosted, url } from '@yaks/platform/host'
 import { lost } from './pages.ts'
 import { askEmail } from './signin-pages.ts'
-import { named, sheeted } from './sheets.ts'
+import { assetFile, named, sheeted } from './sheets.ts'
 import { priceAt } from './sell.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { COUNTED, counted } from './views.ts'
@@ -294,7 +294,10 @@ export let statics = async (
   // the file's etag says nothing about them: `worn` below answers for a page.
   let page = STATICS.includes(path)
     ? await sitePage(env, path, unconditional(req), dir, visitor)
-    : await env.ASSETS.fetch(/\.\w+$/.test(path) ? req : unconditional(req))
+    : await assetFile(
+      /\.\w+$/.test(path) ? req : unconditional(req),
+      env.ASSETS,
+    )
   if (page.status == 404) {
     // A page held from before a deploy names the sheet that deploy replaced.
     let was = named(path)

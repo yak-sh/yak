@@ -2,7 +2,7 @@
 // this door only mounts that page onto the app's existing API and identity.
 import type { Env } from './env.ts'
 import type { Hosting } from '../../packages/browse/hosting.ts'
-import { interaction, named } from './sheets.ts'
+import { assetFile, interaction, named } from './sheets.ts'
 import { ADDRESS } from '@yaks/platform/routes'
 
 /** The data editor's skin beside its page, by `name` (@yaks/platform/ladder
@@ -12,8 +12,9 @@ export let dataAsset = async (
   env: Pick<Env, 'ASSETS'>,
   name: string,
 ) => {
-  let response = await env.ASSETS.fetch(
+  let response = await assetFile(
     new Request(new URL('/' + name, req.url), req),
+    env.ASSETS,
   )
   let was = response.status == 404 ? named('/' + name) : null
   if (!was) return response
