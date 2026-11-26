@@ -241,19 +241,20 @@ let httpSkills = (() => {
 
 // Each era uses this preparation boundary before dispatching its request.
 for (let opening of ['initialize', 'server/discover']) {
-  test(`HTTP tool exchanges do not read skills, while discovery stays fresh in the ${opening} era`, async () => {
+  test(`HTTP discovery advertises skills without reading them in the ${opening} era`, async () => {
     let { files, request, reads, path, encoder } = httpSkills
     files.clear()
+    let before = reads()
     let initial = await request(opening)
     assert(initial.capabilities.resources)
     assert(initial.prompts.has('other'))
+    assertEquals(reads(), before)
     files.set(
       path,
       encoder.encode(
         '---\nname: Invalid\ndescription: Broken\n---\nText\n',
       ),
     )
-    let before = reads()
     await request('tools/list')
     await request('tools/call')
     assertEquals(reads(), before)

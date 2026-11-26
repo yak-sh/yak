@@ -214,14 +214,23 @@ let snapshot = async (options: SkillOptions): Promise<Snapshot> => {
 
 /** Attach before discovery/connection. No scope means an empty catalogue,
  * never all repositories. Each consuming exchange sees one fresh snapshot.
- * Tool-only exchanges do not consume skills; connection factories attach the
+ * Discovery advertises capabilities. Connection factories attach the
  * complete immutable snapshot for their lifetime. */
 export let attachSkills = async (
   built: Server,
   options: SkillOptions,
   exchange?: Exchange,
 ): Promise<void> => {
-  if (exchange?.method == 'tools/list' || exchange?.method == 'tools/call') {
+  let method = exchange?.method
+  if (method == 'initialize' || method == 'server/discover') {
+    built.capable({
+      resources: { listChanged: true },
+      prompts: { listChanged: true },
+      extensions: { 'io.modelcontextprotocol/skills': {} },
+    })
+    return
+  }
+  if (method && !/^(skills|resources|prompts)\//.test(method)) {
     return
   }
   let view = await snapshot(options)
