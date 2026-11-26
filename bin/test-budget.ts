@@ -68,6 +68,9 @@ export type Slack = { times: number; ms: number }
  * files it left out as unchanged. */
 export type Times = {
   wall: number
+  planned?: number
+  loading?: number
+  loads?: Record<string, number>
   tests: Timed[]
   remembered?: Record<string, string>
   ignored?: number
@@ -220,14 +223,39 @@ export type Measured = {
 export let read = async (dir: string): Promise<Measured> => {
   let runs: Record<string, Times> = {}
   let meta = { whole: false }
+  let files: { name: string; platform: string; part: number }[] = []
   for await (let e of Deno.readDir(dir)) {
-    if (!e.name.endsWith('.json')) continue
-    let held = JSON.parse(await Deno.readTextFile(`${dir}/${e.name}`))
-    if (e.name == 'run.json') meta = held
-    else runs[e.name.slice(0, -5)] = held
+    let match = /^(.+?)(?:-(\d+))?\.json$/.exec(e.name)
+    if (match) {
+      files.push({
+        name: e.name,
+        platform: match[1],
+        part: Number(match[2] ?? 1),
+      })
+    }
+  }
+  files.sort((a, b) => a.platform.localeCompare(b.platform) || a.part - b.part)
+  for (let { name, platform } of files) {
+    let held = JSON.parse(await Deno.readTextFile(`${dir}/${name}`))
+    if (name == 'run.json') meta = held
+    else {
+      let earlier = runs[platform]
+      runs[platform] = earlier ? joined(earlier, held) : held
+    }
   }
   return { code: 0, runs, ...meta }
 }
+
+let joined = (a: Times, b: Times): Times => ({
+  wall: a.wall + b.wall,
+  planned: (a.planned ?? 0) + (b.planned ?? 0),
+  loading: (a.loading ?? 0) + (b.loading ?? 0),
+  loads: { ...a.loads, ...b.loads },
+  tests: [...a.tests, ...b.tests],
+  remembered: { ...a.remembered, ...b.remembered },
+  ignored: (a.ignored ?? 0) + (b.ignored ?? 0),
+  left: (a.left ?? 0) + (b.left ?? 0),
+})
 
 /** A run of the suite (bin/test.ts): each platform's runner given `flags`
  * beside the command's own. */

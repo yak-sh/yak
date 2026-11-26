@@ -189,6 +189,7 @@ let restored = (
     [Symbol.dispose]: () => {
       if (!closed) db?.close()
       closed = true
+      db = undefined
     },
     sql: {
       exec: (query, ...bindings) => {

@@ -312,12 +312,11 @@ records each file the run remembered as passed, with its proof in the pass
 record (`forget` from `@yaks/testing/deps` takes one back), and how many tests
 it skipped and files it left out as unchanged.
 
-A runtime keeps every module it loaded, and whatever their tests left reachable,
-until it exits, so one runtime holding a whole suite can outgrow its machine.
-With `--rest`, once the runtime's resident memory passes 2 GiB after a file, it
-loads no more and writes the files it did not reach to that file as a JSON list;
-the caller runs them in a fresh runtime, as the repo's `bin/test.ts` does,
-naming each later one by `--part`.
+A runtime keeps loaded modules and their reachable state until it exits. When
+its resident memory crosses the limit after a file, `--rest` lets it release
+shared fixtures and check again. If it still exceeds the limit, it records the
+remaining files for a fresh runtime. The standalone limit is 1 GiB. The repo
+runner uses 3 GiB and combines each platform's reports in order.
 
 The process's other threads are left out because their work is not the test's.
 V8 compiles and collects garbage on background threads whenever it likes, often

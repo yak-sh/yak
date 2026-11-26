@@ -69,26 +69,33 @@ let paths = system.args.filter((a) => !a.startsWith('--'))
 let given = flag('keys').at(-1)
 let rest = flag('rest').at(-1)
 let part = flag('part').at(-1)
-// The first collection threshold, and the limit if the caller asks to
-// hand off unstarted files.
-let FULL = Number(flag('full').at(-1) ?? 1024 ** 3)
+let GIB = 1024 ** 3
+let FULL = Number(flag('full').at(-1) ?? GIB)
 // Collect when the runtime grows, allow finalizers to close native handles,
 // and give back the memory they free (@yaks/process `trim`). Only a runner
 // with an explicit handoff releases shared fixtures before the last file.
 let sweep = (globalThis as { gc?: () => void }).gc
 let releases: Outcome[] = []
-let sweepAt = FULL
-let full = async () => {
-  if (system.memoryUsage().rss <= sweepAt) return false
-  if (rest) releases.push(...await release(timeout, verbose))
+let sweepAt = Math.min(GIB, FULL)
+let trim = async () => {
   sweep?.()
   await tick()
   system.trim()
-  let kept = system.memoryUsage().rss
+  return system.memoryUsage().rss
+}
+let full = async () => {
+  if (system.memoryUsage().rss <= sweepAt) return false
+  let kept = await trim()
+  if (rest && kept > FULL) {
+    releases.push(...await release(timeout, verbose))
+    kept = await trim()
+  }
   // Native SQLite pages do not count toward JavaScript heap pressure. Give
   // unreachable fixtures a chance to free them, then wait for memory to
-  // grow again before collecting. Shared fixtures live for the whole run.
-  if (!rest) sweepAt = Math.max(FULL, kept + FULL / 4)
+  // grow again before collecting.
+  sweepAt = rest
+    ? Math.min(FULL, kept + GIB / 4)
+    : Math.max(GIB, kept + GIB / 4)
   return !!rest && kept > FULL
 }
 let started = performance.now()

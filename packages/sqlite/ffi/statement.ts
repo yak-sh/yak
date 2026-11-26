@@ -59,17 +59,21 @@ export type BindValue =
 export type BindParameters = BindValue[] | Record<string, BindValue>
 export type RestBindParameters = BindValue[] | [BindParameters]
 
-/** Maps sqlite_stmt* pointers to sqlite* db pointers. */
-export const STATEMENTS_TO_DB = new Map<Deno.PointerValue, Deno.PointerValue>()
+// A finalizer keeps the native handles, without keeping their JS owners.
+// A database closes only its own statements, even when many stores are open.
+type Handles = Set<Deno.PointerValue>
+const handles = new WeakMap<Database, Handles>()
+export const statementsOf = (db: Database): Handles => {
+  let held = handles.get(db)
+  if (!held) handles.set(db, held = new Set())
+  return held
+}
 
 const emptyStringBuffer = new Uint8Array(1)
 
 const statementFinalizer = new FinalizationRegistry(
-  (ptr: Deno.PointerValue) => {
-    if (STATEMENTS_TO_DB.has(ptr)) {
-      sqlite3_finalize(ptr)
-      STATEMENTS_TO_DB.delete(ptr)
-    }
+  ({ handle, held }: { handle: Deno.PointerValue; held: Handles }) => {
+    if (held.delete(handle)) sqlite3_finalize(handle)
   },
 )
 
@@ -143,7 +147,7 @@ function getColumn(
  */
 export class Statement<TStatement extends object = Record<string, any>> {
   #handle: Deno.PointerValue
-  #finalizerToken: { handle: Deno.PointerValue }
+  #native: { handle: Deno.PointerValue; held: Handles }
   #bound = false
   #hasNoArgs = false
   #unsafeConcurrency
@@ -244,10 +248,11 @@ export class Statement<TStatement extends object = Record<string, any>> {
       db.unsafeHandle,
     )
     this.#handle = Deno.UnsafePointer.create(pHandle[0])
-    STATEMENTS_TO_DB.set(this.#handle, db.unsafeHandle)
+    const held = statementsOf(db)
+    held.add(this.#handle)
     this.#unsafeConcurrency = db.unsafeConcurrency
-    this.#finalizerToken = { handle: this.#handle }
-    statementFinalizer.register(this, this.#handle, this.#finalizerToken)
+    this.#native = { handle: this.#handle, held }
+    statementFinalizer.register(this, this.#native, this)
 
     if (
       (this.#bindParameterCount = sqlite3_bind_parameter_count(
@@ -741,11 +746,11 @@ export class Statement<TStatement extends object = Record<string, any>> {
 
   /** Free up the statement object. */
   finalize(): void {
-    if (!STATEMENTS_TO_DB.has(this.#handle)) return
     this.#bindRefs.clear()
-    statementFinalizer.unregister(this.#finalizerToken)
-    STATEMENTS_TO_DB.delete(this.#handle)
-    unwrap(sqlite3_finalize(this.#handle))
+    statementFinalizer.unregister(this)
+    if (this.#native.held.delete(this.#handle)) {
+      unwrap(sqlite3_finalize(this.#handle))
+    }
   }
 
   /** Coerces the statement to a string, which in this case is expanded SQL. */

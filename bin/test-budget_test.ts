@@ -1,10 +1,11 @@
-import { equal, test, throws } from '@yaks/testing'
+import { cleanup, equal, test, throws } from '@yaks/testing'
 import {
   type Budget,
   judge,
   listed,
   measure,
   own,
+  read,
   shrunk,
   type Times,
 } from './test-budget.ts'
@@ -35,6 +36,23 @@ let deno = (
 let ran = (took: Record<string, number>, wall = 1000) =>
   judge(list, { deno: deno(took, wall) })
 let names = (rows: { key: string }[]) => rows.map((r) => r.key)
+
+test('a platform report includes all runtime parts in order', async () => {
+  let dir = await Deno.makeTempDir()
+  cleanup(() => Deno.remove(dir, { recursive: true }))
+  let first = deno({ early: 1 }, 20, 'early_test.ts')
+  let last = deno({ late: -1 }, 30, 'late_test.ts')
+  let write = (name: string, result: Times) =>
+    Deno.writeTextFile(`${dir}/${name}.json`, JSON.stringify(result))
+  await write('deno-2', { ...last, ignored: 1, loading: 3 })
+  await write('deno', { ...first, loading: 2 })
+  let { runs } = await read(dir)
+  equal(Object.keys(runs), ['deno'])
+  equal(runs.deno.wall, 50)
+  equal(runs.deno.loading, 5)
+  equal(runs.deno.tests, [...first.tests, ...last.tests])
+  equal(runs.deno.ignored, 1)
+})
 
 test('CPU observations ignore wall time and waiting', () => {
   let waits = (took: Record<string, [number, number]>): Times => ({

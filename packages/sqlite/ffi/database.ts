@@ -16,7 +16,7 @@ import { readCstr, toCString, unwrap } from './util.ts'
 import {
   type RestBindParameters,
   Statement,
-  STATEMENTS_TO_DB,
+  statementsOf,
 } from './statement.ts'
 import { type BlobOpenOptions, SQLBlob } from './blob.ts'
 
@@ -133,18 +133,16 @@ const BIG_MAX = BigInt(Number.MAX_SAFE_INTEGER)
 type Native = {
   handle: Deno.PointerValue
   callbacks: Set<Deno.UnsafeCallback>
+  statements: Set<Deno.PointerValue>
 }
 
 /** Finalizes the connection's statements, frees its callbacks and closes
  * it. */
-const shut = ({ handle, callbacks }: Native): number => {
-  for (const [stmt, db] of STATEMENTS_TO_DB) {
-    if (db === handle) {
-      sqlite3_finalize(stmt)
-      STATEMENTS_TO_DB.delete(stmt)
-    }
-  }
+const shut = ({ handle, callbacks, statements }: Native): number => {
+  for (const stmt of statements) sqlite3_finalize(stmt)
+  statements.clear()
   for (const cb of callbacks) cb.close()
+  callbacks.clear()
   return sqlite3_close_v2(handle)
 }
 
@@ -278,7 +276,11 @@ export class Database {
     unwrap(result)
     unreached.register(
       this,
-      { handle: this.#handle, callbacks: this.#callbacks },
+      {
+        handle: this.#handle,
+        callbacks: this.#callbacks,
+        statements: statementsOf(this),
+      },
       this,
     )
 
@@ -823,7 +825,11 @@ export class Database {
   close(): void {
     if (!this.#open) return
     unreached.unregister(this)
-    unwrap(shut({ handle: this.#handle, callbacks: this.#callbacks }))
+    unwrap(shut({
+      handle: this.#handle,
+      callbacks: this.#callbacks,
+      statements: statementsOf(this),
+    }))
     this.#open = false
   }
 

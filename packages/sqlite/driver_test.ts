@@ -28,3 +28,20 @@ test('a kept statement that fails as it runs is named by its error', () => {
   assertEquals(named(d, add), render(add).sql)
   d.close()
 })
+
+test('closing one database leaves another database’s statements usable', () => {
+  let first = new Database(':memory:')
+  let second = new Database(':memory:')
+  try {
+    let freed = first.prepare('select 1 as n')
+    let kept = second.prepare('select 2 as n')
+    first.close()
+    freed.finalize()
+    assertEquals(kept.all(), [{ n: 2 }])
+    kept.finalize()
+    kept.finalize()
+  } finally {
+    first.close()
+    second.close()
+  }
+})

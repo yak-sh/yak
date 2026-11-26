@@ -358,15 +358,18 @@ export let compiler = (
 export let bindings = (secret: string, vars: Vars = {}) => {
   // A person's stream (stream.ts), one object per person, made on demand and
   // kept like a store: what a session was told, and the roster it holds.
-  let wires = new Map<string, Wired>()
+  let wires = new Map<
+    string,
+    { wire: Wired; storage: ReturnType<typeof raw> }
+  >()
   let wire = (name: string): Wired => {
     let held = wires.get(name)
     if (!held) {
       let storage = Object.assign(raw(), kvStorage())
       let ctx = { storage, acceptWebSocket() {}, getWebSockets: () => [] }
-      wires.set(name, held = new Wired(ctx, env))
+      wires.set(name, held = { wire: new Wired(ctx, env), storage })
     }
-    return held
+    return held.wire
   }
   let trackers = new Map<string, ReturnType<typeof trackerStore>>()
   let tracker = (scope: string) => {
@@ -382,6 +385,7 @@ export let bindings = (secret: string, vars: Vars = {}) => {
     return held
   }
   let files = bucket()
+  let oauth = kv()
   let env = {
     SESSION_SECRET: secret,
     TRACKER_SECRET: secret,
@@ -414,7 +418,7 @@ export let bindings = (secret: string, vars: Vars = {}) => {
     BLOBS: files.r2,
     // The grants ledger (grants.ts): what a CLI token and the build sandbox's
     // own sign-in are written down in.
-    OAUTH_KV: kv(),
+    OAUTH_KV: oauth,
     ASSETS: assets(),
     WIRE: {
       idFromName: (n: string) => n,
@@ -427,5 +431,23 @@ export let bindings = (secret: string, vars: Vars = {}) => {
   // These bindings finish their work inside each request; no background
   // work remains for their holder to drain. Store hosts add their own drain.
   let settled = () => Promise.resolve()
-  return { env, files, settled, [Symbol.asyncDispose]: settled }
+  let close = () => {
+    for (let { wire, storage } of wires.values()) {
+      for (let stream of wire.streams) wire.drop(stream)
+      storage[Symbol.dispose]()
+    }
+    wires.clear()
+    trackers.clear()
+    oauth.held.clear()
+    files.held.clear()
+    files.at.clear()
+    files.gets.length = 0
+  }
+  return {
+    env,
+    files,
+    settled,
+    [Symbol.dispose]: close,
+    [Symbol.asyncDispose]: () => Promise.try(close),
+  }
 }

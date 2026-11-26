@@ -533,15 +533,22 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     throw new Error('invalid test watch interval')
   }
   let runs = platforms(paths)
-  let children: Deno.ChildProcess[] = []
+  let children = new Set<Deno.ChildProcess>()
   let host = runtime()
-  let spawn = (p: string, files: readonly string[]) => {
+  // Leave room in the session's 6 GiB for selection, type checks, temporary
+  // files and the terminal platform. Keep one active runtime per platform.
+  let full = flags.findLast((f) => f.startsWith('--full=')) ??
+    `--full=${3 * 1024 ** 3}`
+  let spawn = (p: string, files: string[], rest: string, part: number) => {
     let child = new Deno.Command(Deno.execPath(), {
       args: [
         ...host.args,
         RUNNER,
         `--platform=${p}`,
         ...flags,
+        full,
+        `--rest=${rest}`,
+        ...part > 1 ? [`--part=${part}`] : [],
         ...files,
       ],
       env: host.env,
@@ -551,7 +558,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       stdout: 'piped',
       stderr: 'piped',
     }).spawn()
-    children.push(child)
+    children.add(child)
     return child
   }
   let failed: string[] = []
@@ -578,6 +585,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let heard = runs.map(() => ({
     out: [] as Uint8Array[],
     err: [] as Uint8Array[],
+    from: 0,
+    after: 0,
   }))
   let bytes = (parts: Uint8Array[]) => {
     let all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
@@ -587,23 +596,26 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   // A platform's report, once: whole when verbose, and otherwise only a red
   // one's failures. `status` is how its runtime ended; none, when it outlived
   // the run's end.
-  let say = (i: number, status?: Deno.CommandStatus) => {
+  let recent = (i: number) => {
+    let { out, err, from, after } = heard[i]
+    let decode = (parts: Uint8Array[]) => new TextDecoder().decode(bytes(parts))
+    return [decode(out.slice(from)), decode(err.slice(after))] as const
+  }
+  let red = (out: string, err: string, why: string) =>
+    report(Deno.stdout, new TextEncoder().encode(failures(out, err, why)))
+  let say = (i: number, status?: Deno.CommandStatus, reportedPart = false) => {
     if (progress[i].done) return
     progress[i].done = true
-    let out = bytes(heard[i].out), err = bytes(heard[i].err)
-    let said = new TextDecoder().decode(out)
     let ok = status?.success ?? false
     // A runtime that died (out of memory, say) never listed its failures.
+    let [out, err] = recent(i)
     let why = `test ${runs[i].name}: ${
       status ? status.signal ?? status.code : 'still running'
-    }${ok || reported(said) ? '' : died(progress[i])}`
+    }${ok || reported(out) ? '' : died(progress[i])}`
     if (verbose) {
-      report(Deno.stdout, out)
-      report(Deno.stderr, err)
-    } else if (!ok) {
-      let text = failures(said, new TextDecoder().decode(err), why)
-      report(Deno.stdout, new TextEncoder().encode(text))
-    }
+      report(Deno.stdout, bytes(heard[i].out))
+      report(Deno.stderr, bytes(heard[i].err))
+    } else if (!ok && !reportedPart) red(out, err, why)
     if (!ok) failed.push(why)
   }
   // The closing word on a long run: which platforms were red, after every one
@@ -680,15 +692,43 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let run = async (i: number) => {
     let { name, files } = runs[i]
     let p = progress[i]
-    let child = spawn(name, files)
-    p.now = own(child.pid, { every: pulse / 2 })
-    p.at = p.now()
-    let [status] = await Promise.all([
-      child.status,
-      observe(kept(child.stdout, heard[i].out), p, p.now),
-      observe(kept(child.stderr, heard[i].err), p, p.now),
-    ])
-    say(i, status)
+    let rest = await Deno.makeTempFile({ prefix: 'test-rest-' })
+    let status: Deno.CommandStatus | undefined
+    let reportedPart = false
+    try {
+      for (let part = 1; files.length && !ending; part++) {
+        let heardPart = heard[i]
+        let { out, err } = heardPart
+        heardPart.from = out.length
+        heardPart.after = err.length
+        reportedPart = false
+        await Deno.writeTextFile(rest, '')
+        if (ending) break
+        let child = spawn(name, files, rest, part)
+        p.now = own(child.pid, { every: pulse / 2 })
+        p.at = p.now()
+        p.phase = 'loading'
+        p.name = `loading ${files[0]}`
+        let [ended] = await Promise.all([
+          child.status,
+          observe(kept(child.stdout, out), p, p.now),
+          observe(kept(child.stderr, err), p, p.now),
+        ])
+        children.delete(child)
+        status = ended.success && status ? status : ended
+        let next = await Deno.readTextFile(rest)
+        if (!next || ended.signal) break
+        if (!verbose && !ended.success) {
+          red(...recent(i), `test ${name}: ${ended.code}`)
+        }
+        // Any test failures in this part have already been printed.
+        reportedPart = true
+        files = JSON.parse(next)
+      }
+    } finally {
+      await Deno.remove(rest)
+    }
+    say(i, status, reportedPart)
   }
   await Promise.all(runs.map((_, i) => run(i)))
   finish()

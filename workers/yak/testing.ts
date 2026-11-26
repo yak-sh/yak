@@ -482,7 +482,7 @@ export let lasting = (
     sockets.set(`builder ${name}`, ctx.live)
     return ctx
   })
-  let { env, files } = bindings(secret, {
+  let runtime = bindings(secret, {
     STORE: {
       idFromName: (n: string) => n,
       get: (n: unknown) => ({
@@ -499,6 +499,7 @@ export let lasting = (
     BUILDER: namespace,
     ...vars,
   })
+  let { env, files } = runtime
   // Every alarm that is due, delivered the way the runtime delivers one: the
   // instant cleared, then the object's `alarm()`, which may arm the next.
   // Each object's delivery is its own, as in the runtime: an object is never
@@ -594,6 +595,7 @@ export let lasting = (
       for (let held of [objects, sockets, recovery, states, armed, alarms]) {
         held.clear()
       }
+      runtime[Symbol.dispose]()
     }
     // A Durable Object's runtime retains its storage for waitUntil work.
     // An alarm delivery can start such work or call another store before it
