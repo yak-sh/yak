@@ -30,7 +30,8 @@ export let installSecret = async (
   name: string,
   text: string,
   token: string,
-  send: (url: string, init: RequestInit) => Promise<Response> = fetch,
+  send: (url: string, init: RequestInit) => Promise<Response> = (url, init) =>
+    fetch(url, init),
 ): Promise<void> => {
   let url = accountUrl(
     { CF_ACCOUNT: encodeURIComponent(account) },
@@ -42,7 +43,7 @@ export let installSecret = async (
   }
   let status = async (url: string, init: RequestInit) => {
     try {
-      let answer = await send(url, { headers, redirect: 'error', ...init })
+      let answer = await send(url, { headers, ...init, redirect: 'manual' })
       await answer.body?.cancel()
       return answer.status
     } catch {

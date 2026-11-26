@@ -94,16 +94,25 @@ test('a Worker secret is written only when absent and API bodies are discarded',
   await install(404, 200)
   await install(200)
   await assertRejects(() => install(404, 403), Error, 'returned 403')
+  await assertRejects(() => install(302), Error, 'lookup returned 302')
+  await assertRejects(
+    () => install(404, 302),
+    Error,
+    'installation returned 302',
+  )
   let base =
     'https://api.cloudflare.com/client/v4/accounts/account/workers/scripts/script/secrets'
   assertEquals(
     requests.map(({ method, url, redirect }) => [method, url, redirect]),
     [
-      ['GET', `${base}/KEY`, 'error'],
-      ['PUT', base, 'error'],
-      ['GET', `${base}/KEY`, 'error'],
-      ['GET', `${base}/KEY`, 'error'],
-      ['PUT', base, 'error'],
+      ['GET', `${base}/KEY`, 'manual'],
+      ['PUT', base, 'manual'],
+      ['GET', `${base}/KEY`, 'manual'],
+      ['GET', `${base}/KEY`, 'manual'],
+      ['PUT', base, 'manual'],
+      ['GET', `${base}/KEY`, 'manual'],
+      ['GET', `${base}/KEY`, 'manual'],
+      ['PUT', base, 'manual'],
     ],
   )
   assertEquals(requests[1].headers.get('authorization'), 'Bearer token')
