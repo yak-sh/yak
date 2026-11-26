@@ -1,6 +1,7 @@
 /** Filesystem measurements through the host's file API, without commands. */
 import * as disk from './io.ts'
 import type { Disk, Walk } from './occupancy.ts'
+import { type Clock, sleep, system } from '@yaks/fp'
 
 export type Filesystem = Pick<
   typeof disk,
@@ -13,12 +14,15 @@ let readable = (error: unknown): undefined => {
 }
 
 /** Allocated bytes, counting hard links once and stopping at other devices.
- * Symlinks are measured themselves; their targets are never followed. */
+ * Symlinks are measured themselves; their targets are never followed.
+ * `breathe` is awaited before each directory is read, so a caller can pace a
+ * walk that lstats every file on the disk ({@link paced}). */
 export let walk = async (
   mount: string,
   least: number,
   signal?: AbortSignal,
   fs: Filesystem = disk,
+  breathe: () => Promise<void> = () => Promise.resolve(),
 ): Promise<Walk | undefined> => {
   let root = await fs.lstat(mount)
   let seen = new Set<number>()
@@ -30,6 +34,7 @@ export let walk = async (
     seen.add(stat.ino)
     let bytes = stat.blocks == null ? stat.size : stat.blocks * 512
     if (stat.isDirectory) {
+      await breathe()
       try {
         for await (let entry of fs.readDir(absolute)) {
           if (signal?.aborted) break
@@ -49,6 +54,38 @@ export let walk = async (
   }
   let counted = await visit(mount, '')
   return signal?.aborted ? undefined : { counted, paths }
+}
+
+/** A pace for {@link walk}: after each `burst` ms of walking, a pause long
+ * enough that the walk keeps to `share` of the time, so a walk of a whole disk
+ * leaves the CPUs to everything else on the computer.
+ *
+ * ```ts
+ * import { clock, equal } from '@yaks/testing'
+ * let time = clock()
+ * let breathe = paced(0.25, 50, time)
+ * await breathe()
+ * equal(time.pending(), 0)
+ * await time.advance(60)
+ * let paused = breathe()
+ * equal(time.pending(), 1)
+ * await time.advance(180)
+ * await paused
+ * equal([time.now(), time.pending()], [240, 0])
+ * ```
+ */
+export let paced = (
+  share = 0.25,
+  burst = 50,
+  clock: Clock = system,
+): () => Promise<void> => {
+  let since = clock.now()
+  return async () => {
+    let ran = clock.now() - since
+    if (ran < burst) return
+    await sleep(ran * (1 / share - 1), undefined, clock)
+    since = clock.now()
+  }
 }
 
 /** The filesystems holding `places`, each once, at its mount: the highest

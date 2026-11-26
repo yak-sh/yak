@@ -339,23 +339,3 @@ export let perDay = <T extends { at: string }>(
   let days = (Date.parse(newer.at) - Date.parse(older.at)) / DAY
   return days > 0 ? (of(newer) - of(older)) / days : undefined
 }
-
-/**
- * Whether a volume is due a look: its day has none yet, or the latest is at
- * least `again` milliseconds old.
- *
- * ```ts
- * import { due } from './occupancy.ts'
- * import { equal } from '@yaks/testing'
- *
- * let now = Date.parse('2026-10-21T12:00:00Z')
- * equal(due(undefined, now, 36e5), true)
- * equal(due({ at: '2026-10-21T11:30:00Z' }, now, 36e5), false)
- * equal(due({ at: '2026-10-21T11:00:00Z' }, now, 36e5), true)
- * ```
- */
-export let due = (
-  look: { at: string } | undefined,
-  now: number,
-  again: number,
-): boolean => !look || now - Date.parse(look.at) >= again

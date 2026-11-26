@@ -48,10 +48,10 @@ test('a walk stopped as the process winds down keeps nothing', async () => {
   equal((await day('/mnt')).row, undefined)
 })
 
-test('a day looked at within the hour is not walked again', async () => {
+test('a day already looked at is not walked again', async () => {
   let { look, n } = computer([disk('/srv')])
   let volume = volumeOf(machine, '/srv')
-  let at = new Date(NOW - 60_000).toISOString()
+  let at = new Date(NOW - 6 * 60 * 60_000).toISOString()
   let occupancy = { volume, day: DAY, at, size: 1, used: 1, free: 0, ...walk }
   await g.apply([{ entity: { eid: occupancyOf(volume, DAY) }, occupancy }], {
     trusted: true,

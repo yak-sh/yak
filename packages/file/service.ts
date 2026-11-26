@@ -1,9 +1,10 @@
 /**
  * What fills this computer's disks, as a duty: the module a server imports at
  * `@yaks/file/service`. Each pass reads the computer's disks, and walks
- * each one whose day has no look yet, or whose latest look is `AGAIN` old
- * (one filesystem at a time through the file API), into
- * the day's `occupancy` row. The Disks page reads only those rows (./page.ts),
+ * each one whose day has no look yet (one filesystem at a time through the
+ * file API) into the day's `occupancy` row. A walk lstats every file on the
+ * disk, about a CPU for minutes on a box of agents' checkouts, so a disk is
+ * walked once a day, never more. The Disks page reads only those rows (./page.ts),
  * so opening it measures nothing.
  *
  * A walk stops when the process winds down, and the next process
@@ -15,7 +16,7 @@
  *
  * @module
  */
-import { disksAt, walk } from './measure.ts'
+import { disksAt, paced, walk } from './measure.ts'
 import { homedir } from './io.ts'
 import type { Graph } from '@yaks/graph'
 import { sleep } from '@yaks/fp'
@@ -24,7 +25,6 @@ import { here } from './local.ts'
 import { lows, prune } from './upkeep.ts'
 import {
   type Disk,
-  due,
   listed,
   occupancyIn,
   occupancyOf,
@@ -32,10 +32,10 @@ import {
 } from './occupancy.ts'
 
 /** How long a pass waits for the next, in milliseconds: five minutes, so a
- * disk running low is told within them. A walk still waits for `AGAIN`. */
+ * disk running low is told within them. A walk still waits for the next day. */
 export let EVERY = 5 * 60 * 1000
 
-/** How old a volume's latest look is before it is walked again: an hour. */
+/** How often the mirror caches are pruned: an hour. */
 export let AGAIN = 60 * 60 * 1000
 
 /** How a computer is looked at: its disks, and a walk of one. */
@@ -54,11 +54,14 @@ export type Looking = {
  * and the home directory. */
 export let computer: Looking = {
   disks: () => disksAt(['/', homedir()]),
-  walk,
+  // A quarter of one CPU at most: unpaced, a walk held a whole CPU for over
+  // ten minutes beside agents' test runs (bug 60286e2677).
+  walk: (mount, least, signal) =>
+    walk(mount, least, signal, undefined, paced()),
 }
 
-/** One pass: walk each of this computer's disks that is due a look, into its
- * day's row. */
+/** One pass: walk each of this computer's disks whose day has no look yet,
+ * into its day's row. */
 export let pass = async (
   g: Graph,
   look: Looking = computer,
@@ -73,7 +76,7 @@ export let pass = async (
     let held = await g.get([eid, volume], ['occupancy', 'volume'])
     let had = held.find((b) => b.entity.eid == eid)
     let known = held.find((b) => b.entity.eid == volume)
-    if (!due(occupancyIn(had), now, AGAIN)) continue
+    if (occupancyIn(had)) continue
     let walk = await look.walk(disk.mount, listed(disk.size), signal)
     if (!walk) return
     // The filesystem's figures as the walk ends, so they and it agree.

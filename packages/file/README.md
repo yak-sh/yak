@@ -63,11 +63,11 @@ A host that lists `@yaks/file` among its plugins runs its duty
 (`@yaks/file/service`) for the computer it is on. Every five minutes it reads
 the computer's disks: the filesystems holding its root and the home directory,
 each at its mount, the highest directory still on the same device. It walks each
-one whose day has no look yet, or whose latest look is an hour old, using file
-APIs without starting commands. The walk stays on one device, counts allocated
-blocks and hard links once, and never follows symlinks. Protected or
-disappearing paths remain uncounted. Cancellation keeps partial walks out of the
-graph.
+one whose day has no look yet, once a day, using file APIs without starting
+commands: a walk lstats every file on the disk. The walk stays on one device,
+counts allocated blocks and hard links once, and never follows symlinks.
+Protected or disappearing paths remain uncounted. Cancellation keeps partial
+walks out of the graph.
 
 A disk whose free bytes fall below its floor is reported through the host's
 telemetry, once each time it falls: a full disk fails every write on it. The

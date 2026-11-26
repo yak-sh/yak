@@ -54,6 +54,16 @@ test('walk counts allocated blocks and directories, once per inode on one device
   })
 })
 
+test('a paced walk breathes before each directory on its device and counts the same', async () => {
+  let breaths = 0
+  let breathe = () => (breaths++, Promise.resolve())
+  equal(await walk('/', 1000, undefined, fs, breathe), {
+    counted: 6144,
+    paths: { 'home/big': 4096, 'home/': 5632 },
+  })
+  equal(breaths, 3)
+})
+
 test('an aborted walk publishes no partial measurement', async () => {
   equal(await walk('/', 0, AbortSignal.abort(), fs), undefined)
 })
