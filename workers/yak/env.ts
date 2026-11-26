@@ -221,8 +221,6 @@ export type Env = {
   // Directory Bind role.
   DISPATCH?: Dispatch
   CF_WORKERS_TOKEN?: string
-  // Staging's private bootstrap binding to the production kernel.
-  PRODUCTION_QUERY_SETUP?: { seedStaging(secret: string): Promise<void> }
   // The account API is directed to the probe's Cloudflare stand-in in tests.
   WORKERS_API?: string
   // What makes and removes a space's tunnel and its Workers VPC Service

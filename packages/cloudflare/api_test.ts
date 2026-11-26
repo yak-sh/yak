@@ -1,8 +1,8 @@
 // How many times the account API's fetch sends a call that Cloudflare answers
 // with one status each time, or drops (`null`), and what the caller gets.
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
-import { installSecret, resent } from './api.ts'
+import { assertEquals } from '@std/assert'
+import { resent } from './api.ts'
 
 type Call = [string, number | null, boolean?, string?]
 
@@ -64,62 +64,4 @@ test("Cloudflare's own failures are sent again; a refusal once, a 429 after the 
   let got = []
   for (let [call] of calls) got.push(await sends(call))
   assertEquals(got, calls.map(([, want]) => want))
-})
-
-test('a Worker secret is written only when absent and API bodies are discarded', async () => {
-  let requests: Request[] = [], cancelled = 0
-  let answering =
-    (...statuses: number[]) => (input: string, init: RequestInit) => {
-      requests.push(new Request(input, init))
-      return Promise.resolve(
-        new Response(
-          new ReadableStream({
-            cancel: () => {
-              cancelled++
-            },
-          }),
-          { status: statuses.shift() },
-        ),
-      )
-    }
-  let install = (...statuses: number[]) =>
-    installSecret(
-      'account',
-      'script',
-      'KEY',
-      'value',
-      'token',
-      answering(...statuses),
-    )
-  await install(404, 200)
-  await install(200)
-  await assertRejects(() => install(404, 403), Error, 'returned 403')
-  await assertRejects(() => install(302), Error, 'lookup returned 302')
-  await assertRejects(
-    () => install(404, 302),
-    Error,
-    'installation returned 302',
-  )
-  let base =
-    'https://api.cloudflare.com/client/v4/accounts/account/workers/scripts/script/secrets'
-  assertEquals(
-    requests.map(({ method, url, redirect }) => [method, url, redirect]),
-    [
-      ['GET', `${base}/KEY`, 'manual'],
-      ['PUT', base, 'manual'],
-      ['GET', `${base}/KEY`, 'manual'],
-      ['GET', `${base}/KEY`, 'manual'],
-      ['PUT', base, 'manual'],
-      ['GET', `${base}/KEY`, 'manual'],
-      ['GET', `${base}/KEY`, 'manual'],
-      ['PUT', base, 'manual'],
-    ],
-  )
-  assertEquals(requests[1].headers.get('authorization'), 'Bearer token')
-  assertEquals(await requests[1].json(), {
-    name: 'KEY',
-    text: 'value',
-    type: 'secret_text',
-  })
-  assertEquals(cancelled, requests.length)
 })

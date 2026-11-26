@@ -23,45 +23,6 @@ export let accountUrl = (env: Account, path: string) =>
   `${env.WORKERS_API ?? 'https://api.cloudflare.com/client/v4'}` +
   `/accounts/${env.CF_ACCOUNT}${path}`
 
-/** Install a text secret once. Only the Cloudflare API receives the value. */
-export let installSecret = async (
-  account: string,
-  script: string,
-  name: string,
-  text: string,
-  token: string,
-  send: (url: string, init: RequestInit) => Promise<Response> = (url, init) =>
-    fetch(url, init),
-): Promise<void> => {
-  let url = accountUrl(
-    { CF_ACCOUNT: encodeURIComponent(account) },
-    `/workers/scripts/${encodeURIComponent(script)}/secrets`,
-  )
-  let headers = {
-    authorization: `Bearer ${token}`,
-    'content-type': 'application/json',
-  }
-  let status = async (url: string, init: RequestInit) => {
-    try {
-      let answer = await send(url, { headers, ...init, redirect: 'manual' })
-      await answer.body?.cancel()
-      return answer.status
-    } catch {
-      throw new Error('Cloudflare did not answer the Worker secret request')
-    }
-  }
-  let held = await status(`${url}/${encodeURIComponent(name)}`, {})
-  if (held == 200) return
-  if (held != 404) throw new Error(`Cloudflare secret lookup returned ${held}`)
-  let put = await status(url, {
-    method: 'PUT',
-    body: JSON.stringify({ name, text, type: 'secret_text' }),
-  })
-  if (put < 200 || put >= 300) {
-    throw new Error(`Cloudflare secret installation returned ${put}`)
-  }
-}
-
 /** The pauses before a call Cloudflare failed on its own side is sent again,
  * one per resend: about eight seconds in all, which a passing failure rarely
  * outlasts. */

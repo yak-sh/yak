@@ -23,7 +23,6 @@ export let {
   Ads,
   Outbound,
   SandboxOutbound,
-  QuerySetup,
   Reruns,
   ModelHost,
 } = yak.classes

@@ -887,12 +887,6 @@ entrypoint = "Site"
 binding = "TRACKER"
 service = "yak-tracker"
 
-# Remove after both query Workers have their session credential.
-[[env.staging.services]]
-binding = "PRODUCTION_QUERY_SETUP"
-service = "yak"
-entrypoint = "QuerySetup"
-
 [[env.staging.services]]
 binding = "ESBUILD"
 service = "yak-esbuild-staging"

@@ -330,23 +330,6 @@ export let classes: Record<string, Deferred> = {
       }
     },
   ),
-  // The staging kernel alone binds this temporary migration entrypoint.
-  QuerySetup: entered(WorkerEntrypoint, ['seedStaging'], (_ctx, env) => ({
-    seedStaging: async (secret: string) => {
-      let { CF_ACCOUNT: account, CF_WORKERS_TOKEN: token } = env
-      if (env.WORKER_NAME != 'yak' || !account || !token || !secret) {
-        throw new Error('Staging query Worker provisioning is unavailable')
-      }
-      let { installSecret } = await import('@yaks/cloudflare/api')
-      await installSecret(
-        account,
-        'yak-query-staging',
-        'SESSION_SECRET',
-        secret,
-        token,
-      )
-    },
-  })),
   // The platform tracker, handing back the Operator runs a bug it resolved
   // had stopped (operator-rerun.ts, @yaks/tracker/effects `settle`), and
   // asking where trials stand for its daily digest (admin.ts

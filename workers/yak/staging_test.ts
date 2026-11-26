@@ -59,18 +59,6 @@ test('staging repeats the kernel bindings without production resources', () => {
   ) {
     let live = config[key] as Record<string, string>[]
     let isolated = staging[key] as Record<string, string>[]
-    if (key == 'services') {
-      // The bootstrap copies staging's signer into the staging query Worker.
-      let setup = isolated.find((row) =>
-        row.binding == 'PRODUCTION_QUERY_SETUP'
-      )
-      assertEquals(setup, {
-        binding: 'PRODUCTION_QUERY_SETUP',
-        service: 'yak',
-        entrypoint: 'QuerySetup',
-      })
-      isolated = isolated.filter((row) => row != setup)
-    }
     assertEquals(isolated.map((r) => r.binding), live.map((r) => r.binding))
     for (let row of isolated) {
       if (key == 'services' && row.binding == 'TRACKER') continue

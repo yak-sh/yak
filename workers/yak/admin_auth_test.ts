@@ -66,15 +66,6 @@ test('OAuth names the account and opens admin doors without a website cookie', a
         cookie: k.owner.cookie,
       }, 403)
     }
-    let prepare = '/api/move?provision=query-worker'
-    await status(prepare, bearer(token), 403)
-    await status(prepare, bearer(ownerToken), 405)
-    let provision = await k.at(k.host, prepare, {
-      method: 'POST',
-      headers: bearer(ownerToken),
-    })
-    equal(provision.status, 503)
-    await provision.body?.cancel()
     // The funnel's door lets in whom the fee's does (admin.ts `funnelDoor`):
     // the owner gets as far as the window asked.
     await status('/api/funnel', bearer(token), 403)

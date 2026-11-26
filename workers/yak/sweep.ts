@@ -78,32 +78,6 @@ let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
-// Remove once both query Workers have inherited the session credential.
-let provisionQuery = async (req: Request, env: Env, who: Who) => {
-  if (req.method != 'POST') {
-    return json(405, 'method_not_allowed', 'post to provision the query Worker')
-  }
-  let { CF_ACCOUNT: account, SESSION_SECRET: secret, WORKER_NAME: worker } = env
-  let production = env.ENVIRONMENT == 'production' && worker == 'yak'
-  let staging = env.ENVIRONMENT == 'staging' && worker == 'yak-staging'
-  let target = production ? 'yak-query' : staging ? 'yak-query-staging' : null
-  if (!account || !target || !secret) {
-    return json(503, 'unavailable', 'query Worker provisioning is unavailable')
-  }
-  let token = env.CF_WORKERS_TOKEN, setup = env.PRODUCTION_QUERY_SETUP
-  if (production ? !token : !setup) {
-    return json(503, 'unavailable', 'query Worker provisioning is unavailable')
-  }
-  await audit(env, who, { operation: 'provision query Worker', target })
-  if (production) {
-    let { installSecret } = await import('@yaks/cloudflare/api')
-    await installSecret(account, target, 'SESSION_SECRET', secret, token!)
-  } else {
-    await setup!.seedStaging(secret)
-  }
-  return new Response(null, { status: 204 })
-}
-
 /** Every store there is, trashed apps' included: a restore brings one back
  * holding whatever shape it was left in. An app's sample and the stores its
  * visitors were given (@yaks/platform/visits) hold its words too, so a
@@ -467,13 +441,6 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (who.role != 'owner') {
     return json(403, 'not_owner', `a sweep is an owner of ${meta.slug}'s`)
-  }
-  let asked = new URL(req.url)
-  if (
-    asked.pathname == PATH &&
-    asked.searchParams.get('provision') == 'query-worker'
-  ) {
-    return provisionQuery(req, env, who)
   }
   if (new URL(req.url).pathname == ICONS) {
     let { appIcons } = await import('./facets/app-icons.ts')
