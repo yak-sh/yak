@@ -300,6 +300,23 @@ its link in a step and add a
 and clicks at once, so a fetch on hover gets no head start: `hover` the link
 and `wait` a few hundred ms first, as a person's pointer does.
 
+A slow press is found, not guessed:
+
+- **`frame` lines** name each long animation frame: its render, its style
+  and layout, and the scripts that held it with the layout each forced.
+- **`--trace`** adds a `task` line per long task, its time split into
+  style, layout, prepaint, paint, commit, gc and each script file, with the
+  elements styled and objects laid out.
+- **An `eval` step** runs an expression in the page and answers what it came
+  to: time a change in place (`performance.now()` around a forced layout),
+  or add a `<style>` and time it again.
+
+Cloudflare's browsers differ about 2.5× in speed from visit to visit, so two
+visits compare nothing. Compare within one visit: measure, then `open` the
+page again, change it with `eval` and measure again, reading the first
+half's `yak-interaction` measures with an `eval` before the `open`. `--cpu`
+holds a slow runner steady.
+
 Saying something in checks' own chat (`/checks`), as the person, with
 the keyboard open. A draft is kept across visits, so clear the field first:
 
