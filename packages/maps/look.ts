@@ -23,7 +23,7 @@ export let LOOK: string = `
 .MapView{aspect-ratio:var(--map-ratio,16/10);width:100%;border:1px solid var(--border,#cfc5b3);border-radius:var(--radius,8px);background:var(--bg,#f6f1e7);overflow:hidden}
 .MapBox{position:relative}
 .MapCredit{position:absolute;right:6px;bottom:6px;z-index:2;display:flex;flex-direction:row-reverse;align-items:center;gap:.25em;max-width:calc(100% - 12px);border-radius:12px;background:var(--bg,#fff);color:var(--muted,#6f665a);font-family:var(--font,inherit);font-size:var(--small,13px);line-height:1.3;box-shadow:0 1px 2px rgb(0 0 0/.2)}
-.MapCredit summary{display:grid;place-items:center;width:24px;height:24px;list-style:none;cursor:pointer;font-size:16px;line-height:1}
+.MapCredit summary{display:grid;place-items:center;width:24px;height:24px;list-style:none;cursor:pointer;color:var(--text,#2b2620);font-size:16px;line-height:1}
 .MapCredit summary::-webkit-details-marker{display:none}
 .MapCredit[open]{padding-left:.6em}
 .MapCredit a{color:inherit}
