@@ -126,7 +126,7 @@ type Line = Pick<
 // release's files never change under its name (release.ts), so the notes read
 // once are its notes for as long as it is live.
 let HELD = 1024
-let heldNotes = new Map<string, Promise<string>>()
+let heldNotes = new Map<string, string>()
 let keep = <T>(all: Map<string, T>, key: string, value: T) => {
   all.delete(key)
   all.set(key, value)

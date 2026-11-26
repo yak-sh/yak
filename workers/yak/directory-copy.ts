@@ -10,9 +10,10 @@ import { type Fetcher } from './door.ts'
 import { reset } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import { background, defect, invocationKey } from './defects.ts'
+import { inFlight } from './lib/shared.ts'
 import { apart, elapsed, spanned } from './lib/hops.ts'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object/resets'
-import { type Clock, system, within } from '@yaks/fp'
+import { type Clock, system, turns, within } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
 import { RETIRED } from '@yaks/platform/serving-copy'
 import {
@@ -82,37 +83,37 @@ export let copyOf = (env: Pick<Env, 'SERVING_COPY' | 'CLOCK'>) => {
 // it only behind an answer of the directory's. `was` is the copy the directory
 // last fenced, null when it has fenced none, and `moved` marks the handover
 // done, so it happens once.
-let handing = new WeakMap<ServingCopies, Promise<void>>()
 export let handover = (
   env: Pick<Env, 'SERVING_COPY' | 'CLOCK'>,
-  was: string | null,
+  previous: () => string | null,
   moved: () => void,
 ): ServingCopyDoor | undefined => {
   let copies = env.SERVING_COPY
   let copy = copyOf(env)
-  if (!copies || !copy || was == COPY) return copy
-  let ready = handing.get(copies)
-  if (!ready) {
-    let wait = jittered(env.CLOCK ?? system)
-    let former = was && copies.get(copies.idFromName(was))
-    ready = Promise.all([
-      former && retried(() => former.begin(RETIRED - 1), true, moving, wait),
-      copy.revision?.(),
-    ]).then(moved)
-    handing.set(copies, ready)
-    // A handover that fails is tried again by the next fence, which waits.
-    ready.catch((e) => {
-      handing.delete(copies)
-      if (!moving(e)) defect(e, { request: 'serving copy handover' })
+  if (!copies || !copy || previous() == COPY) return copy
+  let ready = () => {
+    let was = previous()
+    if (was == COPY) return
+    return inFlight(copies, 'handover', async () => {
+      let wait = jittered(env.CLOCK ?? system)
+      let former = was && copies.get(copies.idFromName(was))
+      try {
+        await Promise.all([
+          former &&
+          retried(() => former.begin(RETIRED - 1), true, moving, wait),
+          copy.revision?.(),
+        ])
+        if (previous() != COPY) moved()
+      } catch (e) {
+        if (!moving(e)) defect(e, { request: 'serving copy handover' })
+        throw e
+      }
     })
-    // Later requests await this same handover: held to its end
-    // (lib/shared.ts).
-    background(ready.then(() => {}, () => {}))
   }
   return {
     ...copy,
     begin: async (at) => {
-      await ready
+      await ready()
       return await copy.begin(at)
     },
   }
@@ -261,16 +262,9 @@ export class Unfenced extends Error {
 // the effects after it, so an effect's own directory write takes the next one.
 let raising = 0
 let held = new Map<number, () => void>()
-let queue: Promise<void> = Promise.resolve()
-
-// The next turn: ready once every turn asked before it has ended.
-let nextTurn = () => {
-  let end!: () => void
-  let ended = new Promise<void>((done) => end = done)
-  let ready = queue
-  queue = queue.then(() => ended)
-  return { ready, end }
-}
+// The wake carries no result. The next writer reads the committed revision
+// from storage in its own request before asking the copy for a fence.
+let nextTurn = turns()
 
 /** The directory committed a write under this fence: it holds it no longer,
  * and the next write takes its turn. */

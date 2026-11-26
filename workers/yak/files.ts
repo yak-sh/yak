@@ -50,7 +50,7 @@ import { BUILT } from '@yaks/platform/versions'
 import { drawn, ICON_SVG } from './raster.ts'
 import { type Config, parse } from './wrangler_app.ts'
 import * as shared from './shared.ts'
-import { sharing } from './lib/shared.ts'
+import { inFlight, sharing } from './lib/shared.ts'
 import { system, within } from '@yaks/fp'
 
 // What the gateway tells this part, in headers rather than the path, because
@@ -113,7 +113,7 @@ let missing = () =>
 let RELEASED = /\/\.releases\/[^/]+\/[^/]+$/
 let KEPT = 512
 export let ofRelease = <T>(
-  kept: Map<string, Promise<T>>,
+  kept: Map<string, T>,
   prefix: string,
   read: () => Promise<T>,
 ): Promise<T> =>
@@ -123,7 +123,7 @@ export let ofRelease = <T>(
 // never served) and the folder its addresses serve (`assets.directory`). Both
 // files are asked for at once; an app carries at most one, so the miss is
 // unavoidable and paying for it twice over is not.
-let configs = new Map<string, Promise<Config>>()
+let configs = new Map<string, Config>()
 export let configOf = (
   blobs: Pick<Objects, 'read'>,
   prefix: string,
@@ -391,14 +391,14 @@ export let keptBytes = async (
 // A page of three hundred images asks its app's store three hundred times
 // whether each is served (`serves`) wherever Files' cache holds no yes: in a
 // location that never asked, and for every one at once once the app's mark
-// moves. An isolate shares one ask per upload among the reads that want it at
-// once, and remembers the last yes it heard. When the store fails, or has not
+// moves. Each invocation shares one ask per upload and the isolate remembers
+// the last yes it heard. When the store fails, or has not
 // said within `GLANCE`, that yes answers: a store overloaded by the burst
 // neither takes every image down with it nor is asked a second time.
 // With no yes heard, a read waits `PATIENCE` for the store, then fails.
 // A yes heard is kept under the mark it
 // was heard under, so it never answers for an upload withdrawn since (T-1112).
-let asking = new Map<string, Promise<Representation | null>>()
+let asking = {}
 let heard = new Map<string, { rep: Representation; at: number }>()
 let reported = new WeakSet<object>()
 let HEARD = 4096
@@ -436,13 +436,11 @@ export let servableOf = async (
   let stale = last && now() - last.at < STANDS ? last.rep : null
   // Shared while it travels; the next read after it lands asks again.
   let key = `${cache ?? ''} ${url}`
-  let ask = sharing(asking, key, async () => {
+  let ask = inFlight(asking, key, async () => {
     let said = await askedServable(env, url, store, cache)
     remember(url, said, now())
     return said
   })
-  let landed = () => void (asking.get(key) == ask && asking.delete(key))
-  ask.then(landed, landed)
   // The store's failure, met once per ask however many reads it answers.
   let tell = (error: unknown) => {
     if (reported.has(ask)) return

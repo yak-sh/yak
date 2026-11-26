@@ -449,7 +449,7 @@ let built = async (
 }
 
 // The states this isolate has found or built, so a page's assets ask once.
-let states = new Map<string, Promise<{ worker: boolean }>>()
+let states = new Map<string, { worker: boolean }>()
 let HELD = 256
 
 /** The app as a draft stands now, built for the link where no isolate has

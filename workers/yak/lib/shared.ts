@@ -1,19 +1,36 @@
-// A read an isolate's requests share by key (@yaks/fp `sharing`), held by the
-// request that starts it.
-//
-// A read's I/O belongs to the request that began it, and the runtime cancels
-// it when that request ends. A promise shared past that point never settles,
-// so every later request awaiting it waits, with no I/O of its own, until the
-// isolate goes: the page that hung 60 seconds on a release's copy.json (T-363).
-// So the request that starts a shared read holds itself open until the read
-// settles (defects.ts `background`, the runtime's `waitUntil`), even when it
-// answers or its visitor leaves first.
-import { type Kept, sharing as shared } from '@yaks/fp'
-import { background } from '../defects.ts'
+import { singleFlight } from '@yaks/fp'
+import { background, invocationKey } from '../defects.ts'
 
+export let inFlight = singleFlight(invocationKey, background)
+
+type Cache<K, T> = {
+  has(key: K): boolean
+  get(key: K): T | undefined
+  set(key: K, value: T): unknown
+  delete(key: K): unknown
+}
+
+/** Keep completed values across invocations and pending reads within one. */
 export let sharing = <K, T>(
-  kept: Kept<K, T>,
+  kept: Cache<K, T>,
   key: K,
   read: () => Promise<T>,
   limit?: number,
-): Promise<T> => shared(kept, key, read, { limit, hold: background })
+): Promise<T> => {
+  let lru = limit && kept instanceof Map ? kept : null
+  if (kept.has(key)) {
+    let had = kept.get(key) as T
+    lru?.delete(key)
+    lru?.set(key, had)
+    return Promise.resolve(had)
+  }
+  return inFlight(kept, key, async () => {
+    let answer = await read()
+    if (!kept.has(key)) kept.set(key, answer)
+    for (let old of lru?.keys() ?? []) {
+      if (lru!.size <= limit!) break
+      lru!.delete(old)
+    }
+    return answer
+  })
+}

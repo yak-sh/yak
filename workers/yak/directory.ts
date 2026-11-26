@@ -85,7 +85,7 @@ import type { Join } from '@yaks/platform/manifest'
 import type { Tunnel } from '@yaks/tunnel/hosted'
 import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
 import { type Upstream, upstreamOf } from '@yaks/platform/upstream'
-import type { Actor, Bundle, Tx } from '@yaks/graph'
+import { type Actor, type Bundle, mint, type Tx } from '@yaks/graph'
 import { type Listed, listing } from '@yaks/connections/integrations'
 import { integrationEid } from '@yaks/connections/identity'
 import { identityEid, minted } from '@yaks/graph/identity'
@@ -1069,41 +1069,56 @@ let cached = (store: Meta) => {
 // should say. Every path that mints anything goes through /apply, so the
 // seed still happens before there is anything to describe.
 //
-// A second isolate racing the first bounces on the unique slug and is
-// ignored: its query then finds the winner. Held against the door rather than
-// the module, so that one door is seeded once and a test with its own store
-// seeds its own.
-let seeded = new WeakMap<Meta, Promise<void>>()
+// The request decides what is missing inside the directory's transaction,
+// so cold isolates can each ask without racing to create duplicate rows.
+let seeded = new WeakMap<Meta, void>()
 
-/** The platform's own rows in the meta store (`seed`), written once per
- * store: before a directory write, and before the first-owner bootstrap
- * reads the meta space (identity.ts `founding`), which on a new platform
- * may follow a sign-in no directory write came before. */
-export let seeding = (store: Meta) => sharing(seeded, store, () => seed(store))
+export let SEED_DIRECTORY = '$seedDirectory'
 
-// What the platform is made of, row by row: the meta space and its app, the
-// admin person, and the admin's seat in that space. Each half is asked for on
-// its own, so a store that has one and not the other — production, seeded
-// before the admin existed; a kernel where the admin signed in before the
-// first directory write minted its person (signin.ts `personOf` goes straight
-// at the store) — is completed rather than left as it is. Two round trips at
-// most, once per isolate, on a write.
-let seed = async (store: Meta) => {
-  let [[space], [admin]] = await Promise.all([
-    store.query(line`.space.slug=${META.space}`),
-    store.query(line`.person&.email.address=${ADMIN}`),
-  ])
+/** Ask the directory to complete its platform rows before the first write. */
+export let seeding = (store: Meta) =>
+  sharing(seeded, store, async () => {
+    await store.apply([{
+      entity: { eid: SEED_DIRECTORY },
+      [SEED_DIRECTORY]: {},
+    }], KERNEL)
+  })
+
+/** The directory's own rows, filling only what the current transaction lacks. */
+export let directorySeed = ({ read }: Pick<Tx, 'read'>) =>
+  after(
+    together([
+      read(line`.space.slug=${META.space}`),
+      read(line`.person&.email.address=${ADMIN}`),
+    ]),
+    ([[space], [admin]]) => {
+      let seat = space && admin
+        ? read(
+          line`.member.space=${space.entity.eid}&.member.person=${admin.entity.eid}`,
+        )
+        : []
+      return after(seat, (seats) => seedRows(space, admin, !!seats.length))
+    },
+  )
+
+let seedRows = (
+  space: Bundle | undefined,
+  admin: Bundle | undefined,
+  seat: boolean,
+): Bundle[] => {
   let bundles: Bundle[] = []
+  let spaceId = space?.entity.eid ?? mint()
+  let adminId = admin?.entity.eid ?? mint()
   if (!space) {
     bundles.push({
-      entity: { eid: '$space' },
+      entity: { eid: spaceId },
       doc: { title: META.space },
       // Its handle is the bare slug, as every space from before handles
       // wears its own (925e91572), since it never moves.
       space: { slug: META.space, store: META.space },
       operator: { name: pick(META.space) },
     }, {
-      entity: { eid: '$app' },
+      entity: { eid: mint() },
       doc: { title: META.app },
       // The one app whose handle is not minted (`handle`): the meta store is
       // the object this very row is being written into, and it has been called
@@ -1113,7 +1128,7 @@ let seed = async (store: Meta) => {
       // said (`appOf` reports one without) and as the live one stands.
       app: {
         slug: META.app,
-        space: '$space',
+        space: spaceId,
         store: META_STORE,
         access: 'private',
       },
@@ -1121,31 +1136,25 @@ let seed = async (store: Meta) => {
   }
   if (!admin) {
     bundles.push({
-      entity: { eid: '$admin' },
+      entity: { eid: adminId },
       person: {},
       email: { address: ADMIN },
     })
   }
-  // Nothing can hold a seat that was minted a line ago, so the seat is only
-  // ever asked about when both ends already existed.
-  let seat = space && admin &&
-    (await store.query(
-      line`.member.space=${space.entity.eid}&.member.person=${admin.entity.eid}`,
-    )).length
   if (!seat) {
     bundles.push({
-      entity: { eid: '$seat' },
+      entity: { eid: mint() },
       // Owner: the gate on every platform act is a seat in `yak` and the role
       // it names — the fee is set by an owner of it (sell.ts `fees`), and the
       // meter and a sale answer to the same authority.
       member: {
-        space: space ? space.entity.eid : '$space',
-        person: admin ? admin.entity.eid : '$admin',
+        space: spaceId,
+        person: adminId,
         role: 'owner',
       },
     })
   }
-  if (bundles.length) await store.apply(bundles)
+  return bundles
 }
 
 let notFound = () => new Response('not found', { status: 404 })

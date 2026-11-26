@@ -29,16 +29,14 @@ let name = (app: App, release: string) =>
 // Operator's first turn after a wake reads every app it reaches, and from the
 // bucket that was a third of a second each (T-140858).
 let HELD = 256
-let held = new Map<string, Promise<string>>()
-let hold = (at: string, text: Promise<string>) => {
+let held = new Map<string, string>()
+let hold = (at: string, text: string) => {
   held.delete(at)
   held.set(at, text)
-  text.catch(() => held.get(at) == text && held.delete(at))
   for (let old of held.keys()) {
     if (held.size <= HELD) break
     held.delete(old)
   }
-  return text
 }
 
 export let keepDeclaration = async (
@@ -51,7 +49,7 @@ export let keepDeclaration = async (
   let at = prefix(space, app) + name(app, release)
   let text = JSON.stringify(value)
   await r2RawObjects(env.BLOBS).put(at, new TextEncoder().encode(text))
-  hold(at, Promise.resolve(text))
+  hold(at, text)
   // Read once through Files, behind the write, so the first isolate to want
   // it finds it in the cache: a miss there goes both tiers, the entrypoint and
   // the bucket, and cost an Operator's first turn about 850 ms a declaration

@@ -75,7 +75,7 @@ let read = (assets: Assets) =>
 
 // Read once per isolate: the files are the deploy's own and never change
 // under it. A failed read is not kept, so the next page asks again.
-let held = new WeakMap<Assets, Promise<Script[]>>()
+let held = new WeakMap<Assets, Script[]>()
 let scripts = (assets: Assets) => sharing(held, assets, () => read(assets))
 
 /** The tags for a page mounted at `at`, of release `version`, wearing

@@ -9,7 +9,7 @@ import { sharing } from './lib/shared.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a key put after the first call is used by the next.
-let held = new WeakMap<object, Promise<Record<string, MailDomains>>>()
+let held = new WeakMap<object, Record<string, MailDomains>>()
 
 let lending = (env: object) =>
   sharing(

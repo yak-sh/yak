@@ -27,7 +27,7 @@ let COMPILED = `${BUILT}.compile.json`
 // Per assets binding, the isolate's one in a deployment, as esbuild.ts keeps
 // its catalog. A kernel whose assets hold no toolkit.json (a probe's) reads
 // the digests out of its catalog.
-let kits = new WeakMap<Env['ASSETS'], Promise<Toolkits>>()
+let kits = new WeakMap<Env['ASSETS'], Toolkits>()
 let asset = async (env: Pick<Env, 'ASSETS'> & Partial<Env>, path: string) => {
   let r = await env.ASSETS.fetch(new Request(url(env, path)))
   if (r.ok) return await r.json()

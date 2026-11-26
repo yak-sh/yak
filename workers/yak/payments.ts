@@ -12,7 +12,7 @@ import type { Env } from './env.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a key put after the first call is used by the next.
-let held = new WeakMap<object, Promise<Payments>>()
+let held = new WeakMap<object, Payments>()
 
 let lend = async (env: object, settings: typeof config) => {
   let all = await (await import('./lent.ts')).lent(env, 'payments', settings)
@@ -26,7 +26,7 @@ let lend = async (env: object, settings: typeof config) => {
 export let payments = (env: object): Promise<Payments> =>
   sharing(held, env, () => lend(env, config))
 
-let heldSandbox = new WeakMap<object, Promise<Payments>>()
+let heldSandbox = new WeakMap<object, Payments>()
 
 export let sandboxPayments = (env: object): Promise<Payments> =>
   sharing(heldSandbox, env, () => lend(env, sandbox))

@@ -407,7 +407,7 @@ import {
 } from './homes.ts'
 import { type Reach, read, written } from './reach.ts'
 import { vouched, vouchedAs, type Who } from './session.ts'
-import type { Role } from './directory.ts'
+import { type Role, SEED_DIRECTORY } from './directory.ts'
 import { beside, computed, type Reached, reached } from '@yaks/api/reached'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
@@ -951,7 +951,7 @@ let UNFENCED = new Set([
   ...UNNAMED,
 ])
 let UNHELD = new Set([...UNFENCED, ...STAMPS])
-let DECIDED = ['$own', '$appTransfer', '$domainTransfer']
+let DECIDED = ['$own', '$appTransfer', '$domainTransfer', SEED_DIRECTORY]
 let CORE = new Set(REQUESTS)
 let deciding = (bundles: Bundle[]) =>
   bundles.some((b) => Object.keys(b).some((k) => k[0] == '$' && !CORE.has(k)))
@@ -2475,8 +2475,9 @@ export class Store extends Durable {
   #copy = () =>
     handover(
       this.#bind as Env,
-      this.#get('serving-copy') ??
-        (this.#get('directory-revision') ? FORMER : null),
+      () =>
+        this.#get('serving-copy') ??
+          (this.#get('directory-revision') ? FORMER : null),
       () => this.#put('serving-copy', COPY),
     )
 

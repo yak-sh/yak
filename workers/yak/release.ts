@@ -180,7 +180,7 @@ let unrewritten = async (raw: Objects, index: Index): Promise<Assets> => {
   return plainAssets(filesOf(index), text ? serving(text) : {})
 }
 
-let assetsByIndex = new WeakMap<Index, Promise<Assets>>()
+let assetsByIndex = new WeakMap<Index, Assets>()
 export let assetsIn = async (
   raw: Objects,
   source: string,

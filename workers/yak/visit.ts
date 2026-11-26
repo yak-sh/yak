@@ -97,7 +97,7 @@ export let toldStores = (req: Request, res: Response, env: Host): Response => {
 
 /** One release of the app, by its version, read once per isolate: a release
  * never changes. */
-let releases = new Map<string, Promise<Release | null>>()
+let releases = new Map<string, Release | null>()
 export let releaseAt = (
   dir: Pick<Directory, 'deployAt'>,
   app: App,

@@ -3,6 +3,7 @@ import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { door, servableOf } from './files.ts'
 import type { Env } from './env.ts'
+import { within } from './defects.ts'
 
 // A binding that loses its first `cuts` calls the way the runtime does.
 let cutting = (cuts: number) => {
@@ -83,12 +84,16 @@ let asking = () => {
   return { time, asks, rep, upload, read, asked, yes, fail }
 }
 
-test('reads of one upload at once ask its store once', async () => {
+test('reads of one upload in a request ask its store once', async () => {
   let { asks, rep, upload, read, yes } = asking()
   let sha = upload()
-  let reads = [read(sha), read(sha), read(sha)]
+  let reads = within(
+    {},
+    {},
+    () => Promise.all([read(sha), read(sha), read(sha)]),
+  )
   await yes()
-  assertEquals([await Promise.all(reads), asks.length], [[rep, rep, rep], 0])
+  assertEquals([await reads, asks.length], [[rep, rep, rep], 0])
 })
 
 test('a store that fails or holds back answers with the yes last heard', async () => {

@@ -11,7 +11,7 @@ import { r2Objects } from './lib/objects.ts'
 import { sharing } from './lib/shared.ts'
 import { appDoc } from './vocab.ts'
 
-let held = new WeakMap<Env, Map<string, Promise<Status>>>()
+let held = new WeakMap<Env, Map<string, Status>>()
 
 // What a pair with no such version throws, so it is not kept: a version a
 // page names may be one the directory has not answered with yet.

@@ -13,7 +13,7 @@ import { sharing } from './lib/shared.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a secret put after the first text is used by the next.
-let held = new WeakMap<object, Promise<Record<string, Phone>>>()
+let held = new WeakMap<object, Record<string, Phone>>()
 
 // A phone plugin's texter is its phone (@yaks/phone/plugin `texters`).
 let lend = async (env: Env) =>

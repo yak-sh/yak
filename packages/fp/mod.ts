@@ -477,6 +477,33 @@ export let resolvers = <T>(): Resolvers<T> => {
   return { promise, resolve, reject }
 }
 
+/** A FIFO turn for each caller. The queue holds wake callbacks, so every
+ * caller awaits a promise created in its own execution context. */
+export let turns = () => {
+  let waiting = new Set<() => void>()
+  let busy = false
+  return () => {
+    let { promise: ready, resolve } = resolvers<void>()
+    if (busy) waiting.add(resolve)
+    else {
+      busy = true
+      resolve()
+    }
+    let ended = false
+    let end = () => {
+      if (ended) return
+      ended = true
+      let next = waiting.values().next().value
+      if (!next) busy = false
+      else {
+        waiting.delete(next)
+        next()
+      }
+    }
+    return { ready, end }
+  }
+}
+
 /// map(inc)([1, 2]) -> [2, 3]
 /** A list's items mapped. */
 export let map =
@@ -674,6 +701,28 @@ export type Kept<K, T> = {
 /** Keeps work alive past the caller that began it, as a Worker's `waitUntil`
  * does. */
 export type Hold = (work: Promise<void>) => void
+
+/** Deduplicate work by group and key within the caller's scope. A call with
+ * no scope runs independently. A host may keep the scoped work alive. */
+export let singleFlight = (scope: () => object | undefined, hold?: Hold) => {
+  let scopes = new WeakMap<object, WeakMap<object, Map<unknown, unknown>>>()
+  return <K, T>(group: object, key: K, read: () => Promise<T>): Promise<T> => {
+    let owner = scope()
+    if (!owner) return read()
+    let groups = scopes.get(owner)
+    if (!groups) scopes.set(owner, groups = new WeakMap())
+    let pending = groups.get(group)
+    if (!pending) groups.set(group, pending = new Map())
+    let had = pending.get(key) as Promise<T> | undefined
+    if (had) return had
+    let work = read()
+    pending.set(key, work)
+    let forget = () => void pending.delete(key)
+    let done = work.then(forget, forget)
+    hold?.(done)
+    return work
+  }
+}
 
 /**
  * A read every caller shares by key: begun by the first to ask, and handed to

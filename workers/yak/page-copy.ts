@@ -44,7 +44,7 @@ declare let HTMLRewriter: { new (): Rewriter }
 /** The name an app keeps its copy under, at the root of what it serves. */
 export let COPY = 'copy.json'
 
-let read$ = new Map<string, Promise<Copy | null>>()
+let read$ = new Map<string, Copy | null>()
 
 /**
  * The copy of the files at `prefix` (a release, or a draft's state), or null

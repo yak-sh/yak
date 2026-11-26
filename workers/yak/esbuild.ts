@@ -61,7 +61,7 @@ let MODULE = `${BUILT}.worker.js`
 // waking Store's included (T-123910, T-37974).
 // Kept per assets binding, the isolate's one in a deployment: a platform made
 // in a test reads its own, so what it reads never rests on an earlier one.
-let catalogs = new WeakMap<Env['ASSETS'], Promise<string>>()
+let catalogs = new WeakMap<Env['ASSETS'], string>()
 let CATALOG = (env: Env) =>
   sharing(catalogs, env.ASSETS, async () => {
     let r = await env.ASSETS.fetch(

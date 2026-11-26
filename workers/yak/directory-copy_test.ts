@@ -410,7 +410,7 @@ test('a handover retires the former copy before its first fence', async () => {
   }
   let SERVING_COPY = { idFromName: (name: string) => name, get: door }
   let moved = 0
-  let copy = handover({ SERVING_COPY }, FORMER, () => moved++)!
+  let copy = handover({ SERVING_COPY }, () => FORMER, () => moved++)!
   let begun = copy.begin(7)
   await new Promise((r) => setTimeout(r, 0))
   let early = [...calls]
@@ -422,6 +422,6 @@ test('a handover retires the former copy before its first fence', async () => {
   assertEquals(cores.get(FORMER)!.revision, RETIRED)
   // Once handed over, the directory fences the new copy alone.
   calls.length = 0
-  await handover({ SERVING_COPY }, COPY, () => moved++)!.begin(8)
+  await handover({ SERVING_COPY }, () => COPY, () => moved++)!.begin(8)
   assertEquals(calls, [`begin ${COPY}`])
 })

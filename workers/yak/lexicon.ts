@@ -151,7 +151,7 @@ export let fieldsSaid = (searchable: Field[]): string =>
 
 // What each declaration indexes, by the key it is kept under: a declaration
 // never changes once written (declaration.ts), so neither does this.
-let said = new Map<string, Promise<string>>()
+let said = new Map<string, string>()
 let SAID = 256
 
 let indexed = (env: Env, r: Reach): Promise<string> => {

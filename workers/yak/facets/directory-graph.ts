@@ -44,7 +44,13 @@ import {
   type Request as DomainTransfer,
 } from '@yaks/platform/domain-transfer'
 import { friendsPlugin } from '@yaks/platform/friends'
-import { idOf, inside, type Row } from '../directory.ts'
+import {
+  directorySeed,
+  idOf,
+  inside,
+  type Row,
+  SEED_DIRECTORY,
+} from '../directory.ts'
 import { reclaimFiles } from '../file-retirement-graph.ts'
 import { caught } from '../defects.ts'
 import type { Env } from '../env.ts'
@@ -394,16 +400,24 @@ let directSeat = (tx: Tx, { via, account }: Comp) => {
 export let plugins = (_host: unknown, options: Options): Plugin[] => [
   {
     name: 'yak/directory',
-    requests: ['$own'],
-    authorize: hook(['$own'], (bundles, tx, _err, context) => {
-      if (!bundles.some((b) => b.$own)) return bundles
+    requests: ['$own', SEED_DIRECTORY],
+    authorize: hook(['$own', SEED_DIRECTORY], (bundles, tx, _err, context) => {
+      let seeds = bundles.some((b) => b[SEED_DIRECTORY])
+      if (!seeds && !bundles.some((b) => b.$own)) return bundles
       if (!context?.trusted) {
-        throw new Refused('only the platform mints a person their own space')
+        throw new Refused(
+          seeds
+            ? 'only the platform seeds its directory'
+            : 'only the platform mints a person their own space',
+        )
       }
       return each(
         bundles,
         [] as Bundle[],
         (out, b) => {
+          if (b[SEED_DIRECTORY]) {
+            return after(directorySeed(tx), (seed) => [...out, ...seed])
+          }
           if (!b.$own) return [...out, b]
           let { person, want } = b.$own as Own
           return after(
