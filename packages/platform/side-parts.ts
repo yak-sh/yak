@@ -230,9 +230,9 @@ export type Counts = Map<string, number>
 // (the dashboard's side, and the Operator's chat app, which names each
 // space's Operator: operator-page.ts `chatPage`), and `ask` heads the list
 // (the connect dialog asks where a connection goes: desk-pages.ts `to`).
-// `counted` badges each space with how many of the person's Updates wait on
-// them there, and the selector with how many in all (the Operator's), as
-// `counts` says once it has.
+// `counted` badges each space in the list with how many of the person's
+// Updates wait on them there (the Operator's), as `counts` says once it has.
+// The selector itself carries no count: All Updates above it says the total.
 export let choice = (
   here: Picked,
   all: Picked[],
@@ -269,7 +269,6 @@ export let choice = (
       add,
     ]
   }
-  let total = counts && [...counts.values()].reduce((n, c) => n + c, 0)
   return h(
     Menu.Fold,
     { 'data-menu': '' },
@@ -281,12 +280,7 @@ export let choice = (
         'aria-label': `Change space: ${named(here)}`,
       },
       box(here),
-      h(
-        Identity.Action,
-        {},
-        counted ? acrossBadge('', 'Identity_Count', total) : null,
-        glyph(ChevronsUpDown),
-      ),
+      h(Identity.Action, {}, glyph(ChevronsUpDown)),
     ),
     h(
       Menu,

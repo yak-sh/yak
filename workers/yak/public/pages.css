@@ -1489,12 +1489,8 @@
     top: 0;
     display: flex;
     flex-direction: column;
-    gap: .75rem;
     height: var(--viewport-height, 100dvh);
     min-width: 0;
-    padding: calc(1rem + env(safe-area-inset-top, 0px))
-      var(--sidebar-padding) calc(1rem + env(safe-area-inset-bottom, 0px))
-      calc(var(--sidebar-padding) + env(safe-area-inset-left, 0px));
     background: var(--surface);
     z-index: 1;
   }
@@ -1514,31 +1510,29 @@
     font-weight: 800;
     text-decoration: none;
   }
-  /* The brand, navigation and footer scroll together. Keep paint room past
-     the edge so overflow cannot clip the active tab's cover of the wandering
-     pencil line. Equal padding keeps the links at the edge. */
+  /* The brand, navigation and footer scroll together, and the side's paper
+     with them: the scroller fills the side to every edge, its insets (the
+     safe area's too) its own padding, so the texture reaches the edge and
+     moves with the links. Its padding is the paint room past the active
+     tab's wandering pencil line; on the right, where the tab opens into the
+     page, it reaches past the side by a clear border, so overflow cannot
+     clip the tab and the texture stops at the edge rather than laying a
+     second tile, and a seam, over the page beside it. */
   .Sidebar_Scroll {
-    --reach: calc(var(--stroke) + 6px);
-    --overlap: var(--reach);
+    --overlap: calc(var(--stroke) + 6px);
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: .75rem;
     min-height: 0;
-    margin: calc(-1 * var(--reach))
-      calc(-1 * (var(--sidebar-padding) + var(--overlap)))
-      calc(-1 * var(--reach))
-      calc(-1 * var(--reach));
-    padding: var(--reach) var(--sidebar-padding) var(--reach) var(--reach);
-    /* The reach past the side's edge is a clear border, so the texture stops
-       at the edge rather than laying a second tile, and a seam, over the
-       page beside it. */
+    margin-right: calc(-1 * var(--overlap));
+    padding: calc(1rem + env(safe-area-inset-top, 0px))
+      var(--sidebar-padding) calc(1rem + env(safe-area-inset-bottom, 0px))
+      calc(var(--sidebar-padding) + env(safe-area-inset-left, 0px));
     border-right: var(--overlap) solid transparent;
     overflow: hidden auto;
     overscroll-behavior: contain;
-    /* The side's paper is .Sidebar's; this adds only the texture, which
-       scrolls with the links. */
-    background: var(--texture);
+    background: var(--surface-fill);
     background-clip: padding-box;
   }
   .Sidebar_Nav {
@@ -1596,10 +1590,6 @@
   }
   .Sidebar_Count {
     margin-left: auto;
-  }
-  /* How many Updates wait in all, beside the space switcher's arrows. */
-  .Identity_Count {
-    margin-right: .35rem;
   }
   .Sidebar_Foot {
     display: grid;
@@ -1736,8 +1726,6 @@
       display: none;
       width: var(--layer-width);
       height: auto;
-      /* Paint the whole fixed layer, including the insets around its list. */
-      background: var(--surface-fill);
     }
     .Sidebar:target {
       display: flex;
@@ -1748,7 +1736,6 @@
     }
     .Sidebar_Scroll {
       --overlap: 0px;
-      background: none;
       /* This is the menu's scroll container, so it owns the touch action. */
       touch-action: pan-y pinch-zoom;
     }

@@ -9,7 +9,8 @@
    --floor is the paper the page lies on, the floor itself or, in
    Shell-sheet, a sheet on it. --floor-fill is that colour under the skin's
    --texture: the body and the aside paint it, and a sidebar's tab that opens
-   into the page fills with it, so the two are the one paper.
+   into the page fills with it, so the two are the one paper. The sidebar and
+   the bar paint the skin's --surface-fill, so no pane is flat.
    It is as tall as what a person sees, --viewport-height where a page
    holds it (@yaks/ux's Conversation does), so a phone's keyboard shortens
    it and its body rather than scrolling the page. */
@@ -35,7 +36,7 @@
   overflow-y: auto;
   padding: calc(var(--gap) + env(safe-area-inset-top, 0px)) var(--half-gap)
     var(--gap);
-  background: var(--surface);
+  background: var(--surface-fill, var(--surface));
   border-right: 1px solid var(--border);
 }
 .Shell_Brand {
@@ -124,7 +125,7 @@
   padding: calc(var(--half-gap) + env(safe-area-inset-top, 0px))
     calc(var(--gap) + env(safe-area-inset-right, 0px)) var(--half-gap)
     calc(var(--gap) + env(safe-area-inset-left, 0px));
-  background: var(--surface);
+  background: var(--surface-fill, var(--surface));
   border-bottom: 1px solid var(--border);
 }
 .Shell_Menu {
