@@ -898,26 +898,25 @@
   font-size: var(--fine);
 }
 
+/* A thread's messages are one under another, each opening with the line
+   it is to or from, its address never broken. */
+.Home_Mail > .Home_MailBody {
+  gap: .3rem;
+}
+
+.Home_Mail > .Home_MailBody + .Home_MailBody {
+  border-block-start: 1px solid light-dark(#ced6e5, #4e596e);
+}
+
+.Home_MailAddress {
+  white-space: nowrap;
+}
+
 .Home_Attachment {
   justify-self: start;
   border-radius: .35rem;
   background: light-dark(#e6ebf9, #3f4558);
   padding: .18rem .45rem;
-}
-
-.Home_MailSend {
-  justify-self: end;
-  border-radius: 1rem;
-  padding: .25rem .85rem;
-  background: #2563eb;
-  color: #fff;
-  font-weight: 650;
-}
-
-.Home_MailPair {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
-  gap: .65rem;
 }
 
 .Home_Scene-sell {
@@ -1148,6 +1147,18 @@
 
 @container (min-width: 33rem) {
   .Home_Feature {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+
+  /* A thread sits under its words until there is room beside them for an
+     address on one line. */
+  .Home_Feature:has(> .Home_Scene-email) {
+    grid-template-columns: minmax(0, 32rem);
+  }
+}
+
+@container (min-width: 46rem) {
+  .Home_Feature:has(> .Home_Scene-email) {
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   }
 }

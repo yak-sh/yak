@@ -110,39 +110,36 @@ export let People = ({ copy }: { copy: Copy }) => (
   </Card>
 )
 
-let Envelope = ({ box, subject, at, children }: {
-  box: string
-  subject: string
+/** One message of a thread: who it is to or from, on one line, then the rest. */
+let Message = ({ head, address, at, children }: {
+  head: 'From' | 'To'
+  address: string
   at: number
   children: ComponentChildren
 }) => (
-  <figure class='Home_Mail Home_In' {...In(at)}>
-    <figcaption class='Home_WindowBar'>{box}</figcaption>
-    <div class='Home_MailBody'>
-      <b>{subject}</b>
-      {children}
-    </div>
-  </figure>
+  <div class='Home_MailBody Home_In' {...In(at)}>
+    <p class='Home_MailFrom'>
+      <b>{head}</b> <span class='Home_MailAddress'>{address}</span>
+    </p>
+    {children}
+  </div>
 )
 
 let Scenes = {
   email: ({ letter, mail }: Pictured, slug: string) =>
     letter && mail && (
-      <div class='Home_MailPair'>
-        <Envelope box='Inbox' subject={letter[0]} at={0}>
-          <p class='Home_MailFrom'>
-            <b>From</b> yourname.{slug}@yaks.app
-          </p>
-          <p class='Home_MailFrom'>To me · 7:02 AM</p>
+      <figure class='Home_Mail'>
+        <figcaption class='Home_WindowBar'>Mail</figcaption>
+        <Message head='To' address={`yourname.${slug}@yaks.app`} at={0}>
+          <b>Fwd: {mail[0]}</b>
+          <span class='Home_Attachment'>{mail[1]}</span>
+        </Message>
+        <Message head='From' address={`yourname.${slug}@yaks.app`} at={1}>
+          <b>{letter[0]}</b>
           <p>{letter[1]}</p>
           <span class='Home_MailFrom'>Unsubscribe</span>
-        </Envelope>
-        <Envelope box='Forward' subject={`Fwd: ${mail[0]}`} at={1}>
-          <span class='Home_MailFrom'>To yourname.{slug}@yaks.app</span>
-          <span class='Home_Attachment'>{mail[1]}</span>
-          <span class='Home_MailSend' aria-hidden='true'>Send</span>
-        </Envelope>
-      </div>
+        </Message>
+      </figure>
     ),
   sell: ({ sale }: Pictured) =>
     sale && (
