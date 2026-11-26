@@ -45,13 +45,28 @@ page-only components as `sync: none` and use local watches with
 `{remote: false}`. Apply a frame simulation batch per `fixedStep` step or a turn
 batch per accepted action.
 
-In a multiplayer draft, `room-client.ts` watches the selected room via
-`@yaks/client` and `@yaks/sync`. The same subscription supplies the initial
-state, accepted turns and the state after reconnect. The app worker checks the
-guest invitation and writes a turn batch only when `room-rules.ts` accepts the
-action. Keep that authority in the app. The sample uses `play_pawn{room, x, z}`
-for saved positions and `play_motion{room, seat, x, z}` for a transient aim
-marker. Use peer components for frequent motion, with an appropriate `pace`.
+For a multiplayer game, start by reading `room-model.ts`, `room-rules.ts` and
+`room-page.ts`. Change the rules and page as needed. The app worker checks the
+guest invitation and writes a turn batch only when the rules accept the action.
+The sample uses `play_pawn{room, x, z}` for saved positions and
+`play_motion{room, seat, x, z}` for a transient aim marker. Use peer components
+for frequent motion, with an appropriate `pace`.
+
+Keep the watch returned by `connectRoom` in `room-client.ts` as the source of
+room state. It delivers the initial snapshot, accepted turns and a fresh
+snapshot on every reconnect. Use `watch.ready` to enable turn controls after the
+snapshot arrives and `watch.refused` to show a refusal. The watch can keep
+drawing the last state while it reconnects. Room reads on a timer or after each
+action are unnecessary.
+
+Use `app_preview` for the draft's browser check. To check two separate players,
+host a released test game as a signed-in editor, join by invitation in a
+signed-out tab, then disconnect the guest while the host takes a turn. The guest
+should see the new turn on the same seat when the socket reconnects. If a
+sandbox browser stays on Connecting, check whether the socket opened and
+received its initial subscription frame in a regular browser or with a WebSocket
+client. A browser logging a socket URL alone has only shown that it attempted a
+handshake.
 
 ## Working examples
 

@@ -135,7 +135,7 @@ let installFiles = new Set([
 ])
 
 export let rooms = async (req: Request, env: Env): Promise<Response> => {
-  let { pathname, origin } = new URL(req.url)
+  let { pathname } = new URL(req.url)
   let slug = req.headers.get('x-yak-app')
   let mount = req.headers.get('x-yak-mount') ?? (slug ? `/${slug}/` : '/')
   let path = pathname.startsWith(mount)
@@ -150,9 +150,8 @@ export let rooms = async (req: Request, env: Env): Promise<Response> => {
     headers.set('access-control-allow-origin', '*')
     return new Response(file.body, { status: file.status, headers })
   }
-  if (req.headers.get('origin') && req.headers.get('origin') !== origin) {
-    return denied()
-  }
+  // The platform checks the origin before dispatch. Open draft links use
+  // their scoped ticket instead of a cookie and have an opaque origin.
   let browser = req.headers.get('x-yak-person') ?? req.headers.get('x-yak-via')
   if (path === '/rooms' && req.method === 'POST') {
     return browser &&

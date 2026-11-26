@@ -24,6 +24,7 @@ let app = {
           return new Response(error.message, { status: 409 })
         }
       }
+      if (path === '/vocab.json') return Response.json([words])
       let url = new URL(path, 'https://store.test')
       return Response.json(store.read(url.searchParams.get('q')!))
     },
@@ -70,6 +71,30 @@ test('a guest resumes only the room they joined and reads its public components'
   let snapshot = await (await request('guest', path + 'query')).json()
   ok(snapshot.some((row: { play_turn?: unknown }) => row.play_turn))
   ok(snapshot.every((row: { play_room?: unknown }) => !row.play_room))
+})
+
+test('a ticketed draft can load its module and open a live room from an opaque origin', async () => {
+  let mount = '/game/~k3f9x2ab7q1z/'
+  let preview = (path: string, method = 'GET') =>
+    rooms(
+      new Request('https://game.test' + mount + path, {
+        method,
+        headers: {
+          origin: 'null',
+          'x-yak-mount': mount,
+          'x-yak-role': 'editor',
+          'x-yak-via': 'preview',
+        },
+      }),
+      app,
+    )
+  // A 404 lets the platform serve the compiled module.
+  equal((await preview('room-page.ts')).status, 404)
+  let hosted = await preview('rooms', 'POST')
+  equal(hosted.status, 200)
+  let { room } = await hosted.json() as Seat
+  equal((await preview(`rooms/${room}/vocab.json`)).status, 200)
+  equal((await preview(`rooms/${room}/ws`)).status, 426)
 })
 
 test('only one accepted action advances a turn, and only for its active seat', async () => {
