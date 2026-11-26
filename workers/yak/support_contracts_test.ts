@@ -2,6 +2,8 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { contractEid, CONTRACTS, dayOf } from '@yaks/platform/support-contract'
 import { managePath } from '@yaks/platform/routes'
+import { REACH } from '@yaks/platform/page-graph'
+import { billedLine, payerOf } from '@yaks/platform/payment-rows'
 import { test } from '@yaks/testing'
 import { operatorDoor } from './build-door.ts'
 import type { Env } from './env.ts'
@@ -50,6 +52,7 @@ test('support billing uses the space plan, and members ask Jeff privately', asyn
       body: new URLSearchParams({ space: space.slug, ...fields }),
     })
   let invoices: object[] = []
+  let payerReads = 0
   using _ = stub(globalThis, 'fetch', async (input, init) => {
     let req = new Request(input, init)
     let url = new URL(req.url)
@@ -65,6 +68,7 @@ test('support billing uses the space plan, and members ask Jeff privately', asyn
     if (writes) seen.push(path)
     if (path == '/v1/customers') return Response.json({ id: sub.customer })
     if (path == '/v1/customers/cus_checks') {
+      payerReads++
       return Response.json({ email: checks.email, name: checks.name })
     }
     if (path == '/v1/products/prod_yaks_support_contract') {
@@ -172,7 +176,18 @@ test('support billing uses the space plan, and members ask Jeff privately', asyn
   let billing = managePath('billing', space.slug)
   let privatePage = await read(guest.cookie, billing)
   assertEquals(privatePage.includes('mailto:jeff@example.com'), false)
+  let beforePaint = payerReads
   let page = await readBilling(checks.cookie, space.slug)
+  assertEquals(payerReads, beforePaint)
+  let payer = await k.at(
+    k.host,
+    `${REACH}/query?${new URLSearchParams({
+      q: billedLine(space.eid),
+    })}`,
+    { headers: { cookie: checks.cookie } },
+  )
+  assertEquals(payerOf(await payer.json())?.email, checks.email)
+  assertEquals(payerReads, beforePaint + 1)
   assertStringIncludes(page, '1.25 hours used · 2.25 hours left this month')
   assertStringIncludes(page, 'mailto:jeff@example.com')
   assertStringIncludes(page, 'tel:+12695550100')

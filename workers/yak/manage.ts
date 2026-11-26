@@ -927,8 +927,9 @@ let desk = async (
 }
 
 // The rows Selling or Billing of `space` is drawn from: its plan card, and
-// on Selling where it stands and its apps, on Billing whom it is billed to
-// and its month, each read as the page graph's door reads it.
+// on Selling where it stands and its apps, on Billing its month. The
+// payer joins through the page graph after paint, since that read goes to
+// the payment provider.
 let paymentDrawn = async (
   env: Env,
   dir: ReturnType<typeof directory>,
@@ -938,7 +939,7 @@ let paymentDrawn = async (
 ) => {
   let parts: Exclude<Part, 'allowances'>[] = view == 'selling'
     ? ['planCard', 'selling']
-    : ['planCard', 'billedTo']
+    : ['planCard']
   let lines = [
     view == 'selling' ? sideAppsLine(space.eid) : allowancesLine(space.eid),
   ]
