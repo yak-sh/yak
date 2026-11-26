@@ -176,6 +176,10 @@ export let manage = async (
       // read that learns it.
       if (req.method == 'GET' && at.view == 'dashboard' && !url.search) {
         note = foreseen(env, person, at.space)
+        // When the note answered, and whether it named a space to wake.
+        void note.then((space) =>
+          reached(space ? 'operator_foreseen' : 'operator_unforeseen', null)
+        )
       }
       page = dir.page(
         at.space,
