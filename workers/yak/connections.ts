@@ -136,12 +136,12 @@ import {
 } from '@yaks/platform/routes'
 import { telling } from '@yaks/platform/cookie'
 import { background, caught } from './defects.ts'
-import { domainOf, vouched, type Who } from './session.ts'
+import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import { held as live } from './browser-sessions.ts'
 import { type Ctx as Asking, EID, refuse } from './tool.ts'
 export { EID }
 import { vaulted, vaultOf } from './vault.ts'
-import { hold, take } from './attempts.ts'
+import { hold, take, waiting } from './attempts.ts'
 import { drawn } from './theirs.ts'
 import { adopting, BROKER, instructionsOf, offersOf } from './catalog.ts'
 
@@ -1617,10 +1617,15 @@ export let finishConnection = async (env: Env, saved: Bundle[], app?: {
 // The return from a service's sign-in page, in whichever browser or app it
 // lands. The attempt its `state` names must have been begun by a person still
 // signed in where they began it, for their own connection or one of a space
-// they still own. It is finished as that person, with their rights: whoever
-// the returning browser is signed in as, if anyone, gains nothing by it, so a
-// person approving at the service for someone else lands back on the page it
-// was begun from, connected. Anything else is sent back there to start again.
+// they still own, and it is finished as that person, with their rights.
+// Anything else is sent back to the page it was begun from to start again.
+//
+// Whoever approves at the service gives their account to the attempt's
+// space, and the service names only yaks.app. So a return to a browser not
+// signed in as the person who began it, such as a stranger's who followed a
+// link they were sent, attaches nothing until the person there has been shown
+// which space would get their account and who began it, and answers
+// (`confirming`). The beginner's own browser finishes at once.
 export let callback: Door<Env> = async ({ env, req, path, space }) => {
   if (space != null) return null
   if (path != CALLBACK && path != CONNECTION_INSTALL) return null
@@ -1637,8 +1642,13 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
       ? (await import('./connection-install.ts')).outside(req, env, params)
       : answer(url(env, MANAGE))
   }
-  let held = await take<Held>(env, ATTEMPT, states.length == 1 ? state : null)
+  let one = states.length == 1 ? state : null
   let dir = dirOf(env)
+  // The attempt is read, and taken only once it is answered.
+  let [held, here] = await Promise.all([
+    one ? waiting<Held>(env, ATTEMPT, one) : null,
+    whoIs(req, env, () => Promise.resolve(null), null, dir),
+  ])
   // What the attempt names is asked at once.
   let [at, began, [b]] = held
     ? await Promise.all([
@@ -1673,12 +1683,18 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
     ? 'the person who began it does not own its space'
     : null
   if (why || !held || !at || !who) {
+    if (held) await take(env, ATTEMPT, one)
     caught(new Error(`A sign-in came back unfinished: ${why}.`), {
       request: `GET ${CALLBACK}`,
       ...held ? { space: held.space, connection: held.connection } : {},
     })
     return held ? told(held.back, 'refused') : answer(url(env, MANAGE))
   }
+  if (params.has('code') && here.person != held.person) {
+    let asked = await confirming(req, env, held, at, b)
+    if (asked) return asked
+  }
+  if (!await take(env, ATTEMPT, one)) return answer(url(env, MANAGE))
   let { back } = held
   try {
     let saved = await connect(ctxOf(env, who), held.connection, {
@@ -1696,6 +1712,64 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
     caught(e, { request: `GET ${CALLBACK}` })
     return told(back, 'refused')
   }
+}
+
+// The headers of a page that holds a return from a service: never kept,
+// framed or named to another site.
+let PRIVATE = {
+  'cache-control': 'private, no-store',
+  'content-security-policy': "frame-ancestors 'none'",
+  'referrer-policy': 'no-referrer',
+}
+
+// A return that came back to a browser other than the one that began it
+// (`callback`): the page asking the person there whether to give their
+// account to the attempt's space, or what they answered. Declining takes the
+// attempt, so its code is never exchanged and the space holds nothing of
+// theirs. Null once they chose Connect, for the attempt to finish.
+let confirming = async (
+  req: Request,
+  env: Env,
+  held: Held,
+  at: Space,
+  b: Bundle,
+): Promise<Response | null> => {
+  let form = req.method == 'POST'
+    ? await req.formData().catch(() => null)
+    : null
+  let chose = form?.get('answer')
+  if (chose == 'connect') return null
+  let { page } = await import('./pages.ts')
+  let space = at.title || at.slug
+  if (chose == 'decline') {
+    await take(env, ATTEMPT, held.attempt.state)
+    return page(env, {
+      title: 'Not connected',
+      lead:
+        `Nothing of yours was connected to ${space}. You can close this page.`,
+      headers: PRIVATE,
+    })
+  }
+  let name = integrationOf(b)
+  let [i, beginner] = await Promise.all([
+    known(readOf(env), name),
+    dirOf(env).nameAt(held.person),
+  ])
+  let service = i?.title || name
+  let { approveConnect } = await import('@yaks/platform/connections-view')
+  let { pathname, search } = new URL(req.url)
+  return page(
+    env,
+    {
+      title: `Connect ${service}?`,
+      lead: `The ${service} account you just approved would be connected to ` +
+        `the space ${space} on yaks.app, for its Operator and apps to use. ` +
+        `${beginner ?? 'Someone'} began this connect in another browser. ` +
+        'Connect it only if that was you, or you mean to give them your account.',
+      headers: PRIVATE,
+    },
+    approveConnect(pathname + search),
+  )
 }
 
 /** Begin linking the person's own account through `integration` (a chat

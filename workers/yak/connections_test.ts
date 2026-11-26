@@ -46,14 +46,14 @@ import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { type Approval, digestOf } from './operator-approvals.ts'
 import { directory, over, storeName } from './directory.ts'
 import { PLATFORM_OBJECT } from './door.ts'
-import { db, named, platform } from './testing.ts'
+import { db, named, platform, signedInAs } from './testing.ts'
 import { scan } from '@yaks/sql'
 import { KERNEL, meta } from './meta.ts'
 import { envDoor, fetchDoor, outbound } from './outbound.ts'
 import { PUBLISHED } from './published.ts'
 import type { Asked } from './apps.ts'
 import { desk } from './desk-pages.ts'
-import { minted, type Who } from './session.ts'
+import type { Who } from './session.ts'
 import { vaultOf } from './vault.ts'
 import { within } from './defects.ts'
 import { tallying } from './lib/hops.ts'
@@ -244,15 +244,10 @@ test(
       303,
       'https://yaks.app/manage',
     ])
-    // A browser signed in as someone else, approving for her, finishes it
-    // as her, and lands on the page she began it from.
-    let other = crypto.randomUUID()
-    await s.at.apply([{ entity: { eid: other }, person: {} }], KERNEL)
-    let bo =
-      (await minted(new Request('https://yaks.app/'), s.p.env, SECRET, other))
-        .split(';')[0]
+    // Her own browser finishes it, and lands on the page she began it from.
+    let mine = await signedInAs(s.p.env, s.person)
     let back = await returned(s.p.env, await begun('/manage/ada/operator'), {
-      cookie: bo,
+      cookie: mine,
       query: 'code=C',
     })
     assertEquals(to(back), [
@@ -265,6 +260,81 @@ test(
         .map((c) => c.status),
       ['connected'],
     )
+  },
+)
+
+test(
+  'a sign-in that returns to a browser other than the one that began it attaches nothing until the person there confirms it',
+  async () => {
+    let s = await setup()
+    await s.at.apply(
+      [registration('google', { id: 'yaks', secret: 's' })],
+      KERNEL,
+    )
+    let google = 'google-search-console'
+    let begun = async () => {
+      let went = await s.post(
+        { do: 'add', integration: google },
+        `?space=ada&enable=${google}`,
+      )
+      assert(went instanceof Response)
+      return stateOf(went)
+    }
+    let connected = async () =>
+      (await s.shown([google])).list
+        .filter((c) => c.integration == google && c.status == 'connected')
+        .length
+    let answered = (state: string | null, answer: string, cookie?: string) =>
+      returned(s.p.env, state, {
+        query: 'code=C',
+        cookie,
+        answer,
+      })
+    // Returned to a signed-out browser, it asks first and attaches nothing.
+    await s.at.apply(
+      [{ entity: { eid: s.person }, doc: { title: 'Ada Lovelace' } }],
+      KERNEL,
+    )
+    let state = await begun()
+    let asked = await returned(s.p.env, state, { query: 'code=C' })
+    let text = await asked.text()
+    assertEquals([asked.status, await connected()], [200, 0])
+    assertStringIncludes(text, 'connected to the space ada on yaks.app')
+    assertStringIncludes(text, 'Ada Lovelace began this connect')
+    // Declined, nothing is attached and the attempt is spent.
+    assertEquals((await answered(state, 'decline')).status, 200)
+    assertEquals(to(await answered(state, 'connect')), [
+      303,
+      'https://yaks.app/manage',
+    ])
+    assertEquals(await connected(), 0)
+    // Confirmed in a browser signed in as someone else, it finishes as the
+    // person who began it, back on the page she began it from.
+    let other = crypto.randomUUID()
+    await s.at.apply([{ entity: { eid: other }, person: {} }], KERNEL)
+    assertEquals(
+      to(
+        await answered(
+          await begun(),
+          'connect',
+          await signedInAs(s.p.env, other),
+        ),
+      ),
+      [
+        303,
+        `https://yaks.app/manage/ada/connections?enable=${google}`,
+      ],
+    )
+    assertEquals(await connected(), 1)
+    // Her own browser finishes at once.
+    let mine = await returned(s.p.env, await begun(), {
+      query: 'code=C',
+      cookie: await signedInAs(s.p.env, s.person),
+    })
+    assertEquals(to(mine), [
+      303,
+      `https://yaks.app/manage/ada/connections?enable=${google}`,
+    ])
   },
 )
 
@@ -925,12 +995,14 @@ let stateOf = (went: Response) =>
 
 // The return from a service: refused there unless `query` says otherwise, in
 // a browser holding `cookie`, the service answering any exchange with a grant.
+// `answer` is what the person there chose on the page asking them to confirm.
 let returned = async (
   env: Env,
   state: string | null,
-  { cookie, query = 'error=access_denied' }: {
+  { cookie, query = 'error=access_denied', answer }: {
     cookie?: string
     query?: string
+    answer?: string
   } = {},
 ) => {
   let real = globalThis.fetch
@@ -942,6 +1014,9 @@ let returned = async (
       env,
       req: new Request(`https://yaks.app${CALLBACK}?${query}${named}`, {
         headers: cookie ? { cookie } : {},
+        ...answer
+          ? { method: 'POST', body: new URLSearchParams({ answer }) }
+          : {},
       }),
       path: CALLBACK,
       space: null,
@@ -1017,7 +1092,7 @@ test(
 )
 
 test(
-  'a person signs in for their own connection and comes back to the app, though another browser finishes it',
+  'a person signs in for their own connection and comes back to the app',
   async () => {
     let s = await setup()
     await s.at.apply([registration('cal', { id: 'yaks' }), {
@@ -1032,7 +1107,11 @@ test(
     }], KERNEL)
     let { bob, door, his } = await asks(s, 'Cal')
     let went = await door({ person: bob, role: null }, posted())
-    let back = await returned(s.p.env, stateOf(went), { query: 'code=C' })
+    let browser = await signedInAs(s.p.env, bob)
+    let back = await returned(s.p.env, stateOf(went), {
+      query: 'code=C',
+      cookie: browser,
+    })
     assertEquals(to(back), [303, 'https://ada.yaks.app/notes/'])
     let [mine] = await his()
     assertEquals([mine.integration, mine.status], ['Cal', 'connected'])

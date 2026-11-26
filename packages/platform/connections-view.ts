@@ -113,6 +113,21 @@ export let installChoice = (
     h(Button, { type: 'submit' }, label),
   )
 
+/** The answers to a sign-in that came back to a browser other than the one
+ * that began it, posted back to `action`, the return's own address. */
+export let approveConnect = (action: string): Kids =>
+  h(
+    'form',
+    { class: 'Page_Form', method: 'post', action },
+    h(
+      Button,
+      { mod: 'go', type: 'submit', name: 'answer', value: 'connect' },
+      'Connect',
+    ),
+    ' ',
+    h(Button, { type: 'submit', name: 'answer', value: 'decline' }, 'Decline'),
+  )
+
 // A label for what may be left empty.
 let optional = (label: Kids) => [
   label,

@@ -5,7 +5,7 @@ import type { Item, Request as Asked } from '@yaks/model'
 import type { D1Like } from '@yaks/d1'
 import { brokerKey, registration } from '@yaks/connections'
 import { counting } from '../../packages/d1/testing.ts'
-import { platform } from './testing.ts'
+import { platform, signedInAs } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import { CALLBACK, callback, connecting, connectionsOf } from './connections.ts'
 import { KERNEL, meta } from './meta.ts'
@@ -198,7 +198,9 @@ let connect = async (integration: string) => {
   if (!state) return went
   return callback({
     env,
-    req: new Request(`https://yaks.app${CALLBACK}?code=C&state=${state}`),
+    req: new Request(`https://yaks.app${CALLBACK}?code=C&state=${state}`, {
+      headers: { cookie: await signedInAs(env, person) },
+    }),
     path: CALLBACK,
     space: null,
   })

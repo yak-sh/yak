@@ -291,6 +291,19 @@ export let platform = (
   return p
 }
 
+/** The cookie of a browser at the apex signed in as `person`, as a Cookie
+ * header sends it. */
+export let signedInAs = async (env: Env, person: string) => {
+  let { minted } = await import('./session.ts')
+  let set = await minted(
+    new Request('https://yaks.app/'),
+    env,
+    env.SESSION_SECRET!,
+    person,
+  )
+  return set.split(';')[0]
+}
+
 /** A private copy of the standard deployed directory. Use when the supplied
  * bindings change requests a test drives, without changing deployment. */
 export let preparedPlatform = (secret: string, vars: Partial<Env> = {}) => {

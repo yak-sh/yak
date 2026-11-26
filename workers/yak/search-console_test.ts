@@ -3,7 +3,7 @@ import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { D1Like } from '@yaks/d1'
 import { registration } from '@yaks/connections'
 import { d1 } from '../../packages/d1/testing.ts'
-import { platform } from './testing.ts'
+import { platform, signedInAs } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import { CALLBACK, callback, connecting } from './connections.ts'
 import { KERNEL, meta } from './meta.ts'
@@ -128,6 +128,7 @@ let connect = async () => {
       `https://yaks.app${CALLBACK}?code=C&state=${
         location.searchParams.get('state')
       }`,
+      { headers: { cookie: await signedInAs(env, person) } },
     ),
     path: CALLBACK,
     space: null,

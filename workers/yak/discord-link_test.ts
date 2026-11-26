@@ -10,7 +10,7 @@ import type { D1Like } from '@yaks/d1'
 import { registration } from '@yaks/connections'
 import { line } from '@yaks/query'
 import { d1 } from '../../packages/d1/testing.ts'
-import { platform } from './testing.ts'
+import { platform, signedInAs } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import {
   CALLBACK,
@@ -67,8 +67,8 @@ globalThis.fetch = (input, init) => {
   return Promise.resolve(Response.json({}))
 }
 
-// Sent to Discord, then back from it as `who`.
-let back = (went: Response, who: typeof me) => {
+// Sent to Discord by `person`, then back from it as `who` in their browser.
+let back = async (went: Response, who: typeof me, person: string) => {
   let to = new URL(went.headers.get('location') ?? 'x:')
   scopes.push(to.searchParams.get('scope') ?? '')
   me = who
@@ -78,6 +78,7 @@ let back = (went: Response, who: typeof me) => {
       `https://yaks.app${CALLBACK}?code=C&state=${
         to.searchParams.get('state')
       }`,
+      { headers: { cookie: await signedInAs(env, person) } },
     ),
     path: CALLBACK,
     space: null,
@@ -104,7 +105,7 @@ test('adding the bot to a server links the Discord account of whoever added it',
     { person: ann, role: 'owner' },
     form,
   ) as Response
-  await back(went, { id: '4242', global_name: 'Ann' })
+  await back(went, { id: '4242', global_name: 'Ann' }, ann)
   assertEquals(scopes.pop(), 'bot identify')
   assertEquals(await linked(ann), [['4242', 'Ann']])
 })
@@ -118,7 +119,7 @@ test('a member who did not add the bot links their own account from Profile', as
     'discord-account',
     'https://yaks.app/manage/profile',
   )
-  await back(went, { id: '5151', global_name: 'Bob' })
+  await back(went, { id: '5151', global_name: 'Bob' }, bob)
   assertEquals(scopes.pop(), 'identify')
   assertEquals(await linked(bob), [['5151', 'Bob']])
 })
