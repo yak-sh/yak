@@ -42,14 +42,16 @@ test('compiler jobs carry the kernel catalog and preserve container refusals', a
 
 // The answers `send` gives in turn, a function being a throw, and the jobs it
 // was sent.
-let compiler = (...answers: (number | (() => never))[]) => {
+let compiler = (...answers: (number | Response | (() => never))[]) => {
   let jobs: string[] = []
   let send = async (req: Request) => {
     jobs.push(await req.text())
     let next = answers.shift()!
     return typeof next == 'number'
       ? new Response(`${next}`, { status: next })
-      : next()
+      : typeof next == 'function'
+      ? next()
+      : next
   }
   return { jobs, send }
 }
@@ -77,12 +79,27 @@ test('a compile the compiler restarted under is sent once more, whole', async ()
 })
 
 test('a compile that outgrew memory or failed otherwise is not sent again', async () => {
-  let { jobs, send } = compiler(507, 200)
-  equal((await forwarded(job(), send)).status, 507)
-  equal(jobs.length, 1)
+  for (let status of [507, 500]) {
+    let { jobs, send } = compiler(status, 200)
+    equal((await forwarded(job(), send)).status, status)
+    equal(jobs.length, 1)
+  }
   let broke = compiler(() => {
     throw new Error('broke')
   }, 200)
   let thrown = await forwarded(job(), broke.send).catch((e) => e.message)
   equal([thrown, broke.jobs.length], ['broke', 1])
+})
+
+test('a lost container connection retries the same compile once', async () => {
+  let lost = () =>
+    new Response('Container suddenly disconnected, try again', { status: 500 })
+  let recovered = compiler(lost(), 200)
+  equal((await forwarded(job(), recovered.send)).status, 200)
+  equal(recovered.jobs, ['{"ask":{}}', '{"ask":{}}'])
+  let failed = compiler(lost(), lost())
+  let answer = await forwarded(job(), failed.send)
+  equal(answer.status, 500)
+  equal(await answer.text(), 'Container suddenly disconnected, try again')
+  equal(failed.jobs.length, 2)
 })

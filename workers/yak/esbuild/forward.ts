@@ -2,15 +2,19 @@
 // the container's answer goes back as it came, its out-of-memory refusal
 // included. A compile is a pure function of its job, so one the compiler's
 // own restart cut short is sent once more, to the compiler that replaced it:
-// its container stopped under the compile (REPLACED, ./index.ts), or its
-// Durable Object was reset for a new version (an error the runtime marks
-// retryable). Every rollout of this Worker does both to a compile in flight.
+// its container stopped under the compile, its connection was lost before an
+// exit was recorded, or the runtime marked its Durable Object reset retryable.
 
 /** What the compiler answers when its container stopped under a compile for
  * a reason other than the compile's own memory. */
 export let REPLACED = 503
 
 let retryable = (e: unknown) => (e as { retryable?: boolean })?.retryable
+
+/** The Containers SDK returns this response when the proxy connection drops. */
+export let disconnected = async (response: Response): Promise<boolean> =>
+  response.status == 500 &&
+  await response.clone().text() == 'Container suddenly disconnected, try again'
 
 export let forwarded = async (
   req: Request,
@@ -33,7 +37,8 @@ export let forwarded = async (
     )
   try {
     let answer = await sent()
-    if (answer.status != REPLACED) return answer
+    if (answer.status != REPLACED && !await disconnected(answer)) return answer
+    await answer.body?.cancel()
   } catch (e) {
     if (!retryable(e)) throw e
   }

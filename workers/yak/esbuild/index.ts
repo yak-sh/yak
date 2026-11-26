@@ -23,7 +23,7 @@
 import { WorkerEntrypoint } from 'cloudflare:workers'
 import { Container, getContainer } from '@cloudflare/containers'
 import { strip } from '@yaks/esbuild/strip'
-import { forwarded, REPLACED } from './forward.ts'
+import { disconnected, forwarded, REPLACED } from './forward.ts'
 
 // The compilers' Durable Object namespace, as getContainer takes it.
 type Env = { COMPILER: Parameters<typeof getContainer<Compiler>>[0] }
@@ -49,7 +49,7 @@ export class Compiler extends Container<Env> {
     let error: unknown
     try {
       answer = await this.containerFetch(req)
-      if (answer.status != OUTGREW) return answer
+      if (answer.status != OUTGREW && !await disconnected(answer)) return answer
     } catch (e) {
       error = e
     }
