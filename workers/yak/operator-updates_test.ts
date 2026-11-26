@@ -15,7 +15,7 @@ import { rootOf } from './operator-root.ts'
 import { line } from '@yaks/query'
 import { notification, type Update, updating } from './operator-updates.ts'
 import { parseHTML } from 'linkedom'
-import { chatPage, updatesPage } from './operator-page.ts'
+import { allUpdatesPage, chatPage, updatesPage } from './operator-page.ts'
 import { chatAt, shownAnswer, updatesAnswer, updatesApply } from './updates.ts'
 import { clock } from './timing.ts'
 import { attachmentKey } from './attachment-key.ts'
@@ -752,6 +752,17 @@ test('every Operator page holds the chat, its Updates and every space’s as vie
     ['/club', 'hidden', '/club?conversation=1'],
     ['/updates?in=club', 'hidden', 'news'],
   ])
+  let seat = { space, who }
+  assertEquals(
+    await views(
+      allUpdatesPage(p.env, seat, [seat], beside, Promise.resolve(new Map())),
+    ),
+    [
+      ['/updates?in=club', 'shown', 'news'],
+      ['/club', 'hidden', '/club?conversation=1'],
+      ['/club/updates', 'hidden', 'news'],
+    ],
+  )
   // A page that is none of them holds them too.
   assertEquals(await views(updatesPage(p.env, space, who, beside, true)), [
     ['/club/updates?dismissed', 'shown', 'news'],

@@ -13,7 +13,13 @@ import {
 import { renderToString } from 'preact-render-to-string'
 import { Button, Card, Empty, Field, Form, Icon } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
-import { directoryOf, type Panes, type Space, walkTo } from './directory.ts'
+import {
+  type Directory,
+  directoryOf,
+  type Panes,
+  type Space,
+  walkTo,
+} from './directory.ts'
 import { chatRows } from './connections.ts'
 import { reachOf } from './operator-reach.ts'
 import { background, caught } from './defects.ts'
@@ -1814,7 +1820,6 @@ let chatParts = async (
   side: Beside | Promise<Beside> = {},
   chosen?: string | null,
   from?: number,
-  lists = reading(env, space, who),
 ): Promise<Response | TalkPage> => {
   let at = managePath('operator', space.slug)
   let primary = open == 'new'
@@ -1822,6 +1827,7 @@ let chatParts = async (
   // only until they have one (T-141349).
   // Their lists are read with every conversation, at once with it, and
   // never hold it back (`reading`).
+  let lists = reading(env, space, who)
   let [talked, newcomer, { mentions }, alerting, declined, beside] =
     await Promise.all([
       lists.listing.then((l) =>
@@ -2041,11 +2047,12 @@ export let updatesPage = async (
   dismissed = false,
   opened = true,
   c: Clock = clock(),
+  dir?: Directory,
 ) => {
   // Opening the visible Updates reads them. The other view and the day's
   // cards fetch through their usual browser doors when shown.
   let [news, put, beside] = await Promise.all([
-    updatesOf(env, space, who, opened && !dismissed),
+    updatesOf(env, space, who, opened && !dismissed, dir),
     dismissed ? dismissedOf(env, space, who) : undefined,
     side,
   ])
@@ -2167,32 +2174,6 @@ let allBeside = (
   }
 }
 
-// The person's one conversation in the space as a view of a page opened at
-// another of its views; none where it could not be read, which leaves the
-// page as it was.
-let chatBeside = async (
-  env: Env,
-  space: Space,
-  who: Who,
-  beside: Beside | Promise<Beside>,
-  lists?: ReturnType<typeof reading>,
-): Promise<TalkPage | undefined> => {
-  let chat = await chatParts(
-    env,
-    space,
-    who,
-    'new',
-    beside,
-    undefined,
-    undefined,
-    lists,
-  ).catch((e) => {
-    caught(e, { request: 'chat beside', space: space.slug })
-    return undefined
-  })
-  return chat instanceof Response ? undefined : chat
-}
-
 /** The person's Updates from every space's Operator together
  * (updates.ts `allUpdates`), beside the chat app's side of `home`, the
  * space they came from. Opening them reads them, in every space, where
@@ -2206,28 +2187,26 @@ export let allUpdatesPage = async (
   apps: Promise<Map<string, Apps>>,
   opened = true,
   c: Clock = clock(),
+  dir?: Directory,
 ) => {
   let { space, who } = home
-  let lists = reading(env, space, who)
-  let [news, shelves, , chat, beside] = await Promise.all([
-    updatesAcross(env, seats, { seen: opened }),
+  let [news, shelves, beside] = await Promise.all([
+    updatesAcross(env, seats, { seen: opened, dir }),
     apps,
-    lists.listing,
-    chatBeside(env, space, who, side, lists),
     side,
   ])
   for (let { space, error } of news.missed) {
     caught(error, { request: 'all updates', space: space.slug })
   }
-  let listed = await lists.drawn()
   let here = allAt(space)
+  let chat = openingParts(env, space, who, 'new', beside)
   return c.measure('render', () =>
     talkPage(env, space, who, beside, {
       title: 'All updates',
       status: 200,
       waiting: news.updates.filter((u) => u.needs && u.space.eid == space.eid)
         .length,
-      listed,
+      listed: null,
       current: ['all'],
       here,
       skip: ['#content', 'Skip to content'],
@@ -2242,7 +2221,7 @@ export let allUpdatesPage = async (
           who.person ?? '',
         ),
       ),
-    }, chat ? [chat] : []))
+    }, [chat]))
 }
 
 /** A space's Matches (@yaks/platform/operator-matches-view), beside the

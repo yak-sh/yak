@@ -87,7 +87,7 @@ export type Missed = { space: Space; error: unknown }
 
 /** What reading Updates asks of each space: what they read now marked read
  * (`seen`), or the notices they dismissed (`dismissed`). */
-type Asking = { seen?: boolean; dismissed?: boolean }
+type Asking = { seen?: boolean; dismissed?: boolean; dir?: Directory }
 
 /** A person's Updates across the spaces they stand in: @yaks/inbox read in
  * each space's Operator store (operator-updates.ts), as one list, what needs
@@ -98,11 +98,14 @@ type Asking = { seen?: boolean; dismissed?: boolean }
 export let updatesAcross = async (
   env: Env,
   seats: Seat[],
-  { seen = false, dismissed = false }: Asking = {},
+  { seen = false, dismissed = false, dir }: Asking = {},
 ): Promise<
   Updates & { by: Map<string, number>; missed: Missed[]; read: Read[] }
 > => {
   let args = dismissed ? { dismissed } : seen ? { seen } : {}
+  let index = dismissed
+    ? undefined
+    : dir ?? directory(bound(env.DIRECTORY, fetch, env))
   let missed: Missed[] = []
   let read = await Promise.all(seats.map(async ({ space, who }) => {
     try {
@@ -110,7 +113,7 @@ export let updatesAcross = async (
         operatorDoor(env, space, who, 'updates', args) as Promise<
           { updates: Update[]; waiting: number }
         >,
-        dismissed ? [] : offersOf(env, space, who, seen),
+        index ? offersIn(index, space, who, seen) : [],
       ])
       return {
         space,
@@ -141,11 +144,12 @@ export let updatesOf = async (
   space: Space,
   who: Who,
   seen = false,
+  dir?: Directory,
 ): Promise<Updates & { read: Read[] }> => {
   let { updates, waiting, missed, read } = await updatesAcross(env, [{
     space,
     who,
-  }], { seen })
+  }], { seen, dir })
   if (missed.length) throw missed[0].error
   return { updates, waiting, read }
 }
@@ -191,9 +195,6 @@ export let waitingSeats = async (dir: Directory, person: string) =>
         }
       }),
   )
-
-let offersOf = (env: Env, space: Space, who: Who, seen = false) =>
-  offersIn(directory(bound(env.DIRECTORY, fetch, env)), space, who, seen)
 
 /** What the directory holds for a person beside their Operator's Updates
  * in a space (`requestsOf`), and their friends' messages, which reading

@@ -353,8 +353,11 @@ export let manage = async (
     if (canWarm && answer.ok) warmRoster()
     return answer
   }
-  let sidebar = () =>
-    c.time('sidebar', () => beside(env, dir, space, who, apps().then(sideApps)))
+  let sidebar = (contact = true) =>
+    c.time(
+      'sidebar',
+      () => beside(env, dir, space, who, apps().then(sideApps), contact),
+    )
   // Chat and Updates boot the Operator with their read, so its wake cannot
   // start owed work before that read. Their links warm once the page is
   // drawn, with only the app already asked for starting alongside it.
@@ -388,10 +391,11 @@ export let manage = async (
         env,
         space,
         who,
-        sidebar(),
-        new URL(req.url).searchParams.has('dismissed'),
+        sidebar(false),
+        url.searchParams.has('dismissed'),
         !lookingAhead(req),
         c,
+        dir,
       ),
     ))
   }
@@ -522,8 +526,7 @@ let foresee = (
   chat = false,
 ) => {
   let seats = dir.seated(person)
-  let sided = view == 'updates' || view == 'matches' ||
-    view == 'operator' && chat
+  let sided = view == 'matches' || view == 'operator' && chat
   void Promise.allSettled([
     dir.nameAt(person),
     seats,
@@ -659,21 +662,21 @@ let everyUpdate = async (
   let into = url.searchParams.get('in')
   let home = held.find((s) => s.space.slug == into) ?? held[0]
   if (!home) return redirect(hostUrl(env, MANAGE), 303)
+  let shelves = new Map(held.map(({ space, who }) => [
+    space.slug,
+    appsFor(dir, space, who),
+  ]))
+  let roster = shelves.get(home.space.slug)!
   let apps = Promise.all(
-    held.map(async ({ space, who }) => {
-      let { mine } = shelf(await dir.apps(space), space, who)
-      return [
-        space.slug,
-        mine.map((a) => ({ eid: a.eid, slug: a.slug, title: a.title })),
-      ] as const
-    }),
+    [...shelves].map(async ([slug, read]) =>
+      [slug, sideApps(await read)] as const
+    ),
   ).then((all) => new Map(all))
   apps.catch(() => {})
   let { allUpdatesPage } = await c.time(
     'page_modules',
     () => import('./operator-page.ts'),
   )
-  let roster = appsFor(dir, home.space, home.who)
   let answer = await unread(
     req,
     allUpdatesPage(
@@ -682,11 +685,13 @@ let everyUpdate = async (
       held,
       c.time(
         'sidebar',
-        () => beside(env, dir, home.space, home.who, roster.then(sideApps)),
+        () =>
+          beside(env, dir, home.space, home.who, roster.then(sideApps), false),
       ),
       apps,
       !lookingAhead(req),
       c,
+      dir,
     ),
   )
   if (answer.ok) warmApps(env, home.space, await roster)
@@ -716,6 +721,7 @@ let beside = async (
   roster = appsFor(dir, space, who).then((mine) => (
     warmApps(env, space, mine), sideApps(mine)
   )),
+  contact = true,
 ): Promise<Beside> => {
   let [spaces, apps, name, panes, ways, platformAdmin] = await Promise.all([
     pickable(dir, who.person),
@@ -723,14 +729,16 @@ let beside = async (
     dir.nameAt(who.person),
     dir.panes(who.person),
     // As the page asked it ahead (`foresee`), so it is answered from there.
-    chatRows(dir, walkTo(space.slug, space.eid)).then(async (rows) =>
-      (await import('./operator-ways.ts')).waysOf(
-        env,
-        space,
-        who.role == 'owner',
-        rows,
+    contact
+      ? chatRows(dir, walkTo(space.slug, space.eid)).then(async (rows) =>
+        (await import('./operator-ways.ts')).waysOf(
+          env,
+          space,
+          who.role == 'owner',
+          rows,
+        )
       )
-    ),
+      : undefined,
     who.administrative ?? admin({ dir, person: who.person }),
   ])
   return {
