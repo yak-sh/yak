@@ -243,6 +243,8 @@ let tables = (spine: string): Stmt[] => {
     index('journal_field_change', 'journal_field', ['change', 'ordinal']),
     index('journal_field_ref', 'journal_field', ['ref'], notNull(col('ref'))),
     wordTable,
+    // the names recorded for a `_comp` row (./names.ts `recordedAt`)
+    index('journal_word_row', 'journal_word', ['row']),
   ]
 }
 
@@ -483,11 +485,11 @@ export let log = (opts: LogOpts): Log => {
   let rebuild = (found: Row[]): Patch[] =>
     found.map((ch) => {
       let target = String(ch.eid)
-      let comp = named.label(String(ch.component))
+      let comp = named.compLabel(String(ch.component))
       if (ch.operation == 'remove') return { target, comp, value: null }
       let value: Comp = {}
       for (let f of rows(fieldsOf(ch.id))) {
-        let prop = named.label(String(f.field))
+        let prop = named.propLabel(String(f.field))
         value[prop] = f.text ?? read(comp, prop, dec(f.value))
       }
       return { target, comp, value }
@@ -590,7 +592,7 @@ export let log = (opts: LogOpts): Log => {
           where: eq(col('rn'), lit(1)),
         }))
       ) {
-        let prop = named.label(String(r.field))
+        let prop = named.propLabel(String(r.field))
         if (num(r.id) > num(newest.get(prop)?.id)) newest.set(prop, r)
       }
       return [...newest].flatMap(([prop, r]) => num(r.present) ? [prop] : [])
@@ -969,8 +971,8 @@ export let log = (opts: LogOpts): Log => {
     })).map((r) => ({
       field: num(r.id),
       target: str(r.target),
-      comp: named.label(String(r.comp)),
-      prop: named.label(String(r.field)),
+      comp: named.compLabel(String(r.comp)),
+      prop: named.propLabel(String(r.field)),
       seq: num(r.seq),
       at: String(r.at),
       value: r.text != null ? String(r.text) : dec(r.value),

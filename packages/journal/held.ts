@@ -14,10 +14,10 @@ export let heldSql = (): Stmt =>
 /** The counts by each component's label, where rows recorded it by label or
  * by identity (./names.ts). */
 export let heldRows = (rows: Row[], vocab: Vocab): Record<string, number> => {
-  let { label } = names(vocab)
+  let { compLabel } = names(vocab)
   let held: Record<string, number> = {}
   for (let r of rows) {
-    let comp = label(String(r.c))
+    let comp = compLabel(String(r.c))
     held[comp] = (held[comp] ?? 0) + Number(r.n ?? 0)
   }
   return held

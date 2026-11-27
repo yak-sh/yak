@@ -52,6 +52,13 @@ through `@yaks/journal/graph`. A query reads labels from `journal_word`, which
 `ddl(vocab)` writes from the vocabulary each time the schema is installed, so a
 statement over the journal stays short however large the vocabulary is.
 
+Labels come back in the reader's namespace: a log or `backed()` given
+`vocab.in(ns)` names each component as that namespace reads it, `cost` for
+trip's own and `@yaks/model:cost` for the platform's (@yaks/vocab, "Reading in a
+namespace"). `journal_word` holds the store's own labels, and a reading writes
+into its statements only the few components it labels otherwise. A property
+reads by one label in every namespace.
+
 A property the store keeps in another form, such as the address @yaks/blob keeps
 in place of a body, is recorded as stored and read back through the store's read
 overrides (`log({ derived })`; `@yaks/journal/graph` binds the host's). History
@@ -150,10 +157,10 @@ hidden from everyone but its author.
 So history is asked in the query grammar, at every door: `._change.target=T-5`
 is an entity's history, oldest first, and `._change.target=T-5&.limit=20` its
 latest twenty; `._change.comp=<its _comp>&.limit=20` is a component's latest
-twenty writes; `._tx.via=S-7` is what one session wrote, and
-`._change.tx._tx.via=S-7` the changes it made. Each record's eid is its row id
-written ahead of a tag for the store and the component, so `yak graph show` and
-a link open one directly.
+twenty writes, sought through the index on `component` however rarely it is
+written; `._tx.via=S-7` is what one session wrote, and `._change.tx._tx.via=S-7`
+the changes it made. Each record's eid is its row id written ahead of a tag for
+the store and the component, so `yak graph show` and a link open one directly.
 
 `@yaks/journal/graph`'s `schema()` is the journal's tables as statements, which
 a writing host adds with the rest of its composed schema (@yaks/sqlite

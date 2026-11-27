@@ -3,13 +3,13 @@
 // label: a rename keeps its history, and rows recorded by label before
 // identities read alike (./names.ts).
 
-import { equal, test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
 import { whole } from '@yaks/query'
-import { col, select, table } from '@yaks/sql'
+import { col, insert, lit, select, table } from '@yaks/sql'
 import { loadVocab, metaDoc, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { bounded, mem } from '../sqlite/testing.ts'
+import { bounded, mem, stepping } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
 import { backed, ddl, journal, type Log, log } from './mod.ts'
 import { journalDoc } from './vocab.ts'
@@ -43,9 +43,10 @@ let words = (
   }])
 }
 
-// One store, and a graph journaling into it in `vocab`'s words.
-let store = (v = words(), db = mem()) => {
-  let s = storage(db, v, { backed: backed(v) })
+// One store, and a graph journaling into it in `vocab`'s words, its history
+// read in `reader`'s.
+let store = (v = words(), db = mem(), reader = v) => {
+  let s = storage(db, v, { backed: backed(reader) })
   s.install()
   for (let stmt of ddl(v)) db.query(stmt)
   let as = (vocab: Vocab) => {
@@ -60,8 +61,15 @@ let store = (v = words(), db = mem()) => {
     ...names('component', 'journal_change'),
     ...names('field', 'journal_field'),
   ]
-  return { as, recorded }
+  return { as, recorded, db }
 }
+
+// Each change a read finds: its component's label and its value.
+let told = (g: { read: ReturnType<typeof graph>['read'] }, q: string) =>
+  sync(g.read(whole(q))).map((b) => {
+    let { component, value } = b._change as Comp
+    return [component, value]
+  })
 
 // A history, a line per delta: `page.title null→"Kickoff"`.
 let lines = (j: Log, eid: string) =>
@@ -203,4 +211,72 @@ test('a history reads in one short statement however many words the vocabulary h
     ['c39', { p49: 'last' }],
   ])
   equal(read('._change.component=c39'), [['c39', { p49: 'last' }]])
+})
+
+test('a reader reads each component by the label its namespace gives it', () => {
+  // Two namespaces declare `cost`; the store holds each under its full label.
+  let cost = (prop: string) => ({
+    $id: urn(mint()),
+    component: true as const,
+    type: 'object' as const,
+    properties: { [prop]: { $id: urn(mint()), type: 'number' as const } },
+  })
+  let v = loadVocab([
+    metaDoc,
+    journalDoc,
+    { label: '@yaks/model', $defs: { cost: cost('dollars') } },
+    { label: 'yourname/trip', $defs: { cost: cost('euros') } },
+  ])
+  let trip = v.in({ label: 'yourname/trip' })
+  let s = store(v, mem(), trip)
+  let now = s.as(v)
+  now.apply([{
+    entity: { eid: 'p1' },
+    'yourname/trip:cost': { euros: 5 },
+    '@yaks/model:cost': { dollars: 7 },
+  }])
+  let history = [
+    'cost null→{}',
+    'cost.euros null→5',
+    '@yaks/model:cost null→{}',
+    '@yaks/model:cost.dollars null→7',
+  ]
+  equal(lines(log({ rows: (q) => s.db.query(q), vocab: trip }), 'p1'), history)
+  equal(
+    lines(now.j, 'p1'),
+    history.map((l) => l.replace(/^cost/, 'yourname/trip:cost')),
+  )
+  equal(told(now.g, '._change.target=p1'), [
+    ['cost', { euros: 5 }],
+    ['@yaks/model:cost', { dollars: 7 }],
+  ])
+})
+
+test('a component’s writes are sought from its _comp row, however long the journal', () => {
+  let seek = (others: number) => {
+    let { driver, steps } = stepping()
+    let now = store(words(), driver).as(words())
+    now.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
+    sync(now.g.apply([{ entity: { eid: PAGE }, _comp: { name: 'page' } }], {
+      trusted: true,
+    }))
+    let [{ id }] = driver.query(
+      select({ cols: [col('id')], from: table('entity'), limit: lit(1) }),
+    )
+    let other = { tx: 1, ordinal: 0, entity: Number(id), component: 'other' }
+    for (let at = 0; at < others; at += 500) {
+      let n = Math.min(500, others - at)
+      driver.query(insert(
+        'journal_change',
+        ...Array.from({ length: n }, () => ({ ...other, operation: 'upsert' })),
+      ))
+    }
+    let before = steps()
+    let got = told(now.g, `._change.comp=${PAGE}&.limit=20`)
+    return { got, steps: steps() - before }
+  }
+  let small = seek(1), large = seek(4096)
+  equal(large.got, [['page', { title: 'Kickoff' }]])
+  equal(large.got, small.got)
+  ok(large.steps < small.steps + 200, `${small.steps} steps; ${large.steps}`)
 })

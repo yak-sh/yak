@@ -92,7 +92,11 @@ let fieldOf = (derived: Derived, named: Names): Expr => {
 }
 
 // The `_comp` a change's component names, where the graph has one: its
-// column, and the join that reads it.
+// column, and the join that reads it. The join also says the names a row may
+// have recorded for that `_comp` (`recordedAt`), which the first term implies:
+// so `._change.comp=<_comp>` seeks the index on `component` from the `_comp`
+// row, and does not walk the journal back to front testing each change, which
+// for a component written rarely is the whole journal.
 let described = (vocab: Vocab, named: Names) =>
   vocab.comp('_comp')
     ? {
@@ -100,7 +104,10 @@ let described = (vocab: Vocab, named: Names) =>
       joins: [
         left(
           table('entity', 'cc'),
-          eq(cc('eid'), named.rowOf(jc('component'))),
+          and(
+            eq(cc('eid'), named.rowOf(jc('component'))),
+            among(jc('component'), named.recordedAt(cc('eid'))),
+          ),
         ),
       ],
     }
@@ -115,7 +122,7 @@ let valueOf = (derived: Derived, named: Names) =>
     sub(select({
       cols: [fn(
         'json_group_object',
-        named.labelOf(jf('field')),
+        named.propLabelOf(jf('field')),
         fieldOf(derived, named),
       )],
       from: table('journal_field', 'jf'),
@@ -132,7 +139,7 @@ let tells = (id: string, named: Names) =>
     cols: [
       as(jc(id), 'entity'),
       as(jc('entity'), 'about'),
-      as(named.labelOf(jc('component')), 'component'),
+      as(named.compLabelOf(jc('component')), 'component'),
     ],
     from: table('journal_change', 'jc'),
   })
@@ -241,7 +248,7 @@ let registry = (vocab: Vocab, derived: Derived): Backings => {
           as(jc('tx'), 'tx'),
           as(jc('entity'), 'target'),
           as(comp, 'comp'),
-          as(named.labelOf(jc('component')), 'component'),
+          as(named.compLabelOf(jc('component')), 'component'),
           as(value, 'value'),
         ],
         from: table('journal_change', 'jc'),

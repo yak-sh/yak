@@ -13,6 +13,14 @@
 // whenever the vocabulary changes (./log.ts `ddl`). The vocabulary is never
 // written into a statement: the platform's is tens of kilobytes, and workerd
 // refuses a statement past 100,000 bytes (@yaks/sql `LENGTH`).
+//
+// Labels are read back in the reader's namespace: `names(vocab.in(ns))` gives
+// each component the label that namespace reads it by (@yaks/vocab, "Reading
+// in a namespace"). `journal_word` holds the store's own labels, so a reading
+// writes into its statements only the components it labels otherwise: none
+// for the store's own reading, and few for any other, since only a label two
+// namespaces share reads differently. A property's label is the same in every
+// reading.
 
 import { derivedEid } from '@yaks/graph/identity'
 import {
@@ -22,10 +30,13 @@ import {
   type Expr,
   fn,
   lit,
+  type Query,
   select,
   type Stmt,
   sub,
   table,
+  unionAll,
+  when,
 } from '@yaks/sql/core'
 import { rowsOf, type Vocab } from '@yaks/vocab'
 
@@ -35,22 +46,32 @@ export type Names = {
   comp: (label: string) => string
   /** what a row records for a property, by its component's label and its */
   prop: (comp: string, label: string) => string
-  /** every name a row may hold for a component: its identity and its label */
+  /** every name a row may hold for a component: its identity and its labels */
   comps: (label: string) => string[]
   /** every name a row may hold for a property: its identity and its label */
   props: (comp: string, label: string) => string[]
-  /** the label a component or property a row recorded reads as */
-  label: (recorded: string) => string
-  /** {@link Names.label} in SQL, over a column holding what a row recorded */
-  labelOf: (recorded: Expr) => Expr
+  /** the label a component a row recorded reads as */
+  compLabel: (recorded: string) => string
+  /** the label a property a row recorded reads as */
+  propLabel: (recorded: string) => string
+  /** {@link Names.compLabel} in SQL, over a column holding what a row
+   * recorded */
+  compLabelOf: (recorded: Expr) => Expr
+  /** {@link Names.propLabel} in SQL */
+  propLabelOf: (recorded: Expr) => Expr
   /** the eid of the `_comp` row describing a component, in SQL, from what a
    * row recorded for it: its identity, or where its label derives where it
    * has none (@yaks/vocab `rowsOf`) */
   rowOf: (recorded: Expr) => Expr
+  /** every name a row may hold for the component the `_comp` row whose eid
+   * is `row` describes, in SQL: the inverse of {@link Names.rowOf}, as a set
+   * an index on what rows recorded can seek */
+  recordedAt: (row: Expr) => Query
 }
 
-let both = (label: string, id?: string) =>
-  id && id != label ? [id, label] : [label]
+let unique = (
+  names: (string | undefined)[],
+) => [...new Set(names.filter((n): n is string => !!n))]
 
 /** The table naming each word a journal's rows may record: `recorded`, what
  * a row holds for it, its `label`, and for a component the eid of its `_comp`
@@ -84,8 +105,10 @@ let BATCH = 200
 /** The statements writing `vocab`'s words into {@link WORDS}, after what
  * stood there: each component by its identity and by its label, each
  * property by its identity. A property's label is what a row recorded where
- * it has none, which reads as itself. */
-export let words = (vocab: Vocab): Stmt[] => {
+ * it has none, which reads as itself. The labels are the store's own, however
+ * `reading` reads them. */
+export let words = (reading: Vocab): Stmt[] => {
+  let vocab = reading.in()
   let at = rowsOf(vocab, derivedEid)
   let rows: [string, string, string | null][] = []
   for (let comp of vocab.all) {
@@ -97,16 +120,16 @@ export let words = (vocab: Vocab): Stmt[] => {
       if (p && p != prop) rows.push([p, prop, null])
     }
   }
-  let unique = [...new Map(rows.map((r) => [r[0], r])).values()]
+  let once = [...new Map(rows.map((r) => [r[0], r])).values()]
   return [
     { t: 'delete', from: WORDS },
     ...Array.from(
-      { length: Math.ceil(unique.length / BATCH) },
+      { length: Math.ceil(once.length / BATCH) },
       (_, i): Stmt => ({
         t: 'insert',
         into: WORDS,
         cols: ['recorded', 'label', 'row'],
-        rows: unique.slice(i * BATCH, (i + 1) * BATCH).map((r) => r.map(lit)),
+        rows: once.slice(i * BATCH, (i + 1) * BATCH).map((r) => r.map(lit)),
       }),
     ),
   ]
@@ -126,30 +149,61 @@ let looked = (column: string) => (key: Expr): Expr =>
   )
 let labelOf = looked('label'), rowOf = looked('row')
 
+let recordedAt = (row: Expr): Query =>
+  unionAll(
+    select({
+      cols: [col('recorded', '__r')],
+      from: table(WORDS, '__r'),
+      where: eq(col('row', '__r'), row),
+    }),
+    select({ cols: [row] }),
+  )
+
 let made = new WeakMap<Vocab, Names>()
 
-/** The names `vocab`'s words are recorded by, and read back from. */
+/** The names `vocab`'s words are recorded by, and read back from, in the
+ * labels `vocab` reads them by. */
 export let names = (vocab: Vocab): Names => {
   let got = made.get(vocab)
   if (got) return got
-  let labels: Record<string, string> = {}
-  let ids: Record<string, string> = {}
-  for (let comp of vocab.all) {
-    let id = vocab.comp(comp)?.id
-    if (id) [labels[id], ids[comp]] = [comp, id]
-    for (let prop of vocab.props(comp)) {
-      let p = vocab.prop(comp, prop)?.id
-      if (p) labels[p] = prop
+  let own = vocab.in()
+  // The label each recorded name reads as: each identity, and each of the
+  // store's labels this reading gives another (`turned`, which `heldAs` maps
+  // back, since a row recorded by label holds the store's).
+  let comps: Record<string, string> = {}
+  let props: Record<string, string> = {}
+  let turned: [string, string][] = []
+  let heldAs: Record<string, string> = {}
+  for (let comp of own.all) {
+    let id = own.comp(comp)?.id, word = id ? vocab.word(id) : undefined
+    let as = word && 'comp' in word ? word.comp : comp
+    if (id) comps[id] = as
+    if (id && as != comp) {
+      comps[comp] = as
+      heldAs[as] = comp
+      turned.push([id, as], [comp, as])
+    }
+    for (let prop of own.props(comp)) {
+      let p = own.prop(comp, prop)?.id
+      if (p) props[p] = prop
     }
   }
+  let compLabelOf = turned.length
+    ? (key: Expr) =>
+      when(turned.map(([k, as]) => [eq(key, lit(k)), lit(as)]), labelOf(key))
+    : labelOf
+  let idOf = (label: string) => vocab.comp(label)?.id
   got = {
-    comp: (label) => ids[label] ?? label,
+    comp: (label) => idOf(label) ?? label,
     prop: (comp, label) => vocab.prop(comp, label)?.id ?? label,
-    comps: (label) => both(label, ids[label]),
-    props: (comp, label) => both(label, vocab.prop(comp, label)?.id),
-    label: (recorded) => labels[recorded] ?? recorded,
-    labelOf,
+    comps: (label) => unique([idOf(label), label, heldAs[label]]),
+    props: (comp, label) => unique([vocab.prop(comp, label)?.id, label]),
+    compLabel: (recorded) => comps[recorded] ?? recorded,
+    propLabel: (recorded) => props[recorded] ?? recorded,
+    compLabelOf,
+    propLabelOf: labelOf,
     rowOf,
+    recordedAt,
   }
   made.set(vocab, got)
   return got
