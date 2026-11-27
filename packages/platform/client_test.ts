@@ -4,7 +4,8 @@ import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { clock, equal, test, throws } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
-import { store } from './client.js'
+import { parseHTML } from 'linkedom'
+import { morph, store } from './client.js'
 
 test('public apply retains and retries a preview edit when IndexedDB is denied', async () => {
   let time = clock()
@@ -293,4 +294,23 @@ test("a store's friends are read and invited through its own doors", async () =>
   } finally {
     game.outbox.close()
   }
+})
+
+test('morph draws rows in place: a playing video and an opened fold stay', () => {
+  let { document } = parseHTML('<main></main>')
+  let main = document.querySelector('main')!
+  let page = (stage: string) =>
+    `<p>${stage}</p><video src="film.mp4"></video><details><summary>Steps</summary></details>`
+  morph(main, page('Filming'))
+  let video = main.querySelector('video')
+  main.querySelector('details')!.setAttribute('open', '')
+  morph(main, page('Finished'))
+  equal(
+    [
+      main.querySelector('p')?.textContent,
+      main.querySelector('video') == video,
+      main.querySelector('details')?.hasAttribute('open'),
+    ],
+    ['Finished', true, true],
+  )
 })

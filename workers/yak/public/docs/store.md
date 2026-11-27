@@ -8,7 +8,8 @@ guide:
     The frontend data API, ./api/client.js, in full: every function it
     exports; apply, query, search, subscribe, upload, digest, me, the outbox of
     unsaved writes, friends for the person's yaks.app friends and inviting
-    one, qr for SVG QR codes and store(base) for another app's store; the bundle of
+    one, morph for drawing rows in place, qr for SVG QR codes and store(base)
+    for another app's store; the bundle of
     components a write sends;
     patching and deleting; compare-and-set with $was so two writers cannot
     both spend one value; read and write access; the created.by author stamp
@@ -50,7 +51,7 @@ at `../api/client.js`.
 
 ## Exports of `client.js`
 
-`client.js` exports twenty names. These fifteen are bound to the app's own
+`client.js` exports twenty-one names. These fifteen are bound to the app's own
 store:
 
 - the functions `apply`, `query`, `search`, `subscribe`, `upload`, `me` and
@@ -72,7 +73,7 @@ store:
   (`pay('orders/' + eid)`). A refusal throws with its message
   ([Payments](./selling.md)).
 
-These five functions need no store:
+These six functions need no store:
 
 - `was(value)`, the hash a compare-and-set write names, documented under
   Compare-and-set with `$was` below.
@@ -80,6 +81,8 @@ These five functions need no store:
 - `draftEid(by, place)`, the eid of a person's draft at a place
   ([Components and vocab.json](./components.md)).
 - `qr(text, label)`, an inline SVG QR code, documented below.
+- `morph(el, html)`, which draws HTML into an element in place, documented
+  below.
 - `store(base)`, described next.
 
 `store(base)` returns an object holding the fifteen names bound to a store
@@ -102,6 +105,27 @@ and returns a function that cancels it, so a test of a page moves the store's
 time itself.
 
 ## Client functions
+
+### morph(el, html)
+
+Makes `el` hold `html` while keeping every node that is in both the old and the
+new HTML. A video or sound that is playing goes on playing, a `<details>` the
+person opened stays open, a field keeps its focus and what was typed in it until
+the HTML gives it a new value, and only what changed is touched. Use it wherever
+a subscription redraws a page: setting `innerHTML` throws away every node and
+builds new ones, which stops a playing video and closes every open fold each
+time any row changes.
+
+    import { morph, subscribe } from './api/client.js'
+
+    subscribe('.clip&?doc&?clip', (rows) => {
+      morph(document.querySelector('#clips'), rows.map((r) =>
+        `<video controls src="./api/blob/${r.clip.file}"></video>`
+      ).join(''))
+    })
+
+A node is kept by its `id` or `data-key`, a video, sound, image or frame by its
+`src`, and any other node by its tag at its place.
 
 ### qr(text, label)
 
@@ -472,7 +496,8 @@ not exceptions.
 
 The callback receives the whole row set on its first call and whenever stored or
 relayed values change the answer. Rows include the components selected by the
-filter. Redraw the list from the callback's current rows.
+filter. Redraw the list from the callback's current rows with `morph(el, html)`,
+which keeps what the person has open and playing.
 
 - Ask for the components you will draw. A subscription's rows carry the
   components its filter names, exactly like a query, so `.task.status=open`

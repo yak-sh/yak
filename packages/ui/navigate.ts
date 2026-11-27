@@ -59,7 +59,10 @@ let el = (n: Node): Element | null =>
   n.nodeType == ELEMENT ? n as Element : null
 
 // What makes a node the same node in both pages, where something does: its
-// id, its `data-key`, the address an image, script, link or anchor names.
+// id, its `data-key`, the address an image, script, video, sound, frame, link
+// or anchor names. A video kept by its address goes on playing where the
+// nodes before it changed.
+let SOURCED = new Set(['img', 'script', 'video', 'audio', 'iframe'])
 let keyOf = (n: Node): string | null => {
   let e = el(n)
   if (!e) return null
@@ -67,7 +70,7 @@ let keyOf = (n: Node): string | null => {
   if (e.id) return `${tag}#${e.id}`
   let key = e.getAttribute('data-key')
   if (key != null) return `${tag}[${key}]`
-  let at = tag == 'img' || tag == 'script'
+  let at = SOURCED.has(tag)
     ? e.getAttribute('src')
     : tag == 'a' || tag == 'link'
     ? e.getAttribute('href')

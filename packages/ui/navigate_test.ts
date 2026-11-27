@@ -77,6 +77,20 @@ test('keyed nodes keep their own node when the list around them moves', () => {
   assert(now[0] == c && now[2] == a && !now.includes(b))
 })
 
+test('a video, sound or frame keeps its node by its address when what is before it changes', () => {
+  let doc = parse(
+    '<main><h2>A</h2><video src="a.mp4"></video><audio src="b.mp3"></audio><iframe src="/c"></iframe></main>',
+  )
+  let held = [...doc.querySelectorAll('video,audio,iframe')]
+  morph(
+    doc.querySelector('main')!,
+    parse(
+      '<main><h2>A</h2><p>new</p><video src="a.mp4"></video><p>new</p><audio src="b.mp3"></audio><iframe src="/c"></iframe></main>',
+    ).querySelector('main')!,
+  )
+  assertEquals([...doc.querySelectorAll('video,audio,iframe')], held)
+})
+
 test('a region a script keeps stays as it stands where the next page has it too', () => {
   let doc = parse(
     `<main><p>one</p><div id="dock" ${KEPT}><textarea>x</textarea><b>3</b></div></main>`,

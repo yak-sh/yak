@@ -141,7 +141,8 @@ photo before it is uploaded: a phone's photos are several megabytes.
 callback on every change, from any tab, phone or agent, so the callback runs
 often. Keep the callback to drawing: a `query` inside it sends a request every
 time anything changes, and `innerHTML +=` in a loop parses the whole list again
-for every row, where one `replaceChildren` builds it once. Request only what you
+for every row, where one `morph(el, html)` ([Frontend Data](./store.md)) draws
+it once and leaves alone every node that did not change. Request only what you
 draw: a row carries the components its query line names, so use `?doc` for a
 list of titles rather than `*`, and `limit=50` for the newest fifty rather than
 all of them.

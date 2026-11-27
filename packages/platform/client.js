@@ -9,6 +9,7 @@ import { carried } from './installs.ts'
 import { friendsOver } from './friends-at.ts'
 import { browserPage, sayTab } from '@yaks/notify/tab'
 import { landRelay, relayed, split, withRelay } from './page-relay.js'
+import { morph as lay } from '@yaks/ui/navigate'
 export { draftEid }
 export { qr } from './qr.ts'
 
@@ -37,6 +38,10 @@ export { qr } from './qr.ts'
 // function ends it, and its `ready` is those first rows, for a page that waits
 // for them. A page that subscribes to what it draws, all of it at once, loads
 // in one round.
+//
+// `morph(el, html)` draws a subscription's rows: `el` comes to hold `html`
+// with every node that stands in both kept as it was, so a video plays on, a
+// fold the person opened stays open and a field keeps its focus.
 //
 // `me()` is who is looking: the page asks beside its first reads, never ahead
 // of them, so it can show a sign-in link or a name field on load rather than
@@ -392,6 +397,19 @@ let hashed = async (blob) => {
 }
 
 export let digest = async (blob) => (await hashed(blob)).sha
+
+/** Make `el` hold `html` in place (@yaks/ui/navigate `morph`), keeping each
+ * node that stands in both: a video or sound by its `src`, a node by its `id`
+ * or `data-key`, else by its kind at its place. A `<details>` the person
+ * opened stays open where `html` has no word on it.
+ * @param {Element} el
+ * @param {string} html */
+export let morph = (el, html) => {
+  let next = el.ownerDocument.createElement('template')
+  next.innerHTML = html
+  lay(el, next.content, { keeps: folded })
+}
+let folded = (e, name) => name == 'open' && e.localName == 'details'
 
 // A file at least this big goes up in parts, several at once, which from
 // here on send faster than one request, and their fixed second or two of

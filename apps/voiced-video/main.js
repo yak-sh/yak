@@ -2,7 +2,7 @@
 // (seed.json), change any step's output in place (the idea, a line, a
 // shot), choose each voice, and watch the finished file. A change reruns
 // only the steps that read it.
-import { apply, subscribe } from './api/client.js'
+import { apply, morph, subscribe } from './api/client.js'
 import { progress, stage } from './model.js'
 
 let $ = (s) => document.querySelector(s)
@@ -23,13 +23,16 @@ let draw = () => {
   // A field being typed in keeps its words until it is left.
   if (document.activeElement?.matches('[data-edit]')) return
   let { videos, open } = state
-  $('#videos').innerHTML = videos.map((v) =>
-    `<button data-open="${v.entity.eid}" aria-current="${
-      v.entity.eid == open
-    }">${esc(v.doc?.title)}</button>`
-  ).join('')
+  morph(
+    $('#videos'),
+    videos.map((v) =>
+      `<button data-open="${v.entity.eid}" aria-current="${
+        v.entity.eid == open
+      }">${esc(v.doc?.title)}</button>`
+    ).join(''),
+  )
   let video = videos.find((v) => v.entity.eid == open)
-  $('#video').innerHTML = video ? page(video) : ''
+  morph($('#video'), video ? page(video) : '')
 }
 
 let edit = (eid, path, value, rows = 2) =>
