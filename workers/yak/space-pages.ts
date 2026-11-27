@@ -68,12 +68,20 @@ export let spaceRows = async (
   let asked = spaceLine(line)
   if (!asked) return []
   let mine = await owned(dir, person, asked.space)
-  if (!mine) return []
-  let { space, who } = mine
+  return mine ? pageRows(env, dir, mine, asked.page) : []
+}
+
+// The rows of the space's `page`, for its owner.
+let pageRows = async (
+  env: Env,
+  dir: Directory,
+  { space, who }: { space: Space; who: Who },
+  page: SpacePage,
+): Promise<Bundle[]> => {
   // As the page's own reads ask them (manage.ts `desk`), so a page drawn
   // from these rows reads the directory once.
   let apps = await dir.apps(space)
-  if (asked.page == 'settings') {
+  if (page == 'settings') {
     return [settingsRow(space.eid, {
       slug: space.slug,
       title: space.title,
@@ -85,7 +93,7 @@ export let spaceRows = async (
     })]
   }
   let { here, all } = shelf(apps, space, who)
-  if (asked.page == 'domains') {
+  if (page == 'domains') {
     return domainRows(
       space.eid,
       await ownedDomains(env, dir, space, all),
@@ -168,8 +176,8 @@ let tool = (env: Env, dir: Directory, person: string) =>
   TOOLS.find((t) => t.name == name)!.run({ env, dir, person }, args)
     .catch(refused)
 
-// The space's name, what its address opens, the line at the foot of its
-// pages, its logo taken off, and last its address, since moving renames the
+// The space's name and the line at the foot of its pages, what its address
+// opens, its logo taken off, and last its address, since moving renames the
 // space the homepage is written against.
 let settle = async (
   env: Env,
@@ -179,9 +187,14 @@ let settle = async (
   set: SettingsWrite,
 ) => {
   let call = tool(env, dir, who.person!)
+  // Its name and its line, in one call.
   let title = set.title?.trim()
-  if (title && title != space.title) {
-    await call('space_set', { space: space.slug, title })
+  let named = title && title != space.title ? { title } : {}
+  let lined = set.byline !== undefined && set.byline != !!space.byline
+    ? { byline: set.byline }
+    : {}
+  if (Object.keys({ ...named, ...lined }).length) {
+    await call('space_set', { space: space.slug, ...named, ...lined })
   }
   // The library is no app at all, so choosing it takes the word off the app
   // that has it.
@@ -189,9 +202,6 @@ let settle = async (
   let app = set.home || now?.slug
   if (set.home !== undefined && set.home != (now?.slug ?? '') && app) {
     await call('app_set', { space: space.slug, app, home: !!set.home })
-  }
-  if (set.byline !== undefined && set.byline != !!space.byline) {
-    await call('space_set', { space: space.slug, byline: set.byline })
   }
   if (set.logo === null) await logoed(env, dir, space, null, vouched(who))
   let slug = set.slug?.trim().toLowerCase()
@@ -218,7 +228,7 @@ export let spaceApply = async (
   }
   let as = { ...who, ...mine.who, via: who.via } as Who
   let space = mine.space
-  let moved = new Set<string>()
+  let moved = new Set<SpacePage>()
   let answered: Bundle[] = []
   let done = (b: Bundle, word: string, said: string) =>
     answered.push({
@@ -228,8 +238,7 @@ export let spaceApply = async (
   for (let b of bundles) {
     if (b.spaceSettings) {
       await settle(env, dir, space, as, b.spaceSettings as SettingsWrite)
-      space = await dir.at(space.eid) ?? space
-      moved.add(spaceSettings(space.eid))
+      moved.add('settings')
     } else if (b.restoreBinned) {
       let { item } = b.restoreBinned as { item: string }
       let app = (await dir.apps(space)).find((a) => a.eid == item && a.trashed)
@@ -245,7 +254,7 @@ export let spaceApply = async (
         said = `Restored at /${restored.slug}/.` +
           restoredAddress(app.slug, restored.slug)
       } else await restoredNumber(env, dir, line!, as)
-      moved.add(spaceTrash(space.eid))
+      moved.add('trash')
       done(b, 'restoreBinned', said)
     } else if (b.pointDomain) {
       let { name, destination = '' } = b.pointDomain as {
@@ -253,12 +262,12 @@ export let spaceApply = async (
         destination?: string
       }
       await pointDomain(env, dir, space, as, name, destination).catch(refused)
-      moved.add(spaceDomains(space.eid))
+      moved.add('domains')
       done(b, 'pointDomain', 'Saved.')
     } else if (b.chooseDomain) {
       let { name } = b.chooseDomain as { name: string }
       await chooseDomain(dir, space, as, name).catch(refused)
-      moved.add(spaceDomains(space.eid))
+      moved.add('domains')
       done(b, 'chooseDomain', 'Included domain saved.')
     } else if (b.offerDomain) {
       let { name, to } = b.offerDomain as { name: string; to: string }
@@ -269,12 +278,14 @@ export let spaceApply = async (
         name,
         to.trim().toLowerCase(),
       ).catch(refused)
-      moved.add(spaceDomains(space.eid))
+      moved.add('domains')
       done(b, 'offerDomain', said)
-    }
+    } else continue
+    // As the write left it, for the next and for the rows answered.
+    space = await dir.at(space.eid) ?? space
   }
-  for (let line of moved) {
-    answered.push(...await spaceRows(env, dir, person, line))
+  for (let page of moved) {
+    answered.push(...await pageRows(env, dir, { space, who: mine.who }, page))
   }
   return answered
 }

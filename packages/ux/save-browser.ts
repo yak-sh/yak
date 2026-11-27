@@ -1,4 +1,9 @@
-/** Save behavior for server-rendered forms, with drafts supplied by the host. */
+/** Save behavior for server-rendered forms, with drafts supplied by the host.
+ *
+ * A save shows at once: its fields read as saved and the bar says so while
+ * the writes go out behind it, one save after another. A field's draft stays
+ * until its write is answered, and a write that fails puts its fields back
+ * to unsaved, saying why. */
 import { batch, effect, untracked } from '@preact/signals'
 import { h, render } from 'preact'
 import { Save } from './Save.ts'
@@ -10,7 +15,10 @@ type Group = {
   name: string
   place: string
   controls: Control[]
+  /** What the host last answered as saved. */
   before: string[]
+  /** What a save sent and the host has not answered yet. */
+  sent?: string[]
 }
 type Draft = { before: string[]; value: string[] }
 
@@ -20,17 +28,21 @@ export type SaveOptions = {
     type: (place: string, text: string) => void
     spend?: (place: string) => Promise<boolean>
   }
-  /** Save the captured body; a rejection leaves its fields pending, and a
-   * string it resolves to is what the bar says in place of "Saved". */
+  /** Save the captured body, after the page already shows it saved; a
+   * rejection puts its fields back to pending, and a string it resolves to is
+   * what the bar says in place of "Saved". */
   save: (form: HTMLFormElement, body: FormData) => Promise<unknown>
   report?: (error: unknown) => void
-  /** Called after every changed form succeeds and no newer changes remain. */
+  /** Called after every changed form's write succeeds and no newer changes
+   * or writes remain. */
   saved?: () => void
   /** How long the bar says a save worked before it goes, in milliseconds. */
   linger?: number
 }
 
 export type SaveBinding = {
+  /** Show the changes saved and write them; resolves once every write this
+   * binding has sent is answered. */
   save: () => Promise<void>
   discard: () => void
   report: (error: unknown) => void
@@ -68,7 +80,11 @@ let put = (fields: Control[], values: string[]) => {
 }
 
 let same = (a: string[], b: string[]) => JSON.stringify(a) == JSON.stringify(b)
-let changed = (g: Group) => !same(read(g.controls), g.before)
+// What the page shows as saved: the save sent, until the host answers it.
+let shown = (g: Group) => g.sent ?? g.before
+let changed = (g: Group) => !same(read(g.controls), shown(g))
+// What a draft keeps: anything the host has not answered as saved.
+let unconfirmed = (g: Group) => !same(read(g.controls), g.before)
 let strings = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((v) => typeof v == 'string')
 let draftOf = (text: string): Draft | undefined => {
@@ -152,7 +168,7 @@ export let bindSave = (
     label.append(text)
     labels.push(label)
   }
-  let busy = false, message = '', done = '', closed = false
+  let message = '', done = '', closed = false
   let fading: ReturnType<typeof setTimeout> | undefined
   let say = (text: string) => {
     clearTimeout(fading)
@@ -178,7 +194,6 @@ export let bindSave = (
     render(
       h(Save, {
         count: count(),
-        busy,
         message,
         done,
         onSave: save,
@@ -188,7 +203,7 @@ export let bindSave = (
     )
   }
   let keep = (g: Group) => {
-    let text = changed(g)
+    let text = unconfirmed(g)
       ? JSON.stringify({ before: g.before, value: read(g.controls) })
       : ''
     if (text != opts.drafts.text(g.place)) opts.drafts.type(g.place, text)
@@ -198,12 +213,11 @@ export let bindSave = (
     opts.report?.(error)
   }
   let discard = () => {
-    if (busy) return
     message = ''
     batch(() => {
       for (let g of groups) {
-        put(g.controls, g.before)
-        opts.drafts.type(g.place, '')
+        put(g.controls, shown(g))
+        keep(g)
       }
     })
     for (let form of forms) {
@@ -213,48 +227,44 @@ export let bindSave = (
     }
     draw()
   }
-  let save = async () => {
-    if (busy || !count()) return
-    let pending = forms.filter((form) =>
-      groups.some((g) => g.form == form && changed(g))
-    )
-    if (pending.some((form) => form.reportValidity?.() === false)) return
-    let measured = result(doc)
-    let server = 0
-    let waiting = async <T>(send: () => Promise<T>) => {
-      if (!measured) return send()
-      let since = performance.now()
-      try {
-        return await send()
-      } finally {
-        server += performance.now() - since
+  type Sent = {
+    form: HTMLFormElement
+    body: FormData
+    fields: { g: Group; value: string[] }[]
+  }
+  let writing = Promise.resolve()
+  let queued = 0
+  // A write that did not go through: its fields read as unsaved again, their
+  // drafts kept.
+  let unsend = (sends: Sent[]) => {
+    for (let { fields } of sends) {
+      for (let { g, value } of fields) {
+        if (g.sent && same(g.sent, value)) g.sent = undefined
+        keep(g)
       }
     }
-    let snapshots = pending.map((form) => ({
-      form,
-      body: bodyOf(form),
-      fields: groups.filter((g) => g.form == form).map((g) => ({
-        g,
-        value: read(g.controls),
-      })),
-    }))
-    busy = true
-    message = ''
-    say('')
-    draw()
+  }
+  // The writes of one save, in order; the first refused stops the rest.
+  let send = async (sends: Sent[]) => {
     let said = ''
     try {
-      for (let { form, body, fields } of snapshots) {
-        let answer = await waiting(() => opts.save(form, body))
-        if (typeof answer == 'string') said = answer
+      for (let [i, { form, body, fields }] of sends.entries()) {
+        try {
+          let answer = await opts.save(form, body)
+          if (typeof answer == 'string') said = answer
+        } catch (error) {
+          unsend(sends.slice(i))
+          throw error
+        }
         batch(() => {
           for (let { g, value } of fields) {
             g.before = value
-            if (changed(g)) keep(g)
+            if (g.sent && same(g.sent, value)) g.sent = undefined
+            if (unconfirmed(g)) keep(g)
           }
         })
         for (let { g } of fields) {
-          if (changed(g) || !opts.drafts.text(g.place)) continue
+          if (closed || unconfirmed(g) || !opts.drafts.text(g.place)) continue
           if (opts.drafts.spend) {
             if (!await opts.drafts.spend(g.place)) {
               throw new Error(
@@ -264,18 +274,42 @@ export let bindSave = (
           } else opts.drafts.type(g.place, '')
         }
       }
-      if (!count()) {
-        say(said || 'Saved')
-        opts.saved?.()
-      }
+      if (said && !count()) say(said)
+      if (queued == 1 && !count()) opts.saved?.()
     } catch (error) {
+      say('')
       report(error)
     } finally {
-      busy = false
+      queued--
       draw()
-      if (closed) measured?.cancel()
-      else measured?.drawn(server)
     }
+  }
+  let save = () => {
+    if (!count()) return writing
+    let pending = forms.filter((form) =>
+      groups.some((g) => g.form == form && changed(g))
+    )
+    if (pending.some((form) => form.reportValidity?.() === false)) {
+      return writing
+    }
+    let measured = result(doc)
+    let sends: Sent[] = pending.map((form) => ({
+      form,
+      body: bodyOf(form),
+      fields: groups.filter((g) => g.form == form).map((g) => ({
+        g,
+        value: read(g.controls),
+      })),
+    }))
+    for (let { fields } of sends) {
+      for (let { g, value } of fields) g.sent = value
+    }
+    message = ''
+    say('Saved')
+    draw()
+    measured?.drawn(0)
+    queued++
+    return writing = writing.then(() => send(sends))
   }
   let input = () => {
     message = ''
@@ -301,7 +335,7 @@ export let bindSave = (
     for (let g of groups) {
       try {
         let draft = draftOf(opts.drafts.text(g.place))
-        put(g.controls, draft?.value ?? g.before)
+        put(g.controls, draft?.value ?? shown(g))
       } catch (error) {
         report(error)
       }

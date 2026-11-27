@@ -229,20 +229,42 @@ test('a failed write keeps its draft and leaves successfully saved forms clean',
   equal(p.field('name').value, 'My space')
 })
 
-test('the bar says Saving… while it saves, then what the save said, until it fades', async () => {
+test('a save shows at once, then what the save said, until it fades', async () => {
   let pending = Promise.withResolvers<unknown>()
   using p = page(390, stash(), { save: () => pending.promise, linger: 0 })
   p.type('name', 'Our space')
   let saving = p.binding.save()
-  equal(p.$('.Save_Count').textContent, 'Saving…')
+  equal(p.$('.Save-done .Save_Count').textContent, 'Saved')
+  equal(p.binding.count, 0)
+  equal(p.$('body').querySelectorAll('[data-changed]').length, 0)
+  ok(p.drafts.text('space:name'))
   pending.resolve('Invitation sent.')
   await saving
   equal(p.$('.Save-done .Save_Count').textContent, 'Invitation sent.')
+  equal(p.drafts.text('space:name'), '')
   await new Promise((r) => setTimeout(r, 0))
   equal(p.$('.Save'), null)
 })
 
-test('typing during Save keeps newer edits for the next Save', async () => {
+test('a write that fails after the page showed it saved puts its field back, saying why', async () => {
+  let pending = Promise.withResolvers<unknown>()
+  let drafts = stash()
+  using p = page(1280, drafts, { save: () => pending.promise })
+  p.type('name', 'Our space')
+  let saving = p.binding.save()
+  equal(p.binding.count, 0)
+  let copy = drafts.text('space:name')
+  ok(copy)
+  pending.reject(new Error('Connection interrupted'))
+  await saving
+  equal(p.field('name').value, 'Our space')
+  equal(p.binding.count, 1)
+  equal(p.$('[role="alert"]').textContent, 'Connection interrupted')
+  equal(drafts.text('space:name'), copy)
+  equal(p.saved(), 0)
+})
+
+test('saves made while one is out are written after it, in order', async () => {
   let pending = Promise.withResolvers<void>()
   let bodies: string[] = []
   using p = page(1280, stash(), {
@@ -252,21 +274,21 @@ test('typing during Save keeps newer edits for the next Save', async () => {
     },
   })
   p.type('instructions', 'First edit')
-  let saving = p.binding.save()
-  equal(p.$('.Save').getAttribute('aria-busy'), 'true')
+  let first = p.binding.save()
   p.type('instructions', 'Second edit')
-  await p.binding.save()
-  equal(bodies, ['First edit'])
-  pending.resolve()
-  await saving
-  equal(p.field('instructions').value, 'Second edit')
   equal(p.binding.count, 1)
+  let second = p.binding.save()
+  equal(p.binding.count, 0)
+  pending.resolve()
+  await first
+  equal(p.field('instructions').value, 'Second edit')
   equal(p.saved(), 0)
   ok(p.drafts.text('operator:instructions'))
-  await p.binding.save()
+  await second
   equal(bodies, ['First edit', 'Second edit'])
   equal(p.binding.count, 0)
   equal(p.saved(), 1)
+  equal(p.drafts.text('operator:instructions'), '')
 })
 
 test('Save awaits the draft clear receipt before announcing completion', async () => {

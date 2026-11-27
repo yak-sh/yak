@@ -867,8 +867,11 @@ let binding = bindSave(document, {
 binding.close()
 ```
 
-Failed writes retain their drafts. Successful writes retain any newer edits
-typed while saving; Discard restores the values the page last saved.
+A save shows at once: its fields read as saved and the bar says "Saved" while
+the writes go out behind it, each save after the one before. A field's draft
+stays until its write is answered. A failed write puts its fields back to
+unsaved, keeps their drafts and says why. Newer edits typed during a write stay
+pending; Discard restores the values the page last showed saved.
 
 ## Sorting tables
 
