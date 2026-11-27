@@ -12,7 +12,6 @@ import type { Bundle, Comp, NamedTool, ReadTx } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { derivedEid } from '@yaks/graph/identity'
-import { signed } from '@yaks/graph/provenance'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { next, WAKE } from '@yaks/wake'
@@ -82,17 +81,8 @@ let settle = async (
   }
 }
 
-// Settled on behalf of whoever wrote the change that stirred it: the builds
-// and calls it writes are theirs, as `builder_build`'s are its caller's, and
-// a wake's are automation.
 let stir = (o: Options, scheduled: boolean): Handler => (event, tx, write) =>
-  settle(
-    event.entity.eid,
-    tx,
-    (bundles) => write(signed(bundles, event.actor ?? null)),
-    o,
-    scheduled,
-  )
+  settle(event.entity.eid, tx, write, o, scheduled)
 
 export let opening = (o: Options): Handler => stir(o, true)
 export let editing = (o: Options): Handler => stir(o, false)
