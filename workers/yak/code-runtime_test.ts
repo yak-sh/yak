@@ -1,5 +1,5 @@
 import { equal, test, throws } from '@yaks/testing'
-import { evaluator, type Loader } from './code-runtime.ts'
+import { evaluator, type Loader, type Outbound } from './code-runtime.ts'
 import type { Evaluate } from '@yaks/code-mode'
 
 type Bridge = Parameters<Evaluate>[1]
@@ -65,4 +65,31 @@ test('evaluator refuses an expired invocation before loading code', async () => 
     'execution has ended',
   )
   equal(f.disposed(), 0)
+})
+
+test('evaluator lends the scoped egress binding and hosted resource limits to each script', async () => {
+  let outbound: Outbound = {
+    fetch: () => Promise.resolve(new Response('egress')),
+  }
+  let scope = { app: 'an app', person: 'a person', level: 'viewer' as const }
+  let loader: Loader = {
+    load: (code) => {
+      equal(code.globalOutbound, outbound)
+      equal(code.env, {})
+      equal(code.limits, { cpuMs: 30_000, subRequests: 128 })
+      return {
+        getEntrypoint: () => ({
+          run: () =>
+            Object.assign(Promise.resolve('done'), {
+              [Symbol.dispose]: () => {},
+            }),
+        }),
+      }
+    },
+  }
+  let run = evaluator(loader, (b) => b, (caller) => {
+    equal(caller, scope)
+    return outbound
+  })
+  equal(await run({}, bridge, new AbortController().signal, scope), 'done')
 })

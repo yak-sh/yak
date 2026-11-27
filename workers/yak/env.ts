@@ -71,7 +71,7 @@ export type Env = {
   // Connected account used for test-mode donations alongside live payments.
   STRIPE_SANDBOX_ACCOUNT?: string
   LOADER?: import('./code-runtime.ts').Loader
-  CODE_MODE?: import('@yaks/code-mode').Evaluate
+  CODE_MODE?: import('./code-runtime.ts').CodeEvaluate
   // Platform defects and triggered Store traces, through independent intake.
   ERRORS?: { send(rows: import('@yaks/graph').Bundle[]): Promise<void> }
   ENVIRONMENT?: string

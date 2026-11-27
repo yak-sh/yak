@@ -1,5 +1,5 @@
 import { clock, equal, match, ok, test, throws } from '@yaks/testing'
-import { connector, fresh, meta, seed } from './probe.ts'
+import { connector, endpoint, fresh, meta, seed } from './probe.ts'
 import { evaluate } from '../../packages/code-mode/testing.ts'
 import {
   catalog,
@@ -44,6 +44,7 @@ import { attachmentBytes } from './attachments.ts'
 import { attachmentKey } from './attachment-key.ts'
 import { attachmentRows } from '@yaks/blob/attachment'
 import { digest } from '@yaks/graph/sha256'
+import { scriptOutbound } from './outbound.ts'
 
 let fixture = (tools: Tool[]) => {
   let vocab = loadVocab([spineDoc, provenanceDoc, toolsDoc])
@@ -385,6 +386,95 @@ let graphPerson = await seed(k, [{ slug: 'code-mode-person', apps: [] }])
 let graphAgent = connector(k, graphPerson.cookie)
 let message = '\ufeff  name,group\n' + 'Zoë 雪,Group A\n'.repeat(900) + '  \n'
 let sourceSpace = (await directoryOf(env!.STORE).space(k.owner.name))!
+
+test('script files are temporary or belong to the selected app draft', async () => {
+  let space = sourceSpace.slug, app = 'script-files'
+  await agent.tool('app_new', { space, slug: app, title: 'Script files' })
+  let file = (args: Record<string, unknown>) =>
+    agent.answer('app_files', { space, app, ...args })
+  let first =
+    (await file({ path: 'source.txt', content: 'first' })).value!.draft
+  let second =
+    (await file({ draft: 'new', path: 'source.txt', content: 'second' })).value!
+      .draft
+  let run = async (script: string) =>
+    (await agent.call('tools/call', {
+      name: 'code_mode',
+      arguments: { space, app, draft: first, script },
+    })).structuredContent
+  let out = await run(`
+    let file = '/apps/script-files/';
+    await fs.mkdir('/tmp/work');
+    await fs.writeFile('/tmp/work/source.txt', await fs.readFile(file + 'source.txt', 'utf8'));
+    await fs.writeFile(file + 'data/bytes.bin', new Uint8Array([0, 255, 7]));
+    let bytes = [...await fs.readFile(file + 'data/bytes.bin')];
+    let paths = await fs.readdir(file);
+    await fs.unlink(file + 'data/bytes.bin');
+    return {text: await fs.readFile('/tmp/work/source.txt', 'utf8'), bytes, paths};
+  `)
+  equal(out.error, undefined)
+  equal(out.value, {
+    text: 'first',
+    bytes: [0, 255, 7],
+    paths: ['data', 'source.txt'],
+  })
+  equal(
+    out.calls.map((c: { path: string[] }) => c.path[1]),
+    Array(5).fill('app_files'),
+  )
+  equal(
+    (await file({ draft: second, op: 'read', path: 'source.txt' })).value
+      ?.content,
+    'second',
+  )
+  match((await file({ draft: first, op: 'list' })).value, {
+    files: [{ path: 'source.txt' }],
+  })
+  ok(
+    (await run("return fs.readFile('/tmp/work/source.txt', 'utf8')")).error
+      ?.includes('ENOENT'),
+  )
+})
+
+test('script file writes stay within the caller’s app permissions', async () => {
+  let denied = (await graphAgent.call('tools/call', {
+    name: 'code_mode',
+    arguments: {
+      space: sourceSpace.slug,
+      script: "await fs.writeFile('/apps/script-files/denied.txt', 'denied')",
+    },
+  })).structuredContent
+  ok(denied.error)
+  equal(denied.calls[0]?.isError, true)
+})
+
+test('script egress sends public requests and refuses unscoped connection sentinels', async () => {
+  let calls = 0
+  let remote = endpoint(async (req) => {
+    calls++
+    return new Response(`${req.method} ${await req.text()}`)
+  })
+  try {
+    let sent = await scriptOutbound(
+      new Request(remote.url, {
+        method: 'POST',
+        body: 'script data',
+      }),
+      env!,
+    )
+    equal(await sent.text(), 'POST script data')
+    let denied = await scriptOutbound(
+      new Request(remote.url, {
+        headers: { Authorization: 'Bearer yak_sentinel_' + 'a'.repeat(43) },
+      }),
+      env!,
+    )
+    equal(denied.status, 403)
+    equal(calls, 1)
+  } finally {
+    await remote.stop()
+  }
+})
 let sourceAsks: string[] = []
 let service = operatorService(
   env!,

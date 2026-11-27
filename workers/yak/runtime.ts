@@ -34,6 +34,7 @@ export class WorkerEntrypoint<E = unknown> {
 export class DurableObject<E = unknown> extends WorkerEntrypoint<E> {}
 
 export class RpcTarget {}
+export let exports = {}
 
 // Retain an invocation's asynchronous delivery in the caller's process.
 let pending = new Set<Promise<unknown>>()

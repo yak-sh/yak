@@ -31,11 +31,13 @@ import {
   type Caller,
   Capped,
   forward,
+  granted,
   type Host,
   Refused,
   sentinelsIn,
   usable,
 } from '@yaks/egress'
+import { bodyOf, holding } from '@yaks/blob'
 import type { Comp } from '@yaks/graph'
 import { mode, reads } from '@yaks/member'
 import { ctxOf } from './connections.ts'
@@ -106,20 +108,19 @@ let whose = async (
 // answer.
 let sent = async (
   env: Partial<Env> & Pick<Env, 'STORE'>,
-  caller: Caller,
+  caller: Caller | undefined,
   req: Request,
 ) => {
-  let c = {
-    ...egressOf(env, caller.app),
-    fetch: (r: RequestInfo | URL, init?: RequestInit) =>
-      fetch(r, init).catch((e) => {
-        throw new Wire(e)
-      }),
-  }
+  let send: typeof fetch = (r, init) =>
+    fetch(r, init).catch((e) => {
+      throw new Wire(e)
+    })
   try {
-    return await forward(c, caller, req)
+    return await (caller
+      ? forward({ ...egressOf(env, caller.app), fetch: send }, caller, req)
+      : granted([], req, send))
   } catch (e) {
-    if (e instanceof Capped) {
+    if (e instanceof Capped && caller) {
       let said = await whose(env, e, caller.app).catch((err) => {
         caught(err, { request: 'outbound cap', app: caller.app })
         return ''
@@ -135,7 +136,10 @@ let sent = async (
       })
     }
     if (e instanceof Wire) throw e.was
-    caught(e, { request: `outbound ${new URL(req.url).host}`, app: caller.app })
+    caught(e, {
+      request: `outbound ${new URL(req.url).host}`,
+      app: caller?.app,
+    })
     return new Response('yaks.app could not send this call', { status: 502 })
   }
 }
@@ -147,6 +151,26 @@ export let outbound = (
   env: Partial<Env> & Pick<Env, 'STORE'>,
   caller: Caller,
 ): Promise<Response> => sent(env, caller, req)
+
+/** Outbound HTTP for a script. Bound the body before egress scans it for
+ * sentinels. With no app, egress admits public requests and lends no keys. */
+export let scriptOutbound = async (
+  req: Request,
+  env: Env,
+  caller?: Caller,
+): Promise<Response> => {
+  if (req.body) {
+    let body = await holding(bodyOf(req), 4 * 1024 * 1024)
+    if (!(body instanceof Uint8Array)) {
+      await body.stream.cancel()
+      return new Response('Script fetch bodies are limited to 4 MiB.', {
+        status: 413,
+      })
+    }
+    req = new Request(req, { body })
+  }
+  return await sent(env, caller, req)
+}
 
 /** The dispatch namespace's trusted caller: platform requests enter the
  * same router as a public request, keyed by the app that made them. */

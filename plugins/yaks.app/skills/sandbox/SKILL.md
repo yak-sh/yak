@@ -1,6 +1,6 @@
 ---
 name: sandbox
-description: "Sandbox (yaks.app). The sandbox: a private Linux container in the space where an agent runs commands and keeps files while it works, through sandbox_write, sandbox_shell, sandbox_wait, sandbox_stop, sandbox_read and sandbox_ship. Its uses (a script over an attachment, a CSV reconciled against an app's data, an API call, compiling to WebAssembly, building a site), the installed document tools and toolchains, installing more, how long its files last, copying files into an app with sandbox_ship, its network, how many may be awake and the monthly compute time, and the yak CLI and $YAKS_TOKEN it is signed in with."
+description: 'Sandbox (yaks.app). The sandbox: a private Linux container in the space where an agent runs commands and keeps files while it works, through sandbox_write, sandbox_shell, sandbox_wait, sandbox_stop, sandbox_read and sandbox_ship. Its uses (native tools, Python libraries, compiling to WebAssembly, building a site), the installed document tools and toolchains, installing more, how long its files last, copying files into an app with sandbox_ship, its network, how many may be awake and the monthly compute time, and the yak CLI and $YAKS_TOKEN it is signed in with.'
 ---
 
 # Sandbox
@@ -12,10 +12,13 @@ commands and keeps files while it works. `sandbox_write` puts a file in,
 
 ## Uses
 
-- Run a script over an attachment: `sandbox_write` with the attachment's id
-  writes its bytes to a file, and a Python or Deno script parses it.
-- Reconcile a CSV against the app's data, through `yak` (below).
-- Call an API, or clone a repository.
+Use `code_mode` for JavaScript, TypeScript, HTTP requests and app draft files.
+See
+[JavaScript and TypeScript Scripts](https://yaks.app/docs/code#javascript-and-typescript-scripts).
+
+- Run native tools or Python libraries over an attachment. Use `sandbox_write`
+  with the attachment's id to copy its bytes to the sandbox.
+- Install packages or clone a repository.
 - Compile code a browser can't run as written, such as a chess engine, an image
   codec or a solver, to WebAssembly.
 - Build a site with Vite, Astro, Eleventy or SvelteKit, and ship its output.

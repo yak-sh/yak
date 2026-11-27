@@ -22,6 +22,7 @@ export let {
   Uses,
   Ads,
   Outbound,
+  ScriptOutbound,
   SandboxOutbound,
   Reruns,
   ModelHost,

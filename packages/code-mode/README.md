@@ -33,7 +33,7 @@ Each function answers the MCP result: `content`, `structuredContent`, and
 success. The execution answers `{value, calls, error?}`: `value` is what the
 script returned, and each call is a receipt of its id and exact path, with
 `isError` and the first KiB of its words when it failed. Inner results stay in
-the sandbox: a script reads, filters and joins there, and returns only what the
+the isolate: a script reads, filters and joins there, and returns only what the
 model needs. `code_mode` itself is excluded from nested discovery and execution.
 
 The host supplies `Kept` so a script can read results the harness saved in the
@@ -52,23 +52,19 @@ runs jq against the same snapshots. Ordinary graph answers have rows at
 `.result`; custom tool answers keep data under `.structuredContent`, with
 accompanying text in `.content`.
 
-The Cloudflare adapter uses a fresh Worker Loader isolate with an empty `env`,
-`globalOutbound: null`, and one RPC capability passed as an argument. The
-isolate has 128 MiB of memory, 100 ms CPU and 32 subrequests. The host revokes
-the bridge after 30 seconds or completion. A trusted child deadline settles its
-invocation after 30 seconds too. The Loader exposes no hard termination method;
-CPU limits stop synchronous loops, and revocation prevents late tool calls. The
-returned RPC promise is disposed when the host finishes. Executions permit 16
-tool calls and 64 KiB of script and JSON arguments per call. A serialized MCP
-result, kept result read or script answer over 32 MiB is refused for system
-safety; ordinary results remain whole. Each limit's error says what to do
-instead (`TOO`). Discovery is paged.
+On yaks.app, a fresh dynamic Worker runs each script with 30 seconds of CPU, 40
+seconds of elapsed time, 128 MiB of memory and 64 tool calls. Its tool bridge is
+revoked when the execution ends. A script and its ordinary tool arguments each
+have a 64 KiB limit. A serialized result, kept result read or script answer has
+a 32 MiB limit. A script's failure leaves started writes in flight. A receipt
+with `pending: true` means the outcome is still unknown.
 
-A script's failure does not undo started writes. A receipt with `pending: true`
-means the call was still in flight when the execution answered; it may finish
-later. Scripts have no network, secrets, filesystem or ambient bindings. Tools
-retain their own authorization and I/O boundaries. Durable workflows and human
-waits are separate from these short executions.
+The hosted adapter supplies `fs` with a request-local `/tmp` and `/apps/<app>`
+for draft files. App file operations use the ordinary `app_files` tool with its
+draft selection, permissions and receipts. The host gives the isolate an egress
+binding for HTTP requests. Pass `app` to use that app's connection sentinels.
+Egress holds the credentials and sends them to destinations the connection
+permits.
 
 The runtime contract follows Cloudflare's
 [Worker Loader API](https://developers.cloudflare.com/dynamic-workers/api-reference/),

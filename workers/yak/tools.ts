@@ -5,6 +5,7 @@ import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
 import { hostedFeedback } from './feedback.ts'
 import { base64 } from './bytes.ts'
+import { FILE_BYTES } from '@yaks/code-mode'
 import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
@@ -642,6 +643,12 @@ let FILES_INPUT: Shape = {
         'every text file in the app',
     },
     content: str('the file text, for write'),
+    encoding: {
+      type: 'string',
+      enum: ['base64'],
+      description:
+        'For read with a single path, return the original bytes in base64 (up to 1 MiB).',
+    },
     base64: str(
       'the file bytes, base64-encoded, instead of content: for a file ' +
         'that is not text, such as the .wasm a worker.js imports',
@@ -4497,6 +4504,12 @@ let OURS: Row[] = [
       if (fan.length && op != 'write') {
         throw refuse('arguments', `drafts: for a write, not op: ${op}`)
       }
+      if (
+        args.encoding != null &&
+        (op != 'read' || args.path == null || args.paths != null)
+      ) {
+        throw refuse('arguments', 'encoding requires op: read with one path')
+      }
       let c = ctx.clock ?? clock()
       // Reading is the platform admin's in every space, the way the graph
       // tier is: a gallery code review reads a stranger's files (gallery.ts).
@@ -4739,8 +4752,10 @@ let OURS: Row[] = [
         around().catch(() => {})
         let d = await draft()
         let path = named(filePath(args.path))
-        let bytes = await d.view.read(at(d, path))
-        if (!bytes) {
+        let binary = args.encoding == 'base64'
+        let opened = binary ? await d.view.open(at(d, path)) : null
+        let bytes = binary ? null : await d.view.read(at(d, path))
+        if (!bytes && !opened) {
           let draft = selectedDraft(d)
           let create = {
             space: space.slug,
@@ -4757,7 +4772,32 @@ let OURS: Row[] = [
             }.`,
           )
         }
-        let { text: said, value, images } = await glance(path, bytes)
+        if (opened) {
+          let tooLarge = () =>
+            refuse('limit', 'a base64 read can hold at most 1 MiB')
+          if (opened.size > FILE_BYTES) throw tooLarge()
+          let data = await heldUpTo({
+            size: opened.size,
+            stream: await opened.read(),
+          }, FILE_BYTES)
+          if (!(data instanceof Uint8Array)) {
+            await data.stream.cancel()
+            throw tooLarge()
+          }
+          return {
+            text: `Read ${path} as base64 (${size(data.byteLength)}).`,
+            space,
+            value: {
+              base64: base64(data),
+              size: data.byteLength,
+              version: app.version ?? 0,
+            },
+            ...await outside({ [path]: d.files[path] })
+              ? { heard: true as const }
+              : {},
+          }
+        }
+        let { text: said, value, images } = await glance(path, bytes!)
         return {
           text: said,
           space,

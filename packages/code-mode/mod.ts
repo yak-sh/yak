@@ -17,11 +17,14 @@ import {
   structured,
   texts,
   toolEid,
+  valueIn,
 } from '@yaks/tools'
 import { catalog, declarations } from './types.ts'
-import { source, TOO } from './source.ts'
+import { source, timedOut, TOO } from './source.ts'
+import { FILE_BYTES, fileDeclarations, type FileScope } from './files.ts'
 export { catalog, declarations, type Entry } from './types.ts'
 export { TOO } from './source.ts'
+export { FILE_BYTES } from './files.ts'
 
 export let LIMITS = {
   wallMs: 30_000,
@@ -30,6 +33,12 @@ export let LIMITS = {
   calls: 16,
   systemBytes: 33_554_432,
   scriptBytes: 65_536,
+}
+export let HOSTED_LIMITS = {
+  ...LIMITS,
+  wallMs: 40_000,
+  cpuMs: 30_000,
+  calls: 64,
 }
 export type Result = {
   content: { type: 'text'; text: string }[]
@@ -59,6 +68,7 @@ export type Evaluate = (
   bridge: {
     call(set: string, name: string, args: string): Promise<Result>
     read(id: string): Promise<unknown>
+    file?(app: string, args: string): Promise<Result>
   },
   signal: AbortSignal,
 ) => Promise<string>
@@ -90,6 +100,10 @@ let finished = (
  * heard by `refused` with the nested call it refused, as a runner hears its
  * own refusals. */
 export type Options = Pick<Opts, 'clock' | 'report' | 'refused'> & {
+  /** The app mount's tool arguments, scoped by the host. */
+  files?: FileScope
+  /** Execution limits advertised by this host. */
+  limits?: typeof LIMITS
   /** the runner each nested call reaches, asked anew for every call
    * (default: the execution's `run`) */
   current?: () => Promise<Pick<Runner, 'admit'>>
@@ -113,7 +127,13 @@ export let execute = async (
   strip: Strip,
   opts: Options = {},
 ): Promise<Answer> => {
-  let { clock = system, current = () => Promise.resolve(run), kept } = opts
+  let {
+    clock = system,
+    current = () => Promise.resolve(run),
+    kept,
+    limits = LIMITS,
+    files,
+  } = opts
   if (
     script.length > LIMITS.scriptBytes || bytes(script) > LIMITS.scriptBytes
   ) {
@@ -164,6 +184,7 @@ export let execute = async (
     set: string,
     name: string,
     args: string,
+    app?: string,
   ): Promise<Result> => {
     let id = mint()
     let named = typeof name == 'string' ? name : undefined
@@ -176,11 +197,16 @@ export let execute = async (
         typeof set != 'string' || typeof name != 'string' ||
         typeof args != 'string'
       ) throw new CallError('args', 'bridge takes JSON text')
-      if (
-        args.length > LIMITS.scriptBytes ||
-        new TextEncoder().encode(args).length > LIMITS.scriptBytes
-      ) {
-        throw new CallError('limit', TOO.args)
+      let most = app === undefined
+        ? LIMITS.scriptBytes
+        : Math.ceil(FILE_BYTES / 3) * 4 + LIMITS.scriptBytes
+      if (args.length > most || new TextEncoder().encode(args).length > most) {
+        throw new CallError(
+          'limit',
+          app === undefined
+            ? TOO.args
+            : 'app files are limited to 1 MiB per fs write',
+        )
       }
       try {
         input = JSON.parse(args)
@@ -196,11 +222,26 @@ export let execute = async (
           `tool ${path} is outside this execution scope`,
         )
       }
-      if (calls.length >= LIMITS.calls) {
-        throw new CallError('limit', TOO.calls)
+      if (calls.length >= limits.calls) {
+        throw new CallError(
+          'limit',
+          TOO.calls.replace('16', String(limits.calls)),
+        )
       }
       if (!input || typeof input != 'object' || Array.isArray(input)) {
         throw new CallError('args', 'tool arguments must be an object')
+      }
+      if (app !== undefined) {
+        let { op, path, base64, encoding } = input as Record<string, unknown>
+        input = {
+          op,
+          ...path === undefined ? {} : { path },
+          ...base64 === undefined ? {} : { base64 },
+          ...encoding === undefined ? {} : { encoding },
+          app,
+          ...files?.space ? { space: files.space } : {},
+          ...files?.app == app && files?.draft ? { draft: files.draft } : {},
+        }
       }
       let made: Receipt = { id, path: [set, name], pending: true }
       receipt = made
@@ -223,7 +264,11 @@ export let execute = async (
             text,
           })),
           ...(!failed || !admitted.tool.outputSchema
-            ? { structuredContent: structured(admitted.tool, answer) }
+            ? {
+              structuredContent: app !== undefined
+                ? valueIn(answer)
+                : structured(admitted.tool, answer),
+            }
             : {}),
           ...(failed ? { isError: true } : {}),
         }
@@ -252,18 +297,25 @@ export let execute = async (
   }
   let cancel = () => {}
   let timeout = new Promise<never>((_, reject) => {
-    cancel = clock.after(LIMITS.wallMs, () => {
+    cancel = clock.after(limits.wallMs, () => {
       active = false
       controller.abort()
-      reject(new CallError('timeout', 'execution exceeded 30 seconds'))
+      reject(new CallError('timeout', timedOut(limits.wallMs)))
     })
   })
   try {
     let text = await Promise.race([
-      source(script, entries, LIMITS.systemBytes, strip).then((modules) => {
-        controller.signal.throwIfAborted()
-        return evaluate(modules, { call, read }, controller.signal)
-      }),
+      source(script, entries, LIMITS.systemBytes, strip, limits.wallMs, !!files)
+        .then((modules) => {
+          controller.signal.throwIfAborted()
+          return evaluate(modules, {
+            call: (set, name, args) => call(set, name, args),
+            read,
+            ...files
+              ? { file: (app, args) => call('yaks', 'app_files', args, app) }
+              : {},
+          }, controller.signal)
+        }),
       timeout,
     ])
     active = false
@@ -342,12 +394,23 @@ type Definition = Omit<Tool, 'run' | 'inputSchema'> & {
 
 /** The code tool's public declaration from its providers, without building
  * their registry or publishing any of the nested tools' schemas. */
-export let definition = (providers: readonly Provider[]): Definition => ({
+export let definition = (
+  providers: readonly Provider[],
+  opts: Pick<Options, 'files' | 'limits'> = {},
+): Definition => ({
   ...fields,
   description:
-    'Use this for bulk reads, imports, reconciles and writes: keep source data and whole tool results inside a short JS/TS function body with return and await. ' +
+    (opts.files
+      ? 'Run JavaScript or TypeScript here. Use an async function body with return and await. Use fs for temporary files under /tmp and app draft files under /apps/<app>. Use fetch for HTTP requests. '
+      : 'Use this for bulk reads, imports, reconciles and writes: keep source data and whole tool results inside a short JS/TS function body with return and await. ') +
     pathsOf(providers) +
-    ' calls the same scoped tools, returning MCP content and structuredContent. Read schemas and rows, parse input, join, compare, build bundles and write them inside the script. Check isError before using a result. The answer is your return value plus a receipt per call (its id and path, and the error words of a call that failed). Large return values and tool results are kept in the graph; the answer gives their id, size, shape and preview. Use await results.read(id) inside a script to load a kept result, then filter or summarize it before returning. Omit script to read generated TypeScript declarations; search narrows discovery by tool name/description; offset/limit page it (at most 20). No ambient network, secrets or other bindings. 30s wall, 100ms CPU, 128MiB isolate, 16 calls, 64KiB script and arguments. Tool results over the 4MiB execution read budget and return values over 256KiB are kept; accidental results over 32MiB are refused for system safety. Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown. Durable workflows and human waits are separate.',
+    ' calls the same scoped tools, returning MCP content and structuredContent. Check isError before using a result. The answer is your return value plus a receipt per call. Large return values and tool results are kept in the graph; the answer gives their id, size, shape and preview. Use await results.read(id) to load a kept result. Omit script to read generated TypeScript declarations, with search, offset and limit for discovery. ' +
+    `${(opts.limits ?? LIMITS).wallMs / 1000}s wall, ${
+      (opts.limits ?? LIMITS).cpuMs
+    }ms CPU, 128MiB isolate, ${
+      (opts.limits ?? LIMITS).calls
+    } calls, 64KiB script and tool arguments. ` +
+    'Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown.',
 })
 
 /** One connector tool: omit script to discover generated declarations; supply
@@ -359,7 +422,7 @@ export let tool = (
   strip: Strip,
   opts: Options = {},
 ): Tool => ({
-  ...definition(registry.providers()),
+  ...definition(registry.providers(), opts),
   run: async (asked) => {
     let { script, search, offset = 0, limit = 20 } = argsOf(asked)
     let matches = catalog(registry).filter((e) =>
@@ -370,12 +433,13 @@ export let tool = (
     let value = script === undefined
       ? {
         declarations: declarations(matches.slice(start, end)) +
-          '\ndeclare const results: { read(id: string): Promise<any> }',
+          '\ndeclare const results: { read(id: string): Promise<any> }' +
+          (opts.files ? fileDeclarations : ''),
         tools: matches.slice(start, end).map((
           { path, description, inputSchema, outputSchema },
         ) => ({ path, description, inputSchema, outputSchema })),
         next: end < matches.length ? end : null,
-        limits: LIMITS,
+        limits: opts.limits ?? LIMITS,
       }
       : await execute(
         String(script),

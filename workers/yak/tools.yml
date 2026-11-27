@@ -222,7 +222,8 @@ app_files:
           doing: 'Restoring %{path}…'
           done: 'Restored %{path}'
   description: >-
-    Write, read and change an app's files. Every call requires app, usually
+    Write, read and change an app's files. JS and TS scripts can access the
+    same draft through code_mode's fs under /apps/<app>. Every call requires app, usually
     the app slug shown by app_list. Set op for every operation except write,
     which can be inferred from its file data: a read needs op: read. To see what an app holds, call
     it with op: list first.
@@ -296,11 +297,11 @@ sandbox_shell:
   description: >-
     Run one command in the person's sandbox in this space: a private Linux
     container where an agent runs commands and keeps files while it works.
-    Use it for what a browser and the other tools cannot do alone: run a
-    script over an attachment, reconcile a CSV, call an API, compile to
-    WebAssembly, build a site with any tool (Vite, Astro, Eleventy,
-    SvelteKit), run a generator. An app of html, css and js needs none of
-    it. Installed: Rust 1.98.1 with wasm32-unknown-unknown, wasm-bindgen
+    Use code_mode for JavaScript, TypeScript, HTTP requests and app draft files.
+    Use the sandbox when a command needs native tools, Python libraries, package
+    installs, a site build (Vite, Astro, Eleventy, SvelteKit) or compilation
+    to WebAssembly. Installed tools include Rust 1.98.1 with
+    wasm32-unknown-unknown, wasm-bindgen
     0.2.128 and wasm-opt 132; Python 3.13.15 with pip, pypdf, pdfplumber,
     python-docx, openpyxl, python-pptx, pandas and Pillow; pandoc and
     poppler-utils (pdftotext, pdftoppm, pdfinfo); LibreOffice Writer, Calc

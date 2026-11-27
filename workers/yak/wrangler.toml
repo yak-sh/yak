@@ -37,6 +37,7 @@ compatibility_flags = [
   "global_fetch_strictly_public",
   "enable_nodejs_process_v2",
   "enable_request_signal",
+  "enable_ctx_exports",
   "durable_object_io_tasks_prevent_eviction",
 ]
 

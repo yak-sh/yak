@@ -39,6 +39,42 @@ See
 [draft previews](https://yaks.app/docs/files.md#checking-a-draft-with-app_preview)
 for the private URL, examples and limits.
 
+## JavaScript and TypeScript Scripts
+
+Use `code_mode` to run a JavaScript or TypeScript async function body. Use
+`return` for the answer and `await` for file, HTTP and tool calls.
+
+```ts ignore
+const report = JSON.parse(
+  await fs.readFile('/apps/reports/report.json', 'utf8'),
+)
+const checked: string = new Date().toISOString()
+await fs.writeFile('/tmp/checked.txt', checked)
+await fs.writeFile(
+  '/apps/reports/report.json',
+  JSON.stringify({ ...report, checked }),
+)
+return { checked }
+```
+
+- `fs.readFile`, `fs.writeFile`, `fs.readdir` and `fs.unlink` work under `/tmp`
+  and `/apps/<app>`. Use `fs.mkdir` under `/tmp`. App directories appear when
+  you write a file in them. `readFile(path, 'utf8')` returns text. Omit the
+  encoding to read bytes.
+- `/tmp` lives in memory for one run. `/apps/<app>` reads and writes the same
+  draft as `app_files`, with a 1 MiB limit per file read or write. Set `space`
+  for the app mount. Use `app` and `draft` to select a particular open draft for
+  that app. Release edits with `app_deploy`.
+- Use `fetch(url, options)` for HTTP requests, with up to 4 MiB per request
+  body. To call through a connection, pass the app as `app` and use its
+  connection sentinel where the service expects its credential. Egress resolves
+  the sentinel for destinations allowed by the connection.
+- Use `tools.yaks.<tool>(args)` for other platform tools and `results.read(id)`
+  for kept results. Call `code_mode` without `script` for declarations.
+- A run has up to 30 seconds of CPU, 40 seconds of elapsed time and 64 tool
+  calls, including app file operations. The answer includes the return value and
+  the receipts for calls the script started.
+
 ## When an app needs a worker
 
 Most apps do not need a worker. A page reads and writes the app's own graph

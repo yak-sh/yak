@@ -327,13 +327,15 @@ uploading the files a step makes, and the command to paste into Claude Code.
 
 ## Sandbox
 
-Each person has a private Linux container in each space, the **sandbox**, where
-an agent runs commands and keeps files while it works: a script over an
-attachment, a CSV reconciled against an app's data, an API call, a compile to
-WebAssembly, a site built with Vite or Astro. `sandbox_write` puts a file in,
-`sandbox_shell` runs a command, `sandbox_read` reads a file out, and
-`sandbox_ship` copies files into an app. Its files are temporary: only what
-`sandbox_ship` copied into an app is kept.
+Use `code_mode` for JavaScript and TypeScript scripts, HTTP requests and app
+draft files. See
+[JavaScript and TypeScript Scripts](https://yaks.app/docs/code#javascript-and-typescript-scripts).
+
+The **sandbox** is a private Linux container in each space for native tools,
+Python libraries, package installs, WebAssembly compilers and builds such as
+Vite or Astro. `sandbox_write` puts a file in, `sandbox_shell` runs a command,
+`sandbox_read` reads a file out, and `sandbox_ship` copies files into an app.
+Its files are temporary: only what `sandbox_ship` copied into an app is kept.
 
 Python includes pypdf and pdfplumber for PDFs, python-docx for Word, openpyxl
 for Excel, python-pptx for PowerPoint, pandas for CSV and tabular data, and

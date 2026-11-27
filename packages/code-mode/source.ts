@@ -1,5 +1,9 @@
 import type { Strip } from './mod.ts'
 import type { Entry } from './types.ts'
+import { fileModule } from './files.ts'
+
+export let timedOut = (wallMs: number) =>
+  `execution exceeded ${wallMs / 1000} seconds`
 
 /** What each limit says, with what to do instead. */
 export let TOO = {
@@ -21,12 +25,15 @@ export let source = async (
   most: number,
   strip: Strip,
   wallMs = 30_000,
+  files = false,
 ): Promise<Record<string, string>> => ({
+  ...files ? { 'files.js': fileModule } : {},
   'user.js': await strip(
     'user.ts',
-    `export default async function execute(tools, results) {\n${script}\n}`,
+    `export default async function execute(tools, results, fs) {\n${script}\n}`,
   ),
   'script.js': `import { WorkerEntrypoint } from 'cloudflare:workers';
+${files ? "import { filesystem } from './files.js';" : ''}
 const wait = scheduler.wait.bind(scheduler);
 const race = Promise.race.bind(Promise);
 const stringify = JSON.stringify.bind(JSON);
@@ -36,7 +43,9 @@ export default class extends WorkerEntrypoint {
   async run(bridge) {
     let timer = new Controller();
     let cancel = timer.abort.bind(timer);
-    let deadline = wait(${wallMs}, {signal:timer.signal}).then(() => ({error:'execution exceeded 30 seconds'}));
+    let deadline = wait(${wallMs}, {signal:timer.signal}).then(() => ({error:${
+    JSON.stringify(timedOut(wallMs))
+  }}));
     try {
       let tools = Object.create(null);
       for (let [set, name] of ${JSON.stringify(entries.map((e) => e.path))}) {
@@ -63,7 +72,9 @@ export default class extends WorkerEntrypoint {
       tools = named(tools, (k) => \`tools.\${k} is not a tool set; the sets are \`, () => Object.keys(tools).map((s) => 'tools.' + s).join(', '));
       let work = async () => {
         let {default: execute} = await import('./user.js');
-        let value = await execute(tools, {read: (id) => bridge.read(id)});
+        let value = await execute(tools, {read: (id) => bridge.read(id)}${
+    files ? ', filesystem((app, args) => bridge.file(app, args))' : ''
+  });
         return {value: value === undefined ? null : value};
       };
       let text = stringify(await race([work(), deadline]));

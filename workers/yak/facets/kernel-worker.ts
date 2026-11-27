@@ -12,6 +12,7 @@
 import { incoming } from '@yaks/platform/app-outbound'
 import {
   DurableObject,
+  exports as loopback,
   RpcTarget,
   waitUntil,
   WorkerEntrypoint,
@@ -44,6 +45,9 @@ let shelved = (env: Env): Env => ({
 // first of them.
 let agentEnv = async () => {
   let { evaluator } = await import('../code-runtime.ts')
+  type ScriptOutbound = (opts: {
+    props: { caller?: Caller }
+  }) => import('../code-runtime.ts').Outbound
   return (env: Env): Env => ({
     ...shelved(env),
     ...(env.LOADER
@@ -56,7 +60,13 @@ let agentEnv = async () => {
             read(id: string) {
               return bridge.read(id)
             }
-          }()),
+            file(app: string, args: string) {
+              return bridge.file!(app, args)
+            }
+          }(), (caller) =>
+          (loopback as { ScriptOutbound: ScriptOutbound }).ScriptOutbound({
+            props: caller ? { caller } : {},
+          })),
       }
       : {}),
   })
@@ -317,6 +327,11 @@ export let classes: Record<string, Deferred> = {
           (await import('../index.ts')).default.fetch(asked, env),
       )
     return { send, fetch: (req: Request) => incoming(req, send) }
+  }),
+  ScriptOutbound: entered(WorkerEntrypoint, ['fetch'], async (ctx, env) => {
+    let { scriptOutbound } = await import('../outbound.ts')
+    let { caller } = (ctx as { props: { caller?: Caller } }).props
+    return { fetch: (req: Request) => scriptOutbound(req, env, caller) }
   }),
   // A sandbox container's calls to this platform and its spaces, handed here
   // by yak-sandbox (sandbox/index.ts), which holds the container but not the
