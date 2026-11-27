@@ -9,7 +9,8 @@
     "./time": "./time.ts",
     "./constraints": "./constraints.ts",
     "./runtime": "./runtime.ts",
-    "./wire": "./wire.ts"
+    "./wire": "./wire.ts",
+    "./minted": "./minted.ts"
   },
   "license": "Apache-2.0",
   "description": "Loads and checks component vocabularies expressed as JSON Schema, and reads their property types, references, display ordering, tool declarations, rules and effects.",

@@ -281,6 +281,9 @@ declaration (M-17871). Two shapes of one thing is the bug, so a rename is a
 rename: done everywhere in one change, with the stored data migrated
 (`data-migration`), including every app store and kept version.
 
+Never write a `$id` by hand: `deno task test` (or `deno task vocab`) mints one
+into the vocab.json for each new word, and you commit it with the word.
+
 A description has one home too: a component's lives in its declaration, where
 agents, the inspector and the MCP schema all read it; a package's lives in its
 deno.json, which jsr publishes. It is a sentence a stranger can use.

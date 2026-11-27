@@ -46,6 +46,11 @@ if (driver) {
   // keeps them, as a run here formats them. A report of past results reads
   // this checkout, and stays here.
   if (!reportOnly) {
+    // A word without a `$id` gets one written into its vocab.json, for the
+    // author to commit with it; the change then carries it, and is formatted
+    // with the rest (packages/cli/vocab-ids.ts).
+    let { mintIds } = await import('../packages/cli/vocab-ids.ts')
+    await mintIds(new URL('../', import.meta.url))
     let code = await onRunner('test', Deno.args, async (at) => {
       if (Deno.args.includes('--all')) return
       let { changes } = await import('./test-changes.ts')

@@ -7,7 +7,8 @@
 // two commits, one importing a name the other has yet to export. So a command
 // started from a checkout loads only the land lock (@yaks/git/hold, whose one
 // import is @yaks/file/io, which imports Node's alone), waits out a landing,
-// loads the launcher and reads the checkout under that lock, held shared, and
+// loads the launcher and reads the checkout under that lock, held shared
+// (`yak serve` first mints the vocabulary's missing ids into it), and
 // runs, in this process, the copy of this module in a snapshot of it
 // (./runtime.ts `launch`), a tree nothing rewrites while a process runs from
 // it. A release from JSR, an install without `.git`, and the snapshot itself
@@ -61,6 +62,13 @@ export let start = async (argv: string[]): Promise<void> => {
     ? await steady(fileURLToPath(root))
     : undefined
   if (release) {
+    // `yak serve` mints a `$id` for each word its checkout's vocab.json files
+    // lack (./vocab-ids.ts), with no landing under way, before the snapshot
+    // takes the checkout. A failure leaves the words held by their labels.
+    if (argv[0] == 'serve') {
+      await import('./vocab-ids.ts').then(({ mintIds }) => mintIds(root))
+        .catch((error) => console.error('yak serve: vocab ids:', error))
+    }
     let { launch } = await import('./runtime.ts').catch((error) => {
       release()
       throw error

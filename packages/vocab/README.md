@@ -75,6 +75,7 @@ edit is a new document.
 | `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolGrammar`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                                                                                            |
 | `@yaks/vocab/time`        | `timeSpan`, `timeInstant`, `isTimeLiteral`, `unitMs`, `Span`: the time grammar (see [Time phrases](#time-phrases)); @yaks/query re-exports them                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `@yaks/vocab/constraints` | `Factor`, `Term`, `Score`, `NumericConstraint`, `numberOf`, `constraintErrors`                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `@yaks/vocab/minted`      | `minted`: a vocab.json's text with a `$id` minted for each word that has none                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ## The format
 
@@ -422,7 +423,17 @@ A document carries identities in JSON Schema's own `$id`, as `urn:uuid:…`: the
 document's `$id` is its namespace's identity, each `$defs` entry's its
 component's, each property schema's its property's, and each `kinds` entry's its
 kind's. The keys they are written under are labels, which may change while the
-identity stays. The tools mint a `$id`; nobody writes one by hand.
+identity stays.
+
+Nobody writes a `$id` by hand. `minted(text, mint)` from `@yaks/vocab/minted`
+gives a vocab.json's text a `$id` for every word that lacks one, the document's
+included, and keeps the rest of the text as written. The tools that read a
+checkout's vocabularies run it over each packages/*/vocab.json with
+@yaks/graph's `mint()`, like a lockfile: `yak serve`, the test runner and
+`deno task vocab` (packages/cli/vocab-ids.ts). The author commits the ids with
+the word. An `extends` entry gets none, since it is the component it adds to; a
+kind of its own component's name shares the component's. Nothing refuses a word
+without a `$id`.
 
 A namespace's label is the package's name (`@yaks/model`) or the app's address
 (`yourname/trip`), written into the document as `label` by the host that loads
