@@ -774,11 +774,13 @@ test('app_stats with no app counts every app of the space', async () => {
               {
                 app: quiet,
                 day: new Date().toISOString().slice(0, 10),
+                kind: 'person',
                 views: 2,
               },
               {
                 app: busy,
                 day: new Date().toISOString().slice(0, 10),
+                kind: 'person',
                 views: 9,
               },
             ]
