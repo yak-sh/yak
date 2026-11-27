@@ -302,6 +302,35 @@ let row = (id: string, top: number, css = '') =>
     css ? ` data-css="${css}"` : ''
   }>${id}</p>`
 
+test('leaving keeps the latest visible content and pane position without changing the live page', () => {
+  let rows = [-1900, -1400, -400, 100, 1400, 2400]
+    .map((top, i) => row(`r${i}`, top)).join('')
+  let t = tab(
+    `<html><body><h1 ${OWN} data-at="0 50">Updates</h1><main ${SCROLL} data-at="100 700">${rows}</main></body></html>`,
+  )
+  t.load()
+  t.document.querySelector('h1')!.textContent = 'Latest updates'
+  t.document.getElementById('r3')!.textContent = 'Newest visible update'
+  let pane = t.document.querySelector('main')!
+  Object.assign(pane, {
+    scrollHeight: 9000,
+    clientHeight: 700,
+    scrollTop: 3000,
+  })
+  t.unload()
+  assertEquals(t.sent.length, 2)
+
+  let kept = parseHTML(t.sent[1].html).document
+  assertEquals(kept.querySelector('h1')!.textContent, 'Latest updates')
+  assertEquals(kept.getElementById('r3')!.textContent, 'Newest visible update')
+  assertEquals(kept.querySelector('main')!.getAttribute(SCROLL), '1500')
+  assertEquals(kept.getElementById('r0'), null)
+  assertEquals(t.document.getElementById('r0')!.textContent, 'r0')
+  assertEquals(pane.scrollTop, 3000)
+  let shell = parseHTML(t.sent[1].shell!).document
+  assertEquals(shell.querySelector(`h1[${OWN}]`)!.textContent, '')
+})
+
 test('a picture of a long conversation keeps only the rows within a screen of what shows', () => {
   let rows = [-2400, -1900, -1400, -900, -400, 100, 600]
     .map((top, i) => row(`r${i}`, top)).join('')

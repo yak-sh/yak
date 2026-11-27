@@ -98,8 +98,8 @@ let BLOCK = /^(block|flex|grid|table|list-item|flow-root)$/
 let placed = (s: CSSStyleDeclaration) =>
   s.gridRowStart != 'auto' || s.gridColumnStart != 'auto'
 
-// Takes what lies beyond `within` out of `copy`, the copy of `live`. A child
-// that is out of the flow goes freely. One in it goes only from a stacked
+// Leaves out what lies beyond `within`. A child that is out of the flow
+// goes freely. One in it goes only from a stacked
 // parent, and the height gone above what shows is the pane's `shift`, which
 // its scroll position gives back. The address's `target` always stays. Only
 // what holds a pane (`holds`) or reaches past `within` is looked into.
@@ -107,23 +107,23 @@ type Trim = {
   win: Window
   target: Element | null
   holds: Set<Element>
+  omitted: Set<Element>
+  positions: Map<Element, string>
 }
 let beyond = (
   t: Trim,
   live: Element,
-  copy: Element,
   style: CSSStyleDeclaration,
   within: Reach,
 ) => {
-  let copies = [...copy.children]
   let flow = stacked(style)
   let removed = Infinity, kept = Infinity
-  for (let [i, e] of [...live.children].entries()) {
+  for (let e of live.children) {
     if (e.namespaceURI != HTML) continue
     let s = t.win.getComputedStyle(e)
     if (s.display == 'none') continue
     if (s.display == 'contents') {
-      beyond(t, e, copies[i], style, within)
+      beyond(t, e, style, within)
       continue
     }
     let r = e.getBoundingClientRect()
@@ -133,7 +133,7 @@ let beyond = (
     let above = r.bottom < within.top
     let out = (above || r.top > within.bottom) && !e.contains(t.target)
     if (out && (loose || flowing)) {
-      copies[i].remove()
+      t.omitted.add(e)
       if (flowing && above) removed = Math.min(removed, r.top)
       continue
     }
@@ -150,18 +150,18 @@ let beyond = (
     let inner = pane
       ? reach(r.top, Math.min(r.height, t.win.innerHeight))
       : within
-    beyond(t, e, copies[i], s, inner)
-    if (pane) unshift(copies[i], inner)
+    beyond(t, e, s, inner)
+    if (pane) unshift(t.positions, e, inner)
   }
   if (removed < kept && kept < Infinity) within.shift += kept - removed
 }
 let HTML = 'http://www.w3.org/1999/xhtml'
 
 // A pane scrolled to a place is scrolled less by what went above it.
-let unshift = (copy: Element, pane: Reach) => {
-  let at = copy.getAttribute(SCROLL)
+let unshift = (positions: Map<Element, string>, e: Element, pane: Reach) => {
+  let at = positions.get(e)
   if (at && at != 'end' && pane.shift) {
-    copy.setAttribute(SCROLL, String(Math.max(0, Number(at) - pane.shift)))
+    positions.set(e, String(Math.max(0, Number(at) - pane.shift)))
   }
 }
 
@@ -269,22 +269,52 @@ let linked = (win: Window) => {
   }
 }
 
+// Clone retained branches in one piece when they need no changes. Copy the
+// paths to omitted elements, scroll panes and linked sheets one node at a
+// time so a long list never has to be cloned just to cut it back down.
+let copyPicture = (
+  root: Element,
+  omitted: Set<Element>,
+  positions: Map<Element, string>,
+  sources: Set<Element>,
+) => {
+  let shallow = new Set<Element>()
+  let path = (e: Element | null) => {
+    for (; e && !shallow.has(e); e = e.parentElement) shallow.add(e)
+  }
+  for (let e of omitted) path(e.parentElement)
+  for (let e of positions.keys()) path(e)
+  for (let e of sources) path(e)
+  let sheets: [Element, Element][] = []
+  let copy = (e: Element): Element => {
+    if (!shallow.has(e)) return e.cloneNode(true) as Element
+    let shown = e.cloneNode(false) as Element
+    let at = positions.get(e)
+    if (at != null) shown.setAttribute(SCROLL, at)
+    if (sources.has(e)) sheets.push([e, shown])
+    for (let node of e.childNodes) {
+      if (node.nodeType != 1) shown.appendChild(node.cloneNode(true))
+      else if (!omitted.has(node as Element)) {
+        shown.appendChild(copy(node as Element))
+      }
+    }
+    return shown
+  }
+  return { shown: copy(root), sheets }
+}
+
 /** The snapshot of the page in `win` as it shows now, without what is not
  * shown, and its shell where it has parts of its own. */
 export let snapshot = (win: Window): Snapshot => {
   let { documentElement: root, scrollingElement: page } = win.document
-  let shown = root.cloneNode(true) as Element
-  let lives = root.querySelectorAll(SHEETS)
-  let sheets = [...shown.querySelectorAll(SHEETS)].map((copy, i) =>
-    [lives[i], copy] as [Element, Element]
-  )
-  if (page?.scrollTop) shown.setAttribute(SCROLL, scroll(page))
+  let omitted = new Set(root.querySelectorAll(UNSEEN))
+  let positions = new Map<Element, string>()
+  let at = page?.scrollTop ? scroll(page) : root.getAttribute(SCROLL)
+  if (at != null) positions.set(root, at)
   let panes = root.querySelectorAll(`[${SCROLL}]`)
-  for (let [i, copy] of [...shown.querySelectorAll(`[${SCROLL}]`)].entries()) {
-    copy.setAttribute(SCROLL, scroll(panes[i]))
-  }
   let holds = new Set<Element>()
   for (let pane of panes) {
+    positions.set(pane, scroll(pane))
     for (
       let e: Element | null = pane;
       e && !holds.has(e);
@@ -295,14 +325,18 @@ export let snapshot = (win: Window): Snapshot => {
   }
   let view = reach(0, win.innerHeight)
   beyond(
-    { win, target: linked(win), holds },
+    { win, target: linked(win), holds, omitted, positions },
     root,
-    shown,
     win.getComputedStyle(root),
     view,
   )
-  unshift(shown, view)
-  for (let e of shown.querySelectorAll(UNSEEN)) e.remove()
+  unshift(positions, root, view)
+  let { shown, sheets } = copyPicture(
+    root,
+    omitted,
+    positions,
+    new Set(root.querySelectorAll(SHEETS)),
+  )
   carry(win, shown, sheets)
   let doc = (e: Element) => '<!doctype html>' + e.outerHTML
   let shell = shown.querySelector(`[${OWN}]`) &&
