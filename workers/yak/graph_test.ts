@@ -2073,7 +2073,9 @@ let journaled = await (async () => {
   for (let stmt of journalDdl(storeWords('app').vocab)) {
     if (stmt.t == 'create table' && stmt.name != 'journal_word') {
       drive.query(stmt)
-    } else if (stmt.t == 'create index') drive.query(stmt)
+    } else if (stmt.t == 'create index' && stmt.on != 'journal_word') {
+      drive.query(stmt)
+    }
   }
   drive.query({
     t: 'insert',
