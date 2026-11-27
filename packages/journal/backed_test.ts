@@ -18,7 +18,8 @@ import { edgeKeywords } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import type { Visibility } from '@yaks/graph/storage'
 import { ram } from '@yaks/ram'
-import { loadVocab, metaDoc } from '@yaks/vocab'
+import { derivedEid } from '@yaks/graph/identity'
+import { loadVocab, metaDoc, rowsOf } from '@yaks/vocab'
 import { type Backings, render } from '@yaks/sql'
 import { mem } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
@@ -61,7 +62,7 @@ let build = (
   ])
   apply([{ entity: { eid: 'p2' }, $delete: true, $actor: ada }])
   let described = ['page', 'entity'].map((name) => ({
-    entity: { eid: `$${name}` },
+    entity: { eid: rowsOf(vocab, derivedEid).comp(name) },
     _comp: { name },
   }))
   sync(g.apply(described, { trusted: true }))

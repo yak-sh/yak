@@ -144,14 +144,14 @@ lens.put([{ entity: { eid: 'cake' }, recipe: { title: 'Cake' } }])
 Object.values(versions(docs)) // [20261003140000]
 ```
 
-`lensesIn` reads entries ignored by `loadVocab`, derives the ordinary package
-and step identities, and validates each package's timestamp history. `described`
-produces missing rows. Steps are append-only: changing operations at an existing
-step or inserting a new step before a retained later step refuses instead of
-reinterpreting an old caller. `compile(rows, speaks)` composes the remaining
-steps and caches against their content and the package version map. Without
-`speaks` it starts at zero, for the mover. With current versions it returns
-identity functions.
+`lensesIn` reads entries ignored by `loadVocab`, derives the namespace's row
+(@yaks/vocab `labelled`) and step identities, and validates each package's
+timestamp history. `described` produces missing rows. Steps are append-only:
+changing operations at an existing step or inserting a new step before a
+retained later step refuses instead of reinterpreting an old caller.
+`compile(rows, speaks)` composes the remaining steps and caches against their
+content and the package version map. Without `speaks` it starts at zero, for the
+mover. With current versions it returns identity functions.
 
 The plugin declares `$speaks`, a package-eid to latest-timestamp map on writes.
 Reads carry the same map in `ReadOpts.speaks`. No map means current: without

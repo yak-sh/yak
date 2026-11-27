@@ -583,8 +583,8 @@ test("an effect's page says what owes it a run, each name linked to its page", (
     let said of [
       'Close the task when it is done.',
       '3 tries',
-      `href="/${compEid('task')}"`,
-      `href="/${propEid('task', 'status')}"`,
+      `href="/${compEid(vocab, 'task')}"`,
+      `href="/${propEid(vocab, 'task', 'status')}"`,
       `href="/?.task"`,
     ]
   ) assert(page.includes(said), said)
@@ -598,7 +598,7 @@ test("an effect's page under another head says what it does and what owes it a r
       'Close the task when it is done.',
       '3 tries',
       'Owed by',
-      `href="/${propEid('task', 'status')}"`,
+      `href="/${propEid(vocab, 'task', 'status')}"`,
     ]
   ) assert(body.includes(said), said)
   assert(!body.includes('Head_Title'))

@@ -396,7 +396,11 @@ let Handlers = ({ io, owed }: { io: Io; owed: Owed[] }) => {
               h(
                 Cell,
                 {},
-                h('a', { href: io.link(effectEid(o.handler)) }, o.handler),
+                h(
+                  'a',
+                  { href: io.link(effectEid(io.vocab, o.handler)) },
+                  o.handler,
+                ),
               ),
               h(
                 Cell,

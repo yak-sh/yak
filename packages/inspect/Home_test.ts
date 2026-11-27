@@ -50,8 +50,8 @@ let vocab = loadVocab([{
 }, { label: '@test/more', $defs: {} }], [edgeKeywords])
 
 let names = new Map([
-  ...vocab.all.map((n) => [compEid(n), n] as const),
-  ...['@test/work', '@test/more'].map((p) => [packEid(p), p] as const),
+  ...vocab.all.map((n) => [compEid(vocab, n), n] as const),
+  ...['@test/work', '@test/more'].map((p) => [packEid(vocab, p), p] as const),
 ])
 
 // Three sets of components: 3 tasks, 2 done tasks and 4 blocks edges.

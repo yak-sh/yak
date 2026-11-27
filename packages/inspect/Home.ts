@@ -31,7 +31,7 @@
 import { groupBy } from '@yaks/fp'
 import { type ComponentChildren, h, type JSX } from 'preact'
 import { Head, Loading, Tabs, Value } from '@yaks/ui'
-import { type EffectDecl, effectsIn } from '@yaks/vocab'
+import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'
 import type { Bundle, Io } from './host.ts'
 import { type Census, useCensus } from './census.ts'
 import { Grid } from './grid.ts'
@@ -61,7 +61,7 @@ export let SLICES = [
 // Each slice's heading, and the component its notes are about: what its
 // rows are made of.
 let SLICE: Record<string, { heading: string; concept: string }> = {
-  packages: { heading: 'Packages', concept: '_package' },
+  packages: { heading: 'Packages', concept: '_namespace' },
   components: { heading: 'Components', concept: '_comp' },
   kinds: { heading: 'Kinds', concept: '_kind' },
   relations: { heading: 'Relations', concept: 'edge' },
@@ -97,20 +97,20 @@ type Schema = {
 // The rows of the package tree, each made of the vocabulary component it
 // stands for: a property's row names its component as the graph does, by
 // its eid.
-let packRow = (name: string): Bundle => ({
-  entity: { eid: packEid(name) },
-  _package: { name },
+let packRow = (vocab: Vocab) => (name: string): Bundle => ({
+  entity: { eid: packEid(vocab, name) },
+  _namespace: { name },
 })
-let compRow = (name: string): Bundle => ({
-  entity: { eid: compEid(name) },
+let compRow = (vocab: Vocab) => (name: string): Bundle => ({
+  entity: { eid: compEid(vocab, name) },
   _comp: { name },
 })
-let propRow = (comp: string, prop: string): Bundle => ({
-  entity: { eid: propEid(comp, prop) },
-  _prop: { name: prop, comp: compEid(comp) },
+let propRow = (vocab: Vocab, comp: string, prop: string): Bundle => ({
+  entity: { eid: propEid(vocab, comp, prop) },
+  _prop: { name: prop, comp: compEid(vocab, comp) },
 })
-let effectRow = ({ name }: EffectDecl): Bundle => ({
-  entity: { eid: effectEid(name) },
+let effectRow = (vocab: Vocab) => ({ name }: EffectDecl): Bundle => ({
+  entity: { eid: effectEid(vocab, name) },
   _effect: { name },
 })
 
@@ -134,7 +134,7 @@ type Node = {
 let PackageTree = ({ io, census, packages, declared, effects }: Schema) => {
   let { carried, sets, tally, ready } = census
   let vocab = io.vocab
-  let names = new Map(vocab.all.map((n) => [compEid(n), n]))
+  let names = new Map(vocab.all.map((n) => [compEid(vocab, n), n]))
   // How many entities carry any of a package's components.
   let reach = new Map<string, number>()
   for (let s of sets) {
@@ -149,8 +149,8 @@ let PackageTree = ({ io, census, packages, declared, effects }: Schema) => {
     [...effects.values()].flat().map((x) => [x.name, x.description]),
   )
   let read = (b: Bundle): Node => {
-    if (b._package) {
-      let name = str(b, '_package', 'name')
+    if (b._namespace) {
+      let name = str(b, '_namespace', 'name')
       let comps = declared.get(name) ?? []
       let acts = effects.get(name) ?? []
       return {
@@ -165,7 +165,7 @@ let PackageTree = ({ io, census, packages, declared, effects }: Schema) => {
         ].filter(Boolean).join(' · '),
         about: vocab.docs.find((d) => d.label == name)?.description,
         entities: reach.get(name) ?? 0,
-        kids: [...comps.map(compRow), ...acts.map(effectRow)],
+        kids: [...comps.map(compRow(vocab)), ...acts.map(effectRow(vocab))],
       }
     }
     if (b._effect) {
@@ -181,7 +181,7 @@ let PackageTree = ({ io, census, packages, declared, effects }: Schema) => {
     }
     if (b._comp) {
       let name = str(b, '_comp', 'name')
-      let kids = vocab.props(name).map((p) => propRow(name, p))
+      let kids = vocab.props(name).map((p) => propRow(vocab, name, p))
       return {
         name,
         link: chip(io, name),
@@ -214,7 +214,7 @@ let PackageTree = ({ io, census, packages, declared, effects }: Schema) => {
     io,
     id: key('schema', 'Packages'),
     local: true,
-    rows: packages.map(packRow),
+    rows: packages.map(packRow(io.vocab)),
     columns: [
       { name: 'name', value: (b) => node(b).name, cell: (b) => node(b).link },
       { name: 'holds', value: (b) => node(b).holds, cell: (b) => node(b).said },
@@ -248,7 +248,7 @@ let ComponentList = ({ io, census: { carried, ready } }: Schema) => {
     io,
     id: key('schema', 'Components'),
     local: true,
-    rows: comps.map(compRow),
+    rows: comps.map(compRow(vocab)),
     columns: [
       {
         name: 'component',
@@ -335,7 +335,7 @@ let RelationList = ({ io, census: { carried, ready } }: Schema) => {
     io,
     id: key('schema', 'Relations'),
     local: true,
-    rows: relations(io).toSorted().map(compRow),
+    rows: relations(io).toSorted().map(compRow(vocab)),
     columns: [
       {
         name: 'relation',
@@ -445,7 +445,7 @@ let BODY: Record<
 // a slice are about the component its rows are made of.
 let Slice = ({ slice, ...m }: Schema & { slice: string }) => {
   let { heading, concept } = SLICE[slice]
-  let eid = compEid(concept)
+  let eid = compEid(m.io.vocab, concept)
   let { sub, Body, size } = BODY[slice]
   return h(
     Part,

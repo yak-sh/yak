@@ -104,7 +104,7 @@ export let under = (
 /** What a page calls the thing its notes are about: a component, a property
  * or a package by its name, anything else by its id. */
 export let about = (io: Io, e: Bundle): string =>
-  e._comp || e._prop || e._package
+  e._comp || e._prop || e._namespace
     ? str(e, 'doc', 'title') || io.id(e)
     : io.id(e)
 

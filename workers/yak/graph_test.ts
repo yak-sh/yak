@@ -2086,7 +2086,7 @@ let journaled = await (async () => {
     )).json() as Bundle[]
   let [schema] = await query('._comp.name=recipe&?doc')
   let props = await query(`._prop.comp=${schema.entity.eid}`)
-  let packages = rows('_package').map((row) => row.name)
+  let packages = rows('_namespace').map((row) => row.name)
   // A table no write has raised holds nothing either.
   let described = ['_comp', '_prop', '_vocab'].flatMap((name) =>
     named(ctx, { type: 'table', name }).length ? rows(name) : []

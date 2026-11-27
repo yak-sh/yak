@@ -405,7 +405,7 @@ let useComp = ({ e, io }: Props) => {
   let got = io.ask({
     props: `._prop&._prop.comp=${e.entity.eid}&.order=_prop.ord&*`,
   })
-  let pkg = str(e, '_comp', 'package')
+  let pkg = str(e, '_comp', 'namespace')
   useNamed(io, [pkg])
   let n = census.carried[name]
   return {

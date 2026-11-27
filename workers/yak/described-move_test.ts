@@ -5,6 +5,7 @@ import { assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { graph, identityEid } from '@yaks/graph'
+import { packageEid } from '@yaks/lens'
 import { ram } from '@yaks/ram'
 import { loadVocab, metaDoc, type VocabDoc } from '@yaks/vocab'
 import { codeDoc } from '../../packages/code/vocab.ts'
@@ -44,10 +45,10 @@ let storage = ram(vocab)
 let was = graph({ vocab, storage, plugins: [edges(vocab)] })
 await was.apply(await described(was, vocab.docs), { trusted: true })
 let g = graph({ vocab, storage, plugins: [edges(vocab), describing] })
-let own = identityEid('_package', ['@t/lens'])
+let own = packageEid('@t/lens')
 await g.apply([
   { entity: { eid: 'mine' }, doc: { title: 'Lisbon' }, outing: { day: 'mon' } },
-  { entity: { eid: own }, _package: { name: '@t/lens' } },
+  { entity: { eid: own }, _namespace: { name: '@t/lens' } },
   {
     entity: { eid: identityEid('_lens', [own, '1']) },
     _lens: { package: own, step: 1 },

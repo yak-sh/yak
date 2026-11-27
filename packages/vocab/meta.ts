@@ -20,7 +20,7 @@ export let coreVocabulary: JsonSchema = coreDoc
 // The meta-schema: what a well-formed vocabulary document looks like.
 export let metaSchema: JsonSchema = schemaDoc
 
-/** The meta vocabulary: `_package`, `_comp`, `_kind`, `_extends`, `_prop`,
+/** The meta vocabulary: `_namespace`, `_comp`, `_kind`, `_extends`, `_prop`,
  * `_effect` and the `_before` relation, the components a vocabulary is
  * described in as entities (./bundles.ts). Its names start with `_`, which no
  * authored name can: it loads like any other document, and `storable` refuses

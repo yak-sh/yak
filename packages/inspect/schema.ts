@@ -1,34 +1,43 @@
 /**
- * The links every page makes to the vocabulary: a package's page, a
- * component's, a property's and an effect's, by the eids their names derive
- * (@yaks/vocab identifies each `_package`, `_comp` and `_effect` by its name
- * and each `_prop` by its component and its name), so a name links to its page
- * without asking the graph where that is.
+ * The links every page makes to the vocabulary: a namespace's page, a
+ * component's, a property's and an effect's, by the rows the vocabulary
+ * describes them in (@yaks/vocab `rowsOf`): each word's identity, or where its
+ * labels derive for a word without one, so a name links to its page without
+ * asking the graph where that is.
  *
  * @module
  */
 
 import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
-import { identityEid } from '@yaks/graph/identity'
+import { derivedEid } from '@yaks/graph/identity'
+import { rowsOf, type Vocab } from '@yaks/vocab'
 import { Body } from '@yaks/ui'
 import type { Io } from './host.ts'
 
-/** The eid of the package named `name`. */
-export let packEid = (name: string): string => identityEid('_package', [name])
+// Each vocabulary's rows, worked out once.
+let held = new WeakMap<Vocab, ReturnType<typeof rowsOf>>()
+let rows = (vocab: Vocab) =>
+  held.get(vocab) ?? held.set(vocab, rowsOf(vocab, derivedEid)).get(vocab)!
+
+/** The eid of the namespace labelled `name`. */
+export let packEid = (vocab: Vocab, name: string): string =>
+  rows(vocab).namespace(name)
 
 /** The eid of the component named `name`. */
-export let compEid = (name: string): string => identityEid('_comp', [name])
+export let compEid = (vocab: Vocab, name: string): string =>
+  rows(vocab).comp(name)
 
 /** The eid of the effect named `name`. */
-export let effectEid = (name: string): string => identityEid('_effect', [name])
+export let effectEid = (vocab: Vocab, name: string): string =>
+  rows(vocab).effect(name)
 
 /** The eid of the property `prop` of the component named `name`. */
-export let propEid = (name: string, prop: string): string =>
-  identityEid('_prop', [compEid(name), prop])
+export let propEid = (vocab: Vocab, name: string, prop: string): string =>
+  rows(vocab).prop(name, prop)
 
 /** A component's name in its hue, linked to its page. */
 export let chip = (io: Io, name: string): JSX.Element => {
-  let eid = compEid(name)
+  let eid = compEid(io.vocab, name)
   let b = io.get(eid) ?? { entity: { eid }, _comp: { name } }
   return io.show(b, 'Inspect.Reference.Inline') as JSX.Element
 }

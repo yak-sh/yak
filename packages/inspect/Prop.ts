@@ -65,7 +65,7 @@ type Part_ = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 let about = (io: Io, e: Bundle): ComponentChildren[] => {
   let [name] = split(e)
   let p = comp(e, '_prop')
-  let pkg = str(e, '_prop', 'package')
+  let pkg = str(e, '_prop', 'namespace')
   let ref = str(e, '_prop', 'ref')
   let listed = (k: string) => p[k] != null ? [` · ${k} ${face(p[k])}`] : []
   return [
@@ -160,7 +160,7 @@ let Values = ({ e, io, notes }: Part_) => {
 let useProp = ({ e, io }: Props) => {
   let notes = usePageNotes(io, e, HEADINGS)
   let [name, prop] = split(e)
-  useNamed(io, [str(e, '_prop', 'package')])
+  useNamed(io, [str(e, '_prop', 'namespace')])
   return {
     notes,
     text: str(e, 'doc', 'body'),
@@ -172,7 +172,7 @@ let useProp = ({ e, io }: Props) => {
         io,
         notes,
         heading: 'Recent writes',
-        where: `comp=${compEid(name)}`,
+        where: `comp=${compEid(io.vocab, name)}`,
         prop,
         once: true,
       }),

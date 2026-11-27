@@ -7,15 +7,17 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
-import { type Bundle, graph, identities } from '@yaks/graph'
+import { type Bundle, graph } from '@yaks/graph'
+import { derivedEid, mint } from '@yaks/graph/identity'
 import { ram } from '@yaks/ram'
 import {
   effectsIn,
   fromBundles,
-  type Ids,
   type Keywords,
+  labelled,
   loadVocab,
   metaDoc,
+  rowsOf,
   saveOf,
   toBundles,
   type VocabDoc,
@@ -118,12 +120,16 @@ let words: Keywords[] = [
   { uri: 'https://example.com/t', comp: ['prefix'], prop: ['store'] },
 ]
 
-// Ids as plain strings, for bundles that never meet a graph.
-let plain: Ids = (comp, v) => `${comp}:${Object.values(v).join('.')}`
+// Rows where their labels derive as the plain sentence, for bundles that never
+// meet a graph.
+let plain = (s: string) => s
+type Derive = typeof plain
 
 let load = (docs: VocabDoc[]) => loadVocab(docs, words)
-let bundlesOf = (docs: VocabDoc[], id: Ids) =>
-  docs.flatMap((d) => toBundles(d, id))
+// Each document's rows, a name it says of another's found in the vocabulary
+// they load as together, as a host reads them.
+let bundlesOf = (docs: VocabDoc[], derive: Derive, vocab = load(docs)) =>
+  docs.flatMap((d) => toBundles(d, derive, vocab))
 
 test('a vocabulary loads back from its bundles as it was', () => {
   let docs = [kitchen, tagger, docDoc]
@@ -208,6 +214,104 @@ test('a union type, the declared order and every keyword survive', () => {
   assertEquals(back.def('recipe')?.properties?.slug.minLength, 1)
 })
 
+// A vocabulary whose words carry identities, and a document extending one of
+// them: by its `$id`, or by its label alone.
+let urn = () => `urn:uuid:${mint()}`
+let ided = (): VocabDoc => ({
+  $id: urn(),
+  label: '@t/pantry',
+  $defs: {
+    jar: {
+      $id: urn(),
+      component: true,
+      kind: true,
+      before: ['shelf'],
+      properties: { label: { $id: urn(), type: 'string' } },
+    },
+    shelf: { $id: urn(), component: true },
+    jar_count: { $id: urn(), effect: true, created: ['jar'] },
+  },
+  kinds: { shelf: { $id: urn(), is: ['shelf'] } },
+})
+let id = (s?: string) => s!.slice('urn:uuid:'.length)
+
+test('each row is its word’s $id, and the words read back with them', () => {
+  let pantry = ided()
+  let lids: VocabDoc = {
+    $id: urn(),
+    label: '@t/lids',
+    $defs: {
+      jar: {
+        $id: pantry.$defs!.jar.$id,
+        component: true,
+        extends: true,
+        properties: { lid: { $id: urn(), type: 'boolean' } },
+      },
+    },
+  }
+  let rows = bundlesOf([pantry, lids], plain)
+  let at = (comp: string, name: string) =>
+    rows.find((b) => (b[comp] as { name?: string })?.name == name)!
+  let { jar } = pantry.$defs!
+  assertEquals(at('_namespace', '@t/pantry').entity.eid, id(pantry.$id))
+  assertEquals(at('_comp', 'jar').entity.eid, id(jar.$id))
+  assertEquals(at('_prop', 'label').entity.eid, id(jar.properties!.label.$id))
+  let lid = at('_prop', 'lid')._prop as Record<string, unknown>
+  assertEquals([lid.comp, lid.namespace], [id(jar.$id), id(lids.$id)])
+  assertEquals(at('_kind', 'shelf').entity.eid, id(pantry.kinds!.shelf.$id))
+  assertEquals(
+    at('_effect', 'jar_count').entity.eid,
+    id(pantry.$defs!.jar_count.$id),
+  )
+  // A component's own kind is its word, so its row derives from its identity.
+  assertEquals(at('_kind', 'jar').entity.eid, `_kind|${id(jar.$id)}`)
+  let [edge] = rows.filter((b) => b._before)
+  assertEquals(edge.edge, {
+    from: `_kind|${id(jar.$id)}`,
+    to: id(pantry.kinds!.shelf.$id),
+    ord: 0,
+  })
+  let back = fromBundles(rows)
+  assertEquals(back.map((d) => d.$id), [pantry.$id, lids.$id])
+  assertEquals(facts(load(back)), facts(load([pantry, lids])))
+})
+
+test('a renamed word keeps its rows', () => {
+  let pantry = ided()
+  let { jar, ...rest } = pantry.$defs!
+  let { label, ...props } = jar.properties!
+  let renamed: VocabDoc = {
+    ...pantry,
+    $defs: {
+      ...rest,
+      pot: { ...jar, properties: { ...props, name: label } },
+    },
+  }
+  let eids = (doc: VocabDoc) =>
+    toBundles(doc, plain).filter((b) => !b._kind).map((b) => b.entity.eid)
+  assertEquals(eids(renamed).sort(), eids(pantry).sort())
+})
+
+test('an extension without the $id finds its component by label', () => {
+  let pantry = ided()
+  let lids: VocabDoc = {
+    label: '@t/lids',
+    $defs: {
+      jar: {
+        component: true,
+        extends: true,
+        properties: { lid: { type: 'boolean' } },
+      },
+    },
+  }
+  let vocab = load([pantry, lids])
+  let [, ext] = toBundles(lids, plain, vocab)
+  assertEquals(
+    (ext._extends as { comp: string }).comp,
+    id(pantry.$defs!.jar.$id),
+  )
+})
+
 // The graph a front end keeps a vocabulary in: the meta vocabulary beside the
 // `doc` and `edge` its rows wear.
 let described = () => {
@@ -226,11 +330,10 @@ let described = () => {
     edgeDoc,
     metaDoc,
   ], [edgeKeywords])
-  let derive = identities(vocab)
-  let id: Ids = (comp, v) => derive[comp](v, { entity: { eid: '' } })
+  let id = labelled(derivedEid)
   let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab)] })
   let put = (docs: VocabDoc[]) =>
-    g.apply(bundlesOf(docs, id) as Bundle[], { trusted: true })
+    g.apply(bundlesOf(docs, derivedEid) as Bundle[], { trusted: true })
   let titles = async (q: string) =>
     (await g.read(whole(`${q} ?doc`))).map((b) =>
       (b.doc as { title: string }).title
@@ -249,7 +352,7 @@ test('the queries that describe a vocabulary answer from its entities', async ()
     '_effect',
     '_extends',
     '_kind',
-    '_package',
+    '_namespace',
     '_prop',
     '_vocab',
     'doc',
@@ -260,13 +363,13 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   ])
   // Every kind, and what makes one.
   assertEquals(
-    (await titles('._kind.package._package.name=@t/kitchen')).sort(),
+    (await titles('._kind.namespace._namespace.name=@t/kitchen')).sort(),
     ['A meal', 'note', 'recipe'],
   )
   let [meal] = await g.read('._kind.name=meal ?doc')
   assertEquals(meal._kind, {
     name: 'meal',
-    package: id('_package', { name: '@t/kitchen' }),
+    namespace: id.namespace('@t/kitchen'),
     is: ['recipe', 'menu'],
     with: { doc: true, note: { text: 'enjoy' } },
     prefix: 'M',
@@ -277,7 +380,7 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   // order its package declares them; another package's come after.
   assertEquals(
     await titles(
-      '._prop.comp._comp.name=recipe ._prop.package._package.name=@t/kitchen ' +
+      '._prop.comp._comp.name=recipe ._prop.namespace._namespace.name=@t/kitchen ' +
         '.order=_prop.ord',
     ),
     [
@@ -293,24 +396,23 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   )
   // What extends a component, what refers to it, and what it sorts before.
   assertEquals(
-    await titles('._prop.package._package.name=@t/tags'),
+    await titles('._prop.namespace._namespace.name=@t/tags'),
     ['recipe.tagged'],
   )
   assertEquals(await titles('._prop.ref=note'), ['recipe.book'])
   let before = await g.read(
-    line`._before .edge.from=${
-      id('_kind', { name: 'recipe' })
-    } .order=edge.ord`,
+    line`._before .edge.from=${id.kind('recipe')} .order=edge.ord`,
   )
+  let at = rowsOf(load([kitchen, tagger, meta, docDoc]), derivedEid)
   assertEquals(
     before.map((b) => (b.edge as { to: string }).to),
-    [id('_kind', { name: 'note' }), id('_kind', { name: 'doc' })],
+    [at.kind('note'), at.kind('doc')],
   )
   // The effects a package declares, and what owes each a run.
-  let [shop] = await g.read('._effect.package._package.name=@t/kitchen')
+  let [shop] = await g.read('._effect.namespace._namespace.name=@t/kitchen')
   assertEquals(shop._effect, {
     name: 'recipe_shop',
-    package: id('_package', { name: '@t/kitchen' }),
+    namespace: id.namespace('@t/kitchen'),
     created: ['recipe'],
     changed: ['recipe.serves'],
     target: '.recipe !note',
@@ -321,10 +423,10 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   assertEquals(await titles('dish'), ['recipe', 'recipe'])
   // And what the graph holds is the vocabulary it was given.
   // Each package, described.
-  let [pkg] = await g.read('._package.name=@t/kitchen ?doc')
+  let [pkg] = await g.read('._namespace.name=@t/kitchen ?doc')
   assertEquals((pkg.doc as { body: string }).body, 'recipes and notes')
   let rows = [
-    ...await g.read('._package'),
+    ...await g.read('._namespace'),
     ...await g.read('._comp ?doc'),
     ...await g.read('._kind ?doc'),
     ...await g.read('._effect ?doc'),

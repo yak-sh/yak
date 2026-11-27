@@ -1,11 +1,12 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import type { VocabDoc } from '@yaks/vocab'
+import { labelled, type VocabDoc } from '@yaks/vocab'
 import { compile, type Speaks } from './compile.ts'
 import { history } from './steps.ts'
 
-/** The ordinary `_package{name}` identity. */
-export let packageEid = (name: string): string => derivedEid(`_package|${name}`)
+/** The `_namespace{name}` row of a namespace without a `$id`, by its label
+ * (@yaks/vocab `labelled`): what a `_lens` names and a page's `$speaks` keys. */
+export let packageEid: (name: string) => string = labelled(derivedEid).namespace
 
 /** Authored `$defs` lens entries as private `_lens{package, step, ops}` rows.
  * A document must carry its namespace's label. Components and other entries

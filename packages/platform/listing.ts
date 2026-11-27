@@ -55,7 +55,7 @@ export let KERNEL = ['exception', 'error', 'refusal']
 // describe its vocabulary (@yaks/vocab's bundles.ts), each wearing its own
 // word and `doc`, and a `_before` its `edge`.
 export let DESCRIBED = [
-  '_package',
+  '_namespace',
   '_comp',
   '_kind',
   '_effect',

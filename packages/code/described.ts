@@ -1,8 +1,10 @@
 // The vocabulary a graph is served with, described in it as @yaks/vocab's
-// `_package`, `_comp`, `_kind`, `_effect`, `_extends`, `_prop` and `_before`
+// `_namespace`, `_comp`, `_kind`, `_effect`, `_extends`, `_prop` and `_before`
 // entities (@yaks/vocab `toBundles`), so the graph's own model is read,
 // searched and linked like anything else, and a page about a component, a
-// kind or an effect resolves.
+// kind or an effect resolves. Each row is its word's `$id`, so a rename
+// patches the row it had, and the row keeps the label it had before in
+// `former`.
 //
 // The served vocabulary is the one source: every document the host composed,
 // each written with the package that brought it and that package's
@@ -24,16 +26,16 @@
 
 import { bare, type Clause, map, type Pred, type Query } from '@yaks/query'
 import type { Bundle, Comp, Graph, Plugin } from '@yaks/graph'
-import { derivedEid, identities } from '@yaks/graph/identity'
+import { derivedEid } from '@yaks/graph/identity'
 import { link, unlink } from '@yaks/edge'
-import { type Ids, toBundles, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { toBundles, type Vocab, type VocabDoc } from '@yaks/vocab'
 
 let str = (v: unknown) => v == null ? '' : String(v)
 
 // The rows a vocabulary is described in, in the order a batch writes them,
 // so each reference lands on an entity written before it.
 let ROWS = [
-  '_package',
+  '_namespace',
   '_comp',
   '_kind',
   '_effect',
@@ -110,12 +112,9 @@ let sha = async (s: string) =>
 // Every row `docs` describe, by eid: two documents of one package describe it
 // as one.
 let rows = (vocab: Vocab, docs: VocabDoc[]): Map<string, Bundle> => {
-  let derive = identities(vocab)
-  let id: Ids = (comp, values) =>
-    derive[comp](values as Comp, { entity: { eid: '' }, [comp]: values })
   let fresh = new Map<string, Bundle>()
   for (let doc of docs) {
-    for (let b of toBundles(doc, id) as Bundle[]) {
+    for (let b of toBundles(doc, derivedEid, vocab) as Bundle[]) {
       let e = b.edge as Comp | undefined
       let row = e ? link(str(e.from), '_before', str(e.to), Number(e.ord)) : b
       let was = fresh.get(row.entity.eid)
@@ -123,6 +122,20 @@ let rows = (vocab: Vocab, docs: VocabDoc[]): Map<string, Bundle> => {
     }
   }
   return fresh
+}
+
+// A `_comp` or `_prop` row written under a new label keeps the one it had,
+// after any it had before, so a former label still reads as it (@yaks/vocab
+// `in`). A label it comes back to is its own again.
+let renamed = (fresh: Bundle, held?: Bundle): Bundle => {
+  let meta = ['_comp', '_prop'].find((m) => fresh[m])
+  if (!meta) return fresh
+  let now = fresh[meta] as Comp
+  let was = held?.[meta] as Comp | undefined
+  if (!was?.name || was.name == now.name) return fresh
+  let former = [...(was.former as string[] | null) ?? [], String(was.name)]
+    .filter((l) => l != now.name)
+  return { ...fresh, [meta]: { ...now, former } }
 }
 
 /** What to write so `g` describes `docs`, the vocabulary it is served with:
@@ -154,7 +167,7 @@ export let described = async (
   let held = changed && gone
     ? await g.get([...changed.map((b) => b.entity.eid), ...gone])
     : (await Promise.all([
-      g.read('._package ?doc'),
+      g.read('._namespace ?doc'),
       g.read('._comp ?doc'),
       g.read('._kind ?doc'),
       g.read('._effect ?doc'),
@@ -174,7 +187,7 @@ export let described = async (
   return [
     ...(changed ?? [...fresh.values()]).filter((b) =>
       moves(b, at.get(b.entity.eid))
-    ),
+    ).map((b) => renamed(b, at.get(b.entity.eid))),
     ...held.filter((b) => rank(b) >= 0 && !fresh.has(b.entity.eid)).map(
       cleared,
     ),
@@ -219,10 +232,9 @@ let derive = (vocab: Vocab) => {
   return held
 }
 
-// Every eid a description has is derived (@yaks/graph/identity
-// `derivedEid`), so only a value of that shape can name one.
-let DERIVED =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+// Every eid a description has is a word's identity or derived from its
+// labels (@yaks/vocab `labelled`), so only a UUID can name one.
+let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // The components a description wears: its own, its title, and an edge's.
 let WORN = new Set([...META, 'entity', 'doc', 'edge'])
@@ -235,8 +247,7 @@ let WORN = new Set([...META, 'entity', 'doc', 'edge'])
 // cold answers, derives nothing unless it can match a description.
 let asks = (query: Query, held: () => Map<string, Bundle>): boolean => {
   let named = (path: string[]) => path.some((p) => META.includes(p))
-  let says = (raw?: string) =>
-    raw != null && DERIVED.test(raw) && held().has(raw)
+  let says = (raw?: string) => raw != null && UUID.test(raw) && held().has(raw)
   let unworn = (c: Clause) =>
     c.kind == 'pred' && c.op == '!' && bare(c) && !c.not && !c.where &&
     !WORN.has(c.path[0])

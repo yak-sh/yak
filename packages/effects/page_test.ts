@@ -186,7 +186,7 @@ test('each declared effect, the busiest first, its counts opening the runs they 
   equal(
     all(rows[2], 'a').map((a) => a.getAttribute('href')),
     [
-      `/${effectEid('builder_answer')}`,
+      `/${effectEid(vocab, 'builder_answer')}`,
       '/?.effect.handler=builder_answer&.effect.state=failed&?effect',
     ],
   )

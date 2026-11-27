@@ -34,9 +34,7 @@ test('a binary declaration describes bytes independently of their transport', ()
     assert(v.check('document', { bytes }).length > 0)
   }
   assertEquals(v.check('document', { bytes: null }), [])
-  let back = fromBundles(
-    toBundles(doc, (comp, v) => `${comp}:${Object.values(v).join('.')}`),
-  )[0]
+  let back = fromBundles(toBundles(doc, (s) => s))[0]
   assertEquals(back.$defs!.document.properties!.bytes.contentEncoding, 'base64')
 })
 

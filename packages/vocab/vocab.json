@@ -6,19 +6,18 @@
   },
   "title": "vocab",
   "$defs": {
-    "_package": {
+    "_namespace": {
       "$id": "urn:uuid:ee3291b2-41e2-41d9-b192-483d1831053c",
       "component": true,
       "journal": false,
       "type": "object",
       "wire": false,
-      "description": "a package whose vocabulary declares components or extends them. Its doc.title is its name, its doc.body its description",
+      "description": "a vocabulary: the package or app whose document declares words or extends them. Its eid is the document's $id; its doc.title is its name, its doc.body its description",
       "properties": {
         "name": {
           "$id": "urn:uuid:f1e94958-7df2-4fc3-ab85-f3c07223de01",
           "type": "string",
-          "identity": true,
-          "description": "the name it is published under"
+          "description": "its label: a package's name (@yaks/model) or an app's address (yourname/trip)"
         }
       }
     },
@@ -33,15 +32,20 @@
         "name": {
           "$id": "urn:uuid:7ce3e706-c50a-46a3-b5fb-a3a89c9d9585",
           "type": "string",
-          "identity": true,
-          "description": "the name a bundle writes it under"
+          "description": "its label: the name a bundle writes it under"
         },
-        "package": {
+        "former": {
+          "$id": "urn:uuid:287616ca-8a98-4bce-a7dd-14e8f1716ae2",
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the labels it was declared under before, oldest first: each still reads as it in its namespace until another word takes it"
+        },
+        "namespace": {
           "$id": "urn:uuid:023d7b4c-b78f-4d2f-92d6-4dccd6106b9c",
           "type": "string",
-          "ref": "_package",
+          "ref": "_namespace",
           "death": "cascade",
-          "description": "the package whose vocabulary declares it"
+          "description": "the namespace whose vocabulary declares it"
         },
         "wire": {
           "$id": "urn:uuid:c3661765-e530-4e07-9181-34586d22e228",
@@ -124,15 +128,14 @@
         "name": {
           "$id": "urn:uuid:83776ca8-2ffb-47cf-9ffc-a7d16ddd8059",
           "type": "string",
-          "identity": true,
-          "description": "the name .kind= and an entity's kind answer it by"
+          "description": "its label: the name .kind= and an entity's kind answer it by"
         },
-        "package": {
+        "namespace": {
           "$id": "urn:uuid:b538ef6d-bd58-4dc4-b7df-f4abc8e86196",
           "type": "string",
-          "ref": "_package",
+          "ref": "_namespace",
           "death": "cascade",
-          "description": "the package whose vocabulary declares it"
+          "description": "the namespace whose vocabulary declares it"
         },
         "is": {
           "$id": "urn:uuid:4b57e5ae-3516-4bbc-a1cc-2461d6f4d404",
@@ -168,15 +171,14 @@
         "name": {
           "$id": "urn:uuid:b2431f6a-8a02-4fda-b549-296a40255a77",
           "type": "string",
-          "identity": true,
           "description": "the name a recorded run names, and the code that runs it is registered under"
         },
-        "package": {
+        "namespace": {
           "$id": "urn:uuid:c47b1693-b0be-49f5-9cf5-b26679e01f2b",
           "type": "string",
-          "ref": "_package",
+          "ref": "_namespace",
           "death": "cascade",
-          "description": "the package whose vocabulary declares it"
+          "description": "the namespace whose vocabulary declares it"
         },
         "created": {
           "$id": "urn:uuid:c4861f9e-d055-46c0-8854-d8ff3127fda6",
@@ -253,7 +255,6 @@
       "journal": false,
       "type": "object",
       "wire": false,
-      "identity": ["comp", "name"],
       "description": "a property of a component. Its doc.title is comp.prop, its doc.body its description",
       "properties": {
         "comp": {
@@ -266,19 +267,25 @@
         "name": {
           "$id": "urn:uuid:01287163-b623-4a30-ac4a-69f59cb84fe2",
           "type": "string",
-          "description": "its name within the component"
+          "description": "its label within the component"
+        },
+        "former": {
+          "$id": "urn:uuid:fceb28b7-041f-4bbb-b94f-79119d13c728",
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the labels it was declared under before, oldest first: each still reads as it on its component until another property takes it"
         },
         "ord": {
           "$id": "urn:uuid:38376a24-d9e6-40e5-b8a3-069b4e50e035",
           "type": "integer",
           "description": "its position among the properties its entry declares, from 0"
         },
-        "package": {
+        "namespace": {
           "$id": "urn:uuid:c1a397f1-e709-4e3f-adc6-71b289cdd96f",
           "type": "string",
-          "ref": "_package",
+          "ref": "_namespace",
           "death": "cascade",
-          "description": "the package whose vocabulary declares it: the component's own, or one that extends it"
+          "description": "the namespace whose vocabulary declares it: the component's own, or one that extends it"
         },
         "type": {
           "$id": "urn:uuid:757167c5-8a8b-4ade-9a1d-b2130c414fbf",
@@ -405,8 +412,8 @@
       "journal": false,
       "type": "object",
       "wire": false,
-      "identity": ["comp", "package"],
-      "description": "a package's extension of a component another package declares. The properties it adds are _prop rows; its doc.title is comp+package, its doc.body its description",
+      "identity": ["comp", "namespace"],
+      "description": "a namespace's extension of a component another namespace declares. The properties it adds are _prop rows; its doc.title is comp+namespace, its doc.body its description",
       "properties": {
         "comp": {
           "$id": "urn:uuid:dd305036-7494-4bab-b482-1af473d4b89f",
@@ -415,12 +422,12 @@
           "death": "cascade",
           "description": "the component it extends"
         },
-        "package": {
+        "namespace": {
           "$id": "urn:uuid:4a7fbac2-cf39-4225-be04-4744c2c9db9c",
           "type": "string",
-          "ref": "_package",
+          "ref": "_namespace",
           "death": "cascade",
-          "description": "the package whose vocabulary extends it"
+          "description": "the namespace whose vocabulary extends it"
         },
         "status": {
           "$id": "urn:uuid:97a7f72c-e9f3-4429-955b-af759cfb03c7",
@@ -446,9 +453,9 @@
     }
   },
   "kinds": {
-    "_package": {
+    "_namespace": {
       "$id": "urn:uuid:ee3291b2-41e2-41d9-b192-483d1831053c",
-      "description": "a package whose vocabulary declares components or extends them. Its doc.title is its name, its doc.body its description",
+      "description": "a vocabulary: the package or app whose document declares words or extends them. Its eid is the document's $id; its doc.title is its name, its doc.body its description",
       "with": {
         "doc": true
       }
@@ -483,7 +490,7 @@
     },
     "_extends": {
       "$id": "urn:uuid:3041bbb4-f09f-4199-92ab-5cfa79d09dc8",
-      "description": "a package's extension of a component another package declares. The properties it adds are _prop rows; its doc.title is comp+package, its doc.body its description",
+      "description": "a namespace's extension of a component another namespace declares. The properties it adds are _prop rows; its doc.title is comp+namespace, its doc.body its description",
       "with": {
         "doc": true
       }

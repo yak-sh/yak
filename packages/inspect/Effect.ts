@@ -28,7 +28,7 @@ let nameOf = (e: Bundle): string => str(e, '_effect', 'name')
 let named = (io: Io, word: string) => {
   let [name, ...prop] = word.split('.')
   return prop.length
-    ? h('a', { href: io.link(propEid(name, prop.join('.'))) }, word)
+    ? h('a', { href: io.link(propEid(io.vocab, name, prop.join('.'))) }, word)
     : chip(io, name)
 }
 
@@ -70,7 +70,7 @@ let useEffectPage = ({ e, io }: Props) => {
   let name = nameOf(e)
   let notes = usePageNotes(io, e, HEADINGS)
   let c = comp(e, '_effect')
-  let pkg = str(e, '_effect', 'package')
+  let pkg = str(e, '_effect', 'namespace')
   useNamed(io, [pkg])
   let triggers = owed(io, e)
   return {

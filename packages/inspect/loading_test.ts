@@ -167,7 +167,7 @@ let extensionPending = section(
     PackagePage,
     props(io({ comps: { ready: false } }), {
       entity: { eid: 'package' },
-      _package: { name: '@test/loading' },
+      _namespace: { name: '@test/loading' },
     }),
   ),
   'Extends',

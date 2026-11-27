@@ -3,7 +3,7 @@
 // entities with their `doc`, and the `_vocab` hash they were written from.
 // Every read since derives them (@yaks/code `describing`), which reads past the
 // stored copy, so nothing sees them, and a query scanning `doc` walks them
-// all (T-143252). They go. A `_package` a `_lens` names is the store's own
+// all (T-143252). They go. A `_namespace` a `_lens` names is the store's own
 // (@yaks/lens) and stays. The platform's own stores describe theirs in rows,
 // so only an app's store owes this.
 import { joined, line, sub } from '@yaks/query'
@@ -19,7 +19,7 @@ export let describedRule: Rule = {
   find: line`${
     sub(joined(
       ROWS.map((c) =>
-        c == '_package' ? line`._package&!_lens_package` : line`.${c}`
+        c == '_namespace' ? line`._namespace&!_lens_package` : line`.${c}`
       ),
       '|',
     ))

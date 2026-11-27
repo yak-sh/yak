@@ -43,7 +43,7 @@ export let allPlaces = (): Place[] => {
       ? { name: home.name, icon: home.icon, path: '/' }
       : { name: 'Home', icon: 'house', path: '/' },
     allDestinations(),
-    !!vocab.comp('_package'),
+    !!vocab.comp('_namespace'),
     !!vocab.comp('secret'),
   )
 }

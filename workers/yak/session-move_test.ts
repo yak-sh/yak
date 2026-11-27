@@ -31,7 +31,7 @@ let g = graph({
 })
 g.apply([{
   entity: { eid: sessionPackage },
-  _package: { name: '@yaks/session' },
+  _namespace: { name: '@yaks/session' },
 }, ...sessionRows()], { trusted: true })
 test('the core pending bridge exposes sending and no empty model choice on the same eid', () => {
   let [row] = g.get(['source']) as Bundle[]

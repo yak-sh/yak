@@ -33,13 +33,19 @@ export let sessionLens: VocabDoc = {
     },
   },
 }
+// The old shape: `sending`'s properties under `using`, each its own word, so
+// without the identities `sending`'s carry.
 export let sessionSource: VocabDoc = {
   $defs: {
     using: {
       component: true,
       type: 'object',
       extends: true,
-      properties: sessionDoc.$defs!.sending.properties,
+      properties: Object.fromEntries(
+        Object.entries(sessionDoc.$defs!.sending.properties!).map((
+          [name, { $id: _, ...schema }],
+        ) => [name, schema]),
+      ),
     },
   },
 }

@@ -81,7 +81,7 @@ let setup = async (guard = false, expanded = false, shuffled = false) => {
     { entity: { eid: 'owner' }, person: { name: 'Owner' } },
     {
       entity: { eid: packageEid(app.label) },
-      _package: { name: app.label },
+      _namespace: { name: app.label },
     },
     ...lensesIn([app]),
     {
@@ -659,7 +659,7 @@ test('deploying the Vale view preserves stored eid text when the request becomes
     await g.apply([
       {
         entity: { eid: packageEid(app.label) },
-        _package: { name: app.label },
+        _namespace: { name: app.label },
       },
       ...lensesIn([app]),
     ], { trusted: true })

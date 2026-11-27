@@ -1,5 +1,5 @@
 /**
- * A package's page (`_package`, @yaks/vocab): what it is, the components it
+ * A package's page (`_namespace`, @yaks/vocab): what it is, the components it
  * declares and how many entities carry each (from the census, ./census.ts),
  * the properties it adds to components other packages declare (`extends`),
  * and the effects it declares.
@@ -34,7 +34,7 @@ let Declares = (
     {
       io,
       eid: e.entity.eid,
-      subject: str(e, '_package', 'name'),
+      subject: str(e, '_namespace', 'name'),
       heading: 'Components',
       count: comps.ready ? rows(comps).length : undefined,
       notes,
@@ -75,7 +75,7 @@ let Extends = (
     {
       io,
       eid: e.entity.eid,
-      subject: str(e, '_package', 'name'),
+      subject: str(e, '_namespace', 'name'),
       heading: 'Extends',
       count: props.ready && comps.ready ? theirs.length : undefined,
       notes,
@@ -109,7 +109,7 @@ let Effects = ({ e, io, notes, effects }: Part_ & { effects: Answer }) =>
     {
       io,
       eid: e.entity.eid,
-      subject: str(e, '_package', 'name'),
+      subject: str(e, '_namespace', 'name'),
       heading: 'Effects',
       count: effects.ready ? rows(effects).length : undefined,
       notes,
@@ -133,13 +133,13 @@ let Effects = ({ e, io, notes, effects }: Part_ & { effects: Answer }) =>
 // What a package's page says, under whichever head tops it.
 let usePackage = ({ e, io }: Props) => {
   let eid = e.entity.eid
-  let name = str(e, '_package', 'name') || str(e, 'doc', 'title')
+  let name = str(e, '_namespace', 'name') || str(e, 'doc', 'title')
   let notes = under(useNotes(io, eid), name, HEADINGS)
   let census = useCensus(io)
   let got = io.ask({
-    comps: `._comp&._comp.package=${eid}&?doc&.order=_comp.name`,
-    props: `._prop&._prop.package=${eid}&?doc&.order=_prop.comp`,
-    effects: `._effect&._effect.package=${eid}&?doc&.order=_effect.name`,
+    comps: `._comp&._comp.namespace=${eid}&?doc&.order=_comp.name`,
+    props: `._prop&._prop.namespace=${eid}&?doc&.order=_prop.comp`,
+    effects: `._effect&._effect.namespace=${eid}&?doc&.order=_effect.name`,
   })
   return {
     name,
@@ -186,6 +186,6 @@ export let PackageBody = (p: Props): JSX.Element => {
 
 /** A package's page, and its body under another head. */
 export let packageViews: View[] = [
-  { view: 'Inspect.Page', match: parse('._package'), Render: PackagePage },
-  { view: 'Full.Body', match: parse('.doc ._package'), Render: PackageBody },
+  { view: 'Inspect.Page', match: parse('._namespace'), Render: PackagePage },
+  { view: 'Full.Body', match: parse('.doc ._namespace'), Render: PackageBody },
 ]

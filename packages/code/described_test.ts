@@ -7,10 +7,17 @@ import { assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { type Comp, type Graph, graph, identityEid } from '@yaks/graph'
+import { derivedEid, mint } from '@yaks/graph/identity'
 import { gitDoc } from '@yaks/git'
 import { fileDoc } from '@yaks/file/vocab'
 import { ram } from '@yaks/ram'
-import { loadVocab, metaDoc, type PropSchema, type VocabDoc } from '@yaks/vocab'
+import {
+  labelled,
+  loadVocab,
+  metaDoc,
+  type PropSchema,
+  type VocabDoc,
+} from '@yaks/vocab'
 import { codeDoc } from './vocab.ts'
 import { described, describing } from './described.ts'
 
@@ -98,20 +105,24 @@ test('a graph describes what it is served with, and stops describing what it is 
   let befores = async () => (await eids(`._before .edge.from=${kind}`)).length
   await serve([p({ a: { type: 'string' }, b: { type: 'number' } }), q])
 
-  assertEquals(await titles('._package'), ['@t/p', '@t/q'])
-  let [pkg] = await g.read('._package.name=@t/p ?doc')
+  // The fixtures' own documents are namespaces by their `$id`, unlabelled.
+  let labels = async () => (await titles('._namespace')).filter(Boolean)
+  assertEquals(await labels(), ['@t/p', '@t/q'])
+  let [pkg] = await g.read('._namespace.name=@t/p ?doc')
   assertEquals((pkg.doc as Comp).body, 'Notes.')
-  assertEquals(await titles('._comp.package._package.name=@t/p'), ['note'])
+  assertEquals(await titles('._comp.namespace._namespace.name=@t/p'), ['note'])
   assertEquals(await titles('._prop.comp._comp.name=note'), [
     'note.a',
     'note.b',
     'note.c',
   ])
-  assertEquals(await titles('._prop.package._package.name=@t/q'), ['note.c'])
-  assertEquals(await titles('._effect.package._package.name=@t/q'), [
+  assertEquals(await titles('._prop.namespace._namespace.name=@t/q'), [
+    'note.c',
+  ])
+  assertEquals(await titles('._effect.namespace._namespace.name=@t/q'), [
     'note_tidy',
   ])
-  assertEquals(await titles('._kind.package._package.name=@t/p'), ['note'])
+  assertEquals(await titles('._kind.namespace._namespace.name=@t/p'), ['note'])
   assertEquals(await befores(), 1)
   assertEquals((await eids(`.refs=${note}`)).length, 4)
   // A description is read by its eid, and a read that requires a component
@@ -124,7 +135,7 @@ test('a graph describes what it is served with, and stops describing what it is 
   )
   for (
     let query of [
-      '._package ?doc',
+      '._namespace ?doc',
       '._comp ?doc',
       '._kind ?doc',
       '._effect ?doc',
@@ -149,7 +160,7 @@ test('a graph describes what it is served with, and stops describing what it is 
   // package no longer listed, with what it added.
   await serve([p({ a: { type: 'string' } }, [])])
   assertEquals(await titles('._prop.comp._comp.name=note'), ['note.a'])
-  assertEquals(await titles('._package'), ['@t/p'])
+  assertEquals(await labels(), ['@t/p'])
   assertEquals(await titles('._effect.name=note_tidy'), [])
   assertEquals(await befores(), 0)
 
@@ -162,22 +173,22 @@ test('a graph describes what it is served with, and stops describing what it is 
   assertEquals(await eids('._comp.name=note'), [note])
 
   // A derived description reads past what an earlier copy left, and a
-  // package the graph names itself still stands.
-  let own = identityEid('_package', ['@t/own'])
+  // namespace the graph names itself still stands.
+  let own = labelled(derivedEid).namespace('@t/own')
   await d.apply([
     {
       entity: { eid: identityEid('_comp', ['gone']) },
       _comp: { name: 'gone' },
     },
     { entity: { eid: note }, doc: { title: 'stale' } },
-    { entity: { eid: own }, _package: { name: '@t/own' } },
+    { entity: { eid: own }, _namespace: { name: '@t/own' } },
   ], { trusted: true })
   assertEquals(await d.read('._comp.name=gone'), [])
   assertEquals(
     await d.read('._comp.name=note ?doc'),
     await g.read('._comp.name=note ?doc'),
   )
-  assertEquals((await d.read('._package.name=@t/own')).length, 1)
+  assertEquals((await d.read('._namespace.name=@t/own')).length, 1)
 })
 
 test('a retained declaration reads only changed description identities and resumes', async () => {
@@ -230,4 +241,53 @@ test('a retained declaration reads only changed description identities and resum
     ),
     ['kept', 'a'],
   )
+})
+
+test('a renamed word keeps its row, and the label it had', async () => {
+  let ids = { comp: mint(), prop: mint() }
+  let named = (comp: string, prop: string): VocabDoc => ({
+    label: '@t/p',
+    $defs: {
+      [comp]: {
+        $id: `urn:uuid:${ids.comp}`,
+        component: true,
+        properties: { [prop]: { $id: `urn:uuid:${ids.prop}`, type: 'string' } },
+      },
+    },
+  })
+  let serve = store()
+  let labels = async (docs: VocabDoc[]) => {
+    let g = await serve(docs)
+    let [c, p] = await g.get([ids.comp, ids.prop], ['_comp', '_prop'])
+    let { name, former } = c._comp as Comp, prop = p._prop as Comp
+    return [name, former, prop.name, prop.former, prop.comp]
+  }
+  assertEquals(await labels([named('jar', 'label')]), [
+    'jar',
+    undefined,
+    'label',
+    undefined,
+    ids.comp,
+  ])
+  assertEquals(await labels([named('pot', 'label')]), [
+    'pot',
+    ['jar'],
+    'label',
+    undefined,
+    ids.comp,
+  ])
+  assertEquals(await labels([named('crock', 'name')]), [
+    'crock',
+    ['jar', 'pot'],
+    'name',
+    ['label'],
+    ids.comp,
+  ])
+  assertEquals(await labels([named('jar', 'name')]), [
+    'jar',
+    ['pot', 'crock'],
+    'name',
+    ['label'],
+    ids.comp,
+  ])
 })

@@ -3841,7 +3841,7 @@ export class Store extends Durable {
       if (rows.length) {
         await this.#graph.apply([{
           entity: { eid: packageEid(doc.label!) },
-          _package: { name: doc.label! },
+          _namespace: { name: doc.label! },
         }, ...rows], { trusted: true })
       }
     }
@@ -3852,7 +3852,7 @@ export class Store extends Durable {
         await this.#trust([
           {
             entity: { eid: packageEid(doc.label!) },
-            _package: { name: doc.label! },
+            _namespace: { name: doc.label! },
           },
           ...rows,
         ], null)

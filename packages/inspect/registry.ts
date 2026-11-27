@@ -21,7 +21,7 @@ import { propViews } from './Prop.ts'
 
 // Schema names belong to inspect; every consumer asks for this renderer,
 // including the query table and any inline reference.
-let schemaTiles: View[] = ['_package', '_comp', '_kind', '_prop', '_effect']
+let schemaTiles: View[] = ['_namespace', '_comp', '_kind', '_prop', '_effect']
   .flatMap((
     name,
   ) => [

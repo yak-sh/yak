@@ -153,8 +153,8 @@ The parser emits plain scalars; the compiler reads them by the property's type.
   .comments_target!.created.by!=<person>` is the tasks with no comment by
   anyone else. `!comments` alone is the none form with no child test. A
   plural already taken (a component that ends in `s` is its own plural) names
-  the property too: `._package !_lens_package` is the packages no `_lens`
-  names.
+  the property too: `._namespace !_lens_package` is the namespaces no
+  `_lens` names.
 
 ## Walks
 

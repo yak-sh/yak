@@ -67,15 +67,15 @@ edit is a new document.
 
 ## Exports
 
-| Export                    | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/vocab`             | `loadVocab`, `Vocab`, declaration and loaded metadata types; `storable`, `reserved`; routing errors and messages; `kindOrder`, `kindsIn`, `orderKinds`, `kindsIndex`, `Kind`, `KindDecl`, `With`, `pick`, `cast`, `typesOf`, `jsonb`, `composite`; `syncOf`, `durableOf`, `paceOf`, `saveOf`, `expireOf`, `ms`, `lives`, `said`, `kept`, `paced`, `saved`, `SYNC`; `rulesIn`, `effectsIn`; `same`, `changed`; `CORE_URI`, `coreVocabulary`, `metaSchema`, `extendMeta`, `Keywords`, `JsonSchema`; `metaDoc`, `toBundles`, `fromBundles`, `Ids`, `Bundle` |
-| `@yaks/vocab/runtime`     | `loadVocab`, `Vocab`, `pick`, `kindsIndex`, routing errors, keyword and loaded metadata types; excludes document validation and bundle conversion                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `@yaks/vocab/vocab`       | `docs`, containing `metaDoc`, and the package `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolGrammar`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                                                                                            |
-| `@yaks/vocab/time`        | `timeSpan`, `timeInstant`, `isTimeLiteral`, `unitMs`, `Span`: the time grammar (see [Time phrases](#time-phrases)); @yaks/query re-exports them                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `@yaks/vocab/constraints` | `Factor`, `Term`, `Score`, `NumericConstraint`, `numberOf`, `constraintErrors`                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `@yaks/vocab/minted`      | `minted`: a vocab.json's text with a `$id` minted for each word that has none                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Export                    | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/vocab`             | `loadVocab`, `Vocab`, declaration and loaded metadata types; `storable`, `reserved`; routing errors and messages; `kindOrder`, `kindsIn`, `orderKinds`, `kindsIndex`, `Kind`, `KindDecl`, `With`, `pick`, `cast`, `typesOf`, `jsonb`, `composite`; `syncOf`, `durableOf`, `paceOf`, `saveOf`, `expireOf`, `ms`, `lives`, `said`, `kept`, `paced`, `saved`, `SYNC`; `rulesIn`, `effectsIn`; `same`, `changed`; `CORE_URI`, `coreVocabulary`, `metaSchema`, `extendMeta`, `Keywords`, `JsonSchema`; `metaDoc`, `toBundles`, `fromBundles`, `labelled`, `rowsOf`, `Labelled`, `Bundle` |
+| `@yaks/vocab/runtime`     | `loadVocab`, `Vocab`, `pick`, `kindsIndex`, routing errors, keyword and loaded metadata types; excludes document validation and bundle conversion                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `@yaks/vocab/vocab`       | `docs`, containing `metaDoc`, and the package `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolGrammar`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                                                                                                                       |
+| `@yaks/vocab/time`        | `timeSpan`, `timeInstant`, `isTimeLiteral`, `unitMs`, `Span`: the time grammar (see [Time phrases](#time-phrases)); @yaks/query re-exports them                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `@yaks/vocab/constraints` | `Factor`, `Term`, `Score`, `NumericConstraint`, `numberOf`, `constraintErrors`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `@yaks/vocab/minted`      | `minted`: a vocab.json's text with a `$id` minted for each word that has none                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ## The format
 
@@ -981,47 +981,52 @@ as [bundles](../graph/README.md#data-model) in a graph. Its `./vocab` export
 lets a host compose it alongside [@yaks/doc](../doc/README.md) and
 [@yaks/edge](../edge/README.md).
 
-| Component  | Describes                                                     |
-| ---------- | ------------------------------------------------------------- |
-| `_package` | A vocabulary document's package                               |
-| `_comp`    | A declared component and its package                          |
-| `_kind`    | A declared kind: what it is, what it carries with, its prefix |
-| `_extends` | A component extension, its package and its added status rungs |
-| `_prop`    | A property, its component, declaration order and package      |
-| `_effect`  | A declared effect, its package and what owes it a run         |
-| `_before`  | An edge from a `_kind` to a `_kind` it sorts before           |
-| `_vocab`   | A graph's vocabulary hash                                     |
+| Component    | Describes                                                       |
+| ------------ | --------------------------------------------------------------- |
+| `_namespace` | A vocabulary document's namespace: a package or an app          |
+| `_comp`      | A declared component, its namespace and its former labels       |
+| `_kind`      | A declared kind: what it is, what it carries with, its prefix   |
+| `_extends`   | A component extension, its namespace and its added status rungs |
+| `_prop`      | A property, its component, order, namespace and former labels   |
+| `_effect`    | A declared effect, its namespace and what owes it a run         |
+| `_before`    | An edge from a `_kind` to a `_kind` it sorts before             |
+| `_vocab`     | A graph's vocabulary hash                                       |
 
-These components are `wire: false`. `_package`, `_comp`, `_kind`, `_extends`,
+These components are `wire: false`. `_namespace`, `_comp`, `_kind`, `_extends`,
 `_prop` and `_effect` carry `doc` for their name and description; a `_kind`'s
 `doc.title` is its `title` where it has one. Keywords without their own meta
 vocabulary property are retained verbatim in `keywords`, including extension
 keywords and native JSON Schema keywords. Type unions remain lists.
 
-`toBundles(doc, id)` projects component, kind and effect declarations; tools and
-rules are omitted. A kind is a
-`_kind{name, package, is, with, prefix,
-examples}` row whichever way it is
+Each row's eid is its word's identity, the `$id` its document gives it: the
+namespace's, a component's, a property's, a kind's declared under `kinds`, an
+effect's. A rename changes `name` and keeps the row; a store keeps the labels a
+`_comp` or `_prop` had before in `former` (@yaks/code). A word without a `$id`
+is where its labels derive (`labelled`), as every row was before identities; a
+component's own kind derives from the component's identity. An `_extends` is no
+word: it derives from its component and namespace.
+
+`toBundles(doc, derive, vocab?)` projects component, kind and effect
+declarations; tools and rules are omitted. `derive` hashes a sentence into an
+eid (@yaks/graph `derivedEid`). An `extends` entry names its component by the
+`$id` it carries, else by the one `vocab` holds by that label; a `before` names
+a kind the same way. A kind is a
+`_kind{name, namespace, is, with, prefix, examples}` row whichever way it is
 declared, under `kinds` or as a component of its own name, so
 `._kind.name=decision` answers what makes a decision; the component row does not
-repeat its `kind`, `prefix` or `before`. Its `id` callback derives the declared
-identities using the graph's `identities`. `fromBundles` reconstructs one
-vocabulary document per package, including extensions, kinds and effects. A kind
-that is only the component of its own name comes back on that component
-(`kind: true`), any other under `kinds`. A `_before` edge naming an absent kind
-is omitted. `_vocab` is not produced by `toBundles`.
+repeat its `kind`, `prefix` or `before`. `fromBundles` reconstructs one
+vocabulary document per namespace, including extensions, kinds and effects, each
+with the `$id` its row gives. A kind that is only the component of its own name
+comes back on that component (`kind: true`), any other under `kinds`. A
+`_before` edge naming an absent kind is omitted. `_vocab` is not produced by
+`toBundles`.
 
 ```ts
-import { identities } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { docs } from '@yaks/vocab/vocab'
 import { fromBundles, loadVocab, metaDoc, toBundles } from '@yaks/vocab'
 import { equal } from '@yaks/testing'
 
-const derive = identities(loadVocab(metaDoc))
-const id = (
-  comp: '_package' | '_comp' | '_kind' | '_effect' | '_extends' | '_prop',
-  values: Record<string, unknown>,
-) => derive[comp](values, { entity: { eid: '' } })
 const doc = {
   label: '@example/catalog',
   $defs: {
@@ -1032,7 +1037,7 @@ const doc = {
     },
   },
 }
-const rows = toBundles(doc, id)
+const rows = toBundles(doc, derivedEid)
 const [restored] = fromBundles(rows)
 equal(docs, [metaDoc])
 equal(restored.label, '@example/catalog')

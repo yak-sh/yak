@@ -11,8 +11,13 @@
  * @module
  */
 import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
-import { identityEid } from '@yaks/graph/identity'
-import { mention, type Props, useNamed, type View } from '@yaks/inspect'
+import {
+  compEid,
+  mention,
+  type Props,
+  useNamed,
+  type View,
+} from '@yaks/inspect'
 import { Head, Loading, Meter, Section, Table } from '@yaks/ui'
 import { size } from '@yaks/file'
 import {
@@ -121,7 +126,7 @@ let Days = ({ days }: { days: Kept[] }) =>
 let Components = ({ io, k }: { io: Props['io']; k: Kept }) => {
   let rows = io.vocab.all.map((c) => ({
     c,
-    eid: identityEid('_comp', [c]),
+    eid: compEid(io.vocab, c),
     n: k.changes?.[c] ?? 0,
   })).filter((r) => r.n || k.tables[`${r.c}$versions`])
     .toSorted((a, b) => b.n - a.n).slice(0, COMPONENTS)

@@ -13,9 +13,9 @@
         "package": {
           "$id": "urn:uuid:79725c80-a180-493e-8efc-7939614be83a",
           "type": "string",
-          "ref": "_package",
+          "ref": "_namespace",
           "death": "cascade",
-          "description": "The package whose vocabulary changes."
+          "description": "The namespace whose vocabulary changes."
         },
         "step": {
           "$id": "urn:uuid:8ab6ca4c-95f2-45c7-bc85-52c74f04a22f",

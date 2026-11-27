@@ -145,8 +145,9 @@ test('epoch millisecond properties resolve the same time bounds in both evaluato
   }
 })
 
-// A component whose plural is its own name (`_lens` names a `_package`) gets
-// its association by the property, so "a package no lens names" is a line.
+// A component whose plural is its own name (`_lens` names a `_namespace`)
+// gets its association by the property, so "a namespace no lens names" is a
+// line.
 test('an association whose plural is taken is named by its property', () => {
   let v = loadVocab({
     $defs: {

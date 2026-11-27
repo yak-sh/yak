@@ -1266,7 +1266,8 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   // (`loan.book`, `loan.member` → `.loans_book`, `.loans_member`). A forward
   // name always wins, so a plural already taken (`_lens.package`, whose plural
   // is its own name, or a second component pluralizing alike) names the
-  // property too: `._package !_lens_package` is the packages no `_lens` names.
+  // property too: `._namespace !_lens_package` is the namespaces no `_lens`
+  // names.
   let assocs = new Map<string, Assoc>()
   let taken = (name: string) => routes.has(name) || assocs.has(name)
   for (let comp of names) {

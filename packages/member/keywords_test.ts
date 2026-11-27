@@ -54,10 +54,7 @@ test('permit survives published schemas and vocabulary entity roundtrips', () =>
   assertEquals(permitted(v), [])
   assertEquals(permitsIn(v), expected)
   assertEquals(permitsIn(load(schemaOf(v, { comps: v.all }))), expected)
-  let rows = toBundles(
-    declaration,
-    (comp, props) => `${comp}:${JSON.stringify(props)}`,
-  )
+  let rows = toBundles(declaration, (sentence) => sentence)
   assertEquals(
     permitsIn(loadVocab(fromBundles(rows), [memberKeywords])),
     expected,

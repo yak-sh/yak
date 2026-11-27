@@ -34,7 +34,7 @@ let setup = (report?: (error: unknown) => void) => {
   let vocab = kitchenVocab
   let g = graph({ vocab, storage: ram(vocab), plugins: [lenses(report)] })
   let out = g.apply([
-    { entity: { eid: pkg }, _package: { name: 'kitchen' } },
+    { entity: { eid: pkg }, _namespace: { name: 'kitchen' } },
     ...lensesIn([kitchen]),
   ], { trusted: true })
   ok(!(out instanceof Promise))
@@ -282,7 +282,7 @@ test('retained lenses serve old callers after the source property is undeclared'
   let g = graph({ vocab, storage: ram(vocab), plugins: [lenses()] })
   let retained = lensesIn([kitchen])
   g.apply([
-    { entity: { eid: pkg }, _package: { name: 'kitchen' } },
+    { entity: { eid: pkg }, _namespace: { name: 'kitchen' } },
     ...retained,
   ], { trusted: true })
   g.apply([{
@@ -333,7 +333,7 @@ test('retained lenses serve old callers after the source property is undeclared'
 let pendingStore = ram(kitchenVocab)
 let seedPending = graph({ vocab: kitchenVocab, storage: pendingStore })
 seedPending.apply([
-  { entity: { eid: pkg }, _package: { name: 'kitchen' } },
+  { entity: { eid: pkg }, _namespace: { name: 'kitchen' } },
   ...lensesIn([kitchen]),
   { entity: { eid: 'pending-read' }, recipe: { title: 'Cake', yield: 2 } },
 ])
