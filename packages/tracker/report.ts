@@ -107,7 +107,75 @@ export let refused = (error: unknown): boolean => {
     disconnected(error)
 }
 
-/** No request query, headers, body, cookies, or console arguments leave. */
+// The credentials an address carries, each with what stands in its place: a
+// page token or a link's code in a `~` segment, a sealed ticket after
+// `_preview/` (@yaks/platform/routes `paged`), the user and password before
+// a host, and a query parameter named for a secret.
+let CARRIED: [RegExp, string][] = [
+  [/\/(~|_preview\/)[^/\s?#'"`<>()]+/g, '/$1token'],
+  [/(\w+:\/\/)[^/\s@:'"`<>()]+:[^/\s@'"`<>()]*@/g, '$1redacted@'],
+  [
+    /([?&;](?:[\w.-]*[_.-])?(?:token|key|apikey|secret|sig|signature|pass|password|auth|credential|ticket|code)=)[^&#\s'"`<>()]*/gi,
+    '$1redacted',
+  ],
+]
+
+/** `text` with every credential an address in it carries out of sight. A
+ * failure quotes the addresses it asked, and the credential in one opens
+ * what it guards to whoever reads the bug.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { redacted } from '@yaks/tracker/report'
+ *
+ * equal(
+ *   redacted('/emberwild/~eyJhIjoxfQ.c2ln/trail: signal timed out'),
+ *   '/emberwild/~token/trail: signal timed out',
+ * )
+ * equal(redacted('at https://ada.yaks.app/~abc.def/api/query'), 'at https://ada.yaks.app/~token/api/query')
+ * equal(redacted('/cookbook/_preview/t.mac/about'), '/cookbook/_preview/token/about')
+ * equal(redacted('GET https://bo:pw@host/x?page=2&access_token=s3'), 'GET https://redacted@host/x?page=2&access_token=redacted')
+ * equal(redacted('/b.js?X-Amz-Signature=f0&transform.bytecode=1'), '/b.js?X-Amz-Signature=redacted&transform.bytecode=1')
+ * equal(redacted('2 ~ 3, /home/ and /cookbook/_preview'), '2 ~ 3, /home/ and /cookbook/_preview')
+ * ```
+ */
+export let redacted = (text: string): string =>
+  CARRIED.reduce((out, [carried, shown]) => out.replace(carried, shown), text)
+
+let unseen = (value: unknown): unknown =>
+  typeof value == 'string'
+    ? redacted(value)
+    : Array.isArray(value)
+    ? value.map(unseen)
+    : value && typeof value == 'object'
+    ? Object.fromEntries(
+      Object.entries(value).map(([key, v]) => [key, unseen(v)]),
+    )
+    : value
+
+/** `row` with every credential an address carries ({@link redacted}) out of
+ * each of its components: what capture keeps, and what a row captured
+ * before it kept them is scrubbed to. Its eid and stamps stand.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { withheld } from '@yaks/tracker/report'
+ *
+ * equal(
+ *   withheld({ entity: { eid: 'e' }, request: { url: 'https://a.test/x/~s.t/y' } }),
+ *   { entity: { eid: 'e' }, request: { url: 'https://a.test/x/~token/y' } },
+ * )
+ * ```
+ */
+export let withheld = (row: Bundle): Bundle =>
+  Object.fromEntries(
+    Object.entries(row).map(([name, c]) =>
+      name == 'entity' || name.startsWith('$') ? [name, c] : [name, unseen(c)]
+    ),
+  ) as Bundle
+
+/** No request query, headers, body, cookies, or console arguments leave, and
+ * no credential an address carries ({@link redacted}), in any component. */
 export let scrub = (rows: Bundle[]): Bundle[] =>
   rows.map((row) => {
     let out = { ...row }
@@ -132,7 +200,7 @@ export let scrub = (rows: Bundle[]): Bundle[] =>
         out.error = { ...comp(out, 'error'), tags: safe }
       }
     }
-    return out
+    return withheld(out)
   })
 
 let json = (value: object): string => {

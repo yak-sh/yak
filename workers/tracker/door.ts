@@ -299,6 +299,24 @@ async (request: Request): Promise<Response> => {
     }
     return json({ settled: await tracker.settle(eids, reason) })
   }
+  // Stored rows put through capture's redaction again: for rows captured
+  // before it withheld a credential. The same capability as a bug's mark.
+  if (request.method == 'POST' && path == '/scrub') {
+    if (access.mark !== true) {
+      return json({ error: 'tracker scrub denied' }, 403)
+    }
+    let body = await request.json().catch(() => null) as
+      | { eids?: unknown }
+      | null
+    let eids = body?.eids
+    if (
+      !Array.isArray(eids) || !eids.length || eids.length > 100 ||
+      eids.some((eid) => typeof eid != 'string' || !minted(eid))
+    ) {
+      return json({ error: 'body must be JSON with up to 100 eids' }, 400)
+    }
+    return json({ scrubbed: await tracker.scrub(eids) })
+  }
   if (marking(request)) {
     let name = marks[path as keyof typeof marks]
     if (access.mark !== true) {

@@ -117,7 +117,7 @@ export let request = async (
     person: 'box-tracker',
     admin: true,
     ...path == 'errors' ? { ingest: true } : {},
-    ...[...marks, 'retry', 'drop', 'settle', 'resume'].includes(path)
+    ...[...marks, 'retry', 'drop', 'settle', 'scrub', 'resume'].includes(path)
       ? { mark: true }
       : {},
   }

@@ -28,7 +28,6 @@ import { sessionAt, vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
 import { divided, gauged, level } from '@yaks/platform/standing'
-import { unpaged } from '@yaks/platform/routes'
 import { holding } from './held.ts'
 import { caught } from './defects.ts'
 import { scheduleMark } from './used.ts'
@@ -39,6 +38,7 @@ import {
   flood,
   origin,
   queue,
+  redacted,
 } from '@yaks/tracker/report'
 import { errorsAt, errorsIn, type Send } from './app-errors.ts'
 import { refuse } from './tool.ts'
@@ -260,16 +260,16 @@ export let noted = async (
     entrypoint?: string
   },
 ) => {
-  // A page quotes the addresses it asked, its page token with them: kept
-  // out of the record, where it would open the app to whoever reads it.
+  // A page quotes the addresses it asked, its page token with them. Capture
+  // keeps it out of the record; this keeps it out of the fix filed below too.
   broke = {
     ...broke,
-    request: unpaged(broke.request),
-    message: unpaged(broke.message),
-    stack: broke.stack && unpaged(broke.stack),
+    request: redacted(broke.request),
+    message: redacted(broke.message),
+    stack: broke.stack && redacted(broke.stack),
     breadcrumbs: broke.breadcrumbs?.map((c) => ({
       ...c,
-      message: unpaged(c.message),
+      message: redacted(c.message),
     })),
   }
   let account = await ownedBy(at.env, at.space)

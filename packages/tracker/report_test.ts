@@ -144,6 +144,38 @@ test('capture preserves provenance, scrubs request secrets and bounds breadcrumb
   equal((comp(rows[0], 'breadcrumbs').items as unknown[]).length, 20)
 })
 
+test('capture keeps every credential an address carries out of each component', () => {
+  let secret = 'eyJhIjoxfQ.c2ln'
+  let rows = capture(
+    new Error(`/emberwild/~${secret}/trail: signal timed out`, {
+      cause: new Error(`fetch https://ada.yaks.app/~${secret}/api/query`),
+    }),
+    {
+      sink: () => {},
+      tags: { request: `page /emberwild/~${secret}/` },
+      breadcrumbs: [{
+        at: '1',
+        category: 'fetch',
+        message: `200 /x?key=${secret}`,
+      }],
+      request: {
+        entity: { eid: 'request' },
+        request: { url: `https://ada.yaks.app/emberwild/~${secret}/trail` },
+      },
+    },
+  )
+  let said = JSON.stringify(rows)
+  ok(!said.includes(secret))
+  equal(
+    comp(rows[0], 'exception').value,
+    '/emberwild/~token/trail: signal timed out',
+  )
+  equal(
+    comp(rows[1], 'request').url,
+    'https://ada.yaks.app/emberwild/~token/trail',
+  )
+})
+
 test('an error that names its fault files under it wherever it is caught', () => {
   let outage = () => Object.assign(new Error('API down'), { fault: 'api down' })
   let call = capture(outage(), { sink: () => {}, during: { kind: 'call' } })[0]

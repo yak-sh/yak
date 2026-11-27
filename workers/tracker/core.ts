@@ -21,7 +21,7 @@ import { computed, derived, trackerDoc } from '@yaks/tracker/vocab'
 import { effects as handlers, type Options } from '@yaks/tracker/effects'
 import { ingest } from '@yaks/tracker/intake'
 import { timingDoc } from '@yaks/timing/vocab'
-import { caught, origin, type Sink } from '@yaks/tracker/report'
+import { caught, origin, type Sink, withheld } from '@yaks/tracker/report'
 import { bug, bugs, runs } from '@yaks/tracker/tools'
 import { survivor } from '@yaks/tracker/merge'
 import { send, wake } from '@yaks/tracker/digest'
@@ -349,6 +349,25 @@ export let store = (storage: Storage, config: Config) => {
         }
       }
       return found.length
+    },
+    // Rows captured before capture withheld the credentials an address
+    // carries (@yaks/tracker/report `withheld`), withheld now: each component
+    // that held one is written again without it. How many rows it wrote.
+    scrub: async (eids: string[]) => {
+      let patches = (await g.get(eids)).flatMap((row) => {
+        let clean = withheld(row)
+        let moved = Object.keys(row).filter((name) =>
+          JSON.stringify(row[name]) != JSON.stringify(clean[name])
+        )
+        return moved.length
+          ? [{
+            entity: { eid: row.entity.eid },
+            ...Object.fromEntries(moved.map((name) => [name, clean[name]])),
+          }]
+          : []
+      })
+      if (patches.length) await g.apply(patches, { trusted: true })
+      return patches.length
     },
     // The daily digest's wake, written once: a recurring wake moves itself.
     schedule: async (now = Date.now()) => {

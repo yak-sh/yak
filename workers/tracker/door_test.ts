@@ -493,3 +493,28 @@ test('tracker /settle archives the occurrences it names for its reason', async (
   let [row] = await g.graph.get([report], ['archived'])
   equal((row.archived as { reason?: string }).reason, 'Fixed by yaks.app: c')
 })
+test('tracker /scrub refuses a reader and withholds the credentials stored rows quote', async () => {
+  let g = fixture()
+  let report = '00000000-0000-4000-8000-0000000000a2'
+  await g.graph.apply([{
+    entity: { eid: report },
+    error: {
+      at: '2026-11-27T04:21:35Z',
+      bug: other,
+      tags: { request: 'page /emberwild/~s3cr.et/' },
+    },
+    during: { space, app: other },
+  }], { trusted: true })
+  let scrub = (token: string, eids: unknown) =>
+    door(g, platform, secret)(request('/scrub', token, { eids }))
+  equal((await scrub(reader, [report])).status, 403)
+  equal((await scrub(marker, [])).status, 400)
+  equal(await (await scrub(marker, [report, space])).json(), { scrubbed: 1 })
+  equal(await (await scrub(marker, [report])).json(), { scrubbed: 0 })
+  let [row] = await g.graph.get([report], ['error'])
+  equal(row.error, {
+    at: '2026-11-27T04:21:35Z',
+    bug: other,
+    tags: { request: 'page /emberwild/~token/' },
+  })
+})

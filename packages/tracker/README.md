@@ -9,6 +9,12 @@ keeps a reporter's UUID so a queue or spool resend is the same sample. Grouping
 runs downstream and atomically links it and adds its hits to `bug.hits`. All
 references may name entities in other stores.
 
+Capture keeps no request query, headers, body or console arguments, and no
+credential an address carries: a page token or link code in a `~` segment, a
+ticket after `_preview/`, a URL's user and password, or a query parameter named
+for a secret (`./report` `redacted`). It withholds them from every component of
+every row it captures, so no bug title, occurrence, letter or digest quotes one.
+
 | Export         | Owns                                                                                                |
 | -------------- | --------------------------------------------------------------------------------------------------- |
 | `.`            | Fault keys, grouping patches, regression and retention                                              |
