@@ -1,8 +1,8 @@
 // TypeScript and JSX read as the JavaScript they become, by sucrase: the
 // module graph's (./graph.ts `Strip`) wherever a host can carry sucrase. It is
 // its own export so a host that cannot afford its bytes (yaks.app's kernel,
-// whose isolates compile what they import as they start) imports the graph
-// without it and strips through a host that can.
+// which compiles every module it uploads at each isolate's start) imports the
+// graph without it and strips through a host that can.
 import { type Transform, transform } from 'sucrase'
 import type { Strip } from './graph.ts'
 

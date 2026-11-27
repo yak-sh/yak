@@ -278,12 +278,11 @@ A query that works on the box can be refused in a store.
   (T-143307), so a cache kept in module scope did not serve one new store's
   first request. Prove a cache hits live before counting on it.
 - **A sleeping object starts in a new isolate**, nearly always, and that
-  isolate compiles what it imports before it answers. Cloudflare's own part is
-  about 50 ms for an existing object (about 180 ms for a new one); what an
-  isolate compiles is ours: an 8 MB upload cost 280 ms more under the legacy
-  module registry, which compiles the whole upload, and the Store's own import
-  costs what its static closure weighs (T-151187, docs/kernel-startup.md). So
-  keep a class's static imports to what its first call runs. Start it beside what the request already waits on, with `WARM`
+  isolate compiles the whole upload (8 MB, about 280 ms) before it answers:
+  Cloudflare's own part is about 50 ms (T-151187, docs/kernel-startup.md). The
+  legacy module registry stays because that compile is not billed CPU, and
+  `new_module_registry`'s compile on import is: turning it on tripled the
+  Worker's CPU (T-1180). So shrinking the upload is what cuts a wake. Start it beside what the request already waits on, with `WARM`
   (door.ts, used.ts `start`), which touches no storage, so a start nobody
   follows up leaves nothing behind: a birth's. A store that stands is sent
   `WAKE` (used.ts `wake`), which brings it up as any request does (boot,

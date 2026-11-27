@@ -1217,3 +1217,17 @@ Importing the graph.ts chunk in a fresh Node process, 12 alternating rounds: 466
 Left in the closure: yaml through @yaks/platform/manifest (103 KB; a manifest is
 read synchronously), the provider facets that `planting` asks for their names
 (104 KB), chat.ts (43 KB, lent synchronously at bind) and croner (28 KB).
+
+## The new registry's compile is billed CPU (T-1180)
+
+November 27, 2026. The kernel served `new_module_registry` from version
+`103994a9` (`b4cc460dc`, first request 13:29Z). Cloudflare's
+`workersInvocationsAdaptive` for the yak Worker, by version, 12:00Z to 15:10Z:
+the seven versions before it averaged 7–10 ms of CPU a request, every version
+after it 20–44 ms. By the hour, p50 stayed about 5 ms while p99 went from about
+40 ms to 276–374 ms, and the hour's CPU from 420–520 s to 1,638, 2,570 and 2,328
+s. The legacy registry's compile of the upload happens at the isolate's start,
+outside any request's `cpuTimeUs`; the new one compiles inside the first call
+that imports. The wall time the new registry saved a Store's first call (423 to
+341 ms above) does not pay for tripling what the Worker is billed, so the legacy
+registry stays and shrinking the upload is the lever for a wake.

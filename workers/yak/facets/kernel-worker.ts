@@ -6,9 +6,9 @@
 //
 // Nothing here imports the code it runs (T-148770). Each class loads its own
 // module when the runtime first calls it, and a module is evaluated when it is
-// first imported, and compiled then (wrangler.toml `new_module_registry`): an
-// isolate that wakes a Store compiles the Store's code, one that answers a page
-// from Site compiles Site's, and neither the other's.
+// first imported: an isolate that wakes a Store evaluates the Store's code, one
+// that answers a page from Site evaluates Site's, and neither the other's.
+// The legacy module registry loads them (wrangler.toml, T-148980).
 import { incoming } from '@yaks/platform/app-outbound'
 import {
   DurableObject,

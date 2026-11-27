@@ -21,13 +21,14 @@ compatibility_date = "2025-05-08"
 
 # enable_nodejs_process_v2 supplies the native process object to the module
 # build, alongside the runtime's node: modules, without JS polyfills.
-# new_module_registry compiles a module when it is first imported. The legacy
-# registry compiled the whole upload (8 MB) before a new isolate ran anything,
-# and nearly every sleeping store's wake starts a new isolate: an object of
-# that size took 330 ms to answer its first call, 90 under this registry and
-# 51 with a near-empty upload (T-151187, docs/kernel-startup.md). Compiling what
-# an isolate imports now shows in its first call's CPU instead. It is the
-# default from 2026-11-17.
+# The legacy module registry stays (T-148980, T-1180). It compiles the whole
+# upload (8 MB) as a new isolate starts, which Cloudflare does not bill as a
+# request's CPU; `new_module_registry` compiles each module on its first import,
+# inside the call, and is billed. With it on, from 2026-11-27T13:29Z, a request
+# averaged 28 ms of CPU instead of 9, its p99 350 ms instead of 40, and the
+# Worker spent 3.6 times its normal hour. It saved a sleeping Store's first call
+# about 80 ms (423 to 341, docs/kernel-startup.md). A compatibility_date from
+# 2026-11-17 turns the new one on unless `legacy_module_registry` is added.
 # durable_object_io_tasks_prevent_eviction keeps an object up while it waits
 # on I/O nobody connected is waiting for: a call finishing in `Outlast` after
 # its caller was answered (outlast.ts). It is the default from 2026-10-01.
@@ -37,7 +38,6 @@ compatibility_flags = [
   "enable_nodejs_process_v2",
   "enable_request_signal",
   "durable_object_io_tasks_prevent_eviction",
-  "new_module_registry",
 ]
 
 # Modules ship minified. bundle.ts keeps optional doors as dynamic imports
