@@ -5,7 +5,7 @@ import { everforest, sheet } from '@yaks/ui'
 import { print } from '@yaks/tui/print'
 import { h, type VNode } from 'preact'
 import { render } from 'preact-render-to-string'
-import { Grid, kit, Stats, Stick } from './hud.ts'
+import { Grid, kit, Party, Stats, Stick } from './hud.ts'
 
 let dress = sheet({ kits: { game: kit }, theme: everforest })
 // deno-lint-ignore no-control-regex -- compare the terminal painter's words
@@ -97,3 +97,26 @@ for (let [name, titled] of Object.entries(words)) {
     }
   }
 }
+
+let party = h(Party, {
+  members: [
+    { name: 'Wren', hp: 9, most: 10, turn: true, own: true },
+    { name: 'Ash', hp: 3, most: 10 },
+    { name: 'Moss', hp: 0, most: 10 },
+  ],
+})
+
+test('the party panel marks whose turn it is, low health and the knocked out', () => {
+  let html = render(party)
+  ok(html.includes('Party_Member-turn Party_Member-own'))
+  ok(html.includes('Party_Member-low'))
+  ok(html.includes('Party_Member-down'))
+  ok(html.includes('aria-valuenow="0.9"'))
+})
+
+test('the party panel reads health in the terminal', () => {
+  let text = plain(print(party, 80, dress))
+  for (let line of ['Wren', '9/10', '3/10', 'Moss', 'Down']) {
+    ok(text.includes(line))
+  }
+})

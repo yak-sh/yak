@@ -55,3 +55,18 @@ export let traveler = (): THREE.Group => {
   actor.add(coat, head, scarf)
   return actor
 }
+
+/** A foe on the field: a wolf low and grey, a troll tall and mossy. */
+export let beast = (kind: string): THREE.Group => {
+  let big = kind === 'troll'
+  let actor = new THREE.Group()
+  let body = mesh(
+    new THREE.BoxGeometry(big ? 0.9 : 0.45, big ? 1.4 : 0.45, big ? 0.7 : 0.9),
+    big ? 0x5b6e3a : 0x5c5f66,
+  )
+  let eyes = mesh(new THREE.BoxGeometry(big ? 0.5 : 0.3, 0.08, 0.05), 0xffd34d)
+  body.position.y = big ? 0.7 : 0.35
+  eyes.position.set(0, big ? 1.15 : 0.5, big ? 0.36 : 0.46)
+  actor.add(body, eyes)
+  return actor
+}

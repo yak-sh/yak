@@ -82,8 +82,14 @@ invitation in the link fragment and its digest in the store.
 subscription and peer motion through the store's socket. The app's
 `room-rules.ts` checks turn order and returns the batch the worker saves. Moving
 the pointer on the field shares a transient aim marker. Tapping a tile up to
-three steps away moves the pawn, as an accepted turn action. The store pushes
-the new turn and position to each page.
+three steps away walks the pawn there; tapping a foe beside it strikes, and
+tapping a knocked-out ally beside it revives them. A strike rolls a d6 against
+the foe's guard and `blow` sets the damage. Each hit is a `play_hit` row, and
+`hpOf` sums a target's hits on its current life, so health is never stored and a
+revive is a new life. When the last standing player ends a turn, every foe walks
+toward the nearest player and strikes back. The store pushes the new turn,
+positions and hits to each page, whose `Party` panel shows every player's and
+foe's health.
 
 ## Paths
 
@@ -209,11 +215,13 @@ continue to use the rules with no DOM, Preact or UI dependency.
 
 ## HUD kit
 
-`@yaks/game/hud` exports `Grid`, `Stats` and `Stick`, plus their `kit` of CSS,
-terminal sheets and specimens. `@yaks/game/ui` contributes that kit to the style
-guide. These are paint only: the consumer supplies inventory cells, character
-values and stick position, and owns all action handlers. Grid's cells include
-game equipment/rarity marks, while Stats gives combat quantities their reading
-order. General meters, key faces and panels belong to the general kits, not
-here. A terminal hides the decorative touch stick, keeping the same Grid and
-Stats tree readable through their sheets.
+`@yaks/game/hud` exports `Grid`, `Party`, `Stats` and `Stick`, plus their `kit`
+of CSS, terminal sheets and specimens. `Party` lists a party or its foes a line
+each: name, a health bar and health, marking whose turn it is, low health and
+the knocked out. `@yaks/game/ui` contributes that kit to the style guide. These
+are paint only: the consumer supplies inventory cells, character values and
+stick position, and owns all action handlers. Grid's cells include game
+equipment/rarity marks, while Stats gives combat quantities their reading order.
+General meters, key faces and panels belong to the general kits, not here. A
+terminal hides the decorative touch stick, keeping the same Grid and Stats tree
+readable through their sheets.

@@ -1,3 +1,7 @@
+import { kit, Party } from '@yaks/game/hud'
+import { themes } from '@yaks/ui/ui'
+import { wear } from '@yaks/ui/wear'
+import { h, render as paint } from 'preact'
 import { frames } from './frames.ts'
 import {
   connectRoom,
@@ -5,25 +9,23 @@ import {
   postRoom,
   RoomRefused,
 } from './room-client.ts'
-import {
-  type Choice,
-  motionId,
-  roomId,
-  roomPath,
-  type Turn,
-} from './room-model.ts'
-import { REACH } from './room-rules.ts'
+import { type Choice, motionId, roomId, roomPath } from './room-model.ts'
+import { battle, FOES, odds } from './room-rules.ts'
 import { roomView } from './room-view.ts'
 import { screen } from './screen.ts'
 
 let disposeScreen = screen()
+void wear({ kits: { hud: kit }, theme: themes.everforest }).catch(reportError)
 let canvas = document.querySelector('canvas')!
 let status = document.querySelector<HTMLElement>('#room-status')!
+let panel = document.querySelector<HTMLElement>('#party')!
+let log = document.querySelector<HTMLElement>('#log')!
 let host = document.querySelector<HTMLButtonElement>('#host')!
 let share = document.querySelector<HTMLButtonElement>('#share')!
+let friend = document.querySelector<HTMLButtonElement>('#friend')!
+let friends = document.querySelector<HTMLSelectElement>('#friends')!
 let link = document.querySelector<HTMLInputElement>('#invite-link')!
 let actions = document.querySelector<HTMLFieldSetElement>('#actions')!
-let roll = document.querySelector<HTMLElement>('#roll')!
 
 let show = (error: unknown) => {
   status.textContent = error instanceof Error
@@ -36,8 +38,9 @@ let view = roomView(canvas)
 let live:
   | Awaited<ReturnType<typeof connectRoom>> & { member: Joined }
   | undefined
+let now = () => battle(live?.watch.value ?? [], live?.member.room ?? '')
 frames(
-  (_now, dt) => view.draw(live?.watch.value ?? [], dt, live?.member),
+  (_now, dt) => view.draw(live?.watch.value ?? [], now(), dt, live?.member),
   () => {
     disposeScreen()
     live?.front.close()
@@ -54,11 +57,22 @@ let remember = (room: string) => {
   history.replaceState(null, '', url)
 }
 
+// The app's own store doors, for the yaks.app friend list.
+let app = (path: string) => new URL('api/' + path, document.baseURI)
+let read = async (line: string) => {
+  let res = await fetch(app('query?q=' + encodeURIComponent(line)))
+  if (!res.ok) throw new Error(`Friends: HTTP ${res.status}`)
+  return await res.json() as Record<string, Record<string, unknown>>[]
+}
+
+let next = (a: { x: number; z: number }, b: { x: number; z: number }) =>
+  Math.abs(a.x - b.x) + Math.abs(a.z - b.z) === 1
+
 let playRoom = async (member: Joined) => {
   let { room, seat } = member
   let path = roomPath(room)
   host.hidden = true
-  share.hidden = !member.host
+  share.hidden = friend.hidden = !member.host
   remember(room)
   let { front, watch } = await connectRoom(member, {
     report: ({ error, refused }) => {
@@ -67,26 +81,66 @@ let playRoom = async (member: Joined) => {
     },
   })
   live = { front, watch, member }
-  let turn = () =>
-    watch.value.find((r) => r.entity.eid === room)?.play_turn as
-      | Turn
-      | undefined
   let render = () => {
-    let current = turn()
-    actions.disabled = !watch.ready || current?.seat !== seat
+    let { turn, party, foes, hits } = now()
+    let me = party.find((p) => p.eid === seat)
+    let names = new Map([...party, ...foes].map((s) => [s.eid, s.name]))
+    let living = foes.filter((f) => f.hp > 0)
+    let mine = turn?.seat === seat && !!me && me.hp > 0
+    actions.disabled = !watch.ready || !mine
+    panel.hidden = !watch.ready
+    paint(
+      [
+        h(Party, {
+          members: party.map((p) => ({
+            ...p,
+            turn: p.eid === turn?.seat,
+            own: p.eid === seat,
+          })),
+        }),
+        living.length > 0 &&
+        h(Party, { label: 'Foes', members: living }),
+      ],
+      panel,
+    )
+    log.replaceChildren(
+      ...hits.slice(-3).reverse().map((hit) => {
+        let line = document.createElement('li')
+        line.textContent = `${names.get(hit.by)} ${
+          hit.dmg ? 'hit' : 'missed'
+        } ${names.get(hit.target)}: rolled ${hit.roll}, needed ${hit.need}+${
+          hit.dmg ? `, ${hit.dmg} damage` : ''
+        }`
+        return line
+      }),
+    )
+    let beside = <T extends { x: number; z: number }>(them: T[]) =>
+      me ? them.filter((t) => next(t, me)) : []
     status.textContent = watch.refused ??
       (!watch.ready
         ? 'Connecting…'
-        : current?.seat === seat
-        ? `Your turn: tap a tile up to ${REACH} away, roll or pass`
-        : 'Waiting for your friend')
-    roll.textContent = current?.roll ? `Last roll: ${current.roll}` : ''
+        : !living.length
+        ? 'The camp is cleared: the party wins.'
+        : party.every((p) => p.hp <= 0)
+        ? 'The party has fallen.'
+        : mine && turn
+        ? [
+          turn.steps > 0 && `Walk up to ${turn.steps} tiles`,
+          ...beside(living).map((f) =>
+            `strike ${f.name}: ${odds(FOES[f.kind].guard)}`
+          ),
+          ...beside(party.filter((p) => p.hp <= 0)).map((p) =>
+            `revive ${p.name}`
+          ),
+          'or end your turn',
+        ].filter(Boolean).join('; ')
+        : `Waiting for ${names.get(turn?.seat ?? '') ?? 'your friend'}`)
   }
   watch.subscribe(render)
   render()
-  // One way in for every action: the buttons, and a tap on the field to move.
+  // One way in for every action: the button, and a tap on the field.
   let send = (action: Choice) => {
-    let current = turn()
+    let current = now().turn
     if (actions.disabled || !current) return
     actions.disabled = true
     void postRoom(path + 'action', { ...action, number: current.number })
@@ -96,23 +150,37 @@ let playRoom = async (member: Joined) => {
       })
   }
   actions.addEventListener('click', (event) => {
-    let button = (event.target as HTMLElement).closest<HTMLButtonElement>(
-      'button',
-    )
-    if (button) send({ kind: button.value as 'roll' | 'pass' })
+    let button = (event.target as HTMLElement).closest('button')
+    if (button) send({ kind: 'pass' })
   })
+  // A tap on a foe strikes it, on a fallen ally revives them, and anywhere
+  // else walks there.
   canvas.addEventListener('click', (event) => {
     let point = view.pick(event.clientX, event.clientY)
-    if (point) {
-      send({ kind: 'move', x: Math.round(point.x), z: Math.round(point.z) })
-    }
+    if (!point) return
+    let x = Math.round(point.x), z = Math.round(point.z)
+    let { party, foes } = now()
+    let at = (s: { x: number; z: number }) => s.x === x && s.z === z
+    let foe = foes.find((f) => f.hp > 0 && at(f))
+    let ally = party.find((p) => p.hp <= 0 && at(p))
+    send(
+      foe
+        ? { kind: 'strike', foe: foe.eid }
+        : ally
+        ? { kind: 'revive', seat: ally.eid }
+        : { kind: 'move', x, z },
+    )
   })
+  let invite = async () => {
+    member.invite ??= (await postRoom<Joined>(path + 'invite')).invite
+    let url = new URL('room', document.baseURI)
+    url.searchParams.set('room', room)
+    url.hash = new URLSearchParams({ invite: member.invite! }).toString()
+    return url
+  }
   share.addEventListener('click', () => {
     void (async () => {
-      member.invite ??= (await postRoom<Joined>(path + 'invite')).invite
-      let url = new URL('room', document.baseURI)
-      url.searchParams.set('room', room)
-      url.hash = new URLSearchParams({ invite: member.invite! }).toString()
+      let url = await invite()
       link.hidden = false
       link.value = url.href
       link.select()
@@ -125,6 +193,44 @@ let playRoom = async (member: Joined) => {
           link.select()
         })
       }
+    })().catch(show)
+  })
+  // Friends come from the person's yaks.app friend list, with their consent.
+  friend.addEventListener('click', () => {
+    void (async () => {
+      let [{ app_friends: access }] = await read('.app_friends')
+      if (!access?.signed_in) {
+        throw new RoomRefused('Sign in to invite friends.')
+      }
+      if (!access.allowed) return location.assign(app('allow?at=friends'))
+      let rows = await read('.app_friend')
+      if (!rows.length) throw new RoomRefused('No friends on yaks.app yet.')
+      friends.replaceChildren(
+        new Option('Choose a friend', ''),
+        ...rows.map((r) =>
+          new Option(String(r.app_friend.name), String(r.entity.eid))
+        ),
+      )
+      friends.hidden = false
+      friends.focus()
+    })().catch(show)
+  })
+  friends.addEventListener('change', () => {
+    let to = friends.value
+    if (!to) return
+    void (async () => {
+      let url = await invite()
+      let res = await fetch(app('apply'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify([{
+          entity: { eid: crypto.randomUUID() },
+          friend_invite: { to, path: 'room' + url.search + url.hash },
+        }]),
+      })
+      if (!res.ok) throw new Error(`Invite: HTTP ${res.status}`)
+      status.textContent = `Invited ${friends.selectedOptions[0].text}.`
+      friends.hidden = true
     })().catch(show)
   })
   let eid = motionId(member)

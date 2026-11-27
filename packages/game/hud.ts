@@ -3,10 +3,12 @@
 import type { Kit } from '@yaks/ui'
 import { beside } from '@yaks/ui/parts'
 import * as grid from './hud/Grid.ts'
+import * as party from './hud/Party.ts'
 import * as stats from './hud/Stats.ts'
 import * as stick from './hud/Stick.ts'
 
 export { Grid } from './hud/Grid.ts'
+export { type Member, Party, type PartyProps } from './hud/Party.ts'
 export { Stats } from './hud/Stats.ts'
 export { Stick, type StickProps } from './hud/Stick.ts'
 
@@ -18,6 +20,11 @@ export let kit: Kit = {
     ...grid,
     Component: grid.Grid,
     css: here('./hud/Grid.css'),
+  },
+  Party: {
+    ...party,
+    Component: party.Party,
+    css: here('./hud/Party.css'),
   },
   Stats: {
     ...stats,

@@ -1,4 +1,4 @@
-type Point = { x: number; z: number; own?: boolean }
+type Point = { x: number; z: number; own?: boolean; down?: boolean }
 let span = 23
 
 export let board = (canvas: HTMLCanvasElement) => {
@@ -14,7 +14,7 @@ export let board = (canvas: HTMLCanvasElement) => {
     }
   }
   return {
-    draw(pawns: Point[], cursors: Point[] = []) {
+    draw(pawns: Point[], cursors: Point[] = [], foes: Point[] = []) {
       let { rect, size, x, z } = dimensions()
       let density = Math.min(devicePixelRatio || 1, 2)
       let w = Math.floor(rect.width * density),
@@ -56,7 +56,10 @@ export let board = (canvas: HTMLCanvasElement) => {
           ctx.fill()
         }
       }
-      for (let p of pawns) dot(p, p.own ? '#fee1a2' : '#354e72')
+      for (let p of foes) dot(p, '#c4473a')
+      for (let p of pawns) {
+        dot(p, p.own ? '#fee1a2' : '#354e72', p.down)
+      }
       for (let p of cursors) dot(p, '#fff9eb', true)
     },
     pick(clientX: number, clientY: number) {

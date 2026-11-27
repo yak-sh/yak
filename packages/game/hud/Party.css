@@ -1,0 +1,55 @@
+/* A line each: the name, its health bar, then the numbers. Health reads in
+   green, red under a third; a knocked-out member fades, and whose turn it is
+   wears the accent. The bar is the general Meter, set here in the party's
+   colours so the part needs no other sheet. */
+.Party {
+  display: grid;
+  grid-template-columns: minmax(0, auto) auto auto;
+  gap: 0.25rem 0.6rem;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--small);
+  color: var(--text);
+}
+.Party_Member {
+  display: contents;
+}
+.Party_Name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Party_Member-turn > .Party_Name {
+  color: var(--accent);
+  font-weight: bold;
+}
+.Party_Member-own > .Party_Name::after {
+  content: ' (you)';
+  color: var(--muted);
+  font-weight: normal;
+}
+.Party .Meter {
+  font-family: var(--mono);
+  white-space: pre;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.Party .Meter_Fill {
+  color: var(--positive);
+}
+.Party_Member-low .Meter_Fill {
+  color: var(--negative);
+}
+.Party .Meter_Rest {
+  color: var(--dim);
+}
+.Party_Hp {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.Party_Member-down > * {
+  opacity: 0.5;
+}

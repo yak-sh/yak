@@ -27,18 +27,41 @@
   min-height: 44px;
 }
 
+.RoomPanel {
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: auto;
+  border-radius: .5rem;
+  color: #fff5da;
+  background: #1c2e37;
+  font: 1rem system-ui, sans-serif;
+}
+.RoomParty {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  display: grid;
+  gap: .6rem;
+  padding: .6rem .8rem;
+}
 .RoomControls {
   grid-column: 1 / -1;
   grid-row: 2;
   align-self: end;
   justify-self: start;
-  box-sizing: border-box;
-  max-width: 100%;
-  max-height: 100%;
-  overflow: auto;
   padding: 0 .9rem .7rem;
-  border-radius: .5rem;
-  color: #fff5da;
-  background: #1c2e37;
-  font: 1rem system-ui, sans-serif;
+}
+.RoomControls ol {
+  margin: 0 0 .5rem;
+  padding-left: 1.1rem;
+  font-size: .85rem;
+  color: #d9cfb4;
+}
+.RoomControls button,
+.RoomControls select {
+  min-height: 44px;
+}
+.RoomParty[hidden] {
+  display: none;
 }

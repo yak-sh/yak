@@ -21,10 +21,10 @@ another page can read the same game state and a different renderer can draw it.
 
 ## Design the whole game first
 
-The starter is wiring, not a game: its field, its roll button and its tap to
-move only show how a turn travels. Before you build, design the whole game from
-the person's request with good game design principles, and write it in the app
-as `design.md`. Decide every part yourself; don't stop to ask.
+The starter is wiring, not a game: its field, its wolves and troll, and its
+fights only show how a turn travels. Before you build, design the whole game
+from the person's request with good game design principles, and write it in the
+app as `design.md`. Decide every part yourself; don't stop to ask.
 
 When the person names a game they love, it is the default for everything they
 don't specify: its genre, mechanics, strategy, pacing, mood and the feel of its
@@ -91,9 +91,14 @@ page-only components as `sync: none` and use local watches with
 batch per accepted action.
 
 The app worker checks each guest invitation and writes a turn batch only when
-the rules accept the action. The sample uses `play_pawn{room, x, z}` for saved
-positions and `play_motion{room, seat, x, z}` for a transient aim marker. Use
-peer components for frequent motion, with an appropriate `pace`.
+the rules accept the action. The multiplayer starter already has a party panel
+with every player's health bar (`Party` from `@yaks/game/hud`), foes that walk
+up and strike back, knock-out and revive, and moving by tapping where to go:
+build the game's fights on them, and never add arrow buttons. Health is a
+ledger: `play_hit{target, life, dmg, roll, need}` rows summed by `hpOf`, and a
+revive starts a new `play_pawn{life}`. `play_motion{room, seat, x, z}` is a
+transient aim marker. Use peer components for frequent motion, with an
+appropriate `pace`.
 
 Keep the watch returned by `connectRoom` in `room-client.ts` as the source of
 room state. It delivers the initial snapshot, accepted turns and a fresh
@@ -429,11 +434,11 @@ Project `read(dt).pick` through the look's picking function; controls know no
 world coordinates. Visible buttons should call the same app actions as keys and
 gamepads, so the canvas is not the only way to play.
 
-`@yaks/game/hud` supplies display-only `Grid`, `Stats` and `Stick`, plus their
-`kit` of CSS and terminal sheets. Holdfast's `ui.ts` renders `Stats` from the
-run's derived gold, lives and wave values; its `main.ts` links the stylesheet
-URLs from `kit`. It uses general buttons and panels from `@yaks/ui` and
-controlled disclosure from `@yaks/ux`. The HUD never charges gold, owns a
+`@yaks/game/hud` supplies display-only `Grid`, `Party`, `Stats` and `Stick`,
+plus their `kit` of CSS and terminal sheets. Holdfast's `ui.ts` renders `Stats`
+from the run's derived gold, lives and wave values; its `main.ts` links the
+stylesheet URLs from `kit`. It uses general buttons and panels from `@yaks/ui`
+and controlled disclosure from `@yaks/ux`. The HUD never charges gold, owns a
 selected tower or runs the simulation. Read values from the graph and send
 actions back through the app.
 

@@ -3,14 +3,12 @@ import { identityEid } from '@yaks/graph/identity'
 import { digest, token } from '@yaks/graph/sha256'
 import {
   type Action,
-  type Pawn,
   type Room,
   roomId,
   roomLine,
   type Seat,
-  type Turn,
 } from './room-model.ts'
-import { act, ActionRefused, spawn } from './room-rules.ts'
+import { act, ActionRefused, foes, REACH, spawn } from './room-rules.ts'
 import { roomSocket } from './room-wire.ts'
 
 type Door = { fetch(path: string, init?: RequestInit): Promise<Response> }
@@ -46,11 +44,15 @@ let open = async (store: Door, browser: string): Promise<Response> => {
   let member = seatOf(crypto.randomUUID(), browser)
   let { room, seat } = member
   let invite = crypto.randomUUID()
-  let written = await apply(store, [{
-    entity: { eid: room },
-    play_room: { invite: await digest(invite), seats: [seat] },
-    play_turn: { seat, number: 1 },
-  }, spawn(room, seat, 0)])
+  let written = await apply(store, [
+    {
+      entity: { eid: room },
+      play_room: { invite: await digest(invite), seats: [seat] },
+      play_turn: { seat, number: 1, steps: REACH },
+    },
+    spawn(room, seat, 0),
+    ...foes(room),
+  ])
   return written.ok ? packet(member, { invite, host: true }) : written
 }
 
@@ -99,23 +101,12 @@ let action = async (
   store: Door,
   member: Seat,
   seats: string[],
-  turn: Turn,
 ) => {
   let sent = await body(req) as Action | null
   if (!sent) return refuse(400, 'Choose an action.')
-  let [pawn] = await rows(
-    store,
-    `.entity.eid=${member.seat}&.play_pawn.room=${member.room}`,
-  )
+  let room = await rows(store, roomLine(member.room))
   try {
-    let bundles = act(
-      member,
-      seats,
-      turn,
-      pawn.play_pawn as Pawn,
-      sent,
-      () => 1 + Math.floor(Math.random() * 6),
-    )
+    let bundles = act(member, seats, room, sent, Math.random)
     let result = await apply(store, bundles)
     if (result.ok) {
       await result.body?.cancel()
@@ -181,7 +172,7 @@ export let rooms = async (req: Request, env: Env): Promise<Response> => {
     return roomSocket(req, env.APP, member)
   }
   if (door === 'action' && req.method === 'POST') {
-    return action(req, env.APP, member, state.seats, row.play_turn as Turn)
+    return action(req, env.APP, member, state.seats)
   }
   if (
     door === 'invite' && req.method === 'POST' && state.seats[0] === member.seat

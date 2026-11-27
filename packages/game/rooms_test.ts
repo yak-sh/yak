@@ -1,13 +1,22 @@
 import { client } from '@yaks/client'
 import { equal, ok, test, throws } from '@yaks/testing'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import type { Bundle } from '@yaks/graph'
 import {
+  type Choice,
   motionId,
   roomLine,
   type Seat,
   type Turn,
 } from './starter/room-model.ts'
-import { act, ActionRefused, REACH } from './starter/room-rules.ts'
+import {
+  act,
+  ActionRefused,
+  battle,
+  FOES,
+  HERO,
+  REACH,
+} from './starter/room-rules.ts'
 import { roomFrames } from './starter/room-wire.ts'
 import { rooms } from './starter/worker.ts'
 import words from './starter/vocab.json' with { type: 'json' }
@@ -143,18 +152,125 @@ test('a room socket scopes subscriptions and relays to the connected seat', () =
   )
 })
 
-test('a move walks to the tapped tile within reach, and nowhere else', async () => {
-  let seat = { room: 'r', seat: 'a' }
-  let turn = { seat: 'a', number: 1 }
-  let move = (x: number, z: number) =>
-    act(seat, ['a', 'b'], turn, { room: 'r', x: 0, z: 0 }, {
-      number: 1,
-      kind: 'move',
-      x,
-      z,
-    }, () => 1)
-  equal(move(1, -2)[0], { entity: { eid: 'a' }, play_pawn: { x: 1, z: -2 } })
-  for (let [x, z] of [[0, 0], [REACH, 1], [0.5, 0]]) {
-    ok((await throws(() => move(x, z))) instanceof ActionRefused)
+// A room in rows: hero seats at tiles, foes by kind, and the ledger so far.
+let R = 'r'
+let rows = (
+  heroes: [string, number, number, number?][],
+  foes: [string, string, number, number][] = [],
+  hits: [string, number, number?][] = [],
+  steps = REACH,
+): Bundle[] => [
+  { entity: { eid: R }, play_turn: { seat: heroes[0][0], number: 1, steps } },
+  ...heroes.map(([eid, x, z, life = 0]) => ({
+    entity: { eid },
+    play_pawn: { room: R, name: eid, x, z, life },
+  })),
+  ...foes.map(([eid, kind, x, z]) => ({
+    entity: { eid },
+    play_foe: { room: R, kind, x, z },
+  })),
+  ...hits.map(([target, dmg, life = 0], i) => ({
+    entity: { eid: `hit${i}` },
+    play_hit: {
+      room: R,
+      target,
+      by: 'x',
+      life,
+      dmg,
+      roll: 6,
+      need: 1,
+      number: i,
+    },
+  })),
+]
+// Play one action and fold its batch into the rows. `rolls` feed the d6 and
+// the damage spread in turn: 0.99 rolls a 6, 0 a 1 and the least damage.
+let play = (
+  before: Bundle[],
+  seats: string[],
+  choice: Choice,
+  rolls: number[] = [],
+) => {
+  let seat = (before[0].play_turn as Turn).seat
+  let batch = act(
+    { room: R, seat },
+    seats,
+    before,
+    { ...choice, number: 1 },
+    () => rolls.shift() ?? 0,
+  )
+  let after = structuredClone(before)
+  for (let { entity, $was: _, ...parts } of batch) {
+    let row = after.find((r) => r.entity.eid === entity.eid)
+    if (!row) after.push(row = { entity })
+    for (let [name, value] of Object.entries(parts)) {
+      row[name] = { ...row[name] as object, ...value as object }
+    }
   }
+  return { ...battle(after, R), rows: after }
+}
+let refused = async (fn: () => unknown) =>
+  ok((await throws(fn)) instanceof ActionRefused)
+
+test('a move spends steps and keeps the turn, never past them or onto someone', async () => {
+  let start = rows([['a', 0, 0], ['b', 0, 2]], [['w', 'wolf', 2, 0]])
+  let walked = play(start, ['a', 'b'], { kind: 'move', x: 1, z: -1 })
+  equal(walked.party[0], { ...walked.party[0], x: 1, z: -1 })
+  equal(walked.turn, { seat: 'a', number: 2, steps: REACH - 2 })
+  for (let [x, z] of [[0, 0], [REACH, 1], [0.5, 0], [0, 2], [2, 0]]) {
+    await refused(() => play(start, ['a', 'b'], { kind: 'move', x, z }))
+  }
+  await refused(() =>
+    play(walked.rows, ['a', 'b'], { kind: 'move', x: 1, z: 2 })
+  )
+})
+
+test('a strike rolls against the foe and writes the ledger, hit or miss', async () => {
+  let start = rows([['a', 0, 0], ['b', 0, 3]], [['w', 'wolf', 1, 0]])
+  let hit = play(start, ['a', 'b'], { kind: 'strike', foe: 'w' }, [0.99, 0])
+  equal(hit.foes[0].hp, FOES.wolf.most - 3)
+  equal(hit.hits[0], { ...hit.hits[0], by: 'a', roll: 6, need: 3, dmg: 3 })
+  equal(hit.turn?.seat, 'b')
+  let miss = play(start, ['a', 'b'], { kind: 'strike', foe: 'w' }, [0])
+  equal([miss.foes[0].hp, miss.hits[0].dmg], [FOES.wolf.most, 0])
+  await refused(() =>
+    play(rows([['a', 0, 0]], [['w', 'wolf', 2, 0]]), ['a'], {
+      kind: 'strike',
+      foe: 'w',
+    })
+  )
+})
+
+test('when the round ends every foe walks to the nearest hero and strikes', () => {
+  let start = rows([['a', 0, 0], ['b', 6, 0]], [['w', 'wolf', 2, 0]])
+  let next = { ...start[0], play_turn: { seat: 'b', number: 1, steps: 3 } }
+  let round = play([next, ...start.slice(1)], ['a', 'b'], { kind: 'pass' }, [
+    0.99,
+    0,
+  ])
+  equal(round.foes[0], { ...round.foes[0], x: 1, z: 0 })
+  equal(round.party.map((p) => p.hp), [HERO.most - 2, HERO.most])
+  equal(round.turn, { seat: 'a', number: 2, steps: REACH })
+})
+
+test('a knocked-out hero loses their turns until an ally beside them revives them', async () => {
+  let start = rows([['a', 0, 0], ['b', 0, 1], ['c', 5, 5]], [], [[
+    'b',
+    HERO.most,
+  ]])
+  let passed = play(start, ['a', 'b', 'c'], { kind: 'pass' })
+  equal(passed.turn?.seat, 'c')
+  let revived = play(start, ['a', 'b', 'c'], { kind: 'revive', seat: 'b' })
+  equal(revived.party[1], { ...revived.party[1], life: 1, hp: HERO.most })
+  equal(revived.turn?.seat, 'b')
+  await refused(() =>
+    play(start, ['a', 'b', 'c'], { kind: 'revive', seat: 'c' })
+  )
+  let fallen = rows([['a', 0, 0]], [['w', 'wolf', 1, 0]], [[
+    'a',
+    HERO.most - 1,
+  ]])
+  let last = play(fallen, ['a'], { kind: 'pass' }, [0.99, 0])
+  equal(last.party[0].hp, 0)
+  await refused(() => play(last.rows, ['a'], { kind: 'pass' }))
 })

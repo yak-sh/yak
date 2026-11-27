@@ -27,7 +27,7 @@
         "number": {
           "type": "integer"
         },
-        "roll": {
+        "steps": {
           "type": "integer"
         }
       }
@@ -42,11 +42,75 @@
           "index": true,
           "death": "cascade"
         },
+        "name": {
+          "type": "string"
+        },
         "x": {
           "type": "number"
         },
         "z": {
           "type": "number"
+        },
+        "life": {
+          "type": "integer"
+        }
+      }
+    },
+    "play_foe": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "room": {
+          "type": "string",
+          "ref": "entity",
+          "index": true,
+          "death": "cascade"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "x": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        }
+      }
+    },
+    "play_hit": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "room": {
+          "type": "string",
+          "ref": "entity",
+          "index": true,
+          "death": "cascade"
+        },
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "life": {
+          "type": "integer"
+        },
+        "dmg": {
+          "type": "integer"
+        },
+        "roll": {
+          "type": "integer"
+        },
+        "need": {
+          "type": "integer"
+        },
+        "number": {
+          "type": "integer"
         }
       }
     },

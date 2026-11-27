@@ -17,6 +17,7 @@ let shell = [
 let scene = ['look.ts', 'frames.ts', 'world.ts', 'trees.ts']
 let solo = ['main.ts', 'movement.ts', 'play.ts']
 let room = [
+  'frames.ts',
   'room-page.ts',
   'room-client.ts',
   'room-model.ts',
@@ -71,11 +72,12 @@ export let gameStarter = (
   let manifest = JSON.parse(sources['package.json'])
   let depends = manifest.dependencies as Record<string, string>
   if (view !== 'voxel') delete depends['@yaks/voxel']
-  if (!dimensional) {
-    delete depends.three
+  if (!dimensional) delete depends.three
+  if (!dimensional && !multiplayer) {
     delete depends['@yaks/stage']
+    delete depends['@yaks/ui']
+    delete depends.preact
   }
-  if (multiplayer || !dimensional) delete depends['@yaks/ui']
   if (!multiplayer) {
     delete depends['@yaks/workerd']
     delete depends['@yaks/graph']
