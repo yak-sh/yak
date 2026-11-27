@@ -274,9 +274,9 @@ let linked = (win: Window) => {
 // time so a long list never has to be cloned just to cut it back down.
 let copyPicture = (
   root: Element,
-  omitted: Set<Element>,
-  positions: Map<Element, string>,
-  sources: Set<Element>,
+  omitted: ReadonlySet<Node>,
+  positions = new Map<Element, string>(),
+  sources = new Set<Element>(),
 ) => {
   let shallow = new Set<Element>()
   let path = (e: Element | null) => {
@@ -293,10 +293,10 @@ let copyPicture = (
     if (at != null) shown.setAttribute(SCROLL, at)
     if (sources.has(e)) sheets.push([e, shown])
     for (let node of e.childNodes) {
-      if (node.nodeType != 1) shown.appendChild(node.cloneNode(true))
-      else if (!omitted.has(node as Element)) {
-        shown.appendChild(copy(node as Element))
-      }
+      if (omitted.has(node)) continue
+      shown.appendChild(
+        node.nodeType == 1 ? copy(node as Element) : node.cloneNode(true),
+      )
     }
     return shown
   }
@@ -339,11 +339,11 @@ export let snapshot = (win: Window): Snapshot => {
   )
   carry(win, shown, sheets)
   let doc = (e: Element) => '<!doctype html>' + e.outerHTML
-  let shell = shown.querySelector(`[${OWN}]`) &&
-    shown.cloneNode(true) as Element
-  for (let own of shell ? shell.querySelectorAll(`[${OWN}]`) : []) {
-    own.replaceChildren()
-  }
+  let owns = [...shown.querySelectorAll(`[${OWN}]`)]
+  let shell = owns.length && copyPicture(
+    shown,
+    new Set(owns.flatMap((e) => [...e.childNodes])),
+  ).shown
   return {
     keep: win.location.href,
     html: doc(shown),
