@@ -832,6 +832,7 @@ let program = async (
             ]
             : []
         ),
+        { environment: platform },
       )
       : await source([
         tsconfig,
@@ -839,7 +840,7 @@ let program = async (
           .map((r) => `${CHECKOUT}/${r}`),
       ])
     let errors = reported(tsc.out)
-    if (errors.length) console.error(errors.join('\n'))
+    if (errors.length) console.error(`${on.name} types\n${errors.join('\n')}`)
     if (!tsc.success && !/error TS/.test(tsc.out)) {
       console.error(tsc.out, tsc.err)
       return false

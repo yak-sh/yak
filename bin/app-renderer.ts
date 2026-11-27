@@ -26,8 +26,8 @@ export let usesPreact = (path: string): boolean => needsPreact(path, new Set())
 
 let needsPreact = (path: string, visited: Set<string>): boolean => {
   let app = /^apps\/[^/]+/.exec(path)?.[0]
-  if (app) return preactApp(app)
-  let group = /^(bench|bin|workers)\/.*\.[cm]?[jt]sx?$/.exec(path)?.[1]
+  if (app && preactApp(app)) return true
+  let group = /^(apps|bench|bin|workers)\/.*\.[cm]?[jt]sx?$/.exec(path)?.[1]
   if (!group || visited.has(path)) return false
   let prior = sources.get(path)
   if (prior != undefined) return prior

@@ -9,13 +9,24 @@ let info = (...files: string[]) => JSON.stringify({ fileNames: files })
 let rig = () => {
   let root = Deno.makeTempDirSync()
   let dir = `${root}/project`, pool = `${root}/pool`
-  let compile = (files: string[], next?: string, seen: string[] = []) =>
-    incremental(dir, pool, async (path) => {
-      seen.push(await Deno.readTextFile(path).catch(() => 'none'))
-      if (next === undefined) throw new Error('interrupted')
-      await Deno.writeTextFile(path, next)
-      return { success: true }
-    }, files)
+  let compile = (
+    files: string[],
+    next?: string,
+    seen: string[] = [],
+    environment?: string,
+  ) =>
+    incremental(
+      dir,
+      pool,
+      async (path) => {
+        seen.push(await Deno.readTextFile(path).catch(() => 'none'))
+        if (next === undefined) throw new Error('interrupted')
+        await Deno.writeTextFile(path, next)
+        return { success: true }
+      },
+      files,
+      { environment },
+    )
   let pooled = () =>
     [...Deno.readDirSync(pool)].map((e) =>
       JSON.parse(Deno.readTextFileSync(`${pool}/${e.name}`)).fileNames.join()
@@ -23,6 +34,19 @@ let rig = () => {
   let clean = () => Deno.removeSync(root, { recursive: true })
   return { dir, pool, compile, pooled, clean }
 }
+
+test('new ambient declarations start with their own build info', async () => {
+  let { compile, clean } = rig()
+  try {
+    let seen: string[] = []
+    await compile(['a'], info('a'), seen, 'old-types')
+    await compile(['a'], info('a', 'b'), seen, 'new-types')
+    await compile(['a'], info('a'), seen, 'old-types')
+    equal(seen, ['none', 'none', info('a')])
+  } finally {
+    clean()
+  }
+})
 
 test('a compile starts from the build info naming most of its files, and adds what it grew', async () => {
   let { compile, pooled, clean } = rig()

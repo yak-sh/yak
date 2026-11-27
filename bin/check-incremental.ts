@@ -95,15 +95,17 @@ let publish = async (from: string, to: string) => {
  * Concurrent compiles may finish in either order: the compiler validates the
  * saved versions against the sources and options it reads, and build info
  * names files relative to itself, so another checkout's spares what the two
- * hold alike. A compile that throws adds nothing.
+ * hold alike. Use the same environment only for identical compiler options
+ * and ambient declarations. A compile that throws adds nothing.
  */
 export let incremental = async <T>(
   dir: string,
   pool: string,
   compile: (info: string) => Promise<T>,
   files: string[] = [],
-  keep = 8,
+  { keep = 8, environment }: { keep?: number; environment?: string } = {},
 ): Promise<T> => {
+  if (environment) pool = `${pool}/${environment}`
   Deno.mkdirSync(dir, { recursive: true })
   Deno.mkdirSync(pool, { recursive: true })
   let entries = [...Deno.readDirSync(pool)]
@@ -118,7 +120,7 @@ export let incremental = async <T>(
     })
     .sort((a, b) => b.at - a.at)
   let held = entries.map(({ path }) => named(path))
-  let mine = `${dir}/build.tsbuildinfo`
+  let mine = `${dir}/build${environment ? `-${environment}` : ''}.tsbuildinfo`
   let from = best([named(mine), ...held], files)
   let own = `${dir}/build.${Deno.pid}.${crypto.randomUUID()}.tsbuildinfo`
   try {
