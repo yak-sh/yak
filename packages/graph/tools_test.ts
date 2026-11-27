@@ -12,6 +12,7 @@ import {
   tier,
 } from './tools.ts'
 import { graph } from './graph.ts'
+import type { SchemaDoc } from './schema.ts'
 import { ram } from '@yaks/ram'
 import { declared } from './vocab.ts'
 import { Refused } from './errors.ts'
@@ -130,8 +131,6 @@ test('graph_schema reads several components however the names are sent', () => {
   assertEquals(read('library'), ['shelf', 'book'])
 })
 
-// The index is what every agent reads to learn the words, so its answer
-// meets the output schema it declares, an `entity` property among them.
 test('graph_schema answers what its output schema admits', () => {
   let during = loadVocab({
     $defs: {
@@ -140,13 +139,22 @@ test('graph_schema answers what its output schema admits', () => {
         type: 'object',
         properties: {
           entity: { type: 'string', ref: 'entity', death: 'keep' },
+          requestId: { type: 'string', description: 'the originating request' },
         },
       },
     },
+    kinds: { occurrence: { is: ['during'] } },
   })
-  let call = { entity: { eid: 'c' }, call: { args: {} } }
-  let [said] = schema.run(call, { vocab: during } as Graph) as Bundle[]
-  validateToolOutput(schema, (said.output as { value: unknown }).value)
+  for (let args of [{}, { component: 'during' }, { kind: 'occurrence' }]) {
+    let call = { entity: { eid: 'c' }, call: { args } }
+    let [said] = schema.run(call, { vocab: during } as Graph) as Bundle[]
+    let { value } = said.output as { value: SchemaDoc }
+    validateToolOutput(schema, value)
+    assertEquals(
+      Object.keys(value.$defs.during.properties!),
+      during.props('during'),
+    )
+  }
 })
 
 test('generic declarations describe the search capability and reported keywords', () => {

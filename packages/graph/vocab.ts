@@ -52,20 +52,22 @@ let bare = (s: unknown): unknown =>
     )
     : s
 
-// An answer describes a composed vocabulary, including internal and UX
-// components and the kinds they make. The authoring meta-schema reserves those
-// names for the host; its name restriction does not constrain what the host
-// reports.
+// An answer describes a composed vocabulary. Its component, property and
+// kind names come from the loaded graph, which can contain names outside the
+// authoring rules. Keep the meta-schema's value shapes for each of those maps.
+let named = (s: unknown) => {
+  let { propertyNames: _, ...rest } = s as Record<string, unknown>
+  return rest
+}
+
 let reports = new WeakMap<Keywords[], Record<string, unknown>>()
 let reported = (keywords: Keywords[]): Record<string, unknown> => {
   let held = reports.get(keywords)
   if (held) return held
   let { $schema: _, ...meta } = extendMeta(keywords)
   let properties = meta.properties as Record<string, unknown>
-  let named = (s: unknown) => {
-    let { propertyNames: _, ...rest } = s as Record<string, unknown>
-    return rest
-  }
+  let defs = meta.$defs as Record<string, unknown>
+  let component = defs.component as { properties: Record<string, unknown> }
   // Tool schemas are already read as 2020-12. Omit the dialect line, which
   // clients defaulting to an older draft can refuse before checking a value.
   let schema = bare({
@@ -74,6 +76,16 @@ let reported = (keywords: Keywords[]): Record<string, unknown> => {
       ...properties,
       $defs: named(properties.$defs),
       kinds: named(properties.kinds),
+    },
+    $defs: {
+      ...defs,
+      component: {
+        ...component,
+        properties: {
+          ...component.properties,
+          properties: named(component.properties.properties),
+        },
+      },
     },
   }) as Record<string, unknown>
   reports.set(keywords, schema)
