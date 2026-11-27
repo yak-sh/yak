@@ -455,7 +455,7 @@ let Figure: FunctionComponent<Ctx & { pen: Pen; shown: () => void }> = (
   useTold((l) => yak.watch('*', l))
   let sheet = useRef<HTMLDivElement>(null)
   let leader = useRef<SVGSVGElement>(null)
-  let drawing = useRef<Mounted>()
+  let drawing = useRef<Mounted | undefined>(undefined)
   let [asked, setAsked] = useState(figure.query())
   let [fault, setFault] = useState('')
   let [closer, setCloser] = useState(false)

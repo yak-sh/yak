@@ -329,7 +329,13 @@ let host = (name: 'workers' | 'browser') =>
         name,
         dir,
         config: `${dir}/config.json`,
-        options: config.compilerOptions,
+        options: name == 'workers'
+          ? {
+            ...config.compilerOptions,
+            // SSR imports shared views that use DOM types for their effects.
+            lib: [...config.compilerOptions.lib, 'dom', 'dom.iterable'],
+          }
+          : config.compilerOptions,
         globals: async (): Promise<Record<string, string>> =>
           name == 'workers'
             ? {
@@ -894,16 +900,18 @@ let check = async (
   let legacy = roots.filter(usesPreact)
   return await programs(
     [
-      ...local.length
+      ...roots.length
         ? [{
-          made: made(local),
-          check: () => program(deno(), local, snapshot, all),
-        }]
-        : [],
-      ...legacy.length
-        ? [{
-          made: made(legacy),
-          check: () => program(deno('preact'), legacy, snapshot, all),
+          made: made(roots),
+          check: async () => {
+            // Both renderers use the Deno slot so a fourth compiler doesn't
+            // compete with the browser and Worker programs for memory.
+            let react = !local.length ||
+              await program(deno(), local, snapshot, all)
+            let preact = !legacy.length ||
+              await program(deno('preact'), legacy, snapshot, all)
+            return react && preact
+          },
         }]
         : [],
       ...hosted.filter((h) => h.entries.length).map((h) => ({

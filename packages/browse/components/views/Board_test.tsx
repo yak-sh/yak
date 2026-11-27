@@ -72,7 +72,9 @@ test('a quick-add box types on from its draft, and filing spends it', async () =
     input.setSelectionRange = () => {}
     let { Event } = input.ownerDocument.defaultView!
     let fire = (type: string, props = {}) =>
-      input.dispatchEvent(Object.assign(new Event(type), props))
+      input.dispatchEvent(
+        Object.assign(new Event(type, { bubbles: true }), props),
+      )
     return {
       input,
       free: mounted.free,

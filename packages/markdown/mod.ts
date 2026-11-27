@@ -73,7 +73,8 @@ export let useHost = (): Options => {
   return site ? { ...host, site } : host
 }
 
-let node: H<ReactElement> = (tag, props, ...children) => {
+/** Draw a node from the structural renderer with React DOM property names. */
+export let reactNode: H<ReactElement> = (tag, props, ...children) => {
   if (!props || !('class' in props)) return h(tag, props, ...children)
   let { class: className, ...attributes } = props
   return h<{ className?: unknown }>(
@@ -89,7 +90,7 @@ export let Markdown = (
 ): ReactElement =>
   render(
     parse(source, { breaks }),
-    node,
+    reactNode,
     useHost(),
   )
 
@@ -103,7 +104,7 @@ export let MarkdownInline = (
   h(
     'span',
     null,
-    ...blocks(parseInline(source), node, {
+    ...blocks(parseInline(source), reactNode, {
       flat,
       site: useHost().site,
     }),

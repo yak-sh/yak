@@ -54,7 +54,7 @@ let Frame = block('div', 'Show', {
   Main: 'div',
   Heading: 'h1',
   Title: 'span',
-  Body: 'p',
+  Body: 'div',
   Acceptance: 'section',
   AcceptanceTitle: 'h2',
   AcceptanceBody: 'div',

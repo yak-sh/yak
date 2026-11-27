@@ -9,19 +9,14 @@
 // delegated listeners give it the in-app open and entity menu. A hex word
 // quoted in code is a commit, linked to its project's repository when the
 // caller knows one; a whole SHA is the commit's own entity.
-import {
-  type ComponentType,
-  createElement as h,
-  type ReactElement,
-  type ReactNode,
-} from 'react'
-import type { H } from '@yaks/render'
+import type { ComponentType, ReactNode } from 'react'
 import {
   blocks,
   Host,
   MarkdownInline,
   type Options,
   parse,
+  reactNode,
   type Refs,
   type Run,
 } from '@yaks/markdown'
@@ -75,7 +70,7 @@ export let markup = (
 ): ReactNode =>
   inline ? <MarkdownInline source={text} flat /> : blocks(
     parse(text, { breaks: false }),
-    h as H<ReactElement>,
+    reactNode,
     hosted(repo),
   )
 

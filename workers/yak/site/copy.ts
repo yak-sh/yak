@@ -40,7 +40,12 @@ export let text = (key: string, slots: Slots = {}) => {
   let marked = Object.fromEntries(
     Object.entries(slots).map((
       [name, el],
-    ) => [name, cloneElement(el, { [names.slot]: name })]),
+    ) => [
+      name,
+      cloneElement(el as ReactElement<Record<string, unknown>>, {
+        [names.slot]: name,
+      }),
+    ]),
   )
   return { [names.text]: key, children: fill(snippet(key), marked) }
 }
@@ -51,7 +56,7 @@ export let text = (key: string, slots: Slots = {}) => {
  * Each item is drawn alike, so one added on the page is drawn as the rest.
  *
  * ```tsx
- * <ul {...list('pricing.always.items', (says) => <li class='Plan_Item'>{says}</li>)} />
+ * <ul {...list('pricing.always.items', (says) => <li className='Plan_Item'>{says}</li>)} />
  * ```
  */
 export let list = (key: string, item: (says: string) => ReactElement) => {

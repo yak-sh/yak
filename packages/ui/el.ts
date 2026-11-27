@@ -38,7 +38,9 @@ import {
   type FunctionComponent,
   type ReactNode,
   useContext,
+  useLayoutEffect,
   useMemo,
+  useRef,
 } from 'react'
 import { away } from '@yaks/markdown/away'
 import { Site } from '@yaks/markdown/site'
@@ -76,12 +78,43 @@ let face = (
   className: string,
   ref: unknown,
   children: ReactNode,
-) => ({
+): Record<string, unknown> => ({
   ...props,
   ref,
   className,
   ...(children !== undefined && { children }),
 })
+
+type Attrs = Record<string, unknown>
+type Cancel = (event: Event) => void
+
+// Layers dispatch cancel on their own element, including those using an
+// element other than dialog. Listen there so both renderers hear the event.
+let Cancelable = ({ tag, attrs, cancel }: {
+  tag: string
+  attrs: Attrs
+  cancel: Cancel
+}) => {
+  let node = useRef<Element | null>(null)
+  let ref = useMemo(() => (at: Element | null) => {
+    node.current = at
+    let given = attrs.ref
+    if (typeof given == 'function') return given(at)
+    if (given) (given as { current: Element | null }).current = at
+  }, [attrs.ref])
+  useLayoutEffect(() => {
+    let at = node.current
+    at?.addEventListener('cancel', cancel)
+    return () => at?.removeEventListener('cancel', cancel)
+  }, [tag, cancel])
+  return h(tag, { ...attrs, ref })
+}
+
+let element = (tag: string, attrs: Attrs) => {
+  if (typeof attrs.onCancel != 'function') return h(tag, attrs)
+  let { onCancel, ...rest } = attrs
+  return h(Cancelable, { tag, attrs: rest, cancel: onCancel as Cancel })
+}
 
 let Linked = ({ href, props, names, elRef, children }: {
   href: string
@@ -95,7 +128,7 @@ let Linked = ({ href, props, names, elRef, children }: {
   return h(
     Surround.Provider,
     { value: surround },
-    h('a', face(away({ ...props, href }, site), names, elRef, children)),
+    element('a', face(away({ ...props, href }, site), names, elRef, children)),
   )
 }
 
@@ -148,7 +181,7 @@ export let el = <P extends Props = Props>(
   if (href && href != outer) {
     props = { ...props, role: 'link', tabIndex: 0, 'data-href': href }
   }
-  return h(d.tag!, face(props, names, elRef, children))
+  return element(d.tag!, face(props, names, elRef, children))
 }
 
 /** A block and its elements: `block('section', 'Card', { Head: 'header' })`

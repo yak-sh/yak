@@ -84,8 +84,8 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
   let eid = e.entity.eid
   useTold((l) => yak.watch('*', l))
   let [ask, setAsk] = useState<Ask>()
-  useEffect(() =>
-    yak.listen((change) => {
+  useEffect(() => {
+    let off = yak.listen((change) => {
       let made = !change.generation &&
         change.bundles.find((b) => b.signin_request)
       if (made) return setAsk({ eid: made.entity.eid, change, later: [] })
@@ -94,7 +94,9 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
         let more = change.bundles.filter((b) => b.entity.eid == a?.eid)
         return a && more.length ? { ...a, later: [...a.later, ...more] } : a
       })
-    }), [])
+    })
+    return () => void off()
+  }, [])
   // Each phase lights in turn once the ask is written; where nothing paints
   // frames, as in a test, all of them at once.
   let [upto, setUpto] = useState(-1)

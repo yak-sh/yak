@@ -15,7 +15,7 @@ type State = { failure?: { error: unknown } }
 export class Fault extends Component<Props, State> {
   override state: State = {}
 
-  static override getDerivedStateFromError(error: unknown): State {
+  static getDerivedStateFromError(error: unknown): State {
     return { failure: { error } }
   }
 

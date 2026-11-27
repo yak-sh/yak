@@ -8,9 +8,10 @@ import { type Ent } from '../../types.ts'
 import { TileSlot } from '../Tile.tsx'
 import { TaskTile } from './TaskTile.tsx'
 
-let children = (v: ReactElement) =>
+type Part = ReactElement<{ children?: unknown; name?: string }>
+let children = (v: Part) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
-    .flat().filter(Boolean) as ReactElement[]
+    .flat().filter(Boolean) as Part[]
 
 test('task tile delegates its dense meta row to the registry', () => {
   let e: Ent = {
@@ -44,7 +45,7 @@ test('task tile delegates its dense meta row to the registry', () => {
   assertEquals(props.eid, 'task')
   assertEquals(props.view, 'Meta')
   assertEquals(props.id, true)
-  let tail = props.children as ReactElement
+  let tail = props.children as Part
   assertEquals(tail.type === TileSlot, true)
   assertEquals(tail.props.children, after)
   assertEquals(parts[4].type === TileSlot, true)

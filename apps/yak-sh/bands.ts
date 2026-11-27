@@ -338,7 +338,7 @@ export let Phases = (
     call: { kind: string; text: string }
     /** whether the write has been made */
     made: boolean
-    list?: RefObject<HTMLOListElement>
+    list?: RefObject<HTMLOListElement | null>
   },
 ) => {
   let phase = (p: Phase) =>

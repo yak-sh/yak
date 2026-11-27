@@ -7,8 +7,7 @@ The vocabulary describes those components.
 
 The exported `render(registry, bundle, view, vocab, ctx?)` uses the Preact
 rendering backend for view selection and tree construction, then
-`preact-render-to-string` for serialization. An unmatched view returns an empty
-string.
+`react-dom/server` for serialization. An unmatched view returns an empty string.
 
 ```ts
 import { render } from '@yaks/html'

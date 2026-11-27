@@ -2,6 +2,7 @@ import manifest from '../packages/preact/package.json' with { type: 'json' }
 
 let renderer = manifest.yaksRenderer
 let apps = new Map<string, boolean>()
+let sources = new Map<string, boolean>()
 
 let preactApp = (app: string): boolean => {
   let choice = apps.get(app)
@@ -23,12 +24,21 @@ let preactApp = (app: string): boolean => {
 export let usesPreact = (path: string): boolean => {
   let app = /^apps\/[^/]+/.exec(path)?.[0]
   if (app) return preactApp(app)
-  if (!path.startsWith('workers/') || !path.endsWith('_test.ts')) return false
-  let test = Deno.readTextFileSync(new URL(`../${path}`, import.meta.url))
-  let worker = /from\s+['"](?:\.\.\/)+(apps\/[^/]+)\/worker\.[jt]s['"]/.exec(
-    test,
-  )
-  return !!worker && preactApp(worker[1])
+  if (!/^(bin|workers)\/.*\.[cm]?[jt]sx?$/.test(path)) return false
+  let prior = sources.get(path)
+  if (prior != undefined) return prior
+  let choice = false
+  try {
+    let source = Deno.readTextFileSync(new URL(`../${path}`, import.meta.url))
+    let imports = source.matchAll(
+      /(?:\bfrom\s*|\bimport\s*\(?\s*)['"](?:\.\.\/)+(apps\/[^/]+)\/[^'"]+\.[cm]?[jt]sx?['"]/g,
+    )
+    choice = [...imports].some(([, app]) => preactApp(app))
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+  }
+  sources.set(path, choice)
+  return choice
 }
 
 /** The Preact module bindings for the test and type-check processes. */

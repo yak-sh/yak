@@ -108,7 +108,7 @@ export let usePage = (
   enabled = true,
 ): QueryResult => {
   let page = useQueryResult(line, enabled, true)
-  let shown = useRef<{ base: string; eids: string[] }>()
+  let shown = useRef<{ base: string; eids: string[] } | undefined>(undefined)
   if (page.ready) shown.current = { base, eids: page.eids }
   let kept = shown.current?.base == base ? shown.current.eids : undefined
   return page.ready || !kept ? page : { ...page, eids: kept }

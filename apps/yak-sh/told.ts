@@ -23,7 +23,7 @@ export let text = (b: Bundle, comp: string, prop: string) =>
 /** Hear `types` on the element `ref` holds, with the newest `fn`: a drawing
  * hears every click in it on itself, whoever drew the markup inside. */
 export let useHeard = (
-  ref: RefObject<Element>,
+  ref: RefObject<Element | null>,
   types: string[],
   fn: (ev: Event) => void,
 ) => {
@@ -114,7 +114,7 @@ export let played = (
  * is in, so what the step shows plays out as they scroll, and backwards as
  * they go back. */
 export let useReached = (
-  ref: RefObject<Element>,
+  ref: RefObject<Element | null>,
   fallback: number,
   each?: (k: number) => void,
 ) => {

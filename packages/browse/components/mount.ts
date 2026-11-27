@@ -24,6 +24,8 @@ for (
     window.HTMLTextAreaElement.prototype,
   ]
 ) {
+  prototype.selectionStart = 0
+  prototype.selectionEnd = 0
   prototype.setSelectionRange = function (start: number, end: number) {
     this.selectionStart = start
     this.selectionEnd = end
