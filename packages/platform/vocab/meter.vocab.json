@@ -51,6 +51,11 @@
           "type": "string",
           "format": "date-time",
           "description": "The moment past which the call can no longer be running."
+        },
+        "person": {
+          "$id": "urn:uuid:0a0d3836-b3cc-4de2-9cd3-2ea557172750",
+          "type": "string",
+          "description": "The person whose work the call is: the one in the Operator conversation, or the app's caller. None for work no person started."
         }
       }
     },
@@ -87,6 +92,11 @@
         "visitor": {
           "$id": "urn:uuid:9ee3eab6-ad0d-47c5-bee3-66802dd7c380",
           "type": "boolean"
+        },
+        "person": {
+          "$id": "urn:uuid:d872266f-8b28-4868-89c8-7728b3eee43e",
+          "type": "string",
+          "description": "The person whose work the call was, as its hold named them."
         }
       },
       "$comment": "workers/yak model-spend.ts `settled`."

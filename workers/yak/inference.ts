@@ -31,6 +31,7 @@ import { appStore, directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Stored } from './graph.ts'
 import { countedMedia } from './meter.ts'
+import { whoseOf } from './app-whose.ts'
 import { monthOf } from '@yaks/platform/meter'
 import { reservation, reserved } from './model-spend.ts'
 import { KERNEL, metaOf } from './meta.ts'
@@ -213,7 +214,10 @@ export let lending = async (
               found.space,
               (remaining) => quoted(req, price, context, remaining),
               call,
-              { source: provider },
+              {
+                source: provider,
+                person: (await whoseOf(at, req.conversation)).person,
+              },
             )).value
           if (!quote) {
             throw new ModelError(
@@ -417,7 +421,7 @@ export let hosting = (env: Bindings): Kernel => ({
         job.call,
         cost.dollars,
         cost.reported,
-        frozen.provider.name,
+        { source: frozen.provider.name },
       )
     } else if (!budgetRefusal(receipt.failure)) {
       await hosting(env).report(job, {

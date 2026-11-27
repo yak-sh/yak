@@ -71,7 +71,7 @@ import {
 } from './directory.ts'
 import { paid } from '@yaks/platform/plans'
 import { type Tally, tally } from '@yaks/platform/trial'
-import { budget, monthOf, starterOf } from '@yaks/platform/meter'
+import { budget, byPerson, monthOf, starterOf } from '@yaks/platform/meter'
 import { freeBudgetOf } from '@yaks/platform/budget'
 import { DAILY, opened, PER_BUILD, PER_SOURCE } from './newcomer.ts'
 import { sessionAt } from './session.ts'
@@ -100,7 +100,7 @@ import { appVisits, botsAt, botTabs } from '@yaks/platform/visits-view'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
 import { arrivals } from './arrivals.ts'
 import { splitSays, stopped } from '@yaks/platform/funnel'
-import { type ByDay, series, summed } from '@yaks/ui/chart'
+import { type ByDay, series } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
 import { type Listed, listed, type Worked } from './operator-view.ts'
@@ -169,6 +169,7 @@ let COUNTED: CensusFields = {
     'visitor_share',
     'meter',
     'trend.spend',
+    'trend.people',
     'used.at',
     'visitor_build',
     'free_ai_budget',
@@ -208,13 +209,30 @@ let APP_TILES: CensusFields = {
 }
 // The pages that ask spaces' Operators hand each its space whole.
 let OPERATORS: CensusFields = { spaces: ['space', ...SPACE_PARTS, 'trend'] }
-/** The fields of each kind every one of `all` names. */
+/** The fields of each kind every one of `all` names, a property left out
+ * where its component is read whole, since each path is a column of the read
+ * and a store answers only so many (workerd's 100).
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { fieldsOf } from './admin.ts'
+ *
+ * equal(
+ *   fieldsOf({ spaces: ['trend.spend', 'meter'] }, { spaces: ['trend'] }),
+ *   { spaces: ['meter', 'trend'] },
+ * )
+ * ```
+ */
 export let fieldsOf = (...all: CensusFields[]): CensusFields => {
   let out: Record<string, string[]> = {}
   for (let f of all) {
     for (let [kind, paths] of Object.entries(f)) {
       out[kind] = [...new Set([...out[kind] ?? [], ...paths ?? []])]
     }
+  }
+  for (let [kind, paths] of Object.entries(out)) {
+    let whole = new Set(paths.filter((p) => !p.includes('.')))
+    out[kind] = paths.filter((p) => !whole.has(p.split('.')[0]) || whole.has(p))
   }
   return out
 }
@@ -251,6 +269,12 @@ let NAMED = new Set([
 let latest = (...at: (string | null | undefined)[]) =>
   at.filter((a): a is string => !!a).sort().at(-1) ?? null
 let sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0)
+// The dollars of the days of `month` (YYYY-MM) a day map holds.
+let inMonth = (byDay: ByDay | undefined, month: string) =>
+  sum(
+    Object.entries(byDay ?? {}).filter(([d]) => d.startsWith(month))
+      .map(([, n]) => n),
+  )
 let group = (rows: Row[], key: (r: Row) => string) => {
   let out = new Map<string, Row[]>()
   for (let r of rows) out.set(key(r), [...out.get(key(r)) ?? [], r])
@@ -285,9 +309,10 @@ let days = (
  * and the latest use of it or of any of them. An app: this month's requests,
  * its database and files, its 30 days' visits as the hourly reading found them,
  * when it was last deployed, written to and last reported an error, who owns its
- * space and its latest use. A person: their budget over the
- * spaces they own, those spaces' storage and apps, and the latest of their last
- * use (a tool call, a page view), last sign-in and their spaces' latest use.
+ * space and its latest use. A person: what their own work spent, in any
+ * space (@yaks/platform/meter `byPerson`), the storage and apps of the spaces
+ * they own, and the latest of their last use (a tool call, a page view), last
+ * sign-in and their spaces' latest use.
  * A person is a test when they are nobody's (directory.ts `testIs`): a test
  * account, or a newcomer an agent's check opened. A space is a test space when
  * everyone seated in it is a test, and its apps are test apps.
@@ -321,7 +346,7 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   }
   for (let r of c.deploys) newer(idOf(r.deploy!.app), stampOf(r.created))
   for (let r of c.apps) newer(r.entity.eid, stampOf(r.last_deploy))
-  let trends = new Map(c.spaces.map((r) => [r.entity.eid, r.trend]))
+  let { people } = byPerson(c.spaces.map((r) => r.trend))
   let out = new Map<string, Uses>()
   for (let r of c.spaces) {
     let s = spaces.get(r.entity.eid)!
@@ -357,13 +382,10 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
       .filter((s) => s.member!.role == 'owner')
       .flatMap((s) => spaces.get(seatSpace(s)) ?? [])
       .filter((s) => s.slug != META.space)
+    let theirs = people[r.entity.eid]
     out.set(r.entity.eid, {
-      spend: { spent: sum(owned.map((s) => budget(s, now).spent)) },
-      ...days(
-        'spending',
-        summed(owned.map((s) => trends.get(s.eid)?.spend)),
-        now,
-      ),
+      spend: { spent: inMonth(theirs, month) },
+      ...days('spending', theirs, now),
       storage: sum(owned.map((s) => out.get(s.eid)?.storage ?? 0)),
       apps: sum(owned.map((s) => out.get(s.eid)?.apps ?? 0)),
       active: latest(
@@ -1302,8 +1324,9 @@ let sessionsPage = async (d: Reading, env: Env, person: string) => {
 let SPENDERS = 30
 
 // Where the platform's dollars went over the last thirty days
-// (admin-spending.ts): every space's days from the directory, and the
-// conversations and requests of the Operators of the spaces that spent most.
+// (admin-spending.ts): every space's and every person's days from the
+// directory, and the conversations and requests of the Operators of the spaces
+// that spent most.
 // Every space counts, a test one too: its dollars were spent all the same.
 let spendingPage = async (d: Reading, env: Env, person: string) => {
   let now = Date.now()
@@ -1335,7 +1358,13 @@ let spendingPage = async (d: Reading, env: Env, person: string) => {
     d,
     'Spending',
     'spending',
-    spendingBody(spaces, asked, PATH, now),
+    spendingBody(
+      spaces,
+      asked,
+      PATH,
+      now,
+      new Map(d.census.people.map((r) => [r.entity.eid, personName(r)])),
+    ),
   )
 }
 

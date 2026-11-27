@@ -693,7 +693,7 @@ let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
         spent(duration / 1000 * RATE)
         return Promise.resolve()
       }, { space: space.slug, app: app.slug }),
-    'browser',
+    { source: 'browser', person: ctx.person },
   ).catch((e) => {
     throw e instanceof ModelError && e.code == 'limit'
       ? refuse('limit', e.message)

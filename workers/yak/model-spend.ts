@@ -31,6 +31,9 @@ export type Hold = {
   source?: string
   /** a visitor's call, held against their share of the budget as well */
   visitor?: boolean
+  /** the person whose work it is, for the admin's watching of each person's
+   * use (`trend.people`); none for work no person started */
+  person?: string
 }
 /** Who a hold is spent for: what it buys, the source that sells it (a model
  * provider, voice, texts; @yaks/platform/meter `SOURCES`), and the visitor who
@@ -40,6 +43,10 @@ export type Paying = {
   what?: Kind
   source?: string
   visitor?: string
+  /** the person whose work the call is: the one in the Operator conversation,
+   * or the app's caller. None for work no person started (a sweep, an app's
+   * own automation). Billing is the space's either way. */
+  person?: string
   now?: Date
   /** what the call most likely costs should it end with nothing measured,
    * and the moment past which it can no longer be running: a hold still open
@@ -88,13 +95,14 @@ let held = (row: Bundle | undefined) =>
 let guessed = (row: Bundle | undefined) =>
   row?.model_estimate as Omit<Hold, 'dollars'> | undefined
 let paidBy = (
-  { space, month, what, source, visitor }: Omit<Hold, 'dollars'>,
+  { space, month, what, source, visitor, person }: Omit<Hold, 'dollars'>,
 ) => ({
   space,
   month,
   what,
   ...source ? { source } : {},
   ...visitor ? { visitor } : {},
+  ...person ? { person } : {},
 })
 
 export let reservation = async (
@@ -149,6 +157,7 @@ let finish = async (
           [paying.what]: delta,
           ...paying.source ? { source: paying.source } : {},
           ...paying.visitor ? { visitors: delta } : {},
+          ...paying.person ? { person: paying.person } : {},
           // Corrected on the day the hold was made, not the day it settled.
           ...typeof at == 'string' ? { at } : {},
         },
@@ -230,8 +239,15 @@ export let reserved = async <T extends { dollars: number }>(
   space: Space,
   quote: (remaining: number) => T | null,
   call = mint(),
-  { what = 'models', source, visitor, now = new Date(), likely, until }:
-    Paying = {},
+  {
+    what = 'models',
+    source,
+    visitor,
+    person,
+    now = new Date(),
+    likely,
+    until,
+  }: Paying = {},
 ): Promise<
   {
     value: T
@@ -283,6 +299,7 @@ export let reserved = async <T extends { dollars: number }>(
               what,
               ...source ? { source } : {},
               ...visitor ? { visitor: true } : {},
+              ...person ? { person } : {},
               ...until
                 ? {
                   likely: Math.min(likely ?? value!.dollars, value!.dollars),
@@ -299,6 +316,7 @@ export let reserved = async <T extends { dollars: number }>(
               [what]: value!.dollars,
               ...source ? { source } : {},
               ...visitor ? { visitors: value!.dollars } : {},
+              ...person ? { person } : {},
               held: true,
             },
           },
@@ -333,8 +351,8 @@ export let reserved = async <T extends { dollars: number }>(
 /** How much a space's tab ({@link tabbed}) runs up before it is written. */
 export let TAB = 0.001
 
-// The tabs this isolate runs, by space, month, kind and source: measured
-// dollars not yet in the directory.
+// The tabs this isolate runs, by space, month, kind, source and person:
+// measured dollars not yet in the directory.
 let tabs = new Map<string, number>()
 
 /**
@@ -365,9 +383,9 @@ export let tabbed = async <T extends { dollars: number }>(
   }
 > => {
   space = await directoryOf(env.STORE).withBudget(space)
-  let { what = 'models', source, visitor, now = new Date() } = paying
+  let { what = 'models', source, visitor, person, now = new Date() } = paying
   let month = monthOf(now)
-  let key = [space.eid, month, what, source ?? ''].join('|')
+  let key = [space.eid, month, what, source ?? '', person ?? ''].join('|')
   let owed = tabs.get(key) ?? 0
   let value = visitor ? null : quote(left(space, now) - owed)
   if (
@@ -388,7 +406,12 @@ export let tabbed = async <T extends { dollars: number }>(
       await stamp(env, {
         entities: [{
           entity: { eid: space.eid },
-          spend: { month, [what]: due, ...source ? { source } : {} },
+          spend: {
+            month,
+            [what]: due,
+            ...source ? { source } : {},
+            ...person ? { person } : {},
+          },
         }],
       })
     } catch (error) {
@@ -415,14 +438,14 @@ export let onHold = async <T>(
   most: number,
   what: Kind,
   work: (spent: (dollars: number) => void) => Promise<T>,
-  source?: string,
+  { source, person }: Pick<Paying, 'source' | 'person'> = {},
 ): Promise<T> => {
   let hold = await reserved(
     env,
     space,
     (left) => most <= left ? { dollars: most } : null,
     mint(),
-    { what, source },
+    { what, source, person },
   )
   let cost = 0
   try {
@@ -437,6 +460,7 @@ export let onHold = async <T>(
             month: monthOf(new Date()),
             [what]: cost - most,
             ...source ? { source } : {},
+            ...person ? { person } : {},
           },
         }],
       })

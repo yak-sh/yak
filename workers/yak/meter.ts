@@ -116,14 +116,15 @@ export let countedSpend = async (
 }
 
 /** The original media call and its spend commit together, once. A crash after
- * commit is recognized by the ledger rather than charged a second time. */
+ * commit is recognized by the ledger rather than charged a second time. The
+ * spend is sold by `source` for `person`'s work, where they are known. */
 export let countedMedia = async (
   env: { STORE: Namespace },
   space: Pick<Space, 'eid'>,
   call: string,
   dollars: number,
   reported = true,
-  source?: string,
+  { source, person }: Whose & { source?: string } = {},
 ) => {
   if (!Number.isFinite(dollars) || dollars < 0) {
     throw new Error('Generated media returned no valid request cost')
@@ -138,7 +139,12 @@ export let countedMedia = async (
         cost: { dollars, reported },
       }, {
         entity: { eid: space.eid },
-        spend: { month: monthOf(new Date()), models: dollars, source },
+        spend: {
+          month: monthOf(new Date()),
+          models: dollars,
+          ...source ? { source } : {},
+          ...person ? { person } : {},
+        },
       }],
     })
   } catch (error) {
@@ -278,10 +284,16 @@ let inputOf = async (
   return requestBound(req, window)
 }
 
+/** Who a model call is for: the visitor whose share of the space's budget it
+ * spends, if it is a visitor's, and the person whose work it is, if a person
+ * started it (model-spend.ts `Paying`). */
+export type Whose = { visitor?: string; person?: string }
+
 /** A hosted provider spends from the same space budget as every other door.
  * Costs are supplied by the adapter, never guessed from media JSON. A call
- * `visiting` names a visitor for is held to their share as well, and counted
- * among their calls of the day. A call that fails once the provider may have
+ * `whose` names a visitor for is held to their share as well, and counted
+ * among their calls of the day; the person it names is whose work the call's
+ * dollars are kept under (model-spend.ts `Paying`). A call that fails once the provider may have
  * worked on it settles at the usage the provider reported, else at what it
  * most likely cost (@yaks/model `likely`), never at the worst case it held. */
 export let accounted = (
@@ -289,7 +301,7 @@ export let accounted = (
   spaceOf: (dir: Directory) => Promise<Space | null>,
   model: Model,
   price?: (name: string) => Promise<Price | undefined>,
-  visiting?: (req: Parameters<Model>[0]) => Promise<string | undefined>,
+  whose?: (req: Parameters<Model>[0]) => Promise<Whose>,
   source?: string,
   results?: ModelResults,
 ): Model =>
@@ -316,7 +328,7 @@ export let accounted = (
       let unbounded = !own && unboundable(req, tariff, window)
       if (unbounded) throw new ModelError('limit', unbounded)
       let call = req.call ?? mint()
-      let visitor = await visiting?.(req)
+      let { visitor, person } = await whose?.(req) ?? {}
       let counted = own ? 0 : await inputOf(model, req, window!)
       let hold = await reserved(
         { STORE: ns },
@@ -341,6 +353,7 @@ export let accounted = (
         call,
         {
           visitor,
+          person,
           source,
           likely: own ? undefined : likely(req, tariff!, Infinity),
           until: new Date(Date.now() + CALL),
@@ -482,7 +495,7 @@ export let accounted = (
             call,
             cost.dollars,
             cost.reported,
-            source,
+            { source },
           )
         }
         return reply

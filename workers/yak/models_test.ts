@@ -1366,10 +1366,14 @@ test('original media debit is atomic once across concurrent and repeated recover
   let call = crypto.randomUUID()
   await Promise.all(
     [1, 2, 3].map(() =>
-      countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true, 'openai')
+      countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true, {
+        source: 'openai',
+      })
     ),
   )
-  await countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true, 'openai')
+  await countedMedia({ STORE: v.env.STORE }, space, call, 0.45, true, {
+    source: 'openai',
+  })
   assertAlmostEquals((await v.spent()).meter!.models, 0.45)
   assertAlmostEquals(await sourceTotal(v.env, space.eid, 'openai'), 0.45)
   assertEquals(v.asked, [])

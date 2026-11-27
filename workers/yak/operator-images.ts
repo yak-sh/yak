@@ -28,11 +28,13 @@ let THEIRS = ['bad_request', 'input', 'limit', 'space_full']
 
 let EXT: Record<string, string> = { jpeg: 'jpg' }
 
-/** The tool a space's Operator makes an image with. */
+/** The tool a space's Operator makes an image with, for `person`, whose work
+ * its dollars are kept under. */
 export let imageNew = (
   env: Env,
   space: Space,
   store: Pick<OperatorStore, 'g'>,
+  person?: string,
 ): Tool => ({
   ...imageTool(images.models, {
     about:
@@ -71,7 +73,7 @@ export let imageNew = (
         }, { room: mediaRoom(env, space) }),
       }), providing)[images.provider],
       undefined,
-      undefined,
+      () => Promise.resolve({ person }),
       images.provider,
     )
     let reply = await imageMade(make, images.models, args).catch((e) => {

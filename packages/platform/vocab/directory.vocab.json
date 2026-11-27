@@ -1949,6 +1949,12 @@
           "$id": "urn:uuid:44785c89-76b7-4ddb-bc9e-f335fc00c4c9",
           "type": "number",
           "stamped": true
+        },
+        "person": {
+          "$id": "urn:uuid:0660afc8-2929-4730-85d8-886380fcfa33",
+          "type": "string",
+          "description": "The person whose work its dollars paid for, kept by the day in the space's `trend.people`: the one in the Operator conversation, the one who pressed build, or the app's caller. None for work no person started (background runs, sweeps).",
+          "$comment": "For the admin's watching of each person's use; billing stays the space's."
         }
       },
       "$comment": "meter.ts `spend`, model-spend.ts `reserved`, budget.ts, billing.ts `credited`. A refund is journaled with who wrote it, since the meter is not. Stamped for the reason the budget is."

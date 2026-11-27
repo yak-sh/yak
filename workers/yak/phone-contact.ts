@@ -67,7 +67,7 @@ export let provePhone = async (
         'That code does not match, expired, or has no guesses left. Check it or request a new code.',
       )
     }
-    if (arrived.contact) await welcome(env, space, address)
+    if (arrived.contact) await welcome(env, space, address, person)
     return null
   }
   let from = await visitor(secret, person)
@@ -87,7 +87,7 @@ export let provePhone = async (
       'That number has had three codes this hour. Use one already sent or try later.',
     )
   }
-  await charged(env, space, await phoneOf(env)).send({
+  await charged(env, space, await phoneOf(env), person).send({
     to: address,
     text: codeText(digits),
   })
@@ -99,8 +99,13 @@ export let provePhone = async (
   }
 }
 
-let welcome = async (env: Env, space: Space, number: string) =>
-  await charged(env, space, await phoneOf(env)).send({
+let welcome = async (
+  env: Env,
+  space: Space,
+  number: string,
+  person: string,
+) =>
+  await charged(env, space, await phoneOf(env), person).send({
     to: number,
     text: REPLIES.welcome,
   })
@@ -122,6 +127,6 @@ export let consentPhone = async (
   if (!arrived) {
     throw refuse('conflict', 'Your mobile number changed. Try again.')
   }
-  if (arrived.contact) await welcome(env, space, number)
+  if (arrived.contact) await welcome(env, space, number, person)
   return dir.texting(person)
 }

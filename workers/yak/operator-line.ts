@@ -543,7 +543,7 @@ export let phoneSend = (
     // A number the space holds is the platform's phone, paid from the space's
     // budget (text-spend.ts); one the person connected is theirs to pay.
     let account = space.sender
-      ? charged(env, space, await phoneOf(env, space.sender))
+      ? charged(env, space, await phoneOf(env, space.sender), ctx.person)
       : await accountOf(
         ctxOf(env),
         held!.own,
@@ -676,7 +676,9 @@ export let answerText = async (
     ? text
     : `${text}\n\n${textedFor(space, me?.name || 'the sender')}`
   try {
-    let receipt = await (paid && !control ? charged(env, space, phone) : phone)
+    let receipt = await (paid && !control
+      ? charged(env, space, phone, person || undefined)
+      : phone)
       .send({ to, text: body, from })
     if (paid && control) {
       let { countedTexts } = await import('./meter.ts')

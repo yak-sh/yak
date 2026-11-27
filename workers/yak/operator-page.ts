@@ -732,7 +732,14 @@ export let operatorAnswer = async (
           () => refuse('arguments', 'Talk for up to a minute at a time.'),
         )
         if (!audio.length) return Response.json({ text: '' })
-        let got = await hearing(env, space, audio, type)
+        let got = await hearing(
+          env,
+          space,
+          audio,
+          type,
+          undefined,
+          who.person ?? undefined,
+        )
         return Response.json({ text: got.text })
       }
       let asked = await req.json().catch(() => null) as { text?: unknown }
@@ -744,7 +751,12 @@ export let operatorAnswer = async (
         env,
         await settingsAt(env, space, who),
       )
-      let said = await speaking(env, space, text, { voice, provider, speed })
+      let said = await speaking(env, space, text, {
+        voice,
+        provider,
+        speed,
+        person: who.person ?? undefined,
+      })
       return new Response(said.body, {
         headers: { 'content-type': said.type, 'cache-control': 'no-store' },
       })

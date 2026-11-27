@@ -2,7 +2,7 @@
 // let it spend, and the patches a spend makes. All of it is arithmetic on a
 // space as the directory reads it (`Metered`); workers/yak counts the spends
 // and writes them, and ./standing.ts says where a space stands.
-import { type ByDay, kept } from '@yaks/ui/chart'
+import { type ByDay, kept, summed } from '@yaks/ui/chart'
 import {
   allowance,
   budgeted,
@@ -601,9 +601,10 @@ export let sourceOf = (spend: Record<string, unknown>): string =>
 
 /**
  * The patch a spend makes to a space's `trend`: what it cost on its day, in
- * all and under its source (`sourceOf`), and under `paid` too when the space
+ * all and under its source (`sourceOf`), under `paid` too when the space
  * pays for a plan, so a day's dollars say who covered them: the space's own
- * plan, or the platform. A letter or a spend of nothing costs nothing and
+ * plan, or the platform, and under `people` by the person whose work it paid
+ * for, where it names one. A letter or a spend of nothing costs nothing and
  * leaves the days as they are. A spend made `at` an earlier moment (a hold
  * settled after its day) lands on that day.
  *
@@ -627,6 +628,9 @@ export let sourceOf = (spend: Record<string, unknown>): string =>
  *   sources: { texts: { '2026-10-31': 0.25 } },
  *   paid: { '2026-10-31': 0.25 },
  * })
+ * equal(trended({}, { models: 2, person: 'p' }, now).people, {
+ *   p: { '2026-10-31': 2 },
+ * })
  * equal(trended({}, { emails: 1 }, now), {})
  * let held = Date.parse('2026-10-30T23:00:00Z')
  * equal(trended({ spend: { '2026-10-30': 9 } }, { models: -8 }, now, false, held), {
@@ -647,9 +651,75 @@ export let trended = (
   let source = sourceOf(spend)
   let sources = (trend?.sources ?? {}) as Record<string, ByDay>
   let on = (days: ByDay | undefined) => kept(days, cost, now, undefined, at)
+  let person = typeof spend.person == 'string' ? spend.person : ''
   return {
     spend: on(trend?.spend as ByDay),
     sources: { ...sources, [source]: on(sources[source]) },
     ...paying ? { paid: on(trend?.paid as ByDay) } : {},
+    ...person ? { people: peopleOn(trend?.people, person, on, now) } : {},
   }
 }
+
+// Each person's days with one more spend on theirs, and anyone whose days
+// have all passed out of the window dropped.
+let peopleOn = (
+  people: unknown,
+  person: string,
+  on: (days: ByDay | undefined) => ByDay,
+  now: number,
+) => {
+  let all = (people ?? {}) as Record<string, ByDay>
+  let out: Record<string, ByDay> = {}
+  for (let [p, days] of Object.entries(all)) {
+    let left = kept(days, 0, now, undefined, 0)
+    if (Object.keys(left).length) out[p] = left
+  }
+  out[person] = on(all[person])
+  return out
+}
+
+/**
+ * Each person's dollars by day, over the spaces' `trend`s ({@link trended}):
+ * the work they did, in whichever space they did it, and nobody's under
+ * `nobody`, the days' dollars no person's work spent (a sweep, an app's own
+ * automation, a spend from before spends named a person). For watching who
+ * uses what; a space's budget and its bill are the space's own.
+ *
+ * ```ts
+ * import { byPerson } from '@yaks/platform/meter'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(
+ *   byPerson([
+ *     { spend: { '2026-10-31': 3 }, people: { jeff: { '2026-10-31': 2 } } },
+ *     { spend: { '2026-10-31': 1 }, people: { tog: { '2026-10-31': 1 } } },
+ *     { spend: { '2026-10-30': 4 } },
+ *   ]),
+ *   {
+ *     people: { jeff: { '2026-10-31': 2 }, tog: { '2026-10-31': 1 } },
+ *     nobody: { '2026-10-31': 1, '2026-10-30': 4 },
+ *   },
+ * )
+ * ```
+ */
+export let byPerson = (
+  trends: (Record<string, unknown> | null | undefined)[],
+): { people: Record<string, ByDay>; nobody: ByDay } => {
+  let people: Record<string, ByDay> = {}
+  let all: ByDay[] = []
+  for (let trend of trends) {
+    all.push(trend?.spend as ByDay)
+    let theirs = (trend?.people ?? {}) as Record<string, ByDay>
+    for (let [p, days] of Object.entries(theirs)) {
+      people[p] = summed([people[p], days])
+      all.push(negated(days))
+    }
+  }
+  let nobody = Object.fromEntries(
+    Object.entries(summed(all)).filter(([, n]) => n > 0),
+  )
+  return { people, nobody }
+}
+
+let negated = (days: ByDay): ByDay =>
+  Object.fromEntries(Object.entries(days ?? {}).map(([d, n]) => [d, -n]))

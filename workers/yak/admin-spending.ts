@@ -13,7 +13,7 @@ import { Card, type Col, Empty, Group, Table } from '@yaks/ui/parts'
 import { Sort, sortAt, type SortRow, type SortValue } from '@yaks/ux'
 import { type ByDay, columns, series, sparkline, summed } from '@yaks/ui/chart'
 import { count, dollars } from '@yaks/platform/standing'
-import { SOURCES } from '@yaks/platform/meter'
+import { byPerson, SOURCES } from '@yaks/platform/meter'
 import { day } from './html.ts'
 import { NAMES as PLANS, type Tier } from '@yaks/platform/plans'
 import {
@@ -38,7 +38,12 @@ export type Counted = {
   paying: boolean
   /** what it spent this month */
   month: number
-  trend?: { spend?: ByDay; sources?: Record<string, ByDay>; paid?: ByDay }
+  trend?: {
+    spend?: ByDay
+    sources?: Record<string, ByDay>
+    paid?: ByDay
+    people?: Record<string, ByDay>
+  }
 }
 
 /** What a space's Operator answered, or what kept it from answering. */
@@ -133,15 +138,16 @@ let firstOf = (maps: (ByDay | undefined)[]) =>
 
 // ---- each day ---------------------------------------------------------------
 
-// Each source's dollars over the window: the last 30 and 7 days, today, and
-// the line of its days.
-let bySource = (byDay: Record<string, ByDay>, now: number) =>
-  Object.entries(byDay)
-    .map(([source, days]) => ({ source, days, n: total(days, now) }))
-    .filter((s) => s.n)
+// A line's dollars over the window: the last 30 and 7 days, today, and the
+// line of its days, the lines that spent most first.
+type Line = { name: string; said?: ComponentChildren; days: ByDay }
+let byLine = (lines: Line[], now: number) =>
+  lines
+    .map((l) => ({ ...l, n: total(l.days, now) }))
+    .filter((l) => l.n)
     .sort((a, b) => b.n - a.n)
-    .map(({ source, days, n }) =>
-      row(SOURCES[source] ?? source, [
+    .map(({ name, said, days, n }) =>
+      row(said ?? name, [
         dollars(n),
         dollars(total(days, now, 7)),
         dollars(total(days, now, 1)),
@@ -150,13 +156,55 @@ let bySource = (byDay: Record<string, ByDay>, now: number) =>
           money: true,
         }) as VNode,
       ], [
-        SOURCES[source] ?? source,
+        name,
         n,
         total(days, now, 7),
         total(days, now, 1),
         n,
       ])
     )
+
+let bySource = (byDay: Record<string, ByDay>, now: number) =>
+  byLine(
+    Object.entries(byDay).map(([source, days]) => ({
+      name: SOURCES[source] ?? source,
+      days,
+    })),
+    now,
+  )
+
+// Each person's work, in whichever space they did it, and what no person's
+// work spent (@yaks/platform/meter `byPerson`): for watching who uses what,
+// while each space's budget and bill stay its own.
+let byWho = (
+  spaces: Counted[],
+  names: Map<string, string>,
+  base: string,
+  now: number,
+) => {
+  let { people, nobody } = byPerson(spaces.map((s) => s.trend))
+  let lines: Line[] = Object.entries(people).map(([eid, days]) => {
+    let name = names.get(eid)
+    return name
+      ? { name, said: link(`${base}/${eid}`, name), days }
+      : { name: 'Someone not in the directory', days }
+  })
+  let rows = byLine([...lines, { name: NOBODY, days: nobody }], now)
+  return section(
+    'By person',
+    rows.length
+      ? table(
+        [null, 'num', 'num', 'num', null],
+        ['Person', '30 days', '7 days', 'Today', 'Each day'],
+        rows,
+      )
+      : null,
+    note(
+      `Each dollar is the work of the person in the Operator conversation, the one who built, or the app's caller, in whichever space it was spent. ${NOBODY} is what no person started (an app's own automation, a sweep), and what was spent before spends named a person.`,
+    ),
+  )
+}
+let NOBODY = 'No person’s work'
 
 let daily = (spaces: Counted[], asked: Asked[], now: number) => {
   let spend = summed(spaces.map((s) => s.trend?.spend))
@@ -585,6 +633,7 @@ export let spendingBody = (
   asked: Asked[],
   base: string,
   now = Date.now(),
+  names: Map<string, string> = new Map(),
 ): VNode => {
   let runs = runsOf(asked)
   let unread = asked.filter((a) => a.spending instanceof Error)
@@ -592,6 +641,7 @@ export let spendingBody = (
     Fragment,
     null,
     daily(spaces, asked, now),
+    byWho(spaces, names, base, now),
     section('Top spaces', topSpaces(spaces, base, now)),
     section('Top conversations', topRuns(runs, base)),
     section('Conversations and helpers, newest first', sessions(runs, base)),

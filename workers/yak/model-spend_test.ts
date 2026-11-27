@@ -9,7 +9,9 @@ import { mint } from '@yaks/graph'
 import { test } from '@yaks/testing'
 import { platform } from './testing.ts'
 import { directoryOf, stamp } from './directory.ts'
-import { monthOf } from '@yaks/platform/meter'
+import { byPerson, monthOf } from '@yaks/platform/meter'
+import { line } from '@yaks/query'
+import { meta } from './meta.ts'
 import { plans } from '@yaks/platform/standing'
 import { expired, reserved, settled, TAB, tabbed } from './model-spend.ts'
 import { accounted } from './meter.ts'
@@ -55,6 +57,7 @@ let tab = await fixture()
 let full = await fixture(0.2)
 let interrupted = await fixture()
 let swept = await fixture()
+let worked = await fixture(0, { budget: { dollars: 100 } })
 let price = { input: 0.15, output: 0.5 }
 
 test('the pilot last answered call fits the remaining space budget', async () => {
@@ -356,4 +359,30 @@ test('one visitor asks for only so many model calls a day', async () => {
   await spend()
   await spend('ada', today, 'realtime')
   await spend('ada', new Date('2026-11-07T00:00:00Z'))
+})
+
+// T-4174: the admin watches each person's use by the work they did, in any
+// space, while the space's budget pays for all of it.
+test("each spend is kept under the person whose work it paid for, and work no person started under nobody's", async () => {
+  let { space } = worked
+  let hold = (dollars: number, person?: string, until?: Date) =>
+    reserved(p.env, space, () => ({ dollars }), mint(), {
+      person,
+      until,
+      likely: until && dollars,
+    })
+  await (await hold(0.05, 'jeff')).settle(0.02)
+  await (await hold(0.01)).settle(0.01)
+  await hold(0.03, 'tog', new Date(Date.now() - 1000))
+  await expired(p.env)
+  let quote = () => ({ dollars: TAB })
+  await (await tabbed(p.env, space, quote, mint(), { person: 'tog' }))
+    .settle(TAB)
+  let [row] = await meta(p.env).query(line`.entity.eid=${space.eid}`)
+  let day = new Date().toISOString().slice(0, 10)
+  assertEquals(byPerson([row.trend as Record<string, unknown>]), {
+    people: { jeff: { [day]: 0.02 }, tog: { [day]: 0.03 + TAB } },
+    nobody: { [day]: 0.01 },
+  })
+  assertAlmostEquals(await worked.used(), 0.06 + TAB)
 })

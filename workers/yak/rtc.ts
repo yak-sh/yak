@@ -121,6 +121,7 @@ export let voice: Answer = async (asked) => {
             {
               what: 'realtime',
               visitor: writes(who.role) ? undefined : visitorKey(who, req),
+              person: who.person ?? undefined,
             },
           )
         } catch (error) {

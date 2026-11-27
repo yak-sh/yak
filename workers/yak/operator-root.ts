@@ -53,7 +53,9 @@ let spaces = new WeakMap<object, string>()
 /** The space an Operator store is: the one its file keeps (`spacedAt`), else
  * the one its sessions name. */
 export let spaceOf = (
-  store: Pick<Store, 'g' | 'marks'>,
+  store: Pick<Store, 'g'> & {
+    marks?: Pick<NonNullable<Store['marks']>, 'get'>
+  },
 ): string | Promise<string | undefined> => {
   let kept = store.marks?.get(SPACED)
   if (kept) return kept

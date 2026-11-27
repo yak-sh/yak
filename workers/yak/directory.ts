@@ -1001,6 +1001,7 @@ export type Row = MeteredRow & {
     spend?: ByDay
     sources?: Record<string, ByDay>
     paid?: ByDay
+    people?: Record<string, ByDay>
   }
   notified?: Record<string, unknown> | null
   tunnel_trashed?: { at?: string | null }

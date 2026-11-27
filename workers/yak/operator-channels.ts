@@ -1230,13 +1230,14 @@ export let channels = (env: Env): Record<string, Channel> => {
     try {
       // A group's conversation is everyone's in it, so its links sign nobody
       // in, even in an answer to its sender alone.
-      return await (paid ? charged(env, space, phone) : phone).send(
-        text(
-          request.channel == 'group'
-            ? answer.text
-            : await signingIn(env, request.address!, answer.text),
-        ),
-      )
+      return await (paid ? charged(env, space, phone, request.person) : phone)
+        .send(
+          text(
+            request.channel == 'group'
+              ? answer.text
+              : await signingIn(env, request.address!, answer.text),
+          ),
+        )
     } catch (error) {
       if (error instanceof Denied) throw refuse('connection', error.message)
       if (!unpaid(error)) throw error

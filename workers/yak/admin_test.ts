@@ -136,10 +136,10 @@ let census = (): Census => ({
   ],
 } as Census)
 
-test('a person totals what the spaces they own spent, with no budget of their own', () => {
+test("a person totals the storage and apps of the spaces they own, but not what others' work spent there", () => {
   let u = uses(census(), NOW)
   assertEquals(u.get('ann'), {
-    spend: { spent: 1.5 },
+    spend: { spent: 0 },
     storage: 1120,
     apps: 2,
     active: '2026-10-14T10:00:00Z',
@@ -339,7 +339,7 @@ test('the outreach facts read each space by its Operator, and its apps, from the
   )
 })
 
-test("a row's figures carry their days, and a person's are their spaces' added", () => {
+test("a row's figures carry their days, and a person's are their own work's, in any space", () => {
   let c: Census = {
     ...EMPTY,
     people: [{
@@ -351,12 +351,27 @@ test("a row's figures carry their days, and a person's are their spaces' added",
       {
         entity: { eid: 's' },
         space: { slug: 'ann' },
-        trend: { spend: { '2026-10-14': 0.5 }, requests: { '2026-10-13': 7 } },
+        trend: {
+          spend: { '2026-10-14': 0.5 },
+          requests: { '2026-10-13': 7 },
+          people: { ann: { '2026-10-14': 0.125 } },
+        },
       },
       {
         entity: { eid: 't' },
         space: { slug: 'two' },
-        trend: { spend: { '2026-10-14': 0.25 } },
+        trend: {
+          spend: { '2026-10-14': 0.25 },
+          people: { ann: { '2026-10-14': 0.25 } },
+        },
+      },
+      {
+        entity: { eid: 'u' },
+        space: { slug: 'bob' },
+        trend: {
+          spend: { '2026-10-14': 1 },
+          people: { ann: { '2026-10-14': 0.5 } },
+        },
       },
     ],
     apps: [{
@@ -370,7 +385,10 @@ test("a row's figures carry their days, and a person's are their spaces' added",
     })),
   } as unknown as Census
   let all = uses(c, NOW)
-  assertEquals(all.get('ann')?.spending?.values.at(-1), 0.75)
+  // Her work in the spaces she owns and in one she doesn't; what nobody's
+  // work spent in her own is not hers.
+  assertEquals(all.get('ann')?.spending?.values.at(-1), 0.875)
+  assertEquals(all.get('ann')?.spend?.spent, 0.875)
   assertEquals(all.get('s')?.requesting?.values.at(-2), 7)
   let row = drawn(c.apps[0], 'Directory.List.Tile', {
     uses: all.get('a'),

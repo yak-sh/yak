@@ -126,7 +126,7 @@ import { platformFault } from './unseen.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
 import { HEED_OPERATOR } from './door.ts'
-import { accounted, resultOf } from './meter.ts'
+import { accounted, resultOf, type Whose } from './meter.ts'
 import { caught, defect, filed } from './defects.ts'
 import { hearing } from './refusals.ts'
 import {
@@ -2125,15 +2125,23 @@ export let operating = (
     }
     return own
   }
-  // The visitor whose share of the space's budget a session's turns spend
-  // (@yaks/platform/meter `visiting`), as an app visitor's do: whoever it
-  // acts for who holds no seat in the space, a stranger's guest helper, or
-  // for an investigation, the visitor who reported it. A member's spend none.
-  let visitorIn = async (session: string) => {
+  // Who a session's turns are for (meter.ts `Whose`). The person is whoever
+  // it acts for: the person in the conversation, or the member whose words
+  // in a room it answers. The visitor, whose share of the space's budget the
+  // turns spend (@yaks/platform/meter `visiting`) as an app visitor's do, is
+  // that person when they hold no seat in the space (a stranger's guest
+  // helper); a member's spend none. An investigation is no person's work, and
+  // spends the share of the visitor who reported what it looks into.
+  let whoseIn = async (session: string): Promise<Whose> => {
     let work = await workFor(session)
-    if (work.held.person == investigatorOf(work.eid)) return work.held.visitor
+    if (work.held.person == investigatorOf(work.eid)) {
+      return { visitor: work.held.visitor }
+    }
     let ctx = await work.ctx
-    return ctx.role ? undefined : ctx.person || session
+    return {
+      ...ctx.person ? { person: ctx.person } : {},
+      ...ctx.role ? {} : { visitor: ctx.person || session },
+    }
   }
   // Each ask is charged to the space of the session asking, at the price of
   // the model it asks, and a visitor's to their share of it too. One a
@@ -2172,7 +2180,7 @@ export let operating = (
           (dir) => space ? dir.at(space) : Promise.resolve(null),
           rowed(base),
           () => Promise.resolve(price),
-          async () => paying && await visitorIn(paying.session),
+          async () => paying ? await whoseIn(paying.session) : {},
           from,
           modelResults(g),
         )
@@ -2763,7 +2771,7 @@ export let operating = (
       mailSend(env, ctx, space, store),
       phoneSend(env, ctx, space, store),
       phoneNumbers(env, ctx, space, store),
-      imageNew(env, space, store),
+      imageNew(env, space, store, ctx.person),
       ...voiceTools(env, ctx, space, store),
       ...pickTools(store, ctx.person!),
       ...wakeTools(store, steers),
@@ -2816,7 +2824,7 @@ export let operating = (
                 ? { room: { ...room, connection: room.connection } }
                 : {},
             },
-            (to, words) => textPerson(env, space, to, words),
+            (to, words) => textPerson(env, space, to, words, ctx.person),
             Date.now,
             {
               seats: () => ctx.dir.roles(space),

@@ -461,7 +461,13 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
       )
     }
     try {
-      let { id } = await textPerson(env, space, texting.number, text)
+      let { id } = await textPerson(
+        env,
+        space,
+        texting.number,
+        text,
+        ctx.person,
+      )
       return JSON.stringify({ texted: texting.number, id: id ?? null })
     } catch (error) {
       if (error instanceof Blocked) throw refuse('blocked', error.message)
@@ -470,7 +476,7 @@ export let textSend = (env: Env, ctx: Ctx, space: Space): Tool => ({
   },
 })
 
-/** A text from `space`'s Operator to the person at `number`, a number they
+/** A text from `space`'s Operator to `person` at `number`, a number they
  * agreed to: signed with its name, its links signing them in, and paid from
  * the space's budget. */
 export let textPerson = async (
@@ -478,9 +484,10 @@ export let textPerson = async (
   space: Space,
   number: string,
   text: string,
+  person?: string,
 ) => {
   let { textSigned } = await import('./operator-channels.ts')
-  let phone = charged(env, space, await phoneOf(env, space.sender))
+  let phone = charged(env, space, await phoneOf(env, space.sender), person)
   return phone.send({
     to: number,
     text: `${await signingIn(env, number, text)}\n\n${textSigned(space)}`,

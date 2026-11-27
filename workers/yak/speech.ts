@@ -519,13 +519,15 @@ export let unread = () => {
 
 // Speech for `space` while the pilot lets it, on a hold of the most it can
 // cost: the space's budget refuses it in the directory's own transaction
-// (model-spend.ts `onHold`), and it is charged what it cost.
+// (model-spend.ts `onHold`), and it is charged what it cost, kept under
+// `person`, whose work it is, if anybody's.
 let charged = async <T extends { dollars: number }>(
   env: Charging,
   space: Space,
   most: number,
   provider: Provider | undefined,
   work: () => Promise<T>,
+  person?: string,
 ) => {
   let why = await paused(env, provider)
   if (why) throw new ModelError('speech_off', why)
@@ -533,20 +535,22 @@ let charged = async <T extends { dollars: number }>(
     let done = await work()
     spent(done.dollars)
     return done
-  }, 'voice')
+  }, { source: 'voice', person })
 }
 
 /** `text` spoken for `space` through `provider` (the platform's by
  * default): the audio as it streams, charged to the space before it is asked
- * for. */
+ * for, the work of `person`, if anybody's. */
 export let speaking = async (
   env: Env,
   space: Space,
   text: string,
-  { provider, key, ...o }: {
+  { provider, key, person, ...o }: {
     provider?: Provider
     /** a space's own key for `provider`, whose account pays */
     key?: string
+    /** the person whose work it is (model-spend.ts `Paying`) */
+    person?: string
     voice?: string
     format?: Format
     speed?: number
@@ -562,18 +566,21 @@ export let speaking = async (
     spoken(on.provider, text),
     provider,
     () => speak({ ...on, ...o, text }),
+    person,
   )
 }
 
 /** A recording heard for `space`, its minutes charged once heard, on a hold
  * of `seconds` of them (ten, unless the caller guesses longer) until the
- * provider says how long it was. `audio` may be a stream, sent as it is read. */
+ * provider says how long it was. `audio` may be a stream, sent as it is read.
+ * Its dollars are kept under `person`, whose work it is, if anybody's. */
 export let hearing = async (
   env: Charging,
   space: Space,
   audio: BodyInit,
   type: string,
   seconds = 10,
+  person?: string,
 ) => {
   let on = speechOf(env)
   if (!on) throw new ModelError('speech_off', 'Speech is not switched on here.')
@@ -583,6 +590,7 @@ export let hearing = async (
     heard(on.provider.hear, seconds),
     undefined,
     () => hear({ ...on, audio, type }),
+    person,
   )
 }
 
@@ -754,6 +762,7 @@ export let speechDoor: Answer = async (asked) => {
         voice,
         provider: on.provider,
         ...on.own ? { key: on.key } : {},
+        person: asked.who.person ?? undefined,
       })
       return new Response(spoke.body, {
         headers: { 'content-type': spoke.type },
@@ -851,9 +860,14 @@ export let speechDoor: Answer = async (asked) => {
     let audio = new Uint8Array(await req.arrayBuffer())
     if (audio.length > most) return json(413, 'too_large', posted(most))
     if (!audio.length) return json(400, 'bad_request', 'post a recording')
-    let got = on.own
-      ? await hear({ ...on, audio, type })
-      : await hearing(env, space, audio, type)
+    let got = on.own ? await hear({ ...on, audio, type }) : await hearing(
+      env,
+      space,
+      audio,
+      type,
+      undefined,
+      asked.who.person ?? undefined,
+    )
     return Response.json({
       text: got.text,
       turns: got.turns,

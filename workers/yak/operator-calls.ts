@@ -1514,7 +1514,14 @@ export let answering = async (
         ask: c.asking(setup.model),
         listen: (told) =>
           turns({ ...speech, format: line.format, told, open: upgraded }),
-        say: saying(env, seen, operator.store.g, line.format, setup),
+        say: saying(
+          env,
+          seen,
+          operator.store.g,
+          line.format,
+          setup,
+          ticket.person,
+        ),
         ack: ACKS,
       }),
   )
@@ -1531,6 +1538,7 @@ export let answering = async (
  * each line is said, so a voice it sets during the call is heard on its next
  * line, the call going on. The call's model stays the one it began with,
  * and a voice whose provider is off here gives way to the call's first.
+ * It is the work of `person`, the one on the call.
  */
 export let saying = (
   env: Env,
@@ -1538,6 +1546,7 @@ export let saying = (
   g: Parameters<typeof settled>[0],
   format: Line['format'],
   first: ReturnType<typeof setupOf>,
+  person?: string,
 ) =>
 async (text: string) => {
   let now = setupOf(env, {
@@ -1550,6 +1559,7 @@ async (text: string) => {
     format,
     voice: setup.voice,
     speed: setup.speed,
+    person,
   })).body
 }
 

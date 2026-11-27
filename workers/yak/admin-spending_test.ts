@@ -107,7 +107,9 @@ let tables = (d: ParentNode) =>
   )
 
 let page = await get('/admin/spending')
-let [sources, operator, spaces, top, runs, fixed] = tables(page.document)
+let [sources, operator, people, spaces, top, runs, fixed] = tables(
+  page.document,
+)
 
 test('the spending page says what each day spent, by source and by who covered it', () => {
   assertEquals(page.status, 200)
@@ -131,6 +133,18 @@ test('the spending page says what each day spent, by source and by who covered i
   assertEquals(operator.slice(1).map((r) => r.slice(0, 2)), [
     ['Workers AI', '$0.0005'],
   ])
+})
+
+// T-4174: each person's work, wherever they did it, and what no person
+// started apart; the space's own budget pays for both.
+test('the spending page says what each person’s own work spent', () => {
+  assertEquals(people.slice(1).map((r) => r.slice(0, 2)), [
+    ['No person’s work', '$0.75'],
+    ['Jeff', '$0.0005'],
+  ])
+  let jeffs = [...page.document.querySelectorAll('.Table a')]
+    .find((a) => a.textContent == 'Jeff')
+  assertEquals(jeffs?.getAttribute('href'), `/admin/${jeff}`)
 })
 
 test('the top spaces and conversations each open on their page', () => {

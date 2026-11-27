@@ -1021,6 +1021,12 @@ export class Builder extends Durable {
             let { ownerBackfill } = await import('./owner-move.ts')
             return backfill(ownerBackfill(store))
           },
+          // Each person's share of what the Operator spent before spends
+          // named a person (spend-move.ts).
+          spentPeople: async () => {
+            let { spendBackfill } = await import('./spend-move.ts')
+            return backfill(spendBackfill(store, this.#env))
+          },
           memoryOwners: async () => {
             let { memoryOwnerBackfill } = await import(
               '@yaks/platform/operator-memory'

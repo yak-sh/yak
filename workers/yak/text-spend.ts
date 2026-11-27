@@ -65,9 +65,15 @@ export let unpaid = (error: unknown) =>
  * `texter`, its texts paid from `space`'s budget: each held before it goes,
  * refused in the directory's own transaction when the budget cannot pay it
  * (model-spend.ts `onHold`), which rejects as a `limit` refusal in words for
- * the person, and charged once it went.
+ * the person, and charged once it went. Its dollars are kept under `person`,
+ * the one whose work the texts are, if one is.
  */
-export let charged = (env: Env, space: Space, texter: Texter): Texter => ({
+export let charged = (
+  env: Env,
+  space: Space,
+  texter: Texter,
+  person?: string,
+): Texter => ({
   ...texter,
   send: (text) => {
     let cost = sentCost(text)
@@ -75,7 +81,7 @@ export let charged = (env: Env, space: Space, texter: Texter): Texter => ({
       let receipt = await texter.send(text)
       spent(cost)
       return receipt
-    }).catch((e) => {
+    }, { person }).catch((e) => {
       throw e instanceof ModelError && e.code == 'limit'
         ? refuse('limit', e.message)
         : e

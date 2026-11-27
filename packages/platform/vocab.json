@@ -514,6 +514,11 @@
           "$id": "urn:uuid:50aee64b-c678-4ddb-a582-8b67b74832de",
           "type": "object",
           "description": "The part of `spend` a space paying for its plan covered, by day; the rest the platform gave."
+        },
+        "people": {
+          "$id": "urn:uuid:804bc6c7-ce02-45a5-aecf-7706cb7770ea",
+          "type": "object",
+          "description": "The same dollars by the person whose work they paid for (`spend.person`), each a day map like `spend`. What no person's work spent is `spend` less all of them."
         }
       }
     },

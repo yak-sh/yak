@@ -10,7 +10,7 @@ import {
   type ToolContext,
 } from '@yaks/session'
 import { worded } from '@yaks/tools/result'
-import { edits, type Level, mode, writes } from '@yaks/member'
+import { edits, mode, writes } from '@yaks/member'
 import {
   billed,
   confirmed,
@@ -45,11 +45,11 @@ import { background, caught, invocationKey } from './defects.ts'
 import type { Answer, Asked } from './apps.ts'
 import type { Stored } from './graph.ts'
 import { lending } from './inference.ts'
+import { whoseOf } from './app-whose.ts'
 import { modelInputs } from './model-inputs.ts'
 import { bare, connection, served } from './providers.ts'
 import { names, planting } from './provider-names.ts'
 import { serving } from './config.ts'
-import { grantEid } from '@yaks/platform/app-writes'
 import { visitorKey } from '@yaks/workerd/rate'
 
 export let guess = (sent: unknown) =>
@@ -103,30 +103,6 @@ export let tooled = (at: Stored): Tool[] =>
 let payer = (app: string) => async (dir: Directory) =>
   (await dir.appAt(app))?.space ?? null
 
-// The visitor whose turn a model call is, if it is one, who spends the
-// visitors' share of the space's budget (@yaks/platform/meter `visiting`) and
-// their own calls of the day (@yaks/platform/meter `visitorCalls`). Only an app
-// whose manifest opens its models has visitor turns: elsewhere `using` is an
-// editor's to write (app-authority.ts `FLOORS`). There, the turn is the
-// transcript's starter's, since a visitor writes lines only in transcripts they
-// started (`WITHIN`): a visitor unless it is the app itself or someone whose
-// vouched level here writes (app-writes.ts `vouching` keeps it). One signed in
-// is named by their person; nobody signed in is a visitor too, named by the
-// transcript, since the store never learns their address. A transcript nobody
-// wrote, not even through a browser's vouched via, is the app's own
-// automation (a scheduled call's), spent as a member's.
-let visitorOf = (at: Stored) => async (req: { conversation?: string }) => {
-  if (at.manifest().models != 'open' || !req.conversation) return undefined
-  let [session] = await at.graph.get([req.conversation])
-  let { by, via } = (session?.created ?? {}) as Comp
-  if (typeof by != 'string') return via ? req.conversation : undefined
-  if (by == at.app) return undefined
-  let [grant] = await at.graph.get([grantEid(at.app!, by)])
-  return writes((grant?.grant as Comp | undefined)?.access as Level)
-    ? undefined
-    : by
-}
-
 // Where the media an app's models generate is kept: its own blobs, counted
 // among its space's files, which are asked for room before a model is paid.
 let artifacts = (at: Stored): ArtifactStore => {
@@ -173,6 +149,12 @@ let receiptsFor = (at: Stored) =>
     )
     : undefined
 
+// The transcript an ask was asked in.
+let sessionOf = (ask: Bundle) => {
+  let session = (ask.entry as Comp | undefined)?.session
+  return typeof session == 'string' ? session : undefined
+}
+
 /** Recover or account media on its original ask, without generation.
  * An attached recording needs no private receipt or additional download. */
 export let recovering = async (at: Stored, call: string) => {
@@ -197,7 +179,10 @@ export let recovering = async (at: Stored, call: string) => {
       call,
       cost.dollars,
       cost.reported ?? true,
-      typeof source == 'string' ? source : undefined,
+      {
+        ...typeof source == 'string' ? { source } : {},
+        person: (await whoseOf(at, sessionOf(ask))).person,
+      },
     )
     return outputs
   }
@@ -226,7 +211,7 @@ export let recovering = async (at: Stored, call: string) => {
     call,
     charge.dollars,
     charge.reported,
-    provider,
+    { source: provider, person: (await whoseOf(at, sessionOf(ask))).person },
   )
   let session = (ask.entry as Comp).session
   let patches: Bundle[] = [{
@@ -378,7 +363,7 @@ export let asking = (at: Stored): Handlers => {
       payer(at.app),
       model,
       price,
-      visitorOf(at),
+      (req) => whoseOf(at, req.conversation),
       name,
       modelResults(at.graph),
     )
