@@ -84,11 +84,11 @@ export let collect = async (
   roots: string[] = ROOTS,
   stale: number = STALE,
 ): Promise<Record<string, Held>> => {
-  await reconcile(g, common)
-  let own = await rooted(common, roots)
-  let kept: Record<string, Held> = {}
   let filesystem = await localFilesystem(g)
   let repository = repositoryEid(common, filesystem.entity.eid)
+  await reconcile(g, common, repository)
+  let own = await rooted(common, roots)
+  let kept: Record<string, Held> = {}
   for (let path of await linked(common)) {
     if (signal?.aborted) break
     let quiet = await idleFor(path, now)
@@ -98,7 +98,9 @@ export let collect = async (
     if (!(row?.worktree as Comp | undefined)?.managed && !within(real, own)) {
       continue
     }
-    let seen = await discover(g, path).catch(() => row)
+    // The checkout's own row: its repository's refs are the same for every
+    // checkout here, and a shelving below records the one it moves.
+    let seen = await discover(g, path, { refs: false }).catch(() => row)
     if (!seen || await retained(g, seen.entity.eid)) continue
     let free = async () =>
       !signal?.aborted && !await retained(g, seen.entity.eid) &&
@@ -171,7 +173,7 @@ export let service = async (
           options.roots,
           options.stale,
         )
-        : reconcile(host.graph, common).then(() => ({}))).catch(
+        : reconcile(host.graph, common, r.entity.eid).then(() => ({}))).catch(
           async (error) => {
             await report(error, common)
             return {}

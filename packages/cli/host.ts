@@ -945,17 +945,21 @@ let composed = async (
             return (user + system) / 1000
           },
           nudge: opts.thread?.nudge,
-          // Runs another process commits wake this one's pool at once.
-          watch: (heard) =>
-            opts.reader?.storage?.revision
+          // Runs another process commits wake this one's pool at once. Only
+          // a new run wakes it: every other commit on the box would set it
+          // reading for work it already has, several times a second.
+          watch: (heard) => {
+            let newest = opts.reader?.storage?.newest
+            return newest
               ? watchRevision(
-                opts.reader.storage.revision,
+                () => newest(EFFECT),
                 heard,
                 (error) =>
                   void report(error, { tags: { step: 'watch effects' } }),
                 clock,
               )
-              : store?.watch?.(EFFECT, heard) ?? (() => {}),
+              : store?.watch?.(EFFECT, heard) ?? (() => {})
+          },
           report: (error, job) =>
             void report(error, {
               during: {

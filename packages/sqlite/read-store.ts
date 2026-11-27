@@ -19,6 +19,7 @@ import { bindings } from './rules.ts'
 import { branching } from './branches.ts'
 import type { History } from './history.ts'
 import { bindStorage } from './shape.ts'
+import { newest } from './watch.ts'
 
 /** Bind every committed-store capability without admitting write callbacks.
  * Index plugins receive the same statement, revision and schema descriptions
@@ -51,6 +52,7 @@ export let storage = (
     checks: checks(driver),
     migrations: migrations(driver),
     revision: () => revision(driver, 'data'),
+    newest: (comp) => newest(driver, vocab, comp),
     worn: worn(vocab, base.derived),
     ddl: () => [
       ...tabled(vocab, base.derived, !!driver.file),

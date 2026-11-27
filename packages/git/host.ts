@@ -216,14 +216,18 @@ export let primary = async (g: Graph): Promise<string[]> => {
   return [...new Set(roots)].sort()
 }
 
-/** Retire obsolete unmanaged checkout observations, keeping the entity and its
- * other components. Managed rows retain the history required by restore. */
-export let reconcile = async (g: Graph, common: string): Promise<void> => {
-  let filesystem = await localFilesystem(g)
-  let repository = repositoryEid(common, filesystem.entity.eid)
+/** Retire obsolete unmanaged checkout observations of the repository at
+ * `common`, keeping the entity and its other components. Managed rows retain
+ * the history required by restore, and are not read: a repository keeps
+ * thousands. */
+export let reconcile = async (
+  g: Graph,
+  common: string,
+  repository: string,
+): Promise<void> => {
   for (
     let tree of await g.read(
-      line`.worktree.repository=${repository} ?workspace`,
+      line`.worktree.repository=${repository}&.worktree.managed!=true ?workspace`,
     )
   ) {
     let w = tree.worktree as Comp
@@ -247,8 +251,15 @@ export let reconcile = async (g: Graph, common: string): Promise<void> => {
 }
 
 /** Find the checkout containing `cwd`, and update the repository's refs from
- * Git. A ref that Git no longer has keeps its row, marked absent. */
-export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
+ * Git. A ref that Git no longer has keeps its row, marked absent. With
+ * `refs: false`, only the checkout's own row: a pass over many checkouts of
+ * one repository would otherwise read and compare every ref it has (a
+ * thousand and more) once for each. */
+export let discover = async (
+  g: Graph,
+  cwd: string,
+  o: { refs?: boolean } = {},
+): Promise<Bundle> => {
   // Git is asked everything at once: each answer is about the checkout that
   // holds `cwd`, from wherever in it `cwd` is, and a session opening pays for
   // one round of processes rather than six in a row.
@@ -256,7 +267,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
     locate(cwd),
     git(cwd, ['rev-parse', '--verify', 'HEAD'], true),
     git(cwd, ['symbolic-ref', '-q', 'HEAD'], true),
-    git(cwd, [
+    o.refs == false ? undefined : git(cwd, [
       'for-each-ref',
       '--format=%(refname)%09%(objectname)%09%(symref)',
     ]).catch((error: Error) => error),
@@ -273,7 +284,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
     repository: { common, workspace: filesystem.entity.eid },
   }]
   let found = new Set<string>()
-  for (let line of refs!.split('\n').filter(Boolean)) {
+  for (let line of (refs ?? '').split('\n').filter(Boolean)) {
     let [name, oid, target] = line.split('\t')
     let id = refEid(repository, name)
     found.add(id)
@@ -290,7 +301,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   }
   // A branch with no commits yet still gets an entity, even though Git has no
   // ref for it.
-  if (branch && !found.has(refEid(repository, branch))) {
+  if (refs != null && branch && !found.has(refEid(repository, branch))) {
     let id = refEid(repository, branch)
     found.add(id)
     bundles.push({
@@ -306,7 +317,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   }
   // Only a ref still marked present can have gone: the repository's absent
   // ones, every branch a session ever cut, are many times the present.
-  let present = await g.rows(
+  let present = refs == null ? [] : await g.rows(
     line`.ref.app=${repository}&.ref.present=true .fields=entity.eid`,
   ) as { eid: string }[]
   for (let { eid } of present) {

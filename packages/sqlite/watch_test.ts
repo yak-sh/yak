@@ -2,7 +2,7 @@ import { insert } from '@yaks/sql'
 import { equal, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { mem } from './testing.ts'
-import { watch } from './watch.ts'
+import { newest, watch } from './watch.ts'
 
 let vocab = loadVocab([{
   $defs: { item: { component: true }, other: { component: true } },
@@ -40,4 +40,12 @@ test("a watch hears a row added to its component, not another's", () => {
 test('a driver that hears nothing, or a component with no table, watches nothing', () => {
   equal(watch(d, vocab, 'item', () => {})(), undefined)
   equal(watch(file, vocab, 'missing', () => {})(), undefined)
+})
+
+test("the newest row moves when its component gains one, not another's", () => {
+  let before = newest(d, vocab, 'item')
+  d.query(insert('other', { entity: 10 }))
+  equal(newest(d, vocab, 'item'), before)
+  d.query(insert('item', { entity: 11 }))
+  equal([newest(d, vocab, 'item'), newest(d, vocab, 'missing')], [11, 0])
 })

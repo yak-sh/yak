@@ -62,3 +62,19 @@ test('a missing program is refused as it starts', async () => {
   await throws(() => child.started, 'ENOENT')
   await throws(() => child.status, 'ENOENT')
 })
+
+test('a detached child leads its own session and group under its pid', async () => {
+  let child = command('sh', {
+    args: ['-c', 'echo $(ps -o pgid= -o sid= -p $$)'],
+    stdout: 'piped',
+    detached: true,
+  }).spawn()
+  let said = new TextDecoder().decode((await child.output()).stdout)
+  equal(said.trim().split(/\s+/).map(Number), [child.pid, child.pid])
+})
+
+test('a missing detached program is refused as it starts', async () => {
+  let child = command('no-such-program-anywhere', { detached: true }).spawn()
+  await throws(() => child.started, 'ENOENT')
+  await throws(() => child.status, 'ENOENT')
+})

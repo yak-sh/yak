@@ -4,7 +4,9 @@ import {
   spawn,
   spawnSync,
 } from 'node:child_process'
+import { statSync } from 'node:fs'
 import process from 'node:process'
+import { delimiter, join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { type Signal, signalCode } from './system.ts'
@@ -157,16 +159,52 @@ let child = (p: NativeChild): ChildProcess => {
     },
   }
 }
+/// found('sh', '/nowhere:/bin') -> '/bin/sh'
+/// found('no-such-program', '/bin') -> undefined
+/** The executable a bare program name runs from `PATH`, as `execvp` finds it. */
+export let found = (
+  name: string,
+  dirs = process.env.PATH ?? '',
+): string | undefined =>
+  dirs.split(delimiter).filter(Boolean).map((dir) => join(dir, name)).find(
+    (file) => {
+      let stat = statSync(file, { throwIfNoEntry: false })
+      return stat?.isFile() && (stat.mode & 0o111) != 0
+    },
+  )
+
+// Deno starts a child in its own session by forking, which copies the
+// parent's page tables on the calling thread: about 50 ms for each GB the
+// parent holds, so a long-lived server spent seconds a minute starting git.
+// A child started through util-linux's setsid(1) takes the session itself,
+// after Deno started it with posix_spawn, and keeps its pid, so its group is
+// still `-pid`. A program setsid can't find starts the forking way, which
+// reports it missing.
+let launch = (
+  program: string | URL,
+  o: CommandOptions,
+  collect = false,
+): [string, string[], ReturnType<typeof options>] => {
+  let given = options(o, collect)
+  let file = path(program), args = o.args ?? []
+  if (
+    !o.detached || o.uid != null || o.gid != null ||
+    process.platform == 'win32'
+  ) return [file, args, given]
+  let dirs = (given.env ?? process.env).PATH
+  let setsid = found('setsid', dirs)
+  let runs = file.includes('/') || found(file, dirs) != null
+  if (!setsid || !runs) return [file, args, given]
+  return [setsid, ['-w', '--', file, ...args], { ...given, detached: false }]
+}
+
 export let command = (program: string | URL, o: CommandOptions = {}) => ({
-  spawn: (): ChildProcess =>
-    child(spawn(path(program), o.args ?? [], options(o))),
+  spawn: (): ChildProcess => child(spawn(...launch(program, o))),
   output: (): Promise<CommandOutput> =>
-    child(spawn(path(program), o.args ?? [], options(o, true))).output(),
+    child(spawn(...launch(program, o, true))).output(),
   outputSync: (): CommandOutput => {
-    let result = spawnSync(path(program), o.args ?? [], {
-      ...options(o, true),
-      maxBuffer: Infinity,
-    })
+    let [file, args, given] = launch(program, o, true)
+    let result = spawnSync(file, args, { ...given, maxBuffer: Infinity })
     if (result.error) throw result.error
     return {
       ...status(result.status, result.signal),

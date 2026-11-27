@@ -44,6 +44,7 @@ type Call =
   | { op: 'rawRows'; query: Query; opts?: ReadOpts }
   | { op: 'rawGet'; eids: Eid[]; comps?: string[]; opts?: ReadOpts }
   | { op: 'revision' }
+  | { op: 'newest'; comp: string }
   | { op: 'buried'; before: string; page: { after?: string; limit: number } }
   | { op: 'bindings'; args: Parameters<NonNullable<Tx['bindings']>> }
   | { op: 'statement'; stmt: Stmt }
@@ -389,6 +390,7 @@ export let readThread = (
           value as Bundle[]
         ),
       revision: () => ask({ op: 'revision' }),
+      newest: (comp) => ask({ op: 'newest', comp }),
       buried: (before, page) =>
         ask({ op: 'buried', before, page }).then((value) => value as Graves),
       bindings: (...args) =>

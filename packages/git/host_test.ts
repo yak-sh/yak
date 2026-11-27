@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   createWorktree,
+  discover,
   holds,
   inUse,
   processCwds,
@@ -153,6 +154,27 @@ test('a checkout whose removal was killed partway grows again', async () => {
     assertEquals((tree.workspace as { root: string }).root, path)
     assertEquals((await Deno.stat(`${path}/.git`)).isFile, true)
     assertEquals(Deno.readDirSync(path).some((e) => e.name == 'left'), false)
+  } finally {
+    close()
+  }
+})
+
+test("a checkout discovered without refs records itself and leaves the repository's refs", async () => {
+  let { source, close } = await repo()
+  try {
+    let g = fixture().g
+    await discover(g, source)
+    let refs = () => g.rows('.ref.present=true .fields=ref.name,ref.oid')
+    let before = await refs()
+    await new Deno.Command('git', {
+      args: ['branch', 'other'],
+      cwd: source,
+    }).output()
+    let tree = await discover(g, source, { refs: false })
+    assertEquals((tree.workspace as Comp).root, source)
+    assertEquals(await refs(), before)
+    await discover(g, source)
+    assertEquals((await refs()).length, before.length + 1)
   } finally {
     close()
   }

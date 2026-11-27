@@ -194,9 +194,12 @@ streams; `disconnected()` from `@yaks/process/system` settles in the child when
 its parent closes the channel or exits, including an exit before the child
 starts listening. A child's `kill()` signals it by pid and leaves that channel
 open, so a child told to drain is not also told its parent is gone.
-`detached: true` gives the child its own process group. `started` settles once
-the child runs and rejects when it cannot start (a missing program), before any
-of its streams is used. `unref()` lets the parent exit while the child runs, its
+`detached: true` gives the child its own session and process group, led by its
+pid. Where util-linux's `setsid` is on `PATH`, the child starts through it: Deno
+would otherwise fork to detach, copying the parent's page tables on the calling
+thread (about 50 ms per GB of the parent's memory). `started` settles once the
+child runs and rejects when it cannot start (a missing program), before any of
+its streams is used. `unref()` lets the parent exit while the child runs, its
 piped streams included; `ref()` holds the parent open again.
 
 `@yaks/process/modules` says which modules a set of roots reaches:

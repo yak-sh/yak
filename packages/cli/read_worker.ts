@@ -90,6 +90,8 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
               return graph.storage.get(call.eids, call.comps, call.opts)
             case 'revision':
               return graph.storage.revision?.()
+            case 'newest':
+              return graph.storage.newest?.(call.comp)
             case 'buried':
               return graph.storage.buried?.(call.before, call.page) ??
                 { eids: [] }

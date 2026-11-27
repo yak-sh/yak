@@ -154,7 +154,7 @@ import { basis, local, memoized, rooted, simple } from './memo.ts'
 import { listed, revision, storeAs } from '@yaks/sql'
 import { bindStorage, readingVocab } from './shape.ts'
 export { bindStorage, identified, layoutOf, wordColumns } from './shape.ts'
-import { watch } from './watch.ts'
+import { newest, watch } from './watch.ts'
 import { gotten, metered, named } from './budget.ts'
 import { comps, dead } from '@yaks/graph/bundle'
 import { holds, raise, raisedIn, recorded, units, unraised } from './raise.ts'
@@ -388,6 +388,9 @@ export type Store = {
   bindings?: Tx['bindings']
   /** Current committed-data invalidation token, including external WAL writes. */
   revision?: () => unknown
+  /** The newest row of `comp`, which moves only when a row is added
+   * (./watch.ts `newest`). */
+  newest: (comp: string) => number
   /** Call `heard` soon after another connection commits a new row of
    * `comp` (./watch.ts). Only a store over a file has one. Answers a stop. */
   watch?: (comp: string, heard: () => void) => () => void
@@ -1567,6 +1570,7 @@ let bound = (driver: Driver, vocab: Vocab, base: Opts): Store => {
     migrations: migrations(driver),
     maintain: upkeep.work,
     revision: () => revision(driver, 'data'),
+    newest: (comp: string) => newest(driver, vocab, comp),
     ...driver.watch
       ? {
         watch: (comp: string, heard: () => void) =>

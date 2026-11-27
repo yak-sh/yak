@@ -310,6 +310,10 @@ export type Storage = {
    * change, including other connections. Optional: read-result memoization
    * must not survive a call when the store cannot prove this token. */
   revision?: () => unknown | Promise<unknown>
+  /** A token that moves when an entity first wears `comp`, and not for any
+   * other write: a watch for new rows of one component reads it rather than
+   * {@link Storage.revision}, which every commit moves. Optional. */
+  newest?: (comp: string) => unknown | Promise<unknown>
   /** Whether a value this store reads for the property means its entity
    * wears the component. A stored property's does; a computed one's may be
    * answered from elsewhere (@yaks/sql `worn`). */
@@ -372,7 +376,7 @@ export type Storage = {
 /** Raw committed reads a graph can lend to another connection. */
 export type Committed = Pick<
   Storage,
-  'read' | 'rows' | 'get' | 'revision' | 'buried' | 'bindings'
+  'read' | 'rows' | 'get' | 'revision' | 'newest' | 'buried' | 'bindings'
 >
 
 /** Keep write transactions on their owner while lending committed reads. */
@@ -389,6 +393,7 @@ export let lending = (
     rows: (...args: Parameters<Storage['rows']>) => by().rows(...args),
     get: (...args: Parameters<Storage['get']>) => by().get(...args),
     revision: () => by().revision?.(),
+    ...read.newest ? { newest: (comp: string) => by().newest?.(comp) } : {},
     ...read.buried
       ? {
         buried: (...args: Parameters<NonNullable<Storage['buried']>>) =>

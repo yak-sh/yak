@@ -8,6 +8,21 @@ import { as, col, type Driver, fn, select, table } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { tables } from './layout.ts'
 
+/** The newest row of `comp`'s table, one seek: a higher one is a row added
+ * since. 0 where nothing has written the table yet, or it names no table. */
+export let newest = (driver: Driver, vocab: Vocab, comp: string): number =>
+  // A table nothing has written yet stands once a write first names it
+  // (./raise.ts); until then it has no newest row.
+  tables(vocab).includes(comp) &&
+    driver.query({ t: 'pragma', name: 'table_info', arg: comp }).length
+    ? Number(
+      driver.query(select({
+        cols: [as(fn('max', col('entity')), 'newest')],
+        from: table(comp),
+      }))[0]?.newest ?? 0,
+    )
+    : 0
+
 /** Call `heard` soon after another connection commits a new row of
  * `comp`. */
 export let watch = (
@@ -17,20 +32,9 @@ export let watch = (
   heard: () => void,
 ): () => void => {
   if (!driver.watch || !tables(vocab).includes(comp)) return () => {}
-  // A table nothing has written yet stands once a write first names it
-  // (./raise.ts); until then it has no newest row.
-  let newest = () =>
-    driver.query({ t: 'pragma', name: 'table_info', arg: comp }).length
-      ? Number(
-        driver.query(select({
-          cols: [as(fn('max', col('entity')), 'newest')],
-          from: table(comp),
-        }))[0]?.newest ?? 0,
-      )
-      : 0
-  let last = newest()
+  let last = newest(driver, vocab, comp)
   return driver.watch(() => {
-    let now = newest()
+    let now = newest(driver, vocab, comp)
     let more = now > last
     last = now
     if (more) heard()
