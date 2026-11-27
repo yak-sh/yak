@@ -599,6 +599,15 @@ let ended = (error: string, used: Comps): Comps[] => [
   { stop: {}, ...used },
 ]
 
+// The model that read the conversation in Gemini CLI's `result.stats.models`:
+// when a turn routes across models, the one with the most input tokens
+// answered; the smaller one is Gemini's router.
+let geminiModel = (models: Event): string | undefined =>
+  Object.entries(models)
+    .filter(([name]) => name)
+    .map(([name, raw]) => [name, count(obj(raw).input_tokens) ?? -1] as const)
+    .sort((a, b) => b[1] - a[1])[0]?.[0]
+
 /**
  * Gemini CLI: the stream `gemini -p --output-format stream-json` prints. Its
  * reply comes in fragments (`message` with `delta`), each a part of the entry
@@ -620,7 +629,6 @@ let ended = (error: string, used: Comps): Comps[] => [
 export let gemini: Reader = (e) => {
   let type = str(e.type)
   let stats = obj(e.stats)
-  let models = Object.keys(obj(stats.models))
   let entries: Comps[] = type == 'tool_use'
     ? [call(str(e.tool_name), e.tool_id, e.parameters)]
     : type == 'tool_result'
@@ -649,6 +657,11 @@ export let gemini: Reader = (e) => {
     : []
   let piece = type == 'message' && e.role == 'assistant' && e.delta &&
     str(e.content)
+  let model = type == 'init'
+    ? (str(e.model) == 'auto' ? '' : str(e.model))
+    : type == 'result'
+    ? geminiModel(obj(stats.models))
+    : undefined
   return {
     entries,
     ...piece
@@ -659,11 +672,7 @@ export let gemini: Reader = (e) => {
     ...type == 'init' && e.session_id
       ? { about: { session: { id: str(e.session_id) } } }
       : {},
-    ...type == 'init' && str(e.model)
-      ? { model: str(e.model) }
-      : models.length == 1
-      ? { model: models[0] }
-      : {},
+    ...model ? { model } : {},
     ...str(e.timestamp) ? { at: str(e.timestamp) } : {},
   }
 }

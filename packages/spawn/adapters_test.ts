@@ -302,6 +302,41 @@ test("gemini's and agy's streams read as transcripts, their threads named by the
   }
 })
 
+test("gemini ignores init's auto model and names the model that read the conversation", () => {
+  assertEquals(
+    gemini.read({ type: 'init', session_id: 'g1', model: 'auto' }).model,
+    undefined,
+  )
+  assertEquals(
+    gemini.read({
+      type: 'result',
+      status: 'success',
+      stats: {
+        input_tokens: 63602,
+        output_tokens: 23,
+        cached: 0,
+        models: {
+          'gemini-3.5-flash-lite': { input_tokens: 4883, output_tokens: 22 },
+          'gemini-3.8-flash': { input_tokens: 58719, output_tokens: 1 },
+        },
+      },
+    }).model,
+    'gemini-3.8-flash',
+  )
+  assertEquals(
+    gemini.read({
+      type: 'result',
+      status: 'success',
+      stats: {
+        input_tokens: 9,
+        output_tokens: 2,
+        models: { 'gemini-3': { input_tokens: 9 } },
+      },
+    }).model,
+    'gemini-3',
+  )
+})
+
 test("grok's stream reads as a transcript, its thread named by its opening line", () => {
   let lines = [
     { type: 'system', subtype: 'init', session_id: 'S1', model: 'grok-build' },
