@@ -339,9 +339,9 @@ export let fetchOf = (
 
 /**
  * A start sent ahead of what a caller will ask an object (`WARM`, `WAKE`), so
- * the object is up when it asks: a new object takes 150 to 500 ms to start
- * before any code of ours runs in it, and an isolate's first boot spends as
- * long again on CPU (T-149696). Nobody waits on its answer, so it is no trip
+ * the object is up when it asks: a sleeping object starts in a new isolate,
+ * which compiles and runs the object's code before it answers (T-151187), and
+ * an isolate's first boot spends as long again on CPU (T-149696). Nobody waits on its answer, so it is no trip
  * of the request's (hops.ts `apart`), and a failure is reported, never met.
  * `retain` holds it past the answer (the request's own `waitUntil` unless
  * named).

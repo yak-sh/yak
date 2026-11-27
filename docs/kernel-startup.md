@@ -1110,3 +1110,40 @@ IDs from the Store's deployment-skew lineage.
 
 The experiment used its own namespaces. Production continues to serve the same
 authorization paths and Store namespace. The 926 ms Township gap remains open.
+
+## A sleeping Store waits on the registry's compile (T-151187)
+
+November 27, 2026. The comparisons above timed new, empty objects, where an
+object's creation hides an upload's cost. These time existing SQLite objects
+that had slept, through cross-Worker bindings from a caller placed at
+`aws:us-east-2`, each object hinted `enam`. Every object Worker ran the same
+11-line class (one `select count(*)` per call); the large ones also uploaded the
+kernel's 721 modules (8.37 MB, built at `cc546ac69`) beside it. The "import"
+builds load the Store's module (graph.ts's chunk and its 3.9 MB static closure)
+on their first call without running it. Each object was seeded once, then woken
+after 2–6 minutes asleep or straight after a new version of its Worker. The
+class reported whether its isolate and its object were new.
+
+Caller's round trip of an object's first call, milliseconds:
+
+| Upload                  | Registry | New isolate: n, median (range) | Isolate warm: n, median |
+| ----------------------- | -------- | -----------------------------: | ----------------------: |
+| Class only (1 KB)       | legacy   |                 15, 51 (43–84) |                   3, 62 |
+| With the kernel's 8 MB  | legacy   |              15, 330 (295–921) |                   3, 54 |
+| With the kernel's 8 MB  | new      |                14, 90 (75–139) |                   4, 63 |
+| 8 MB, imports the Store | legacy   |               9, 423 (392–791) |                   3, 60 |
+| 8 MB, imports the Store | new      |               5, 341 (287–465) |                   7, 54 |
+
+Three of four first calls found a new isolate. Repeat calls took 4–21 ms. New
+objects (the seeding call) took 180 ms for the class only, 397 with the 8 MB
+under the legacy registry and 194 under the new one.
+
+So the 205–532 ms before a sleeping Store's code ran was the legacy registry
+compiling the whole upload, not Cloudflare's own start, which is about 50 ms.
+T-148980's revert compared the first call's CPU and wall under each registry,
+which leaves out the legacy registry's compile before the call. Under
+`new_module_registry` the upload's unimported modules cost 40 ms, and the
+Store's static closure (3.9 MB, 381 chunks: directory.ts, chat.ts, models.ts
+with @yaks/session and marked, signup.ts with libphonenumber, load.ts with every
+package's vocabulary) costs about 250 ms. The kernel takes `new_module_registry`
+again; what the Store's first call imports is the next cost to cut.

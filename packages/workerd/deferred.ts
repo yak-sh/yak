@@ -1,8 +1,8 @@
 // A class the runtime constructs at once whose object is made on its first
-// call, from a module loaded then. A module is evaluated when it is first
-// imported, so an isolate that wakes one Durable Object evaluates that
-// object's code and not the router's, and one that answers a page none of
-// the object's own.
+// call, from a module loaded then. Under workerd's `new_module_registry` a
+// module is compiled and evaluated when it is first imported, so an isolate
+// that wakes one Durable Object compiles that object's code and not the
+// router's, and one that answers a page none of the object's own.
 
 import { lazy } from '@yaks/fp'
 

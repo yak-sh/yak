@@ -21,11 +21,13 @@ compatibility_date = "2025-05-08"
 
 # enable_nodejs_process_v2 supplies the native process object to the module
 # build, alongside the runtime's node: modules, without JS polyfills.
-# The legacy module registry stays (T-148980). Loading the same modules in a
-# new isolate's first call cost far more under `new_module_registry`: a cold
-# Store call's median CPU was 482 ms with it and 152 ms without, startup 7 and
-# 0-1 ms. A compatibility_date from 2026-11-17 turns the new one on unless
-# `legacy_module_registry` is added.
+# new_module_registry compiles a module when it is first imported. The legacy
+# registry compiled the whole upload (8 MB) before a new isolate ran anything,
+# and nearly every sleeping store's wake starts a new isolate: an object of
+# that size took 330 ms to answer its first call, 90 under this registry and
+# 51 with a near-empty upload (T-151187, docs/kernel-startup.md). Compiling what
+# an isolate imports now shows in its first call's CPU instead. It is the
+# default from 2026-11-17.
 # durable_object_io_tasks_prevent_eviction keeps an object up while it waits
 # on I/O nobody connected is waiting for: a call finishing in `Outlast` after
 # its caller was answered (outlast.ts). It is the default from 2026-10-01.
@@ -35,6 +37,7 @@ compatibility_flags = [
   "enable_nodejs_process_v2",
   "enable_request_signal",
   "durable_object_io_tasks_prevent_eviction",
+  "new_module_registry",
 ]
 
 # Modules ship minified. bundle.ts keeps optional doors as dynamic imports

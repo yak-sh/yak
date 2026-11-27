@@ -273,8 +273,13 @@ A query that works on the box can be refused in a store.
   stores made 20 s apart each found no earlier new store in its isolate
   (T-143307), so a cache kept in module scope did not serve one new store's
   first request. Prove a cache hits live before counting on it.
-- **A new object takes 150 to 500 ms to start** before any code of ours runs in
-  it (T-143307). Start it beside what the request already waits on, with `WARM`
+- **A sleeping object starts in a new isolate**, nearly always, and that
+  isolate compiles what it imports before it answers. Cloudflare's own part is
+  about 50 ms for an existing object (about 180 ms for a new one); what an
+  isolate compiles is ours: an 8 MB upload cost 280 ms more under the legacy
+  module registry, which compiles the whole upload, and the Store's own import
+  costs what its static closure weighs (T-151187, docs/kernel-startup.md). So
+  keep a class's static imports to what its first call runs. Start it beside what the request already waits on, with `WARM`
   (door.ts, used.ts `start`), which touches no storage, so a start nobody
   follows up leaves nothing behind: a birth's. A store that stands is sent
   `WAKE` (used.ts `wake`), which brings it up as any request does (boot,
