@@ -22,17 +22,28 @@
  *     { day: '2026-11-26 00:00:00', space: 'ada', client: 'bot', views: 2 },
  *     { day: '2026-11-25 00:00:00', space: 'checks', client: 'browser', views: 9 },
  *   ],
- *   apps: [{ app: 'a1', client: 'browser', views: 3 }],
+ *   apps: [
+ *     { app: 'a1', client: 'browser', views: 3 },
+ *     { app: 't1', client: 'browser', views: 1 },
+ *     { app: 't2', client: 'bot', views: 5 },
+ *   ],
  * }, {
  *   spaces: [
  *     { eid: 's1', slug: 'ada', test: false },
  *     { eid: 's2', slug: 'checks', test: true },
+ *     { eid: 's3', slug: 'probes', test: true },
  *   ],
- *   apps: [{ eid: 'a1', slug: 'notes', space: 's1' }],
+ *   apps: [
+ *     { eid: 'a1', slug: 'notes', space: 's1' },
+ *     { eid: 't1', slug: 'try', space: 's2' },
+ *     { eid: 't2', slug: 'probe', space: 's3' },
+ *   ],
  * })
  * equal(v.people.map((d) => d.views), [0, 3])
  * equal(v.others.map((d) => d.views), [0, 2])
  * equal(v.tests.people, 9)
+ * // A test space's every visit counts, bots' too.
+ * equal(v.tests.spaces.map((p) => p.name), ['probes', 'checks'])
  * equal(v.apps[0], { eid: 'a1', space: 's1', name: 'ada/notes', people: 3, others: 0 })
  * ```
  *
@@ -111,9 +122,12 @@ let dense = (byDay: ByDay, days: number, now: number): Day[] => {
   return values.map((views, i) => ({ day: ymd(start + i * DAY), views }))
 }
 
-let busiest = (all: Iterable<Place>) =>
-  [...all].filter((p) => p.people + p.others > 0)
-    .sort((a, b) => b.people - a.people || b.others - a.others)
+let all = (p: Place) => p.people + p.others
+
+// People's places by people's visits; the test spaces' by every visit.
+let busiest = (places: Iterable<Place>, by = (p: Place) => p.people) =>
+  [...places].filter((p) => all(p) > 0)
+    .sort((a, b) => by(b) - by(a) || all(b) - all(a))
 
 /** The visits `t` counted, told apart by `places`. A view of a space the
  * directory no longer names counts as everyone's; an app it no longer names
@@ -158,15 +172,17 @@ export let platformVisits = (t: Tallied, places: Places): PlatformVisits => {
     if (space) space[side] += r.views
   }
   let test = (p: Place) => !!spaces.get(p.space)?.test
-  let shown = busiest(inSpace.values())
   return {
     at: t.at,
     days: t.days,
     people: dense(people, t.days, now),
     others: dense(others, t.days, now),
-    spaces: shown.filter((p) => !test(p)).slice(0, TOP),
+    spaces: busiest(inSpace.values()).filter((p) => !test(p)).slice(0, TOP),
     apps: busiest(apps).filter((p) => !test(p)).slice(0, TOP),
-    tests: { ...tested, spaces: shown.filter(test).slice(0, TOP) },
+    tests: {
+      ...tested,
+      spaces: busiest(inSpace.values(), all).filter(test).slice(0, TOP),
+    },
   }
 }
 
