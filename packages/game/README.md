@@ -72,23 +72,9 @@ can use the same client to apply a batch on each action.
 
 ## Friends
 
-`friendsAt(api)` from `@yaks/game/friends` reads the signed-in player's yaks.app
-friends through the app's query door. A game keeps no friend list of its own.
-`list()` answers `{kind: 'signed-out'}`, `{kind: 'ask', allow}` while the player
-has not let this app see their friends (`allow` is the page that asks them), or
-`{kind: 'friends', friends}`. Each friend is `{person, name, avatar, presence}`,
-with whoever is online first. `invite(person, path)` sends them a link to `path`
-inside the app, which reaches them in their Friends conversation and Updates.
-
-```ts ignore
-import { friendsAt } from '@yaks/game/friends'
-
-let friends = friendsAt()
-let shown = await friends.list()
-if (shown.kind == 'friends') {
-  await friends.invite(shown.friends[0].person, 'room.html#' + roomCode)
-}
-```
+A player's yaks.app friends, and inviting one, are every app's:
+`@yaks/platform/friends-at`, which a page's `./api/client.js` offers as
+`friends`. `@yaks/game/friends` re-exports it for games that import it there.
 
 ## Live rooms
 

@@ -1,5 +1,5 @@
 import { equal, ok, test, until } from '@yaks/testing'
-import type { Friends } from '@yaks/game/friends'
+import type { Friends } from '@yaks/platform/friends-at'
 import { withDom } from './dom_fixture.ts'
 import { memberOf } from './party-state.ts'
 import { partybox } from './partybox.ts'

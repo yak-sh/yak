@@ -1,5 +1,5 @@
 import { equal, test } from '@yaks/testing'
-import { friendsAt } from './friends.ts'
+import { friendsAt } from './friends-at.ts'
 
 let API = 'https://game.example/play/api'
 

@@ -243,3 +243,54 @@ test('a store posts to its payment doors as JSON and throws a refusal', async ()
     ['https://shop.test/shop/api/pay/refunds/r1', undefined, undefined],
   ])
 })
+
+test("a store's friends are read and invited through its own doors", async () => {
+  let posted: unknown[] = []
+  using _fetch = stub(globalThis, 'fetch', (url, init) => {
+    let { pathname, search } = new URL(String(url))
+    if (pathname.endsWith('/vocab.json')) {
+      return Promise.resolve(Response.json([]))
+    }
+    if (pathname.endsWith('/who')) {
+      return Promise.resolve(Response.json({ person: 'jo' }))
+    }
+    if (pathname.endsWith('/apply')) {
+      posted.push(JSON.parse(String(init?.body)).entities)
+      return Promise.resolve(
+        Response.json({ ok: true, aliases: {}, bundles: [] }),
+      )
+    }
+    return Promise.resolve(Response.json(
+      search == '?.app_friends'
+        ? [{
+          entity: { eid: 'jo' },
+          app_friends: { signed_in: true, allowed: true },
+        }]
+        : [
+          {
+            entity: { eid: 'p1' },
+            app_friend: { name: 'Wren', presence: 'away' },
+          },
+          {
+            entity: { eid: 'p2' },
+            app_friend: { name: 'Tam', presence: 'online' },
+          },
+        ],
+    ))
+  })
+  let game = store('https://game.test/play/api/')
+  try {
+    let shown = await game.friends.list()
+    equal(shown.kind == 'friends' && shown.friends.map((f) => f.person), [
+      'p2',
+      'p1',
+    ])
+    await game.friends.invite('p2', '?room=r1', 'e1')
+    equal(posted, [[{
+      entity: { eid: 'e1' },
+      friend_invite: { to: 'p2', path: '?room=r1' },
+    }]])
+  } finally {
+    game.outbox.close()
+  }
+})

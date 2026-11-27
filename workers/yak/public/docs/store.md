@@ -7,7 +7,8 @@ guide:
   description: >-
     The frontend data API, ./api/client.js, in full: every function it
     exports; apply, query, search, subscribe, upload, digest, me, the outbox of
-    unsaved writes, qr for SVG QR codes and store(base) for another app's store; the bundle of
+    unsaved writes, friends for the person's yaks.app friends and inviting
+    one, qr for SVG QR codes and store(base) for another app's store; the bundle of
     components a write sends;
     patching and deleting; compare-and-set with $was so two writers cannot
     both spend one value; read and write access; the created.by author stamp
@@ -49,7 +50,7 @@ at `../api/client.js`.
 
 ## Exports of `client.js`
 
-`client.js` exports nineteen names. These fourteen are bound to the app's own
+`client.js` exports twenty names. These fifteen are bound to the app's own
 store:
 
 - the functions `apply`, `query`, `search`, `subscribe`, `upload`, `me` and
@@ -61,6 +62,9 @@ store:
 - `words()`, which resolves to the store's components by name: each declaration
   from its `vocab.json` and the platform's, such as
   `words().then((w) => w.order.properties)`.
+- `friends`, the signed-in person's yaks.app friends once they let the app see
+  them: `friends.list()` reads them and `friends.invite(person, path)` sends one
+  a link into the app ([Multiplayer Games](./games.md), "Inviting friends").
 - `pay(path, body)`, which calls the store's payment doors under `./api/pay/`:
   with a body it posts it as JSON
   (`pay('refunds', {request, order, amount,
@@ -78,13 +82,13 @@ These five functions need no store:
 - `qr(text, label)`, an inline SVG QR code, documented below.
 - `store(base)`, described next.
 
-`store(base)` returns an object holding the fourteen names bound to a store
+`store(base)` returns an object holding the fifteen names bound to a store
 (`apply`, `query`, `search`, `subscribe`, `upload`, `me`, `operatorSend`,
-`outbox`, `drafts`, `publish`, `unpublish`, `publicFiles`, `words` and `pay`),
-pointed at the store at the address you pass. Every app in a space shares one
-hostname, so a sibling app (another app in the same space) is addressed by its
-path, with or without the trailing slash. The sibling answers according to its
-own `access` setting, whoever is asking:
+`outbox`, `drafts`, `friends`, `publish`, `unpublish`, `publicFiles`, `words`
+and `pay`), pointed at the store at the address you pass. Every app in a space
+shares one hostname, so a sibling app (another app in the same space) is
+addressed by its path, with or without the trailing slash. The sibling answers
+according to its own `access` setting, whoever is asking:
 
     import { store } from './api/client.js'
 

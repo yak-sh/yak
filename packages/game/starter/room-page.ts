@@ -1,4 +1,3 @@
-import { friendsAt } from '@yaks/game/friends'
 import { frames } from './frames.ts'
 import {
   connectRoom,
@@ -53,8 +52,10 @@ let remember = (room: string) => {
   history.replaceState(null, '', url)
 }
 
-// The person's yaks.app friend list, with their consent.
-let yaks = friendsAt()
+// The person's yaks.app friends, with their consent: `friends` from the
+// app's ./api/client.js, which is served beside the page, never compiled in.
+let yaks = async () =>
+  (await import(new URL('api/client.js', document.baseURI).href)).friends
 
 let next = (a: { x: number; z: number }, b: { x: number; z: number }) =>
   Math.abs(a.x - b.x) + Math.abs(a.z - b.z) === 1
@@ -174,7 +175,7 @@ let playRoom = async (member: Joined) => {
   // Friends come from the person's yaks.app friend list, with their consent.
   friend.addEventListener('click', () => {
     void (async () => {
-      let shown = await yaks.list()
+      let shown = await (await yaks()).list()
       if (shown.kind == 'signed-out') {
         throw new RoomRefused('Sign in to invite friends.')
       }
@@ -184,7 +185,9 @@ let playRoom = async (member: Joined) => {
       }
       friends.replaceChildren(
         new Option('Choose a friend', ''),
-        ...shown.friends.map((f) => new Option(f.name, f.person)),
+        ...shown.friends.map((f: { person: string; name: string }) =>
+          new Option(f.name, f.person)
+        ),
       )
       friends.hidden = false
       friends.focus()
@@ -195,7 +198,7 @@ let playRoom = async (member: Joined) => {
     if (!to) return
     void (async () => {
       let url = await invite()
-      await yaks.invite(to, 'room' + url.search + url.hash)
+      await (await yaks()).invite(to, 'room' + url.search + url.hash)
       status.textContent = `Invited ${friends.selectedOptions[0].text}.`
       friends.hidden = true
     })().catch(show)

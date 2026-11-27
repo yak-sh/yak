@@ -18,6 +18,7 @@
   "description": "Game rules, browser controls and HUD parts over values, without a graph or a game world.",
   "dependencies": {
     "@yaks/client": "0.2.24",
+    "@yaks/platform": "0.2.30",
     "@yaks/tui": "0.2.24",
     "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",

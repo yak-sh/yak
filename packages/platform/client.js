@@ -6,6 +6,7 @@ import { durableOutbox } from '@yaks/sync/outbox'
 import { pacer, saying } from '@yaks/sync'
 import { system } from '@yaks/fp'
 import { carried } from './installs.ts'
+import { friendsOver } from './friends-at.ts'
 import { browserPage, sayTab } from '@yaks/notify/tab'
 import { landRelay, relayed, split, withRelay } from './page-relay.js'
 export { draftEid }
@@ -50,6 +51,11 @@ export { qr } from './qr.ts'
 // cut short resumes: sent again, from this tab or another, it sends only the
 // parts the platform does not have yet (`POST ./api/blob/<sha>`). `digest(file)`
 // is that SHA-256, the eid an upload of the file answers.
+//
+// `friends` is the signed-in person's yaks.app friends, once they let this
+// app see them: `friends.list()` answers who they are (or that they are
+// signed out, or the page that asks them), and `friends.invite(person, path)`
+// sends one a link into the app (./friends-at.ts).
 //
 // `was(value)` is the precondition half of a write: hash what you read, name
 // it under `$was`, and the store refuses the whole batch if that property has
@@ -970,6 +976,10 @@ export let store = (base, {
     publicFiles,
     drafts: (opts) =>
       browserDrafts({ apply, me, subscribe }, String(base), opts),
+    friends: friendsOver(
+      { query, apply },
+      new URL('allow?at=friends', base).href,
+    ),
   }
 }
 
@@ -1094,6 +1104,7 @@ let rows = ({ rows, riders, relays }) => {
 export let {
   apply,
   drafts,
+  friends,
   me,
   operatorSend,
   outbox,

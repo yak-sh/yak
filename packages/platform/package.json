@@ -120,6 +120,7 @@
     "./upstream": "./upstream.ts",
     "./app-transfer": "./app-transfer.ts",
     "./friends": "./friends.ts",
+    "./friends-at": "./friends-at.ts",
     "./friends-browser": "./friends-browser.ts",
     "./friends-dock-view": "./friends-dock-view.ts",
     "./friends-dock-browser": "./friends-dock-browser.ts",

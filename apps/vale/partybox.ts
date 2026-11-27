@@ -14,7 +14,7 @@ import { split } from './ui/split.ts'
 import { ITEMS } from './items.ts'
 import { SLOT_NAMES, SLOTS } from './arms.ts'
 import type { Member } from './party-state.ts'
-import type { Friend } from '@yaks/game/friends'
+import type { Friend } from '@yaks/platform/friends-at'
 import { ValeMeter } from './kit/ValeMeter.ts'
 import { head, hint, part, picture } from './tile.ts'
 

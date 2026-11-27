@@ -2,6 +2,12 @@ import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { line, sub } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
+import {
+  APP_FRIEND,
+  APP_FRIENDS,
+  type FriendInvite,
+  type Presence,
+} from './friends-at.ts'
 import { monogram } from './monogram.ts'
 import appFriendsJson from './vocab/app-friends.vocab.json' with {
   type: 'json',
@@ -11,11 +17,8 @@ import appPermissionsJson from './vocab/app-permissions.vocab.json' with {
 }
 
 export let FRIENDS_ACCESS = 'friends'
-export let APP_FRIENDS = '.app_friends'
-export let APP_FRIEND = '.app_friend'
-
-export type Presence = 'online' | 'building' | 'away' | 'unknown'
-export type FriendInvite = { to: string; path?: string }
+export { APP_FRIEND, APP_FRIENDS }
+export type { FriendInvite, Presence }
 
 export let appFriendsWords: VocabDoc = appFriendsJson as VocabDoc
 

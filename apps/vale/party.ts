@@ -1,11 +1,11 @@
 // Party state at the graph edge: each hero's owner writes new membership steps,
 // invitations, and replies. Watches cover only this hero's inbox and the
 // current party; pure party-state.ts decides which authored rows count.
-// Friends are the player's yaks.app friends (@yaks/game/friends): inviting one
-// invites each of their heroes and sends them a link, `?party=<hero>`, which
-// opens the game with that hero's invitation waiting for whichever hero they
-// play.
-import { type Friends, friendsAt } from '@yaks/game/friends'
+// Friends are the player's yaks.app friends, as the page's ./api/client.js
+// offers them (`friends`): inviting one invites each of their heroes and sends
+// them a link, `?party=<hero>`, which opens the game with that hero's
+// invitation waiting for whichever hero they play.
+import type { Friends, FriendsAt } from '@yaks/platform/friends-at'
 import { comp, num, str } from './bundle.ts'
 import { writer } from './chat.ts'
 import { LEVELS } from './levels.ts'
@@ -18,15 +18,26 @@ import type { Body } from './sim.ts'
 /** The query parameter a friend's invitation link names the inviter in. */
 export let LINK = 'party'
 
+// The friends ./api/client.js offers, the client loaded beside the store at
+// `api` when the sheet first asks: it is served there, never compiled in.
+let clientFriends = (api: string): FriendsAt => {
+  let at = import(new URL('client.js', api).href)
+    .then((client) => client.friends as FriendsAt)
+  return {
+    list: () => at.then((f) => f.list()),
+    invite: (...args) => at.then((f) => f.invite(...args)),
+  }
+}
+
 export let parties = (
   net: Net,
-  { link = null, friendsOf = () => friendsAt(net.store) }: {
+  { link = null, friendsOf = () => clientFriends(net.store) }: {
     link?: string | null
-    friendsOf?: () => ReturnType<typeof friendsAt>
+    friendsOf?: () => FriendsAt
   } = {},
 ) => {
   type Watch = ReturnType<Net['client']['watch']>
-  let yaks: ReturnType<typeof friendsAt> | null = null
+  let yaks: FriendsAt | null = null
   let friends: Friends | null = null
   // The invitation a link brought, for the hero this tab plays.
   let linked: Invite | null = null

@@ -206,13 +206,14 @@ private game still requires its room invite to join an expedition.
 ## Inviting friends
 
 Offer an **Invite a friend** button beside the game's share link, and list the
-player's yaks.app friends with `@yaks/game/friends`. The game keeps no friend
-list of its own.
+player's yaks.app friends with `friends` from `./api/client.js`, which every app
+has ([Frontend Data](store.md)). The game keeps no friend list of its own. A
+compiled script loads the client as it runs:
 
 ```ts ignore
-import { friendsAt } from '@yaks/game/friends'
-
-let friends = friendsAt()
+let { friends } = await import(
+  new URL('api/client.js', document.baseURI).href
+)
 let shown = await friends.list()
 if (shown.kind == 'friends') {
   await friends.invite(shown.friends[0].person, 'play#' + roomCode)
@@ -239,7 +240,8 @@ Underneath, these are the app's own query and apply doors:
 `query('.app_friends')` answers `app_friends{signed_in, allowed}`,
 `query('.app_friend')` answers `app_friend{name, avatar, presence}` with the
 friend's person ID as `entity.eid`, and one `friend_invite{to, path}` bundle
-sent with `apply` invites them.
+sent with `apply` invites them. A game that imports `@yaks/game/friends` keeps
+working: it is the same module.
 
 ## Platform dependencies and vocabulary
 
