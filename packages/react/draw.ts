@@ -10,8 +10,68 @@ type Surface = { draw: (node: ReactNode) => void; close: () => void }
 // The in-memory document has neither a window of its own nor frame elements.
 let surfaces = 0
 let restore: () => void
+let documents = new WeakMap<Document, { refs: number; close: () => void }>()
+
+// React sets the option properties for a controlled select. A painted tree
+// reads those states from its attributes.
+let controls = (doc: Document): () => void => {
+  let create = doc.createElement
+  let createNS = doc.createElementNS
+  let control = (element: Element, name: string) => {
+    if (name == 'select' && !('options' in element)) {
+      let choices = () => Array.from(element.querySelectorAll('option'))
+      Object.defineProperties(element, {
+        options: { get: choices },
+        value: {
+          get: () => {
+            let listed = choices()
+            return (listed.find((option) => option.selected) ?? listed[0])
+              ?.value ?? ''
+          },
+          set: (value: string) => {
+            for (let option of choices()) {
+              option.selected = option.value == value
+            }
+          },
+        },
+      })
+    }
+    if (name == 'option' && !('selected' in element)) {
+      for (let property of ['selected', 'defaultSelected']) {
+        Object.defineProperty(element, property, {
+          get: () => element.hasAttribute('selected'),
+          set: (on: boolean) => {
+            if (on) element.setAttribute('selected', '')
+            else element.removeAttribute('selected')
+          },
+        })
+      }
+    }
+    return element
+  }
+  doc.createElement =
+    ((name: string, options?: ElementCreationOptions) =>
+      control(create.call(doc, name, options), name)) as typeof create
+  doc.createElementNS = ((
+    namespace: string | null,
+    name: string,
+    options?: string | ElementCreationOptions,
+  ) =>
+    control(
+      createNS.call(doc, namespace, name, options),
+      name,
+    )) as typeof createNS
+  return () => {
+    doc.createElement = create
+    doc.createElementNS = createNS
+  }
+}
+
 let attach = (doc: Document) => {
   if (doc.defaultView) return () => {}
+  let held = documents.get(doc)
+  if (!held) documents.set(doc, held = { refs: 0, close: controls(doc) })
+  held.refs++
   if (surfaces++ == 0) {
     let names: string[] = []
     for (
@@ -29,6 +89,10 @@ let attach = (doc: Document) => {
     }
   }
   return () => {
+    if (--held.refs == 0) {
+      held.close()
+      documents.delete(doc)
+    }
     if (--surfaces == 0) restore()
   }
 }
