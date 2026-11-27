@@ -298,10 +298,11 @@ let owed = (
 
 /** The `rules` hook: the `write` steps, run over the batch until they write
  * nothing more (each binding once in a write), then the runs the `commit`
- * steps are owed. */
+ * steps are owed. A batch only checked (`admission`, such as a peer's relayed
+ * value) is never kept, so no step acts on it, and it reads nothing. */
 let inWrite: Hook = (bundles, tx, _err, context) => {
   let v = (context?.graph as Graph | undefined)?.vocab
-  if (!v || !tx.bindings) return bundles
+  if (!v || !tx.bindings || context?.admission) return bundles
   return after(steps(tx), (all) => {
     let list = all.filter((s) => s.when == 'write' && !s.fires)
     let commit = all.filter((s) => s.when == 'commit' && !s.fires)
@@ -329,6 +330,9 @@ let inWrite: Hook = (bundles, tx, _err, context) => {
 export let workflows = (): Plugin => ({
   name: 'workflow',
   requests: [GEN],
+  // A check keeps nothing, and the steps leave it alone (`inWrite`), so it
+  // needs no dry run of its own.
+  admission: () => true,
   hooks: { rules: inWrite },
 })
 

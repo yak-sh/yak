@@ -165,6 +165,14 @@ test('an owed step survives a stop, and a fresh process runs it once', async () 
   equal(await read('.effect'), [])
 })
 
+test('a value only checked runs no step and owes none', async () => {
+  let { g, read, flow } = fixture()
+  await flow('orders', ask, { ...ship, eid: 'label', match: '$o .order' })
+  await g.admit([{ entity: { eid: 'o1' }, order: {} }])
+  equal(await read('.step_due'), [])
+  equal(await read('.order'), [])
+})
+
 test('the map follows matches and writes, and requires edges', async () => {
   let { g, apply, flow } = fixture()
   let bill = { eid: 'bill', match: '$s .shipment', write: [] }
