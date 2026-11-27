@@ -593,6 +593,10 @@ grouped approximately by function, **not** by dependency order.
   transformation. Each outer query binding has one durable `build`; changed
   content starts a tool `call`, and named `built` outputs keep their identity. A
   model is one tool adapter, using `content.body` and `using` on the builder.
+- **[@yaks/workflow](./workflow)** — a `step` is a rule stored as a row: for
+  each binding of its match it writes its template, in the write, after it
+  commits, or when its wake fires. A `workflow` contains steps, a `case` is one
+  item moving through, and `made` says which case and step wrote a row.
 - **[@yaks/dreaming](./dreaming)** — what an agent works on when nothing else is
   asking for its attention: a `dream`, which runs as a @yaks/builders builder,
   and the `recall` it consolidates.

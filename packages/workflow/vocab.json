@@ -1,0 +1,106 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/edge": true
+  },
+  "title": "workflow",
+  "$defs": {
+    "step": {
+      "component": true,
+      "type": "object",
+      "description": "a rule stored as a row: for each binding of `match`, write `write` with its variables filled. A step a workflow `contains` writes a case for the item and stamps `made` on what it creates",
+      "properties": {
+        "match": {
+          "type": "string",
+          "format": "query",
+          "description": "the query whose bindings it acts on: `$o .order, !shipped`, or several patterns joined by shared variables"
+        },
+        "write": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true },
+          "description": "the bundles it writes for each binding: a string `$name` the match bound is its value, and an entity eid `$name` it did not bind is a fresh entity, one per binding"
+        },
+        "when": {
+          "type": "string",
+          "enum": ["write", "commit"],
+          "description": "`write` runs inside the write that made it match, `commit` (the default) after that write commits; a step carrying `wake` or `watch` runs when that fires instead"
+        }
+      }
+    },
+    "workflow": {
+      "component": true,
+      "type": "object",
+      "description": "a structure of steps: it `contains` them, and which feeds which is computed from their matches and writes",
+      "properties": {}
+    },
+    "case": {
+      "component": true,
+      "type": "object",
+      "identity": ["workflow", "for"],
+      "description": "one item moving through a workflow, its eid derived from the workflow and the item so a rematch finds it",
+      "properties": {
+        "workflow": {
+          "type": "string",
+          "ref": "workflow",
+          "death": "cascade",
+          "description": "the workflow it moves through"
+        },
+        "for": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the item: the entity the case's first step matched"
+        }
+      }
+    },
+    "made": {
+      "component": true,
+      "type": "object",
+      "index": [["case", "step"]],
+      "description": "which case and step wrote this row; a row made before its step's last edit reads as outdated",
+      "properties": {
+        "case": {
+          "type": "string",
+          "ref": "case",
+          "death": "release",
+          "description": "the case it was written for"
+        },
+        "step": {
+          "type": "string",
+          "ref": "step",
+          "death": "keep",
+          "description": "the step that wrote it"
+        }
+      }
+    }
+  },
+  "kinds": {
+    "step": {
+      "description": "a rule stored as a row: what it matches, what it writes for each binding, and when",
+      "examples": [
+        {
+          "step": {
+            "match": "$o .doc, !doc.body",
+            "write": [
+              { "entity": { "eid": "$o" }, "doc": { "body": "To do" } }
+            ],
+            "when": "write"
+          }
+        }
+      ]
+    },
+    "workflow": {
+      "description": "steps it `contains`, and the cases moving through them",
+      "with": { "doc": true },
+      "examples": [
+        {
+          "workflow": {},
+          "doc": {
+            "title": "Bug to fix",
+            "body": "A reported bug, its fix, and the time between"
+          }
+        }
+      ]
+    }
+  }
+}

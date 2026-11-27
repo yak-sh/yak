@@ -1,0 +1,29 @@
+{
+  "name": "@yaks/workflow",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Steps stored as rows, run in a write, after it commits or when a wake fires; workflows of steps, the cases moving through them, and which step made each row.",
+  "dependencies": {
+    "@yaks/fp": "0.2.23",
+    "@yaks/graph": "0.2.33",
+    "@yaks/query": "0.2.32",
+    "@yaks/vocab": "0.2.32"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/doc": "0.2.24",
+    "@yaks/edge": "0.2.24",
+    "@yaks/journal": "0.2.30",
+    "@yaks/ram": "0.2.24",
+    "@yaks/sqlite": "0.2.30",
+    "@yaks/testing": "0.2.30",
+    "@yaks/tools": "0.2.30",
+    "@yaks/wake": "0.2.24"
+  }
+}
