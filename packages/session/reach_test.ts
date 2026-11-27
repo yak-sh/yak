@@ -301,10 +301,12 @@ test('a turn holds each result’s call, not what its tool answered as data', as
   )
 })
 
-// Four hundred lines of turns, then a window or a checkpoint that bounds what
+// Four hundred lines of turns, then a window, a checkpoint or a summary
+// imported from a provider's log (naming no line it replaced) that bounds what
 // a model is sent and a line that owes it a turn; or neither, and settled,
 // where a turn would be sent all of it.
-let long = (bound: 'window' | 'checkpoint' | 'neither'): Bundle[] => {
+type Bound = 'window' | 'checkpoint' | 'imported' | 'neither'
+let long = (bound: Bound): Bundle[] => {
   let out: Bundle[] = [{ entity: { eid: 's' }, session: {} }]
   for (let i = 1; i <= 400; i += 3) {
     out.push(
@@ -339,6 +341,15 @@ let long = (bound: 'window' | 'checkpoint' | 'neither'): Bundle[] => {
       notice: {},
     })
   }
+  if (bound == 'imported') {
+    out.push({
+      entity: { eid: 'mark' },
+      entry: { session: 's', seq: 403 },
+      checkpoint: {},
+      content: { body: 'summary' },
+      notice: {},
+    })
+  }
   if (bound != 'neither') {
     out.push({
       entity: { eid: 'again' },
@@ -349,7 +360,7 @@ let long = (bound: 'window' | 'checkpoint' | 'neither'): Bundle[] => {
   return out
 }
 
-for (let bound of ['window', 'checkpoint', 'neither'] as const) {
+for (let bound of ['window', 'checkpoint', 'imported', 'neither'] as const) {
   let g = await world(long(bound))
   let whole = await transcript(g, 's')
   let want = { turn: turned(whole), status: statusOf(whole) }

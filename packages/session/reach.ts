@@ -1025,11 +1025,12 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
   if (o.turn && statusOf(await gather()) == 'pending') {
     let mark = checkpointOf(ordered(held))
     if (mark) {
+      // A summary naming no line it replaced through, as a provider's log
+      // imports one (./readers.ts), replaces every line before itself
+      // (./compact.ts `context`).
       let through = comp(mark, 'checkpoint')?.through
-      let boundary = through == null
-        ? undefined
-        : await n.seqAt(String(through))
-      let at = boundary ?? Number(comp(mark, 'checkpoint')?.seq)
+      let at = through == null ? seqOf(mark) : await n.seqAt(String(through)) ??
+        Number(comp(mark, 'checkpoint')?.seq)
       n.mark = Number.isSafeInteger(at) && at >= 1 ? at : -Infinity
       n.summary = seqOf(mark)
       if (through != null && !find(String(through))) {
