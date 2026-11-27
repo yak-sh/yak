@@ -19,7 +19,6 @@
   "license": "Apache-2.0",
   "description": "Exact person and thread attention policy, with server-owned summaries and lazy conversation reads shared by inbox doors.",
   "dependencies": {
-    "@preact/signals": "2.9.4",
     "@yaks/archetype": "0.2.24",
     "@yaks/client": "0.2.24",
     "@yaks/draft": "0.2.24",
@@ -35,7 +34,8 @@
     "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",
     "lucide": "1.31.0",
-    "preact": "10.29.7"
+    "preact": "10.29.7",
+    "@yaks/ux": "0.2.23"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
@@ -52,6 +52,10 @@
     "@yaks/sql": "0.2.30",
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30",
-    "linkedom": "^0.18.12"
+    "linkedom": "^0.18.12",
+    "react": "npm:@preact/compat@18.3.2"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0"
   }
 }

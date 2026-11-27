@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 /**
  * A person's inbox: their threads in attention lanes, a search over what was
  * said and received, each thread opened in place to read and answer, and a
@@ -10,8 +10,7 @@
  * @module
  */
 
-import { type ComponentChild, Fragment, type JSX } from 'preact'
-import { useRef, useState } from 'preact/hooks'
+import { Fragment, type JSX, type ReactNode, useRef, useState } from 'react'
 import {
   Button,
   Dot,
@@ -166,7 +165,7 @@ export let InboxThreads = (
     search: Search
     onSearch: (search: Search) => void
     limit?: number
-    find?: ComponentChild
+    find?: ReactNode
     actor: string
     io: Io
   },

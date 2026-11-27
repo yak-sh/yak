@@ -21,7 +21,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import * as ui from '@yaks/ui'
 import {
   at as editAt,

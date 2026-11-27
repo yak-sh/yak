@@ -7,7 +7,7 @@
 import { define, type Registry } from '@yaks/render'
 import type { View } from './host.ts'
 import { and, parse } from '@yaks/query'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Tile } from '@yaks/ui'
 import { str } from './read.ts'
 import { HomePage } from './Home.ts'

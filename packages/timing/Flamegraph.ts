@@ -8,7 +8,7 @@
  * the span table beside it instead.
  * @module
  */
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { amount, hue, type Merged, noun, said } from './readings.ts'
 
 let ROW = 22

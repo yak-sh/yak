@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 /**
  * What the inbox offers a browsing app, as a `./views` facet: the `Inbox`
  * view of a person (./Person.tsx) and of a project (./Project.tsx), written

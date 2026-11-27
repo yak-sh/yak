@@ -25,7 +25,7 @@
  * @module
  */
 
-import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
+import { createElement as h, Fragment, type JSX, type ReactNode } from 'react'
 import { conjoin, order as ordered, stringify } from '@yaks/query'
 import { Pager, Table } from '@yaks/ui'
 import { sortRows, type SortValue } from '@yaks/ux'
@@ -46,7 +46,7 @@ export type Column = {
    * pressed: a number, text, or null for none */
   value?: (b: Bundle) => SortValue
   mod?: 'num' | 'key' | 'prose'
-  cell: (b: Bundle) => ComponentChildren
+  cell: (b: Bundle) => ReactNode
 }
 
 // What a column sorts by in a table's state: the property the graph runs by,

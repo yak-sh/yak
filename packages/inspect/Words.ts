@@ -14,7 +14,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { Markdown } from '@yaks/markdown'
 import * as ui from '@yaks/ui'
 import { Edit, useEdit } from '@yaks/ux'
@@ -49,7 +49,7 @@ export let Words = (
     {
       'data-words': `${comp}.${prop}`,
       mod: io.edits && click ? 'typed' : undefined,
-      onDblClick: typed ? edit.begin : undefined,
+      onDoubleClick: typed ? edit.begin : undefined,
       onClick: typed && click
         ? (ev: MouseEvent) =>
           (ev.target as Element).closest?.('a') || edit.begin()

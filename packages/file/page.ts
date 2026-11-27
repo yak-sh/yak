@@ -13,7 +13,7 @@
  *
  * @module
  */
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { parse } from '@yaks/query'
 import {
   type Answer,
@@ -78,7 +78,7 @@ let waiting = (got: Answer | undefined, what: string) =>
 
 // The rows under headings every table here has: a name, a bar, numbers.
 let Ranked = (
-  { heads, children }: { heads: string[]; children?: ComponentChildren },
+  { heads, children }: { heads: string[]; children?: ReactNode },
 ) =>
   h(
     Table,
@@ -102,7 +102,7 @@ let Ranked = (
 // pointer or by Enter or Space where it has the keyboard.
 let Measured = (
   { name, bytes, of, grown, mod, open, toggle }: {
-    name: ComponentChildren
+    name: ReactNode
     bytes: number
     of: number
     grown: string
@@ -164,7 +164,7 @@ let Tree = (
     return opens(s.Disclosure ? isOpen(s) : undefined, bytes, newer.used)
   }
   // A directory wears whether it is open; a file stands where that would.
-  let name = (l: Line): ComponentChildren =>
+  let name = (l: Line): ReactNode =>
     l.rest
       ? within(newer, l.path).listed.length ? 'the rest' : 'all of it'
       : l.open == null

@@ -16,7 +16,7 @@
  * @module
  */
 
-import { useLayoutEffect, useState } from 'preact/hooks'
+import { useLayoutEffect, useState } from 'react'
 import { stringify } from '@yaks/query'
 import type { Query } from '@yaks/graph'
 import type { Bundle, Io } from './host.ts'

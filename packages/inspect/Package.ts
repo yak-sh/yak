@@ -7,7 +7,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { parse } from '@yaks/query'
 import { Body, Head, Loading } from '@yaks/ui'
 import type { Answer, Bundle, Io, Props, View } from './host.ts'

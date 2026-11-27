@@ -18,7 +18,7 @@
  * @module
  */
 
-import type { ComponentChildren, FunctionComponent } from 'preact'
+import type { FunctionComponent, ReactNode } from 'react'
 import type { Bundle, Context, Registration } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab'
 
@@ -104,7 +104,7 @@ export type Host = {
 /** A view's doors to the world outside it. */
 export type Io = Omit<Host, 'useAnswers' | 'front'> & {
   /** another bundle, drawn through the same registry as `view` */
-  show: (b: Bundle, view: string, ctx?: Context) => ComponentChildren
+  show: (b: Bundle, view: string, ctx?: Context) => ReactNode
   /** whether the registry draws this bundle as `view` */
   can: (b: Bundle, view: string) => boolean
   /** the answers to asks a component makes as it draws: a hook, for a query

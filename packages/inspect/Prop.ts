@@ -12,7 +12,7 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { parse } from '@yaks/query'
 import { Button, Rows, Value } from '@yaks/ui'
 import type { Prop } from '@yaks/vocab'
@@ -62,7 +62,7 @@ type Part_ = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 
 // What the head says under the property's name: what it is, then whose it
 // is, its type and what is special about it.
-let about = (io: Io, e: Bundle): ComponentChildren[] => {
+let about = (io: Io, e: Bundle): ReactNode[] => {
   let [name] = split(e)
   let p = comp(e, '_prop')
   let pkg = str(e, '_prop', 'namespace')

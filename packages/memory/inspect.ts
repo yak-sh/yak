@@ -17,7 +17,7 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { parse } from '@yaks/query'
 import * as ui from '@yaks/ui'
 import {
@@ -54,7 +54,7 @@ export let Cited = ({ e: m, io }: Props): JSX.Element => {
   let on = str(m, 'comment', 'target')
   useNamed(io, [by, session, on])
   let when = str(m, 'created', 'at')
-  let where: ComponentChildren[] = [
+  let where: ReactNode[] = [
     session ? h('span', { key: 'in' }, 'in ', mention(io, session)) : null,
     on ? h('span', { key: 'on' }, 'on ', mention(io, on)) : null,
   ]

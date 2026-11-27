@@ -19,7 +19,7 @@
  */
 
 import { groupBy } from '@yaks/fp'
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { Timeline, Value } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { paged, Paging } from './grid.ts'
@@ -72,7 +72,7 @@ let did = (
   b: Bundle,
   older?: Bundle,
   prop?: string,
-): ComponentChildren[] => {
+): ReactNode[] => {
   let now = value(b)
   if (now == null) return [name == 'entity' ? 'deleted' : 'removed']
   let was = older ? value(older) ?? {} : undefined

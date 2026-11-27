@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 /** The complete anatomy remains reachable without an unbounded DOM. Paging,
  * filters and selection are graph-owned; the map's caps never cap the list.
  */
@@ -31,39 +31,39 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
   let start = page * PAGE_SIZE
   let names = new Map(model.nodes.map((node) => [node.id, node.name]))
   return (
-    <section class='AnatomyList' aria-label='Complete anatomy list'>
-      <header class='Map_Header'>
+    <section className='AnatomyList' aria-label='Complete anatomy list'>
+      <header className='Map_Header'>
         <div>
-          <span class='Atlas_Eyebrow'>Complete anatomy</span>
-          <h2 class='Atlas_Reset Map_Header_Title'>
+          <span className='Atlas_Eyebrow'>Complete anatomy</span>
+          <h2 className='Atlas_Reset Map_Header_Title'>
             {relations ? 'Every declared connection' : 'Every reported part'}
           </h2>
         </div>
-        <span class='Map_Count'>
+        <span className='Map_Count'>
           {total ? start + 1 : 0}–{Math.min(total, start + PAGE_SIZE)}
-          <span class='Map_Count_Text'>of {total}</span>
+          <span className='Map_Count_Text'>of {total}</span>
         </span>
       </header>
-      <div class='AnatomyList_Head' aria-hidden='true'>
+      <div className='AnatomyList_Head' aria-hidden='true'>
         <span>{relations ? 'From → to' : 'Name / provenance'}</span>
         <span>{relations ? 'Relationship' : 'Group / state'}</span>
       </div>
       {!total
         ? (
-          <div class='AnatomyList_Empty' role='status'>
-            <h3 class='Atlas_Reset AnatomyList_Empty_Title'>
+          <div className='AnatomyList_Empty' role='status'>
+            <h3 className='Atlas_Reset AnatomyList_Empty_Title'>
               {unobserved
                 ? 'Category unobserved here.'
                 : `No matching ${relations ? 'relationships' : 'parts'}.`}
             </h3>
-            <p class='Atlas_Reset AnatomyList_Empty_Description'>
+            <p className='Atlas_Reset AnatomyList_Empty_Description'>
               {unobserved
                 ? 'This host does not report coverage for this category. No matches cannot establish absence.'
                 : 'Try a shorter filter or choose a different anatomy group.'}
             </p>
             {model.state.filter && (
               <Button
-                class='Atlas_Button'
+                className='Atlas_Button'
                 type='button'
                 onClick={() => {
                   model.search('')
@@ -76,27 +76,27 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
           </div>
         )
         : (
-          <ul class='AnatomyList_Rows Atlas_Reset'>
+          <ul className='AnatomyList_Rows Atlas_Reset'>
             {relations
               ? edges.slice(start, start + PAGE_SIZE).map((edge) => (
                 <li key={edge.id}>
                   <button
                     type='button'
-                    class='AnatomyList_Row Atlas_Button'
+                    className='AnatomyList_Row Atlas_Button'
                     aria-pressed={model.state.selected == edge.id}
                     onClick={() =>
                       model.select(edge.id)}
                   >
-                    <Tile class='AnatomyList_Tile'>
-                      <div class='AnatomyList_Name'>
-                        <Tile.Title class='AnatomyList_Title'>
+                    <Tile className='AnatomyList_Tile'>
+                      <div className='AnatomyList_Name'>
+                        <Tile.Title className='AnatomyList_Title'>
                           {names.get(edge.from) ?? edge.from}
                         </Tile.Title>
-                        <Tile.Note class='AnatomyList_Note'>
+                        <Tile.Note className='AnatomyList_Note'>
                           → {names.get(edge.to) ?? edge.to}
                         </Tile.Note>
                       </div>
-                      <Tile.Count class='AnatomyList_Kind'>
+                      <Tile.Count className='AnatomyList_Kind'>
                         <Chip>{edge.kind}</Chip>
                       </Tile.Count>
                     </Tile>
@@ -107,28 +107,28 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
                 <li key={node.id}>
                   <button
                     type='button'
-                    class='AnatomyList_Row Atlas_Button'
+                    className='AnatomyList_Row Atlas_Button'
                     aria-pressed={model.state.selected == node.id}
                     style={{ '--part': `var(--${colorOf(node)})` }}
                     onClick={() =>
                       model.select(node.id)}
                   >
-                    <Tile class='AnatomyList_Tile'>
+                    <Tile className='AnatomyList_Tile'>
                       <i
-                        class='AnatomyList_Mark'
+                        className='AnatomyList_Mark'
                         aria-hidden='true'
                         data-bound={node.bound}
                       />
-                      <div class='AnatomyList_Name'>
-                        <Tile.Title class='AnatomyList_Title'>
+                      <div className='AnatomyList_Name'>
+                        <Tile.Title className='AnatomyList_Title'>
                           {node.name}
                         </Tile.Title>
-                        <Tile.Note class='AnatomyList_Note'>
+                        <Tile.Note className='AnatomyList_Note'>
                           {node.package ?? node.facet ?? 'Composition metadata'}
                         </Tile.Note>
                       </div>
-                      <div class='AnatomyList_State'>
-                        <Tile.Kind class='AnatomyList_Kind'>
+                      <div className='AnatomyList_State'>
+                        <Tile.Kind className='AnatomyList_Kind'>
                           {groupName(node.group)}
                         </Tile.Kind>
                         <Chip
@@ -145,13 +145,16 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
               ))}
           </ul>
         )}
-      <footer class='AnatomyList_Pager'>
-        <span class='AnatomyList_Pager_Text'>
+      <footer className='AnatomyList_Pager'>
+        <span className='AnatomyList_Pager_Text'>
           All {total} matches are accessible · {PAGE_SIZE} rows per page
         </span>
-        <nav class='AnatomyList_Pager_Nav' aria-label='Anatomy list pagination'>
+        <nav
+          className='AnatomyList_Pager_Nav'
+          aria-label='Anatomy list pagination'
+        >
           <Button
-            class='Atlas_Button'
+            className='Atlas_Button'
             type='button'
             disabled={!page}
             aria-label='Previous anatomy page'
@@ -160,13 +163,13 @@ export let AnatomyList = ({ model }: { model: AtlasModel }) => {
             ← Previous
           </Button>
           <output
-            class='AnatomyList_Pager_Output'
+            className='AnatomyList_Pager_Output'
             aria-label='Anatomy list page'
           >
             {page + 1} / {lastPage + 1}
           </output>
           <Button
-            class='Atlas_Button'
+            className='Atlas_Button'
             type='button'
             disabled={page >= lastPage}
             aria-label='Next anatomy page'

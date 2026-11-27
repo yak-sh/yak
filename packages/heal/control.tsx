@@ -1,7 +1,7 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Sessions exposes the follower's existing graph mute. Loading deployment
 // metadata never holds a second copy of the person's on/off choice.
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useState } from 'react'
 import type { Io, Props } from '@yaks/inspect'
 import { Button, Loading, Section } from '@yaks/ui'
 import type { Control } from './routes.ts'

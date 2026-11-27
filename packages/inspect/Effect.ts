@@ -9,7 +9,7 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { parse } from '@yaks/query'
 import { Pairs, Value } from '@yaks/ui'
 import type { Bundle, Io, Props, View } from './host.ts'
@@ -46,7 +46,7 @@ let query = (io: Io, q: string) => {
 }
 
 // What owes it a run: how each trigger its declaration can name is drawn.
-let TRIGGERS: Record<string, (io: Io, v: unknown) => ComponentChildren> = {
+let TRIGGERS: Record<string, (io: Io, v: unknown) => ReactNode> = {
   created: (io, v) => list(io, v as string[]),
   changed: (io, v) => list(io, v as string[]),
   removed: (io, v) => list(io, v as string[]),
@@ -58,7 +58,7 @@ let TRIGGERS: Record<string, (io: Io, v: unknown) => ComponentChildren> = {
 }
 
 // The triggers its declaration names, each beside what it names.
-let owed = (io: Io, e: Bundle): [string, ComponentChildren][] => {
+let owed = (io: Io, e: Bundle): [string, ReactNode][] => {
   let c = comp(e, '_effect')
   return Object.entries(TRIGGERS)
     .filter(([k]) => c[k] != null && c[k] !== false)

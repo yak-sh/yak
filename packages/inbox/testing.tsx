@@ -309,7 +309,7 @@ export let mount = (node: ComponentChild) => {
     configurable: true,
   })
   let root = document.querySelector('main')!
-  render(node, root)
+  act(() => render(node, root))
   return {
     root,
     free() {

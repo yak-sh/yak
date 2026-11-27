@@ -1,5 +1,5 @@
 /** Adapts form questions and their HTTP door to controlled kit components. @module */
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { derivedEid } from '@yaks/graph/identity'
 import { Body, Button, Field, Form, Notice } from '@yaks/ui'
 import {
@@ -230,7 +230,7 @@ let drawn = (
   if (state.sent) {
     return h(
       'section',
-      { class: 'Submit', role: 'status' },
+      { className: 'Submit', role: 'status' },
       title,
       paragraphs(settings.thanks ?? 'Thank you. Your answers are in.'),
       h(
@@ -246,7 +246,7 @@ let drawn = (
   if (!open) {
     return h(
       'section',
-      { class: 'Submit' },
+      { className: 'Submit' },
       title,
       paragraphs(settings.closed ?? 'This form is closed.'),
       state.said
@@ -281,7 +281,7 @@ let drawn = (
 
   return h(
     'section',
-    { class: 'Submit' },
+    { className: 'Submit' },
     title,
     paragraphs(doc.body),
     h(

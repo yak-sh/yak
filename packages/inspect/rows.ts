@@ -5,7 +5,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { Loading, Rows } from '@yaks/ui'
 import type { Answer, Bundle } from './host.ts'
 

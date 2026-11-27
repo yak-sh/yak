@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { h, type VNode } from 'preact'
+import { createElement as h, type ReactElement } from 'react'
 import type { Map as MapLibre } from 'maplibre-gl'
 import { directions, type LngLat } from './draw.ts'
 import { Frame } from './frame.ts'
@@ -29,7 +29,7 @@ export type PlaceProps = {
 }
 
 /** One place on a still map. */
-export let Place = (p: PlaceProps): VNode =>
+export let Place = (p: PlaceProps): ReactElement =>
   h(Frame, {
     center: p.at,
     zoom: p.zoom ?? 14,
@@ -45,4 +45,4 @@ export let Place = (p: PlaceProps): VNode =>
       target: '_blank',
       rel: 'noopener',
     }, p.directions ?? 'Directions'),
-  }) as VNode
+  }) as ReactElement

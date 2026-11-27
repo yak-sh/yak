@@ -1,7 +1,7 @@
 // The interface's drafts and the boxes that type into them. A host supplies
 // its watch/write doors, identity and storage; no draft knows its app.
 import { signal } from '@preact/signals'
-import { useLayoutEffect } from 'preact/hooks'
+import { useCallback, useLayoutEffect, useSyncExternalStore } from 'react'
 import type { Bundle } from '@yaks/graph'
 import { type Client, desk, type Drafts, type Stash } from './desk.ts'
 
@@ -55,7 +55,18 @@ export let useDraft = (
   sync: (el: Box) => void
   spend: (also?: Bundle[]) => void | false | 0 | Promise<boolean>
 } => {
-  let text = key ? drafts.text(key) : ''
+  let read = useCallback(() => key ? drafts.text(key) : '', [key])
+  let subscribe = useCallback((changed: () => void) =>
+    drafts.follow(() => {
+      read()
+      changed()
+    }), [read])
+  let useSnapshot: (
+    subscribe: (changed: () => void) => () => void,
+    read: () => string,
+    server: () => string,
+  ) => string = useSyncExternalStore
+  let text = useSnapshot(subscribe, read, read)
   useLayoutEffect(() => {
     let el = ref.current
     if (!el || el.value == text) return

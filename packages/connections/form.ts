@@ -8,8 +8,12 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h, type JSX } from 'preact'
-import { useState } from 'preact/hooks'
+import {
+  createElement as h,
+  type JSX,
+  type ReactNode as Kids,
+  useState,
+} from 'react'
 import { Button, Field as Box, Form, Section } from '@yaks/ui'
 import { type Field, fieldsOf, KEY } from './field.ts'
 import type { Pasted } from './paste.ts'

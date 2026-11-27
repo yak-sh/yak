@@ -15,7 +15,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { Markdown } from '@yaks/markdown'
 import * as ui from '@yaks/ui'
 import type { Bundle, Io, Props, View } from './host.ts'

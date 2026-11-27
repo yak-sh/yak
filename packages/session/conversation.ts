@@ -22,8 +22,12 @@
  * @module
  */
 
-import { type ComponentChildren as Node, h, type VNode } from 'preact'
-import { useContext } from 'preact/hooks'
+import {
+  createElement as h,
+  type ReactElement,
+  type ReactNode as Node,
+  useContext,
+} from 'react'
 import { Host, type Options } from '@yaks/markdown'
 import {
   Attachments,
@@ -214,11 +218,11 @@ let Called = (
 }
 
 /** A reply as it was written, in Markdown. */
-export let reply = (text: string): VNode =>
+export let reply = (text: string): ReactElement =>
   h(Transcript.Reply, {}, markdown(text))
 
 /** A person's words, on their side. `mark` sits before them: how they came. */
-export let yours = (text: string, mark?: Node): VNode =>
+export let yours = (text: string, mark?: Node): ReactElement =>
   h(Transcript.Bubble, {}, mark ?? null, text)
 
 /** A file as a line names it: its name, and its media type where known. */
@@ -264,7 +268,7 @@ export type Filed = Sent & {
 /** One file, as `Filed` says. */
 export let Filed = (
   { name, mime, href, src, size, note, remove }: Filed,
-): VNode => {
+): ReactElement => {
   let away = remove
     ? h(Attachments.Remove, {
       type: 'button',
@@ -294,7 +298,7 @@ export let Filed = (
  * itself, words in a frame of their own that loads once it is seen (from its
  * `src`, a page of them, else its `href`), and any
  * other file as itself, which opens it. */
-export let Shown = (file: Filed): VNode =>
+export let Shown = (file: Filed): ReactElement =>
   textual(file.mime) && file.href
     ? h(Attachments.Frame, {
       src: file.src ?? file.href,
@@ -306,12 +310,12 @@ export let Shown = (file: Filed): VNode =>
 
 /** A file a step read or made, named in a quiet line that opens to what it
  * holds (`Shown`): "Read notes.txt". */
-export let opened = (doing: string, file: Filed): VNode =>
+export let opened = (doing: string, file: Filed): ReactElement =>
   step(`${doing} ${file.name}`, '', h(Shown, file))
 
 /** The files that came with a line, under it as a chat app shows them: a
  * person's sit at the `end`, on their side. None draws nothing. */
-export let files = (sent: Filed[], mod?: 'end'): VNode | null =>
+export let files = (sent: Filed[], mod?: 'end'): ReactElement | null =>
   sent.length ? h(Attachments, { mod }, sent.map((f) => h(Filed, f))) : null
 
 /** The one way a conversation draws anything that opens: a step, by what it
@@ -322,7 +326,8 @@ export let step = (
   name: Node,
   mod: '' | Tone,
   ...inside: Node[]
-): VNode => h(Fold, { mod: ['quiet', mod], summary: name }, ...inside) as VNode
+): ReactElement =>
+  h(Fold, { mod: ['quiet', mod], summary: name }, ...inside) as ReactElement
 
 /** A {@link step} whose inside is drawn only once it is opened (@yaks/ux
  * `Disclosure` `lazy`): what a model was told, say, which runs to tens of
@@ -331,12 +336,12 @@ export let lazyStep = (
   name: Node,
   mod: '' | Tone,
   ...inside: Node[]
-): VNode =>
+): ReactElement =>
   h(
     Fold,
     { mod: ['quiet', mod], summary: name, lazy: true },
     ...inside,
-  ) as VNode
+  ) as ReactElement
 
 /** A value a tool was given or gave back, the way a person reads it: a list
  * of what it holds under names in words, never its JSON. Bounded in depth,
@@ -397,7 +402,7 @@ let laid = (detail: unknown): string => {
 
 /** The one way a conversation draws an error: what happened and what to do,
  * in words, with what the error said only inside a closed "Details". */
-export let trouble = (said: string, detail?: unknown): VNode =>
+export let trouble = (said: string, detail?: unknown): ReactElement =>
   h(
     Transcript.Error,
     {},

@@ -15,7 +15,7 @@ import { derivedEid } from '@yaks/graph/identity'
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { parse } from '@yaks/query'
 import { Value } from '@yaks/ui'
 import type { Answer, Bundle, Io, Props, View } from './host.ts'
@@ -168,8 +168,8 @@ let Found = ({ e, io, notes, census }: Part_ & { census: Census }) => {
 type Tie = {
   entity: { eid: string }
   way: '→' | '←'
-  through: ComponentChildren
-  far: ComponentChildren
+  through: ReactNode
+  far: ReactNode
   n?: number
 }
 

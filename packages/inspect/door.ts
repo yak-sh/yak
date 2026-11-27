@@ -13,7 +13,8 @@
  * @module
  */
 
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
+import { useObserved } from '@yaks/ux'
 import { signal } from '@preact/signals'
 import { type Context, resolve, type Selection } from '@yaks/render'
 import type { Bundle, Host, Io, View } from './host.ts'
@@ -34,8 +35,7 @@ export let inspector = (
   host: Host,
 ): Inspector => {
   let { useAnswers, front, ...doors } = host
-  // One watch per component of the page's own graph, each change a new turn:
-  // a read of it during a render subscribes that render to it.
+  // A change to the inspector's graph wakes the doors mounted over it.
   let turn = signal(0)
   for (let comp of front.vocab.comps.filter((c) => c != 'entity')) {
     front.watch(`.${comp}`).subscribe(() => turn.value++)
@@ -46,10 +46,11 @@ export let inspector = (
       h(Door, { key: `${b.entity.eid} ${view}`, e: b, view, ctx }),
     can: (b, view) => !!resolve(registry, b, view, host.vocab),
     ask: useAnswers,
-    state: (eid) => (turn.value, front.ent(eid)),
+    state: front.ent,
     set: (bundles) => void front.mutate(bundles),
   }
   let Door: FunctionComponent<DoorProps> = ({ e, view, ctx = {} }) => {
+    useObserved(turn)
     let r = resolve(registry, e, view, host.vocab)
     let got = useAnswers(r?.asks?.(e, io, ctx) ?? {})
     return r ? h(r.Render, { e, got, io, ctx }) : null

@@ -1,9 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 /** The domain's controlled spatial view: fixed lanes, bounded geometry and
  * event-driven pulses. Pointer captures are resources; the camera is graph data.
  */
 
-import { useRef } from 'preact/hooks'
+import { useRef } from 'react'
 import { Button } from '@yaks/ui'
 import type { Activity, AtlasModel, Edge, Node } from './model.ts'
 
@@ -134,31 +134,31 @@ export let Spine = ({ model }: { model: AtlasModel }) => {
     .sort((a, b) => Number(a.detail.order ?? 0) - Number(b.detail.order ?? 0))
   return (
     <section
-      class='Spine'
+      className='Spine'
       aria-label='Pipeline labels and observed phase activity'
     >
-      <div class='Spine_Intro'>
-        <span class='Atlas_Eyebrow Spine_Intro_Text'>Pipeline labels</span>
-        <strong class='Spine_Intro_Strong'>apply()</strong>
-        <span class='Spine_Intro_Text'>
+      <div className='Spine_Intro'>
+        <span className='Atlas_Eyebrow Spine_Intro_Text'>Pipeline labels</span>
+        <strong className='Spine_Intro_Strong'>apply()</strong>
+        <span className='Spine_Intro_Text'>
           Labels ≠ bound handlers. Activity is observed.
         </span>
       </div>
       {phases.length
         ? (
-          <ol class='Spine_Path Atlas_Reset'>
+          <ol className='Spine_Path Atlas_Reset'>
             {phases.map((node, i) => {
               let event = recent.findLast((e) => phaseOf(e, node))
               return (
                 <li
                   key={node.id}
-                  class='Spine_Step'
+                  className='Spine_Step'
                   data-observed={Boolean(event)}
                   data-path={node.detail.path}
                 >
                   <button
                     type='button'
-                    class='Spine_Phase Atlas_Button'
+                    className='Spine_Phase Atlas_Button'
                     onClick={() => {
                       model.select(node.id)
                       if (event) model.choose(event.id)
@@ -167,17 +167,17 @@ export let Spine = ({ model }: { model: AtlasModel }) => {
                       ? `${event.name}: ${elapsed(event)}`
                       : `${node.name}: no observation in the last ${PULSE_LIMIT} records`}
                   >
-                    <span class='Spine_Number'>
+                    <span className='Spine_Number'>
                       {String(i + 1).padStart(2, '0')}
                     </span>
                     <span>{node.name}</span>
                     {node.detail.path == 'rollback' &&
-                      <span class='Spine_PathLabel'>rollback only</span>}
-                    <span class='Spine_Time'>{elapsed(event)}</span>
+                      <span className='Spine_PathLabel'>rollback only</span>}
+                    <span className='Spine_Time'>{elapsed(event)}</span>
                     {event && (
                       <span
                         key={`${event.epoch}:${event.seq}`}
-                        class='Spine_Pulse'
+                        className='Spine_Pulse'
                       />
                     )}
                   </button>
@@ -187,7 +187,7 @@ export let Spine = ({ model }: { model: AtlasModel }) => {
           </ol>
         )
         : (
-          <p class='Spine_Empty Atlas_Reset'>
+          <p className='Spine_Empty Atlas_Reset'>
             Pipeline labels are not available in this page.
           </p>
         )}
@@ -336,30 +336,30 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
   }
   let pickEdge = (edge: Edge) => model.select(edge.id)
   return (
-    <section class='Map' aria-label='System anatomy map'>
-      <header class='Map_Header'>
+    <section className='Map' aria-label='System anatomy map'>
+      <header className='Map_Header'>
         <div>
-          <span class='Atlas_Eyebrow'>Anatomy</span>
-          <h2 class='Atlas_Reset Map_Header_Title'>
+          <span className='Atlas_Eyebrow'>Anatomy</span>
+          <h2 className='Atlas_Reset Map_Header_Title'>
             The shape of this runtime
           </h2>
         </div>
-        <span class='Map_Count'>
+        <span className='Map_Count'>
           {placed.length} of {nodes.length} parts
-          <span class='Map_Count_Text'>· {edges.length} relations</span>
+          <span className='Map_Count_Text'>· {edges.length} relations</span>
         </span>
       </header>
       {!nodes.length && (
-        <div class='Map_NoMatches' role='status'>
-          <strong class='Map_NoMatches_Strong'>
+        <div className='Map_NoMatches' role='status'>
+          <strong className='Map_NoMatches_Strong'>
             No parts match this view.
           </strong>
           <span>Change the filter or choose another anatomy group.</span>
         </div>
       )}
-      <div class='Map_Viewport'>
+      <div className='Map_Viewport'>
         <svg
-          class='Map_Canvas Atlas_Focusable'
+          className='Map_Canvas Atlas_Focusable'
           viewBox={`0 0 ${width} ${aperture}`}
           role='group'
           aria-label='Pan and zoom the system topology'
@@ -379,7 +379,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
               height='24'
               patternUnits='userSpaceOnUse'
             >
-              <circle cx='1' cy='1' r='.7' class='Map_GridDot' />
+              <circle cx='1' cy='1' r='.7' className='Map_GridDot' />
             </pattern>
             <marker
               id='atlas-arrow'
@@ -390,7 +390,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
               markerHeight='5'
               orient='auto-start-reverse'
             >
-              <path d='M0 0L10 5L0 10z' class='Map_Arrow' />
+              <path d='M0 0L10 5L0 10z' className='Map_Arrow' />
             </marker>
           </defs>
           <rect width={width} height={height} fill='url(#atlas-grid)' />
@@ -402,7 +402,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
             {frames.map((f) => (
               <g
                 key={f.id}
-                class='Map_Lane'
+                className='Map_Lane'
                 style={{ '--lane': `var(--${f.color})` }}
               >
                 <rect
@@ -411,27 +411,27 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
                   width='438'
                   height={f.height}
                   rx='16'
-                  class='Map_Frame'
+                  className='Map_Frame'
                 />
-                <text x={f.x + 18} y={f.y + 28} class='Map_LaneMark'>
+                <text x={f.x + 18} y={f.y + 28} className='Map_LaneMark'>
                   {f.mark}
                 </text>
-                <text x={f.x + 54} y={f.y + 29} class='Map_LaneName'>
+                <text x={f.x + 54} y={f.y + 29} className='Map_LaneName'>
                   {f.name}
                 </text>
-                <text x={f.x + 18} y={f.y + 54} class='Map_LaneNote'>
+                <text x={f.x + 18} y={f.y + 54} className='Map_LaneNote'>
                   {f.note}
                 </text>
                 <text
                   x={f.x + 414}
                   y={f.y + 29}
                   text-anchor='end'
-                  class='Map_LaneCount'
+                  className='Map_LaneCount'
                 >
                   {f.shown.length}/{f.total}
                 </text>
                 {!f.total && (
-                  <text x={f.x + 18} y={f.y + 112} class='Map_EmptyLane'>
+                  <text x={f.x + 18} y={f.y + 112} className='Map_EmptyLane'>
                     {f.groups.some((group) =>
                         model.coverage[group] === false
                       )
@@ -441,7 +441,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
                 )}
               </g>
             ))}
-            <g class='Map_Relations'>
+            <g className='Map_Relations'>
               {edges.map((edge) => {
                 let from = positions.get(edge.from)!
                 let to = positions.get(edge.to)!
@@ -451,7 +451,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
                   <g
                     key={edge.id}
                     data-edge={edge.id}
-                    class={`Atlas_Focusable Map_Edge${
+                    className={`Atlas_Focusable Map_Edge${
                       selected ? ' Map_Edge-selected' : ''
                     }`}
                     role='button'
@@ -464,10 +464,10 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
                     <title>
                       {from.node.name} → {edge.kind} → {to.node.name}
                     </title>
-                    <path d={pathOf(from, to)} class='Map_EdgeHit' />
+                    <path d={pathOf(from, to)} className='Map_EdgeHit' />
                     <path
                       d={pathOf(from, to)}
-                      class='Map_EdgeLine'
+                      className='Map_EdgeLine'
                       marker-end='url(#atlas-arrow)'
                     />
                   </g>
@@ -480,7 +480,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
                 transform={`translate(${x} ${y})`}
                 data-node={node.id}
                 style={{ '--node': `var(--${colorOf(node)})` }}
-                class={`Atlas_Focusable Map_Node${
+                className={`Atlas_Focusable Map_Node${
                   state.selected == node.id
                     ? ' Map_Node-selected'
                     : related.has(node.id)
@@ -499,19 +499,19 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
                 <title>
                   {node.name} · {groupName(node.group)} · {statusOf(node)}
                 </title>
-                <rect width='202' height='37' rx='7' class='Map_NodeBody' />
+                <rect width='202' height='37' rx='7' className='Map_NodeBody' />
                 <circle
                   cx='13'
                   cy='18'
                   r='3'
-                  class='Map_NodeDot'
+                  className='Map_NodeDot'
                   data-bound={node.bound}
                   data-loaded={node.loaded}
                 />
-                <text x='25' y='16' class='Map_NodeName'>
+                <text x='25' y='16' className='Map_NodeName'>
                   {short(node.name)}
                 </text>
-                <text x='25' y='29' class='Map_NodeKind'>
+                <text x='25' y='29' className='Map_NodeKind'>
                   {groupName(node.group)} · {statusOf(node)}
                 </text>
               </g>
@@ -526,7 +526,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
                   width='208'
                   height='43'
                   rx='9'
-                  class='Map_Pulse'
+                  className='Map_Pulse'
                   pointer-events='none'
                   style={{ '--node': `var(--${colorOf(p.node)})` }}
                 />
@@ -534,20 +534,20 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
             })}
           </g>
         </svg>
-        <div class='Map_Camera' aria-label='Map camera controls'>
+        <div className='Map_Camera' aria-label='Map camera controls'>
           <Button
-            class='Atlas_Button Map_Camera_Button'
+            className='Atlas_Button Map_Camera_Button'
             type='button'
             aria-label='Zoom out'
             onClick={() => zoomed(model, -.2)}
           >
             −
           </Button>
-          <output class='Map_Camera_Output' aria-label='Current zoom'>
+          <output className='Map_Camera_Output' aria-label='Current zoom'>
             {Math.round(state.zoom * 100)}%
           </output>
           <Button
-            class='Atlas_Button Map_Camera_Button'
+            className='Atlas_Button Map_Camera_Button'
             type='button'
             aria-label='Zoom in'
             onClick={() => zoomed(model, .2)}
@@ -555,31 +555,33 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
             +
           </Button>
           <Button
-            class='Atlas_Button Map_Camera_Button'
+            className='Atlas_Button Map_Camera_Button'
             type='button'
             onClick={() => model.set({ x: 0, y: 0, zoom: 1 })}
           >
             Fit
           </Button>
         </div>
-        <div class='Map_Legend' aria-label='Map legend'>
-          <span class='Map_Legend_Text'>
-            <i class='Map_LegendDot Map_LegendDot-bound' />bound
+        <div className='Map_Legend' aria-label='Map legend'>
+          <span className='Map_Legend_Text'>
+            <i className='Map_LegendDot Map_LegendDot-bound' />bound
           </span>
-          <span class='Map_Legend_Text'>
-            <i class='Map_LegendDot' />declaration
+          <span className='Map_Legend_Text'>
+            <i className='Map_LegendDot' />declaration
           </span>
-          <span class='Map_Legend_Text'>
-            <i class='Map_LegendLine' />relationship
+          <span className='Map_Legend_Text'>
+            <i className='Map_LegendLine' />relationship
           </span>
         </div>
       </div>
-      <footer class='Map_Footer'>
+      <footer className='Map_Footer'>
         <span>Drag to pan · + / − zoom · ↑ / ↓ select · Enter inspect</span>
-        <span class='Map_Budget'>≤{PULSE_LIMIT} observed records animate</span>
+        <span className='Map_Budget'>
+          ≤{PULSE_LIMIT} observed records animate
+        </span>
         {(nodes.length > NODE_LIMIT || relations.length > EDGE_LIMIT) && (
           <Button
-            class='Atlas_Button'
+            className='Atlas_Button'
             type='button'
             mod='quiet'
             onClick={() => model.set({ view: 'list' })}

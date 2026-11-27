@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { h, type VNode } from 'preact'
+import { createElement as h, type ReactElement } from 'react'
 import type { Map as MapLibre } from 'maplibre-gl'
 import type { LngLat, Pin } from './draw.ts'
 import { Frame } from './frame.ts'
@@ -29,7 +29,7 @@ export type MapProps = {
 }
 
 /** A map a person moves, with a pin for each place. */
-export let Map = (p: MapProps): VNode =>
+export let Map = (p: MapProps): ReactElement =>
   h(Frame, {
     center: p.center,
     zoom: p.zoom ?? 12,
@@ -40,4 +40,4 @@ export let Map = (p: MapProps): VNode =>
     provider: p.provider,
     onMap: p.onMap,
     title: p.title ?? 'Map',
-  }) as VNode
+  }) as ReactElement

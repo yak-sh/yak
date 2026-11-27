@@ -9,7 +9,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { parse } from '@yaks/query/core'
 import type { Props, View } from '@yaks/inspect'
 import { Conversation, conversationAt } from '@yaks/ux'

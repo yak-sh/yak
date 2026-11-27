@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
+import { createElement as h, Fragment, type JSX, type ReactNode } from 'react'
 import { and, eq, ge, lt, parse, stringify } from '@yaks/query'
 import { labelOf } from '@yaks/model'
 import { partQuery } from '@yaks/session/parts'
@@ -123,7 +123,7 @@ let Limits = (
 // dollars it billed each plan and what a dollar of that plan is worth. Shares
 // of two plans don't add, so each is said apart, by its plan's name where
 // more than one plan is measured.
-type Share = (row: Rows, key: string, dollars: number) => ComponentChildren
+type Share = (row: Rows, key: string, dollars: number) => ReactNode
 
 let shareOf = (
   io: Props['io'],
@@ -174,12 +174,12 @@ let Ranking = (
     row?: Rows
     rows: [string, number[]][]
     at: number
-    name: (key: string) => ComponentChildren
-    more: (ns: number[], key: string) => ComponentChildren[]
+    name: (key: string) => ReactNode
+    more: (ns: number[], key: string) => ReactNode[]
     heads: string[]
     share?: Share
     /** what a row's dollars say (default: the dollars) */
-    paid?: (key: string, n: number) => ComponentChildren
+    paid?: (key: string, n: number) => ReactNode
   },
 ) => {
   let most = rows[0]?.[1][at] || 1

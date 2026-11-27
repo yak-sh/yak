@@ -15,8 +15,13 @@
  *
  * @module
  */
-import { type ComponentChildren, h, type JSX } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import {
+  createElement as h,
+  type JSX,
+  type ReactNode,
+  useEffect,
+  useState,
+} from 'react'
 import {
   type Answer,
   type Bundle,
@@ -220,7 +225,7 @@ let stat = (
   value: string,
   label: string,
   mod?: string,
-  note?: ComponentChildren,
+  note?: ReactNode,
 ) =>
   h(
     Metrics.Item,

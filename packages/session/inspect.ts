@@ -17,7 +17,7 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { parse } from '@yaks/query'
 import * as ui from '@yaks/ui'
 import { Markdown } from '@yaks/markdown'
@@ -112,7 +112,7 @@ export let EntryTurn = ({ e, io, ctx }: Props): JSX.Element => {
     : OUTPUT in e || CALL in e || RESULT in e
     ? 'agent'
     : kind ?? io.kind(e)
-  let text: ComponentChildren = CALL in e
+  let text: ReactNode = CALL in e
     ? ['called ', to ? mention(io, to) : 'a tool', ': ', called(e)]
     : RESULT in e
     ? ['answered: ', cut(said.trim() || '…', 160)]
@@ -227,7 +227,7 @@ let SessionDot = ({ e }: { e: Bundle }): JSX.Element => {
 
 // What a session is running, in a line: its status, the model it asks, and
 // the worktree it works in.
-let running = (io: Io, e: Bundle): ComponentChildren[] => {
+let running = (io: Io, e: Bundle): ReactNode[] => {
   let model = str(e, 'using', 'model')
   let branch = str(e, 'worktree', 'branch')
   let path = str(e, 'workspace', 'root')

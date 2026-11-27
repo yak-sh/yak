@@ -3,7 +3,7 @@
  * that line up (./layout.ts), so a deep tree reads on a phone too.
  * @module
  */
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import type { Io } from '@yaks/inspect'
 import { Button, Chip } from '@yaks/ui'
 import { disclosed, disclosureAt, isOpen } from '@yaks/ux'
@@ -46,8 +46,8 @@ export let Place = ({ n }: { n: Merged }): JSX.Element =>
 export let Line = (
   { depth = 0, label, cells, id, head }: {
     depth?: number
-    label: ComponentChildren
-    cells: ComponentChildren[]
+    label: ReactNode
+    cells: ReactNode[]
     id?: string
     head?: boolean
   },

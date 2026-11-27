@@ -6,8 +6,13 @@
  * a timing import.
  * @module
  */
-import { type ComponentChildren, h, type JSX } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import {
+  createElement as h,
+  type JSX,
+  type ReactNode,
+  useEffect,
+  useState,
+} from 'react'
 import { parse, queryAt } from '@yaks/query'
 import {
   all as baseViews,
@@ -59,8 +64,8 @@ let More = (
   { io, at, summary, children }: {
     io: Io
     at: string
-    summary: ComponentChildren
-    children?: ComponentChildren
+    summary: ReactNode
+    children?: ReactNode
   },
 ): JSX.Element => {
   let eid = disclosureAt(at)
@@ -76,7 +81,7 @@ let at = (io: Io, moment: string) =>
   h('time', { datetime: moment, title: moment }, io.when(moment))
 
 // One shared value: a reference named, a commit short, a tag as written.
-let value = (io: Io, name: string, v: string): ComponentChildren =>
+let value = (io: Io, name: string, v: string): ReactNode =>
   REFS.includes(name)
     ? mention(io, v)
     : name == 'commit'
@@ -227,8 +232,8 @@ let Message = (
   { io, e, sub, facts }: {
     io: Io
     e: Bundle
-    sub: ComponentChildren
-    facts: ComponentChildren[]
+    sub: ReactNode
+    facts: ReactNode[]
   },
 ): JSX.Element => {
   let whole = said(e), { type, message } = thrown(headline(whole))
@@ -460,7 +465,7 @@ let Traces = (
 
 // The bug an occurrence belongs to, by its id: its message is already the
 // page's title.
-let bugOf = (io: Io, eid: string): ComponentChildren => {
+let bugOf = (io: Io, eid: string): ReactNode => {
   let b = io.get(eid)
   return b
     ? h('a', { href: io.link(eid), title: said(b) }, io.id(b))
@@ -475,16 +480,16 @@ let ErrorPage = ({ e, io, got }: Props): JSX.Element => {
   let top = frames.find((f) => f.app) ?? frames[0]
   useNamed(io, [...REFS.map((k) => str(d[k])), str(error.bug)])
   let context = [
-    ...tags(e).map(([k, v]) => [k, v] as [string, ComponentChildren]),
+    ...tags(e).map(([k, v]) => [k, v] as [string, ReactNode]),
     ...REFS.filter((k) => d[k]).map((k) =>
-      [k, mention(io, str(d[k]))] as [string, ComponentChildren]
+      [k, mention(io, str(d[k]))] as [string, ReactNode]
     ),
-    ...d.kind ? [['kind', str(d.kind)] as [string, ComponentChildren]] : [],
+    ...d.kind ? [['kind', str(d.kind)] as [string, ReactNode]] : [],
     ...comp(e, 'exception').mechanism
       ? [
         ['caught by', str(comp(e, 'exception').mechanism)] as [
           string,
-          ComponentChildren,
+          ReactNode,
         ],
       ]
       : [],

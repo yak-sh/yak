@@ -25,7 +25,7 @@ export let useRows = (front: Front, query: string): Bundle[] => {
 /** Read an observable snapshot and subscribe while the component is mounted. */
 export let useObserved = <T>(source: {
   peek: () => T
-  subscribe: (changed: (value: T) => void) => () => void
+  subscribe: (changed: () => void) => () => void
 }): T => {
   let subscribe = useCallback(
     (changed: () => void) => source.subscribe(changed),

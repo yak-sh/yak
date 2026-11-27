@@ -1,10 +1,11 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 /** A process-local system MRI. The model owns navigation, filters, camera and
  * playback; this surface owns only layout, focus and display-only kit parts.
  */
 
-import { useRef } from 'preact/hooks'
+import { useRef } from 'react'
 import { Button, Chip, Field } from '@yaks/ui'
+import { useObserved } from '@yaks/ux'
 import type { AtlasModel } from './model.ts'
 import { ActivityView } from './ActivityView.tsx'
 import { AnatomyList, matchingEdges, PAGE_SIZE } from './AnatomyList.tsx'
@@ -28,19 +29,26 @@ let connectionNames: Record<string, string> = {
 }
 
 let Mark = () => (
-  <svg class='Atlas_Mark' viewBox='0 0 40 40' aria-hidden='true'>
-    <rect class='Atlas_Mark_Frame' x='3' y='3' width='34' height='34' rx='9' />
-    <path class='Atlas_Mark_Path' d='M7 20h7l3-7 5 15 4-8h7' />
-    <circle class='Atlas_Mark_Circle' cx='20' cy='20' r='13' />
+  <svg className='Atlas_Mark' viewBox='0 0 40 40' aria-hidden='true'>
+    <rect
+      className='Atlas_Mark_Frame'
+      x='3'
+      y='3'
+      width='34'
+      height='34'
+      rx='9'
+    />
+    <path className='Atlas_Mark_Path' d='M7 20h7l3-7 5 15 4-8h7' />
+    <circle className='Atlas_Mark_Circle' cx='20' cy='20' r='13' />
   </svg>
 )
 
 let Shortcuts = () => (
-  <details class='Atlas_Shortcuts'>
-    <summary class='Atlas_Summary Atlas_Shortcuts_Summary'>
-      Keyboard <kbd class='Atlas_Key'>?</kbd>
+  <details className='Atlas_Shortcuts'>
+    <summary className='Atlas_Summary Atlas_Shortcuts_Summary'>
+      Keyboard <kbd className='Atlas_Key'>?</kbd>
     </summary>
-    <dl class='Atlas_Reset Atlas_Shortcuts_List'>
+    <dl className='Atlas_Reset Atlas_Shortcuts_List'>
       {[
         ['/', 'Focus search'],
         ['↑ / ↓', 'Select a part'],
@@ -51,11 +59,11 @@ let Shortcuts = () => (
         ['L / M', 'List / map'],
         ['Esc', 'Clear selection'],
       ].map(([keys, action]) => (
-        <div class='Atlas_Shortcuts_List_Row' key={keys}>
+        <div className='Atlas_Shortcuts_List_Row' key={keys}>
           <dt>
-            <kbd class='Atlas_Key'>{keys}</kbd>
+            <kbd className='Atlas_Key'>{keys}</kbd>
           </dt>
-          <dd class='Atlas_Shortcuts_Value'>{action}</dd>
+          <dd className='Atlas_Shortcuts_Value'>{action}</dd>
         </div>
       ))}
     </dl>
@@ -63,6 +71,7 @@ let Shortcuts = () => (
 )
 
 export let Atlas = ({ model }: { model: AtlasModel }) => {
+  useObserved(model.snapshot)
   let state = model.state
   let search = useRef<HTMLInputElement>(null)
   let root = useRef<HTMLDivElement>(null)
@@ -152,7 +161,7 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
   }
   return (
     <div
-      class='Atlas'
+      className='Atlas'
       ref={root}
       onKeyDown={press}
       data-paused={state.paused}
@@ -160,38 +169,40 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
       data-scheme={state.scheme}
       style={{ colorScheme: state.scheme }}
     >
-      <a href='#atlas-workspace' class='Atlas_Skip Atlas_Link'>
+      <a href='#atlas-workspace' className='Atlas_Skip Atlas_Link'>
         Skip to anatomy
       </a>
-      <header class='Atlas_Header' data-ready={Boolean(state.host)}>
-        <div class='Atlas_Brand'>
+      <header className='Atlas_Header' data-ready={Boolean(state.host)}>
+        <div className='Atlas_Brand'>
           <Mark />
           <div>
-            <strong class='Atlas_Brand_Strong'>visualize</strong>
-            <span class='Atlas_Brand_Text'>@yaks / system MRI</span>
+            <strong className='Atlas_Brand_Strong'>visualize</strong>
+            <span className='Atlas_Brand_Text'>@yaks / system MRI</span>
           </div>
         </div>
-        <div class='Atlas_Host'>
-          <span class='Atlas_Eyebrow Atlas_Host_Text'>Connected process</span>
+        <div className='Atlas_Host'>
+          <span className='Atlas_Eyebrow Atlas_Host_Text'>
+            Connected process
+          </span>
           <span
-            class='Atlas_Host_Text'
+            className='Atlas_Host_Text'
             title={state.host || 'Waiting for host anatomy'}
           >
             {state.host || 'Awaiting anatomy…'}
           </span>
         </div>
-        <div class='Atlas_HeaderControls'>
+        <div className='Atlas_HeaderControls'>
           <span
-            class='Atlas_Connection'
+            className='Atlas_Connection'
             data-connection={connection}
             role='status'
           >
-            <i class='Atlas_Connection_Indicator' aria-hidden='true' />
+            <i className='Atlas_Connection_Indicator' aria-hidden='true' />
             {connectionNames[connection] ?? connection}
           </span>
           <Button
             type='button'
-            class='Atlas_Pause Atlas_Button'
+            className='Atlas_Pause Atlas_Button'
             aria-pressed={state.paused}
             title='Pause or resume recording (P)'
             onClick={() => model.set({ paused: !state.paused })}
@@ -199,10 +210,10 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
             <span aria-hidden='true'>{state.paused ? '▷' : 'Ⅱ'}</span>
             {state.paused ? 'Resume' : 'Pause'}
           </Button>
-          <label class='Atlas_Theme'>
-            <span class='Atlas_VisuallyHidden'>Color theme</span>
+          <label className='Atlas_Theme'>
+            <span className='Atlas_VisuallyHidden'>Color theme</span>
             <select
-              class='Atlas_Select Atlas_Theme_Select'
+              className='Atlas_Select Atlas_Theme_Select'
               value={state.theme}
               aria-label='Color theme'
               onChange={(event) =>
@@ -216,7 +227,7 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
           </label>
           <Button
             type='button'
-            class='Atlas_Scheme Atlas_Button'
+            className='Atlas_Scheme Atlas_Button'
             aria-label={`Switch to ${
               state.scheme == 'dark' ? 'light' : 'dark'
             } mode`}
@@ -230,19 +241,20 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
           </Button>
         </div>
       </header>
-      <main class='Atlas_Main'>
-        <section class='Atlas_Intro' aria-labelledby='atlas-title'>
-          <div class='Atlas_Heading'>
-            <span class='Atlas_Eyebrow'>Structure × causality</span>
-            <h1 class='Atlas_Reset Atlas_Heading_Title' id='atlas-title'>
-              The platform, <em class='Atlas_Heading_Emphasis'>in focus.</em>
+      <main className='Atlas_Main'>
+        <section className='Atlas_Intro' aria-labelledby='atlas-title'>
+          <div className='Atlas_Heading'>
+            <span className='Atlas_Eyebrow'>Structure × causality</span>
+            <h1 className='Atlas_Reset Atlas_Heading_Title' id='atlas-title'>
+              The platform,{' '}
+              <em className='Atlas_Heading_Emphasis'>in focus.</em>
             </h1>
-            <p class='Atlas_Reset Atlas_Heading_Description'>
+            <p className='Atlas_Reset Atlas_Heading_Description'>
               Its parts. Their connections. The work moving through them.
             </p>
           </div>
           <dl
-            class='Atlas_Metrics Atlas_Reset'
+            className='Atlas_Metrics Atlas_Reset'
             aria-label='Anatomy snapshot summary'
           >
             {[
@@ -251,35 +263,35 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
               [bound, 'bound'],
               [model.edges.length, 'relationships'],
             ].map(([number, label]) => (
-              <div class='Atlas_Metrics_Row' key={label}>
-                <dt class='Atlas_Metrics_Term'>{label}</dt>
-                <dd class='Atlas_Metrics_Value'>{number}</dd>
+              <div className='Atlas_Metrics_Row' key={label}>
+                <dt className='Atlas_Metrics_Term'>{label}</dt>
+                <dd className='Atlas_Metrics_Value'>{number}</dd>
               </div>
             ))}
           </dl>
         </section>
-        <div class='Atlas_Coverage' role='note'>
-          <Chip class='Atlas_Scope' style={{ '--hue': 'var(--info)' }}>
+        <div className='Atlas_Coverage' role='note'>
+          <Chip className='Atlas_Scope' style={{ '--hue': 'var(--info)' }}>
             Process-local
           </Chip>
-          <p class='Atlas_Reset Atlas_Coverage_Description'>
+          <p className='Atlas_Reset Atlas_Coverage_Description'>
             Composition and activity of this host only. Recording exists while
             subscribed; other processes and unobserved intervals are not
             represented.
           </p>
-          <span class='Atlas_Safety'>
+          <span className='Atlas_Safety'>
             Names & contracts. No entity or secret values.
           </span>
         </div>
         {unobserved.length > 0 && (
-          <details class='Atlas_Unobserved'>
-            <summary class='Atlas_Summary Atlas_Unobserved_Summary'>
+          <details className='Atlas_Unobserved'>
+            <summary className='Atlas_Summary Atlas_Unobserved_Summary'>
               {unobserved.length} categories unobserved here
             </summary>
-            <p class='Atlas_Reset Atlas_Unobserved_Description'>
+            <p className='Atlas_Reset Atlas_Unobserved_Description'>
               {unobserved.join(' · ')}
             </p>
-            <p class='Atlas_Reset Atlas_Unobserved_Description'>
+            <p className='Atlas_Reset Atlas_Unobserved_Description'>
               An empty unobserved category is not evidence that its parts are
               absent.
             </p>
@@ -287,17 +299,17 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
         )}
         {(state.error || state.gap > 0 || state.paused) && (
           <section
-            class='Atlas_Notices'
+            className='Atlas_Notices'
             aria-label='Connection and recording notices'
           >
             {state.error && (
-              <div class='Atlas_Notice' data-tone='negative' role='alert'>
-                <strong class='Atlas_Notice_Strong'>
+              <div className='Atlas_Notice' data-tone='negative' role='alert'>
+                <strong className='Atlas_Notice_Strong'>
                   Connection needs attention.
                 </strong>
-                <span class='Atlas_Notice_Text'>{state.error}</span>
+                <span className='Atlas_Notice_Text'>{state.error}</span>
                 <Button
-                  class='Atlas_Button'
+                  className='Atlas_Button'
                   type='button'
                   onClick={() =>
                     void model.refresh()}
@@ -307,11 +319,11 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
               </div>
             )}
             {state.gap > 0 && (
-              <div class='Atlas_Notice' data-tone='caution' role='status'>
-                <strong class='Atlas_Notice_Strong'>
+              <div className='Atlas_Notice' data-tone='caution' role='status'>
+                <strong className='Atlas_Notice_Strong'>
                   Observation gaps ({state.gap})
                 </strong>
-                <span class='Atlas_Notice_Text'>
+                <span className='Atlas_Notice_Text'>
                   Pauses, epoch changes or known omissions broke continuity.
                   This counts episodes, not missed records. Disconnection alone
                   does not prove record loss.
@@ -319,9 +331,11 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
               </div>
             )}
             {state.paused && (
-              <div class='Atlas_Notice' data-tone='muted' role='status'>
-                <strong class='Atlas_Notice_Strong'>Recording paused.</strong>
-                <span class='Atlas_Notice_Text'>
+              <div className='Atlas_Notice' data-tone='muted' role='status'>
+                <strong className='Atlas_Notice_Strong'>
+                  Recording paused.
+                </strong>
+                <span className='Atlas_Notice_Text'>
                   Retained observations and anatomy remain available. New work
                   during the pause is not reconstructed.
                 </span>
@@ -331,15 +345,15 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
         )}
         <Spine model={model} />
         <section
-          class='Atlas_Workspace Atlas_Focusable'
+          className='Atlas_Workspace Atlas_Focusable'
           id='atlas-workspace'
           tabIndex={-1}
           aria-label='Explore system anatomy'
         >
-          <div class='Atlas_Toolbar'>
-            <div class='Atlas_Search'>
+          <div className='Atlas_Toolbar'>
+            <div className='Atlas_Search'>
               <svg
-                class='Atlas_Search_Icon'
+                className='Atlas_Search_Icon'
                 viewBox='0 0 20 20'
                 aria-hidden='true'
               >
@@ -347,7 +361,7 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
                 <path d='m12 12 5 5' />
               </svg>
               <Field
-                class='Atlas_SearchField Atlas_Input'
+                className='Atlas_SearchField Atlas_Input'
                 elRef={search}
                 type='search'
                 aria-label='Search anatomy by name, package or description'
@@ -363,7 +377,7 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
               {state.filter
                 ? (
                   <Button
-                    class='Atlas_Button'
+                    className='Atlas_Button'
                     type='button'
                     mod='quiet'
                     aria-label='Clear anatomy search'
@@ -376,12 +390,12 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
                     ×
                   </Button>
                 )
-                : <kbd class='Atlas_Key'>/</kbd>}
+                : <kbd className='Atlas_Key'>/</kbd>}
             </div>
-            <label class='Atlas_Group'>
-              <span class='Atlas_VisuallyHidden'>Anatomy group</span>
+            <label className='Atlas_Group'>
+              <span className='Atlas_VisuallyHidden'>Anatomy group</span>
               <select
-                class='Atlas_Select Atlas_Group_Select'
+                className='Atlas_Select Atlas_Group_Select'
                 value={state.group || 'all'}
                 aria-label='Filter anatomy group'
                 onChange={(event) => changeGroup(event.currentTarget.value)}
@@ -402,9 +416,9 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
                 </option>
               </select>
             </label>
-            <div class='Atlas_Views' role='group' aria-label='Anatomy view'>
+            <div className='Atlas_Views' role='group' aria-label='Anatomy view'>
               <Button
-                class='Atlas_Button Atlas_Views_Button'
+                className='Atlas_Button Atlas_Views_Button'
                 type='button'
                 aria-pressed={state.view == 'map'}
                 onClick={map}
@@ -412,7 +426,7 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
                 <span aria-hidden='true'>⌘</span> Map
               </Button>
               <Button
-                class='Atlas_Button Atlas_Views_Button'
+                className='Atlas_Button Atlas_Views_Button'
                 type='button'
                 aria-pressed={state.view == 'list'}
                 onClick={() => model.set({ view: 'list' })}
@@ -422,7 +436,7 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
             </div>
             <Button
               type='button'
-              class='Atlas_Refresh Atlas_Button'
+              className='Atlas_Refresh Atlas_Button'
               mod='quiet'
               aria-label='Refresh host anatomy'
               title='Refresh host anatomy'
@@ -431,14 +445,14 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
               ↻
             </Button>
           </div>
-          <div class='Atlas_FilterSummary'>
+          <div className='Atlas_FilterSummary'>
             <span>
               {shown} matching{' '}
               {state.group == 'relations' ? 'relationships' : 'parts'}
               {state.filter && (
                 <>
                   for{' '}
-                  <strong class='Atlas_FilterSummary_Strong'>
+                  <strong className='Atlas_FilterSummary_Strong'>
                     “{state.filter}”
                   </strong>
                 </>
@@ -449,7 +463,7 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
             )}
             <Shortcuts />
           </div>
-          <div class='Atlas_Anatomy'>
+          <div className='Atlas_Anatomy'>
             {state.view == 'list' || state.group == 'relations'
               ? <AnatomyList model={model} />
               : <Topology model={model} />}
@@ -457,9 +471,10 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
           </div>
         </section>
         <ActivityView model={model} />
-        <footer class='Atlas_Footer'>
+        <footer className='Atlas_Footer'>
           <span>
-            <strong class='Atlas_Footer_Strong'>@yaks/visualize</strong>{' '}
+            <strong className='Atlas_Footer_Strong'>@yaks/visualize</strong>
+            {' '}
             · Anatomy is declaration, not execution.
           </span>
           <span>

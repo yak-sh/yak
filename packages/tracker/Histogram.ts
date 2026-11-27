@@ -4,7 +4,7 @@
  * a terminal, which paints no SVG, reads the caption.
  * @module
  */
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { Stamp } from '@yaks/ui'
 import { bins } from './spread.ts'
 

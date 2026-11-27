@@ -29,7 +29,7 @@
  */
 
 import { groupBy } from '@yaks/fp'
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { Head, Loading, Tabs, Value } from '@yaks/ui'
 import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'
 import type { Bundle, Io } from './host.ts'
@@ -121,7 +121,7 @@ let effectRow = (vocab: Vocab) => ({ name }: EffectDecl): Bundle => ({
 // under it.
 type Node = {
   name: string
-  link: ComponentChildren
+  link: ReactNode
   holds: number | string
   said: string
   about?: string

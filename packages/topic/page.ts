@@ -23,7 +23,7 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { Markdown } from '@yaks/markdown'
 import * as ui from '@yaks/ui'
 import { Disclosure, disclosureAt } from '@yaks/ux'
@@ -98,7 +98,7 @@ let byTitle = (a: Bundle, b: Bundle) =>
 let named = (io: Io, b: Bundle) => io.show(b, 'Inspect.Reference.Inline')
 
 // Each of some entities by name, a comma between them.
-let listed = (io: Io, said: string, all: Bundle[]): ComponentChildren =>
+let listed = (io: Io, said: string, all: Bundle[]): ReactNode =>
   all.length
     ? [said, ...all.flatMap((b, i) => [i ? ', ' : null, named(io, b)])]
     : null

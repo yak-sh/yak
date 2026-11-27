@@ -1,6 +1,6 @@
 /** The page's domain state lives in a local graph, not component state or a
  * second record store. Resource indexes contain only bounded UUID mappings. */
-import { signal } from '@preact/signals'
+import { computed, signal } from '@preact/signals'
 import { client } from '@yaks/client'
 import { desk, drafts } from '@yaks/draft'
 import type { Bundle } from '@yaks/graph'
@@ -33,6 +33,10 @@ export type VisualizeState = {
   host: string
 }
 export type AtlasModel = {
+  readonly snapshot: {
+    peek: () => unknown
+    subscribe: (wake: () => void) => () => void
+  }
   readonly state: VisualizeState
   readonly nodes: Node[]
   readonly edges: Edge[]
@@ -335,6 +339,13 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
     }
   }
   let model: AtlasModel = {
+    snapshot: computed(() => [
+      state(),
+      nodeWatch.value,
+      edgeWatch.value,
+      eventWatch.value,
+      coverageWatch.value,
+    ]),
     get state() {
       return state()
     },

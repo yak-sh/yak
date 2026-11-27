@@ -3853,6 +3853,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/cli@0.2.33",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
@@ -4013,6 +4014,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/doc@0.2.24",
@@ -4079,6 +4081,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/id@0.2.23",
@@ -4194,6 +4197,7 @@
       "packages/file": {
         "packageJson": {
           "dependencies": [
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/inspect@0.2.30",
@@ -4231,6 +4235,7 @@
       "packages/forms": {
         "packageJson": {
           "dependencies": [
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/doc@0.2.24",
@@ -4405,6 +4410,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/client@0.2.24",
@@ -4509,7 +4515,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/signals@2.9.4",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/cli@0.2.33",
@@ -4536,6 +4542,7 @@
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tools@0.2.30",
             "npm:@yaks/ui@0.2.30",
+            "npm:@yaks/ux@0.2.23",
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
@@ -4547,6 +4554,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/draft@0.2.24",
@@ -4574,6 +4582,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.33",
@@ -4698,6 +4707,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@protomaps/basemaps@5.7.2",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/cli@0.2.33",
@@ -4716,6 +4726,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/id@0.2.23",
@@ -4804,6 +4815,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/host@0.2.29",
@@ -4970,6 +4982,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
@@ -5325,6 +5338,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/blob@0.2.30",
@@ -5422,6 +5436,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/model@0.2.32",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/ui@0.2.30",
@@ -5436,6 +5451,7 @@
       "packages/spend": {
         "packageJson": {
           "dependencies": [
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/cli@0.2.33",
             "npm:@yaks/file@0.2.28",
@@ -5630,6 +5646,7 @@
       "packages/timing": {
         "packageJson": {
           "dependencies": [
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/inspect@0.2.30",
@@ -5692,6 +5709,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/graph@0.2.33",
@@ -5731,6 +5749,7 @@
       "packages/tracker": {
         "packageJson": {
           "dependencies": [
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/code@0.2.23",
@@ -5886,6 +5905,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/cli@0.2.33",
@@ -5900,6 +5920,7 @@
             "npm:@yaks/tools@0.2.30",
             "npm:@yaks/trace@0.2.23",
             "npm:@yaks/ui@0.2.30",
+            "npm:@yaks/ux@0.2.23",
             "npm:@yaks/vocab@0.2.32",
             "npm:preact@10.29.7"
           ]
@@ -6023,6 +6044,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.33",

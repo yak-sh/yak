@@ -17,8 +17,7 @@
  */
 
 import { groupBy } from '@yaks/fp'
-import { h, type JSX } from 'preact'
-import { useRef } from 'preact/hooks'
+import { createElement as h, type JSX, useRef } from 'react'
 import { Button, Field, Pairs, Rows, Say, Value } from '@yaks/ui'
 import type { Bundle, Io, Props, View } from './host.ts'
 import { chip, relations } from './schema.ts'
@@ -90,7 +89,7 @@ let Link = ({ e, io }: { e: Bundle; io: Io }) => {
       'select',
       {
         ref: rel,
-        class: 'Edit Edit-fit',
+        className: 'Edit Edit-fit',
         name: 'relation',
         'aria-label': 'relation',
       },

@@ -1,7 +1,7 @@
 // The `@yaks/persona/ui` facet: what a persona's people change of it, drawn
 // from the kit's parts. Where a card's fields are sent is its host's: the
 // host puts it in its form.
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { Card, Field, Form } from '@yaks/ui/parts'
 import { LONGEST } from './name.ts'
 

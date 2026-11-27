@@ -2,7 +2,7 @@
 // on a call (`speech{}`, ./vocab.json), drawn from the kit's parts. What it
 // offers is its host's, which knows the providers it has keys for, and so is
 // where its fields and its samples are sent.
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { Button, Card, Check, Form, Icon, More, Rows } from '@yaks/ui/parts'
 // @ts-types="@yaks/ui/lucide"
 import Play from 'lucide/dist/esm/icons/play.mjs'

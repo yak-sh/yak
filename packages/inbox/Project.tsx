@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 /**
  * A project's inbox: what is addressed to it, one line per thread in the
  * policy's order, with the whole count above and a `limit` (from the caller's
@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { JSX } from 'preact'
+import type { JSX } from 'react'
 import { Button, Dot, Rows, Section, Stamp } from '@yaks/ui'
 import type { Io, Props } from '@yaks/inspect'
 import type { Row } from './reader.ts'

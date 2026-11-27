@@ -32,6 +32,10 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/cli": "0.2.33",
-    "@yaks/secrets": "0.2.28"
+    "@yaks/secrets": "0.2.28",
+    "react": "npm:@preact/compat@18.3.2"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0"
   }
 }

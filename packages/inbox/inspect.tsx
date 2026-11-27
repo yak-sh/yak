@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The inbox pages a browsing host draws. The views facet loads these only
 // when that host asks for its inspector registrations.
 import { parse } from '@yaks/query'

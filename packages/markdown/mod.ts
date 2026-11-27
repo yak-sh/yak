@@ -1,12 +1,12 @@
-// Preact components over the shared structural Markdown renderer.
+// React components over the shared structural Markdown renderer.
 import {
-  type ComponentChildren,
   type Context,
   createContext,
-  h,
-  type VNode,
-} from 'preact'
-import { useContext } from 'preact/hooks'
+  createElement as h,
+  type ReactElement,
+  type ReactNode,
+  useContext,
+} from 'react'
 import type { H } from '@yaks/render'
 import {
   blocks,
@@ -21,42 +21,41 @@ import { Site } from './site.ts'
 export * from './structural.ts'
 export { Site }
 
-type Props = { children?: ComponentChildren }
-export let Bold = ({ children }: Props): VNode<{ class?: string }> =>
-  h<{ class?: string }>('strong', { class: 'Body_Strong' }, children)
-export let Italic = ({ children }: Props): VNode<{ class?: string }> =>
-  h<{ class?: string }>('em', { class: 'Body_Emphasis' }, children)
+type Props = { children?: ReactNode }
+export let Bold = ({ children }: Props): ReactElement<{ className?: string }> =>
+  h<{ className?: string }>('strong', { className: 'Body_Strong' }, children)
+export let Italic = (
+  { children }: Props,
+): ReactElement<{ className?: string }> =>
+  h<{ className?: string }>('em', { className: 'Body_Emphasis' }, children)
 export let Heading = (
   { level = 1, children }: Props & { level?: number },
-): VNode<{ class?: string }> =>
-  h<{ class?: string }>('h' + Math.max(1, Math.min(6, Math.trunc(level))), {
-    class: `Body_Heading Body_Heading-${
+): ReactElement<{ className?: string }> =>
+  h<{ className?: string }>('h' + Math.max(1, Math.min(6, Math.trunc(level))), {
+    className: `Body_Heading Body_Heading-${
       Math.max(1, Math.min(6, Math.trunc(level)))
     }`,
   }, children)
-export let Code = ({ children }: Props): VNode<{ class?: string }> =>
-  h<{ class?: string }>('code', { class: 'Body_Code' }, children)
+export let Code = ({ children }: Props): ReactElement<{ className?: string }> =>
+  h<{ className?: string }>('code', { className: 'Body_Code' }, children)
 export let CodeBlock = (
   { children, language }: Props & { language?: string },
-): VNode<{ class?: string }> =>
-  h<{ class?: string }>(
+): ReactElement<{ className?: string }> =>
+  h<{ className?: string }>(
     'pre',
-    { class: 'Body_Source' },
+    { className: 'Body_Source' },
     h(
       'code',
-      { class: 'Body_Code' + (language ? ' language-' + language : '') },
+      { className: 'Body_Code' + (language ? ' language-' + language : '') },
       children,
     ),
   )
 export let Link = (
   { href, children }: Props & { href: string },
-): VNode<{ href: string | undefined; class: string }> =>
-  h<{ href: string | undefined; class: string }>(
+): ReactElement<{ href: string | undefined; className: string }> =>
+  h(
     'a',
-    away(
-      { href: safeHref(href), class: 'Body_Link' },
-      useContext(Site) ?? useContext(Host).site,
-    ),
+    away({ href: safeHref(href), className: 'Body_Link' }, useHost().site),
     children,
   )
 
@@ -74,14 +73,23 @@ export let useHost = (): Options => {
   return site ? { ...host, site } : host
 }
 
-/** Preact component shared by browser DOM and the terminal's Preact DOM.
- * `breaks: false` reads a document whose prose wraps across source lines. */
+let node: H<ReactElement> = (tag, props, ...children) => {
+  if (!props || !('class' in props)) return h(tag, props, ...children)
+  let { class: className, ...attributes } = props
+  return h<{ className?: unknown }>(
+    tag,
+    { ...attributes, className },
+    ...children,
+  )
+}
+
+/** `breaks: false` reads a document whose prose wraps across source lines. */
 export let Markdown = (
   { source, breaks }: { source: string; breaks?: boolean },
-): VNode =>
+): ReactElement =>
   render(
     parse(source, { breaks }),
-    h as H<ReturnType<typeof h>>,
+    node,
     useHost(),
   )
 
@@ -91,11 +99,11 @@ export let Markdown = (
  * images words too, for a line that is itself a link, such as a title. */
 export let MarkdownInline = (
   { source, flat }: { source: string; flat?: boolean },
-): VNode =>
+): ReactElement =>
   h(
     'span',
     null,
-    ...blocks(parseInline(source), h as H<VNode>, {
+    ...blocks(parseInline(source), node, {
       flat,
       site: useHost().site,
     }),

@@ -17,7 +17,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import * as ui from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { Body } from './Entity.ts'

@@ -11,7 +11,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import { Edit } from '@yaks/ux'
 import { Value } from '@yaks/ui'
 import type { Prop as Declared } from '@yaks/vocab'

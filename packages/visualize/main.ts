@@ -1,6 +1,7 @@
 /** Browser boot: one local page graph, one shared-stream lease, no inspector. */
 import { effect } from '@preact/signals'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { Atlas } from './Atlas.tsx'
 import { atlas } from './model.ts'
 

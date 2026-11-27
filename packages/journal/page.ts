@@ -10,7 +10,7 @@
  *
  * @module
  */
-import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
+import { createElement as h, Fragment, type JSX, type ReactNode } from 'react'
 import {
   compEid,
   mention,
@@ -56,7 +56,7 @@ let Ranked = (
     heads: string[]
     rows: {
       key: string
-      name: ComponentChildren
+      name: ReactNode
       bar: number
       cells: string[]
     }[]

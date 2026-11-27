@@ -1,8 +1,7 @@
 /** A page-only reader for the box's credential-free tracker doors. Responses
  * live only while this view is mounted, never in the box or browser's durable
  * graph. The ordinary timing views receive the same bundles and query answers. */
-import { h } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import { createElement as h, useEffect, useState } from 'react'
 import { matcher } from '@yaks/match'
 import { and, type Clause, parse, querySearch } from '@yaks/query'
 import type { Answer, Asks, Bundle, Io } from '@yaks/inspect'

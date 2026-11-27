@@ -5,7 +5,13 @@
  * here; the host answers them, names references and keeps the page's state.
  * @module
  */
-import { type ComponentChildren, h, type JSX } from 'preact'
+import {
+  createElement as h,
+  type JSX,
+  type ReactNode,
+  useEffect,
+  useState,
+} from 'react'
 import { parse, queryAt } from '@yaks/query'
 import {
   type Bundle,
@@ -48,7 +54,6 @@ import {
   type Tree,
   tree,
 } from './remote.ts'
-import { useEffect, useState } from 'preact/hooks'
 import { Button } from '@yaks/ui'
 
 let CONTEXT = ['entity', 'space', 'app', 'process', 'request']
@@ -374,8 +379,8 @@ let More = (
   { io, at, summary, children }: {
     io: Io
     at: string
-    summary: ComponentChildren
-    children?: ComponentChildren
+    summary: ReactNode
+    children?: ReactNode
   },
 ): JSX.Element => {
   let eid = disclosureAt(at)

@@ -16,7 +16,7 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import * as ui from '@yaks/ui'
 import { at, Edit, put, useEdit } from '@yaks/ux'
 import {
@@ -116,7 +116,7 @@ let List = (
     from: string
     tag: string
     heading: string
-    sub: ComponentChildren
+    sub: ReactNode
     links: Bundle[]
     ends?: Answer
   },
@@ -163,7 +163,7 @@ let List = (
  * documents by, with what each says to an agent. */
 let Lists = (
   { e, io, got, subs }: Props & {
-    subs: Record<string, ComponentChildren>
+    subs: Record<string, ReactNode>
   },
 ): JSX.Element => {
   let from = e.entity.eid

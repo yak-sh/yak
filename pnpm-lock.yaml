@@ -1521,6 +1521,9 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/context:
     dependencies:
@@ -1786,6 +1789,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/dreaming:
     dependencies:
@@ -1958,6 +1964,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/egress:
     dependencies:
@@ -2186,6 +2195,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/filter:
     dependencies:
@@ -2290,6 +2302,9 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/fp: {}
 
@@ -2743,6 +2758,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/hook:
     dependencies:
@@ -2894,9 +2912,6 @@ importers:
 
   packages/inbox:
     dependencies:
-      '@preact/signals':
-        specifier: 2.9.4
-        version: 2.9.4(preact@10.29.7)
       '@yaks/archetype':
         specifier: 0.2.24
         version: link:../archetype
@@ -2936,6 +2951,9 @@ importers:
       '@yaks/ui':
         specifier: 0.2.30
         version: link:../ui
+      '@yaks/ux':
+        specifier: 0.2.23
+        version: link:../ux
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
@@ -2991,6 +3009,9 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/inspect:
     dependencies:
@@ -3058,6 +3079,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/journal:
     dependencies:
@@ -3125,6 +3149,9 @@ importers:
       '@yaks/text':
         specifier: 0.2.24
         version: link:../text
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/kernel:
     dependencies:
@@ -3371,6 +3398,9 @@ importers:
       '@yaks/secrets':
         specifier: 0.2.28
         version: link:../secrets
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/markdown:
     dependencies:
@@ -3405,6 +3435,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/match:
     dependencies:
@@ -3608,6 +3641,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/mirror:
     dependencies:
@@ -3993,6 +4029,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/phone:
     dependencies:
@@ -4842,6 +4881,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/slack:
     dependencies:
@@ -4976,6 +5018,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/spend:
     dependencies:
@@ -5037,6 +5082,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/sql:
     dependencies:
@@ -5481,6 +5529,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/tmux:
     dependencies:
@@ -5646,6 +5697,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/trace:
     devDependencies:
@@ -5755,6 +5809,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/trial:
     dependencies:
@@ -6075,6 +6132,9 @@ importers:
       '@yaks/ui':
         specifier: 0.2.30
         version: link:../ui
+      '@yaks/ux':
+        specifier: 0.2.23
+        version: link:../ux
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
@@ -6091,6 +6151,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/vocab:
     dependencies:
@@ -6408,6 +6471,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/yaml:
     dependencies:

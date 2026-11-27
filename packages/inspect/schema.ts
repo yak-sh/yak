@@ -8,7 +8,7 @@
  * @module
  */
 
-import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
+import { createElement as h, Fragment, type JSX, type ReactNode } from 'react'
 import { derivedEid } from '@yaks/graph/identity'
 import { rowsOf, type Vocab } from '@yaks/vocab'
 import { Body } from '@yaks/ui'
@@ -53,14 +53,14 @@ export let chips = (io: Io, names: string[]): JSX.Element =>
 /** What a vocabulary entity's page says of it, as its head's sub: its words,
  * then its facts (its package, how it is kept) on a line of their own. */
 export let described = (
-  text: ComponentChildren,
-  facts: ComponentChildren[],
-): ComponentChildren[] => [text, h('br', {}), ...facts]
+  text: ReactNode,
+  facts: ReactNode[],
+): ReactNode[] => [text, h('br', {}), ...facts]
 
 /** The same, as the body of a page another head tops (a Full page's): its
  * words read in the ink, its facts a quiet line under them. */
 export let Described = (
-  { text, facts }: { text: ComponentChildren; facts: ComponentChildren[] },
+  { text, facts }: { text: ReactNode; facts: ReactNode[] },
 ): JSX.Element =>
   h(
     Fragment,

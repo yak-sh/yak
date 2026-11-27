@@ -8,10 +8,9 @@
  * @module
  */
 
-import { signal } from '@preact/signals'
-import { useLayoutEffect, useMemo } from 'preact/hooks'
 import { type Client, client } from '@yaks/client'
 import { derivedEid } from '@yaks/graph/identity'
+import { useRows } from '@yaks/ux'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import doc from './front.json' with { type: 'json' }
 
@@ -30,21 +29,9 @@ export let front = (): Client =>
  * thread's (`thread:<eid>`) or a person's search (`search:<eid>`). */
 export let usePage = <T extends Record<string, unknown>>(place: string) => {
   let eid = derivedEid(`inboxView|${place}`)
-  let held = useMemo(() => {
-    let watch = front().watch(`.inboxView .entity.eid=${eid}`)
-    let rows = signal(watch.value)
-    let off = watch.subscribe((now) => rows.value = now)
-    return {
-      rows,
-      free() {
-        off()
-        watch.close()
-      },
-    }
-  }, [eid])
-  useLayoutEffect(() => held.free, [held])
+  let [state] = useRows(front(), `.inboxView .entity.eid=${eid}`)
   return {
-    value: held.rows.value[0]?.inboxView as T | undefined,
+    value: state?.inboxView as T | undefined,
     set: (value: Partial<T>) =>
       void front().mutate([{ entity: { eid }, inboxView: value }]),
   }

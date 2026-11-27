@@ -18,8 +18,13 @@
  */
 
 import { groupBy } from '@yaks/fp'
-import { type ComponentChildren, h, type JSX } from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import {
+  createElement as h,
+  type JSX,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+} from 'react'
 import { Button, Field, Notes, Say, Section } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { comp, count, line, named, str } from './read.ts'
@@ -246,16 +251,16 @@ export type PartProps = Omit<Said, 'notes'> & {
   /** its notes, by heading (`under`) */
   notes?: Map<string, Bundle[]>
   /** what its title says, when it is more than its heading */
-  title?: ComponentChildren
+  title?: ReactNode
   /** how many things it holds */
   count?: number
   /** said small beside its title */
-  note?: ComponentChildren
+  note?: ReactNode
   /** what else its title line offers */
-  act?: ComponentChildren
+  act?: ReactNode
   /** what it is about, under its title */
-  sub?: ComponentChildren
-  children?: ComponentChildren
+  sub?: ReactNode
+  children?: ReactNode
 }
 
 /** A titled part of a page: its heading and what it holds, with its note

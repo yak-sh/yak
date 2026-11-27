@@ -13,7 +13,7 @@
  * @module
  */
 
-import { Fragment, h, type JSX } from 'preact'
+import { createElement as h, Fragment, type JSX } from 'react'
 import { Button, Pairs, Rows, Section, Value } from '@yaks/ui'
 import type { Bundle, Io, Props, View } from './host.ts'
 import { Cell, reads } from './value.ts'

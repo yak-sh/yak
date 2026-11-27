@@ -13,7 +13,7 @@
  * @module
  */
 
-import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
+import { createElement as h, Fragment, type JSX, type ReactNode } from 'react'
 import * as ui from '@yaks/ui'
 import type { Bundle, Io, Props, View } from './host.ts'
 import { about, NoteButton, Said, useNamed } from './notes.ts'
@@ -24,7 +24,7 @@ import { edited, me, put, refusal, write } from './state.ts'
 /** What a head is drawn with besides its entity: what the page says about
  * it, under its name, and the notes left on it as a whole. */
 export type HeadCtx = {
-  sub?: ComponentChildren
+  sub?: ReactNode
   notes?: Bundle[]
   /** what a note on it calls it (its id, or a component's name) */
   subject?: string
@@ -40,7 +40,7 @@ let Add = ({ e, io }: { e: Bundle; io: Io }) =>
   h(
     'select',
     {
-      class: 'Edit Edit-fit',
+      className: 'Edit Edit-fit',
       'aria-label': 'add a component',
       value: '',
       onChange: (ev: Event & { currentTarget: HTMLSelectElement }) => {
@@ -104,7 +104,7 @@ export let Provenance = ({ e, io }: { e: Bundle; io: Io }): JSX.Element => {
   let other = who(changed.by) != by ? who(changed.by) : ''
   let read = str(e, 'lines', 'file')
   useNamed(io, [by, via, other, build, builder, str(e, 'built', 'call'), read])
-  let parts: ComponentChildren[] = [
+  let parts: ReactNode[] = [
     build
       ? h(
         'span',

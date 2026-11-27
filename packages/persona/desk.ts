@@ -19,8 +19,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { createElement as h, type JSX, useLayoutEffect, useRef } from 'react'
 import * as ui from '@yaks/ui'
 import { drag, useDraft, useHost } from '@yaks/ux'
 import {

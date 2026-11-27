@@ -1,5 +1,10 @@
 /** Formatted prose for conversation replies and cards. @module */
-import { type ComponentChildren as Node, Fragment, h, type VNode } from 'preact'
+import {
+  createElement as h,
+  Fragment,
+  type ReactElement,
+  type ReactNode as Node,
+} from 'react'
 import { blocks, parse, useHost } from '@yaks/markdown'
 import { Body } from '@yaks/ui/parts'
 
@@ -20,11 +25,11 @@ let short =
       ...tag == 'a' ? shortened(props?.href, kids) : kids,
     )) as typeof h
 
-let Prose = ({ text }: { text: string }): VNode =>
+let Prose = ({ text }: { text: string }): ReactElement =>
   h(Fragment, null, ...blocks(parse(text), short, useHost()))
 
 /** Draw Markdown in the kit's Body, with entity links supplied by the page's
  * `Host` from @yaks/markdown, and a link off the page's site opening in a new
  * tab (@yaks/markdown/away). */
-export let markdown = (text: string): VNode =>
+export let markdown = (text: string): ReactElement =>
   h(Body, { mod: 'flow' }, h(Prose, { text }))

@@ -18,6 +18,7 @@ import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
 import { type ComponentChild, h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { Float } from '@yaks/ui'
 import { Ux } from '@yaks/ux'
 import { docs as uxDocs } from '@yaks/ux/vocab'
@@ -202,12 +203,14 @@ let mount = (node: ComponentChild) => {
   for (let [k, value] of Object.entries(globals)) {
     Object.defineProperty(globalThis, k, { value, configurable: true })
   }
-  render(node, root)
+  act(() => render(node, root))
   let fire = async (el: Element, type: string, key?: string) => {
     let ev = new window.Event(type, { bubbles: true, cancelable: true })
     if (key) Object.defineProperty(ev, 'key', { value: key })
-    el.dispatchEvent(ev)
-    await tick()
+    await act(async () => {
+      el.dispatchEvent(ev)
+      await tick()
+    })
   }
   let $ = <T extends Element = HTMLElement>(s: string) =>
     root.querySelector<T>(s)!
