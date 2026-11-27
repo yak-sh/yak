@@ -1,4 +1,6 @@
 /** @jsxImportSource react */
+import { useDraft, useObserved } from '@yaks/ux'
+import { drafts } from '@yaks/draft/input'
 import { pagePath } from '../hosting.ts'
 import { entityPath, searchPath } from '../url.ts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -72,7 +74,8 @@ export let Search = ({ open, clock = system }: {
   let [err, setErr] = useState('')
   let [answered, setAnswered] = useState<string | undefined>()
   let [sel, setSel] = useState(0)
-  let q = fields.text(FIELD)
+  let q = useDraft(FIELD, drafts)
+  let searching = useObserved(searchOpen)
   // One array a line, so a row redraws when the words change, not each time
   // the selection moves.
   let marks = useMemo(() => sought(q), [q])
@@ -81,15 +84,15 @@ export let Search = ({ open, clock = system }: {
   let seq = useRef(0)
 
   useLayoutEffect(() => {
-    if (searchOpen.value) box.current?.focus()
-  }, [searchOpen.value])
+    if (searching) box.current?.focus()
+  }, [searching])
 
   // FTS shares the server's one event loop with keypress delivery. Search
   // only after the line settles: a request per letter queues stale work ahead
   // of the word the typist is still entering. Cleanup also keeps a late answer
   // from repainting a closed or newer palette.
   useEffect(() => {
-    if (!searchOpen.value) return
+    if (!searching) return
     if (!q.trim()) {
       setHits([])
       setErr('')
@@ -105,8 +108,8 @@ export let Search = ({ open, clock = system }: {
       cancel()
       abort.abort()
     }
-  }, [q, searchOpen.value, clock])
-  if (!searchOpen.value) return null
+  }, [q, searching, clock])
+  if (!searching) return null
 
   // The kind-grouped list, flattened: the selection index and every key
   // walk THIS order, so arrowing crosses sections in the order they paint.

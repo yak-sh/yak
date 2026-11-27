@@ -1,4 +1,5 @@
 /** @jsxImportSource react */
+import { drafts } from '@yaks/draft/input'
 import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'react'
 import { signal } from '@preact/signals'
@@ -27,7 +28,7 @@ import {
 } from '../commands.ts'
 import { num, slotsOf } from '../verb.ts'
 import { navigate, screenTarget } from './nav.tsx'
-import { pickLine, useHits } from '@yaks/ux'
+import { pickLine, useDraft, useHits, useObserved } from '@yaks/ux'
 import { typing } from '@yaks/ux/keys'
 import { spawnOf } from './Run.tsx'
 import { block } from '@yaks/ui'
@@ -290,7 +291,10 @@ export let Status = () => {
   let input = useRef<HTMLTextAreaElement>(null)
   // The line is the `cmd` field (fields.tsx), whose text is the person's
   // draft; the hints and the ghost read it there.
-  let line = fields.text(CMD)
+  let line = useDraft(CMD, drafts)
+  let active = useObserved(mode)
+  let message = useObserved(msg)
+  let issue = useObserved(problem)
   let [pick, setPick] = useState(0)
 
   useEffect(() => {
@@ -359,9 +363,9 @@ export let Status = () => {
 
   // Take the keyboard when the command input APPEARS (a thumb waits).
   useEffect(() => {
-    if (mode.value != 'command') return
+    if (active != 'command') return
     if (!thumb()) input.current?.focus()
-  }, [mode.value])
+  }, [active])
 
   // A half-typed : line is a draft: wherever it was typed (before a reload,
   // in another tab, in the terminal), the first time this page hears of it
@@ -375,7 +379,7 @@ export let Status = () => {
   }, [line])
 
   // The hints the line offers, and which is picked (0 = the best match).
-  let hints = mode.value == 'command' ? suggest(line, all()) : []
+  let hints = active == 'command' ? suggest(line, all()) : []
   let [, pre, verb, rest] = line.match(/^(\s*)(\S+)(.*)$/s) ?? []
   let faded = ghost(line, all())
   let put = (v: string) => {
@@ -420,8 +424,8 @@ export let Status = () => {
 
   return (
     <Frame>
-      <Left onClick={mode.value == 'command' ? undefined : commandMode}>
-        {mode.value == 'command'
+      <Left onClick={active == 'command' ? undefined : commandMode}>
+        {active == 'command'
           ? (
             <>
               <Colon>:</Colon>
@@ -480,22 +484,22 @@ export let Status = () => {
           )
           : (
             <>
-              <Mode mod={mode.value}>
-                {mode.value == 'insert'
+              <Mode mod={active}>
+                {active == 'insert'
                   ? '-- INSERT --'
-                  : mode.value == 'visual'
+                  : active == 'visual'
                   ? '-- VISUAL --'
                   : '-- NORMAL --'}
               </Mode>
-              {(msg.value || problem.value) && (
+              {(message || issue) && (
                 <Msg
-                  title={typeof msg.value == 'string'
-                    ? msg.value || problem.value
+                  title={typeof message == 'string'
+                    ? message || issue
                     : undefined}
                 >
-                  {typeof msg.value == 'string'
-                    ? msg.value || problem.value
-                    : <FixMessage {...msg.value} />}
+                  {typeof message == 'string'
+                    ? message || issue
+                    : <FixMessage {...message} />}
                 </Msg>
               )}
             </>
@@ -504,7 +508,7 @@ export let Status = () => {
       <Right>
         <Sync />
         {capable('canvas') && <WhoAmI />}
-        {mode.value == 'command' && (
+        {active == 'command' && (
           <Close type='button' aria-label='exit command mode' onClick={close}>
             ×
           </Close>

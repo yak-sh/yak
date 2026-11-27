@@ -121,7 +121,10 @@ export let useQueryEids = (query: string, direct = false): string[] =>
 
 // The matching entities, assembled. Each rides its own `row` signal, so the
 // list re-renders on membership change and each row on its own edits.
-export let useQuery = (query: string): Ent[] => useQueryEids(query).map(ent)
+export let useQuery = (query: string, direct = false): Ent[] => {
+  let eids = useQueryEids(query, direct)
+  return useDerived(() => eids.map(ent), [eids])
+}
 
 // The open card's reverse lists (T-21489), held for the view's life. Each is an
 // EID-KEYED server sub — "comments aimed at X", "entities referencing X" — so
@@ -131,10 +134,10 @@ export let useQuery = (query: string): Ent[] => useQueryEids(query).map(ent)
 // live.ts backlinks door reads locally from the rows a mounted view holds;
 // it never opens an unowned server subscription.
 export let useCommentsOn = (target: string): Ent[] =>
-  useQueryEids(
+  useQuery(
     vocab.prop('comment', 'target') ? `.comment.target=${target}` : '',
   )
-    .map(ent)
+    .slice()
     .sort((a, b) => a.num - b.num)
 
 // The commits landed for an entity — the structured rows that sit in the
@@ -143,8 +146,8 @@ export let useCommentsOn = (target: string): Ent[] =>
 // its vocabulary lacks. The vocabulary is loaded before this module runs
 // (types.ts), so the choice is made once.
 export let useCommitsOn = (target: string): Ent[] =>
-  useQueryEids(vocab.prop('commit', 'target') ? `.commit.target=${target}` : '')
-    .map(ent)
+  useQuery(vocab.prop('commit', 'target') ? `.commit.target=${target}` : '')
+    .slice()
     .sort((a, b) => a.num - b.num)
 
 // `via` — WHICH column points here — reads off each referrer's own row signal
@@ -169,7 +172,10 @@ export let useBacklinks = (
     `.refs=${target}${backlinkComps()}&.limit=${BACKLINKS}`,
   )
   return {
-    links: from.flatMap((eid) => linksVia(eid, target)),
+    links: useDerived(() => from.flatMap((eid) => linksVia(eid, target)), [
+      from,
+      target,
+    ]),
     more: from.length >= BACKLINKS,
   }
 }
@@ -181,13 +187,15 @@ export let useBoardsOver = (target: string): string[] =>
 export let useChatFor = (
   actor: string | undefined,
   target: string,
-): Ent | undefined =>
-  useQueryResult(
+): Ent | undefined => {
+  let [eid] = useQueryResult(
     actor && vocab.prop('chat', 'actor') && vocab.prop('chat', 'target')
       ? `.chat.actor=${actor}&.chat.target=${target}`
       : '',
     !!actor && !!vocab.prop('chat', 'actor') && !!vocab.prop('chat', 'target'),
-  ).eids.map(ent)[0]
+  ).eids
+  return useDerived(() => eid ? ent(eid) : undefined, [eid])
+}
 
 // The comments a session's transcript cites: those the session, or one of its
 // entries, holds an edge to. A comment delivered to a graph-native session is
@@ -200,4 +208,4 @@ let citedLine = (session: string) =>
     : ''
 
 export let useCitedComments = (session: string): Ent[] =>
-  useQueryEids(citedLine(session), true).map(ent).sort((a, b) => a.num - b.num)
+  useQuery(citedLine(session), true).slice().sort((a, b) => a.num - b.num)

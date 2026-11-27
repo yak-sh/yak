@@ -11,7 +11,7 @@
 // `cancel`, which puts it away and hands the cursor back to the link.
 import { useLayoutEffect, useRef } from 'react'
 import { Loading, Peek as Frame, place, Tabs } from '@yaks/ui'
-import { Ux } from '@yaks/ux'
+import { useObserved, Ux } from '@yaks/ux'
 import { ent, type Peeked, peeked, row, useHold } from '../live.ts'
 import { entityPath } from '../url.ts'
 import { idOf } from '../types.ts'
@@ -105,6 +105,7 @@ let Card = ({ p }: { p: Peeked }) => {
     )
   }
 
+  let ready = useObserved(row(p.eid))
   return (
     <Frame
       elRef={root}
@@ -141,7 +142,7 @@ let Card = ({ p }: { p: Peeked }) => {
         </Tabs>
       </Head>
       <Body>
-        {row(p.eid).value
+        {ready
           ? (
             // Its own owner, so its editors keep apart from the page's
             // editors of the same values (@yaks/ux).
@@ -161,6 +162,7 @@ let Card = ({ p }: { p: Peeked }) => {
 
 /** The peek over this page, if one is up. */
 export let Peek = () => {
-  let p = peeked.value
-  return p && p.at == route.value ? <Card key='peek' p={p} /> : null
+  let p = useObserved(peeked)
+  let path = useObserved(route)
+  return p && p.at == path ? <Card key='peek' p={p} /> : null
 }

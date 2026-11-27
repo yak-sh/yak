@@ -1,4 +1,6 @@
 /** @jsxImportSource react */
+import { useObserved } from '@yaks/ux'
+import { useDerived } from './read.ts'
 // The sidebar: search at the top, then a line per place (home, each
 // destination, the schema), the one you are on lit. Every line is a plain
 // link; a phone folds the sidebar behind the bar's menu, and going anywhere
@@ -69,30 +71,35 @@ export let openSidebar = (yes: boolean): void =>
   void front.mutate([{ entity: { eid: sidebarEid }, Sidebar: { open: yes } }])
 
 /** The bar's menu: where a window is narrow, the way to the sidebar. */
-export let SidebarMenu = () => (
-  <Shell.Menu>
-    <Button
-      type='button'
-      mod='quiet'
-      aria-label='Open navigation'
-      aria-expanded={sidebarOpen()}
-      onClick={() => openSidebar(!sidebarOpen())}
-    >
-      <Icon name='menu' size={18} />
-    </Button>
-  </Shell.Menu>
-)
+export let SidebarMenu = () => {
+  let expanded = useObserved(open)
+  return (
+    <Shell.Menu>
+      <Button
+        type='button'
+        mod='quiet'
+        aria-label='Open navigation'
+        aria-expanded={expanded}
+        onClick={() => openSidebar(!sidebarOpen())}
+      >
+        <Icon name='menu' size={18} />
+      </Button>
+    </Shell.Menu>
+  )
+}
 
 // The app's name: the box's, or an app store's slug under its mount.
 let brand = () => hosting().page.split('/').filter(Boolean)[0] ?? 'Tasks'
 
 export let Navigation = () => {
-  let lit = placeAt(route.value, allPlaces())?.path
+  let path = useObserved(route)
+  let places = useDerived(allPlaces, [])
+  let lit = placeAt(path, places)?.path
   let go = (path: string) => (ev: MouseEvent) => {
     follow(path)(ev)
     if (ev.defaultPrevented) openSidebar(false)
   }
-  let actor = owner.value
+  let actor = useObserved(owner)
   let home = homeOffer()
   return (
     <Shell.Side aria-label='Navigation'>
@@ -115,7 +122,7 @@ export let Navigation = () => {
           Search <kbd>/</kbd>
         </Button>
       </Find>
-      {allPlaces().map((p) => (
+      {places.map((p) => (
         <Item
           key={p.path}
           href={pagePath(p.path)}

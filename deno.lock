@@ -3551,6 +3551,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/admin@0.2.17",
             "npm:@yaks/alias@0.2.24",

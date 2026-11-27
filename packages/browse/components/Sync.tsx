@@ -1,4 +1,5 @@
 /** @jsxImportSource react */
+import { useObserved } from '@yaks/ux'
 // The standing sync indicator (T-21441). An optimistic cache shows every local
 // edit as landed the instant it is typed; when the server is unreachable the
 // write sits undelivered in the outbox (live.ts) with nothing on screen to say
@@ -77,9 +78,9 @@ export let late = (writes: { since: number }[], now: number) =>
   now - oldestOf(writes) >= LATE
 
 export let Sync = () => {
-  let writes = outboxWrites.value
-  let errs = refused.value
-  let gone = away.value
+  let writes = useObserved(outboxWrites)
+  let errs = useObserved(refused)
+  let gone = useObserved(away)
   let [open, setOpen] = useState(false)
   let [now, setNow] = useState(Date.now())
 

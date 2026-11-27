@@ -1,4 +1,5 @@
 /** @jsxImportSource react */
+import { useObserved } from '@yaks/ux'
 import { localPath } from '../hosting.ts'
 import { addressId, entityPath } from '../url.ts'
 import { signal } from '@preact/signals'
@@ -391,7 +392,7 @@ export let cardMenuAt = (e: Ent) => (ev: MouseEvent) => {
 let { Item, Rule } = ui.Menu
 
 export let Menu = () => {
-  let m = menu.value
+  let m = useObserved(menu)
   let root = useRef<HTMLDivElement>(null)
   usePlaceAt(root, m)
   if (!m) return null

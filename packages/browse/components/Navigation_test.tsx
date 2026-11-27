@@ -25,7 +25,11 @@ test('the sidebar lists its places, lights the one you are on, and goes where yo
     destinations: [{ key: 'bugs', name: 'Bugs', icon: 'bug', query: '.task' }],
   })
   bindHistory(undefined)
-  let { root, free } = mount(<Navigation />)
+  let mounted!: ReturnType<typeof mount>
+  act(() => {
+    mounted = mount(<Navigation />)
+  })
+  let { root, free } = mounted
   let lines = () =>
     [...root.querySelectorAll('.Shell_Item')].map((a) => [
       a.textContent,

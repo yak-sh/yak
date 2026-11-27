@@ -1,4 +1,5 @@
 /** @jsxImportSource react */
+import { useObserved } from '@yaks/ux'
 import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'react'
 import { signal } from '@preact/signals'
@@ -147,7 +148,7 @@ let Form = ({ a }: { a: Ask }) => {
   // menu no longer offers falls back to its first entry, and effort to
   // the picked model's first, with nothing to keep in sync. Each model is
   // offered ONCE — the transport is chosen at start by readiness.
-  let ms = catalog(providers.value)
+  let ms = catalog(useObserved(providers))
   let m = ms.find((x) => x.model == choice) ?? ms[0]
   let ef = m?.efforts.includes(effort) ? effort : m?.efforts[0]
 
@@ -230,6 +231,6 @@ let Form = ({ a }: { a: Ask }) => {
 // Keyed by the task: a second ask is a fresh form, not the last one's
 // leftovers.
 export let Run = () => {
-  let a = run.value
+  let a = useObserved(run)
   return a ? <Form key={a.eid} a={a} /> : null
 }

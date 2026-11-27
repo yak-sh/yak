@@ -1,4 +1,5 @@
 /** @jsxImportSource react */
+import { useObserved } from '@yaks/ux'
 // Configuration restores the host's secrets and sign-ins using their existing
 // graph and authorization doors. Credential input stays private and is never
 // prefilled; each entity's public face is drawn by the shared renderer.
@@ -38,7 +39,8 @@ let Secret = ({ e }: { e?: Ent }) => {
   let input = useMemo(() => signal({ name: '', value: '' }), [])
   let progress = useProgress(e?.eid ?? 'new-secret')
   let secret = e?.secret as { name?: string } | undefined
-  let name = secret?.name ?? input.value.name
+  let entered = useObserved(input)
+  let name = secret?.name ?? entered.name
   let save = () => {
     let value = input.value.value
     void progress.run(async () => {
@@ -53,7 +55,7 @@ let Secret = ({ e }: { e?: Ent }) => {
         <Field
           aria-label='New secret name'
           placeholder='Secret name'
-          value={input.value.name}
+          value={entered.name}
           onInput={(ev: InputEvent) => {
             input.value = {
               ...input.value,
@@ -67,7 +69,7 @@ let Secret = ({ e }: { e?: Ent }) => {
         aria-label={`${name || 'New secret'} value`}
         autocomplete='new-password'
         placeholder='New secret value'
-        value={input.value.value}
+        value={entered.value}
         disabled={progress.busy}
         onInput={(ev: InputEvent) => {
           input.value = {
@@ -78,7 +80,7 @@ let Secret = ({ e }: { e?: Ent }) => {
       />
       <Button
         type='button'
-        disabled={progress.busy || !name.trim() || !input.value.value}
+        disabled={progress.busy || !name.trim() || !entered.value}
         onClick={save}
       >
         {e ? 'Update secret' : 'Add secret'}
@@ -120,7 +122,7 @@ let Authorization = () => {
       privateState.value = { names: [], name: '', url: '', callback: '' }
     }
   }, [])
-  let state = privateState.value
+  let state = useObserved(privateState)
   return (
     <Section>
       <Section.Title>Sign-ins</Section.Title>

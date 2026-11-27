@@ -708,6 +708,9 @@ importers:
       '@preact/signals':
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@yaks/api':
         specifier: 0.2.29
         version: link:../api

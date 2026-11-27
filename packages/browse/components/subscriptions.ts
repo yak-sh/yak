@@ -16,14 +16,17 @@ import {
   subscriptionState,
   useHold,
 } from '../live.ts'
+import { useDerived } from './read.ts'
 import { useQueryResult } from './useQuery.ts'
 import { type Ent, type Pinned, vocab } from '../types.ts'
 
 export let useBoardSub = (e?: Ent): SubscriptionRead | undefined => {
   useHold(e && { board: e })
-  if (!e) return undefined
-  let sub = `board:${e.eid}`
-  return { sub, state: subscriptionState(sub) }
+  return useDerived(() => {
+    if (!e) return undefined
+    let sub = `board:${e.eid}`
+    return { sub, state: subscriptionState(sub) }
+  }, [e?.eid])
 }
 
 // The tile's half of a board: its status COUNTS, held for the tile's life and
@@ -41,19 +44,22 @@ export let useBoardTally = (e?: Ent) => {
 // endpoints — streams in on mount and is evicted with the last view of it.
 export let useEntity = (eid?: string | null, fields?: string) => {
   useHold(eid && { entity: eid, fields })
-  return eid ? entityRead(eid, fields) : undefined
+  return useDerived(() => eid ? entityRead(eid, fields) : undefined, [
+    eid,
+    fields,
+  ])
 }
 
 // The cards on a canvas, held while a view draws them.
 export let usePinned = (canvas: string): Pinned[] => {
   useHold(!!canvas && { query: pinsOn(canvas) })
-  return pinned(canvas)
+  return useDerived(() => pinned(canvas), [canvas])
 }
 
 // The task a session is on, held while a view draws it.
 export let useJob = (e: Ent): string | null => {
   useHold(!!e.session && { query: jobQuery(e.eid) })
-  return jobOf(e)
+  return useDerived(() => jobOf(e), [e])
 }
 
 // The rows of a LIST of entities, in one sub (live.ts rowsSub), never their
@@ -79,7 +85,10 @@ export let useReference = (eid?: string | null) => {
   let read = useEntity(eid, fields || 'entity.eid')
   return {
     ...read,
-    value: eid && read?.loaded(eid, 'doc', 'title') ? read.value : undefined,
+    value: useDerived(
+      () => eid && read?.loaded(eid, 'doc', 'title') ? read.value : undefined,
+      [eid, read],
+    ),
   }
 }
 
@@ -102,11 +111,18 @@ export let useModel = (e: Ent): {
     !!e.session,
     true,
   ).eids[0]
-  let using = (latest ? ent(latest).using : undefined) ?? e.using
+  let using = useDerived(
+    () => (latest ? ent(latest).using : undefined) ?? e.using,
+    [latest, e.using],
+  )
   let model = using?.model
   useEntity(model, 'model.name')
+  let name = useDerived(
+    () => model ? ent(model).model?.name ?? undefined : undefined,
+    [model],
+  )
   return {
-    name: model ? ent(model).model?.name ?? undefined : undefined,
+    name,
     effort: using?.effort ?? undefined,
     using: using?.provider
       ? {
@@ -128,9 +144,13 @@ export let useRepoUrl = (e: Ent): string | undefined => {
     let [comp, prop] = field.split('.')
     return vocab.prop(comp, prop)
   }).join(',')
-  let trace = vocab.prop('repo', 'url')
-    ? repoTrace(ent(e.eid))
-    : { eids: [], url: undefined }
+  let trace = useDerived(
+    () =>
+      vocab.prop('repo', 'url')
+        ? repoTrace(ent(e.eid))
+        : { eids: [], url: undefined },
+    [e.eid],
+  )
   let holds = trace.eids.map((eid) => ({
     entity: eid,
     fields: fields || 'entity.eid',

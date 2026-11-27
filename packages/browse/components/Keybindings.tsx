@@ -2,6 +2,7 @@
 // The web keybinding card and its global `?` door. While the card is open its
 // capture listener owns every key, so canvas and mode handlers beneath it
 // cannot act on a hidden surface.
+import { useObserved } from '@yaks/ux'
 import { signal } from '@preact/signals'
 import { useEffect, useRef } from 'react'
 import { capable, mode } from '../live.ts'
@@ -39,6 +40,7 @@ let { Box, Head, Title, Close, List, Row, Keys, About } = Frame
 
 export let Keybindings = () => {
   let box = useRef<HTMLElement>(null)
+  let opened = useObserved(keybindingsOpen)
 
   useEffect(() => {
     let key = (e: KeyboardEvent) => {
@@ -57,10 +59,10 @@ export let Keybindings = () => {
   }, [])
 
   useEffect(() => {
-    if (keybindingsOpen.value) box.current?.focus()
-  }, [keybindingsOpen.value])
+    if (opened) box.current?.focus()
+  }, [opened])
 
-  if (!keybindingsOpen.value) return null
+  if (!opened) return null
   return (
     <Frame
       onMouseDown={(e: MouseEvent) =>

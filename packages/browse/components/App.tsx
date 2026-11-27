@@ -1,4 +1,6 @@
 /** @jsxImportSource react */
+import { useObserved } from '@yaks/ux'
+import { useDerived } from './read.ts'
 import { InspectPage, PagePart, PastPage } from './inspect.tsx'
 import { hosting } from '../hosting.ts'
 import { back, forward, left, scrolledTo } from '../history.ts'
@@ -113,9 +115,10 @@ export let Page = ({ at }: { at: string }) => {
   // `?at=<transaction>` reads the entity as it was just after it; an id that
   // names a deleted entity reads what it held last.
   let past = url.searchParams.get('at') ?? undefined
-  let buried = screenBuried(at)
+  let scroll = useObserved(left)
+  let buried = useDerived(() => screenBuried(at), [at])
   let place = destinationAt(at, allDestinations())
-  let t = screenTarget(at)
+  let t = useDerived(() => screenTarget(at), [at])
   let home = url.pathname == '/' && !url.search
   let offered = home ? homeOffer() : undefined
   // The owner's home page holds what its view asks, never the owner's
@@ -127,10 +130,13 @@ export let Page = ({ at }: { at: string }) => {
     ? undefined
     : addressId(decodeURIComponent(url.pathname.slice(1))) ?? t?.eid
   useHold(rootEid && { entity: rootEid })
-  let read = rootEid && config.host
-    ? entityRead(rootEid, undefined, t?.eid)
-    : undefined
-  let e = read?.ready ? read.value : t ? ent(t.eid) : undefined
+  let { read, e } = useDerived(() => {
+    let read = rootEid && config.host
+      ? entityRead(rootEid, undefined, t?.eid)
+      : undefined
+    let e = read?.ready ? read.value : t ? ent(t.eid) : undefined
+    return { read, e }
+  }, [rootEid, t])
   let tabs = e ? applicable(e) : []
   // A coarse pointer with no explicit view defaults a Canvas to List: its
   // spatial face eagerly renders every pinned card and floods a phone (the
@@ -251,7 +257,7 @@ export let Page = ({ at }: { at: string }) => {
       <Viewport
         id={`browse:${at}`}
         className='Shell_Body'
-        start={left.value}
+        start={scroll}
         onScroll={scrolledTo}
       >
         {configAt(at)
@@ -342,7 +348,9 @@ export let App = () => {
   // What the app draws for this person everywhere inside it: their drafts,
   // and this tab's own screen rows (cursor, camera, folds, shelf).
   useDrafts()
-  let me = myClient()
+  let me = useDerived(myClient, [])
+  let path = useObserved(route)
+  let sidebar = useDerived(sidebarOpen, [])
   useHold(me && { client: me })
   // `/` raises the search palette over ANY page — canvas, doc, board.
   // The shell owns the hotkey and the one <Search> mount so any page can
@@ -389,7 +397,7 @@ export let App = () => {
     <MarkdownHost>
       <Shell
         elRef={shell}
-        mod={sidebarOpen() && 'open'}
+        mod={sidebar && 'open'}
         onPointerDown={() => {
           menu.value = null
           run.value = null
@@ -404,8 +412,8 @@ export let App = () => {
           onClick={() => openSidebar(false)}
         />
         <Shell.Main>
-          <Fault key={route.value} place='Page'>
-            <Page at={route.value} />
+          <Fault key={path} place='Page'>
+            <Page at={path} />
           </Fault>
           <Fault place='Status'>
             <Status />
