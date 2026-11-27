@@ -210,9 +210,10 @@ test("the statistics an install owes are the alarm's, and the next incarnation k
   await write('recipe', 'three')
   write = await wake()
   assertEquals(statistics('recipe'), legacy)
+  // A few rows said, and twice as many held: analyzed again (bug 16830a75).
   await write('recipe', 'four')
   write = await wake()
-  assertEquals(statistics('recipe'), legacy)
+  assertEquals(rows('recipe'), 4)
 
   // A table holding one row is never analyzed, since SQLite scans a table
   // it thinks holds one row rather than seek it (bug b5285b5d); it is owed
