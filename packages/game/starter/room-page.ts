@@ -5,7 +5,14 @@ import {
   postRoom,
   RoomRefused,
 } from './room-client.ts'
-import { motionId, roomId, roomPath, type Turn } from './room-model.ts'
+import {
+  type Choice,
+  motionId,
+  roomId,
+  roomPath,
+  type Turn,
+} from './room-model.ts'
+import { REACH } from './room-rules.ts'
 import { roomView } from './room-view.ts'
 import { screen } from './screen.ts'
 
@@ -71,29 +78,34 @@ let playRoom = async (member: Joined) => {
       (!watch.ready
         ? 'Connecting…'
         : current?.seat === seat
-        ? 'Your turn'
+        ? `Your turn: tap a tile up to ${REACH} away, roll or pass`
         : 'Waiting for your friend')
     roll.textContent = current?.roll ? `Last roll: ${current.roll}` : ''
   }
   watch.subscribe(render)
   render()
+  // One way in for every action: the buttons, and a tap on the field to move.
+  let send = (action: Choice) => {
+    let current = turn()
+    if (actions.disabled || !current) return
+    actions.disabled = true
+    void postRoom(path + 'action', { ...action, number: current.number })
+      .then(render, (error) => {
+        render()
+        show(error)
+      })
+  }
   actions.addEventListener('click', (event) => {
     let button = (event.target as HTMLElement).closest<HTMLButtonElement>(
       'button',
     )
-    let current = turn()
-    if (!button || actions.disabled || !current) return
-    let [dx, dz] = (button.dataset.move ?? '').split(',').map(Number)
-    actions.disabled = true
-    void postRoom(path + 'action', {
-      number: current.number,
-      kind: button.value,
-      dx,
-      dz,
-    }).then(render, (error) => {
-      render()
-      show(error)
-    })
+    if (button) send({ kind: button.value as 'roll' | 'pass' })
+  })
+  canvas.addEventListener('click', (event) => {
+    let point = view.pick(event.clientX, event.clientY)
+    if (point) {
+      send({ kind: 'move', x: Math.round(point.x), z: Math.round(point.z) })
+    }
   })
   share.addEventListener('click', () => {
     void (async () => {

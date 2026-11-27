@@ -1,6 +1,6 @@
 ---
 name: games
-description: 'Multiplayer Games (yaks.app). Start a game with app_files and the game starter. Choose a 3D, voxel or 2D view, then add live rooms for multiplayer. Covers fullscreen play, local and stored game state, guest invites, controls, HUD, rendering, fixed-step timing and retrying lost writes.'
+description: 'Multiplayer Games (yaks.app). Design the whole game first and play it to its ending before release. Start a game with app_files and the game starter. Choose a 3D, voxel or 2D view, then add live rooms for multiplayer. Covers fullscreen play, local and stored game state, guest invites, controls, HUD, rendering, fixed-step timing and retrying lost writes.'
 ---
 
 # Multiplayer Games
@@ -9,6 +9,43 @@ A game is a yaks app whose page reads the graph, decides what happens next, and
 writes bundles back to the graph. The toolkit computes and draws values; it does
 not store your graph, world, economy or save rules. Keep those in the app, so
 another page can read the same game state and a different renderer can draw it.
+
+## Design the whole game first
+
+The starter is wiring, not a game: its field, its roll button and its tap to
+move only show how a turn travels. Before you build, design the whole game from
+the person's request with good game design principles, and write it in the app
+as `design.md`. Decide every part yourself; don't stop to ask.
+
+- **Premise and arc**: who the players are, what they want, what stands in the
+  way, and how the game opens, turns and ends.
+- **Core loop**: what a player does from moment to moment, and why it is fun to
+  do again.
+- **Challenge**: the contest at its heart (a fight, a race, a puzzle), what a
+  player can lose, such as health, and how they see it.
+- **Progression and balance**: what grows over a run, what it costs, and numbers
+  worked out so the game is neither trivial nor hopeless.
+- **Variety**: quests, levels or encounters that each ask something different of
+  the player.
+- **Players**: what each one controls and, in a party, what everyone sees of the
+  others.
+- **Feel**: controls that fit the genre on a phone and a keyboard (walk, drag or
+  tap where to go, never a button per tile), and how moving, hitting and winning
+  look and sound.
+- **Ending**: a win the players can reach, and what a loss does.
+
+Build from the design, and answer with its main points beside the game's
+address. When the person changes any part, change `design.md` first, then redo
+every part of the game that depended on it.
+
+## Play it from start to end
+
+Before releasing, play the game through to its ending. The rules are pure, so a
+script in the sandbox can play whole runs through them: that shows the ending is
+reachable and the balance holds. Then play it in the browser as the person
+would, through the opening, the main challenge and the ending screen, with two
+seats for multiplayer. Fix what is broken, dull or lopsided, and play again. Say
+in the answer what you played and where play stopped.
 
 ## Start with a game starter
 

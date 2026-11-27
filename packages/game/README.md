@@ -81,9 +81,9 @@ invitation in the link fragment and its digest in the store.
 `room-client.ts` opens the room-scoped page graph. `room-wire.ts` carries the
 subscription and peer motion through the store's socket. The app's
 `room-rules.ts` checks turn order and returns the batch the worker saves. Moving
-the pointer on the field shares a transient aim marker. Moving a pawn requires
-an accepted turn action. The store pushes the new turn and position to each
-page.
+the pointer on the field shares a transient aim marker. Tapping a tile up to
+three steps away moves the pawn, as an accepted turn action. The store pushes
+the new turn and position to each page.
 
 ## Paths
 

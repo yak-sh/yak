@@ -5,12 +5,13 @@ export type Turn = { seat: string; number: number; roll?: number }
 export type Pawn = { room: string; x: number; z: number }
 
 export type Seat = { room: string; seat: string }
-export type Action = { number: number; kind: 'roll' | 'pass' } | {
-  number: number
+/** What a player chose; the page adds the turn it was chosen on. */
+export type Choice = { kind: 'roll' | 'pass' } | {
   kind: 'move'
-  dx: number
-  dz: number
+  x: number
+  z: number
 }
+export type Action = Choice & { number: number }
 
 export let roomLine = (room: string): string =>
   `(.entity.eid=${room}&.play_turn)|.play_pawn.room=${room}|.play_motion.room=${room}`

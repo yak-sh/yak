@@ -4,6 +4,9 @@ import type { Action, Pawn, Seat, Turn } from './room-model.ts'
 
 export class ActionRefused extends Error {}
 
+/** How many tiles a pawn may walk in one turn. */
+export let REACH = 3
+
 export let spawn = (room: string, seat: string, order: number): Bundle => ({
   entity: { eid: seat },
   play_pawn: { room, x: order * 2 - 3, z: 3 },
@@ -32,12 +35,14 @@ export let act = (
     case 'pass':
       break
     case 'move': {
-      let { dx, dz } = action
-      if (
-        !Number.isInteger(dx) || !Number.isInteger(dz) ||
-        Math.abs(dx) + Math.abs(dz) !== 1
-      ) throw new ActionRefused('Choose one neighboring tile.')
-      let x = pawn.x + dx, z = pawn.z + dz
+      let { x, z } = action
+      let steps = Math.abs(x - pawn.x) + Math.abs(z - pawn.z)
+      if (!Number.isInteger(x) || !Number.isInteger(z) || steps < 1) {
+        throw new ActionRefused('Choose a tile to move to.')
+      }
+      if (steps > REACH) {
+        throw new ActionRefused(`Move up to ${REACH} tiles in a turn.`)
+      }
       if (Math.abs(x) > 11 || Math.abs(z) > 11) {
         throw new ActionRefused('That tile is outside the field.')
       }

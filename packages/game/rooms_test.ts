@@ -1,5 +1,5 @@
 import { client } from '@yaks/client'
-import { equal, ok, test } from '@yaks/testing'
+import { equal, ok, test, throws } from '@yaks/testing'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import {
   motionId,
@@ -7,6 +7,7 @@ import {
   type Seat,
   type Turn,
 } from './starter/room-model.ts'
+import { act, ActionRefused, REACH } from './starter/room-rules.ts'
 import { roomFrames } from './starter/room-wire.ts'
 import { rooms } from './starter/worker.ts'
 import words from './starter/vocab.json' with { type: 'json' }
@@ -140,4 +141,20 @@ test('a room socket scopes subscriptions and relays to the connected seat', () =
       }],
     },
   )
+})
+
+test('a move walks to the tapped tile within reach, and nowhere else', async () => {
+  let seat = { room: 'r', seat: 'a' }
+  let turn = { seat: 'a', number: 1 }
+  let move = (x: number, z: number) =>
+    act(seat, ['a', 'b'], turn, { room: 'r', x: 0, z: 0 }, {
+      number: 1,
+      kind: 'move',
+      x,
+      z,
+    }, () => 1)
+  equal(move(1, -2)[0], { entity: { eid: 'a' }, play_pawn: { x: 1, z: -2 } })
+  for (let [x, z] of [[0, 0], [REACH, 1], [0.5, 0]]) {
+    ok((await throws(() => move(x, z))) instanceof ActionRefused)
+  }
 })
