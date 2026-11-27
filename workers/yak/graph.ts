@@ -581,6 +581,15 @@ let planKind = (name: string, versioned: boolean): PlanKind => {
 }
 let configOf = (kind: PlanKind) =>
   kind == 'versions' ? appVersionsConfig : worker.stores[kind]
+// Whether a composition meets what a store's data requires (@yaks/host `meet`).
+let composes = (config: Parameters<typeof meet>[0], held: string[]) => {
+  try {
+    meet(config, held)
+    return true
+  } catch {
+    return false
+  }
+}
 // The words a shape's plan is assembled under: its own, read through what
 // its storage reads a stored value through. Plans retain only declarations
 // and modules (@yaks/durable-object `planned`), one a kind and words; each
@@ -5071,13 +5080,17 @@ export class Store extends Durable {
     if (!app || this.#get('name') != name || this.#get('copied')) return null
     let shape = this.#shape()
     // A deploy moves the fit's version. Where the schema did not move with
-    // it, the listing reads the tables as they stand (`unmoved`).
+    // it, the listing reads the tables as they stand (`unmoved`), once this
+    // code composes every plugin the data requires: `#build` asks the same
+    // where the fit moved, and a rollback can find one it lacks.
+    let held = requirements(this.#sql)
     if (
       !(this.#stood(shape) ||
-        unmoved(this.#sql, shape, (key) => this.#get(key as Word))) ||
+        unmoved(this.#sql, shape, (key) => this.#get(key as Word)) &&
+          composes(configOf(planKind(name, false)), held)) ||
       shape.vocab.comp('_tx') ||
       this.#slots.branches().length ||
-      requirements(this.#sql).includes(versions.use) || recovering(this.#sql) ||
+      held.includes(versions.use) || recovering(this.#sql) ||
       Object.keys(JSON.parse(this.#get('uses') ?? '{}')).length
     ) return null
 

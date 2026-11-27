@@ -5,6 +5,7 @@ import { equal, test } from '@yaks/testing'
 import { ACROSS, BRANCH, WAKE } from './door.ts'
 import { Store } from './graph.ts'
 import { slotsOf } from './store-schema.ts'
+import { requires } from '@yaks/sqlite'
 import { state } from './testing.ts'
 
 let name = 'ada/cookbook'
@@ -122,6 +123,17 @@ test('a moved schema stamp fits on the full Store', async () => {
     await open(testVersion('next')).fetch(request(listing)),
   )
   equal([status, started, body], [200, true, expected])
+  await ctx.settled()
+})
+
+test('a deploy whose code lacks a plugin the data requires uses the full Store', async () => {
+  let { ctx, open, request } = await cookbook()
+  using _db = ctx.storage
+  requires(driver(ctx.storage), ['@yaks/retired'])
+  let [status, started] = await read(
+    await open(testVersion('next')).fetch(request(listing)),
+  )
+  equal([status === 200, started], [false, true])
   await ctx.settled()
 })
 
