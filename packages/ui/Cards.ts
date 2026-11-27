@@ -8,7 +8,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button } from './Button.ts'
 import { Card } from './Card.ts'
 import { block, type Part } from './el.ts'

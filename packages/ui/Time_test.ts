@@ -1,6 +1,7 @@
 import { cleanup, clock, equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { draw } from '@yaks/preact/draw'
 import { renderToString } from 'preact-render-to-string'
 import { day, pretty } from './relative.ts'
 import { Time } from './Time.ts'
@@ -23,7 +24,7 @@ let page = () => {
   })
   let root = document.querySelector('main')!
   cleanup(() => {
-    render(null, root)
+    draw(null, root)()
     if (width) Object.defineProperty(globalThis, 'innerWidth', width)
     else delete (globalThis as { innerWidth?: unknown }).innerWidth
     if (height) Object.defineProperty(globalThis, 'innerHeight', height)
@@ -84,10 +85,11 @@ test('a rendered date says its age and reveals the full timestamp in a kit toolt
 test('mounted dates share a ticking clock and stop it when the last date leaves', async () => {
   let { root } = page()
   let time = clock(Date.parse(at) + 60_000)
-  render(
+  let hide = draw(
     h('div', null, h(Time, { at, clock: time }), h(Time, { at, clock: time })),
     root,
   )
+  await Promise.resolve()
   equal([...root.querySelectorAll('time')].map((x) => x.textContent), [
     '1 minute ago',
     '1 minute ago',
@@ -99,14 +101,15 @@ test('mounted dates share a ticking clock and stop it when the last date leaves'
     '2 minutes ago',
     '2 minutes ago',
   ])
-  render(null, root)
+  hide()
   equal(time.pending(), 0)
 })
 
 test('a mounted duration counts up every second', async () => {
   let { root } = page()
   let time = clock(Date.parse(at) + 192_000)
-  render(h(Time, { at, clock: time, lasting: true }), root)
+  draw(h(Time, { at, clock: time, lasting: true }), root)
+  await Promise.resolve()
   equal(root.textContent, '3m 12s')
   await time.advance(1_000)
   await Promise.resolve()

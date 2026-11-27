@@ -1,7 +1,7 @@
 /**
  * An `Edit`'s state, read live from the page's graph and changed there, and
  * the person's draft of its value, read and kept through the host's drafts.
- * One watch per graph; each instance's row is its own computed, so opening
+ * One watch per graph; each instance reads its own row of it, so opening
  * one repaints it and whoever reads that one, nothing else. An `Edit` is open
  * while its state says so, or while the value has a draft that says
  * something else, so a draft typed anywhere shows wherever the value does.
@@ -9,36 +9,27 @@
  * @module
  */
 
-import { computed, type ReadonlySignal, signal } from '@preact/signals'
-import { useMemo } from 'preact/hooks'
+import { useStore } from '@yaks/ui/store'
+import { useMemo } from 'react'
 import type { Front } from './host.ts'
-import { useHost, useOwner } from './host.ts'
+import { useDraft, useHost, useOwner } from './host.ts'
 import { at, place, put, type Row, source } from './state.ts'
 
-type Rows = (eid: string) => ReadonlySignal<Row | undefined>
+type Edits = {
+  read: () => ReturnType<Front['watch']>['value']
+  subscribe: (wake: () => void) => () => void
+}
 
-let held = new WeakMap<Front, Rows>()
+let held = new WeakMap<Front, Edits>()
 
-// The rows of one graph, one computed per instance, made once.
-let rowsOf = (front: Front): Rows => {
-  let rows = held.get(front)
-  if (rows) return rows
+// The `Edit` rows of one graph, watched once.
+let editsOf = (front: Front): Edits => {
+  let edits = held.get(front)
+  if (edits) return edits
   let seen = front.watch('.Edit')
-  let all = signal(seen.value)
-  seen.subscribe((now) => all.value = now)
-  let each = new Map<string, ReadonlySignal<Row | undefined>>()
-  rows = (eid) => {
-    let r = each.get(eid)
-    if (!r) {
-      r = computed(() =>
-        all.value.find((b) => b.entity.eid == eid)?.Edit as Row | undefined
-      )
-      each.set(eid, r)
-    }
-    return r
-  }
-  held.set(front, rows)
-  return rows
+  edits = { read: () => seen.value, subscribe: (wake) => seen.subscribe(wake) }
+  held.set(front, edits)
+  return edits
 }
 
 /** One `Edit`, as its owner and the component itself hold it: its eid, its
@@ -95,8 +86,11 @@ export let useEdit = (
       search: (query: string) => set({ query }),
     }
   }, [front, drafts, me, where])
-  let row = rowsOf(front)(me).value
-  let text = drafts.text(where)
+  let edits = editsOf(front)
+  let read = () =>
+    edits.read().find((b) => b.entity.eid == me)?.Edit as Row | undefined
+  let row = useStore(edits.subscribe, read)
+  let text = useDraft(where, drafts)
   let open = !!row?.open || (!!text && text != source(value))
   return { at: me, row, place: where, text, open, ...acts }
 }

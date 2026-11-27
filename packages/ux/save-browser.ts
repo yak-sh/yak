@@ -4,8 +4,8 @@
  * the writes go out behind it, one save after another. A field's draft stays
  * until its write is answered, and a write that fails puts its fields back
  * to unsaved, saying why. */
-import { batch, effect, untracked } from '@preact/signals'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { createRoot } from 'react-dom/client'
 import { Save } from './Save.ts'
 import { result } from '@yaks/ui/interaction'
 
@@ -27,6 +27,9 @@ export type SaveOptions = {
     text: (place: string) => string
     type: (place: string, text: string) => void
     spend?: (place: string) => Promise<boolean>
+    /** Run `fn` now and again whenever a text it read changes (@yaks/ux
+     * `Drafts`). */
+    follow: (fn: () => void) => () => void
   }
   /** Save the captured body, after the page already shows it saved; a
    * rejection puts its fields back to pending, and a string it resolves to is
@@ -169,6 +172,18 @@ export let bindSave = (
     labels.push(label)
   }
   let message = '', done = '', closed = false
+  let face = createRoot(mount)
+  // Drafts this binding keeps from the fields it reads are already what
+  // those fields show: a change it makes itself is not put back on them.
+  let own = false
+  let keeping = (fn: () => void) => {
+    own = true
+    try {
+      fn()
+    } finally {
+      own = false
+    }
+  }
   let fading: ReturnType<typeof setTimeout> | undefined
   let say = (text: string) => {
     clearTimeout(fading)
@@ -191,7 +206,7 @@ export let bindSave = (
       field.classList.toggle('Save_Field-changed', pending)
       field.toggleAttribute('data-changed', pending)
     }
-    render(
+    face.render(
       h(Save, {
         count: count(),
         message,
@@ -199,7 +214,6 @@ export let bindSave = (
         onSave: save,
         onDiscard: discard,
       }),
-      mount,
     )
   }
   let keep = (g: Group) => {
@@ -214,7 +228,7 @@ export let bindSave = (
   }
   let discard = () => {
     message = ''
-    batch(() => {
+    keeping(() => {
       for (let g of groups) {
         put(g.controls, shown(g))
         keep(g)
@@ -256,7 +270,7 @@ export let bindSave = (
           unsend(sends.slice(i))
           throw error
         }
-        batch(() => {
+        keeping(() => {
           for (let { g, value } of fields) {
             g.before = value
             if (g.sent && same(g.sent, value)) g.sent = undefined
@@ -314,7 +328,7 @@ export let bindSave = (
   let input = () => {
     message = ''
     say('')
-    batch(() => {
+    keeping(() => {
       for (let g of groups) keep(g)
     })
     draw()
@@ -331,21 +345,21 @@ export let bindSave = (
     form.addEventListener('change', input)
     form.addEventListener('submit', submit)
   }
-  let stop = effect(() => {
-    for (let g of groups) {
+  let stop = opts.drafts.follow(() => {
+    let texts = groups.map((g) => opts.drafts.text(g.place))
+    if (own) return
+    for (let [i, g] of groups.entries()) {
       try {
-        let draft = draftOf(opts.drafts.text(g.place))
+        let draft = draftOf(texts[i])
         put(g.controls, draft?.value ?? shown(g))
       } catch (error) {
         report(error)
       }
     }
     draw()
-    untracked(() => {
-      for (let form of forms) {
-        form.dispatchEvent(new doc.defaultView!.Event('save-restored'))
-      }
-    })
+    for (let form of forms) {
+      form.dispatchEvent(new doc.defaultView!.Event('save-restored'))
+    }
   })
   let Observer = doc.defaultView?.MutationObserver
   let observer = Observer && new Observer(draw)
@@ -378,7 +392,7 @@ export let bindSave = (
       }
       for (let face of tagged) face.classList.remove('Save_Label')
       for (let label of labels) label.replaceWith(...label.childNodes)
-      render(null, mount)
+      face.unmount()
       mount.remove()
     },
   }

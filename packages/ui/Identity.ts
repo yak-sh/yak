@@ -1,6 +1,6 @@
 /** An image or initial, a name and a short description. @module */
 import type { Sheet } from '@yaks/tui/theme'
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 import { block, el, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 

@@ -1,6 +1,6 @@
 /** The guide uses the page's composition: installed kits, UX specimens and
  * skin coverage, rather than an inventory private to the base package. */
-import { h, type VNode } from 'preact'
+import { createElement as h, type ReactElement } from 'react'
 import { Catalog } from './Catalog.ts'
 import type { Props } from './el.ts'
 import { Gallery } from './Gallery.ts'
@@ -77,7 +77,7 @@ let { Figure, Caption, Stage } = Gallery
 /** One entry, including whether the skin names this part. */
 export let Specimens = (
   { name, composition: c = composition }: Dressed & { name: string },
-): VNode => {
+): ReactElement => {
   let part = entries(c)[name]
   if (!part) throw new Error(`unknown guide entry: ${name}`)
   let uiName = part.part ?? (!part.title ? name : undefined)
@@ -103,7 +103,7 @@ let Group = (
     name: string
     only?: string[]
   },
-): VNode =>
+): ReactElement =>
   h(
     Catalog.Group,
     { id: name },
@@ -126,7 +126,7 @@ export let Worn = (
   { parts: only, composition: c = composition }: Dressed & {
     parts: string[]
   },
-): VNode =>
+): ReactElement =>
   h(
     Catalog,
     {},
@@ -136,7 +136,9 @@ export let Worn = (
   )
 
 /** The same composition as the page being checked. */
-export let Guide = ({ composition: c = composition }: Dressed = {}): VNode =>
+export let Guide = (
+  { composition: c = composition }: Dressed = {},
+): ReactElement =>
   h(
     Catalog,
     { id: title },
@@ -156,7 +158,7 @@ export let Guide = ({ composition: c = composition }: Dressed = {}): VNode =>
   )
 export let Page = (
   { stop, composition: c = composition }: Dressed & { stop: string },
-): VNode<{ composition: Composition }> | VNode =>
+): ReactElement<{ composition: Composition }> | ReactElement =>
   stop == title ? h(Guide, { composition: c }) : h(
     Catalog,
     {},
@@ -168,7 +170,7 @@ export let Contents = (
   { entry, composition: c = composition }: Dressed & {
     entry: (stop: string) => Props
   },
-): VNode =>
+): ReactElement =>
   h(
     Index,
     {},

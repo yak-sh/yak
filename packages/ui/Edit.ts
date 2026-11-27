@@ -10,7 +10,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { block, el, type Part } from './el.ts'
 import { Field } from './Field.ts'
 import type { Colors, Specimen } from './theme.ts'
@@ -40,7 +40,7 @@ export let specimens = (): Specimen[] => [
   ],
   [
     'Edit, text',
-    h(Field, { class: 'Edit', placeholder: 'e.g. Inbox', value: 'Inbox' }),
+    h(Field, { className: 'Edit', placeholder: 'e.g. Inbox', value: 'Inbox' }),
   ],
   [
     'Edit, a choice',

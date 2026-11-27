@@ -5,17 +5,20 @@
  * @module
  */
 
-import { computed, type ReadonlySignal, signal } from '@preact/signals'
+import { useStore } from '@yaks/ui/store'
 import {
-  type ComponentChildren,
+  createElement as h,
   Fragment,
   type FunctionComponent,
-  h,
-  type VNode,
-} from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+  type ReactElement,
+  type ReactNode,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+} from 'react'
 import type { Bundle } from '@yaks/graph'
 import { Choices, Field as Input } from '@yaks/ui/parts'
+import type { Drafts as HostDrafts } from './host.ts'
 import type { Result } from './completion-state.ts'
 import {
   type Act,
@@ -45,16 +48,13 @@ export type Anchor = { current: HTMLInputElement | HTMLTextAreaElement | null }
 
 /** Where the list of candidates floats: around it, the field it belongs to. */
 export type Float = FunctionComponent<
-  { anchor: Anchor; children?: ComponentChildren }
+  { anchor: Anchor; children?: ReactNode }
 >
 
 /** A person's drafts, by the place they type in: what is typed there ('' for
- * nothing, read reactively), and kept as it is typed. @yaks/draft's `desk`
- * is one. */
-export type Drafts = {
-  text: (place: string) => string
-  type: (place: string, text: string) => void
-}
+ * nothing), kept as it is typed, and followed as it changes (host.ts
+ * `Drafts`). @yaks/draft's `desk` is one. */
+export type Drafts = Pick<HostDrafts, 'text' | 'type' | 'follow'>
 
 /** What the host supplies; the domain owns completion, the host owns drafts. */
 export type Opts = {
@@ -79,6 +79,7 @@ export type FieldProps = {
   lines?: boolean
   /** @yaks/ui `Field` variants */
   mod?: string
+  className?: string
   class?: string
   /** the text a field starts with when nothing is typed in it yet */
   initial?: string
@@ -105,9 +106,9 @@ export type Controller = {
   bind: (id: string, el: HTMLInputElement | HTMLTextAreaElement) => () => void
   /** Release the controller's graph subscription when its host closes. */
   dispose: () => void
-  /** a field's row, read reactively */
+  /** a field's row */
   row: (id: string) => Row | undefined
-  /** what is typed in a field, read reactively */
+  /** what is typed in a field */
   text: (id: string) => string
   /** the person typed: the text, the caret, and what can come next there */
   type: (id: string, text: string, caret?: number) => void
@@ -133,32 +134,46 @@ let modified = (e: KeyboardEvent) =>
 /** Bind completion to a front-end graph and to what its host knows. */
 export let completion = (front: Front, opts: Opts): Controller => {
   let { Float = Inline, component = 'Completion' } = opts
-  // One watch for every field; each field's row is its own computed, so a
+  // One watch for every field; each field reads its own row of it, so a
   // keystroke repaints the field it landed in and whoever reads that one.
   // Choices and carets stay on this interface even on a connected graph.
   let seen = front.watch(`.${component}`, { remote: false })
-  let rows = signal(seen.value)
-  let off = seen.subscribe((all) => rows.value = all)
-  let dispose = () => {
-    off()
-    seen.close?.()
-  }
-  let held = new Map<string, ReadonlySignal<Row | undefined>>()
+  let dispose = () => seen.close?.()
   // A field's row: what is typed (its draft) over its state component, and none
   // while it has neither.
-  let rowOf = (id: string, f?: Bundle) => {
-    let text = opts.drafts.text(id)
+  let rowOf = (id: string, f?: Bundle, text = opts.drafts.text(id)) => {
     let at = f?.[component] as Omit<Row, 'text'> | undefined
     return at || text ? { ...placed(text), ...at, text } : undefined
   }
+  // The row as it stands, the same object until its state or its draft
+  // changes.
+  let drawn = new Map<string, { f?: Bundle; text: string; row?: Row }>()
   let live = (id: string) => {
-    let r = held.get(id)
-    if (!r) {
-      r = computed(() => rowOf(id, rows.value.find((b) => b.entity.eid == id)))
-      held.set(id, r)
-    }
-    return r
+    let f = seen.value.find((b) => b.entity.eid == id)
+    let text = opts.drafts.text(id)
+    let was = drawn.get(id)
+    if (was && was.f === f && was.text === text) return was.row
+    let row = rowOf(id, f, text)
+    drawn.set(id, { f, text, row })
+    return row
   }
+  // Wake `fn` whenever a field's state or draft may have changed.
+  let follow = (id: string, fn: () => void) => {
+    let off = seen.subscribe(() => fn())
+    let unfollow = opts.drafts.follow?.(() => {
+      opts.drafts.text(id)
+      fn()
+    })
+    return () => {
+      off()
+      unfollow?.()
+    }
+  }
+  let useLive = (id: string) =>
+    useStore(
+      useCallback((wake: () => void) => follow(id, wake), [id]),
+      () => live(id),
+    )
   let now = (id: string) => rowOf(id, front.ent(id))
   let write = (id: string, { text, ...at }: Partial<Row>) => {
     if (text != null) opts.drafts.type(id, text)
@@ -277,7 +292,7 @@ export let completion = (front: Front, opts: Opts): Controller => {
     )
 
   let List = ({ id, anchor }: { id: string; anchor: Anchor }) => {
-    let r = live(id).value
+    let r = useLive(id)
     return r?.cands.length ? h(ChoicesList, { id, r, anchor }) : null
   }
 
@@ -303,7 +318,11 @@ export let completion = (front: Front, opts: Opts): Controller => {
     for (let event of ['click', 'select', 'keyup']) {
       el.addEventListener(event, selected)
     }
-    let off = live(id).subscribe((row) => {
+    let last: Row | undefined | null = null
+    let off = follow(id, () => {
+      let row = live(id)
+      if (row === last) return
+      last = row
       let r = row ?? placed('')
       let changed = el.value != r.text
       if (changed) el.value = r.text
@@ -324,7 +343,7 @@ export let completion = (front: Front, opts: Opts): Controller => {
     }
   }
 
-  let Field = (p: FieldProps): VNode => {
+  let Field = (p: FieldProps): ReactElement => {
     let own = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
     let box = p.elRef ?? own
     useLayoutEffect(() => {
@@ -337,7 +356,7 @@ export let completion = (front: Front, opts: Opts): Controller => {
       el.setSelectionRange(caret, caret)
       if (p.focus) el.focus()
     }, [p.id])
-    let r = live(p.id).value
+    let r = useLive(p.id)
     let text = r?.text ?? p.initial ?? ''
     return h(
       Fragment,
@@ -346,7 +365,7 @@ export let completion = (front: Front, opts: Opts): Controller => {
         elRef: box,
         lines: p.lines,
         mod: p.mod,
-        class: p.class,
+        className: p.className ?? p.class,
         placeholder: p.placeholder ?? 'Type to search…',
         'aria-label': p['aria-label'],
         value: text,
@@ -382,8 +401,8 @@ export let completion = (front: Front, opts: Opts): Controller => {
     List,
     bind,
     dispose,
-    row: (id) => live(id).value,
-    text: (id) => live(id).value?.text ?? '',
+    row: live,
+    text: (id) => live(id)?.text ?? '',
     type,
     set,
     move,

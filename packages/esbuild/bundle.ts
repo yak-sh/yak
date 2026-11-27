@@ -36,6 +36,10 @@ export type Options = {
   ) => string | undefined
   /** A package import read from another of the build's files, by path. */
   alias?: (specifier: string, importer: string) => string | undefined
+  /** Bare package imports redirected before external and package resolution. */
+  packages?: Readonly<Record<string, string>>
+  /** The package supplying automatic JSX for an app's source. */
+  jsxImportSource?: string
   /** The expression a package module's `import.meta.url` becomes, asked
    * with the path of a module that reads it, or none to leave it. */
   moved?: (path: string) => string | undefined
@@ -227,7 +231,7 @@ let loader = (path: string): esbuild.Loader =>
 
 let virtual = (
   files: Source,
-  { external, alias, moved, node = false }: Options,
+  { external, alias, packages, moved, node = false }: Options,
 ): esbuild.Plugin => ({
   name: 'virtual-fs',
   setup(build) {
@@ -241,6 +245,7 @@ let virtual = (
       ({ kind, path, resolveDir, importer: name, with: attributes }) => {
         let importer = plain(files, name)
         if (kind == 'entry-point') return found(path)
+        path = packages?.[path] ?? path
         let other = alias?.(path, importer)
         if (other) return found(other)
         let url = external?.(path, importer, attributes)
@@ -337,6 +342,9 @@ let built = async (
     format: 'esm',
     platform: node ? 'node' : 'browser',
     target: 'es2022',
+    ...options.jsxImportSource
+      ? { jsx: 'automatic' as const, jsxImportSource: options.jsxImportSource }
+      : {},
     minify,
     plugins: [virtual(files, options)],
     ...typeof entry == 'string'

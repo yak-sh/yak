@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { print } from '@yaks/tui/print'
 // deno-lint-ignore no-control-regex -- read the terminal's words

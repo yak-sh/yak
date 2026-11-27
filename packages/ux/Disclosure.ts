@@ -5,7 +5,7 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { More, State } from '@yaks/ui/parts'
@@ -33,17 +33,18 @@ export type Disclosed = {
 
 /** State and presentation supplied by the disclosure's consumer. */
 export type DisclosureProps = Disclosed & {
-  summary: ComponentChildren
+  summary: ReactNode
   /** its summary's own attributes: a `class`, a `data-` name to find it by */
   summaryProps?: Record<string, unknown>
   /** the fold's look: `quiet` for a step, `on` running, `no` failed */
   mod?: string | (string | false | null | undefined)[]
+  className?: string
   class?: string
   /** what it holds is drawn only while open, for content that asks for
    * rows; closed, it holds only `Loading…`, which a page that holds the
    * server's drawing shows as it opens until what it fetches replaces it */
   lazy?: boolean
-  children?: ComponentChildren
+  children?: ReactNode
 }
 
 // The id of what a disclosure holds, which its summary and marks control.
@@ -66,15 +67,25 @@ export let Loading = (): JSX.Element =>
 /** Open as its state says; what it holds is drawn whether open or not, so a
  * page drawn on a server opens it with no script, unless it is `lazy`. */
 export let Disclosure = (
-  { e, onChange, summary, summaryProps, mod, class: extra, lazy, children }:
-    DisclosureProps,
+  {
+    e,
+    onChange,
+    summary,
+    summaryProps,
+    mod,
+    className,
+    class: named,
+    lazy,
+    children,
+  }: DisclosureProps,
 ): JSX.Element => {
   let open = isOpen(e)
   return h(
     More,
     {
       mod,
-      class: extra,
+      className,
+      class: named,
       open,
       ...e ? { 'data-disclosure': e.entity.eid } : {},
       // what a page holding the server's drawing asks for before it opens
@@ -97,7 +108,7 @@ export let Disclosure = (
  * same state, its own words in `children`. */
 export let DisclosureMark = (
   { e, onChange, children, ...props }: Disclosed & {
-    children?: ComponentChildren
+    children?: ReactNode
     [attribute: string]: unknown
   },
 ): JSX.Element =>

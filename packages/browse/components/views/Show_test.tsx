@@ -6,6 +6,7 @@
 import { test, tick, until } from '../../testing.ts'
 import { test as preparedTest } from '@yaks/testing'
 import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { assert, assertEquals, assertExists } from '@std/assert'
 import {
@@ -541,18 +542,20 @@ let typedOver = await (async () => {
       doc: { eid: 'doc', title: 'Typed', body: 'The body text' },
     },
   }
-  let { root, free } = mount(h(Entity, { eid: 'doc', view: 'Full' }))
+  let mounted!: ReturnType<typeof mount>
+  await act(() => {
+    mounted = mount(h(Entity, { eid: 'doc', view: 'Full' }))
+  })
+  let { root, free } = mounted
   let { Event } = root.ownerDocument.defaultView!
   let dbl = (el: Element | null) =>
     el?.dispatchEvent(new Event('dblclick', { bubbles: true }))
   let typed = (at: string) =>
     !!root.querySelector(`${at} .Edit`)?.hasAttribute('contenteditable')
   try {
-    dbl(root.querySelector('.Show_Title .Edit'))
-    await tick()
+    await act(() => void dbl(root.querySelector('.Show_Title .Edit')))
     let title = typed('.Show_Title')
-    dbl(root.querySelector('.Show_Body'))
-    await tick()
+    await act(() => void dbl(root.querySelector('.Show_Body')))
     return { title, body: typed('.Show_Body') }
   } finally {
     free()
@@ -943,9 +946,8 @@ test('the status pip picks a status through its Edit and writes marks', async ()
   }
   let root = document.querySelector('main')!
   try {
-    render(h(Ux, { host: ux }, h(Pip, { e: ent(eid) })), root)
-    root.querySelector<HTMLElement>('.Show_Pip')!.click()
-    await tick()
+    await act(() => render(h(Ux, { host: ux }, h(Pip, { e: ent(eid) })), root))
+    await act(() => root.querySelector<HTMLElement>('.Show_Pip')!.click())
     let tabs = [...document.querySelectorAll<HTMLElement>('.Prop_Tab')]
     assertEquals(
       tabs.length,

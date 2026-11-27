@@ -1,7 +1,8 @@
 // Rows put in order by dragging, on a page: a row dragged over the list marks
 // where it would land, and dropped there it is put there; a list that puts
 // nothing in order is a plain one.
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { equal, lend, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'

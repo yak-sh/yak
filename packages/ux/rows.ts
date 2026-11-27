@@ -6,20 +6,18 @@
  * @module
  */
 
-import { useEffect, useMemo, useState } from 'preact/hooks'
+import { useStore } from '@yaks/ui/store'
+import { useCallback, useEffect, useMemo } from 'react'
 import type { Bundle } from '@yaks/graph'
 import type { Front } from './host.ts'
 
 /** What `query` answers in `front` now, and again each time it changes. */
 export let useRows = (front: Front, query: string): Bundle[] => {
   let watch = useMemo(() => front.watch(query), [front, query])
-  let [, drew] = useState(0)
-  useEffect(() => {
-    let off = watch.subscribe(() => drew((n) => n + 1))
-    return () => {
-      off()
-      watch.close?.()
-    }
-  }, [watch])
-  return watch.value
+  useEffect(() => () => watch.close?.(), [watch])
+  let subscribe = useCallback(
+    (wake: () => void) => watch.subscribe(wake),
+    [watch],
+  )
+  return useStore(subscribe, () => watch.value)
 }

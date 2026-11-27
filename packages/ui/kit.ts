@@ -94,7 +94,7 @@ import { linen } from './linen.ts'
 import { paper } from './paper.ts'
 import { pencil } from './pencil.ts'
 import { rosepine } from './rosepine.ts'
-import { Fragment } from 'preact'
+import { Fragment } from 'react'
 import { text } from '@yaks/api/asset'
 import {
   beside,

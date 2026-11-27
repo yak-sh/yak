@@ -51,12 +51,12 @@
     "./relative": "./relative.ts",
     "./lucide": "./lucide.d.ts",
     "./*.css": "./*.css",
-    "./interaction": "./interaction.ts"
+    "./interaction": "./interaction.ts",
+    "./store": "./store.ts"
   },
   "license": "Apache-2.0",
-  "description": "Preact parts with semantic variants, CSS and terminal sheet entries; compose kits with themes and skins, and inspect their specimens in the style guide.",
+  "description": "UI parts with semantic variants, CSS and terminal sheet entries; compose kits with themes and skins, and inspect their specimens in the style guide.",
   "dependencies": {
-    "@preact/signals": "2.9.4",
     "@yaks/api": "0.2.29",
     "@yaks/markdown": "0.2.30",
     "@yaks/render": "0.2.24",
@@ -67,6 +67,12 @@
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/testing": "0.2.30"
+    "@yaks/testing": "0.2.30",
+    "react": "npm:@preact/compat@18.3.2",
+    "react-dom": "npm:@preact/compat@18.3.2"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0",
+    "react-dom": "^18.3.0 || ^19.0.0"
   }
 }

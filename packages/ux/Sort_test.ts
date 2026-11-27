@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { render } from 'preact-render-to-string'
 import { Table } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'

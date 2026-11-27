@@ -14,7 +14,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h, toChildArray } from 'preact'
+import { Children, createElement as h } from 'react'
 import { block, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { marked } from './Match.ts'
@@ -36,7 +36,7 @@ export let Passage: Part & Record<'By' | 'Title' | 'Who' | 'Text', Part> =
       h(
         Line,
         p,
-        toChildArray(children).flatMap((kid, i) =>
+        Children.toArray(children).flatMap((kid, i) =>
           i ? [h(Sep, { key: `sep${i}` }, '·'), kid] : [kid]
         ),
       ),

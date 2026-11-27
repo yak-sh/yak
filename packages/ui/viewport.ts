@@ -1,14 +1,20 @@
 /** The scrolling body primitive: browser overflow or a terminal window. Each
  * `id` starts scrolled to `start`, such as where a page was left, and
  * `onScroll` hears where a person moves it. */
-import { type ComponentChildren, type FunctionComponent, h } from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import {
+  createElement as h,
+  type FunctionComponent,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+} from 'react'
 export type ViewportProps = {
   id: string
   start?: number
   onScroll?: (top: number) => void
+  className?: string
   class?: string
-  children?: ComponentChildren
+  children?: ReactNode
 }
 // A page returned to may draw its rows after it mounts, so the browser's body
 // reaches for its start as they arrive, until it gets there, a person scrolls

@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { Field, Form } from '@yaks/ui/parts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { Save } from './Save.ts'

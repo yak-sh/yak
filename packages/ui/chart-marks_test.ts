@@ -1,6 +1,6 @@
 // What a chart draws, and what it hands the page's listener.
 import { equal, test } from '@yaks/testing'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { columns, kept, points, said, sparkline } from './chart-marks.ts'
 

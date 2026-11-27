@@ -72,6 +72,9 @@ export type Drafts = {
   /** Restore text from another source, preserving subsequent typing.
    * `over` is the source text already imported (default: empty). */
   restore: (place: string, text: string, over?: string) => void
+  /** Run `fn` now and again whenever a text or place it read changes, until
+   * the returned function is called. */
+  follow: (fn: () => void) => () => void
 }
 
 /** A desk can tell a recovery source when it can release its own copy. */
@@ -425,6 +428,7 @@ export let desk = (
         local: merge(over, text, h.local),
         stuck: false,
       })),
+    follow: (fn) => effect(fn),
     close: () => {
       closed = true
       stop()

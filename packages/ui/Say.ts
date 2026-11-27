@@ -8,7 +8,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { Button } from './Button.ts'
@@ -44,7 +44,7 @@ export let specimens = (): Specimen[] => [
       {},
       h(
         'select',
-        { class: 'Edit Edit-fit' },
+        { className: 'Edit Edit-fit' },
         h('option', { value: 'requires' }, 'requires'),
       ),
       h(Field, { value: '', placeholder: 'to (an id: T-12)' }),

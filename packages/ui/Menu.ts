@@ -9,7 +9,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h, type JSX } from 'preact'
+import { createElement as h, type HTMLAttributes } from 'react'
 import { Surface } from './Surface.ts'
 import { block, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
@@ -85,7 +85,7 @@ export let specimens = (): Specimen[] => [
     'Menu-below',
     h(
       'div',
-      { style: 'padding-bottom:4rem' } as JSX.HTMLAttributes<HTMLDivElement>,
+      { style: 'padding-bottom:4rem' } as HTMLAttributes<HTMLDivElement>,
       h(
         Menu.Fold,
         { open: true },
@@ -100,7 +100,7 @@ export let specimens = (): Specimen[] => [
       'div',
       {
         style: 'display:flex;justify-content:flex-end;padding-bottom:6rem',
-      } as JSX.HTMLAttributes<HTMLDivElement>,
+      } as HTMLAttributes<HTMLDivElement>,
       h(
         Menu.Fold,
         { open: true },

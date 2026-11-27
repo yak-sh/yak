@@ -88,6 +88,7 @@ export let commandField = (
     restore: (place, text, over) => {
       if (!closed) active.value?.restore(place, text, over)
     },
+    follow: (fn) => effect(fn),
   }
   let fields = completion({
     watch: local.watch,

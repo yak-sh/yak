@@ -2,7 +2,8 @@ import { tick, until } from '@yaks/testing'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { type ComponentChild, h, options, render } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
+import { options, render } from 'preact'
 import { client } from '@yaks/client'
 import { desk, draftDoc, drafts } from '@yaks/draft'
 import { mint } from '@yaks/graph'
@@ -129,12 +130,11 @@ let page = (more: Partial<Host> = {}) => {
     asked,
     fire,
     $,
-    draw: (node: ComponentChild) => render(h(Ux, { host }, node), root),
+    draw: (node: ReactNode) => render(h(Ux, { host }, node), root),
     // Take the tree off the page as a browser does, blurring what is typed in
     // as it goes.
     drop: () => {
-      root.querySelector('[contenteditable]')
-        ?.dispatchEvent(new window.Event('blur'))
+      root.querySelector<HTMLElement>('[contenteditable]')?.blur()
       render(null, root)
     },
     // Type over a value in place: its text, then the key that ends it.

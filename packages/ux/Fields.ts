@@ -1,6 +1,6 @@
 /** Controlled fields and repeat groups, composed from the UI kit's controls.
  * The caller supplies visible fields, values and validation feedback. @module */
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { Button, Card, Check, Field, Form, Notice } from '@yaks/ui/parts'
 import { named, type Path, valueAt, type Values } from './field-values.ts'
 
@@ -54,7 +54,7 @@ export let Fields = (
         : [' ', h(Form.Optional, {}, '(optional)')],
     )
   }
-  let after = (a: FieldSpec): ComponentChildren => [
+  let after = (a: FieldSpec): ReactNode => [
     a.hint ? h(Form.Hint, {}, a.hint) : null,
     owed.has(named(a.path))
       ? h(Notice, { mod: 'negative' }, 'This one needs an answer.')
@@ -267,5 +267,5 @@ export let Fields = (
     }
   }
 
-  return h('div', { class: 'Fields' }, fields.map(draw))
+  return h('div', { className: 'Fields' }, fields.map(draw))
 }

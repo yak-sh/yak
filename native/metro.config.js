@@ -52,6 +52,14 @@ config.resolver.resolveRequest = (context, name, platform) => {
   if (hosted[name]) return { type: 'sourceFile', filePath: hosted[name] }
   let file = exported(name)
   if (file) return { type: 'sourceFile', filePath: file }
+  if (context.originModulePath.startsWith(path.join(repo, 'packages') + '/')) {
+    let compat = {
+      react: 'preact/compat',
+      'react-dom': 'preact/compat',
+      'react/jsx-runtime': 'preact/jsx-runtime',
+    }
+    name = compat[name] ?? name
+  }
   if (own.some((p) => name == p || name.startsWith(p + '/'))) {
     return context.resolveRequest(
       { ...context, originModulePath: here },

@@ -14,7 +14,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h, type VNode } from 'preact'
+import { createElement as h, type ReactElement } from 'react'
 import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
@@ -44,6 +44,7 @@ export type Drawn = {
   from?: string
   on?: string
   label?: string
+  className?: string
   class?: string
 }
 
@@ -67,11 +68,11 @@ let list = (entries: Entry[], on?: string) =>
 /** The contents of a page, drawn from its sections. */
 export let contents = (
   { entries = [], from, on, label = 'On this page', ...at }: Drawn,
-): VNode =>
+): ReactElement =>
   h(
     Contents,
     {
-      class: at.class,
+      className: at.className ?? at.class,
       'aria-label': label,
       'data-contents': from ?? '',
       hidden: from && !entries.length ? true : undefined,

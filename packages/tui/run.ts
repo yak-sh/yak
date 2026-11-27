@@ -16,7 +16,8 @@ import * as system from '@yaks/process/system'
  */
 
 import { resolvers } from '@yaks/fp'
-import { type ComponentType, h, render } from 'preact'
+import { type ComponentType, h } from 'preact'
+import { draw } from '@yaks/preact/draw'
 import { useEffect } from 'preact/hooks'
 import { type Hold, listen, wind } from '@yaks/process/wind'
 import { install, onPaint, place, touch } from '@yaks/dom'
@@ -104,7 +105,8 @@ export let run = async (
       tmux: opts.tmux ?? !!system.env.get('TMUX'),
     })
   let screen = opts.screen ?? install()
-  let host = screen.root as unknown as Parameters<typeof render>[1]
+  let host = screen.root as unknown as Element
+  let hide: (() => void) | undefined
   let cancelRead: (() => Promise<void>) | undefined
   let done = false
   // The terminal's hold on the process: the input loop ends once the
@@ -160,7 +162,7 @@ export let run = async (
   let bye = () => {
     clearTimeout(escapeTimer)
     painted = []
-    attempt(() => render(null, host))
+    attempt(() => hide?.())
     onPaint(() => {})
     clearMouse()
     clear()
@@ -184,7 +186,7 @@ export let run = async (
       measured(frame.metrics)
       place(painted, frame.hidden)
     })
-    render(h(App, {}), host)
+    hide = draw(h(App, {}), host)
 
     let keys = feed((body) => backend.control?.(body))
     let dispatch = (events: ReturnType<typeof keys>) => {

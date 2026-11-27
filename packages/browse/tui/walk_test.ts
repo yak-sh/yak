@@ -4,8 +4,9 @@ import './doc.ts'
 import { until } from '../testing.ts'
 import '../domain-host.tsx'
 import { equal, ok, test } from '@yaks/testing'
-import { h, render } from 'preact'
+import { h } from 'preact'
 import { act } from 'preact/test-utils'
+import { draw } from '@yaks/preact/draw'
 import { doc, onPaint, TElement } from '@yaks/tui'
 import { interaction } from '@yaks/tui/interaction'
 import { terminalHistory } from '@yaks/tui/history'
@@ -28,7 +29,7 @@ let two = 'bbbbbbbb-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 // the cursor, and where H went.
 let walked = await (async () => {
   let root = new TElement('root')
-  let target = root as unknown as Parameters<typeof render>[1]
+  let target = root as unknown as Element
   let port = terminalHistory({ path: '/', state: null })
   let before = config.host, fetcher = globalThis.fetch
   config.host = 'walk.test'
@@ -57,10 +58,11 @@ let walked = await (async () => {
     )
   let cursor = () => root.querySelector('[data-cursor]')
   let box = () => cursor()?.getBoundingClientRect()
+  let hide = draw(
+    h(Ux, { host: { ...ux, Float: undefined } }, h(App, {})),
+    target,
+  )
   try {
-    await act(() =>
-      render(h(Ux, { host: { ...ux, Float: undefined } }, h(App, {})), target)
-    )
     await until(() => root.textContent.includes('assignee'))
     paint(root)
     onPaint(() => paint(root)) // as a running terminal paints every change
@@ -103,7 +105,7 @@ let walked = await (async () => {
     }
   } finally {
     onPaint(() => {})
-    render(null, target)
+    hide()
     server.free()
     cache.value = {}
     config.host = before

@@ -6,6 +6,7 @@ import { querySearch } from '@yaks/query'
 // where it shows on a click, with nothing on it to drag; a new document
 // written into a list; and a skill's instructions.
 import { h, render } from 'preact'
+import { act as flush } from 'preact/test-utils'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { equal, lend, ok, test } from '@yaks/testing'
@@ -227,7 +228,9 @@ let mounted = async (
   let root = document.querySelector('main')!
   let front = page()
   try {
-    render(tree(eid, view, '', front, host(front, wrote)), root)
+    await flush(() =>
+      render(tree(eid, view, '', front, host(front, wrote)), root)
+    )
     await settle()
     let did = await act(root)
     await settle()

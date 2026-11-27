@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { everforest } from './everforest.ts'
 import { stops } from './guide.ts'
 import { kit } from './kit.ts'

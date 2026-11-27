@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { Copy } from './Copy.ts'
 import { kit, skins, stylesheet } from './kit.ts'

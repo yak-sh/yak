@@ -5,8 +5,8 @@
  * its `mod` prop adds variants, `<Dot mod='ring' />` rendering
  * `<span class="Dot Dot-ring">`. `block()` hangs a block's elements on it.
  *
- * A part is paint. Everything a caller passes besides `mod`, `class`, `elRef`,
- * `href` and `as` (a style, a handler, `draggable`, `type`) lands on the
+ * A part is paint. Everything a caller passes besides `mod`, `className` (or
+ * `class`), `elRef`, `href` and `as` (a style, a handler, `draggable`, `type`) lands on the
  * element as given; what a click on it means is the caller's business. `as`
  * names the element where the page's outline wants another than the part's
  * own: a card's title as an `h3` under the page's `h2`, a card as an `li` of
@@ -32,13 +32,14 @@
  */
 
 import {
-  type ComponentChildren,
   type Context,
   createContext,
+  createElement as h,
   type FunctionComponent,
-  h,
-} from 'preact'
-import { useContext, useMemo } from 'preact/hooks'
+  type ReactNode,
+  useContext,
+  useMemo,
+} from 'react'
 import { away } from '@yaks/markdown/away'
 import { Site } from '@yaks/markdown/site'
 
@@ -49,6 +50,8 @@ export type Props = {
   /** variants, each adding `Base-variant` to the class; falsy ones drop */
   mod?: Mod | Mod[]
   /** more classes, after the part's own */
+  className?: string
+  /** more classes, as HTML names them: `className` too */
   class?: string
   /** the element itself, as `ref` would give it (a function component
    * cannot forward `ref`) */
@@ -58,7 +61,7 @@ export type Props = {
   /** the element to render, where the page's outline wants another, or a
    * part to draw this one as */
   as?: string | Part
-  children?: ComponentChildren
+  children?: ReactNode
   [x: string]: unknown
 }
 
@@ -99,7 +102,10 @@ export let el = <P extends Props = Props>(
   tag: string | FunctionComponent<P>,
   base: string,
 ): FunctionComponent<P> =>
-({ mod, class: extra, elRef, children, href, as, ...props }: Props) => {
+(
+  { mod, className, class: named, elRef, children, href, as, ...props }: Props,
+) => {
+  let extra = [className, named].filter(Boolean).join(' ') || undefined
   let d = drawn(tag as string | Part, as)
   // Drawn as another part, which makes the element and its link. Whether
   // a part is drawn so is fixed where it is written, so hooks keep order.
@@ -108,7 +114,7 @@ export let el = <P extends Props = Props>(
     return h(d.look, {
       ...props,
       as: d.tag,
-      class: names,
+      className: names,
       elRef,
       href,
       children,
@@ -122,7 +128,7 @@ export let el = <P extends Props = Props>(
     ...a.href ? away({ ...props, href: a.href }, site) : props,
     ...(a.demote && { role: 'link', tabIndex: 0, 'data-href': a.demote }),
     ref: elRef,
-    class: classes(base, mod, extra),
+    className: classes(base, mod, extra),
     ...(children !== undefined && { children }),
   })
   // One value per href: a fresh object each render would wake every nested

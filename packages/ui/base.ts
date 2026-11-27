@@ -11,7 +11,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { Colors, Specimen } from './theme.ts'
 
 /** What it is, in a line. */
@@ -49,7 +49,7 @@ export let sheet = (c: Colors): Sheet => ({
 
 // Syntax, as highlight.js marks it up.
 let hl = (kind: string, text: string) =>
-  h('span', { class: `hljs-${kind}` }, text)
+  h('span', { className: `hljs-${kind}` }, text)
 
 /** Prose, as the defaults dress it. */
 export let specimens = (): Specimen[] => [

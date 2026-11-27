@@ -6,6 +6,8 @@
  * page; `q` outside a field quits. */
 import * as preact from 'preact'
 import * as hooks from 'preact/hooks'
+import * as react from 'react'
+import * as jsx from 'react/jsx-runtime'
 import * as ui from '@yaks/ui'
 import { h } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
@@ -26,6 +28,8 @@ import {
 export let carried: Carried = {
   preact,
   'preact/hooks': hooks,
+  react,
+  'react/jsx-runtime': jsx,
   '@yaks/ui': ui,
 }
 

@@ -16,11 +16,17 @@
  * @module
  */
 
-import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
+import {
+  createElement as h,
+  Fragment,
+  type JSX,
+  type ReactNode,
+  useContext,
+  useRef,
+} from 'react'
 import { define, type Registry, resolve } from '@yaks/render'
 import type { ComponentRenderer } from '@yaks/preact'
 import { parse } from '@yaks/query'
-import { useContext, useRef } from 'preact/hooks'
 import { Prop as Frame, Surround } from '@yaks/ui/parts'
 import { type Bundle, type Host, useHost } from './host.ts'
 import { emit, type OnChange } from './emit.ts'
@@ -48,7 +54,7 @@ export type ControlProps = {
   onChange?: OnChange
   edit: Editing
   anchor: { current: HTMLElement | null }
-  face?: ComponentChildren
+  face?: ReactNode
   side?: 'above' | 'below'
 }
 type Control = (p: ControlProps) => JSX.Element
@@ -361,7 +367,7 @@ export type ControlOwnProps = {
 /** A property's control alone, anchored where its caller says, drawn while
  * its `Edit` state is open. The status pip opens one: a derived enum its
  * caller turns into marks, with the same picker as every other enum. */
-let Control = (p: ControlOwnProps): ComponentChildren => {
+let Control = (p: ControlOwnProps): ReactNode => {
   let host = useHost()
   let edit = useEdit(p.e.entity.eid, p.comp, p.prop, {
     at: p.at,

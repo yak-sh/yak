@@ -1,7 +1,7 @@
 /** An embedded page with its address and a choice of views. @module */
 import type { Sheet } from '@yaks/tui/theme'
 import { Check } from './Check.ts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 

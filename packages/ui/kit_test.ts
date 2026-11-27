@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { print } from '@yaks/tui/print'
 import { compose } from '@yaks/tui/theme'
-import { h, type VNode } from 'preact'
+import { createElement as h, type ReactElement } from 'react'
 import { Dot } from './Dot.ts'
 import { everforest } from './everforest.ts'
 import { kits } from './kit.ts'
@@ -83,7 +83,7 @@ for (
 test('a terminal menu paints button items as rows separated by a rule', () => {
   // A menu's items are rows, as in a browser, though each is a button.
   let { Item, Rule } = Menu
-  let menu: VNode = h(
+  let menu: ReactElement = h(
     Menu,
     {},
     h(Item, {}, 'open'),

@@ -118,6 +118,7 @@ test('seed does not load an unused catalog and preserves ordinary npm asks', () 
   assertEquals(seed(input, catalog), {
     files: input,
     dependencies: { preact: '^10' },
+    jsxImportSource: 'preact',
     platform: {},
     assets: {},
     notes: [],

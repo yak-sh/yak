@@ -1,7 +1,7 @@
-import { signal } from '@preact/signals'
 import { pageRow } from '@yaks/platform/connections-page'
 import { equal, test } from '@yaks/testing'
 import { bindSave } from '@yaks/ux/save'
+import { heldDrafts } from '@yaks/ux'
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
 import { desk } from './desk-pages.ts'
@@ -12,13 +12,8 @@ import { offered } from './speech.ts'
 import { KEY } from '@yaks/connections'
 
 let drafts = () => {
-  let texts = signal<Record<string, string>>({})
-  return {
-    text: (place: string) => texts.value[place] ?? '',
-    type: (place: string, text: string) => {
-      texts.value = { ...texts.value, [place]: text }
-    },
-  }
+  let { text, type, follow } = heldDrafts()
+  return { text, type, follow }
 }
 
 let editing = async (

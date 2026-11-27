@@ -13,14 +13,16 @@
  * @module
  */
 
+import { useStore } from '@yaks/ui/store'
 import {
-  type ComponentChildren,
   createContext,
+  createElement as h,
   type FunctionComponent,
-  h,
   type JSX,
-} from 'preact'
-import { useContext } from 'preact/hooks'
+  type ReactNode,
+  useCallback,
+  useContext,
+} from 'react'
 import type { Bundle } from '@yaks/graph'
 import type { FieldProps } from './completion.ts'
 import type { EditOptions } from '@yaks/render'
@@ -42,18 +44,16 @@ export type Front = {
 }
 
 /** A person's drafts, by the place they type in: what is typed there and not
- * yet sent ('' for nothing, read reactively), kept as it is typed, and
- * emptied once it is sent or discarded. Where they are kept is the host's
- * choice; @yaks/draft's `desk` keeps them in the graph, synced to every
- * interface the person uses. */
+ * yet sent ('' for nothing), kept as it is typed, and emptied once it is sent
+ * or discarded. Where they are kept is the host's choice; @yaks/draft's `desk`
+ * keeps them in the graph, synced to every interface the person uses. */
 export type Drafts = {
   text: (place: string) => string
   type: (place: string, text: string) => void
   spend: (place: string) => void
   /** Run `fn` now and again whenever a text it read changes, until the
-   * returned function is called: how a component follows a desk whose
-   * signals its Preact does not track, such as a yaks app's
-   * `./api/client.js` `drafts()`, bundled apart from the page. */
+   * returned function is called: how a component draws again as a draft
+   * changes (`useDraft`). */
   follow?: (fn: () => void) => () => void
 }
 
@@ -62,7 +62,7 @@ export type Drafts = {
 export type Float = FunctionComponent<{
   anchor: { current: HTMLElement | null }
   side?: 'above' | 'below'
-  children?: ComponentChildren
+  children?: ReactNode
 }>
 
 /** What a page supplies. */
@@ -101,14 +101,14 @@ export type Host = {
    * them a query is typed as text */
   fields?: { Filter: FunctionComponent<FieldProps> }
   /** inline markdown, drawn: a value shown `inline` at rest */
-  markup?: (text: string) => ComponentChildren
+  markup?: (text: string) => ReactNode
   /** prose as its reader reads it (@yaks/markdown `drawn`): what a property
    * declaring `prose` (@yaks/vocab) is typed over, so a person edits `T-12`
    * where the store holds its eid, and the store swaps it back on the write;
    * without it, the text as stored */
   prose?: (text: string) => string
   /** what a choice wears beside its word: a status's dot */
-  wears?: (comp: string, prop: string, value: string) => ComponentChildren
+  wears?: (comp: string, prop: string, value: string) => ReactNode
   /** where a popout floats; without it, in the flow */
   Float?: Float
 }
@@ -128,7 +128,7 @@ export let Ux = (
   { host, at, children }: {
     host?: Host
     at?: string
-    children?: ComponentChildren
+    children?: ReactNode
   },
 ): JSX.Element => {
   let up = useContext(Given)
@@ -158,4 +158,51 @@ export let useDrafts = (drafts?: Drafts): Drafts => {
   let found = drafts ?? host?.drafts
   if (!found) throw new Error('@yaks/ux: supply drafts or wrap the tree in Ux')
   return found
+}
+
+/** What `read` answers of `drafts`, read again whenever a text it read
+ * changes. `deps` are what `read` closes over. */
+export let useFollowed = <T>(
+  drafts: Pick<Drafts, 'follow'>,
+  read: () => T,
+  deps: unknown[],
+): T => {
+  let subscribe = useCallback(
+    (wake: () => void) =>
+      drafts.follow?.(() => {
+        read()
+        wake()
+      }) ?? (() => {}),
+    [drafts, ...deps],
+  )
+  return useStore(subscribe, read)
+}
+
+/** What is typed at `place` in `drafts` (the host's, unless given), drawn
+ * again as it changes. */
+export let useDraft = (place: string, drafts?: Drafts): string => {
+  let d = useDrafts(drafts)
+  return useFollowed(d, () => d.text(place), [place])
+}
+
+/** Drafts held in this page's memory and lost with it: a specimen's, a
+ * test's. A page a person types in keeps theirs in a desk (@yaks/draft). */
+export let heldDrafts = (): Drafts & Required<Pick<Drafts, 'follow'>> => {
+  let texts = new Map<string, string>()
+  let followers = new Set<() => void>()
+  let set = (place: string, text: string) => {
+    if ((texts.get(place) ?? '') == text) return
+    texts.set(place, text)
+    for (let fn of [...followers]) fn()
+  }
+  return {
+    text: (place) => texts.get(place) ?? '',
+    type: set,
+    spend: (place) => set(place, ''),
+    follow: (fn) => {
+      followers.add(fn)
+      fn()
+      return () => void followers.delete(fn)
+    },
+  }
 }

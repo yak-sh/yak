@@ -9,7 +9,7 @@
 
 import { Time } from './Time.ts'
 import type { Sheet } from '@yaks/tui/theme'
-import { h, toChildArray } from 'preact'
+import { Children, createElement as h } from 'react'
 import { block, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
@@ -29,7 +29,7 @@ export let Quote: Part & Record<'Text' | 'By' | 'Note', Part> = Object
       h(
         Line,
         p,
-        toChildArray(children).flatMap((kid, i) =>
+        Children.toArray(children).flatMap((kid, i) =>
           i ? [h(Sep, { key: `sep${i}` }, '·'), kid] : [kid]
         ),
       ),

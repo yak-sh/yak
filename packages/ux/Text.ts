@@ -11,8 +11,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { createElement as h, type JSX, useLayoutEffect, useRef } from 'react'
 import { Edit as Span } from '@yaks/ui/parts'
 import { type Bundle, useHost } from './host.ts'
 import { emit, type OnChange } from './emit.ts'

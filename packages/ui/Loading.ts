@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { Sheet } from '@yaks/tui/theme'
 import { Dot } from './Dot.ts'
 import { el, type Part } from './el.ts'

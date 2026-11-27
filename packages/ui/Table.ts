@@ -37,7 +37,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 import { block, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { Value } from './Value.ts'
@@ -105,7 +105,7 @@ export let Table:
             children,
             h(
               'span',
-              { class: 'Table_Direction', 'aria-hidden': true },
+              { className: 'Table_Direction', 'aria-hidden': true },
               arrow(p.mod),
             ),
           ),

@@ -1,7 +1,8 @@
 {
   "entries": [
     ".",
-    "./host"
+    "./host",
+    "./draw"
   ],
   "compilerOptions": {
     "lib": [

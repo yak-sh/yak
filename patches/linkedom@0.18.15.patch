@@ -1,3 +1,35 @@
+diff --git a/cjs/html/element.js b/cjs/html/element.js
+index 408535e4068a29aa807ddc92f44d59973842e541..2e2d8ae45673ce8abd0bb1d57269308ce8286676 100644
+--- a/cjs/html/element.js
++++ b/cjs/html/element.js
+@@ -70,7 +70,10 @@ class HTMLElement extends Element {
+   offsetWidth
+   */
+ 
+-  blur() { this.dispatchEvent(new Event('blur')); }
++  blur() {
++    this.dispatchEvent(new Event('blur'));
++    this.dispatchEvent(new Event('focusout', {bubbles: true}));
++  }
+   click() {
+     const clickEvent = new Event('click', {bubbles: true, cancelable: true});
+     clickEvent.button = 0;
+diff --git a/cjs/interface/element.js b/cjs/interface/element.js
+index 5d513d6afd3f53ada6cc4ec8c8ffd4c2e207144f..d71e702b30560eb8a0afc2dbaf8a551125c3e38d 100644
+--- a/cjs/interface/element.js
++++ b/cjs/interface/element.js
+@@ -223,7 +223,10 @@ class Element extends ParentNode {
+     return new Proxy(attributes, attributesHandler);
+   }
+ 
+-  focus() { this.dispatchEvent(new Event('focus')); }
++  focus() {
++    this.dispatchEvent(new Event('focus'));
++    this.dispatchEvent(new Event('focusin', {bubbles: true}));
++  }
+ 
+   getAttribute(name) {
+     if (name === 'class')
 diff --git a/cjs/interface/event-target.js b/cjs/interface/event-target.js
 index 450b3d6331e1fe138defa8168a28458908e69d39..a1658893452358d7450497cfefa017af388d8fa3 100644
 --- a/cjs/interface/event-target.js
@@ -11,6 +43,54 @@ index 450b3d6331e1fe138defa8168a28458908e69d39..a1658893452358d7450497cfefa017af
    else
      listener.handleEvent(event);
    return event._stopImmediatePropagationFlag;
+diff --git a/cjs/interface/node.js b/cjs/interface/node.js
+index a8b1cbd6e3903c40b163bcfe6e3ab2095c103ac2..a3f148c19551efdd329d6748e37a1496021127e5 100644
+--- a/cjs/interface/node.js
++++ b/cjs/interface/node.js
+@@ -133,6 +133,11 @@ class Node extends EventTarget {
+   toString() { return ''; }
+   /* c8 ignore stop */
+ 
++  // Its properties link the whole document, so showing them never ends.
++  // Inspection shows the markup instead.
++  [Symbol.for('Deno.customInspect')]() { return this.toString(); }
++  [Symbol.for('nodejs.util.inspect.custom')]() { return this.toString(); }
++
+   hasChildNodes() { return !!this.lastChild; }
+   isSameNode(node) { return this === node; }
+ 
+diff --git a/esm/html/element.js b/esm/html/element.js
+index b3201f82cb70feab79c4a21cff68e26701cd8f89..5a176b82cd029679522209eb90e646fadcbd7031 100644
+--- a/esm/html/element.js
++++ b/esm/html/element.js
+@@ -69,7 +69,10 @@ export class HTMLElement extends Element {
+   offsetWidth
+   */
+ 
+-  blur() { this.dispatchEvent(new Event('blur')); }
++  blur() {
++    this.dispatchEvent(new Event('blur'));
++    this.dispatchEvent(new Event('focusout', {bubbles: true}));
++  }
+   click() {
+     const clickEvent = new Event('click', {bubbles: true, cancelable: true});
+     clickEvent.button = 0;
+diff --git a/esm/interface/element.js b/esm/interface/element.js
+index c98f5f7dde4ca256411c0b204f4608f316c26461..da15a46d7f059a1e7ed0949d97e42eb66a7cea92 100644
+--- a/esm/interface/element.js
++++ b/esm/interface/element.js
+@@ -225,7 +225,10 @@ export class Element extends ParentNode {
+     return new Proxy(attributes, attributesHandler);
+   }
+ 
+-  focus() { this.dispatchEvent(new Event('focus')); }
++  focus() {
++    this.dispatchEvent(new Event('focus'));
++    this.dispatchEvent(new Event('focusin', {bubbles: true}));
++  }
+ 
+   getAttribute(name) {
+     if (name === 'class')
 diff --git a/esm/interface/event-target.js b/esm/interface/event-target.js
 index edffded19e2af9c11d91795e1a6c2625665330d5..0b90cdaf23200c750779a93bef0432aac7e93d35 100644
 --- a/esm/interface/event-target.js
@@ -24,8 +104,24 @@ index edffded19e2af9c11d91795e1a6c2625665330d5..0b90cdaf23200c750779a93bef0432aa
    else
      listener.handleEvent(event);
    return event._stopImmediatePropagationFlag;
+diff --git a/esm/interface/node.js b/esm/interface/node.js
+index 46161e8bfbf4ab80ee4b09622ea2730f1bd3f7f2..5e78e58806a6c1e20da513f1fc34ba8e0a3427ae 100644
+--- a/esm/interface/node.js
++++ b/esm/interface/node.js
+@@ -132,6 +132,11 @@ export class Node extends EventTarget {
+   toString() { return ''; }
+   /* c8 ignore stop */
+ 
++  // Its properties link the whole document, so showing them never ends.
++  // Inspection shows the markup instead.
++  [Symbol.for('Deno.customInspect')]() { return this.toString(); }
++  [Symbol.for('nodejs.util.inspect.custom')]() { return this.toString(); }
++
+   hasChildNodes() { return !!this.lastChild; }
+   isSameNode(node) { return this === node; }
+ 
 diff --git a/worker.js b/worker.js
-index fa7dc792b82e558ed5265cbe5b175e7a859264cf..6d4cd62298492338c241b7123fef031c75360e5c 100644
+index fa7dc792b82e558ed5265cbe5b175e7a859264cf..36eda6b9a744d528cf63d50df68891bbc7db5f3b 100644
 --- a/worker.js
 +++ b/worker.js
 @@ -2701,7 +2701,7 @@ const wm = new WeakMap();
@@ -37,37 +133,7 @@ index fa7dc792b82e558ed5265cbe5b175e7a859264cf..6d4cd62298492338c241b7123fef031c
    else
      listener.handleEvent(event);
    return event._stopImmediatePropagationFlag;
-@@ -2903,6 +2903,11 @@
-   toString() { return ''; }
-   /* c8 ignore stop */
- 
-+  // Its properties link the whole document, so showing them never ends.
-+  // Inspection shows the markup instead.
-+  [Symbol.for('Deno.customInspect')]() { return this.toString(); }
-+  [Symbol.for('nodejs.util.inspect.custom')]() { return this.toString(); }
-+
-   hasChildNodes() { return !!this.lastChild; }
-   isSameNode(node) { return this === node; }
- 
-diff --git a/cjs/interface/node.js b/cjs/interface/node.js
---- a/cjs/interface/node.js
-+++ b/cjs/interface/node.js
-@@ -133,6 +133,11 @@
-   toString() { return ''; }
-   /* c8 ignore stop */
- 
-+  // Its properties link the whole document, so showing them never ends.
-+  // Inspection shows the markup instead.
-+  [Symbol.for('Deno.customInspect')]() { return this.toString(); }
-+  [Symbol.for('nodejs.util.inspect.custom')]() { return this.toString(); }
-+
-   hasChildNodes() { return !!this.lastChild; }
-   isSameNode(node) { return this === node; }
- 
-diff --git a/esm/interface/node.js b/esm/interface/node.js
---- a/esm/interface/node.js
-+++ b/esm/interface/node.js
-@@ -132,6 +132,11 @@
+@@ -2903,6 +2903,11 @@ let Node$1 = class Node extends DOMEventTarget {
    toString() { return ''; }
    /* c8 ignore stop */
  

@@ -11,7 +11,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 // @ts-types="./lucide.d.ts"
 import copy from 'lucide/dist/esm/icons/copy.mjs'
 // @ts-types="./lucide.d.ts"
@@ -43,8 +43,8 @@ export let Copy: FunctionComponent<CopyProps> = (
         title: 'Copy',
         ...go,
       },
-      h(Icon, { of: copy, class: 'Copy_Icon' }),
-      h(Icon, { of: check, class: 'Copy_Icon Copy_Icon-done' }),
+      h(Icon, { of: copy, className: 'Copy_Icon' }),
+      h(Icon, { of: check, className: 'Copy_Icon Copy_Icon-done' }),
     ),
   )
 

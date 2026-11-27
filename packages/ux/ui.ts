@@ -3,9 +3,13 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
-import { useEffect, useMemo } from 'preact/hooks'
-import { useSignal } from '@preact/signals'
+import {
+  createElement as h,
+  type JSX,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -20,7 +24,7 @@ import { Text } from './Text.ts'
 import { Save } from './Save.ts'
 import { Sort, sortAt } from './Sort.ts'
 import { Button, Form, Notice, Table, Transcript } from '@yaks/ui/parts'
-import { type Host, Ux } from './host.ts'
+import { heldDrafts, type Host, Ux } from './host.ts'
 import { defineKit, type Kit } from './kit.ts'
 import { uxDoc } from './vocab.ts'
 
@@ -36,15 +40,15 @@ let DisclosureSample = ({ open }: { open: boolean }): JSX.Element => {
     () => client(loadVocab([uxDoc]), [], { vault: false, wireVault: false }),
     [],
   )
-  let row = useSignal<Bundle>({
+  let [row, setRow] = useState<Bundle>({
     entity: { eid: disclosureAt(`guide/${open}`) },
     Disclosure: { open },
   })
   useEffect(() => {
-    front.mutate([row.value])
+    front.mutate([row])
     let watch = front.watch('.Disclosure', { remote: false })
     let off = watch.subscribe((rows) => {
-      if (rows[0]) row.value = rows[0]
+      if (rows[0]) setRow(rows[0])
     })
     return () => {
       off()
@@ -53,7 +57,7 @@ let DisclosureSample = ({ open }: { open: boolean }): JSX.Element => {
     }
   }, [])
   return h(Disclosure, {
-    e: row.value,
+    e: row,
     onChange: (b) => void front.mutate([b]),
     summary: 'Completed',
   }, h('p', {}, 'The village is safe.'))
@@ -66,15 +70,15 @@ let ConversationSample = (): JSX.Element => {
     () => client(loadVocab([uxDoc]), [], { vault: false, wireVault: false }),
     [],
   )
-  let row = useSignal<Bundle>({
+  let [row, setRow] = useState<Bundle>({
     entity: { eid: conversationAt('guide', 'sample') },
     Conversation: { take: 2 },
   })
   useEffect(() => {
-    front.mutate([row.value])
+    front.mutate([row])
     let watch = front.watch('.Conversation', { remote: false })
     let off = watch.subscribe((rows) => {
-      if (rows[0]) row.value = rows[0]
+      if (rows[0]) setRow(rows[0])
     })
     return () => {
       off()
@@ -83,41 +87,36 @@ let ConversationSample = (): JSX.Element => {
     }
   }, [])
   // What is sent from its box joins it, and Stop ends what it is doing.
-  let said = useSignal([
+  let [said, setSaid] = useState(() => [
     h(Transcript.Bubble, {}, 'Can you find the recipe from last week?'),
     h(Transcript.Reply, {}, 'It is the lentil soup, saved on Tuesday.'),
     h(Transcript.Bubble, {}, 'Add it to Sunday.'),
   ])
-  let now = useSignal('Writing…')
-  let typed = useSignal('')
-  let drafts = {
-    text: () => typed.value,
-    type: (_: string, text: string) => void (typed.value = text),
-    spend: () => void (typed.value = ''),
-  }
+  let [now, setNow] = useState('Writing…')
+  let drafts = useMemo(heldDrafts, [])
   return h(
     'div',
     {},
     h(Conversation, {
-      e: row.value,
+      e: row,
       onChange: (b) => void front.mutate([b]),
-      lines: said.value.map((node, i) => ({ id: `sample-${i}`, node })),
-      now: now.value,
+      lines: said.map((node, i) => ({ id: `sample-${i}`, node })),
+      now,
     }),
     h(Conversation.Box, {
       place: 'guide',
       drafts,
       session: 'sample',
-      busy: !!now.value,
+      busy: !!now,
       placeholder: 'Write a message',
       words: (body) => ({ entity: { eid: 'sample' }, content: { body } }),
       onSend: (b) => {
         let body = String((b.content as { body: string }).body)
         if (!body.trim()) return
-        said.value = [...said.value, h(Transcript.Bubble, {}, body)]
-        drafts.spend()
+        setSaid((was) => [...was, h(Transcript.Bubble, {}, body)])
+        drafts.spend('guide')
       },
-      onStop: () => void (now.value = ''),
+      onStop: () => setNow(''),
     }),
   )
 }
@@ -128,13 +127,12 @@ let OrderSample = (): JSX.Element => {
     () => client(loadVocab([uxDoc]), [], { vault: false, wireVault: false }),
     [],
   )
-  let state = useSignal<Bundle>({ entity: { eid: orderAt('guide/order') } })
-  let ids = useSignal(['signal over noise', 'the map', 'the one idea'])
+  let entity = { eid: orderAt('guide/order') }
+  let [state, setState] = useState<Bundle>({ entity })
+  let [ids, setIds] = useState(['signal over noise', 'the map', 'the one idea'])
   useEffect(() => {
     let watch = front.watch('.Order', { remote: false })
-    let off = watch.subscribe((rows) => {
-      state.value = rows[0] ?? { entity: state.value.entity }
-    })
+    let off = watch.subscribe((rows) => setState(rows[0] ?? { entity }))
     return () => {
       off()
       watch.close()
@@ -142,25 +140,26 @@ let OrderSample = (): JSX.Element => {
     }
   }, [])
   return h(Order, {
-    e: state.value,
+    e: state,
     onChange: (b) => void front.mutate([b]),
-    ids: ids.value,
+    ids,
     row: (id) => h('p', {}, id),
-    onPlace: (id, at) => {
-      let rest = ids.value.filter((x) => x != id)
-      ids.value = [...rest.slice(0, at), id, ...rest.slice(at)]
-    },
+    onPlace: (id, at) =>
+      setIds((was) => {
+        let rest = was.filter((x) => x != id)
+        return [...rest.slice(0, at), id, ...rest.slice(at)]
+      }),
   })
 }
 
 let SortSample = (): JSX.Element => {
-  let state = useSignal<Bundle>({ entity: { eid: sortAt('guide/sort') } })
+  let [state, setState] = useState<Bundle>({
+    entity: { eid: sortAt('guide/sort') },
+  })
   let rows = [['Apple', 12], ['Pear', 3], ['Orange', 90]] as [string, number][]
   return h(Sort, {
-    e: state.value,
-    onChange: (b) => {
-      state.value = b
-    },
+    e: state,
+    onChange: setState,
     cols: [null, 'num'],
     heads: ['Name', 'Count'],
     rows: rows.map(([name, n]) => ({
@@ -188,12 +187,12 @@ let controls: FieldSpec[] = [
 
 let SubmitSample = (): JSX.Element => {
   let at = 'guide/submit'
-  let row = useSignal<Bundle>({ entity: { eid: submitAt(at) } })
+  let [row, setRow] = useState<Bundle>({ entity: { eid: submitAt(at) } })
   let props: SubmitProps<object> = {
     at,
     place: at,
-    e: row.value,
-    onChange: (b) => row.value = b,
+    e: row,
+    onChange: setRow,
     read: () => Promise.resolve({}),
     send: () => Promise.resolve(undefined),
     render: ({ state, change, send }) =>
@@ -229,7 +228,6 @@ let SubmitSample = (): JSX.Element => {
 let Sample = (
   { part }: { part: 'Edit' | 'Text' | 'Submit' },
 ): JSX.Element => {
-  let words = useSignal<Record<string, string>>({})
   let front = useMemo(
     () => client(loadVocab([uxDoc]), [], { vault: false, wireVault: false }),
     [],
@@ -238,11 +236,7 @@ let Sample = (
     return {
       vocab: loadVocab([domain]),
       front,
-      drafts: {
-        text: (place) => words.value[place] ?? '',
-        type: (place, text) => words.value = { ...words.value, [place]: text },
-        spend: (place) => words.value = { ...words.value, [place]: '' },
-      },
+      drafts: heldDrafts(),
       write: () => {},
       name: (eid) => eid,
       id: (e) => e.entity.eid,

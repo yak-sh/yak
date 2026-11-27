@@ -2,7 +2,7 @@
  * full timestamp in a kit tooltip.
  * @module
  */
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 import type { Clock } from '@yaks/fp'
 import { useNow } from './clock.ts'
 import type { H } from '@yaks/render'
@@ -30,6 +30,7 @@ export let time = <N>(
     timeZone,
     clock: _clock,
     title: _title,
+    className,
     ...props
   }: TimeProps,
 ): N | null => {
@@ -38,7 +39,7 @@ export let time = <N>(
   return at && full
     ? h('time', {
       ...props,
-      class: ['Time', props.class].filter(Boolean).join(' '),
+      class: ['Time', className, props.class].filter(Boolean).join(' '),
       datetime: at,
       'data-zone': timeZone,
       tabindex: props.tabindex ?? 0,

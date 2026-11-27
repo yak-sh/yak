@@ -108,7 +108,12 @@ export let within = <F>(
 
 // What a draft is on the server, which draws the box before the page knows
 // what the person has typed.
-let unwritten: Drafts = { text: () => '', type: () => {}, spend: () => {} }
+let unwritten: Drafts = {
+  text: () => '',
+  type: () => {},
+  spend: () => {},
+  follow: () => () => {},
+}
 
 /** The box, as the server and the page both draw it. */
 export let Ask = (

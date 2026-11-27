@@ -1,8 +1,8 @@
 // A form over a desk whose changes this page's Preact cannot see (a yaks
 // app's client.js drafts, bundled apart): a draft typed in another tab, or
 // restored once the person is known, still draws.
-import { h, render } from 'preact'
-import { useState } from 'preact/hooks'
+import { createElement as h, useState } from 'react'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { equal, lend, test } from '@yaks/testing'

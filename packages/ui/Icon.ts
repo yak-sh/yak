@@ -8,7 +8,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 import type { IconNode } from 'lucide'
 // @ts-types="./lucide.d.ts"
 import plug from 'lucide/dist/esm/icons/plug.mjs'

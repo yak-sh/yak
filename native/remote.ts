@@ -4,7 +4,15 @@
 // ones the shell's in-memory DOM is rendered by.
 import * as preact from 'preact'
 import * as hooks from 'preact/hooks'
+import * as react from 'preact/compat'
+import * as jsx from 'preact/jsx-runtime'
 import * as ui from '@yaks/ui'
 import type { Carried } from '@yaks/native/remote'
 
-export let carried: Carried = { preact, 'preact/hooks': hooks, '@yaks/ui': ui }
+export let carried: Carried = {
+  preact,
+  'preact/hooks': hooks,
+  react,
+  'react/jsx-runtime': jsx,
+  '@yaks/ui': ui,
+}

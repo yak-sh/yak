@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { heldDrafts } from './host.ts'
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { bindSave, type SaveOptions } from './save-browser.ts'
@@ -21,15 +21,8 @@ let markup = `<html><body><main>
 </main></body></html>`
 
 let stash = () => {
-  let values = signal<Record<string, string>>({})
-  return {
-    text: (place: string) => values.value[place] ?? '',
-    type: (place: string, text: string) => {
-      if ((values.peek()[place] ?? '') != text) {
-        values.value = { ...values.peek(), [place]: text }
-      }
-    },
-  }
+  let { text, type, follow } = heldDrafts()
+  return { text, type, follow }
 }
 
 let page = (

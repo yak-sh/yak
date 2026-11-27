@@ -1,0 +1,68 @@
+diff --git a/client.d.ts b/client.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..74d63fa37ced49c7505af797fd425de83b23eb02
+--- /dev/null
++++ b/client.d.ts
+@@ -0,0 +1 @@
++export * from 'preact/compat/client'
+diff --git a/index.d.ts b/index.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..6c4ddebb8f2ece2189b43ada69907da4d17c0da2
+--- /dev/null
++++ b/index.d.ts
+@@ -0,0 +1,2 @@
++import React = require('preact/compat')
++export = React
+diff --git a/jsx-dev-runtime.d.ts b/jsx-dev-runtime.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..5a1dd2de0b4fd65dd0a895786b31e0fba66fe05c
+--- /dev/null
++++ b/jsx-dev-runtime.d.ts
+@@ -0,0 +1 @@
++export * from 'preact/jsx-runtime'
+diff --git a/jsx-runtime.d.ts b/jsx-runtime.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..5a1dd2de0b4fd65dd0a895786b31e0fba66fe05c
+--- /dev/null
++++ b/jsx-runtime.d.ts
+@@ -0,0 +1 @@
++export * from 'preact/jsx-runtime'
+diff --git a/package.json b/package.json
+index eb0730ca1d0565d3e87b5576d82a88aeceb9a684..7dbd3acb40926ad7bc17c45fa92276ba13c80b20 100644
+--- a/package.json
++++ b/package.json
+@@ -7,6 +7,7 @@
+   "module": "./index.mjs",
+   "exports": {
+     ".": {
++      "types": "./index.d.ts",
+       "module": "./index.mjs",
+       "import": "./index.mjs",
+       "require": "./index.js"
+@@ -27,15 +28,18 @@
+       "require": "./server.js"
+     },
+     "./client": {
++      "types": "./client.d.ts",
+       "import": "./client.mjs",
+       "require": "./client.js"
+     },
+     "./jsx-dev-runtime": {
++      "types": "./jsx-dev-runtime.d.ts",
+       "module": "./jsx-dev-runtime.mjs",
+       "import": "./jsx-dev-runtime.mjs",
+       "require": "./jsx-dev-runtime.js"
+     },
+     "./jsx-runtime": {
++      "types": "./jsx-runtime.d.ts",
+       "module": "./jsx-runtime.mjs",
+       "import": "./jsx-runtime.mjs",
+       "require": "./jsx-runtime.js"
+@@ -51,5 +55,6 @@
+   },
+   "devDependencies": {
+     "preact": "^10.5.15"
+-  }
++  },
++  "types": "./index.d.ts"
+ }

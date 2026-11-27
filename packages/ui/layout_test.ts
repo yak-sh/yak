@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertStringIncludes } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { print } from '@yaks/tui/print'
 import { everforest, kits, rosepine, sheet, stylesheet } from './mod.ts'

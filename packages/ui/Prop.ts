@@ -12,7 +12,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 import { Field, type FieldProps } from './Field.ts'
 import { block, el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'

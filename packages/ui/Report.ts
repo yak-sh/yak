@@ -11,7 +11,7 @@
 
 import { Time } from './Time.ts'
 import type { Sheet } from '@yaks/tui/theme'
-import { h, type VNode } from 'preact'
+import { createElement as h, type ReactElement } from 'react'
 import { Card } from './Card.ts'
 import { Columns } from './Chart.ts'
 import { block, type Part } from './el.ts'
@@ -98,7 +98,7 @@ export let specimens = (): Specimen[] => [
       h(
         Plot,
         {},
-        h(Columns, week) as VNode,
+        h(Columns, week) as ReactElement,
         h(
           Span,
           {},

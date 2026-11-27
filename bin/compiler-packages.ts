@@ -7,7 +7,7 @@ import { parse } from 'es-module-lexer/js'
 import { resolve as named } from 'resolve.exports'
 import type ts from 'typescript'
 import { glob, stat } from 'node:fs/promises'
-import type { Catalog } from '../packages/esbuild/platform.ts'
+import type { Catalog, Renderer } from '../packages/esbuild/platform.ts'
 import { COMPILER, toolkits } from '../packages/esbuild/plan.ts'
 import { members as workspace } from '@yaks/cli/dependencies'
 
@@ -15,6 +15,8 @@ type Manifest = {
   name?: string
   exports?: string | Record<string, string>
   dependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+  yaksRenderer?: Renderer
   workspaces?: string[]
 }
 type Member = {
@@ -197,7 +199,8 @@ export let catalog = async (
       if (imp.n == null) continue
       let spec = imp.n
       let target = spec
-      let dependency = member.manifest.dependencies?.[packageOf(spec)]
+      let dependency = member.manifest.dependencies?.[packageOf(spec)] ??
+        member.manifest.peerDependencies?.[packageOf(spec)]
       if (target.startsWith('@yaks/')) {
         member.dependencies[exported(target)] = 'platform'
       } else if (local(target)) {
@@ -254,11 +257,13 @@ export let catalog = async (
     })
     let files = ordered(member.files)
     let resources = ordered({ ...member.resources, ...generated[name] })
+    let renderer = member.manifest.yaksRenderer
     out[name] = {
       files,
       resources,
       dependencies,
-      version: await digest(JSON.stringify({ files, resources })),
+      ...(renderer && { renderer }),
+      version: await digest(JSON.stringify({ files, resources, renderer })),
     }
   }
   return ordered(out)

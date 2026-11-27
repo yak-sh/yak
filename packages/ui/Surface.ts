@@ -1,6 +1,6 @@
 /** Shared painting primitives. Compose a part from one of these to inherit
  * its skin's surface, edge and interaction without knowing that skin. */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import type { Sheet } from '@yaks/tui/theme'

@@ -18,9 +18,8 @@
     "./image-fallback": "./image-fallback.ts"
   },
   "license": "Apache-2.0",
-  "description": "Controlled Preact components for editing, navigation, fields and submissions. Page state lives in graph bundles; durable drafts belong to the host.",
+  "description": "Controlled components for editing, navigation, fields and submissions. Page state lives in graph bundles; durable drafts belong to the host.",
   "dependencies": {
-    "@preact/signals": "2.9.4",
     "@yaks/client": "0.2.24",
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.33",
@@ -38,6 +37,12 @@
     "@yaks/testing": "0.2.30",
     "@yaks/tui": "0.2.24",
     "linkedom": "^0.18.12",
-    "preact-render-to-string": "6.7.0"
+    "preact-render-to-string": "6.7.0",
+    "react": "npm:@preact/compat@18.3.2",
+    "react-dom": "npm:@preact/compat@18.3.2"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0",
+    "react-dom": "^18.3.0 || ^19.0.0"
   }
 }

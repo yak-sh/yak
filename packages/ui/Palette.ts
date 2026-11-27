@@ -1,5 +1,5 @@
 /** A searchable overlay: paint only; its caller owns the query and choices. */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { block, type Part } from './el.ts'
 import { Field } from './Field.ts'
 import { Value } from './Value.ts'

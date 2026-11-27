@@ -1,5 +1,5 @@
 /** Controlled pending changes; persistence and writes belong to the host. */
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { Button, type Props, Save as Paint } from '@yaks/ui/parts'
 
 export type SaveProps = {
@@ -16,7 +16,7 @@ export type SaveProps = {
 
 export type SaveFieldProps = Props & {
   changed: boolean
-  children?: ComponentChildren
+  children?: ReactNode
 }
 
 let Field = (

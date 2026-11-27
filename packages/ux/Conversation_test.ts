@@ -6,8 +6,9 @@ import { client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { desk, merge } from '@yaks/draft'
-import type { Drafts } from './host.ts'
-import { h, hydrate, render } from 'preact'
+import { type Drafts, heldDrafts } from './host.ts'
+import { createElement as h } from 'react'
+import { hydrate, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
@@ -28,7 +29,6 @@ import {
   useFold,
   VIEWPORT,
 } from './Conversation.ts'
-import { signal } from '@preact/signals'
 import { docs } from './vocab.ts'
 
 let lines = (n: number, from = 0): Line[] =>
@@ -459,8 +459,8 @@ test("a mark opens and closes its fold, on the server's line as on one drawn aga
   equal(p.mark().getAttribute('aria-expanded'), 'false')
 })
 
-// A box on a linkedom page, its words kept in drafts held in a signal, as a
-// host's are, and what it emits kept.
+// A box on a linkedom page, its words kept in drafts held in memory, and
+// what it emits kept.
 let boxed = (given?: Drafts) => {
   let { document, Event } = parseHTML(
     '<html><body><div id="box"></div></body></html>',
@@ -470,29 +470,24 @@ let boxed = (given?: Drafts) => {
     value: document,
     configurable: true,
   })
-  let texts = signal<Record<string, string>>({})
-  let drafts = given ?? {
-    text: (place: string) => texts.value[place] ?? '',
-    type: (place: string, text: string) =>
-      void (texts.value = { ...texts.value, [place]: text }),
-    spend: (place: string) =>
-      void (texts.value = { ...texts.value, [place]: '' }),
-  }
+  let drafts = given ?? heldDrafts()
   let sent: Bundle[] = [], stops: Bundle[] = []
   let root = document.getElementById('box')!
   let draw = (more: Record<string, unknown> = {}) =>
-    render(
-      h(Conversation.Box, {
-        place: 'talk',
-        drafts,
-        session: 's1',
-        words: (body) => ({ entity: { eid: 'said' }, content: { body } }),
-        onSend: (b) => void sent.push(b),
-        onStop: (b) => void stops.push(b),
-        name: 'say',
-        ...more,
-      }),
-      root,
+    act(() =>
+      render(
+        h(Conversation.Box, {
+          place: 'talk',
+          drafts,
+          session: 's1',
+          words: (body) => ({ entity: { eid: 'said' }, content: { body } }),
+          onSend: (b) => void sent.push(b),
+          onStop: (b) => void stops.push(b),
+          name: 'say',
+          ...more,
+        }),
+        root,
+      )
     )
   draw()
   let field = () => root.querySelector('textarea') as HTMLTextAreaElement

@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { h, type VNode } from 'preact'
+import { createElement as h, type ReactElement } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { block, el } from './el.ts'
 import { Field } from './Field.ts'
@@ -12,7 +12,7 @@ let Dot = el('span', 'Dot')
 let Card = block('div', 'Card', { Head: 'header' })
 
 test('a part wears its block, its variants and extra classes', () => {
-  let cases: [VNode, string][] = [
+  let cases: [ReactElement, string][] = [
     [h(Dot, {}), '<span class="Dot"></span>'],
     [h(Dot, { mod: 'ring' }), '<span class="Dot Dot-ring"></span>'],
     [
@@ -39,7 +39,7 @@ test('a part drawn as another wears both, in its own element', () => {
   let Panel = el('section', 'Tabs_Panel')
   let Copy = block('span', 'Copy', { Go: Button })
   let Report = block(Card, 'Report', { Total: 'p' })
-  let cases: [VNode, string][] = [
+  let cases: [ReactElement, string][] = [
     [
       h(Panel, { as: Card, mod: 'claude' }, 'x'),
       '<section class="Card Tabs_Panel Tabs_Panel-claude">x</section>',
@@ -77,7 +77,7 @@ test('links nest the way HTML allows', () => {
 
 test('a part linking off the page site opens it in a new tab', () => {
   let Id = el('span', 'Id')
-  let on = (node: VNode) =>
+  let on = (node: ReactElement) =>
     html(h(Site.Provider, { value: ['yaks.app'] }, node))
   assertEquals(
     on(h(Id, { href: 'https://discord.com/x' }, 'x')),

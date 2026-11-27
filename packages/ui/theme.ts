@@ -12,7 +12,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import type { ComponentType, JSX } from 'preact'
+import type { ComponentType, JSX } from 'react'
 
 /** A theme's colours, named as its custom properties are (`hues` are
  * `--hue-0` to `--hue-5`). A terminal paints with one palette; where the

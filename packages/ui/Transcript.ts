@@ -11,7 +11,7 @@ import { native as body } from './Body.ts'
  * @module
  */
 import type { Sheet } from '@yaks/tui/theme'
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 import { block, type Part } from './el.ts'
 import { discord, Icon, type IconProps } from './Icon.ts'
 import type { Colors, Native, Specimen } from './theme.ts'

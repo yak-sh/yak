@@ -4,7 +4,7 @@
  * (`Dress`). */
 import type { Route } from '@yaks/api'
 import { bytes } from '@yaks/api/asset'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { Contents, Guide, title } from './guide.ts'
 import { kits, skins, stylesheet, themes } from './kit.ts'

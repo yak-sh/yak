@@ -25,7 +25,13 @@ import { said } from './said.ts'
 import { external, flat, pack, shared, unexported } from './shared.ts'
 import { header, phase, type Report, type Timing } from './timing.ts'
 import { homes } from './home.ts'
-import { type Catalog, located, type Seed, seed } from './platform.ts'
+import {
+  type Catalog,
+  located,
+  packageFor,
+  type Seed,
+  seed,
+} from './platform.ts'
 export type { Catalog, Toolkit } from './platform.ts'
 export { Stopped } from './bundle.ts'
 
@@ -101,7 +107,9 @@ let install = async (
     all,
     (name) =>
       name in setup.platform
-        ? Object.keys(catalog[name].dependencies)
+        ? Object.keys(catalog[name].dependencies).flatMap((spec) =>
+          packageFor(setup, spec) ?? []
+        )
         : needed(name),
   )
   let name = pkg == null ? undefined : JSON.parse(pkg).name
@@ -296,7 +304,11 @@ export let compile = async (
   ) => {
     try {
       locate(at)
-      let { code, warnings } = await bundle(fs, entry, options)
+      let { code, warnings } = await bundle(fs, entry, {
+        packages: setup.aliases,
+        jsxImportSource: setup.jsxImportSource,
+        ...options,
+      })
       answer.errors.push(...checked(entry, code, why))
       answer.notes.push(...warnings.map((w) => `${entry}: ${w}`))
       return code

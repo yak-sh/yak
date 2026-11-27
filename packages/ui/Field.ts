@@ -17,8 +17,13 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { type FunctionComponent, h } from 'preact'
-import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
+import {
+  createElement as h,
+  type FunctionComponent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react'
 import { Surface } from './Surface.ts'
 import { el, type Props } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
@@ -152,10 +157,11 @@ export let drawField = <Node, Child>(
     props: Record<string, unknown>,
     ...children: Child[]
   ) => Node,
-  { lines, choose, class: extra, ...props }: FieldProps,
+  { lines, choose, className, class: named, ...props }: FieldProps,
   ...children: Child[]
-): Node =>
-  draw(
+): Node => {
+  let extra = [className, named].filter(Boolean).join(' ')
+  return draw(
     tagOf(choose, lines),
     {
       ...props,
@@ -163,6 +169,7 @@ export let drawField = <Node, Child>(
     },
     ...children,
   )
+}
 
 /** What it is, in a line. */
 export let description =

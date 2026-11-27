@@ -10,7 +10,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Surface } from './Surface.ts'
 import { Button } from './Button.ts'
 import { block, type Part } from './el.ts'

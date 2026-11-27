@@ -40,6 +40,7 @@ export let drafts: Drafts = {
   type: (place, text) => desked().type(place, text),
   spend: (place, also) => desked().spend(place, also),
   restore: (place, text, over) => desked().restore(place, text, over),
+  follow: (fn) => desked().follow(fn),
 }
 
 type Box = HTMLInputElement | HTMLTextAreaElement

@@ -9,7 +9,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { block, type Part } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 
@@ -35,7 +35,7 @@ export let native = (c: Colors): Native => ({
 })
 
 let check = (
-  words: ComponentChildren,
+  words: ReactNode,
   { type = 'checkbox', checked = false, disabled = false, name = '' } = {},
 ) =>
   h(

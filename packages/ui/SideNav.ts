@@ -15,7 +15,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 // @ts-types="./lucide.d.ts"
 import grid from 'lucide/dist/esm/icons/layout-grid.mjs'
 // @ts-types="./lucide.d.ts"

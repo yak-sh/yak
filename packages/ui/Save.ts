@@ -1,5 +1,5 @@
 /** The viewport's pending changes and the fields they came from. */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { Sheet } from '@yaks/tui/theme'
 import { block, type Part } from './el.ts'
 import { Button } from './Button.ts'

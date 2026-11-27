@@ -5,7 +5,7 @@
  * snippet with.
  *
  * ```ts
- * import { h } from 'preact'
+ * import { createElement as h } from 'react'
  * import { renderToString } from 'preact-render-to-string'
  * import { marked } from './Match.ts'
  * import { equal } from '@yaks/testing'
@@ -21,7 +21,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { type ComponentChild, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
@@ -29,7 +29,7 @@ import type { Colors, Specimen } from './theme.ts'
 export let Match: Part = el('mark', 'Match')
 
 /** `text` with each run between `\x01` and `\x02` a {@link Match}. */
-export let marked = (text: string): ComponentChild[] =>
+export let marked = (text: string): ReactNode[] =>
   text.split('\x01').flatMap((chunk, i) => {
     if (!i) return chunk ? [chunk] : []
     let [found, rest = ''] = chunk.split('\x02')

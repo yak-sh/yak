@@ -2,7 +2,7 @@
  * together. Server-rendered tables use the same transitions through bindSort.
  * @module
  */
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { type Col, Table } from '@yaks/ui/parts'
@@ -10,7 +10,7 @@ import { type Col, Table } from '@yaks/ui/parts'
 /** Numbers include money and timestamps; null values follow known values. */
 export type SortValue = string | number | null
 /** One sortable item, which may draw several related table rows. */
-export type SortRow = { values: SortValue[]; content: ComponentChildren }
+export type SortRow = { values: SortValue[]; content: ReactNode }
 /** The column and direction the reader chose. */
 export type SortState = { column: number; direction: 'asc' | 'desc' }
 /** The page entity for one owner's table. */

@@ -1,6 +1,6 @@
 /** A dialog over the page, holding a card and a link back to what opened it. */
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { block, type Part } from './el.ts'
 import { Card } from './Card.ts'
 import { Button } from './Button.ts'

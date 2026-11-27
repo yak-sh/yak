@@ -30,12 +30,20 @@
  * @module
  */
 
-import { type ComponentChildren, createContext, h, type JSX } from 'preact'
-import { useContext, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import {
+  createContext,
+  createElement as h,
+  type JSX,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Button, Composer, Transcript } from '@yaks/ui/parts'
-import { type Drafts, useDrafts } from './host.ts'
+import { type Drafts, useDraft, useDrafts } from './host.ts'
 import {
   type Disclosed,
   disclosed,
@@ -59,7 +67,7 @@ export let NEAR = 120
 /** A line, by the id it is put under (`#row-<id>`): drawn here (`node`), or
  * as it was drawn elsewhere, the server's page (`html`), kept as it is until
  * it is given drawn. */
-export type Line = { id: string; node?: ComponentChildren; html?: string }
+export type Line = { id: string; node?: ReactNode; html?: string }
 
 /** What a conversation holds of its own. */
 export type Conversing = {
@@ -112,7 +120,7 @@ export type ConversationProps = {
   state?: (eid: string) => Bundle | undefined
   lines: Line[]
   /** what the conversation is doing now, said under its lines */
-  now?: ComponentChildren
+  now?: ReactNode
   /** how many lines came before these, that its owner can bring */
   earlier?: number
   /** what scrolls it: the nearest scrolling place around it, or the page */
@@ -134,7 +142,7 @@ let Held = createContext<Held>({})
  * draws under one, and a line inside a fold (a call's turn) is under one of
  * its own. */
 export let Folds = (
-  { line, children }: { line: string; children?: ComponentChildren },
+  { line, children }: { line: string; children?: ReactNode },
 ): JSX.Element => {
   let up = useContext(Held)
   // How many folds it has drawn, kept while it is: a fold drawn again keeps
@@ -269,18 +277,18 @@ export type BoxProps = {
   /** a send is under way, so Send waits */
   sending?: boolean
   /** what it says under itself */
-  said?: ComponentChildren
+  said?: ReactNode
   /** the field's name, the words in a form posted without script */
   name?: string
   placeholder?: string
   /** its owner's, over the field: who the words go to, files held */
-  top?: ComponentChildren
+  top?: ReactNode
   /** its owner's, along its tools before Stop */
-  tools?: ComponentChildren
+  tools?: ReactNode
   /** its owner's, beside Send */
-  beside?: ComponentChildren
+  beside?: ReactNode
   /** its owner's, in the form before the box */
-  children?: ComponentChildren
+  children?: ReactNode
   /** files pasted or dropped on it, which its owner holds; without it, it
    * takes none */
   onFiles?: (files: File[]) => void
@@ -360,7 +368,7 @@ let Box = (
 ): JSX.Element => {
   let taking = useTaking(onFiles)
   let drafts = useDrafts(supplied)
-  let text = drafts.text(place)
+  let text = useDraft(place, drafts)
   let send = () => void (!sending && onSend(words(drafts.text(place))))
   return h(
     Composer.Form,

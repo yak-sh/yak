@@ -7,7 +7,7 @@
  */
 import { Form } from './Form.ts'
 import type { Sheet } from '@yaks/tui/theme'
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 import { block, el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { Button } from './Button.ts'

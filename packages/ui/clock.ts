@@ -2,21 +2,24 @@
  * each stopped with the last face reading it.
  * @module
  */
-import { type Signal, signal } from '@preact/signals'
-import { useLayoutEffect } from 'preact/hooks'
+import { useStore } from './store.ts'
+import { useCallback } from 'react'
 import { type Clock, system } from '@yaks/fp'
 
-type Ticker = { at: Signal<number>; readers: number; cancel?: () => void }
+type Ticker = { at: number; readers: Set<() => void>; cancel?: () => void }
 let clocks = new WeakMap<Clock, Map<number, Ticker>>()
 let ticker = (clock: Clock, every: number) => {
   let paces = clocks.get(clock)
   if (!paces) clocks.set(clock, paces = new Map())
   let t = paces.get(every)
-  if (!t) paces.set(every, t = { at: signal(clock.now()), readers: 0 })
+  if (!t) paces.set(every, t = { at: clock.now(), readers: new Set() })
+  // Nobody reads a stopped clock: what a face reads first is the time now.
+  else if (!t.readers.size) t.at = clock.now()
   return t
 }
 let start = (clock: Clock, every: number, t: Ticker): void => {
-  t.at.value = clock.now()
+  t.at = clock.now()
+  for (let wake of [...t.readers]) wake()
   t.cancel = clock.after(every, () => start(clock, every, t))
 }
 
@@ -24,12 +27,13 @@ let start = (clock: Clock, every: number, t: Ticker): void => {
  * subscribed only while the date is mounted. */
 export let useNow = (clock: Clock = system, every = 60_000): number => {
   let t = ticker(clock, every)
-  useLayoutEffect(() => {
-    if (!t.readers++) start(clock, every, t)
+  let subscribe = useCallback((wake: () => void) => {
+    t.readers.add(wake)
+    if (t.readers.size == 1) start(clock, every, t)
     return () => {
-      if (!--t.readers) t.cancel?.()
+      t.readers.delete(wake)
+      if (!t.readers.size) t.cancel?.()
     }
-  }, [clock, every])
-  let now = t.at.value
-  return t.readers ? now : clock.now()
+  }, [t])
+  return useStore(subscribe, () => t.at)
 }

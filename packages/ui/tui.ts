@@ -13,8 +13,8 @@
  * @module
  */
 
-import { signal } from '@preact/signals'
-import { h } from 'preact'
+import { useStore } from './store.ts'
+import { createElement as h } from 'react'
 import { type Key, quit, run, Scroll, useKeys } from '@yaks/tui'
 import { Contents, Page, stops } from './guide.ts'
 import { kits, sheet, skins, themes } from './kit.ts'
@@ -26,22 +26,31 @@ import { Tabs } from './Tabs.ts'
 export let terminalGuide = () => {
   let names = Object.keys(themes)
   let skinNames = ['base', ...Object.keys(skins)]
-  let skin = signal(1) // the default, the first after the kit's own
+  // The walk's stop, and the theme and skin painted (the default skin is
+  // the first after the kit's own), read by the App and by the sheet.
+  let now = { at: 0, theme: 0, skin: 1 }
+  let readers = new Set<() => void>()
+  let set = (next: Partial<typeof now>) => {
+    now = { ...now, ...next }
+    for (let wake of [...readers]) wake()
+  }
+  let subscribe = (wake: () => void) => {
+    readers.add(wake)
+    return () => void readers.delete(wake)
+  }
   let dressed = () => ({
     kits,
-    theme: themes[names[theme.value]],
-    skin: skins[skinNames[skin.value]],
+    theme: themes[names[now.theme]],
+    skin: skins[skinNames[now.skin]],
   })
-  let at = signal(0)
-  let theme = signal(0)
   let walk = (i: number) =>
-    at.value = Math.max(0, Math.min(stops.length - 1, i))
+    set({ at: Math.max(0, Math.min(stops.length - 1, i)) })
   let press = (k: Key): boolean => {
     let c = k.name == 'char' ? k.text : undefined
     if (c == 'q') quit()
-    else if (c == 'j' || c == 'k') walk(at.value + (c == 'j' ? 1 : -1))
-    else if (c == 's') skin.value = (skin.value + 1) % skinNames.length
-    else if (c == 't') theme.value = (theme.value + 1) % names.length
+    else if (c == 'j' || c == 'k') walk(now.at + (c == 'j' ? 1 : -1))
+    else if (c == 's') set({ skin: (now.skin + 1) % skinNames.length })
+    else if (c == 't') set({ theme: (now.theme + 1) % names.length })
     else return false
     return true
   }
@@ -51,12 +60,13 @@ export let terminalGuide = () => {
     let i = stops.indexOf(stop)
     return {
       href: `#${stop}`,
-      mod: i == at.value && 'on',
-      reveal: i == at.value ? '' : undefined,
+      mod: i == now.at && 'on',
+      reveal: i == now.at ? '' : undefined,
       onClick: () => walk(i),
     }
   }
   let App = () => {
+    let { at, skin, theme } = useStore(subscribe, () => now)
     // Keys typed faster than a read arrive as one run of characters: each is
     // its own press, the way it was typed.
     useKeys((k) =>
@@ -64,7 +74,7 @@ export let terminalGuide = () => {
         ? [...k.text!].map((text) => press({ ...k, text })).some(Boolean)
         : press(k)
     )
-    let here = stops[at.value]
+    let here = stops[at]
     return h(
       'div',
       { col: '' },
@@ -91,8 +101,8 @@ export let terminalGuide = () => {
                     h(Tabs.Tab, {
                       key: name,
                       type: 'button',
-                      mod: i == skin.value && 'on',
-                      onClick: () => skin.value = i,
+                      mod: i == skin && 'on',
+                      onClick: () => set({ skin: i }),
                     }, name)
                   ),
                 ),
@@ -108,8 +118,8 @@ export let terminalGuide = () => {
                     h(Tabs.Tab, {
                       key: name,
                       type: 'button',
-                      mod: i == theme.value && 'on',
-                      onClick: () => theme.value = i,
+                      mod: i == theme && 'on',
+                      onClick: () => set({ theme: i }),
                     }, name)
                   ),
                 ),
@@ -134,9 +144,9 @@ export let terminalGuide = () => {
       ),
       h(
         'div',
-        { class: 'Muted' },
+        { className: 'Muted' },
         `j k contents · ↑ ↓ PgUp PgDn scroll · t theme · s skin (${
-          skinNames[skin.value]
+          skinNames[skin]
         }) · q quit`,
       ),
     )

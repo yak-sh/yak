@@ -11,17 +11,22 @@
 
 import { day } from './relative.ts'
 import type { Sheet } from '@yaks/tui/theme'
-import { cloneElement, type FunctionComponent, h, type VNode } from 'preact'
+import {
+  cloneElement,
+  createElement as h,
+  type FunctionComponent,
+  type ReactElement,
+} from 'react'
 import { columns, type Series, sparkline } from './chart-marks.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 /** A line beside a number. */
 export let Sparkline: FunctionComponent<Series> = (s) =>
-  sparkline(h as never, s) as VNode | null
+  sparkline(h as never, s) as ReactElement | null
 
 /** A column a day, as wide as the page. */
 export let Columns: FunctionComponent<Series> = (s) =>
-  columns(h as never, s) as VNode
+  columns(h as never, s) as ReactElement
 
 /** What it is, in a line. */
 export let description = 'A series over time, as a line or a column a day.'
@@ -33,20 +38,20 @@ let week = { from: '2026-10-01', values: [0, 2, 5, 3, 0, 8, 6], noun: 'visit' }
 
 /** One of each, and a point a pointer is on. */
 export let specimens = (): Specimen[] => [
-  ['Chart-line, Chart_Line, Chart_End', h(Sparkline, week) as VNode],
-  ['Chart-bars, Chart_Bar', h(Columns, week) as VNode],
+  ['Chart-line, Chart_Line, Chart_End', h(Sparkline, week) as ReactElement],
+  ['Chart-bars, Chart_Bar', h(Columns, week) as ReactElement],
   [
     'Chart[data-on], Chart_Tip',
     h(
       'div',
       null,
-      cloneElement(columns(h as never, week) as VNode, {
+      cloneElement(columns(h as never, week) as ReactElement, {
         'data-on': '',
         style: '--at: 50%',
       }),
       h(
         'span',
-        { class: 'Chart_Tip', style: 'position: static' },
+        { className: 'Chart_Tip', style: 'position: static' },
         `${day('2026-10-04', 'UTC')}: 3 visits`,
       ),
     ),

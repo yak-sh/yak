@@ -11,9 +11,9 @@
  * viewport coordinates, so a node portaled into document.body and fixed at
  * that rect lands on the trigger from anywhere in the plane, and renders at
  * 1:1 whatever the zoom, which is the feature (a picker at zoom 0.4 stays
- * readable). We portal by hand with preact's own render() into a
- * body-mounted `Overlay`, carrying the context of the tree it springs from, so
- * what floats reads the same providers as what stayed.
+ * readable). We portal into a body-mounted `Overlay`, which carries the
+ * context of the tree it springs from, so what floats reads the same
+ * providers as what stayed.
  *
  * - `Float`: children floated beside an anchor.
  * - `place`, `placeAt`, `usePlaceAt`: a fixed element put on a rect or a
@@ -24,13 +24,14 @@
  */
 
 import {
-  type ComponentChildren,
+  createElement as h,
   Fragment,
   type FunctionComponent,
-  h,
-  render,
-} from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+} from 'react'
+import { createPortal } from 'react-dom'
 import { type Clock, system } from '@yaks/fp'
 
 let MARGIN = 6 // keep this many px off every viewport edge
@@ -94,24 +95,12 @@ export let usePlaceAt = (
     return () => ro.disconnect()
   }, [at])
 
-// A separate render root starts with no context. Preact hands a component
-// the context of the tree it is in as its second argument, and a component
-// that gives `getChildContext` hands that on to its children: the same carry
-// preact/compat's portal makes.
-function Carry(
-  this: { getChildContext?: () => unknown },
-  { context, children }: { context: unknown; children?: ComponentChildren },
-) {
-  this.getChildContext = () => context
-  return h(Fragment, null, children)
-}
-
 /** What a `Float` is drawn with: the element it springs from, as a ref, and
  * which side of it to float on first. */
 export type FloatProps = {
   anchor: { current: HTMLElement | null }
   side?: 'above' | 'below'
-  children?: ComponentChildren
+  children?: ReactNode
 }
 
 /**
@@ -120,15 +109,14 @@ export type FloatProps = {
  * anchor is a ref, not an element: the child that owns it may mount in the
  * same commit as this Float, so `.current` is read in the layout effect,
  * after the DOM exists. The children keep their own focus, keys and state,
- * because render() into the same host diffs in place.
+ * as any children do.
  */
 export let Float: FunctionComponent<FloatProps> = (
   { anchor, side = 'above', children },
-  context,
-): ReturnType<typeof h> | null => {
+) => {
   // A terminal's document has no body: children stay in the flow. Hooks
   // still run in either host, but only the browser attaches a portal.
-  let host = useRef<HTMLDivElement>()
+  let host = useRef<HTMLDivElement | null>(null)
   if (!host.current && globalThis.document?.body) {
     host.current = document.createElement('div')
     host.current.className = 'Overlay'
@@ -138,9 +126,8 @@ export let Float: FunctionComponent<FloatProps> = (
     anchor.current && place(el, anchor.current.getBoundingClientRect(), side)
 
   // Live for the life of the component: attach on mount, tear the portal
-  // down on unmount (render(null) runs the children's own cleanup first). A
-  // ResizeObserver re-places when the CHILDREN resize — a picker's list
-  // grows in its own render root, which the parent never hears — and a
+  // down on unmount. A ResizeObserver re-places when the children resize —
+  // a picker's list grows without the parent hearing of it — and a
   // window resize re-places too. We don't chase scroll: the trigger's own
   // blur/selection closes an overlay before that matters.
   useLayoutEffect(() => {
@@ -154,21 +141,19 @@ export let Float: FunctionComponent<FloatProps> = (
     return () => {
       ro.disconnect()
       removeEventListener('resize', onResize)
-      render(null, el)
       el.remove()
     }
   }, [])
 
-  // Every commit: repaint the children (new props from the parent) and
-  // re-place, so an anchor that moved is tracked immediately.
+  // Every commit: re-place, so an anchor that moved is tracked immediately.
   useLayoutEffect(() => {
     let el = host.current
-    if (!el) return
-    render(h(Carry, { context }, children), el)
-    put(el)
+    if (el) put(el)
   })
 
-  return globalThis.document?.body ? null : h(Fragment, null, children)
+  return host.current
+    ? createPortal(children, host.current)
+    : h(Fragment, null, children)
 }
 
 let tipped = new WeakSet<Document>()

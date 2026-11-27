@@ -16,7 +16,7 @@
  * @module
  */
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { block, type Part } from './el.ts'
 import { Badge } from './Badge.ts'
 import { Button } from './Button.ts'
@@ -109,7 +109,7 @@ export let specimens = (): Specimen[] => [[
     Dock.Launcher,
     { mod: 'bar' },
     'Friends',
-    h(Dot, { mod: 'positive', class: 'Dock_Here Dock_Presence' }),
+    h(Dot, { mod: 'positive', className: 'Dock_Here Dock_Presence' }),
     h(Badge, null, '2'),
   ),
 ], [
@@ -118,7 +118,7 @@ export let specimens = (): Specimen[] => [[
     Dock.Launcher,
     { mod: 'bar' },
     'Friends',
-    h(Dot, { mod: 'caution', class: 'Dock_Here Dock_Presence' }),
+    h(Dot, { mod: 'caution', className: 'Dock_Here Dock_Presence' }),
   ),
 ], [
   'Friend presence',
@@ -133,7 +133,7 @@ export let specimens = (): Specimen[] => [[
             key: mod,
             style: 'display: inline-flex; align-items: center; gap: .4rem',
           },
-          h(Dot, { mod, class: 'Dock_Presence', 'aria-hidden': 'true' }),
+          h(Dot, { mod, className: 'Dock_Presence', 'aria-hidden': 'true' }),
           label,
         ),
     ),

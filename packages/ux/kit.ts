@@ -4,16 +4,16 @@
  * @module
  */
 
-import type { VNode } from 'preact'
+import type { ReactElement } from 'react'
 import { storable, type VocabDoc } from '@yaks/vocab'
 
 /** A labelled tree, drawn by the guide within its own composition. */
-export type Specimen = [label: string, node: VNode]
+export type Specimen = [label: string, node: ReactElement]
 
 /** Metadata for one controlled component. Props remain on its own export;
  * this erased component reference is for discovery, not invocation. */
 export type Piece = {
-  Component: (props: never) => VNode | null
+  Component: (props: never) => ReactElement | null
   description: string
   specimens: () => Specimen[]
   /** CamelCase state and event components declared in this kit's vocabulary. */

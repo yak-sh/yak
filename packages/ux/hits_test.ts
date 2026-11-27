@@ -1,6 +1,7 @@
 import { clock, equal, test, tick } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { h, options, render } from 'preact'
+import { createElement as h } from 'react'
+import { options, render } from 'preact'
 import { parse } from '@yaks/query'
 import { pickLine, useHits } from './hits.ts'
 

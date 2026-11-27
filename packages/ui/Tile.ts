@@ -23,7 +23,12 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { type ComponentChild, h, isValidElement, toChildArray } from 'preact'
+import {
+  Children,
+  createElement as h,
+  isValidElement,
+  type ReactNode,
+} from 'react'
 import { block, el, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { Chip } from './Chip.ts'
@@ -46,8 +51,8 @@ let { Icon, Id, Kind, Title, Note, Count, Sub, End } = Base
 
 // A tile with nothing beside its title line keeps the line as its row; one
 // with an icon, a sub or an end stacks the line over the sub between them.
-let lay = (children: Props['children']): ComponentChild[] => {
-  let kids = toChildArray(children)
+let lay = (children: Props['children']): ReactNode[] => {
+  let kids = Children.toArray(children)
   let of = (part: Part) =>
     kids.filter((k) => isValidElement(k) && k.type == part)
   let [icon, sub, end] = [of(Icon), of(Sub), of(End)]

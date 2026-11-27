@@ -4,7 +4,7 @@
 // digests describe what was compiled, never a version to ask the registry for.
 import { gt, intersects, minVersion, Range } from 'semver'
 import { parse } from 'es-module-lexer/js'
-import { script } from './graph.ts'
+import { packageOf, script } from './graph.ts'
 import { dependencies } from './plan.ts'
 
 /** A compiler's toolkit package: paths relative to its package root, including
@@ -14,7 +14,15 @@ export type Toolkit = {
   dependencies: Record<string, string>
   /** Runtime text files, relative to the package root. */
   resources?: Record<string, string>
+  renderer?: Renderer
   version: string
+}
+
+/** The import aliases a renderer supplies to apps that select it. */
+export type Renderer = {
+  dependency: string
+  unless?: string
+  aliases: Record<string, string>
 }
 
 /** Supplied by the compiler's wrapper, never by an app. */
@@ -30,7 +38,13 @@ export type Seed = {
   platform: Record<string, string>
   /** What the app should know about how its asks were met. */
   notes: string[]
+  aliases?: Readonly<Record<string, string>>
+  jsxImportSource?: string
 }
+
+/** The package supplying an import after the app's renderer is selected. */
+export let packageFor = (setup: Seed, spec: string): string | undefined =>
+  packageOf(setup.aliases?.[spec] ?? spec) ?? undefined
 
 /** Runtime resources stay outside the app's own paths. */
 export let ASSETS = '__packages/'
@@ -156,8 +170,19 @@ export let seed = (files: Record<string, string>, catalog: Catalog): Seed => {
     notes: [],
   }
   let noted = (note: string) => out.notes.push(note)
+  let roots = dependencies(files['package.json'] ?? null)
+  let renderer = Object.values(catalog).map((p) => p.renderer).find((r) =>
+    r && roots[r.dependency] && (!r.unless || !roots[r.unless])
+  )
+  if (renderer) {
+    out.aliases = renderer.aliases
+    out.jsxImportSource = renderer.dependency
+  } else if (roots.preact && !roots.react) {
+    out.jsxImportSource = 'preact'
+  } else if (roots.react) out.jsxImportSource = 'react'
   let visit = (name: string, version: string) => {
     if (!toolkit(name)) {
+      if (out.aliases?.[name] && !roots[name]) return
       if (version == 'platform') {
         throw new Error(`${name}: only @yaks toolkit packages use "platform"`)
       }
@@ -203,12 +228,6 @@ export let seed = (files: Record<string, string>, catalog: Catalog): Seed => {
     }
     for (let [dep, range] of Object.entries(pkg.dependencies)) visit(dep, range)
   }
-  for (
-    let [name, range] of Object.entries(
-      dependencies(files['package.json'] ?? null),
-    )
-  ) {
-    visit(name, range)
-  }
+  for (let [name, range] of Object.entries(roots)) visit(name, range)
   return out
 }

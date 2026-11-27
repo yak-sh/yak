@@ -4,7 +4,7 @@
 // the server answers over the whole graph. The host's `find` is the one
 // server search; the hook here debounces it and aborts a stale request, so a
 // late answer never repaints a newer query.
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useState } from 'react'
 import { type Clock, system } from '@yaks/fp'
 
 /** A server search: the entities a line answers, at most `limit`. */

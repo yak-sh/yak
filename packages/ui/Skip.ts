@@ -1,6 +1,6 @@
 /** A link revealed by keyboard focus to skip repeated navigation. @module */
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 

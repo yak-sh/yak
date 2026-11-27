@@ -15,7 +15,8 @@
  * @module
  */
 
-import { Component, type ComponentChild, h, render } from 'preact'
+import { Component, type ComponentChild, h } from 'preact'
+import { draw } from '@yaks/preact/draw'
 import {
   dispatch,
   install,
@@ -525,7 +526,7 @@ export let mount = (
   } = {},
 ): () => void => {
   let { root, free } = install()
-  let host = root as unknown as Parameters<typeof render>[1]
+  let stop: (() => void) | undefined
   let fault: Web | null = null
   let fall = (e: unknown) => {
     fault = broken(e)
@@ -535,12 +536,12 @@ export let mount = (
   onPaint(() => drawn(fault ?? paint(root, look)))
   onNavigate(follow)
   try {
-    render(h(Kept, { fell: fall }, node), host)
+    stop = draw(h(Kept, { fell: fall }, node), root as unknown as Element)
   } catch (e) {
     fall(e)
   }
   return () => {
-    render(null, host)
+    stop?.()
     onPaint(() => {})
     onNavigate(() => {})
     free()

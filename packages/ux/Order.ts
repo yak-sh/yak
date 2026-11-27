@@ -14,7 +14,7 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Rows } from '@yaks/ui/parts'
@@ -80,14 +80,14 @@ export type OrderProps = {
   /** the entities its rows stand for, in order */
   ids: string[]
   /** what a row says, and what opens beneath it */
-  row: (id: string) => ComponentChildren
+  row: (id: string) => ReactNode
   /** an entity put at `at` among the other rows; without it, the rows are
    * neither picked up nor put in order */
   onPlace?: (eid: string, at: number) => void
   /** whether a row is open for reading and typing, and so not picked up */
   open?: (id: string) => boolean
   /** what a list with no rows says */
-  empty?: ComponentChildren
+  empty?: ReactNode
 }
 
 type Ev = DragEvent & { currentTarget: HTMLElement }

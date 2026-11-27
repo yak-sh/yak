@@ -12,11 +12,25 @@ import { type Common, common } from './common.ts'
 import { packageOf } from './graph.ts'
 import { homes } from './home.ts'
 import type { Files } from './npm.ts'
-import { type Catalog, located, moved, type Seed } from './platform.ts'
+import {
+  type Catalog,
+  located,
+  moved,
+  packageFor,
+  type Seed,
+} from './platform.ts'
 import { phase, type Report } from './timing.ts'
 import { used } from './used.ts'
+import { initSync, parse as cjs } from 'cjs-module-lexer'
+import { posix } from 'node:path'
 
-let singletons = ['preact', '@preact/signals', '@preact/signals-core']
+let singletons = [
+  'preact',
+  '@preact/signals',
+  '@preact/signals-core',
+  'react',
+  'react-dom',
+]
 
 let production: Options = {
   minify: true,
@@ -109,6 +123,9 @@ let exports = (fs: Pick<Files, 'read'>, name: string) => {
   if (name == 'preact') {
     keys = keys.filter((key) => !key.startsWith('./compat/server'))
   }
+  if (name == 'react-dom') {
+    keys = keys.filter((key) => !/^\.\/(?:server|static)\./.test(key))
+  }
   let out: Record<string, string> = {}
   for (let key of keys.sort()) {
     if (key.includes('*')) {
@@ -121,6 +138,37 @@ let exports = (fs: Pick<Files, 'read'>, name: string) => {
     if (path && !path.endsWith('.json')) out[spec] = path
   }
   return out
+}
+
+// React's browser entries are CommonJS. A shared ESM needs its names declared
+// statically, including those forwarded by the package's CommonJS entry.
+let commonJS = (fs: Files, path: string): string => {
+  initSync()
+  let names = new Set<string>()
+  let seen = new Set<string>()
+  let visit = (file: string) => {
+    if (seen.has(file)) return
+    seen.add(file)
+    let source = fs.read(file)
+    if (source == null) return
+    let { exports, reexports } = cjs(source)
+    for (let name of exports) {
+      if (name != 'default' && name != '__esModule') names.add(name)
+    }
+    for (let next of reexports) {
+      if (next.startsWith('.')) visit(posix.join(posix.dirname(file), next))
+    }
+  }
+  visit(path)
+  return [
+    `import value from ${JSON.stringify('/' + path)}`,
+    'export default value',
+    ...[...names].sort().map((name, i) =>
+      `let n${i} = value[${JSON.stringify(name)}]; export { n${i} as ${
+        JSON.stringify(name)
+      } }`
+    ),
+  ].join('\n')
 }
 
 // The module a shared npm specifier is built from: the exports of it that the
@@ -154,6 +202,11 @@ let carried = async (
   timing?: Report,
 ): Promise<Carried> => {
   let toolkits = Object.keys(setup.platform)
+  let options = {
+    ...production,
+    packages: setup.aliases,
+    jsxImportSource: setup.jsxImportSource,
+  }
   let npm = toolkits.some((name) =>
     Object.entries(catalog[name].dependencies).some(([dep, version]) =>
       version != 'platform' && !singletons.includes(dep)
@@ -164,7 +217,7 @@ let carried = async (
     pages,
     stops,
     toolkits.map((name) => [name, catalog[name].dependencies]),
-    production,
+    options,
   ])
   try {
     return await analysis(key, (path) => fs.read(path), async (source) => {
@@ -180,7 +233,7 @@ let carried = async (
         let { inputs } = await bundle(
           source,
           Object.fromEntries(files.map((path, i) => [`entry-${i}`, path])),
-          { define: production.define, graph: true },
+          { ...options, minify: false, graph: true },
         )
         let { entries, uses } = common(inputs!, consumers, new Set(stops))
         graph()
@@ -191,7 +244,7 @@ let carried = async (
             source,
             files,
             Object.assign({}, ...Object.values(entries)),
-            production,
+            options,
           )
         } finally {
           trimmed()
@@ -243,10 +296,14 @@ let builds = async (
           ...pkg.dependencies,
           ...pkg.peerDependencies,
           ...catalog[name]?.dependencies,
+          // React DOM's CommonJS imports React synchronously. Put both
+          // behind the same browser module graph and one React instance.
+          ...name == 'react' && { 'react-dom': '*' },
         }),
         ...npm.uses[name] ?? [],
       ]),
-    ].filter((dep) => has.has(dep)).sort()
+    ].flatMap((dep) => packageFor(setup, dep) ?? [])
+      .filter((dep, i, all) => has.has(dep) && all.indexOf(dep) == i).sort()
   }
   let result: Shared = { files: {}, urls: {}, tarballs: {} }
   for (let group of groups(names, deps)) {
@@ -255,7 +312,14 @@ let builds = async (
     let entries: Record<string, string> = {}
     let picks: Record<string, string> = {}
     for (let name of group) {
-      if (!npm.modules[name]) Object.assign(entries, exports(fs, name))
+      if (!npm.modules[name]) {
+        for (let [spec, file] of Object.entries(exports(fs, name))) {
+          if (name == 'react' || name == 'react-dom') {
+            let entry = entries[spec] = `__picked/${spec}.js`
+            picks[entry] = commonJS(fs, file)
+          } else entries[spec] = file
+        }
+      }
       for (let [spec, source] of Object.entries(npm.modules[name] ?? {})) {
         entries[spec] = `__picked/${spec}.js`
         picks[entries[spec]] = source
@@ -301,6 +365,7 @@ let builds = async (
       sorted(resources),
       sorted(pins),
       sorted(dependencies),
+      setup.aliases,
       origin,
     ])
     let rewritten = located(
@@ -351,6 +416,7 @@ let builds = async (
     let home = homes((name) => fs.tarball(name), origin)
     let built = await bundle(files, points, {
       ...production,
+      packages: setup.aliases,
       moved: home.moved,
       external: (spec) => {
         let name = packageOf(spec)

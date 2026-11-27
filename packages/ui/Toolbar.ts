@@ -1,7 +1,7 @@
 /** A compact heading and its adjacent controls. `Toolbar-plain` wraps
  * controls in a row without a background or edge. @module */
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { Button } from './Button.ts'

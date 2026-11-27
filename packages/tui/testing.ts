@@ -8,7 +8,8 @@
  * @module
  */
 
-import { type ComponentType, h, render } from 'preact'
+import { type ComponentType, h } from 'preact'
+import { draw as show } from '@yaks/preact/draw'
 import { install, onPaint, place } from '@yaks/dom'
 import { decode } from './input.ts'
 import { clearMouse, routeMouse } from './mouse.ts'
@@ -48,9 +49,10 @@ export let mount = async (
     place(lines, r.hidden)
   }
   onPaint(draw)
-  render(h(App, {}), screen.root as unknown as Parameters<typeof render>[1])
-  // Preact renders and the tree repaints on microtasks; a few turns settle the
-  // measure/re-render loop a scroll region makes on its first paint.
+  let hide = show(h(App, {}), screen.root as unknown as Element)
+  // Preact renders, runs effects and the tree repaints on microtasks; a few
+  // turns settle the measure/re-render loop a scroll region makes on its
+  // first paint.
   let settle = async () => {
     for (let i = 0; i < 8; i++) await Promise.resolve()
   }
@@ -81,7 +83,7 @@ export let mount = async (
       await settle()
     },
     free: () => {
-      render(null, screen.root as unknown as Parameters<typeof render>[1])
+      hide()
       onPaint(() => {})
       clearMouse()
       clear()

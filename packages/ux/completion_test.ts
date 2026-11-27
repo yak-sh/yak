@@ -1,14 +1,15 @@
 import { assert, assertEquals } from '@std/assert'
 import { client } from '@yaks/client'
-import { type Signal, signal } from '@preact/signals'
 import { desk, draftDoc, drafts } from '@yaks/draft'
 import { mint } from '@yaks/graph'
 import { test, tick } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { draw } from '@yaks/preact/draw'
 import { completion, type Drafts, type Result } from './completion.ts'
 import { docs, uxDoc } from './vocab.ts'
+import { heldDrafts } from './host.ts'
 
 let writer = mint()
 let kept = () =>
@@ -17,15 +18,7 @@ let kept = () =>
   })
 // Drafts kept only in this interface, for a test whose subject is not where
 // a host keeps them.
-let typedHere = (): Drafts => {
-  let texts = new Map<string, Signal<string>>()
-  let at = (place: string) =>
-    texts.get(place) ?? texts.set(place, signal('')).get(place)!
-  return {
-    text: (place) => at(place).value,
-    type: (place, text) => at(place).value = text,
-  }
-}
+let typedHere = (): Drafts => heldDrafts()
 let sharedVocab = loadVocab(docs)
 let offers = (text: string, caret: number): Result => ({
   from: 0,
@@ -77,11 +70,8 @@ test('connected completion keeps its caret local and clears bound spent drafts',
       addEventListener() {},
     }),
   })
-  let text = signal('remote command')
-  let drafts = {
-    text: () => text.value,
-    type: (_id: string, value: string) => text.value = value,
-  }
+  let drafts = heldDrafts()
+  drafts.type('chat', 'remote command')
   let fields = completion(front, { drafts, complete: offers })
   let { document } = parseHTML('<input><input>')
   let inputs = [...document.querySelectorAll('input')]
@@ -97,7 +87,7 @@ test('connected completion keeps its caret local and clears bound spent drafts',
       'remote command',
       'remote command',
     ])
-    text.value = '' // another interface spent the hosted draft
+    drafts.spend('chat') // another interface spent the hosted draft
     assertEquals(inputs.map((input) => input.value), ['', ''])
     fields.type('chat', 'pe tail', 2)
     assertEquals(inputs.map((input) => input.selectionStart), [2, 2])
@@ -180,7 +170,7 @@ test('an imperative input binds to generic Choices, accepts at its caret, and cl
   input.addEventListener('input', () => heard.push(input.value))
   try {
     assertEquals(input.value, 'pe', 'bind restores the host draft')
-    render(h(c.List, { id, anchor: { current: input } }), root)
+    draw(h(c.List, { id, anchor: { current: input } }), root)
     input.setSelectionRange(2, 2)
     input.dispatchEvent(new window.Event('input', { bubbles: true }))
     await tick()
@@ -217,7 +207,7 @@ test('an imperative input binds to generic Choices, accepts at its caret, and cl
   } finally {
     off()
     c.dispose()
-    render(null, root)
+    draw(null, root)
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }
@@ -285,7 +275,7 @@ for (let tag of ['input', 'textarea']) {
     let rows = () =>
       [...root.querySelectorAll('.Choices_Text')].map((n) => n.textContent)
     try {
-      render(h(c.List, { id, anchor: { current: input } }), root)
+      draw(h(c.List, { id, anchor: { current: input } }), root)
       for (
         let [at, event] of [[2, 'click'], [4, 'select'], [3, 'keyup']] as const
       ) {
@@ -331,7 +321,7 @@ for (let tag of ['input', 'textarea']) {
     } finally {
       off()
       c.dispose()
-      render(null, root)
+      draw(null, root)
       if (prior) Object.defineProperty(globalThis, 'document', prior)
       else delete (globalThis as { document?: unknown }).document
     }
@@ -387,14 +377,14 @@ let renderedCompletion = (() => {
   let restore = scope()
   let off = () => {}
   try {
-    render(h(c.Field, { id: 'managed', initial: 'pe' }), root)
+    draw(h(c.Field, { id: 'managed', initial: 'pe' }), root)
     c.type('separate', 'pe')
     off = c.bind('separate', input)
-    render(h(c.List, { id: 'separate', anchor: { current: input } }), list)
+    draw(h(c.List, { id: 'separate', anchor: { current: input } }), list)
   } catch (error) {
     off()
-    render(null, root)
-    render(null, list)
+    draw(null, root)
+    draw(null, list)
     c.dispose()
     front.close()
     draftFront.close()
@@ -426,8 +416,8 @@ test('managed completion and a bound List restore drafts and acceptance carets',
     assertEquals(c.text('separate'), 'pear')
   } finally {
     off()
-    render(null, root)
-    render(null, list)
+    draw(null, root)
+    draw(null, list)
     c.dispose()
     front.close()
     draftFront.close()
