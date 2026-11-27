@@ -1,7 +1,7 @@
 import { clock, equal, test, throws } from '@yaks/testing'
 import { coalesced, doorOf, IDEMPOTENCY, resending } from './door.ts'
 
-let fixture = () => {
+let fixture = (beat?: number) => {
   let calls: Request[] = [], held: Promise<void>[] = []
   let answers: ((r: Response) => void)[] = []
   let queued: (() => void)[] = []
@@ -16,6 +16,7 @@ let fixture = () => {
       hold: (work) => held.push(work),
       turn: (send) => queued.push(send),
       clock: time,
+      beat,
     },
   )
   let answer = (n: number, body: string) =>
@@ -50,6 +51,17 @@ test('queued reads share one trip and each gets its own bytes', async () => {
     'second',
     'second',
   ])
+})
+
+// A read's answer reaches the caller that sent it as it lands; only a caller
+// who boarded someone else's batch looks for it on a beat.
+test('the caller who sent a read hears its answer without waiting a beat', async () => {
+  let f = fixture(60_000)
+  let read = f.door('/query')
+  f.flush()
+  f.answer(0, 'landed')
+  let late = new Promise<string>((go) => setTimeout(() => go('late'), 50))
+  equal(await Promise.race([read.then((r) => r.text()), late]), 'landed')
 })
 
 test('read sharing separates queries and callers with different standing', async () => {

@@ -91,6 +91,19 @@ export type Reach = {
 export let at = (r: { space: Space; app: App }) =>
   `${r.space.slug}/${r.app.slug}`
 
+// A reach's words, composed once per distinct set of words and lent packages:
+// every composed read asks for them, and the same caller's reach says the
+// same words call after call. Loading a vocabulary is the costly part of a
+// read that names no app; the most recently asked few are kept.
+let unions = new Map<string, Vocab>()
+let spokenOnce = (key: string, load: () => Vocab): Vocab => {
+  let kept = unions.get(key) ?? load()
+  unions.delete(key)
+  unions.set(key, kept)
+  if (unions.size > 32) unions.delete(unions.keys().next().value!)
+  return kept
+}
+
 // The space's language, and the platform's listing rule: a stamp leaves a
 // listing unless the line names it (listing.ts `listed`), so one fetched only
 // to order by leaves the answer too. A store left out of a read is reported
@@ -100,18 +113,18 @@ let fan = once(() =>
     core: core(),
     // And the words the apps' `"platform"` dependencies lend, beneath their
     // own.
-    union: (defs, docs) =>
-      loadVocab(
-        [
-          ...core().docs,
-          ...lentDocs({
-            $defs: defs,
-            packages: [...new Set(docs.flatMap(packagesOf))].sort(),
-          }),
-          { title: 'space', $defs: defs },
-        ],
-        appKeywords,
-      ),
+    union: (defs, docs) => {
+      let packages = [...new Set(docs.flatMap(packagesOf))].sort()
+      return spokenOnce(JSON.stringify([defs, packages]), () =>
+        loadVocab(
+          [
+            ...core().docs,
+            ...lentDocs({ $defs: defs, packages }),
+            { title: 'space', $defs: defs },
+          ],
+          appKeywords,
+        ))
+    },
     hidden: (comp, line) => STAMPS.includes(comp) && !names(line, comp),
     silent: (e, m) => {
       let [space, app] = m.at.split('/')

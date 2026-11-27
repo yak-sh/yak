@@ -18,6 +18,7 @@ import {
   resolvers,
   system,
   waitFor,
+  within,
 } from '@yaks/fp'
 import {
   evicted,
@@ -201,8 +202,9 @@ let landed = (batch: Batch) =>
  * the sleeper's request ends (@yaks/fp `Scope`). So no caller awaits or
  * settles another's promise. The caller that opens a batch sends it from its
  * own request, and its answer lands on the batch as a value: the bytes, which
- * each caller makes its own response from, or the failure. Every other
- * caller looks for it every `beat` ms on its own clock (@yaks/fp `waitFor`).
+ * each caller makes its own response from, or the failure. The opener hears
+ * its own send land; every other caller looks for it every `beat` ms on its
+ * own clock (@yaks/fp `waitFor`).
  *
  * What runs in another request is dropped, without a word, once that request
  * ends: a batch whose opener ended before sending it, or whose trip never
@@ -292,12 +294,17 @@ export let coalesced = (
   let ride = async (key: string, trip: Trip): Promise<Response> => {
     for (let sent = 0; sent < 2; sent++) {
       let batch = boarding.get(key)
+      let sending: Promise<void> | undefined
       if (!batch) {
         boarding.set(key, batch = {})
-        let sending = send(key, batch, trip)
+        sending = send(key, batch, trip)
         hold?.(sending)
       }
-      let got = await waitFor(() => landed(batch), patience, looking)
+      // The opener sent the trip from its own request, so it hears its own
+      // send land; only a caller who boarded another's batch looks for it.
+      let got = sending
+        ? await within(sending.then(() => landed(batch)), patience, clock)
+        : await waitFor(() => landed(batch), patience, looking)
       if (got?.answer) return got.answer()
       if (got?.failed) throw got.failed.error
       lost(key, batch)
