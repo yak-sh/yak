@@ -278,6 +278,26 @@ await proof(
   },
 )
 
+// A page opened after a deploy asks for its release's remake (remake.ts
+// `ask`), a job row only the directory's alarm reads: asking and marking it
+// hold back no serving check, so the page's own directory reads never wait
+// on a fence for it in a deploy's first minute.
+await proof('asking for a remake leaves serving checks standing', async () => {
+  let f = await fixture()
+  await f.at.apply([{
+    entity: { eid: 'remake' },
+    wake: { at: new Date().toISOString(), note: 'Compile this release again' },
+    sweep: { kind: 'remake' },
+    release_remake: { app: 'app', source: 'source' },
+  }], KERNEL)
+  await f.at.apply([{
+    entity: { eid: 'remake' },
+    release_remake: { fence: 'fence' },
+  }], KERNEL)
+  let asked = { fences: f.begins.length, current: f.core().valid(f.initial) }
+  return () => equal(asked, { fences: 0, current: true })
+})
+
 // An effect's run deletes itself once it finishes; no serving check reads it
 // (T-147454). Deleting what one does read still fences.
 await proof(

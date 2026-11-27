@@ -219,6 +219,7 @@ import { writer } from '@yaks/platform/app-authority'
 import { ADDRESS } from '@yaks/platform/routes'
 import { FORM } from '@yaks/forms/routes'
 import { background, caught, defect, failing, refusing } from './defects.ts'
+import { apart } from './lib/hops.ts'
 import {
   atApp,
   barOf,
@@ -1040,14 +1041,16 @@ export let refresh = (
   let now = env.CLOCK?.now() ?? Date.now()
   if ((refreshed.get(source) ?? -Infinity) > now - ASKING) return
   // A refusal here is the platform's own write refused: every failure is ours.
-  let work = (async () => {
+  // Apart from the page's request: the ask is a directory write, and the
+  // page neither waits on it nor reads its own directory lines again for it.
+  let work = apart(async () => {
     let { stale } = await import('./toolkit.ts')
     if (await stale(env, source)) {
       await (await import('./remake.ts')).ask(env, { app: app.eid, source })
     } else {
       refreshed.set(source, Infinity)
     }
-  })().catch((e) => {
+  }).catch((e) => {
     refreshed.delete(source)
     defect(e, { request: 'toolkit refresh', space: space.slug, app: app.slug })
   })

@@ -961,12 +961,25 @@ installContext({
 // out to (`Unraised`). `$own` mints a person's space and seat
 // (facets/directory-graph.ts) whenever it is asked, so it fences from the
 // start.
-let UNNAMED = new Set(['signin', 'signin_miss', 'effect'])
+// A remake's job row (remake.ts `ask`): its wake, its sweep and the release
+// it names are read only by the directory's own alarm (wake.ts, jobs.ts), so
+// asking for one and each run's marks on it raise no fence. A page opened
+// after a deploy asks for its release's remake, and each such ask once waited
+// on the copy's fence and the regional leases, seconds in a deploy's first
+// minute.
+let UNNAMED = new Set([
+  'signin',
+  'signin_miss',
+  'effect',
+  'sweep',
+  'release_remake',
+])
 let STAMPS = new Set(PROVENANCE)
 let UNFENCED = new Set([
   ...RECEIPTS,
   'signed_in',
   'archetype',
+  'wake',
   ...UNNAMED,
 ])
 let UNHELD = new Set([...UNFENCED, ...STAMPS])
