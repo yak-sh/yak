@@ -152,9 +152,10 @@ one paste and nothing else to think about.
   OpenAI, Anthropic) is a connection of the `yak` space that its `platform`
   app uses under the name the Worker reads it by
   (workers/yak/platform-keys.ts; workers/yak/README.md, "yaks.app's own
-  keys"). Ask for it on yaks.app with `yak command connection_need --space
-  yak --app platform --integration <name> --binding <NAME> --as admin`
-  (a custom integration also gives `--hosts`), and file his task with the
+  keys"). Ask for it on yaks.app with `yak command store_connection_need
+  --space yak --owner yak --app platform --integration <name> --binding <NAME>
+  --as admin` (a custom integration also gives `--hosts`, `--title` and
+  `--instructions`), and file his task with the
   link `https://yaks.app/manage/connections?space=yak`, where he pastes it.
   Never send him to 1Password for one, and never copy one into a Worker
   secret: the connection serves within a minute, and the Worker secret of
@@ -162,7 +163,7 @@ one paste and nothing else to think about.
   keys the box uses.
 - **Look before you ask.** The key he gave weeks ago is probably already here.
   A yaks.app key shows on the `yak` space's connections page, or with
-  `yak command connection_list --space yak --as admin`. For the box,
+  `yak command store_connection_list --space yak --as admin`. For the box,
   `op item list` lists 1Password's items by title alone (the Telnyx key is
   "telnyx API"); a box secret shows with `graph_query` `.secret.name=NAME&*`,
   and a connection with `connection_list`, his person as owner. A box key

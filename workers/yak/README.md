@@ -433,7 +433,7 @@ space, `yak`, used by its `platform` app under the name the table below gives it
 naming the integration and that name as `binding`:
 
 ```sh
-yak command connection_need --space yak --app platform \
+yak command store_connection_need --space yak --owner yak --app platform \
   --integration elevenlabs --binding ELEVENLABS_API_KEY --as admin
 ```
 
