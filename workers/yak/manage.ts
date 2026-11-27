@@ -214,6 +214,12 @@ export let manage = async (
       if (at.account == 'profile') {
         void dir.browserSessions(person).catch(() => {})
       }
+    } else if (
+      'updates' in at && reads && !url.searchParams.has('waiting') &&
+      !url.searchParams.get('space')
+    ) {
+      // The side's account reads can travel with the seats that pick a space.
+      void Promise.allSettled(sideReads(dir, { person }))
     }
     return Promise.resolve(null)
   }
@@ -780,6 +786,19 @@ let unread = async (req: Request, page: Promise<Response>) => {
   return told
 }
 
+// The side's reads that need only the signed-in person, before a space is
+// picked. The request remembers the same directory reads for `beside`.
+let sideReads = (
+  dir: ReturnType<typeof directory>,
+  { person, administrative }: Pick<Owner, 'person' | 'administrative'>,
+) =>
+  [
+    pickable(dir, person),
+    dir.nameAt(person),
+    dir.panes(person),
+    administrative ?? admin({ dir, person }),
+  ] as const
+
 // What the chat app's side holds (operator-page.ts `Beside`), asked at once:
 // the spaces its selector offers, the apps here this person may open, what
 // they are called, whether they are the platform's admin, and every way to
@@ -795,11 +814,9 @@ let beside = async (
   )),
   contact = true,
 ): Promise<Beside> => {
-  let [spaces, apps, name, panes, ways, platformAdmin] = await Promise.all([
-    pickable(dir, who.person),
+  let [[spaces, name, panes, platformAdmin], apps, ways] = await Promise.all([
+    Promise.all(sideReads(dir, who)),
     roster,
-    dir.nameAt(who.person),
-    dir.panes(who.person),
     // As the page asked it ahead (`foresee`), so it is answered from there.
     contact
       ? chatRows(dir, walkTo(space.slug, space.eid)).then(async (rows) =>
@@ -811,7 +828,6 @@ let beside = async (
         )
       )
       : undefined,
-    who.administrative ?? admin({ dir, person: who.person }),
   ])
   return {
     spaces,
