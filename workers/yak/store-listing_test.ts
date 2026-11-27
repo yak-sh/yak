@@ -4,6 +4,7 @@ import { mint } from '@yaks/graph'
 import { equal, test } from '@yaks/testing'
 import { ACROSS, BRANCH, WAKE } from './door.ts'
 import { Store } from './graph.ts'
+import { slotsOf } from './store-schema.ts'
 import { state } from './testing.ts'
 
 let name = 'ada/cookbook'
@@ -103,11 +104,31 @@ test('a fitted private listing checks fresh standing and keeps its policy floor'
   await ctx.settled()
 })
 
-test('a moved schema, branch, named read and new access use the full Store', async () => {
+test('a deploy that leaves the schema standing lists without the full Store', async () => {
+  let { ctx, open, request, expected } = await cookbook()
+  using _db = ctx.storage
+  let [status, started, body] = await read(
+    await open(testVersion('next')).fetch(request(listing)),
+  )
+  equal([status, started, body], [200, false, expected])
+  await ctx.settled()
+})
+
+test('a moved schema stamp fits on the full Store', async () => {
+  let { ctx, open, request, expected } = await cookbook()
+  using _db = ctx.storage
+  slotsOf(() => driver(ctx.storage)).write('schema', 'an older stamp')
+  let [status, started, body] = await read(
+    await open(testVersion('next')).fetch(request(listing)),
+  )
+  equal([status, started, body], [200, true, expected])
+  await ctx.settled()
+})
+
+test('a branch, named read and new access use the full Store', async () => {
   let { ctx, open, request, expected } = await cookbook()
   using _db = ctx.storage
   let results = [
-    await read(await open(testVersion('next')).fetch(request(listing))),
     await read(
       await open(testVersion('next')).fetch(
         request(listing, { [BRANCH]: '1' }),
@@ -124,14 +145,12 @@ test('a moved schema, branch, named read and new access use the full Store', asy
     ),
   ]
   equal(results.map(([status, started]) => [status, started]), [
-    [200, true],
     [400, false],
     [200, true],
     [401, true],
   ])
-  equal(results[0][2], expected)
-  equal(JSON.parse(results[1][2]).message, 'no branch 1')
-  equal(results[2][2], expected)
+  equal(JSON.parse(results[0][2]).message, 'no branch 1')
+  equal(results[1][2], expected)
   await ctx.settled()
 })
 

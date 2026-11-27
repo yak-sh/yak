@@ -32,6 +32,7 @@ import {
   FIT,
   follow,
   forget,
+  printed,
   printFor,
   printOf,
   schema,
@@ -383,6 +384,17 @@ export let passed = (
   }, own ? { vocab, beside } : undefined)
   return { left, stamp: ran ? stamp : null }
 }
+
+/** Whether a fit that moved only by its Worker version leaves the schema
+ * where it stands: the store holds this code's stamp and has recorded its
+ * print, so the pass ({@link passed}) would not run. A read can be served over
+ * it; the fit's once-a-version work (requirements, index adoption, the
+ * embedding watch) waits for the next full start, which writes `fitted`. */
+export let unmoved = (
+  driver: Driver,
+  shape: Pick<Shape, 'print' | 'stamp'>,
+  read: Read,
+): boolean => read('schema') == shape.stamp && printed(driver, shape.print)
 
 /** Fit the stored vocabulary over existing SQLite tables and retain its receipt. */
 export let fitSchema = (

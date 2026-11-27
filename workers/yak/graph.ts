@@ -15,6 +15,7 @@ import {
   shapeOf,
   slotsOf,
   stands,
+  unmoved,
 } from './store-schema.ts'
 export { fitOf, KV, shapeOf, stands } from './store-schema.ts'
 import {
@@ -5069,8 +5070,12 @@ export class Store extends Durable {
     let app = this.#get('app')
     if (!app || this.#get('name') != name || this.#get('copied')) return null
     let shape = this.#shape()
+    // A deploy moves the fit's version. Where the schema did not move with
+    // it, the listing reads the tables as they stand (`unmoved`).
     if (
-      !this.#stood(shape) || shape.vocab.comp('_tx') ||
+      !(this.#stood(shape) ||
+        unmoved(this.#sql, shape, (key) => this.#get(key as Word))) ||
+      shape.vocab.comp('_tx') ||
       this.#slots.branches().length ||
       requirements(this.#sql).includes(versions.use) || recovering(this.#sql) ||
       Object.keys(JSON.parse(this.#get('uses') ?? '{}')).length
