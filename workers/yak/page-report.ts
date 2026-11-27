@@ -91,11 +91,12 @@ export let answer = (req: Request, env: Host): Promise<Response> => {
   })(req)
 }
 
-/** The platform's own interaction batches, from its browser pages. */
+/** The platform's own interaction batches, from its browser pages, and an
+ * app page's, `app` naming it as `space/app`. */
 export let interactions = async (
   req: Request,
   env: Env,
-  app = false,
+  app?: string,
 ): Promise<Response> => {
   let { ERRORS } = env
   if (
@@ -117,6 +118,7 @@ export let interactions = async (
     sink: (rows) => ERRORS.send(rows),
     environment: 'production',
     commit: env.CF_VERSION_METADATA?.id,
+    ...app ? { app } : {},
     ...opened
       ? {
         opened: {

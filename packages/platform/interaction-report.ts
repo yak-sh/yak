@@ -147,6 +147,9 @@ type Reporting = {
   commit?: string
   environment?: Context['environment']
   opened?: { page: string; person?: string | null }
+  /** The app a report came from, as `space/app`: a slow app page is one
+   * app's, and only its name says which. */
+  app?: string
   failed: (error: unknown) => void
 }
 
@@ -155,7 +158,7 @@ type Reporting = {
 // waited for, so they are counted but never judged against a budget.
 let slowOpen = (
   seen: Batch,
-  { sink, commit, environment, opened }: Reporting,
+  { sink, commit, environment, opened, app }: Reporting,
 ): Bundle[] => {
   let open = seen.open
   if (!open || !opened || open.unseen) return []
@@ -175,6 +178,7 @@ let slowOpen = (
       during: { kind: 'browser interaction' },
       tags: {
         page: opened.page,
+        ...app ? { app } : {},
         source: open.source,
         device: open.device,
         ms,
@@ -205,7 +209,7 @@ let rows = (
   ...interactionRows(seen, reporting.commit, reporting.opened),
   ...slowOpen(seen, reporting),
   ...seen.points.flatMap((p, i) => {
-    let { sink, commit, environment } = reporting
+    let { sink, commit, environment, app } = reporting
     let name = interactionName(p)
     let cause = unexpected(p.target)
     let budget = budgetOf(p.target)
@@ -229,7 +233,12 @@ let rows = (
       at: new Date(seen.at).toISOString(),
       fault: `interaction|${name}`,
       during: { kind: 'browser interaction' },
-      tags: { ...p, account: 'person', entrypoint: 'browser interaction' },
+      tags: {
+        ...p,
+        ...app ? { app } : {},
+        account: 'person',
+        entrypoint: 'browser interaction',
+      },
     })
   }),
 ]

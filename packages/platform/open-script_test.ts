@@ -183,6 +183,7 @@ test('a sandboxed fullscreen app reports its opening without service worker acce
 let reported = async (
   b: ReturnType<typeof browser>,
   opened: { page: string; person?: string },
+  app?: string,
 ): Promise<Bundle[]> => {
   let rows: Bundle[] = []
   let req = new Request('https://yaks.app/api/interaction?open=1', {
@@ -196,6 +197,7 @@ let reported = async (
       throw error
     },
     opened,
+    ...app ? { app } : {},
   })
   return rows
 }
@@ -237,6 +239,18 @@ test('a slow network open reports the browser navigation timestamps with the inc
     Object.values(navigation),
     Object.values(navigation),
   ])
+})
+
+test('a slow open of an app page names its app', async () => {
+  let b = browser('https://ada.yaks.app/explore/')
+  b.run()
+  b.parsed(4000)
+  b.frame(4100)
+  let rows = await reported(b, { page: 'app' }, 'ada/explore')
+  let apps = rows.flatMap((row) =>
+    row.error ? [(row.error as { tags: { app?: string } }).tags.app] : []
+  )
+  equal(apps, ['ada/explore', 'ada/explore'])
 })
 
 test('a slow open begun hidden is counted but never filed as slow', async () => {
