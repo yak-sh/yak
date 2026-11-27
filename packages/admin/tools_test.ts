@@ -506,7 +506,8 @@ test('upload without --as is recorded as the platform admin and sends bearer byt
       equal(new Headers(init?.headers).get('cookie'), null)
       equal(init?.body, bytes)
       return Response.json({
-        url: '/vale/api/blob/sha',
+        eid: 'b1',
+        url: '/vale/api/blob/b1/sha',
         bytes: 5,
         mime: 'audio/mpeg',
       })
@@ -519,7 +520,7 @@ test('upload without --as is recorded as the platform admin and sends bearer byt
             mime: 'audio/mpeg',
           }),
         ),
-        '/vale/api/blob/sha — 5 bytes, audio/mpeg',
+        '/vale/api/blob/b1/sha — eid b1, 5 bytes, audio/mpeg',
       )
     })
   } finally {

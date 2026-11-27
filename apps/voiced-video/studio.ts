@@ -46,10 +46,15 @@ let yak = (...args: string[]) => run('yak', ['admin', ...args])
 let query = async (q: string): Promise<Row[]> =>
   JSON.parse(await yak('query', where, q)).result
 let apply = (bundles: unknown[]) => yak('apply', where, JSON.stringify(bundles))
+// A file kept at the app's ./api/blob: its eid, and a copy kept here, so
+// what the studio made is never read back.
 let upload = async (path: string, mime: string) => {
   let said = await yak('upload', where, path, '--mime', mime)
-  let url = said.trim().split(/\s/)[0]
-  return decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
+  let eid = / eid (\S+),/.exec(said)?.[1]
+  if (!eid) throw new Error(`upload said no eid: ${said.slice(0, 300)}`)
+  await Deno.mkdir(`${HOME}blobs`, { recursive: true })
+  await Deno.copyFile(path, `${HOME}blobs/${eid}`)
+  return eid
 }
 // A blob of the app's, kept here once read.
 let fetched = async (eid: string) => {
@@ -123,9 +128,28 @@ let film = async (take: Row, shot: Row) => {
   return { path: `${dir}/take.mp4`, ms, browser, frames: frames.length }
 }
 
-let takes = async () => {
-  let open = (await query('.take&*')).filter((t) => !(t.take as Comp).film)
+/** The open takes worth filming, in order, and those a newer take of the
+ * same panel supersedes (its panel changed before it was filmed). */
+export let waiting = (rows: Row[]) => {
+  let at = (t: Row) => String((t.created as Comp | undefined)?.at ?? '')
+  let open = rows.filter((t) => !(t.take as Comp).film)
+  let newest = new Map<string, Row>()
+  for (let t of open) {
+    let p = ref(t.take.panel), held = newest.get(p)
+    if (!held || at(t) > at(held)) newest.set(p, t)
+  }
+  let film = open.filter((t) => newest.get(ref(t.take.panel)) == t)
     .toSorted((a, b) => Number(a.take.n) - Number(b.take.n))
+  return { film, stale: open.filter((t) => !film.includes(t)) }
+}
+
+let takes = async () => {
+  let { film: open, stale } = waiting(await query('.take&*&?created'))
+  if (stale.length) {
+    await apply(
+      stale.map((t) => ({ entity: { eid: t.entity.eid }, tombstone: {} })),
+    )
+  }
   let last = 0
   let panel = async (take: Row) =>
     (await query(`.eid=${ref(take.take.panel)}&*`))[0]

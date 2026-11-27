@@ -891,7 +891,7 @@
       "noun": "admin",
       "verb": "upload",
       "title": "Upload a local file to an app",
-      "description": "Send one local file through an app's upload door. Public uploads use /api/blob; --private uses /api/pay/artifacts and requires --buyer or --via to name its customer or browser instrument. The app role must permit writes. Returns the content-addressed URL, byte count and MIME type. The file name defaults to the local basename and MIME defaults to application/octet-stream.",
+      "description": "Send one local file through an app's upload door. Public uploads use /api/blob; --private uses /api/pay/artifacts and requires --buyer or --via to name its customer or browser instrument. The app role must permit writes. Returns the content-addressed URL, the blob's eid (what a row names it by, and `download` reads), byte count and MIME type. The file name defaults to the local basename and MIME defaults to application/octet-stream.",
       "input": {
         "where": {
           "type": "string",

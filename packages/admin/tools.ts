@@ -982,7 +982,14 @@ export let runs = (
         name,
         customer,
       )
-      return [said(call, `${file.url} — ${file.bytes} bytes, ${file.mime}`)]
+      return [
+        said(
+          call,
+          `${file.url} — ${
+            file.eid ? `eid ${file.eid}, ` : ''
+          }${file.bytes} bytes, ${file.mime}`,
+        ),
+      ]
     }),
 
     admin_download: verb(async (call) => {
