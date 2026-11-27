@@ -155,12 +155,14 @@ export let ready = (
   }
   // A slow phase gets time to finish even when the phases before it were slow.
   let wait = <T>(pending: Promise<T>, phase: string): Promise<T> => {
-    let { promise, reject } = Promise.withResolvers<never>()
-    let timer = win.setTimeout(
-      () => reject(Error(`The signed-in view timed out ${phase}`)),
-      WAIT,
-    )
-    return Promise.race([pending, promise]).finally(() =>
+    let timer: ReturnType<typeof win.setTimeout> | undefined
+    let overdue = new Promise<never>((_, reject) => {
+      timer = win.setTimeout(
+        () => reject(Error(`The signed-in view timed out ${phase}`)),
+        WAIT,
+      )
+    })
+    return Promise.race([pending, overdue]).finally(() =>
       win.clearTimeout(timer)
     )
   }
