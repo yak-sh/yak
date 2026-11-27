@@ -6,6 +6,7 @@ import { seed, stepping } from '@yaks/sqlite/testing'
 import { equal, ok, test } from '@yaks/testing'
 import { loadVocab, pick } from '@yaks/vocab'
 import { directoryIndex } from './directory-index.ts'
+import { directoryHoldsMove } from './directory-index-move.ts'
 import { directoryDoc, referralDoc } from './directory-vocab.ts'
 import { platformDoc } from './vocab.ts'
 import { ADMIN, DEMO, NUMBERS } from './bots.ts'
@@ -22,7 +23,13 @@ let words = loadVocab([
   },
   pick(platformDoc, ['app', 'space']),
   pick(referralDoc, ['referral']),
-  pick(directoryDoc, ['directory_order', 'member', 'newcomer', 'test']),
+  pick(directoryDoc, [
+    'directory_order',
+    'holds',
+    'member',
+    'newcomer',
+    'test',
+  ]),
   {
     $defs: {
       used: { component: true, properties: { at: { type: 'string' } } },
@@ -83,6 +90,40 @@ test('a space and app follow its seats; a browser sign-in clears an inferred tes
   equal(await marked(), new Set())
   let [row] = await g.get([guest], ['directory_order'])
   equal(row.directory_order, { kind: 'person', visible_kind: 'person' })
+})
+
+test('a space keeps how many apps it has outside the trash', async () => {
+  let other = mint(), more = mint()
+  let apps = async () =>
+    (await g.get([space, other], ['holds'])).map((r) => r.holds)
+  let write = (...rows: Bundle[]) => g.apply(rows, { trusted: true })
+  await write({ entity: { eid: other }, space: { slug: 'shop' } })
+  equal(await apps(), [{ apps: 1 }, { apps: 0 }])
+  await write({ entity: { eid: more }, app: { space, slug: 'cart' } })
+  equal(await apps(), [{ apps: 2 }, { apps: 0 }])
+  await write({ entity: { eid: more }, trashed: {} })
+  equal(await apps(), [{ apps: 1 }, { apps: 0 }])
+  await write({ entity: { eid: more }, trashed: null })
+  equal(await apps(), [{ apps: 2 }, { apps: 0 }])
+  await write({ entity: { eid: more }, app: { space: other } })
+  equal(await apps(), [{ apps: 1 }, { apps: 1 }])
+  await write({ entity: { eid: more }, $delete: true })
+  equal(await apps(), [{ apps: 1 }, { apps: 0 }])
+})
+
+test('the mover counts a space the index kept before it kept holds', async () => {
+  let old = fixture()
+  let [lab, notes, cart] = Array.from({ length: 3 }, mint)
+  seed(old.store, [
+    { entity: { eid: lab }, space: { slug: 'lab' } },
+    { entity: { eid: notes }, app: { space: lab, slug: 'notes' } },
+    { entity: { eid: cart }, app: { space: lab, slug: 'cart' }, trashed: {} },
+  ])
+  let found = await old.g.read(directoryHoldsMove.find)
+  equal(found.map((r) => r.entity.eid), [lab])
+  await old.g.apply(found.flatMap(directoryHoldsMove.move), { trusted: true })
+  equal((await old.g.get([lab], ['holds']))[0].holds, { apps: 1 })
+  equal(await old.g.read(directoryHoldsMove.find), [])
 })
 
 let users: Bundle[] = [

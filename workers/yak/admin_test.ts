@@ -62,19 +62,38 @@ let census = (): Census => ({
       signed_in: { at: '2026-10-14T09:00:00Z' },
     },
   ],
+  // Each keeps what its apps sum to, as the sweep (`meter`) and the directory
+  // index (`holds`, `directory_order`) write it.
   spaces: [
     {
       entity: { eid: 'home' },
       space: { slug: 'ann', store: 'ann' },
-      meter: meter({ models: 0.25, realtime: 0.25, files: 20 }),
+      meter: meter({ models: 0.25, realtime: 0.25, bytes: 100, files: 20 }),
+      holds: { apps: 1 },
+      directory_order: {
+        kind: 'space',
+        visible_kind: 'space',
+        at: '2026-10-12T00:00:00Z',
+      },
     },
     {
       entity: { eid: 'shop' },
       space: { slug: 'shop', store: 'shop' },
       plan: { tier: 'plus' },
-      meter: meter({ models: 1, files: 3 }),
+      meter: meter({ models: 1, bytes: 997, files: 3 }),
+      holds: { apps: 1 },
+      directory_order: {
+        kind: 'space',
+        visible_kind: 'space',
+        at: '2026-10-14T10:00:00Z',
+      },
     },
-    { entity: { eid: 'lab' }, space: { slug: 'lab', store: 'lab' } },
+    {
+      entity: { eid: 'lab' },
+      space: { slug: 'lab', store: 'lab' },
+      holds: { apps: 1 },
+      directory_order: { kind: 'space', at: null },
+    },
   ],
   // Each wears its access mode, as every stored app does: a row without one
   // is reported as a failure (directory.ts `unsaid`).
@@ -315,6 +334,22 @@ test('the directory mover merges existing attribution into the indexed work exac
     figures.work?.find((r) => r.space == space)?.days,
     { [day]: 0.75 },
   )
+})
+
+test('a page counts a space by its own row, reading none of its apps', async () => {
+  let rows = await dir.read(
+    line`.space&.holds.apps>0&.fields=${TILES.spaces}`,
+  ) as Row[]
+  assertEquals(rows.length > 0, true)
+  let figures = await gather(dir, { spaces: rows })
+  assertEquals(figures.apps, [])
+  let u = uses(figures)
+  for (let r of rows) {
+    let live = await dir.read(
+      line`.app.space=${r.entity.eid}&!trashed&.fields=app.space`,
+    )
+    assertEquals(u.get(r.entity.eid)?.apps, live.length, r.entity.eid)
+  }
 })
 
 test('a page reads which app each release is of and when, never its files', async () => {

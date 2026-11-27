@@ -697,6 +697,8 @@ export type Row = MeteredRow & {
   // (@yaks/platform/directory-derived).
   space?: { test?: boolean | null; active?: string | null }
   directory_order?: { kind: string; visible_kind?: string; at?: string | null }
+  /** what the directory index keeps of a space's apps */
+  holds?: { apps?: number | null }
   release_view?: import('@yaks/platform/release-index').ReleaseView
   free_ai_budget?: { dollars?: number | null }
   app_transfer?: TransferOffer

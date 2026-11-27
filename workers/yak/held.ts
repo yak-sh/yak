@@ -8,7 +8,7 @@ import {
 // whole and for each app. Every reader takes it from here: the hourly sweep
 // writes it (usage.ts `sweep`), the doors that refuse a write past a ceiling
 // decide by it and say it (usage.ts `full`, `fullFiles`), app_list says it
-// (tools.ts), and the admin's directory counts it (admin.ts).
+// (tools.ts), and the admin's directory reads the space's (admin.ts).
 //
 // App data is what each app's store last told the directory it weighs (meter.ts
 // `weighed`). A trashed app's store keeps its rows until it is erased, so it

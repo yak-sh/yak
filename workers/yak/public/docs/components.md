@@ -873,7 +873,7 @@ The complete list of reserved names:
     fired form form_guest form_mail form_phone form_post former
     free_ai_budget free_spaces friend_invite fund fund_receipt gallery
     geocode gift gitobj grant grants_listed handoff_spent heard heard_turn
-    hearing held home hook hostname image inference install installed
+    hearing held holds home hook hostname image inference install installed
     integration integration_install interrupted invite inviting key
     keyword_replies knock last_deploy lease lent lines located made mail
     mail_answered mail_dismissed mail_domain mail_post mail_task mcp_list

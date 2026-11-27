@@ -1849,6 +1849,21 @@
         }
       }
     },
+    "holds": {
+      "$id": "urn:uuid:9ea7a2de-4afd-4917-be36-771274f4cf88",
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "description": "What a space holds, kept by the directory index as its apps come, go, move and are trashed, so a page that counts a space reads only its row.",
+      "properties": {
+        "apps": {
+          "$id": "urn:uuid:f1003079-89df-4952-bfdb-536819f66e89",
+          "type": "number",
+          "description": "its apps outside the trash"
+        }
+      }
+    },
     "directory_indexed": {
       "$id": "urn:uuid:15f62319-5c51-4a9b-a60f-80712d92b309",
       "component": true,

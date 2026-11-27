@@ -53,8 +53,7 @@ import { Form, Head } from '@yaks/ui/parts'
 // newest first, each opening on that same page.
 
 import { bound, type Env } from './env.ts'
-import { holding } from './held.ts'
-import { dollars, type Held } from '@yaks/platform/standing'
+import { dollars } from '@yaks/platform/standing'
 import {
   appAbout,
   type Census,
@@ -158,7 +157,9 @@ export type { Census }
 // What the admin reads of each kind (directory.ts `census` for outreach.ts):
 // only the properties a page draws or counts, since the directory's bytes,
 // more than its rows, are what a page waits on (T-4002). A row is counted by
-// who is a test and each person's and space's sums.
+// who is a test and the figures its own row keeps: a space's storage
+// (`meter`), its apps (`holds`) and latest use (`directory_order`), so a page
+// reads no row it does not draw (T-4233).
 let COUNTED: CensusFields = {
   people: [
     'person.test',
@@ -189,6 +190,7 @@ let COUNTED: CensusFields = {
     'used.at',
     'visitor_build',
     'free_ai_budget',
+    'holds',
     'trashed.at',
     'created.at',
   ],
@@ -203,6 +205,16 @@ let COUNTED: CensusFields = {
   seats: ['member.space', 'member.person', 'member.role'],
   referrals: ['referral', 'rewarded', 'created'],
 }
+// What a space a page never draws is read for: the figures its owners' and
+// apps' tiles sum or say of it.
+let SUMMED = [
+  'space.slug',
+  'meter.bytes',
+  'meter.files',
+  'holds',
+  'directory_order',
+  'used.at',
+]
 // What each tile draws beside: a space's title and requests, and an app's
 // row whole as its tile says it, with its releases and the agents its stamps
 // name.
@@ -302,10 +314,11 @@ export type Shown = Partial<Census> & {
 /**
  * The rows a page draws and every row their figures are counted from
  * (`uses`), each read by key: the platform's own space, whose free budget
- * every space's is; each shown space's seats, who sits in it and its apps;
- * each shown person's seats, the spaces they sit in and those spaces' apps;
- * each shown app's space, as a shown space, and its releases; and whoever a
- * stamp names. Nothing else is read.
+ * every space's is; each shown space's seats and who sits in them; each shown
+ * person's seats and the spaces they sit in; each shown app's space, as a
+ * shown space, and its releases; and whoever a stamp names. A space's apps
+ * are never read to count it: its row keeps what they sum to. Nothing else is
+ * read.
  */
 type Figures = Census & { work?: WorkSpend[] }
 
@@ -377,22 +390,22 @@ export let gather = async (
   let spaces = byEid(shown.spaces ?? [], meta as Row[])
   let people = byEid(shown.people ?? [])
   let sat = unique([...homes, ...mine.map(seatSpace)])
-  let counted = unique([
-    ...eids(shown.spaces),
-    ...mine.filter((s) =>
-      s.member?.role == 'owner' && seatSpace(s) != meta[0]?.entity.eid
-    )
-      .map(seatSpace),
-  ])
   let stamps = [...shown.apps ?? [], ...deploys]
     .flatMap((r) => r.created?.by ? [idOf(r.created.by)] : [])
   let missing = (held: Map<string, Row>, all: string[]) =>
     all.filter((eid) => !held.has(eid))
-  let [more, who, apps] = await Promise.all([
+  let named = missing(spaces, shown.named?.spaces ?? [])
+  let [more, counted, who] = await Promise.all([
     keyed(
       dir,
-      missing(spaces, [...sat, ...shown.named?.spaces ?? []]),
+      named,
       (some) => line`.entity.eid=${some}&.space&.fields=${TILES.spaces}`,
+    ),
+    // A space a page draws none of, only counts its people and apps by.
+    keyed(
+      dir,
+      missing(spaces, sat).filter((eid) => !named.includes(eid)),
+      (some) => line`.entity.eid=${some}&.space&.fields=${SUMMED}`,
     ),
     keyed(
       dir,
@@ -407,13 +420,6 @@ export let gather = async (
           ...TILES.agents,
         ]}`,
     ),
-    // What each of their apps counts toward: a space's storage, apps and
-    // latest use. An app a page draws is a shown one, read whole.
-    keyed(
-      dir,
-      counted,
-      (some) => line`.app.space=${some}&.fields=${COUNTED.apps!}`,
-    ),
   ])
   return {
     work,
@@ -421,8 +427,8 @@ export let gather = async (
       ...byEid([...people.values()], who.filter((r) => r.person))
         .values(),
     ],
-    spaces: [...byEid([...spaces.values()], more).values()],
-    apps: [...byEid(shown.apps ?? [], apps).values()],
+    spaces: [...byEid([...spaces.values()], more, counted).values()],
+    apps: shown.apps ?? [],
     seats: [...byEid(mine, seated).values()],
     deploys,
     referrals: shown.referrals ?? [],
@@ -582,15 +588,10 @@ let group = (rows: Row[], key: (r: Row) => string) => {
 let seatSpace = (r: Row) => idOf(r.member!.space)
 let seatPerson = (r: Row) => idOf(r.member!.person)
 let appSpace = (r: Row) => idOf(r.app!.space)
-// An app as `holding` counts it with no listing of the bucket: what its
-// store and files weigh.
-let owner = (r: Row) => ({
-  eid: r.entity.eid,
-  slug: r.app?.slug ?? '',
-  files: null,
-  blobs: null,
-  meter: r.meter ?? null,
-})
+// What a row holds (held.ts): app data and photos and files together, as the
+// hourly sweep last added a space's up, and as an app's own store last
+// weighed it.
+let stored = (r: Row) => (r.meter?.bytes ?? 0) + (r.meter?.files ?? 0)
 
 // A figure's days, for a row that has kept any.
 let days = (
@@ -619,9 +620,6 @@ let days = (
 export let uses = (c: Figures, now = new Date()): Map<string, Uses> => {
   let month = monthOf(now)
   let spaces = new Map(c.spaces.map((r) => [r.entity.eid, spaceOf(r)]))
-  let live = c.apps.filter((r) => !r.trashed)
-  let appsIn = group(live, appSpace)
-  let everyIn = group(c.apps, appSpace)
   let seatsIn = group(c.seats, seatSpace)
   let seatsOf = group(c.seats, seatPerson)
   let tests = new Set(
@@ -633,13 +631,6 @@ export let uses = (c: Figures, now = new Date()): Map<string, Uses> => {
     let seats = seatsIn.get(space) ?? []
     return seats.length > 0 && seats.every((s) => tests.has(seatPerson(s)))
   }
-  // What each space holds and each app's share, those in the trash included
-  // (held.ts): app data and photos and files together.
-  let held = new Map(c.spaces.map((r) => {
-    let s = spaces.get(r.entity.eid)!
-    return [s.eid, holding(s, (everyIn.get(s.eid) ?? []).map(owner))]
-  }))
-  let stored = (h?: Held) => (h?.bytes ?? 0) + (h?.files ?? 0)
   let names = new Map(c.people.map((r) => [r.entity.eid, personName(r)]))
   // Its latest move live (`last_deploy`), or before that was kept, its newest
   // release.
@@ -653,14 +644,13 @@ export let uses = (c: Figures, now = new Date()): Map<string, Uses> => {
   let out = new Map<string, Uses>()
   for (let r of c.spaces) {
     let s = spaces.get(r.entity.eid)!
-    let apps = appsIn.get(s.eid) ?? []
     out.set(s.eid, {
       spend: { spent: budget(s, now).spent },
       ...days('spending', r.trend?.spend, now),
       ...days('requesting', r.trend?.requests, now),
-      storage: stored(held.get(s.eid)),
-      apps: apps.length,
-      active: latest(r.used?.at, ...apps.map((a) => a.used?.at)),
+      storage: stored(r),
+      apps: r.holds?.apps ?? 0,
+      active: r.directory_order?.at ?? r.used?.at ?? null,
       test: r.directory_order ? !r.directory_order.visible_kind : tested(s.eid),
     })
   }
@@ -669,7 +659,7 @@ export let uses = (c: Figures, now = new Date()): Map<string, Uses> => {
       requests: r.meter?.month == month ? r.meter.requests ?? 0 : 0,
       visits: r.meter?.visits ?? null,
       ...days('requesting', r.trend?.requests, now),
-      storage: stored(held.get(appSpace(r))?.apps.get(r.entity.eid)),
+      storage: stored(r),
       active: r.used?.at ?? null,
       deployed: deployed.get(r.entity.eid) ?? null,
       changed: r.changed?.at ?? null,

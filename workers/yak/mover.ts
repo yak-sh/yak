@@ -79,7 +79,10 @@ import { dateDirect } from '@yaks/chat'
 import { recipientRule } from './recipient-move.ts'
 import { demoFeaturedRule, integrationFeaturedRule } from './featured-move.ts'
 import { draftRule } from './draft-move.ts'
-import { directoryIndexMove } from '@yaks/platform/directory-index-move'
+import {
+  directoryHoldsMove,
+  directoryIndexMove,
+} from '@yaks/platform/directory-index-move'
 import { checkNewcomerRule } from './check-newcomer-move.ts'
 export type MoveContext = { store: string; app?: string; space?: string }
 
@@ -226,6 +229,12 @@ export let RULES: Rule[] = [
   {
     ...directoryIndexMove,
     stores: [PLATFORM_STORE],
+    live: 'all',
+  },
+  {
+    ...directoryHoldsMove,
+    stores: [PLATFORM_STORE],
+    core: ['holds'],
     live: 'all',
   },
   starterRule,

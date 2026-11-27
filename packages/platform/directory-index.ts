@@ -1,6 +1,8 @@
-// A directory write keeps the keys its published lists page through. The
-// source rows still say what happened: the keys follow the transaction,
-// including removals, restores and changes to a seat's person or space.
+// A directory write keeps the keys its published lists page through, and the
+// figures a list counts a space by (`holds`), so a page reads only its own
+// rows. The source rows still say what happened: the keys follow the
+// transaction, including removals, restores and changes to a seat's person or
+// space.
 import { after, each } from '@yaks/fp'
 import { type Bundle, type Comp, type Plugin, type Tx } from '@yaks/graph'
 import { line } from '@yaks/query'
@@ -137,7 +139,7 @@ let indexSpaces = (tx: Tx, spaces: string[], made: Bundle[]) =>
     { people: [] as string[], apps: [] as string[] },
     (out, eid) =>
       after(
-        tx.get([eid], ['space', 'used', 'test', 'directory_order']),
+        tx.get([eid], ['space', 'used', 'test', 'directory_order', 'holds']),
         ([r]) => {
           if (!r?.space) return out
           return after(
@@ -164,13 +166,14 @@ let indexSpaces = (tx: Tx, spaces: string[], made: Bundle[]) =>
                     tx.read(line`.app.space=${eid}`, {}, ['used', 'trashed']),
                     (apps) => {
                       let by = byId(members)
+                      let live = apps.filter((a) => !a.trashed)
                       let test = seats.length > 0 &&
                         seats.every((s) =>
                           testOf(by.get(ref(s, 'member', 'person')))
                         )
                       let at = latest(
                         used(r),
-                        ...apps.filter((a) => !a.trashed).map(used),
+                        ...live.map(used),
                       )
                       let order = ordered(r, 'space', test, at)
                       if (test != !!r.test) out.apps.push(...apps.map(id))
@@ -192,6 +195,9 @@ let indexSpaces = (tx: Tx, spaces: string[], made: Bundle[]) =>
                           patch(r, {
                             test: marked(r, test),
                             directory_order: order,
+                            holds: part(r, 'holds')?.apps == live.length
+                              ? undefined
+                              : { apps: live.length },
                           }),
                         ),
                         () => out,

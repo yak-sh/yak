@@ -46,3 +46,14 @@ export let directoryIndexMove = {
   },
   finish: () => [{ entity: { eid: RECEIPT }, directory_indexed: {} }],
 }
+
+// Every space the index has not counted since it began keeping `holds`: the
+// same untouched-listing seed, so the write tracker counts it from its rows.
+export let directoryHoldsMove = {
+  mark: 'yak/store/directory-holds/1' as const,
+  find: line`.space&!holds&.fields=directory_order.kind`,
+  move: (row: Bundle): Bundle[] => [{
+    entity: row.entity,
+    directory_order: { kind: 'pending' },
+  }],
+}
