@@ -14,7 +14,7 @@ import type { Actor, ApplyOpts, Bundle, Graph, ReadOpts } from '@yaks/graph'
 import { aggregate, reduced } from '@yaks/graph/read'
 import type { Driver } from '@yaks/sql'
 import { knownOptions, Refused } from '@yaks/graph/errors'
-import { limit, parse, type Query, windowOf } from '@yaks/query'
+import { parse } from '@yaks/query'
 import { during, parent, peek, scope } from '@yaks/trace'
 import { type Authenticate, signed } from './actor.ts'
 import { readBody, receiveBody } from './body.ts'
@@ -469,42 +469,6 @@ export type ListQuery = (
   request: Request,
 ) => Bundle[] | Promise<Bundle[]>
 
-/** How a door answers a query beyond reading it: the shape its bundles take
- * on the wire, and the most entities one read answers. */
-export type Answering = { list?: ListQuery; most?: number }
-
-// A read asked through a door with a ceiling builds at most one entity past
-// it: a window the caller named within the ceiling is read as named, and any
-// other is cut to one past it, so a selection bigger than the ceiling is known
-// without building it. Reading every entity of a store holding 198,395 took
-// its object 20 s of CPU and then its memory (bug be9051e2), and each caller
-// queued behind it failed with it.
-//
-/// windowed({ kind: 'and', clauses: [] }, 10) -> { kind: 'and', clauses: [{ kind: 'limit', n: 11 }] }
-/// windowed({ kind: 'and', clauses: [{ kind: 'limit', n: 5 }] }, 10) -> { kind: 'and', clauses: [{ kind: 'limit', n: 5 }] }
-/// windowed({ kind: 'and', clauses: [{ kind: 'limit', n: 50 }] }, 10) -> { kind: 'and', clauses: [{ kind: 'limit', n: 11 }] }
-/// windowed({ kind: 'and', clauses: [] }, undefined) -> { kind: 'and', clauses: [] }
-export let windowed = (ast: Query, most?: number): Query => {
-  let n = windowOf(ast).limit
-  if (most == null || n != null && n <= most) return ast
-  let clauses = ast.clauses.filter((c) => c.kind != 'limit')
-  return { ...ast, clauses: [...clauses, limit(most + 1)] }
-}
-
-/** The rows a {@link windowed} read answered, or its refusal when they hold
- * more entities than one read answers: the caller pages with `.limit` and
- * `.after`. */
-/// bounded([1, 2], 2) -> [1, 2]
-/// bounded([1, 2, 3], 2) throws 'more than 2 entities'
-export let bounded = <T>(rows: T[], most?: number): T[] => {
-  if (most == null || rows.length <= most) return rows
-  throw new Refused(
-    `this read selects more than ${most} entities, the most one read ` +
-      `answers: read it in pages, .limit=${most} or fewer, each page ` +
-      `continuing with .after= the last entity it answered`,
-  )
-}
-
 /**
  * `GET /query?q=…` or `POST /query` — a query string in, the bundles it
  * selects out.
@@ -520,7 +484,7 @@ export let ask = async (
   request: Request,
   activity: object = graph,
   opts?: ReadOpts,
-  { list, most }: Answering = {},
+  list?: ListQuery,
 ): Promise<Response> => {
   let q = request.method == 'GET'
     ? new URL(request.url).searchParams.get('q')
@@ -539,10 +503,7 @@ export let ask = async (
   let op = aggregate(ast)
   try {
     if (op) return json(reduced(op, await graph.rows(ast, options)))
-    let rows = published(
-      graph.vocab,
-      bounded(await graph.read(windowed(ast, most), options), most),
-    )
+    let rows = published(graph.vocab, await graph.read(ast, options))
     return listed(list ? await list(rows, request) : rows)
   } catch (error) {
     if (request.signal.aborted && error === request.signal.reason) {
