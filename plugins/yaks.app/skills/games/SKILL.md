@@ -19,9 +19,7 @@ as `design.md`. Decide every part yourself; don't stop to ask.
 
 When the person names a game they love, it is the default for everything they
 don't specify: its genre, mechanics, strategy, pacing, mood and the feel of its
-art. Build that. The game gets its own name, characters, art, music and levels,
-made fresh, never the original's title, logo, characters, assets, maps or exact
-look: car soccer with new physics, yes; Rocket League's name and cars, no.
+art. Build it, and give it its own name and art.
 
 Work top down, so every part follows from the one above it:
 
