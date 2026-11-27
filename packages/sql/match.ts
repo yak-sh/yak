@@ -4,17 +4,18 @@
 // by the same compiler as every other query and there is no second evaluator
 // to keep in step.
 //
-// What makes several entities fit in one SELECT is the dialect. A dialect names
-// every table, alias, join key and column expression, so each pattern is bound
-// through one whose names carry that pattern's prefix (`p0_doc`, `p1_entity`),
-// and the resulting selects can simply be put side by side: their sources
-// cross, their joins gather, their conditions AND. One statement, no candidate
-// sets, nothing gathered per rule by the caller.
+// What makes several entities fit in one statement is the dialect. A dialect
+// names every table, alias, join key and column expression, so each pattern is
+// bound through one whose names carry that pattern's prefix (`p0_doc`,
+// `p1_entity`), and no two patterns' selects share a name. Each is found in a
+// select of its own, keyed on the patterns before it, and the statement crosses
+// their rows (see `arm`). One statement, nothing gathered per rule by the
+// caller.
 //
-// A gate lowers to a LEFT JOIN whose owner column IS NULL. It gets an alias of
-// its own (`p0_gate_result`) because a gate is an absence — the query never
-// reads its columns, and a separate alias cannot collide with a join the filter
-// already made for the same component.
+// A gate lowers to a `not exists` under an alias of its own
+// (`p0_gate_result`): a gate is an absence, the query never reads its columns,
+// and a separate alias cannot collide with a join the filter already made for
+// the same component.
 //
 // A variable is a slot. `$call` alone is the pattern's entity (its integer
 // spine id); `$call` as a value is that property. Two slots sharing a name are
@@ -39,6 +40,8 @@ import { type And, present } from '@yaks/query/core'
 import {
   among,
   and,
+  as,
+  call,
   col,
   type Compound,
   cross,
@@ -46,19 +49,26 @@ import {
   eq,
   type Expr,
   FALSE,
+  fn,
+  from,
+  iff,
+  isNull,
   type Join,
+  lit,
+  op,
   raw,
   type Select,
   select,
   type Source,
   sub,
   table,
+  val,
 } from './ast.ts'
 import { inline, q, relationOf } from './render.ts'
 import { unionAllWithin } from './compound.ts'
 import { type BindOpts, boundReads } from './bind.ts'
 import type { Extension } from './extend.ts'
-import { type Dialect, refEqAt, sqlite } from './sqlite.ts'
+import { type Dialect, refEqAt, sqlite, type Tag } from './sqlite.ts'
 
 // The spine's own id, `entity.eid`, as a hop.
 let spine = (hop: { comp: string; prop: string }) =>
@@ -174,11 +184,45 @@ let removals = (gone: Gone): Extension => ({
   },
 })
 
+// The batch's ids, as each arm starts from them.
+let TOUCHED = '__touched'
+
 // Where a variable is filled from, and what kind of value fills it: an `id` is
 // an integer spine id (an entity, or a reference column), a `value` is the
 // column's own. `read` is how the same slot is projected — an eid for an id,
-// so what comes back is the word a patch would write.
-type Slot = { kind: 'id' | 'value'; sql: string; read: string }
+// so what comes back is the word a patch would write. `of` is the pattern the
+// slot belongs to, and `tag` how its value crosses a carried row (`carry`).
+type Slot = {
+  name: string
+  kind: 'id' | 'value'
+  sql: string
+  read: string
+  tag: Tag
+  of: number
+}
+
+// One matching pattern, bound: what finds it (its sources, their joins and
+// its conditions), its eid, and its slots in the order its row carries them.
+type Part = {
+  i: number
+  from: Source[]
+  joins: Join[]
+  where: Expr[]
+  eid: string
+  slots: Slot[]
+}
+
+// A carried row holds a value as JSON does, except the two JSON cannot hold:
+// a JSONB value rides as its text and a binary one as hex, and each is read
+// back as it was stored.
+let carry = (e: Expr, tag: Tag): Expr =>
+  tag == 'jsonb'
+    ? op('||', fn('json', e), lit(''))
+    : tag == 'binary'
+    ? iff(isNull(e), lit(null), fn('hex', e))
+    : e
+let uncarry = (e: Expr, tag: Tag): Expr =>
+  tag == 'jsonb' ? fn('jsonb', e) : tag == 'binary' ? fn('unhex', e) : e
 
 /**
  * A rule's match as one select: one `e<i>` column per pattern (its eid), one
@@ -205,19 +249,8 @@ export let rule = (
   let touched = on.touched
   let extend = [...(opts.extend ?? []), removals(on.gone ?? (() => null))]
   let ctes: Cte[] = []
-  let froms: Source[] = []
-  let joins: Join[] = []
-  let conds: Expr[] = []
-  let cols: Expr[] = []
-  let anchors: string[] = []
-  // each matching pattern's own sources, in the order `anchors` lists them
-  let spines: Source[][] = []
+  let parts: Part[] = []
   let slots = new Map<string, Slot[]>()
-  let slot = (name: string, s: Slot) => {
-    let held = slots.get(name) ?? []
-    held.push(s)
-    slots.set(name, held)
-  }
 
   m.patterns.forEach((p, i) => {
     // A pattern that only writes matches nothing: it makes its entity, one
@@ -263,13 +296,16 @@ export let rule = (
       binds.map((b) => b.path),
     )
     ctes.push(...r.with ?? [])
-    let own = [r.from ?? []].flat()
-    froms.push(...own)
-    spines.push(own)
-    joins.push(...r.joins ?? [])
-    if (r.where) conds.push(r.where)
-    cols.push(raw(`${q(pre + 'entity')}."eid" as ${q(`e${i}`)}`))
-    anchors.push(`${q(pre + 'entity')}."id"`)
+    let entity = q(pre + 'entity')
+    let part: Part = {
+      i,
+      from: [r.from ?? []].flat(),
+      joins: r.joins ?? [],
+      where: r.where ? [r.where] : [],
+      eid: `${entity}."eid"`,
+      slots: [],
+    }
+    parts.push(part)
 
     // A gate: no row of it for the matched entity, asked under a name of its
     // own. Asked as `not exists` rather than a left join found empty, because
@@ -278,86 +314,179 @@ export let rule = (
     // right side of a left join: there it copies the whole table first.
     for (let comp of p.gates) {
       let as = `${pre}gate_${comp}`
-      conds.push(
+      part.where.push(
         raw(
           `not exists (select 1 from ${source(comp)} ${q(as)} where ${
             q(as)
-          }."entity" = ${q(pre + 'entity')}."id")`,
+          }."entity" = ${entity}."id")`,
         ),
       )
     }
 
+    let slot = (s: Omit<Slot, 'of'>) => {
+      let one = { ...s, of: i }
+      slots.set(s.name, [...slots.get(s.name) ?? [], one])
+      part.slots.push(one)
+    }
     if (p.entity) {
-      slot(p.entity, {
+      slot({
+        name: p.entity,
         kind: 'id',
-        sql: `${q(pre + 'entity')}."id"`,
-        read: `${q(pre + 'entity')}."eid"`,
+        sql: `${entity}."id"`,
+        read: `${entity}."eid"`,
+        tag: 'eid',
       })
     }
     // A reference joins by the integer id it stores, a plain value by itself.
     for (let b of binds) {
-      let { expr, key } = fields.get(b.path)!
+      let { expr, key, tag } = fields.get(b.path)!
       let leaf = b.hops[b.hops.length - 1]
       let id = key ??
         (b.hops.length == 1 ? d.refCol!(leaf.comp, leaf.prop) : undefined)
       if (b.ref && !id) {
         throw new Error(`$${b.name} reads .${b.path}, which stores no id`)
       }
-      slot(b.name, {
+      slot({
+        name: b.name,
         kind: b.ref ? 'id' : 'value',
         sql: b.ref ? id! : expr,
         read: expr,
+        tag,
       })
     }
   })
 
-  // The anchor. A rule is about a batch, not about the whole database: without
-  // this the same statement queries the whole graph, and a rule with a standing
-  // gate would fire on every entity that ever failed to satisfy it. So at least
-  // one of its patterns must bind an entity the batch wrote — the same thing
-  // the hand-written effect rules have always required, expressed in SQL.
-  //
-  // Each pattern starts from the batch: its ids are read first and crossed
-  // into the pattern's spine, so the engine looks up the few entities the
-  // batch wrote rather than walking a table whose rows merely might match (a
-  // plain `in` lets it start from every task to find the one the batch
-  // touched). Several patterns are anchored together, any one of them enough:
-  // one arm for each, starting from it, their rows together. An `in` against
-  // each instead leaves no pattern to start from, and the engine walks one.
-  let start = (k: number): Pick<Select, 'from' | 'joins' | 'where'> => ({
-    from: [raw(`json_each(?) as "__touched"`, [JSON.stringify(touched)])],
-    joins: [
-      ...[...spines[k], ...spines.filter((_, i) => i != k).flat()].map(cross),
-      ...joins,
-    ],
-    where: and(...conds, raw(`${anchors[k]} = "__touched"."value"`)),
-  })
-  // The join proper: every slot of a variable is the same value. An id and a
-  // value are not comparable — a reference stores an integer, a scalar stores
-  // itself — so the query mixing them is refused rather than compiled.
+  // An id and a value are not comparable — a reference stores an integer, a
+  // scalar stores itself — so the query mixing them is refused rather than
+  // compiled.
   for (let [name, held] of slots) {
     if (new Set(held.map((s) => s.kind)).size > 1) throw mixed(name)
-    for (let other of held.slice(1)) {
-      conds.push(raw(`${held[0].sql} = ${other.sql}`))
+  }
+
+  // The order an arm binds its patterns in: `k` first, then each pattern
+  // sharing a variable with those already bound, so it is found by a key they
+  // hold rather than read whole. A pattern sharing none comes when nothing
+  // else is left.
+  let ordered = (k: number): Part[] => {
+    let order = [parts[k]]
+    let names = new Set(parts[k].slots.map((s) => s.name))
+    while (order.length < parts.length) {
+      let rest = parts.filter((p) => !order.includes(p))
+      let next = rest.find((p) => p.slots.some((s) => names.has(s.name))) ??
+        rest[0]
+      order.push(next)
+      for (let s of next.slots) names.add(s.name)
     }
-    cols.push(raw(`${held[0].read} as ${q(`v_${name}`)}`))
+    return order
+  }
+
+  // One arm: its patterns in order, each found in a select of its own.
+  //
+  // A batch's overlay is a `union all` of committed and batch rows, and SQLite
+  // reads one by its key only by folding it into the select that names it,
+  // which copies that select once for each of its arms. Every overlaid source
+  // in one select doubles it again: a rule of n patterns, each standing on an
+  // overlaid spine and component, was 4^n copies of itself, and four patterns
+  // passed workerd's 25,000 operations to a statement. So each pattern is
+  // found in a select of its own, its sources folded there and nowhere else,
+  // and what the rest of the arm needs of it (its eid and its slots) comes back
+  // as one JSON row per match, which `json_each` crosses into the arm. Its
+  // conditions on the patterns bound before it are part of that select, so it
+  // is found by their keys, and the first is found by the batch's. `limit -1`
+  // keeps SQLite from folding that select into the `json_group_array` around
+  // it, which no overlay can be folded into.
+  let arm = (order: Part[]): Select => {
+    // The first slot of each variable: every later slot of it equals that
+    // one, which is the join, and it is what the variable reads as.
+    let first = new Map<string, Slot>()
+    for (let s of order.flatMap((p) => p.slots)) {
+      if (!first.has(s.name)) first.set(s.name, s)
+    }
+    // Where a carried row holds a first slot's value, and its read where that
+    // differs; a later slot is only compared, in its own pattern's select.
+    let carried = new Map<Slot, { row: string; read: number; sql: number }>()
+    let held = (s: Slot, which: 'sql' | 'read'): Expr => {
+      let at = carried.get(s)
+      if (!at) return raw(s[which])
+      return uncarry(
+        fn('json_extract', col('value', at.row), lit(`$[${at[which]}]`)),
+        s.tag,
+      )
+    }
+    let rows = new Map<number, string>()
+    let sources: Source[] = []
+    // The anchor. A rule is about a batch, not about the whole database:
+    // without it the same statement queries the whole graph, and a rule with
+    // a standing gate would fire on every entity that ever failed to satisfy
+    // it. So one of its patterns must bind an entity the batch wrote: the arm
+    // starts from the batch's ids, and its first pattern is looked up by them
+    // rather than found by walking a table whose rows merely might match.
+    if (touched) {
+      sources.push(call('json_each', [val(JSON.stringify(touched))], TOUCHED))
+    }
+    for (let p of order) {
+      let conds = [...p.where]
+      if (touched && p == order[0]) {
+        conds.push(
+          eq(raw(`${q(`p${p.i}_entity`)}."id"`), col('value', TOUCHED)),
+        )
+      }
+      let row = `__p${p.i}`
+      let values: Expr[] = [raw(p.eid)]
+      let own = new Map<Slot, { row: string; read: number; sql: number }>()
+      for (let s of p.slots) {
+        let one = first.get(s.name)!
+        if (one != s) {
+          conds.push(eq(held(one, 'sql'), raw(s.sql)))
+          continue
+        }
+        let read = values.push(carry(raw(s.read), s.tag)) - 1
+        let sql = s.sql == s.read || slots.get(s.name)!.length == 1
+          ? read
+          : values.push(carry(raw(s.sql), s.tag)) - 1
+        own.set(s, { row, read, sql })
+      }
+      let found = select({
+        cols: [as(fn('json_array', ...values), 'row')],
+        from: p.from,
+        joins: p.joins,
+        where: and(...conds),
+        limit: val(-1),
+      })
+      sources.push(call('json_each', [
+        sub(select({
+          cols: [fn('json_group_array', col('row'))],
+          from: from(found),
+        })),
+      ], row))
+      rows.set(p.i, row)
+      for (let [s, at] of own) carried.set(s, at)
+    }
+    let [start, ...rest] = sources
+    return select({
+      cols: [
+        ...parts.map((p) =>
+          as(
+            fn('json_extract', col('value', rows.get(p.i)), lit('$[0]')),
+            `e${p.i}`,
+          )
+        ),
+        ...[...slots.keys()].map((name) =>
+          as(held(first.get(name)!, 'read'), `v_${name}`)
+        ),
+      ],
+      from: start,
+      joins: rest.map(cross),
+    })
   }
 
   let with_ = ctes.length ? { with: ctes } : {}
-  // Not `distinct`: SQLite folds an overlay into a statement only when that
-  // statement is not one, so a `distinct` rule copies every table the batch
-  // overlays. A binding found twice is one binding to whoever reads the rows
-  // back (@yaks/sqlite rules.ts).
-  if (!touched) {
-    return {
-      t: 'select',
-      ...with_,
-      cols,
-      from: froms,
-      joins,
-      where: and(...conds),
-    }
-  }
-  let arms = anchors.map((_, k): Select => ({ t: 'select', cols, ...start(k) }))
+  // Not `distinct`: a binding found twice is one binding to whoever reads the
+  // rows back (@yaks/sqlite rules.ts).
+  //
+  // Several patterns are anchored together, any one of them enough: one arm
+  // for each, starting from it, their rows together.
+  if (!touched) return { ...arm(ordered(0)), ...with_ }
+  let arms = parts.map((_, k) => arm(ordered(k)))
   return { ...unionAllWithin(arms) as Select | Compound, ...with_ }
 }

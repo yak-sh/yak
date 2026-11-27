@@ -921,8 +921,7 @@ filters, gates, variable bindings and whether they only make entities. It is
 structurally compatible with [@yaks/graph](../graph/README.md)'s `Match`. `rule`
 produces one statement with `e0`, `e1`, … for matched eids and `v_<name>` for
 variables. Shared variables equate stored integer ids or scalar values; mixing
-those two forms is refused. The statement is not `distinct`, since SQLite folds
-a batch overlay into a statement only when it is not one: a binding it finds
+those two forms is refused. The statement is not `distinct`: a binding it finds
 twice is kept once by whoever reads the rows.
 
 ```ts
@@ -961,10 +960,16 @@ equal(render(statement).sql.includes('distinct'), false)
 removed-owner source for `-comp`. `On.touched` requires at least one pattern to
 match an integer id the batch touched; each pattern starts from those ids in an
 arm of its own, `union all`, so its cost follows the batch rather than the
-tables. Each pattern is bound correlated, testing the row in hand, and a gate is
-a `not exists`: an overlay read any other way is copied whole. Omit it to read
-the whole committed graph. Collections are evaluated by the storage adapter.
-Multi-hop variable bindings are not routed through their full path yet.
+tables. Within an arm each pattern is found in a select of its own, keyed on the
+patterns before it, and comes back as JSON rows that `json_each` crosses into
+the arm. SQLite reads an overlay by its key only by folding it into the select
+naming it, which copies that select once per overlay arm, so a select holding
+every pattern grew exponentially with them; one per pattern keeps a statement
+proportional to its patterns times its arms. Each pattern is bound correlated,
+testing the row in hand, and a gate is a `not exists`: an overlay read any other
+way is copied whole. Omit it to read the whole committed graph. Collections are
+evaluated by the storage adapter. Multi-hop variable bindings are not routed
+through their full path yet.
 
 ## Deletion lookups and compound statements
 

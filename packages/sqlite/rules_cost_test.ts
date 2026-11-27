@@ -9,7 +9,7 @@ import { Database } from './legacy.ts'
 import { match, reads } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
 import { type Driver, render, type Row, type Stmt } from '@yaks/sql'
-import { equal, test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import { storage } from './mod.ts'
 import { driver } from './native.ts'
 import { bindings } from './rules.ts'
@@ -37,15 +37,20 @@ let file = (size: number) => {
   return { db, d }
 }
 
-// The bindings `rule` finds over `batch`, and the steps its statements took.
+// The bindings `rule` finds over `batch`, the steps its statements took, and
+// the most operations one of them compiled to.
 let cost = (size: number, rule: string, batch: Bundle[]) => {
   let { db, d } = file(size)
-  let steps = 0
+  let steps = 0, ops = 0
   let counted: Driver = {
     ...d,
     query: (s: Stmt): Row[] => {
       let text = render(s)
       if (!text.sql.includes('__touched')) return d.query(s)
+      ops = Math.max(
+        ops,
+        db.prepare(`explain ${text.sql}`).all(...text.params).length,
+      )
       let stmt = db.prepare(text.sql)
       try {
         let rows = stmt.all(...text.params) as Row[]
@@ -62,7 +67,7 @@ let cost = (size: number, rule: string, batch: Bundle[]) => {
   }
   let m = match(rule)
   let found = bindings(counted, shop, [m], batch, [...new Set(reads(m, shop))])
-  return { found: found[0].map((b) => b.entities), steps }
+  return { found: found[0].map((b) => b.entities), steps, ops }
 }
 
 let cases: [string, Bundle[], (string | null)[][]][] = [
@@ -86,5 +91,25 @@ test('a rule asked of a batch costs the batch, whatever the file holds', () => {
     equal([rule, small.found], [rule, expected])
     equal([rule, large.found], [rule, expected])
     equal([rule, large.steps], [rule, small.steps])
+  }
+})
+
+// Workerd refuses a statement past 25,000 operations. A rule whose patterns
+// all read what the batch overlays once compiled to a copy of itself for each
+// way of choosing committed or batch rows across them, past that at four.
+test('a rule asked of a batch compiles to a statement that grows with its patterns, not their product', () => {
+  for (let n of [2, 4, 6]) {
+    let rule = [
+      '$p .product',
+      ...Array(n - 1).fill('.review, review.product=$p'),
+    ]
+      .join('; ')
+    let batch: Bundle[] = [
+      { entity: { eid: 'new' }, product: { price: 1, maker: 'p0' } },
+      { entity: { eid: 'r' }, review: { stars: 3, product: 'new' } },
+    ]
+    let { found, ops } = cost(10, rule, batch)
+    equal([n, found], [n, [['new', ...Array(n - 1).fill('r')]]])
+    ok(ops < 12_500, `${n} patterns: ${ops} operations`)
   }
 })
