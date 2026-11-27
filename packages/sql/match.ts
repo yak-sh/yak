@@ -43,6 +43,7 @@ import {
   type Compound,
   cross,
   type Cte,
+  eq,
   type Expr,
   FALSE,
   type Join,
@@ -50,9 +51,10 @@ import {
   type Select,
   select,
   type Source,
+  sub,
   table,
 } from './ast.ts'
-import { q } from './render.ts'
+import { inline, q } from './render.ts'
 import { unionAllWithin } from './compound.ts'
 import { type BindOpts, boundReads } from './bind.ts'
 import type { Extension } from './extend.ts'
@@ -141,11 +143,14 @@ let prefixed = (pre: string, at: At): Dialect => {
       if (prop == 'eid') return `${q(pre + comp)}."entity"`
       let c = v.prop(comp, prop)
       if (!c) return null
+      let own = col(field(prop), pre + comp)
       return c.category == 'ref'
-        ? `(select __re.eid from ${from('entity')} __re where __re.id = ${
-          q(pre + comp)
-        }.${q(field(prop))})`
-        : `${q(pre + comp)}.${q(field(prop))}`
+        ? inline(sub(select({
+          cols: [col('eid', '__re')],
+          from: table(at('entity'), '__re'),
+          where: eq(col('id', '__re'), own),
+        })))
+        : inline(own)
     },
   }
 }

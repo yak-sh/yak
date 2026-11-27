@@ -6,7 +6,7 @@
  *
  * @module
  */
-import type { PropSchema } from '@yaks/vocab'
+import { type PropSchema, refOf } from '@yaks/vocab'
 
 /** The words a component, command or property gives itself, which name it
  * for a person ('' for none). */
@@ -83,8 +83,10 @@ let lines = (s: PropSchema) =>
 // The control a property is edited with, from what it declares. A file is a
 // reference to the platform's `blob`, or the guide's `blob` text property.
 let control = (prop: string, s: PropSchema): Control => {
-  if (s.ref == 'blob' || (prop == 'blob' && s.type == 'string')) return 'file'
-  if (s.ref) return 'pick'
+  if (refOf(s) == 'blob' || (prop == 'blob' && s.type == 'string')) {
+    return 'file'
+  }
+  if (refOf(s)) return 'pick'
   if (s.enum) return 'choice'
   if (s.type == 'number' || s.type == 'integer') return 'number'
   if (s.type == 'boolean') return 'bool'
@@ -123,7 +125,7 @@ export let fields = (name: string, def: PropSchema): Field[] => [
       label: label(prop, s),
       control: control(prop, s),
       ...s.description ? { hint: s.description } : {},
-      ...s.ref ? { ref: s.ref } : {},
+      ...refOf(s) ? { ref: refOf(s) } : {},
       ...s.enum ? { choices: s.enum } : {},
       ...readOnly(s) ? { readOnly: true } : {},
     })),
@@ -143,7 +145,7 @@ export let facts = (name: string, def: PropSchema): Field[] =>
     label: label(prop, s),
     control: control(prop, s),
     ...s.description ? { hint: s.description } : {},
-    ...s.ref ? { ref: s.ref } : {},
+    ...refOf(s) ? { ref: refOf(s) } : {},
     readOnly: true,
   }))
 

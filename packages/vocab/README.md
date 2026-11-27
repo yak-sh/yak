@@ -20,8 +20,9 @@ hold, and how to resolve a [query](../query/README.md).
 
 A **reference** is a string property that names an
 [entity](../graph/README.md#data-model), declared with `ref` and `death`, such
-as `{ type: 'string', ref: 'book', death: 'detach' }`. `ref: 'entity'` accepts
-any entity; another component name requires that component on the target.
+as `{ type: 'string', ref: 'book', death: 'detach' }`. `ref: 'entity'` (or
+`ref: true`) accepts any entity; another component name requires that component
+on the target.
 
 A **kind** is a named shape: the components that make an entity that kind of
 thing, and what a whole one also carries. A document declares its kinds beside

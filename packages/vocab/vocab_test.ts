@@ -69,6 +69,16 @@ test('properties interrogate to their whole shape', () => {
   )
   // a kept reference carries no foreign key
   assertEquals(v.prop('memory', 'scope')!.fk, false)
+  // `ref: true` is a reference to any entity, and no component is called true
+  let any = loadVocab({
+    $defs: {
+      link: {
+        component: true,
+        properties: { to: { type: 'string', ref: true, death: 'keep' } },
+      },
+    },
+  })
+  assertEquals(any.prop('link', 'to')!.ref, 'entity')
   // where a string property keeps its value is no concern of the meta-model:
   // a body is an ordinary text property here (@yaks/blob owns `store`)
   let body = v.prop('doc', 'body')!

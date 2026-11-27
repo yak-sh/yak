@@ -293,6 +293,11 @@ let carried = (
   return out
 }
 
+/** What a property references: the component its target wears, `entity` for
+ * any entity (also spelled `ref: true`), or nothing for a plain property. */
+export let refOf = (s: PropSchema): string | undefined =>
+  s.ref === true ? 'entity' : s.ref
+
 // The JSON types a property declares: one name, or the members of a union.
 export let typesOf = (s: PropSchema): string[] =>
   Array.isArray(s.type) ? [...s.type] : s.type == null ? [] : [s.type]
@@ -428,7 +433,7 @@ let propOf = (
     values: s.enum ? [...s.enum] : undefined,
     types: scalar == 'jsonb' ? typesOf(s) : undefined,
     aliases: s.aliases,
-    ref: s.ref,
+    ref: refOf(s),
     death,
     stamped: !!s.stamped,
     search: s.search === true,

@@ -156,6 +156,24 @@ test('a hosted blob-backed binding projects text at every collection level', asy
   })
 })
 
+// workerd writes a `not materialized` overlay out where it is named, so the
+// spine a reference variable reads its eid through becomes a subquery there.
+test('a rule binds a reference variable over a batch that mints an entity', async () => {
+  let s = store()
+  await s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'p1' }, product: { price: 9 } }])
+  )
+  let m = match('$r .review.product=$p')
+  let found = await s.tx((tx) =>
+    tx.bindings(
+      [m],
+      [{ entity: { eid: 'r1' }, review: { stars: 5, product: 'p1' } }],
+      reads(m, shop),
+    )
+  )
+  assertEquals(found[0].map((b) => b.vars), [{ r: 'r1', p: 'p1' }])
+})
+
 test('bytes go in as an ArrayBuffer and come back as bytes', async () => {
   let s = store()
   await s.tx((tx) =>

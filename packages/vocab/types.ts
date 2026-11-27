@@ -298,7 +298,7 @@ export type PropSchema = {
   $ref?: string
   // yaks core keywords (death is loose here — a JSON import infers plain
   // string; the storable check is what rejects a value outside the four)
-  ref?: string
+  ref?: string | true
   death?: string
   // true = derived, never stored: a property no column holds, or a component
   // no table holds (its rows are another package's, read through a backing)
