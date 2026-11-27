@@ -53,6 +53,12 @@ config.resolver.resolveRequest = (context, name, platform) => {
   let file = exported(name)
   if (file) return { type: 'sourceFile', filePath: file }
   if (context.originModulePath.startsWith(path.join(repo, 'packages') + '/')) {
+    if (name == 'react-dom/client') {
+      return {
+        type: 'sourceFile',
+        filePath: path.join(repo, 'packages/preact/client.ts'),
+      }
+    }
     let compat = {
       react: 'preact/compat',
       'react-dom': 'preact/compat',

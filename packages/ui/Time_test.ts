@@ -1,7 +1,8 @@
 import { cleanup, clock, equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { createElement as h } from 'react'
-import { draw } from '@yaks/preact/draw'
+import { draw } from '@yaks/react/draw'
+import { act } from '@yaks/react/testing'
 import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { day, pretty } from './relative.ts'
 import { Time } from './Time.ts'
@@ -24,7 +25,6 @@ let page = () => {
   })
   let root = document.querySelector('main')!
   cleanup(() => {
-    draw(null, root)()
     if (width) Object.defineProperty(globalThis, 'innerWidth', width)
     else delete (globalThis as { innerWidth?: unknown }).innerWidth
     if (height) Object.defineProperty(globalThis, 'innerHeight', height)
@@ -89,13 +89,14 @@ test('mounted dates share a ticking clock and stop it when the last date leaves'
     h('div', null, h(Time, { at, clock: time }), h(Time, { at, clock: time })),
     root,
   )
+  cleanup(hide)
   await Promise.resolve()
   equal([...root.querySelectorAll('time')].map((x) => x.textContent), [
     '1 minute ago',
     '1 minute ago',
   ])
   equal(time.pending(), 1)
-  await time.advance(60_000)
+  await act(() => time.advance(60_000))
   await Promise.resolve()
   equal([...root.querySelectorAll('time')].map((x) => x.textContent), [
     '2 minutes ago',
@@ -108,10 +109,10 @@ test('mounted dates share a ticking clock and stop it when the last date leaves'
 test('a mounted duration counts up every second', async () => {
   let { root } = page()
   let time = clock(Date.parse(at) + 192_000)
-  draw(h(Time, { at, clock: time, lasting: true }), root)
+  cleanup(draw(h(Time, { at, clock: time, lasting: true }), root))
   await Promise.resolve()
   equal(root.textContent, '3m 12s')
-  await time.advance(1_000)
+  await act(() => time.advance(1_000))
   await Promise.resolve()
   equal(root.textContent, '3m 13s')
 })

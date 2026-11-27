@@ -9,7 +9,8 @@ import { views as connectionViews } from '@yaks/connections/views'
 import { views as genericViews } from '@yaks/render/views'
 // The curated views and verbs, with the app's quarantine, failure and memo
 // boundaries.
-// @yaks/render selects them; @yaks/preact mounts the selected component.
+// @yaks/render selects them and React mounts the selected component.
+import { memo } from 'react'
 import { and, parse } from '@yaks/query'
 import { statusChanges, subChanges } from '../client.ts'
 import { Fault } from './Fault.tsx'
@@ -17,7 +18,6 @@ import { ent, mutate, myActor, myMode, reveal, rows, shown } from '../live.ts'
 import { type Ent, idOf, statusOf, vocab } from '../types.ts'
 import { navigate } from './nav.tsx'
 import { type Action, define, defineActions, renderView } from './registry.ts'
-import { memo } from './memo.ts'
 import { useDerived } from './read.ts'
 import {
   Acceptance,

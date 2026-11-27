@@ -24,7 +24,7 @@
     "@yaks/doc": "0.2.24",
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.30",
-    "react": "npm:@preact/compat@18.3.2",
+    "react": "19.3.0",
     "@preact/signals": "2.9.4"
   },
   "peerDependencies": {

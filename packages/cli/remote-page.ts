@@ -33,7 +33,7 @@ export let bundle = async (
       target: 'esnext',
       // esbuild reads no deno.json: said here, or JSX compiles to `React`.
       jsx: 'automatic',
-      jsxImportSource: 'preact',
+      jsxImportSource: 'react',
       minify: true,
       write: false,
       logLevel: 'silent',

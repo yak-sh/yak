@@ -190,7 +190,6 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@preact/compat@18.3.2': 20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902
   linkedom@0.18.15: e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef
 
 importers:
@@ -359,11 +358,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
       resolve.exports:
         specifier: 2.0.3
         version: 2.0.3
@@ -410,6 +409,12 @@ importers:
       '@types/mime-types':
         specifier: ^3.0.1
         version: 3.0.1
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 19.3.0
+        version: 19.3.0(@types/react@19.3.0)
       '@types/semver':
         specifier: ^7.8.0
         version: 7.8.0
@@ -938,8 +943,8 @@ importers:
         specifier: 0.2.24
         version: link:../wake
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/builders:
     dependencies:
@@ -1277,8 +1282,8 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       smol-toml:
         specifier: ^1.9.1
         version: 1.9.1
@@ -1534,8 +1539,8 @@ importers:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/context:
     dependencies:
@@ -1805,8 +1810,8 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/dreaming:
     dependencies:
@@ -1980,11 +1985,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/egress:
     dependencies:
@@ -2152,8 +2157,8 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -2168,8 +2173,8 @@ importers:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/feedback:
     dependencies:
@@ -2220,8 +2225,8 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/filter:
     dependencies:
@@ -2332,12 +2337,15 @@ importers:
       '@yaks/tui':
         specifier: 0.2.24
         version: link:../tui
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0(supports-color@10.2.2)
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/fp: {}
 
@@ -2409,11 +2417,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/git:
     dependencies:
@@ -2713,8 +2721,8 @@ importers:
         specifier: 0.2.24
         version: link:../tunnel
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/heal:
     dependencies:
@@ -2816,8 +2824,8 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/hook:
     dependencies:
@@ -2929,8 +2937,8 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -2948,8 +2956,8 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/id:
     dependencies:
@@ -3079,8 +3087,8 @@ importers:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/inspect:
     dependencies:
@@ -3155,11 +3163,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/journal:
     dependencies:
@@ -3228,8 +3236,8 @@ importers:
         specifier: 0.2.24
         version: link:../text
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/kernel:
     dependencies:
@@ -3283,8 +3291,8 @@ importers:
         specifier: 0.2.24
         version: link:../text
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/key:
     dependencies:
@@ -3477,8 +3485,8 @@ importers:
         specifier: 0.2.28
         version: link:../secrets
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/markdown:
     dependencies:
@@ -3514,8 +3522,8 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/match:
     dependencies:
@@ -3720,8 +3728,8 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/mirror:
     dependencies:
@@ -3823,9 +3831,9 @@ importers:
       '@yaks/dom':
         specifier: 0.2.24
         version: link:../dom
-      '@yaks/preact':
-        specifier: 0.2.24
-        version: link:../preact
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/ui':
         specifier: 0.2.30
         version: link:../ui
@@ -3843,8 +3851,8 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/notify:
     dependencies:
@@ -4114,11 +4122,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/phone:
     dependencies:
@@ -4365,8 +4373,8 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
       ua-parser-js:
         specifier: 1.0.41
         version: 1.0.41
@@ -4387,8 +4395,8 @@ importers:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/preact:
     dependencies:
@@ -4657,11 +4665,11 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/render:
     dependencies:
@@ -4981,11 +4989,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/slack:
     dependencies:
@@ -5121,11 +5129,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/spend:
     dependencies:
@@ -5188,8 +5196,8 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/sql:
     dependencies:
@@ -5477,8 +5485,8 @@ importers:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/telnyx:
     dependencies:
@@ -5644,11 +5652,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/tmux:
     dependencies:
@@ -5815,11 +5823,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/trace:
     devDependencies:
@@ -5933,11 +5941,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/trial:
     dependencies:
@@ -6073,8 +6081,8 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/tunnel:
     dependencies:
@@ -6171,11 +6179,11 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/ux:
     dependencies:
@@ -6232,11 +6240,11 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
   packages/visualize:
     dependencies:
@@ -6302,8 +6310,8 @@ importers:
         specifier: 0.2.30
         version: link:../testing
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/vocab:
     dependencies:
@@ -6625,8 +6633,8 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
 
   packages/yaml:
     dependencies:
@@ -7070,8 +7078,8 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0
       rollup:
         specifier: 4.65.1
         version: 4.65.1
@@ -7095,8 +7103,8 @@ importers:
         specifier: 2.3.2
         version: 2.3.2
       react-dom:
-        specifier: npm:@preact/compat@18.3.2
-        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
 
 packages:
   '@asamuzakjp/css-color@3.2.0':
@@ -8315,13 +8323,6 @@ packages:
       integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==,
     }
 
-  '@preact/compat@18.3.2':
-    resolution: {
-      integrity: sha512-5vSl55K5yLMvocT7PBKxDOHGgYPjMrKQqqr6roSNjIXcJOtSgDDMjpiCAF3s7klRdmGrN75b/Przmjw8gmlg/w==,
-    }
-    peerDependencies:
-      preact: '*'
-
   '@preact/signals-core@1.14.5':
     resolution: {
       integrity: sha512-vcRv7Ityz5JVmeiVqIluLFzT/PDS/AlhHUpw3/aUWqcVUs6bDGIPXE/6RSC4evBNWYvnniozg5Syfj33al3gkg==,
@@ -8772,6 +8773,18 @@ packages:
   '@types/node@26.6.6':
     resolution: {
       integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==,
+    }
+
+  '@types/react-dom@19.3.0':
+    resolution: {
+      integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==,
+    }
+    peerDependencies:
+      '@types/react': ^19.3.0
+
+  '@types/react@19.3.0':
+    resolution: {
+      integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==,
     }
 
   '@types/semver@7.8.0':
@@ -9278,6 +9291,11 @@ packages:
       integrity: sha512-2z+rWdzbbSZv6/rhtvzvqeZQHrBaqgogqt85sqFNbabZOuFbCVFb8kPeEtZjiKkbrm395irpNKiYeFeLiQnFPg==,
     }
     engines: { node: '>=18' }
+
+  csstype@3.2.4:
+    resolution: {
+      integrity: sha512-PoKaoPzQapnEoqUSnHx1u6W6ku8CVEgKsnpmmzU3m1nwkidpPBQ8V/Zq2+bWNrsOKoKLwTGdbx6xF7BXP1zLVQ==,
+    }
 
   csv-parse@7.0.3:
     resolution: {
@@ -10235,6 +10253,19 @@ packages:
     }
     engines: { node: '>= 0.10' }
 
+  react-dom@19.3.0:
+    resolution: {
+      integrity: sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==,
+    }
+    peerDependencies:
+      react: ^19.3.0
+
+  react@19.3.0:
+    resolution: {
+      integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==,
+    }
+    engines: { node: '>=0.10.0' }
+
   require-directory@2.1.1:
     resolution: {
       integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==,
@@ -10291,6 +10322,11 @@ packages:
       integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==,
     }
     engines: { node: '>=v12.22.7' }
+
+  scheduler@0.28.0:
+    resolution: {
+      integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==,
+    }
 
   semver@7.8.5:
     resolution: {
@@ -11477,10 +11513,6 @@ snapshots:
 
   '@poppinss/exception@1.2.3': {}
 
-  '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)':
-    dependencies:
-      preact: 10.29.7(preact-render-to-string@6.7.0)
-
   '@preact/signals-core@1.14.5': {}
 
   '@preact/signals@2.9.4(preact@10.29.7)':
@@ -11708,6 +11740,14 @@ snapshots:
   '@types/node@26.6.6':
     dependencies:
       undici-types: 8.9.0
+
+  '@types/react-dom@19.3.0(@types/react@19.3.0)':
+    dependencies:
+      '@types/react': 19.3.0
+
+  '@types/react@19.3.0':
+    dependencies:
+      csstype: 3.2.4
 
   '@types/semver@7.8.0': {}
 
@@ -11981,6 +12021,8 @@ snapshots:
     dependencies:
       '@asamuzakjp/css-color': 3.2.0
       rrweb-cssom: 0.8.0
+
+  csstype@3.2.4: {}
 
   csv-parse@7.0.3: {}
 
@@ -12665,6 +12707,13 @@ snapshots:
       iconv-lite: 0.7.3
       unpipe: 1.0.0
 
+  react-dom@19.3.0(react@19.3.0):
+    dependencies:
+      react: 19.3.0
+      scheduler: 0.28.0
+
+  react@19.3.0: {}
+
   require-directory@2.1.1: {}
 
   require-from-string@2.0.2: {}
@@ -12728,6 +12777,8 @@ snapshots:
   saxes@6.0.0:
     dependencies:
       xmlchars: 2.2.0
+
+  scheduler@0.28.0: {}
 
   semver@7.8.5: {}
 

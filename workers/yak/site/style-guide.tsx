@@ -11,7 +11,7 @@ import {
   pencil,
   Worn,
 } from '@yaks/ui'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { WORN } from '../sheet-assets.ts'
 import { UI_GUIDE } from '../kept-page.ts'
 import { attr, said, type Slots, text } from './copy.ts'
@@ -144,7 +144,10 @@ let Rules = ({ at, rules }: { at: string; rules: Record<string, Slots> }) => (
 // A colour token: its paint, its name and its value as painted.
 let Swatch = ({ token }: { token: string }) => (
   <li className='Guide_Swatch' data-token={token}>
-    <span className='Guide_Chip' style={`--swatch: var(${token})`} />{' '}
+    <span
+      className='Guide_Chip'
+      style={{ '--swatch': `var(${token})` } as CSSProperties}
+    />{' '}
     <code className='Guide_Name'>{token}</code> <span className='Guide_Value' />
   </li>
 )
@@ -156,7 +159,10 @@ let Size = ({ token }: { token: string }) => (
       <code className='Guide_Name'>{token}</code>{' '}
       <span className='Guide_Value' />
     </span>{' '}
-    <span className='Guide_Bar' style={`--bar: var(${token})`} />
+    <span
+      className='Guide_Bar'
+      style={{ '--bar': `var(${token})` } as CSSProperties}
+    />
   </li>
 )
 
@@ -196,8 +202,11 @@ export let StyleGuide = () => (
       <h1 className='Title Title-page' {...say('head.title')} />
       <p className='Note Note-lead' {...say('head.lead')} />
       <p>
-        <label className='Note Note-small' for='theme' {...say('head.theme')} />
-        {' '}
+        <label
+          className='Note Note-small'
+          htmlFor='theme'
+          {...say('head.theme')}
+        />{' '}
         <Field choose id='theme' name='theme'>
           {['system', 'light', 'dark'].map((theme) => (
             <option
@@ -309,7 +318,7 @@ export let StyleGuide = () => (
           <span className='Guide_Name'>--font</span>{' '}
           <span className='Guide_Value' />
         </p>
-        <p data-token='--mono' style='font-family: var(--mono)'>
+        <p data-token='--mono' style={{ fontFamily: 'var(--mono)' }}>
           <span className='Guide_Name'>--mono</span>{' '}
           <span className='Guide_Value' />
         </p>
@@ -317,7 +326,7 @@ export let StyleGuide = () => (
           <p
             key={size}
             data-token={`--${size}`}
-            style={`font-size: var(--${size})`}
+            style={{ fontSize: `var(--${size})` }}
             {...say(`type.${size}`, token(`--${size}`))}
           />
         ))}
@@ -351,7 +360,10 @@ export let StyleGuide = () => (
         <li className='Guide_Swatch' data-token='--stroke'>
           <span
             className='Guide_Chip'
-            style='--swatch: var(--card); border: var(--stroke) solid var(--graphite)'
+            style={{
+              '--swatch': 'var(--card)',
+              border: 'var(--stroke) solid var(--graphite)',
+            } as CSSProperties}
           />{' '}
           <code className='Guide_Name'>--stroke</code>{' '}
           <span className='Guide_Value' />
@@ -360,7 +372,7 @@ export let StyleGuide = () => (
           <Card
             as='span'
             className='Guide_Chip'
-            style='--swatch: var(--card); border-color: transparent'
+            style={{ '--swatch': 'var(--card)', borderColor: 'transparent' }}
           />{' '}
           <code className='Guide_Name'>--radius</code>{' '}
           <span className='Guide_Value' />
@@ -370,7 +382,7 @@ export let StyleGuide = () => (
             as='span'
             mod='go'
             className='Guide_Chip'
-            style='--swatch: var(--accent); border-color: transparent'
+            style={{ '--swatch': 'var(--accent)', borderColor: 'transparent' }}
           />{' '}
           <code className='Guide_Name'>--lift</code>{' '}
           <span className='Guide_Value' />
@@ -477,7 +489,7 @@ export let StyleGuide = () => (
             <iframe
               className='Window_Frame'
               {...attr('title', 'style-guide.components.window.title')}
-              srcdoc={PREVIEW}
+              srcDoc={PREVIEW}
             />
           </div>
         </div>

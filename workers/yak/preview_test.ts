@@ -19,9 +19,9 @@ import { createElement as h } from 'react'
 import { client } from '@yaks/client'
 import { store } from '@yaks/platform/client'
 import { stub } from '@std/testing/mock'
-import { host } from '@yaks/preact/host'
+import { host } from '@yaks/react/host'
 import { loadVocab } from '@yaks/vocab'
-import { CustomEvent, stage } from '../../packages/preact/testing.ts'
+import { CustomEvent, stage } from '../../packages/react/test-dom.ts'
 
 let kernel = (req: Request, env: Parameters<typeof handler.fetch>[1]) =>
   handler.fetch(req, env)
@@ -365,7 +365,7 @@ test('the link follows the draft: each write is told to its pages and served on 
   ok(!released.includes('data-yak-draft="'))
 })
 
-test('a page drawn by @yaks/preact/host takes a write of its views module from the link in place: the module the link serves, drawn in the same root over the same page graph', async () => {
+test('a page host takes a write of its views module from the link in place: the module the link serves, drawn in the same root over the same page graph', async () => {
   let views = (word: string) =>
     `import { define } from ${
       JSON.stringify(import.meta.resolve('@yaks/render'))

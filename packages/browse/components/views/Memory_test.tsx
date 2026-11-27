@@ -3,7 +3,7 @@
 // promises.
 import { test } from '@yaks/testing'
 import '../../testing.ts'
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { render } from '@yaks/react/draw'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
@@ -27,7 +27,7 @@ let memory: Ent = {
   feedback: { eid: 'memory' },
 }
 
-let children = (v: ReactElement) =>
+let children = (v: ReactElement<{ children?: ReactNode }>) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
     .filter((x) => x !== undefined && x !== false) as ReactElement[]
 

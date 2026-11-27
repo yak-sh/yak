@@ -40,6 +40,7 @@ import { incremental } from './check-incremental.ts'
 import { compiler } from './check-compiler.ts'
 import { diagnostic, unavailable } from './check-imports.ts'
 import { localCheck, onRunner } from './check-work.ts'
+import { preactImports, usesPreact } from './app-renderer.ts'
 
 /** Where the checked modules live. */
 export const DIRS = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
@@ -257,6 +258,7 @@ type Platform = {
   name: string
   dir: string
   config?: string
+  importMap?: string
   options: Record<string, unknown>
   globals: () => Promise<Record<string, string>>
   hosted: boolean
@@ -289,13 +291,14 @@ let TEXT = ['css', 'md'].map((ext) =>
 `
 ).join('')
 
-let deno = (): Platform => {
+let deno = (name: 'deno' | 'preact' = 'deno'): Platform => {
   let { lib, ...options } = config.compilerOptions
   let other = lib.filter((l) => l.startsWith('deno.') && l != 'deno.ns')
   if (other.length) throw new Error(`deno.json: no program for ${other}`)
   return {
-    name: 'deno',
-    dir: DIR,
+    name,
+    dir: name == 'preact' ? `${DIR}/preact` : DIR,
+    importMap: name == 'preact' ? preactImports : undefined,
     options: {
       ...options,
       lib: [...lib.filter((l) => !l.startsWith('deno.')), 'esnext'],
@@ -331,8 +334,11 @@ let host = (name: 'workers' | 'browser') =>
           name == 'workers'
             ? {
               'workers.d.ts': await Deno.readTextFile(
-                `${CHECKOUT}/node_modules/@cloudflare/workers-types/index.d.ts`,
+                `${CHECKOUT}/node_modules/@cloudflare/workers-types/latest/index.d.ts`,
               ),
+              // Encoding creates a new ordinary buffer, as DOM's declaration does.
+              'utf8.d.ts':
+                'interface TextEncoder { encode(input?: string): Uint8Array<ArrayBuffer> }',
               'wasm.d.ts': `declare module '*.wasm' {
   const module: WebAssembly.Module
   export default module
@@ -676,6 +682,14 @@ let program = async (
         'info',
         '--json',
         ...on.config ? ['--no-lock', '--config', on.config] : [],
+        ...on.importMap
+          ? [
+            '--no-lock',
+            '--node-modules-dir=manual',
+            '--import-map',
+            on.importMap,
+          ]
+          : [],
         graph,
       ])
       if (!info.success) throw new Error(info.err)
@@ -684,7 +698,8 @@ let program = async (
     // What deno said a platform's own configuration resolves is kept by
     // that configuration, as Deno's is by the checkout's, and a new checkout
     // starts from what any checkout said under the same one (`shared`).
-    let own = on.config && shared(on.name, on.config)
+    let settings = on.config ?? on.importMap
+    let own = settings && shared(on.name, settings)
     let [found, globals] = await Promise.all([
       own
         ? remembered(resolve, ...own)(roots, snapshot?.said)
@@ -779,6 +794,11 @@ let program = async (
       Object.keys(globals),
       on.hosted,
       on.name != 'browser',
+      new Set(
+        on.importMap
+          ? Object.keys(JSON.parse(Deno.readTextFileSync(on.importMap)).imports)
+          : [],
+      ),
     )
     lay(p, on.dir)
     for (let [name, text] of Object.entries(globals)) {
@@ -870,12 +890,20 @@ let check = async (
         .filter(([, out]) => snapshot.reaches(roots, out))
         .map(([generator]) => generator)
       : Object.keys(MADE)
+  let local = roots.filter((root) => !usesPreact(root))
+  let legacy = roots.filter(usesPreact)
   return await programs(
     [
-      ...roots.length
+      ...local.length
         ? [{
-          made: made(roots),
-          check: () => program(deno(), roots, snapshot, all),
+          made: made(local),
+          check: () => program(deno(), local, snapshot, all),
+        }]
+        : [],
+      ...legacy.length
+        ? [{
+          made: made(legacy),
+          check: () => program(deno('preact'), legacy, snapshot, all),
         }]
         : [],
       ...hosted.filter((h) => h.entries.length).map((h) => ({

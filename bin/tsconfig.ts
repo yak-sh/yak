@@ -203,6 +203,7 @@ export let project = (
   globals: string[] = [],
   hosted = false,
   nodes = true,
+  mapped: ReadonlySet<string> = new Set(),
 ): Project => {
   let base = `file://${checkout}/`
   let modules = new Map(info.modules.map((m) => [m.specifier, m]))
@@ -263,7 +264,8 @@ export let project = (
       if (!tos.length) continue
       if (!/^\.\.?\//.test(d.specifier)) {
         if (
-          url?.includes('/node_modules/') && !d.specifier.startsWith('npm:')
+          url?.includes('/node_modules/') && !d.specifier.startsWith('npm:') &&
+          !mapped.has(d.specifier)
         ) continue
         paths[d.specifier] ??= tos.map((to) => relative(dir, to))
         continue

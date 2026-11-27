@@ -20,9 +20,6 @@ allowBuilds:
 # element listening (`currentTarget`), as a browser does. A node's properties
 # link its whole document, so inspection walks every node; the patch shows
 # the node's markup instead. Its `focus()` and `blur()` send `focusin` and
-# `focusout` too, bubbling, as a browser does: React's onFocus and onBlur. `react` and `react-dom` are @preact/compat, Preact's
-# own alias package, until our code moves to React (D-437); its patch adds the
-# declarations it lacks, which re-export preact/compat's.
+# `focusout` too, bubbling, as a browser does for React's onFocus and onBlur.
 patchedDependencies:
-  '@preact/compat@18.3.2': patches/@preact__compat@18.3.2.patch
   linkedom@0.18.15: patches/linkedom@0.18.15.patch

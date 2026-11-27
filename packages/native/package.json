@@ -12,13 +12,13 @@
     "@yaks/dom": "0.2.24",
     "@yaks/ui": "0.2.30",
     "sucrase": "3.35.1",
-    "@yaks/preact": "0.2.24"
+    "@yaks/react": "0.2.33"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/testing": "0.2.30",
     "preact": "10.29.7",
-    "react": "npm:@preact/compat@18.3.2"
+    "react": "19.3.0"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"

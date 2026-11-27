@@ -12,6 +12,7 @@ import type { Suite } from './test-budget.ts'
 import type { Survey } from '@yaks/testing/deps'
 import type { Examples } from '@yaks/testing/examples'
 import { localCheck, onRunner } from './check-work.ts'
+import { preactImports, usesPreact } from './app-renderer.ts'
 
 /** Set in a run's environment, naming the run: every process it starts
  * inherits it, so a run started from inside one refuses. */
@@ -102,20 +103,26 @@ export let denoDir = (
     ? `${env.LOCALAPPDATA}\\deno`
     : `${env.XDG_CACHE_HOME ?? `${env.HOME}/.cache`}/deno`)
 
-export let PLATFORMS = ['deno', 'terminal']
+export let PLATFORMS = ['deno', 'terminal', 'preact']
 
 /// platform('packages/graph/graph_test.ts') -> 'deno'
 /// platform('packages/web/live_test.ts') -> 'deno'
 /// platform('packages/browse/tui/run_test.tsx') -> 'terminal'
 /** The TUI owns a terminal document; page behavior uses linkedom in Deno. */
 export let platform = (file: string) =>
-  file.includes('packages/browse/tui/') ? 'terminal' : 'deno'
+  usesPreact(file)
+    ? 'preact'
+    : file.includes('packages/browse/tui/')
+    ? 'terminal'
+    : 'deno'
 
 /** Each selected file belongs to one document environment. */
 export let platforms = (paths: string[]) =>
   PLATFORMS.map((name) => ({
     name,
-    files: paths.filter((f) => (tested(f) ? platform(f) : 'deno') == name),
+    files: paths.filter((f) =>
+      (tested(f) || usesPreact(f) ? platform(f) : 'deno') == name
+    ),
   })).filter(({ files }) => files.length)
 
 /**
@@ -328,6 +335,7 @@ let rel = (url: string | URL) => relative(Deno.cwd(), fileURLToPath(url))
 export let ALSO = [
   'deno.json',
   'deno.jsonc',
+  'deno.preact.json',
   'deno.lock',
   'package.json',
   'pnpm-lock.yaml',
@@ -571,6 +579,14 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     let child = new Deno.Command(Deno.execPath(), {
       args: [
         ...host.args,
+        ...p == 'preact'
+          ? [
+            '--no-lock',
+            '--node-modules-dir=manual',
+            '--import-map',
+            preactImports,
+          ]
+          : [],
         RUNNER,
         `--platform=${p}`,
         ...flags,

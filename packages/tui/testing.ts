@@ -9,7 +9,8 @@
  */
 
 import { type ComponentType, createElement as h } from 'react'
-import { draw as show } from '@yaks/preact/draw'
+import { act } from '@yaks/react/testing'
+import { draw as show } from '@yaks/react/draw'
 import { install, onPaint, place } from '@yaks/dom'
 import { decode } from './input.ts'
 import { clearMouse, routeMouse } from './mouse.ts'
@@ -68,9 +69,10 @@ export let mount = async (
     send: async (bytes: string) => {
       wrote = 0
       for (let key of decode(bytes)) {
-        if (key.name == 'mouse') {
-          routeMouse(key, lines)
-        } else press(key)
+        await act(() => {
+          if (key.name == 'mouse') routeMouse(key, lines)
+          else press(key)
+        })
       }
       await settle()
       return wrote

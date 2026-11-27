@@ -82,6 +82,7 @@ export let pageModule = async (source: string, page: Page) => {
     queueMicrotask,
     structuredClone,
     performance,
+    MessageChannel,
     reportError: (error: unknown) => globalThis.reportError(error),
     ...page.globals,
   })

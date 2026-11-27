@@ -42,8 +42,8 @@
     "@yaks/tools": "0.2.30",
     "linkedom": "^0.18.12",
     "preact-render-to-string": "6.7.0",
-    "react": "npm:@preact/compat@18.3.2",
-    "react-dom": "npm:@preact/compat@18.3.2"
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"

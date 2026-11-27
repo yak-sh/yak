@@ -17,7 +17,7 @@ import * as system from '@yaks/process/system'
 
 import { resolvers } from '@yaks/fp'
 import { type ComponentType, createElement as h, useEffect } from 'react'
-import { draw } from '@yaks/preact/draw'
+import { draw } from '@yaks/react/draw'
 import { type Hold, listen, wind } from '@yaks/process/wind'
 import { install, onPaint, place, touch } from '@yaks/dom'
 import { ansiBackend, type Backend } from './paint.ts'

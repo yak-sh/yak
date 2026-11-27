@@ -28,7 +28,7 @@
     "@yaks/task": "platform",
     "@yaks/tools": "platform",
     "@yaks/vocab": "platform",
-    "preact": "^10.29.1",
+    "react": "^19.3.0",
     "@yaks/react": "platform"
   }
 }

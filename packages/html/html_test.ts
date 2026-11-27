@@ -2,14 +2,14 @@
 // including literal content that would become markup without serialization.
 
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertMatch } from '@std/assert'
 import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import { entity } from '@yaks/react'
 import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { mount } from '../preact/testing.ts'
+import { mount } from '../react/test-dom.ts'
 import { markup, raw, render } from './mod.ts'
 
 let vocab = loadVocab([{
@@ -59,7 +59,7 @@ test('trusted fragments splice into their parent while text remains escaped', ()
   assertEquals(p.textContent, 'one <b>two</b> three')
 })
 
-test('HTML escapes content and agrees with the mounted Preact view', () => {
+test('HTML escapes content and agrees with the mounted view', () => {
   let html = render(registry, bundle, 'Library.Tile', vocab, ctx)
   let { document } = parseHTML(`<main>${html}</main>`)
   let root = document.querySelector('main')!
@@ -150,10 +150,10 @@ test('an empty child list does not replace a textarea value during serialization
   let registry = define([{
     view: 'Edit',
     match: true,
-    render: (_b, h) => h('textarea', { value: '<b>before</b>' }),
+    render: (_b, h) => h('textarea', { defaultValue: '<b>before</b>' }),
   }])
-  assertEquals(
+  assertMatch(
     render(registry, bundle, 'Edit', vocab),
-    '<textarea>&lt;b>before&lt;/b></textarea>',
+    /^<textarea>&lt;b(?:&gt;|>)before&lt;\/b(?:&gt;|>)<\/textarea>$/,
   )
 })

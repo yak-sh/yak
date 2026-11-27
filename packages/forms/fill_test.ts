@@ -11,7 +11,7 @@ import { type Answers, type Question, SIGNS, type Signs } from '@yaks/forms'
 import { createElement as h, type ReactNode } from 'react'
 import { render } from '@yaks/react/draw'
 import { act } from '@yaks/react/testing'
-import { parseHTML } from 'linkedom'
+import { JSDOM } from 'jsdom'
 import { mount } from '../tui/testing.ts'
 import { Submit, submitAt, submitOf } from '@yaks/ux'
 import { type Door, fill, returned, type Upload } from './fill.ts'
@@ -78,7 +78,10 @@ let words = (el: Node): string =>
     n.nodeType == 3 ? n.textContent!.trim() : words(n)
   ).filter(Boolean).join(' ')
 
-let { document, Event } = parseHTML('<html><body><main></main></body></html>')
+let { window } = new JSDOM('<html><body><main></main></body></html>', {
+  url: 'https://church.example/join',
+})
+let { document, Event } = window
 
 // A page holding one Submit: its state kept as the page graph would keep it,
 // its door answered by the given rows, and every send remembered.
@@ -195,8 +198,12 @@ let page = async (
       el.value = value
       await fire(el, 'input')
     },
-    pick: async (name: string, value: string) =>
-      await fire($(`[name="${name}"][value="${value}"]`), 'change'),
+    pick: async (name: string, value: string) => {
+      await act(() =>
+        $([`[name="${name}"]`, `[value="${value}"]`].join('')).click()
+      )
+      await settle()
+    },
     press: async (said: string, within = 'form') =>
       await fire(
         [...root.querySelector(within)!.querySelectorAll('button')]
@@ -234,7 +241,7 @@ test('a standalone form recovers the draft kept by the previous component', asyn
   typed.type(place, JSON.stringify({ name: 'Ruth', texts: true }))
   await using p = await page(card, undefined, undefined, typed)
   equal(p.$('[name=name]').value, 'Ruth')
-  equal(p.$('[name=texts]').hasAttribute('checked'), true)
+  equal(p.$('[name=texts]').checked, true)
   await p.submit()
   equal(p.sent, [{ name: 'Ruth', texts: true }])
   equal(typed.text(place), '')
@@ -468,7 +475,7 @@ test('a closed tab recovers unsent repeated and conditional answers before the s
     equal(p.$('[name="children.0.allergies"]').value, 'peanuts')
     equal(p.$('[name="children.1.name"]').value, 'Sam')
     equal(
-      p.$('[name="children.1.allergic"][value=No]').hasAttribute('checked'),
+      p.$('[name="children.1.allergic"][value=No]').checked,
       true,
     )
     equal(p.state().values?.parent, 'Ruth')
@@ -488,8 +495,8 @@ test('a refusal keeps text, choices and checkboxes through reload; acceptance cl
   {
     await using p = await page(card, undefined, undefined, open())
     equal(p.$('[name=name]').value, 'Ruth')
-    equal(p.$('[name=next][value=Serving]').hasAttribute('checked'), true)
-    equal(p.$('[name=texts]').hasAttribute('checked'), true)
+    equal(p.$('[name=next][value=Serving]').checked, true)
+    equal(p.$('[name=texts]').checked, true)
     await p.submit()
     equal(
       p.text(),
@@ -499,8 +506,8 @@ test('a refusal keeps text, choices and checkboxes through reload; acceptance cl
   {
     await using p = await page(card, undefined, undefined, open())
     equal(p.$('[name=name]').value, '')
-    equal(p.$('[name=next][value=Serving]').hasAttribute('checked'), false)
-    equal(p.$('[name=texts]').hasAttribute('checked'), false)
+    equal(p.$('[name=next][value=Serving]').checked, false)
+    equal(p.$('[name=texts]').checked, false)
   }
 })
 

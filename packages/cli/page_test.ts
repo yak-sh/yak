@@ -176,7 +176,7 @@ test('a failed build releases its context', async () => {
   assertEquals(seen.disposed, 1)
 })
 
-test('a bundled page compiles its JSX against Preact', async () => {
+test('a bundled page compiles its JSX against React', async () => {
   let path = await Deno.makeTempFile({
     dir: new URL('./', import.meta.url).pathname,
     prefix: '.page-',
@@ -185,8 +185,10 @@ test('a bundled page compiles its JSX against Preact', async () => {
   try {
     await Deno.writeTextFile(path, 'export let page = <><b>hi</b></>\n')
     let code = await bundle(new URL(`file://${path}`))
-    assertEquals(code.includes('React'), false)
-    assertEquals(code.includes('hi'), true)
+    let url = `data:text/javascript;base64,${btoa(code)}`
+    let { page } = await import(url)
+    assertEquals(page.props.children.type, 'b')
+    assertEquals(page.props.children.props.children, 'hi')
   } finally {
     await Deno.remove(path)
   }

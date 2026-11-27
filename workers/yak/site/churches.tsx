@@ -66,7 +66,7 @@ export let Churches = () => (
       <div className='Hello_Copy'>
         <p className='Hello_Kicker' {...text('churches.hello.kicker')} />
         <h1 className='Title Title-hero' id='hello'>
-          <label for='say' {...text('churches.hello.title')} />
+          <label htmlFor='say' {...text('churches.hello.title')} />
         </h1>
         <p className='Note' {...text('churches.hello.note')} />
         <form className='Hello_Ask' method='post' action={START}>

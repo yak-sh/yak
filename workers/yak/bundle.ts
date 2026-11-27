@@ -104,7 +104,7 @@ export let options = (
   platform: 'browser',
   target: 'es2022',
   jsx: 'automatic',
-  jsxImportSource: 'preact',
+  jsxImportSource: 'react',
   conditions: ['workerd', 'worker', 'browser'],
   external: ['node:*', 'cloudflare:*'],
   plugins: [{

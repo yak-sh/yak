@@ -537,6 +537,7 @@ export let VirtualList = <T extends VirtualItem>(
     onViewportChange?: (value: ViewportState) => void
     id?: string
     grow?: string
+    height?: string
   },
 ): ReactElement<{
   onWheel: (event: MouseEvent) => void
@@ -548,8 +549,8 @@ export let VirtualList = <T extends VirtualItem>(
   // The same range may be requested again only once the loaded ids change. If
   // the caller returns the same page, it must not be asked again, or the list
   // requests forever, stays pending, and drops every key.
-  let rangeRequest = useRef<string>()
-  let rangeIds = useRef<string>()
+  let rangeRequest = useRef<string | undefined>(undefined)
+  let rangeIds = useRef<string | undefined>(undefined)
   let ids = items.map((item) => item.id).join('\n')
   if (rangeIds.current !== ids) {
     rangeRequest.current = undefined
@@ -565,9 +566,9 @@ export let VirtualList = <T extends VirtualItem>(
   let props = useRef({ renderItem, version })
   props.current = { renderItem, version }
   let selectionWidth = useRef(80)
-  let selectedIndex = useRef<number>()
-  let env = useRef<{ style: Style; sheet: Sheet }>()
-  let state = useRef<VirtualWindow<T>>()
+  let selectedIndex = useRef<number | undefined>(undefined)
+  let env = useRef<{ style: Style; sheet: Sheet } | undefined>(undefined)
+  let state = useRef<VirtualWindow<T> | undefined>(undefined)
   let trees = useRef(new Map<string, { version: string; root: TElement }>())
   let clearTrees = () => {
     for (let { root } of trees.current.values()) {
@@ -579,8 +580,8 @@ export let VirtualList = <T extends VirtualItem>(
   // Keep the last accepted viewport while its replacement is in flight.
   // This is a paint cache, not a second source of item or scroll state.
   let frame = useRef<
-    { lines: Line[]; position: ScrollPosition }
-  >()
+    { lines: Line[]; position: ScrollPosition } | undefined
+  >(undefined)
   let identity = useRef(attrs.id)
   if (identity.current != attrs.id) {
     frame.current = undefined
@@ -765,16 +766,18 @@ export let VirtualList = <T extends VirtualItem>(
   }, [items, renderItem, selected, selectionVisible, selectionClass, cursor])
   return h('div', {
     ...attrs,
-    onWheel: (event: MouseEvent) => {
+    onWheel: (event: MouseEvent & { nativeEvent?: MouseEvent }) => {
+      let { release, ctrl, alt, shift } = event.nativeEvent ?? event
       if (pending) return
       if (
-        !event.deltaY || event.release || event.ctrl || event.alt || event.shift
+        !event.deltaY || release || ctrl || alt || shift
       ) return
       if (
         state.current!.key({ name: event.deltaY < 0 ? 'wheelup' : 'wheeldown' })
       ) {
         touch()
         event.preventDefault()
+        event.stopPropagation()
       }
     },
     ref: (el: unknown) => {

@@ -3,7 +3,7 @@
  * event-driven pulses. Pointer captures are resources; the camera is graph data.
  */
 
-import { useRef } from 'react'
+import { type KeyboardEvent, type PointerEvent, useRef } from 'react'
 import { Button } from '@yaks/ui'
 import type { Activity, AtlasModel, Edge, Node } from './model.ts'
 
@@ -299,8 +299,8 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
   let active = model.events.slice(-PULSE_LIMIT).filter((e) =>
     e.kind != 'phase' && e.node && positions.has(e.node)
   )
-  let drag = useRef<Drag | undefined>()
-  let pan = (event: PointerEvent) => {
+  let drag = useRef<Drag | undefined>(undefined)
+  let pan = (event: PointerEvent<SVGSVGElement>) => {
     if (
       event.button != 0 ||
       (event.target as Element).closest('[data-node],[data-edge]')
@@ -317,7 +317,7 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
     }
     svg.setPointerCapture(event.pointerId)
   }
-  let move = (event: PointerEvent) => {
+  let move = (event: PointerEvent<SVGSVGElement>) => {
     let start = drag.current
     if (!start || start.id != event.pointerId) return
     model.set({
@@ -325,10 +325,10 @@ export let Topology = ({ model }: { model: AtlasModel }) => {
       y: start.cameraY + (event.clientY - start.y) * start.ratio,
     })
   }
-  let end = (event: PointerEvent) => {
+  let end = (event: PointerEvent<SVGSVGElement>) => {
     if (drag.current?.id == event.pointerId) drag.current = undefined
   }
-  let press = (event: KeyboardEvent, id: string) => {
+  let press = (event: KeyboardEvent<SVGGElement>, id: string) => {
     if (event.key == 'Enter' || event.key == ' ') {
       event.preventDefault()
       model.select(id)

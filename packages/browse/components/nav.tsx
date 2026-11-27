@@ -56,7 +56,19 @@ export let appRoute = (path: string) =>
 // page's, opens its page: a second press, or a double click, is the way in.
 // A coarse pointer and the terminal open the page at once, fullscreen being
 // a phone's right answer.
-export let openAt = (eid: string, ev: MouseEvent) => {
+type LinkEvent = Pick<
+  MouseEvent,
+  | 'button'
+  | 'ctrlKey'
+  | 'metaKey'
+  | 'shiftKey'
+  | 'currentTarget'
+  | 'target'
+  | 'preventDefault'
+  | 'stopPropagation'
+>
+
+export let openAt = (eid: string, ev: LinkEvent) => {
   let at = route.peek()
   let up = peeked.peek()
   let now = up?.at == at ? up : null
@@ -80,7 +92,7 @@ let fine = () => !!globalThis.matchMedia?.('(pointer: fine)').matches
 
 // The link a press landed on: the element whose handler heard it, or, for a
 // listener on the document, the nearest link around what was pressed.
-let linkAt = (ev: MouseEvent): Element | undefined => {
+let linkAt = (ev: LinkEvent): Element | undefined => {
   let on = ev.currentTarget as Element | null | undefined
   let at = ev.target as Element | null | undefined
   return typeof on?.closest == 'function'
@@ -145,7 +157,7 @@ let screenId = (at: string) =>
 // their new-tab forms; a bare click (tap included) opens its entity as a link
 // does (openAt) when the caller knows it, or goes to its href when that is
 // all it has.
-export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
+export let follow = (href: string, eid?: string) => (ev: LinkEvent) => {
   if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button != 0) return
   ev.preventDefault()
   ev.stopPropagation()

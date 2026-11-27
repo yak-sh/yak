@@ -191,7 +191,7 @@ export let servedTo = async (
   graph: Pick<Meta, 'query'>,
   sha: string,
   eid: string,
-  cache?: RequestCache,
+  cache?: RequestInit['cache'],
 ) => {
   let read = () =>
     files.patiently(

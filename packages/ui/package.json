@@ -68,8 +68,8 @@
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/testing": "0.2.30",
-    "react": "npm:@preact/compat@18.3.2",
-    "react-dom": "npm:@preact/compat@18.3.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "@yaks/react": "0.2.33",
     "@preact/signals-core": "1.14.5"
   },

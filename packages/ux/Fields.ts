@@ -142,11 +142,9 @@ export let Fields = (
                 required: q.required,
                 disabled,
                 value: text,
-                onChange: (ev: Event) =>
-                  set(
-                    path,
-                    (ev.target as HTMLSelectElement).value || undefined,
-                  ),
+                onChange: (
+                  { currentTarget }: { currentTarget: { value: string } },
+                ) => set(path, currentTarget.value || undefined),
               },
               h('option', { value: '' }, ''),
               choices.map((c) => h('option', { key: c, value: c }, c)),
@@ -218,10 +216,12 @@ export let Fields = (
             type: 'file',
             required: q.required && !text,
             disabled,
-            onChange: (ev: Event) => {
-              let chosen = (ev.target as HTMLInputElement).files?.[0]
+            onChange: ({ currentTarget }: {
+              currentTarget: { files?: ArrayLike<File> | null; value: string }
+            }) => {
+              let chosen = currentTarget.files?.[0]
               if (chosen) {
-                ;(ev.target as HTMLInputElement).value = ''
+                currentTarget.value = ''
                 void file(path, chosen)
               }
             },
@@ -251,15 +251,11 @@ export let Fields = (
             required: q.required,
             disabled,
             value: text,
-            autocomplete: q.autocomplete,
+            autoComplete: q.autocomplete,
             inputMode: q.inputMode,
-            onInput: (ev: Event) =>
-              set(
-                path,
-                (ev.target as HTMLInputElement).value === ''
-                  ? undefined
-                  : (ev.target as HTMLInputElement).value,
-              ),
+            onInput: (
+              { currentTarget }: { currentTarget: { value: string } },
+            ) => set(path, currentTarget.value || undefined),
           }),
           after(a),
         )

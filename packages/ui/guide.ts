@@ -1,6 +1,10 @@
 /** The guide uses the page's composition: installed kits, UX specimens and
  * skin coverage, rather than an inventory private to the base package. */
-import { createElement as h, type ReactElement } from 'react'
+import {
+  createElement as h,
+  type FunctionComponent,
+  type ReactElement,
+} from 'react'
 import { Catalog } from './Catalog.ts'
 import type { Props } from './el.ts'
 import { Gallery } from './Gallery.ts'
@@ -136,7 +140,7 @@ export let Worn = (
   )
 
 /** The same composition as the page being checked. */
-export let Guide = (
+export let Guide: FunctionComponent<Dressed> = (
   { composition: c = composition }: Dressed = {},
 ): ReactElement =>
   h(

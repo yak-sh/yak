@@ -3,7 +3,7 @@
  * playback; this surface owns only layout, focus and display-only kit parts.
  */
 
-import { useRef } from 'react'
+import { type KeyboardEvent, useRef } from 'react'
 import { Button, Chip, Field } from '@yaks/ui'
 import { useObserved } from '@yaks/ux'
 import type { AtlasModel } from './model.ts'
@@ -110,7 +110,7 @@ export let Atlas = ({ model }: { model: AtlasModel }) => {
       ...(['relations', 'phases'].includes(state.group) &&
         { group: 'all' }),
     })
-  let press = (event: KeyboardEvent) => {
+  let press = (event: KeyboardEvent<HTMLDivElement>) => {
     let target = event.target as Element
     if (
       event.altKey || event.ctrlKey || event.metaKey ||

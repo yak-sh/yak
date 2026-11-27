@@ -70,7 +70,20 @@ export let moved = (was: string, now: string, at: number): number => {
     : now.length - z
 }
 
-type Typed = HTMLInputElement | HTMLTextAreaElement
+type Typed = {
+  value: string
+  selectionStart: number | null
+  selectionEnd: number | null
+  selectionDirection?: 'forward' | 'backward' | 'none' | null
+  setSelectionRange: (
+    start: number,
+    end: number,
+    direction?: 'forward' | 'backward' | 'none',
+  ) => void
+  setAttribute: (name: string, value: string) => void
+  addEventListener: (name: string, listener: () => void) => void
+  removeEventListener: (name: string, listener: () => void) => void
+}
 type Ref = ((el: Typed | null) => void) | { current: Typed | null }
 
 // `value` shown in `el`, its selection moved with the text around it. A
@@ -91,7 +104,7 @@ let show = (el: Typed, value: string) => {
 
 /** A text field. */
 export let Field: FunctionComponent<FieldProps> = (
-  { lines, choose, caret, as, elRef, value, ...p },
+  { lines, choose, caret, as, elRef, value, autoFocus, autofocus, ...p },
 ) => {
   let el = useRef<Typed | null>(null)
   // the text it is to show; none for a field picked in
@@ -99,12 +112,14 @@ export let Field: FunctionComponent<FieldProps> = (
   // a composition is under way, and whether a value waits for its end
   let composing = useRef<false | { waits: boolean }>(false)
   given.current = !choose && typeof value == 'string' ? value : undefined
+  let focus = Boolean(autoFocus ?? autofocus)
   let ref = useMemo(() => (node: Typed | null) => {
+    if (focus) node?.setAttribute('autofocus', '')
     el.current = node
     let r = elRef as Ref | undefined
     if (typeof r == 'function') r(node)
     else if (r) r.current = node
-  }, [elRef])
+  }, [elRef, focus])
   let shown = () => {
     let node = el.current, text = given.current
     if (!node || text == null) return
@@ -132,6 +147,7 @@ export let Field: FunctionComponent<FieldProps> = (
     ...p,
     as: as ?? tagOf(choose, lines),
     elRef: ref,
+    ...focus && { autoFocus: true },
     // Drawn, a text field is told what it already shows, so drawing it
     // again never writes over typing; `show` puts a new value in. A field
     // given none carries no `value`, so its `defaultValue` is what it shows.

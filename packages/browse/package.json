@@ -91,7 +91,7 @@
     "@yaks/testing": "0.2.30",
     "@yaks/tmux": "0.2.23",
     "@yaks/wake": "0.2.24",
-    "react": "npm:@preact/compat@18.3.2",
+    "react": "19.3.0",
     "@preact/signals": "2.9.4"
   },
   "peerDependencies": {

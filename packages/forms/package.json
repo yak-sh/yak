@@ -12,7 +12,7 @@
     "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
-  "description": "Form, question and registration rows, with pure functions for the next question, missing required answers and sign-up availability, the rules a registration is accepted by and the letters a completed one owes, and the door a page’s form is shown and sent at.",
+  "description": "Form, question and registration rows, with pure functions for the next question, missing required answers and sign-up availability, the rules a registration is accepted by and the letters a completed one owes, and the door a page\u2019s form is shown and sent at.",
   "dependencies": {
     "@yaks/api": "0.2.29",
     "@yaks/effects": "0.2.33",
@@ -36,8 +36,9 @@
     "@yaks/draft": "0.2.24",
     "@yaks/tui": "0.2.24",
     "linkedom": "^0.18.12",
-    "react": "npm:@preact/compat@18.3.2",
-    "@yaks/react": "0.2.33"
+    "react": "19.3.0",
+    "@yaks/react": "0.2.33",
+    "jsdom": "^26.1.0"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"

@@ -967,7 +967,7 @@ let told = (summary: string, text: unknown) =>
     'details',
     null,
     h('summary', null, summary),
-    h('pre', { style: 'white-space: pre-wrap' }, String(text ?? '')),
+    h('pre', { style: { whiteSpace: 'pre-wrap' } }, String(text ?? '')),
   )
 
 let lettersPage = (d: Reading, trials: Row[]) =>

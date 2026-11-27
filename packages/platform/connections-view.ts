@@ -1606,14 +1606,23 @@ export let connectionsView = (
   // hold is said as not here, or loading while the page asks for it.
   let showing = offered?.name ?? (open && keyOf(open)) ?? loan?.eid ??
     (server && `mcp:${server.id}`) ?? opened
-  let bodies: [string, ReactElement][] = [
-    ...offers.map((i): [string, ReactElement] => [i.name, offer(i)]),
-    ...c.list.map((one): [string, ReactElement] => [keyOf(one), contents(one)]),
-    ...c.borrowed.map((b): [string, ReactElement] => [
+  let bodies: [string, ReactElement<Record<string, unknown>>][] = [
+    ...offers.map((
+      i,
+    ): [string, ReactElement<Record<string, unknown>>] => [i.name, offer(i)]),
+    ...c.list.map((
+      one,
+    ): [string, ReactElement<Record<string, unknown>>] => [
+      keyOf(one),
+      contents(one),
+    ]),
+    ...c.borrowed.map((b): [string, ReactElement<Record<string, unknown>>] => [
       b.eid,
       borrowing(b, env, c.on, action, close, mine(b)),
     ]),
-    ...(c.mcp?.servers ?? []).map((s): [string, ReactElement] => [
+    ...(c.mcp?.servers ?? []).map((
+      s,
+    ): [string, ReactElement<Record<string, unknown>>] => [
       `mcp:${s.id}`,
       serving(s),
     ]),

@@ -68,7 +68,7 @@ test('Tab walks past a select and a checkbox to the text box, arrows choose, and
           h(
             'select',
             {
-              value: '',
+              defaultValue: '',
               onChange: (e: Event) =>
                 model = (e.target as unknown as TElement).value,
             },

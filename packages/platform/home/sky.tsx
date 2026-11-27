@@ -325,7 +325,7 @@ let night = () => {
     stars.push(
       <circle
         className={blink ? 'Sky_Star Sky_Star-blink' : 'Sky_Star'}
-        style={blink ? `animation-delay:-${n1(r() * 5)}s` : undefined}
+        style={blink ? { animationDelay: `-${n1(r() * 5)}s` } : undefined}
         cx={n1(x)}
         cy={n1(y)}
         r={n1(s)}
@@ -342,9 +342,10 @@ let night = () => {
         cy={n1(y)}
         r='4.5'
         fill='url(#Sky-fly)'
-        style={`animation-delay:-${n1(r() * 9)}s;animation-duration:${
-          n1(7 + r() * 6)
-        }s`}
+        style={{
+          animationDelay: `-${n1(r() * 9)}s`,
+          animationDuration: `${n1(7 + r() * 6)}s`,
+        }}
       />,
     )
   }

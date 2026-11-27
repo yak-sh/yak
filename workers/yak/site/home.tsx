@@ -184,7 +184,7 @@ let Step = ({ app, step }: { app: string; step: string }) => {
         <a
           className='Walk_Shot'
           href={`${DEMO_AT}${app}/`}
-          tabindex={-1}
+          tabIndex={-1}
           aria-hidden='true'
         >
           <span className='Walk_Picture' data-walk-shot={`${app}/${step}`} />
@@ -194,7 +194,7 @@ let Step = ({ app, step }: { app: string; step: string }) => {
           <Form.Hidden name='step' value={step} />
           <label
             className='Walk_Label'
-            for={`ask-${app}-${step}`}
+            htmlFor={`ask-${app}-${step}`}
             {...text('home.walk.ask.label')}
           />
           <Field
@@ -470,7 +470,7 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
           {yak()}
           <p className='Hello_Kicker' {...own.text('home.hello.kicker')} />
           <h1 className='Title Title-hero' id='hello'>
-            <label for='say' {...own.text('home.hello.title')} />
+            <label htmlFor='say' {...own.text('home.hello.title')} />
           </h1>
           {read(COPY, own.key('home.hello.lead')) != null && (
             <p className='Note' {...own.text('home.hello.lead')} />

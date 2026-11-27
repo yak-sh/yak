@@ -6,7 +6,7 @@ import { mount } from '@yaks/tui/testing'
 import { composition, sheet } from '@yaks/ui'
 import { mount as native, type Node } from '@yaks/native'
 import { type Store, viewAt } from '@yaks/native/remote'
-import { appAt, carried, Kit } from './kit.ts'
+import { appAt, Kit } from './kit.ts'
 
 // The packing list's own view, as its app serves it.
 let packing = await Deno.readTextFile(
@@ -100,7 +100,7 @@ let toggles = (n: Node | null): Extract<Node, { kind: 'toggle' }>[] =>
 
 test('a kit-built app paints the same natively as in the terminal', async () => {
   let go = (() => Promise.resolve(new Response(packing))) as typeof fetch
-  let view = await viewAt(VIEW, carried, go)
+  let view = await appAt(VIEW, go)
   let rows = () => ({
     e1: { entity: { eid: 'e1' }, doc: { title: 'socks' } },
     e2: {

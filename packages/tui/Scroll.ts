@@ -138,9 +138,10 @@ export let Scroll = (
     scroll: String(Math.min(top, max)),
     'scroll-snapped': stick ? '1' : undefined,
     scrollbar: scrollbar ? '1' : undefined,
-    onWheel: (event: MouseEvent) => {
+    onWheel: (event: MouseEvent & { nativeEvent?: MouseEvent }) => {
+      let { release, ctrl, alt, shift } = event.nativeEvent ?? event
       if (
-        !event.deltaY || event.release || event.ctrl || event.alt || event.shift
+        !event.deltaY || release || ctrl || alt || shift
       ) return
       let to = Math.max(0, Math.min(max, live.current + event.deltaY * WHEEL))
       if (to == live.current) return
@@ -148,6 +149,7 @@ export let Scroll = (
       setStick(to >= max)
       setTop(to)
       event.preventDefault()
+      event.stopPropagation()
     },
   }, children)
 }

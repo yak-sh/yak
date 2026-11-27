@@ -127,7 +127,7 @@ let Hero = (
     <div className='Hello_Copy Home_Words'>
       <p className='Hello_Kicker' {...copy.text('home.hello.kicker')} />
       <h1 className='Title Title-hero' id='hello'>
-        <label for='say' {...copy.text('home.hello.title')} />
+        <label htmlFor='say' {...copy.text('home.hello.title')} />
       </h1>
       <p
         className='Note Note-lead Home_Lead'

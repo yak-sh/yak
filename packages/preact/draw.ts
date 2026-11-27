@@ -22,16 +22,23 @@ export let frames = (
   }
 }
 
+/** Run effects on a microtask while a host paints the tree. */
+export let paintFrames = (): () => void => {
+  if (mounted++ == 0) {
+    restore = options.requestAnimationFrame ? () => {} : frames(queueMicrotask)
+  }
+  return () => {
+    if (--mounted == 0) restore()
+  }
+}
+
 /** Draw `node` into `into`, an element of a tree its host paints itself (an
  * @yaks/dom tree, a test's document), and answer what takes it down. Such a
  * host paints no browser frames, so effects run once the commit's microtasks
  * are done, as a browser's next frame would run them, instead of Preact's
  * fallback a few dozen milliseconds later. */
 export let draw = (node: ComponentChildren, into: Element): () => void => {
-  if (mounted++ == 0) restore = frames(queueMicrotask)
-  let release = () => {
-    if (--mounted == 0) restore()
-  }
+  let release = paintFrames()
   try {
     render(node, into)
   } catch (error) {

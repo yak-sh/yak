@@ -1,5 +1,5 @@
 // One renderer must keep its document structure across hosts. Mount it through
-// the Preact Entity door, parse the text host's markdown, and compare the tags,
+// the React Entity door, parse the text host's markdown, and compare the tags,
 // words and link destinations a reader receives from those two paths.
 
 import { test } from '@yaks/testing'
@@ -7,11 +7,11 @@ import { assertEquals } from '@std/assert'
 import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import { marked } from 'marked'
-import { entity } from '@yaks/preact'
+import { entity } from '@yaks/react'
+import { draw } from '@yaks/react/draw'
 import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { mount } from '../preact/testing.ts'
 import { render } from './mod.ts'
 
 let vocab = loadVocab([{
@@ -72,19 +72,23 @@ let signature = (root: Element) =>
       element.getAttribute('href'),
     ])
 
-test('one renderer preserves its document through Preact and markdown', () => {
+test('one renderer preserves its document through React and markdown', () => {
   let Entity = entity({ registry, vocab, store: () => bundle })
-  let mounted = mount(h(Entity, { eid: 'page', view: 'Tile' }))
+  let { document: browser } = parseHTML(
+    '<html><body><main></main></body></html>',
+  )
+  let root = browser.querySelector('main')!
+  let close = draw(h(Entity, { eid: 'page', view: 'Tile' }), root)
   try {
     let markdown = render(registry, bundle, 'Tile', vocab)
     let { document } = parseHTML(`<main>${marked.parse(markdown)}</main>`)
-    assertEquals(mounted.root.querySelector('h2')?.textContent, 'yaks.app')
-    assertEquals(mounted.root.querySelectorAll('li').length, 4)
+    assertEquals(root.querySelector('h2')?.textContent, 'yaks.app')
+    assertEquals(root.querySelectorAll('li').length, 4)
     assertEquals(
       signature(document.querySelector('main')!),
-      signature(mounted.root),
+      signature(root),
     )
   } finally {
-    mounted.free()
+    close()
   }
 })

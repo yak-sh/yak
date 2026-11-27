@@ -37,7 +37,7 @@
     "@yaks/testing": "0.2.30",
     "@yaks/tools": "0.2.30",
     "linkedom": "^0.18.12",
-    "react": "npm:@preact/compat@18.3.2",
+    "react": "19.3.0",
     "@yaks/react": "0.2.33",
     "@preact/signals-core": "1.14.5"
   },

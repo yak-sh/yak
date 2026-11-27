@@ -11,7 +11,7 @@
     "./testing": "./testing.ts"
   },
   "license": "Apache-2.0",
-  "description": "Renders Preact trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",
+  "description": "Renders React trees in a terminal through a replaceable backend, with a diffing ANSI painter and scrolling, input, and layout widgets.",
   "dependencies": {
     "@yaks/dom": "0.2.24",
     "@yaks/fp": "0.2.23",
@@ -26,7 +26,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/markdown": "0.2.30",
     "@yaks/testing": "0.2.30",
-    "react": "npm:@preact/compat@18.3.2",
+    "react": "19.3.0",
     "@preact/signals": "2.9.4"
   },
   "peerDependencies": {

@@ -23,7 +23,7 @@ let SERVICES = [
 ]
 
 /** A part of a scene that comes in as its section is read, `i` steps after the first. */
-let In = (i: number) => ({ style: `--i:${i}` })
+let In = (i: number) => ({ style: { '--i': i } })
 
 export let ServiceLogo = (
   { slug, title }: { slug: string; title?: string },

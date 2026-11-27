@@ -3065,7 +3065,7 @@ let offeredWords = async (raw: Objects, files: Files) => {
   return {
     file,
     source,
-    change: { path: file, bytes: clean, sha: await digest(clean) },
+    change: { path: file, bytes: clean, sha: await digest(source) },
   }
 }
 
@@ -5071,7 +5071,7 @@ let OURS: Row[] = [
         let each = await Promise.all(
           sent.map(async (f, i) =>
             `${wrote[i]} → ${where(wrote[i])} — ${
-              stored(wrote[i], f.bytes, await digest(f.bytes))
+              stored(wrote[i], f.bytes, await digest(new Uint8Array(f.bytes)))
             }`
           ),
         )
@@ -5195,7 +5195,7 @@ let OURS: Row[] = [
       let there = new Set(already)
       let each = await Promise.all(
         sent.map(async (f, i) =>
-          stored(paths[i], f.bytes, await digest(f.bytes)) +
+          stored(paths[i], f.bytes, await digest(new Uint8Array(f.bytes))) +
           (there.has(paths[i]) ? ', already there' : '')
         ),
       )

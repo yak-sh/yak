@@ -30,7 +30,7 @@ let BROWSER = {
   platform: 'browser',
   target: 'esnext',
   jsx: 'automatic',
-  jsxImportSource: 'preact',
+  jsxImportSource: 'react',
   minify: true,
   write: false,
   metafile: true,

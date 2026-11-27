@@ -1,5 +1,5 @@
 // The library's row is a row of the kit's Rows, drawn by the registry's view.
-// Exercise both the served page and a mounted Preact host with the same data.
+// Exercise the served page and a mounted React host with the same data.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -7,7 +7,7 @@ import { createElement as h, type ReactNode } from 'react'
 import { parseHTML } from 'linkedom'
 import { entity } from '@yaks/react'
 import { resolve } from '@yaks/render'
-import { mount } from '../../../packages/preact/testing.ts'
+import { mount } from '../../../packages/react/test-dom.ts'
 import { markup } from '../html.ts'
 import { desk } from '../desk-pages.ts'
 import { app } from '@yaks/platform/app-tile'

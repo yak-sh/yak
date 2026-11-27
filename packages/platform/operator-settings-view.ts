@@ -321,7 +321,7 @@ let agreeing = (label: string) => [
   ),
   h(
     Check,
-    { style: 'align-items:flex-start' },
+    { style: { alignItems: 'flex-start' } },
     h(Check.Input, { type: 'checkbox', name: 'agreed', value: 'yes' }),
     h('span', null, terms(CONSENT)),
   ),

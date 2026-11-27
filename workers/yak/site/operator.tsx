@@ -80,7 +80,7 @@ export let Operator = ({ by }: { by: By }) => {
           </div>
           <p className='Hello_Kicker' {...text('operator.hello.kicker')} />
           <h1 className='Title Title-hero' id='hello'>
-            <label for='address' {...text(own('label'))} />
+            <label htmlFor='address' {...text(own('label'))} />
           </h1>
           <Form method='post' action='/login' id='start'>
             <Form.Field>

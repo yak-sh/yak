@@ -31,7 +31,10 @@ export let hit = (
 let pressed: TElement | undefined
 let clickable = (node: TElement | undefined): TElement | undefined => {
   for (let at = node; at; at = at.parentNode ?? undefined) {
-    if (at.handlers.has('click')) return at
+    if (
+      typeof at.onclick == 'function' ||
+      at.parentNode && at.handlers.has('click')
+    ) return at
   }
   return node
 }

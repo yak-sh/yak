@@ -272,7 +272,9 @@ let load = async (
 ) => {
   let html = await (await chatPage(p.env, space, as, open, beside, app))
     .text()
-  let { document: next, Event } = parseHTML(html)
+  let { document: next, Event, CustomEvent, HTMLIFrameElement } = parseHTML(
+    html,
+  )
   // The side drawn live from the tab's page graph is reach-door_test.ts's:
   // here the page holds its conversation alone.
   next.querySelector('[data-side-view]')?.removeAttribute('data-side-view')
@@ -299,6 +301,10 @@ let load = async (
   signals(document)
   signals(windowEvents)
   document.hasFocus = () => true
+  Object.defineProperty(document, 'oninput', {
+    value: null,
+    configurable: true,
+  })
   Object.defineProperty(document, 'visibilityState', { value: 'visible' })
   for (
     let part of document.querySelectorAll(
@@ -328,7 +334,9 @@ let load = async (
     Object.defineProperty(form, 'requestSubmit', {
       configurable: true,
       value: () =>
-        form.dispatchEvent(new Event('submit', { cancelable: true })),
+        form.dispatchEvent(
+          new Event('submit', { bubbles: true, cancelable: true }),
+        ),
     })
   }
   class FormOf extends FormData {
@@ -353,7 +361,7 @@ let load = async (
   let after = (fn: () => void, ms: number) => {
     if (left) return 0
     let id = ++n
-    if (fromTab() || /\/preact\/hooks\//.test(new Error().stack ?? '')) {
+    if (fromTab() || /\/page-renderer\.js/.test(new Error().stack ?? '')) {
       tabTimers.add(id)
     }
     if (held) waits.set(id, { at: now + ms, fn })
@@ -634,6 +642,8 @@ let load = async (
         items = { add: (file: File) => this.files.push(file) }
       },
       Event,
+      CustomEvent,
+      HTMLIFrameElement,
       scrollTo: () => {},
       addEventListener: windowEvents.addEventListener.bind(windowEvents),
       removeEventListener: windowEvents.removeEventListener.bind(windowEvents),
@@ -786,13 +796,19 @@ let load = async (
     },
     type: (text: string) => {
       say.value = text
-      say.dispatchEvent(new Event('input'))
+      say.dispatchEvent(new Event('input', { bubbles: true }))
     },
     enter: () =>
-      say.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Enter' })),
+      say.dispatchEvent(
+        Object.assign(new Event('keydown', { bubbles: true }), {
+          key: 'Enter',
+        }),
+      ),
     send: () => {
       let form = document.querySelector('#ask')!
-      form.dispatchEvent(new Event('submit', { cancelable: true }))
+      form.dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true }),
+      )
     },
     leave,
   }

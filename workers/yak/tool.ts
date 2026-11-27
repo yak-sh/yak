@@ -390,9 +390,14 @@ export let flag = (v: unknown, what: string) => {
 // not text arrives as — the `.wasm` an app's worker imports, a picture. One
 // of the two; naming neither is the `content` refusal, since text is what a
 // model reaching for this tool means.
-export let bytesOf = (f: Record<string, unknown>, at = '') => {
+export let bytesOf = (
+  f: Record<string, unknown>,
+  at = '',
+): Uint8Array<ArrayBuffer> => {
   if (f.base64 == null) {
-    return new TextEncoder().encode(text(f.content, `${at}content`))
+    return new TextEncoder().encode(
+      text(f.content, `${at}content`),
+    ) as Uint8Array<ArrayBuffer>
   }
   // Wrapped at some width is still base64: a model that pretty-prints a long
   // string has not made a mistake, and `atob` would refuse the newlines.

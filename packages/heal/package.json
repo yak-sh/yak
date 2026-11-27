@@ -44,7 +44,7 @@
     "@yaks/ram": "0.2.24",
     "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.30",
-    "react": "npm:@preact/compat@18.3.2",
+    "react": "19.3.0",
     "@yaks/react": "0.2.33",
     "@preact/signals-core": "1.14.5"
   },

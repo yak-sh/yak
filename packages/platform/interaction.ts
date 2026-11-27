@@ -211,12 +211,22 @@ let HASH: Record<string, string> = {
 let CONTROL =
   'a[href], button, input, select, textarea, summary, label, [role=button], [role=tab]'
 
-let messageSection = (at: Element) => {
+// The selectors used by this classifier are also implemented by painted trees.
+type Control = {
+  closest: (selector: string) => Control | null
+  querySelector: (selector: string) => Control | null
+  matches: (selector: string) => boolean
+  getAttribute: (name: string) => string | null
+  id: string
+  localName: string
+}
+
+let messageSection = (at: Control) => {
   let turn = at.closest('[data-line][data-turn]')?.getAttribute('data-turn')
   return SECTIONS[Number(turn ?? NaN)]
 }
 
-let homeBackground = (at: Element): string => {
+let homeBackground = (at: Control): string => {
   let example = messageSection(at)
   if (example) return `example-${example}`
   if (at.closest('[data-wander], .Wander')) return 'home-mascot'
@@ -229,7 +239,7 @@ let homeBackground = (at: Element): string => {
 /** Identify a control by its code or native role. Link destinations collapse
  * to the same view name as the page itself. */
 export let targetKind = (
-  at: Element,
+  at: Control,
   here: URL,
   event: string,
 ): string => {

@@ -508,7 +508,8 @@ let handed = async (
   if (source) headers.set(COMMAND_SOURCE, source)
   headers.set(GRANT, await granting(secret, store, who, app.policy))
   headers.set(SELF, await owning(secret, store, app, who))
-  return new Request(url, new Request(req, { headers }))
+  let forwarded: RequestInit = new Request(req, { headers })
+  return new Request(url, forwarded)
 }
 
 // A script that is not there, which is every app that has never deployed a

@@ -20,8 +20,8 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "react": "npm:@preact/compat@18.3.2",
-    "react-dom": "npm:@preact/compat@18.3.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "@yaks/dom": "0.2.24",
     "@yaks/testing": "0.2.30"
   }

@@ -359,7 +359,7 @@ export let appMark = (at: string, app: MarkedApp): string => {
 
 /** An app list's image and the mark it can paint before the image arrives. */
 export let appMarkImage = (at: string, app: MarkedApp): {
-  backdrop: { 'data-app-mark': string; style: string }
+  backdrop: { 'data-app-mark': string; style: { '--app-mark': string } }
   image: {
     src: string
     alt: string
@@ -370,9 +370,11 @@ export let appMarkImage = (at: string, app: MarkedApp): {
 } => ({
   backdrop: {
     'data-app-mark': '',
-    style: `--app-mark:url("data:image/svg+xml,${
-      encodeURIComponent(monogram(app.title || app.slug, app.eid))
-    }");`,
+    style: {
+      '--app-mark': `url("data:image/svg+xml,${
+        encodeURIComponent(monogram(app.title || app.slug, app.eid))
+      }")`,
+    },
   },
   image: {
     src: appMark(at, app),

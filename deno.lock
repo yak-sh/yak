@@ -38,7 +38,6 @@
     "npm:@napi-rs/canvas@0.1.80": "0.1.80",
     "npm:@noble/hashes@2.4.0": "2.4.0",
     "npm:@pdf-lib/fontkit@1.1.1": "1.1.1",
-    "npm:@preact/compat@18.3.2": "18.3.2_preact@10.29.7",
     "npm:@preact/signals-core@1.14.5": "1.14.5",
     "npm:@preact/signals-core@^1.14.0": "1.14.5",
     "npm:@preact/signals@2.9.4": "2.9.4_preact@10.29.7",
@@ -49,6 +48,8 @@
     "npm:@types/jsdom@^21.1.7": "21.1.7",
     "npm:@types/mime-types@^3.0.1": "3.0.1",
     "npm:@types/node@26": "26.6.6",
+    "npm:@types/react-dom@19.3.0": "19.3.0_@types+react@19.3.0",
+    "npm:@types/react@19.3.0": "19.3.0",
     "npm:@types/semver@^7.8.0": "7.8.0",
     "npm:@types/three@0.186": "0.186.0",
     "npm:@types/ua-parser-js@0.7.39": "0.7.39",
@@ -87,6 +88,8 @@
     "npm:postal-mime@3.0.0": "3.0.0",
     "npm:preact-render-to-string@6.7.0": "6.7.0_preact@10.29.7",
     "npm:preact@10.29.7": "10.29.7_preact-render-to-string@6.7.0",
+    "npm:react-dom@19.3.0": "19.3.0_react@19.3.0",
+    "npm:react@19.3.0": "19.3.0",
     "npm:resolve.exports@2.0.3": "2.0.3",
     "npm:rollup@4.65.1": "4.65.1",
     "npm:rrule@2.8.1": "2.8.1",
@@ -1124,12 +1127,6 @@
     "@poppinss/exception@1.2.3": {
       "integrity": "sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw=="
     },
-    "@preact/compat@18.3.2_preact@10.29.7": {
-      "integrity": "sha512-5vSl55K5yLMvocT7PBKxDOHGgYPjMrKQqqr6roSNjIXcJOtSgDDMjpiCAF3s7klRdmGrN75b/Przmjw8gmlg/w==",
-      "dependencies": [
-        "preact"
-      ]
-    },
     "@preact/signals-core@1.14.5": {
       "integrity": "sha512-vcRv7Ityz5JVmeiVqIluLFzT/PDS/AlhHUpw3/aUWqcVUs6bDGIPXE/6RSC4evBNWYvnniozg5Syfj33al3gkg=="
     },
@@ -1435,6 +1432,18 @@
       "integrity": "sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==",
       "dependencies": [
         "undici-types"
+      ]
+    },
+    "@types/react-dom@19.3.0_@types+react@19.3.0": {
+      "integrity": "sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==",
+      "dependencies": [
+        "@types/react"
+      ]
+    },
+    "@types/react@19.3.0": {
+      "integrity": "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==",
+      "dependencies": [
+        "csstype"
       ]
     },
     "@types/semver@7.8.0": {
@@ -1819,6 +1828,9 @@
         "@asamuzakjp/css-color",
         "rrweb-cssom"
       ]
+    },
+    "csstype@3.2.4": {
+      "integrity": "sha512-PoKaoPzQapnEoqUSnHx1u6W6ku8CVEgKsnpmmzU3m1nwkidpPBQ8V/Zq2+bWNrsOKoKLwTGdbx6xF7BXP1zLVQ=="
     },
     "csv-parse@7.0.3": {
       "integrity": "sha512-YFd3QM/yo17vH91L1IOZuvl09zM0zEEtdfTcOCKWcMdM++MNaQSyp09slXyFCLaPXvHstQFx/xC8myiFHSMUvw=="
@@ -2720,6 +2732,16 @@
         "unpipe"
       ]
     },
+    "react-dom@19.3.0_react@19.3.0": {
+      "integrity": "sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==",
+      "dependencies": [
+        "react",
+        "scheduler"
+      ]
+    },
+    "react@19.3.0": {
+      "integrity": "sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog=="
+    },
     "require-directory@2.1.1": {
       "integrity": "sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q=="
     },
@@ -2798,6 +2820,9 @@
       "dependencies": [
         "xmlchars"
       ]
+    },
+    "scheduler@0.28.0": {
+      "integrity": "sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw=="
     },
     "semver@7.8.5": {
       "integrity": "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==",
@@ -3340,7 +3365,8 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:preact@10.29.7"
+      "npm:react-dom@19.3.0",
+      "npm:react@19.3.0"
     ],
     "packageJson": {
       "dependencies": [
@@ -3370,13 +3396,14 @@
         "npm:@napi-rs/canvas@0.1.80",
         "npm:@noble/hashes@2.4.0",
         "npm:@pdf-lib/fontkit@1.1.1",
-        "npm:@preact/compat@18.3.2",
         "npm:@preact/signals-core@^1.14.0",
         "npm:@preact/signals@2.9.4",
         "npm:@resvg/resvg-wasm@2.6.2",
         "npm:@types/jsdom@^21.1.7",
         "npm:@types/mime-types@^3.0.1",
         "npm:@types/node@26",
+        "npm:@types/react-dom@19.3.0",
+        "npm:@types/react@19.3.0",
         "npm:@types/semver@^7.8.0",
         "npm:@types/three@0.186",
         "npm:ajv@^8.17.1",
@@ -3403,6 +3430,8 @@
         "npm:postal-mime@3.0.0",
         "npm:preact-render-to-string@6.7.0",
         "npm:preact@10.29.7",
+        "npm:react-dom@19.3.0",
+        "npm:react@19.3.0",
         "npm:resolve.exports@2.0.3",
         "npm:rollup@4.65.1",
         "npm:semver@7.8.5",
@@ -3551,7 +3580,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/admin@0.2.17",
@@ -3627,7 +3655,8 @@
             "npm:highlight.js@11.11.1",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -3719,7 +3748,6 @@
           "dependencies": [
             "npm:@jsr/luca__esbuild-deno-loader@0.11.1",
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/alias@0.2.24",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/blob@0.2.30",
@@ -3768,6 +3796,7 @@
             "npm:es-module-lexer@2.3.2",
             "npm:esbuild@0.28.1",
             "npm:preact@10.29.7",
+            "npm:react@19.3.0",
             "npm:smol-toml@^1.9.1",
             "npm:typescript@6.0.3"
           ]
@@ -3857,7 +3886,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/cli@0.2.33",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
@@ -3882,7 +3910,8 @@
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4019,7 +4048,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/client@0.2.24",
@@ -4029,7 +4057,8 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4087,7 +4116,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/id@0.2.23",
@@ -4106,7 +4134,9 @@
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4180,7 +4210,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@types/chrome@~0.3.7",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/fp@0.2.23",
@@ -4190,7 +4219,9 @@
             "npm:esbuild@0.28.1",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4204,7 +4235,6 @@
       "packages/file": {
         "packageJson": {
           "dependencies": [
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/inspect@0.2.30",
@@ -4217,7 +4247,8 @@
             "npm:@yaks/ux@0.2.23",
             "npm:@yaks/vocab@0.2.32",
             "npm:lucide@1.31.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4244,7 +4275,6 @@
       "packages/forms": {
         "packageJson": {
           "dependencies": [
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/doc@0.2.24",
@@ -4264,8 +4294,10 @@
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/ux@0.2.23",
             "npm:@yaks/vocab@0.2.32",
+            "npm:jsdom@^26.1.0",
             "npm:linkedom@~0.18.12",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4286,7 +4318,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/platform@0.2.30",
@@ -4298,7 +4329,9 @@
             "npm:@yaks/workerd@0.2.24",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4365,7 +4398,6 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@modelcontextprotocol/sdk@^1.29.0",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/api@0.2.29",
@@ -4417,7 +4449,8 @@
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/ux@0.2.23",
             "npm:@yaks/vocab@0.2.32",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4425,7 +4458,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/api@0.2.29",
@@ -4456,7 +4488,8 @@
             "npm:@yaks/tracker@0.2.33",
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4505,7 +4538,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
@@ -4513,7 +4545,9 @@
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4533,7 +4567,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
@@ -4566,7 +4599,8 @@
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4574,7 +4608,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/client@0.2.24",
@@ -4596,7 +4629,9 @@
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4604,7 +4639,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.33",
@@ -4624,7 +4658,8 @@
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:lucide@1.31.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4632,7 +4667,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/draft@0.2.24",
             "npm:@yaks/edge@0.2.24",
@@ -4647,7 +4681,8 @@
             "npm:@yaks/text@0.2.24",
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4729,7 +4764,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@protomaps/basemaps@5.7.2",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/cli@0.2.33",
@@ -4740,7 +4774,8 @@
             "npm:lucide@1.31.0",
             "npm:maplibre-gl@5.24.1",
             "npm:pmtiles@4.5.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4748,7 +4783,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/id@0.2.23",
@@ -4757,7 +4791,8 @@
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:marked@18.2.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4837,7 +4872,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/host@0.2.29",
@@ -4849,7 +4883,8 @@
             "npm:@yaks/tools@0.2.30",
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -4912,12 +4947,12 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/dom@0.2.24",
-            "npm:@yaks/preact@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/ui@0.2.30",
             "npm:preact@10.29.7",
+            "npm:react@19.3.0",
             "npm:sucrase@3.35.1"
           ]
         }
@@ -5005,7 +5040,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
@@ -5041,6 +5075,8 @@
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0",
             "npm:yaml@^2.9.1"
           ]
         }
@@ -5079,7 +5115,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@types/ua-parser-js@0.7.39",
             "npm:@yaks/alias@0.2.24",
             "npm:@yaks/api@0.2.29",
@@ -5143,6 +5178,8 @@
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0",
             "npm:ua-parser-js@1.0.41",
             "npm:uqr@0.1.3"
           ]
@@ -5271,12 +5308,13 @@
       "packages/react": {
         "packageJson": {
           "dependencies": [
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/dom@0.2.24",
             "npm:@yaks/preact@0.2.24",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.30",
-            "npm:@yaks/vocab@0.2.32"
+            "npm:@yaks/vocab@0.2.32",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -5365,7 +5403,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/blob@0.2.30",
@@ -5411,7 +5448,9 @@
             "npm:@yaks/vocab@0.2.32",
             "npm:@yaks/wake@0.2.24",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -5463,7 +5502,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/model@0.2.32",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/ui@0.2.30",
@@ -5471,14 +5509,15 @@
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
       "packages/spend": {
         "packageJson": {
           "dependencies": [
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/cli@0.2.33",
             "npm:@yaks/file@0.2.28",
@@ -5497,7 +5536,8 @@
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:lucide@1.31.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -5593,7 +5633,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/doc@0.2.24",
@@ -5616,7 +5655,8 @@
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -5675,7 +5715,6 @@
       "packages/timing": {
         "packageJson": {
           "dependencies": [
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/inspect@0.2.30",
@@ -5695,7 +5734,9 @@
             "npm:@yaks/ux@0.2.23",
             "npm:@yaks/vocab@0.2.32",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -5739,7 +5780,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/graph@0.2.33",
@@ -5765,6 +5805,8 @@
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0",
             "npm:stemmer@2.0.1"
           ]
         }
@@ -5779,7 +5821,6 @@
       "packages/tracker": {
         "packageJson": {
           "dependencies": [
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/code@0.2.23",
@@ -5813,7 +5854,9 @@
             "npm:@yaks/vocab@0.2.32",
             "npm:@yaks/wake@0.2.24",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -5857,7 +5900,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/dom@0.2.24",
@@ -5868,7 +5910,8 @@
             "npm:@yaks/react@0.2.33",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/text@0.2.24",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -5900,7 +5943,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/markdown@0.2.30",
@@ -5910,7 +5952,9 @@
             "npm:@yaks/tui@0.2.24",
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -5918,7 +5962,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/draft@0.2.24",
@@ -5934,7 +5977,9 @@
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -5942,7 +5987,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/api@0.2.29",
@@ -5961,7 +6005,8 @@
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/ux@0.2.23",
             "npm:@yaks/vocab@0.2.32",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -6083,7 +6128,6 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.33",
@@ -6106,7 +6150,8 @@
             "npm:@yaks/wake@0.2.24",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
-            "npm:preact@10.29.7"
+            "npm:preact@10.29.7",
+            "npm:react@19.3.0"
           ]
         }
       },
@@ -6132,7 +6177,6 @@
             "npm:@jsr/std__assert@1",
             "npm:@jsr/std__path@1.1.2",
             "npm:@jsr/std__testing@1",
-            "npm:@preact/compat@18.3.2",
             "npm:@resvg/resvg-wasm@2.6.2",
             "npm:@yaks/admin@0.2.17",
             "npm:@yaks/alias@0.2.24",
@@ -6270,6 +6314,8 @@
             "npm:postal-mime@3.0.0",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",
+            "npm:react-dom@19.3.0",
+            "npm:react@19.3.0",
             "npm:rollup@4.65.1",
             "npm:smol-toml@^1.9.1"
           ]

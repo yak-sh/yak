@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { createElement as h } from 'react'
-import { mount } from '../preact/testing.ts'
+import { mount } from '../react/test-dom.ts'
 import { assert, assertEquals } from '@std/assert'
 import { Marked } from 'marked'
 import {
@@ -141,7 +141,7 @@ test('a document is its blocks in an element of its own', () => {
   assertEquals(blocks(tokens, tree).map((b) => (b as Tree).tag), ['h1', 'p'])
 })
 
-test('Preact component produces ordinary web-compatible elements', () => {
+test('Markdown produces ordinary web-compatible elements', () => {
   let ui = mount(h(Markdown, { source: '**hello**' }))
   try {
     assertEquals(

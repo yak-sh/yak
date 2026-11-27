@@ -20,8 +20,8 @@ let markup = renderToString(
     copy={copy}
     action='/start'
     yak={
-      <div class='Hello_Yak' data-wander=''>
-        <img class='Wander_Image' alt='' />
+      <div className='Hello_Yak' data-wander=''>
+        <img className='Wander_Image' alt='' />
       </div>
     }
     plans={null}

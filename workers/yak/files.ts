@@ -431,7 +431,7 @@ export let servableOf = async (
   store: StoreAt,
   sha: string,
   rep: string,
-  cache?: RequestCache,
+  cache?: RequestInit['cache'],
 ): Promise<Representation | null> => {
   let url = servableAt(app.eid, sha, rep, app.withdrawn)
   let now = () => (env.CLOCK ?? system).now()
@@ -486,7 +486,7 @@ let askedServable = async (
   env: Env,
   url: string,
   store: StoreAt,
-  cache?: RequestCache,
+  cache?: RequestInit['cache'],
 ): Promise<Representation | null> => {
   let r = await trip(
     env,

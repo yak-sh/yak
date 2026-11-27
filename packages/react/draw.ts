@@ -5,13 +5,49 @@ import { flushSync, version } from 'react-dom'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 
 type Surface = { draw: (node: ReactNode) => void; close: () => void }
-let commit = parseInt(version) >= 19 ? flushSync : <T>(draw: () => T) => draw()
+let modern = parseInt(version) >= 19
+let commit = modern ? flushSync : <T>(draw: () => T) => draw()
 
 // React DOM consults window and the iframe constructor for focus restoration.
 // The in-memory document has neither a window of its own nor frame elements.
 let surfaces = 0
-let restore: () => void
+let restore: (() => void) | undefined
 let documents = new WeakMap<Document, { refs: number; close: () => void }>()
+
+// A painted tree dispatches capture listeners under a separate event name.
+let listening = new WeakSet<Element>()
+let eventName = (type: string, options?: boolean | EventListenerOptions) =>
+  (typeof options == 'boolean' ? options : options?.capture)
+    ? type + 'Capture'
+    : type
+let listen = (element: Element) => {
+  if (listening.has(element)) return
+  listening.add(element)
+  let add = element.addEventListener
+  let remove = element.removeEventListener
+  element.addEventListener = ((
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ) =>
+    listener && add.call(
+      element,
+      eventName(type, options),
+      listener,
+      options,
+    )) as typeof add
+  element.removeEventListener = ((
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ) =>
+    listener && remove.call(
+      element,
+      eventName(type, options),
+      listener,
+      options,
+    )) as typeof remove
+}
 
 // React sets the option properties for a controlled select. A painted tree
 // reads those states from its attributes.
@@ -19,6 +55,34 @@ let controls = (doc: Document): () => void => {
   let create = doc.createElement
   let createNS = doc.createElementNS
   let control = (element: Element, name: string) => {
+    listen(element)
+    if (!('nodeName' in element)) {
+      Object.defineProperty(element, 'nodeName', {
+        get: () => (element as Element).tagName,
+      })
+    }
+    if (['input', 'textarea', 'select'].includes(name)) {
+      let props = name == 'input' ? ['type', 'name'] : ['name']
+      for (let prop of props) {
+        if (prop in element) continue
+        Object.defineProperty(element, prop, {
+          get: () => element.getAttribute(prop) ?? '',
+          set: (value: string) => element.setAttribute(prop, value),
+        })
+      }
+    }
+    if (name == 'input' || name == 'textarea') {
+      if (!('defaultValue' in element)) {
+        Object.defineProperty(element, 'defaultValue', {
+          get: () => element.getAttribute('value') ?? '',
+          set: (value: string) => {
+            if (!element.hasAttribute('value')) {
+              element.setAttribute('value', value)
+            }
+          },
+        })
+      }
+    }
     if (name == 'select' && !('options' in element)) {
       let choices = () => Array.from(element.querySelectorAll('option'))
       Object.defineProperties(element, {
@@ -75,10 +139,12 @@ let controls = (doc: Document): () => void => {
 }
 
 let attach = (doc: Document) => {
+  if (!modern) return () => {}
   let current = globalThis.window
   if (
-    doc.defaultView && typeof current?.HTMLIFrameElement == 'function' &&
-    surfaces == 0
+    typeof doc.defaultView?.HTMLIFrameElement == 'function' &&
+    typeof current?.HTMLIFrameElement == 'function' &&
+    !restore
   ) {
     return () => {}
   }
@@ -93,9 +159,19 @@ let attach = (doc: Document) => {
       documents.delete(doc)
     }
   }
-  // The repository's Preact compatibility runtime draws without a window.
-  if (parseInt(version) < 19) return release
-  if (surfaces++ == 0) {
+  let view = doc.defaultView
+  let frameClass = view && typeof view.HTMLIFrameElement != 'function'
+    ? Object.getOwnPropertyDescriptor(view, 'HTMLIFrameElement')
+    : undefined
+  let absent = view && typeof view.HTMLIFrameElement != 'function'
+  if (absent) {
+    Object.defineProperty(view, 'HTMLIFrameElement', {
+      value: class {},
+      configurable: true,
+    })
+  }
+  surfaces++
+  if (!restore) {
     let frame = current ?? doc.defaultView ?? globalThis
     let undo: (() => void)[] = []
     let supply = (target: object, name: string, value: unknown) => {
@@ -103,8 +179,8 @@ let attach = (doc: Document) => {
       let prior = Object.getOwnPropertyDescriptor(target, name)
       Object.defineProperty(target, name, {
         value,
-        writable: true,
         configurable: true,
+        writable: true,
       })
       undo.push(() => {
         if (prior) Object.defineProperty(target, name, prior)
@@ -119,7 +195,21 @@ let attach = (doc: Document) => {
   }
   return () => {
     release()
-    if (--surfaces == 0) restore()
+    if (view && absent) {
+      if (frameClass) {
+        Object.defineProperty(view, 'HTMLIFrameElement', frameClass)
+      } else Reflect.deleteProperty(view, 'HTMLIFrameElement')
+    }
+    if (--surfaces == 0) {
+      let release = restore
+      let after = (globalThis as { setImmediate?: (f: () => void) => unknown })
+        .setImmediate ?? setTimeout
+      after(() => {
+        if (surfaces || restore !== release) return
+        restore = undefined
+        release?.()
+      })
+    }
   }
 }
 
@@ -131,6 +221,7 @@ export let surface = (
   initial?: ReactNode,
 ): Surface => {
   let release = attach(into.ownerDocument)
+  if (modern && !into.ownerDocument.defaultView) listen(into)
   let root
   let committing = false
   let failure: { error: unknown } | undefined
@@ -153,7 +244,7 @@ export let surface = (
   try {
     root = initial === undefined
       ? open(into, options)
-      : resume(into, initial, options)
+      : commit(() => resume(into, initial, options))
   } catch (error) {
     release()
     throw error

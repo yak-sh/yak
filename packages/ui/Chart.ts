@@ -45,10 +45,13 @@ export let specimens = (): Specimen[] => [
     h(
       'div',
       null,
-      cloneElement(columns(h as never, week) as ReactElement, {
-        'data-on': '',
-        style: { '--at': '50%' },
-      }),
+      cloneElement(
+        columns(h as never, week) as ReactElement<Record<string, unknown>>,
+        {
+          'data-on': '',
+          style: { '--at': '50%' },
+        },
+      ),
       h(
         'span',
         { className: 'Chart_Tip', style: { position: 'static' } },

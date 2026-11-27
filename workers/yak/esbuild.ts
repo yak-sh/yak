@@ -626,7 +626,7 @@ export let compiled = async (
       source: ask.worker.entry,
       main: builtWorker.main,
       modules: [
-        { name: builtWorker.main, bytes: builtWorker.bytes },
+        { name: builtWorker.main, bytes: new Uint8Array(builtWorker.bytes) },
         ...carried.flat(),
       ],
     },

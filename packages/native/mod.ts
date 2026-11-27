@@ -1,5 +1,5 @@
 /**
- * @yaks/native: the kits' Preact tree, painted as native views. Preact
+ * @yaks/native: the kits' component tree, painted as native views. The host
  * renders into @yaks/dom's in-memory DOM, as it does for a terminal; `paint`
  * reads that tree into plain nodes a native host draws with its own widgets:
  * a box, a run of text, a press, a field, a toggle, a pick, a drawing, an
@@ -16,7 +16,7 @@
  */
 
 import { Component, createElement as h, type ReactNode } from 'react'
-import { draw } from '@yaks/preact/draw'
+import { draw } from '@yaks/react/draw'
 import {
   dispatch,
   install,

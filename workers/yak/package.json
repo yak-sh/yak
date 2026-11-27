@@ -146,7 +146,7 @@
     "rollup": "4.65.1",
     "smol-toml": "^1.9.1",
     "@gabrielbryk/jq-ts": "1.7.0",
-    "react": "npm:@preact/compat@18.3.2",
+    "react": "19.3.0",
     "@yaks/react": "0.2.33"
   },
   "devDependencies": {
@@ -155,7 +155,7 @@
     "@yaks/client": "0.2.24",
     "@yaks/preact": "0.2.24",
     "es-module-lexer": "2.3.2",
-    "react-dom": "npm:@preact/compat@18.3.2"
+    "react-dom": "19.3.0"
   },
   "version": "0.2.17",
   "type": "module"
