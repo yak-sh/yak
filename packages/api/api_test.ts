@@ -197,6 +197,30 @@ test('/query sends a selection larger than one piece of its stream, whole', asyn
   )
 })
 
+test('/query past its ceiling is refused and pages within it', async () => {
+  let graph = shopGraph()
+  await graph.apply([1, 2, 3].map((price) => ({
+    entity: { eid: `b${price}` },
+    book: { price },
+  })))
+  let door = api({ graph, most: 2 })
+  let count = async (line: string, live = '') => {
+    let r = await door(req(`/query?q=${encodeURIComponent(line)}${live}`))
+    return r.ok ? (await r.json() as Bundle[]).length : r.status
+  }
+  for (let live of ['', '&live=1']) {
+    assertEquals(
+      await Promise.all(
+        ['.book', '.book&.limit=3', '.book&.limit=2', '.book.price>1']
+          .map((line) => count(line, live)),
+      ),
+      [400, 400, 2, 2],
+    )
+  }
+  let refused = await door(ask('.book'))
+  assert((await refused.text()).includes('.limit=2 or fewer'))
+})
+
 let postedQuery = await (async () => {
   let handler = shop()
   await handler(

@@ -815,6 +815,14 @@ type Word =
 // them, so this bounds the alarm, not a request's wait; a deploy owes a few,
 // and only growth or a store's first statistics owe every table holding rows.
 let ANALYSES = 50
+// The most entities one read of a store's `/query` answers (@yaks/api
+// `most`); a read selecting more is refused and pages with `.limit` and
+// `.after`. Each entity a read builds costs the object about 0.1 ms and holds
+// its bytes until the answer is sent: one agent's `*` over the platform's
+// 198,395 entities took 20 s of CPU and then the object's memory, and every
+// request queued behind it failed (bug be9051e2). Ten thousand is about a
+// second.
+let READ_MOST = 10_000
 // The object yielded between pieces of a long run, so the requests waiting on
 // it are let in: the next task, not a zero timer, since a timer set five
 // timers deep waits at least 4 ms (HTML's timer rule, which Deno keeps), and a
@@ -2426,6 +2434,7 @@ export class Store extends Durable {
       ...applying,
       graph: g,
       subs,
+      most: READ_MOST,
       list: appListing({
         vocab: g.vocab,
         read,
