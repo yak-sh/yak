@@ -1367,7 +1367,8 @@
         "operation": {
           "$id": "urn:uuid:e4a09eee-0623-4ee2-be9a-b7a65282959a",
           "type": "string",
-          "stamped": true
+          "stamped": true,
+          "index": true
         },
         "space": {
           "$id": "urn:uuid:7bd219d6-5d48-4484-b1d7-58dfebffa202",
