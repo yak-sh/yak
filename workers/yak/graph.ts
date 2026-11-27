@@ -5101,25 +5101,32 @@ export class Store extends Durable {
     if (!app || this.#get('name') != name || this.#get('copied')) {
       return this.#fell(name, 'unnamed')
     }
+    // A store that keeps versions is shaped and planned with them, as `#build`
+    // would. Its live tables are what a read on main reads (@yaks/sqlite
+    // history.ts), and a branch's or an earlier version's read names its
+    // branch, which `listingDoor` leaves to the full Store. One still taking
+    // its rows as their first versions starts whole, since its alarm takes
+    // them (`#seeding`).
+    let held = requirements(this.#sql)
+    this.#versioned = held.includes(versions.use)
     let shape = this.#shape()
     // A deploy moves the fit's version. Where the schema did not move with
     // it, the listing reads the tables as they stand (`unmoved`), once this
     // code composes every plugin the data requires: `#build` asks the same
     // where the fit moved, and a rollback can find one it lacks.
-    let held = requirements(this.#sql)
     let why = this.#stood(shape)
       ? null
       : !unmoved(this.#sql, shape, (key) => this.#get(key as Word))
       ? 'schema moved'
-      : !composes(configOf(planKind(name, false)), held)
+      : !composes(configOf(planKind(name, this.#versioned)), held)
       ? 'plugins'
       : null
     why ??= shape.vocab.comp('_tx')
       ? 'transactions'
       : this.#slots.branches().length
       ? 'branches'
-      : held.includes(versions.use)
-      ? 'versions'
+      : this.#versioned && seeding(this.#sql)
+      ? 'seeding'
       : recovering(this.#sql)
       ? 'recovering'
       : Object.keys(JSON.parse(this.#get('uses') ?? '{}')).length

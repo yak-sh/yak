@@ -115,6 +115,30 @@ test('a deploy that leaves the schema standing lists without the full Store', as
   await ctx.settled()
 })
 
+test('a store that keeps versions lists without the full Store after a deploy', async () => {
+  let { ctx, open, request, expected } = await cookbook()
+  using _db = ctx.storage
+  let kernel = { 'x-yak-kernel': '1' }
+  let full = open()
+  let made = await full.fetch(request('/branches', kernel, {}))
+  let { branch } = await made.json() as { branch: { id: number } }
+  equal(
+    (await full.fetch(
+      new Request(`http://store/branches/${branch.id}`, {
+        method: 'DELETE',
+        headers: { 'x-store': name, ...kernel },
+      }),
+    )).status,
+    204,
+  )
+  await ctx.settled()
+  equal(
+    await read(await open(testVersion('next')).fetch(request(listing))),
+    [200, false, expected],
+  )
+  await ctx.settled()
+})
+
 test('a moved schema stamp fits on the full Store', async () => {
   let { ctx, open, request, expected } = await cookbook()
   using _db = ctx.storage
