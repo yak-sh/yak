@@ -1,7 +1,7 @@
 /** React drawing into a browser document or a tree a host paints. @module */
 
 import type { ReactNode } from 'react'
-import { flushSync } from 'react-dom'
+import { flushSync, version } from 'react-dom'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 
 type Surface = { draw: (node: ReactNode) => void; close: () => void }
@@ -86,13 +86,25 @@ let attach = (doc: Document) => {
     if (!held) documents.set(doc, held = { refs: 0, close: controls(doc) })
     held.refs++
   }
+  let release = () => {
+    if (held && --held.refs == 0) {
+      held.close()
+      documents.delete(doc)
+    }
+  }
+  // The repository's Preact compatibility runtime draws without a window.
+  if (parseInt(version) < 19) return release
   if (surfaces++ == 0) {
     let frame = current ?? doc.defaultView ?? globalThis
     let undo: (() => void)[] = []
     let supply = (target: object, name: string, value: unknown) => {
       if (Reflect.get(target, name) != null) return
       let prior = Object.getOwnPropertyDescriptor(target, name)
-      Object.defineProperty(target, name, { value, configurable: true })
+      Object.defineProperty(target, name, {
+        value,
+        writable: true,
+        configurable: true,
+      })
       undo.push(() => {
         if (prior) Object.defineProperty(target, name, prior)
         else Reflect.deleteProperty(target, name)
@@ -105,10 +117,7 @@ let attach = (doc: Document) => {
     }
   }
   return () => {
-    if (held && --held.refs == 0) {
-      held.close()
-      documents.delete(doc)
-    }
+    release()
     if (--surfaces == 0) restore()
   }
 }
