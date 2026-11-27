@@ -16,6 +16,7 @@ import { ctxOf } from './connections.ts'
 import { directoryOf, seeding, stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
 import { meta } from './meta.ts'
+import { phoneOf, textable } from './phones.ts'
 import { keyed } from './platform-keys.ts'
 import { speaking } from './speech.ts'
 import { platform } from './testing.ts'
@@ -34,7 +35,12 @@ let c = ctxOf(p.env)
 await seeding(meta(p.env))
 
 // The platform app's connection through `integration`, read as `binding`.
-let given = async (integration: string, binding: string, key: string) => {
+let given = async (
+  integration: string,
+  binding: string,
+  key: string,
+  hosts?: string[],
+) => {
   let [app] = await c.graph.read(line`.app.store=${PLATFORM_STORE}&*`)
   let made = await c.graph.apply(
     await need(c.graph.read, {
@@ -42,6 +48,7 @@ let given = async (integration: string, binding: string, key: string) => {
       app: app.entity.eid,
       integration,
       binding,
+      hosts,
     }),
   )
   await connect(c, made.find((b) => b.connection)!.entity.eid, { key })
@@ -55,8 +62,38 @@ test('a Worker secret answers until its connection is given, and the connection 
   assertEquals((await keyed(env)).ANTHROPIC_API_KEY, 'secret')
   await given('anthropic', 'ANTHROPIC_API_KEY', 'pasted')
   let next = fresh({ ANTHROPIC_API_KEY: 'secret' })
-  assertEquals((await keyed(next)).ANTHROPIC_API_KEY, 'pasted')
+  let key = () => keyed(next).then((env) => env.ANTHROPIC_API_KEY)
+  assertEquals(await Promise.all([key(), key()]), ['pasted', 'pasted'])
   assertEquals({ ...await keyed(next) }.ANTHROPIC_API_KEY, 'pasted')
+})
+
+test('Telnyx can send a platform text on the connection alone', async () => {
+  await given('telnyx-platform', 'TELNYX_API_KEY', 'text-key', [
+    'api.telnyx.com',
+  ])
+  let from = '+18885550100'
+  let to = '+12695550142'
+  let telnyx = endpoints(globalThis).open(async (req) => {
+    assertEquals(new URL(req.url).pathname, '/messages')
+    assertEquals(req.headers.get('authorization'), 'Bearer text-key')
+    assertEquals(await req.json(), { from, to, text: 'Hello' })
+    return Response.json({ data: { id: 'accepted' } })
+  })
+  try {
+    let env = fresh({
+      TELNYX_API: telnyx.url,
+      PHONE_SENDER: { via: 'telnyx', number: from },
+      TEXT_SIGNUP: 'on',
+    })
+    assertEquals(await textable(env), true)
+    assertEquals(await (await phoneOf(env)).send({ to, text: 'Hello' }), {
+      id: 'accepted',
+      via: 'telnyx',
+      from,
+    })
+  } finally {
+    await telnyx.stop()
+  }
 })
 
 test('keying is idempotent: an env and its keyed env key to one object', async () => {

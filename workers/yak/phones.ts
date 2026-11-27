@@ -1,15 +1,14 @@
 // The phones the platform texts and calls through: each provider plugin
 // config.ts `phoneConfig` names, lent under its name (lent.ts) with
-// the options its entry gives it, every secret among them read from the
-// Worker's environment at its use. Nothing here names a provider: the
-// Operator's texts and calls, an app's texts and the sign-up texts all go
-// through the phone a name selects.
+// the options its entry gives it. The Operator's texts and calls, app texts,
+// and sign-in texts use the selected phone with the platform's keys.
 import { Blocked, type Transport } from '@yaks/phone'
 import { directoryOf } from './directory.ts'
 import type { Phone } from '@yaks/phone/plugin'
 import { phoneConfig } from './config.ts'
 import type { Env } from './env.ts'
 import { sharing } from './lib/shared.ts'
+import { keyed } from './platform-keys.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a secret put after the first text is used by the next.
@@ -24,8 +23,10 @@ let lend = async (env: Env) =>
 
 /** Every phone config.ts `phoneConfig` lends, by name. Two plugins lending
  * one name are refused: which answers would be an accident of order. */
-export let phones = (env: Env): Promise<Record<string, Phone>> =>
-  sharing(held, env, () => lend(env))
+export let phones = async (env: Env): Promise<Record<string, Phone>> => {
+  let options = await keyed(env)
+  return sharing(held, options, () => lend(options))
+}
 
 /** The phone config.ts `phoneConfig` lends as `via`, where one does. */
 export let phoneNamed = async (

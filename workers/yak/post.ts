@@ -28,6 +28,7 @@ import { apex, type Host } from '@yaks/platform/host'
 import type { Env } from './env.ts'
 import type { App, Directory, Space } from './directory.ts'
 import { type Post, posts } from './config.ts'
+import { keyed } from './platform-keys.ts'
 
 // Apply at the transport so app effects and platform letters obey one rule.
 // A letter every recipient of which is the fleet's own (@yaks/platform/bots
@@ -207,9 +208,12 @@ export let transport = async (
   let built = env.MAIL_DEV == '1' ? { sender: printed } : post(
     { via: env.MAIL_VIA ?? kind.via },
     {
-      senders: await (await import('./lent.ts')).lent(env, 'senders', kind, {
-        tags,
-      }),
+      senders: await (await import('./lent.ts')).lent(
+        await keyed(env),
+        'senders',
+        kind,
+        { tags },
+      ),
     },
   )
   return built.sender ? { sender: diverted(built.sender, env) } : built

@@ -404,9 +404,9 @@ bindings, and no other module of the Worker names a provider. The same plugins
 lend the reader of a provider's signed notices at `POST /mail/<via>` and the
 arrival `inbox.ts` reads Email Routing's letters with (`ARRIVAL`). When unset,
 platform letters use Cloudflare's REST sender and apps and Operators use the
-`MAIL` binding. `MAIL_VIA=resend` selects Resend for each, with a
-service-specific `sending_access` app-domain key in the Worker secret
-`RESEND_TOKEN` and a separate bot-domain key in `RESEND_PLATFORM_TOKEN`.
+`MAIL` binding. `MAIL_VIA=resend` selects Resend for each. The platform
+connections hold a `sending_access` key for `yaks.app` as `RESEND_TOKEN` and a
+separate key for `bot.yak.sh` as `RESEND_PLATFORM_TOKEN`.
 `RESEND_WEBHOOK_SECRET` authenticates signed receipts at `POST /mail/resend`;
 they fill Message-IDs in app and Operator mail without granting Resend account
 access to a Worker. `RESEND_API` and `MAIL_FETCH` replace only the HTTP boundary
@@ -426,11 +426,11 @@ Receiving remains on Email Routing until Resend's MX, signed webhook, body and
 attachment retrieval, and durable acknowledgement path are configured and
 proved. Existing queued letters and receiving cursors are retained.
 
-**yaks.app's own keys** — a provider key the platform spends from (speech and
-models: ElevenLabs, Deepgram, OpenAI, Anthropic) is a connection of its own
-space, `yak`, used by its `platform` app under the name the table below gives it
-(platform-keys.ts). Ask for one with `connection_need` on that space and app,
-naming the integration and that name as `binding`:
+**yaks.app's own keys** — the platform's speech, model, Resend sending and
+Telnyx keys are connections of its own space, `yak`, used by its `platform` app
+under the name the table below gives each one (platform-keys.ts). Ask for one
+with `connection_need` on that space and app, naming the integration and that
+name as `binding`:
 
 ```sh
 yak command store_connection_need --space yak --owner yak --app platform \
@@ -443,9 +443,9 @@ like any space's. Each isolate reads these connections (@yaks/connections
 `keysOf`) over the Worker secret of the same name, again once a minute, so a
 pasted key serves within a minute and needs no deploy; the Worker secret answers
 only until its connection is given, and is deleted once it serves
-(`npx wrangler secret delete <NAME>`). Speech's doors, the Operator's object
-(build.ts) and `./api/ai` read them; mail, texts and the platform's own
-Cloudflare and Stripe credentials are still Worker secrets.
+(`npx wrangler secret delete <NAME>`). Speech, the Operator's object
+(`build.ts`), `./api/ai`, mail and phones use the connection keys. The
+directory's mail effects read the keys through its in-process graph door.
 
 **Secrets** — `npx wrangler secret put <NAME>` from `workers/yak` (add
 `--env staging` for staging); locally a `.dev.vars` line.
@@ -455,7 +455,8 @@ Cloudflare and Stripe credentials are still Worker secrets.
 | `SESSION_SECRET`                                                 | yes         | any long random string                                                                                                                                                                                                                                        | no session verifies, no sign-in code is issued                                                                                       |
 | `TRACKER_SECRET`                                                 | yes         | the independent tracker's signing key, shared with its scoped service door                                                                                                                                                                                    | app failure reads and archive/resolve cannot reach the tracker                                                                       |
 | `MAIL_TOKEN`                                                     | Cloudflare  | Cloudflare Email Sending API token, for the Worker's own account (`CF_ACCOUNT`)                                                                                                                                                                               | sign-in code letters do not send                                                                                                     |
-| `RESEND_TOKEN`                                                   | Resend      | separate sending-only API key for this Worker                                                                                                                                                                                                                 | selected Resend sender waits; sign-in mail is unavailable                                                                            |
+| `RESEND_TOKEN`                                                   | Resend      | platform connection with a sending-only key restricted to `yaks.app`                                                                                                                                                                                          | app and Operator mail waits                                                                                                          |
+| `RESEND_PLATFORM_TOKEN`                                          | Resend      | platform connection with a sending-only key restricted to `bot.yak.sh`                                                                                                                                                                                        | platform mail, including sign-in codes, waits                                                                                        |
 | `CF_ANALYTICS_TOKEN`                                             | yes         | API token, **Account · Account Analytics · Read** (see Analytics)                                                                                                                                                                                             | the meter and Visits report counts are off                                                                                           |
 | `CF_WORKERS_TOKEN`                                               | yes         | API token, **Workers Scripts, D1, R2, Vectorize · Edit; Connectivity Directory · Bind** (see App bindings)                                                                                                                                                    | an app's files deploy, its `worker.js` does not; no space gets a tunnel                                                              |
 | `BUILD_HOOK`                                                     | prod        | deploy hook URL for `main` (Workers & Pages → `yak` → Settings → Builds)                                                                                                                                                                                      | a failed push build is filed, never built again                                                                                      |
@@ -471,7 +472,7 @@ Cloudflare and Stripe credentials are still Worker secrets.
 | `PHONE_SENDER`                                                   | texts       | a `[vars]` line in wrangler.toml, not a secret: the phone and `number` every platform text goes from, and the only number a text signs up at, e.g. `{ via = "telnyx", number = "+18663141594" }`; a space's `sender{via}` beside `phone{number}` overrides it | nothing texts or calls                                                                                                               |
 | `PINNACLE_API_KEY`, `PINNACLE_SIGNING_SECRET`, `PINNACLE_NUMBER` | texts       | Pinnacle send key, webhook secret and default sending number; receive at `/pinnacle/webhook`                                                                                                                                                                  | Pinnacle is unconfigured                                                                                                             |
 | `VOIPMS_USERNAME`, `VOIPMS_API_PASSWORD`, `VOIPMS_NUMBER`        | texts       | voip.ms platform account and default number; personal connections keep their own credentials                                                                                                                                                                  | voip.ms platform sender is unconfigured                                                                                              |
-| `TELNYX_API_KEY`                                                 | texts       | Telnyx API key (Mission Control, Auth > API Keys); the webhook's public key is `TELNYX_PUBLIC_KEY` in `[vars]`                                                                                                                                                | the Operator sends no texts; the opt-in still saves                                                                                  |
+| `TELNYX_API_KEY`                                                 | texts       | platform connection with the Telnyx API key. `TELNYX_PUBLIC_KEY` in `[vars]` verifies webhooks                                                                                                                                                                | the Operator sends no texts and the opt-in still saves                                                                               |
 | `TEXT_SIGNUP`                                                    | texts       | `on` signs up a stranger who texts `PHONE_SENDER`'s number, puts that number's QR code on invite pages, and lets the sign-in card take a US mobile number and text it the code; set once its toll-free verification covers it (T-138775)                      | a stranger's text is left unread, invites offer the letter alone, and the sign-in card asks for an email                             |
 | `DEEPGRAM_API_KEY`                                               | speech      | Deepgram API key, a platform key (above); `SPEECH_FLOOR` in `[vars]` is the account credit below which speech pauses while it is a pilot                                                                                                                      | `./api/speech` answers 503 and calls to the Operator are not answered                                                                |
 | `OPENAI_VOICE_KEY`                                               | speech      | OpenAI key of the "yaks.app voice" project, which may use only its voice models and spend $10 a month; a platform key (above)                                                                                                                                 | an Operator set to an OpenAI voice is not answered on a call, and its voices are not offered                                         |

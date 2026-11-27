@@ -1734,7 +1734,17 @@ export class Store extends Durable {
     let kind = planKind(name, this.#versioned), config = configOf(kind)
     let observed = workerAnatomy(config)
     let host!: PluginHost
-    let env = () => meta ? { ...this.#bind, META: this.#meta } : this.#bind
+    // Keep one env for the directory's key cache. The local door is ready
+    // once the store can run its effects and jobs.
+    let local = () => this.#meta
+    let env = meta
+      ? {
+        ...this.#bind,
+        get META() {
+          return local()
+        },
+      }
+      : this.#bind
     let kernelGraph: Graph | undefined
     let kernel = () => kernelGraph ??= this.#kernelGraph(host.graph)
     let context = () => this.#expires?.context
@@ -1742,14 +1752,12 @@ export class Store extends Durable {
       ...this.#stored(this.#graph),
       // Only the directory keeps the platform's schedules and runs its jobs.
       ...meta
-        ? { job: (job: string, row: Bound) => jobs[job](env() as Env, row) }
+        ? { job: (job: string, row: Bound) => jobs[job](env as Env, row) }
         : {},
       get context() {
         return context()
       },
-      get env() {
-        return env()
-      },
+      env,
       get graph() {
         return kernel()
       },
@@ -1876,16 +1884,16 @@ export class Store extends Durable {
         worker: metering(
           this.#bind,
           () => this.#get('mail'),
-          outgoing(this.#bind, mailTags(name)),
+          outgoing(env, mailTags(name)),
         ),
         // The platform's own letters, which only the directory sends
         // (config.ts): unmetered, from the platform's address or a space's
         // Operator's.
-        platform: platformPost(this.#bind),
+        platform: platformPost(env),
       },
       texters: {
         worker: appTexter(
-          this.#bind as Env,
+          env as Env,
           () => this.#get('phone'),
           () => this.#get('space'),
         ),

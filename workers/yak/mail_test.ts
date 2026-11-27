@@ -18,13 +18,17 @@ import { Undeliverable } from '@yaks/mail'
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
+import { connect, need } from '@yaks/connections'
+import type { D1Like } from '@yaks/d1'
 import type { Bundle } from '@yaks/graph'
+import { d1 } from '../../packages/d1/testing.ts'
 import { platform as runtime, state } from './testing.ts'
 import { storeOf } from './door.ts'
 import { type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { bounce, FROM, mail, mailable, REPLY_TO } from './mail.ts'
 import { posts } from './config.ts'
+import { ctxOf } from './connections.ts'
 import { Store } from './graph.ts'
 import { KERNEL, type Meta, metaOf } from './meta.ts'
 import { monthOf } from '@yaks/platform/meter'
@@ -37,7 +41,7 @@ import {
   transport,
 } from './post.ts'
 import { mailFrom } from '@yaks/platform/host'
-import type { App, Host, Space } from './directory.ts'
+import { type App, type Host, seeding, type Space } from './directory.ts'
 
 test('an app writes from a local part at the apex, or at its mail domain', () => {
   assertEquals(mailFrom('ada', 'cookbook'), 'ada.cookbook@yaks.app')
@@ -659,6 +663,72 @@ let left = (store: Meta, eid: string) =>
     )
     return row?.delivered || row?.bounced
   })
+
+let authorizations = new Map<string, string | null>()
+let resend = {
+  MAIL_VIA: 'resend',
+  VAULT: d1() as unknown as D1Like,
+  VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(17))),
+  MAIL_FETCH: (_url: string, init: RequestInit) => {
+    let { from } = JSON.parse(String(init.body))
+    authorizations.set(from, new Headers(init.headers).get('authorization'))
+    return Promise.resolve(Response.json({ id: 'accepted' }))
+  },
+}
+let connectedMail = directory({
+  ...resend,
+  STORE: {
+    idFromName: (name) => name,
+    get: () => {
+      throw new Error('The directory called its own stub')
+    },
+  },
+})
+let mailEnv = { ...resend, ...connectedMail.at }
+let mailConnections = ctxOf(mailEnv)
+await seeding(connectedMail.store)
+let [mailApp] = await mailConnections.graph.read(
+  line`.app.store=${PLATFORM_STORE}`,
+)
+for (
+  let [integration, binding, key] of [
+    ['resend-bot', 'RESEND_PLATFORM_TOKEN', 'bot-key'],
+    ['resend-app', 'RESEND_TOKEN', 'app-key'],
+  ]
+) {
+  let rows = await mailConnections.graph.apply(
+    await need(mailConnections.graph.read, {
+      app: mailApp.entity.eid,
+      owner: String((mailApp.app as { space: string }).space),
+      integration,
+      binding,
+      hosts: ['api.resend.com'],
+    }),
+  )
+  await connect(mailConnections, rows.find((b) => b.connection)!.entity.eid, {
+    key,
+  })
+}
+
+test('the directory sends from both domains using its own connections', async () => {
+  assert(await mailable(mailEnv))
+  for (let from of [FROM, 'ada@yaks.app']) {
+    let [eid] = await mail(mailEnv)({
+      to: 'ana@example.com',
+      subject: 'Hello',
+      body: 'Hello',
+      from,
+    })
+    assert(await left(connectedMail.store, eid))
+  }
+  assertEquals(
+    authorizations,
+    new Map([
+      [`yaks.app <${FROM}>`, 'Bearer bot-key'],
+      ['yaks.app <ada@yaks.app>', 'Bearer app-key'],
+    ]),
+  )
+})
 
 // What a binding was handed, refusing every address at `refused.example`.
 let binding = () => {

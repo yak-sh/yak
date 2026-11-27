@@ -142,8 +142,8 @@ VIEWS_DATASET = "yak_views"
 META_DATASET = "2229428124636727"
 # The tracker records the environment beside each captured failure.
 ENVIRONMENT = "production"
-# Letters go out through Resend: platform letters on RESEND_PLATFORM_TOKEN
-# (bot.yak.sh), app and Operator letters on RESEND_TOKEN (yaks.app).
+# Letters go out through the Resend platform connections RESEND_PLATFORM_TOKEN
+# (bot.yak.sh) and RESEND_TOKEN (yaks.app app and Operator mail).
 MAIL_VIA = "resend"
 
 # The zone a customer's own domain is attached to as a Cloudflare for SaaS
@@ -605,9 +605,8 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 
 # Secrets never live in this file. SESSION_SECRET signs the platform session
 # cookie (lib/token.ts) and keys the sign-in code digests (signin.ts);
-# RESEND_PLATFORM_TOKEN and RESEND_TOKEN are the domain-restricted Resend
-# sending keys MAIL_VIA above selects; RESEND_WEBHOOK_SECRET verifies
-# Resend's receipts at /mail/resend; RESEND_DOMAINS_TOKEN is the `full_access`
+# RESEND_WEBHOOK_SECRET verifies Resend's receipts at /mail/resend.
+# RESEND_DOMAINS_TOKEN is the `full_access`
 # key a space's mail domains are set up with (config.ts `mailDomains`), unset
 # until Jeff answers #a3030ebc6a. MAIL_TOKEN is Cloudflare Email Sending's,
 # for a deployment without MAIL_VIA. config.ts `posts` names the provider

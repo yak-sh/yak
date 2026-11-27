@@ -13,6 +13,7 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import { line } from '@yaks/query'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
+import { inFlight } from './lib/shared.ts'
 import { vaulted } from './vault.ts'
 
 let FRESH = 60_000
@@ -42,11 +43,17 @@ export let keyed = async <E extends object>(env: E): Promise<E> => {
   let now = Date.now()
   if (now - h.at < FRESH) return h.env as E
   let first = h.at == -Infinity
-  h.at = now
-  let read = platformKeys(h.base).then(
-    (keys) => void (h.keys = keys),
-    (e) => caught(e, { request: 'platform keys' }),
-  )
+  if (!first) h.at = now
+  let read = inFlight(held, h, async () => {
+    try {
+      let keys = await platformKeys(h.base)
+      if (h.at <= now) h.keys = keys
+    } catch (e) {
+      caught(e, { request: 'platform keys' })
+    } finally {
+      h.at = Math.max(h.at, now)
+    }
+  })
   if (first) await read
   return h.env as E
 }
@@ -78,8 +85,8 @@ let overlay = (env: object): Held => {
   return made
 }
 
-/** The keys the `platform` app's connections hold, by the name each is read
- * by; none where the Worker keeps no vault or reaches no directory. */
+/** The keys the `platform` app's connections hold, by binding name. Inside
+ * the directory, `ctxOf` reads through the local `META` door. */
 export let platformKeys = async (
   env: Partial<Env>,
 ): Promise<Record<string, string>> => {
