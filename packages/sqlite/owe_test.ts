@@ -388,6 +388,21 @@ test('upkeep is done once a day, and one that fails waits an hour', () => {
   ])
 })
 
+// A daily that a deploy revised is due at once, not a day on: done now, a
+// moment on, revised, and a moment after that.
+let [, revised] = stage((db) => {
+  let check = (revision?: number): Daily => ({
+    name: 'check',
+    revision,
+    run: () => {},
+  })
+  return [[], [], [2], [2]].map(([r], t) => did(db, NOW + t, [check(r)]))
+}, files)
+
+test('a daily is due again at once when its revision rises', () => {
+  assertEquals(revised, [['daily:check'], [], ['daily:check'], []])
+})
+
 // Two chores, one with two windows of work, the other with one and failing
 // the first time it runs: what was done now, a moment on, and an hour on.
 let [, chored] = stage((db) => {

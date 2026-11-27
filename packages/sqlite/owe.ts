@@ -267,9 +267,24 @@ export type Worked =
  * statistics ({@link statistics}) always, and what a host adds, the way the
  * box checks that its text indexes hold every row (@yaks/fts `heal`). `run`
  * is one window, in one unit. When each is next due is kept in `server_meta`
- * as `daily:<name>`.
+ * as `daily:<name>`, with its `revision` after a `#`. One whose run changed
+ * what it decides raises its revision, so every store runs it at its next
+ * wake rather than up to a day after the deploy.
  */
-export type Daily = { name: string; run: (driver: Driver) => void }
+export type Daily = {
+  name: string
+  run: (driver: Driver) => void
+  revision?: number
+}
+
+// A daily's mark: when it is next due, and the revision that set it.
+let marked = (d: Daily, ms: number) =>
+  new Date(ms).toISOString() + (d.revision ? `#${d.revision}` : '')
+let due = (d: Daily, at: string | null | undefined, now: number) => {
+  if (!at) return true
+  let [when, revision] = at.split('#')
+  return (revision ?? '') != String(d.revision ?? '') || Date.parse(when) <= now
+}
 
 let DAILY = 'daily:'
 
@@ -315,6 +330,8 @@ let chore = (
  * which {@link work} does a table a window. */
 export let statistics: Daily = {
   name: 'statistics',
+  // 2: tables whose statistics say they hold a few rows (./ddl.ts `small`).
+  revision: 2,
   run: (driver) => {
     let receipt = installation(driver)
     let owed = analyzed(driver, receipt?.statistics)
@@ -462,16 +479,13 @@ export let upkeep = (
   now: number,
 ): Worked | undefined => {
   let m = meta(driver)
-  let due = daily.find((d) => {
-    let at = m.get(DAILY + d.name)
-    return !at || Date.parse(at) <= now
-  })
-  if (!due) return
-  let name = DAILY + due.name
-  let later = (ms: number) => m.set(name, new Date(now + ms).toISOString())
+  let next = daily.find((d) => due(d, m.get(DAILY + d.name), now))
+  if (!next) return
+  let name = DAILY + next.name
+  let later = (ms: number) => m.set(name, marked(next, now + ms))
   try {
     unit(driver, () => {
-      due.run(driver)
+      next.run(driver)
       later(DAY)
     })
     return { name, done: true }
