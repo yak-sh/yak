@@ -108,6 +108,7 @@ let excluded = (path: string) =>
 export let catalog = async (
   root: string,
   memo: Transpiled = { kept: {}, made: {} },
+  generated: Record<string, Record<string, string>> = {},
 ): Promise<Catalog> => {
   root = resolve(root)
   let members = new Map<string, Member>()
@@ -252,7 +253,7 @@ export let catalog = async (
       dependencies,
     })
     let files = ordered(member.files)
-    let resources = ordered(member.resources)
+    let resources = ordered({ ...member.resources, ...generated[name] })
     out[name] = {
       files,
       resources,
@@ -303,9 +304,10 @@ export let write = async (
   root = repo,
   to = CATALOG,
   memo = join(dirname(to), 'transpiled.json'),
+  generated?: Record<string, Record<string, string>>,
 ) => {
   let made: Record<string, string> = {}
-  let packages = await catalog(root, { kept: kept(memo), made })
+  let packages = await catalog(root, { kept: kept(memo), made }, generated)
   materialize(to, packages)
   // Beside it, each package's digest alone: what a page's serving reads to
   // tell a release compiled by an older toolkit (workers/yak/toolkit.ts).
@@ -317,8 +319,15 @@ export let write = async (
 if (import.meta.main) {
   let to = Deno.args[1] ?? CATALOG
   let cache = Deno.env.get('DENO_DIR')
+  let root = Deno.args[0] ?? repo
+  let generated = resolve(root) == resolve(repo)
+    ? {
+      '@yaks/ui': await (await import('../packages/ui/wear-build.ts'))
+        .wearAssets(),
+    }
+    : undefined
   await write(
-    Deno.args[0] ?? repo,
+    root,
     to,
     Deno.args[2] ??
       (cache
@@ -326,5 +335,6 @@ if (import.meta.main) {
         : to == CATALOG
         ? MEMO
         : join(dirname(to), 'transpiled.json')),
+    generated,
   )
 }

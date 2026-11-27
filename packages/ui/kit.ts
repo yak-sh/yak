@@ -223,6 +223,8 @@ groups.Page.Grid = groups.Page.Cards
 /** Every base part, document defaults first. */
 export let kit: Kit = Object.assign({}, ...Object.values(groups))
 export let kits: Record<string, Kit> = { base: kit }
+/** The stock Linen stylesheet generated for compiled browser packages. */
+export let linenAsset = 'wear-linen.css'
 /** Gouache and paper, yak.sh's design, are the default: the first of each. */
 export let themes: Record<string, Theme> = {
   gouache,
