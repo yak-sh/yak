@@ -677,7 +677,7 @@ test('reference equality compares indexed keys, not projected eids', () => {
 
 test('reverse NONE and compound child conditions bind without outer-owner leakage', () => {
   let none = compile(parse('.notes!.note.stars=5'), v)
-  assert(none.sql.includes('not exists (select 1 from "note"'))
+  assert(/not \(?exists \(select 1 from "note"/.test(none.sql), none.sql)
   assertEquals(none.params, [5])
   let ast = and({
     ...present('notes'),

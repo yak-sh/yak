@@ -1,4 +1,5 @@
 import { equal, test } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
 import {
   and,
   as,
@@ -25,6 +26,38 @@ test('compiled fragments inline values outside quoted text and names', () => {
     inline(fragment),
     `(select 'can''t?', 'already?quoted', "why?" from "table?" where "key" = 'value?')`,
   )
+})
+
+test('a component stored under its identity is read with only the columns its select names', () => {
+  let [note, body, stars] = [0, 1, 2].map(() => crypto.randomUUID())
+  let v = loadVocab({
+    $defs: {
+      note: {
+        $id: `urn:uuid:${note}`,
+        component: true,
+        properties: {
+          body: { $id: `urn:uuid:${body}`, type: 'string' },
+          stars: { $id: `urn:uuid:${stars}`, type: 'number' },
+        },
+      },
+    },
+  })
+  let from = (where: string) =>
+    render(
+      select({ cols: [lit(1)], from: table('note', 'n'), where: raw(where) }),
+      undefined,
+      undefined,
+      v,
+    ).sql.replace(/ where .*/, '')
+  let starred =
+    `select 1 from (select "entity", "${stars}" as "stars" from "${note}") as "n"`
+  equal(from('"n"."stars" > 1'), starred)
+  equal(from(`"n"."stars" > 1 and "n"."entity" is not null`), starred)
+  // A name given after `as` is defined there, and a keyword is no name.
+  equal(from(`"n"."stars" in (select 1 as "body" from "x")`), starred)
+  equal(from('"n"."entity" is not null'), `select 1 from "${note}" as "n"`)
+  equal(from('"n".* is not null').includes(`"${body}" as "body"`), true)
+  equal(from('"body" is not null').includes(`"${body}" as "body"`), true)
 })
 
 test('vacuum binds its destination as a value', () => {

@@ -470,6 +470,8 @@ export let relationOf = (
     let at = stored(v, comp, k)
     return at == k ? q(k) : `${q(at)} as ${q(k)}`
   })
+  // Its owner alone is the stored table's own column.
+  if (!named.length && !indexed) return `${schema}${q(stored(v, comp))}`
   return `(select ${['"entity"', ...named].join(', ')} from ${schema}${
     q(stored(v, comp))
   }${indexed})`
@@ -488,12 +490,39 @@ export let tableOf = (
 // Which columns of each of a select's sources it may read, by the source's
 // name in it: a renamed component's relation lists only those
 // (`relationOf`), so a statement repeating a relation repeats no column it
-// never names. A column is read where a column node names it, qualified by
-// the source or by nothing; every column, where the select reads all of a
-// source (`*`, `"source".*`) or raw text names the source. Any other word in
-// raw text is read as an unqualified column. Reading too much costs only
-// text; a column left out would be refused by the engine, never misread.
+// never names. A column is read where a column node or raw text names it,
+// qualified by the source or by nothing; every column, where the select reads
+// all of a source (`*`, `"source".*`). Any other word in raw text is read as
+// an unqualified column. Reading too much costs only text; a column left out
+// would be refused by the engine, never misread.
 type Reads = (source: string) => (column: string) => boolean
+// Each name raw text reads, quoted or a bare word: its qualifier where it
+// follows one and a dot, and `*` for a source's every column. A name given
+// after `as` is defined there, not read, and a keyword or a string is no name.
+let MENTION =
+  /'(?:[^']|'')*'|(?:"((?:[^"]|"")*)"|(\w+))(?:\s*\.\s*(?:"((?:[^"]|"")*)"|(\w+)|(\*)))?/g
+let KEYWORDS = new Set(
+  ('select from where and or not is null as in exists on join left cross ' +
+    'inner case when then else end by order group having limit offset union ' +
+    'all distinct like glob between asc desc collate escape cast values with ' +
+    'materialized indexed using').split(' '),
+)
+let mentions = function* (
+  sql: string,
+): Generator<[string | undefined, string]> {
+  let unquote = (s: string) => s.replaceAll('""', '"')
+  let defining = false
+  for (let [, q1, w1, q2, w2, all] of sql.matchAll(MENTION)) {
+    let named = !defining
+    let word = w1?.toLowerCase()
+    defining = word == 'as'
+    if (!named || q1 == null && w1 == null) continue
+    let first = q1 != null ? unquote(q1) : w1!
+    let second = q2 != null ? unquote(q2) : w2 ?? all
+    if (second != null) yield [first, second]
+    else if (!word || !KEYWORDS.has(word)) yield [undefined, first]
+  }
+}
 let readings = new WeakMap<Select, Reads>()
 let reading = (s: Select): Reads => {
   let held = readings.get(s)
@@ -519,11 +548,9 @@ let reading = (s: Select): Reads => {
     }
     if (n.t == 'star' && typeof n.of == 'string') return add(n.of, true)
     if (n.t == 'raw') {
-      let sql = String(n.sql)
-      for (let [, quoted, word] of sql.matchAll(/"((?:[^"]|"")*)"|(\w+)/g)) {
-        let name = quoted?.replaceAll('""', '"') ?? word
-        by.set(name, true)
-        bare.add(name)
+      for (let [of, column] of mentions(String(n.sql))) {
+        if (of == null) bare.add(column)
+        else add(of, column == '*' || column)
       }
       return
     }

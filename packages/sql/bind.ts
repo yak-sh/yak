@@ -119,6 +119,7 @@ import {
 } from './ast.ts'
 import {
   inline as inlineIn,
+  q,
   relationOf,
   render as renderIn,
   renderStable as stableIn,
@@ -1204,8 +1205,14 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
 // that renames a component's table or reads it from somewhere else (the CTEs
 // @yaks/sqlite overlays a pending transaction with) is followed here too, not
 // only at the top-level joins. It must be the bare table expression with no
-// alias of its own, because `as "__p1"` follows it.
-let source = (ctx: Ctx, comp: string) => ctx.d.source?.(comp) ?? `"${comp}"`
+// alias of its own, because `as "__p1"` follows it. Read from its stored
+// relation, that relation lists only the columns in `reads`, where given.
+let source = (ctx: Ctx, comp: string, reads?: string[]) => {
+  let text = ctx.d.source?.(comp) ?? `"${comp}"`
+  return reads && text == relationOf(ctx.v, comp)
+    ? relationOf(ctx.v, comp, '', '', (c) => reads.includes(c))
+    : text
+}
 
 // A reference property's stored integer column, asked of the dialect — which is
 // what lets a dialect that renames its tables (the per-pattern prefix a rule
@@ -1454,7 +1461,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
     )
     if (shape) return rooted(shape)
     let owner = leaf.comp == 'entity' ? `"__pl"."id"` : `"__pl"."entity"`
-    let hit = `(select ${owner} from ${source(ctx, leaf.comp)} as "__pl"` +
+    let hit = `(select ${owner} from ${source(ctx, leaf.comp, [])} as "__pl"` +
       ` where ${owner} = ${target})`
     return rooted(
       cond({ sql: `${hit} is ${present ? 'not ' : ''}null`, params: [] }),
@@ -2068,8 +2075,10 @@ let intersection = (parts: Query[]): Query => {
 // The left JOINs for the tables this bind touched, keyed on the row they hang
 // off: the entity table for an ordinary query, or the child table inside a
 // reverse hop's subquery (which is the from there, so it is never joined to
-// itself). Each is the dialect's joined source and its on condition.
-type Link = { source: string; on: string }
+// itself). Each is the dialect's joined source and its on condition, and,
+// where that source is a component's stored relation, the table the renderer
+// writes it from (`storedAs`).
+type Link = { source: string; on: string; table?: Source }
 
 // A join source read from its component's own table, as one keyed by its
 // owner where the dialect has such a read (`Dialect.owned`): each named row is
@@ -2093,15 +2102,45 @@ let tablesOf = (v: Vocab): Map<string, string> => {
   }
   return held
 }
+// Each component's stored relation (./render.ts `tableOf`), plain or keyed by
+// its owner (`Dialect.owned`), by its text, as the table node it is written
+// from. The renderer lists only the columns a select reads of such a node,
+// where the text lists every one.
+let storedNodes = new WeakMap<Vocab, Map<string, Source>>()
+let storedAs = (v: Vocab, text: string): Source | undefined => {
+  let held = storedNodes.get(v)
+  if (!held) {
+    held = new Map()
+    for (let c of v.all) {
+      if (tableOf(v, c) == q(c)) continue
+      held.set(tableOf(v, c), table(c))
+      held.set(tableOf(v, c, ' not indexed'), table(c, undefined, false))
+    }
+    storedNodes.set(v, held)
+  }
+  return held.get(text)
+}
 let joining = (ctx: Ctx, comp: string): string =>
   !ctx.spine ? ctx.d.joined?.(comp) ?? ctx.d.table(comp) : ctx.d.table(comp)
 let joinsOf = (ctx: Ctx, base = 'entity'): Link[] =>
   [...ctx.tables]
     .filter((t) => t != 'entity' && t != base && t != ctx.spine)
-    .map((t) => ({
-      source: base == 'entity' ? joining(ctx, t) : ctx.d.table(t),
-      on: ctx.d.joinOn(t, base),
-    }))
+    .map((t) => {
+      let source = base == 'entity' ? joining(ctx, t) : ctx.d.table(t)
+      return {
+        source,
+        on: ctx.d.joinOn(t, base),
+        table: storedAs(ctx.v, source),
+      }
+    })
+
+// The joins as a select holds them.
+let linked = (links: Link[]): Join[] =>
+  links.map((j) => ({
+    how: 'left',
+    src: j.table ?? raw(j.source),
+    on: raw(j.on),
+  }))
 
 // The joins written out as they appear after the from.
 let joined = (links: Link[]): string =>
@@ -2120,11 +2159,7 @@ let rel = (from: string, o: {
   t: 'select',
   cols: o.cols.map((c) => typeof c == 'string' ? raw(c) : c),
   from: raw(from, [], 'entity'),
-  joins: o.joins.map((j): Join => ({
-    how: 'left',
-    src: raw(j.source),
-    on: raw(j.on),
-  })),
+  joins: linked(o.joins),
   where: o.where,
   group: o.group ? [raw(o.group)] : undefined,
   having: o.having ? raw(o.having) : undefined,
@@ -2276,14 +2311,16 @@ let reverse = (
       }),
     )
   }
-  return cond({
-    sql:
-      `${p.not ? 'not ' : ''}exists (select 1 from ${child}${
-        joined(joinsOf(sub, a.comp))
-      }` +
-      ` where ${corr}${inner.sql == '1' ? '' : ` and ${inner.sql}`})`,
-    params: inner.params,
-  })
+  let rows = exists(select({
+    cols: [lit(1)],
+    from: storedAs(ctx.v, child) ?? raw(child),
+    joins: linked(joinsOf(sub, a.comp)),
+    where: raw(
+      `${corr}${inner.sql == '1' ? '' : ` and ${inner.sql}`}`,
+      inner.params,
+    ),
+  }))
+  return p.not ? not(rows) : rows
 }
 
 // The reference walk: `.fork.from->S-7` follows one reference property of one
