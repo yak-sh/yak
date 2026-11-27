@@ -135,6 +135,15 @@ test('a live shell sends an access refusal to the browser without reporting a fa
   assertEquals([o.said.written, o.said.told, o.reloads()], ['', [], 1])
 })
 
+test('a live shell gives a JSON response back to a normal navigation', async () => {
+  let o = opened(() => Promise.resolve(Response.json({ cost: 2 })), {
+    live: true,
+    shell: true,
+  })
+  await o.settle()
+  assertEquals([o.said.written, o.said.told, o.reloads()], ['', [], 1])
+})
+
 test('a live shell follows a sign-in redirect as a browser navigation', async () => {
   let login = 'https://yaks.app/login?return=%2Fmanage%2Fchat'
   let o = opened(

@@ -161,15 +161,16 @@ let boot = ({ opening, door, live = false }: Boot = {}) =>
       opened?.waited(wait == null ? performance.now() - began : Number(wait),
         gateway ? Number(gateway[1]) : undefined)
     } catch {}
+    let page = (r.headers.get('content-type') || '').includes('text/html')
     ${
     live
-      ? `if ([401, 403, 404].includes(r.status)) {
+      ? `if ([401, 403, 404].includes(r.status) || r.ok && !page) {
       void r.body?.cancel()
       return network()
     }`
       : ''
   }
-    if (!r.ok || !(r.headers.get('content-type') || '').includes('text/html')) {
+    if (!r.ok || !page) {
       return network('answered ' + r.status)
     }
     let url = r.headers.get('${FRESH_URL}') || r.url
