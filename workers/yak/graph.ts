@@ -5090,45 +5090,60 @@ export class Store extends Durable {
     if (this.#started.ran) return null
     let name = request.headers.get('x-store')
     if (!name || ownStore(name)) return null
-    if (this.#ctx.getWebSockets().length) return null
+    if (this.#ctx.getWebSockets().length) return this.#fell(name, 'sockets')
 
     if (!this.#sql) {
       let sql = driver(this.#ctx.storage, undefined, this.#measure)
-      if (!columns(sql, KV.name).length) return null
+      if (!columns(sql, KV.name).length) return this.#fell(name, 'new')
       this.#sql = sql
     }
     let app = this.#get('app')
-    if (!app || this.#get('name') != name || this.#get('copied')) return null
+    if (!app || this.#get('name') != name || this.#get('copied')) {
+      return this.#fell(name, 'unnamed')
+    }
     let shape = this.#shape()
     // A deploy moves the fit's version. Where the schema did not move with
     // it, the listing reads the tables as they stand (`unmoved`), once this
     // code composes every plugin the data requires: `#build` asks the same
     // where the fit moved, and a rollback can find one it lacks.
     let held = requirements(this.#sql)
-    if (
-      !(this.#stood(shape) ||
-        unmoved(this.#sql, shape, (key) => this.#get(key as Word)) &&
-          composes(configOf(planKind(name, false)), held)) ||
-      shape.vocab.comp('_tx') ||
-      this.#slots.branches().length ||
-      held.includes(versions.use) || recovering(this.#sql) ||
-      Object.keys(JSON.parse(this.#get('uses') ?? '{}')).length
-    ) return null
+    let why = this.#stood(shape)
+      ? null
+      : !unmoved(this.#sql, shape, (key) => this.#get(key as Word))
+      ? 'schema moved'
+      : !composes(configOf(planKind(name, false)), held)
+      ? 'plugins'
+      : null
+    why ??= shape.vocab.comp('_tx')
+      ? 'transactions'
+      : this.#slots.branches().length
+      ? 'branches'
+      : held.includes(versions.use)
+      ? 'versions'
+      : recovering(this.#sql)
+      ? 'recovering'
+      : Object.keys(JSON.parse(this.#get('uses') ?? '{}')).length
+      ? 'uses'
+      : null
+    if (why) return this.#fell(name, why)
 
     this.#listingExpiry ??= this.#ctx.storage.get<Expiry>?.('expires')
-    if (await this.#listingExpiry || this.#started.ran || this.#dormant) {
-      return null
-    }
+    if (await this.#listingExpiry) return this.#fell(name, 'expires')
+    if (this.#started.ran || this.#dormant) return null
 
-    if (
-      !wake && (
-        request.headers.get('x-yak-app') != app ||
-        request.headers.get('x-yak-access') != this.#get('access') ||
-        (request.headers.has('x-yak-release') &&
-          request.headers.get('x-yak-release') != this.#get('release')) ||
-        !this.#serving.unchanged(request)
-      )
-    ) return null
+    why = wake
+      ? null
+      : request.headers.get('x-yak-app') != app
+      ? 'app'
+      : request.headers.get('x-yak-access') != this.#get('access')
+      ? 'access'
+      : request.headers.has('x-yak-release') &&
+          request.headers.get('x-yak-release') != this.#get('release')
+      ? 'release'
+      : !this.#serving.unchanged(request)
+      ? 'standing'
+      : null
+    if (why) return this.#fell(name, why)
     let listing = this.#listing ??= storeListing({
       vocab: shape.vocab,
       derived: shape.derived,
@@ -5158,6 +5173,15 @@ export class Store extends Durable {
         request.headers.has('x-yak-via'))
     ) this.#used()
     return answer
+  }
+
+  // Why a waking listing took the full start instead (`#plain`): told on
+  // the object's first request only, since the early path is what keeps a
+  // page's first read short after a deploy, and Workers Logs is where a slow
+  // one is matched to its cause.
+  #fell(store: string, why: string): null {
+    console.log({ message: 'yak listing start', store, why })
+    return null
   }
 
   #listingAlarm = once()
