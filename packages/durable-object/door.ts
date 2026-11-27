@@ -90,6 +90,36 @@ export type Door = {
 export type Send = (req: Request) => Promise<Response>
 
 /**
+ * An object's door onto itself: each call waits a `turn` of its event loop
+ * before `send` answers it. In-process a call is a method call that settles on
+ * microtasks alone, so a job asking read after read held the object for the
+ * whole job, and every request waiting on the object waited that long: the
+ * directory's trash sweep held every door on the platform for 18 s (T-4061).
+ * Its calls still run in order; the requests waiting run between them. The
+ * runtime gives the turn (the next task: Node's `setImmediate` where it has
+ * one), since not every Worker that loads this module has it.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { setImmediate } from 'node:timers'
+ * let next = () => new Promise<void>((go) => void setImmediate(go))
+ * let seen: string[] = []
+ * let itself = yielding(() => {
+ *   seen.push('job')
+ *   return Promise.resolve(new Response())
+ * }, next)
+ * setImmediate(() => seen.push('waiting'))
+ * await itself(new Request('http://store/query'))
+ * assertEquals(seen, ['waiting', 'job'])
+ * ```
+ */
+export let yielding =
+  (send: Send, turn: () => Promise<void>): Send => async (req) => {
+    await turn()
+    return await send(req)
+  }
+
+/**
  * A door that builds each request from scratch and hands it to `send`: the
  * init's headers named in `scrub` are dropped, then the call's own headers
  * set. `send` sees the request last, so what it sets is the final word.

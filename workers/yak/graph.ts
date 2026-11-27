@@ -396,6 +396,7 @@ import {
   doorOf as opened,
   IDEMPOTENCY,
   type Namespace,
+  yielding,
 } from '@yaks/durable-object/door'
 import {
   borrowedDocs,
@@ -2191,10 +2192,15 @@ export class Store extends Durable {
     this.#anatomy = observed
     // One per incarnation, like the graph: directory.ts seeds once per Meta.
     // Its own writes are not writes reaching it, so they skip the log (and
-    // never wait on a replay they may be part of).
+    // never wait on a replay they may be part of). Each call waits a turn, so
+    // a job asking read after read lets every door waiting on the directory in
+    // between (@yaks/durable-object `yielding`).
     this.#meta = metaOf(
       doorOf(
-        async (req) => await this.#ready(req) ?? this.#serve(req),
+        yielding(
+          async (req) => await this.#ready(req) ?? this.#serve(req),
+          yielded,
+        ),
         PLATFORM_STORE,
       ),
     )

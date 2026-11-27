@@ -1240,6 +1240,19 @@ let PREVIEWS = new RegExp(`^/[^/]+/(?:${PREVIEW}|~[a-z0-9]{12})(?:/|$)`)
 /// previews('/_preview/t/') -> false
 export let previews = (pathname: string): boolean => PREVIEWS.test(pathname)
 
+let CARRIED = new RegExp(`/(~|${PREVIEW}/)[^/\\s?#'"\`<>()]+`, 'g')
+
+/** `text` with every credential a path carries ({@link paged}) out of sight:
+ * a page token or a preview link's code after `~`, a sealed ticket after
+ * `_preview/`. A page's report quotes the addresses it asked, and the
+ * credential in one opens its app to whoever reads it. */
+/// unpaged('/emberwild/~eyJhIjoxfQ.c2ln/trail: signal timed out') -> '/emberwild/~token/trail: signal timed out'
+/// unpaged('at https://ada.yaks.app/~abc.def/api/query') -> 'at https://ada.yaks.app/~token/api/query'
+/// unpaged('/cookbook/_preview/t.mac/about') -> '/cookbook/_preview/token/about'
+/// unpaged('/cookbook/~k3f9x2ab7q1z') -> '/cookbook/~token'
+/// unpaged('2 ~ 3, /home/ and /cookbook/_preview') -> '2 ~ 3, /home/ and /cookbook/_preview'
+export let unpaged = (text: string): string => text.replace(CARRIED, '/$1token')
+
 /** The connector and app or platform API doors answer failures as JSON. */
 export let jsonDoor = (path: string) =>
   path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path)

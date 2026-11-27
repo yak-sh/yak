@@ -28,6 +28,7 @@ import { sessionAt, vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
 import { divided, gauged, level } from '@yaks/platform/standing'
+import { unpaged } from '@yaks/platform/routes'
 import { holding } from './held.ts'
 import { caught } from './defects.ts'
 import { scheduleMark } from './used.ts'
@@ -259,6 +260,18 @@ export let noted = async (
     entrypoint?: string
   },
 ) => {
+  // A page quotes the addresses it asked, its page token with them: kept
+  // out of the record, where it would open the app to whoever reads it.
+  broke = {
+    ...broke,
+    request: unpaged(broke.request),
+    message: unpaged(broke.message),
+    stack: broke.stack && unpaged(broke.stack),
+    breadcrumbs: broke.breadcrumbs?.map((c) => ({
+      ...c,
+      message: unpaged(c.message),
+    })),
+  }
   let account = await ownedBy(at.env, at.space)
   if (!at.env.ERRORS) throw Error('tracker intake is unavailable')
   let error = Object.assign(Error(broke.message), {

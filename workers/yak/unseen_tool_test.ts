@@ -65,6 +65,25 @@ test('app_errors lists a break whose stored stack is null', async () => {
   )
 })
 
+test("a break quoting the page's address keeps its page token out", async () => {
+  await using p = platform('unseen-secret')
+  let { env } = p
+  let { dir, space, app } = await seeded(env)
+  let token = 'eyJwZXJzb24iOiJhZGEifQ.f6E6_XPwKyZS9b8m'
+  await noted({
+    request: `page /cookbook/~${token}/`,
+    message: `/cookbook/~${token}/trail: signal timed out`,
+    stack: `Error: at https://ada.yaks.app/cookbook/~${token}/page.js:1:1`,
+    version: 1,
+  }, { env, space, app })
+  let { text } = await call({ env, dir, person: ADA }, 'app_errors', {
+    space: 'ada',
+    app: 'cookbook',
+  })
+  assertStringIncludes(text, '/cookbook/~token/trail: signal timed out')
+  assertEquals(text.includes(token), false)
+})
+
 // A person's app break is also the platform's, since yaks.app may have caused
 // it; the page's own write its words refuse is the owner's alone.
 test("an app's own mistake reaches its owner, never the platform", async () => {
