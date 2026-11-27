@@ -13,7 +13,7 @@
  * @module
  */
 
-import { addresses, kits, linenAsset, themes } from './kit.ts'
+import { addresses, kits, linenAddresses, linenAsset, themes } from './kit.ts'
 import type { Composition } from './theme.ts'
 
 /** Link the sheets `c` dresses a page in (`addresses`), before the page's
@@ -22,10 +22,18 @@ export let wear = (c: Composition): Promise<void> => wearIn(document, c)
 
 // Compiled browser packages carry the kit beside the original CSS. Outside
 // that catalog the original stylesheet URLs stand on their own.
-let combined = (at: string, c: Composition): string | undefined => {
+let combined = (
+  at: string,
+  c: Composition,
+  wanted: string[],
+): string | undefined => {
   if (c.kits != kits || c.theme != themes.linen || c.skin) return
   let bundle = new URL(linenAsset, at)
-  if (/^\/__packages\/[a-f0-9]{64}\/resources\//.test(bundle.pathname)) {
+  if (!/^\/__packages\/[a-f0-9]{64}\/resources\//.test(bundle.pathname)) return
+  let stock = linenAddresses()
+  if (
+    stock.length == wanted.length && stock.every((href, i) => wanted[i] == href)
+  ) {
     return bundle.href
   }
 }
@@ -60,7 +68,7 @@ export let wearIn = async (
   )
   let first = doc.querySelector('link[rel=stylesheet],style')
   let wanted = addresses(c)
-  let bundle = combined(moduleUrl, c)
+  let bundle = combined(moduleUrl, c, wanted)
   if (bundle && linked.has(bundle)) return
   if (
     bundle && wanted.every((href) => !linked.has(href)) &&

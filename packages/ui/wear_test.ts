@@ -79,6 +79,18 @@ test('a compiled page loads its separate sheets if the combined sheet is unavail
   await done
 })
 
+test('extending the exported kit uses the extended stylesheet sequence', async () => {
+  let { document } = parseHTML('<html><head></head></html>')
+  kits.custom = kit
+  let wanted = addresses(linen)
+  let done = wearIn(document, linen, browserModule)
+  delete kits.custom
+  let links = [...document.querySelectorAll<HTMLLinkElement>('link')]
+  assertEquals(links.map((link) => link.href), wanted)
+  for (let link of links) link.onload!(new Event('load'))
+  await done
+})
+
 test('the built sheet keeps the original cascade and relative image addresses', async () => {
   let sheets = addresses(linen).map((href) => new URL(href))
   let icon = './illustration.svg'

@@ -352,10 +352,18 @@ export let sheets = (c: Composition): Promise<[string, string][]> =>
     ]),
   )
 
+let ordered = (c: Composition): Stylesheet[] =>
+  dressing(c).flatMap(([, each]) => each)
+let urls = (sheets: Stylesheet[]): string[] =>
+  sheets.map((sheet) => sheet().href)
+
 /** The address of every sheet a browser gets, in the order `stylesheet`
  * reads them: the theme and what every theme derives, then each part's. */
-export let addresses = (c: Composition): string[] =>
-  dressing(c).flatMap(([, each]) => each.map((sheet) => sheet().href))
+export let addresses = (c: Composition): string[] => urls(ordered(c))
+
+// Keep the original sheets because apps can extend the exported kit and theme.
+let linenSheets = ordered({ kits, theme: linen })
+export let linenAddresses = (): string[] => urls(linenSheets)
 
 /** Every sheet a browser gets, in order, as one. */
 export let stylesheet = async (c: Composition): Promise<string> =>
