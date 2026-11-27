@@ -51,7 +51,7 @@ import {
 import type { Actor } from '@yaks/graph'
 import { and, limit, parse, whole } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import type { Handlers } from '@yaks/effects'
+import type { Handlers, Write } from '@yaks/effects'
 import { fill } from './fill.ts'
 import { CASE } from './map.ts'
 
@@ -370,10 +370,10 @@ let looping = (list: Step[]) =>
       ' — a step whose match does not exclude its own output',
   )
 
-// What a set of rows writes, with `also`, applied as one write signed by
-// `who`, `depth` after-commit step writes deep.
+// What a set of rows writes, with `also`, applied through the effect's
+// `write` as one write signed by `who`, `depth` after-commit step writes deep.
 let perform = (
-  g: Access,
+  write: Write,
   tx: ReadTx,
   rows: Row[],
   who: Actor | undefined,
@@ -384,7 +384,7 @@ let perform = (
     let out = [...wrote, ...also]
     if (!out.length) return null
     let marked = out.map((b) => ({ ...b, [GEN]: depth }))
-    return g.apply(who ? signed(marked, who) : marked)
+    return write(who ? signed(marked, who) : marked)
   })
 
 // The runs this batch owes its `commit` steps: a `step_due` for each binding
@@ -458,18 +458,22 @@ export let workflows = (report: Report = console.error): Plugin => ({
 })
 
 /**
- * The code of `step_run` and `step_fire`, writing through `g`.
+ * The code of `step_run` and `step_fire`, asking matches in `vocab`.
+ *
+ * Each writes through the `write` its effect is handed, as every effect does
+ * (@yaks/effects `Write`): the host's own door, so a write signed as nobody is
+ * the host's automation, as a rule's is, rather than a signed-out visitor's.
  *
  * `step_run` runs one owed binding: the step's match asked again anchored to
  * the entities the binding named, the rows that still bind them written,
- * signed as the write that matched, with its `step_due` deleted in the same
- * write, so a run repeated after a crash finds nothing owed. `step_fire` runs
- * a step whose wake or watch fired, its match asked of the whole graph,
- * written as the step's writer. A step deleted or changed since does what it
- * now says.
+ * signed as the write that matched (unsigned when nobody signed it), with its
+ * `step_due` deleted in the same write, so a run repeated after a crash finds
+ * nothing owed. `step_fire` runs a step whose wake or watch fired, its match
+ * asked of the whole graph, written as the step's writer. A step deleted or
+ * changed since does what it now says.
  */
-export let handlers = (g: Access): Handlers => ({
-  [RUN]: (e, tx) => {
+export let handlers = (vocab: Vocab): Handlers => ({
+  [RUN]: (e, tx, write) => {
     // Run already, or its step deleted with it: nothing is owed.
     if (!e.comp) return null
     let due = e.comp
@@ -485,18 +489,18 @@ export let handlers = (g: Access): Handlers => ({
       let same = (r: Row) =>
         r.binding.entities.every((x, i) => (x ?? '') == (binding[i] ?? ''))
       return after(
-        s ? bound(tx, g.vocab, [s], anchor) : [],
-        (rows) => perform(g, tx, rows.filter(same), who, depth, done),
+        s ? bound(tx, vocab, [s], anchor) : [],
+        (rows) => perform(write, tx, rows.filter(same), who, depth, done),
       )
     })
   },
-  [FIRE]: (e, tx) =>
+  [FIRE]: (e, tx, write) =>
     after(steps(tx), (all) => {
       let s = all.find((x) => x.eid == e.entity.eid)
       if (!s?.fires) return null
       return after(
-        bound(tx, g.vocab, [s], []),
-        (rows) => perform(g, tx, rows, s.by ? { by: s.by } : undefined, 1),
+        bound(tx, vocab, [s], []),
+        (rows) => perform(write, tx, rows, s.by ? { by: s.by } : undefined, 1),
       )
     }),
 })

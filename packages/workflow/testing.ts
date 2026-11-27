@@ -82,7 +82,7 @@ export let process = (db: Db, defer = false) => {
       fx,
     ],
   })
-  fx.handle(handlers(g))
+  fx.handle(handlers(vocab))
   return { g, settle: () => fx.work(g) }
 }
 
