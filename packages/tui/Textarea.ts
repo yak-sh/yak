@@ -13,8 +13,7 @@ export { type VisualRow, visualRows, visualSpot } from './textRows.ts'
  */
 
 import { useTextSurface } from './visual.ts'
-import { h, type JSX } from 'preact'
-import { useRef, useState } from 'preact/hooks'
+import { createElement as h, type JSX, useRef, useState } from 'react'
 import type { Key } from './input.ts'
 import { size, terminalFocused, useKeys, useMetric } from './screen.ts'
 
@@ -205,10 +204,10 @@ export let Textarea = (
     Math.max(0, lines.length - height),
   )
   let gutter = (i: number) =>
-    h('span', { class: 'Entry_Hint' }, i ? ' '.repeat(hint.length) : hint)
+    h('span', { className: 'Entry_Hint' }, i ? ' '.repeat(hint.length) : hint)
   return h(
     'div',
-    { id, class: 'Entry', height: String(height), scroll: String(top) },
+    { id, className: 'Entry', height: String(height), scroll: String(top) },
     ...lines.map((line, i) =>
       h(
         'div',
@@ -217,7 +216,7 @@ export let Textarea = (
         active && terminalFocused.value && i == row
           ? [
             h('span', {}, line.slice(0, col)),
-            h('span', { class: 'Cursor' }, line[col] ?? ' '),
+            h('span', { className: 'Cursor' }, line[col] ?? ' '),
             h('span', {}, line.slice(col + 1)),
           ]
           : h('span', {}, line),

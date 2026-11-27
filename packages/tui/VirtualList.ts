@@ -9,8 +9,14 @@ import { useTextSurface } from './visual.ts'
 import { scrollbar as drawScrollbar, type ScrollPosition } from './scrollbar.ts'
 import type { MouseEvent } from './mouse.ts'
 /** An identity-anchored, lazily measured viewport. No total-height pass. */
-import { type ComponentChildren, h, render, type VNode } from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import {
+  createElement as h,
+  type ReactElement,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+} from 'react'
+import { render } from 'preact'
 import { TElement, touch } from '@yaks/dom'
 import { clip, lay, type Line, viewports } from './paint.ts'
 import { type Sheet, type Style } from './theme.ts'
@@ -520,7 +526,7 @@ export let VirtualList = <T extends VirtualItem>(
     selectionVisible?: boolean
     onSelect?: (id: string) => void
     textOf?: (item: T) => string
-    renderItem: (item: T) => ComponentChildren
+    renderItem: (item: T) => ReactNode
     version?: (item: T) => string
     scrollbar?: boolean
     follow?: boolean
@@ -532,7 +538,7 @@ export let VirtualList = <T extends VirtualItem>(
     id?: string
     grow?: string
   },
-): VNode<{
+): ReactElement<{
   onWheel: (event: MouseEvent) => void
   ref: (el: unknown) => void
   scrollbar?: boolean

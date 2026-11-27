@@ -1,7 +1,7 @@
+import { useObserved, useWatch } from '@yaks/ux'
 import { derivedEid } from '@yaks/graph/identity'
 /** Authorization input is private component memory, deliberately outside draft/graph persistence. */
-import { h } from 'preact'
-import { useLayoutEffect, useMemo } from 'preact/hooks'
+import { createElement as h, useLayoutEffect, useMemo } from 'react'
 import { signal } from '@preact/signals'
 import type { Frontend } from './frontend.ts'
 import type { UIAgent } from './panels.ts'
@@ -143,6 +143,8 @@ export const MCPAuthPanel = (
     }
     return true
   })
+  useWatch(ui.keyboard)
+  useObserved(privateState)
   const s = state.value
   if (!s.open) return null
   return h(
@@ -150,11 +152,11 @@ export const MCPAuthPanel = (
     { border: 'Composer_Border', col: '1' },
     h(
       'div',
-      { class: 'Panel_Title' },
+      { className: 'Panel_Title' },
       'Authorization · j/k connection · Enter select/submit · Esc cancel',
     ),
     ...s.servers.map((name, i) =>
-      h('div', { class: i === s.index ? 'Session_Selected' : '' }, name)
+      h('div', { className: i === s.index ? 'Session_Selected' : '' }, name)
     ),
     !s.servers.length
       ? h('div', null, 'No authorizable connections configured.')

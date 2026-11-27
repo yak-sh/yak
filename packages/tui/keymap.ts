@@ -1,5 +1,5 @@
 /** Graph-free keyboard mode routing. A mounted controller runs before focused widgets. */
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { useLayoutEffect, useRef } from 'react'
 import type { Key } from './input.ts'
 
 type Handler = (key: Key) => boolean | void

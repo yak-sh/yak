@@ -2,7 +2,7 @@ import { Scroll } from '@yaks/tui'
 import { compactCount } from './numbers.ts'
 import { hideCompletedChild, sessionTree } from './tree.ts'
 /** Sidebar contributions: one graph read and one renderer, added as one row. */
-import { type ComponentType, Fragment, h } from 'preact'
+import { type ComponentType, createElement as h, Fragment } from 'react'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import type { Local } from './local.ts'
 import { indicator } from './status.ts'
@@ -154,7 +154,7 @@ export let panels: Panel[] = [
           h(
             'div',
             {
-              class: (sidebar ?? session ?? 'new') == 'new'
+              className: (sidebar ?? session ?? 'new') == 'new'
                 ? (active ? 'Selection_Active' : 'Session_Selected')
                 : 'Muted',
               fill: '1',
@@ -165,7 +165,7 @@ export let panels: Panel[] = [
           h(
             'div',
             {
-              class: sidebar == 'browse' && active
+              className: sidebar == 'browse' && active
                 ? 'Selection_Active'
                 : 'Muted',
               fill: '1',
@@ -181,11 +181,11 @@ export let panels: Panel[] = [
                 onClick: () =>
                   select?.({ id: b.entity.eid, session: b.entity.eid }),
                 fill: '1',
-                class: (sidebar ?? session) == b.entity.eid
+                className: (sidebar ?? session) == b.entity.eid
                   ? (active ? 'Selection_Active' : 'Session_Selected')
                   : '',
               },
-              h('span', { class: 'Muted' }, prefix),
+              h('span', { className: 'Muted' }, prefix),
               h(SessionLabel, { b }),
             )
           ),
@@ -193,7 +193,7 @@ export let panels: Panel[] = [
             ? h(
               'div',
               {
-                class: 'Muted',
+                className: 'Muted',
                 fill: '1',
                 onClick: () => select?.({ id: 'older' }),
               },
@@ -204,7 +204,7 @@ export let panels: Panel[] = [
             ? h(
               'div',
               {
-                class: 'Muted',
+                className: 'Muted',
                 fill: '1',
                 onClick: () => select?.({ id: 'newer' }),
               },

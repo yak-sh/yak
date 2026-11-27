@@ -12,10 +12,9 @@
 
 import * as systemProcess from '@yaks/process/system'
 
-import { h } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import { createElement as h, useEffect, useState } from 'react'
 import type { Bundle, Comp } from '@yaks/graph'
-import type { ComponentRenderer } from '@yaks/preact'
+import type { ComponentRenderer } from '@yaks/react'
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
 import { run, useHold } from '@yaks/tui'

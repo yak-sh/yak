@@ -1,7 +1,7 @@
+import { useWatch } from '@yaks/ux'
 import { derivedEid } from '@yaks/graph/identity'
 /** Graph-backed selection; provider identity is resolved by the backend. */
-import { h } from 'preact'
-import { useLayoutEffect } from 'preact/hooks'
+import { createElement as h, useLayoutEffect } from 'react'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Scroll, useKeymap } from '@yaks/tui'
 import type { Frontend } from './frontend.ts'
@@ -12,9 +12,9 @@ export const ModelPanel = ({ ui, agent, session }: {
   agent: UIAgent
   session?: string
 }) => {
-  const keyboard = ui.keyboard.value[0].keyboard as Comp
+  const keyboard = useWatch(ui.keyboard)[0].keyboard as Comp
   const open = Boolean(keyboard.models)
-  const state = ui.view.value[0].frontend as Comp
+  const state = useWatch(ui.view)[0].frontend as Comp
   const choices = JSON.parse(String(state.modelChoices ?? '[]')) as Bundle[]
   const current = session
     ? state.currentModel
@@ -95,7 +95,7 @@ export const ModelPanel = ({ ui, agent, session }: {
     null,
     h(
       'div',
-      { class: 'Entry_Hint' },
+      { className: 'Entry_Hint' },
       active ? 'Model (next): ' + label(active) : 'Model: default',
     ),
     open
@@ -104,12 +104,12 @@ export const ModelPanel = ({ ui, agent, session }: {
         { border: 'Composer_Border', height: '9', col: '1' },
         h(
           'div',
-          { class: 'Panel_Title' },
+          { className: 'Panel_Title' },
           'Model · j/k select · Enter choose · Esc cancel',
         ),
         h(
           'div',
-          { class: 'Muted' },
+          { className: 'Muted' },
           session
             ? 'Next request only; running requests stay unchanged. Sign in with A.'
             : 'Applies to the next new session. Authorize providers with A.',
@@ -126,7 +126,7 @@ export const ModelPanel = ({ ui, agent, session }: {
             h('div', {
               key: b.entity.eid,
               fill: '1',
-              class: i == Number(keyboard.modelIndex ?? 0)
+              className: i == Number(keyboard.modelIndex ?? 0)
                 ? 'Session_Selected'
                 : '',
               onClick: () => {

@@ -8,8 +8,8 @@ import type { Model } from '@yaks/model'
 import { type Bundle } from '@yaks/graph'
 import type { ChildLimits, Step, Tool } from '@yaks/session'
 import { watchMigrations } from '@yaks/sqlite/migration'
-import { render as tree } from '@yaks/preact'
-import type { VNode } from 'preact'
+import { render as tree } from '@yaks/react'
+import type { ReactElement } from 'react'
 import { type Agent, agent, type Opts as AgentOpts } from './agent.ts'
 import { authorize } from './mcp_authorize.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
@@ -95,7 +95,7 @@ export type Local = Agent<Harness> & {
   ) => Promise<MCPAuthReply>
   image: (eid: string) => Promise<Uint8Array>
   /** one bundle as the terminal draws it */
-  entry: (b: Bundle) => VNode | null
+  entry: (b: Bundle) => ReactElement | null
 }
 
 /** What this machine lends an agent: its options, and what answers a person

@@ -17,7 +17,7 @@
  */
 
 import { transform } from 'sucrase'
-import type { ComponentType } from 'preact'
+import type { ComponentType } from 'react'
 
 /** The packages a host carries for a remote view, by the names it imports
  * them by: `{ preact, 'preact/hooks': hooks, '@yaks/ui': ui }`. */

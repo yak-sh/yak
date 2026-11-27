@@ -1,12 +1,12 @@
+import { useObserved, useWatch } from '@yaks/ux'
 import { derivedEid } from '@yaks/graph/identity'
 /** Optional runtime view. Application selection and feedback remain graph state. */
-import { h } from 'preact'
-import { useLayoutEffect, useMemo } from 'preact/hooks'
+import { createElement as h, useLayoutEffect, useMemo } from 'react'
 import { signal } from '@preact/signals'
 import { type Bundle, type Comp } from '@yaks/graph'
 import { define, type Renderer, type Rendering } from '@yaks/render'
 import { parse } from '@yaks/query'
-import { render } from '@yaks/preact'
+import { render } from '@yaks/react'
 import { loadVocab, pick } from '@yaks/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
@@ -76,7 +76,7 @@ export let RuntimePanel = ({ ui, agent, session, subscribe }: {
   session?: string
   subscribe: (fn: () => void) => () => void
 }) => {
-  let state = ui.keyboard.value[0].keyboard as Comp
+  let state = useWatch(ui.keyboard)[0].keyboard as Comp
   let open = Boolean(state.runtime)
   // Async read result is a projection; timer is presentation, neither is domain state.
   let rows = useMemo(() => signal<Bundle[]>([]), [])
@@ -154,36 +154,38 @@ export let RuntimePanel = ({ ui, agent, session, subscribe }: {
     }
     return true
   })
+  let readings = useObserved(rows)
+  let currentTime = useObserved(now)
   if (!open) return null
   let index = Math.max(
     0,
-    rows.value.findIndex((b) => b.entity.eid == state.runtimeSelected),
+    readings.findIndex((b) => b.entity.eid == state.runtimeSelected),
   )
   return h(
     'div',
     { border: 'Composer_Border', height: '10', col: '1' },
     h(
       'div',
-      { class: 'Panel_Title' },
+      { className: 'Panel_Title' },
       'Runtime · j/k select · x interrupt/cancel queued · c continue · r close',
     ),
     h(
       Scroll,
       { id: 'runtime', grow: '1', keyboard: false, reveal: index },
-      ...rows.value.map((b, i) =>
+      ...readings.map((b, i) =>
         h(
           'div',
           {
             key: b.entity.eid,
             fill: '1',
-            class: i == index ? 'Session_Selected' : '',
+            className: i == index ? 'Session_Selected' : '',
           },
           render(runtimeViews, runtimeRow(b), 'Runtime', runtimeVocab),
           ' ',
           elapsed(
             (b.updated as Comp | undefined)?.at ??
               (b.created as Comp | undefined)?.at,
-            now.value,
+            currentTime,
           ),
           ' · ',
           sessionLine(b),
@@ -193,7 +195,7 @@ export let RuntimePanel = ({ ui, agent, session, subscribe }: {
     !session ? h('div', null, 'Select a session first.') : null,
     h(
       'div',
-      { wrap: '1', class: 'Muted' },
+      { wrap: '1', className: 'Muted' },
       String(
         state.runtimeFeedback ??
           'Actions affect only the selected session, never independent processes or task completion.',

@@ -1,6 +1,6 @@
+import { useWatch } from '@yaks/ux'
 /** Choose the graph persona a new session opens with. */
-import { h } from 'preact'
-import { useLayoutEffect } from 'preact/hooks'
+import { createElement as h, useLayoutEffect } from 'react'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Scroll, useKeymap } from '@yaks/tui'
 import type { Frontend } from './frontend.ts'
@@ -14,9 +14,9 @@ export let PersonaPanel = ({ ui, agent, session }: {
   agent: UIAgent
   session?: string
 }) => {
-  let keyboard = ui.keyboard.value[0].keyboard as Comp
+  let keyboard = useWatch(ui.keyboard)[0].keyboard as Comp
   let open = Boolean(keyboard.personas) && !session
-  let state = ui.view.value[0].frontend as Comp
+  let state = useWatch(ui.view)[0].frontend as Comp
   let choices = JSON.parse(String(state.personaChoices ?? '[]')) as Bundle[]
   let current = String(state.newPersona ?? '')
   useLayoutEffect(() => {
@@ -68,7 +68,7 @@ export let PersonaPanel = ({ ui, agent, session }: {
     null,
     h(
       'div',
-      { class: 'Entry_Hint' },
+      { className: 'Entry_Hint' },
       active ? 'Persona (next): ' + label(active) : 'Persona: checkout default',
     ),
     open
@@ -77,10 +77,10 @@ export let PersonaPanel = ({ ui, agent, session }: {
         { border: 'Composer_Border', height: '9', col: '1' },
         h(
           'div',
-          { class: 'Panel_Title' },
+          { className: 'Panel_Title' },
           'Persona · j/k select · Enter choose · Esc cancel',
         ),
-        h('div', { class: 'Muted' }, 'Applies to the next new session.'),
+        h('div', { className: 'Muted' }, 'Applies to the next new session.'),
         h(
           Scroll,
           {
@@ -91,14 +91,14 @@ export let PersonaPanel = ({ ui, agent, session }: {
           },
           h('div', {
             fill: '1',
-            class: index == 0 ? 'Session_Selected' : '',
+            className: index == 0 ? 'Session_Selected' : '',
             onClick: () => choose(null),
           }, (current ? '○ ' : '● ') + 'Checkout default'),
           ...choices.map((b, i) =>
             h('div', {
               key: b.entity.eid,
               fill: '1',
-              class: index == i + 1 ? 'Session_Selected' : '',
+              className: index == i + 1 ? 'Session_Selected' : '',
               onClick: () => choose(b.entity.eid),
             }, (current == b.entity.eid ? '● ' : '○ ') + label(b))
           ),

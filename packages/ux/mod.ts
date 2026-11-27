@@ -96,7 +96,7 @@ export {
   TAKE,
   useFold,
 } from './Conversation.ts'
-export { useObserved, useRows } from './rows.ts'
+export { useObserved, useRows, useWatch } from './rows.ts'
 export { Fields, type FieldSpec, type FieldsProps } from './Fields.ts'
 export {
   type Feedback,

@@ -1,7 +1,7 @@
 /** Controlled, graph-free characterwise selection over opt-in text surfaces.
  * A virtual surface supplies one item, never its entire history. */
 import { safe } from '@yaks/text'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { useLayoutEffect, useRef } from 'react'
 import { touch } from '@yaks/dom'
 import type { Key } from './input.ts'
 import type { Line } from './paint.ts'

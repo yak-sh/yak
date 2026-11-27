@@ -15,7 +15,7 @@
  * @module
  */
 
-import { Component, type ComponentChild, h } from 'preact'
+import { Component, createElement as h, type ReactNode } from 'react'
 import { draw } from '@yaks/preact/draw'
 import {
   dispatch,
@@ -501,7 +501,7 @@ let broken = (e: unknown): Web => ({
 // Catches what the tree throws while rendering, so a view that breaks shows
 // its notice instead of taking the host down with it.
 class Kept
-  extends Component<{ fell: (e: unknown) => void; children?: ComponentChild }> {
+  extends Component<{ fell: (e: unknown) => void; children?: ReactNode }> {
   override componentDidCatch(e: unknown) {
     this.props.fell(e)
   }
@@ -517,7 +517,7 @@ class Kept
  * `fell` hears what it threw; a pressed link no listener took is `follow`ed,
  * as a browser loads it. */
 export let mount = (
-  node: ComponentChild,
+  node: ReactNode,
   look: Look,
   drawn: (painted: Node | null) => void,
   { fell = console.error, follow = () => {} }: {

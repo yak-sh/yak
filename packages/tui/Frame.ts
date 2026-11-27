@@ -8,7 +8,12 @@
  * @module
  */
 
-import { type ComponentChildren, type ComponentType, h, type JSX } from 'preact'
+import {
+  type ComponentType,
+  createElement as h,
+  type JSX,
+  type ReactNode,
+} from 'react'
 import { size } from './screen.ts'
 import { Scroll } from './Scroll.ts'
 
@@ -34,7 +39,7 @@ export let Frame = (
     /** Fraction of terminal width (0–1). Rounded down; leaves one main column. */
     ratio?: number
     min?: number
-    children?: ComponentChildren
+    children?: ReactNode
   },
 ): JSX.Element => {
   if (ratio != null && (!Number.isFinite(ratio) || ratio < 0 || ratio > 1)) {
@@ -53,19 +58,21 @@ export let Frame = (
     wide
       ? h(
         'div',
-        { width: String(sidebarWidth), col: '1', class: 'Frame_Side' },
+        { width: String(sidebarWidth), col: '1', className: 'Frame_Side' },
         ...sidebar.map((p) =>
           h(
             'div',
             {
-              class: 'Panel',
+              className: 'Panel',
               key: p.title,
               ...(p.bounded
                 ? { grow: '1', col: '1', ...(p.fit ? { 'grow-fit': '1' } : {}) }
                 : {}),
             },
             h('div', {
-              class: ['Panel_Title', p.titleClass].filter(Boolean).join(' '),
+              className: ['Panel_Title', p.titleClass].filter(Boolean).join(
+                ' ',
+              ),
             }, p.title),
             p.bounded
               ? p.scrollable

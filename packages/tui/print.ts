@@ -16,14 +16,15 @@
  * @module
  */
 
-import { type ComponentChild, render } from 'preact'
+import type { ReactNode } from 'react'
+import { render } from 'preact'
 import { install } from '@yaks/dom'
 import { printout } from './paint.ts'
 import type { Sheet } from './theme.ts'
 
 /** The text a terminal prints for `node`; `sheet` extends the widgets' `base`. */
 export let print = (
-  node: ComponentChild,
+  node: ReactNode,
   columns: number,
   sheet: Sheet = {},
 ): string => {

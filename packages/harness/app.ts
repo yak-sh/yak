@@ -1,3 +1,4 @@
+import { useObserved, useWatch } from '@yaks/ux'
 import { derivedEid } from '@yaks/graph/identity'
 import { ModelPanel } from './ModelPanel.ts'
 import { PersonaPanel } from './PersonaPanel.ts'
@@ -12,9 +13,14 @@ import { rootOf, sessionTree } from './tree.ts'
 import { ToolError } from '@yaks/session'
 import { diagnostics } from './diagnostics.ts'
 /** The harness on @yaks/tui: local editing, graph-backed content. */
-import { h, type JSX } from 'preact'
-import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
-import { type ComponentRenderer, render as renderView } from '@yaks/preact'
+import {
+  createElement as h,
+  type JSX,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react'
+import { type ComponentRenderer, render as renderView } from '@yaks/react'
 import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { signal } from '@preact/signals'
@@ -86,7 +92,7 @@ export let App = (
   useLayoutEffect(() => () => {
     if (!supplied) ui.close()
   }, [ui, supplied])
-  let state = ui.view.value[0].frontend as Comp
+  let state = useWatch(ui.view)[0].frontend as Comp
   let showSettled = Boolean(state.showSettled)
   let selection = {
     id: state.selected == null ? undefined : String(state.selected),
@@ -118,7 +124,7 @@ export let App = (
     () => signal<Snapshot>({ sessions: [], entries: [], rows: [] }),
     [],
   )
-  let data = projection.value
+  let data = useObserved(projection)
   let setData = (next: Snapshot | ((before: Snapshot) => Snapshot)) => {
     projection.value = typeof next == 'function'
       ? next(projection.peek())
@@ -522,6 +528,7 @@ export let App = (
     })
   }
 
+  let keys = useWatch(ui.keyboard)[0].keyboard as Comp
   let ctx: Context = {
     agent: a,
     select: (row) => {
@@ -532,8 +539,7 @@ export let App = (
     sessions: data.sessions,
     showSettled,
     sidebar: state.sidebar == null ? undefined : String(state.sidebar),
-    active: (ui.keyboard.value[0].keyboard as Comp).mode == 'NORMAL' &&
-      (ui.keyboard.value[0].keyboard as Comp).focus == 'sidebar',
+    active: keys.mode == 'NORMAL' && keys.focus == 'sidebar',
     showArchived: Boolean(state.showArchived),
     browse: Boolean(state.browse),
     page: String(state.page ?? ''),
@@ -565,7 +571,7 @@ export let App = (
         },
         h(
           'div',
-          { class: 'Title' },
+          { className: 'Title' },
           data.loadedFor !== selection.id
             ? `Harness — ${
               data.loadedFor?.slice(0, 8) ?? 'New session'
@@ -603,11 +609,11 @@ let Visual = ({ ui }: { ui: Frontend }) => {
         .visual as VisualState,
     ui.select,
   )
-  let value = ui.visual.value[0].visual as VisualState
+  let value = useWatch(ui.visual)[0].visual as VisualState
   return value.surface
     ? h(
       'div',
-      { class: 'Good' },
+      { className: 'Good' },
       'VISUAL · ' + value.surface +
         ' · Tab region · [/] item · hjkl move · y yank · Esc cancel',
     )
@@ -615,22 +621,22 @@ let Visual = ({ ui }: { ui: Frontend }) => {
 }
 
 let Feedback = ({ ui }: { ui: Frontend }) => {
-  let error = String((ui.feedback.value[0].feedback as Comp).error ?? '')
+  let error = String((useWatch(ui.feedback)[0].feedback as Comp).error ?? '')
   return error ? h('div', { wrap: '1' }, error) : null
 }
 
 let Composer = (
   { ui, submit }: { ui: Frontend; submit: (text: string) => boolean | void },
 ) => {
-  let mode = String((ui.composer.value[0].composer as Comp).mode)
+  let mode = String((useWatch(ui.composer)[0].composer as Comp).mode)
   return h(
     'div',
     { border: 'Composer_Border' },
     h(
       'div',
       null,
-      h('span', { class: mode == 'message' ? 'Good' : 'Task' }, mode),
-      h('span', { class: 'Entry_Hint' }, ' · Esc NORMAL'),
+      h('span', { className: mode == 'message' ? 'Good' : 'Task' }, mode),
+      h('span', { className: 'Entry_Hint' }, ' · Esc NORMAL'),
     ),
     h(Draft, { ui, submit }),
   )
@@ -651,8 +657,9 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
     id,
   ])
   useLayoutEffect(() => () => viewport.watch.close(), [viewport])
+  let keys = useWatch(ui.keyboard)[0].keyboard as Comp
   let position =
-    (viewport.watch.value[0] ?? ui.client.ent(derivedEid('viewport-' + id)))
+    (useWatch(viewport.watch)[0] ?? ui.client.ent(derivedEid('viewport-' + id)))
       ?.viewport as Comp | undefined
   return h(VirtualList<{ id: string; bundle: Bundle }>, {
     id: 'transcript-' + id,
@@ -698,9 +705,9 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
       ? undefined
       : String(position.selected),
     cursor: !position?.windowLoading && ['NORMAL', 'VISUAL'].includes(
-        String((ui.keyboard.value[0].keyboard as Comp).mode),
+        String(keys.mode),
       ) &&
-        (ui.keyboard.value[0].keyboard as Comp).focus == 'transcript' &&
+        keys.focus == 'transcript' &&
         items.length
       ? {
         id: String(position?.selected ?? position?.item ?? items.at(-1)!.id),
@@ -755,7 +762,7 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
           : 'Rendered text saved in local yank',
       })
     },
-    selectionVisible: (ui.keyboard.value[0].keyboard as Comp).mode != 'INSERT',
+    selectionVisible: keys.mode != 'INSERT',
     selectionClass: 'List_Selected',
     onSelect: (selected: string) =>
       ui.client.mutate([{
@@ -791,16 +798,16 @@ let frontendViews = define<ComponentRenderer>([{
 let Draft = (
   { ui, submit }: { ui: Frontend; submit: (text: string) => boolean | void },
 ) =>
-  renderView(frontendViews, ui.draft.value[0], 'Editor', ui.client.vocab, {
+  renderView(frontendViews, useWatch(ui.draft)[0], 'Editor', ui.client.vocab, {
     edit: ui.edit,
-    active: (ui.keyboard.value[0].keyboard as Comp).mode == 'INSERT',
+    active: (useWatch(ui.keyboard)[0].keyboard as Comp).mode == 'INSERT',
     submit,
   })
 
 /** Explicit bounded source inspection, separate from rendered cursor selection. */
 const EntryDetail = ({ ui, agent }: { ui: Frontend; agent: UIAgent }) => {
-  const state = ui.keyboard.value[0].keyboard as Comp
-  const session = (ui.view.value[0].frontend as Comp).selected as
+  const state = useWatch(ui.keyboard)[0].keyboard as Comp
+  const session = (useWatch(ui.view)[0].frontend as Comp).selected as
     | string
     | undefined
   const viewport = session
@@ -842,7 +849,7 @@ const EntryDetail = ({ ui, agent }: { ui: Frontend; agent: UIAgent }) => {
       { border: 'Composer_Border' },
       h(
         'div',
-        { class: 'Entry_Hint' },
+        { className: 'Entry_Hint' },
         'SOURCE · ' + String(eid ?? '') + ' · ' +
           String(state.detailStart ?? 0) + '/' +
           String(state.detailTotal ?? '?') + ' · [/] chunks · Esc close',

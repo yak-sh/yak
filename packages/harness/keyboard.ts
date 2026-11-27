@@ -1,6 +1,7 @@
+import { useWatch } from '@yaks/ux'
 import { derivedEid } from '@yaks/graph/identity'
 /** Harness modes are graph state; the key interceptor and text surfaces are not. */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { Comp } from '@yaks/graph'
 import {
   beginVisual,
@@ -116,7 +117,7 @@ export let Keyboard = ({ ui, action }: {
   ui: Frontend
   action: (key: Key) => boolean | void
 }) => {
-  let state = ui.keyboard.value[0].keyboard as Comp
+  let state = useWatch(ui.keyboard)[0].keyboard as Comp
   useKeymap((key) => {
     let current = () =>
       ui.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp
@@ -380,14 +381,14 @@ export let Keyboard = ({ ui, action }: {
     null,
     h(
       'div',
-      { class: 'Entry_Hint' },
+      { className: 'Entry_Hint' },
       String(state.mode) +
         (state.mode == 'NORMAL'
           ? ' · ' + state.focus + ' · ? help'
           : ' · Esc NORMAL'),
     ),
     state.clipboard
-      ? h('div', { class: 'Entry_Hint' }, String(state.clipboard))
+      ? h('div', { className: 'Entry_Hint' }, String(state.clipboard))
       : null,
     state.help
       ? h(

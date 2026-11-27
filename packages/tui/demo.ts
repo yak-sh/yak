@@ -7,8 +7,7 @@
  * @module
  */
 
-import { h } from 'preact'
-import { useState } from 'preact/hooks'
+import { createElement as h, useState } from 'react'
 import { Frame, type Panel, run, Scroll, size, Textarea } from './mod.ts'
 
 let words = 'graph entity component wire paint session claim board terminal'
@@ -33,16 +32,16 @@ let App = () => {
           h(
             'div',
             null,
-            h('span', { class: 'Muted' }, 'lines '),
-            h('span', { class: 'Key' }, String(lines.length)),
+            h('span', { className: 'Muted' }, 'lines '),
+            h('span', { className: 'Key' }, String(lines.length)),
           ),
           h(
             'div',
             null,
-            h('span', { class: 'Muted' }, 'size  '),
+            h('span', { className: 'Muted' }, 'size  '),
             h(
               'span',
-              { class: 'Key' },
+              { className: 'Key' },
               `${size.value.columns}x${size.value.rows}`,
             ),
           ),
@@ -57,26 +56,26 @@ let App = () => {
           h(
             'div',
             null,
-            h('span', { class: 'Key' }, '⏎'),
-            h('span', { class: 'Dim' }, ' send'),
+            h('span', { className: 'Key' }, '⏎'),
+            h('span', { className: 'Dim' }, ' send'),
           ),
           h(
             'div',
             null,
-            h('span', { class: 'Key' }, '⇧⏎'),
-            h('span', { class: 'Dim' }, ' newline'),
+            h('span', { className: 'Key' }, '⇧⏎'),
+            h('span', { className: 'Dim' }, ' newline'),
           ),
           h(
             'div',
             null,
-            h('span', { class: 'Key' }, 'PgUp'),
-            h('span', { class: 'Dim' }, ' scroll'),
+            h('span', { className: 'Key' }, 'PgUp'),
+            h('span', { className: 'Dim' }, ' scroll'),
           ),
           h(
             'div',
             null,
-            h('span', { class: 'Key' }, '^C'),
-            h('span', { class: 'Dim' }, ' quit'),
+            h('span', { className: 'Key' }, '^C'),
+            h('span', { className: 'Dim' }, ' quit'),
           ),
         ),
     },
@@ -84,7 +83,7 @@ let App = () => {
   return h(
     Frame,
     { sidebar },
-    h('div', { class: 'Title' }, '@yaks/tui demo'),
+    h('div', { className: 'Title' }, '@yaks/tui demo'),
     h(
       Scroll,
       { id: 'log', grow: '1' },

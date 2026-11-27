@@ -2579,9 +2579,6 @@ importers:
       '@yaks/persona':
         specifier: 0.2.23
         version: link:../persona
-      '@yaks/preact':
-        specifier: 0.2.24
-        version: link:../preact
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
@@ -2591,6 +2588,9 @@ importers:
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -2621,6 +2621,9 @@ importers:
       '@yaks/ui':
         specifier: 0.2.30
         version: link:../ui
+      '@yaks/ux':
+        specifier: 0.2.23
+        version: link:../ux
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
@@ -2664,6 +2667,9 @@ importers:
       '@yaks/tunnel':
         specifier: 0.2.24
         version: link:../tunnel
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/heal:
     dependencies:
@@ -3764,6 +3770,9 @@ importers:
       preact:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/notify:
     dependencies:
@@ -5943,6 +5952,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/tunnel:
     dependencies:

@@ -15,6 +15,14 @@ import type { Front } from './host.ts'
 export let useRows = (front: Front, query: string): Bundle[] => {
   let watch = useMemo(() => front.watch(query), [front, query])
   useEffect(() => () => watch.close?.(), [watch])
+  return useWatch(watch)
+}
+
+/** Read a watch already held by the host without taking over its lifetime. */
+export let useWatch = <T>(watch: {
+  readonly value: T
+  subscribe: (changed: () => void) => () => void
+}): T => {
   let subscribe = useCallback(
     (wake: () => void) => watch.subscribe(wake),
     [watch],

@@ -9,8 +9,14 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
-import { useLayoutEffect, useRef, useState } from 'preact/hooks'
+import {
+  createElement as h,
+  type JSX,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import type { MouseEvent } from './mouse.ts'
 import type { Key } from './input.ts'
 import { useKeys, useMetric } from './screen.ts'
@@ -70,7 +76,7 @@ export let Scroll = (
      * first row of the element inside marked `reveal`. */
     reveal?: number
     follow?: boolean
-    children?: ComponentChildren
+    children?: ReactNode
     [attr: string]: unknown
   },
 ): JSX.Element => {

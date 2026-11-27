@@ -1,5 +1,5 @@
 /** A graph-independent, lazy terminal image. The backend owns loading and graphics. */
-import { h, type JSX } from 'preact'
+import { createElement as h, type JSX } from 'react'
 import type { TElement } from '@yaks/dom'
 import { images } from './paint.ts'
 

@@ -13,7 +13,7 @@ import { interceptKey } from './keymap.ts'
 
 import { visualKey } from './visual.ts'
 import { computed, type Signal, signal } from '@preact/signals'
-import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Key } from './input.ts'
 import type { Metrics } from './paint.ts'
 

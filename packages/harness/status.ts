@@ -3,7 +3,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { define, type Renderer, type Rendering } from '@yaks/render'
-import { render } from '@yaks/preact'
+import { render } from '@yaks/react'
 import { loadVocab } from '@yaks/vocab'
 
 // These are already evaluated read-model properties, not storage declarations.
