@@ -37,7 +37,7 @@ import {
   appVocab,
   lentDocs,
   packagesOf,
-  platformDocs,
+  platformVocab,
 } from './vocab.ts'
 import { type Clock, once, system } from '@yaks/fp'
 import { type Asked, bareLine, type Line } from '@yaks/query'
@@ -67,13 +67,17 @@ let core = once((): Vocab => appVocab())
 // already in every store, the same shape an app's `/vocab` answers, so routing
 // and alias derivation see `secret.name` and the rest of the directory's own
 // identities without treating shared words as though only it declared them.
-let platformWords = once((): VocabDoc => ({
-  title: 'platform',
-  $defs: Object.fromEntries(
-    platformDocs().flatMap((doc) => Object.entries(doc.$defs ?? {}))
-      .filter(([name]) => !core().all.includes(name)),
-  ),
-}))
+let platformWords = once((): VocabDoc => {
+  let vocab = platformVocab()
+  let shared = new Set(core().all)
+  return {
+    title: 'platform',
+    $defs: Object.fromEntries(
+      vocab.all.filter((name) => !shared.has(name))
+        .map((name) => [name, vocab.def(name)!]),
+    ),
+  }
+})
 
 // One store in reach: the app, the space it is in, and who the caller is
 // there. `at` is what a bundle names as the component's home.
