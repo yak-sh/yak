@@ -6,7 +6,7 @@ import { whole } from '@yaks/query'
 import type { Comp } from '@yaks/graph'
 import { link } from '@yaks/edge'
 import { tick } from '@yaks/wake'
-import { feeds, outdated, rerun, steps } from './mod.ts'
+import { bindingKey, feeds, outdated, rerun, steps } from './mod.ts'
 import { ask, fixture, process, ship, vocab } from './testing.ts'
 
 test('a step calls out, and the next matches its answer', async () => {
@@ -88,6 +88,18 @@ test('a step naming a word the store lacks refuses no write, its own fix include
   await apply([{ entity: { eid: 'ask' }, step: { match: '$o .order' } }])
   await apply([{ entity: { eid: 'o2' }, order: {} }])
   equal((await read('.call')).length, 1)
+})
+
+test('a binding’s key holds its bracket’s members as a set', () => {
+  let member = (e: string, film: string) => ({ entities: [e], vars: { film } })
+  let bound = (...members: ReturnType<typeof member>[]) => ({
+    entities: ['v'],
+    vars: {},
+    collections: [{ vars: ['film'], entityVars: ['k'], members }],
+  })
+  let a = bindingKey(bound(member('k1', 'f1'), member('k2', 'f2')))
+  equal(bindingKey(bound(member('k2', 'f2'), member('k1', 'f1'))), a)
+  equal(bindingKey(bound(member('k1', 'f1'), member('k2', 'f3'))) == a, false)
 })
 
 test('a person’s step is a task, and the next step matches its completion', async () => {

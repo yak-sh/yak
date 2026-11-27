@@ -180,10 +180,19 @@ let canon = (v: unknown): string =>
     }}`
     : JSON.stringify(v ?? null)
 
+// A binding as canonical text: a bracket's members are a set, so they are
+// put in order, whatever order the store read them in.
+let said = ({ entities, vars, collections = [] }: Binding): string =>
+  canon([
+    entities,
+    vars,
+    collections.map((c) => c.members.map(said).sort()),
+  ])
+
 /** What a binding bound, as a short key: two bindings with the same
- * entities, variables and bracket members have the same key. */
-export let bindingKey = ({ entities, vars, collections }: Binding): string =>
-  sha256(canon([entities, vars, collections ?? []])).slice(0, 32)
+ * entities, variables and bracket members, in any order, have the same
+ * key. */
+export let bindingKey = (b: Binding): string => sha256(said(b)).slice(0, 32)
 
 // What one binding writes, each row it creates stamped with its case, step
 // and binding. A workflow's step writes nothing for a case it already made
