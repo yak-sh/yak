@@ -57,6 +57,7 @@ import type {
 import { after, each, isPromise, over } from '@yaks/fp'
 import { during, link, peek, unlink } from '@yaks/trace'
 import { asked, match, reads } from '@yaks/graph/declared'
+import { writers } from '@yaks/graph/provenance'
 import { filter } from '@yaks/match'
 import {
   type And,
@@ -688,6 +689,15 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       return poolEids.has(eid)
     }
     let allowed = (s: Slot, e: Event) => !s.effect || !inPool(e.entity.eid)
+    // Who wrote each event's entity in this batch, carried on the event so a
+    // run can write on that commit's behalf (`Event.actor`).
+    let wrote = writers(bundles)
+    let signing = (e: Event): Event => {
+      let { by, via } = wrote(e.entity.eid)
+      return by || via
+        ? { ...e, actor: { ...by ? { by } : {}, ...via ? { via } : {} } }
+        : e
+    }
     let found: [Slot, Event][] = []
     for (let e of seen) {
       let group = byComp.get(e.name)
@@ -766,7 +776,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
               (scoped) =>
                 scoped
                   ? after(enabled(pair[0]), (yes) => {
-                    if (yes) out.push(pair)
+                    if (yes) out.push([pair[0], signing(pair[1])])
                     return out
                   })
                   : out,

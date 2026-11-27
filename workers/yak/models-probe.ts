@@ -105,6 +105,15 @@ export let vale = async (
         body: typeof body == 'string' ? body : JSON.stringify(body),
       }),
     )
+  // The platform writing in the store, as nobody: the kernel's own door.
+  let kernel = (path: string, body: unknown) =>
+    store.fetch(
+      new Request(`http://store${path}`, {
+        method: 'POST',
+        headers: { ...as(null), 'x-yak-kernel': '1' },
+        body: JSON.stringify(body),
+      }),
+    )
   let read = async (q: string): Promise<Bundle[]> =>
     await (await store.fetch(
       new Request(`http://store/query?q=${encodeURIComponent(q)}`, {
@@ -159,6 +168,7 @@ export let vale = async (
     app,
     dir,
     send,
+    kernel,
     run,
     runRaw,
     read,

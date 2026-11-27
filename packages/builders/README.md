@@ -21,7 +21,12 @@ deno add jsr:@yaks/builders
   Nested bracket collections change the key but keep the build. A vanished
   binding marks its build stale and retains its outputs; a returning binding
   reuses the same build. An answer that lands after its binding vanished is kept
-  too, so a binding returning under the same key has it without asking again.
+  too, so a binding returning under the same key has it without asking again. A
+  build and its call are written by whoever wrote the change that started them:
+  `builder_build`'s caller, the writer of an input change an immediate builder
+  reconciles inside the write, or the writer of the builder, its edit or its
+  unstaging, reconciled after commit (@yaks/effects `Event.actor`). Its call
+  runs as them. A wake's reconciliation is automation.
 - `built{build,slot,key,inputs,definition,call,artifact?}` is one retained take
   of a named slot. `chosen{at,by,via}` marks the take in use, one per
   build/slot. The newest successful answer is chosen by default. `built.current`

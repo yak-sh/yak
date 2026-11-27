@@ -540,6 +540,11 @@ No-op edits, provider ids, labels, claims, and wake firings keep call authority;
 each recurring invocation inherits its schedule's call authority. Authorization
 checks that identity's current standing when the call fires.
 
+So a call has its writer's authority however it was written: through a tool
+door, by a rule inside a write (whose output carries the batch's actor), or by
+an effect after the commit that signs its write with the commit's actor
+(@yaks/effects `Event.actor`). An effect's unsigned write is automation.
+
 `report` receives caught failures, including tool defects, unrecorded reads,
 completed-answer persistence and replies. Recording an `exception` answer keeps
 the call’s history; it does not create another tracker occurrence.

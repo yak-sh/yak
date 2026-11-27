@@ -1647,18 +1647,21 @@ export class Store extends Durable {
     let app = this.#get('app')
     // Each incarnation binds declared effects to its host capabilities.
     // An effect writes back through the kernel's own door — a new batch
-    // through this graph's `apply()`, trusted and unsigned — so what a letter
-    // came to is journaled, cast to every open socket, and seen by whatever
-    // else is watching, instead of a row a page finds on its next query
-    // (T-34044). `#trust` is the same door `x-yak-kernel` writes through; the
-    // graph it names is whichever one this object last built, which is the
-    // only one that could be committing.
+    // through this graph's `apply()`, trusted — so what a letter came to is
+    // journaled, cast to every open socket, and seen by whatever else is
+    // watching, instead of a row a page finds on its next query (T-34044).
+    // It is unsigned unless its handler signed it: a run writing on its
+    // commit's behalf, such as a call a builder asks for, signs as that
+    // commit's writer (@yaks/effects `Event.actor`), so the call runs as it
+    // would from a tool door. `#asIs` is the same door `x-yak-kernel` and the
+    // runner write through; the graph it names is whichever one this object
+    // last built, which is the only one that could be committing.
     // A handler or hook that fails after its batch committed is sent to
     // the tracker rather than to the console the packages default to. Not noted in
     // this store as `#broke` does: the note is a write, and a hook that fails
     // on every write would answer it with another break, forever.
     let fx = effects(vocab, {
-      write: (b) => this.#trust(b, null),
+      write: (b) => this.#asIs(b),
       clock: clockOf(this.#time),
       singleOwner: true,
       startup: 'manual',

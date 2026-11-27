@@ -851,6 +851,12 @@ test("visitors spend only the owner's share of the space's budget", async () => 
   await v.send('/apply', asking(ada, FLASH))
   await v.landed(`.entry.session=${ada}&.output&*`)
   assertEquals((await v.run({ model: FLASH, input: {} })).status, 200)
+  // Nor is the app's own automation: a transcript nobody wrote, as a
+  // scheduled call's is.
+  let own = crypto.randomUUID()
+  assertEquals((await v.kernel('/apply', asking(own, FLASH))).status, 200)
+  await v.landed(`.entry.session=${own}&.output&*`)
+  assertEquals(await v.read(`.entry.session=${own}&.refusal`), [])
   assertEquals((await v.spent()).meter!.visitors ?? 0, 0)
   // Given a share, the visitor is answered, and counted in it.
   await share(50)

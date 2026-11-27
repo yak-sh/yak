@@ -22,7 +22,16 @@
 // which is how one phase of `apply()` passes what it learned to a later one
 // without a global anywhere. The effect phase strips it back off.
 
-import type { Ask, Binding, Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
+import type {
+  Actor,
+  Ask,
+  Binding,
+  Bundle,
+  Comp,
+  Eid,
+  Entity,
+  Tx,
+} from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { comps, dead } from '@yaks/graph/bundle'
 import { doomed } from '@yaks/graph/read'
@@ -62,6 +71,11 @@ export type Event = {
   vars?: Record<string, unknown>
   /** the whole multi-entity match, including its collected members */
   binding?: Binding
+  /** Who wrote the commit, as its batch signed the entity: absent for
+   * automation. A run that writes on the commit's behalf (a call it asks
+   * for) signs with it, `signed(bundles, event.actor)`, as a rule inside
+   * the write is; what it writes unsigned is automation. */
+  actor?: Actor
 }
 
 /** What each entity carried before the batch: its row, by eid. */

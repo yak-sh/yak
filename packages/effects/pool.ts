@@ -105,7 +105,15 @@
 // how busy it is (./worker.ts). Where it leaves the pool, the row goes too, and
 // a worker starting clears the rows of those `gone` says were killed first.
 
-import type { Access, Bundle, Comp, Eid, HookContext, Tx } from '@yaks/graph'
+import type {
+  Access,
+  Actor,
+  Bundle,
+  Comp,
+  Eid,
+  HookContext,
+  Tx,
+} from '@yaks/graph'
 import { after, type Clock, system } from '@yaks/fp'
 import {
   during,
@@ -644,6 +652,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         entity,
         name,
         touched: row.touched as string[] | undefined,
+        ...row.actor ? { actor: row.actor as Actor } : {},
         ...(kind != 'removed'
           ? { comp: found?.[name] as Comp }
           : before
@@ -1320,6 +1329,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           attempts: ours ? 1 : 0,
           at,
           generation: gen,
+          ...e.actor ? { actor: e.actor } : {},
           ...(ours ? claim() : {}),
         }
         let eid = mint()

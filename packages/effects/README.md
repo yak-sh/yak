@@ -109,6 +109,14 @@ going, narrowed by a `target`, and reads `before.edge`. `touched` lists every
 component the same commit moved on that entity, including removals. A pooled run
 keeps both, so a removal's row is never larger than the component it is about.
 
+`actor` is who wrote the commit, the `{by, via}` its batch signed that entity
+with, and is absent for automation. A pooled run keeps it too. What a handler
+writes is unsigned, which is automation, unless it signs it: a run that writes
+on the commit's behalf, such as a call it asks for, signs with
+`signed(bundles, event.actor ?? null)` (@yaks/graph/provenance). The call then
+runs as its writer, as it would from a tool door or from a rule inside the write
+([@yaks/tools](../tools/README.md#runner-options)).
+
 ```ts
 import { graph } from '@yaks/graph'
 import { observerExample as vocab } from './testing.ts'

@@ -91,11 +91,13 @@ export let actorOf = (bundles: Bundle[]): Actor =>
  */
 export let writers = (bundles: Bundle[]): (eid: Eid) => Actor => {
   let named = new Map<Eid, Actor>()
+  let actor: Actor | undefined
   for (let b of bundles) {
-    if (b.$actor && !named.has(b.entity.eid)) named.set(b.entity.eid, b.$actor)
+    if (!b.$actor) continue
+    actor ??= b.$actor
+    if (!named.has(b.entity.eid)) named.set(b.entity.eid, b.$actor)
   }
-  let actor = actorOf(bundles)
-  return (eid) => named.get(eid) ?? actor
+  return (eid) => named.get(eid) ?? actor ?? {}
 }
 
 // The writer a rule stamps an entity with: the one its own bundles named

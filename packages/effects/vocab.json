@@ -101,6 +101,11 @@
           "stamped": true,
           "description": "how deep in effect-written batches the commit that owed it was: 0 for a client's write, 1 for an effect's own, so what this run writes is one more"
         },
+        "actor": {
+          "type": "object",
+          "stamped": true,
+          "description": "the by/via pair that wrote the commit that owed it, so a write the run makes on that commit's behalf is signed as it was; absent for automation"
+        },
         "error": {
           "type": "string",
           "stamped": true,

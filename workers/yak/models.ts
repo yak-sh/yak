@@ -133,12 +133,14 @@ let payer = (app: string) => async (dir: Directory) =>
 // started (`WITHIN`): a visitor unless it is the app itself or someone whose
 // vouched level here writes (app-writes.ts `vouching` keeps it). One signed in
 // is named by their person; nobody signed in is a visitor too, named by the
-// transcript, since the store never learns their address.
+// transcript, since the store never learns their address. A transcript nobody
+// wrote, not even through a browser's vouched via, is the app's own
+// automation (a scheduled call's), spent as a member's.
 let visitorOf = (at: Stored) => async (req: { conversation?: string }) => {
   if (at.manifest().models != 'open' || !req.conversation) return undefined
   let [session] = await at.graph.get([req.conversation])
-  let by = (session?.created as Comp | undefined)?.by
-  if (typeof by != 'string') return req.conversation
+  let { by, via } = (session?.created ?? {}) as Comp
+  if (typeof by != 'string') return via ? req.conversation : undefined
   if (by == at.app) return undefined
   let [grant] = await at.graph.get([grantEid(at.app!, by)])
   return writes((grant?.grant as Comp | undefined)?.access as Level)

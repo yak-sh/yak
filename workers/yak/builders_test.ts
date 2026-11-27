@@ -284,7 +284,8 @@ for (
   })
 }
 
-let start = (v: Awaited<ReturnType<typeof app>>) =>
+// A source and a builder over it, which builds at once unless `staged`.
+let start = (v: Awaited<ReturnType<typeof app>>, staged = false) =>
   v.send('/apply', [
     { entity: { eid: SOURCE }, doc: { title: 'Source', body: 'The village.' } },
     {
@@ -299,6 +300,7 @@ let start = (v: Awaited<ReturnType<typeof app>>) =>
         query: '.doc.title=Source',
         to: toolEid('builder_model'),
       },
+      ...staged ? { staged: {} } : {},
     },
   ])
 
@@ -327,6 +329,42 @@ test('a hosted builder writes named outputs and spends the account budget', asyn
   await until(async () => (await v.dir.space('builder-test'))?.meter?.models)
   assertAlmostEquals((await v.dir.space('builder-test'))!.meter!.models, cost)
 })
+
+// The same build asked for through a tool door, and by the write that made
+// the builder, through the effect it owes after commit: either way its call
+// runs as the writer, and its model turn is the space's to pay.
+for (
+  let [door, ask] of [
+    ['builder_build', async (v: Awaited<ReturnType<typeof app>>) => {
+      assertEquals((await start(v, true)).status, 200)
+      return v.call('builder_build', { builder: BUILDER })
+    }],
+    ['a write, after commit', (v: Awaited<ReturnType<typeof app>>) => start(v)],
+  ] as const
+) {
+  test(`a build asked for by ${door} runs as its writer and spends the space's budget`, async () => {
+    await using v = await app()
+    assertEquals((await ask(v)).status, 200)
+    let [build] = await until(async () => {
+      let rows = await v.read('.build&*')
+      return rows.length ? rows : null
+    }, { label: 'build' })
+    let call = String((build.build as Comp).call)
+    let [session] = await until(async () => {
+      let rows = await v.read(`.session.source=${call}&*`)
+      return rows.length ? rows : null
+    }, { label: 'model session' })
+    let [asked] = await v.read(`.entity.eid=${call}&*`)
+    for (let row of [build, asked, session]) {
+      assertEquals((row.created as Comp).by, ADA)
+    }
+    await until(async () => (await v.dir.space('builder-test'))?.meter?.models)
+    assertAlmostEquals(
+      (await v.dir.space('builder-test'))!.meter!.models,
+      weigh(PRICE, { input_tokens: 1_000, output_tokens: 100 }),
+    )
+  })
+}
 
 test('builder_build tries a staged builder on the rows it names, as the caller', async () => {
   let v = await app()
