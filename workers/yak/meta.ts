@@ -239,10 +239,27 @@ export let metaOf = (
   },
 })
 
-// One door per binding, so the answer is the same object every time: what is
-// memoized on a door (the seed the directory part runs once, directory.ts) is
-// memoized per isolate, and a test that builds its own gets its own.
-let doors = new WeakMap<object, Meta>()
+// Keep each directory's adapter stable within its binding. The directory's
+// seed and its isolate's route invalidation both follow that binding.
+let doors = new WeakMap<object, WeakMap<Namespace, Meta>>()
+
+let invalidating = (ns: Namespace, live: Meta): Meta => ({
+  ...live,
+  apply: (bundles, headers, opts) =>
+    changingRoutes(ns, bundles, () => live.apply(bundles, headers, opts)),
+  ...live.restoreTrash && {
+    restoreTrash: (...args) =>
+      changingRoutes(ns, null, () => live.restoreTrash!(...args)),
+  },
+  ...live.purgeTrash && {
+    purgeTrash: (...args) =>
+      changingRoutes(ns, null, () => live.purgeTrash!(...args)),
+  },
+  ...live.purgeTrashEntities && {
+    purgeTrashEntities: (...args) =>
+      changingRoutes(ns, null, () => live.purgeTrashEntities!(...args)),
+  },
+})
 
 /** The directory's store. The env is the one binding it reads, so a Store
  * object — which holds the namespace and no service binding — reaches the
@@ -256,11 +273,15 @@ let doors = new WeakMap<object, Meta>()
 export let meta = (
   env: { STORE: Namespace; META?: Meta; CLOCK?: Clock },
 ): Meta => {
-  if (env.META) return env.META
-  let ns = env.STORE as unknown as object
-  let held = doors.get(ns)
-  if (!held) {
-    let door = coalesced(
+  if (env.META && !env.STORE) return env.META
+  let ns = env.STORE
+  let source = env.META ?? ns
+  let adapters = doors.get(source)
+  if (!adapters) doors.set(source, adapters = new WeakMap())
+  let held = adapters.get(ns)
+  if (held) return held
+  let live = env.META ?? metaOf(
+    coalesced(
       storeOf(env.STORE, PLATFORM_STORE, undefined, jittered(env.CLOCK)),
       (request) => {
         let url = new URL(request.url)
@@ -276,22 +297,10 @@ export let meta = (
         patience: 24_000,
         wait: (seated) => waiting('directory_wait', seated),
       },
-    )
-    let live = metaOf(door, {}, PLATFORM_STORE)
-    doors.set(
-      ns,
-      held = {
-        ...live,
-        apply: (bundles, headers, opts) =>
-          changingRoutes(ns, bundles, () => live.apply(bundles, headers, opts)),
-        restoreTrash: (...args) =>
-          changingRoutes(ns, null, () => live.restoreTrash!(...args)),
-        purgeTrash: (...args) =>
-          changingRoutes(ns, null, () => live.purgeTrash!(...args)),
-        purgeTrashEntities: (...args) =>
-          changingRoutes(ns, null, () => live.purgeTrashEntities!(...args)),
-      },
-    )
-  }
+    ),
+    {},
+    PLATFORM_STORE,
+  )
+  adapters.set(ns, held = invalidating(ns, live))
   return held
 }
