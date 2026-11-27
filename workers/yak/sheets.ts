@@ -131,7 +131,7 @@ export let sheeted = (html: string, env: Host, names = NAMES) =>
           )
         }`,
     ).replace(
-      /<a class="[^"]*\bNav_SignIn\b[^"]*"[^>]*>Sign in<\/a>/,
+      /<a\b[^>]*\sclass="[^"]*\bNav_SignIn\b[^"]*"[^>]*>Sign in<\/a>/,
       (a) => a + signedIn,
     )
     .replace(

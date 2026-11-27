@@ -360,8 +360,8 @@ working: it is the same module.
 ## Platform dependencies and vocabulary
 
 A **platform dependency** is a package supplied by the running yaks.app release,
-named with `"platform"` instead of an npm version in `package.json`. Holdfast
-declares:
+named with `"platform"` in `package.json`. A React game can use these
+dependencies:
 
 ```json
 {
@@ -376,19 +376,21 @@ declares:
     "@yaks/ux": "platform",
     "@yaks/vocab": "platform",
     "@yaks/voxel": "platform",
-    "preact": "^10.29.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "three": "^0.186.1"
   }
 }
 ```
 
-Write your page's module as TypeScript and load it with
-`<script type="module" src="main.ts"></script>`. `app_deploy` compiles it; a
-platform dependency is not installed from npm. Ordinary npm dependencies still
-use versions and `package-lock.json`. Three.js is one shared module between the
-page and toolkit, not a second engine instance inside each package. Import
-toolkit subpaths from their package, such as `@yaks/game/controls` or
-`@yaks/voxel/three`; declare the package root in `dependencies`.
+Write your page module as `main.tsx` when it contains JSX and load it with
+`<script type="module" src="main.tsx"></script>`. Declaring `react` selects the
+React JSX runtime. `app_deploy` compiles it; a platform dependency is not
+installed from npm. Ordinary npm dependencies still use versions and
+`package-lock.json`. Three.js is one shared module between the page and toolkit,
+not a second engine instance inside each package. Import toolkit subpaths from
+their package, such as `@yaks/game/controls` or `@yaks/voxel/three`; declare the
+package root in `dependencies`.
 
 A dependency also brings its **vocabulary**: the components and properties it
 declares. The store composes a dependency's stored and relayed components with
@@ -559,26 +561,22 @@ and controlled disclosure from `@yaks/ux`. The HUD never charges gold, owns a
 selected tower or runs the simulation. Read values from the graph and send
 actions back through the app.
 
-For example, this browser view receives `gold` from the run snapshot and mounts
-into the page's `root`; it does not keep a separate balance:
+This React view displays the gold value from the run snapshot using `@yaks/ui`.
+The app supplies `root` and `gold`.
 
-```ts ignore
-import { h, render } from 'preact'
-import { kit, Stats } from '@yaks/game/hud'
+```tsx ignore
+import { createRoot } from 'react-dom/client'
+import { Badge } from '@yaks/ui/parts'
+import { kits, themes } from '@yaks/ui/ui'
+import { wear } from '@yaks/ui/wear'
 
-let css = document.createElement('link')
-css.rel = 'stylesheet'
-css.href = kit.Stats.css().href
-document.head.append(css)
-render(
-  h(
-    Stats,
-    { 'aria-label': 'Run resources' },
-    h(Stats.Stat, {}, h(Stats.Words, {}, `${gold} gold`)),
-  ),
-  root,
-)
+await wear({ kits, theme: themes.gouache })
+createRoot(root).render(<Badge>{gold} gold</Badge>)
 ```
+
+Preact apps can use [the @yaks/preact plugin](https://jsr.io/@yaks/preact).
+Declare `preact` as an npm dependency. The compiler uses Preact's JSX runtime
+and resolves the kits' React imports through `preact/compat`.
 
 ## Rendering with `@yaks/stage` and `@yaks/voxel`
 

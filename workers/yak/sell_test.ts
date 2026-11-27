@@ -16,7 +16,6 @@ import {
   backTo,
   cart,
   feeOf,
-  MARK,
   orderEid,
   orderOf,
   priced,
@@ -104,7 +103,7 @@ test('the pricing page is quoted the rate that is set', () => {
   assertEquals(quoted(`<span class="Fee">0%`, 250), `<span class="Fee">0%`)
   // And the page itself carries the mark, or the splice would quietly do
   // nothing on the page it exists for.
-  assertStringIncludes(drawn('pricing.html'), MARK)
+  assertStringIncludes(quoted(drawn('pricing.html'), 321), '>3.21%</span>')
 })
 
 let seller = (ready: boolean, submitted: boolean) =>

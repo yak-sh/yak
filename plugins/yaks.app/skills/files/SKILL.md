@@ -181,16 +181,33 @@ An app on the `@yaks/` packages takes a write of its views in place, with no
 reload. Put the page's renderers in a views module that exports `views`, a
 `@yaks/render` registry; load it from `index.html` with its own
 `<script type="module" src="views.ts"></script>`; and draw the page with `host`
-from `@yaks/preact/host` (`"@yaks/preact": "platform"` in `package.json`),
-giving it the root element, the views module's address and the page's client
-through the `client` option. A write of the views module, or a dependency whose
+from `@yaks/react/host` (`"@yaks/react": "platform"` in `package.json`), giving
+it the root element, the views module's address and the page's client through
+the `client` option. A write of the views module, or a dependency whose
 `entries` name only that module, imports the updated module and draws it in the
 same place: the client, its socket and the page graph stay open, and scroll,
 focus and everything in the page graph are kept. A `vocab.json` write that only
 adds components fetches `api/vocab.json` and extends the client's vocabulary in
 place. A changed component shape, a dependency shared with another page entry,
-or a module that fails to import or draw reloads the page as above. The
-[@yaks/preact README](https://jsr.io/@yaks/preact) has the details.
+or a module that fails to import or draw reloads the page as above.
+
+Declare `react` and `react-dom` as npm dependencies. In the page entry
+`main.tsx`, where `client` is the page's store client and `pageId` is the entity
+to display:
+
+```tsx ignore
+import { host } from '@yaks/react/host'
+
+await host({
+  root: document.querySelector('main')!,
+  views: new URL('./views.ts', import.meta.url),
+  client,
+  draw: (Entity) => <Entity eid={pageId} view='Page' />,
+})
+```
+
+Preact apps use [@yaks/preact](https://jsr.io/@yaks/preact) and can import the
+same kits.
 
 Calls a draft worker makes to external services still reach those services; the
 draft's branch keeps its writes from the app's data, not external side effects.

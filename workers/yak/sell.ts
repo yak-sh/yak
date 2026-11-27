@@ -145,15 +145,11 @@ export let platformFee = (env: Env) => feeOf(dirOf(env))
  * directory will not answer. The element may carry more attributes than its
  * class, as the slot of the sentence it sits in (site/copy.ts).
  */
-export let MARK = '<span class="Fee"'
-
 export let quoted = (file: string, bps: number) => {
-  let from = file.indexOf(MARK)
-  if (from < 0) return file
-  let open = file.indexOf('>', from + MARK.length)
-  let to = file.indexOf('</span>', open)
-  if (open < 0 || to < 0) return file
-  return file.slice(0, open + 1) + rate(bps) + file.slice(to)
+  return file.replace(
+    /(<span\b[^>]*\sclass="Fee"[^>]*>)[^<]*(<\/span>)/,
+    (_, open, close) => open + rate(bps) + close,
+  )
 }
 
 // ---- the connected account -------------------------------------------------
