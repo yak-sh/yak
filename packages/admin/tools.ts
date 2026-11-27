@@ -18,7 +18,7 @@ import { person } from '@yaks/cli/host'
 import { given, read as configAt, used } from '@yaks/cli/config'
 import type { Options as TrackerOptions } from '@yaks/tracker/routes'
 import { type Account, account } from './account.ts'
-import { ADMIN, isTestAddress } from '@yaks/platform/bots'
+import { ADMIN, isFleetAddress } from '@yaks/platform/bots'
 import { budgetLines, freeBudgetLine } from '@yaks/platform/budget'
 import { funnelLines } from '@yaks/platform/funnel'
 import { cameFrom, firstApps, firstsLines, weekly } from '@yaks/platform/firsts'
@@ -454,7 +454,7 @@ export let runs = (
     admin_browse: verb(async (call) => {
       let a = argsOf(call)
       let at = await account(host)(word(a, 'as') ?? 'checks@bot.yak.sh')
-      if (at.address != ADMIN && !isTestAddress(at.address)) {
+      if (!isFleetAddress(at.address)) {
         throw new CallError(
           'access',
           'Choose a bot account for a browser visit',

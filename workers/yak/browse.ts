@@ -10,14 +10,16 @@
 // The private admin door accepts the admin bot's OAuth
 // grant and issues a short-lived directory credential for the browser.
 //
-// Only the fleet's test accounts may ask. The browser time is the platform's,
-// spent checking the platform, and a person's own sign-in never goes into a
-// browser that automation drives, the platform owner's included (T-2254).
+// Only accounts the fleet holds may ask: its test accounts, the demo account
+// and the admin bot (@yaks/platform/bots `isFleetAddress`). The browser time is
+// the platform's, spent checking the platform, and a person's own sign-in never
+// goes into a browser that automation drives, the platform owner's included
+// (T-2254).
 // Account cookies go only to visits on our own zone. Mockups use a separate
 // origin held by the browser for that visit.
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { apex } from '@yaks/platform/host'
-import { ADMIN as ADMIN_BOT, isTestAddress } from '@yaks/platform/bots'
+import { ADMIN as ADMIN_BOT, isFleetAddress } from '@yaks/platform/bots'
 import {
   ADMIN,
   ADMIN_BROWSE,
@@ -192,11 +194,11 @@ let sessionCaller = async (
   }
   waitingOn('Reading the test account for the browser visit')
   let known = await dir.known(claims.person)
-  if (!isTestAddress(known?.email ?? '') && known?.email != ADMIN_BOT) {
+  if (!isFleetAddress(known?.email ?? '')) {
     return json(
       403,
       'not_a_test_account',
-      'the browser is for the platform’s test accounts: sign in as one with --as',
+      'the browser is for accounts the fleet holds: sign in as one with --as',
     )
   }
   return {

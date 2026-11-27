@@ -228,9 +228,10 @@ yak admin delete reviewer --as reviewer
 ```
 
 The website's renewed cookie is written back under the same OAuth record's vault
-lock. A `@bot.yak.sh` test account whose session is missing or has expired signs
-itself in again when a browser-only act asks for it: it asks for a code, reads
-the letter from this graph's mail, and keeps the new session in the same record
+lock. A `@bot.yak.sh` account other than the admin, the demo account `yourname`
+included, whose session is missing or has expired signs itself in again when a
+browser-only act asks for it: it asks for a code, reads the letter from this
+graph's mail, and keeps the new session in the same record
 (@yaks/connections/yaks-app `botSession`). Neither the bearer nor the cookie is
 included in graph text or tool answers. `delete` reads the website's list of
 what would be destroyed before submitting the space's name back to its deletion
@@ -245,12 +246,13 @@ directory. It takes the steps a person would: tap, type, press a key, swipe,
 open a phone's keyboard, clear a field, wait, take a screenshot. Each screenshot
 is written to `--to` (default `.scratch/browse`), the last as `end.png`; the
 answer says the status, the page's errors and its text. The window is a phone's,
-390 × 844 with touch, unless named. `browse` defaults to `checks@bot.yak.sh`.
-Use `--as admin` for `/admin` pages. To view an app as a member, invite a test
-bot with the member's role, accept its invitation, and select its account with
-`--as`. `--html <file>` shows a page as a checkout draws it, before it deploys:
-the browser answers the page's first load with the file (@yaks/platform/still
-makes one), and everything else comes from yaks.app.
+390 × 844 with touch, unless named. `browse` defaults to `checks@bot.yak.sh` and
+takes any account the fleet holds: a test account, the demo account `yourname`
+or the admin. Use `--as admin` for `/admin` pages. To view an app as a member,
+invite a test bot with the member's role, accept its invitation, and select its
+account with `--as`. `--html <file>` shows a page as a checkout draws it, before
+it deploys: the browser answers the page's first load with the file
+(@yaks/platform/still makes one), and everything else comes from yaks.app.
 
 Use `--mockup <directory>` to open a mockup with its own stylesheets, scripts,
 and images. The page path is relative to the directory and defaults to

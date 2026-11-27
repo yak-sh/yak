@@ -7,7 +7,7 @@ import type { Comp } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
 import { adminForward } from '@yaks/cli/account-forward'
-import { ADMIN, isTestAddress } from '@yaks/platform/bots'
+import { ADMIN, isFleetAddress } from '@yaks/platform/bots'
 import { botSession } from '@yaks/connections/yaks-app'
 import { accountCredential } from '@yaks/connections'
 import { records } from '@yaks/secrets'
@@ -64,7 +64,10 @@ async (as?: string): Promise<Account> => {
   let session = at.session
   if (session) renewing(keep)
   let signedIn = async (rejected?: string) => {
-    if (!isTestAddress(address) || (session != rejected && live(session))) {
+    if (
+      address == ADMIN || !isFleetAddress(address) ||
+      (session != rejected && live(session))
+    ) {
       return session
     }
     session = await signIn(host.graph, `https://${zone()}`, address)

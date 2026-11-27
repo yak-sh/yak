@@ -158,6 +158,16 @@ in the trash once that command exits and so cuts off any Operator work still
 running. The account and its data remain recoverable until the person chooses
 permanent erasure through the confirmation page.
 
+### A build Jeff will open
+
+A game or app you build to link Jeff to is built where he can open it signed
+in as himself: `yourname`, where checks is an editor (`app_new space=yourname`,
+`operator_chat --space yourname --as checks`). Never make a space for it:
+checks.yaks.app and every space checks owns are closed to him, and a clean
+slate is not a reason for `space_new` or for raising checks' allowance with
+`admin_spaces`. Leave a linked build in place when the run ends; the cleanup
+above is for apps nobody was linked to.
+
 An Operator's model varies from run to run, so one run of a behavior proves little:
 send the same kind of request three or more times and count. Comparing two
 versions of the Operator takes dozens of runs an arm: 16 could not tell 82% from

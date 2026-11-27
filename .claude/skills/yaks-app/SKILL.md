@@ -629,6 +629,8 @@ subscription, the Operator) runs in `checks`, the agents' own space,
 (end-to-end-checks has the recipe). `operator_chat --space checks --as checks`
 reaches its Operator. `checks` is in idle-spaces.ts `PROTECTED`, so the sweep
 never takes it. Nothing an agent tests runs in `jeff` or another person's space.
+A game or app built for Jeff to open goes in `yourname`, where checks is an
+editor, never in a new space (end-to-end-checks).
 
 A call to the Operator is checked the same way, from a number of our own:
 `scripts/test-call.ts` beside this skill dials the platform's number from the
