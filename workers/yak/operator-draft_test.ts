@@ -268,7 +268,7 @@ let load = async (
   app?: string,
   network?: 'held' | 'deploying' | 'down',
   as: Who = who,
-  view?: View,
+  { view, holdTimers = false }: { view?: View; holdTimers?: boolean } = {},
 ) => {
   let html = await (await chatPage(p.env, space, as, open, beside, app))
     .text()
@@ -347,7 +347,7 @@ let load = async (
   let tabTimers = new Set<number>()
   // The page's waits on the held clock: each runs once `pass` reaches its
   // moment, `now`, which the page reads as `performance.now()`.
-  let held = network == 'held' || network == 'down'
+  let held = holdTimers || network == 'held' || network == 'down'
   let now = 0, n = 0
   let waits = new Map<number, { at: number; fn: () => void }>()
   let after = (fn: () => void, ms: number) => {
@@ -917,7 +917,14 @@ let park = await begun('Book the park pavilion for June')
 
 test('swapping between conversations and leaving for Manage lets go of each chat', async () => {
   let stash = storage()
-  let first = await load(stash, false, road)
+  // Leave with timers still pending, regardless of when the runner would
+  // have fired them. The renderer's after-paint callbacks belong to the tab.
+  let visit = (chat: string, view?: View) =>
+    load(stash, false, chat, {}, undefined, undefined, who, {
+      view,
+      holdTimers: true,
+    })
+  let first = await visit(road)
   let doc = first.document as unknown as Document
   let menu = doc.getElementById('menu')
   await first.heard()
@@ -934,16 +941,7 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   // (operator-talk-browser.ts `close`).
   assertEquals(doc.querySelectorAll('[data-task]').length, 1)
 
-  let second = await load(
-    stash,
-    false,
-    park,
-    {},
-    undefined,
-    undefined,
-    who,
-    first.view,
-  )
+  let second = await visit(park, first.view)
   await second.heard()
   assertEquals([second.sockets.length, second.conversing()], [0, 1])
   assertEquals(second.stores.length, 1)
@@ -980,16 +978,7 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   assertEquals(second.intervals.size, 0)
   assertEquals(second.timeouts(), 0)
 
-  let back = await load(
-    stash,
-    false,
-    road,
-    {},
-    undefined,
-    undefined,
-    who,
-    second.view,
-  )
+  let back = await visit(road, second.view)
   await back.heard()
   assertEquals([back.sockets.length, back.conversing()], [0, 1])
   assertEquals(back.stores.length, 1)
