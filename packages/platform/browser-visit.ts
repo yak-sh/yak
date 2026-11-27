@@ -708,9 +708,17 @@ let taken = async (
 }
 
 // The first element a selector names that shows: what a person sees to tap,
-// where a hidden one earlier in the page would take the press.
+// where a hidden one earlier in the page would take the press. The refusal
+// says how to see the page as the step found it.
 let missing = (step: string, selector: string) =>
-  waitExpired(`${step} waited for a visible element matching ${selector}.`)
+  waitExpired(
+    `${step} waited ${
+      FIND / 1000
+    } s for a visible element matching ${selector}; none showed, so the ` +
+      'steps after it did not run. To see the page as that step found it, ' +
+      'run the steps before it alone; then fix the selector, or put a wait ' +
+      'step before it if the element shows later.',
+  )
 
 let shown = async (
   page: Page,

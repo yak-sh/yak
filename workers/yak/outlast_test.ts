@@ -16,13 +16,14 @@ test('the door says a late answer was asked earlier, and a refusal stays one', a
     'k',
     asked,
   )
+  // A caller polling until the answer stops saying "still running" stops
+  // here, rather than starting a run of its own on every late answer.
+  let text = (late.content as { body: string }).body
   equal(
-    (late.content as { body: string }).body,
-    'This answers the app_deploy asked at T with the same arguments, which ' +
-      'was still running when its caller stopped waiting; this call ran ' +
-      'nothing of its own. If what it acts on changed since, call ' +
-      'app_deploy again to run it anew:\ndeployed v42',
+    [/asked at T\b/.test(text), text.endsWith('\ndeployed v42')],
+    [true, true],
   )
+  equal(text.includes('still running'), false)
   let [running] = await outlasted(objects({ running: 'T' }), 'k', asked)
   equal((running.output as { value: unknown }).value, {
     running: true,

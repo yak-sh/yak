@@ -1282,8 +1282,8 @@ test('the visit deadline while waiting for step 7 names the missing element', as
   let body = await response.json()
   assertEquals(body.refusal, 'browser_wait_expired')
   assertEquals(
-    body.failed,
-    'Step 7 waited for a visible element matching [data-not-now].',
+    body.failed.match(/^Step 7 waited .* matching \[data-not-now\];/)?.length,
+    1,
   )
   assertEquals(body.faults, undefined)
   assertEquals(p.log.includes('press Enter'), false)

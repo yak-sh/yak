@@ -479,8 +479,8 @@ test('a missing visible element is a refusal naming the step and selector', asyn
   equal(status, 400)
   equal(body.error.code, 'browser_wait_expired')
   equal(
-    body.error.message,
-    'Step 1 waited for a visible element matching [data-not-now].',
+    /^Step 1 waited .* matching \[data-not-now\];/.test(body.error.message),
+    true,
   )
   equal(reports, [])
 })

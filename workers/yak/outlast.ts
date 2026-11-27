@@ -45,13 +45,13 @@ let said = (body: string, value?: Record<string, unknown>, call?: string) => [{
   output: { ...call ? { source: call } : {}, ...value ? { value } : {} },
 }]
 
-// A late answer is an earlier run's, asked with the same arguments, and this
-// call ran nothing: a caller that changed what it acts on since hears so.
+// A late answer is the run a caller was told to call again for, which ended
+// between its calls: this call started nothing, and the next one runs anew.
+// It never says the run is still going, so a caller polling for that ends.
 let earlier = (name: string, asked: string) =>
-  `This answers the ${name} asked at ${asked} with the same arguments, ` +
-  'which was still running when its caller stopped waiting; this call ran ' +
-  `nothing of its own. If what it acts on changed since, call ${name} ` +
-  'again to run it anew:\n'
+  `This is how the ${name} asked at ${asked} with the same arguments ended; ` +
+  'it ended between calls, so this call started nothing. Changes made ' +
+  `after it was asked are not in it: call ${name} again to run it anew.\n`
 
 type Result = {
   key: string
