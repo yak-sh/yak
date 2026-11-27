@@ -21,8 +21,30 @@ export { offered, type ToolId, toolName } from './tool_meta.ts'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './package.json' with { type: 'json' }
 
+/** Largest explicit page size for entity reads through graph_query. */
+export const MOST = 10_000
+
+export const queryPages =
+  `.limit= accepts up to ${MOST.toLocaleString('en-US')} rows per page. ` +
+  `For the next page, repeat the query with .after=<id> set to the last entity's id.`
+
+let query = doc.$defs.graph_query
+
 /** The tool declarations the generic tier is listed and typed from. */
-export let graphDoc: VocabDoc = doc
+export let graphDoc: VocabDoc = {
+  ...doc,
+  $defs: {
+    ...doc.$defs,
+    graph_query: {
+      ...query,
+      description: `${query.description} ${queryPages}`,
+      input: {
+        ...query.input,
+        limit: { ...query.input.limit, description: queryPages },
+      },
+    },
+  },
+}
 
 /** What this package is: its manifest's description, the one place it is
  * written, which a host stamps on each document here. */

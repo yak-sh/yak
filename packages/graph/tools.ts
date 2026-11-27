@@ -58,7 +58,7 @@ import type { Graph } from './graph.ts'
 import type { Tool } from './plugin.ts'
 import { argsOf, type NamedTool, referenced, toolName } from './tool.ts'
 import { minted } from './mint.ts'
-import { declared, graphDoc } from './vocab.ts'
+import { declared, graphDoc, MOST, queryPages } from './vocab.ts'
 import { formed } from './admit.ts'
 import { deriving } from './identity.ts'
 import { Refused } from './errors.ts'
@@ -69,6 +69,7 @@ import { readTrash } from './trash-read.ts'
 import { restoring, type Trash } from './trash.ts'
 export { type Edit, edited, type TextEdit, textEdited } from './changes.ts'
 export { type Link, linked } from './links.ts'
+export { MOST } from './vocab.ts'
 
 /** The implementations a set of declarations needs. Keyed by the declaration's
  * own `name`, or by the name derived from its noun and verb for a module that
@@ -138,13 +139,6 @@ export type Seams = {
 /** How many rows a search answers when it asks for no window of its own: its
  * best, as the `search` tool's are. */
 export let BEST = 20
-
-/** The widest window one `graph_query` asks for, and refused with how to
- * page before anything is read: an agent's `*` built all 198,395 entities of
- * yaks.app's platform store, 20 s of the object's CPU, then its memory, and
- * every request queued behind it failed (bug be9051e2). No context holds an
- * answer that size. */
-export let MOST = 10_000
 
 // Why a query would answer more than `MOST` entities, if it would: its window
 // is wider, or it has none and nothing on it filters, so it selects every
@@ -523,9 +517,8 @@ export let runs = (seams: Seams = {}): Runs => {
         let wide = past(ast)
         if (wide) {
           throw new Refused(
-            `${q}: ${wide}. Name a filter, or read it in pages of .limit=${MOST} or ` +
-              `fewer, each continuing with .after= the last entity it ` +
-              `answered; .count says how many there are`,
+            `${q}: ${wide}. Name a filter or read in pages. ${queryPages} ` +
+              `.count says how many there are`,
           )
         }
         let said = words(ast)
