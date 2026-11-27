@@ -10,6 +10,8 @@ import { durable } from '../../packages/durable-object/testing.ts'
 import { sandboxes } from '../../packages/sandbox/testing.ts'
 import type { Env } from './env.ts'
 import { strip } from '@yaks/esbuild/strip'
+import { evaluate } from '../../packages/code-mode/testing.ts'
+import { compiler } from './testing.ts'
 
 let outlasts = (
   env: Env,
@@ -33,6 +35,44 @@ let outlasts = (
     },
   } satisfies Outlasts
 }
+
+test('a code_mode result handle waits for the original invocation', async () => {
+  let time = clock(Date.now())
+  let started = Promise.withResolvers<void>()
+  let ready = Promise.withResolvers<void>()
+  let runs = 0
+  let k = await fresh({ ESBUILD: compiler() }, (env) => {
+    outlasts(env, undefined, time)
+    env.CODE_MODE = async (...args) => {
+      runs++
+      started.resolve()
+      await ready.promise
+      return await evaluate(args[0], args[1], args[2])
+    }
+  })
+  try {
+    let agent = connector(k, k.owner.cookie)
+    let result = agent.call('tools/call', {
+      name: 'code_mode',
+      arguments: { script: 'const answer: number = 21 * 2; return answer' },
+    })
+    await Promise.race([
+      started.promise,
+      result.then((out) => {
+        throw new Error(JSON.stringify(out))
+      }),
+    ])
+    await time.advance(PATIENCE)
+    let pending = (await result).structuredContent.result_handle
+    ready.resolve()
+    let answer = await agent.answer('result_wait', { result_handle: pending })
+    assertEquals(answer.value?.value, 42)
+    assertEquals(runs, 1)
+  } finally {
+    ready.resolve()
+    await k.stop()
+  }
+})
 
 test('app_deploy through the door runs in its object, one per arguments, and answers its release', async () => {
   let keys: string[] = []

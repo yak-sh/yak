@@ -3,6 +3,7 @@
 // would, as the person and through the credential the door verified, with
 // the directory opened afresh as mcp.ts opens it.
 import { CallError } from '@yaks/tools/errors'
+import { mint } from '@yaks/graph'
 import { Durable, type State } from '@yaks/durable-object/object'
 import type { Clock } from '@yaks/fp'
 import { running } from './agent.ts'
@@ -26,7 +27,9 @@ let ran = async (
 ): Promise<Ended> => {
   let named = (tool: { name: string }) => tool.name == asked.tool
   let t = TOOLS.find(named) ?? PUBLISHED.find(named)
-  if (!t) return { refused: { code: 'missing', text: `no tool ${asked.tool}` } }
+  if (!t && asked.tool != 'code_mode') {
+    return { refused: { code: 'missing', text: `no tool ${asked.tool}` } }
+  }
   let { space, spaceEid } = asked.who ?? {}
   let reopen = () => {
     let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
@@ -46,7 +49,18 @@ let ran = async (
     ...asked.who ? { who: asked.who } : {},
   }
   try {
-    let said = await c.counting(() => running(ctx, t)(asked.args, asked.call))
+    let said = await c.counting(async () => {
+      if (t) return await running(ctx, t)(asked.args, asked.call)
+      let { scripted } = await import('./agent-code.ts')
+      return await scripted(ctx, {
+        entity: { eid: asked.call ?? mint() },
+        call: { args: asked.args },
+        $actor: {
+          by: asked.person,
+          ...asked.who?.instrument ? { via: asked.who.instrument } : {},
+        },
+      })
+    })
     return { said, timing: c.header('tool_') }
   } catch (e) {
     if (e instanceof CallError) {

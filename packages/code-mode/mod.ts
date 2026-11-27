@@ -36,7 +36,7 @@ export let LIMITS = {
 }
 export let HOSTED_LIMITS = {
   ...LIMITS,
-  wallMs: 40_000,
+  wallMs: 120_000,
   cpuMs: 30_000,
   calls: 64,
 }
@@ -379,6 +379,7 @@ let fields = {
       tools: { type: 'array', items: { type: 'object' } },
       limits: { type: 'object' },
       next: { type: ['integer', 'null'] },
+      result_handle: { type: 'string' },
     },
   },
   applied: true,

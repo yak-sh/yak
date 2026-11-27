@@ -1,5 +1,5 @@
 import { listing, type Options } from '@yaks/mcp'
-import { registry, runner } from '@yaks/tools'
+import { registry, runner, valueIn } from '@yaks/tools'
 import {
   definition,
   HOSTED_LIMITS,
@@ -10,11 +10,25 @@ import { connected, reaching, searching } from './agent.ts'
 import { inReach } from './declared.ts'
 import { stripping } from './esbuild.ts'
 import { ledger } from './ledger.ts'
-import { argsOf } from '@yaks/graph'
+import { argsOf, type Bundle } from '@yaks/graph'
 import { toolName } from '@yaks/graph/call'
-import { APP, type Args, type Ctx, inApp, refuse, SPACE, str } from './tool.ts'
+import {
+  apart,
+  APP,
+  type Args,
+  type Ctx,
+  inApp,
+  inSpace,
+  refuse,
+  SPACE,
+  str,
+} from './tool.ts'
 import { type ResultHost, resultStore, resultTools } from './result-tools.ts'
 import type { Graph, NamedTool, Tool } from '@yaks/graph'
+import { outlasted } from './outlast.ts'
+import { connectedTools } from './connected-mcp.ts'
+import { admitted, hearing } from './refusals.ts'
+import { reporter } from './defects.ts'
 // Both agent doors offer short executions over the connector's tools. Each
 // nested call reads the caller's reach anew, including apps just deployed.
 // A host that narrows a turn once it heard words it cannot vouch for says
@@ -60,7 +74,8 @@ export let coded = <T extends Options>(
   let unavailable = () => {
     throw refuse('unavailable', 'code mode is unavailable on this kernel')
   }
-  let offered = async (args: Args) => {
+  let offered = async (args: Args, call: string) => {
+    apart(args)
     let { app, space, draft } = args
     let files = {
       space: typeof space == 'string' ? space : undefined,
@@ -76,8 +91,9 @@ export let coded = <T extends Options>(
         'Open a new draft with app_files and pass its draft id.',
       )
     }
+    let runCtx = { ...ctx }
     let at = args.script !== undefined && app != null
-      ? await inApp(ctx, args)
+      ? await inApp(runCtx, args)
       : null
     let caller = at
       ? { app: at.app.eid, level: at.who.role, person: ctx.person }
@@ -86,7 +102,17 @@ export let coded = <T extends Options>(
     return codeMode(
       scripts(),
       scriptRunner(),
-      (modules, bridge, signal) => evaluate(modules, bridge, signal, caller),
+      async (modules, bridge, signal) => {
+        let paying = ctx.env.LOADER
+          ? at?.space ?? (await inSpace(runCtx, args)).space
+          : undefined
+        return await evaluate(modules, bridge, signal, {
+          caller,
+          bill: paying
+            ? { space: paying, person: ctx.person, call }
+            : undefined,
+        })
+      },
       ctx.env.ESBUILD ? stripping(ctx.env) : unavailable,
       {
         files,
@@ -146,12 +172,32 @@ export let coded = <T extends Options>(
       },
     },
     run: async (call, graph) => {
+      let args = argsOf(call)
+      if (
+        args.script !== undefined && ctx.outlast && ctx.env.OUTLAST &&
+        ctx.env.SESSION_SECRET
+      ) {
+        return await outlasted(
+          ctx.env.OUTLAST,
+          `code_mode|${call.entity.eid}`,
+          {
+            tool: 'code_mode',
+            call: call.entity.eid,
+            args,
+            person: ctx.person,
+            who: ctx.who,
+          },
+          'The script is still running.',
+          ctx.env.SESSION_SECRET,
+          ctx.clock?.include,
+        )
+      }
       if (typeof remote == 'function') {
         let catalog = scripts()
         remoteTools = await remote()
         catalog.replace('mcp', remoteTools)
       }
-      return (await offered(argsOf(call))).run(call, graph)
+      return (await offered(args, call.entity.eid)).run(call, graph)
     },
   }
   let scripts = () =>
@@ -171,4 +217,27 @@ export let coded = <T extends Options>(
     refused: opts.refused,
   })
   return { ...opts, registry: catalog, runner: run }
+}
+
+/** Reopen an outlasting connector script with the same actor and tool scope. */
+export let scripted = async (ctx: Ctx, call: Bundle) => {
+  let reach = await inReach(ctx)
+  let graph = await reaching(ctx, reach)
+  let { registry } = coded(
+    {
+      ...connected(ctx, reach, graph),
+      calls: ledger(graph),
+      report: reporter(ctx),
+      refused: hearing(ctx.env, admitted(ctx)),
+    },
+    ctx,
+    undefined,
+    () => connectedTools(ctx),
+  )
+  let answer = await registry.get('code_mode')!.run(call, graph)
+  let result = valueIn(answer)
+  if (result && JSON.stringify(result.value ?? null).length > 256 * 1024) {
+    result.value = await resultStore(ctx, argsOf(call)).keep(result.value, call)
+  }
+  return answer
 }

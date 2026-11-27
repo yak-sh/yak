@@ -44,29 +44,43 @@ let shelved = (env: Env): Env => ({
 // Agent entrypoints share the same isolated code evaluator, loaded with the
 // first of them.
 let agentEnv = async () => {
-  let { evaluator } = await import('../code-runtime.ts')
-  type ScriptOutbound = (opts: {
-    props: { caller?: Caller }
-  }) => import('../code-runtime.ts').Outbound
+  let [{ evaluator }, { reserveScript }] = await Promise.all([
+    import('../code-runtime.ts'),
+    import('../script-spend.ts'),
+  ])
+  let services = loopback as {
+    ScriptOutbound(
+      opts: { props: { caller?: Caller } },
+    ): import('../code-runtime.ts').Outbound
+    ScriptTail(
+      opts: { props: { call: string } },
+    ): import('../code-runtime.ts').Tail
+  }
   return (env: Env): Env => ({
     ...shelved(env),
     ...(env.LOADER
       ? {
-        CODE_MODE: evaluator(env.LOADER, (bridge) =>
-          new class extends RpcTarget {
-            call(set: string, name: string, args: string) {
-              return bridge.call(set, name, args)
-            }
-            read(id: string) {
-              return bridge.read(id)
-            }
-            file(app: string, args: string) {
-              return bridge.file!(app, args)
-            }
-          }(), (caller) =>
-          (loopback as { ScriptOutbound: ScriptOutbound }).ScriptOutbound({
-            props: caller ? { caller } : {},
-          })),
+        CODE_MODE: evaluator(
+          env.LOADER,
+          (bridge) =>
+            new class extends RpcTarget {
+              call(set: string, name: string, args: string) {
+                return bridge.call(set, name, args)
+              }
+              read(id: string) {
+                return bridge.read(id)
+              }
+              file(app: string, args: string) {
+                return bridge.file!(app, args)
+              }
+            }(),
+          (caller) =>
+            services.ScriptOutbound({ props: caller ? { caller } : {} }),
+          async (bill) => {
+            let tail = services.ScriptTail({ props: { call: bill.call } })
+            return { tail, release: await reserveScript(env, bill) }
+          },
+        ),
       }
       : {}),
   })
@@ -242,8 +256,13 @@ export let classes: Record<string, Deferred> = {
   Outlast: entered(
     DurableObject,
     OUTLAST,
-    async (ctx: never, env) =>
-      new (await import('../outlast-object.ts')).Outlast(ctx, env),
+    async (ctx: never, env) => {
+      let [{ Outlast }, agent] = await Promise.all([
+        import('../outlast-object.ts'),
+        agentEnv(),
+      ])
+      return new Outlast(ctx, agent(env))
+    },
   ),
   // A bot listening on a chat platform's socket (chat.ts): yaks.app's own,
   // hearing each server a space added it to, or one a space brought.
@@ -332,6 +351,14 @@ export let classes: Record<string, Deferred> = {
     let { scriptOutbound } = await import('../outbound.ts')
     let { caller } = (ctx as { props: { caller?: Caller } }).props
     return { fetch: (req: Request) => scriptOutbound(req, env, caller) }
+  }),
+  ScriptTail: entered(WorkerEntrypoint, ['tail'], async (ctx, env) => {
+    let { settleScript } = await import('../script-spend.ts')
+    let { call } = (ctx as { props: { call: string } }).props
+    return {
+      tail: (events: import('../script-spend.ts').ScriptTrace[]) =>
+        settleScript(env, call, events),
+    }
   }),
   // A sandbox container's calls to this platform and its spaces, handed here
   // by yak-sandbox (sandbox/index.ts), which holds the container but not the

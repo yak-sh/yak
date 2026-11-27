@@ -23,6 +23,7 @@ export let {
   Ads,
   Outbound,
   ScriptOutbound,
+  ScriptTail,
   SandboxOutbound,
   Reruns,
   ModelHost,

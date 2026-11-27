@@ -91,5 +91,8 @@ test('evaluator lends the scoped egress binding and hosted resource limits to ea
     equal(caller, scope)
     return outbound
   })
-  equal(await run({}, bridge, new AbortController().signal, scope), 'done')
+  equal(
+    await run({}, bridge, new AbortController().signal, { caller: scope }),
+    'done',
+  )
 })

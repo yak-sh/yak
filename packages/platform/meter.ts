@@ -586,8 +586,13 @@ export let SOURCES: Record<string, string> = {
   voice: 'Voice',
   texts: 'Texts',
   browser: 'Browser',
+  scripts: 'Scripts',
   models: 'Other models',
 }
+
+/** Marginal price of a fresh Dynamic Worker, one invocation, and its CPU. */
+export let scriptDollars = (cpuMs: number): number =>
+  (2_000_000 + 300 + Math.round(cpuMs * 20)) / 1_000_000_000
 
 /** The source a spend is kept under: the one it names, else what it buys. */
 export let sourceOf = (spend: Record<string, unknown>): string =>

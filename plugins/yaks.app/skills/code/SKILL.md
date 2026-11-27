@@ -51,9 +51,11 @@ return { checked }
   the sentinel for destinations allowed by the connection.
 - Use `tools.yaks.<tool>(args)` for other platform tools and `results.read(id)`
   for kept results. Call `code_mode` without `script` for declarations.
-- A run has up to 30 seconds of CPU, 40 seconds of elapsed time and 64 tool
+- A run has up to 30 seconds of CPU, two minutes of elapsed time and 64 tool
   calls, including app file operations. The answer includes the return value and
-  the receipts for calls the script started.
+  receipts for the calls the script started. If the connector returns a
+  `result_handle` after 40 seconds, pass it to `result_wait` for the answer.
+  Script execution spends from the space budget.
 
 ## When an app needs a worker
 
