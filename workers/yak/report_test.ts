@@ -255,10 +255,7 @@ test('a refusal the door meant is not a break', async () => {
     let outside = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book=')
     assertEquals(outside.status, 400)
     assertStringIncludes(await outside.text(), '.book= is written !book')
-    // Through app_set, as its owner closes it: a write past the kernel would
-    // leave the kernel's remembered route (route-memory.ts) open for its
-    // lifetime, and this no would then depend on whether the read above was
-    // remembered.
+    // Through app_set, as its owner closes it.
     await agent.tool('app_set', { ...app, access: 'private' })
     let denied = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book')
     assertEquals(denied.status, 401)
