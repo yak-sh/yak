@@ -65,18 +65,28 @@ let inherited = (row: Bundle, bug: Bundle | undefined, before: Bundle[]) => {
     ),
   )
 }
-// An occurrence after its bug's resolution, which brings the bug back unless
-// the group saw its release before.
-let past = (row: Bundle, bug: Bundle): boolean =>
-  !imported(row) && !!bug.resolved &&
-  str(comp(row, 'error').at) > str(comp(bug, 'resolved').at)
-/** A resolved bug comes back when it happens after its resolution, unless the
- * occurrence names a release the group saw by then: that is old code still
- * running. An occurrence naming no release (a systemd unit's failure, reported
- * from outside the process that ran) has only its time to go by. */
+let windowStart = (row: Bundle): string => str(comp(row, 'error').window_start)
+
+// An interval can cover many releases. The reporter's commit identifies the
+// code that read the interval.
+let eventRelease = (row: Bundle): string => windowStart(row) ? '' : release(row)
+
+let past = (row: Bundle, bug: Bundle): boolean => {
+  if (imported(row) || !bug.resolved) return false
+  let resolved = comp(bug, 'resolved')
+  let start = windowStart(row)
+  return start
+    ? Date.parse(start) >= Date.parse(str(resolved.live ?? resolved.at))
+    : str(comp(row, 'error').at) > str(resolved.at)
+}
+
+/** A measured interval can reopen a bug when it starts at or after the fix
+ * went live. Other occurrences must follow resolution and name a release the
+ * group has not seen by then, if they name one. */
 export let regresses = (row: Bundle, bug: Bundle, before: Bundle[]): boolean =>
   past(row, bug) &&
-  !(release(row) && before.some((old) => release(old) == release(row)))
+  !(eventRelease(row) &&
+    before.some((old) => eventRelease(old) == eventRelease(row)))
 
 /** Where frames place a bug: their top in-app symbol is its culprit, or
  * else the top in-app frame, or the top frame, its spot. */
@@ -159,7 +169,10 @@ export let grouped = (
       entity: { eid },
       $was: {
         bug: { hits: token(old.hits) },
-        resolved: { at: token(comp(bug, 'resolved').at) },
+        resolved: {
+          at: token(comp(bug, 'resolved').at),
+          live: token(comp(bug, 'resolved').live),
+        },
         ...Object.fromEntries(
           Object.keys(marks).map((name) => [
             name,
@@ -203,7 +216,7 @@ export let grouped = (
             via: null,
             error: row.entity.eid,
             message: title(row) || null,
-            commit: e.commit ?? null,
+            commit: windowStart(row) ? null : e.commit ?? null,
           },
         }
         : {},
@@ -223,6 +236,7 @@ let COUNTED = fields(
   'bug.first',
   'bug.last',
   'resolved.at',
+  'resolved.live',
 )
 
 /** The bug an occurrence joins, as grouping reads it. */
@@ -259,7 +273,7 @@ let earlier = (
   if (!bug) return []
   let of = eq('error.bug', bug.entity.eid)
   if (imported(row)) return g.read(and(of, ...MARKS.map((m) => want(m))))
-  if (!past(row, bug) || !release(row)) return []
+  if (!past(row, bug) || !eventRelease(row)) return []
   return sharing(g, bug, row)
 }
 
@@ -270,6 +284,7 @@ let sharing = (g: Desk, bug: Bundle, row: Bundle) => {
   return g.read(and(
     eq('error.bug', bug.entity.eid),
     le('error.at', str(comp(bug, 'resolved').at)),
+    absent('error.window_start'),
     ...e.commit
       ? [eq('error.commit', str(e.commit))]
       : [absent('error.commit'), eq('error.version', Number(e.version))],

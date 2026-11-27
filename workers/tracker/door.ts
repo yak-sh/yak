@@ -333,7 +333,7 @@ async (request: Request): Promise<Response> => {
     let said: Record<string, number> = name == 'taken'
       ? { task: 100 }
       : name == 'resolved'
-      ? { broke: 2000, cause: 2000, since: 64, fix: 64, recur: 2000 }
+      ? { broke: 2000, cause: 2000, since: 64, fix: 64, live: 64, recur: 2000 }
       : name == 'archived'
       ? { reason: 2000 }
       : {}

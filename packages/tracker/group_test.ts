@@ -303,6 +303,43 @@ for (let kind of ['commit', 'version', 'no release']) {
   }
 }
 
+test('a delayed observation spanning a deploy counts without reopening its bug', async () => {
+  let g = fixture()
+  let sample = (at: string, windowStart: string, commit: string) =>
+    capture(Error('High CPU usage'), {
+      sink: () => {},
+      fault: 'usage jump|worker yak|cpuTimeUs',
+      at: `2026-10-02T00:00:${at}Z`,
+      windowStart: `2026-10-02T00:00:${windowStart}Z`,
+      commit,
+    })[0]
+  await put(g, sample('01', '00', a))
+  let [bug] = await bugs(g)
+  let resolved = {
+    at: '2026-10-02T00:00:05Z',
+    live: '2026-10-02T00:00:03Z',
+    cause: 'a change in the runtime',
+    recur: 'yes, if the runtime changes again',
+  }
+  await g.apply([{ entity: bug.entity, resolved, notified: {} }], {
+    trusted: true,
+  })
+  let straddled = sample('06', '02', b)
+  await put(g, straddled)
+  let [still] = await bugs(g)
+  equal(comp(still, 'bug').hits, 2)
+  equal(still.resolved, resolved)
+  ok(still.notified && !still.regressed)
+
+  let after = sample('07', '03.000', a)
+  await put(g, after)
+  let [back] = await bugs(g)
+  equal(comp(back, 'bug').hits, 3)
+  equal(comp(back, 'regressed').error, after.entity.eid)
+  equal(comp(back, 'regressed').commit, undefined)
+  ok(!back.resolved && !back.notified)
+})
+
 test('retention preserves the first per commit and historical hit count', async () => {
   let g = fixture()
   for (let i = 1; i <= 6; i++) {

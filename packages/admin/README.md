@@ -434,6 +434,11 @@ an eid derived from the hour, so a look repeated after a restart lands once. It
 reports through the box's spool, never through the platform tracker's Worker, so
 a jump in that tracker is still heard.
 
+Each report carries the start of its measured hour. When resolving a jump,
+record the fix's deploy timestamp with `yak bug resolve --live`. An hour that
+starts before the deploy still counts in the bug's history. A jump in an hour
+that starts at or after the deploy can reopen it.
+
 A look that fails is tried again five minutes later, for the same hour. A query
 Cloudflare fails on its own side (a 5xx or a 429) is sent again within each look
 (@yaks/cloudflare/api `resent`), and a look it fails through every resend is a

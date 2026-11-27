@@ -320,7 +320,6 @@ export class UsageJump extends Error {
 }
 
 /// report({ subject: 'worker w', metric: METRICS.cpuTimeUs, hour: 0, value: 1.3e9, normal: 126.5e6, running: 3 }).error.message.split(' in the hour')[0] -> 'worker w spent 1,300 CPU seconds'
-/// report({ subject: 'worker w', metric: METRICS.cpuTimeUs, hour: 16 * HOUR, value: 1.3e9, normal: 126.5e6, running: 3 }).context.at -> '1970-01-01T16:00:00.000Z'
 /** A jump as the tracker files it: the error, and the context that groups
  * every hour of one subject's metric on one bug, an hour's report landing
  * once however often it is sent. */
@@ -348,12 +347,8 @@ export let report = (jump: Jump, who?: Who) => {
     ),
     context: {
       fault,
-      // A jump happened in the hour it measures, not at the look that found
-      // it: the tracker brings a resolved bug back only for an occurrence
-      // after its resolution, so an hour that began before a fix went live
-      // (and was resolved) does not reopen it.
-      at,
       eid: derivedEid(`${fault}|${at}`),
+      windowStart: at,
       tags: {
         ...who?.tags,
         metric: metric.name,

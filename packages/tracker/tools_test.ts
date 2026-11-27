@@ -11,6 +11,7 @@ import { validateToolInput } from '@yaks/vocab/tools'
 import { ram } from '@yaks/ram'
 import { answerOf, runner, toolEid, worded } from '@yaks/tools'
 import { valueIn } from '@yaks/tools/value'
+import { comp } from './model.ts'
 import { door } from '../../workers/tracker/door.ts'
 import { options, platform, store, vocab } from '../../workers/tracker/core.ts'
 import { trackerDoc } from './vocab.ts'
@@ -550,6 +551,7 @@ let homeMark = await platformHome.call('bug_resolve', {
   bug: ids[0],
   since: head.slice(0, 7),
   fix: head.slice(0, 9),
+  live: '2026-10-02T00:00:00.000Z',
 })
 test('a config naming yaks.app its source marks the Worker by default', async () => {
   equal(valueIn(homeMark), {
@@ -559,10 +561,10 @@ test('a config naming yaks.app its source marks the Worker by default', async ()
   })
   equal(await platformHome.box.read('.bug'), [])
 })
-test('a resolution names its commits by full sha, read from a short one', async () => {
+test('a resolution records the full commit hashes and when the fix went live', async () => {
   let [row] = await platformHome.worker.get([ids[0]], ['resolved'])
-  let { since, fix } = row.resolved as Record<string, unknown>
-  equal([since, fix], [head, head])
+  let { since, fix, live } = comp(row, 'resolved')
+  equal([since, fix, live], [head, head, '2026-10-02T00:00:00.000Z'])
 })
 test('a short sha that names no one commit is refused, saying why', async () => {
   let said = (fix: string) =>

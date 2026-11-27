@@ -24,6 +24,13 @@
           "description": "When it was caught.",
           "format": "date-time"
         },
+        "window_start": {
+          "$id": "urn:uuid:ed7b8ac4-ce65-465b-8cdd-43a3f4d0ac05",
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "Start of the observation window for a failure measured over an interval."
+        },
         "level": {
           "$id": "urn:uuid:421cd90d-8d82-401a-b6d1-d6b4b7d2bfd8",
           "type": "string",
@@ -392,6 +399,12 @@
           "death": "keep",
           "description": "The commit that fixed it, by its full sha."
         },
+        "live": {
+          "$id": "urn:uuid:270173fb-1115-4d19-865e-e1d88942f8f4",
+          "type": "string",
+          "format": "date-time",
+          "description": "When the fix went live, if known. A measured interval can reopen the bug when it starts at or after this time."
+        },
         "recur": {
           "$id": "urn:uuid:6b33f900-0a63-4fab-901c-bf7887fae79f",
           "type": "string",
@@ -544,6 +557,11 @@
         "fix": {
           "type": "string",
           "description": "The sha of the commit that fixed it, live; a short one is read as Git reads it. A fix that is not a commit (a key put in the vault, a row repaired) is said in cause."
+        },
+        "live": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the fix went live, if known. Use the deploy timestamp for a bug reported from an observation window."
         },
         "recur": {
           "type": "string",

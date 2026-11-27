@@ -13,6 +13,8 @@ export type Context = {
   actor?: Actor
   eid?: string
   at?: string
+  /** start of the observation window when a failure was measured over time */
+  windowStart?: string
   level?: Level
   /** the bug this files under; default the error's own `fault`, if it names
    * one, else one derived from its kind, message and top frame */
@@ -330,6 +332,7 @@ export let capture = (error: unknown, context: Context): Bundle[] => {
     ...context.actor ? { $actor: context.actor } : {},
     error: {
       at: context.at ?? new Date().toISOString(),
+      ...context.windowStart ? { window_start: context.windowStart } : {},
       level: context.level ?? 'error',
       ...error instanceof Error
         ? {}

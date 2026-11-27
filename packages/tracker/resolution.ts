@@ -24,11 +24,13 @@ export type Explanation = {
   since?: string
   /** the full sha of the commit that fixed it */
   fix?: string
+  /** when the fix went live */
+  live?: string
   /** whether it can happen again, and why */
   recur: string
 }
 
-let KEYS = ['broke', 'cause', 'since', 'fix', 'recur'] as const
+let KEYS = ['broke', 'cause', 'since', 'fix', 'live', 'recur'] as const
 let SHA = /^[0-9a-f]{40}([0-9a-f]{24})?$/
 
 /// explanation({ bug: 'b', cause: 'a race', recur: 'no', fix: undefined }) -> { cause: 'a race', recur: 'no' }
@@ -108,6 +110,7 @@ export let explained = (
     ['Why', str(r.cause)],
     ['Introduced in', r.since ? commit(str(r.since)) : ''],
     ['Fixed in', r.fix ? commit(str(r.fix)) : 'no commit named'],
+    ['Went live', str(r.live)],
     ['Can it come back', str(r.recur)],
   ]
   return lines.filter(([, line]) => line)

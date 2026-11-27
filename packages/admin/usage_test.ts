@@ -110,14 +110,15 @@ test("an hour's report lands once however often it is sent", () => {
 })
 
 test('a look reports every jump it finds', async () => {
-  let sent: string[] = []
+  let sent: [string, string | undefined][] = []
   let jumped = await look(
     () => Promise.resolve(answer(run(3.3e6, 423.8e6))),
-    (error) => void sent.push(String(error)),
+    (error, context) => void sent.push([String(error), context?.windowStart]),
     at,
   )
   equal([jumped.length, sent.length], [1, 1])
-  match(sent[0], /^UsageJump: Durable Object o1/)
+  match(sent[0][0], /^UsageJump: Durable Object o1/)
+  equal(sent[0][1], last)
 })
 
 test('a look with no token to read analytics with passes its hour quietly', async () => {

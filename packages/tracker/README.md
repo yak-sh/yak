@@ -47,14 +47,15 @@ normalize('T-42 failed at /srv/app.ts:10:3 after 300 tries')
 
 A bug is resolved only by an agent that fixed its cause and saw the fix live,
 and every resolved bug says how. The resolver writes the explanation on its
-mark, `resolved{at, by, via, broke, cause, since, fix, recur}`: what broke and
-whom it reached, in plain words (`broke`); why (`cause`); the commits that
+mark, `resolved{at, by, via, broke, cause, since, fix, live, recur}`: what broke
+and whom it reached, in plain words (`broke`); why (`cause`); the commits that
 introduced it (`since`) and fixed it (`fix`), each by its full sha (the tool
 reads a short one as Git does); and whether it can come back, and why (`recur`).
 A fix that is not a commit, such as a key put in the vault, is said in `cause`.
-The `./graph` facet refuses a bug's resolution without `cause` and `recur`, or
-with a commit named by anything but a full sha, at every door. The tool asks for
-`broke` too:
+When the fix's deploy time is known, pass it as `--live <timestamp>` so the
+tracker can distinguish samples that include time before the fix. The `./graph`
+facet refuses a bug's resolution without `cause` and `recur`, or with a commit
+named by anything but a full sha, at every door. The tool asks for `broke` too:
 
 ```sh
 yak bug resolve <bug> --broke '…' --cause '…' --since <sha> --fix <sha> --recur '…'
@@ -182,6 +183,12 @@ group by then: that is old code still running. One naming no release, such as a
 systemd unit's failure reported from outside the unit, regresses on its time
 alone. Earlier occurrences and occurrences at the resolution timestamp still
 count, but retain `resolved` and `notified` without adding `regressed`.
+
+A report measured over an interval carries `error{at, window_start, …}`. The
+interval can reopen its bug if it starts at or after the fix went live
+(`resolved.live`, with `resolved.at` as the fallback). The reporting process's
+commit is kept on the occurrence for diagnosis. A sample spanning the deploy
+still counts and keeps the resolution in place.
 
 An occurrence whose `error.level` is `warning`, a failure near its line such as
 a press or an open slower than its budget but within twice it, joins no bug: the
