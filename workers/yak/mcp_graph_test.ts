@@ -436,6 +436,73 @@ test('graph_show and graph_apply take the space and app other tools take', async
   }
 })
 
+// What callers write to graph_show: ids joined by commas, an app named among
+// the ids as a query names it, and an id the platform directory holds, which
+// is said to be there with the call that reads it (T-4159).
+test('graph_show reads ids joined by commas, in=<app> and the directory', async () => {
+  let k = await kernel()
+  try {
+    let person = await signIn(k)
+    let agent = connector(k, person.cookie)
+    let made = await agent.tool('app_new', { slug: 'notes', title: 'Notes' })
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/.exec(made)![1]
+    let note = async (title: string) =>
+      minted(
+        await agent.tool('graph_apply', {
+          app: 'notes',
+          bundles: [{ entity: { eid: '$note' }, doc: { title } }],
+        }),
+        '$note',
+      )
+    let [a, b] = [await note('A'), await note('B')]
+    let titles = async (args: Record<string, unknown>) =>
+      (JSON.parse(await agent.tool('graph_show', args)) as Bundle[])
+        .map((r) =>
+          (r.doc as { title?: string } | undefined)?.title ?? r.entity.eid
+        )
+        .sort()
+    for (
+      let args of [
+        { id: `${a},${short(b)}` },
+        { ids: [a, b, `in=${space}/notes`] },
+        { ids: `${a},${b},.in=notes` },
+      ]
+    ) assertEquals(await titles(args), ['A', 'B'], JSON.stringify(args))
+
+    let admin = connector(k, k.owner.cookie)
+    let [dir] = JSON.parse(
+      await admin.tool('graph_query', {
+        app: 'yak/platform',
+        q: '.space .limit=1',
+      }),
+    ) as Bundle[]
+    let eid = dir.entity.eid
+    for (
+      let args of [
+        { ids: [eid, 'in=yak/platform'] },
+        { id: eid, app: 'yak/platform' },
+      ]
+    ) {
+      let [row] = JSON.parse(await admin.tool('graph_show', args)) as Bundle[]
+      assertEquals(row.entity.eid, eid, JSON.stringify(args))
+    }
+    await assertRejects(
+      () => admin.tool('graph_show', { id: short(eid) }),
+      Error,
+      `${short(eid)} is in yak/platform, not the apps graph_show read: it ` +
+        'reads it with app yak/platform, or in=yak/platform among the ids',
+    )
+    // Someone who cannot read the directory hears the id named nothing.
+    await assertRejects(
+      () => agent.tool('graph_show', { id: short(eid) }),
+      Error,
+      `${short(eid)} names nothing`,
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 test('graph_show accepts a bare hex handle when it names one entity', async () => {
   let k = await kernel()
   try {

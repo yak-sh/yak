@@ -1,5 +1,16 @@
-import { argsOf, type Bundle, type Tool } from '@yaks/graph'
+import {
+  argsOf,
+  type Bundle,
+  type Comp,
+  type Graph,
+  type Tool,
+} from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
+import { answers, asked } from '@yaks/graph/tools'
+import { conjoin, whole } from '@yaks/query/core'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { core, type CoreOpts, inputSchemaOf } from '@yaks/mcp'
+import { refusalOf } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
 import { operatorDoor } from './build-door.ts'
 import { writeSpace } from './reach.ts'
@@ -13,7 +24,8 @@ import { apart, type Ctx, inSpace, SPACE, str } from './tool.ts'
 // The reach is every app the caller can read, so `app` (with `space` where two
 // spaces have an app by that name) narrows: a query to that app's rows (`.in=`)
 // and a write's bundles to that app (`$app`). An id names one entity in every
-// app, so graph_show reads it whole with or without them. `self` reads the
+// app, so graph_show reads it whole without them, and with them reads it in
+// that app alone, as `in=<app>` among its ids does. `self` reads the
 // caller's Operator attachment metadata in the space instead of the apps, and
 // writes to their own conversations there what is theirs to write
 // (operator-access.ts `mayWrite`).
@@ -40,7 +52,9 @@ let APP = {
       'omitted, every app you can reach',
   ),
   graph_show: str(
-    'not needed: an id names one entity in every app you can reach',
+    'the app slug, as in <space>.yaks.app/<app>/, to read the ids in that ' +
+      'app alone (yak/platform for the platform directory); omitted, every ' +
+      'app you can reach',
   ),
   graph_apply: str(
     'the app slug, as in <space>.yaks.app/<app>/, that bundles write to, ' +
@@ -60,14 +74,70 @@ let named = (space: unknown, app: unknown) =>
     ? `${space}/${app}`
     : app
 
-/** A query's app as an `.in=` filter, before the connector picks its reach. */
+/** A read's app as an `.in=` clause, before the connector picks its reach:
+ * graph_query's filter, and an `in=` among graph_show's ids. */
 export let inApp = (name: string, args: Record<string, unknown>) => {
-  if (name != 'graph_query' || args.self) return args
+  if (args.self || (name != 'graph_query' && name != 'graph_show')) return args
   let { space, app, ...rest } = args
   let at = named(space, app)
   if (!at) return args
+  if (name == 'graph_show') {
+    return { ...rest, ids: [[rest.ids ?? []].flat(), `in=${at}`].flat() }
+  }
   let filters = Array.isArray(rest.filters) ? rest.filters : []
   return { ...rest, filters: [`.in=${at}`, ...filters] }
+}
+
+/**
+ * graph_show's answer, where an id the reach does not hold is the platform
+ * directory's: said as that store's, with the call that reads it, rather than
+ * as an id that names nothing. Only a caller who may read the directory is
+ * told; for anyone else the read refuses and the answer stands.
+ */
+let located = async (
+  graph: Graph,
+  args: Record<string, unknown>,
+  shown: Bundle[] | Promise<Bundle[]>,
+): Promise<Bundle[]> => {
+  let { ids, clauses } = asked(args)
+  let rows: Bundle[] = [], refused: Refused | undefined
+  try {
+    rows = await shown
+  } catch (e) {
+    if (!(e instanceof Refused) || clauses.length) throw e
+    refused = e
+  }
+  let missing = ids.filter((id) => !rows.some(answers(id)))
+  if (clauses.length || !missing.length) return rows
+  let there: Bundle[]
+  try {
+    there = await graph.read(whole(conjoin(
+      `.entity.eid=${missing.join(',')}`,
+      `.in=${PLATFORM_STORE}`,
+    )))
+  } catch (e) {
+    if (refusalOf(e)) return stood(refused, rows)
+    throw e
+  }
+  let held = missing.filter((id) => there.some(answers(id)))
+  if (!held.length) return stood(refused, rows)
+  let one = held.length == 1
+  let note = `${held.join(', ')} ${one ? 'is' : 'are'} in ` +
+    `${PLATFORM_STORE}, not the apps graph_show read: it reads ` +
+    `${one ? 'it' : 'them'} with app ${PLATFORM_STORE}, or ` +
+    `in=${PLATFORM_STORE} among the ids`
+  if (refused) throw new Refused(`${note}; ${refused.message}`)
+  return rows.map((b) =>
+    b.entity.eid == '$said'
+      ? { ...b, content: { body: `${note}; ${(b.content as Comp).body}` } }
+      : b
+  )
+}
+
+// The answer as it stood: the refusal, or the rows.
+let stood = (refused: Refused | undefined, rows: Bundle[]) => {
+  if (refused) throw refused
+  return rows
 }
 
 // Attach the destination to bundles after graph_apply has built the patch.
@@ -96,7 +166,7 @@ let targeted = async (
 // graph_show's ids as the one clause that door narrows by.
 let selfQuery = (name: Scoped, args: Record<string, unknown>) => {
   if (name == 'graph_query') return args
-  let ids = [args.ids, args.id].flat().filter((x) => typeof x == 'string')
+  let { ids } = asked(args)
   let { ids: _, id: __, ...rest } = args
   return { ...rest, q: `.entity.eid=${ids.join(',')}&*` }
 }
@@ -166,6 +236,7 @@ export let attachmentCore = (
             { ...call, call: { ...call.call as object, args } },
             graph,
           )
+          if (name == 'graph_show') return located(graph, args, bundles)
           return writes ? targeted(ctx, said, await bundles) : bundles
         }
         let { space: _, app: __, self: ___, ...args } = said

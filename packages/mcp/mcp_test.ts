@@ -358,6 +358,23 @@ test('graph_show answers the entities asked for and nothing else', async () => {
   await client.close()
 })
 
+// The runner hands graph_show its ids as said, so one that names nothing is
+// reported beside the rest rather than refusing the call (T-4159).
+test('graph_show shows the ids that name something and says which do not', async () => {
+  let graph = shopGraph()
+  await graph.apply([spring])
+  let client = await connect({ graph })
+  let out = bundles(
+    result(await called(client, 'graph_show', { ids: ['b1', 'nowhere'] })),
+  )
+  assertEquals(out.map((b) => b.entity.eid), ['b1', '$said'])
+  assertStringIncludes(
+    String(comp(out[1], 'content').body),
+    'nowhere names nothing',
+  )
+  await client.close()
+})
+
 test('a host that draws prose sends no whole uuid in a body', async () => {
   let graph = shopGraph()
   let eid = '0e513227-de00-4000-8000-000000000001'

@@ -29,7 +29,7 @@
 // declaration means validating it, which means a JSON Schema validator, which
 // has no business in a browser tab that only wants the graph. Import `@yaks/graph/tools` to get it.
 
-import { unnamed } from '@yaks/id'
+import { BARE, parse as human, SHORT, unnamed } from '@yaks/id'
 import {
   adopt,
   and,
@@ -56,7 +56,8 @@ import { named } from './projection.ts'
 import { type Bundle, comps, TOMBSTONE } from './bundle.ts'
 import type { Graph } from './graph.ts'
 import type { Tool } from './plugin.ts'
-import { argsOf, type NamedTool, toolName } from './tool.ts'
+import { argsOf, type NamedTool, referenced, toolName } from './tool.ts'
+import { minted } from './mint.ts'
 import { declared, graphDoc } from './vocab.ts'
 import { formed } from './admit.ts'
 import { deriving } from './identity.ts'
@@ -194,6 +195,139 @@ let held = (b: Bundle): boolean => b[TOMBSTONE] != null || comps(b).length > 0
 
 let strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x) => typeof x == 'string') : []
+
+// An id as a person writes one: a human id (`T-12`), a `#…` handle, an eid
+// or the hex of one. None holds a comma, which a name may.
+let idLike = (s: string) =>
+  !!human(s) || SHORT.test(s) || BARE.test(s) || minted(s)
+
+// A query clause among the ids, `in=recipes` or `.in=yak/platform`, as the
+// page's grammar and the store's write it: no id holds `=`.
+let clause = (s: string) => s.includes('=')
+
+/**
+ * What graph_show's `id` and `ids` said: the ids asked for, each once, and the
+ * query clauses among them that narrow where they are read. Either field
+ * takes one id or several, as a list or joined by commas, because callers
+ * write both; a string is split only where every part is an id or a clause,
+ * so a name that holds a comma stays one name.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { asked } from '@yaks/graph/tools'
+ *
+ * assertEquals(asked({ id: 'M-1,M-2', ids: ['M-2', 'in=yak/platform'] }), {
+ *   ids: ['M-2', 'M-1'],
+ *   clauses: ['.in=yak/platform'],
+ * })
+ * assertEquals(asked({ ids: 'Salt, pepper' }).ids, ['Salt, pepper'])
+ * ```
+ */
+export let asked = (
+  args: Record<string, unknown>,
+): { ids: string[]; clauses: string[] } => {
+  let said = [args.ids, args.id].flat()
+    .filter((x): x is string => typeof x == 'string')
+    .flatMap((s) => {
+      let parts = s.split(',').map((p) => p.trim()).filter(Boolean)
+      return parts.length > 1 && parts.every((p) => idLike(p) || clause(p))
+        ? parts
+        : [s.trim()]
+    })
+    .filter(Boolean)
+  return {
+    ids: [...new Set(said.filter((p) => !clause(p)))],
+    clauses: [
+      ...new Set(
+        said.filter(clause).map((p) => p.startsWith('.') ? p : `.${p}`),
+      ),
+    ],
+  }
+}
+
+/**
+ * Whether row `b` is the entity `id` names, however it was written: its eid,
+ * its human id, a handle or bare hex starting its eid, or its title.
+ *
+ * ```ts
+ * import { answers } from '@yaks/graph/tools'
+ *
+ * let b = { entity: { eid: 'd8aaf2fd-0000-4000-8000-000000000001', prefix: 'M', num: 4 } }
+ * answers('m-4')(b) // true
+ * answers('#d8aaf2fd00')(b) // true
+ * answers('M-5')(b) // false
+ * ```
+ */
+export let answers = (id: string) => (b: Bundle): boolean => {
+  let { eid, prefix, num } = b.entity as {
+    eid: string
+    prefix?: string | null
+    num?: number | null
+  }
+  if (eid.toLowerCase() == id.toLowerCase()) return true
+  let p = human(id)
+  if (p) return num == p.num && (!p.prefix || prefix == p.prefix)
+  let hex = SHORT.test(id) ? id.slice(1) : BARE.test(id) ? id : ''
+  if (hex) {
+    return eid.replaceAll('-', '').toLowerCase().startsWith(hex.toLowerCase())
+  }
+  return (b.doc as { title?: unknown } | undefined)?.title === id
+}
+
+type Shown = { rows: Bundle[]; missing: string[] }
+
+// The eids `said` names, or the refusal of the first that names nothing.
+let naming = async (graph: Graph, said: string[]) => {
+  try {
+    return await referenced(graph, said)
+  } catch (error) {
+    if (error instanceof Refused) return error
+    throw error
+  }
+}
+
+// Each id as the eid it names: the batch at once, and one at a time only when
+// one of them refuses, so the rest are still read. An id that names nothing
+// keeps its refusal's words.
+let byId = async (
+  graph: Graph,
+  ids: string[],
+  args: Record<string, unknown>,
+): Promise<Shown> => {
+  let all = await naming(graph, ids)
+  let eids = !(all instanceof Refused) ? all : await Promise.all(
+    ids.map(async (id) => {
+      let one = await naming(graph, [id])
+      return one instanceof Refused ? one : one[0]
+    }),
+  )
+  let wanted = [...new Set(eids.filter((e) => typeof e == 'string'))]
+  let rows = (await graph.get(wanted, undefined, on(args))).filter(held)
+  let found = new Set(rows.map((b) => b.entity.eid))
+  let missing = ids.flatMap((id, i) => {
+    let e = eids[i]
+    if (typeof e != 'string') return [e.message]
+    return found.has(e) ? [] : [unnamed(id, graph.vocab)]
+  })
+  return { rows, missing }
+}
+
+// The ids read where `clauses` narrow the read (`.in=yak/platform`), as the
+// graph's own query reads them: it is the graph that knows what a clause
+// names.
+let within = async (
+  graph: Graph,
+  ids: string[],
+  clauses: string[],
+  args: Record<string, unknown>,
+): Promise<Shown> => {
+  let q = conjoin(`.entity.eid=${ids.join(',')}`, ...clauses)
+  let rows = (await graph.read(whole(q), on(args))).filter(held)
+  let where = clauses.join('&')
+  let missing = ids.filter((id) => !rows.some(answers(id)))
+    .map((id) => `${id} names nothing in ${where}`)
+  return { rows, missing }
+}
 
 // The branch a call reads on, where it names one.
 let on = (args: Record<string, unknown>) =>
@@ -378,24 +512,24 @@ export let runs = (seams: Seams = {}): Runs => {
     graph_show: async (call, graph) => {
       let args = argsOf(call)
       // The entities asked for, each one whole and each one once, and nothing
-      // else: what points at them is a query of its own (`.refs=<id>`). The
-      // ids arrive as the eids they name (@yaks/tools resolves every
-      // declared reference). An id that names nothing is said after the rest
-      // rather than refusing them, so one miscopied id costs no second call;
-      // only a call naming nothing at all is refused.
-      let ids = [...strings(args.ids), ...strings([args.id])]
+      // else: what points at them is a query of its own (`.refs=<id>`). An id
+      // that names nothing is said after the rest rather than refusing them,
+      // so one miscopied id costs no second call; only a call naming nothing
+      // at all is refused. The ids are resolved here, one by one where one
+      // refuses, rather than by the runner, which would refuse the call for
+      // its first unknown id.
+      let { ids, clauses } = asked(args)
       if (!ids.length) throw new Refused('graph_show needs at least one id')
-      let asked = [...new Set(ids)]
-      let rows = (await graph.get(asked, undefined, on(args))).filter(held)
-      let found = new Set(rows.map((b) => b.entity.eid))
-      let nothing = asked.filter((id) => !found.has(id))
-      if (!nothing.length) return rows
-      let missing = nothing.map((id) => unnamed(id, graph.vocab)).join('; ')
+      let { rows, missing } = clauses.length
+        ? await within(graph, ids, clauses, args)
+        : await byId(graph, ids, args)
+      if (!missing.length) return rows
+      let said = missing.join('; ')
       // A call naming nothing at all is told where an id that exists is
       // found: by its words, or by what it holds.
       if (!rows.length) {
         throw new Refused(
-          `${missing}; ${
+          `${said}; ${
             find ? 'search finds an entity by its words, and ' : ''
           }graph_query by what it holds`,
         )
@@ -403,7 +537,7 @@ export let runs = (seams: Seams = {}): Runs => {
       return [...rows, {
         entity: { eid: '$said' },
         content: {
-          body: `${missing}; ${
+          body: `${said}; ${
             rows.length == 1 ? 'the other is' : `the other ${rows.length} are`
           } shown`,
         },

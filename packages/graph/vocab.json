@@ -250,20 +250,21 @@
         "doing": "Looking up the details…",
         "done": "Looked up the details"
       },
-      "description": "Read whole entities by eid, human id (T-12), a short handle (#3b5bc70420 or unambiguous bare hex 3b5bc70420), or name, once each: id for one, ids for several. $was.doc.body holds its SHA-256 for guarded writes. Missing ids are reported; all missing refuses. Backlinks: graph_query .refs=<id>; text search: search.",
+      "description": "Read whole entities by eid, human id (T-12), a short handle (#3b5bc70420 or unambiguous bare hex 3b5bc70420), or name, once each. id and ids each take one id or several, as a list or joined by commas (M-1,M-2). A query clause among the ids, such as in=<app> where graph_query takes .in=, narrows where they are read. $was.doc.body holds its SHA-256 for guarded writes. Missing ids are reported beside the rest; all missing refuses. Backlinks: graph_query .refs=<id>; text search: search.",
       "input": {
         "ids": {
-          "type": "array",
+          "type": ["array", "string"],
           "items": {
             "type": "string"
           },
-          "ref": "entity",
-          "description": "Entity ids or names."
+          "description": "Entity ids or names, as a list or joined by commas."
         },
         "id": {
-          "type": "string",
-          "ref": "entity",
-          "description": "One entity id or name."
+          "type": ["string", "array"],
+          "items": {
+            "type": "string"
+          },
+          "description": "One entity id or name, or several joined by commas."
         },
         "branch": {
           "type": "integer",

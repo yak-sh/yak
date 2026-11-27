@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { BEST, loadTools, textSearch, tier } from './tools.ts'
+import { asked as idsOf, BEST, loadTools, textSearch, tier } from './tools.ts'
 import { graph } from './graph.ts'
 import { ram } from '@yaks/ram'
 import { declared } from './vocab.ts'
@@ -273,6 +273,36 @@ let shown = (...ids: string[]) =>
   show.run({ entity: { eid: 'c' }, call: { args: { ids } } }, books) as Promise<
     Bundle[]
   >
+
+// Callers write one id or several in either field, as a list or joined by
+// commas; each is read once.
+test('graph_show takes one id or several in id and ids alike', async () => {
+  let [a, b] = [
+    '0e513227-de00-4000-8000-00000000000a',
+    '1f513227-de00-4000-8000-00000000000b',
+  ]
+  await books.apply([
+    { entity: { eid: a }, book: { title: 'Ada' } },
+    { entity: { eid: b }, book: { title: 'Bea' } },
+  ])
+  let eids = async (args: Record<string, unknown>) =>
+    ((await show.run(
+      { entity: { eid: 'c' }, call: { args } },
+      books,
+    )) as Bundle[])
+      .map((r) => r.entity.eid)
+  for (
+    let args of [
+      { id: `${a},${b}` },
+      { id: ` ${a} , ${b} ` },
+      { ids: `${a},${b}` },
+      { ids: [`${a},${b}`, a] },
+      { id: [a], ids: b },
+    ]
+  ) assertEquals((await eids(args)).sort(), [a, b], JSON.stringify(args))
+  // A name that holds a comma stays one name.
+  assertEquals(idsOf({ ids: 'Salt, pepper' }).ids, ['Salt, pepper'])
+})
 
 test('graph_show answers the ids that name something and says which do not', async () => {
   assertEquals((await shown('b1', 'b2')).map((b) => b.entity.eid), ['b1', 'b2'])
