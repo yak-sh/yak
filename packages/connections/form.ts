@@ -100,8 +100,9 @@ export let givenOf = (
  * it: what it is for, how to get the key (`howTo`, drawn by the host), the
  * box, anything the host adds under it (`children`), and what came of
  * saving. A connection whose last key the service refused (`broken`) asks
- * again. `save` keeps what was given and resolves once the write is
- * answered; what the page says after is its own. */
+ * again; once connected, only what came of saving stays, and no box. `save`
+ * keeps what was given and resolves once the write is answered; what the page
+ * says after is its own. */
 export let KeyForm = (
   { id, title, fields, status, howTo, save, children }: {
     id: string
@@ -116,7 +117,8 @@ export let KeyForm = (
 ): JSX.Element | null => {
   let [said, say] = useState('')
   let [busy, setBusy] = useState(false)
-  if (status == 'connected' && !said) return null
+  let connected = status == 'connected'
+  if (connected && !said) return null
   let submit = async (ev: Event) => {
     ev.preventDefault()
     let form = ev.currentTarget as HTMLFormElement
@@ -144,13 +146,17 @@ export let KeyForm = (
       Section.Title,
       {},
       title,
-      h(Section.Note, {}, status == 'broken' ? 'refused' : 'needed'),
+      h(
+        Section.Note,
+        {},
+        connected ? 'connected' : status == 'broken' ? 'refused' : 'needed',
+      ),
     ),
     status == 'broken'
       ? h(Section.Sub, {}, 'The service refused the last key. Paste a new one.')
       : null,
-    howTo,
-    h(
+    connected ? null : howTo,
+    connected ? null : h(
       Form,
       { onSubmit: submit },
       keyBox(

@@ -728,7 +728,6 @@ export let Show = (
       <Entity eid={e.eid} view='Mail' />
       <Decision e={e} />
       <Keys e={e} />
-      <Keys e={e} />
       <Entity eid={e.eid} view='Full.Body' />
       {stack.filter((v) => talkback || v != 'Comments').map((v) => (
         <Entity key={v} eid={e.eid} view={v} />
