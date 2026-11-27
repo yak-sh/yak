@@ -55,7 +55,8 @@ return { checked }
   calls, including app file operations. The answer includes the return value and
   receipts for the calls the script started. If the connector returns a
   `result_handle` after 40 seconds, pass it to `result_wait` for the answer.
-  Script execution spends from the space budget.
+  Script execution spends from the space budget, and a space runs four scripts
+  at once.
 
 ## App Tests
 

@@ -16,7 +16,7 @@ import { plans } from '@yaks/platform/standing'
 import { expired, reserved, settled, TAB, tabbed } from './model-spend.ts'
 import { accounted } from './meter.ts'
 import { type Tally, tallying } from './lib/hops.ts'
-import { reserveScript, settleScript } from './script-spend.ts'
+import { reserveScript, RUNS, settleScript } from './script-spend.ts'
 
 let p = platform('model spending')
 let dir = directoryOf(p.env.STORE)
@@ -72,6 +72,17 @@ test('a script reserves, settles once from CPU telemetry, and shares the space b
   await assertRejects(() =>
     reserveScript(p.env, { ...bill, space: full.space, call: mint() })
   )
+})
+
+test('a space runs four scripts at once, and a fifth waits for one to settle', async () => {
+  let { space } = await fixture()
+  let bill = () => ({ space, person: mint(), call: mint() })
+  let bills = Array.from({ length: RUNS }, bill)
+  for (let b of bills) await reserveScript(p.env, b)
+  let busy = await assertRejects(() => reserveScript(p.env, bill()))
+  assertEquals((busy as { code?: string }).code, 'limit')
+  await settleScript(p.env, bills[0].call, [{ cpuTime: 1 }])
+  await reserveScript(p.env, bill())
 })
 
 test('the pilot last answered call fits the remaining space budget', async () => {
