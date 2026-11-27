@@ -51,12 +51,10 @@ let page = (
     method: 'POST',
     headers,
   })
-let read = () => Promise.resolve(9)
 let recording = () => {
   let reports: Parameters<Parameters<typeof mistaken>[3]['note']>[0][] = []
   return {
     reports,
-    version: read,
     note: (report: typeof reports[number]) =>
       Promise.resolve(void reports.push(report)),
   }
@@ -66,7 +64,6 @@ let limited = page()
 let wall = page('wall')
 let outside = page('guests', {})
 let foreign = page('guests', {})
-let sameOrigin = page('guests', { 'sec-fetch-site': 'same-origin' })
 
 test("a write the app's own vocabulary refuses is a break", async () => {
   let reporter = recording()
@@ -131,13 +128,22 @@ test('an outside caller writes no page break, even for a malformed query', async
   equal(reporter.reports, [])
 })
 
-test('a same-origin page without a release header reads the serving release', async () => {
+// A query typed into the page's console, or an agent's script a browser runs
+// in the page, is a plain fetch from the page's origin: it is not the page's
+// code, which reaches its doors through client.js and says its release.
+test("a plain fetch from the page's origin writes no page break", async () => {
   let reporter = recording()
-  await mistaken(
-    sameOrigin,
-    new Refused('unknown prop'),
-    'query',
-    reporter,
-  )
-  equal(reporter.reports[0].version, 9)
+  let plain: Record<string, string>[] = [
+    { 'sec-fetch-site': 'same-origin' },
+    { 'sec-fetch-site': 'same-origin', 'x-yak-version': 'abc' },
+  ]
+  for (let headers of plain) {
+    await mistaken(
+      page('guests', headers),
+      new Refused('unknown prop'),
+      'query',
+      reporter,
+    )
+  }
+  equal(reporter.reports, [])
 })

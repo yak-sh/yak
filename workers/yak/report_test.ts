@@ -245,7 +245,7 @@ test('a refusal the door meant is not a break', async () => {
     // A page can catch and show a query error. Its 400 is an app bug, even
     // though an access denial at the same door is an expected refusal.
     let query = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book', {
-      headers: { 'sec-fetch-site': 'same-origin' },
+      headers: { 'x-yak-version': '1' },
     })
     assertEquals(query.status, 400)
     assertStringIncludes(await query.text(), 'unknown prop: .book')
@@ -321,18 +321,11 @@ test('a break names the version the app is serving', async () => {
         url: `https://${jeff61}.yaks.app/recipes/`,
       }),
     })).body?.cancel()
-    await (await k.at(`${jeff61}.yaks.app`, '/recipes/api/query?.book', {
-      headers: { 'sec-fetch-site': 'same-origin' },
-    })).body?.cancel()
 
     let told = await agent.tool('app_errors', app)
     assertMatch(
       told,
       /recipes v9: page \/recipes\/ — boom is not a function/,
-    )
-    assertStringIncludes(
-      told,
-      'recipes v9: GET /recipes/api/query?.book — unknown prop: .book',
     )
   } finally {
     await k.stop()

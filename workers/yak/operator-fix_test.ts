@@ -70,7 +70,7 @@ test('a break starts one Operator run that fixes the app', async () => {
         method: 'POST',
         headers: {
           cookie,
-          'sec-fetch-site': 'same-origin',
+          'x-yak-version': '1',
           'content-type': 'application/json',
         },
         body: JSON.stringify([{
@@ -122,7 +122,7 @@ test('a break starts one Operator run that fixes the app', async () => {
     // shows it, once.
     away = true
     let missing = await k.at(`${slug}.yaks.app`, '/msp/api/query?.nothing', {
-      headers: { cookie, 'sec-fetch-site': 'same-origin' },
+      headers: { cookie, 'x-yak-version': '1' },
     })
     assertEquals(missing.status, 400)
     await missing.body?.cancel()
@@ -159,7 +159,7 @@ test('a break starts one Operator run that fixes the app', async () => {
       meter: { month: new Date().toISOString().slice(0, 7), models: 1000 },
     }])
     let broke = await k.at(`${slug}.yaks.app`, '/msp/api/query?.spent', {
-      headers: { cookie, 'sec-fetch-site': 'same-origin' },
+      headers: { cookie, 'x-yak-version': '1' },
     })
     await broke.body?.cancel()
     let spent = await answered('unknown prop: .spent')
@@ -203,7 +203,7 @@ test("the Operator's draft names its session, not the owner's hand", async () =>
     })
     await agent.tool('app_deploy', app)
     let broke = await k.at(`${slug}.yaks.app`, '/msp/api/query?.nothing', {
-      headers: { cookie, 'sec-fetch-site': 'same-origin' },
+      headers: { cookie, 'x-yak-version': '1' },
     })
     await broke.body?.cancel()
     let drafts = await until(async () => {

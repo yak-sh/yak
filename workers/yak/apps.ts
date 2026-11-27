@@ -455,7 +455,7 @@ async (
 // app, filed here at its door because the page may catch the refusal and the
 // browser reporter deliberately files no 4xx (unseen.ts `refusal`). The page
 // still hears the refusal as it always has. It names the release the page
-// ran, which client.js sends, else the one serving.
+// ran, which client.js sends (mistake.ts).
 let mistake = async (
   req: Request,
   env: Env,
@@ -466,7 +466,6 @@ let mistake = async (
 ) => {
   try {
     await mistaken(req, e, entrypoint, {
-      version: () => serving(env, space, app),
       note: (report) =>
         noted(report, { env, space, app, request: req, entrypoint }),
     })

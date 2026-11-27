@@ -89,10 +89,12 @@ store cannot read, and a write the app's own `vocab.json` does not allow (a
 component or property it does not declare, a string where it declares a number,
 a server-owned stamp written back). The page still receives those as `refused`
 at 400, and each is also filed as an error in `app_errors`, once for every place
-and message. Only the page's own requests are filed: the same refusal of a
-request from anywhere else (curl, an agent's own fetch, another site) is for
-that caller to read. Otherwise the rule is the status code: a 4xx is a
-deliberate refusal, and a 5xx or a thrown exception is an error.
+and message. Only the page's own requests are filed, which `client.js` marks
+with the release the page runs: the same refusal of a request from anywhere else
+(curl, an agent's own fetch, another site, a plain `fetch` typed into the page's
+console or run in it by a script) is for that caller to read. Otherwise the rule
+is the status code: a 4xx is a deliberate refusal, and a 5xx or a thrown
+exception is an error.
 
 ## Showing a refusal on the page
 
