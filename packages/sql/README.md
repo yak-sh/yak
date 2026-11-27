@@ -869,15 +869,17 @@ A child filter whose path turns back again
 (`.members_person.member.space.members_space.member.person=P`, the people seated
 beside P) is read as the owners each child set names, innermost first, from the
 child's own reference column. `.refs=<eid>` finds backlinks across reference
-properties, grouping columns by table and cutting compound selects to fit the
-engine limit. Each backlink predicate binds its target once, regardless of the
-number of reference columns. A window of backlinks in the default order
-(`.refs=<eid>&.limit=200`) costs about its page: when the entity has more than
-10,000 references the statement walks the newest entities in order and keeps the
-referrers among them, and otherwise it looks up each referrer and sorts them.
-[Walks](../query/README.md#walks-and-qualifiers) compile reference chains to a
-recursive common table expression. The exported `walk` accepts a one-step query
-projecting `from` and `to` integer ids; edge packages supply their own step.
+properties, one seek of each reference column's index, cutting compound selects
+to fit the engine limit. Each backlink predicate binds its target once,
+regardless of the number of reference columns, and reads about the rows that
+point at it, however common another value is in the same column. A window of
+backlinks in the default order (`.refs=<eid>&.limit=200`) costs about its page:
+when the entity has more than 10,000 references the statement walks the newest
+entities in order and keeps the referrers among them, and otherwise it looks up
+each referrer and sorts them. [Walks](../query/README.md#walks-and-qualifiers)
+compile reference chains to a recursive common table expression. The exported
+`walk` accepts a one-step query projecting `from` and `to` integer ids; edge
+packages supply their own step.
 
 ```ts
 import { compile } from '@yaks/sql'
@@ -982,11 +984,10 @@ the file's **Lacks** (`{absent, lacking, unindexed}`, what a store's survey
 finds it does not hold yet), so a store behind its vocabulary is read for the
 tables, columns and indexes it has.
 
-An **Arm** groups one component table and its reference property names as
-`[comp, props]`. `arms` groups them and `cut` splits them into groups.
+`cut` splits a list into groups of a compound select's width.
 
 ```ts
-import { arms, cut, doomSql, looseSql, narrow } from '@yaks/sql'
+import { cut, doomSql, looseSql, narrow } from '@yaks/sql'
 import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 
@@ -1004,10 +1005,6 @@ let vocab = loadVocab({
 equal(narrow(vocab), true)
 equal(doomSql(vocab, ['p1'])[0].params, ['p1'])
 equal(looseSql(vocab, ['p1'])[0].params, ['p1', 'note', 'related'])
-equal(arms([['note', 'about'], ['note', 'related']]), [['note', [
-  'about',
-  'related',
-]]])
 equal(cut([1, 2, 3], 2), [[1, 2], [3]])
 ```
 

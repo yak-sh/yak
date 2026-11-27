@@ -12,14 +12,14 @@ import { from, type Query, select, star, unionAll } from './ast.ts'
 // death cascade (./cascade.ts) and the `.refs=` backlink union (./bind.ts) both
 // do.
 //
-// Two steps keep every compound SELECT under that limit, and they compose.
-// Group first — a component's columns become one term, combined with OR,
-// because terms are scarce and or is not — then cut what is left into
-// statements of {@link ARMS} terms each. What the caller does with the pieces
-// is its own business: the cascade asks them in rounds and unions the answers;
-// the `.refs=` predicate combines them with OR into one where clause; a union
-// of rows nests them ({@link unionAllWithin}), as a search over every text
-// index does (@yaks/fts).
+// Cutting keeps every compound SELECT under that limit: a list of terms is cut
+// into statements of {@link ARMS} terms each. What the caller does with the
+// pieces is its own business: the cascade asks them in rounds and unions the
+// answers; a union of rows nests them ({@link unionAllWithin}), as the `.refs=`
+// backlink union and a search over every text index (@yaks/fts) do. Each
+// reference column is a term of its own rather than one of its table's
+// columns combined with OR: an OR scans the table whenever statistics judge
+// any one of its columns unselective.
 
 /** How many terms one compound SELECT may carry. Workerd allows five, and a
  * seeded recursion spends one of them on the seed. This is the lowest limit any
@@ -28,29 +28,13 @@ import { from, type Query, select, star, unionAll } from './ast.ts'
  * than broken. */
 export let ARMS = 4
 
-/** What an engine allows when it is NOT workerd — an embedded SQLite is built
+/** What an engine allows when it is not workerd — an embedded SQLite is built
  * with the stock SQLITE_MAX_COMPOUND_SELECT of 500, and a driver over one
  * declares this (`Driver.arms`) so that a query spanning the whole
  * vocabulary stays one statement instead of one per four components. Set below
  * the stock limit rather than at it, because such a query is not the only
  * compound SELECT a statement may contain. */
 export let STOCK = 400
-
-/** One term of a compound SELECT: a component table, and every column of it
- * that has the behaviour being asked about. */
-export type Arm = [comp: string, props: string[]]
-
-/** Reference properties grouped by the table they belong to, so two of one
- * component cost one term rather than two. */
-export let arms = (refs: [string, string][]): Arm[] => {
-  let by = new Map<string, string[]>()
-  for (let [comp, prop] of refs) {
-    let props = by.get(comp)
-    if (props) props.push(prop)
-    else by.set(comp, [prop])
-  }
-  return [...by]
-}
 
 /** A list cut into groups of at most `n`. Always at least one group, so a
  * vocabulary with no terms at all still produces the statement that would have

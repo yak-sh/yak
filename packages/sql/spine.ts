@@ -110,8 +110,8 @@ export let backedDialect = (
   }
   let base: Dialect = {
     ...d,
-    table: (comp) =>
-      computed(v, comp) ? `${rows(comp)} as ${q(comp)}` : d.table(comp),
+    table: (comp, cols) =>
+      computed(v, comp) ? `${rows(comp)} as ${q(comp)}` : d.table(comp, cols),
     source: (comp) =>
       computed(v, comp) ? rows(comp) : d.source?.(comp) ?? q(comp),
     col: (comp, prop, vv) =>

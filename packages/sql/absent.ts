@@ -23,23 +23,25 @@ import { alike, type Derived, type DerivedProp } from './derived.ts'
 import { inline, q } from './render.ts'
 import { type Dialect, field } from './sqlite.ts'
 
-// No row, with the owner column and every stored property's column.
-let nothing = (v: Vocab, comp: string): Query =>
+// No row, with the owner column and every stored property's column, or only
+// those of `cols`.
+let nothing = (v: Vocab, comp: string, cols?: readonly string[]): Query =>
   select({
     cols: [
       as(lit(null), 'entity'),
       ...v.props(comp).map((p) => v.prop(comp, p)!)
-        .filter((c) => !c.computed)
+        .filter((c) => !c.computed && (!cols || cols.includes(field(c.prop))))
         .map((c) => as(lit(null), field(c.prop))),
     ],
     where: lit(0),
   })
 let empties = new WeakMap<Vocab, Map<string, string>>()
-let empty = (v: Vocab, comp: string): string => {
+let empty = (v: Vocab, comp: string, cols?: readonly string[]): string => {
   let held = empties.get(v) ?? new Map<string, string>()
   empties.set(v, held)
-  let got = held.get(comp)
-  if (got == null) held.set(comp, got = inline(sub(nothing(v, comp))))
+  let key = cols ? `${comp} ${cols.join(' ')}` : comp
+  let got = held.get(key)
+  if (got == null) held.set(key, got = inline(sub(nothing(v, comp, cols))))
   return got
 }
 
@@ -57,15 +59,18 @@ export let absentDialect = (
 ): Dialect => {
   if (!absent?.length) return d
   let gone = new Set(absent)
-  let named = (comp: string) => `${empty(v, comp)} as ${q(comp)}`
+  let named = (comp: string, cols?: readonly string[]) =>
+    `${empty(v, comp, cols)} as ${q(comp)}`
   let { indexed, joined, owned } = d
   return {
     ...d,
-    table: (comp) => gone.has(comp) ? named(comp) : d.table(comp),
+    table: (comp, cols) =>
+      gone.has(comp) ? named(comp, cols) : d.table(comp, cols),
     source: (comp) =>
       gone.has(comp) ? empty(v, comp) : d.source?.(comp) ?? q(comp),
     ...joined && {
-      joined: (comp) => gone.has(comp) ? named(comp) : joined(comp),
+      joined: (comp, cols) =>
+        gone.has(comp) ? named(comp, cols) : joined(comp, cols),
     },
     ...indexed && {
       indexed: (comp, index) =>

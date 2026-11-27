@@ -126,7 +126,7 @@ import {
   renderStable as stableIn,
   tableOf,
 } from './render.ts'
-import { type Arm, ARMS, arms, cut, unionAllWithin } from './compound.ts'
+import { ARMS, cut, unionAllWithin } from './compound.ts'
 
 // Text written with the names `v` stores its words under (./render.ts).
 let render = (n: Stmt | Cond, v: Vocab): Raw =>
@@ -1669,7 +1669,7 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   )
   return cond({
     sql:
-      `${key} in (select "o" from (${held.sql}) as "__refs" where "t" in (select "id" from ${entity} as "__refs_seen" where ${visible.sql}))`,
+      `${key} in (select "o" from (${held.sql}) as "__held" where "t" in (select "id" from ${entity} as "__refs_seen" where ${visible.sql}))`,
     params: [...held.params, ...visible.params],
   })
 }
@@ -1690,15 +1690,19 @@ let backlinks = (alts: Clause[]): Clause[] => {
   return [merged, ...alts.filter((c) => !refs.includes(c as Refs))]
 }
 
-// A vocabulary's reference properties by table, cut to what one compound
-// SELECT may carry (compound.ts). They are fixed for a vocabulary, so they are
-// grouped once rather than on every backlink read.
-let refArms = new WeakMap<Vocab, Arm[][]>()
-let refGroups = (v: Vocab): Arm[][] => {
+// A vocabulary's reference properties, cut to what one compound SELECT may
+// carry (compound.ts). They are fixed for a vocabulary, so they are cut once
+// rather than on every backlink read.
+let refArms = new WeakMap<Vocab, [string, string][][]>()
+let refGroups = (v: Vocab): [string, string][][] => {
   let held = refArms.get(v)
-  if (!held) refArms.set(v, held = cut(arms(v.refProps()), ARMS))
+  if (!held) refArms.set(v, held = cut(v.refProps(), ARMS))
   return held
 }
+
+/** The share of a reference column's rows a backlink read tells SQLite one
+ * target holds (`referrers`), as a keyset's bound is told it (`seekFrom`). */
+let RARE = 0.001
 
 /** How many references to an entity make a backlink page walk the newest
  * entities rather than seek each referrer (`lower`). About where the two cost
@@ -1718,28 +1722,37 @@ let PREFIX = 1024
 
 // The owners of the rows whose reference properties point at `value`, as one
 // selection of ids, or none where the vocabulary has no reference property:
-// each term a table's reference columns combined with OR. An owner may come
-// more than once, by two of its properties: `in` asks only whether it is
-// there, so the terms are a union all, and none is sorted to drop a repeat.
+// a term for each reference column, each the column's owner and its value. An
+// owner may come more than once, by two of its properties: `in` asks only
+// whether it is there, so the terms are a union all, and none is sorted to
+// drop a repeat.
 //
-// Bind the target once, not once per reference column: a wide vocabulary must
-// still fit the runtime's 100-parameter limit. Each term joins the target and
-// compares its columns to the joined id, which still seeks each column's
-// index. A scalar subquery per column would look the target up, through its
-// visibility scope, once per column.
+// The union is asked once for the values that are the targets' ids, and
+// SQLite pushes that test into every term, where it seeks the column's index.
+// The targets are looked up and bound once, however many columns there are,
+// and the statement names no common table expression: workerd refuses to name
+// one past 100 cursors, and a lookup named by every term would be written out
+// at each, its targets as literals past the 100th parameter.
 //
-// The join is a cross join, which SQLite never reorders: the one target row
-// is the outer loop and each column's index is sought from it. SQLite plans
-// only the first arm knowing the target is one row; left to choose, every
-// later arm walked its table's whole index and probed the target per row,
-// 10.9 million steps and 41,000 pages for one task's backlinks on the box, 10 s
-// when cold (bug d592f5ae).
+// Each column is its own term, never one of a table's columns combined with
+// OR, and the test is marked `likelihood` rare. Statistics describe a column's
+// values on average: `created.by` names one actor on nearly every row, so
+// SQLite judged a seek of it as costly as the table and scanned `created` and
+// `updated` whole, about 15,000 directory rows for any target, even one no row
+// names (T-4077). An OR of two columns scanned whenever either did,
+// likelihood or not. A target is one value, which the average does not
+// describe: its own rows are what a backlink read should cost. A term reads
+// its table's owner and that one column (`table`'s `cols`), so a component
+// stored under other names repeats no column it never reads.
 //
 // A row is read as joined to an owner the spine admits (the dialect's
 // `joined`), with no scope of its own unless its component has one: the owner
 // it names is tested against the selection's spine, which already says what
 // is visible. Scoping each row as well read every referrer's visibility three
-// times over, 30 s for a model with 557,859 referrers (T-132056).
+// times over, 30 s for a model with 557,859 referrers (T-132056). Whether the
+// scope admits a target is asked beside the union (`refsUnion`); with
+// `pairs`, each row names the target it points at beside its owner, for that
+// question.
 let referrers = (
   ctx: Ctx,
   values: string[],
@@ -1747,24 +1760,16 @@ let referrers = (
 ): Frag | undefined => {
   let groups = refGroups(ctx.v)
   if (!groups[0].length) return
-  let name = '__refs_target'
-  while (ctx.v.comp(name)) name += '_'
-  // Every arm shares this lookup of the targets' identities; whether the
-  // scope admits them is asked beside them (`refsUnion`), since a scope's
-  // relation copied at every arm made a wide vocabulary's statement too long
-  // to write out, and too deep for workerd to take named. With `pairs`, each
-  // row names the target it points at beside its owner, for that question.
   let addressed = values.length == 1
     ? render(eq(col('eid'), val(values[0])), ctx.v)
     : renderStable(among(col('eid'), each(values)), ctx.v)
-  let target = `with "${name}" as materialized (select id from ${
+  let ids = `(select id from ${
     ctx.d.unscoped?.('entity') ?? source(ctx, 'entity')
   } where ${addressed.sql})`
-  let term = ([c, props]: Arm) =>
-    `select ${ctx.d.ownerKey(c)}${
-      pairs ? ` as "o", "${name}".id as "t"` : ''
-    } from "${name}" cross join ${ctx.d.joined?.(c) ?? ctx.d.table(c)} on ` +
-    props.map((p) => `${refKey(ctx, c, p)} = "${name}".id`).join(' or ')
+  let term = ([c, p]: [string, string]) =>
+    `select ${ctx.d.ownerKey(c)} as "o", ${refKey(ctx, c, p)} as "t" from ${
+      ctx.d.joined?.(c, [field(p)]) ?? ctx.d.table(c, [field(p)])
+    }`
   let list = render(
     unionAllWithin(groups.map((group, i) =>
       select({
@@ -1775,8 +1780,11 @@ let referrers = (
     ctx.v,
   )
   return {
-    sql: `${target} ${list.sql}`,
-    params: [...addressed.params, ...list.params],
+    sql: `select ${pairs ? '"o", "t"' : '"o"'} from (${list.sql}) as "__refs"` +
+      ` where likelihood("t" ${
+        values.length == 1 ? '=' : 'in'
+      } ${ids}, ${RARE})`,
+    params: [...list.params, ...addressed.params],
   }
 }
 
@@ -6717,10 +6725,10 @@ let visible = (
     // A read asking for graves selects the deleted the scope admits too.
     spine: `${opts.graves ? named() : entity} as "entity"`,
     admitted: !masked ? base.spine : undefined,
-    joined: (comp) =>
+    joined: (comp, cols) =>
       visibility.components?.[comp]
         ? `${source(comp)} as ${quoted(comp)}`
-        : base.table(comp),
+        : base.table(comp, cols),
     source,
     unscoped: (comp) => base.source?.(comp) ?? quoted(comp),
     scoped: true,

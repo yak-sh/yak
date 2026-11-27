@@ -1,6 +1,7 @@
 // One entity's backlinks seek each reference column's index in every arm of
 // the union, not only the first: SQLite plans a later arm without the target's
-// one-row estimate, and left to choose there walks the arm's whole table.
+// one-row estimate, and left to choose there walks the arm's whole table. A
+// column whose rows nearly all name one entity is still sought for another.
 import '../sqlite/sqlitepath.ts'
 import { Database } from '@yaks/sqlite/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -17,6 +18,7 @@ let vocab = loadVocab({
     entity: { component: true, properties: { num: { type: 'number' } } },
     anchor: { component: true, properties: { to: ref } },
     link: { component: true, properties: { to: ref } },
+    stamp: { component: true, properties: { by: ref, via: ref } },
   },
 })
 let db = new Database(':memory:'), sql = driver(db)
@@ -24,6 +26,7 @@ let tables: Record<string, string[]> = {
   entity: ['eid', 'num'],
   anchor: ['to'],
   link: ['to'],
+  stamp: ['by', 'via'],
   tombstone: [],
 }
 for (let [name, cols] of Object.entries(tables)) {
@@ -48,11 +51,13 @@ for (let [name, cols] of Object.entries(tables)) {
   }
 }
 // Every entity links to the one before it, and three also anchor at the
-// first: the first arm is small, the second is every entity.
+// first: the first arm is small, the second is every entity. Every entity is
+// stamped by the last two, as one actor stamps nearly every row it writes.
 db.exec('begin')
 for (let id = 1; id <= 20_000; id++) {
   sql.query(insert('entity', { id, eid: `row-${id}`, num: id }))
   sql.query(insert('link', { entity: id, to: id - 1 }))
+  sql.query(insert('stamp', { entity: id, by: 20_000, via: 19_999 }))
   if ([20, 1000, 2001].includes(id)) {
     sql.query(insert('anchor', { entity: id, to: 1 }))
   }
@@ -67,15 +72,28 @@ let status = Deno.dlopen(sqlitePath, {
   },
 })
 
-test('one entity’s backlinks seek every arm’s index', () => {
-  let q = compile(parse('.refs=row-1'), vocab)
+let backlinks = (target: string) => {
+  let q = compile(parse(`.refs=${target}`), vocab)
   let stmt = db.prepare(q.sql)
   try {
     let eids = stmt.all<Row>(...q.params).map((r) => r.eid)
-    let steps = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0)
-    assertEquals(eids, ['row-2', 'row-20', 'row-1000', 'row-2001'])
-    assert(steps < 1_000, `${steps} VM instructions`)
+    return {
+      eids,
+      steps: status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0),
+    }
   } finally {
     stmt.finalize()
   }
+}
+
+test('one entity’s backlinks seek every arm’s index', () => {
+  let { eids, steps } = backlinks('row-1')
+  assertEquals(eids, ['row-2', 'row-20', 'row-1000', 'row-2001'])
+  assert(steps < 1_000, `${steps} VM instructions`)
+})
+
+test('backlinks seek a column one entity fills for another', () => {
+  let { eids, steps } = backlinks('row-5')
+  assertEquals(eids, ['row-6'])
+  assert(steps < 1_000, `${steps} VM instructions`)
 })

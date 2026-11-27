@@ -44,8 +44,10 @@ export type Dialect = {
   /** `live` already leaves out the store's bookkeeping (./bind.ts
    * `BindOpts.bookkeeping`), which a dialect made from this one inherits. */
   discreet?: boolean
-  // The join source for a component and the on key.
-  table: (comp: string) => string
+  // The join source for a component and the on key. `cols` names every
+  // column a statement reads of it beside its owner, where its relation may
+  // list only those.
+  table: (comp: string, cols?: readonly string[]) => string
   // The bare table expression for a component, with no alias — what a
   // correlated subquery refers to. A dialect that reads a component from
   // somewhere else (the CTEs @yaks/sqlite overlays a pending transaction with)
@@ -59,8 +61,8 @@ export type Dialect = {
   // A spine lookup for keys already selected by this dialect's scoped
   // relations. Omitted when the spine also transforms visible values.
   admitted?: string
-  // Components joined to an owner the spine already admitted.
-  joined?: (comp: string) => string
+  // Components joined to an owner the spine already admitted, as `table`.
+  joined?: (comp: string, cols?: readonly string[]) => string
   // A declared ordinary index, used to drive a required scalar selection.
   indexed?: (comp: string, index: string) => string
   // A component keyed by its owner: disable secondary-index scans while
@@ -543,16 +545,25 @@ export let storedIn = (d: Dialect, v: Vocab): Dialect => {
   if (stores.has(d)) return d
   let held = storedDialects.get(d)?.get(v)
   if (held) return held
-  let plain = (comp: string, text: string, suffix = '') =>
-    text == `${q(comp)}${suffix}` ? tableOf(v, comp, suffix) : text
+  let plain = (
+    comp: string,
+    text: string,
+    suffix = '',
+    cols?: readonly string[],
+  ) =>
+    text == `${q(comp)}${suffix}`
+      ? tableOf(v, comp, suffix, cols && ((k) => cols.includes(k)))
+      : text
   let made: Dialect = {
     ...d,
-    table: (comp) => plain(comp, d.table(comp)),
+    table: (comp, cols) => plain(comp, d.table(comp, cols), '', cols),
     source: (comp) => {
       let from = d.source?.(comp)
       return from == null || from == q(comp) ? relationOf(v, comp) : from
     },
-    ...d.joined && { joined: (comp) => plain(comp, d.joined!(comp)) },
+    ...d.joined && {
+      joined: (comp, cols) => plain(comp, d.joined!(comp, cols), '', cols),
+    },
     ...d.owned && {
       owned: (comp) => plain(comp, d.owned!(comp), ' not indexed'),
     },

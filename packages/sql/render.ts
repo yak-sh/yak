@@ -482,9 +482,10 @@ export let tableOf = (
   v: Vocab | undefined,
   comp: string,
   indexed = '',
+  read?: (column: string) => boolean,
 ): string =>
   renamed(v, comp)
-    ? `${relationOf(v, comp, indexed)} as ${q(comp)}`
+    ? `${relationOf(v, comp, indexed, '', read)} as ${q(comp)}`
     : `${q(comp)}${indexed}`
 
 // Which columns of each of a select's sources it may read, by the source's

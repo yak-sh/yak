@@ -525,7 +525,7 @@ test('the membership statement excludes graves and answers one eid', () => {
   assert(sql.includes('not exists (select 1 from tombstone'), sql)
 })
 
-test('.refs= groups its arms and cuts them to what a compound may carry', () => {
+test('.refs= seeks each column and cuts its terms to what a compound may carry', () => {
   // A vocabulary wider than one compound SELECT may carry: seven tables bear a
   // reference column and one of them bears two, where workerd would refuse the
   // sixth term (./compound.ts). Every group is a compound of its own, nested in
@@ -558,15 +558,12 @@ test('.refs= groups its arms and cuts them to what a compound may carry', () => 
   let { sql, params } = compile(parse('.refs=a1'), wide)
   // A target is bound once, independently of column count or union count.
   assertEquals(params, ['a1'])
-  assert(
-    sql.includes(
-      '"pair"."left" = "__refs_target".id or ' +
-        '"pair"."right" = "__refs_target".id',
-    ),
-    sql,
-  )
-  // Seven arms, in compounds of at most four terms.
-  assertEquals(sql.match(/ join "(n\d|pair)"/g)?.length, 7)
+  // Each of pair's columns is a term of its own.
+  for (let p of ['left', 'right']) {
+    assert(sql.includes(`"pair"."${p}" as "t" from "pair"`), sql)
+  }
+  // Eight terms, in compounds of at most four.
+  assertEquals(sql.match(/ from "(n\d|pair)"/g)?.length, 8)
   for (let terms of compounds(sql)) {
     assert(terms <= ARMS, `${terms} terms: ${sql}`)
   }
@@ -577,7 +574,7 @@ test('.refs= groups its arms and cuts them to what a compound may carry', () => 
       parse(Array.from({ length: n }, (_, i) => `.refs=a${i}`).join('|')),
       wide,
     ).sql
-  assertEquals(refs(40).match(/ join "(n\d|pair)"/g)?.length, 7)
+  assertEquals(refs(40).match(/ from "(n\d|pair)"/g)?.length, 8)
   assertEquals(refs(40), refs(2))
 })
 
