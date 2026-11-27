@@ -52,7 +52,9 @@
 // indexes: an external-content index has exactly three writers, and a fourth
 // double-counts every row.
 
+import type { Vocab } from '@yaks/vocab'
 import {
+  columnsOf,
   type Field,
   type Index,
   indexes,
@@ -78,6 +80,7 @@ import {
   erect,
   exists,
   type Expr,
+  field,
   fn,
   ge,
   gt,
@@ -94,9 +97,18 @@ import {
   type Stmt,
   sub,
   table,
+  tableAsWritten,
   val,
   type Write,
 } from '@yaks/sql'
+
+// FTS views already name their inputs by stored column name.
+let contentTable = (name: string, as?: string) => ({
+  t: 'table' as const,
+  name,
+  as,
+  physical: true,
+})
 
 // How one column of `comp` reads as text, given the expression for its stored
 // value: through the registered `text` expression where there is one, else as
@@ -173,15 +185,15 @@ let pieceOf = (entity: Expr): Expr =>
 // pieces when it changes or goes. Nothing makes a piece inside a write:
 // `pieces` makes them a window at a time, and the text is owed until then.
 let tail = (ix: Index, derived: Derived): Stmt[] => {
-  let { comp, props } = ix
+  let { comp, props } = ix, columns = columnsOf(ix)
   let fts = tailOf(ix), list = piecesOf(ix)
-  let text = (p: string, row?: string) =>
-    fn('coalesce', whole(ix, derived)(p, col(p, row)), lit(''))
+  let text = (p: string, row?: string, column = field(p)) =>
+    fn('coalesce', whole(ix, derived)(p, col(column, row)), lit(''))
   let gone: Write[] = [
     {
       t: 'insert',
       into: fts,
-      cols: [fts, 'rowid', ...props],
+      cols: [fts, 'rowid', ...columns],
       q: select({
         cols: [
           lit('delete'),
@@ -221,11 +233,13 @@ let tail = (ix: Index, derived: Derived): Stmt[] => {
       q: select({
         cols: [
           as(col('id', 'p'), 'id'),
-          ...props.map((p) => as(piece(col('id', 'p'), text(p, 'c')), p)),
+          ...props.map((p, i) =>
+            as(piece(col('id', 'p'), text(p, 'c', columns[i])), columns[i])
+          ),
         ],
         from: table(list, 'p'),
         joins: [join(
-          table(comp, 'c'),
+          contentTable(comp, 'c'),
           eq(col('entity', 'c'), op('/', col('id', 'p'), lit(PIECES))),
         )],
       }),
@@ -236,7 +250,7 @@ let tail = (ix: Index, derived: Derived): Stmt[] => {
       ifNot: true,
       using: 'fts5',
       args: [
-        ...props,
+        ...columns,
         ['content', textName(fts)],
         ['content_rowid', 'id'],
         ...GRAMS,
@@ -244,7 +258,11 @@ let tail = (ix: Index, derived: Derived): Stmt[] => {
     },
     trigger(
       'update',
-      or(...props.map((p) => op('is not', col(p, 'old'), col(p, 'new')))),
+      or(
+        ...props.map((p) =>
+          op('is not', col(field(p), 'old'), col(field(p), 'new'))
+        ),
+      ),
     ),
     trigger('delete'),
   ]
@@ -301,7 +319,9 @@ export let pieces = (
       cols: [as(
         fn(
           'max',
-          ...ix.props.map((p) => fn('length', whole(ix, derived)(p, col(p)))),
+          ...ix.props.map((p) =>
+            fn('length', whole(ix, derived)(p, col(field(p))))
+          ),
         ),
         'size',
       )],
@@ -318,9 +338,9 @@ export let pieces = (
     db.query({
       t: 'insert',
       into: fts,
-      cols: ['rowid', ...ix.props],
+      cols: ['rowid', ...columnsOf(ix)],
       q: select({
-        cols: [col('id'), ...ix.props.map((p) => col(p))],
+        cols: [col('id'), ...columnsOf(ix).map((p) => col(p))],
         from: table(textName(fts)),
         where: among(col('id'), ids.map((id) => val(id))),
       }),
@@ -368,34 +388,34 @@ let sourceOf = (ix: Index, derived: Derived): string =>
 // it is read as it stands when its window comes, and deleting a row the index
 // never held would corrupt it.
 let index = (ix: Index, derived: Derived, cursor?: Expr): Stmt[] => {
-  let { comp, props, on } = ix
+  let { comp, props, on } = ix, columns = columnsOf(ix)
   let fts = tableOf(ix)
   let read = reader(ix, derived)
   // The values a trigger inserts: the column read as text, or '' for a null —
   // the index never holds a null term, and the delete side must mirror the
   // insert side exactly.
-  let side = (row: string) =>
-    props.map((p) => fn('coalesce', read(p, col(p, row)), lit('')))
+  let side = (row: string, named = props.map(field)) =>
+    props.map((p, i) => fn('coalesce', read(p, col(named[i], row)), lit('')))
   let add = (row: string): Insert => ({
     t: 'insert',
     into: fts,
-    cols: ['rowid', ...props],
+    cols: ['rowid', ...columns],
     rows: [[col('entity', row), ...side(row)]],
   })
   let drop: Insert = {
     t: 'insert',
     into: fts,
-    cols: [fts, 'rowid', ...props],
+    cols: [fts, 'rowid', ...columns],
     rows: [[lit('delete'), col('entity', 'old'), ...side('old')]],
   }
   // The text a scoped entity already holds, as it joins or leaves `on`.
   let held = (row: 'new' | 'old', first: Expr[]): Insert => ({
     t: 'insert',
     into: fts,
-    cols: [...(row == 'old' ? [fts] : []), 'rowid', ...props],
+    cols: [...(row == 'old' ? [fts] : []), 'rowid', ...columns],
     q: select({
-      cols: [...first, col('entity', row), ...side('c')],
-      from: table(comp, 'c'),
+      cols: [...first, col('entity', row), ...side('c', columns)],
+      from: contentTable(comp, 'c'),
       where: eq(col('entity', 'c'), col('entity', row)),
     }),
   })
@@ -443,7 +463,7 @@ let index = (ix: Index, derived: Derived, cursor?: Expr): Stmt[] => {
       ifNot: true,
       using: 'fts5',
       args: [
-        ...props,
+        ...columns,
         ['content', content],
         ['content_rowid', 'entity'],
         ...ix.trigram ? GRAMS : [],
@@ -466,7 +486,7 @@ let index = (ix: Index, derived: Derived, cursor?: Expr): Stmt[] => {
 // The view presenting an index's columns as text, joined to `on` for a scoped
 // one.
 let view = (ix: Index, derived: Derived): CreateView => {
-  let { comp, props, on } = ix
+  let { comp, props, on } = ix, columns = columnsOf(ix)
   let read = reader(ix, derived)
   let c = on ? 'c' : undefined
   return {
@@ -476,12 +496,17 @@ let view = (ix: Index, derived: Derived): CreateView => {
     q: select({
       cols: [
         as(col('entity', c), 'entity'),
-        ...props.map((p) => as(read(p, col(p, c)), p)),
+        ...props.map((p, i) => as(read(p, col(columns[i], c)), columns[i])),
         as(col('entity', c), 'rowid'),
       ],
-      from: table(comp, c),
+      from: contentTable(comp, c),
       joins: on
-        ? [join(table(on, 'o'), eq(col('entity', 'o'), col('entity', 'c')))]
+        ? [
+          join(
+            contentTable(on, 'o'),
+            eq(col('entity', 'o'), col('entity', 'c')),
+          ),
+        ]
         : [],
     }),
   }
@@ -496,7 +521,11 @@ let view = (ix: Index, derived: Derived): CreateView => {
 // `text` expression, which resolves the old and new values without re-reading
 // the owner row. An override with no `text` would index the stored value, so it
 // is refused.
-export let schema = (fields: Field[], derived: Derived = {}): Stmt[] => {
+export let schema = (
+  fields: Field[],
+  derived: Derived = {},
+  vocab?: Vocab,
+): Stmt[] => {
   for (let { comp, prop } of fields) {
     let key = `${comp}.${prop}`
     if (derived[key] && !derived[key].text) {
@@ -505,7 +534,7 @@ export let schema = (fields: Field[], derived: Derived = {}): Stmt[] => {
       )
     }
   }
-  return indexes(fields).flatMap((ix) => [
+  return indexes(fields, vocab).flatMap((ix) => [
     ...index(ix, derived),
     ...ix.trigram ? tail(ix, derived) : [],
   ])
@@ -522,12 +551,15 @@ export let sources = (
   derived: Derived = {},
   db?: Driver,
 ): Stmt[] =>
-  (db ? standing(db, worded(fields)) : indexes(worded(fields))).map((ix) =>
-    select({
-      cols: ix.props.map((p) => col(p)),
-      from: table(sourceOf(ix, derived)),
+  (db ? standing(db, worded(fields)) : indexes(worded(fields))).map((ix) => {
+    let source = sourceOf(ix, derived)
+    return select({
+      cols: ix.props.map((p, i) =>
+        as(col(source == ix.comp ? field(p) : columnsOf(ix)[i]), p)
+      ),
+      from: table(source),
     })
-  )
+  })
 
 // The indexes of `fields` whose tables the file holds. A store makes a
 // component's table the first time a write names it (@yaks/sqlite), and an
@@ -538,7 +570,7 @@ let standing = (db: Driver, fields: Field[], made = false): Index[] => {
   let tables = new Set(
     catalogue(db).filter((o) => o.type == 'table').map((o) => o.name),
   )
-  return indexes(fields).filter((ix) =>
+  return indexes(fields, db.stored?.v).filter((ix) =>
     tables.has(ix.comp) && (!ix.on || tables.has(ix.on)) ||
     made && tables.has(tableOf(ix))
   )
@@ -745,6 +777,7 @@ export type Fill = {
   fts: string
   source: string
   props: string[]
+  fields?: string[]
   triggers: CreateTrigger[]
 }
 
@@ -753,7 +786,8 @@ export type Fill = {
 let filling = (ix: Index, derived: Derived): Fill => ({
   fts: tableOf(ix),
   source: sourceOf(ix, derived),
-  props: ix.props,
+  props: columnsOf(ix),
+  ...sourceOf(ix, derived) == ix.comp ? { fields: ix.props.map(field) } : {},
   triggers: index(ix, derived).filter((s) => s.t == 'create trigger'),
 })
 
@@ -793,6 +827,8 @@ export let adopt = (
   // Adoption compares the objects that stood when it began. Its own DDL
   // must not make every later comparison reread the entire schema.
   let before = catalogue(db)
+  let v = db.stored?.v
+  let written = (s: Stmt) => render(s, undefined, undefined, v).sql
   let gone = (kind: 'trigger' | 'view' | 'table', name: string) =>
     db.query({ t: 'drop', kind, name, ifExists: true })
   // What one of `mine` would be stored as, by the name it creates.
@@ -800,7 +836,7 @@ export let adopt = (
     let s = mine.find((s) =>
       (s.t == 'create view' || s.t == 'create trigger') && s.name == name
     )
-    return s && render(s).sql
+    return s && written(s)
   }
   let planned: {
     ix: Index
@@ -812,9 +848,10 @@ export let adopt = (
   for (let ix of standing(db, fields)) {
     let fts = tableOf(ix)
     let have = declared(db, fts)
-    let same = have.length == ix.props.length &&
-      have.every((c, i) => c == ix.props[i]) &&
-      source(before, fts) == sourceOf(ix, derived)
+    let columns = columnsOf(ix)
+    let same = have.length == columns.length &&
+      have.every((c, i) => c == columns[i]) &&
+      tableAsWritten(v, source(before, fts) ?? '') == sourceOf(ix, derived)
     for (let t of strays(before, ix)) {
       gone('trigger', t)
       dropped.push(t)
@@ -855,7 +892,7 @@ export let adopt = (
         : 'table'
     let stale = rest.some((s) => {
       let had = stored(before, kindOf(s), made(s))
-      return had != null && body(had, made(s)) != body(render(s).sql, made(s))
+      return had != null && body(had, made(s)) != body(written(s), made(s))
     })
     if (stale) {
       for (let s of [...rest].reverse()) gone(kindOf(s), made(s))

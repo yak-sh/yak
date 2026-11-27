@@ -95,7 +95,10 @@ let tracked = (driver: Driver, table: string): boolean => {
   let complete = versioned(table).every((s) =>
     s.t != 'create trigger' ||
     body(objects.get(s.name)?.sql ?? '') ==
-      body(render({ ...s, ifNot: false }).sql)
+      body(
+        render({ ...s, ifNot: false }, undefined, undefined, driver.stored?.v)
+          .sql,
+      )
   )
   held.tables.set(table, complete)
   return complete

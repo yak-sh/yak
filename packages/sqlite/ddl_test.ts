@@ -1,6 +1,7 @@
 // The schema a vocabulary implies: one identity table, one graveyard, one table
 // per component, and the doc view (search indexes belong to @yaks/fts).
 
+import { indexName } from '@yaks/sql/core'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { graph, identityEid } from '@yaks/graph'
@@ -448,14 +449,18 @@ test('reference indexes are installed on new and existing member stores', () => 
     if (existing) {
       // A database created before references were indexed by default.
       for (
-        let name of [
-          'member_space',
-          'member_person',
-          'grant_app',
-          'grant_person',
+        let [comp, prop] of [
+          ['member', 'space'],
+          ['member', 'person'],
+          ['grant', 'app'],
+          ['grant', 'person'],
         ]
       ) {
-        d.query({ t: 'drop', kind: 'index', name })
+        d.query({
+          t: 'drop',
+          kind: 'index',
+          name: indexName(vocab, comp, [prop]),
+        })
       }
     }
     s.tx((tx) =>
@@ -490,7 +495,10 @@ test('reference indexes are installed on new and existing member stores', () => 
         t: 'explain query plan',
         of: compile(parse(query), vocab),
       }).map((r) => String(r.detail)).join('\n')
-      assert(/SEARCH/.test(plan) && plan.includes(`${comp}_${prop}`), plan)
+      assert(
+        /SEARCH/.test(plan) && plan.includes(indexName(vocab, comp, [prop])),
+        plan,
+      )
       assertEquals(s.read(query).map((b) => b.entity.eid), [expected])
       assertEquals(
         s.read(`.${comp}.${prop}=missing`).map((b) => b.entity.eid),

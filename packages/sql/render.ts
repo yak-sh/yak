@@ -16,11 +16,20 @@
 // are checked against what such a word can be before they are written, so
 // text a caller passes in is never taken for SQL.
 //
+// A statement names a component's table and columns by their labels, and is
+// rendered with the vocabulary they are stored under (`Vocab.stored`): a
+// component's table read as the relation of its stored columns renamed to
+// their labels, which SQLite flattens into the query, and a write or schema
+// statement's own table and columns by their stored names. Nothing above the
+// renderer names storage.
+//
 // Operators are parenthesized where one sits inside another, so a tree renders
 // with the precedence it was built with. AND and OR nest in halves: SQLite
 // parses `a or b or c …` into a tree as deep as the list is long and refuses one
 // deeper than 1000, and a delete's reverse read asks thousands.
 
+import { related, stoodColumn, stored } from './layout.ts'
+import type { Vocab } from '@yaks/vocab'
 import {
   array,
   bounded,
@@ -42,8 +51,123 @@ import {
 // What one rendering accumulates: the parameters in the order their `?`s were
 // written, whether values are being written as literals instead, whether the
 // text must be stable whatever a collection's members (`renderStable`), and
-// how many parameters the engine binds at most.
-type Ctx = { params: Param[]; inline: boolean; stable: boolean; cap: number }
+// how many parameters the engine binds at most. `v` is the vocabulary names
+// are stored under, and `at` the table a write or schema statement names its
+// columns in (below).
+type Ctx = {
+  params: Param[]
+  inline: boolean
+  stable: boolean
+  cap: number
+  v?: Vocab
+  at?: At
+  fired?: At
+  ctes?: ReadonlySet<string>
+}
+
+// The table a write or schema statement is about: its component, the names a
+// column of it is qualified by (the table, its alias, a trigger's `new` and
+// `old`, an upsert's `excluded`), and whether an unqualified column is its
+// own, which it is in the statement itself and never in a query inside it.
+type At = { comp: string; names: Set<string>; bare: boolean }
+
+// A component's stored properties: every one but those computed, which no
+// column holds.
+let columns = (v: Vocab, name: string): string[] => {
+  let relation = related(v, name)
+  let comp = relation?.comp ?? name
+  return [
+    ...v.props(comp).filter((p) => !v.prop(comp, p)!.computed).map((p) =>
+      p == 'entity' ? '$entity' : p
+    ),
+    ...relation?.columns ?? [],
+  ]
+}
+
+// Whether a name is a component's table the vocabulary stores apart from its
+// labels, so a statement naming it is rewritten. Asked of every table a
+// statement names, so answered once a vocabulary.
+let renames = new WeakMap<Vocab, Map<string, boolean>>()
+let renamed = (v: Vocab | undefined, comp: string): v is Vocab => {
+  if (!v) return false
+  let held = renames.get(v)
+  if (!held) renames.set(v, held = new Map())
+  let is = held.get(comp)
+  if (is == null) {
+    is = comp != 'entity' && (!!v.comp(comp) || !!related(v, comp)) &&
+      (stored(v, comp) != comp ||
+        columns(v, comp).some((k) => stored(v, comp, k) != k))
+    held.set(comp, is)
+  }
+  return is
+}
+
+// A column of the table a write or schema statement is about.
+let own = (c: Ctx, name: string): string =>
+  c.at && c.v ? stored(c.v, c.at.comp, name) : name
+
+// A column node's stored name, where it names one of the statement's own
+// table or a trigger's `new` or `old`.
+let ownColumn = (c: Ctx, e: { name: string; of?: string }): string => {
+  let at = c.at && (e.of ? c.at.names.has(e.of) : c.at.bare)
+    ? c.at
+    : e.of && c.fired?.names.has(e.of)
+    ? c.fired
+    : undefined
+  return at ? stored(c.v!, at.comp, e.name) : e.name
+}
+
+// The names a query's own sources take, which a column it qualifies by one
+// means: no longer the write's table, where the write names it the same.
+let shadowed = (c: Ctx, from: Source[], js: Join[] | undefined): Ctx => {
+  if (!c.at && !c.fired) return c
+  let mine = [...from, ...(js ?? []).map((j) => j.src)].flatMap((f) =>
+    f.t == 'raw' ? [] : [f.as ?? (f.t == 'table' ? f.name : '')]
+  )
+  let less = (at?: At) =>
+    at && mine.some((n) => at.names.has(n))
+      ? {
+        ...at,
+        names: new Set([...at.names].filter((n) => !mine.includes(n))),
+      }
+      : at
+  return { ...c, at: less(c.at), fired: less(c.fired) }
+}
+
+// The same statement's columns, past the statement itself: a query inside it
+// names its own columns, though it may still qualify one of the statement's.
+let inner = (c: Ctx): Ctx =>
+  c.at?.bare ? { ...c, at: { ...c.at, bare: false } } : c
+
+// A trigger's body: each of its writes is about its own table, and `new` and
+// `old` stay the trigger's.
+let triggered = (t: Ctx): Ctx =>
+  t.at
+    ? {
+      ...t,
+      at: undefined,
+      fired: { comp: t.at.comp, names: new Set(['new', 'old']), bare: false },
+    }
+    : t
+
+// A write or schema statement about `table`, its columns qualified by `names`.
+let about = (c: Ctx, table: string, ...names: (string | undefined)[]): Ctx =>
+  renamed(c.v, table)
+    ? {
+      ...c,
+      at: {
+        comp: table,
+        names: new Set([table, ...names.filter((n) => n != null)]),
+        bare: true,
+      },
+    }
+    : c.at
+    ? { ...c, at: undefined }
+    : c
+
+// A table a statement names, by its stored name.
+let tableName = (c: Ctx, name: string): string =>
+  q(c.v ? stored(c.v, name) : name)
 
 /** How many parameters one statement may bind. Workerd, the SQLite under a
  * Durable Object, allows 100, the lowest of any supported engine, and so the
@@ -168,13 +292,22 @@ let texts = () => {
     set,
   }
 }
-let seen = [texts(), texts()]
+let bare = [texts(), texts()]
+let seen = new WeakMap<Vocab, ReturnType<typeof texts>[]>()
+let textsOf = (c: Ctx) => {
+  if (!c.v) return bare
+  let held = seen.get(c.v)
+  if (!held) seen.set(c.v, held = [texts(), texts()])
+  return held
+}
 let LEAF = new Set(['col', 'val', 'lit', 'star', 'table'])
 let kept =
   <N extends { t: string }>(write: (n: N, c: Ctx) => string) =>
   (n: N, c: Ctx): string => {
-    if (c.inline || LEAF.has(n.t) || full(c)) return write(n, c)
-    let texts = seen[c.stable ? 1 : 0]
+    if (c.inline || c.at || c.fired || c.ctes || LEAF.has(n.t) || full(c)) {
+      return write(n, c)
+    }
+    let texts = textsOf(c)[c.stable ? 1 : 0]
     let text = texts.get(n)
     if (text != null) return text
     let bound = c.params.length
@@ -191,8 +324,15 @@ let expr: (e: Expr, c: Ctx) => string = kept((e: Expr, c: Ctx): string => {
       }
       c.params.push(...e.params)
       return e.sql
-    case 'col':
-      return e.of ? `${q(e.of)}.${q(e.name)}` : q(e.name)
+    case 'col': {
+      let name = c.v ? ownColumn(c, e) : e.name
+      let of = e.of
+      let target = c.at
+      if (of && target?.names.has(of) && of == target.comp) {
+        of = stored(c.v!, of)
+      }
+      return of ? `${q(of)}.${q(name)}` : q(name)
+    }
     case 'val':
       if (c.inline || full(c)) return literal(e.v)
       c.params.push(e.v)
@@ -224,12 +364,12 @@ let expr: (e: Expr, c: Ctx) => string = kept((e: Expr, c: Ctx): string => {
           ? list(e.set, c)
           : e.set.t == 'each'
           ? written(e.set.list, c) ?? query(array(e.set.list), c)
-          : query(e.set, c)
+          : query(e.set, inner(c))
       })`
     case 'exists':
-      return `exists (${query(e.q, c)})`
+      return `exists (${query(e.q, inner(c))})`
     case 'sub':
-      return `(${query(e.q, c)})`
+      return `(${query(e.q, inner(c))})`
     case 'case':
       return `case${e.of ? ` ${expr(e.of, c)}` : ''} ${
         e.arms.map(([w, t]) => `when ${expr(w, c)} then ${expr(t, c)}`).join(
@@ -268,21 +408,85 @@ let names = (ns: string[]): string => ns.map(q).join(', ')
 let source: (s: Source, c: Ctx) => string = kept((s: Source, c: Ctx) => {
   if (s.t == 'raw') return expr(s, c)
   let as = s.as ? ` as ${q(s.as)}` : ''
-  if (s.t == 'from') return `(${query(s.q, c)})${as}`
+  if (s.t == 'from') return `(${query(s.q, inner(c))})${as}`
   let schema = s.schema ? `${q(s.schema)}.` : ''
-  return `${schema}${q(s.name)}${s.args ? `(${list(s.args, c)})` : ''}${as}` +
-    (s.indexed === false
-      ? ' not indexed'
-      : s.indexed
-      ? ` indexed by ${q(s.indexed)}`
-      : '')
+  let indexed = s.indexed === false
+    ? ' not indexed'
+    : s.indexed
+    ? ` indexed by ${q(s.indexed)}`
+    : ''
+  if (
+    !s.args && !s.physical && (s.schema || !c.ctes?.has(s.name)) &&
+    renamed(c.v, s.name)
+  ) {
+    return `${relationOf(c.v, s.name, indexed, schema)} as ${q(s.as ?? s.name)}`
+  }
+  return `${schema}${s.physical ? tableName(c, s.name) : q(s.name)}${
+    s.args ? `(${list(s.args, c)})` : ''
+  }${as}` +
+    indexed
 })
+
+/** A component's table as a statement reads it, before any alias: its name,
+ * or, where the vocabulary stores it apart from its labels, the relation of
+ * its stored columns under their labels. SQLite flattens the subquery, so a
+ * read of it seeks the table and its indexes as a read of the plain name
+ * would. `indexed` is the table's own `indexed by` or `not indexed`.
+ *
+ * ```ts
+ * import { relationOf } from '@yaks/sql/core'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let [note, body] = [crypto.randomUUID(), crypto.randomUUID()]
+ * let v = loadVocab({ $defs: { note: {
+ *   $id: `urn:uuid:${note}`, component: true,
+ *   properties: { body: { $id: `urn:uuid:${body}`, type: 'string' } },
+ * } } })
+ * equal(
+ *   relationOf(v, 'note'),
+ *   `(select "entity", "${note}"."${body}" as "body" from "${note}")`,
+ * )
+ * equal(relationOf(v, 'meta'), '"meta"')
+ * ```
+ */
+export let relationOf = (
+  v: Vocab | undefined,
+  comp: string,
+  indexed = '',
+  schema = '',
+): string => {
+  if (!renamed(v, comp)) return `${schema}${q(comp)}${indexed}`
+  let named = columns(v, comp).map((k) => {
+    if (!stoodColumn(v, comp, k)) return `null as ${q(k)}`
+    let at = stored(v, comp, k)
+    return at == k ? q(k) : `${q(stored(v, comp))}.${q(at)} as ${q(k)}`
+  })
+  return `(select ${['"entity"', ...named].join(', ')} from ${schema}${
+    q(stored(v, comp))
+  }${indexed})`
+}
+
+/** {@link relationOf} under the component's name, as a statement joins it. */
+export let tableOf = (
+  v: Vocab | undefined,
+  comp: string,
+  indexed = '',
+): string =>
+  renamed(v, comp)
+    ? `${relationOf(v, comp, indexed)} as ${q(comp)}`
+    : `${q(comp)}${indexed}`
 
 let HOW = { join: 'join', left: 'left join', cross: 'cross join' }
 let joins = (js: Join[] | undefined, c: Ctx): string =>
   (js ?? []).map((j) =>
     ` ${HOW[j.how]} ${source(j.src, c)}${j.on ? ` on ${expr(j.on, c)}` : ''}`
   ).join('')
+
+let within = (c: Ctx, ctes?: Cte[]): Ctx =>
+  c.v && ctes?.length
+    ? { ...c, ctes: new Set([...c.ctes ?? [], ...ctes.map((t) => t.name)]) }
+    : c
 
 let withs = (ctes: Cte[] | undefined, c: Ctx): string =>
   ctes?.length
@@ -333,11 +537,13 @@ let query: (s: Query, c: Ctx) => string = kept((s: Query, c: Ctx) => {
   if (s.t == 'values') {
     return `values ${s.rows.map((r) => `(${list(r, c)})`).join(', ')}`
   }
+  c = within(c, s.with)
   if (s.t == 'compound') {
     return withs(s.with, c) +
       s.parts.map((p) => query(p, c)).join(` ${s.op} `) + tail(s, c)
   }
   let from = s.from == null ? [] : Array.isArray(s.from) ? s.from : [s.from]
+  c = shadowed(c, from, s.joins)
   return withs(s.with, c) +
     `select${s.distinct ? ' distinct' : ''} ` +
     (s.cols?.length ? list(s.cols, c) : '*') +
@@ -349,11 +555,29 @@ let query: (s: Query, c: Ctx) => string = kept((s: Query, c: Ctx) => {
     tail(s, c)
 })
 
+// What a write returns, each column of its own table under the name the
+// statement asked for it by.
 let returning = (es: Expr[] | undefined, c: Ctx): string =>
-  es?.length ? ` returning ${list(es, c)}` : ''
+  es?.length
+    ? ` returning ${
+      es.map((e) => {
+        let text = expr(e, c)
+        return e.t == 'col' && c.v && ownColumn(c, e) != e.name
+          ? `${text} as ${q(e.name)}`
+          : text
+      }).join(', ')
+    }`
+    : ''
 
 let sets = (set: Record<string, Expr>, c: Ctx): string =>
-  Object.entries(set).map(([k, e]) => `${q(k)} = ${expr(e, c)}`).join(', ')
+  Object.entries(set).map(([k, e]) => `${q(own(c, k))} = ${expr(e, c)}`)
+    .join(', ')
+
+// Columns of the table a statement is about, by their stored names.
+let owns = (ns: string[], c: Ctx): string =>
+  ns.map((n) => q(own(c, n))).join(
+    ', ',
+  )
 
 let upsert = (u: Upsert, c: Ctx): string =>
   ` on conflict${u.on ? ` (${list(u.on, c)})` : ''}` +
@@ -363,8 +587,10 @@ let upsert = (u: Upsert, c: Ctx): string =>
       (u.when ? ` where ${expr(u.when, c)}` : '')
     : ' do nothing')
 
-let ref = (r: Ref): string =>
-  ` references ${q(r.table)}${r.cols ? `(${names(r.cols)})` : ''}` +
+let ref = (r: Ref, c: Ctx): string =>
+  ` references ${tableName(c, r.table)}${
+    r.cols ? `(${owns(r.cols, about(c, r.table))})` : ''
+  }` +
   (r.onDelete ? ` on delete ${r.onDelete}` : '')
 
 // A default is written bare when it is a literal — `alter table … add column`
@@ -374,7 +600,7 @@ let fallback = (e: Expr, c: Ctx): string =>
 
 let column = (k: Column, c: Ctx): string =>
   [
-    q(k.name),
+    q(own(c, k.name)),
     k.type ? word(k.type, 'type', TYPE) : '',
     k.pk ? 'primary key' : '',
     k.autoincrement ? 'autoincrement' : '',
@@ -382,69 +608,81 @@ let column = (k: Column, c: Ctx): string =>
     k.unique ? 'unique' : '',
     k.default ? `default ${fallback(k.default, c)}` : '',
     k.check ? `check (${expr(k.check, c)})` : '',
-  ].filter(Boolean).join(' ') + (k.ref ? ref(k.ref) : '')
+  ].filter(Boolean).join(' ') + (k.ref ? ref(k.ref, c) : '')
 
 let key = (k: Key, c: Ctx): string =>
   'pk' in k
-    ? `primary key (${names(k.pk)})`
+    ? `primary key (${owns(k.pk, c)})`
     : 'unique' in k
-    ? `unique (${names(k.unique)})`
+    ? `unique (${owns(k.unique, c)})`
     : 'check' in k
     ? `check (${expr(k.check, c)})`
-    : `foreign key (${names(k.fk)})${ref(k.ref)}`
+    : `foreign key (${owns(k.fk, c)})${ref(k.ref, c)}`
 
 let ifNot = (b?: boolean) => b ? 'if not exists ' : ''
 
-let stmt = (s: Stmt, c: Ctx): string => {
+let stmt = (s: Stmt, top: Ctx): string => {
+  let c = within(
+    top.at ? { ...top, at: undefined } : top,
+    'with' in s ? s.with : undefined,
+  )
   switch (s.t) {
     case 'insert': {
+      let t = about(c, s.into, 'excluded')
       // SQLite cannot tell an upsert's `on conflict` from a join's `on` after
       // a bare select, so the select source of an upsert always has a where.
       let src = s.q && s.upsert?.length && s.q.t == 'select' && !s.q.where
         ? { ...s.q, where: { t: 'lit' as const, v: true } }
         : s.q
       return withs(s.with, c) +
-        `insert${s.or ? ` or ${s.or}` : ''} into ${q(s.into)}` +
-        (s.cols ? ` (${names(s.cols)})` : '') +
+        `insert${s.or ? ` or ${s.or}` : ''} into ${tableName(c, s.into)}` +
+        (s.cols ? ` (${owns(s.cols, t)})` : '') +
         (src
-          ? ` ${query(src, c)}`
+          ? ` ${query(src, inner(t))}`
           : s.rows
-          ? ` values ${s.rows.map((r) => `(${list(r, c)})`).join(', ')}`
+          ? ` values ${s.rows.map((r) => `(${list(r, inner(t))})`).join(', ')}`
           : ' default values') +
-        (s.upsert ?? []).map((u) => upsert(u, c)).join('') +
-        returning(s.returning, c)
+        (s.upsert ?? []).map((u) => upsert(u, t)).join('') +
+        returning(s.returning, t)
     }
     case 'update': {
       let from = s.from == null ? [] : Array.isArray(s.from) ? s.from : [s.from]
+      let t = about(c, s.table, s.as)
       return withs(s.with, c) +
-        `update${s.or ? ` or ${s.or}` : ''} ${q(s.table)}` +
+        `update${s.or ? ` or ${s.or}` : ''} ${tableName(c, s.table)}` +
         (s.as ? ` as ${q(s.as)}` : '') +
-        ` set ${sets(s.set, c)}` +
+        ` set ${sets(s.set, t)}` +
         (from.length
-          ? ` from ${from.map((f) => source(f, c)).join(', ')}`
+          ? ` from ${from.map((f) => source(f, inner(t))).join(', ')}`
           : '') +
-        (s.where ? ` where ${expr(s.where, c)}` : '') +
-        returning(s.returning, c)
+        (s.where ? ` where ${expr(s.where, t)}` : '') +
+        returning(s.returning, t)
     }
-    case 'delete':
+    case 'delete': {
+      let t = about(c, s.from, s.as)
       return withs(s.with, c) +
-        `delete from ${q(s.from)}${s.as ? ` as ${q(s.as)}` : ''}` +
-        (s.where ? ` where ${expr(s.where, c)}` : '') +
-        returning(s.returning, c)
-    case 'create table':
+        `delete from ${tableName(c, s.from)}${s.as ? ` as ${q(s.as)}` : ''}` +
+        (s.where ? ` where ${expr(s.where, t)}` : '') +
+        returning(s.returning, t)
+    }
+    case 'create table': {
+      let t = lit(about(c, s.name))
       return `create ${s.temp ? 'temp ' : ''}table ${ifNot(s.ifNot)}${
-        q(s.name)
+        tableName(c, s.name)
       } (${
         [
-          ...s.cols.map((k) => column(k, lit(c))),
-          ...(s.keys ?? []).map((k) => key(k, lit(c))),
+          ...s.cols.map((k) => column(k, t)),
+          ...(s.keys ?? []).map((k) => key(k, t)),
         ].join(', ')
       })${s.withoutRowid ? ' without rowid' : ''}`
-    case 'create index':
+    }
+    case 'create index': {
+      let t = lit(about(c, s.on))
       return `create ${s.unique ? 'unique ' : ''}index ${ifNot(s.ifNot)}${
         q(s.name)
-      } on ${q(s.on)} (${list(s.cols, lit(c))})` +
-        (s.where ? ` where ${expr(s.where, lit(c))}` : '')
+      } on ${tableName(c, s.on)} (${list(s.cols, t)})` +
+        (s.where ? ` where ${expr(s.where, t)}` : '')
+    }
     case 'create view':
       return `create ${s.temp ? 'temp ' : ''}view ${ifNot(s.ifNot)}${
         q(s.name)
@@ -455,35 +693,48 @@ let stmt = (s: Stmt, c: Ctx): string => {
         word(s.using, 'module')
       }(${
         s.args.map((a) =>
-          typeof a == 'string'
-            ? q(a)
-            : `${word(a[0], 'option')}=${literal(a[1])}`
+          typeof a == 'string' ? q(a) : `${word(a[0], 'option')}=${
+            literal(
+              s.using == 'fts5' && a[0] == 'content' &&
+                typeof a[1] == 'string' && c.v
+                ? stored(c.v, a[1])
+                : a[1],
+            )
+          }`
         ).join(', ')
       })`
-    case 'create trigger':
+    case 'create trigger': {
+      let t = lit(about(c, s.on, 'new', 'old'))
       return `create trigger ${ifNot(s.ifNot)}${q(s.name)} ${s.timing} ${
-        s.event == 'update' && s.of ? `update of ${names(s.of)}` : s.event
-      } on ${q(s.on)}` +
-        (s.when ? ` when ${expr(s.when, lit(c))}` : '') +
-        ` begin ${s.body.map((b) => `${stmt(b, lit(c))};`).join(' ')} end`
-    case 'alter table':
-      return `alter table ${q(s.table)} ` +
+        s.event == 'update' && s.of ? `update of ${owns(s.of, t)}` : s.event
+      } on ${tableName(c, s.on)}` +
+        (s.when ? ` when ${expr(s.when, t)}` : '') +
+        ` begin ${s.body.map((b) => `${stmt(b, triggered(t))};`).join(' ')} end`
+    }
+    case 'alter table': {
+      let t = lit(about(c, s.table))
+      return `alter table ${tableName(c, s.table)} ` +
         ('add' in s
-          ? `add column ${column(s.add, lit(c))}`
+          ? `add column ${column(s.add, t)}`
           : 'drop' in s
-          ? `drop column ${q(s.drop)}`
+          ? `drop column ${q(own(t, s.drop))}`
           : typeof s.rename == 'string'
-          ? `rename to ${q(s.rename)}`
+          ? `rename to ${tableName(c, s.rename)}`
           : `rename column ${q(s.rename.column)} to ${q(s.rename.to)}`)
+    }
     case 'drop':
-      return `drop ${s.kind} ${s.ifExists ? 'if exists ' : ''}${q(s.name)}`
+      return `drop ${s.kind} ${s.ifExists ? 'if exists ' : ''}${
+        s.kind == 'table' ? tableName(c, s.name) : q(s.name)
+      }`
     case 'pragma':
       return `pragma ${s.schema ? `${q(s.schema)}.` : ''}${
         word(s.name, 'pragma')
       }` +
         (s.arg == null
           ? ''
-          : `(${typeof s.arg == 'number' ? literal(s.arg) : q(s.arg)})`) +
+          : `(${
+            typeof s.arg == 'number' ? literal(s.arg) : tableName(c, s.arg)
+          })`) +
         (s.value == null
           ? ''
           : ` = ${
@@ -494,7 +745,7 @@ let stmt = (s: Stmt, c: Ctx): string => {
     case 'catalogued':
       return s.sql
     case 'analyze':
-      return s.table == null ? 'analyze' : `analyze ${q(s.table)}`
+      return s.table == null ? 'analyze' : `analyze ${tableName(c, s.table)}`
     case 'vacuum':
       return s.into == null
         ? 'vacuum'
@@ -543,7 +794,8 @@ export let render = (
   node: Stmt | Expr,
   cap = VARIABLES,
   most = Infinity,
-): Raw => rendered(node, false, cap, most)
+  v?: Vocab,
+): Raw => rendered(node, false, cap, most, v)
 
 /** {@link render} for a host that keeps prepared statements by their text:
  * every collection (`each`) is bound as one JSON array, so a statement's text
@@ -560,20 +812,22 @@ export let renderStable = (
   node: Stmt | Expr,
   cap = VARIABLES,
   most = Infinity,
-): Raw => rendered(node, true, cap, most)
+  v?: Vocab,
+): Raw => rendered(node, true, cap, most, v)
 
 let rendered = (
   node: Stmt | Expr,
   stable: boolean,
   cap: number,
   most: number,
+  v?: Vocab,
   hoist = true,
 ): Raw => {
-  let c: Ctx = { params: [], inline: false, stable, cap }
+  let c: Ctx = { params: [], inline: false, stable, cap, v }
   let sql = isExpr(node) ? expr(node, c) : stmt(node, c)
   let top = hoist && long(sql) && !isExpr(node) &&
-    hoisted(node, (q) => rendered(q, stable, cap, most, false))
-  if (top) return rendered(top, stable, cap, most, false)
+    hoisted(node, (q) => rendered(q, stable, cap, most, v, false))
+  if (top) return rendered(top, stable, cap, most, v, false)
   return flat(
     raw(
       sql,
@@ -1192,8 +1446,8 @@ let MEMO_SIZE = 1024, MEMO_TEXT = 4096
 /** An expression written with every value as a literal, parenthesized where an
  * operator around it would take it apart: what an ORDER BY term or a derived
  * read is spliced into the binder's text as. */
-export let inline = (e: Expr): string =>
-  operand(e, { params: [], inline: true, stable: false, cap: 0 })
+export let inline = (e: Expr, v?: Vocab): string =>
+  operand(e, { params: [], inline: true, stable: false, cap: 0, v })
 
 let EXPRS = new Set([
   'col',

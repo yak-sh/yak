@@ -73,6 +73,7 @@ import { only } from '@yaks/graph/read'
 import { matcher } from '@yaks/match'
 import {
   and,
+  asWritten,
   type BindOpts,
   col,
   cross,
@@ -85,6 +86,7 @@ import {
   select,
   type Stmt,
   table,
+  tableAsWritten,
   worn,
 } from '@yaks/sql'
 import {
@@ -93,7 +95,9 @@ import {
   fitting,
   grown,
   heard,
+  identified,
   indexed,
+  layoutOf,
   logged,
   minted,
   mintSql,
@@ -223,18 +227,31 @@ export let storage = <S extends Prepared<S>>(
   }
   let bears = deadly(vocab)
   let report = base.report ?? logged
-  let prep = (s: Stmt): S => prepare(db, s)
+  let prep = (s: Stmt): S => prepare(db, s, vocab)
 
   // One statement, one round trip.
   let one = async (s: Stmt): Promise<Row[]> =>
-    (await prep(s).all<Row>()).results.map(unbind)
+    asWritten(s, (await prep(s).all<Row>()).results.map(unbind), vocab)
 
   // Many statements, still one round trip — and, when they are writes, one
   // transaction. The answers come back per statement, in order.
   let send = async (stmts: readonly Stmt[]): Promise<Row[][]> =>
     stmts.length
-      ? (await db.batch(stmts.map(prep))).map((r) => r.results.map(unbind))
+      ? (await db.batch(stmts.map(prep))).map((r, i) =>
+        asWritten(stmts[i], r.results.map(unbind), vocab)
+      )
       : []
+
+  let layout: Promise<void> | undefined
+  let ready = () =>
+    identified(vocab)
+      ? layout ??= one(defined).then((rows) => {
+        vocab = layoutOf(vocab, rows.map((r) => String(r.name)))
+      }).catch((error) => {
+        layout = undefined
+        throw error
+      })
+      : undefined
 
   let shapes = (bundles: Bundle[]) =>
     bundles.map((b) => ({
@@ -588,6 +605,7 @@ export let storage = <S extends Prepared<S>>(
   }
 
   let run = async <R>(body: (tx: Tx) => R): Promise<Awaited<R>> => {
+    await ready()
     let { tx, flush } = open()
     let out = await body(tx)
     await flush()
@@ -600,8 +618,12 @@ export let storage = <S extends Prepared<S>>(
     install: async () => {
       // What stood before, which only a table that did can be behind its
       // vocabulary in (@yaks/sqlite `fit`): the tables, then what each holds.
-      let defs = await one(defined)
-      let names = defs.map((d) => String(d.name)).filter(fitting(vocab))
+      await ready()
+      let defs = (await one(defined)).map((d) => ({
+        ...d,
+        name: tableAsWritten(vocab, String(d.name)),
+      }))
+      let names = defs.map((d) => d.name).filter(fitting(vocab))
       let before = heard(defs, names, await send(asked(names)))
       await send([...tabled(vocab), ...grown(vocab, before)])
       // A rebuild to a batch, which is D1's only transaction: a table whose
@@ -629,9 +651,18 @@ export let storage = <S extends Prepared<S>>(
       await send(indexed(vocab, true))
       await backfill()
     },
-    read,
-    rows,
-    get: (eids, names) => gather(eids, base, names),
+    read: async (...args) => {
+      await ready()
+      return read(...args)
+    },
+    rows: async (...args) => {
+      await ready()
+      return rows(...args)
+    },
+    get: async (eids, names) => {
+      await ready()
+      return gather(eids, base, names)
+    },
     purgeTrash: async (id) => {
       await one(purgeTrashSql(id))
     },

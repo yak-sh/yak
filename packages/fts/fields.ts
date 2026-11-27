@@ -21,6 +21,7 @@
 // own beside the word indexes.
 
 import type { Prop, Vocab } from '@yaks/vocab'
+import { field } from '@yaks/sql/core'
 
 // A `comp.prop` pair naming one indexed text property — a book's title, a
 // review's prose, a shop's own description — and, for text an entity is found
@@ -43,6 +44,15 @@ export type Pick = (prop: Prop) => boolean
 let prose: Pick = (c) =>
   !c.computed && c.category == 'scalar' && c.scalar == 'text'
 
+// A field retains the vocabulary it came from, so a schema prepared before
+// a connection is bound uses the identities of a fresh store. The bound
+// vocabulary can still select the label layout of an existing file.
+let declared = new WeakMap<Field, Vocab>()
+let declaredIn = (v: Vocab, f: Field): Field => {
+  declared.set(f, v)
+  return f
+}
+
 // The default selection: the properties the vocabulary marked searchable with
 // `"search": true` (@yaks/vocab). Deciding which prose is worth finding belongs
 // to the vocabulary, not to this package: a repository path and a provider name
@@ -59,12 +69,12 @@ export let fields = (vocab: Vocab, pick: Pick = searched): Field[] => [
     vocab.props(comp)
       .map((prop) => vocab.prop(comp, prop)!)
       .filter(pick)
-      .map((c) => ({ comp, prop: c.prop, ...unfound(vocab) }))
+      .map((c) => declaredIn(vocab, { comp, prop: c.prop, ...unfound(vocab) }))
   ),
   ...vocab.all.flatMap((on) =>
     (vocab.comp(on)?.search ?? []).map((name) => {
       let [comp, prop] = name.split('.')
-      return { comp, prop, on, ...unfound(vocab) }
+      return declaredIn(vocab, { comp, prop, on, ...unfound(vocab) })
     })
   ),
 ]
@@ -88,7 +98,7 @@ export let grams = (vocab: Vocab, pick: Pick = (c) => c.contains): Field[] =>
     vocab.props(comp)
       .map((prop) => vocab.prop(comp, prop)!)
       .filter((c) => prose(c) && pick(c))
-      .map((c) => ({ comp, prop: c.prop, trigram: true as const }))
+      .map((c) => declaredIn(vocab, { comp, prop: c.prop, trigram: true }))
   )
 
 // Every field a vocabulary has indexed: its words and its substrings. What a
@@ -117,9 +127,11 @@ export type Index = {
 }
 
 // The fields grouped into indexes, one per name, in first-seen order.
-export let indexes = (fields: Field[]): Index[] => {
+export let indexes = (fields: Field[], v?: Vocab): Index[] => {
   let by = new Map<string, Index>()
-  for (let { comp, prop, on, not, trigram } of fields) {
+  for (let f of fields) {
+    let { comp, prop, on, not, trigram } = f
+    let layout = v ?? declared.get(f)
     let name = on ?? comp
     let key = trigram ? gramName(name) : name
     let ix = by.get(key) ??
@@ -132,10 +144,29 @@ export let indexes = (fields: Field[]): Index[] => {
         ...trigram && { trigram },
       }
     ix.props.push(prop)
+    let physical = names.get(ix)
+    if (!physical) {
+      names.set(
+        ix,
+        physical = {
+          owner: layout?.stored(name) ?? name,
+          columns: [],
+        },
+      )
+    }
+    let stored = layout?.stored(comp, prop) ?? prop
+    physical.columns.push(stored == prop ? field(prop) : stored)
     by.set(key, ix)
   }
   return [...by.values()]
 }
+
+let names = new WeakMap<Index, { owner: string; columns: string[] }>()
+let ownerOf = (ix: Index) => names.get(ix)?.owner ?? ix.name
+
+/** The columns handled by FTS, in the order the index declares them. */
+export let columnsOf = (ix: Index): string[] =>
+  names.get(ix)?.columns ?? ix.props.map(field)
 
 // The name of an index: `book` → `book_fts`.
 export let indexName = (name: string): string => `${name}_fts`
@@ -145,17 +176,17 @@ export let gramName = (name: string): string => `${name}_trigram`
 
 // The FTS5 table an index is: its word index, or its substring index.
 export let tableOf = (ix: Index): string =>
-  ix.trigram ? gramName(ix.name) : indexName(ix.name)
+  ix.trigram ? gramName(ownerOf(ix)) : indexName(ownerOf(ix))
 
 // The view an index reads its text through, where it needs one (`textName`).
 export let viewOf = (ix: Index): string =>
-  textName(ix.trigram ? gramName(ix.name) : ix.name)
+  textName(ix.trigram ? gramName(ownerOf(ix)) : ownerOf(ix))
 
 // The substring index of the texts' tails past what a substring index holds,
 // and the table listing the pieces it holds: `content_trigram_tail`,
 // `content_trigram_piece`.
-export let tailOf = (ix: Index): string => `${gramName(ix.name)}_tail`
-export let piecesOf = (ix: Index): string => `${gramName(ix.name)}_piece`
+export let tailOf = (ix: Index): string => `${gramName(ownerOf(ix))}_tail`
+export let piecesOf = (ix: Index): string => `${gramName(ownerOf(ix))}_piece`
 
 // The name of the view that presents an index's columns as text: `doc` →
 // `doc_text`. It is created for an index where at least one column has to be

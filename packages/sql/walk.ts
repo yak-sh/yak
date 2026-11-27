@@ -19,6 +19,7 @@
 
 import { type Walk, WALK_LIMIT } from '@yaks/query/core'
 import { type Expr, type Frag, type Query, raw } from './ast.ts'
+import type { Vocab } from '@yaks/vocab'
 import { render } from './render.ts'
 import { identity } from './ident.ts'
 
@@ -70,10 +71,11 @@ let reached = (c: Walk, step: Frag): Frag => {
  * A walk as a condition on `owner`, the candidate row's integer id: it holds
  * for the rows `step` reaches from the walk's target. `step` selects one hop
  * as `"from"` and `"to"` integer ids — the edge table narrowed to one
- * relation, or a component's owner beside its reference column.
+ * relation, or a component's owner beside its reference column. `v` is the
+ * vocabulary they are stored by (./render.ts).
  */
-export let walk = (owner: Expr, c: Walk, step: Query): Expr => {
-  let o = render(owner)
-  let rows = reached(c, render(step))
+export let walk = (owner: Expr, c: Walk, step: Query, v?: Vocab): Expr => {
+  let o = render(owner, undefined, undefined, v)
+  let rows = reached(c, render(step, undefined, undefined, v))
   return raw(`${o.sql} in (${rows.sql})`, [...o.params, ...rows.params])
 }

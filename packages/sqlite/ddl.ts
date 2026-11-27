@@ -37,7 +37,12 @@
 // the engine, except a `keep` reference, which outlives the row it points at
 // and stays key-free.
 
-import { field, indexName } from '@yaks/sql'
+import {
+  field,
+  indexName,
+  stored as sqlStored,
+  tableAsWritten,
+} from '@yaks/sql'
 import { type Index, loadVocab, type Prop, type Vocab } from '@yaks/vocab'
 import { archetypeDoc } from '@yaks/archetype/sets'
 import {
@@ -84,6 +89,11 @@ import {
 import { unit } from './unit.ts'
 import { TRASH } from './trash.ts'
 import { clocked, versioned } from './versions.ts'
+
+// A statement as the file keeps it: written with the names `v` stores its
+// words under (@yaks/sql `render`).
+let text = (s: Stmt, v?: Vocab): string =>
+  render(s, undefined, undefined, v).sql
 import { telling, writtenDdl } from './written.ts'
 import { tallying } from './population.ts'
 
@@ -283,7 +293,9 @@ let indexDdl = (v: Vocab, comp: string, i: Index): CreateIndex => ({
   cols: i.props.map((p) => col(field(p))),
   unique: i.unique,
   ifNot: true,
-  where: i.present ? and(...i.present.map((p) => notNull(col(p)))) : undefined,
+  where: i.present
+    ? and(...i.present.map((p) => notNull(col(field(p)))))
+    : undefined,
 })
 
 /** The `doc` view: each property read as text — through its registered `text`
@@ -292,8 +304,9 @@ let indexDdl = (v: Vocab, comp: string, i: Index): CreateIndex => ({
  * by the application using @yaks/fts. */
 export let docDdl = (v: Vocab, derived: Derived): Stmt[] => {
   if (!v.all.includes('doc')) return []
+  let name = `${v.stored('doc')}_value`
   let read = (prop: string) =>
-    derived[`doc.${prop}`]?.text?.(col(prop)) ?? col(prop)
+    derived[`doc.${prop}`]?.text?.(col(field(prop))) ?? col(field(prop))
   let props = stored(v, 'doc').map((c) => c.prop)
   // The view names its columns rather than selecting `*`, because `*` cannot
   // replace one with the expression that resolves it. `*` did have one virtue —
@@ -302,15 +315,15 @@ export let docDdl = (v: Vocab, derived: Derived): Stmt[] => {
   // rows, so recreating it costs nothing, and a view that lags its table is a
   // read that fails at the engine.
   return [
-    { t: 'drop', kind: 'view', name: 'doc_value', ifExists: true },
+    { t: 'drop', kind: 'view', name, ifExists: true },
     {
       t: 'create view',
-      name: 'doc_value',
+      name,
       ifNot: true,
       q: select({
         cols: [
           col('entity'),
-          ...props.map((p) => as(read(p), p)),
+          ...props.map((p) => as(read(p), v.stored('doc', p))),
           as(col('entity'), 'rowid'),
         ],
         from: table('doc'),
@@ -388,7 +401,8 @@ let stands = (driver: Driver, make: CreateView): boolean => {
   let [row] = objects(driver, { type: 'view', name: make.name })
   let body = (sql: string) => sql.replace(/^create view /i, '')
   return !!row &&
-    body(String(row.sql)) == body(render({ ...make, ifNot: false }).sql)
+    body(String(row.sql)) ==
+      body(text({ ...make, ifNot: false }, driver.stored?.v))
 }
 
 // What `retabled` answers by vocabulary and read overrides: the doc view, and
@@ -509,12 +523,21 @@ let indexing = (vocab: Vocab): CreateIndex[] => [
 // underscores or dots (@yaks/sql `indexName`). Inspect the engine's column list
 // too: another package's index on a component table is not ours to retire
 // merely because its name starts with that table's name.
-let managed = (driver: Driver, table: string, name: string): boolean => {
+let managed = (
+  driver: Driver,
+  v: Vocab,
+  table: string,
+  name: string,
+): boolean => {
   let cols = driver.query({ t: 'pragma', name: 'index_info', arg: name })
     .toSorted((a, b) => Number(a.seqno) - Number(b.seqno))
     .map((r) => r.name)
-  return !!cols.length && cols.every((c) => typeof c == 'string') &&
-    ['_', '.'].some((by) => name == [table, ...cols].join(by))
+  if (!cols.length || !cols.every((c) => typeof c == 'string')) return false
+  let names = [table, ...cols as string[]]
+  let kept = [sqlStored(v, table), ...cols.map((c) => sqlStored(v, table, c))]
+  return ['_', '.'].some((by) =>
+    name == names.join(by) || name == kept.join(by)
+  )
 }
 
 let predicate = (sql: string): string =>
@@ -525,16 +548,17 @@ let fitsIndex = (
   held: Row | undefined,
   sql: string,
   now: CreateIndex,
+  v: Vocab,
 ): boolean =>
   !!held && Number(held.unique) == Number(!!now.unique) &&
   Number(held.partial) == Number(!!now.where) &&
-  (!now.where || predicate(sql) == predicate(render(now).sql))
+  (!now.where || predicate(sql) == predicate(text(now, v)))
 
 // The SQL SQLite keeps for an index made by `create`: its statement as it
 // renders, but for `if not exists`, which the engine leaves out, and its
 // leading keywords, which the engine keeps in capitals.
-let made = (create: CreateIndex): string =>
-  render({ ...create, ifNot: false }).sql
+let made = (create: CreateIndex, v: Vocab): string =>
+  text({ ...create, ifNot: false }, v)
     .replace(/^create (unique )?index/, (k) => k.toUpperCase())
 
 /** Retire vocabulary indexes whose declaration disappeared or changed. An
@@ -547,8 +571,8 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
     let table = String(row.tbl_name), name = String(row.name)
     if (!(table == 'entity' || vocab.comp(table))) return []
     let now = wanted.get(name)
-    if (now?.on == table && row.sql == made(now)) return []
-    if (!managed(driver, table, name)) return []
+    if (now?.on == table && row.sql == made(now, vocab)) return []
+    if (!managed(driver, vocab, table, name)) return []
     if (now?.on == table) {
       let held = listed.get(table)
       if (!held) {
@@ -558,7 +582,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
         )
         listed.set(table, held)
       }
-      if (fitsIndex(held.get(name), String(row.sql), now)) return []
+      if (fitsIndex(held.get(name), String(row.sql), now, vocab)) return []
     }
     return [{ t: 'drop' as const, kind: 'index' as const, name }]
   })
@@ -605,15 +629,19 @@ let declaration = (sql: string) => sql.replace(/^create table /i, '')
 
 /** Whether a table SQLite keeps the CREATE text `sql` of stands as `s`
  * declares it, every column and constraint included. */
-export let declares = (sql: string | null, s: CreateTable): boolean =>
+export let declares = (
+  sql: string | null,
+  s: CreateTable,
+  v?: Vocab,
+): boolean =>
   sql != null &&
-  declaration(sql) == declaration(render({ ...s, ifNot: false }).sql)
+  declaration(sql) == declaration(text({ ...s, ifNot: false }, v))
 let declared = (vocab: Vocab) => {
   let held = declarations.get(vocab)
   if (!held) {
     held = new Map(
       tabled(vocab).filter((s): s is CreateTable => s.t == 'create table')
-        .map((s) => [s.name, declaration(render({ ...s, ifNot: false }).sql)]),
+        .map((s) => [s.name, declaration(text({ ...s, ifNot: false }, vocab))]),
     )
     declarations.set(vocab, held)
   }
@@ -655,10 +683,20 @@ let comps = (vocab: Vocab, was: Standing): string[] =>
 // named and kept for its values) could never be cleared, so it could never
 // be cleared; a column that admits a null its vocabulary refuses is how
 // `grown` adds one on purpose, and admission holds the writes.
-let fits = (t: Stood, fresh: CreateTable, changes: number): boolean => {
+let fits = (
+  t: Stood,
+  fresh: CreateTable,
+  changes: number,
+  v: Vocab,
+): boolean => {
   let keyed = fresh.cols.filter((c) => c.ref).map((c) => c.name)
-  let checked = checks(render(fresh).sql)
-  let names = ['', ...t.cols.map((r) => String(r.name).toLowerCase())]
+  let checked = checks(text(fresh, v))
+  let names = [
+    '',
+    ...t.cols.map((r) =>
+      sqlStored(v, fresh.name, String(r.name)).toLowerCase()
+    ),
+  ]
   let loose = new Set(fresh.cols.filter((c) => !c.notNull).map((c) => c.name))
   return keyed.length == t.keys.length &&
     keyed.every((c) => t.keys.includes(c)) &&
@@ -801,7 +839,7 @@ export let refitting = (
         }))
       let fresh = tableDdl(vocab, comp, comp, extra)
       let refs = converted(t, fresh, referenceFields(vocab, comp))
-      if (fits(t, fresh, refs.length)) return []
+      if (fits(t, fresh, refs.length, vocab)) return []
       let old = t.cols.map((r) => String(r.name))
       let cols = fresh.cols.map((r) => r.name).filter((n) => old.includes(n))
       let changed = Object.fromEntries(
@@ -813,15 +851,15 @@ export let refitting = (
 
 /** The value `r` carries over for column `c`, read off `row`: as stored, or
  * through the entity spine where its stored form changes. */
-export let carried = (r: Refitting, c: string, row: string): Expr => {
+export let carried = (r: Refitting, c: string, row: string, name = c): Expr => {
   let to = r.changed[c]
   return to
     ? sub(select({
       cols: [col(to.to)],
       from: table('entity'),
-      where: eq(col(to.from), col(c, row)),
+      where: eq(col(to.from), col(name, row)),
     }))
-    : col(c, row)
+    : col(name, row)
 }
 
 /**
@@ -841,19 +879,23 @@ export let refit = (
 ): Record<string, Stmt[]> =>
   Object.fromEntries(
     Object.entries(refitting(vocab, was)).map(([comp, r]) => {
-      let aside = `${comp}__refit`
+      let aside = `${sqlStored(vocab, comp)}__refit`
+      let field = (p: string) => sqlStored(vocab, comp, p)
       return [comp, [
         // A column of no type holds each value exactly as it was stored.
         {
           t: 'create table',
           name: aside,
-          cols: r.old.map((name) => ({ name })),
+          cols: r.old.map((c) => ({ name: field(c) })),
         },
         {
           t: 'insert',
           into: aside,
-          cols: r.old,
-          q: select({ cols: r.old.map((c) => col(c)), from: table(comp) }),
+          cols: r.old.map(field),
+          q: select({
+            cols: r.old.map((c) => col(field(c))),
+            from: { t: 'table', name: sqlStored(vocab, comp), physical: true },
+          }),
         },
         { t: 'drop', kind: 'table', name: comp },
         r.fresh,
@@ -862,7 +904,7 @@ export let refit = (
           into: comp,
           cols: r.cols,
           q: select({
-            cols: r.cols.map((c) => carried(r, c, aside)),
+            cols: r.cols.map((c) => carried(r, c, aside, field(c))),
             from: table(aside),
           }),
         },
@@ -1197,7 +1239,12 @@ export let few = (stats: readonly Row[]): string[] => {
 // The rows of `sqlite_stat1`: one for each table and index analyzed.
 let stat1 = (driver: Driver): Row[] =>
   extant(driver, 'sqlite_stat1')
-    ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx', 'stat'])
+    ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx', 'stat']).map((
+      r,
+    ) => ({
+      ...r,
+      tbl: tableAsWritten(driver.stored?.v, String(r.tbl)),
+    }))
     : []
 
 let joined = (owed: string[] = [], more: string[]) => [
@@ -1416,6 +1463,8 @@ export let tallied = (
 // the planner read them again: `ANALYZE sqlite_schema` reads no table, and
 // makes `sqlite_stat1` where none stands.
 let stated = (driver: Driver, name: string, rows: number) => {
+  let v = driver.stored?.v
+  if (v) name = sqlStored(v, name)
   let reload = () => driver.query({ t: 'analyze', table: 'sqlite_schema' })
   if (!extant(driver, 'sqlite_stat1')) reload()
   driver.query({

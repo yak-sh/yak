@@ -54,12 +54,13 @@ import {
   type Raw,
   raw,
   select,
+  type Stmt,
   table,
   union,
   unionAll,
   val,
 } from './ast.ts'
-import { DEPTH, render } from './render.ts'
+import { DEPTH, render as renderIn } from './render.ts'
 import { field, indexName } from './sqlite.ts'
 
 /** How far a cascade's rungs are counted before the number stops climbing.
@@ -206,6 +207,9 @@ let closure = (h: Held, eids: string[], group: [string, string][]): Cte => {
 // caller can change a kept plan.
 type Plan = Partial<Record<'doom' | 'loose', Raw[]>>
 type Build = (h: Held, eids: string[], terms: number, cursors: number) => Raw[]
+
+// Text written with the names `v` stores its words under (./render.ts).
+let render = (n: Stmt, v: Vocab): Raw => renderIn(n, undefined, undefined, v)
 let plans = new WeakMap<Vocab, Map<string, [Plan, Plan]>>()
 let planned = (
   v: Vocab,
@@ -259,21 +263,24 @@ export let doomSql = (
 
 let doom: Build = (h, eids, terms, cursors) =>
   cut(h.deaths('cascade'), width(terms, cursors)).map((group) =>
-    render(select({
-      with: [closure(h, eids, group)],
-      cols: [
-        entity('eid'),
-        entity('num'),
-        as(fn('min', doomed('depth')), 'depth'),
-      ],
-      from: table(W),
-      joins: [{
-        ...cross(table('entity', E)),
-        on: eq(entity('id'), doomed('id')),
-      }],
-      group: [doomed('id')],
-      order: [col('depth'), doomed('id')],
-    }))
+    render(
+      select({
+        with: [closure(h, eids, group)],
+        cols: [
+          entity('eid'),
+          entity('num'),
+          as(fn('min', doomed('depth')), 'depth'),
+        ],
+        from: table(W),
+        joins: [{
+          ...cross(table('entity', E)),
+          on: eq(entity('id'), doomed('id')),
+        }],
+        group: [doomed('id')],
+        order: [col('depth'), doomed('id')],
+      }),
+      h.v,
+    )
   )
 
 /**
@@ -341,6 +348,6 @@ let loose: Build = (h, eids, terms, cursors) => {
     )
     let query = parts.length == 1 ? parts[0] : unionAll(...parts)
     // The seed parameter must precede the component and property bindings.
-    return render({ ...query, with: [head], order: [col('ord')] })
+    return render({ ...query, with: [head], order: [col('ord')] }, h.v)
   })
 }

@@ -18,6 +18,7 @@
 
 import {
   as,
+  asWritten,
   cardinality,
   DEPTH,
   type Driver,
@@ -35,6 +36,7 @@ import {
 } from '@yaks/sql'
 import { during, measure as traced, peek } from '@yaks/trace'
 import { bounded } from './ceiling.ts'
+import type { Vocab } from '@yaks/vocab'
 
 /** A value the engine will bind: everything else is converted first. */
 export type SqlValue = ArrayBuffer | string | number | null
@@ -134,6 +136,16 @@ let unbind = (row: Row): Row => {
 // sends hundreds. The statement is its shape, so no value rides along, and
 // the first SHOWN characters of it, where its `with` list is. It is said on
 // the console too, since the Workers log is read when the tracker cannot be.
+// Workerd keeps each prepared statement by its text (SqlStorage's
+// StatementCache), so every collection binds as one JSON array: a read's text
+// is the same whatever ids it names, and is prepared once. Workerd refuses to
+// name a common table expression past DEPTH cursors.
+let render = (s: Stmt, v?: Vocab) => renderStable(s, VARIABLES, DEPTH, v)
+
+// What each object's drivers write their statements with (@yaks/sql
+// `storeAs`): one for all of them, as they are one connection.
+let storedBy = new WeakMap<DurableStorage, { v?: Vocab }>()
+
 let SHOWN = 12_000
 let refused = (e: unknown, rendered: Raw) => {
   if (!(e instanceof Error) || e.cause != null) return e
@@ -164,16 +176,14 @@ export let driver = (
   let reported = false
   // What this object's statements may cost together (./ceiling.ts).
   let bound = bounded(durable)
+  let stored = storedBy.get(durable)
+  if (!stored) storedBy.set(durable, stored = {})
   // The cursor is lazy: draining it is what runs the statement.
   let execute = (s: Stmt): Row[] => {
     // A stopped object's refusal is the caller's to wait out, not the
     // engine's: it is no statement the engine refused.
     bound.admit(writing(s))
-    // Workerd keeps each prepared statement by its text (SqlStorage's
-    // StatementCache), so every collection binds as one JSON array: a read's
-    // text is the same whatever ids it names, and is prepared once. Workerd
-    // refuses to name a common table expression past DEPTH cursors.
-    let rendered = renderStable(s, VARIABLES, DEPTH)
+    let rendered = render(s, stored.v)
     let { sql, params } = rendered
     let cursor: SqlCursor<Row> | undefined
     let returned = 0
@@ -232,7 +242,10 @@ export let driver = (
       }
     }
   }
-  let query = (s: Stmt): Row[] => {
+  // Rows come back under the names the statement wrote (@yaks/sql
+  // `asWritten`).
+  let query = (s: Stmt): Row[] => asWritten(s, told(s), stored.v)
+  let told = (s: Stmt): Row[] => {
     let c = peek()
     if (!c) return execute(s)
     return during(
@@ -258,6 +271,8 @@ export let driver = (
     },
     tx: (body) => durable.transactionSync(body),
     stable: true,
+    render,
+    stored,
     statistics: durable.sql.databaseSize == null
       ? undefined
       : { bytes: () => durable.sql.databaseSize! },

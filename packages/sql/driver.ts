@@ -7,7 +7,19 @@
 // and writes stay free of promise plumbing. An engine that is async (D1) wraps
 // it at its own boundary.
 
-import { as, col, count, type Expr, select, type Stmt, table } from './ast.ts'
+import type { Vocab } from '@yaks/vocab'
+import {
+  as,
+  col,
+  count,
+  type Expr,
+  type Raw,
+  select,
+  type Stmt,
+  table,
+} from './ast.ts'
+import { render } from './render.ts'
+import { asWritten } from './catalogue.ts'
 
 /** One row, a bag of column values keyed by name. */
 export type Row = Record<string, unknown>
@@ -89,6 +101,21 @@ export type Driver = {
    */
   stable?: boolean
   /**
+   * How this engine writes a statement as text: within its limits on bound
+   * values and named relations, collections bound as {@link stable} says, and
+   * with the names `v` stores its words under (./render.ts). A driver that
+   * leaves it out writes one within the strictest engine's limits.
+   */
+  render?: (s: Stmt, v?: Vocab) => Raw
+  /**
+   * The vocabulary this driver writes statements with ({@link storeAs}),
+   * shared by every driver over the same database: a driver made over
+   * another (`{ ...driver }`) holds the same one.
+   */
+  stored?: { v?: Vocab }
+  /** The connection supplies component relations under their logical names. */
+  views?: boolean
+  /**
    * Make a schema from a template. Where another database of this process
    * already ran `make` for the same `key`, holding the same objects this one
    * holds and no rows, this one becomes a copy of what that one made, and
@@ -112,6 +139,29 @@ export type Driver = {
 /** A statement run for its effect. Query executes commands too; asking for
  * an affected count can require another engine operation, so reserve `run`
  * for callers that consume its count. */
+/**
+ * Have `driver` write every statement with the names `v` stores its words
+ * under (`Vocab.stored`): what a store binds its driver with, so each statement
+ * it and every package beside it runs names a component's table and columns
+ * as storage keeps them, though written with their labels. Every driver over
+ * the same database shares it ({@link Driver.stored}); bound again, it takes
+ * the newer vocabulary. A driver with no such slot (a test's own) is changed
+ * in place to write each statement before sending it.
+ */
+export let storeAs = (driver: Driver, v: Vocab): void => {
+  if (driver.stored) return void (driver.stored.v = v)
+  let at: { v?: Vocab } = { v }
+  driver.stored = at
+  let text = (s: Stmt): Stmt =>
+    s.t == 'raw' ? s : render(s, undefined, undefined, at.v)
+  let query = driver.query.bind(driver)
+  driver.query = (s) => asWritten(s, query(text(s)), at.v)
+  if (driver.run) {
+    let run = driver.run.bind(driver)
+    driver.run = (s) => run(text(s))
+  }
+}
+
 export let effect = (driver: Driver, s: Stmt): void => {
   driver.query(s)
 }

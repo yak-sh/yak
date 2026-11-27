@@ -110,22 +110,38 @@ import {
   type Source,
   sources,
   star,
+  type Stmt,
   sub,
   table,
   TRUE,
   val,
   when,
 } from './ast.ts'
-import { inline, render, renderStable } from './render.ts'
+import {
+  inline as inlineIn,
+  relationOf,
+  render as renderIn,
+  renderStable as stableIn,
+  tableOf,
+} from './render.ts'
 import { type Arm, ARMS, arms, cut, unionAllWithin } from './compound.ts'
+
+// Text written with the names `v` stores its words under (./render.ts).
+let render = (n: Stmt | Cond, v: Vocab): Raw =>
+  renderIn(n, undefined, undefined, v)
+let renderStable = (n: Stmt | Cond, v: Vocab): Raw =>
+  stableIn(n, undefined, undefined, v)
+let inline = (e: Cond, v: Vocab): string => inlineIn(e, v)
 import { alternatives } from './alternatives.ts'
 import {
   type Dialect,
   field,
   indexName,
+  readsStored,
   refEqAt,
   sqlite,
   stableSqlite,
+  storedIn,
   type Tag,
   tagOf,
   tallied,
@@ -671,7 +687,7 @@ let fresh = (
 let share = (ctx: Ctx, query: Query, materialized = false): Source => {
   let found = ctx.shared.get(query)
   if (found) return found.source
-  let rendered = render(query)
+  let rendered = render(query, ctx.v)
   let name = fresh(
     ctx,
     [rendered.sql],
@@ -769,8 +785,8 @@ let unworn = (op: string, value: Value | null, prop: string): Cond =>
 // time an untouched row changed.
 // A registered expression, written into the binder's text around the SQL that
 // names its owner.
-let derive = (dc: DerivedProp, owner: string): string =>
-  inline(dc.expr(raw(owner)))
+let derive = (dc: DerivedProp, owner: string, v: Vocab): string =>
+  inline(dc.expr(raw(owner)), v)
 
 let guarded = (dc: DerivedProp, present: string, expr: string): string =>
   dc.worn === false ? expr : `(case when ${present} then ${expr} end)`
@@ -822,7 +838,7 @@ export let readAt = (
   let dc = derived[key]
   if (dc) {
     return {
-      expr: guarded(dc, `${owner} is not null`, derive(dc, owner)),
+      expr: guarded(dc, `${owner} is not null`, derive(dc, owner, v)),
       tag: dc.tag,
       deps: dc.deps,
     }
@@ -1271,7 +1287,9 @@ let backThrough = (ctx: Ctx, hops: Hop[], set: Query): Query =>
   hops.reduceRight((targets, { comp, prop }, i) => {
     let alias = `__back${i}`
     let table = source(ctx, comp)
-    let index = table == `"${comp}"` ? leading(ctx, comp, prop) : undefined
+    let index = table == relationOf(ctx.v, comp)
+      ? leading(ctx, comp, prop)
+      : undefined
     return select({
       cols: [as(col('entity', alias), 'id')],
       from: index
@@ -1373,7 +1391,7 @@ let sought = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
       where,
     })
   let n = hops.length - 1, leaf = hops[n]
-  let key = inline(col(field(leaf.prop), at(n)))
+  let key = inline(col(field(leaf.prop), at(n)), ctx.v)
   let def = ctx.v.prop(leaf.comp, leaf.prop)!
   if (def.category != 'ref') {
     opaque(tagOf(def), 'a filter on it', `${leaf.comp}.${leaf.prop}`)
@@ -1486,7 +1504,10 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
     let present = leaf.comp == 'entity' ? `${target} is not null` : `exists ` +
       `(select 1 from ${source(ctx, leaf.comp)} as "__pw"` +
       ` where "__pw"."entity" = ${target})`
-    return { expr: guarded(dc, present, derive(dc, target)), tag: dc.tag }
+    return {
+      expr: guarded(dc, present, derive(dc, target, ctx.v)),
+      tag: dc.tag,
+    }
   }
   let def = ctx.v.prop(leaf.comp, leaf.prop)
   if (def?.computed) return null
@@ -1513,7 +1534,9 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
     ctx.tagged.add(def.ref!)
     let tag = tagIn(def.ref!)
     return {
-      expr: `(select ${inline(eidAt(tag, col(leaf.prop, '__pl')))} from ${
+      expr: `(select ${
+        inline(eidAt(tag, col(leaf.prop, '__pl')), ctx.v)
+      } from ${
         source(ctx, leaf.comp)
       } as "__pl" where "__pl"."entity" = ${target})`,
       tag: 'eid',
@@ -1623,7 +1646,10 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
       params: [...held.params, values[0]],
     })
   }
-  let visible = renderStable(among(col('eid', '__refs_seen'), each(values)))
+  let visible = renderStable(
+    among(col('eid', '__refs_seen'), each(values)),
+    ctx.v,
+  )
   return cond({
     sql:
       `${key} in (select "o" from (${held.sql}) as "__refs" where "t" in (select "id" from ${entity} as "__refs_seen" where ${visible.sql}))`,
@@ -1712,8 +1738,8 @@ let referrers = (
   // to write out, and too deep for workerd to take named. With `pairs`, each
   // row names the target it points at beside its owner, for that question.
   let addressed = values.length == 1
-    ? render(eq(col('eid'), val(values[0])))
-    : renderStable(among(col('eid'), each(values)))
+    ? render(eq(col('eid'), val(values[0])), ctx.v)
+    : renderStable(among(col('eid'), each(values)), ctx.v)
   let target = `with "${name}" as materialized (select id from ${
     ctx.d.unscoped?.('entity') ?? source(ctx, 'entity')
   } where ${addressed.sql})`
@@ -1722,12 +1748,15 @@ let referrers = (
       pairs ? ` as "o", "${name}".id as "t"` : ''
     } from "${name}" cross join ${ctx.d.joined?.(c) ?? ctx.d.table(c)} on ` +
     props.map((p) => `${refKey(ctx, c, p)} = "${name}".id`).join(' or ')
-  let list = render(unionAllWithin(groups.map((group, i) =>
-    select({
-      cols: [star()],
-      from: from(raw(group.map(term).join(' union all ')), `__refs${i}`),
-    })
-  )))
+  let list = render(
+    unionAllWithin(groups.map((group, i) =>
+      select({
+        cols: [star()],
+        from: from(raw(group.map(term).join(' union all ')), `__refs${i}`),
+      })
+    )),
+    ctx.v,
+  )
   return {
     sql: `${target} ${list.sql}`,
     params: [...addressed.params, ...list.params],
@@ -1737,8 +1766,7 @@ let referrers = (
 // Whether a read can be driven from a component's own table.
 let spined = (ctx: Ctx, comp: string): boolean =>
   comp != 'entity' && !!ctx.v.comp(comp) && !computed(ctx.v, comp) &&
-  (ctx.d.scoped || source(ctx, comp) == `"${comp}"` &&
-      ctx.d.table(comp) == `"${comp}"`)
+  (ctx.d.scoped || readsStored(ctx.d, ctx.v, comp))
 
 // The component a test of its property requires, where no clause names one
 // outright: `.session.operator=true` holds only for a session.
@@ -1908,13 +1936,16 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
     return or(...branches.map((b) => b.where))
   }
   let picks = branches.map(({ branch, where, joins, x }) =>
-    render(indexedRelation(branch, [x], ctx.d.spine, {
-      cols: ctx.d.admitted
-        ? ['"entity".*']
-        : [`${ctx.d.ownerKey('entity')} as id`],
-      joins,
-      where,
-    }))
+    render(
+      indexedRelation(branch, [x], ctx.d.spine, {
+        cols: ctx.d.admitted
+          ? ['"entity".*']
+          : [`${ctx.d.ownerKey('entity')} as id`],
+        joins,
+        where,
+      }),
+      ctx.v,
+    )
   )
   let groups = cut(picks, ARMS).map((group) => ({
     sql: group.map((a) => a.sql).join(' union all '),
@@ -1987,13 +2018,13 @@ let selection = (ctx: Ctx, test: Cond): Query | undefined => {
     )
     if (
       !list.length || list.length < test.set.length ||
-      render(test.e).sql != ctx.d.ownerKey('entity')
+      render(test.e, ctx.v).sql != ctx.d.ownerKey('entity')
     ) return
     return selection(ctx, { ...test, set: each(list) })
   }
   if (test.t == 'in' && !Array.isArray(test.set)) {
     let set = test.set
-    if (render(test.e).sql != ctx.d.ownerKey('entity')) return
+    if (render(test.e, ctx.v).sql != ctx.d.ownerKey('entity')) return
     let first = column(set)
     let name = first?.t == 'as' || first?.t == 'col' ? first.name : undefined
     if (!name) return
@@ -2039,6 +2070,29 @@ let intersection = (parts: Query[]): Query => {
 // reverse hop's subquery (which is the from there, so it is never joined to
 // itself). Each is the dialect's joined source and its on condition.
 type Link = { source: string; on: string }
+
+// A join source read from its component's own table, as one keyed by its
+// owner where the dialect has such a read (`Dialect.owned`): each named row is
+// sought by its key, never by a secondary index.
+let ownedJoin = (ctx: Ctx, source: string, must = true): string => {
+  if (!must || !ctx.d.owned) return source
+  let comp = /^"[a-z_0-9]+"$/.test(source)
+    ? source.slice(1, -1)
+    : tablesOf(ctx.v).get(source)
+  return comp ? ctx.d.owned(comp) : source
+}
+
+// Each component the vocabulary stores apart from its labels, by the text a
+// statement joins its table as (./render.ts `tableOf`).
+let joinedAs = new WeakMap<Vocab, Map<string, string>>()
+let tablesOf = (v: Vocab): Map<string, string> => {
+  let held = joinedAs.get(v)
+  if (!held) {
+    held = new Map(v.all.map((c) => [tableOf(v, c), c]))
+    joinedAs.set(v, held)
+  }
+  return held
+}
 let joining = (ctx: Ctx, comp: string): string =>
   !ctx.spine ? ctx.d.joined?.(comp) ?? ctx.d.table(comp) : ctx.d.table(comp)
 let joinsOf = (ctx: Ctx, base = 'entity'): Link[] =>
@@ -2188,7 +2242,7 @@ let reverse = (
   }
   let filter = p.where ?? { ...p, path: rest, not: undefined }
   let test = clause(sub, filter)
-  let inner = render(test)
+  let inner = render(test, ctx.v)
   if (semi) {
     // A child's reference equality or reference into a set can seek its
     // index even when old statistics say every child points at one entity.
@@ -2202,12 +2256,12 @@ let reverse = (
       (filter.path.length == 2 ||
         conjunctsOf(test).some((part) =>
           part.t == 'in' && !Array.isArray(part.set) &&
-          render(part.e).sql == refKey(ctx, a.comp, prop)
+          render(part.e, ctx.v).sql == refKey(ctx, a.comp, prop)
         ))
     let index =
       prop && stored && stored.category == 'ref' && !stored.computed &&
         seeks && !ctx.derived[`${a.comp}.${prop}`] &&
-        child == `"${a.comp}"` && source(ctx, a.comp) == child
+        readsStored(ctx.d, ctx.v, a.comp)
         ? leading(ctx, a.comp, prop)
         : undefined
     let from = index && ctx.d.indexed?.(a.comp, index) || child
@@ -2759,10 +2813,13 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     let few = found?.few ? found.owners : undefined
     let reading = (where: Frag): Frag => {
       let w = found?.owners
-        ? render(and(
-          among(raw(few ? '"entity"."id"' : '+"entity"."id"'), found.owners),
-          raw(where.sql, where.params),
-        ))
+        ? render(
+          and(
+            among(raw(few ? '"entity"."id"' : '+"entity"."id"'), found.owners),
+            raw(where.sql, where.params),
+          ),
+          ctx.v,
+        )
         : where
       return {
         sql: `select "entity".${admitted ? '*' : '"id"'} from ${
@@ -2782,7 +2839,7 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     let key = ctx.d.archetype!(ctx.owner)
     ctx.shapeCandidates = true
     ctx.candidates = {
-      ...reading(render(shape)),
+      ...reading(render(shape, ctx.v)),
       test: shape,
       whole: !!admitted,
       keyed: !!few,
@@ -2806,7 +2863,7 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   ) {
     for (let c of rest.filter((c) => keyTest(ctx, c))) {
       let condition = conditions.get(c)!
-      let test = render(condition)
+      let test = render(condition, ctx.v)
       ctx.candidates.sql += ` and (${test.sql})`
       ctx.candidates.params.push(...test.params)
       // An indexed predicate may drive instead of these candidates. Keep the
@@ -3130,6 +3187,7 @@ let selectionScreen = (
   d: Dialect = dialectOf(opts),
   screening = false,
 ): Selection | null => {
+  d = storedIn(d, vocab)
   let rest = ast.clauses.filter((c) => !directive(c))
   if (!rest.length && !opts.visibility && !opts.eids) return null
   let query = { ...ast, clauses: rest }
@@ -3167,7 +3225,7 @@ let selectionScreen = (
       ...admits,
       cols: [raw(`${d.ownerKey('entity')} as id`)],
       order: [],
-    }),
+    }, vocab),
     keyed,
     whole: admitting.whole?.() ?? false,
     seek: seek && d.indexed
@@ -3178,7 +3236,7 @@ let selectionScreen = (
           }),
           cols: [raw(`${d.ownerKey('entity')} as id`)],
           order: [],
-        })
+        }, vocab)
       : undefined,
     probe: (owner) =>
       exists({
@@ -3325,11 +3383,14 @@ let resolveField = (
     }
     return {
       expr: worn(ctx, leaf.comp)
-        ? inline(owned({
-          ...ctx,
-          correlated: true,
-          owner: owner ?? ctx.owner ?? ctx.d.ownerKey('entity'),
-        }, leaf.comp))
+        ? inline(
+          owned({
+            ...ctx,
+            correlated: true,
+            owner: owner ?? ctx.owner ?? ctx.d.ownerKey('entity'),
+          }, leaf.comp),
+          ctx.v,
+        )
         : '0',
       tag: 'number',
     }
@@ -3430,14 +3491,17 @@ let gatedList = (
     }))
     arms.unshift([not(enclosing), lit(0)])
   }
-  return render(select({
-    cols: [raw('*')],
-    from: raw(src),
-    where: cond(matches),
-    // A WHERE gate is evaluated after IN has already sought its values.
-    // LIMIT is evaluated before those seeks, and leaves outer shaping intact.
-    limit: { t: 'case', arms, else: lit(0) },
-  }))
+  return render(
+    select({
+      cols: [raw('*')],
+      from: raw(src),
+      where: cond(matches),
+      // A WHERE gate is evaluated after IN has already sought its values.
+      // LIMIT is evaluated before those seeks, and leaves outer shaping intact.
+      limit: { t: 'case', arms, else: lit(0) },
+    }),
+    ctx.v,
+  )
 }
 
 // Every arm owns its indexed selection; unrelated alternatives share no joins.
@@ -3465,7 +3529,7 @@ let indexedRelation = (
         let named = `"${
           fresh(
             ctx,
-            [render(s).sql],
+            [render(s, ctx.v).sql],
             `__named_${ctx.d.name.replace(/[^A-Za-z_0-9]/g, '_')}_`,
           )
         }"`
@@ -3496,11 +3560,7 @@ let indexedRelation = (
               )
               return {
                 how: must ? 'cross' : 'left',
-                src: raw(
-                  must && ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.source)
-                    ? ctx.d.owned(j.source.slice(1, -1))
-                    : j.source,
-                ),
+                src: raw(ownedJoin(ctx, j.source, must)),
                 on: raw(j.on),
               }
             }),
@@ -3534,8 +3594,7 @@ let indexedRelation = (
         if (
           comp == 'entity' || !ctx.v.comp(comp) || ctx.v.props(comp).length ||
           computed(ctx.v, comp) || !ctx.d.scoped &&
-            (source(ctx, comp) != `"${comp}"` ||
-              ctx.d.table(comp) != `"${comp}"`)
+            !readsStored(ctx.d, ctx.v, comp)
         ) continue
         root = { comp }
         break
@@ -3558,8 +3617,7 @@ let indexedRelation = (
       let index = choice?.name
       if (
         !index || !ctx.d.scoped &&
-          (ctx.d.table(comp) != `"${comp}"` ||
-            source(ctx, comp) != `"${comp}"`)
+          !readsStored(ctx.d, ctx.v, comp)
       ) continue
       if ((choice?.n ?? 0) > (root?.n ?? -1)) {
         root = { comp, index, pred: hops ? undefined : c, n: choice?.n }
@@ -3593,7 +3651,7 @@ let indexedRelation = (
       // search never walks every eligible owner before finding no hits.
       ctx.shapeCandidates = false
       ctx.candidates = {
-        ...render(intersection(selected.map((s) => s.q))),
+        ...render(intersection(selected.map((s) => s.q)), ctx.v),
         test: and(...selected.map((s) => s.test)),
       }
     }
@@ -3732,7 +3790,7 @@ let indexedRelation = (
     ctx.storageOrder && s.where &&
     !flattened(clauses).some((c) => c.kind == 'order')
   ) {
-    let w = render(s.where)
+    let w = render(s.where, ctx.v)
     s = {
       ...s,
       where: raw(
@@ -3796,11 +3854,7 @@ let indexedRelation = (
             )
           ? 'cross'
           : 'left',
-        src: raw(
-          !root!.index && ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.source)
-            ? ctx.d.owned(j.source.slice(1, -1))
-            : j.source,
-        ),
+        src: raw(ownedJoin(ctx, j.source, !root!.index)),
         on: raw(j.on),
       })),
     ],
@@ -3846,11 +3900,7 @@ let indexedRelation = (
               )
               ? 'cross'
               : 'left',
-            src: raw(
-              ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.source)
-                ? ctx.d.owned(j.source.slice(1, -1))
-                : j.source,
-            ),
+            src: raw(ownedJoin(ctx, j.source)),
             on: raw(j.on),
           })),
         ],
@@ -3959,7 +4009,7 @@ let roads = (
         arms: [[enabled, val(page ?? -1)]],
         else: val(0),
       },
-    })
+    }, ctx.v)
     return {
       t: 'select' as const,
       cols: [raw('"id"')],
@@ -3970,7 +4020,7 @@ let roads = (
     t: 'compound',
     op: 'union all',
     parts: arms.map(([q, enabled]) => gated(q, enabled)),
-  })
+  }, ctx.v)
   return {
     ...s,
     from: raw(`(${union.sql}) as "__selected"`, union.params),
@@ -3989,9 +4039,7 @@ let roads = (
         how: j.src.t == 'raw' && j.src.sql == joining(ctx, comp)
           ? 'cross'
           : j.how,
-        src: j.src.t == 'raw' && ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.src.sql)
-          ? raw(ctx.d.owned(j.src.sql.slice(1, -1)))
-          : j.src,
+        src: j.src.t == 'raw' ? raw(ownedJoin(ctx, j.src.sql)) : j.src,
       })),
     ],
   }
@@ -4135,6 +4183,7 @@ export let prepared = (
   heard: Heard = { archetypes: opts.archetypes, extend: opts.extend },
   fields?: Map<string, Field>,
 ): Prepared => {
+  d = storedIn(d, vocab)
   let vacant = empty(ast, vocab, opts)
   if (vacant && !reads.length) {
     return { opts, lower: () => ({ ...vacant, from: raw(d.spine) }) }
@@ -4428,7 +4477,7 @@ let limited = (ast: And, ctx: Ctx): Frag | undefined => {
     let arm = render({
       ...q,
       cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
-    })
+    }, ctx.v)
     let held: Param[] = [...marks.values()]
     return held
       .reduce<boolean[][]>(
@@ -4457,11 +4506,14 @@ let limited = (ast: And, ctx: Ctx): Frag | undefined => {
   let q: Query = parts.length == 1
     ? parts[0]
     : { t: 'compound', op: 'union all', parts }
-  return render(select({
-    distinct: true,
-    from: from(q),
-    limit: val(limit.n),
-  }))
+  return render(
+    select({
+      distinct: true,
+      from: from(q),
+      limit: val(limit.n),
+    }),
+    ctx.v,
+  )
 }
 
 // A window in the default order is the numbered entities, newest number
@@ -4509,7 +4561,7 @@ let halved = (ast: And, ctx: Ctx): Frag | undefined => {
     let arm = render({
       ...q,
       cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
-    })
+    }, ctx.v)
     return select({
       from: from(raw(arm.sql, arm.params, arm.table, arm.origin)),
     })
@@ -4520,13 +4572,16 @@ let halved = (ast: And, ctx: Ctx): Frag | undefined => {
     op,
     value: op == '=' ? { kind: 'scalar', raw: '' } : null,
   })
-  return render(select({
-    from: from({
-      t: 'compound',
-      op: 'union all',
-      parts: [page('numbered', at('!')), page('unnumbered', at('='))],
+  return render(
+    select({
+      from: from({
+        t: 'compound',
+        op: 'union all',
+        parts: [page('numbered', at('!')), page('unnumbered', at('='))],
+      }),
     }),
-  }))
+    ctx.v,
+  )
 }
 
 // A page in the order of an indexed property, `.order=-created.at&.limit=20`.
@@ -4574,7 +4629,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     computed(ctx.v, comp) || ctx.derived[path.join('.')] ||
     ranked(ctx, path.join('.')) ||
     !ctx.d.scoped &&
-      (source(ctx, comp) != `"${comp}"` || ctx.d.table(comp) != `"${comp}"`)
+      !readsStored(ctx.d, ctx.v, comp)
   ) return
   let index = indexFor(ctx, comp, prop, ast.clauses)?.name
   if (!index) return
@@ -4608,7 +4663,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   )
   if (after) {
     return required
-      ? render(page({ walk: { comp, index } }, [], limit.n))
+      ? render(page({ walk: { comp, index } }, [], limit.n), ctx.v)
       : undefined
   }
   // Beside a test, fewer than a page of the component that drives the read
@@ -4633,21 +4688,24 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     let presence = indexedPresence(ctx, filters, comp, limit.n)
     if (!presence) return ordered
     let { walk, crowded } = presence
-    return render(select({
-      from: from({
-        t: 'compound',
-        op: 'union all',
-        parts: [
-          page({ walk }, [], crowded),
-          select({
-            from: from(select({
-              from: raw(`(${ordered.sql})`, ordered.params),
-              limit: { t: 'case', arms: [[crowded, lit(-1)]], else: lit(0) },
-            })),
-          }),
-        ],
+    return render(
+      select({
+        from: from({
+          t: 'compound',
+          op: 'union all',
+          parts: [
+            page({ walk }, [], crowded),
+            select({
+              from: from(select({
+                from: raw(`(${ordered.sql})`, ordered.params),
+                limit: { t: 'case', arms: [[crowded, lit(-1)]], else: lit(0) },
+              })),
+            }),
+          ],
+        }),
       }),
-    }))
+      ctx.v,
+    )
   }
   let tests = (c: Clause) =>
     c.kind != 'pred' || c.not || c.where || opOf(c) != 'want' &&
@@ -4672,7 +4730,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     let newest = render({
       ...few,
       cols: [raw(`${ctx.d.ownerKey('entity')} as id`)],
-    })
+    }, ctx.v)
     return sparse(ahead(
       ctx,
       page(
@@ -4685,7 +4743,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     ))
   }
   if (required) {
-    return sparse(render(page({ walk: { comp, index } }, [], limit.n)))
+    return sparse(render(page({ walk: { comp, index } }, [], limit.n), ctx.v))
   }
   let holding: Pred = { kind: 'pred', path, op: '!', value: null }
   // Blank, so it holds an empty text too, which the holding half may also read.
@@ -4754,16 +4812,19 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     held.params,
   )
   let lead = first(few ?? limit.n)
-  let led = render(lead)
+  let led = render(lead, ctx.v)
   let full = raw(
     `exists (${led.sql} limit 1 offset ${limit.n - 1})`,
     led.params,
   )
   let parts = [lead, rest(few ? or(few, full) : full)]
   if (few) parts.push(page({ walk: null }, [], not(few)))
-  return sparse(render(select({
-    from: from({ t: 'compound', op: 'union', parts }),
-  })))
+  return sparse(render(
+    select({
+      from: from({ t: 'compound', op: 'union', parts }),
+    }),
+    ctx.v,
+  ))
 }
 
 // A reference can be far sparser than the component holding it. Probe its
@@ -4813,7 +4874,7 @@ let arm = (
     limit: typeof n == 'number'
       ? val(n)
       : { t: 'case', arms: [[n, val(0)]], else: val(limit) },
-  })
+  }, ctx.v)
   return select({
     from: from(raw(read.sql, read.params, read.table, read.origin)),
   })
@@ -4839,21 +4900,24 @@ let ahead = (
     offset: lit(n - 1),
   }))
   let stop = made ? and(full, made(lead)) : full
-  return render(select({
-    from: from({
-      t: 'compound',
-      op: 'union',
-      parts: [
-        select({ cols: [col('id')], from: lead }),
-        select({
-          from: from(select({
-            from: from(rest),
-            limit: { t: 'case', arms: [[stop, val(0)]], else: val(n) },
-          })),
-        }),
-      ],
+  return render(
+    select({
+      from: from({
+        t: 'compound',
+        op: 'union',
+        parts: [
+          select({ cols: [col('id')], from: lead }),
+          select({
+            from: from(select({
+              from: from(rest),
+              limit: { t: 'case', arms: [[stop, val(0)]], else: val(n) },
+            })),
+          }),
+        ],
+      }),
     }),
-  }))
+    ctx.v,
+  )
 }
 
 // A page in the order of a ranking that says where its page lies (./extend.ts
@@ -4883,7 +4947,7 @@ let led = (ast: And, ctx: Ctx): Frag | undefined => {
   if (!lead) return
   let floor = lead.floor
   let clauses = [...ast.clauses.filter((c) => !directive(c)), order]
-  let rows = render(lead.rows)
+  let rows = render(lead.rows, ctx.v)
   return ahead(
     ctx,
     arm(ctx, clauses, n, {
@@ -4908,7 +4972,7 @@ let led = (ast: And, ctx: Ctx): Frag | undefined => {
 let spun = (ctx: Ctx, c: Pred): string | undefined => {
   let [comp] = implied(ctx, c)
   return comp && !computed(ctx.v, comp) && (ctx.d.scoped ||
-      source(ctx, comp) == `"${comp}"` && ctx.d.table(comp) == `"${comp}"`)
+      readsStored(ctx.d, ctx.v, comp))
     ? comp
     : undefined
 }
@@ -4977,9 +5041,7 @@ let lower = (
   let stored = scope?.dialect ?? ctx.d
   if (
     counted?.present &&
-    (stored.source?.(counted.comp) ?? `"${counted.comp}"`) ==
-      `"${counted.comp}"` &&
-    stored.table(counted.comp) == `"${counted.comp}"`
+    readsStored(stored, ctx.v, counted.comp)
   ) {
     return rel(ctx.d.table(counted.comp), {
       cols: [`'' as value`, as(count(), 'n')],
@@ -5000,7 +5062,7 @@ let lower = (
       let comp = required[0]!.comp
       if (
         ctx.d.scoped ||
-        source(ctx, comp) == `"${comp}"` && ctx.d.table(comp) == `"${comp}"`
+        readsStored(ctx.d, ctx.v, comp)
       ) ctx.present = comp
     }
   }
@@ -5231,13 +5293,13 @@ let lower = (
             order: ordered,
           }),
           limit: val(limit.n),
-        })
+        }, ctx.v)
         return select({
           cols: [raw('"id"'), raw('"num"')],
           from: raw(`(${a.sql})`, a.params),
         })
       }
-      let all = render(unionAllWithin(shapes.map(arm)))
+      let all = render(unionAllWithin(shapes.map(arm)), ctx.v)
       let page = render({
         ...select({
           cols: [raw('"id"')],
@@ -5245,7 +5307,7 @@ let lower = (
         }),
         order: [raw('"num" desc'), raw('"id" desc')],
         limit: val(limit.n),
-      })
+      }, ctx.v)
       return paging(page)
     }
   }
@@ -5290,7 +5352,7 @@ let lower = (
     })
     // LIMIT, unlike WHERE, gates the whole fallback before its driving scan.
     fallback.limit = { t: 'case', arms: [[full, val(0)]], else: val(limit.n) }
-    let slow = render(fallback)
+    let slow = render(fallback, ctx.v)
     let selected = render({
       t: 'compound',
       op: 'union all',
@@ -5301,7 +5363,7 @@ let lower = (
           from: raw(`(${slow.sql})`, slow.params),
         }),
       ],
-    })
+    }, ctx.v)
     return paging(
       selected,
       { name: prefix, q: { ...recent, limit: val(cap) }, materialized: true },
@@ -5338,7 +5400,7 @@ let lower = (
         order: ordered,
       }, limit.n),
       limit: val(limit.n),
-    })
+    }, ctx.v)
     // The page drives the projection, a scoped spine's too (the entity table
     // read through a visibility policy): re-selected through the selection's
     // own joins, the page's rows are found by walking its seek's whole index.
@@ -5447,7 +5509,7 @@ let lower = (
           arms: [[many, val(on ? limit.n : 0)]],
           else: val(on ? 0 : limit.n),
         },
-      })
+      }, ctx.v)
       return select({
         cols: [raw('"id"')],
         from: raw(`(${ran.sql})`, ran.params),
@@ -5457,7 +5519,7 @@ let lower = (
       t: 'compound',
       op: 'union all',
       parts: [road(walk, true), road(seek, false)],
-    })
+    }, ctx.v)
     return finished({
       ...rel(ctx.d.spine, { cols, joins: [], where: TRUE, order: ordered }),
       with: [{
@@ -5521,7 +5583,8 @@ export let sourceScreen = (
   vocab: Vocab,
   opts: BindOpts,
   components: string[] = [],
-  lower: Screener = (ast, o, d) => render(screening(ast, vocab, o, d).lower()),
+  lower: Screener = (ast, o, d) =>
+    render(screening(ast, vocab, o, d).lower(), vocab),
 ): Raw | null => {
   let scopes = [
     opts.visibility?.entity,
@@ -5587,8 +5650,10 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
     ),
   )
   let key = JSON.stringify([
-    entity && inline(entity),
-    ...[...screens].map(([name, screen]) => [name, screen && inline(screen)]),
+    entity && inline(entity, vocab),
+    ...[...screens].map((
+      [name, screen],
+    ) => [name, screen && inline(screen, vocab)]),
   ])
   let byVocab = scopedDerived.get(vocab)
   if (!byVocab) scopedDerived.set(vocab, byVocab = new WeakMap())
@@ -5598,7 +5663,7 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   let allowed = new Set<Cte>()
   let relations = new Map<string, Cte>()
   let shared = (screen: Raw): string => {
-    let key = inline(screen)
+    let key = inline(screen, vocab)
     let relation = relations.get(key)
     if (!relation) {
       let name = `__derive_allowed${relations.size}`
@@ -5786,7 +5851,7 @@ let ghostly = (
         ? [{ name, as: field(name), ref: p.category == 'ref' }]
         : []
     })
-    return inline(sub(held(comp, props)))
+    return inline(sub(held(comp, props)), vocab)
   }
   let past = (c: string) => col(c, '__past')
   let told = (at: string) =>
@@ -5808,7 +5873,9 @@ let ghostly = (
     live: (at = owner) => {
       let alive = d.live(at)
       return {
-        sql: `(not ${alive.sql} and ${inline(told(at ?? '"entity"."id"'))})`,
+        sql: `(not ${alive.sql} and ${
+          inline(told(at ?? '"entity"."id"'), vocab)
+        })`,
         params: alive.params,
       }
     },
@@ -6057,7 +6124,7 @@ let admitting = (
   // as their components are, so they never name the row they screen: one
   // read as `"text"` (a derived property's alias for `content`) would be the
   // scope's own `text` table there, joined to its right.
-  let key = direct ? '"__owner"."id"' : inline(owner)
+  let key = direct ? '"__owner"."id"' : inline(owner, vocab)
   let keyedTo: Dialect = {
     ...base,
     indexed: undefined,
@@ -6094,7 +6161,7 @@ let admitting = (
   return exists({
     ...owners,
     ...direct
-      ? { from: raw(`(select ${inline(owner)} as "id") as "__owner"`) }
+      ? { from: raw(`(select ${inline(owner, vocab)} as "id") as "__owner"`) }
       : {},
     cols: [val(1)],
     where: direct
@@ -6611,7 +6678,7 @@ let sortOf = (ctx: Ctx, { value, last }: Order): Sort => {
 let ranked = (ctx: Ctx, field: string, owner?: string): string | null => {
   for (let e of ctx.ext) {
     let expr = e.order?.(field, site(ctx, owner))
-    if (expr) return inline(expr)
+    if (expr) return inline(expr, ctx.v)
   }
   return null
 }

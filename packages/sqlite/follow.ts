@@ -21,6 +21,7 @@ import {
   render,
   type SchemaObject,
   type Stmt,
+  stored,
 } from '@yaks/sql/core'
 import {
   col,
@@ -29,7 +30,6 @@ import {
   lit,
   notNull,
   select,
-  table,
   tagOf,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
@@ -115,7 +115,7 @@ export let grow = (
       made.add(s.name)
       return []
     }
-    if (declares(stood.get(s.name) ?? null, s)) return []
+    if (declares(stood.get(s.name) ?? null, s, driver.stored?.v)) return []
     let has = new Set(
       driver.query({ t: 'pragma', name: 'table_info', arg: s.name })
         .map((r) => String(r.name)),
@@ -148,13 +148,15 @@ export let add = (driver: Driver, stmts: Stmt[]): Error[] =>
 export type Named = { vocab: Vocab; beside?: readonly Stmt[] }
 
 // Whether any row of `name` holds a value in its column `c`.
-let valued = (driver: Driver, name: string, c: string): boolean =>
-  driver.query(select({
+let valued = (driver: Driver, name: string, c: string): boolean => {
+  let v = driver.stored?.v
+  return driver.query(select({
     cols: [lit(1)],
-    from: table(name),
-    where: notNull(col(c)),
+    from: { t: 'table', name: v ? stored(v, name) : name, physical: true },
+    where: notNull(col(v ? stored(v, name, c) : c)),
     limit: lit(1),
   })).length > 0
+}
 
 /** A component's table, or a table and one of its columns. */
 export type Seat = readonly [table: string, column?: string]
@@ -177,7 +179,11 @@ let unseating = (driver: Driver, [t, c]: Seat): Stmt[] => [
       return []
     }
     let said = words(o.sql)
-    let names = said.has(t.toLowerCase()) && (!c || said.has(c.toLowerCase()))
+    let v = driver.stored?.v
+    let name = v ? stored(v, t) : t
+    let prop = c && v ? stored(v, t, c) : c
+    let names = said.has(name.toLowerCase()) &&
+      (!prop || said.has(prop.toLowerCase()))
     return names ? [dropOf(o.type as Kind, o.name)] : []
   }),
   c
@@ -264,7 +270,8 @@ export let shed = (driver: Driver, { vocab, beside = [] }: Named): Seat[] => {
       return columnsBy(driver, name, sql)
         .filter((c) => {
           let low = c.toLowerCase()
-          return !made.get(name)!.has(low) && !held.has(low) &&
+          return !made.get(name)!.has(low) &&
+            !held.has(stored(vocab, name, c).toLowerCase()) &&
             !valued(driver, name, c)
         })
         .map((c): Seat => [name, c])

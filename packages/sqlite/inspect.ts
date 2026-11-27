@@ -1,7 +1,7 @@
 // Bounded physical facts about a SQLite store. The caller sees names and
 // counts, never definitions, statement text, or row values.
 
-import { foreign } from './physical.ts'
+import { mainTables } from './physical.ts'
 import { heldBy } from './archetype.ts'
 import { ledger } from './ledger.ts'
 import { populations } from './population.ts'
@@ -104,10 +104,7 @@ export let inspect = (
   preferred: readonly string[] = [],
 ): StoreSize => {
   let first = new Set(['entity', 'journal', 'yak_writes', ...preferred])
-  let names = db.query({ t: 'pragma', name: 'table_list' })
-    .filter((r) => r.schema == 'main' && r.type == 'table')
-    .map((r) => String(r.name))
-    .filter((name) => !foreign(name))
+  let names = mainTables(db).filter((r) => r.type == 'table').map((r) => r.name)
     .sort((a, b) =>
       Number(first.has(b)) - Number(first.has(a)) ||
       a.localeCompare(b)

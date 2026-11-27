@@ -78,6 +78,7 @@ import type { History, Store } from '@yaks/sqlite'
 import type { Stmt } from '@yaks/sql'
 import { migrations, migrationSchema } from '@yaks/sqlite/migration'
 import { add, follow, printing, printOf } from '@yaks/sqlite/follow'
+import { bindStorage } from '@yaks/sqlite'
 import { requirements, requires } from '@yaks/sqlite/meta'
 import { filler, SCHEMA_DUTY, tend } from '@yaks/sqlite/owe'
 import { survey } from '@yaks/sqlite/survey'
@@ -634,6 +635,7 @@ let composed = async (
       if (!opts.readOnly) add(opened, migrationSchema())
     } else part?.('migrations')
     let sql = opened
+    let layout = bindStorage(sql, vocab)
     // Facet imports may have awaited while another process announced work.
     // Refuse again on the retained connection before domain schema or factories.
     migrations(sql).ready()
@@ -693,7 +695,7 @@ let composed = async (
     let self = writer(vocab)
     // The store's print, digested by the platform before the store is bound,
     // so the schema below finds it made.
-    if (!opts.readOnly && !mode) await printing(vocab, derived, !!sql.file)
+    if (!opts.readOnly && !mode) await printing(layout, derived, !!sql.file)
     // A web host warms when its server asks (@yaks/api `serve`): first what
     // its routes make ahead of a first request, then, once that is made, the
     // rest (`opts.warm`), so the first page answers before workers start.
@@ -884,7 +886,7 @@ let composed = async (
       // A mode's connection reads the file its writers keep in shape.
       schema: opts.readOnly || mode ? undefined : (_built, stmts) => {
         let beside = [...migrationSchema(), ...blobSchema(), ...stmts]
-        let indexes = textSchema(text, derived)
+        let indexes = textSchema(text, derived, layout)
         over = [...beside, ...indexes]
         let print = printOf(store!.print(), [...beside, ...indexes])
         let told = (error: unknown) =>
@@ -919,7 +921,7 @@ let composed = async (
           // What a reader's first look at the file finds, kept for every
           // opener after this one until the schema moves.
           try {
-            survey(sql, vocab, derived)
+            survey(sql, layout, derived)
           } catch (error) {
             told(error)
           }

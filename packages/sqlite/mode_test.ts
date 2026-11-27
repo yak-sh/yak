@@ -55,3 +55,38 @@ test('a branch over a file owing an index seeks none of its own', async () =>
     (await on.read('.dep.source="component:doc"')).map((b) => b.entity.eid),
     ['a'],
   ))
+
+test('branches read and write versions in a UUID store', () => {
+  let v = loadVocab({
+    $defs: {
+      memo: {
+        $id: `urn:uuid:${crypto.randomUUID()}`,
+        component: true,
+        properties: {
+          title: { $id: `urn:uuid:${crypto.randomUUID()}`, type: 'string' },
+        },
+      },
+    },
+  })
+  let db = open(':memory:')
+  using _close = { [Symbol.dispose]: () => db.close() }
+  db.query({
+    t: 'create table',
+    name: 'clock',
+    cols: [{ name: 'id', type: 'integer', pk: true }, {
+      name: 'at',
+      type: 'text',
+    }],
+  })
+  let live = storage(db, v, { history })
+  live.install()
+  let patch = (title: string) => [{ entity: { eid: 'a' }, memo: { title } }]
+  live.tx((tx) => tx.patch(patch('before')))
+  let mode = branch(db, history)
+  live.tx((tx) => tx.patch(patch('main')))
+  let side = moded(db, v, { history }, mode)
+  equal(side.read('.memo.title=before')[0]?.memo, { title: 'before' })
+  side.tx((tx) => tx.patch(patch('branch')))
+  equal(side.read('.memo.title=branch')[0]?.memo, { title: 'branch' })
+  equal(live.read('.memo.title=main')[0]?.memo, { title: 'main' })
+})

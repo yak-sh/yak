@@ -43,7 +43,7 @@
 
 import { type And, map, type Pred, type Value } from '@yaks/query/core'
 import type { Presence, Vocab } from '@yaks/vocab'
-import { type Param, type Raw, raw, type Stmt } from './ast.ts'
+import { type Expr, type Param, type Raw, raw, type Stmt } from './ast.ts'
 import {
   type BindOpts,
   type Census,
@@ -61,7 +61,7 @@ import {
 import type { ArchetypeSet } from './archetype.ts'
 import { idOf } from './derived.ts'
 import { type Extension, ranking, type Site } from './extend.ts'
-import { render } from './render.ts'
+import { render as renderIn } from './render.ts'
 import { empty } from './empty.ts'
 import { listed } from './listed.ts'
 import type { Compiled } from './query.ts'
@@ -114,6 +114,10 @@ type Begin = (ast: And, opts: BindOpts, heard: Heard) => Prepared
 let SHELF = 512
 let SHELVES = 16
 let shelves = new Map<Vocab, Shelf>()
+// Text written with the names `v` stores its words under (./render.ts).
+let render = (n: Stmt | Expr, v: Vocab): Raw =>
+  renderIn(n, undefined, undefined, v)
+
 let shelf = (v: Vocab): Shelf => {
   let found = shelves.get(v)
   if (found) {
@@ -648,6 +652,7 @@ let proven = (
             ...choosing(opts.census, asked),
           },
         ).lower(),
+        vocab,
       ))
     if (touched.any || !agree(asked, seen.asked) || out.sql != seen.first.sql) {
       return null
@@ -706,7 +711,7 @@ export let compile = (
   opts: BindOpts = {},
 ): Compiled => {
   let vacant = empty(ast, vocab, opts)
-  if (vacant) return { ...render(vacant), answer: [] }
+  if (vacant) return { ...render(vacant, vocab), answer: [] }
   if (!opts.unordered && !opts.storageOrder) {
     ast = ranking(opts.extend ?? [], ast)
   }
@@ -761,6 +766,7 @@ let kept = (
         archetypes: opts.archetypes,
         extend: opts.extend,
       }).lower(),
+      vocab,
     )
   }
   let shaped = called(kind, ast, vocab, opts)
@@ -779,7 +785,7 @@ let kept = (
         ...choosing(opts.census, asked),
       }),
   )
-  let lowered = () => within(touched, () => render(p.lower()))
+  let lowered = () => within(touched, () => render(p.lower(), vocab))
   if (!shaped || held === null) return lowered()
   // The clock the lowering read.
   let { key } = shaped, call = { ...shaped.call, now: p.opts.now! }

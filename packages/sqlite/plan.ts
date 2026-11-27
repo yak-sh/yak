@@ -57,8 +57,12 @@ let draft = (vocab: Vocab, derived: Derived, file: boolean) => {
     // changes is read off the file, so a fitting that learns something new
     // installs again over a file whose statements are as they were. So does
     // when a component's objects are made (./raise.ts `RAISED`).
-    text: [FIT, POPULATION_VERSION, RAISED, ...stmts.map((s) => render(s).sql)]
-      .join(';\n'),
+    text: [
+      FIT,
+      POPULATION_VERSION,
+      RAISED,
+      ...stmts.map((s) => render(s, undefined, undefined, vocab).sql),
+    ].join(';\n'),
     raised,
     made: stmts.flatMap((s, i) => makes(s) && !on[i].length ? [s.name] : []),
     on: stmts.flatMap((s, i) => makes(s) ? [on[i]] : []),

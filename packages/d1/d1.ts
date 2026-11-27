@@ -16,6 +16,7 @@
 //   There is no interactive transaction — nothing holds a lock open while your
 //   code decides what to write next. ./store.ts is built around that.
 
+import type { Vocab } from '@yaks/vocab'
 import { DEPTH, render, type Stmt, VARIABLES } from '@yaks/sql'
 
 /** A value D1 binds: its documented type table, and nothing else. A boolean is
@@ -100,7 +101,11 @@ export let unbind = (row: Row): Row => {
  * {@link bind}, so a statement may carry the plain SQLite values @yaks/sqlite's
  * shared write path uses (a bigint, a byte array) and D1's narrower set is
  * satisfied in exactly one place. */
-export let prepare = <S extends Prepared<S>>(db: D1Like<S>, s: Stmt): S => {
-  let r = render(s, VARIABLES, DEPTH)
+export let prepare = <S extends Prepared<S>>(
+  db: D1Like<S>,
+  s: Stmt,
+  vocab?: Vocab,
+): S => {
+  let r = render(s, VARIABLES, DEPTH, vocab)
   return db.prepare(r.sql).bind(...r.params.map(bind))
 }

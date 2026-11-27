@@ -19,6 +19,7 @@ import {
   lit,
   select,
   type Stmt,
+  stored,
   table,
   val,
 } from '@yaks/sql'
@@ -104,7 +105,9 @@ export let walk = async (
   let held = performance.now()
   for (let o of trees) {
     if (signal?.aborted) return
-    let [r] = unit(driver, () => driver.query(pages(o.name)), 'read')
+    let v = driver.stored?.v
+    let name = o.type == 'table' && v ? stored(v, o.name) : o.name
+    let [r] = unit(driver, () => driver.query(pages(name)), 'read')
     let kept = tables[o.tbl_name] ??= [0, 0]
     kept[0] += Number(r?.bytes ?? 0)
     if (o.type == 'table') kept[1] = Number(r?.cells ?? 0)

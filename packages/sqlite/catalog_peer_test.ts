@@ -10,6 +10,7 @@ import { shop } from './testing.ts'
 import { catalog } from './catalog.ts'
 import { assertThrows } from '@std/assert'
 import { Unpointed } from './error.ts'
+import { storeAs } from '@yaks/sql'
 let dir = Deno.makeTempDirSync({ prefix: 'catalog-peer-' })
 let path = `${dir}/graph.db`, writer = open(path)
 let vocab = loadVocab([...shop.docs, archetypeDoc]),
@@ -18,7 +19,9 @@ store.install()
 let g = graph({ storage: store, vocab, plugins: [archetypes()] })
 g.apply([{ entity: { eid: 'one' }, doc: { title: 'One' } }])
 g.apply([{ entity: { eid: 'one' }, doc: { title: 'Second' } }])
+// A peer reads the file as its own store would.
 let reader = open(path, { readOnly: true })
+storeAs(reader, vocab)
 catalog(reader)({ all: ['doc'], none: [] })
 g.apply([{ entity: { eid: 'one' }, doc: { title: 'Changed' } }])
 let unrelated = !!catalog(reader).held

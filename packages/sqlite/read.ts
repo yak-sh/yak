@@ -1,3 +1,5 @@
+import { logicalVocab } from '@yaks/sql/core'
+import { readingVocab } from './shape.ts'
 import { Unpointed } from './error.ts'
 import {
   cardinality,
@@ -143,7 +145,7 @@ export let rows = (
         : undefined
     let compiled = compile(
       parsed,
-      vocab,
+      readingVocab(driver, vocab),
       catalogued(driver, vocab, {
         ...opts,
         population,
@@ -185,7 +187,12 @@ export let screened = (
   vocab: Vocab,
   query: Query,
   opts: BindOpts = {},
-): Raw | null => screen(ast(query), vocab, catalogued(driver, vocab, opts))
+): Raw | null =>
+  screen(
+    ast(query),
+    readingVocab(driver, vocab),
+    catalogued(driver, vocab, opts),
+  )
 
 // The properties a gather reads: the stored ones, plus any computed property
 // the caller registered an expression for. A computed property has no row to
@@ -791,6 +798,9 @@ let joinedPlan = (
     let spine = namedSpine(vocab, eids)
     let statement = render(
       select({ ...spine, with: tagged(blank, tags), cols: columns }),
+      undefined,
+      undefined,
+      vocab,
     )
     let bind = eids.length == 1 ? eids[0] : JSON.stringify(eids)
     return { statement, at: statement.params.indexOf(bind) }
@@ -813,7 +823,7 @@ let joinedGet = (
   wanted?: string[],
   unsettled?: Unsettled,
 ): Bundle[] | { spine: Row[] } | undefined => {
-  let plan = joinedPlan(vocab, names, opts)
+  let plan = joinedPlan(readingVocab(driver, vocab), names, opts)
   if (!plan) return
   let { statement, at } = eids.length == 1 ? plan.one : plan.many
   let params = [...statement.params]
@@ -1004,7 +1014,11 @@ export let get = (
         driver.query(
           admitted(
             ids,
-            sourceScreen(vocab, { ...opts, graves: true }, components),
+            sourceScreen(
+              readingVocab(driver, vocab),
+              { ...opts, graves: true },
+              components,
+            ),
           ),
         )
       for (
@@ -1122,7 +1136,7 @@ export let get = (
       : tables(vocab)).filter((c) => !setOf(absent).has(c))
   let remembered = at(
     at(shapes, driver, () => new WeakMap()),
-    vocab,
+    logicalVocab(vocab),
     () => new Map(),
   )
   let initial: Row[] | undefined

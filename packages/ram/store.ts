@@ -71,6 +71,7 @@ import {
 } from '@yaks/match'
 import { extendsVocab, type Vocab } from '@yaks/vocab'
 import { bindings } from './rules.ts'
+import { records } from './records.ts'
 
 export type { Query }
 
@@ -246,8 +247,7 @@ let uniqueIn = (vocab: Vocab) =>
  * ```
  */
 export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
-  // One bundle per entity: the answer a read hands back, built once per write.
-  let rows = new Map<Eid, Bundle>()
+  let rows = records(() => vocab)
   // Compact identity reservations survive payload eviction. They are not query rows.
   let cold = new Map<Eid, Entity>()
   // What a query reads instead of every row: the entities wearing each
@@ -273,10 +273,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   }
   let uniques = new Map<string, Unique[]>()
   let uniqueOf = (comp: string): Unique[] => {
-    let got = uniques.get(comp)
+    let key = vocab.stored(comp)
+    let got = uniques.get(key)
     if (!got) {
       uniques.set(
-        comp,
+        key,
         got = !vocab.comp(comp) ? [] : vocab.indexes(comp)
           .filter((i) => i.unique)
           .map((index) => ({ comp, index, held: new Map() })),
@@ -364,8 +365,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         )
       }
     }
-    if (b) rows.set(eid, b)
-    else rows.delete(eid)
+    if (b) {
+      let at = laid.get(b)
+      b = rows.set(eid, b)
+      if (at != null) laid.set(b, at)
+    } else rows.delete(eid)
     let num = b?.entity.num
     if (num != null) given.set(num, (given.get(num) ?? new Set()).add(eid))
     for (let { comp, index, held } of checks) {
@@ -376,14 +380,17 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     }
     if (was) {
       for (let name in was) {
-        if (name != 'entity' && !(b && name in b)) worn.get(name)?.delete(eid)
+        if (name != 'entity' && !(b && name in b)) {
+          worn.get(vocab.stored(name))?.delete(eid)
+        }
       }
     }
     if (b) {
       for (let name in b) {
         if (name == 'entity') continue
-        let at = worn.get(name)
-        if (!at) worn.set(name, at = new Map())
+        let key = vocab.stored(name)
+        let at = worn.get(key)
+        if (!at) worn.set(key, at = new Map())
         at.set(eid, b)
       }
     }
@@ -401,15 +408,19 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     }
   }
 
+  let holdersOf = (comp: string) => worn.get(vocab.stored(comp)) ?? NONE
+  let keyFor = (comp: string, prop: string) =>
+    `${vocab.stored(comp)}.${vocab.stored(comp, prop)}`
+
   // The keyed index over one property: filed from the component index the
   // first time a query asks for it, and kept by `put` from then on.
   let keys = (comp: string, prop: string): Map<string, Map<Eid, Bundle>> => {
-    let at = `${comp}.${prop}`
+    let at = keyFor(comp, prop)
     let held = filed.get(at)
     if (held) return held[2]
     let byKey = new Map<string, Map<Eid, Bundle>>()
     filed.set(at, [comp, prop, byKey])
-    for (let [eid, b] of worn.get(comp) ?? NONE) {
+    for (let [eid, b] of holdersOf(comp)) {
       let key = keyOf(valueOf(b, comp, prop))
       if (key !== undefined) file(byKey, key, eid, b)
     }
@@ -419,12 +430,12 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // The number index over one property, filed the same way the first time a
   // query asks for a range of it.
   let bands = (comp: string, prop: string): Map<number, Map<Eid, Bundle>> => {
-    let at = `${comp}.${prop}`
+    let at = keyFor(comp, prop)
     let held = banded.get(at)
     if (held) return held[2]
     let byBand = new Map<number, Map<Eid, Bundle>>()
     banded.set(at, [comp, prop, byBand])
-    for (let [eid, b] of worn.get(comp) ?? NONE) {
+    for (let [eid, b] of holdersOf(comp)) {
       let band = bandOf(valueOf(b, comp, prop))
       if (band !== undefined) file(byBand, band, eid, b)
     }
@@ -460,7 +471,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         return list ??= [...rows.values()]
       },
       of: (eid) => rows.get(eid),
-      wearing: (comp) => worn.get(comp) ?? NONE,
+      wearing: holdersOf,
       keyed: (comp, prop, key) => keys(comp, prop).get(key) ?? NONE,
       ranged,
       gone,
@@ -890,7 +901,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     let owners = (targets: Eid[], props: [string, string][]): Bundle[] => {
       let found = new Map<Eid, Bundle>()
       for (let [comp, prop] of props) {
-        if (!worn.has(comp)) continue
+        if (!worn.has(vocab.stored(comp))) continue
         let held = keys(comp, prop)
         for (let target of targets) {
           for (let [eid, b] of held.get(keyOf(target)!) ?? NONE) {
@@ -998,7 +1009,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       [...trash.values()].some((r) =>
         r.bundles.some((b) => b.entity.eid == eid)
       ) ||
-      refs.some(([c, p]) => worn.has(c) && !!keys(c, p).get(keyOf(eid)!)?.size)
+      refs.some(([c, p]) =>
+        worn.has(vocab.stored(c)) && !!keys(c, p).get(keyOf(eid)!)?.size
+      )
     let mark = (at: string, eid: Eid) => JSON.stringify([at, eid])
     let found = [...rows].flatMap(([eid, b]) => {
       let at = laid.get(b)
@@ -1018,7 +1031,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       for (let name of next.all) {
         if (vocab.comp(name)) continue
         cells.delete(name)
-        uniques.delete(name)
+        uniques.delete(next.stored(name))
       }
       vocab = next
       hasUnique = uniqueIn(vocab)

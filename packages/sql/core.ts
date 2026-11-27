@@ -93,11 +93,13 @@ export {
   deep,
   DEPTH,
   excerpt,
+  relationOf,
   render,
   renderStable,
   shape,
   STOCK_DEPTH,
   STOCK_VARIABLES,
+  tableOf,
   VARIABLES,
 } from './render.ts'
 export {
@@ -106,13 +108,29 @@ export {
   type Row,
   scan,
   type Settled,
+  storeAs,
   tally,
 } from './driver.ts'
 export { held, type Tag, tagOf, tallied } from './sqlite.ts'
 export * from './compound.ts'
-export { field, indexName } from './sqlite.ts'
+export {
+  fullLayout,
+  logicalVocab,
+  type Related,
+  relating,
+  stored,
+  withoutColumns,
+} from './layout.ts'
+export { field, indexName, readsStored, storedIn } from './sqlite.ts'
 export { revision } from './revision.ts'
-export { catalogue, erect, type SchemaObject } from './catalogue.ts'
+export {
+  asWritten,
+  catalogue,
+  columnAsWritten,
+  erect,
+  type SchemaObject,
+  tableAsWritten,
+} from './catalogue.ts'
 export { cardinality, statement, writing } from './statement.ts'
 export { lookup } from './lookup.ts'
 export * from './archetype.ts'

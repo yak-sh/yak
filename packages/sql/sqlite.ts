@@ -1,3 +1,4 @@
+import { stored } from './layout.ts'
 // The SQLite dialect: the one place that knows how the data is laid out in
 // SQLite, and how a value lowers to a comparison there. Everything above it
 // (the binder, the relational representation) works in terms of a component and
@@ -23,7 +24,7 @@ import { groupBy } from '@yaks/fp'
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { binaryOperand, timeEdges, type Value } from '@yaks/query/core'
 import { bounded, type Frag, spelled } from './ast.ts'
-import { literal, nest } from './render.ts'
+import { literal, nest, relationOf, tableOf } from './render.ts'
 
 // The type a value is coerced to before comparison — the vocabulary's property
 // category flattened to the one name the lowerings switch on.
@@ -148,7 +149,9 @@ let plained = (v: Vocab): Map<string, number> => {
 }
 
 /**
- * The name of the index over `comp`'s `props`: `<comp>_<props>`. Underscores
+ * The name of the index over `comp`'s `props`: `<comp>_<props>`, each by the
+ * name it is stored under (`Vocab.stored`), so an index of identities is named
+ * by them and a rename moves none. Underscores
  * cannot say where one name ends, and SQLite keeps tables and indexes in one
  * namespace, so where that name is also a component's table (`tower` +
  * `design` is `tower_design`) or another index's, it is `<comp>.<props>`,
@@ -173,6 +176,11 @@ export let indexName = (
   comp: string,
   props: readonly string[],
 ): string => {
+  let table = stored(v, comp)
+  let cols = props.map((p) => v.stored(comp, p))
+  if (table != comp || cols.some((k, i) => k != props[i])) {
+    return `${table}_${cols.join('_')}`
+  }
   let plain = `${comp}_${props.join('_')}`
   return v.comp(plain) || (plained(v).get(plain) ?? 0) > 1
     ? `${comp}.${props.join('.')}`
@@ -523,6 +531,50 @@ export let sqlite: Dialect = {
     params: [],
   }),
 }
+
+/**
+ * A dialect as it reads one vocabulary's tables: each component's from where
+ * it is stored (./render.ts `relationOf`), under its label, wherever `d`
+ * reads it from the plain table. A relation `d` reads from somewhere else (a
+ * pending transaction's overlay, a scope) is its own. Asked again of the same
+ * dialect and vocabulary, the same one.
+ */
+export let storedIn = (d: Dialect, v: Vocab): Dialect => {
+  if (stores.has(d)) return d
+  let held = storedDialects.get(d)?.get(v)
+  if (held) return held
+  let plain = (comp: string, text: string, suffix = '') =>
+    text == `${q(comp)}${suffix}` ? tableOf(v, comp, suffix) : text
+  let made: Dialect = {
+    ...d,
+    table: (comp) => plain(comp, d.table(comp)),
+    source: (comp) => {
+      let from = d.source?.(comp)
+      return from == null || from == q(comp) ? relationOf(v, comp) : from
+    },
+    ...d.joined && { joined: (comp) => plain(comp, d.joined!(comp)) },
+    ...d.owned && {
+      owned: (comp) => plain(comp, d.owned!(comp), ' not indexed'),
+    },
+    ...d.indexed && {
+      indexed: (comp, index) =>
+        plain(comp, d.indexed!(comp, index), ` indexed by ${q(index)}`),
+    },
+  }
+  stores.add(made)
+  let all = storedDialects.get(d)
+  if (!all) storedDialects.set(d, all = new WeakMap())
+  all.set(v, made)
+  return made
+}
+let stores = new WeakSet<Dialect>()
+let storedDialects = new WeakMap<Dialect, WeakMap<Vocab, Dialect>>()
+
+/** Whether `d` reads a component from the table it is stored in, as
+ * {@link storedIn} writes it, rather than from a relation of its own. */
+export let readsStored = (d: Dialect, v: Vocab, comp: string): boolean =>
+  (d.source?.(comp) ?? q(comp)) == relationOf(v, comp) &&
+  d.table(comp) == tableOf(v, comp)
 
 /** The dialect for a host that keeps statements by their text (`stable`):
  * the lists a read's operands and the catalog's answers make bind as one JSON

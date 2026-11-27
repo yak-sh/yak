@@ -1,4 +1,6 @@
 /// <reference lib="deno.ns" />
+import { labelStored, loadVocab } from '@yaks/vocab'
+import memberDoc from '../member/vocab.json' with { type: 'json' }
 // What the parity script cannot see, because the reference adapter has no such
 // boundary: the batch itself. These hold the promises this package makes about
 // D1's grain — one atomic write batch, reads that see the transaction's own
@@ -189,4 +191,34 @@ test('partial updates over D1 keep required columns and roll back late failures'
   )
   assertEquals((await get()).doc, { title: 'changed', body: 'body' })
   assertEquals(await s.tx((tx) => tx.get(['bad'])), [])
+})
+
+test('D1 reopens both physical layouts through the same vocabulary', async () => {
+  let v = loadVocab(memberDoc)
+  for (let layout of [v, labelStored(v)]) {
+    let db = d1()
+    let before = storage(db, layout)
+    await before.install()
+    await before.tx((tx) =>
+      tx.patch([{
+        entity: { eid: 'p1' },
+        member: { person: 'p1', space: 'space' },
+      }])
+    )
+    let after = storage(db, v)
+    await after.install()
+    assertEquals((await after.read('.member.person=p1'))[0]?.member, {
+      person: 'p1',
+      space: 'space',
+      role: 'member',
+    })
+    let cols = await prepare(db, {
+      t: 'pragma',
+      name: 'table_info',
+      arg: layout.stored('member'),
+    }).all<{ name: string }>()
+    assert(
+      cols.results.some((r) => r.name == layout.stored('member', 'person')),
+    )
+  }
 })

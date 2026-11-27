@@ -57,6 +57,7 @@ import {
   select,
   type Source,
   type Stmt,
+  stored as storageName,
   table,
   unionAll,
   val,
@@ -139,6 +140,7 @@ export let besideDdl = (
   let indexes = indexed(vocab)
   return [...covered(vocab)].flatMap((comp): Stmt[] => {
     let name = beside(comp)
+    let physical = storageName(vocab, name)
     let made: CreateTable = {
       t: 'create table',
       name,
@@ -161,7 +163,7 @@ export let besideDdl = (
     }
     let key: CreateIndex = {
       t: 'create index',
-      name: `${name}.key`,
+      name: `${physical}.key`,
       on: name,
       cols: [col('entity'), col(BRANCH), col(TO)],
       unique: true,
@@ -169,7 +171,7 @@ export let besideDdl = (
     }
     let closed: CreateIndex = {
       t: 'create index',
-      name: `${name}.to`,
+      name: `${physical}.to`,
       on: name,
       cols: [col(TO)],
       ifNot: true,
@@ -179,7 +181,7 @@ export let besideDdl = (
     // them here rather than in every version main keeps.
     let few: CreateIndex = {
       t: 'create index',
-      name: `${name}.branch`,
+      name: `${physical}.branch`,
       on: name,
       cols: [col(BRANCH), col('entity')],
       ifNot: true,

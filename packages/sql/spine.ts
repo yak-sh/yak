@@ -40,7 +40,12 @@ export let hasComputed = (v: Vocab): boolean => {
 /** A backed component's rows, and the tag its eids carry in this store —
  * refused, never guessed at, when the store has not registered them. The rows
  * are written out when read, once per registry. */
-export let backingOf = (backed: Backings, tags: Tags, comp: string) => {
+export let backingOf = (
+  backed: Backings,
+  tags: Tags,
+  comp: string,
+  v?: Vocab,
+) => {
   let b = backed[comp]
   if (!b) {
     throw new Unsupported('a computed component', `${comp} has no backing`)
@@ -53,15 +58,23 @@ export let backingOf = (backed: Backings, tags: Tags, comp: string) => {
   }
   return {
     get rows() {
-      return written(b.rows)
+      return written(b.rows, v)
     },
     tag: tags[comp],
   }
 }
-let texts = new WeakMap<Select, string>()
-let written = (rows: Select): string => {
+// Each backing's rows as text, per vocabulary they are stored by.
+let plain = new WeakMap<Select, string>()
+let stored = new WeakMap<Vocab, WeakMap<Select, string>>()
+let written = (rows: Select, v?: Vocab): string => {
+  let texts = plain
+  if (v) {
+    let held = stored.get(v)
+    if (!held) stored.set(v, held = new WeakMap())
+    texts = held
+  }
   let text = texts.get(rows)
-  if (text == null) texts.set(rows, text = inline(sub(rows)))
+  if (text == null) texts.set(rows, text = inline(sub(rows), v))
   return text
 }
 
@@ -81,7 +94,7 @@ export let backedDialect = (
   spine?: string,
 ): Dialect => {
   if (!hasComputed(v)) return d
-  let rows = (comp: string) => backingOf(backed, tags, comp).rows
+  let rows = (comp: string) => backingOf(backed, tags, comp, v).rows
   let tag = (comp: string) => {
     backingOf(backed, tags, comp)
     read(comp)
@@ -92,7 +105,7 @@ export let backedDialect = (
   let refRead = (comp: string, prop: string): string | null => {
     let target = v.prop(comp, prop)?.ref
     return target && computed(v, target)
-      ? inline(eidAt(tag(target), col(field(prop), comp)))
+      ? inline(eidAt(tag(target), col(field(prop), comp)), v)
       : null
   }
   let base: Dialect = {
@@ -106,7 +119,7 @@ export let backedDialect = (
   }
   if (!spine) return base
   let owner = `${q(spine)}.${q('entity')}`
-  let self = inline(eidAt(tag(spine), col('entity', spine)))
+  let self = inline(eidAt(tag(spine), col('entity', spine)), v)
   return {
     ...base,
     spine: `${rows(spine)} as ${q(spine)}`,

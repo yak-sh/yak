@@ -19,6 +19,7 @@ import {
   rule,
 } from '@yaks/sql'
 import { overlay } from './overlay.ts'
+import { readingVocab } from './shape.ts'
 
 /**
  * Run a compiled match and read its rows back as bindings. The statement is
@@ -39,7 +40,7 @@ export let matched = (
   collected(m, (plan, anchored) => {
     let statement = rule(
       { patterns: plan.patterns },
-      vocab,
+      readingVocab(driver, vocab),
       opts,
       anchored ? on : { ...on, touched: undefined },
     )

@@ -8,9 +8,20 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { at, by, col, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
+import {
+  at,
+  by,
+  col,
+  fn,
+  indexName,
+  insert,
+  lit,
+  scan,
+  type Stmt,
+} from '@yaks/sql'
 import { DIRTY, OWED, TABLE } from '@yaks/embedding'
 import {
+  bindStorage,
   columns,
   objects as catalogue,
   reclassify,
@@ -20,11 +31,11 @@ import { mem } from '../../packages/sqlite/testing.ts'
 import { ddl as journalDdl } from '@yaks/journal'
 import { Store } from './graph.ts'
 import { loadVocab } from '@yaks/vocab'
-import { storeWords } from './vocab.ts'
 import { documented, respelled, unholed, unworded } from './migrate.ts'
 import { passed } from './store-schema.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { db, keep, slot } from './testing.ts'
+import { appWords, storeWords } from './vocab.ts'
 
 // One object's whole state, kept across incarnations: its storage and the
 // socket list the runtime holds.
@@ -472,17 +483,20 @@ test('a schema that moves re-cuts its definitions and refills', async () => {
   // The pre-fix definition, put back by hand: a trigger that indexes the column
   // as it is stored, which for a body is its address. A document written under
   // it is findable by its title and not by a word of its prose.
+  let d = db(ctx), v = bindStorage(d, appWords().vocab)
+  let fts = `${v.stored('doc')}_fts`, trigger = `${fts}_insert`
   let fresh = at('new')
-  run(ctx, { t: 'drop', kind: 'trigger', name: 'doc_fts_insert' }, {
+  d.query({ t: 'drop', kind: 'trigger', name: trigger })
+  d.query({
     t: 'create trigger',
-    name: 'doc_fts_insert',
+    name: trigger,
     timing: 'after',
     event: 'insert',
     on: 'doc',
     body: [{
       t: 'insert',
-      into: 'doc_fts',
-      cols: ['rowid', 'title', 'body'],
+      into: fts,
+      cols: ['rowid', v.stored('doc', 'title'), v.stored('doc', 'body')],
       rows: [[
         fresh('entity'),
         ...['title', 'body'].map((c) => fn('coalesce', fresh(c), lit(''))),
@@ -561,22 +575,24 @@ test('a doc_value-backed legacy index upgrades to the composed FTS schema', asyn
   // The retired sqlite DDL read external content through doc_value. Its
   // resolved triggers have the same mirror rule as FTS's, so leave them in
   // place to prove boot replaces the index without losing the stored prose.
+  let v = appWords().vocab, doc = v.stored('doc')
+  let fts = `${doc}_fts`, text = `${doc}_text`
   run(
     ctx,
-    { t: 'drop', kind: 'table', name: 'doc_fts' },
-    { t: 'drop', kind: 'view', name: 'doc_text' },
+    { t: 'drop', kind: 'table', name: fts },
+    { t: 'drop', kind: 'view', name: text },
     {
       t: 'create virtual table',
-      name: 'doc_fts',
+      name: fts,
       using: 'fts5',
       args: [
-        'title',
-        'body',
-        ['content', 'doc_value'],
+        v.stored('doc', 'title'),
+        v.stored('doc', 'body'),
+        ['content', `${doc}_value`],
         ['content_rowid', 'entity'],
       ],
     },
-    insert('doc_fts', { doc_fts: 'rebuild' }),
+    insert(fts, { [fts]: 'rebuild' }),
   )
   keep(ctx, 'schema', 'legacy sqlite FTS')
 
@@ -584,8 +600,8 @@ test('a doc_value-backed legacy index upgrades to the composed FTS schema', asyn
   let hits = await upgraded.query('lemons', APP)
   assertEquals(hits.length, 1)
   assertEquals(hits[0].entity.eid, ONE)
-  let [definition] = catalogue(db(ctx), { name: 'doc_fts' })
-  assert(String(definition.sql).includes("content='doc_text'"))
+  let [definition] = catalogue(db(ctx), { name: fts })
+  assert(String(definition.sql).includes(`content='${text}'`))
   // New writes use the new triggers, removing the old words and adding prose
   // rather than a blob address. Another wake keeps those results intact.
   assertEquals((await write(upgraded, 'four limes')).status, 200)
@@ -723,11 +739,12 @@ test('a raw index creation failure still refuses a store', async () => {
     }])).status,
     200,
   )
-  run(ctx, { t: 'drop', kind: 'index', name: 'space_slug' })
+  let name = indexName(storeWords('directory').vocab, 'space', ['slug'])
+  run(ctx, { t: 'drop', kind: 'index', name })
   keep(ctx, 'schema', 'older schema')
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
   ctx.storage.sql.exec = (query, ...params) => {
-    if (query.startsWith('create unique index if not exists "space_slug"')) {
+    if (query.startsWith(`create unique index if not exists "${name}"`)) {
       throw new Error('index creation failed')
     }
     return exec(query, ...params)

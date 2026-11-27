@@ -23,7 +23,7 @@ let shape = (vocab: Vocab) => {
   let bodies = blobRead(vocab)
   let derived = { ...bodies, ...appDerived(vocab, bodies) }
   let searchable = indexed(vocab)
-  let extra = [...blobSchema(), ...ftsSchema(searchable, bodies)]
+  let extra = [...blobSchema(), ...ftsSchema(searchable, bodies, vocab)]
   let image: Snapshot | undefined
   return {
     derived,

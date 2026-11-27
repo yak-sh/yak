@@ -38,6 +38,7 @@ import { pastShapes } from './history-shapes.ts'
 import { docDdl, indexed } from './ddl.ts'
 import { covered, type History, keep, type Mode, seen } from './history.ts'
 import { turned } from './memo.ts'
+import { bindStorage } from './shape.ts'
 import { type Opts, storage, type Store } from './mod.ts'
 
 // What a mode reads each relation it stands in front of as, by name, in the
@@ -100,7 +101,9 @@ let dressed = (s: Stmt, all: Cte[]): Stmt => {
   }
   if (!dressable(s) && s.t != 'raw') return s
   let names = named(render(s).sql)
-  if (names.has('doc_value')) names.add('doc')
+  if (all.some((r) => r.name.endsWith('_value') && names.has(r.name))) {
+    names.add('doc')
+  }
   let own = new Set((dressable(s) ? s.with ?? [] : []).map((c) => c.name))
   let ctes = all.filter((r) => names.has(r.name) && !own.has(r.name))
   if (!ctes.length) return s
@@ -129,6 +132,7 @@ let through = (driver: Driver, on: () => Dialed): Driver => {
   let run = driver.run?.bind(driver)
   return {
     ...rest,
+    views: true,
     query: (s) => query(dressed(s, on().all)),
     ...run ? { run: (s: Stmt) => run(dressed(s, on().all)) } : {},
     ...driver.tx ? { tx: driver.tx.bind(driver) } : {},
@@ -158,6 +162,7 @@ export let moded = (
   base: Opts & { history: History },
   mode: Mode,
 ): Store => {
+  vocab = bindStorage(driver, vocab)
   let derived = base.derived ?? {}
   let all = relations(vocab, derived, mode)
   let made = modes.get(driver)

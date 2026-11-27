@@ -28,6 +28,7 @@ import {
   eq,
   exists,
   type Expr,
+  field,
   fn,
   from,
   type Join,
@@ -48,10 +49,11 @@ import {
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import {
+  columnsOf,
   type Field,
   type Index,
   indexes,
-  indexName,
+  tableOf,
   trim,
   worded,
 } from './fields.ts'
@@ -208,14 +210,17 @@ export let hits = (
     })).map((r) => [Number(r.id), String(r.eid)]),
   )
   let snippets = new Map<string, string>()
-  indexes(worded(fields)).forEach(({ name, props }, i) => {
+  indexes(worded(fields), db.stored?.v).forEach((ix, i) => {
     let mine = ranking.filter((r) => r.arm == i)
     if (!mine.length) return
-    let fts = indexName(name)
+    let fts = tableOf(ix)
     let cuts = db.query(select({
       cols: [
         as(col('rowid', fts), 'owner'),
-        as(cut(fts, props, marked, context, opts.content?.[name]), 'snippet'),
+        as(
+          cut(fts, columnsOf(ix), marked, context, opts.content?.[ix.name]),
+          'snippet',
+        ),
       ],
       from: table(fts),
       where: and(
@@ -289,7 +294,7 @@ let best = (
   t: string,
   opts: RankOpts,
 ): Candidate[] | null => {
-  let arms = indexes(worded(fields))
+  let arms = indexes(worded(fields), db.stored?.v)
   if (!t || !arms.length) return null
   if (opts.owners?.length == 0) return []
   let limit = opts.limit ?? 20
@@ -315,7 +320,7 @@ let best = (
         src: from(keyed, '__fts_visible'),
         on: eq(
           col('id', '__fts_visible'),
-          col('rowid', indexName(arms[arm].name)),
+          col('rowid', tableOf(arms[arm])),
         ),
       }]
       : []
@@ -380,27 +385,26 @@ let best = (
       ? when([...wide(n), [exists(owned(arm)), lit(n)]], lit(0))
       : lit(n)
   // An index's rows matching `expr`, among the live owners the caller admits.
-  let admitted: Admitted = (name, expr) => {
-    let fts = indexName(name)
+  let admitted: Admitted = (ix, expr) => {
+    let fts = tableOf(ix)
     let owner = col('rowid', fts)
     return and(
       op('match', col(fts), val(expr)),
       ...opts.owners ? [withinOwners(owner, opts.owners)] : [],
-      permitted(name, owner, opts.screens),
+      permitted(ix.name, owner, opts.screens),
       ...unworn(
-        ['tombstone', ...arms.find((arm) => arm.name == name)!.not ?? []],
+        ['tombstone', ...ix.not ?? []],
         owner,
       ),
       ...opts.screen && !keyed ? [eligible(owner)] : [],
     )
   }
   let found = arms.flatMap((arm, i) => {
-    let { name } = arm
     let page = ask(
       select({
         cols: [as(col('rowid'), 'owner'), as(col('rank'), 'rank')],
-        from: table(indexName(name)),
-        where: admitted(name, t),
+        from: table(tableOf(arm)),
+        where: admitted(arm, t),
         order: [col('rank'), ...sorting ? [desc(col('rowid'))] : []],
         limit: take(arm, sorting ? limit : limit + 1),
       }),
@@ -413,7 +417,7 @@ let best = (
       ? [
         ...page.filter((r) => r.rank != worst),
         ...tied > 1
-          ? ask(newest(name, t, worst!, tied - 1, admitted), i, 0)
+          ? ask(newest(arm, t, worst!, tied - 1, admitted), i, 0)
           : [],
       ]
       : page
@@ -436,24 +440,24 @@ let best = (
     .slice(0, limit)
 }
 
-type Admitted = (name: string, expr: string) => Expr
+type Admitted = (ix: Index, expr: string) => Expr
 
 // An index's places at its worst rank `worst` when the row past its last place
 // ties with them, taken again newest first: `room` of them, all who share that
 // rank but the row past. It matches the rank through `bm25`, since FTS5 reads
 // a constraint on `rank` as its configuration.
 let newest = (
-  name: string,
+  ix: Index,
   t: string,
   worst: number,
   room: number,
   admitted: Admitted,
 ): Select => {
-  let fts = indexName(name)
+  let fts = tableOf(ix)
   return select({
     cols: [as(col('rowid'), 'owner'), as(col('rank'), 'rank')],
     from: table(fts),
-    where: and(eq(fn('bm25', col(fts)), val(worst)), admitted(name, t)),
+    where: and(eq(fn('bm25', col(fts)), val(worst)), admitted(ix, t)),
     order: [desc(col('rowid'))],
     limit: lit(room),
   })
@@ -468,16 +472,16 @@ let newest = (
 // ranked. A property kept elsewhere is compared as stored: a body @yaks/blob
 // holds is its address, never its words.
 let exactly = (
-  { name: index, comp, props }: Index,
+  ix: Index,
   t: string,
   name: string,
   limit: Expr,
   admitted: Admitted,
 ): Select => {
-  let fts = indexName(index)
+  let { comp, props } = ix, fts = tableOf(ix)
   let n = at('__named')
   let same = (p: string) =>
-    eq(fn('lower', fn('trim', n(p))), fn('lower', val(name)))
+    eq(fn('lower', fn('trim', n(field(p)))), fn('lower', val(name)))
   let rank = sub(select({
     cols: [col('rank', '__rank')],
     from: table(fts, '__rank'),
@@ -490,7 +494,7 @@ let exactly = (
     cols: [as(col('rowid'), 'owner'), as(rank, 'rank')],
     from: table(fts),
     where: and(
-      admitted(index, `^"${name.replaceAll('"', '')}"`),
+      admitted(ix, `^"${name.replaceAll('"', '')}"`),
       exists(select({
         cols: [lit(1)],
         from: table(comp, '__named'),
@@ -525,9 +529,14 @@ export let find = (
 ): Hit[] => {
   if (scope && !vocab) throw new Error('a scoped search requires a vocabulary')
   let tables = catalogue(db).filter((o) => o.type == 'table')
+  let v = db.stored?.v
+  let namesOf = new Map(
+    indexes(worded(fields), v).map((ix) => [tableOf(ix), ix.name]),
+  )
   let content = Object.fromEntries(tables.flatMap((o) => {
     let source = /content='([^']*)'/.exec(o.sql ?? '')?.[1]
-    return source ? [[o.name.replace(/_fts$/, ''), source]] : []
+    let name = namesOf.get(o.name)
+    return source && name != null ? [[name, source]] : []
   }))
   // An index stands once its component's first write made it, and a scope
   // reads a component no table stands for as worn by nobody (@yaks/sqlite).

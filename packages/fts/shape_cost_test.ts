@@ -43,7 +43,7 @@ let world = (n: number) => {
   let db = {
     ...engine,
     query: (s: Parameters<typeof engine.query>[0]) =>
-      engine.query(renderStable(s, VARIABLES, DEPTH)),
+      engine.query(renderStable(s, VARIABLES, DEPTH, engine.stored?.v)),
   }
   let store = storage(db, vocab)
   store.install()

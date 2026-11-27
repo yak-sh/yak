@@ -49,6 +49,7 @@ import {
   type SchemaObject,
   select,
   type Stmt,
+  stored,
   sub,
   table,
   val,
@@ -64,7 +65,7 @@ import {
   tallied,
   tally,
 } from './ddl.ts'
-import { META } from './layout.ts'
+import { BUILDING, META } from './layout.ts'
 import { analyzedAt, installation, meta } from './meta.ts'
 import { unit } from './unit.ts'
 
@@ -147,6 +148,7 @@ export type Owed =
       kind: 'fill'
       source: string
       props: string[]
+      fields?: string[]
       triggers: CreateTrigger[]
       cursor: number
     }
@@ -507,11 +509,13 @@ let next = (driver: Driver, source: string, cursor: number, n: number) => {
 // `text`, or null when there are none.
 let reach = (
   driver: Driver,
-  w: { source: string; props: string[]; cursor: number },
+  w: { source: string; props: string[]; fields?: string[]; cursor: number },
   n: number,
   text: number,
 ) => {
-  let size = w.props.map((p) => fn('coalesce', fn('length', col(p)), lit(0)))
+  let size = (w.fields ?? w.props).map((p) =>
+    fn('coalesce', fn('length', col(p)), lit(0))
+  )
     .reduce((a, b) => op('+', a, b))
   let rows = select({
     cols: [col('entity'), as(size, 'size')],
@@ -559,7 +563,7 @@ let cursorOf = (w: Pick<Owed, 'kind' | 'name'>): Expr =>
 
 /** The name a table is rebuilt under, and the name its old rows wait under
  * to be cleared. Neither is a component table (./physical.ts). */
-export let building = (comp: string): string => `_yaks_refit_${comp}`
+export let building = (comp: string): string => BUILDING + comp
 export let leaving = (comp: string): string => `_yaks_old_${comp}`
 
 // The triggers keeping a table being rebuilt in step with the rows its cursor
@@ -654,7 +658,7 @@ let windows: {
       q: select({
         cols: [
           col('entity'),
-          ...w.props.map((p) => fn('coalesce', col(p), lit(''))),
+          ...(w.fields ?? w.props).map((p) => fn('coalesce', col(p), lit(''))),
         ],
         from: table(w.source),
         where: window(w.cursor, hi),
@@ -664,7 +668,9 @@ let windows: {
     return false
   },
   refit: (driver, w, here, sizes) => {
-    let comp = w.name, into = w.table.name, old = leaving(comp)
+    let comp = w.name, into = w.table.name
+    let v = driver.stored?.v
+    let old = leaving(v ? stored(v, comp) : comp)
     if (!here.has(comp) || !here.has(into)) return quit(driver, w), true
     let hi = next(driver, comp, w.cursor, sizes.copy)
     if (hi != null) {

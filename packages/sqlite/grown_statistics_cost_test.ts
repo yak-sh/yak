@@ -33,7 +33,7 @@ let { driver: engine, steps } = stepping()
 let driver = Object.assign({
   ...engine,
   query: (s: Parameters<typeof engine.query>[0]) =>
-    engine.query(renderStable(s, VARIABLES, DEPTH)),
+    engine.query(renderStable(s, VARIABLES, DEPTH, engine.stored?.v)),
 }, { statistics: { bytes: () => 1 } })
 let open = () => {
   let s = storage(driver, vocab)

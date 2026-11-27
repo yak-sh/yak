@@ -517,6 +517,11 @@ export type Vocab = {
   props: (comp: string) => string[] // readable properties (writable ∪ stamped)
   /** One property, by its label or its identity. */
   prop: (comp: string, prop: string) => Prop | undefined
+  /** The name storage keeps a component under, or one of its properties: its
+   * identity, so a rename moves no table or column, or its name where it has
+   * none. The spine (`entity`) keeps its own names, and a vocabulary read
+   * {@link labelStored} keeps every name. */
+  stored: (comp: string, prop?: string) => string
   /** Declared indexes plus automatic reference indexes — see
    * {@link Index}. A storage adapter renders them; nothing else reads them. */
   indexes: (comp: string) => Index[]
@@ -1481,6 +1486,13 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       let c = look(comp), p = c && propOf(c, prop)
       return p ? propFor(c!, p) : undefined
     },
+    stored: (name, prop) => {
+      let comp = look(name) ?? name
+      if (comp == SPINE || comp == 'tombstone') return prop ?? comp
+      if (prop == null) return infoOf(comp)?.id ?? comp
+      let p = propOf(comp, prop)
+      return (p && propFor(comp, p)?.id) || prop
+    },
     indexes: (name) => {
       let comp = look(name) ?? name
       let held = read.get(comp)
@@ -1792,6 +1804,10 @@ let relabeled = (v: Vocab, t: Turn): Vocab => {
     },
     deaths: (word) => v.deaths(word).map(pair),
     refProps: () => v.refProps().map(pair),
+    stored: (name, p) => {
+      let c = comp(name) ?? name
+      return v.stored(c, p == null ? undefined : t.prop(c, p) ?? p)
+    },
     check: (name, value, opts) => v.check(comp(name) ?? name, value, opts),
   }
   return self
@@ -1804,3 +1820,26 @@ let frozen = <T>(x: T): T => {
   }
   return x
 }
+
+/** The same vocabulary, stored under its names rather than its identities:
+ * how a store whose file was laid out before identities reads it, until it
+ * migrates (@yaks/sqlite `shaped`).
+ *
+ * ```ts
+ * import { labelStored, loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let id = crypto.randomUUID()
+ * let v = loadVocab({ $defs: { note: {
+ *   $id: `urn:uuid:${id}`, component: true, properties: {},
+ * } } })
+ * equal(v.stored('note'), id)
+ * equal(labelStored(v).stored('note'), 'note')
+ * ```
+ */
+export let labelStored = (v: Vocab): Vocab => {
+  let held = named.get(v)
+  if (!held) named.set(v, held = { ...v, stored: (comp, prop) => prop ?? comp })
+  return held
+}
+let named = new WeakMap<Vocab, Vocab>()

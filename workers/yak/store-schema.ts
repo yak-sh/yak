@@ -28,6 +28,7 @@ import {
 } from '@yaks/sql'
 import {
   add,
+  bindStorage,
   FIT,
   follow,
   forget,
@@ -84,6 +85,7 @@ export type Shape = {
    * (the search indexes and the embedding queue's triggers), made with a
    * component's table by its first write (@yaks/sqlite `over`) */
   readonly over: Stmt[]
+  overFor: (layout: Vocab) => Stmt[]
   readonly key: string
 }
 
@@ -129,7 +131,7 @@ export let shapeOf = (
   // The blob table first: the `doc_value` view and the search triggers read a
   // body's text out of it, so it has to be standing before they are.
   let after = () => [
-    ...ftsSchema(searchable, read),
+    ...ftsSchema(searchable, read, vocab),
     ...vectorSchema(),
     ...(kept || vocab.comp('_tx') ? journalDdl(vocab) : []),
   ]
@@ -140,7 +142,21 @@ export let shapeOf = (
   // same schema in the shape an older release kept, for a rollback to find.
   let print: string | undefined, stamp: string | undefined
   let ddl: Stmt[] | undefined, named: string | undefined
-  let over: Stmt[] | undefined, beside: Stmt[] | undefined
+  let over = new WeakMap<Vocab, Stmt[]>()
+  let beside: Stmt[] | undefined
+  let overFor = (layout: Vocab) => {
+    let held = over.get(layout)
+    if (!held) {
+      over.set(
+        layout,
+        held = [
+          ...ftsSchema(searchable, read, layout),
+          ...queueTriggers(texts(vocab, read)),
+        ],
+      )
+    }
+    return held
+  }
   let shape: Shape = {
     words,
     vocab,
@@ -161,11 +177,9 @@ export let shapeOf = (
       return ddl ??= [...blobSchema(), ...schema(vocab, derived), ...after()]
     },
     get over() {
-      return over ??= [
-        ...ftsSchema(searchable, read),
-        ...queueTriggers(texts(vocab, read)),
-      ]
+      return overFor(vocab)
     },
+    overFor,
     get stamp() {
       return stamp ??= sha256(
         [
@@ -272,10 +286,12 @@ export let INSTALL = 6
 
 /** What one schema pass is asked for: a store's words and the schema they
  * compose ({@link Shape}). */
-export type Pass = Pick<
-  Shape,
-  'vocab' | 'derived' | 'beside' | 'print' | 'stamp' | 'own' | 'history'
->
+export type Pass =
+  & Pick<
+    Shape,
+    'vocab' | 'derived' | 'beside' | 'print' | 'stamp' | 'own' | 'history'
+  >
+  & Partial<Pick<Shape, 'overFor'>>
 
 /** The schema a store's words compose, brought over whatever the object
  * holds: its storage's own install (@yaks/sqlite), with what stands beside
@@ -286,11 +302,12 @@ export type Pass = Pick<
  * fitted, and a new unique index the rows already there break. */
 export let install = (
   d: Driver,
-  { vocab, derived, beside, history }: Pick<
+  { vocab, derived, beside, history, overFor }: Pick<
     Pass,
-    'vocab' | 'derived' | 'beside' | 'history'
+    'vocab' | 'derived' | 'beside' | 'history' | 'overFor'
   >,
 ): Error[] => {
+  vocab = bindStorage(d, vocab)
   let read = blobRead(vocab)
   lifecycleColumns(d, vocab)
   // The vectors' tables were once keyed by `entity`, which `add` would see as
@@ -311,7 +328,7 @@ export let install = (
       number: numbered(vocab),
       report: () => {},
       ...history ? { history, paced: true } : {},
-    }).install(beside),
+    }).install(overFor?.(vocab) ?? beside),
     ...add(d, vectorSchema()),
   ]
   adopt(d, indexed(vocab), read, { heal: false })
@@ -353,7 +370,8 @@ export let passed = (
   held: string | null,
   pass = install,
 ): { left: Error[]; stamp: string | null } => {
-  let { vocab, beside, print, stamp, own } = shape
+  let { beside, print, stamp, own } = shape
+  let vocab = bindStorage(d, shape.vocab)
   let left: Error[] = []
   let ran = false
   if (held && held != stamp) forget(d, print)
@@ -378,7 +396,10 @@ export let fitSchema = (
   let held = read('schema')
   if (!(read('name') || held)) return []
   let fitted = () => fitOf(version(), shape.key, read('schema'))
-  if (stands(read('fitted'), fitted())) return []
+  if (stands(read('fitted'), fitted())) {
+    bindStorage(driver, shape.vocab)
+    return []
+  }
   let { left, stamp } = passed(driver, shape, held)
   if (stamp) write('schema', stamp)
   // A draft written by an older runtime could raise a component without its

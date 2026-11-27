@@ -1863,7 +1863,7 @@ export class Store extends Durable {
             ...opened,
             number: numbered(words.vocab),
             derived: words.derived,
-            over: () => words.over,
+            over: (layout) => words.overFor(layout),
             history: history!,
           }, mode),
         effects: () => quiet,
@@ -1941,7 +1941,7 @@ export class Store extends Durable {
               this.#stood(fitted) || printed(drive, fitted.print),
             // A component's search index and queue triggers are made with its
             // table, by the write that first names it.
-            over: () => fitted.over,
+            over: (layout) => fitted.overFor(layout),
             extend,
             ...(vocab.comp('_tx')
               ? { backed: journalBacked(vocab, derived) }
@@ -4384,7 +4384,7 @@ export class Store extends Durable {
           report: (error) =>
             defect(error, { request: 'store', store: this.#get('name') }),
           schemaReady: () => true,
-          over: () => this.#fitted(this.#shape()).over,
+          over: (layout) => this.#fitted(this.#shape()).overFor(layout),
           derived,
           number: numbered(vocab),
         }),

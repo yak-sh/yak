@@ -152,7 +152,9 @@ import { burying } from './buried.ts'
 import { located, measure } from './measure.ts'
 import { bindings } from './rules.ts'
 import { basis, local, memoized, rooted, simple } from './memo.ts'
-import { listed, revision } from '@yaks/sql'
+import { listed, revision, storeAs } from '@yaks/sql'
+import { bindStorage, readingVocab } from './shape.ts'
+export { bindStorage, identified, layoutOf } from './shape.ts'
 import { watch } from './watch.ts'
 import { gotten, metered, named } from './budget.ts'
 import { comps, dead } from '@yaks/graph/bundle'
@@ -543,7 +545,7 @@ export type Opts = BindOpts & {
    * made with the last table it rests on, by the write that first names that
    * component (./raise.ts). Asked when a write first names one, so a host
    * that composes them after binding the store can still give them. */
-  over?: () => readonly Stmt[]
+  over?: (layout: Vocab) => readonly Stmt[]
 }
 
 // The read options a statement is the same under (@yaks/graph `ReadOpts`).
@@ -632,6 +634,23 @@ export let storage = (
   vocab: Vocab,
   base: Opts = {},
 ): Store => {
+  // Binding asks the file nothing: the store is bound on its first use, once
+  // it knows how the file lays its words out (./shape.ts).
+  let store: Store | undefined
+  let at = () => store ??= bound(driver, bindStorage(driver, vocab), base)
+  return new Proxy({} as Store, {
+    get: (target, k) => Reflect.get(target, k) ?? Reflect.get(at(), k),
+    has: (target, k) => Reflect.has(target, k) || Reflect.has(at(), k),
+    ownKeys: (
+      target,
+    ) => [...new Set([...Reflect.ownKeys(at()), ...Reflect.ownKeys(target)])],
+    getOwnPropertyDescriptor: (target, k) =>
+      Reflect.getOwnPropertyDescriptor(target, k) ??
+        Reflect.getOwnPropertyDescriptor(at(), k),
+  })
+}
+
+let bound = (driver: Driver, vocab: Vocab, base: Opts): Store => {
   let effective = options(driver, vocab, base)
   if (base.history) keep(driver, vocab, base.history, base.mode)
   // What a store with history adds beside its own schema, run and printed
@@ -707,7 +726,8 @@ export let storage = (
   }
   // Everything a component's first write may make (./raise.ts): the store's
   // own schema, and what its host keeps beside it over component tables.
-  let makes = () => units(vocab, base.derived, !!driver.file, base.over?.())
+  let makes = () =>
+    units(vocab, base.derived, !!driver.file, base.over?.(vocab))
   // Raise the tables of `given` the file lacks, keeping the survey and an
   // install receipt that stood before standing after.
   let raising = (given: Iterable<string>): string[] => {
@@ -962,7 +982,11 @@ export let storage = (
         driver.query(
           admitted(
             eids,
-            sourceScreen(vocab, { ...opts(), ...o, graves: true }),
+            sourceScreen(readingVocab(driver, vocab), {
+              ...opts(),
+              ...o,
+              graves: true,
+            }),
           ),
         ),
       true,
@@ -1386,6 +1410,7 @@ export let storage = (
   // install. A file's spine is moved by its host's migration.
   let respining = () => !!base.number && !driver.file && sole(driver)
   let install = (beside: Stmt[] = []): Error[] => {
+    storeAs(driver, vocab)
     let left: Error[] = []
     let mark = marked
     let print = printed()

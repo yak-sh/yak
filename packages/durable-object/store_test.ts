@@ -9,7 +9,7 @@ import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { type Bundle, graph, match, reads } from '@yaks/graph'
 import { purgeEntities } from '@yaks/graph/trash'
 import { blobKeywords, blobRead, blobSchema } from '@yaks/blob'
-import { by, insert, scan } from '@yaks/sql'
+import { by, call, col, insert, scan, select, val } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { durable, shop, store } from './testing.ts'
 import { driver } from './sql.ts'
@@ -348,4 +348,38 @@ test('confirmed purge stays inside the object synchronous transaction and rolls 
   assertEquals(purgeEntities(g, ['precious']), undefined)
   assertEquals(s.trash(['precious']), [])
   assertEquals(told, [])
+})
+
+test('a Durable Object reopens UUID component properties through SQLite', async () => {
+  let v = loadVocab({
+    $defs: {
+      note: {
+        $id: `urn:uuid:${crypto.randomUUID()}`,
+        component: true,
+        properties: {
+          title: { $id: `urn:uuid:${crypto.randomUUID()}`, type: 'string' },
+        },
+      },
+    },
+  })
+  using db = durable()
+  let before = storage(db, v)
+  before.install()
+  await before.tx((tx) =>
+    tx.patch([{
+      entity: { eid: 'a' },
+      note: { title: 'Read me' },
+    }])
+  )
+  let after = storage(db, v)
+  assertEquals(after.read('.note.title="Read me"')[0]?.note, {
+    title: 'Read me',
+  })
+  assertEquals(
+    driver(db).query(select({
+      cols: [col('name')],
+      from: call('pragma_table_info', [val(v.stored('note'))]),
+    })).map((r) => r.name),
+    ['entity', v.stored('note', 'title')],
+  )
 })

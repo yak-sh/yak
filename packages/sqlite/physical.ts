@@ -1,4 +1,12 @@
-import { catalogue, revision } from '@yaks/sql'
+import {
+  catalogue,
+  columnAsWritten,
+  fullLayout,
+  revision,
+  stored,
+  tableAsWritten,
+} from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
 import {
   col,
   type Driver,
@@ -21,26 +29,43 @@ export let foreign = (name: string): boolean => /^(sqlite_|_+cf_)/i.test(name)
 type MainTable = { name: string; type: unknown; withoutRowid: boolean }
 let listedTables = new WeakMap<Driver, {
   at: number
-  tables: readonly MainTable[]
+  physical: readonly MainTable[]
+  written?: { v?: Vocab; tables: readonly MainTable[] }
 }>()
 
-/** The main schema's own tables, shared by component discovery and statistics
- * until DDL changes the schema. The pragma reads unbilled metadata directly.
- * Engine tables are excluded, including sqlite_stat1, which ANALYZE may add. */
-export let mainTables = (driver: Driver): readonly MainTable[] => {
+// The engine's catalogue of main tables, as the file names them.
+let main = (driver: Driver) => {
   let at = revision(driver, 'schema')
   let held = listedTables.get(driver)
-  if (held?.at === at) return held.tables
-  let tables = driver.query({ t: 'pragma', name: 'table_list' })
+  if (held?.at === at) return held
+  let physical = driver.query({ t: 'pragma', name: 'table_list' })
     .filter((r) => r.schema == 'main' && !foreign(String(r.name)))
     .map((r) => ({
       name: String(r.name),
       type: r.type,
       withoutRowid: r.wr == 1,
     }))
-  listedTables.set(driver, { at, tables })
+  listedTables.set(driver, held = { at, physical })
+  return held
+}
+
+/** The main schema's tables under the names statements write them by. */
+export let mainTables = (driver: Driver): readonly MainTable[] => {
+  let held = main(driver), v = driver.stored?.v
+  if (!v) return held.physical
+  v = fullLayout(v)
+  if (held.written?.v === v) return held.written!.tables
+  let tables = held.physical.map((r) => ({
+    ...r,
+    name: tableAsWritten(v, r.name),
+  }))
+  held.written = { v, tables }
   return tables
 }
+
+/** The main schema's tables as the file names them. */
+export let storedTables = (driver: Driver): string[] =>
+  main(driver).physical.map((r) => r.name)
 
 /** Every table the file's schema lists, with the statement it was made by. */
 export let defined: Stmt = select({
@@ -270,12 +295,14 @@ export let columnsBy = (
   sql: string | null | undefined,
 ): readonly string[] => {
   if (sql == null) return columns(driver, name)
-  let held = made.get(sql)
-  if (held) return held
-  let found = columns(driver, name)
-  if (made.size >= MADE) made.delete(made.keys().next().value!)
-  made.set(sql, found)
-  return found
+  let held = made.get(sql), v = driver.stored?.v
+  if (!held) {
+    let found = columns(driver, name)
+    held = v ? found.map((n) => stored(v, name, n)) : found
+    if (made.size >= MADE) made.delete(made.keys().next().value!)
+    made.set(sql, held)
+  }
+  return v ? held.map((n) => columnAsWritten(v, name, n)) : held
 }
 
 /** The columns a table requires a value for: not null, with no default, as
@@ -283,14 +310,17 @@ export let columnsBy = (
  * stands. */
 let requirements = new WeakMap<
   object,
-  { at: number; tables: Map<string, string[]> }
+  { at: number; v?: Vocab; tables: Map<string, string[]> }
 >()
 
 export let required = (driver: Driver, name: string): string[] => {
   let at = revision(driver, 'schema')
   let key = driver.connection ?? driver
-  let held = requirements.get(key)
-  if (held?.at != at) requirements.set(key, held = { at, tables: new Map() })
+  let held = requirements.get(key), v = driver.stored?.v
+  if (v) v = fullLayout(v)
+  if (held?.at != at || held.v != v) {
+    requirements.set(key, held = { at, v, tables: new Map() })
+  }
   let need = held.tables.get(name)
   if (!need) {
     need = driver.query({ t: 'pragma', name: 'table_info', arg: name })
@@ -315,7 +345,12 @@ export let required = (driver: Driver, name: string): string[] => {
  */
 let components = new WeakMap<
   Driver,
-  { revision: number; tables: string[]; checked: Map<string, boolean> }
+  {
+    revision: number
+    v?: Vocab
+    tables: string[]
+    checked: Map<string, boolean>
+  }
 >()
 
 // Whether a table is a component's, by the statement SQLite keeps for it: the
@@ -331,15 +366,16 @@ export function componentTables(
   candidates?: readonly string[],
 ): string[] {
   let current = revision(driver, 'schema')
-  let held = components.get(driver)
-  if (!held || held.revision != current) {
+  let held = components.get(driver), v = driver.stored?.v
+  if (v) v = fullLayout(v)
+  if (!held || held.revision != current || held.v != v) {
     let found = mainTables(driver)
       .filter(({ name, type }) =>
         type == 'table' && name != 'entity' && !name.startsWith('_yaks_')
       )
       .map(({ name }) => name)
       .sort()
-    held = { revision: current, tables: found, checked: new Map() }
+    held = { revision: current, v, tables: found, checked: new Map() }
     components.set(driver, held)
   }
   let accounted = new Set(known)

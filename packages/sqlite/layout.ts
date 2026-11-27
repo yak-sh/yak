@@ -8,6 +8,7 @@ import type { Vocab } from '@yaks/vocab'
  * installing over one adopts it instead of creating a second.
  */
 export let META = 'server_meta'
+export let BUILDING = '_yaks_refit_'
 
 let tableNames = new WeakMap<Vocab, string[]>()
 /** The components that have a table of their own: every one but the spine

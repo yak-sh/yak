@@ -1,7 +1,9 @@
 // Statements and tracing are shared by the native writer and file reader;
 // preparing, binding and decoding belong to their engine boundaries.
 import { context, leaf, peek } from '@yaks/trace'
+import type { Vocab } from '@yaks/vocab'
 import {
+  asWritten,
   type Driver,
   excerpt,
   type Param,
@@ -32,17 +34,24 @@ let naming =
     }
   }
 
+// An embedded SQLite's limits are the stock ones.
+let render = (s: Stmt, v?: Vocab) =>
+  renderStable(s, STOCK_VARIABLES, STOCK_DEPTH, v)
+
 export let driver = (
   ran: (sql: string, params: Param[]) => Row[],
   opts: { file: boolean; before?: (s: Stmt) => void; changes?: () => number },
 ): Driver => {
   let run = naming(ran)
-  let query = (s: Stmt): Row[] => {
+  let stored: { v?: Vocab } = {}
+  // Rows come back under the names the statement wrote (@yaks/sql
+  // `asWritten`).
+  let query = (s: Stmt): Row[] => asWritten(s, ask(s), stored.v)
+  let ask = (s: Stmt): Row[] => {
     opts.before?.(s)
     // Each statement is kept by its text (./native.ts `prepared`), and a list
     // costs no rows here: every collection binds as one JSON array.
-    let rendered = renderStable(s, STOCK_VARIABLES, STOCK_DEPTH),
-      { sql, params } = rendered
+    let rendered = render(s, stored.v), { sql, params } = rendered
     let at = context()
     let c = at?.channel ?? peek(d)
     if (!c) return run(sql, params)
@@ -70,6 +79,8 @@ export let driver = (
   }
   let d: Driver = {
     query,
+    render,
+    stored,
     file: opts.file,
     statistics: opts.file ? 'sampled' : undefined,
     arms: STOCK,

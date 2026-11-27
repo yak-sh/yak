@@ -7,6 +7,8 @@ import {
   derivedOf,
   type Driver,
   revision,
+  storeAs,
+  withoutColumns,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import type { Store } from './mod.ts'
@@ -16,6 +18,7 @@ import { unit } from './unit.ts'
 import { gotten, metered, named } from './budget.ts'
 import { glance, lacked, type Survey, surveyed } from './survey.ts'
 import { raisedOnly, unraised } from './raise.ts'
+import { bindStorage, identified } from './shape.ts'
 
 /** Read against the physical schema of this snapshot, not the one that was
  * standing when the command started. Never repair an older vocabulary's
@@ -28,6 +31,7 @@ export let options = <T extends BindOpts & { deferred?: boolean }>(
   let tagged: T | undefined
   let schema: number | undefined
   let found: Omit<Survey, 'unlogged'> | undefined
+  let layout = vocab
   // The options over what a look found, and the components no write has
   // raised a table for yet.
   let bound = (seen: Omit<Survey, 'unlogged'>, unwritten: string[]): T => {
@@ -56,7 +60,10 @@ export let options = <T extends BindOpts & { deferred?: boolean }>(
   }
   return () => {
     let current = revision(driver, 'schema')
-    if (tagged && schema == current) return tagged
+    if (tagged && schema == current) {
+      if (driver.stored?.v != layout) storeAs(driver, layout)
+      return tagged
+    }
     // The schema is taken as seen only once its look is done: a look that
     // failed (the storage refused a read) is looked again by the next.
     let seen = (options: T) => {
@@ -84,6 +91,10 @@ export let options = <T extends BindOpts & { deferred?: boolean }>(
       ? surveyed(driver, vocab, base.derived) ??
         glance(driver, vocab, base.derived)
       : { lacking: [], absent: [], unindexed: [] }
+    if (identified(vocab) && found.lacking.length) {
+      layout = withoutColumns(vocab, found.lacking)
+    } else layout = vocab
+    if (driver.stored?.v != layout) storeAs(driver, layout)
     return seen(bound(found, unwritten))
   }
 }
@@ -113,6 +124,7 @@ export let reader = (
   vocab: Vocab,
   base: BindOpts = {},
 ): Pick<Store, 'read' | 'rows' | 'get'> => {
+  vocab = bindStorage(driver, vocab)
   let opts = options(driver, vocab, base)
   // Each read is refused past what one read may hold (./budget.ts).
   return {

@@ -60,7 +60,8 @@ let measured = (db: Database, d: Driver) => {
   let active = false
   let query = (s: Stmt): Row[] => {
     if (!active || !['select', 'raw'].includes(s.t)) return d.query(s)
-    let text = render(s), stmt = db.prepare(text.sql)
+    let text = render(s, undefined, undefined, d.stored?.v)
+    let stmt = db.prepare(text.sql)
     try {
       let rows = stmt.all(...text.params)
       costs.push({

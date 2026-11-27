@@ -179,6 +179,8 @@ export type Source =
     /** The database it is in, where an unqualified name would find another:
      * `main` beside a temporary view of the same name. */
     schema?: string
+    /** This name and its columns already describe physical storage. */
+    physical?: boolean
     args?: Expr[]
     as?: string
     /** Require a named index, or disable secondary indexes when false. */

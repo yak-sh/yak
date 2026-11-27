@@ -65,15 +65,7 @@ import {
   unworn,
   withinOwners,
 } from './search.ts'
-import {
-  type Field,
-  indexes,
-  indexName,
-  tableOf,
-  tailOf,
-  trim,
-  worded,
-} from './fields.ts'
+import { type Field, indexes, tableOf, tailOf, trim, worded } from './fields.ts'
 import { grammed, named, term } from './term.ts'
 import { DONE, type Filler, PAST, PIECES, SPAN } from './ddl.ts'
 import { type And, type Clause, map, words as wordsIn } from '@yaks/query/core'
@@ -153,7 +145,6 @@ export let search = (
   db?: Driver,
   fill?: Pick<Filler, 'pending'>,
 ): Extension => {
-  let grams = indexes(fields).filter((ix) => ix.trigram)
   // Whether the file holds a substring index, asked once a read.
   let standing = new Map<string, boolean>()
   let stands = (fts: string): boolean => {
@@ -303,8 +294,8 @@ export let search = (
         // entity table once for every row holding the word: `task` beside a
         // project's tasks read millions of transcript rows' entities cold.
         return or(
-          ...indexes(worded(live)).map(({ name, not }) => {
-            let fts = indexName(name)
+          ...indexes(worded(live), db?.stored?.v ?? site.vocab).map((ix) => {
+            let { name, not } = ix, fts = tableOf(ix)
             return among(
               site.owner,
               select({
@@ -336,7 +327,9 @@ export let search = (
     // its trigrams are those characters'. A file without the tail index
     // (an older writer's) holds the marker, and every longer text with it.
     contains: (comp, prop, needle) => {
-      let ix = grams.find((ix) => ix.comp == comp && ix.props.includes(prop))
+      let ix = indexes(fields, db?.stored?.v).find((ix) =>
+        ix.trigram && ix.comp == comp && ix.props.includes(prop)
+      )
       let m = ix && grammed([...needle].slice(0, SPAN).join(''))
       if (!ix || !m) return null
       let fts = tableOf(ix), tail = tailOf(ix)

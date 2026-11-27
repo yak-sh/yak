@@ -1,9 +1,10 @@
+import type { Stmt } from '@yaks/sql'
 // The space's private work stays beside its builder, put back apart from any
 // app's store (store_restore with `operator`, build.ts `/restore`).
 // Its store is composed from its config (config.ts `operatorConfig`) through
 // @yaks/host's assembly, as the Store object composes each kind it serves.
 import { line } from '@yaks/query'
-import { statements } from '@yaks/sqlite'
+import { bindStorage, statements } from '@yaks/sqlite'
 import type { Graph, ReadOpts, Storage } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { type Held, held } from '@yaks/id/graph'
@@ -92,9 +93,22 @@ let meant = texts(operatorVocab, derived)
 // first names that component (@yaks/sqlite `over`), as an app's store makes
 // its own. A store fitted before any entry was written holds no `entry` table
 // to index then.
-let searching = [...ftsSchema(text, derived), ...queueTriggers(meant)]
+let searches = new WeakMap<typeof operatorVocab, Stmt[]>()
+let searchSchema = (layout: typeof operatorVocab) => {
+  let held = searches.get(layout)
+  if (!held) {
+    searches.set(
+      layout,
+      held = [
+        ...ftsSchema(text, derived, layout),
+        ...queueTriggers(meant),
+      ],
+    )
+  }
+  return held
+}
 let beside = () => [...blobSchema(), ...vectorSchema()]
-let print: string | undefined
+let prints = new WeakMap<typeof operatorVocab, string>()
 
 /** The revision of how the file is fitted, part of its print: a file fitted
  * when its search indexes were made only by the fitting holds no index over a
@@ -152,6 +166,7 @@ export let operatorStore = async (
 ): Promise<OperatorStore> => {
   let plan = await operatorPlan()
   let sql = driver(durable)
+  let layout = bindStorage(sql, operatorVocab)
   let stood = false, fitted = false
   let store!: ReturnType<typeof storage>
   let marks = meta(sql)
@@ -187,17 +202,23 @@ export let operatorStore = async (
         derived,
         number: NUMBERS,
         extend,
-        over: () => searching,
+        over: searchSchema,
         report: (error) => caught(error, { request: 'operator store' }),
         schemaReady: () => stood,
       }),
     extend: [search(text, sql)],
     ...lends,
     fit: () => {
-      print ??= printOf(`operator:${FITTING}:${store.print()}`, [
-        ...beside(),
-        ...searching,
-      ])
+      let print = prints.get(layout)
+      if (!print) {
+        prints.set(
+          layout,
+          print = printOf(
+            `operator:${FITTING}:${store.print()}`,
+            [...beside(), ...searchSchema(layout)],
+          ),
+        )
+      }
       let born = installed(sql) == null
       stood = !born && marks.get(FITTED) == print
       fitted = true

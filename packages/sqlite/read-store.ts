@@ -18,6 +18,7 @@ import { measure } from './measure.ts'
 import { bindings } from './rules.ts'
 import { branching } from './branches.ts'
 import type { History } from './history.ts'
+import { bindStorage } from './shape.ts'
 
 /** Bind every committed-store capability without admitting write callbacks.
  * Index plugins receive the same statement, revision and schema descriptions
@@ -27,6 +28,7 @@ export let storage = (
   vocab: Vocab,
   base: BindOpts & { history?: History } = {},
 ): Store => {
+  vocab = bindStorage(driver, vocab)
   let opts = options(driver, vocab, base)
   let sql = statements(driver)
   let graves = burying(driver, vocab)

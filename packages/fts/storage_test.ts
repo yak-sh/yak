@@ -6,7 +6,7 @@ import { render } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { objects, storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
-import { fields, find, schema, search } from './mod.ts'
+import { adopt, fields, find, indexed, schema, search } from './mod.ts'
 
 test('storage composes FTS explicitly for document and non-document prose', () => {
   let vocab = loadVocab({
@@ -142,4 +142,56 @@ test('a component marked found: false keeps its wearers out of every word search
   // Its text stayed indexed, so the mark coming off finds it at once.
   store.tx((tx) => tx.patch([{ entity: { eid: 'gone' }, set: null }]))
   assertEquals(read('grams'), ['gone', 'kept'])
+})
+
+test('UUID search indexes keep membership, snippets and substring matches after a rename', () => {
+  let word = () => `urn:uuid:${crypto.randomUUID()}`
+  let id = word(), property = word()
+  let vocab = (comp: string, prop: string) =>
+    loadVocab({
+      $defs: {
+        [comp]: {
+          $id: id,
+          component: true,
+          properties: {
+            [prop]: {
+              $id: property,
+              type: 'string',
+              search: true,
+              contains: true,
+            },
+          },
+        },
+      },
+    })
+  let db = open(':memory:')
+  using _close = { [Symbol.dispose]: () => db.close() }
+  let bind = (v: ReturnType<typeof vocab>) => {
+    let text = indexed(v)
+    return storage(db, v, {
+      extend: [search(text, db)],
+      over: (layout) => schema(text, {}, layout),
+    })
+  }
+  let v = vocab('doc', 'title'), s = bind(v)
+  s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'b' }, doc: { title: 'Kettle of copper' } }])
+  )
+  assertEquals(s.read('copper').map((b) => b.entity.eid), ['b'])
+  let renamed = vocab('note', 'heading'), next = bind(renamed)
+  assertEquals(next.read('copper .order=search .limit=1')[0].note, {
+    heading: 'Kettle of copper',
+  })
+  assertEquals(next.read('.note.heading~=kett').map((b) => b.entity.eid), ['b'])
+  assert(find(db, fields(renamed), 'copper')[0].snippet.includes('copper'))
+  assertEquals(adopt(db, indexed(renamed), {}, { heal: false }), {
+    recut: [],
+    dropped: [],
+    healed: [],
+  })
+  next.tx((tx) =>
+    tx.patch([{ entity: { eid: 'b' }, note: { heading: 'Tin cup' } }])
+  )
+  assertEquals(next.read('copper'), [])
+  assertEquals(next.read('tin').map((b) => b.entity.eid), ['b'])
 })

@@ -35,7 +35,7 @@ let made = (shapes: number) => {
   let driver = {
     ...engine,
     query: (s: Parameters<typeof engine.query>[0]) =>
-      engine.query(renderStable(s, VARIABLES, DEPTH)),
+      engine.query(renderStable(s, VARIABLES, DEPTH, engine.stored?.v)),
   }
   let store = storage(driver, vocab)
   store.install()

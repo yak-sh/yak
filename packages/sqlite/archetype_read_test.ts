@@ -125,7 +125,7 @@ test('classified gathers select only present tables and only their owners', () =
   assertEquals(asked.length, 1) // known missing; no projection probe
   asked = []
   cold.tx((tx) => tx.get(['a']))
-  assertEquals(asked.length, 1) // fresh spine, descriptor and facets together
+  assertEquals(asked.length, 1, JSON.stringify(asked)) // fresh spine, descriptor and facets together
   asked = []
   s.rows('.doc.title=hello')
   assertEquals(asked.length, 1) // value-only queries do not load the catalog

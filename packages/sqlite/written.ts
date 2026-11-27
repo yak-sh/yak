@@ -29,10 +29,12 @@ import {
   render,
   select,
   type Stmt,
+  stored,
   table,
   val,
   when,
 } from '@yaks/sql/core'
+import type { Vocab } from '@yaks/vocab'
 
 /** The log's table. */
 export const WRITTEN = 'entity_written'
@@ -130,7 +132,7 @@ export let follows = (driver: Driver, tables: Iterable<string>): boolean => {
     let known = held.tables.get(name)
     if (known === undefined) {
       known = !named.has(name) || events.every((event) => {
-        let [trigger, made] = making(name, event)
+        let [trigger, made] = making(name, event, driver.stored?.v)
         return body(named.get(trigger) ?? '') == made
       })
       held.tables.set(name, known)
@@ -145,12 +147,19 @@ let body = (sql: string) => sql.replace(/^create trigger /i, '')
 
 // Each trigger's name and statement, rendered once.
 let made = new Map<string, [string, string]>()
-let making = (table: string, event: typeof events[number]) => {
-  let key = `${table} ${event}`
+let making = (table: string, event: typeof events[number], v?: Vocab) => {
+  let at = v ? stored(v, table) : table
+  let key = `${at} ${event}`
   let held = made.get(key)
   if (!held) {
     let s = told(table, event)
-    made.set(key, held = [s.name, body(render({ ...s, ifNot: false }).sql)])
+    made.set(
+      key,
+      held = [
+        s.name,
+        body(render({ ...s, ifNot: false }, undefined, undefined, v).sql),
+      ],
+    )
   }
   return held
 }

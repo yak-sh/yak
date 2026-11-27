@@ -1,5 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
-import { col, eq, insert, lit, render, select, table } from '@yaks/sql'
+import { col, eq, insert, lit, render, select, storeAs, table } from '@yaks/sql'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -80,6 +80,8 @@ let peer = () => {
       return out
     },
   }
+  // A peer reads the file as its own store would.
+  storeAs(reader, vocab)
   let match = (all = ['doc']) => catalog(reader)({ all, none: [] })
   let first = match()
   rows = 0

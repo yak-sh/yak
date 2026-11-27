@@ -99,7 +99,7 @@ export let cut = (
         ),
         ...content
           ? {
-            from: table(content),
+            from: { t: 'table' as const, name: content, physical: true },
             where: eq(col('entity', content), col('rowid', fts)),
           }
           : {},
