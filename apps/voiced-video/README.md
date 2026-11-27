@@ -1,14 +1,14 @@
 # Voiced Video
 
 A short video made from an idea, as a [@yaks/workflow](../../packages/workflow)
-whose steps are rows: the idea, the script, the storyboard (shots: browser
-recordings of web pages, or stills), casting (voice auditions and the person's
-choice), voice lines, recording, assembly and the finished file. Every step's
-output is a row the page shows and lets the person change: the idea, a line, a
-shot's steps, the choice of voice. A step runs once for each set of values its
-match binds, so a change reruns only the steps that read what changed: editing a
-line says that line again and recuts, and leaves the other lines and every take
-as they were.
+whose steps are rows: the idea, the script, the storyboard (`panel`s, each a
+browser recording of a web page or a still), casting (voice auditions and the
+person's choice), voice lines, recording, assembly and the finished file. Every
+step's output is a row the page shows and lets the person change: the idea, a
+line, a panel's steps, the choice of voice. A step runs once for each set of
+values its match binds, so a change reruns only the steps that read what
+changed: editing a line says that line again and recuts, and leaves the other
+lines and every take as they were.
 
 The app lives in `jeff/voiced-video`.
 

@@ -164,7 +164,7 @@ subscribe('.video&?doc&?video', (rows) => {
   draw()
 })
 subscribe(
-  '(.role|.line|.shot|.audition|.cast|.voicing|.take|.cut|.film)&*',
+  '(.role|.line|.panel|.audition|.cast|.voicing|.take|.cut|.film)&*',
   (rows) => {
     state.rows = rows
     draw()

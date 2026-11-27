@@ -121,7 +121,7 @@
       "body": "The studio films each shot in Cloudflare's browser; changing a shot films it again."
     },
     "step": {
-      "match": "$v .video; $s .shot.video=$v, shot.n=$n, shot.page=$page, shot.as=$as, shot.steps=$steps, doc.title=$title",
+      "match": "$v .video; $s .panel.video=$v, panel.n=$n, panel.page=$page, panel.as=$as, panel.steps=$steps, doc.title=$title",
       "write": [
         {
           "entity": {
@@ -133,7 +133,7 @@
           },
           "take": {
             "video": "$v",
-            "shot": "$s",
+            "panel": "$s",
             "n": "$n"
           }
         }
@@ -149,7 +149,7 @@
       "body": "Once every line is voiced and every shot filmed, the shots and lines are put in order and timed."
     },
     "step": {
-      "match": "$v .video, lines_video>=1, shots>=1; [$x .voicing.video=$v, voicing.audio=$audio, voicing.ms=$ms]; [$k .take.video=$v, take.film=$film]; ![$l .line.video=$v; ![$y .voicing.line=$l]]; ![$s .shot.video=$v; ![$f .take.shot=$s, .take.film]]",
+      "match": "$v .video, lines_video>=1, panels>=1; [$x .voicing.video=$v, voicing.audio=$audio, voicing.ms=$ms]; [$k .take.video=$v, take.film=$film]; ![$l .line.video=$v; ![$y .voicing.line=$l]]; ![$s .panel.video=$v; ![$f .take.panel=$s, .take.film]]",
       "write": [
         {
           "entity": {

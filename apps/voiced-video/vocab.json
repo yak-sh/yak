@@ -43,14 +43,14 @@
           "type": "integer",
           "description": "Where the line comes in the script, from 1."
         },
-        "shot": {
+        "panel": {
           "type": "integer",
-          "description": "The shot shown while it is said, by its n."
+          "description": "The storyboard panel shown while it is said, by its n."
         }
       }
     },
-    "shot": {
-      "description": "One shot of the storyboard: a browser recording of a page, or a still of one. doc.title says what it shows.",
+    "panel": {
+      "description": "One panel of the storyboard, a shot: a browser recording of a page, or a still of one. doc.title says what it shows.",
       "properties": {
         "video": {
           "type": "string",
@@ -60,7 +60,7 @@
         },
         "n": {
           "type": "integer",
-          "description": "Where the shot comes, from 1."
+          "description": "Where the panel comes, from 1."
         },
         "kind": {
           "type": "string",
@@ -84,7 +84,7 @@
         "height": { "type": "integer" },
         "after": {
           "type": "integer",
-          "description": "Seconds to wait after the shot before it is filmed, for what an earlier shot started to finish."
+          "description": "Seconds to wait after the panel before it is filmed, for what an earlier shot started to finish."
         }
       }
     },
@@ -152,7 +152,7 @@
       }
     },
     "take": {
-      "description": "A shot filmed: a task for the studio, which films the shot in Cloudflare's browser and keeps it as an MP4.",
+      "description": "A panel filmed: a task for the studio, which films its shot in Cloudflare's browser and keeps it as an MP4.",
       "properties": {
         "video": {
           "type": "string",
@@ -160,9 +160,9 @@
           "death": "cascade",
           "index": true
         },
-        "shot": {
+        "panel": {
           "type": "string",
-          "ref": "shot",
+          "ref": "panel",
           "death": "cascade",
           "index": true
         },
@@ -179,7 +179,7 @@
       }
     },
     "cut": {
-      "description": "The edit: each shot with the lines said over it, and when each starts, in ms.",
+      "description": "The edit: each panel's shot with the lines said over it, and when each starts, in ms.",
       "properties": {
         "video": {
           "type": "string",

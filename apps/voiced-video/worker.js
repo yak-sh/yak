@@ -120,7 +120,7 @@ export let steps = (api) => {
       let board = await model(storyboardPrompt(v, lines))
       let shots = (board.shots ?? []).map((s, i) => ({
         entity: { eid: `$shot${i}` },
-        shot: {
+        panel: {
           video,
           n: i + 1,
           kind: s.kind == 'still' ? 'still' : 'browse',
@@ -137,11 +137,11 @@ export let steps = (api) => {
         ),
       )
       await write([
-        ...gone(await read(`.shot.video=${video}`)),
+        ...gone(await read(`.panel.video=${video}`)),
         ...shots,
         ...lines.map((l) => ({
           entity: l.entity,
-          line: { shot: shotOf.get(l.line.n) ?? shots.length },
+          line: { panel: shotOf.get(l.line.n) ?? shots.length },
         })),
       ])
       return { shots: shots.length }
@@ -229,7 +229,7 @@ export let steps = (api) => {
     assemble: async ({ video }) => {
       let v = await one(video)
       let [lines, shots, voicings, takes] = await Promise.all(
-        ['line', 'shot', 'voicing', 'take'].map((c) =>
+        ['line', 'panel', 'voicing', 'take'].map((c) =>
           read(`.${c}.video=${video}&*`)
         ),
       )

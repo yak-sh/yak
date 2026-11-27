@@ -84,7 +84,7 @@ let fit = (w: number, h: number) =>
 
 // One shot filmed: its frames encoded as take.mp4 in its own directory.
 let film = async (take: Row, shot: Row) => {
-  let s = shot.shot as Comp
+  let s = shot.panel as Comp
   let dir = `${HOME}takes/${take.entity.eid}`
   await Deno.remove(dir, { recursive: true }).catch(() => {})
   await Deno.mkdir(dir, { recursive: true })
@@ -128,21 +128,21 @@ let takes = async () => {
     .toSorted((a, b) => Number(a.take.n) - Number(b.take.n))
   let last = 0
   for (let take of open) {
-    let [shot] = await query(`.eid=${ref(take.take.shot)}&*`)
+    let [shot] = await query(`.eid=${ref(take.take.panel)}&*`)
     if (!shot) continue
     // Time for what an earlier shot started (an Operator's work) to finish.
-    let after = Number((shot.shot as Comp).after ?? 0) * 1000
+    let after = Number((shot.panel as Comp).after ?? 0) * 1000
     let wait = last ? last + after - Date.now() : 0
     if (wait > 0) {
       console.log(`shot ${take.take.n}: waiting ${Math.round(wait / 1000)} s`)
       await new Promise((r) => setTimeout(r, wait))
     }
-    console.log(`shot ${take.take.n}: filming ${(shot.shot as Comp).page}`)
+    console.log(`shot ${take.take.n}: filming ${(shot.panel as Comp).page}`)
     let made = await film(take, shot)
     last = Date.now()
     let blob = await upload(made.path, 'video/mp4')
     // A shot filmed again replaces its earlier takes.
-    let older = (await query(`.take.shot=${shot.entity.eid}`))
+    let older = (await query(`.take.panel=${shot.entity.eid}`))
       .filter((t) => t.entity.eid != take.entity.eid)
     await apply([
       {

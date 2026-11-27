@@ -148,9 +148,9 @@ test('an idea is scripted, storyboarded, cast, voiced, filmed, cut and rendered'
   // The script and storyboard; the role auditioned and its person asked.
   let [asked] = await count('.decision', 1)
   equal((asked.filed as Comp).assignee, ADA)
-  await count('.shot', 2)
+  await count('.panel', 2)
   let lines = await count('.line', 2)
-  equal(lines.map((l) => (l.line as Comp).shot).sort(), [1, 2])
+  equal(lines.map((l) => (l.line as Comp).panel).sort(), [1, 2])
   assertEquals(await shown(), 'Choose a voice for Narrator.')
 
   // Choosing the voice says both lines, and the studio's two takes wait.
@@ -229,12 +229,12 @@ test('the cut gives each shot the time its lines need', () => {
   })
   let cut = timeline({
     shots: [
-      row('s2', 'shot', { n: 2 }, { title: 'Two' }),
-      row('s1', 'shot', { n: 1 }, { title: 'One' }),
+      row('s2', 'panel', { n: 2 }, { title: 'Two' }),
+      row('s1', 'panel', { n: 1 }, { title: 'One' }),
     ],
     lines: [
-      row('l1', 'line', { n: 1, shot: 1 }, { body: 'a' }),
-      row('l2', 'line', { n: 2, shot: 1 }, { body: 'b' }),
+      row('l1', 'line', { n: 1, panel: 1 }, { body: 'a' }),
+      row('l2', 'line', { n: 2, panel: 1 }, { body: 'b' }),
     ],
     voicings: [
       row('v1', 'voicing', { line: 'l1', ms: 1000, audio: 'A' }, {
@@ -242,7 +242,7 @@ test('the cut gives each shot the time its lines need', () => {
       }),
       row('v2', 'voicing', { line: 'l2', ms: 500, audio: 'B' }, { title: 'N' }),
     ],
-    takes: [row('t2', 'take', { shot: 's2', film: 'F2', ms: 9000 })],
+    takes: [row('t2', 'take', { panel: 's2', film: 'F2', ms: 9000 })],
   })
   equal(cut.clips.map((c) => [c.n, c.at, c.ms]), [[1, 300, 1000], [
     2,

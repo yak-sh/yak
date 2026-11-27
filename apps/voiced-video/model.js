@@ -56,13 +56,15 @@ let byN = (comp) => (a, b) => a[comp].n - b[comp].n
 export let timeline = ({ lines, shots, voicings, takes }) => {
   let said = new Map(voicings.map((v) => [idOf(v.voicing.line), v]))
   let filmed = new Map(
-    takes.filter((t) => t.take.film).map((t) => [idOf(t.take.shot), t]),
+    takes.filter((t) => t.take.film).map((t) => [idOf(t.take.panel), t]),
   )
-  let ordered = shots.toSorted(byN('shot'))
-  let last = ordered.at(-1)?.shot.n
+  let ordered = shots.toSorted(byN('panel'))
+  let last = ordered.at(-1)?.panel.n
   let over = (n) =>
     lines.filter((l) => {
-      let at = ordered.some((s) => s.shot.n == l.line.shot) ? l.line.shot : last
+      let at = ordered.some((s) => s.panel.n == l.line.panel)
+        ? l.line.panel
+        : last
       return at == n
     }).toSorted(byN('line'))
   let at = 0
@@ -70,7 +72,7 @@ export let timeline = ({ lines, shots, voicings, takes }) => {
   for (let s of ordered) {
     let take = filmed.get(s.entity.eid)
     let start = at, t = at + LEAD
-    let mine = over(s.shot.n)
+    let mine = over(s.panel.n)
     for (let l of mine) {
       let v = said.get(l.entity.eid)
       let ms = v?.voicing.ms ?? 0
@@ -88,7 +90,7 @@ export let timeline = ({ lines, shots, voicings, takes }) => {
       ? t - GAP + TAIL - start
       : Math.min(take?.take.ms ?? BARE, BARE)
     cutShots.push({
-      n: s.shot.n,
+      n: s.panel.n,
       title: s.doc?.title ?? '',
       film: take?.take.film ?? null,
       at: start,
@@ -125,18 +127,18 @@ export let progress = (video, rows) => {
   ) => ({
     eid: l.entity.eid,
     n: l.line.n,
-    shot: l.line.shot ?? null,
+    shot: l.line.panel ?? null,
     who: named.get(idOf(l.line.role)) ?? '',
     text: l.doc?.body ?? '',
     audio: of(rows, 'voicing', 'line', l.entity.eid)[0]?.voicing.audio ?? null,
   }))
-  let shots = of(rows, 'shot', 'video', video).toSorted(byN('shot')).map((
+  let shots = of(rows, 'panel', 'video', video).toSorted(byN('panel')).map((
     s,
   ) => ({
     eid: s.entity.eid,
-    ...s.shot,
+    ...s.panel,
     title: s.doc?.title ?? '',
-    film: of(rows, 'take', 'shot', s.entity.eid).find((t) => t.take.film)
+    film: of(rows, 'take', 'panel', s.entity.eid).find((t) => t.take.film)
       ?.take.film ?? null,
   }))
   let cut = of(rows, 'cut', 'video', video)[0] ?? null
