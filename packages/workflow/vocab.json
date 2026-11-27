@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:cf87c191-cda9-4486-9cea-9042efade43c",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/edge": true
@@ -6,21 +7,25 @@
   "title": "workflow",
   "$defs": {
     "step": {
+      "$id": "urn:uuid:367ef366-6170-408c-8495-24e9b6796faf",
       "component": true,
       "type": "object",
       "description": "a rule stored as a row: for each binding of `match`, write `write` with its variables filled. A step a workflow `contains` writes a case for the item and stamps `made` on what it creates",
       "properties": {
         "match": {
+          "$id": "urn:uuid:5b0bc58e-dba7-4c51-9838-dae8ddb2b989",
           "type": "string",
           "format": "query",
           "description": "the query whose bindings it acts on: `$o .order, !shipped`, or several patterns joined by shared variables"
         },
         "write": {
+          "$id": "urn:uuid:a8bc3170-c7e1-4059-9c6a-390321c918bc",
           "type": "array",
           "items": { "type": "object", "additionalProperties": true },
           "description": "the bundles it writes for each binding: a string `$name` the match bound is its value, and an entity eid `$name` it did not bind is a fresh entity, one per binding"
         },
         "when": {
+          "$id": "urn:uuid:567127f8-5386-4bd5-9961-85fe97f85772",
           "type": "string",
           "enum": ["write", "commit"],
           "description": "`write` runs inside the write that made it match, `commit` (the default) after that write commits; a step carrying `wake` or `watch` runs when that fires instead"
@@ -28,24 +33,28 @@
       }
     },
     "workflow": {
+      "$id": "urn:uuid:77d9c940-3755-4423-8707-ce6b01ee41d1",
       "component": true,
       "type": "object",
       "description": "a structure of steps: it `contains` them, and which feeds which is computed from their matches and writes",
       "properties": {}
     },
     "workflow_case": {
+      "$id": "urn:uuid:5f6cb265-aaf6-4c47-b1a7-10d3043d50dc",
       "component": true,
       "type": "object",
       "identity": ["workflow", "for"],
       "description": "a case: one item moving through a workflow, its eid derived from the workflow and the item so a rematch finds it. Named `case` once two packages may declare one label (@yaks/trial declares `case`)",
       "properties": {
         "workflow": {
+          "$id": "urn:uuid:6cd82442-e544-4f32-a4d6-f17cbf45ba51",
           "type": "string",
           "ref": "workflow",
           "death": "cascade",
           "description": "the workflow it moves through"
         },
         "for": {
+          "$id": "urn:uuid:5ec65d72-a57f-4235-9d5c-99c8988b6d14",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -54,18 +63,21 @@
       }
     },
     "made": {
+      "$id": "urn:uuid:1a82aa5c-ca77-45ed-af45-59aaa23fb9c4",
       "component": true,
       "type": "object",
       "index": [["case", "step"]],
       "description": "which case and step wrote this row; a row made before its step's last edit reads as outdated",
       "properties": {
         "case": {
+          "$id": "urn:uuid:b0ab8ae2-afeb-4595-822f-8ee636c8b96a",
           "type": "string",
           "ref": "workflow_case",
           "death": "release",
           "description": "the case it was written for"
         },
         "step": {
+          "$id": "urn:uuid:8eac4174-4008-41ab-8294-442caa414ebe",
           "type": "string",
           "ref": "step",
           "death": "keep",
@@ -74,12 +86,14 @@
       }
     },
     "step_due": {
+      "$id": "urn:uuid:3e733210-e257-4e0b-af60-95211f1f5329",
       "component": true,
       "type": "object",
       "journal": false,
       "description": "one after-commit run a step owes, written in the transaction of the write that matched so a crash or restart never loses it; `step_run` runs it and deletes it in the same write",
       "properties": {
         "step": {
+          "$id": "urn:uuid:5bf79a90-8c52-4133-b87b-3f1a52201952",
           "type": "string",
           "ref": "step",
           "death": "cascade",
@@ -87,12 +101,14 @@
           "description": "the step to run"
         },
         "binding": {
+          "$id": "urn:uuid:311335b2-e062-47e7-bf0e-ffb24c9a51c6",
           "type": "array",
           "items": { "type": "string" },
           "stamped": true,
           "description": "the entities its match bound, in its patterns' order (`''` for one it left unbound); the run asks the match again anchored to them, so it acts on the present"
         },
         "by": {
+          "$id": "urn:uuid:024c58a8-0693-4be4-83ec-7ff1a5c490c8",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -100,6 +116,7 @@
           "description": "who wrote the write that matched, whom the step's write is signed as"
         },
         "via": {
+          "$id": "urn:uuid:72c3de40-9ad5-46bd-920c-e0fc8de1b318",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -107,6 +124,7 @@
           "description": "the session or client that write came in on"
         },
         "depth": {
+          "$id": "urn:uuid:89318c8f-bbd9-4196-a0ff-ebafce1de596",
           "type": "number",
           "stamped": true,
           "description": "how many after-commit step writes came before the one that matched: past 32, the chain is taken for a step whose output keeps matching it"
@@ -128,6 +146,7 @@
   },
   "kinds": {
     "step": {
+      "$id": "urn:uuid:367ef366-6170-408c-8495-24e9b6796faf",
       "description": "a rule stored as a row: what it matches, what it writes for each binding, and when",
       "examples": [
         {
@@ -142,6 +161,7 @@
       ]
     },
     "workflow": {
+      "$id": "urn:uuid:77d9c940-3755-4423-8707-ce6b01ee41d1",
       "description": "steps it `contains`, and the cases moving through them",
       "with": { "doc": true },
       "examples": [

@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:aa721a7a-c4e7-4d01-b855-daa8dce36db8",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
@@ -7,10 +8,12 @@
   "title": "memory",
   "$defs": {
     "feedback": {
+      "$id": "urn:uuid:9c87c041-380a-464c-9e87-b3688cfcd5da",
       "component": true,
       "type": "object",
       "properties": {
         "by": {
+          "$id": "urn:uuid:5ea0b6c4-c358-4e13-8d54-67c1ed4ff7f2",
           "type": "string",
           "ref": "entity",
           "death": "keep"
@@ -19,33 +22,39 @@
       "description": "this memory records a correction somebody gave, and who gave it"
     },
     "miss": {
+      "$id": "urn:uuid:122cbb47-e092-4126-8ca8-37745e5382be",
       "component": true,
       "type": "object",
       "description": "worn beside feedback{by} on the entity that records a correction: what the corrected agent had wrong, and where the fact it lacked was. A miss is a case a way of assembling context can be scored on (@yaks/trial)",
       "properties": {
         "entry": {
+          "$id": "urn:uuid:4ebdb78c-bcdb-4d3e-9cd4-81b09a6bb477",
           "type": "string",
           "ref": "entry",
           "death": "keep",
           "description": "the agent's entry that erred; everything before it in its session is what the agent had"
         },
         "needed": {
+          "$id": "urn:uuid:591506c4-067e-47fc-a23b-d728b03c4231",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the entity that held the fact; absent when the graph did not hold it"
         },
         "across": {
+          "$id": "urn:uuid:1c138fdb-0134-4940-b123-fc7a5e0e9f57",
           "type": "string",
           "enum": ["compaction", "clear", "fork", "spawn"],
           "description": "what stood between the fact and the agent, when something did"
         },
         "told": {
+          "$id": "urn:uuid:f4c9d26b-7742-4d93-be1f-c387929217de",
           "type": "string",
           "enum": ["restated", "pointed"],
           "description": "restated when the person said the fact again, pointed when they said it is in the graph; absent when an agent found the miss"
         },
         "kind": {
+          "$id": "urn:uuid:180b9246-d2b4-492d-8a44-6dec8f1e99de",
           "type": "string",
           "enum": ["reserve", "offer", "directive"],
           "description": "which known error it was: reserve when the agent kept back budget the person said to spend, offer when it ended on \"Want me to…?\" instead of doing it, directive when it posted the person's remark as a directive; absent when it was none of them"
@@ -53,41 +62,49 @@
       }
     },
     "memory": {
+      "$id": "urn:uuid:ab0cd4b6-b02b-4f16-98b5-0727f8aef461",
       "component": true,
       "type": "object",
       "description": "a mark on the entity holding one thing a person said about how they want something built or handled, in their own words: a session entry, a comment, a doc. The words are that entity's own text (a doc's body, an entry's content) and are never edited; memory_save makes a doc to hold them only where the graph does not hold them yet. These properties record where the words belong and what is needed to read them, and at, by and via who marked them and when. Who said them, and when, is the entity's created{at, by}",
       "properties": {
         "scope": {
+          "$id": "urn:uuid:80296218-c1f8-41ab-a8eb-79b985d61f61",
           "type": "string",
           "ref": "project",
           "death": "keep"
         },
         "last_confirmed_at": {
+          "$id": "urn:uuid:1cc9d9cc-b1f5-4392-81e5-7c49a22ac7db",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "space": {
+          "$id": "urn:uuid:63ce0dd5-37e7-4761-8919-f3994248e8c1",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "whose space they were said in — every member of that space can read them, and they are deleted with it"
         },
         "about": {
+          "$id": "urn:uuid:706e9a01-c1c5-4de6-b089-2a953397c6e8",
           "type": "string",
           "description": "the app they were said about, by slug, when they were about one"
         },
         "context": {
+          "$id": "urn:uuid:cbe951e2-157a-45a9-9626-67e26623a4ba",
           "type": "string",
           "description": "the line or two needed to understand the words — what was being talked about, never a restatement of what was said"
         },
         "at": {
+          "$id": "urn:uuid:d00a4a24-b733-434b-a6b8-d72bcdbee077",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the words were marked"
         },
         "by": {
+          "$id": "urn:uuid:9a197ad8-2690-438a-bd79-396c7515cad4",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -95,6 +112,7 @@
           "description": "who marked them"
         },
         "via": {
+          "$id": "urn:uuid:67b1505c-7d32-4ab5-899c-02e250d8b7f0",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -104,17 +122,20 @@
       }
     },
     "belief": {
+      "$id": "urn:uuid:ed55d493-2678-4f83-82fd-fb7ba610199e",
       "component": true,
       "type": "object",
       "description": "what a builder concluded from memories: one point a person made, or everything they said about one subject. Its doc says it; its built names the build that made it, and its cites edges what it was built from. Never edited by hand: a wrong belief is fixed in the builder that made it",
       "properties": {
         "scope": {
+          "$id": "urn:uuid:9fd03769-fcaa-4415-89ac-a828ae90992d",
           "type": "string",
           "ref": "project",
           "death": "keep",
           "description": "the project it holds for; absent for a principle that holds everywhere"
         },
         "about": {
+          "$id": "urn:uuid:80638005-5aca-416f-a77e-00f940bc930d",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -406,6 +427,7 @@
   },
   "kinds": {
     "memory": {
+      "$id": "urn:uuid:ab0cd4b6-b02b-4f16-98b5-0727f8aef461",
       "description": "a mark on the entity holding one thing a person said about how they want something built or handled, in their own words: a session entry, a comment, a doc. The words are that entity's own text (a doc's body, an entry's content) and are never edited; memory_save makes a doc to hold them only where the graph does not hold them yet. These properties record where the words belong and what is needed to read them, and at, by and via who marked them and when. Who said them, and when, is the entity's created{at, by}",
       "with": {
         "doc": true
@@ -422,6 +444,7 @@
       ]
     },
     "belief": {
+      "$id": "urn:uuid:ed55d493-2678-4f83-82fd-fb7ba610199e",
       "description": "what a builder concluded from memories: one point a person made, or everything they said about one subject. Its doc says it; its built names the build that made it, and its cites edges what it was built from. Never edited by hand: a wrong belief is fixed in the builder that made it",
       "with": {
         "doc": true,

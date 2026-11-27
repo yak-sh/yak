@@ -1,25 +1,30 @@
 {
+  "$id": "urn:uuid:fb059283-e594-4313-9607-ddd3a2917b7c",
   "title": "tracker",
   "$defs": {
     "error": {
+      "$id": "urn:uuid:1d439915-0ce4-4829-979c-852420943e5f",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "A sample of a mistake with an occurrence count, minted by the reporter so resends land once.",
       "properties": {
         "hits": {
+          "$id": "urn:uuid:a4b561c7-7622-4519-9b33-8a7ad95c1055",
           "type": "integer",
           "minimum": 1,
           "stamped": true,
           "description": "Occurrences represented by this sample; omitted means one."
         },
         "at": {
+          "$id": "urn:uuid:2acbaafb-4625-45f6-a9c0-2e0fab962b8a",
           "type": "string",
           "stamped": true,
           "description": "When it was caught.",
           "format": "date-time"
         },
         "level": {
+          "$id": "urn:uuid:421cd90d-8d82-401a-b6d1-d6b4b7d2bfd8",
           "type": "string",
           "stamped": true,
           "description": "What it cost the caller.",
@@ -29,16 +34,19 @@
           ]
         },
         "message": {
+          "$id": "urn:uuid:61198774-dde8-4cb9-9b35-fcc007584d8a",
           "type": "string",
           "stamped": true,
           "description": "The failure sentence when nothing was thrown."
         },
         "fault": {
+          "$id": "urn:uuid:1badce34-7621-49a0-936e-5aa42896410f",
           "type": "string",
           "stamped": true,
           "description": "An explicit group key, otherwise computed downstream."
         },
         "bug": {
+          "$id": "urn:uuid:9ac39c6c-2a27-4a47-97da-5d72e1a30ed2",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -46,6 +54,7 @@
           "description": "The group written by the grouper."
         },
         "commit": {
+          "$id": "urn:uuid:649b9b88-c7c4-476f-85af-9a6e5304563a",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -53,11 +62,13 @@
           "description": "The commit sha of the running code."
         },
         "version": {
+          "$id": "urn:uuid:1c708f8a-78cd-492b-9e2d-65801e00df60",
           "type": "number",
           "stamped": true,
           "description": "The app version that produced the error."
         },
         "environment": {
+          "$id": "urn:uuid:55ca285f-49ee-420e-89f8-b73d3b6c8a03",
           "type": "string",
           "stamped": true,
           "description": "Where the error happened.",
@@ -67,6 +78,7 @@
           ]
         },
         "tags": {
+          "$id": "urn:uuid:951a5ba2-e137-4dbd-8ebf-27bda40880dd",
           "type": "object",
           "stamped": true,
           "description": "Additional catch context; never request headers, cookies or bodies."
@@ -75,12 +87,14 @@
       "embed": false
     },
     "during": {
+      "$id": "urn:uuid:94f76f98-bcb3-44a3-8642-3088f90866ad",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "What an error happened among, by global eid.",
       "properties": {
         "entity": {
+          "$id": "urn:uuid:6abd5c92-269e-41dd-bd81-649dfee8a19b",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -88,6 +102,7 @@
           "description": "The call, effect, entry or process being run, or the signed-in person whose browser opened a document."
         },
         "app": {
+          "$id": "urn:uuid:25b0d386-c194-47a8-9906-1b7de2f3db45",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -95,6 +110,7 @@
           "description": "The app."
         },
         "space": {
+          "$id": "urn:uuid:f5da6d5a-c335-454b-a62c-8aeef35a11ce",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -102,6 +118,7 @@
           "description": "The space."
         },
         "session": {
+          "$id": "urn:uuid:4e09af63-7a67-4ce8-a7ec-99527fa968f9",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -109,6 +126,7 @@
           "description": "The session whose work raised the error."
         },
         "process": {
+          "$id": "urn:uuid:5aee3cc8-48b9-445a-b028-dd972dc413c1",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -116,6 +134,7 @@
           "description": "The process when the entity does not already name it."
         },
         "request": {
+          "$id": "urn:uuid:e1b719ab-5221-4e3f-b8c7-446d2d176dec",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -123,6 +142,7 @@
           "description": "The HTTP request."
         },
         "kind": {
+          "$id": "urn:uuid:f9182e1a-0adb-4ff4-b236-dde47d1ece24",
           "type": "string",
           "stamped": true,
           "description": "The served entity’s kind, read where it happened."
@@ -130,12 +150,14 @@
       }
     },
     "breadcrumbs": {
+      "$id": "urn:uuid:4141f7de-40c5-4d79-89c7-55954cd0026a",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "The last twenty page navigations, API calls and console errors.",
       "properties": {
         "items": {
+          "$id": "urn:uuid:c876d482-d861-481d-bdc5-412bda81bd97",
           "type": "array",
           "maxItems": 20,
           "stamped": true,
@@ -162,16 +184,19 @@
       "description": "The tracker’s stack, parsed frames and catch mechanism for a thrown value.",
       "properties": {
         "stack": {
+          "$id": "urn:uuid:3bd7aec4-eb75-4266-a756-84dc12914d7f",
           "type": "string",
           "stamped": true,
           "description": "The stack trace, as the runtime reported it."
         },
         "cause": {
+          "$id": "urn:uuid:aa0d356a-0b19-43ec-97c3-6ed38ce167e6",
           "type": "string",
           "stamped": true,
           "description": "What the error was wrapped around: each `cause` down its chain, its name and message, then its stack."
         },
         "frames": {
+          "$id": "urn:uuid:fc7ffd3e-8694-40a2-a15c-b9ea92f2d25f",
           "type": "array",
           "stamped": true,
           "items": {
@@ -202,6 +227,7 @@
           }
         },
         "mechanism": {
+          "$id": "urn:uuid:9038ece5-6c3e-488c-8194-dab8a982ecb6",
           "type": "string",
           "stamped": true,
           "description": "The hook that caught the throw.",
@@ -217,12 +243,14 @@
       "extends": true
     },
     "probe": {
+      "$id": "urn:uuid:44cc1551-76cd-4f80-809f-731a9bab03f9",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "An occurrence sent to prove the path from a reporter to grouping, as a deploy's canary is. Grouping writes its receipt and files it under no bug.",
       "properties": {
         "grouped": {
+          "$id": "urn:uuid:8aba2e27-c105-4225-86f4-62eddeebbdc4",
           "type": "string",
           "index": true,
           "stamped": true,
@@ -232,17 +260,20 @@
       }
     },
     "regressed": {
+      "$id": "urn:uuid:fb552028-0254-46f2-b78f-fb8d5a48ade0",
       "component": true,
       "type": "object",
       "description": "A resolved bug that happened again after its resolution, in code that had not produced it before or naming no release at all.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:5daf48b4-e62f-483e-a1ab-0ded87766bd0",
           "type": "string",
           "stamped": true,
           "description": "When the regression was grouped.",
           "format": "date-time"
         },
         "by": {
+          "$id": "urn:uuid:5709ef0c-5c4f-4776-a159-e6001f03a8ea",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -250,6 +281,7 @@
           "description": "Who hit the regression."
         },
         "via": {
+          "$id": "urn:uuid:485e361f-2d77-43b7-9392-b430731b55f4",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -257,6 +289,7 @@
           "description": "The session or client."
         },
         "error": {
+          "$id": "urn:uuid:e4a87776-34c4-4c7b-9133-0472cc35728f",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -264,11 +297,13 @@
           "description": "The occurrence that brought the bug back."
         },
         "message": {
+          "$id": "urn:uuid:d0962fb8-b99a-4ef3-a85d-20b303e4e863",
           "type": "string",
           "stamped": true,
           "description": "What that occurrence said, which the bug's title, its first occurrence's, does not."
         },
         "commit": {
+          "$id": "urn:uuid:0d19b7e8-3831-46d3-9472-513bb4d616ed",
           "type": "string",
           "stamped": true,
           "description": "The commit that occurrence ran."
@@ -276,18 +311,21 @@
       }
     },
     "taken": {
+      "$id": "urn:uuid:6c179ff5-44c5-462b-af98-9859c11aa98e",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "A fixer started on the bug. Written again when a fixer takes it after a regression.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:eb3b6e50-1fac-445e-8b91-98d262ca33de",
           "type": "string",
           "stamped": true,
           "description": "When the fixer started.",
           "format": "date-time"
         },
         "by": {
+          "$id": "urn:uuid:e126ae37-01f8-48c9-afb2-8c3724cedc4b",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -295,6 +333,7 @@
           "description": "Who marked it taken."
         },
         "via": {
+          "$id": "urn:uuid:183d9ddb-58a5-4304-b75c-9bca82e2d282",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -302,6 +341,7 @@
           "description": "The session or client."
         },
         "task": {
+          "$id": "urn:uuid:d3a443e5-28ce-451a-94be-be6bf10793fc",
           "type": "string",
           "description": "The work item, by the name the graph working on it gives it (T-123)."
         }
@@ -314,6 +354,7 @@
       "description": "A bug set aside without a fix, by whoever archived it. Nothing archives a bug on its own: a task's state never does.",
       "properties": {
         "reason": {
+          "$id": "urn:uuid:c511a35f-3a41-49c1-8c8d-e4d76730a244",
           "type": "string",
           "description": "Why it was archived, such as the person's own app code having broken."
         }
@@ -326,26 +367,31 @@
       "description": "How a bug was fixed, as the agent that fixed its cause and saw the fix live explained it. Nothing resolves a bug on its own: one that stopped stays open. The tracker refuses a bug's resolution without its cause and recur.",
       "properties": {
         "broke": {
+          "$id": "urn:uuid:85737909-20f4-4fef-add3-0e67d89febb7",
           "type": "string",
           "description": "What broke and whom it reached, in plain words for someone who never saw the error."
         },
         "cause": {
+          "$id": "urn:uuid:f91669b8-4a4f-430f-9bd8-2d43abf36922",
           "type": "string",
           "description": "Why it broke."
         },
         "since": {
+          "$id": "urn:uuid:10b2b3b3-5cf0-4273-9c9d-3ebfc99e3da3",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "The commit that introduced it, by its full sha, when known."
         },
         "fix": {
+          "$id": "urn:uuid:b7875992-7807-412e-ae63-a147e9b0ff76",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "The commit that fixed it, by its full sha."
         },
         "recur": {
+          "$id": "urn:uuid:6b33f900-0a63-4fab-901c-bf7887fae79f",
           "type": "string",
           "description": "Whether it can happen again, and why."
         }
@@ -360,6 +406,7 @@
       "target": ".error !error.bug !probe.grouped"
     },
     "digest": {
+      "$id": "urn:uuid:6f7c5368-8e5f-4b4b-b607-b087769e10ea",
       "component": true,
       "type": "object",
       "description": "Marks the recurring wake that sends the daily bug digest (./digest.ts).",
@@ -638,11 +685,13 @@
       "target": ".error .exception .error.bug"
     },
     "merged": {
+      "$id": "urn:uuid:302150ef-4d87-4352-80ec-d542afdb8fda",
       "component": true,
       "type": "object",
       "description": "An entity consolidated into another; its issued address still names the survivor.",
       "properties": {
         "into": {
+          "$id": "urn:uuid:26e346ba-17ea-4916-b7a9-2a94df3da3a8",
           "type": "string",
           "ref": "entity",
           "death": "keep"
@@ -650,11 +699,13 @@
       }
     },
     "bug": {
+      "$id": "urn:uuid:35078332-4a8f-4c03-b800-b0182928d4c7",
       "component": true,
       "type": "object",
       "description": "A group of tracked errors with the same fault, scoped to an app.",
       "properties": {
         "app": {
+          "$id": "urn:uuid:32bc93b2-e18b-43a6-ade2-76b23c1d3d9a",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -662,12 +713,14 @@
           "description": "The app, absent for platform and box bugs."
         },
         "fault": {
+          "$id": "urn:uuid:91927d72-8a20-4ff7-ae53-27cc20ac67e2",
           "type": "string",
           "index": true,
           "stamped": true,
           "description": "The stable grouping key."
         },
         "culprit": {
+          "$id": "urn:uuid:f7a7e712-2300-4333-999b-9695285467f8",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -675,37 +728,44 @@
           "description": "The top in-app code symbol."
         },
         "spot": {
+          "$id": "urn:uuid:fa10f921-77f6-44d3-8871-209246c44724",
           "type": "string",
           "stamped": true,
           "description": "The unresolved file, line and function."
         },
         "first": {
+          "$id": "urn:uuid:d90c17d7-d033-4a75-8f3b-cb1290ec5ef2",
           "type": "string",
           "stamped": true,
           "description": "The first occurrence.",
           "format": "date-time"
         },
         "last": {
+          "$id": "urn:uuid:c92bf14a-18ee-4643-8320-cec7c1468afe",
           "type": "string",
           "stamped": true,
           "description": "The latest occurrence.",
           "format": "date-time"
         },
         "hits": {
+          "$id": "urn:uuid:e6e6892a-be8e-48a7-932d-bafab9f8f28c",
           "type": "number",
           "stamped": true,
           "description": "Occurrences grouped, including those retained only in the count."
         },
         "days": {
+          "$id": "urn:uuid:e3ea3073-f838-46e5-998d-9f63ab069eae",
           "type": "object",
           "description": "Its hits by day, YYYY-MM-DD, for the last thirty days; a quiet day is absent."
         },
         "people": {
+          "$id": "urn:uuid:88ad70aa-e3e9-46b2-bf6d-b5bc25cd3796",
           "type": "number",
           "description": "Distinct people its retained occurrences reached, by their user_id tag.",
           "computed": true
         },
         "account": {
+          "$id": "urn:uuid:bd6fe173-5714-4481-8b7c-ddea7599c567",
           "type": "string",
           "enum": [
             "person",

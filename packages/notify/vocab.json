@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:9633882a-0d6a-4d95-a205-6049603458de",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true
@@ -6,6 +7,7 @@
   "title": "notify",
   "$defs": {
     "chat": {
+      "$id": "urn:uuid:60f17b09-8281-4ade-9b7f-b7cf835ac7b4",
       "component": true,
       "type": "object",
       "unique": [
@@ -16,11 +18,13 @@
       ],
       "properties": {
         "actor": {
+          "$id": "urn:uuid:4cda218b-a39e-4ee6-a30f-441557b5fb9a",
           "type": "string",
           "ref": "entity",
           "death": "detach"
         },
         "target": {
+          "$id": "urn:uuid:d7d12f44-c428-4979-9e0c-816c64d14080",
           "type": "string",
           "ref": "entity",
           "death": "detach"
@@ -29,22 +33,26 @@
       "description": "an open conversation between an actor and an entity — one per actor/entity pair"
     },
     "knock": {
+      "$id": "urn:uuid:f92b85b4-cb65-44d3-a700-0d61690a35bb",
       "component": true,
       "type": "object",
       "notice": true,
       "properties": {
         "target": {
+          "$id": "urn:uuid:b6db3189-88c6-4904-a132-f83436322fa1",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "from": {
+          "$id": "urn:uuid:b58f0785-17c1-4955-b9e7-7f8cf843aa4a",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "whose act or words it tells, where it tells someone's: the actor who finished a task or commented on it, the person who sent a text"
         },
         "about": {
+          "$id": "urn:uuid:a259ac68-6ad7-4301-b954-ff6ab766a6d5",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -54,23 +62,27 @@
       "description": "a nudge aimed at an entity, with the message that came with it"
     },
     "notification": {
+      "$id": "urn:uuid:b05a4c79-b446-4ebd-ab09-230f2768f3f9",
       "component": true,
       "type": "object",
       "notice": true,
       "properties": {
         "to": {
+          "$id": "urn:uuid:6b131f34-34d3-43e7-a10c-9b39812e5f30",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "whom it tells: a person, or a space or project for everyone standing in it; it may live in another graph"
         },
         "about": {
+          "$id": "urn:uuid:eb443781-86dc-41e1-9e2d-02232e322cc2",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "what it tells of, which may live in another graph"
         },
         "from": {
+          "$id": "urn:uuid:a28892b9-ae86-49d4-8ded-48545804cfdb",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -80,10 +92,12 @@
       "description": "words emitted, not said, telling whoever its `to` names (a person, or a space or project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own"
     },
     "reply": {
+      "$id": "urn:uuid:76f98866-e79f-4474-9e4c-0746343ccc00",
       "component": true,
       "type": "object",
       "properties": {
         "to": {
+          "$id": "urn:uuid:a984c972-0614-4fbe-ada1-cb0d632f7cfd",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -93,6 +107,7 @@
       "description": "these words answer words somebody said: a notification telling them the answer to what they wrote is a reply, shown as its own words"
     },
     "subscription": {
+      "$id": "urn:uuid:c3ce17be-a170-49da-9fe1-25797a0abce5",
       "component": true,
       "type": "object",
       "unique": [
@@ -103,16 +118,19 @@
       ],
       "properties": {
         "actor": {
+          "$id": "urn:uuid:78edcef1-5b27-4784-9b17-6c5b7f1de22c",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "target": {
+          "$id": "urn:uuid:5288e00f-1b59-48a0-9b2d-c9f526463446",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "mode": {
+          "$id": "urn:uuid:97213217-0198-4594-9ea8-6704912ddaab",
           "type": "string",
           "enum": [
             "watch",
@@ -124,17 +142,20 @@
       "description": "one actor’s attention to one entity; mode watches or mutes it, and archived/opened marks on this row record putting away or reading its thread"
     },
     "whereabouts": {
+      "$id": "urn:uuid:c1ecca6a-595b-4b85-9117-bded2b8b0f23",
       "component": true,
       "type": "object",
       "description": "where a person is available on one channel, as it last changed: one row per person, channel and place, its eid derived from the three (@yaks/notify/whereabouts `whereaboutsEid`). A row is written when its state changes, or again while it holds once it is old enough to fade; a row older than its channel's fade says nothing.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:1896b71e-2f02-4c47-bd1c-2ef35a08078a",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "whose whereabouts it is"
         },
         "channel": {
+          "$id": "urn:uuid:2c7edb35-3c2f-4299-a30b-e72c523cef7d",
           "type": "string",
           "enum": [
             "operator",
@@ -146,10 +167,12 @@
           "description": "where: the Operator's page, a yaks.app app's page, Discord, a text, an email"
         },
         "place": {
+          "$id": "urn:uuid:9f8e2baf-8f9b-49fb-925f-5c25482bffbe",
           "type": "string",
           "description": "which one of the channel, where there are several: the space whose Operator page, the app whose page; none for a channel the person is on once"
         },
         "state": {
+          "$id": "urn:uuid:94a9fc59-214b-4460-8951-c6dd3997264d",
           "type": "string",
           "enum": [
             "here",
@@ -165,6 +188,7 @@
           "description": "what the channel last said: an Operator page focused (here), open but hidden or unfocused (background), or closed (away); an app page open or closed (away); Discord's status; a text or email used"
         },
         "at": {
+          "$id": "urn:uuid:58fbbadb-0a93-45c6-8ec9-5e2eea766410",
           "type": "string",
           "format": "date-time",
           "description": "when the state was last said, which it fades from"
@@ -174,6 +198,7 @@
   },
   "kinds": {
     "knock": {
+      "$id": "urn:uuid:f92b85b4-cb65-44d3-a700-0d61690a35bb",
       "description": "a nudge aimed at an entity, with the message that came with it",
       "prefix": "K",
       "examples": [
@@ -188,12 +213,14 @@
       ]
     },
     "notification": {
+      "$id": "urn:uuid:b05a4c79-b446-4ebd-ab09-230f2768f3f9",
       "description": "words emitted, not said, telling whoever its `to` names (a person, or a space or project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own",
       "with": {
         "doc": true
       }
     },
     "subscription": {
+      "$id": "urn:uuid:c3ce17be-a170-49da-9fe1-25797a0abce5",
       "description": "one actor’s attention to one entity; mode watches or mutes it, and archived/opened marks on this row record putting away or reading its thread"
     }
   }

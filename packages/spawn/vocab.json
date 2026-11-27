@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:688a6a64-5333-4aa1-a84e-f5216e033a90",
   "title": "spawn",
   "$defs": {
     "session_spawn": {

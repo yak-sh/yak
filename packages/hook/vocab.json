@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:124c81e9-94ba-47f5-b0d7-d8207732130f",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
@@ -7,42 +8,50 @@
   "title": "hook",
   "$defs": {
     "hook": {
+      "$id": "urn:uuid:66e0f5a0-5f2a-4e9a-9d28-8b9610abef69",
       "component": true,
       "type": "object",
       "properties": {
         "source": {
+          "$id": "urn:uuid:a1beb809-c161-46a9-89aa-b182dea73047",
           "type": "string",
           "stamped": true,
           "description": "who sent it"
         },
         "event": {
+          "$id": "urn:uuid:d0af272f-c927-4d33-868f-02b818883441",
           "type": "string",
           "stamped": true,
           "description": "the event name the sender gave it"
         },
         "payload": {
+          "$id": "urn:uuid:844e9a87-57c9-488c-9b9d-c6b38fcc959c",
           "type": "string",
           "store": "blob",
           "stamped": true,
           "description": "the body exactly as delivered"
         },
         "method": {
+          "$id": "urn:uuid:8b8ce8c6-c51c-4e01-9cb7-34d59cfe90c6",
           "type": "string",
           "stamped": true,
           "description": "the HTTP method it arrived by"
         },
         "path": {
+          "$id": "urn:uuid:a141f4b3-9961-43d6-be38-e61f5d6e499b",
           "type": "string",
           "stamped": true,
           "description": "the path it arrived on"
         },
         "headers": {
+          "$id": "urn:uuid:81ec23fa-b3a6-4f39-b795-d060a99dd60e",
           "type": "string",
           "store": "blob",
           "stamped": true,
           "description": "the headers, as sent"
         },
         "verified": {
+          "$id": "urn:uuid:5f8e66f3-3add-4509-bd98-8d89f20d5e9d",
           "type": "boolean",
           "stamped": true,
           "description": "whether the sender's signature verified — the same property name @yaks/mail uses in `mail.verified`"
@@ -53,6 +62,7 @@
   },
   "kinds": {
     "hook": {
+      "$id": "urn:uuid:66e0f5a0-5f2a-4e9a-9d28-8b9610abef69",
       "description": "an event another system delivered, kept as it arrived — the payload is the body that was sent, not a parsed version of it",
       "with": {
         "doc": true

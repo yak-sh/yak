@@ -1,144 +1,224 @@
 {
+  "$id": "urn:uuid:02d51e51-8b32-400d-838e-d2a045505587",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "people",
   "$defs": {
     "individual": {
+      "$id": "urn:uuid:88b8e152-456e-4d57-be46-785bf76bcb4c",
       "component": true,
       "type": "object",
       "description": "a person an app keeps: a church's member, a guest a sign-up added, a relative listed with them",
       "properties": {
         "slug": {
+          "$id": "urn:uuid:9de8dceb-7737-4cf8-a44e-e38f2cf0c589",
           "type": "string",
           "description": "their part of an address in the app's pages"
         },
-        "first": { "type": "string", "search": true },
-        "middle": { "type": "string" },
-        "last": { "type": "string", "search": true },
+        "first": {
+          "$id": "urn:uuid:2408782d-350a-4fe2-9704-888554cd7e40",
+          "type": "string",
+          "search": true
+        },
+        "middle": {
+          "$id": "urn:uuid:2a7316df-4f40-432a-8d6b-ac14a9bf0a50",
+          "type": "string"
+        },
+        "last": {
+          "$id": "urn:uuid:2f70f98b-e30e-4e03-ae00-41cbcc45c1e5",
+          "type": "string",
+          "search": true
+        },
         "maiden": {
+          "$id": "urn:uuid:c6cd5e5a-a6fb-4105-ba2c-3e41bbeec62f",
           "type": "string",
           "search": true,
           "description": "their family name before marriage"
         },
         "nickname": {
+          "$id": "urn:uuid:fc07be40-02c3-47b1-8480-79c96f846042",
           "type": "string",
           "search": true,
           "description": "what they go by"
         },
-        "suffix": { "type": "string" },
-        "gender": { "type": "string" },
+        "suffix": {
+          "$id": "urn:uuid:0178eb56-3ab5-4755-a58f-378e70c9f43a",
+          "type": "string"
+        },
+        "gender": {
+          "$id": "urn:uuid:01d2fc23-a737-47c6-8028-e5b132c533a3",
+          "type": "string"
+        },
         "born": {
+          "$id": "urn:uuid:229c2440-6d52-433c-b1c0-ba5b3715b1a5",
           "type": "string",
           "description": "their birthday, YYYY-MM-DD"
         },
         "deceased": {
+          "$id": "urn:uuid:839d51e3-c502-4bb0-8875-2a4df0e9d0e7",
           "type": "boolean",
           "description": "they have died: nobody signs in or signs up as this row"
         },
         "died": {
+          "$id": "urn:uuid:02b30427-c3d0-41d8-9d87-adea8f9b64dd",
           "type": "string",
           "description": "the day they died, YYYY-MM-DD"
         },
         "phone": {
+          "$id": "urn:uuid:cbe042e4-9c5d-40ad-b99a-ed26897d51da",
           "type": "string",
           "description": "their phone as typed; phone{number} carries it in E.164 form"
         },
         "email": {
+          "$id": "urn:uuid:6a1e538a-0193-482d-aa10-4f3bf6885978",
           "type": "string",
           "description": "their address, or two separated by commas"
         },
-        "photo": { "type": "string" },
+        "photo": {
+          "$id": "urn:uuid:3944ef51-6f2b-4c21-b176-ac650854c03e",
+          "type": "string"
+        },
         "status": {
+          "$id": "urn:uuid:98e1e9d0-c6b1-41d8-9cc9-a53bfe8b003c",
           "type": "string",
           "description": "member, attender, guest, or the app's own word; a sign-up adds a guest"
         },
         "title": {
+          "$id": "urn:uuid:4fe0f5e9-89b1-4078-aca2-6e512cc3daf4",
           "type": "string",
           "description": "a role they hold, such as Pastor"
         },
         "joined": {
+          "$id": "urn:uuid:f5614ac3-7673-493b-a609-5c973ebcafde",
           "type": "string",
           "description": "the day they joined, YYYY-MM-DD"
         },
         "household": {
+          "$id": "urn:uuid:81941f55-863e-4e2a-ad5a-0b627890a658",
           "type": "string",
           "ref": "entity",
           "death": "detach",
           "description": "the household they live in"
         },
         "position": {
+          "$id": "urn:uuid:b1efee60-f2af-4309-a05a-df7eff025d63",
           "type": "number",
           "description": "their place in their household's list"
         },
         "sample": {
+          "$id": "urn:uuid:c91134cc-e5e3-4373-91c2-b49ef4886271",
           "type": "boolean",
           "description": "a row the app seeded to show itself, not a person"
         }
       }
     },
     "household": {
+      "$id": "urn:uuid:1d7bbdcc-938b-4b5a-aacc-c11866aee916",
       "component": true,
       "type": "object",
       "description": "the home one or more people live in, and its address",
       "properties": {
         "slug": {
+          "$id": "urn:uuid:2901edf0-bf4f-4504-9771-34e173270211",
           "type": "string",
           "description": "its part of an address in the app's pages"
         },
         "name": {
+          "$id": "urn:uuid:abc52e1c-acbb-42e0-b043-f4f7b53bbb26",
           "type": "string",
           "description": "what the household is called, such as The Parks"
         },
-        "street": { "type": "string" },
-        "street2": { "type": "string" },
-        "city": { "type": "string" },
+        "street": {
+          "$id": "urn:uuid:011b6759-6227-4f80-abe8-a61e9eb71940",
+          "type": "string"
+        },
+        "street2": {
+          "$id": "urn:uuid:a7c66b73-9c09-42f6-af84-6f152102bdb5",
+          "type": "string"
+        },
+        "city": {
+          "$id": "urn:uuid:53fd5cb6-cf2f-4606-be90-8e5d2308216b",
+          "type": "string"
+        },
         "region": {
+          "$id": "urn:uuid:e1d7f89a-1516-4226-806a-29a945adc9ce",
           "type": "string",
           "description": "the state, as two letters"
         },
-        "postal": { "type": "string" },
-        "phone": { "type": "string" },
-        "email": { "type": "string" },
-        "photo": { "type": "string" },
+        "postal": {
+          "$id": "urn:uuid:1bab85a6-e350-47f6-b3c6-f736f58aad52",
+          "type": "string"
+        },
+        "phone": {
+          "$id": "urn:uuid:f877106a-85c0-475f-b562-349cd760c424",
+          "type": "string"
+        },
+        "email": {
+          "$id": "urn:uuid:a404fd1c-3e79-44a6-967b-0f269c939f19",
+          "type": "string"
+        },
+        "photo": {
+          "$id": "urn:uuid:0907b90f-b58b-4e68-be2b-518cca22d268",
+          "type": "string"
+        },
         "unlisted": {
+          "$id": "urn:uuid:d25c1e88-0132-4653-b302-32bf288b7ee9",
           "type": "boolean",
           "description": "kept out of the listings the app prints and shares"
         },
         "sample": {
+          "$id": "urn:uuid:b4a8039d-234e-4e4c-b8f0-c84b183d085e",
           "type": "boolean",
           "description": "a row the app seeded to show itself, not a home"
         }
       }
     },
     "relation": {
+      "$id": "urn:uuid:4d5f4a04-53a4-4f4c-b57f-d4b9325f7f64",
       "component": true,
       "type": "object",
       "description": "what two people are to each other: parent (a is b's parent), spouse or sibling",
       "properties": {
         "kind": {
+          "$id": "urn:uuid:7d33af3d-56d1-4bfe-bc37-ca2f4f213a88",
           "type": "string",
           "description": "parent, spouse or sibling"
         },
-        "a": { "type": "string", "ref": "entity", "death": "cascade" },
-        "b": { "type": "string", "ref": "entity", "death": "cascade" },
+        "a": {
+          "$id": "urn:uuid:de4e2f4c-93e2-4232-921f-7d67f6aac120",
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        },
+        "b": {
+          "$id": "urn:uuid:620eecf8-ced7-49a2-9c2f-014e562364ff",
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        },
         "type": {
+          "$id": "urn:uuid:d5db42e6-c548-4433-b244-cd44598db73a",
           "type": "string",
           "description": "the kind's own word, such as step or adopted"
         },
         "married": {
+          "$id": "urn:uuid:ce07a5fa-977a-4feb-9ab0-8c951113a029",
           "type": "string",
           "description": "the day a spouse relation began, YYYY-MM-DD"
         },
         "ended": {
+          "$id": "urn:uuid:948896c0-8325-405f-88a6-d4d99772f2d8",
           "type": "string",
           "description": "why it ended, such as divorced or widowed"
         },
         "ended_on": {
+          "$id": "urn:uuid:4207d49c-0415-46c6-ad5c-296d5a5711a6",
           "type": "string",
           "description": "the day it ended, YYYY-MM-DD"
         },
         "sample": {
+          "$id": "urn:uuid:44855ad6-d2e5-4927-8588-8360731b504c",
           "type": "boolean",
           "description": "a row the app seeded to show itself"
         }

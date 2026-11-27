@@ -1,28 +1,34 @@
 {
+  "$id": "urn:uuid:e8c6dfca-8214-4dfc-a88e-9903bde2a036",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "filter",
   "$defs": {
     "filter": {
+      "$id": "urn:uuid:155b606e-5c25-4620-95b4-a76f7a32d578",
       "component": true,
       "type": "object",
       "sync": "none",
       "durable": "connection",
       "properties": {
         "caret": {
+          "$id": "urn:uuid:b386e450-54a2-47f9-96e1-995c65ed8674",
           "type": "number",
           "description": "where the caret stands, as an offset into what is typed"
         },
         "from": {
+          "$id": "urn:uuid:e91cffd8-7bfa-4fdc-8e4b-430e37f113b1",
           "type": "number",
           "description": "where the word being completed starts"
         },
         "to": {
+          "$id": "urn:uuid:d49607bc-ac12-4acb-bf3b-794d0d2661d2",
           "type": "number",
           "description": "where the word being completed ends"
         },
         "cands": {
+          "$id": "urn:uuid:08c2f038-dad1-4a9b-ab51-d4b496aff5b1",
           "type": "array",
           "description": "what can replace that word, each its text as it reads once taken and the kind of thing it is (@yaks/query complete)",
           "items": {
@@ -38,6 +44,7 @@
           }
         },
         "pick": {
+          "$id": "urn:uuid:1dbe4093-ffac-457b-969f-fe5a57eeb098",
           "type": "number",
           "description": "which of cands is picked, -1 for none: what is typed already reads whole"
         }

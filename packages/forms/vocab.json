@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:ae7a1571-6fbd-4b36-aaa6-07f38055f5de",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/kernel": true,
@@ -7,34 +8,41 @@
   "title": "forms",
   "$defs": {
     "form": {
+      "$id": "urn:uuid:f3ff0c1d-f8b3-43ac-ab39-68c5d05ab28b",
       "component": true,
       "type": "object",
       "description": "a sign-up form, with its title and introduction in doc",
       "properties": {
         "opens": {
+          "$id": "urn:uuid:de550f07-81a5-4c2c-bd69-54a48634291d",
           "type": "string",
           "format": "date-time",
           "description": "first instant that takes sign-ups; absent means no opening limit"
         },
         "closes": {
+          "$id": "urn:uuid:ed70f14c-686e-41a6-bb53-4789bf3cb3bb",
           "type": "string",
           "format": "date-time",
           "description": "first instant that no longer takes sign-ups; absent means no closing limit"
         },
         "capacity": {
+          "$id": "urn:uuid:5d184167-b6cd-449f-b72f-016d49b6b4ea",
           "type": "integer",
           "minimum": 0,
           "description": "maximum accepted registrations; absent means unlimited"
         },
         "thanks": {
+          "$id": "urn:uuid:6c712bdc-e462-42a4-a25f-92b0c294382a",
           "type": "string",
           "description": "confirmation shown after a sign-up"
         },
         "closed": {
+          "$id": "urn:uuid:f0ab8eab-90d9-44c9-a310-bed9a59cc8fd",
           "type": "string",
           "description": "what the form says while it takes no sign-ups: before it opens, after it closes, or once it is full"
         },
         "seen": {
+          "$id": "urn:uuid:5fb56486-4cbb-4ab6-8177-d462090edfa9",
           "type": "string",
           "description": "the page of the app, relative to its address, where a sign-up is read, with {id} standing for the registration; the alert to the people the form notifies links to it when it is set",
           "examples": [
@@ -42,6 +50,7 @@
           ]
         },
         "notify": {
+          "$id": "urn:uuid:ca36189c-06a4-45c6-b22d-6e2572b0bc88",
           "type": "array",
           "items": {
             "type": "string"
@@ -49,6 +58,7 @@
           "description": "entity ids to notify of a sign-up"
         },
         "shares": {
+          "$id": "urn:uuid:81836924-ef31-4379-a833-c408b7f68499",
           "type": "object",
           "properties": {
             "question": {
@@ -66,6 +76,7 @@
       }
     },
     "question": {
+      "$id": "urn:uuid:c8942c71-f756-4527-845e-f9f784ce1389",
       "component": true,
       "type": "object",
       "description": "one question belonging to a form; repeat children point at their containing question",
@@ -76,16 +87,19 @@
       ],
       "properties": {
         "form": {
+          "$id": "urn:uuid:a911d81a-05b1-480b-a81b-341097c2536f",
           "type": "string",
           "ref": "form",
           "death": "cascade",
           "description": "the form asking this question"
         },
         "label": {
+          "$id": "urn:uuid:cc983571-5e77-4074-b5af-5dbb7b8779d5",
           "type": "string",
           "description": "the words asking the question"
         },
         "kind": {
+          "$id": "urn:uuid:173acf34-879e-4fbb-a6ec-d00b481755bd",
           "type": "string",
           "enum": [
             "line",
@@ -103,6 +117,7 @@
           "description": "the answer shape"
         },
         "choices": {
+          "$id": "urn:uuid:e55dd622-fd9e-48ad-b55e-b9bbecea1673",
           "type": "array",
           "items": {
             "type": "string"
@@ -110,20 +125,24 @@
           "description": "the offered values for choose or choices"
         },
         "required": {
+          "$id": "urn:uuid:c51ad00b-bfb5-4a3d-a090-008ad38debf9",
           "type": "boolean",
           "description": "whether completion needs an answer"
         },
         "hint": {
+          "$id": "urn:uuid:6bd83afa-a4ea-462e-a96a-c281c4282f98",
           "type": "string",
           "description": "help shown beside the question"
         },
         "within": {
+          "$id": "urn:uuid:75a35f54-3b4e-44ea-b905-8e5fea71a133",
           "type": "string",
           "ref": "question",
           "death": "cascade",
           "description": "the repeat question containing this question"
         },
         "when": {
+          "$id": "urn:uuid:c98113ce-cb7b-408d-af0f-5f2f02db856e",
           "type": "object",
           "properties": {
             "question": {
@@ -139,10 +158,12 @@
           "description": "show only when an earlier answer matches; look in the nearest repeat entry, then outer answers"
         },
         "fills": {
+          "$id": "urn:uuid:4706bf7f-7de6-412f-964e-42cb91e3b02b",
           "type": "string",
           "description": "directory property filled by this answer, such as individual.born or household.city; a list property gains the choices it lacks, and household alone on an address question fills the street, city, region and postal code of the household the person lives in, making one when they have none"
         },
         "relates": {
+          "$id": "urn:uuid:5d326de4-ee8c-4a89-95ea-2733b7cef50b",
           "type": "string",
           "enum": [
             "child",
@@ -153,16 +174,19 @@
           "description": "on a repeat, what each entry is to the person it is listed under; absent records no relation"
         },
         "shared": {
+          "$id": "urn:uuid:a041a663-2515-48e9-b71b-fa5e757a58c9",
           "type": "boolean",
           "description": "whether this answer is among those a shared sign-up shows the app's people"
         },
         "order": {
+          "$id": "urn:uuid:68261c16-af2c-4663-8f1a-aaf70a6ccd2c",
           "type": "number",
           "description": "question order; absent is zero and ties sort by entity id"
         }
       }
     },
     "registration": {
+      "$id": "urn:uuid:a02d1c59-2306-496a-b666-63639f34b7ac",
       "component": true,
       "type": "object",
       "description": "one sign-up; answers are keyed by question id, with repeat groups holding arrays of answer objects; read only by the app's owners and editors",
@@ -176,28 +200,33 @@
       },
       "properties": {
         "form": {
+          "$id": "urn:uuid:d18d839d-f325-4fda-baad-952451f6836f",
           "type": "string",
           "ref": "form",
           "death": "keep",
           "description": "the form signed up through, retained as history"
         },
         "person": {
+          "$id": "urn:uuid:6d3abc1e-954d-47f2-8065-a402bf430c9b",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the person signing up, when identified"
         },
         "answers": {
+          "$id": "urn:uuid:6b26463a-a019-4fc9-87a7-1ea1e1482c04",
           "type": "object",
           "additionalProperties": true,
           "description": "answers keyed by question id; null skips an optional question; repeat answers are arrays of answer objects"
         },
         "at": {
+          "$id": "urn:uuid:c3220cb0-31c1-4a47-866b-1716d46d1442",
           "type": "string",
           "format": "date-time",
           "description": "when this sign-up began"
         },
         "submitter": {
+          "$id": "urn:uuid:f1deccf9-c408-46cb-8aa0-c960dd40a540",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -206,6 +235,7 @@
       }
     },
     "shared": {
+      "$id": "urn:uuid:5dd563f4-fdee-4b4e-b375-ed7b571353b2",
       "component": true,
       "type": "object",
       "description": "the answers a sign-up's sender chose to share, read by the app's viewers, editors and owners and nobody else; deleting the sign-up deletes it",
@@ -216,23 +246,27 @@
       ],
       "properties": {
         "form": {
+          "$id": "urn:uuid:ad36e22b-8914-45a7-9d65-814b79108e38",
           "type": "string",
           "ref": "form",
           "death": "keep",
           "description": "the form signed up through"
         },
         "registration": {
+          "$id": "urn:uuid:e779aa66-15c2-4adf-ab07-0324ac478e64",
           "type": "string",
           "ref": "registration",
           "death": "cascade",
           "description": "the sign-up whose answers these are"
         },
         "answers": {
+          "$id": "urn:uuid:d2934976-6636-4e71-9901-55e733ebf5dc",
           "type": "object",
           "additionalProperties": true,
           "description": "the shared answers, keyed by question id"
         },
         "at": {
+          "$id": "urn:uuid:929cfc59-370c-4c75-95fe-a16bd96ba13e",
           "type": "string",
           "format": "date-time",
           "description": "when the sign-up was sent"
@@ -240,6 +274,7 @@
       }
     },
     "form_phone": {
+      "$id": "urn:uuid:2fce1768-a96a-4f56-9475-91e6d2b7efa2",
       "component": true,
       "type": "object",
       "description": "a phone row created for a form's texter; read only by the app's owners and editors",
@@ -249,6 +284,7 @@
       ],
       "properties": {
         "submitter": {
+          "$id": "urn:uuid:2acf0bbb-79b4-4b20-992a-deea2d3e57b1",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -257,6 +293,7 @@
       }
     },
     "form_mail": {
+      "$id": "urn:uuid:33463030-3b35-4c08-a539-0fdd2cf83406",
       "component": true,
       "type": "object",
       "description": "a letter a form sent for one sign-up, or the address it went to; read only by the app's owners and editors, as the sign-up is; deleting the sign-up deletes it",
@@ -266,18 +303,21 @@
       ],
       "properties": {
         "registration": {
+          "$id": "urn:uuid:01d5fb51-6609-4389-b487-2a6539c6f242",
           "type": "string",
           "ref": "registration",
           "death": "cascade",
           "description": "the sign-up it was written for"
         },
         "purpose": {
+          "$id": "urn:uuid:8ad692f4-c9c0-459a-84b2-7f21afad0996",
           "type": "string",
           "description": "confirm for the letter to the person who signed up, notify for one to the people the form names"
         }
       }
     },
     "form_guest": {
+      "$id": "urn:uuid:8264fcf6-b3fc-4276-b292-2d0e1d7973be",
       "component": true,
       "type": "object",
       "description": "a person, or the relation between two, that a sign-up created from its answers; read only by the app's owners and editors, as the sign-up is. A person the app wrote itself, which the sign-up matched, does not wear it",
@@ -287,6 +327,7 @@
       ],
       "properties": {
         "registration": {
+          "$id": "urn:uuid:cbf277b9-33c3-4e46-bbf8-29fd6ee69701",
           "type": "string",
           "ref": "registration",
           "death": "keep",
@@ -295,11 +336,13 @@
       }
     },
     "held": {
+      "$id": "urn:uuid:10b629bf-f3ea-4cba-a11f-f8aee100b73e",
       "component": true,
       "type": "object",
       "description": "a sign-up the form's door took for a bot's, kept for the app's owners and editors to look at: it sends no email, fills nothing in the directory and takes no place until one of them accepts it, by removing this mark and marking it completed",
       "properties": {
         "why": {
+          "$id": "urn:uuid:b4688fcf-63e9-4618-adac-ec2172cd271e",
           "type": "string",
           "enum": [
             "trap",
@@ -308,12 +351,14 @@
           "description": "trap when the field people never see was filled in, quick when the form was sent sooner than a person could fill it in"
         },
         "at": {
+          "$id": "urn:uuid:0453ea91-6689-4818-b574-675386c41a2c",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the door held it"
         },
         "by": {
+          "$id": "urn:uuid:73ff66cd-ba58-43f4-8214-f16b0ad02ed5",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -321,6 +366,7 @@
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:15f4583d-9e24-498a-85a9-eabe8f939409",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -330,17 +376,20 @@
       }
     },
     "waitlisted": {
+      "$id": "urn:uuid:fdd30660-5029-4510-ae59-17a79de23090",
       "component": true,
       "type": "object",
       "description": "this registration is waiting for a place",
       "properties": {
         "at": {
+          "$id": "urn:uuid:cd2a4ed1-a495-45a3-96d2-8b185160741d",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it joined the waitlist"
         },
         "by": {
+          "$id": "urn:uuid:4c314255-2766-4400-a9ad-07a978c1592e",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -348,6 +397,7 @@
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:9ed69cd8-7d42-4d03-a318-c57298e31449",
           "type": "string",
           "ref": "entity",
           "death": "keep",

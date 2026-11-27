@@ -1,6 +1,8 @@
 {
+  "$id": "urn:uuid:99ac13d4-626b-4f9f-aabf-133bfe489b17",
   "$defs": {
     "machine": {
+      "$id": "urn:uuid:ba9cbcbd-d254-404e-be03-c92ba3bb7353",
       "component": true,
       "journal": false,
       "type": "object",
@@ -8,12 +10,14 @@
       "description": "an actual computer with a stable identity and an optional connector address; without a reachable address it is inventory, not an execution target",
       "properties": {
         "address": {
+          "$id": "urn:uuid:be053b0f-0b4b-41ba-a0af-325ae807ff4a",
           "type": "string",
           "description": "the connection address selecting a configured computer connector; changing it preserves computer identity"
         }
       }
     },
     "workspace": {
+      "$id": "urn:uuid:26fd7959-8b68-4ea1-b4fa-de087c037440",
       "component": true,
       "journal": false,
       "type": "object",
@@ -21,16 +25,19 @@
       "description": "a file-and-command target on a computer or in a sandbox; its root is a default directory, not an access boundary. Missing placement is unknown, never this host",
       "properties": {
         "machine": {
+          "$id": "urn:uuid:233fb637-dfbc-4107-9d9a-e99d1d0a25a2",
           "type": "string",
           "ref": "machine",
           "death": "keep",
           "description": "the computer whose filesystem or sandbox contains this target; absent only when a backend cannot disclose placement"
         },
         "root": {
+          "$id": "urn:uuid:62d5e08c-43f7-4543-aac1-9151fd6eb012",
           "type": "string",
           "description": "the default absolute directory in this filesystem; placement and root remain fixed for the resource lifetime"
         },
         "sandbox": {
+          "$id": "urn:uuid:2b19e9fa-7dbb-476e-915b-74eecbacca0a",
           "type": "string",
           "ref": "sandbox",
           "death": "keep",

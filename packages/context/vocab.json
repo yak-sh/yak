@@ -1,43 +1,53 @@
 {
+  "$id": "urn:uuid:5cd6899e-e264-46b7-8e72-d76afb2e2bf9",
   "title": "context",
   "$defs": {
     "prompt": {
+      "$id": "urn:uuid:8d8f2b82-81e3-4b1d-9fb4-bba7f2fa9896",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "Explicitly admitted instruction snapshot; never inferred from file reads or tool output. Content carries the exact text.",
       "properties": {
         "scope": {
+          "$id": "urn:uuid:fae8f2ee-0638-4e0d-b8ab-add00002f6dc",
           "type": "string",
           "description": "shared instructions copied to fresh children, local instructions for this transcript, or turn: a note held for its turn alone, which a checkpoint drops"
         },
         "source": {
+          "$id": "urn:uuid:94148668-84c2-4d22-8ed3-8c11b8a56707",
           "type": "string",
           "description": "Source label or canonical file path; descriptive, not reread at delivery"
         },
         "revision": {
+          "$id": "urn:uuid:4affcffe-9790-4fa5-8a0a-1b33d0599381",
           "type": "string",
           "description": "SHA-256 of the admitted text when loaded from a file"
         }
       }
     },
     "context_output": {
+      "$id": "urn:uuid:6d2fb192-d17b-42c3-b85a-d55afc7aac89",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "Immutable full tool-result snapshot, scoped by originating transcript entry.",
       "properties": {
         "source": {
+          "$id": "urn:uuid:5e898bf3-058b-4c18-b79d-84444b1bdb15",
           "type": "string"
         },
         "revision": {
+          "$id": "urn:uuid:72b09c0a-4d9a-4e2b-8da1-42a8d70c8036",
           "type": "string"
         },
         "body": {
+          "$id": "urn:uuid:823a457d-ea97-4ee9-aa3f-8996237c1d34",
           "type": "string",
           "store": "blob"
         },
         "reader": {
+          "$id": "urn:uuid:d7221cfc-c9b4-4d29-9ce4-440f89f53d22",
           "type": "string",
           "description": "Caller principal permitted to inspect a snapshot kept by a multi-user host; omitted when the graph itself provides its access boundary."
         }

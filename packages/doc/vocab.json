@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:b617d629-f91e-460c-a597-536f4d99142b",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/blob": true
@@ -6,16 +7,19 @@
   "title": "doc",
   "$defs": {
     "doc": {
+      "$id": "urn:uuid:e8a36111-d334-4772-a0f9-89512f1e76ea",
       "component": true,
       "type": "object",
       "description": "the text a person reads: a title and a body",
       "properties": {
         "title": {
+          "$id": "urn:uuid:08bc6a17-08d6-4894-8628-ebebfe5ac2f3",
           "type": "string",
           "search": true,
           "description": "the one line an entity is known by"
         },
         "body": {
+          "$id": "urn:uuid:51f0daea-5680-4a8b-a222-165555d74600",
           "type": "string",
           "store": "blob",
           "search": true,
@@ -28,6 +32,7 @@
   },
   "kinds": {
     "doc": {
+      "$id": "urn:uuid:e8a36111-d334-4772-a0f9-89512f1e76ea",
       "description": "the text a person reads: a title and a body",
       "examples": [
         {

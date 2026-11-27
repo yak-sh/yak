@@ -1,33 +1,40 @@
 {
+  "$id": "urn:uuid:dab058de-5bd9-4676-8690-d5dde0b763ec",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "builders",
   "$defs": {
     "builder": {
+      "$id": "urn:uuid:9b1b500d-361b-4275-a331-fd83199fd4c1",
       "component": true,
       "type": "object",
       "properties": {
         "query": {
+          "$id": "urn:uuid:714551bd-58e1-48e9-9505-d01e67d652bd",
           "type": "string",
           "description": "query whose outer bindings each name a build"
         },
         "to": {
+          "$id": "urn:uuid:5ae8f8b5-48ea-444e-a4f1-b009b1e23f2e",
           "type": "string",
           "ref": "tool",
           "death": "keep",
           "description": "registered tool called for each changed binding"
         },
         "floor": {
+          "$id": "urn:uuid:eee9e439-1645-46aa-8fae-9de86510aafa",
           "type": "string",
           "format": "date-time",
           "description": "earliest a scheduled reconciliation may run"
         },
         "immediate": {
+          "$id": "urn:uuid:25b76ec8-9c72-40be-85a2-a669fa7f9e93",
           "type": "boolean",
           "description": "reconcile when selected graph inputs change"
         },
         "wiring": {
+          "$id": "urn:uuid:490a5fed-0ec1-411f-95eb-6de564b1da10",
           "type": "object",
           "additionalProperties": {
             "type": "object",
@@ -39,6 +46,7 @@
           "description": "output slot -> component.property -> sibling output slot; fills writable references before admission, overriding tool values"
         },
         "definition": {
+          "$id": "urn:uuid:4db59b63-f40f-4f18-8c37-3671fa112d38",
           "type": "string",
           "stamped": true,
           "description": "fingerprint of the current template, effective using, wiring, tool and its revision; definition edits never invalidate outputs"
@@ -47,16 +55,19 @@
       "description": "a query-to-tool transformation; content.body is its optional $var template and using chooses a model"
     },
     "staged": {
+      "$id": "urn:uuid:fa0c0300-b076-481e-b0d8-6701b7eff722",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:56e02f16-645a-42fa-b839-e5df367d1418",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was staged"
         },
         "by": {
+          "$id": "urn:uuid:0bc8d09b-b8d8-4169-87d9-abc121e43b20",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -64,6 +75,7 @@
           "description": "who staged it"
         },
         "via": {
+          "$id": "urn:uuid:6d4724eb-77b4-4337-9f9c-543ea33ac403",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -74,6 +86,7 @@
       "description": "A builder being tried on a few bindings: only `builder build` builds it. Removing the mark builds the rest once, and a binding already built under the same key is not asked again."
     },
     "builder_dep": {
+      "$id": "urn:uuid:4b396821-475d-4de3-ad0d-76a33a8090a2",
       "component": true,
       "journal": false,
       "type": "object",
@@ -84,16 +97,19 @@
       ],
       "properties": {
         "builder": {
+          "$id": "urn:uuid:eb3ebbc9-22ea-4519-92db-374d529ef6ea",
           "type": "string",
           "ref": "builder",
           "death": "cascade"
         },
         "source": {
+          "$id": "urn:uuid:40b9efe2-3f6c-4b0e-bb70-a51fc3373ef6",
           "type": "string",
           "index": true,
           "description": "component:name or entity:eid read by an immediate builder"
         },
         "version": {
+          "$id": "urn:uuid:5cf8b924-7de9-4c4f-9534-975cbb80efe1",
           "type": "string",
           "stamped": true,
           "description": "compare-and-set token for one dependency replacement"
@@ -101,23 +117,28 @@
       }
     },
     "build": {
+      "$id": "urn:uuid:d8b2fc40-035e-4448-9eab-700739cfe38d",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "builder": {
+          "$id": "urn:uuid:08fa085f-29d5-43a7-81c3-56824afb2ee3",
           "type": "string",
           "ref": "builder",
           "death": "keep"
         },
         "match": {
+          "$id": "urn:uuid:feec368d-2a73-42f1-a97d-99eae3a448b8",
           "type": "string",
           "description": "JSON outer entity-ID tuple; with the builder and variant, what the build's `build_of` key says"
         },
         "variant": {
+          "$id": "urn:uuid:abfa7be2-31c5-46fb-a777-7a1abb81b2a4",
           "type": "string"
         },
         "for": {
+          "$id": "urn:uuid:56bdc146-bd46-4a32-bd50-7eedde0129db",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -125,11 +146,13 @@
           "description": "the entity it was built for: the first its outer binding holds, so a query reaches what was built for X (`.built.build.build.for=X`), which `match` as JSON cannot"
         },
         "key": {
+          "$id": "urn:uuid:24b84ddd-81ab-41e7-aabe-2cbb16028f71",
           "type": "string",
           "stamped": true,
           "description": "opaque attempt key shared with its outputs; inputs select work, and an explicit reroll gets a fresh key"
         },
         "call": {
+          "$id": "urn:uuid:5fdfd568-b7b6-4305-b60f-597ae51e6c5f",
           "type": "string",
           "ref": "call",
           "death": "keep",
@@ -137,11 +160,13 @@
           "description": "latest call for this key"
         },
         "stale": {
+          "$id": "urn:uuid:716716e5-fea0-4ea7-b04f-18f3f72fbd7f",
           "type": "boolean",
           "stamped": true,
           "description": "outer binding no longer matches"
         },
         "cost": {
+          "$id": "urn:uuid:49019125-9457-4de7-8a1e-20ba8dc82b29",
           "type": "number",
           "computed": true,
           "reads": [
@@ -153,16 +178,19 @@
           "description": "the dollars its calls spent, summed: each call's own `cost` and the entries of each session a call opened; absent where none records any"
         },
         "inputs": {
+          "$id": "urn:uuid:ab78b2ef-e6fa-4e72-8cbf-ad212e2315cd",
           "type": "string",
           "stamped": true,
           "description": "fingerprint of the selected binding tree, independent of the builder definition"
         },
         "definition": {
+          "$id": "urn:uuid:f328d495-85d3-461b-93e1-a4a83f0be57d",
           "type": "string",
           "stamped": true,
           "description": "definition fingerprint used by the latest attempt; retained across definition edits"
         },
         "outdated": {
+          "$id": "urn:uuid:4638dca3-6119-4f7c-8efc-e95e21ce2a13",
           "type": "boolean",
           "computed": true,
           "reads": [
@@ -176,6 +204,7 @@
       "description": "one stable instance of a builder for an outer query binding"
     },
     "build_of": {
+      "$id": "urn:uuid:f5967cbc-8a13-43ae-a1da-befbf329ecac",
       "component": true,
       "journal": false,
       "type": "object",
@@ -183,6 +212,7 @@
       "description": "the key a build is found by: `<builder>/<variant>/<match>`, so a rebuild lands on the build already there"
     },
     "output_of": {
+      "$id": "urn:uuid:7212617f-8a7a-4d93-a5a0-861dfe70c047",
       "component": true,
       "journal": false,
       "type": "object",
@@ -190,35 +220,42 @@
       "description": "the key of one take: <build>/<slot>/<call>, so replaying one answer keeps its entity and another answer adds a take"
     },
     "built": {
+      "$id": "urn:uuid:0821d09f-d94b-4444-9d44-ee7f3d761eec",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "build": {
+          "$id": "urn:uuid:9bc747ff-5b9e-4fb5-84ef-5c2d1fb49380",
           "type": "string",
           "ref": "build",
           "death": "keep"
         },
         "slot": {
+          "$id": "urn:uuid:9caf309a-8aff-4364-8d81-08d9a6146597",
           "type": "string"
         },
         "key": {
+          "$id": "urn:uuid:b0d64e7f-421a-4f8f-9144-4854c7f33302",
           "type": "string",
           "stamped": true
         },
         "call": {
+          "$id": "urn:uuid:993f5953-51b0-4b75-9c25-e71a321bfbbd",
           "type": "string",
           "ref": "call",
           "death": "keep",
           "stamped": true
         },
         "artifact": {
+          "$id": "urn:uuid:09b18f45-0d7a-483b-afa0-9bab506c3d23",
           "type": "string",
           "ref": "artifact",
           "death": "keep",
           "stamped": true
         },
         "current": {
+          "$id": "urn:uuid:429e775c-0d67-4c5b-9c10-e03d0944fc0a",
           "type": "boolean",
           "computed": true,
           "reads": [
@@ -233,16 +270,19 @@
           "description": "chosen take whose binding still matches its inputs; readers keep playing it while a reroll with unchanged inputs is pending"
         },
         "definition": {
+          "$id": "urn:uuid:b92574bf-1ca3-4cdd-a65c-51a50c0cf77e",
           "type": "string",
           "stamped": true,
           "description": "definition fingerprint used to produce this output"
         },
         "inputs": {
+          "$id": "urn:uuid:19baddb8-e0f0-41aa-ae72-73b4e33d1be3",
           "type": "string",
           "stamped": true,
           "description": "binding fingerprint that produced this take"
         },
         "unresolved": {
+          "$id": "urn:uuid:7af56f44-b042-46ef-825d-7f7fecfe0502",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -338,10 +378,12 @@
       ]
     },
     "agent_step": {
+      "$id": "urn:uuid:695ae92f-ff78-4fcb-8b9c-30df4ca1c3a3",
       "component": true,
       "type": "object",
       "properties": {
         "call": {
+          "$id": "urn:uuid:577a7a1e-daf0-4b3d-8f51-635f918d47ae",
           "type": "string",
           "ref": "call",
           "death": "cascade",
@@ -599,16 +641,19 @@
       ]
     },
     "chosen": {
+      "$id": "urn:uuid:13546084-1393-42e7-b0db-03e84d1a0860",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:f1ca2720-a181-449e-a889-9671d876d53b",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was chosen"
         },
         "by": {
+          "$id": "urn:uuid:aa05b142-50e1-4784-97d1-5f140e9de3d5",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -616,6 +661,7 @@
           "description": "who chose it"
         },
         "via": {
+          "$id": "urn:uuid:84e6ec92-3e2b-454f-8728-06221f0d5454",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -655,6 +701,7 @@
   },
   "kinds": {
     "builder": {
+      "$id": "urn:uuid:9b1b500d-361b-4275-a331-fd83199fd4c1",
       "description": "a query-to-tool transformation; content.body is its optional $var template and using chooses a model",
       "with": {
         "doc": true
@@ -672,12 +719,14 @@
       ]
     },
     "built": {
+      "$id": "urn:uuid:0821d09f-d94b-4444-9d44-ee7f3d761eec",
       "description": "one retained take in one named output slot; chosen marks the one in use",
       "with": {
         "doc": true
       }
     },
     "agent_step": {
+      "$id": "urn:uuid:695ae92f-ff78-4fcb-8b9c-30df4ca1c3a3",
       "description": "a workflow step the person's own agent takes; step_list finds it and step_answer answers it",
       "with": {
         "task": true,

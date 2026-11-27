@@ -1,24 +1,29 @@
 {
+  "$id": "urn:uuid:d96549f8-2df5-4d85-ad20-ee391da61abd",
   "title": "member",
   "$defs": {
     "member": {
+      "$id": "urn:uuid:873d2e5d-3061-49ad-99b9-883b2eda9a8e",
       "component": true,
       "type": "object",
       "description": "one person's membership in a space",
       "properties": {
         "space": {
+          "$id": "urn:uuid:50d285c2-4085-4198-baad-952006691a62",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the space they belong to"
         },
         "person": {
+          "$id": "urn:uuid:a86a552f-daf8-46dc-97dc-3e240db430c1",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the person the membership is for"
         },
         "role": {
+          "$id": "urn:uuid:1aa8d814-5d6c-48e1-a222-9f9f25771ffb",
           "type": "string",
           "enum": [
             "owner",
@@ -30,27 +35,32 @@
       }
     },
     "grant": {
+      "$id": "urn:uuid:41ca19bb-146e-4566-9cac-5b52dd230e87",
       "component": true,
       "type": "object",
       "description": "what one principal is permitted to do with one app",
       "properties": {
         "app": {
+          "$id": "urn:uuid:77456970-ffa7-4570-bcb8-092043b27b2f",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the app the grant is on"
         },
         "person": {
+          "$id": "urn:uuid:d366217e-32a8-4c49-bb05-3ee63df89612",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the person it is for — absent on a share link, which names a token instead"
         },
         "token": {
+          "$id": "urn:uuid:10192a2d-ae35-4d55-9626-218bbdac248d",
           "type": "string",
           "description": "an unguessable secret standing in for a person: whoever opens the link acts as this grant"
         },
         "access": {
+          "$id": "urn:uuid:0a183e71-c610-4e49-a212-9ae5ccb88c1f",
           "type": "string",
           "enum": [
             "owner",
@@ -63,11 +73,13 @@
       }
     },
     "access": {
+      "$id": "urn:uuid:4f268033-1919-4e0f-8a9d-5a4a44e0df42",
       "component": true,
       "type": "object",
       "description": "what an app allows everyone who has no grant on it",
       "properties": {
         "mode": {
+          "$id": "urn:uuid:7845b925-f945-4adc-a659-61657f9291c3",
           "type": "string",
           "enum": [
             "public",
@@ -80,6 +92,7 @@
       }
     },
     "_privacy": {
+      "$id": "urn:uuid:66962ebf-4fa2-424d-9720-ced973401362",
       "component": true,
       "journal": false,
       "type": "object",
@@ -88,6 +101,7 @@
       "description": "Who may read this entity, as the personal, inherited and readers declarations say of its components and of what it inherits from; kept by @yaks/member's personal rule in the transaction that changes them, and screening a person's read where every entity's is current. An entity wearing none of those components keeps none.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:ae217ba3-b867-42eb-898c-552c5281c941",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -95,22 +109,26 @@
           "description": "The one person it is kept to; none where it is kept to no one in particular."
         },
         "shut": {
+          "$id": "urn:uuid:abe1cba3-486a-49bf-abf9-4d7fb61da6d0",
           "type": "boolean",
           "stamped": true,
           "description": "True where it is kept to nobody: it names more than one person, or names nobody where a person was asked."
         },
         "signed": {
+          "$id": "urn:uuid:81ffc817-ba5a-4080-b44e-491e82d193d3",
           "type": "boolean",
           "stamped": true,
           "description": "True where a component asks its readers to be signed in."
         },
         "floor": {
+          "$id": "urn:uuid:9c71cd97-b0d8-4b35-b607-b3b01770efa4",
           "type": "string",
           "enum": ["viewer", "editor", "owner"],
           "stamped": true,
           "description": "The highest level a component asks its readers to hold."
         },
         "hash": {
+          "$id": "urn:uuid:53a2399d-9b3f-4664-b37a-721dd0c92aaf",
           "type": "string",
           "index": true,
           "stamped": true,
@@ -119,6 +137,7 @@
       }
     },
     "_pace": {
+      "$id": "urn:uuid:a8582232-6757-4bbf-8cf7-dcb83e115b41",
       "component": true,
       "journal": false,
       "type": "object",
@@ -127,6 +146,7 @@
       "description": "The last accepted write of each paced component through each instrument on this entity; maintained by the write guard in the value's transaction.",
       "properties": {
         "writes": {
+          "$id": "urn:uuid:bab448b6-3f93-4620-9fcd-3a3fb911a89d",
           "type": "array",
           "stamped": true,
           "description": "Independent component and via clocks, read whole; a null via pools writers carrying no instrument.",
@@ -158,6 +178,7 @@
   },
   "kinds": {
     "member": {
+      "$id": "urn:uuid:873d2e5d-3061-49ad-99b9-883b2eda9a8e",
       "description": "one person's membership in a space",
       "examples": [
         {
@@ -170,6 +191,7 @@
       ]
     },
     "grant": {
+      "$id": "urn:uuid:41ca19bb-146e-4566-9cac-5b52dd230e87",
       "description": "what one principal is permitted to do with one app",
       "examples": [
         {

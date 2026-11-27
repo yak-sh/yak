@@ -1,10 +1,12 @@
 {
+  "$id": "urn:uuid:fea551fc-ed67-457f-8a90-2dbda48fe650",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "spend",
   "$defs": {
     "spend": {
+      "$id": "urn:uuid:9562bb25-5700-4e19-852a-2432ef30ec26",
       "component": true,
       "journal": false,
       "wire": false,
@@ -13,16 +15,19 @@
       "description": "where one UTC day's model requests went, tallied from each request's `usage` and `context_parts`: by part of the context, session, task, model and large entry, each as tokens by how they were paid (read from the provider cache, written to it, sent fresh, generated) and dollars. Dollars are what the provider reported, else the tokens at the model's list `price`. The totals are measured; the split across parts, and across the tasks a session worked on, is estimated",
       "properties": {
         "day": {
+          "$id": "urn:uuid:f3c6cd4d-ad07-421f-80b1-fe756454cd16",
           "type": "string",
           "identity": true,
           "description": "the UTC day, `2026-10-20`"
         },
         "requests": {
+          "$id": "urn:uuid:ec996e89-a695-4e9a-bcfc-0fa7a0ee21b9",
           "type": "integer",
           "stamped": true,
           "description": "how many model requests it tallies"
         },
         "tokens": {
+          "$id": "urn:uuid:933e7806-41c2-4885-ad73-a33ee9edd1e7",
           "type": "array",
           "items": { "type": "integer" },
           "minItems": 4,
@@ -31,11 +36,13 @@
           "description": "its tokens as [read, write, fresh, generated]"
         },
         "dollars": {
+          "$id": "urn:uuid:3fd54392-c870-4f31-8749-eda368bb1f4e",
           "type": "number",
           "stamped": true,
           "description": "what they cost"
         },
         "parts": {
+          "$id": "urn:uuid:dc7d297c-95f6-46dd-8545-a4a49a0bd5d8",
           "type": "object",
           "additionalProperties": {
             "type": "array",
@@ -47,6 +54,7 @@
           "description": "by part of the context (`persona <id>`, `tool <name>`, `skills`, `system`, `result <tool>`, `call <tool>`, `input`, `notice`, `output`, `reasoning`, `checkpoint`, and `unrecorded` for a request whose context was not recorded): [read, write, fresh, generated, dollars]"
         },
         "sessions": {
+          "$id": "urn:uuid:ded7186d-6f88-413a-9802-0badc0b2371b",
           "type": "object",
           "additionalProperties": {
             "type": "array",
@@ -58,6 +66,7 @@
           "description": "by session eid: [tokens, dollars, requests]"
         },
         "tasks": {
+          "$id": "urn:uuid:3021fe1d-5fb7-49b2-87b3-7389c87d4a38",
           "type": "object",
           "additionalProperties": {
             "type": "array",
@@ -69,6 +78,7 @@
           "description": "by task eid, each session's share split evenly across the tasks it worked on, a subagent's across the tasks its brief names, else as the session that started it: [tokens, dollars]"
         },
         "models": {
+          "$id": "urn:uuid:6a4563b0-e370-4709-a761-82997cab675b",
           "type": "object",
           "additionalProperties": {
             "type": "array",
@@ -80,6 +90,7 @@
           "description": "by model eid: [read, write, fresh, generated, dollars, requests]"
         },
         "plans": {
+          "$id": "urn:uuid:5e71f0e6-5b7c-40fe-9f0e-20743d1c182b",
           "type": "object",
           "additionalProperties": {
             "type": "object",
@@ -119,12 +130,14 @@
           "description": "by the account whose plan its requests billed against (a transcript's request the account whose directory keeps it, a native harness's the account its provider's CLI signs in with here; a request paid per token bills none): the dollars they ran up on it, in all and by part, session, task, model, entry and (`metered`) each model's by session, which is what a limit on one model counts. Against that account's weekly limit, its dollars say what share of the week each row used"
         },
         "unpriced": {
+          "$id": "urn:uuid:7ab5ece5-d15c-430b-84f4-210d37d17763",
           "type": "array",
           "items": { "type": "string" },
           "stamped": true,
           "description": "the model eids a request was tallied for that had no `price` and reported no dollars: what they cost is missing from the dollars, not zero. Also kept per account, so an account's rate is known incomplete"
         },
         "entries": {
+          "$id": "urn:uuid:c0d26212-1e7e-4896-97ea-92e85bae88c6",
           "type": "object",
           "additionalProperties": {
             "type": "array",
@@ -138,6 +151,7 @@
       }
     },
     "untallied": {
+      "$id": "urn:uuid:ae0fa60e-d0f8-4f16-ab62-d4d4cc8c9ef7",
       "component": true,
       "journal": false,
       "wire": false,
@@ -146,6 +160,7 @@
       "description": "a past day some of whose requests were written after it ended, as when a transcript is read in after the fact: on its day's row until the duty tallies that day again",
       "properties": {
         "day": {
+          "$id": "urn:uuid:056f6b4f-e394-4ee7-a216-a15b0b2d7368",
           "type": "string",
           "stamped": true,
           "description": "the UTC day, `2026-10-20`"

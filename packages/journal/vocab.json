@@ -1,81 +1,96 @@
 {
+  "$id": "urn:uuid:de4b07e4-bed4-4479-b581-3e70aa37ee82",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "journal",
   "$defs": {
     "_tx": {
+      "$id": "urn:uuid:f6fd3747-f157-4fa3-ae7b-832ef5164b76",
       "component": true,
       "computed": true,
       "type": "object",
       "description": "A committed transaction, read from the journal: one call to apply(), whose bundles all committed together.",
       "properties": {
         "seq": {
+          "$id": "urn:uuid:ec85f5f4-920e-4b16-8906-c6c64a3c3ff8",
           "type": "integer",
           "description": "its place in the journal's total order, the cursor a feed holds"
         },
         "at": {
+          "$id": "urn:uuid:500a621e-da7c-4c98-9ecd-d25d0dec9aba",
           "type": "string",
           "format": "date-time",
           "description": "when it committed"
         },
         "by": {
+          "$id": "urn:uuid:788db1bb-7436-4fff-8e54-0d35ea114d3f",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "whom the write acted for"
         },
         "via": {
+          "$id": "urn:uuid:5850cf02-1f3a-4277-8a94-e9cea77fba9a",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the session, connector or other entity it was made through"
         },
         "host": {
+          "$id": "urn:uuid:d988bc41-ea9d-459f-b25b-3998c3788f21",
           "type": "string",
           "description": "the process that wrote it"
         },
         "note": {
+          "$id": "urn:uuid:1aa1b4fb-052b-4c51-860e-24468d4fbbd9",
           "type": "string",
           "description": "a note its writer left"
         }
       }
     },
     "_change": {
+      "$id": "urn:uuid:67ef9841-b93a-4f61-845f-c007147182c2",
       "component": true,
       "computed": true,
       "type": "object",
       "description": "One component a transaction wrote or removed, read from the journal.",
       "properties": {
         "tx": {
+          "$id": "urn:uuid:cd24e6de-0905-4f38-be97-2cf3efc9c315",
           "type": "string",
           "ref": "_tx",
           "death": "keep",
           "description": "the transaction it belongs to"
         },
         "target": {
+          "$id": "urn:uuid:f8e842a6-f3ca-41a4-976d-83bc7cdf92b0",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the entity it changed"
         },
         "comp": {
+          "$id": "urn:uuid:de9dee4e-a26f-4e64-8b47-544d39f5708d",
           "type": "string",
           "ref": "_comp",
           "death": "keep",
           "description": "the component it wrote or removed; entity for a deletion"
         },
         "component": {
+          "$id": "urn:uuid:b1f3ccac-1d75-4d3f-abc4-e85ccb2d03d4",
           "type": "string",
           "description": "that component's name, which a graph that does not describe its vocabulary as _comp rows reads in place of comp"
         },
         "value": {
+          "$id": "urn:uuid:13915bcc-223f-4f15-b349-73185cc91fbe",
           "type": "object",
           "description": "the properties it wrote; absent where it removed the component"
         }
       }
     },
     "kept": {
+      "$id": "urn:uuid:0327d0a6-6b99-4bc4-8cb9-27bf776aa2d0",
       "component": true,
       "journal": false,
       "wire": false,
@@ -84,27 +99,32 @@
       "description": "what the store's file kept on one UTC day, measured once that day from its page statistics, so history can be read against the rest of the file: the file's bytes, how many of them were free, each table's bytes with its indexes and its rows, and the changes the journal held per component. History is the journal's tables (`journal_*`) and each component's versions (`<comp>$versions`)",
       "properties": {
         "day": {
+          "$id": "urn:uuid:bc2e8e30-2f58-43be-b5df-9bb6a964a19a",
           "type": "string",
           "identity": true,
           "description": "the UTC day, `2026-10-21`"
         },
         "at": {
+          "$id": "urn:uuid:ed64c46e-e690-4497-b912-b858ae26d21b",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was measured"
         },
         "bytes": {
+          "$id": "urn:uuid:00c9cd8a-83c5-47e5-b465-a5d9722a4379",
           "type": "integer",
           "stamped": true,
           "description": "the file's bytes"
         },
         "free": {
+          "$id": "urn:uuid:ec0caddc-4de5-4031-afb4-a77dc48568e1",
           "type": "integer",
           "stamped": true,
           "description": "how many of them were free pages"
         },
         "file": {
+          "$id": "urn:uuid:f158dc98-4283-4111-9876-2f4fe228bad7",
           "type": "string",
           "ref": "file",
           "death": "keep",
@@ -112,6 +132,7 @@
           "description": "the file it measured, where the store keeps one on a disk"
         },
         "tables": {
+          "$id": "urn:uuid:1597e56d-c1ec-4ffb-a9c8-678dbb211add",
           "type": "object",
           "additionalProperties": {
             "type": "array",
@@ -125,6 +146,7 @@
           "description": "by table: [bytes, rows], its indexes' bytes folded into its own"
         },
         "changes": {
+          "$id": "urn:uuid:1b6bc08a-9071-4977-a892-ce8c61306256",
           "type": "object",
           "additionalProperties": {
             "type": "integer"
@@ -275,9 +297,11 @@
   },
   "kinds": {
     "_tx": {
+      "$id": "urn:uuid:f6fd3747-f157-4fa3-ae7b-832ef5164b76",
       "description": "A committed transaction, read from the journal: one call to apply(), whose bundles all committed together."
     },
     "_change": {
+      "$id": "urn:uuid:67ef9841-b93a-4f61-845f-c007147182c2",
       "description": "One component a transaction wrote or removed, read from the journal."
     }
   }

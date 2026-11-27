@@ -1,20 +1,26 @@
 {
+  "$id": "urn:uuid:419c8402-7791-4ea1-a4a1-75c4558b967b",
   "$defs": {
     "prop": {
+      "$id": "urn:uuid:b5f5bc11-a900-4348-8f55-9bf1c02e5fff",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "comp": {
+          "$id": "urn:uuid:ce5084b3-b0f4-440f-97f1-fa8cd4a022b9",
           "type": "string"
         },
         "prop": {
+          "$id": "urn:uuid:f0930224-6e2d-492d-b1e0-cbadde5a8b59",
           "type": "string"
         },
         "type": {
+          "$id": "urn:uuid:11a31394-83d8-4671-964b-ba1b4d04edc2",
           "type": "string"
         },
         "ref": {
+          "$id": "urn:uuid:ba5ebc4f-6d3e-4d98-bb73-449f50c1990a",
           "type": "string"
         }
       }

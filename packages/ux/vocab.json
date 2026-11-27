@@ -1,10 +1,12 @@
 {
+  "$id": "urn:uuid:c8021deb-d6ec-49ce-a5c5-2e2916bd58e2",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "ux",
   "$defs": {
     "Disclosure": {
+      "$id": "urn:uuid:346094c7-7450-4ba8-aa08-54ad8d5a9bc1",
       "component": true,
       "type": "object",
       "sync": "none",
@@ -12,12 +14,14 @@
       "description": "A disclosure's open state on the consumer-named page entity; missing state is closed.",
       "properties": {
         "open": {
+          "$id": "urn:uuid:cb2c61eb-e799-4b39-99bd-8170fada7d9a",
           "type": "boolean",
           "description": "whether the disclosure's content is shown"
         }
       }
     },
     "Conversation": {
+      "$id": "urn:uuid:0fb3c505-b595-4ffc-8d7e-d73a1baae8cf",
       "component": true,
       "type": "object",
       "sync": "none",
@@ -25,16 +29,19 @@
       "description": "A conversation (@yaks/ux Conversation) as its reader follows it, on the page entity its owner names for a session: how many lines back it draws, and whether the reader scrolled away from the newest; missing state draws the last 100 lines and stays at the newest.",
       "properties": {
         "take": {
+          "$id": "urn:uuid:13fc1c6a-da8c-44bc-af80-c5e5da0f9c34",
           "type": "number",
           "description": "how many lines back it draws"
         },
         "away": {
+          "$id": "urn:uuid:c2fd0eaa-1a4b-48fa-a02a-55daceb4f783",
           "type": "boolean",
           "description": "the reader has scrolled up from the newest line"
         }
       }
     },
     "Order": {
+      "$id": "urn:uuid:baf05e2d-e1bd-4b5d-a1be-9e73b11a5cff",
       "component": true,
       "type": "object",
       "sync": "none",
@@ -42,12 +49,14 @@
       "description": "Where an entity dragged over an ordered list (@yaks/ux Order) would land, on the consumer-named page entity; missing state is none dragged over it.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:30a3ffe4-e80d-4cba-bb7a-e4d388ad31fa",
           "type": "number",
           "description": "the index of the row it would land before; the number of rows, after the last"
         }
       }
     },
     "Edit": {
+      "$id": "urn:uuid:4045cda1-bb84-43b0-863c-d5ac35a0d9d3",
       "component": true,
       "type": "object",
       "sync": "none",
@@ -55,16 +64,19 @@
       "description": "a value being changed where it stands (@yaks/ux Edit), on an entity of its own whose eid is derived from its owner and the value: open while it is, and what its picker searches for; what is typed over it is the person's draft, kept where the host says (its drafts)",
       "properties": {
         "open": {
+          "$id": "urn:uuid:3a25a1b0-1527-41de-add5-281207a7ee82",
           "type": "boolean",
           "description": "being changed: typed over in place, or its picker floating beside it"
         },
         "query": {
+          "$id": "urn:uuid:c0c85d0b-045d-4dfc-9349-92b4f8f1884f",
           "type": "string",
           "description": "what is typed in its picker's search"
         }
       }
     },
     "Refused": {
+      "$id": "urn:uuid:a4871fa1-6a55-4bc1-a967-8bca72924f0b",
       "component": true,
       "type": "object",
       "sync": "none",
@@ -72,12 +84,14 @@
       "description": "an event an Edit emits on the entity whose value it changes: what was typed could not be read as the value's type",
       "properties": {
         "said": {
+          "$id": "urn:uuid:064fe6d8-8b77-485d-b6b1-84c729a6c1f4",
           "type": "string",
           "description": "why"
         }
       }
     },
     "Stop": {
+      "$id": "urn:uuid:27327edf-fe0d-4bc9-a531-5c13aa574c24",
       "component": true,
       "type": "object",
       "sync": "none",
@@ -86,24 +100,29 @@
       "properties": {}
     },
     "Completion": {
+      "$id": "urn:uuid:4c0485d0-2ffa-4cf5-8766-391cca246cc5",
       "component": true,
       "type": "object",
       "sync": "none",
       "durable": "connection",
       "properties": {
         "caret": {
+          "$id": "urn:uuid:f48be65a-b40c-4cde-94e7-436078cdbc7e",
           "type": "number",
           "description": "where the caret stands, as an offset into what is typed"
         },
         "from": {
+          "$id": "urn:uuid:09f9565a-6c6d-4391-8d1b-e5bb50fcb238",
           "type": "number",
           "description": "where the word being completed starts"
         },
         "to": {
+          "$id": "urn:uuid:f670127f-e12f-4397-886f-81def07bb319",
           "type": "number",
           "description": "where the word being completed ends"
         },
         "cands": {
+          "$id": "urn:uuid:6da581bd-b6f5-436c-8a1b-08e47e2602f0",
           "type": "array",
           "description": "what can replace the span, each its text and the note shown beside it",
           "items": {
@@ -119,6 +138,7 @@
           }
         },
         "pick": {
+          "$id": "urn:uuid:3d97f23e-5a49-404d-b1a4-f2e99147f731",
           "type": "number",
           "description": "which of cands is picked, -1 for none: what is typed already reads whole"
         }
@@ -126,6 +146,7 @@
       "description": "Completion at a caret, in the host page graph: the replacement span and choices. Text is the host-owned durable draft, not this component."
     },
     "Sort": {
+      "$id": "urn:uuid:ec4f1b6a-91c1-4b5a-a6a5-ac184f00b3dc",
       "component": true,
       "type": "object",
       "sync": "none",
@@ -133,10 +154,12 @@
       "description": "A table's sort choice on its owner-named page entity.",
       "properties": {
         "column": {
+          "$id": "urn:uuid:e251e526-5ed1-42ee-8644-83add9ffdaf1",
           "type": "number",
           "description": "the zero-based column index"
         },
         "direction": {
+          "$id": "urn:uuid:0583f006-438e-45d8-b585-63219c01ce54",
           "type": "string",
           "enum": [
             "asc",
@@ -147,6 +170,7 @@
       }
     },
     "Submit": {
+      "$id": "urn:uuid:fc9969f8-304e-4c65-9abf-8689879fb011",
       "component": true,
       "type": "object",
       "sync": "none",
@@ -154,31 +178,38 @@
       "description": "Loading and submission in the page graph; values mirror the durable draft owned by the host.",
       "properties": {
         "unread": {
+          "$id": "urn:uuid:ba827a2f-5c09-42ef-9d12-1697411b466d",
           "type": "string",
           "description": "Why loading failed"
         },
         "tried": {
+          "$id": "urn:uuid:81a85712-5e03-4b89-8214-610d2e991e77",
           "type": "boolean",
           "description": "Submission was attempted; show validation feedback"
         },
         "sending": {
+          "$id": "urn:uuid:ee23f93b-c300-4cc5-8c85-5a38f027df0a",
           "type": "boolean",
           "description": "a send is on its way"
         },
         "sent": {
+          "$id": "urn:uuid:177d2750-90e1-4918-babd-6f1c4962a81a",
           "type": "boolean",
           "description": "Submission succeeded"
         },
         "said": {
+          "$id": "urn:uuid:92736cc6-95f0-49e5-8c19-2cecbe5dc327",
           "type": "string",
           "description": "Feedback from the supplied sender"
         },
         "content": {
+          "$id": "urn:uuid:a7d9dce5-35de-4af5-8e13-22c0364e237d",
           "type": "object",
           "additionalProperties": true,
           "description": "Content returned by the supplied reader"
         },
         "values": {
+          "$id": "urn:uuid:419a4d2d-caae-4511-85ba-0a08f0753a66",
           "type": "object",
           "additionalProperties": true,
           "description": "Current draft values, including nested repeat entries"

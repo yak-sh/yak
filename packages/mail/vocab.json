@@ -1,13 +1,16 @@
 {
+  "$id": "urn:uuid:9943b3f1-54f6-408b-808b-ea7e402a6aa1",
   "title": "mail",
   "$defs": {
     "mail": {
+      "$id": "urn:uuid:ea7b9af6-9fd2-4d87-a0ab-ae7d635d1e4f",
       "component": true,
       "type": "object",
       "description": "one letter's envelope, sent or received; in an app, read only by its owners and editors, whatever the app's access",
       "readers": "editor",
       "properties": {
         "from": {
+          "$id": "urn:uuid:b695e16e-a49b-4879-911d-86b39e4412ce",
           "type": "string",
           "description": "the address it came from",
           "examples": [
@@ -15,6 +18,7 @@
           ]
         },
         "name": {
+          "$id": "urn:uuid:7c56e771-49d8-459a-ae95-fadbf306c232",
           "type": "string",
           "description": "the name it is from, as the reader's mail shows it beside the address",
           "examples": [
@@ -22,6 +26,7 @@
           ]
         },
         "to": {
+          "$id": "urn:uuid:7ec2ee9f-14ca-4b3c-b041-affe7cab95d7",
           "type": "string",
           "description": "the address it is written to — absent when `deliver.to` names the recipient as an entity instead",
           "examples": [
@@ -29,6 +34,7 @@
           ]
         },
         "cc": {
+          "$id": "urn:uuid:cc6156c4-79d4-40ad-872a-83cd584b10c2",
           "type": "string",
           "description": "the address copied on it",
           "examples": [
@@ -36,35 +42,42 @@
           ]
         },
         "at": {
+          "$id": "urn:uuid:2b6c05d4-df97-4018-8fc1-6fa9e6f6a81b",
           "type": "string",
           "format": "date-time",
           "description": "when it was written, or when it arrived"
         },
         "target": {
+          "$id": "urn:uuid:fbc22496-2d05-4369-9415-ba287a54b423",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the entity this letter is about — any entity at all, so correspondence hangs off the thing it concerns"
         },
         "reply_to": {
+          "$id": "urn:uuid:6dcf9533-fe48-4778-9e4a-070a0209c64b",
           "type": "string",
           "ref": "mail",
           "death": "keep",
           "description": "the letter this one answers"
         },
         "message_id": {
+          "$id": "urn:uuid:cf9c5728-970c-46fe-83d4-046ef7cb730a",
           "type": "string",
           "description": "the Message-ID other mail systems know this letter by — read from a letter that arrived, or returned by the sender for one that left — and what a reply threads on"
         },
         "verified": {
+          "$id": "urn:uuid:3ca7f8ed-7d3f-4bc1-bb57-2fea67939e3a",
           "type": "boolean",
           "description": "whether the sending domain signed for this letter (DKIM) — false is recorded, never dropped: a letter nobody signed for is still a letter, and the reader is the one who decides what to trust"
         },
         "in_reply_to": {
+          "$id": "urn:uuid:463d981f-1429-4310-a3f0-dbf6f4bc2ea4",
           "type": "string",
           "description": "the Message-ID this letter answers, exactly as the header wrote it — what arrives before `reply_to` can name an entity, and all a reply to a letter nobody kept ever has"
         },
         "reply_address": {
+          "$id": "urn:uuid:13a515d3-c9ef-4e1e-8447-d6e121b545cc",
           "type": "string",
           "description": "where an answer to this letter goes: for one that arrived, its `Reply-To:` header; for one we send, the `Reply-To:` it leaves with. Absent, an answer goes to `from`",
           "examples": [
@@ -74,39 +87,46 @@
       }
     },
     "email": {
+      "$id": "urn:uuid:2bce8bee-e883-4f1e-a594-1490172c29ba",
       "component": true,
       "type": "object",
       "description": "an address, as an entity — what a person is reachable at",
       "properties": {
         "address": {
+          "$id": "urn:uuid:5d5f9bd6-6b15-400f-8c26-76d5c88148ba",
           "type": "string",
           "description": "the address itself, canonical (see canon)"
         }
       }
     },
     "recipient": {
+      "$id": "urn:uuid:370fb148-e602-40d9-90f5-d8422a8f098a",
       "component": true,
       "type": "object",
       "description": "this address is on file only because a letter is for it, and nothing else about it is; in an app, read only by its owners and editors, whatever the app's access — the platform writes it when a letter's `deliver.to` names such an address, as a letter is kept by `mail`",
       "readers": "editor"
     },
     "deliver": {
+      "$id": "urn:uuid:715e5e0e-a87e-4471-b619-ed940c71f7a3",
       "component": true,
       "type": "object",
       "description": "who a letter is for, as an entity in your graph",
       "properties": {
         "to": {
+          "$id": "urn:uuid:5e1dd3aa-6fad-4da4-844e-fb9850a47660",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the recipient — their address is looked up when the letter goes out"
         },
         "waiting": {
+          "$id": "urn:uuid:6880c202-c715-4b46-b7d9-dd155e357c00",
           "type": "string",
           "stamped": true,
           "description": "why an outbound letter cannot reach a sender yet; cleared before it is handed over"
         },
         "tried": {
+          "$id": "urn:uuid:ca94c1b1-b5f7-4c27-8956-baa61fcd3b08",
           "type": "string",
           "format": "date-time",
           "stamped": true,
@@ -115,41 +135,48 @@
       }
     },
     "delivered": {
+      "$id": "urn:uuid:e99b7661-ed9e-4ab4-b839-8e7e882a925c",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "the letter left: half of the outcome pair",
       "properties": {
         "at": {
+          "$id": "urn:uuid:e222c090-615a-4c81-aaed-381aeb26f2da",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it went"
         },
         "channel": {
+          "$id": "urn:uuid:816bd91c-2607-4b85-a5d8-79f60c3ff76a",
           "type": "string",
           "description": "the delivery channel, when delivery can take more than one route"
         }
       }
     },
     "bounced": {
+      "$id": "urn:uuid:a7e30c56-36c1-4a63-a962-b8f3af1c0112",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "the letter did not leave: the other half",
       "properties": {
         "at": {
+          "$id": "urn:uuid:dac2a8aa-1dec-47e9-8d30-9871eb34258d",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the attempt failed"
         },
         "reason": {
+          "$id": "urn:uuid:3eb6a446-a0c2-4988-bf5c-6925991e7d2a",
           "type": "string",
           "stamped": true,
           "description": "what went wrong, as the sender reported it"
         },
         "refused": {
+          "$id": "urn:uuid:33356c11-9352-4de1-8679-70509c02205f",
           "type": "boolean",
           "stamped": true,
           "description": "the provider refused an address on the letter: the address is the writer's to fix, and nothing failed"
@@ -157,18 +184,21 @@
       }
     },
     "notified": {
+      "$id": "urn:uuid:6c8a44d7-a3e3-47a9-974a-5635589ce1a1",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "a recipient was told about something",
       "properties": {
         "at": {
+          "$id": "urn:uuid:d7d75429-759c-4fe6-acd2-5a998562bf98",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when they were told"
         },
         "by": {
+          "$id": "urn:uuid:4b9d8cb3-d8f2-412e-8148-8cbb6eea176a",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -176,6 +206,7 @@
           "description": "who told them"
         },
         "via": {
+          "$id": "urn:uuid:58aaebc3-9d98-4ed0-8195-fa092e7b8481",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -340,6 +371,7 @@
   },
   "kinds": {
     "mail": {
+      "$id": "urn:uuid:ea7b9af6-9fd2-4d87-a0ab-ae7d635d1e4f",
       "description": "one letter's envelope, sent or received; in an app, read only by its owners and editors, whatever the app's access",
       "with": {
         "doc": true
@@ -361,6 +393,7 @@
       ]
     },
     "email": {
+      "$id": "urn:uuid:2bce8bee-e883-4f1e-a594-1490172c29ba",
       "description": "an address, as an entity — what a person is reachable at",
       "prefix": "A",
       "examples": [

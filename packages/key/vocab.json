@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:8f6168ff-fd0b-42df-ad65-0e95402185c6",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/key": true
@@ -6,17 +7,20 @@
   "title": "key",
   "$defs": {
     "key": {
+      "$id": "urn:uuid:836e1250-a3aa-4c8e-90ba-c99f8d04aed8",
       "component": true,
       "type": "object",
       "description": "a value that identifies an entity; a second component beside it tags which kind of value it is",
       "properties": {
         "of": {
+          "$id": "urn:uuid:7fa840e2-6be6-40a5-94cc-12c626bd7dc3",
           "type": "string",
           "ref": "entity",
           "death": "release",
           "description": "the entity the value identifies; the row is removed when that entity is deleted, which frees the value"
         },
         "value": {
+          "$id": "urn:uuid:b9f5680c-703c-4ec9-bb6a-a057db386be2",
           "type": "string",
           "description": "the value itself; unique within its kind, because the key's own id is derived from the kind and the value"
         }
@@ -25,6 +29,7 @@
   },
   "kinds": {
     "key": {
+      "$id": "urn:uuid:836e1250-a3aa-4c8e-90ba-c99f8d04aed8",
       "description": "a value that identifies an entity; a second component beside it tags which kind of value it is"
     }
   }

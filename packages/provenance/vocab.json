@@ -1,28 +1,33 @@
 {
+  "$id": "urn:uuid:fe640674-02a0-4cf8-8281-a374152a6e84",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "provenance",
   "$defs": {
     "created": {
+      "$id": "urn:uuid:d3a388b2-b026-41dc-b091-ae6d084ce0a4",
       "component": true,
       "type": "object",
       "index": [["by", "at"]],
       "journal": false,
       "properties": {
         "by": {
+          "$id": "urn:uuid:60cb742d-47df-468d-958f-f78bdb49549c",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "at": {
+          "$id": "urn:uuid:cbccaaab-b8d7-4860-b73b-c092c87bfc4c",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "index": true
         },
         "via": {
+          "$id": "urn:uuid:9edc3533-4ff4-4749-9759-57000d562c70",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -32,24 +37,28 @@
       "description": "who made it, when, and through what"
     },
     "updated": {
+      "$id": "urn:uuid:430587e2-f666-41d8-90b3-119a86653420",
       "component": true,
       "type": "object",
       "index": [["by", "at"]],
       "journal": false,
       "properties": {
         "by": {
+          "$id": "urn:uuid:4c43cbde-6060-41b6-bce2-1d4938d70f0d",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "at": {
+          "$id": "urn:uuid:f5807155-4539-4058-a0ab-14e19b285aae",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "index": true
         },
         "via": {
+          "$id": "urn:uuid:5dab6c48-1be3-47eb-bb2b-e9caf7dfff9c",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -59,6 +68,7 @@
       "description": "who last changed it, when, and through what"
     },
     "authorship": {
+      "$id": "urn:uuid:f27d1d00-c17d-4f12-8889-260cb7f698d9",
       "component": true,
       "type": "object",
       "wire": false,
@@ -66,6 +76,7 @@
       "description": "the writers of the primitive values and text spans the entity still holds",
       "properties": {
         "fields": {
+          "$id": "urn:uuid:ddecaca4-3002-48a1-a638-47f624ba26ce",
           "type": "object",
           "stamped": true,
           "description": "by JSON-encoded component/property/leaf path, its writer spans; from and to are UTF-16 offsets for strings, otherwise 0 and 1",

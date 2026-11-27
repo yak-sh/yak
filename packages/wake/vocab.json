@@ -1,33 +1,40 @@
 {
+  "$id": "urn:uuid:b47e3c8f-3def-4a79-aeec-955a37480fd2",
   "title": "wake",
   "$defs": {
     "wake": {
+      "$id": "urn:uuid:8552ecd4-e1d0-48e6-902f-ee9ffc096367",
       "component": true,
       "type": "object",
       "description": "a scheduled time to come back to something",
       "$comment": "A wake carries no patch to apply when it fires: a rule's produce already writes the entity it matched. Patching a wake's target declaratively would need a rule that names that target.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:0903ab23-fc94-444c-a2d3-310d50eec5ea",
           "type": "string",
           "format": "date-time",
           "index": true,
           "description": "when it is next due; absent once a one-shot has fired, or once a recurrence has ended"
         },
         "target": {
+          "$id": "urn:uuid:11ba5980-bc10-4192-af74-77cfffbbe664",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "what the wake is about; when absent, the entity carrying it"
         },
         "note": {
+          "$id": "urn:uuid:3eda4b5f-d6d0-43ad-ab47-bce35eec5846",
           "type": "string",
           "description": "a line for whoever is woken: why the wake was set"
         },
         "every": {
+          "$id": "urn:uuid:d092cd9f-54cf-46b2-af79-e8593396d300",
           "type": "string",
           "description": "how it recurs: a duration (30m, 2h, 1d), five cron fields (0 9 * * 1-5), or @hourly/@daily/@weekly/@monthly; a cron line may end with an IANA time zone (0 9 * * 1-5 America/New_York), otherwise UTC"
         },
         "while": {
+          "$id": "urn:uuid:74a31464-1c60-4f3d-95e9-a17523a3d913",
           "type": "array",
           "description": "how it recurs while something holds: {match, every} in order, a query over the whole store and the cadence it asks for; at each firing the first whose query finds anything sets the next instant, else every does, and with neither the wake sleeps until a write makes one hold",
           "items": {
@@ -50,12 +57,14 @@
           }
         },
         "for": {
+          "$id": "urn:uuid:2a62b406-a7cf-4053-b9f4-e73d3f6af69d",
           "type": "string",
           "ref": "person",
           "death": "keep",
           "description": "the person it was set for: it runs as them, with their permissions as they stand when it fires, and it is theirs to list and cancel"
         },
         "brief": {
+          "$id": "urn:uuid:359065e9-b215-49d7-ad03-dfa259cfe063",
           "type": "string",
           "description": "words for a fresh session started at each firing, given the outcome of the call it carries: a helper that checks the work and tells whom it is for only when they should hear"
         }
@@ -126,12 +135,14 @@
       ]
     },
     "fired": {
+      "$id": "urn:uuid:6a83fc72-8b4d-49e5-9a29-8203b1cc691b",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "when a wake last fired",
       "properties": {
         "at": {
+          "$id": "urn:uuid:f04ffaf2-a553-4ae8-bc10-3be5c8802dc6",
           "type": "string",
           "format": "date-time",
           "description": "the instant it fired"
@@ -139,64 +150,77 @@
       }
     },
     "watch": {
+      "$id": "urn:uuid:5630c807-dc45-47ae-8075-a74c8653991e",
       "component": true,
       "type": "object",
       "description": "a query a wake watches: each time the wake comes due its rows are read again, and it fires only when they changed since it last looked; a look that finds nothing new moves it on without firing",
       "properties": {
         "query": {
+          "$id": "urn:uuid:0311eea7-4cd3-48b9-b642-448c2b50c08e",
           "type": "string",
           "format": "query",
           "description": "the query whose rows it watches, written as for graph_query"
         },
         "tool": {
+          "$id": "urn:uuid:57653ddb-56be-46bb-9ef1-8a48e3f414bf",
           "type": "string",
           "description": "the reading tool it was subscribed to, whose declared query (@yaks/tools watched) is its query"
         },
         "args": {
+          "$id": "urn:uuid:80a30e91-9ac5-4c85-848b-9c7de0e1d70d",
           "type": "object",
           "description": "the arguments that tool was given, which filled its query"
         },
         "local": {
+          "$id": "urn:uuid:7d7439ef-a8f9-4c39-9ed2-ad5e648a2290",
           "type": "boolean",
           "description": "read over the store the wake is kept in, rather than everything its person reaches (on yaks.app, the space's apps)"
         },
         "over": {
+          "$id": "urn:uuid:5b314310-da55-4c69-9ea9-d31cf571b4be",
           "type": "string",
           "description": "the graph its host reads the query over, by the host's name for it, where it is neither the store the wake is kept in nor everything its person reaches (on yaks.app, `members`: the space's seats in the directory)"
         },
         "seen": {
+          "$id": "urn:uuid:c46f629b-c00f-4844-a1be-c44dca332db3",
           "type": "object",
           "description": "each row the query answered at the last look, by eid, and a digest of what it held"
         },
         "changes": {
+          "$id": "urn:uuid:c1ca711b-422f-4765-8acf-8fcf4ad67a2e",
           "type": "string",
           "description": "what changed at the look the wake last fired for, in words: rows new, changed and gone"
         }
       }
     },
     "occurrence": {
+      "$id": "urn:uuid:9a9736bd-8e09-4ae7-8b90-17c41f2078b5",
       "component": true,
       "type": "object",
       "description": "one firing of a wake that did work; completed or failed says how it ended",
       "properties": {
         "wake": {
+          "$id": "urn:uuid:592ea322-24c2-4948-8f36-5343584fc08f",
           "type": "string",
           "ref": "wake",
           "death": "keep",
           "description": "the wake that fired, kept when it is cancelled"
         },
         "at": {
+          "$id": "urn:uuid:eacbfd8d-2ef8-4b00-bd1d-a649dd68bbd0",
           "type": "string",
           "format": "date-time",
           "description": "the instant it fired"
         },
         "call": {
+          "$id": "urn:uuid:a11eb437-749b-45a5-94fa-a4739c865516",
           "type": "string",
           "ref": "call",
           "death": "keep",
           "description": "the call it made, whose answer is that call's own record (@yaks/tools)"
         },
         "error": {
+          "$id": "urn:uuid:16d22572-23bc-416c-b486-28dbdcedac2b",
           "type": "string",
           "description": "the call's failure, kept while a session given the wake's brief checks its outcome"
         }
@@ -218,6 +242,7 @@
   },
   "kinds": {
     "wake": {
+      "$id": "urn:uuid:8552ecd4-e1d0-48e6-902f-ee9ffc096367",
       "description": "a scheduled time to come back to something",
       "prefix": "W",
       "examples": [

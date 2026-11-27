@@ -1,41 +1,49 @@
 {
+  "$id": "urn:uuid:958f3df3-cf9f-497d-8df3-b17c62f5eac1",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "api",
   "$defs": {
     "request": {
+      "$id": "urn:uuid:719919a9-dbfa-493e-a382-c1f0f9d8f621",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "An HTTP request as the server that answered it records it. The entity's id is the one the caller was answered with, in the x-request-id header, so a person holding a failed answer can name its record. Only a request that broke is written: one answered with a status of 500 or over.",
       "properties": {
         "method": {
+          "$id": "urn:uuid:2fd01bbc-9f32-4252-b22c-b0ceb7320592",
           "type": "string",
           "stamped": true,
           "description": "the HTTP method: GET, POST, PUT, \u2026"
         },
         "url": {
+          "$id": "urn:uuid:22a30a9c-8562-4467-bd33-0678d1345dbf",
           "type": "string",
           "stamped": true,
           "description": "the address asked for, without its query string"
         },
         "route": {
+          "$id": "urn:uuid:425c5676-dc71-4636-bf9d-52aad202f170",
           "type": "string",
           "stamped": true,
           "description": "the route that answered it, as the server names its routes (`/apply`, `/blob/*`); absent when no route claimed the address"
         },
         "status": {
+          "$id": "urn:uuid:d43eb5ae-fa3d-46ed-ab9e-2bf776c614cf",
           "type": "integer",
           "stamped": true,
           "description": "the HTTP status it was answered with"
         },
         "ms": {
+          "$id": "urn:uuid:f8e5bd21-5045-4887-9f4e-e0f0619d0555",
           "type": "number",
           "stamped": true,
           "description": "milliseconds from its arrival until the answer's head was ready"
         },
         "agent": {
+          "$id": "urn:uuid:b86033ba-1686-49cf-acb0-96261a60a811",
           "type": "string",
           "stamped": true,
           "description": "what sent it, from its User-Agent header: a browser, its major version and the operating system (`Chrome 141 on macOS`), or any other program's name and version (`curl 8.5.0`)"
@@ -78,6 +86,7 @@
   },
   "kinds": {
     "request": {
+      "$id": "urn:uuid:719919a9-dbfa-493e-a382-c1f0f9d8f621",
       "description": "An HTTP request as the server that answered it records it. The entity's id is the one the caller was answered with, in the x-request-id header, so a person holding a failed answer can name its record. Only a request that broke is written: one answered with a status of 500 or over."
     }
   }

@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:75ae2566-c38d-456b-b3c9-87b3ab37492a",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/member": true
@@ -6,31 +7,37 @@
   "title": "draft",
   "$defs": {
     "draft": {
+      "$id": "urn:uuid:8422da8a-3258-4953-a850-84393d27511b",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "what a person has typed in one place and not yet sent, on an entity whose eid is derived from the person and the place (draftEid), so every interface they use finds the same one; sending it or discarding it empties its text",
       "properties": {
         "by": {
+          "$id": "urn:uuid:8b615d50-5d1e-41f5-a8ef-b6c2f65959c3",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the person typing it"
         },
         "place": {
+          "$id": "urn:uuid:18e55035-119c-4da1-bd35-6ece1d4b500a",
           "type": "string",
           "description": "where it is typed, as its interface names it: `<eid>.comment`, `edit:<eid>:doc.title`, `search`"
         },
         "text": {
+          "$id": "urn:uuid:9dfed182-bcf8-41f8-93d5-63010422c1a6",
           "type": "string",
           "description": "what is typed; empty once it is sent or discarded"
         },
         "rev": {
+          "$id": "urn:uuid:3b20e298-0ad3-4771-a577-9972d7fed7a5",
           "type": "integer",
           "stamped": true,
           "description": "how many writes of its text the store has taken, so an interface tells the newer text from the older"
         },
         "via": {
+          "$id": "urn:uuid:997886cf-466b-4536-8acf-dcf2decff3d2",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -40,30 +47,36 @@
       "personal": "by"
     },
     "typed": {
+      "$id": "urn:uuid:39d24090-864c-45df-a53d-805728c12958",
       "component": true,
       "type": "object",
       "durable": "0s",
       "description": "an event beside a draft's text: the text it was typed over, so the store keeps what another interface wrote meanwhile",
       "properties": {
         "over": {
+          "$id": "urn:uuid:c70aab4f-9501-4e0a-b80c-da5fd2ade4b5",
           "type": "string",
           "description": "the text the writer last heard from the store"
         },
         "writer": {
+          "$id": "urn:uuid:1f422d85-c6db-4bf0-9c9b-09c421a1fa37",
           "type": "string",
           "description": "the UUID of the desk issuing ordered saves and spends"
         },
         "order": {
+          "$id": "urn:uuid:4e227bb0-c7ad-45eb-a445-9cdb270edbc4",
           "type": "integer",
           "description": "the order in which that desk issued this write"
         },
         "confirmed": {
+          "$id": "urn:uuid:9a95efea-566e-41d1-a1d6-4f1e3607ec60",
           "type": "integer",
           "description": "on a spend, the last write this desk heard back from the store before sending"
         }
       }
     },
     "draft_writer": {
+      "$id": "urn:uuid:44ca0877-e9ee-425f-9e01-7a6274dd4681",
       "component": true,
       "type": "object",
       "journal": false,
@@ -73,11 +86,33 @@
       "personal": "by",
       "description": "a desk's last saved text and spend order, used to absorb delayed autosaves",
       "properties": {
-        "draft": { "type": "string", "ref": "entity", "death": "cascade" },
-        "by": { "type": "string", "ref": "entity", "death": "keep" },
-        "saved": { "type": "integer", "stamped": true },
-        "text": { "type": "string", "stamped": true },
-        "spent": { "type": "integer", "stamped": true }
+        "draft": {
+          "$id": "urn:uuid:c716e475-8d27-4189-b3d3-6ac292a773a1",
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        },
+        "by": {
+          "$id": "urn:uuid:28c24ef4-6b58-4368-8cab-7af167c96348",
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "saved": {
+          "$id": "urn:uuid:6896f4f3-a094-4d9a-9c07-2dad45fcb311",
+          "type": "integer",
+          "stamped": true
+        },
+        "text": {
+          "$id": "urn:uuid:0b43f847-c367-46c0-b2e9-2bb7db3b5b97",
+          "type": "string",
+          "stamped": true
+        },
+        "spent": {
+          "$id": "urn:uuid:53d3eb13-b018-4222-a874-04427f5d48aa",
+          "type": "integer",
+          "stamped": true
+        }
       }
     }
   }

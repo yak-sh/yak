@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:76f26eaf-3e3e-4bdc-b84c-f3aa1729ff76",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
@@ -7,41 +8,50 @@
   "title": "connections",
   "$defs": {
     "integration": {
+      "$id": "urn:uuid:ee4229da-b654-4785-b09e-ccef920733ab",
       "component": true,
       "type": "object",
       "description": "an outside service, as data: where a person signs in to it and where its codes are exchanged, for one reached by OAuth, the hosts its credential may be sent to, and how a page shows it. A built one is installed by the host from @yaks/connections' own seed data, and marked built; any other is a custom one, owned by the space or person that made it",
       "properties": {
         "name": {
+          "$id": "urn:uuid:4647d493-9ffb-4b7d-ad02-8497acc8b759",
           "type": "string",
           "identity": true,
           "description": "what a connection names it by; the entity id is derived from it, so one name is one integration"
         },
         "title": {
+          "$id": "urn:uuid:bbc2eec5-b543-43bb-b97c-2eb43d494b45",
           "type": "string",
           "description": "what a person calls it, written as its maker writes it: OpenRouter, Google Calendar"
         },
         "tagline": {
+          "$id": "urn:uuid:26a23068-272b-4edd-a569-eb5db5be8719",
           "type": "string",
           "description": "one line saying what it is, written for a person"
         },
         "site": {
+          "$id": "urn:uuid:6adf5cd0-8c74-4dc4-9151-7e23b812e49b",
           "type": "string",
           "format": "uri",
           "description": "its address on the web"
         },
         "logo": {
+          "$id": "urn:uuid:15c9f3f5-690c-4b4c-8089-83c74be93293",
           "type": "string",
           "description": "its mark, as an SVG document; a page draws it as an image, never as markup"
         },
         "authorize": {
+          "$id": "urn:uuid:532dad69-a243-4907-9a91-8b7ee33bae67",
           "type": "string",
           "description": "where a person grants access, for an integration reached by OAuth"
         },
         "token": {
+          "$id": "urn:uuid:b7de4443-e967-493c-a43e-83fb8aafaa3a",
           "type": "string",
           "description": "where codes and refresh tokens are exchanged; an integration with none is a pasted key"
         },
         "scopes": {
+          "$id": "urn:uuid:50426dd8-209c-4651-981d-b7fa392e9526",
           "type": "array",
           "items": {
             "type": "string"
@@ -49,19 +59,23 @@
           "description": "what a connection asks for when nothing narrower was needed"
         },
         "scope_separator": {
+          "$id": "urn:uuid:bec544d7-450b-426a-b940-269167642252",
           "type": "string",
           "enum": [" ", ","],
           "description": "the delimiter for a provider's requested and granted OAuth scopes"
         },
         "pkce": {
+          "$id": "urn:uuid:2a9c816c-8a95-4641-aeb1-880c88d851ec",
           "type": "boolean",
           "description": "whether the OAuth provider accepts PKCE for this client, true by default"
         },
         "params": {
+          "$id": "urn:uuid:852cab27-f1b7-42f0-ac2b-de6cd9cc0519",
           "type": "object",
           "description": "extra parameters the authorize link carries, such as Google's access_type"
         },
         "auth": {
+          "$id": "urn:uuid:1bc75468-151f-4b5f-9eaf-9a735f5ef2ae",
           "type": "string",
           "enum": [
             "basic",
@@ -70,6 +84,7 @@
           "description": "how the client authenticates at the token endpoint (default basic)"
         },
         "refresh_encoding": {
+          "$id": "urn:uuid:82fc4452-9b99-4da7-94ee-78dbabfef144",
           "type": "string",
           "enum": [
             "form",
@@ -78,6 +93,7 @@
           "description": "how the token endpoint receives refresh grants (default form)"
         },
         "answers": {
+          "$id": "urn:uuid:2db45aa6-5ffe-4fc6-a80c-586a5e452f50",
           "type": "string",
           "enum": [
             "tokens",
@@ -86,22 +102,27 @@
           "description": "what the token endpoint answers: tokens (the default), or an API key, as OpenRouter's PKCE exchange does"
         },
         "resource": {
+          "$id": "urn:uuid:3af1d48e-7c19-44e5-8830-5818be8b8aaf",
           "type": "string",
           "description": "the resource a grant is for (RFC 8707), sent with the sign-in link and every exchange, as an MCP server asks"
         },
         "issuer": {
+          "$id": "urn:uuid:e11b0cb2-9e74-4d5a-83ff-09c873ab8e7d",
           "type": "string",
           "description": "the issuer every sign-in return must name (RFC 9207), for a service that says it names one"
         },
         "client": {
+          "$id": "urn:uuid:904f63f3-c5e5-48f4-9133-14b35b0335f4",
           "type": "string",
           "description": "the OAuth client it signs in as, by name: kept once as the secret `oauth_client <name>`, and shared by every integration naming it. Only a built integration signs in as a client a built one names"
         },
         "client_id": {
+          "$id": "urn:uuid:96f45c90-f000-4bda-b161-7acb0ffe60c4",
           "type": "string",
           "description": "a public OAuth client's id, shipped with a built integration"
         },
         "broker": {
+          "$id": "urn:uuid:f1939f88-569e-42a2-b797-0e7cbd02af61",
           "type": "object",
           "required": [
             "name",
@@ -120,6 +141,7 @@
           "description": "the broker new connections through it are made through: a service that signs a person in through its own app and hands back a fresh access token, which still goes only to `hosts`. None is direct. Changing it moves no connection: each keeps the broker it was made through"
         },
         "hosts": {
+          "$id": "urn:uuid:c09942a8-5981-43ae-bb30-49e9e37a77cb",
           "type": "array",
           "items": {
             "type": "string"
@@ -127,6 +149,7 @@
           "description": "the API hosts a connection's credential may be sent to, and no others. None is sent nowhere: a custom key kept before anyone uses it, whose owner names its hosts once"
         },
         "api": {
+          "$id": "urn:uuid:208e7558-aa4a-4473-a6c8-5792dd31a02c",
           "type": "object",
           "required": [
             "base"
@@ -151,6 +174,7 @@
           "description": "its API, for an agent calling it as a connection: where its paths are and where they are documented. None is reached at its first host"
         },
         "methods": {
+          "$id": "urn:uuid:dc2a3bb4-e4f2-4ff1-8ec8-1707a6c39aaf",
           "type": "array",
           "items": {
             "type": "string"
@@ -158,6 +182,7 @@
           "description": "the only API methods a connection through it may ask for, where the service names one in each request (voip.ms's `method`): a person's own voip.ms account reads its numbers, texts, and sets where a number's texts go, and has no method that cancels or reroutes a number. None limits nothing"
         },
         "fields": {
+          "$id": "urn:uuid:a76a534f-c66c-493e-a2b3-e7de7428ee1f",
           "type": "array",
           "items": {
             "type": "object",
@@ -188,6 +213,7 @@
           "description": "what a person gives to connect a pasted-key integration, each asked for by its label: S3's access key ID, secret key and region. Kept together as the connection's secret, each with its own sentinel. None is one key; it is set when the integration is made and never changes"
         },
         "signature": {
+          "$id": "urn:uuid:0f1e787a-b9c9-41cd-bced-0104e58d6c12",
           "type": [
             "string",
             "object"
@@ -195,79 +221,96 @@
           "description": "how the service signs the webhooks it sends (@yaks/hook's Scheme)"
         },
         "testing": {
+          "$id": "urn:uuid:a0c68929-fef4-4552-8fa6-e03e1f339e98",
           "type": "boolean",
           "description": "still in the service's testing mode, where only the people it lists may sign in: a page offers it only where asked to by name"
         },
         "built": {
+          "$id": "urn:uuid:b6a89ac2-1427-451f-b6a9-6860cb1779f2",
           "type": "boolean",
           "stamped": true,
           "description": "installed by the host: from @yaks/connections' own seed data, or from a broker's catalog once someone connects a service it lists. Only the host writes it, so no space can mark an integration built or sign in as a built one's client"
         },
         "userinfo": {
+          "$id": "urn:uuid:2c72148f-45db-43e9-bbe6-f36beb562946",
           "type": "string",
           "format": "uri",
           "description": "OpenID endpoint naming the signed-in account when the token answer has no id_token"
         },
         "account": {
+          "$id": "urn:uuid:fb6fd8ea-4c08-4011-b1ad-c95d69443202",
           "type": "string",
           "description": "the field of the token endpoint's answer naming the account, as a dotted path, where it is not an email address",
           "examples": ["guild.id"]
         },
         "account_title": {
+          "$id": "urn:uuid:26eb9975-eb46-4cd9-b9d7-0615b551a8f1",
           "type": "string",
           "description": "the field of the same answer naming that account for people, as a dotted path, where `account` is an id",
           "examples": ["guild.name"]
         },
         "links": {
+          "$id": "urn:uuid:d9b8c083-7401-455f-8c39-1f5e99acfb32",
           "type": "string",
           "description": "another integration naming the person who signs in through this one, by name, whose own connection the same sign-in makes",
           "examples": ["discord-account"]
         },
         "personal": {
+          "$id": "urn:uuid:9d8a826e-22ff-41fc-849a-794209b948b7",
           "type": "boolean",
           "description": "a person's own account at the service, such as their Discord user, which says who they are there: a connection through it belongs to whoever connects it, never to the space they connect it from"
         },
         "chat": {
+          "$id": "urn:uuid:940f36eb-8500-464b-b05e-4d8a530d9cf3",
           "type": "string",
           "description": "the chat platform its connections talk through (@yaks/chat), by name: connecting it lets the Operator and the space's apps hear and answer there",
           "examples": ["discord"]
         },
         "chat_grant": {
+          "$id": "urn:uuid:ddec435d-ba95-41d2-862d-648299d5948f",
           "type": "boolean",
           "description": "the OAuth grant is the bot credential for this installation, as with a Slack workspace"
         },
         "instructions": {
+          "$id": "urn:uuid:a9b69dd5-e3e3-4e34-9bef-9deadba025ab",
           "type": "string",
           "description": "how a person gets the credential, in markdown, written for them and for the agent helping them: where to sign up, which page issues the key, what to paste. Shown beside every connection it is needed for"
         },
         "example": {
+          "$id": "urn:uuid:c0c50db9-630b-4a67-9a04-320bc097be52",
           "type": "string",
           "description": "what its one key looks like, shown in the box it is pasted in: ElevenLabs' sk_••••••••, Stripe's rk_live_••••••••. None shows a row of dots"
         },
         "check": {
+          "$id": "urn:uuid:d354be3c-48d4-4400-8c1a-177bbb4800d7",
           "type": "string",
           "description": "a call that answers 2xx once its credential works, a method and an https address on one of its hosts: GET https://api.cloudflare.com/client/v4/user/tokens/verify. Its owner may change it; none checks nothing"
         },
         "owner": {
+          "$id": "urn:uuid:f386e0d5-7812-4ee1-bc4b-1624b97b26d3",
           "type": "string",
           "ref": "entity",
           "death": "detach",
           "description": "the space or person that made a custom integration: only its owner may change the integration's title, tagline, site or instructions, and nobody may change its hosts once they are named. A built integration has none, and is the host's"
         },
         "description": {
+          "$id": "urn:uuid:dd50eab9-63be-468e-ad2f-7f1ae8502ce1",
           "type": "string",
           "description": "one paragraph describing the service itself and who it helps"
         },
         "details": {
+          "$id": "urn:uuid:3849ec47-90f3-47b8-adab-efa1ac9e817d",
           "type": "string",
           "description": "what connecting this integration unlocks, the service data it accesses and its limitations"
         },
         "docs": {
+          "$id": "urn:uuid:fa5e4b33-3db1-47c3-8c1a-86e666598917",
           "type": "string",
           "format": "uri",
           "description": "the service integration documentation a person can read before connecting"
         },
         "connects": {
+          "$id": "urn:uuid:85b29525-66d6-4ef3-a144-93367ede2843",
           "type": "string",
           "enum": [
             "key",
@@ -277,6 +320,7 @@
           "description": "how a person connects: a pasted API key or credential fields, an OAuth sign-in, or an OAuth client of their own"
         },
         "categories": {
+          "$id": "urn:uuid:a2076f0a-5fd7-48d1-8983-0e93d0ec0a6f",
           "type": "array",
           "items": {
             "type": "string"
@@ -284,11 +328,13 @@
           "description": "the kinds of service this catalog integration belongs to, such as crm or productivity"
         },
         "image": {
+          "$id": "urn:uuid:b93ce951-9b1c-4e00-8531-fc19b58837bc",
           "type": "string",
           "format": "uri",
           "description": "the address of the service logo, served through the host image door where no SVG is kept on the row"
         },
         "service": {
+          "$id": "urn:uuid:99203d03-ed08-4f96-8d39-ede91f9682d2",
           "type": "object",
           "description": "a hosted app service, whose operations are the service-marked commands in its current release declaration",
           "required": [
@@ -306,29 +352,35 @@
       }
     },
     "connection": {
+      "$id": "urn:uuid:cc3f01c3-ecdd-4e80-b543-6d7d5d08edb7",
       "component": true,
       "type": "object",
       "description": "one link between a space or a person and an outside service, through an integration. The entity is also the secret its credential is kept as: the graph holds the handle, the vault the key or the tokens",
       "properties": {
         "integration": {
+          "$id": "urn:uuid:151f3795-aede-40bc-822f-bba6525d491a",
           "type": "string",
           "description": "the integration it goes through, by name"
         },
         "owner": {
+          "$id": "urn:uuid:7be90ebb-136f-4423-ae9f-b42e0b78b7ad",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the space or the person it belongs to; it is deleted with them, and its credential with it"
         },
         "account": {
+          "$id": "urn:uuid:dd9c54a5-de76-44fd-87f6-57a880a350b0",
           "type": "string",
           "description": "which account at the outside service, as the person would recognize it"
         },
         "title": {
+          "$id": "urn:uuid:cff07e30-e4bf-4c6d-8ac6-7758135f028c",
           "type": "string",
           "description": "what people call that account, where `account` is an id: a Discord server's name"
         },
         "scopes": {
+          "$id": "urn:uuid:7598603e-dc6e-4a28-9343-a6c4bc6a990e",
           "type": "array",
           "items": {
             "type": "string"
@@ -336,6 +388,7 @@
           "description": "what it was granted, or what the app that needs it asked for"
         },
         "status": {
+          "$id": "urn:uuid:eb228eb0-0a60-4e29-a8c1-62303cbaa8a5",
           "type": "string",
           "enum": [
             "needed",
@@ -345,10 +398,12 @@
           "description": "needed: no credential yet; connected: one is kept; broken: the service refused it"
         },
         "broker": {
+          "$id": "urn:uuid:48393555-9e98-4eab-a827-13be1b11f659",
           "type": "string",
           "description": "the broker it was made through, by name; none is made directly. It keeps working through it whatever its integration names later"
         },
         "keep": {
+          "$id": "urn:uuid:c5aeae2d-dc29-4a68-91ad-e7c4d93e4d85",
           "type": "array",
           "items": {
             "type": "object",
@@ -372,17 +427,20 @@
       }
     },
     "reconnecting": {
+      "$id": "urn:uuid:1a5530c2-9805-40e4-851a-847c88df329a",
       "component": true,
       "type": "object",
       "description": "a mark on a connection a person began signing in to again at its broker, which never sends them back: whoever reads the connection settles it once the broker holds the new grant, and the mark goes. One left over an hour is dropped",
       "properties": {
         "at": {
+          "$id": "urn:uuid:fa1138cc-326d-4f68-9147-ff6ed60ee4bb",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the sign-in again began"
         },
         "by": {
+          "$id": "urn:uuid:4430bbe1-6289-4ab7-9f76-9c1621e29d5f",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -392,37 +450,45 @@
       }
     },
     "uses": {
+      "$id": "urn:uuid:ead2830f-a3ac-4811-b42a-53da5916adc3",
       "component": true,
       "type": "object",
       "edge": true,
       "reversed": "used by",
       "properties": {
         "anyone": {
+          "$id": "urn:uuid:71dcca0a-3c10-4942-8f03-1a7f5315e6eb",
           "type": "boolean",
           "description": "anyone may call out through it, signed in or not, as a public widget does; otherwise only a caller holding a level on the app"
         },
         "each": {
+          "$id": "urn:uuid:143a4f82-6fe8-47cc-942f-cff473e42905",
           "type": "boolean",
           "description": "each person who uses the app connects their own, and only the person who owns the connection calls out through it: set on the app's ask, the needed connection its space holds, and on the link to every person's own"
         },
         "binding": {
+          "$id": "urn:uuid:79c487aa-efb5-477f-b774-a63fcc4222d4",
           "type": "string",
           "description": "the name the app's code reads it by, env.NAME in a worker: the sentinel for its credential, or the credential itself where the link is direct"
         },
         "direct": {
+          "$id": "urn:uuid:d0f18f49-31b2-4dc0-8efb-0c6dc5cd8855",
           "type": "boolean",
           "description": "the app's code is handed the credential itself rather than a sentinel, for a key it must transform before sending (a signature, Basic auth); only a pasted key may be"
         },
         "cap": {
+          "$id": "urn:uuid:c79a417b-65ec-4899-bb98-84aee9b6661e",
           "type": "number",
           "stamped": true,
           "description": "the most calls a month that may go out through it (@yaks/egress `calls`); past it the egress refuses them until the month turns. None is no limit. Only the host sets it, never the app it caps"
         },
         "lends": {
+          "$id": "urn:uuid:8e56cee6-bbee-4637-b941-d636a953c710",
           "type": "number",
           "description": "on an app's link to a connection its own space keeps: the connection is lent to every copy installed from the app, which borrows it rather than asking for its own, and this is the cap each copy's link borrows it under, in calls a month. None lends it to no copy. The space owner's act, and only a sentinel every caller shares is lent: never a direct key, nor a link where each person connects their own"
         },
         "lender": {
+          "$id": "urn:uuid:12beda06-9115-4fd1-8c69-7677e4adb778",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -433,6 +499,7 @@
       "description": "the relation on a link: this app calls out through that connection"
     },
     "asks": {
+      "$id": "urn:uuid:d0c8fc00-5f34-41e2-b62a-a72388fe0967",
       "component": true,
       "type": "object",
       "edge": true,
@@ -614,6 +681,7 @@
   },
   "kinds": {
     "integration": {
+      "$id": "urn:uuid:ee4229da-b654-4785-b09e-ccef920733ab",
       "description": "an outside service, as data: where a person signs in to it and where its codes are exchanged, for one reached by OAuth, the hosts its credential may be sent to, and how a page shows it. A built one is installed by the host from @yaks/connections' own seed data, and marked built; any other is a custom one, owned by the space or person that made it",
       "examples": [
         {
@@ -633,6 +701,7 @@
       ]
     },
     "connection": {
+      "$id": "urn:uuid:cc3f01c3-ecdd-4e80-b543-6d7d5d08edb7",
       "description": "one link between a space or a person and an outside service, through an integration. The entity is also the secret its credential is kept as: the graph holds the handle, the vault the key or the tokens",
       "with": {
         "secret": true

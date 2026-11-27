@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:5a9bfb85-c15f-4167-9de5-ffc8ef86a06c",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
@@ -9,10 +10,12 @@
   "title": "task",
   "$defs": {
     "accept": {
+      "$id": "urn:uuid:27039c57-9725-424a-a94b-a79becdbd84c",
       "component": true,
       "type": "object",
       "properties": {
         "body": {
+          "$id": "urn:uuid:1eb66fd6-7efc-4a41-baee-d6bf4ed4bd5b",
           "type": "string",
           "store": "blob",
           "description": "the conditions, in prose"
@@ -21,15 +24,18 @@
       "description": "what finishing this means — written when the work is asked for, not after"
     },
     "blocked": {
+      "$id": "urn:uuid:5db71c1a-e774-405d-9724-08e22455308c",
       "component": true,
       "type": "object",
       "description": "something outside the graph is in the way. Not a status: a blocked task is still open work.",
       "properties": {
         "on": {
+          "$id": "urn:uuid:a8ec2593-cf9b-4af4-88b7-806fce191eeb",
           "type": "string",
           "description": "what it is waiting on, in words"
         },
         "since": {
+          "$id": "urn:uuid:30b0890c-09bf-48e8-bf9e-64b3b9ed99af",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -37,17 +43,20 @@
       }
     },
     "started": {
+      "$id": "urn:uuid:88f4a8e8-a09c-45e7-bc6a-5292bc87c8f0",
       "component": true,
       "type": "object",
       "description": "the mark on a task somebody said they are working on: a person's wip, where a session's is its claim",
       "properties": {
         "at": {
+          "$id": "urn:uuid:74dec5c7-6d72-457a-b15d-3f2f85c113d2",
           "type": "string",
           "format": "date-time",
           "description": "when it was started",
           "stamped": true
         },
         "by": {
+          "$id": "urn:uuid:33ba2622-55d3-4e4e-90f6-fc79e56bfa84",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -55,6 +64,7 @@
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:b9083ee2-9469-449e-8994-376560ffc9e9",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -64,6 +74,7 @@
       }
     },
     "contains": {
+      "$id": "urn:uuid:60bb43e3-fd78-4fa5-a4cd-81609da61bc2",
       "component": true,
       "type": "object",
       "edge": "contains",
@@ -72,6 +83,7 @@
       "properties": {}
     },
     "requires": {
+      "$id": "urn:uuid:3290cf06-32d5-4037-996f-3b6972ec1fd4",
       "component": true,
       "type": "object",
       "edge": "requires",
@@ -80,6 +92,7 @@
       "properties": {}
     },
     "task": {
+      "$id": "urn:uuid:c1a80ff2-0ba3-450f-8931-993669a0a1f3",
       "component": true,
       "type": "object",
       "governed": true,
@@ -533,6 +546,7 @@
       ]
     },
     "shows": {
+      "$id": "urn:uuid:4f5dd093-a1a2-40e8-a4e7-b89a487c4705",
       "component": true,
       "type": "object",
       "edge": "shows",
@@ -540,6 +554,7 @@
       "description": "this decision presents that entity under one of its choices: an image, prose, or a page such as a draft of an app",
       "properties": {
         "choice": {
+          "$id": "urn:uuid:6857bdf6-1e39-4fe5-8999-394d07fd8f09",
           "type": "string",
           "minLength": 1,
           "description": "The label of the choice that presents it."
@@ -550,16 +565,19 @@
       ]
     },
     "decision": {
+      "$id": "urn:uuid:c9d19446-9a71-4d45-b316-fe3b83234617",
       "component": true,
       "type": "object",
       "description": "A task asking a question, with choices and the asker’s recommendation. Open work requiring it makes it blocking; no such edge makes it eventual.",
       "properties": {
         "question": {
+          "$id": "urn:uuid:b3e277ec-f00e-43d1-9a69-8156d027929c",
           "type": "string",
           "minLength": 1,
           "search": true
         },
         "choices": {
+          "$id": "urn:uuid:f565248e-ccda-470d-b97e-1ef4628aeb0a",
           "type": "array",
           "minItems": 2,
           "maxItems": 4,
@@ -584,6 +602,7 @@
           "description": "Two to four choices, each a label and a line saying what it means."
         },
         "recommended": {
+          "$id": "urn:uuid:bebf0d40-8279-4600-8672-5e56f0c64417",
           "type": "string",
           "description": "The label of the choice the asker recommends."
         }
@@ -710,6 +729,7 @@
   },
   "kinds": {
     "task": {
+      "$id": "urn:uuid:c1a80ff2-0ba3-450f-8931-993669a0a1f3",
       "description": "a thing to do",
       "with": {
         "doc": true
@@ -729,6 +749,7 @@
       ]
     },
     "decision": {
+      "$id": "urn:uuid:0752fc4c-be85-4d55-8f02-8958ea829d09",
       "description": "a question somebody answers: a task carrying the choices and the asker’s recommendation",
       "is": [
         "task",

@@ -1,26 +1,31 @@
 {
+  "$id": "urn:uuid:bb16cc96-aef8-483c-9a8c-8b3cdb5ba715",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "page",
   "$defs": {
     "web": {
+      "$id": "urn:uuid:216402d4-2d15-45ff-87d3-c89e9b5e60d3",
       "component": true,
       "type": "object",
       "properties": {
         "url": {
+          "$id": "urn:uuid:11819708-b8ab-4618-83f0-4423362ed0c3",
           "type": "string",
           "format": "uri",
           "identity": true,
           "description": "the canonical address of the page; the entity id is derived from it, so recording the same page twice lands on one entity"
         },
         "frozen_at": {
+          "$id": "urn:uuid:d082786f-1a52-4790-93ac-12310b116575",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when a copy of the document was stored, if one was"
         },
         "bytes": {
+          "$id": "urn:uuid:3ec66ff0-fd9e-4b7f-86c2-bdfae6f46522",
           "type": "string",
           "stamped": true,
           "address": true,
@@ -37,6 +42,7 @@
   },
   "kinds": {
     "web": {
+      "$id": "urn:uuid:216402d4-2d15-45ff-87d3-c89e9b5e60d3",
       "description": "a web page as it was seen: the address that was read, and when and where a copy of it was stored",
       "with": {
         "doc": true

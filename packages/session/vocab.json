@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:52aeacd1-1165-45d2-aff2-6b8d9836f695",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
@@ -8,6 +9,7 @@
   "title": "session",
   "$defs": {
     "announced": {
+      "$id": "urn:uuid:e6c62acc-12ee-4a33-a9f5-8f835ab674d2",
       "component": true,
       "journal": false,
       "wire": false,
@@ -16,11 +18,13 @@
       "description": "A harness hook's pairing of an MCP tool call with the session making it, shared by every serving process until the result is reported.",
       "properties": {
         "call": {
+          "$id": "urn:uuid:ece2abdb-5c91-4e9f-a4da-c168929f0f3f",
           "type": "string",
           "identity": true,
           "description": "the harness's tool use id, carried in the MCP message metadata"
         },
         "session": {
+          "$id": "urn:uuid:ca1a7405-270f-4ed2-a60a-40003cb88c99",
           "type": "string",
           "ref": "session",
           "death": "cascade",
@@ -29,6 +33,7 @@
       }
     },
     "input_context": {
+      "$id": "urn:uuid:33ad4b8e-55e6-4b37-8922-c47b6b2c4d00",
       "component": true,
       "journal": false,
       "type": "object",
@@ -37,6 +42,7 @@
       "description": "Historical context snapshot retained beside a transcript input for inspection; excluded from model requests.",
       "properties": {
         "items": {
+          "$id": "urn:uuid:661b7b47-cde8-4664-bd27-0a71a4a0e0f5",
           "type": "array",
           "items": {
             "type": "object",
@@ -48,40 +54,47 @@
       }
     },
     "ask": {
+      "$id": "urn:uuid:48fdd23c-edee-481a-9523-a14d64bac519",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "the model was asked here, from the prefix ending at `through`; what the provider keeps about it is stored in that provider's own component beside this one",
       "properties": {
         "to": {
+          "$id": "urn:uuid:7f8f8b43-6aeb-423a-9626-deaed20871a9",
           "type": "string",
           "ref": "model",
           "death": "keep",
           "description": "the model entity asked"
         },
         "served": {
+          "$id": "urn:uuid:f4cd8feb-d3a0-416b-9c09-fdd5ebd3acf0",
           "type": "string",
           "ref": "model",
           "death": "keep",
           "description": "the model entity that answered, where its reply names one other than `to`: a Claude Code alias such as `fable` is answered by a release such as `claude-fable-5-2`, and the release is what has a price"
         },
         "through": {
+          "$id": "urn:uuid:64ff9232-96ff-4d0c-9265-c9e7e7f8fce6",
           "type": "string",
           "ref": "entry",
           "death": "keep",
           "description": "the last entry of the prefix it was asked with"
         },
         "pruning": {
+          "$id": "urn:uuid:d52bd9d5-665a-4bc6-9262-b49626cc6590",
           "type": "string",
           "description": "archive-mark fingerprint of the context sent or summarized; a changed archive or restore invalidates this snapshot"
         },
         "elided_before": {
+          "$id": "urn:uuid:db21aa7f-51f4-4b19-b57c-ff563a0b0891",
           "type": "integer",
           "description": "transcript position before which this request omitted old turn context and answered calls and reports after the provider cache expired"
         }
       }
     },
     "context_parts": {
+      "$id": "urn:uuid:473dea01-99f7-4202-9c46-82fd61fe4217",
       "component": true,
       "journal": false,
       "wire": false,
@@ -90,6 +103,7 @@
       "description": "where one model request's tokens went, beside its `usage`: each part of its context, and each large entry in it, with its tokens as they were paid (read from the provider cache, written to it, sent fresh, generated). The totals are the provider's; the split across parts is estimated from their sizes. The fixed part every request carries is one part, `fixed`, whose pieces are the session's `fixed`",
       "properties": {
         "parts": {
+          "$id": "urn:uuid:408abd5d-a469-4e45-baab-ca2ad2411d48",
           "type": "object",
           "additionalProperties": {
             "type": "array",
@@ -103,6 +117,7 @@
           "description": "tokens by part: `fixed`, `input`, `notice`, `output`, `reasoning`, `checkpoint`, `call <tool>`, `result <tool>`, each as [read, write, fresh, generated]"
         },
         "entries": {
+          "$id": "urn:uuid:2296ca4e-fa92-446d-89b4-95cd714c200b",
           "type": "object",
           "additionalProperties": {
             "type": "array",
@@ -118,6 +133,7 @@
       }
     },
     "fixed": {
+      "$id": "urn:uuid:6ac6fd65-42a9-4697-9135-ff1976dcb89c",
       "component": true,
       "journal": false,
       "wire": false,
@@ -126,6 +142,7 @@
       "description": "what every model request of a session carries before its conversation, piece by piece in prompt order, each sized in characters: the harness's system prompt, each tool's schema, the instructions and each part of the persona, the skills, tools and agents it lists, and `unseen` for what its log never showed",
       "properties": {
         "parts": {
+          "$id": "urn:uuid:f860f031-4260-4d99-8f1e-872b352b57b3",
           "type": "object",
           "additionalProperties": {
             "type": "integer"
@@ -136,10 +153,12 @@
       }
     },
     "attempt": {
+      "$id": "urn:uuid:4852a227-7f6e-40a1-84ec-85866f124798",
       "component": true,
       "description": "A provider request held while in flight; its state is computed from the holder and interruption mark. An unfinished dispatched request is ambiguous on restart.",
       "properties": {
         "state": {
+          "$id": "urn:uuid:1f9f93fc-c969-47c8-ac31-64ee2fe62c4f",
           "type": "string",
           "enum": [
             "inflight",
@@ -151,6 +170,7 @@
           "computed": true
         },
         "by": {
+          "$id": "urn:uuid:4c40e524-1fc8-4e63-a4f3-ff8d94effb22",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -159,11 +179,13 @@
       }
     },
     "attention": {
+      "$id": "urn:uuid:0b79e5a7-1a6a-467d-97da-e5303b3adc04",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "worker": {
+          "$id": "urn:uuid:0976f00a-47ad-44a7-b1bb-72178b9e8992",
           "type": "string",
           "ref": "session",
           "death": "keep",
@@ -173,6 +195,7 @@
       "description": "an entry to be read before the next ask: what the session bus says to a native transcript"
     },
     "hooked": {
+      "$id": "urn:uuid:d66d8918-a257-4923-bacf-d9796cd1e61a",
       "component": true,
       "journal": false,
       "type": "object",
@@ -180,10 +203,12 @@
       "description": "on a session: its harness reports the tool calls of its own line of work to the hook door (POST /session/hook), where the bus says what the session is owed. Every context the harness runs shares the session’s id, so a tool reply never says it"
     },
     "brief": {
+      "$id": "urn:uuid:0c4d918d-783e-45c7-bca8-87299abe5a4c",
       "component": true,
       "type": "object",
       "properties": {
         "text": {
+          "$id": "urn:uuid:092146f1-342d-4e37-8cb4-ad1edb348768",
           "type": "string",
           "store": "blob"
         }
@@ -191,10 +216,12 @@
       "description": "the session’s own account of itself, written at the end and quoted in the next one"
     },
     "cancel": {
+      "$id": "urn:uuid:edbdc48b-3091-4dca-a9ba-05fb1079fb4b",
       "component": true,
       "type": "object",
       "properties": {
         "target": {
+          "$id": "urn:uuid:0ab0830e-201f-4c16-8580-7af0a7ab8cd2",
           "type": "string",
           "ref": "entity",
           "death": "keep"
@@ -203,26 +230,31 @@
       "description": "an entry that withdraws an earlier one"
     },
     "checkpoint": {
+      "$id": "urn:uuid:498f3d99-7619-472b-a72b-034526872233",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "through": {
+          "$id": "urn:uuid:76c6c152-6920-45ae-befa-12b36b30b28e",
           "type": "string",
           "ref": "entry",
           "death": "keep"
         },
         "seq": {
+          "$id": "urn:uuid:a937d0d1-9c8a-4b61-95b8-92efaf4d4921",
           "type": "integer",
           "description": "position of the last summarized entry, kept if that imported entry is later trimmed"
         },
         "overflow": {
+          "$id": "urn:uuid:59041d5f-5c81-4081-b620-84c18f89dfd4",
           "type": "string",
           "ref": "ask",
           "death": "keep",
           "description": "the request refused for length that forced this checkpoint; only one compacted retry follows it"
         },
         "tasks": {
+          "$id": "urn:uuid:53d0cca1-bed9-46e4-952d-2c8007ae3417",
           "type": "object",
           "additionalProperties": {
             "type": "object",
@@ -239,6 +271,7 @@
           "description": "claimed task specifications frozen at this boundary, keyed by entity id"
         },
         "pruning": {
+          "$id": "urn:uuid:0237efcf-94f4-441a-914a-de2e2e0ea3a2",
           "type": "string",
           "description": "archive-mark fingerprint of the context sent or summarized; a changed archive or restore invalidates this snapshot"
         }
@@ -246,16 +279,19 @@
       "description": "everything through this entry is settled: a compaction boundary"
     },
     "task_context": {
+      "$id": "urn:uuid:4984b03b-ba84-4327-8003-ad59ceac3837",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "checkpoint": {
+          "$id": "urn:uuid:f8bf23f6-402a-4f15-af20-ff8879c3bb2f",
           "type": "string",
           "ref": "checkpoint",
           "death": "keep"
         },
         "tasks": {
+          "$id": "urn:uuid:4cdf76c6-dced-4cbf-af57-5bd8faae69b9",
           "type": "object",
           "additionalProperties": {
             "type": "object",
@@ -275,18 +311,21 @@
       "description": "an admitted change to claimed task specifications, appended as passive context after its checkpoint; content carries the exact changes"
     },
     "claim": {
+      "$id": "urn:uuid:98fb4755-143d-4baa-a124-654f271a2a7c",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "a session’s lock on the entity it is stored on",
       "properties": {
         "session": {
+          "$id": "urn:uuid:7b17c220-b6d9-4d24-80e8-36b122b62a21",
           "type": "string",
           "ref": "session",
           "death": "release",
           "description": "the session holding it — when that session’s entity dies the lock goes and the entity lives"
         },
         "at": {
+          "$id": "urn:uuid:ade50e9e-f2a6-46c1-b072-3246cf6fb23f",
           "type": "string",
           "format": "date-time",
           "stamped": true,
@@ -304,12 +343,14 @@
       }
     },
     "conflict": {
+      "$id": "urn:uuid:e87275ea-fcfd-4da4-a6b7-1c9d8a7e35de",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "two sessions wanted one thing: written after the refusal, never by a client",
       "properties": {
         "target": {
+          "$id": "urn:uuid:4a274cc9-d9d7-4405-a854-d8c5b20f5705",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -317,6 +358,7 @@
           "description": "the contested entity"
         },
         "loser": {
+          "$id": "urn:uuid:d2e84580-c13b-4ff1-a793-c9008541d29f",
           "type": "string",
           "ref": "session",
           "death": "keep",
@@ -324,6 +366,7 @@
           "description": "the session whose write was refused"
         },
         "holder": {
+          "$id": "urn:uuid:47d99067-7e21-4156-96c5-c38792c94999",
           "type": "string",
           "ref": "session",
           "death": "keep",
@@ -331,6 +374,7 @@
           "description": "the session that already held the lock"
         },
         "at": {
+          "$id": "urn:uuid:82950d77-02ba-4174-a5a6-6d0bcc6681f8",
           "type": "string",
           "format": "date-time",
           "stamped": true,
@@ -339,20 +383,24 @@
       }
     },
     "dispatch": {
+      "$id": "urn:uuid:ea9fc4e5-f7d6-4305-ad2c-2f624845dd04",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "a child's place under the concurrency bound; settling removes it",
       "properties": {
         "state": {
+          "$id": "urn:uuid:a1e82dcf-a9f3-45d0-9c2c-3fa6b396f213",
           "type": "string",
           "index": true,
           "description": "Legacy compatibility during the dispatch marks expansion; removed after the deferred cutover. Indexed because a settled legacy child keeps its dispatch, and admission seeks past them (./admission.ts)."
         },
         "args": {
+          "$id": "urn:uuid:be10ceb7-870b-43a1-88f3-c6cb1fb96a1f",
           "type": "string"
         },
         "order": {
+          "$id": "urn:uuid:41540db0-94f7-43a0-b35f-9ed6f8e259e1",
           "type": "number"
         }
       },
@@ -363,6 +411,7 @@
       }
     },
     "entry": {
+      "$id": "urn:uuid:ab7e4a3b-0423-4e6c-bc81-294c8a1a838d",
       "component": true,
       "type": "object",
       "notice": true,
@@ -379,6 +428,7 @@
       ],
       "properties": {
         "session": {
+          "$id": "urn:uuid:f0fcc3a6-73f1-429d-9505-f0766e4275fe",
           "type": "string",
           "index": true,
           "ref": "session",
@@ -386,52 +436,62 @@
           "description": "the transcript it belongs to"
         },
         "seq": {
+          "$id": "urn:uuid:48d50175-fcaa-4ac7-9765-197b66c5d1b0",
           "type": "number",
           "description": "Positive integer position; omit on append to allocate atomically. Explicit fractional or occupied positions are refused."
         },
         "from": {
+          "$id": "urn:uuid:a7f631c0-55c9-4113-a9a6-727a2190a32a",
           "type": "string",
           "description": "Who wrote these words, rendered as From <from> by generic prompt assembly for every provider: the system, checkpoint summarizer, parent session, helper, TaskMaster or named person. Set for injected messages; never impersonate the person through created.by. Older rows infer their source from transcript components and writer stamps."
         }
       }
     },
     "intake": {
+      "$id": "urn:uuid:122aa2dc-b415-4881-bb61-517685964ae3",
       "component": true,
       "type": "object",
       "description": "on an input, where its words came from: the request, letter, comment or knock they say. A session takes an item's words once (@yaks/session/intake `take`), and the files they came with are attached to the item. Kept beside the entry, not in it, so a transcript's hot reads stay as narrow as they were",
       "properties": {
         "item": {
+          "$id": "urn:uuid:dce8a781-dd49-45b0-915c-543a62d57cd4",
           "type": "string",
           "description": "The item's eid. Not a reference, so `.entries` stays the transcript's reverse name and an item's death keeps its words."
         },
         "source": {
+          "$id": "urn:uuid:7d00ca39-cc20-4841-b480-bd75e027a9f8",
           "type": "string",
           "description": "Supplied (an empty string on every new input) when the input body carries its words apart from channel framing. An older input named here the address of a `message.txt` attachment that kept its words a second time."
         }
       }
     },
     "channel": {
+      "$id": "urn:uuid:2dedc33e-30cd-44b7-b157-63cea9820689",
       "component": true,
       "type": "object",
       "description": "on an input, how its words came: the channel they came by, and the framing said before them to the model, which a conversation draws as the channel's icon",
       "properties": {
         "name": {
+          "$id": "urn:uuid:f842f8e3-2315-40f7-b5c1-9208da2871dd",
           "type": "string",
           "index": true,
           "description": "The channel: chat, email, text, voice, or another the host names."
         },
         "framing": {
+          "$id": "urn:uuid:afe2e32f-e15d-4661-b3ef-e0caaf34d1e1",
           "type": "string",
           "description": "What the model reads before the words, saying how they came."
         }
       }
     },
     "fork": {
+      "$id": "urn:uuid:2e2c04e1-b569-484d-8f25-1be46c59b452",
       "component": true,
       "type": "object",
       "description": "this session continues another transcript from one of its entries",
       "properties": {
         "from": {
+          "$id": "urn:uuid:45cec7f7-4e4f-455d-9e60-ddb49a3930fe",
           "type": "string",
           "ref": "entry",
           "death": "keep",
@@ -440,11 +500,13 @@
       }
     },
     "transcript": {
+      "$id": "urn:uuid:592f4c86-2f6a-4b12-b689-b3f81fbc6cba",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "session": {
+          "$id": "urn:uuid:1ea27454-dad0-4794-b4f2-99ac0c91b7ac",
           "type": "string",
           "ref": "session",
           "death": "release",
@@ -452,16 +514,19 @@
           "description": "the session it is read into; when that session dies its transcript goes and the file stays"
         },
         "consumed": {
+          "$id": "urn:uuid:1291e91b-b3e6-4c9e-97e6-4006d3c73573",
           "type": "number",
           "stamped": true,
           "description": "how many of its lines the importer has read; where a resume begins"
         },
         "version": {
+          "$id": "urn:uuid:309c1fda-b82b-4e36-949e-77f91b1adf61",
           "type": "string",
           "stamped": true,
           "description": "file size and modification time of the immutable source being consumed; a changed version restarts its line cursor"
         },
         "finished": {
+          "$id": "urn:uuid:579bfb6b-3b09-448b-95f8-ad54dedbae79",
           "type": "string",
           "stamped": true,
           "description": "the immutable source version fully consumed after successful decoder EOF; its file size and modification time, so changed bytes reopen it"
@@ -470,37 +535,44 @@
       "description": "a file that holds a session's transcript, as the harness that ran it wrote it, and how far the importer has read it into the session. It sits on the file (@yaks/file), and each entry read from it wears the line it came from as `lines{file, start}`"
     },
     "system": {
+      "$id": "urn:uuid:4e91380f-194d-4c46-a15f-ffb2483ed774",
       "component": true,
       "type": "object",
       "properties": {},
       "description": "on an input: words the platform wrote into the transcript, such as a recovery after an interrupted response or an error to fix, never a person's. The model reads it as any input, labeled as from the system; a conversation draws it as the system's"
     },
     "heard": {
+      "$id": "urn:uuid:e7a90dcd-3cf0-4fbf-95d1-fe1b5339f82f",
       "component": true,
       "type": "object",
       "properties": {},
       "description": "on an entry, a tool's result, or a child's report to its parent once any of its own entries carries it: what it brought was written by someone the session does not work for, such as a stranger's letter or rows a visitor wrote, read directly or inside a code_mode script. A host also stamps it on what a turn so steered leaves behind, such as a wake it set, so what that starts is steered too. Until the person speaks again, the turn is steered (steered), and a host has its privileged acts wait for their tap"
     },
     "notice": {
+      "$id": "urn:uuid:1ed038b3-d346-4372-af69-826668fe4e06",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "passive transcript context, included in the next ask without requesting one",
       "properties": {
         "child": {
+          "$id": "urn:uuid:d93e5aa4-2fd6-4b59-995e-a7b495fcfe4a",
           "type": "string",
           "ref": "session",
           "death": "keep"
         },
         "task": {
+          "$id": "urn:uuid:4f3abbd7-1ae1-44c0-95af-3e992cc35cef",
           "type": "string",
           "description": "the task that prompted this notice"
         },
         "own": {
+          "$id": "urn:uuid:bd22b257-c16a-45f1-88c7-e6d105ea5de8",
           "type": "boolean",
           "description": "words spoken outside this model's turn by its voice on a call; prompt assembly labels the voice as their source rather than presenting them as this model's output"
         },
         "moved_from": {
+          "$id": "urn:uuid:2d1f4f67-72ec-4455-a69a-fc36bae5317a",
           "type": "string",
           "ref": "provider",
           "death": "keep",
@@ -509,27 +581,32 @@
       }
     },
     "reasoning": {
+      "$id": "urn:uuid:f736debe-ea2d-40a3-abf0-953ba382a4fc",
       "component": true,
       "type": "object",
       "properties": {},
       "description": "an entry the model reasoned with rather than returned"
     },
     "resume": {
+      "$id": "urn:uuid:30dd5ec0-fc86-4c58-be8b-43fc7afee5d1",
       "component": true,
       "type": "object",
       "properties": {
         "actor": {
+          "$id": "urn:uuid:bf98d483-f84f-4aa8-9874-107a1ffbf5d4",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "at": {
+          "$id": "urn:uuid:0564ada0-e98b-4991-8d8c-067a3c02ff8e",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "rank": {
+          "$id": "urn:uuid:9b6a330d-6c45-4dbb-ad65-3ccefb94f4f2",
           "type": "number",
           "stamped": true
         }
@@ -537,34 +614,40 @@
       "description": "set aside by an actor to come back to, with its place in the stack"
     },
     "session": {
+      "$id": "urn:uuid:f9e68f04-f407-4bf7-9f03-3c62adc7dcf8",
       "component": true,
       "type": "object",
       "description": "a transcript something reacts to. Its chosen persona is kept here; what it is doing is read off its entries (`status`), where it runs is @yaks/process `process`, and what it was asked for is the `using` on its first entry",
       "properties": {
         "id": {
+          "$id": "urn:uuid:8ab19654-e167-4187-bd3c-70475c7771f9",
           "type": "string",
           "index": true,
           "description": "the runner’s own id for it"
         },
         "actor": {
+          "$id": "urn:uuid:64bc9e06-a5a1-4c6e-a588-f4d8a9cc3b15",
           "type": "string",
           "ref": "entity",
           "death": "detach",
           "description": "who it speaks as — the identity that survives a /clear, where `created.via` is the run"
         },
         "source": {
+          "$id": "urn:uuid:fb88e974-4a5f-4656-b78f-e8797b628c9e",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the request that opened this transcript, when it has one"
         },
         "persona": {
+          "$id": "urn:uuid:763380f9-715f-4a07-81c1-1d9f99c8258c",
           "type": "string",
           "ref": "persona",
           "death": "keep",
           "description": "the instructions chosen when this session began"
         },
         "transcript": {
+          "$id": "urn:uuid:0c541017-ed7c-41ac-8b6c-3efccafa41e1",
           "type": "string",
           "ref": "transcript",
           "death": "detach",
@@ -572,20 +655,24 @@
           "description": "the file it was first read from, whose entries are named by session and line alone; an entry read from any other file also names that file's path"
         },
         "operator": {
+          "$id": "urn:uuid:16f9799b-5957-40fd-9a9d-8b2c32b10267",
           "type": "boolean",
           "description": "true for a transcript opened and driven by a person; false for an agent or automated opening, even if a person later replies"
         },
         "fallback": {
+          "$id": "urn:uuid:d94b4dbc-0cc4-49e8-ba02-e6213c0f37bb",
           "type": "boolean",
           "stamped": true,
           "description": "true for an MCP connection opened by the host's own process fallback, a request that named no caller; it speaks for nobody, and a door that trusts the host's perimeter may read it as the host's person (@yaks/harness conversations)"
         },
         "door": {
+          "$id": "urn:uuid:52ec247f-2513-4067-a581-218a3533e071",
           "type": "string",
           "stamped": true,
           "description": "the door (a tunnel) a conversation held in another store reaches this graph through, on the session standing here for it. Who a write through such a session is by is that door's word: it names nobody else as the one a mark is by"
         },
         "person": {
+          "$id": "urn:uuid:41788d60-cda2-48e9-ba4c-fb8e9e07b5f5",
           "type": "string",
           "ref": "person",
           "death": "release",
@@ -593,15 +680,18 @@
           "description": "the person this graph knows whose conversation, held in another store, this session stands for (`door`), where the door says whose it is: what is news to them reaches that conversation through this session"
         },
         "ended": {
+          "$id": "urn:uuid:a1b65b46-3673-40d8-9acd-34b68b3b13cf",
           "type": "boolean",
           "description": "this session is over: its harness ended it, its process is gone, or it came to rest with no process to ask about. What its entries leave unfinished reads stopped; settled, failed and empty read as they are. A resume or a message clears it"
         },
         "standing": {
+          "$id": "urn:uuid:3eb3680a-fc03-416d-a338-7ce93844eb28",
           "type": "string",
           "stamped": true,
           "description": "a long-running session: recorded here rather than ended when its work is done"
         },
         "status": {
+          "$id": "urn:uuid:2d0ca419-ffa9-49c0-b911-de84446df924",
           "type": "string",
           "enum": [
             "empty",
@@ -625,6 +715,7 @@
           "description": "what the newest entry implies: pending is waiting on the model, running is waiting on an answer, settled has nothing to do. A session a process of its own runs (`process` with no `exit`) reads running where its entries say pending"
         },
         "cost": {
+          "$id": "urn:uuid:cd701af4-70cb-4e90-9832-3f460bf42a09",
           "type": "number",
           "computed": true,
           "reads": [
@@ -636,25 +727,30 @@
       }
     },
     "spawned": {
+      "$id": "urn:uuid:891fbbf5-3815-4389-bcf7-3304126ed537",
       "component": true,
       "type": "object",
       "description": "a child session delegated by a parent; fork independently selects an inherited prefix",
       "properties": {
         "parent": {
+          "$id": "urn:uuid:f2d09b57-7876-47e5-99a2-9f9b8b015103",
           "type": "string",
           "ref": "session",
           "death": "keep"
         },
         "notice": {
+          "$id": "urn:uuid:f9be6642-91ad-4a9f-9993-fc3162104f2a",
           "type": "boolean",
           "index": true,
           "description": "Report passively, without waking the parent, in one notice per child; later turns update that same notice."
         },
         "quiet": {
+          "$id": "urn:uuid:b9da95d7-90d0-45b5-a29c-91f2b0029918",
           "type": "number",
           "description": "For passive reports, milliseconds without new input before a settled chat closes; failure and stop report at once."
         },
         "call": {
+          "$id": "urn:uuid:4a31b518-d99f-4ade-9d5a-52b71f2f53b2",
           "type": "string",
           "ref": "entry",
           "death": "keep"
@@ -662,33 +758,39 @@
       }
     },
     "delivery": {
+      "$id": "urn:uuid:e9aa62af-8972-4430-9339-21f5752e294b",
       "component": true,
       "type": "object",
       "description": "on a parent's entry, the child session whose end it tells: the receipt deliverChild writes, never words a person wrote, which the model reads labeled as from the system",
       "properties": {
         "child": {
+          "$id": "urn:uuid:ca4dd854-23a5-48f4-be3e-a7bcfd7f242c",
           "type": "string",
           "ref": "session",
           "death": "keep"
         },
         "through": {
+          "$id": "urn:uuid:08e0b011-d19e-465c-87a0-5b7465ac9c30",
           "type": "string",
           "ref": "entry",
           "death": "keep",
           "description": "The last entry covered by a passive closing notice."
         },
         "outcome": {
+          "$id": "urn:uuid:8d3d8beb-7e1f-49ad-b724-6429fcd082cd",
           "type": "string",
           "description": "how the child had ended when it was told: settled, failed or stopped"
         }
       }
     },
     "woken": {
+      "$id": "urn:uuid:721d56f9-7579-479e-95f1-faa540d6a800",
       "component": true,
       "type": "object",
       "description": "on a wake's input, the task it woke its transcript for: what finds the run already on a task once its claim was let go",
       "properties": {
         "task": {
+          "$id": "urn:uuid:8e790c75-2210-46c2-834b-7a1a850fd865",
           "type": "string",
           "ref": "task",
           "death": "keep"
@@ -696,41 +798,48 @@
       }
     },
     "helper": {
+      "$id": "urn:uuid:1baa5cfa-5162-494d-bb5b-0ff2245cbecd",
       "component": true,
       "type": "object",
       "description": "on a project: what is addressed to its operator that no person wrote (a knock at the project, or at a session a person opened for it) goes to a helper instead of waking that session: a run of its own wearing `persona`, with nothing in its context but what is waiting. One helper runs at a time and takes everything waiting. Removing it gives what is waiting back to the operator",
       "properties": {
         "persona": {
+          "$id": "urn:uuid:8e71a569-2957-423d-9c5e-719a19323b25",
           "type": "string",
           "ref": "persona",
           "death": "detach",
           "description": "the persona a helper wears: the operator's"
         },
         "provider": {
+          "$id": "urn:uuid:f9a2ce1f-4bba-4b3e-843b-734bc302f96c",
           "type": "string",
           "ref": "provider",
           "death": "detach",
           "description": "the provider a helper runs on"
         },
         "model": {
+          "$id": "urn:uuid:e214ed0d-cc8d-40e8-861a-1d2e01792d9d",
           "type": "string",
           "ref": "model",
           "death": "detach",
           "description": "the model a helper runs; the provider's own where absent"
         },
         "effort": {
+          "$id": "urn:uuid:70fcbfb9-a44e-4c77-b492-bf38a2e8502e",
           "type": "string",
           "description": "the reasoning effort, where the model accepts such a setting"
         }
       }
     },
     "helping": {
+      "$id": "urn:uuid:cc61cbd3-016a-4694-9c5d-fa8820f10f38",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "on a session: a helper, started to take what waited for this project's operator. A knock written through it is a hand-up, which the operator hears",
       "properties": {
         "project": {
+          "$id": "urn:uuid:55e917f4-61d2-4c27-b8e2-eafa816e7766",
           "type": "string",
           "ref": "project",
           "death": "keep",
@@ -739,12 +848,14 @@
       }
     },
     "routine": {
+      "$id": "urn:uuid:72afc3a7-f0cb-4134-9ee5-dce17da27c40",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "on a knock: a helper's to take, never said to the operator's session. Written with the knock when it is addressed to the operator of a project wearing `helper` and is neither a person's words nor a hand-up: a knock written through a helper, or through a session opened on a topic",
       "properties": {
         "project": {
+          "$id": "urn:uuid:e1de5da4-ba0b-4dd7-b931-37635531ca79",
           "type": "string",
           "ref": "project",
           "death": "keep",
@@ -753,39 +864,46 @@
       }
     },
     "stop": {
+      "$id": "urn:uuid:5f305107-049e-4076-832a-bafab8b243b5",
       "component": true,
       "type": "object",
       "description": "on an entry, a marker ending the transcript; on a managed session, a request to stop its process",
       "properties": {}
     },
     "using": {
+      "$id": "urn:uuid:23e58889-6a4e-4959-9f5a-9324175eedaf",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "provider, model, effort and account: on an input it sets or switches them, on an ask it records what was served, and on a provider's row its model is what a request naming that provider alone runs",
       "properties": {
         "provider": {
+          "$id": "urn:uuid:2bcaebd8-f529-46d6-af63-f85a773a1617",
           "type": "string",
           "ref": "provider",
           "death": "keep",
           "description": "the provider asked — kept as history when that entity is deleted, so a past ask still records what answered it"
         },
         "model": {
+          "$id": "urn:uuid:f59259eb-f148-41a8-8948-94083216f170",
           "type": "string",
           "ref": "model",
           "death": "keep",
           "description": "the model asked — kept as history when that entity is deleted, so a past ask still records what answered it"
         },
         "effort": {
+          "$id": "urn:uuid:2e2598f9-e2e0-4056-8b54-8a0e3a55b3d2",
           "type": "string"
         },
         "account": {
+          "$id": "urn:uuid:e744c111-4afe-4ba0-b60d-d80be4fb65fd",
           "type": "string",
           "ref": "account",
           "death": "keep",
           "description": "on a request a spawn runs, the account its provider's CLI signs in with (@yaks/model `account`): the one named, else the offered one further under its weekly pace, kept so every later run of the session uses it too"
         },
         "why": {
+          "$id": "urn:uuid:7cbb8fe7-f931-4ec9-8233-6b87a7889862",
           "type": "string",
           "description": "on the input a router answered (@yaks/model `route`), one line saying why it chose this model, as the plans read then; an ask and a later input record the selection without it"
         }
@@ -1241,17 +1359,20 @@
       "description": "start a project's helper when a routine knock waits and none is at work: one session wearing the project's `helper{persona}`, whose first input is every routine knock waiting, each marked notified in the same write, and whose `using` asks for its run the way session spawn does. A helper's `exit` asks again for what came while it ran; one that ended badly, or that said nothing for five minutes or is still going after half an hour and is stopped, is handed up to the operator with what it held. Removing `helper` from a project gives its waiting knocks back to the operator"
     },
     "native": {
+      "$id": "urn:uuid:389f8e34-8213-42b3-ad8d-7287faff06fa",
       "component": true,
       "journal": false,
       "description": "A transcript run by the native model/tool loop, not an outside CLI agent."
     },
     "drops": {
+      "$id": "urn:uuid:70232ce9-6a42-4993-bb1b-ba4c74132d7d",
       "component": true,
       "type": "object",
       "properties": {},
       "description": "on a session, or on the persona it wears: its requests leave out what it has replied past. When a request starts after the provider’s cache of the one before has expired, each of its earlier calls with their results, and each worker’s report (`delivery`, `attention{worker}`), that came before the request its newest reply answered is marked `archived`, with no model call; where a summary checkpoint is due while the cache is warm, the same is done first. A person’s words and the session’s own replies always stay, and an archived entry keeps its row"
     },
     "tool_async": {
+      "$id": "urn:uuid:dafafece-9011-4204-bd7b-c634715055eb",
       "component": true,
       "journal": false,
       "type": "object",
@@ -1259,12 +1380,14 @@
       "properties": {}
     },
     "tool_progress": {
+      "$id": "urn:uuid:f2ee90da-f517-48b8-a528-cee0928bfa39",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "the Pending entry of a background call that outlasted its patience: an immutable interim result that is something new for the model to read, so it may take a turn while the call runs; older transcripts hold one beside every background call",
       "properties": {
         "call": {
+          "$id": "urn:uuid:2c8a1b62-7b58-4146-9d43-08fbf8968704",
           "type": "string",
           "ref": "call",
           "death": "cascade"
@@ -1283,39 +1406,47 @@
       "description": "on pool startup, wake each ended child still holding a dispatch place so its receipt is delivered and its place released. Take up asynchronous calls left by a holder that has exited or that the host says is gone, through session_tool's recovery path"
     },
     "sending": {
+      "$id": "urn:uuid:46d730e4-6c88-4295-8042-5f66f8d18ba8",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "what is sent to a model: selected on an input, recorded on an ask",
       "properties": {
         "input": {
+          "$id": "urn:uuid:8fb9853f-205c-4045-8ef2-45290b8338e2",
           "type": "object",
           "description": "explicit model-native inputs, such as lyrics or duration; validated by the provider, never inferred from the prompt"
         },
         "instructions": {
+          "$id": "urn:uuid:dc4bcecc-5a37-4700-aace-fc063e5e3633",
           "type": "string",
           "description": "on an input, the system instructions it selects for this transcript"
         },
         "told": {
+          "$id": "urn:uuid:853f843e-b090-4a7b-abe7-b0894607d730",
           "type": "string",
           "ref": "told",
           "death": "keep",
           "description": "on an ask, the system instructions it sent, as the told row named by their sha256"
         },
         "scope": {
+          "$id": "urn:uuid:a6934439-63a9-457e-bbbf-5c78cbf9f5cd",
           "type": "string",
           "description": "the host instruction scope at this ask; a different scope refreshes instructions even while the provider prefix stays cached"
         },
         "window": {
+          "$id": "urn:uuid:9efec021-935b-475a-9b7e-589d64c738ca",
           "type": "integer",
           "description": "how many of the transcript's newest entries a turn sends the model, reaching back to the input that began the turn they cut into; the whole transcript where absent"
         },
         "tokens": {
+          "$id": "urn:uuid:11ab5a73-1e3b-4772-95b2-4e98d993a513",
           "type": "integer",
           "minimum": 1,
           "description": "the most tokens a turn's reply may write, reasoning included; the provider's own limit where absent"
         },
         "tools": {
+          "$id": "urn:uuid:f542ea77-d808-4728-96ec-ef3f13c744a7",
           "type": "array",
           "items": {
             "type": "string"
@@ -1323,12 +1454,14 @@
           "description": "the tools a turn is offered, by name: exactly these, from every tool the runner can run; the runner's own set where absent"
         },
         "offer": {
+          "$id": "urn:uuid:0ed2c85d-2462-4b75-93aa-6e553ca1048d",
           "type": "string",
           "ref": "offer",
           "death": "keep",
           "description": "on an ask, the tools it sent the model, as the offer row named by their sha256"
         },
         "context": {
+          "$id": "urn:uuid:ab9b5d34-f0e0-40c2-be60-43f84092b441",
           "type": "array",
           "items": {
             "type": "string"
@@ -1338,11 +1471,13 @@
       }
     },
     "offer": {
+      "$id": "urn:uuid:cbe6cac9-3402-4c1d-90f8-d871a3fd46aa",
       "component": true,
       "type": "object",
       "description": "the tools an ask sent a model, exactly as sent; its eid is the sha256 of them, so a set many asks send is kept once",
       "properties": {
         "tools": {
+          "$id": "urn:uuid:86597dfc-8d47-4c1e-bbc2-cff4421d7734",
           "type": "array",
           "items": {
             "type": "object"
@@ -1352,11 +1487,13 @@
       }
     },
     "told": {
+      "$id": "urn:uuid:e7655b44-5255-48fd-8865-33cf75ae8b25",
       "component": true,
       "type": "object",
       "description": "the system instructions an ask sent a model, exactly as sent; its eid is the sha256 of them, so a text many asks send is kept once",
       "properties": {
         "instructions": {
+          "$id": "urn:uuid:4b9d0785-4ca7-40a4-8dbc-e5e66cc2ca93",
           "type": "string",
           "description": "the instructions' text"
         }
@@ -1365,15 +1502,19 @@
   },
   "kinds": {
     "claim": {
+      "$id": "urn:uuid:98fb4755-143d-4baa-a124-654f271a2a7c",
       "description": "a session’s lock on the entity it is stored on"
     },
     "conflict": {
+      "$id": "urn:uuid:e87275ea-fcfd-4da4-a6b7-1c9d8a7e35de",
       "description": "two sessions wanted one thing: written after the refusal, never by a client"
     },
     "entry": {
+      "$id": "urn:uuid:ab7e4a3b-0423-4e6c-bc81-294c8a1a838d",
       "description": "one entry of a transcript; the component stored beside it is its kind; every model-bound message names its source independently of its provider turn role. Only the person’s own words are their user input"
     },
     "session": {
+      "$id": "urn:uuid:f9e68f04-f407-4bf7-9f03-3c62adc7dcf8",
       "description": "a transcript something reacts to. Its chosen persona is kept here; what it is doing is read off its entries (`status`), where it runs is @yaks/process `process`, and what it was asked for is the `using` on its first entry",
       "before": [
         "process"

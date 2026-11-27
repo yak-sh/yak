@@ -1,7 +1,9 @@
 {
+  "$id": "urn:uuid:3f0430a0-a8d1-4d85-9d11-1a8db80746f1",
   "title": "timing",
   "$defs": {
     "timing": {
+      "$id": "urn:uuid:7df4903e-4ba7-44b4-b1c3-9b6363ca53e0",
       "component": true,
       "journal": false,
       "type": "object",
@@ -10,42 +12,50 @@
       "description": "One immutable completed minute of a piece of code in during.process; the reporter derives its eid from process, op, name, plugin and at. Rows merge by adding n, total, bucket and count values and taking the greatest max.",
       "properties": {
         "op": {
+          "$id": "urn:uuid:510fa9d1-d908-49ca-8099-df826f02c32c",
           "type": "string",
           "stamped": true,
           "description": "The span kind."
         },
         "name": {
+          "$id": "urn:uuid:eccaf1fb-edf4-4f5f-9730-b1027bdcc7c9",
           "type": "string",
           "stamped": true,
           "description": "The measured code, never an entity id, query text, URL or value."
         },
         "plugin": {
+          "$id": "urn:uuid:b7ca26b9-f73d-4eb3-b5c7-8286dec5f9f4",
           "type": "string",
           "stamped": true,
           "description": "The emitting plugin; empty for work without plugin attribution."
         },
         "at": {
+          "$id": "urn:uuid:f419ee76-fedf-4613-8ed5-6e27251ca963",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "The UTC completion minute, rounded down."
         },
         "n": {
+          "$id": "urn:uuid:53901e59-46d6-4dd2-ae1f-80bfd80c030c",
           "type": "integer",
           "stamped": true,
           "description": "The number of completed spans and instants."
         },
         "total": {
+          "$id": "urn:uuid:adc3e2bd-9a14-4cb4-a320-04774edfd525",
           "type": "number",
           "stamped": true,
           "description": "The sum of span durations in milliseconds."
         },
         "max": {
+          "$id": "urn:uuid:6d2d135b-8308-46ec-910e-0e511fe7cf70",
           "type": "number",
           "stamped": true,
           "description": "The greatest span duration in milliseconds."
         },
         "buckets": {
+          "$id": "urn:uuid:7c503866-e7db-47c6-90fe-8018765e5d79",
           "type": "array",
           "stamped": true,
           "minItems": 43,
@@ -56,6 +66,7 @@
           "description": "Fixed log-scale counts: exact zero, upper bounds 2^-10 through 2^30 milliseconds inclusive, then overflow. Read whole."
         },
         "counts": {
+          "$id": "urn:uuid:ea20536d-bd94-492a-aa29-893c2dd47f8b",
           "type": "object",
           "stamped": true,
           "additionalProperties": {
@@ -64,6 +75,7 @@
           "description": "The spans' summed numeric metrics, such as bundles, statements and rows; read whole."
         },
         "commit": {
+          "$id": "urn:uuid:29bb68c1-ed47-46f4-91b4-40fe88be772f",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -73,6 +85,7 @@
       }
     },
     "trace": {
+      "$id": "urn:uuid:00b84cfe-4784-455d-a07f-92a98d6b680d",
       "component": true,
       "journal": false,
       "type": "object",
@@ -81,16 +94,19 @@
       "description": "One selected operation with tracker context in during; its separately stored spans refer to this entity.",
       "properties": {
         "op": {
+          "$id": "urn:uuid:1ff473a6-f466-4636-ae6e-6adc551bc81d",
           "type": "string",
           "stamped": true,
           "description": "The root span kind."
         },
         "name": {
+          "$id": "urn:uuid:58d7857e-d1ab-4904-b74c-9ff80a8dd865",
           "type": "string",
           "stamped": true,
           "description": "The root's code, never an entity id, query text, URL or value."
         },
         "at": {
+          "$id": "urn:uuid:808eb881-ba1b-469e-8b53-63209512e99a",
           "type": "string",
           "format": "date-time",
           "stamped": true,
@@ -99,6 +115,7 @@
       }
     },
     "span": {
+      "$id": "urn:uuid:eec2063e-1664-4ed3-84e9-39d291e76b98",
       "component": true,
       "journal": false,
       "type": "object",
@@ -107,6 +124,7 @@
       "description": "One measured piece of code within a stored trace; each measurement is a separate component on this entity.",
       "properties": {
         "trace": {
+          "$id": "urn:uuid:f770ef2a-1ce8-4fb4-8cd8-f625823d1c6b",
           "type": "string",
           "stamped": true,
           "description": "The operation this span belongs to.",
@@ -114,6 +132,7 @@
           "death": "cascade"
         },
         "parent": {
+          "$id": "urn:uuid:c051ca75-7441-4954-9de2-6a3a203280fe",
           "type": "string",
           "stamped": true,
           "description": "The containing span; absent for the root.",
@@ -121,31 +140,37 @@
           "death": "cascade"
         },
         "op": {
+          "$id": "urn:uuid:4ca28b95-f13d-4496-936a-2c40169b7ed3",
           "type": "string",
           "stamped": true,
           "description": "The span kind."
         },
         "name": {
+          "$id": "urn:uuid:1d51aadf-5458-4e1b-80d0-837659bfb529",
           "type": "string",
           "stamped": true,
           "description": "The measured code, never a query, URL, credential or value."
         },
         "plugin": {
+          "$id": "urn:uuid:11f4abde-6905-4fb1-ae86-b49a1964ffa6",
           "type": "string",
           "stamped": true,
           "description": "The emitting plugin."
         },
         "package": {
+          "$id": "urn:uuid:c991c659-6bb2-4648-b5a9-75de603c6982",
           "type": "string",
           "stamped": true,
           "description": "The package owning the measured code."
         },
         "outcome": {
+          "$id": "urn:uuid:b8d2f7bd-4610-45de-9f6b-5c0d4ad7a423",
           "type": "string",
           "stamped": true,
           "description": "How the measured operation ended."
         },
         "query": {
+          "$id": "urn:uuid:4b6a312a-1378-4427-ac68-aacd03723128",
           "type": "string",
           "stamped": true,
           "description": "A read's yaks query line, every value in it masked."
@@ -153,6 +178,7 @@
       }
     },
     "elapsed": {
+      "$id": "urn:uuid:fc4807b2-5b64-4ae7-bc05-67f0fdfcd343",
       "component": true,
       "journal": false,
       "type": "object",
@@ -161,11 +187,13 @@
       "description": "A span's start and duration in milliseconds relative to its trace root.",
       "properties": {
         "start": {
+          "$id": "urn:uuid:558ee9f6-e223-4e0a-b66a-d7f00ac931f6",
           "type": "number",
           "stamped": true,
           "description": "Milliseconds from the trace root start."
         },
         "ms": {
+          "$id": "urn:uuid:c2b88472-a406-4d2c-a716-b5ea03fb539b",
           "type": "number",
           "stamped": true,
           "minimum": 0,
@@ -174,6 +202,7 @@
       }
     },
     "rows_read": {
+      "$id": "urn:uuid:2a1b2e8f-2494-4c14-ae94-4ddc96015a7b",
       "component": true,
       "journal": false,
       "type": "object",
@@ -182,6 +211,7 @@
       "description": "SQL cursor rows read during a span.",
       "properties": {
         "n": {
+          "$id": "urn:uuid:37daf9e0-3415-409f-80ee-61525dba3d0e",
           "type": "number",
           "stamped": true,
           "minimum": 0,
@@ -190,6 +220,7 @@
       }
     },
     "rows_written": {
+      "$id": "urn:uuid:a2309054-4061-409a-b0a0-38f844f05c30",
       "component": true,
       "journal": false,
       "type": "object",
@@ -198,6 +229,7 @@
       "description": "SQL cursor rows written during a span.",
       "properties": {
         "n": {
+          "$id": "urn:uuid:649e03da-4f15-4fa0-9815-23bbd53a9a40",
           "type": "number",
           "stamped": true,
           "minimum": 0,
@@ -206,6 +238,7 @@
       }
     },
     "statements": {
+      "$id": "urn:uuid:285085c8-87ce-45ab-8b6d-de6408b10cbc",
       "component": true,
       "journal": false,
       "type": "object",
@@ -214,12 +247,14 @@
       "description": "SQL statements executed during a span.",
       "properties": {
         "n": {
+          "$id": "urn:uuid:dfa4e4d1-9b0f-4860-a7b5-889f482500a6",
           "type": "number",
           "stamped": true,
           "minimum": 0,
           "description": "The measured count; parent spans include their descendants."
         },
         "ran": {
+          "$id": "urn:uuid:8262f476-c92c-4bce-97f1-2706b3236294",
           "type": "array",
           "stamped": true,
           "items": {
@@ -249,6 +284,7 @@
       }
     },
     "repeats": {
+      "$id": "urn:uuid:0d1ee076-e846-460f-80d1-8dcf203e5aca",
       "component": true,
       "journal": false,
       "type": "object",
@@ -257,6 +293,7 @@
       "description": "Automatic occurrences suppressed by the source since the previous selected trace of this root span\u2019s code coordinates.",
       "properties": {
         "n": {
+          "$id": "urn:uuid:4a61fd7f-c5ac-45d5-989a-cd6eda387706",
           "type": "integer",
           "minimum": 0,
           "stamped": true,

@@ -1,21 +1,26 @@
 {
+  "$id": "urn:uuid:9b2c7d08-a2ab-40f8-802c-1506b1239538",
   "title": "process",
   "$defs": {
     "service": {
+      "$id": "urn:uuid:15d7eef3-71dd-411a-ab51-52c2a0f83692",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "a program that should be running. It is stored on the same entity its `process` component lands on: the service records what is wanted, the process records what is actually running, and a `stop` component beside it means the program is no longer wanted",
       "properties": {
         "command": {
+          "$id": "urn:uuid:0645da35-6940-4ed1-85bf-dac6e1fe81b5",
           "type": "string",
           "description": "the command line to run, argv joined by spaces \u2014 the supervisor's own copy, kept here rather than read back off the running process, because restarting needs the command that was asked for and not what the kernel reports"
         },
         "cwd": {
+          "$id": "urn:uuid:0ad0d6df-5de5-4c87-9ec4-996c28d76f1a",
           "type": "string",
           "description": "the working directory to run it in; absent means the supervisor's own working directory"
         },
         "restart": {
+          "$id": "urn:uuid:b51aa570-8cb0-41a3-99af-b0c768a67b15",
           "type": "string",
           "enum": [
             "never",
@@ -25,30 +30,36 @@
           "description": "what to do when it exits, using systemd's three values; absent means never, so a service that does not set it runs once and stays down"
         },
         "attempts": {
+          "$id": "urn:uuid:623bde4c-d2c4-48e0-9d3e-762b120fa969",
           "type": "integer",
           "description": "how many times the supervisor has restarted it after an exit \u2014 the backoff grows with this number, and a run that outlives the longest backoff resets the count"
         }
       }
     },
     "process": {
+      "$id": "urn:uuid:b7a4d4f3-e939-4e29-bdc1-cb82318183a5",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "a program observed on its launch workspace; its entity id, not a pid alone, is the durable process handle",
       "properties": {
         "pid": {
+          "$id": "urn:uuid:6776369c-8ddb-4145-b87b-cab6c55cee5f",
           "type": "integer",
           "description": "the process id on the machine tracking it \u2014 the only durable handle an adopted process has"
         },
         "command": {
+          "$id": "urn:uuid:108add78-7e11-4421-80dc-734404a5b607",
           "type": "string",
           "description": "the command line it was launched with, argv joined by spaces; absent when the process was adopted rather than started here"
         },
         "cwd": {
+          "$id": "urn:uuid:40445dc3-8d4c-413a-8ae0-17694f6e794c",
           "type": "string",
           "description": "the working directory it was launched in; absent for the same reason as command"
         },
         "roles": {
+          "$id": "urn:uuid:9ce0b806-5655-421a-8987-510d9cad6ae2",
           "type": "array",
           "items": {
             "type": "string"
@@ -56,12 +67,14 @@
           "description": "the roles it serves, where it opened a graph: graph, web, effects, or a plugin's service by its name; absent for a program that opened none"
         },
         "workspace": {
+          "$id": "urn:uuid:f446209c-0bb2-4fdb-9778-c4a01e48a47d",
           "type": "string",
           "ref": "workspace",
           "death": "keep",
           "description": "the original launch workspace, retained for wait, stop and output recovery; absent placement is unknown, never local"
         },
         "watcher": {
+          "$id": "urn:uuid:300d3fb9-5dd4-49a1-a2ee-1a9891ea4267",
           "type": "string",
           "ref": "entity",
           "death": "detach",
@@ -70,36 +83,43 @@
       }
     },
     "runtime": {
+      "$id": "urn:uuid:c27665d8-0a13-4292-8f00-80ba17bc1be3",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "what a process runs on, written by the process about itself when it starts, beside its `process` component: the JavaScript runtime, its version and the operating system. It is how a failure in that process says what it ran on",
       "properties": {
         "name": {
+          "$id": "urn:uuid:6798f5b8-1ab9-492e-a9ed-797cc4fcda60",
           "type": "string",
           "description": "the runtime, lowercase: deno"
         },
         "version": {
+          "$id": "urn:uuid:69381af7-276b-44e7-8843-0e084bdadc51",
           "type": "string",
           "description": "the runtime's version: 2.5.1"
         },
         "os": {
+          "$id": "urn:uuid:baad6797-36b9-4e40-bc1e-b0c2f395f8a8",
           "type": "string",
           "description": "the operating system and its release, as the runtime reports them: linux 6.8.0-45-generic, darwin 24.1.0"
         }
       }
     },
     "exit": {
+      "$id": "urn:uuid:300f1cca-b07b-4bf7-9a06-399e4ffc98f9",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "the process has ended \u2014 never rewritten, and deleted only by the transaction that records the next attempt on a supervised entity",
       "properties": {
         "code": {
+          "$id": "urn:uuid:c8c3cc99-be3d-484a-ae70-5353252e1d4e",
           "type": "integer",
           "description": "the exit code it reported; absent when the end of the process was observed but the code was not (a signal killed the wrapper, or nothing was watching)"
         },
         "oom": {
+          "$id": "urn:uuid:4b64c05b-9f35-44e8-8bcd-34ccdf908cb4",
           "type": "integer",
           "description": "how many of the run's processes the kernel's OOM killer ended at its memory limit while it ran (Linux, its scope's memory.events); absent when none were or nothing counts them"
         }
@@ -108,12 +128,14 @@
   },
   "kinds": {
     "service": {
+      "$id": "urn:uuid:15d7eef3-71dd-411a-ab51-52c2a0f83692",
       "description": "a program that should be running. It is stored on the same entity its `process` component lands on: the service records what is wanted, the process records what is actually running, and a `stop` component beside it means the program is no longer wanted",
       "before": [
         "process"
       ]
     },
     "process": {
+      "$id": "urn:uuid:b7a4d4f3-e939-4e29-bdc1-cb82318183a5",
       "description": "a program observed on its launch workspace; its entity id, not a pid alone, is the durable process handle"
     }
   }

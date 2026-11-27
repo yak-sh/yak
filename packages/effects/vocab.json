@@ -1,10 +1,12 @@
 {
+  "$id": "urn:uuid:f144dc01-40ae-4520-a926-0211ac38d229",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "effect",
   "$defs": {
     "effect": {
+      "$id": "urn:uuid:08192132-d4a8-4912-aa88-2222c18dbb4b",
       "component": true,
       "index": [
         ["handler", "state", "at"],
@@ -32,11 +34,13 @@
       "description": "one run a commit owes, written in the commit's own transaction and claimed by whichever process runs it",
       "properties": {
         "handler": {
+          "$id": "urn:uuid:cf0ea4db-e5e8-418f-9122-a83f3044a2f4",
           "type": "string",
           "stamped": true,
           "description": "the declared effect it runs, by name"
         },
         "target": {
+          "$id": "urn:uuid:742ba7de-da47-4b52-9799-e9e82718e46c",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -44,11 +48,13 @@
           "description": "the entity the committed change was about"
         },
         "comp": {
+          "$id": "urn:uuid:02fdd8ae-883b-4f6d-90b9-facf1c22867e",
           "type": "string",
           "stamped": true,
           "description": "the component that changed"
         },
         "touched": {
+          "$id": "urn:uuid:50698ec9-f55f-4b7c-b220-c0198edfe426",
           "type": "array",
           "items": {
             "type": "string"
@@ -57,12 +63,14 @@
           "description": "components moved on the target by the same commit"
         },
         "before": {
+          "$id": "urn:uuid:7400ae2d-c972-4093-9b97-1994ad93b051",
           "type": "object",
           "additionalProperties": true,
           "stamped": true,
           "description": "on a `removed` run, the component it is about as it was before the commit, by name, since the run cannot read it afterwards"
         },
         "kind": {
+          "$id": "urn:uuid:00e74f77-a06d-43b1-9c26-5a7e609a3633",
           "type": "string",
           "enum": [
             "created",
@@ -75,6 +83,7 @@
           "description": "what happened to it, `matched` where a query matched it, or `started` where the target is a process that started working the effects"
         },
         "state": {
+          "$id": "urn:uuid:230e36c5-8ae3-4268-8617-d80af06826ab",
           "type": "string",
           "enum": [
             "pending",
@@ -86,59 +95,70 @@
           "index": true
         },
         "attempts": {
+          "$id": "urn:uuid:80bbff40-1c55-4b2c-9578-58327f46bb22",
           "type": "number",
           "stamped": true,
           "description": "how many attempts the handler has spent; waiting through defer does not spend an attempt"
         },
         "at": {
+          "$id": "urn:uuid:2f1032ac-2beb-4e18-a00c-594a28ce9d5e",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the run was recorded"
         },
         "generation": {
+          "$id": "urn:uuid:68d3bc10-4dd1-4511-b83f-76a6c08db0e6",
           "type": "number",
           "stamped": true,
           "description": "how deep in effect-written batches the commit that owed it was: 0 for a client's write, 1 for an effect's own, so what this run writes is one more"
         },
         "actor": {
+          "$id": "urn:uuid:4532c304-d559-40c2-adec-b38c4ec8c5ca",
           "type": "object",
           "stamped": true,
           "description": "the by/via pair that wrote the commit that owed it, so a write the run makes on that commit's behalf is signed as it was; absent for automation"
         },
         "error": {
+          "$id": "urn:uuid:2f6ac8b5-0cd3-4fad-b931-65c5946d0fb4",
           "type": "string",
           "stamped": true,
           "description": "what the last attempt threw — kept beside a run left failed, so the record shows why"
         },
         "next": {
+          "$id": "urn:uuid:20eacbaf-d8d2-4c12-85c5-f2290f1356f5",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the run next becomes eligible after failure backoff or deferred readiness; absent means a run nobody has started or one in progress"
         },
         "waiting": {
+          "$id": "urn:uuid:c8591190-9f80-4367-8b53-20d3573f892b",
           "type": "string",
           "stamped": true,
           "description": "the readiness condition the handler last found unmet when it deferred this run"
         },
         "version": {
+          "$id": "urn:uuid:e04367e6-6278-4cf6-a657-3b40afb1bb17",
           "type": "string",
           "stamped": true,
           "description": "the code version its latest attempt started on, where the host names one: resumed under another, a deploy cut the attempt off and it runs again as the same attempt; under the same one, its process crashed and that spends an attempt"
         },
         "lease_owner": {
+          "$id": "urn:uuid:a60afb70-7a6d-4177-b555-a17a50262929",
           "type": "string",
           "stamped": true,
           "description": "the process that claimed this run",
           "index": true
         },
         "lease_token": {
+          "$id": "urn:uuid:11ba3bb1-0efa-4ca2-af7f-b35564bffbac",
           "type": "string",
           "stamped": true,
           "description": "that claim's token, fresh on every claim"
         },
         "lease_expiry": {
+          "$id": "urn:uuid:eb82dc8c-ea4c-4e5d-8952-d113de3f3163",
           "type": "string",
           "format": "date-time",
           "stamped": true,
@@ -147,22 +167,26 @@
       }
     },
     "lease": {
+      "$id": "urn:uuid:5ad53d0f-a5e0-41d8-a31e-31ade78c7be3",
       "component": true,
       "type": "object",
       "journal": false,
       "description": "a duty held by one process at a time — its eid is derived from `name`, so two processes reaching for the same duty address one row and the winner is settled by the graph's own precondition; plumbing between the processes on one store, so it is not history",
       "properties": {
         "name": {
+          "$id": "urn:uuid:cf56a038-8db0-42fa-9a63-986ad6452e1a",
           "type": "string",
           "description": "the duty being held — a sweep, a clock, a start-up pass; the eid is derived from it, so the same duty is the same row in every graph"
         },
         "holder": {
+          "$id": "urn:uuid:9739435a-de84-428f-846d-e3d782371272",
           "type": "string",
           "ref": "entity",
           "death": "detach",
           "description": "the process running it — absent means nobody is, and the next process to ask gets it"
         },
         "until": {
+          "$id": "urn:uuid:a2f22992-5e47-4cc8-bf42-d7d68c63026b",
           "type": "string",
           "format": "date-time",
           "description": "when the hold expires; a holder still working pushes this out on a timer, and one that was killed leaves a row that expires without anything having to clean up after it"
@@ -170,23 +194,27 @@
       }
     },
     "worker": {
+      "$id": "urn:uuid:02d13d39-0c35-4abe-913a-09728be2672c",
       "component": true,
       "type": "object",
       "journal": false,
       "description": "what a process working the effect pool says about itself, on its own process entity, every fifteen seconds while it works: how many runs it has going and the oldest of them, how many it has finished, and how busy it is. A row whose `at` stops moving is a worker that stopped saying, because it ended or its thread is stuck; one leaving the pool takes its row with it, and the next worker to start clears the row of one that was killed",
       "properties": {
         "at": {
+          "$id": "urn:uuid:4a1e9eb7-f2e4-4b38-b3c6-7a8e699fa23a",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it last said this"
         },
         "running": {
+          "$id": "urn:uuid:04c2dfe8-5cda-468f-840b-2f03e3877183",
           "type": "integer",
           "stamped": true,
           "description": "how many runs it has going"
         },
         "runs": {
+          "$id": "urn:uuid:c73a516a-7225-4a52-89ac-a8388530bbb3",
           "type": "array",
           "items": {
             "type": "object",
@@ -214,16 +242,19 @@
           "description": "the runs it has going, oldest first, at most twenty"
         },
         "ran": {
+          "$id": "urn:uuid:1196b47d-89af-4de1-8db8-51c79c07399a",
           "type": "integer",
           "stamped": true,
           "description": "how many runs it has finished since it started, however each ended"
         },
         "errors": {
+          "$id": "urn:uuid:ff862089-7b99-4550-9f25-cda92624fddf",
           "type": "integer",
           "stamped": true,
           "description": "how many of those threw"
         },
         "history": {
+          "$id": "urn:uuid:322975e9-3d07-438b-b1cd-ebb352337cf9",
           "type": "array",
           "items": {
             "type": "integer"
@@ -232,11 +263,13 @@
           "description": "how many runs it finished in each of the last sixty whole seconds, oldest first"
         },
         "cpu": {
+          "$id": "urn:uuid:f261b0a0-df10-4e09-aff9-2733c083747f",
           "type": "number",
           "stamped": true,
           "description": "the share of one core its process used since it last said, 1 being a whole core; absent where its host cannot tell"
         },
         "lag": {
+          "$id": "urn:uuid:5df7748c-adb5-4f3f-bbe1-b7b6212f84bc",
           "type": "integer",
           "stamped": true,
           "description": "the longest its thread ran a timer late since it last said, in milliseconds: how full its event loop is"
@@ -244,12 +277,14 @@
       }
     },
     "provisional": {
+      "$id": "urn:uuid:9812181d-27c8-40ad-a9fd-cd4a5f68b8a4",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "an entity whose asynchronous step has not finished yet: it sits where it always does, and the effect that finishes the step removes this mark. A reader who sees it knows the entity is not settled; the writer who started the step waits for it and never sees the mark",
       "properties": {
         "note": {
+          "$id": "urn:uuid:046d3d6f-a1da-44d5-b565-4ff2161554e2",
           "type": "string",
           "description": "a line for the person reading it: why the entity is provisional, such as \"saving the key\""
         }
@@ -306,6 +341,7 @@
   },
   "kinds": {
     "lease": {
+      "$id": "urn:uuid:5ad53d0f-a5e0-41d8-a31e-31ade78c7be3",
       "description": "a duty held by one process at a time — its eid is derived from `name`, so two processes reaching for the same duty address one row and the winner is settled by the graph's own precondition; plumbing between the processes on one store, so it is not history"
     }
   }

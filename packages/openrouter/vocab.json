@@ -1,15 +1,19 @@
 {
+  "$id": "urn:uuid:5667b827-4689-439e-b74c-bb439879ee99",
   "title": "openrouter",
   "$defs": {
     "openrouter": {
+      "$id": "urn:uuid:5329e80a-39a6-436f-b3e4-24c00cadc962",
       "component": true,
       "journal": false,
       "description": "OpenRouter response metadata; not a server-side continuation handle.",
       "properties": {
         "response_id": {
+          "$id": "urn:uuid:2c711d14-0315-4fd9-be8e-a60b654ba1f6",
           "type": "string"
         },
         "cache_expires_at": {
+          "$id": "urn:uuid:41b7f256-8f20-4b66-9785-45d85a883a49",
           "type": "string",
           "format": "date-time",
           "description": "the recorded expiry of this request\u2019s cached prefix; provider-reported where present, otherwise request start plus documented provider retention. Missing means unknown, not warm"

@@ -1,36 +1,44 @@
 {
+  "$id": "urn:uuid:cbad80b6-19c8-4e01-a43b-9c31b59b9f71",
   "title": "invocation",
   "$defs": {
     "call": {
+      "$id": "urn:uuid:bb13d2df-778c-4964-be30-0faffa877527",
       "component": true,
       "type": "object",
       "description": "A recorded tool invocation. `to` references the tool, so a query names a tool by .call.to.tool.name=…; `name`, when present, is the name the caller wrote. Its outcome is not on the call: .execution.state beside it reads running, done, failed or interrupted, and what the tool answered is the result that names it (.result.call=<call>, result{call, ms, value}), refused or thrown when that result also wears refusal{code} or exception{type, value}.",
       "properties": {
         "to": {
+          "$id": "urn:uuid:4cbacaf7-97d5-4c22-87df-d43d4be68da4",
           "type": "string",
           "ref": "tool",
           "death": "keep",
           "description": "the tool entity called"
         },
         "name": {
+          "$id": "urn:uuid:224e92b0-fbe3-4ef7-9f4b-5f20c35754dd",
           "type": "string",
           "description": "optional: the tool's name as the caller wrote it, which says what was asked for where `to` names a tool nobody serves, as a model's call to a tool it invented does"
         },
         "id": {
+          "$id": "urn:uuid:2727bf95-0cfd-4eaf-a72b-4371f7e9cec8",
           "type": "string",
           "description": "the provider's id for it, echoed in the result"
         },
         "args": {
+          "$id": "urn:uuid:34b60be7-4269-4a35-9db5-18c75b206d4f",
           "type": "object",
           "description": "its arguments: the object the tool's input schema describes"
         },
         "source": {
+          "$id": "urn:uuid:16860fad-01fd-402d-863f-d9e1366463a9",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "optional: the request or other entity this call came from"
         },
         "actor": {
+          "$id": "urn:uuid:f00d9797-9bbc-4f8a-b08e-816371368379",
           "type": "object",
           "stamped": true,
           "description": "The by/via identity pair of whoever last changed the executable request. Server-owned; an empty pair means automation. When absent, the creation author still owns the request."
@@ -38,6 +46,7 @@
       }
     },
     "cut": {
+      "$id": "urn:uuid:ddef1925-2b8b-443b-be8f-caf00ed56ab2",
       "component": true,
       "journal": false,
       "type": "object",
@@ -45,33 +54,39 @@
       "properties": {}
     },
     "result": {
+      "$id": "urn:uuid:4b700c7a-d183-492c-865b-7df754b899d3",
       "component": true,
       "embed": false,
       "type": "object",
       "description": "What a tool returned, and how long the call took.",
       "properties": {
         "ms": {
+          "$id": "urn:uuid:96293bb8-f3a3-4d1a-9283-94713faecc64",
           "type": "number",
           "description": "how long the tool took, in milliseconds"
         },
         "call": {
+          "$id": "urn:uuid:40290495-9d34-442b-8ca7-4053945a316a",
           "type": "string",
           "ref": "call",
           "death": "keep",
           "description": "the call it is the result of"
         },
         "value": {
+          "$id": "urn:uuid:647c8419-7c53-4cfc-b2d4-4c6f97080843",
           "type": "object",
           "description": "what the tool answered as data, the `output{value}` beside its words, kept on the result where a reader of the transcript finds it"
         }
       }
     },
     "content": {
+      "$id": "urn:uuid:72f04d9e-0a8a-4bf9-a179-e5ca64ab4819",
       "component": true,
       "type": "object",
       "description": "Text content, retained with the call that asked for it.",
       "properties": {
         "body": {
+          "$id": "urn:uuid:9d7c5ee7-2547-46ca-bda5-9e90c8ef02d6",
           "type": "string",
           "store": "blob",
           "contains": true,
@@ -80,25 +95,30 @@
       }
     },
     "output": {
+      "$id": "urn:uuid:f0c5043d-140f-4dd5-b4a0-0c40f6c10a81",
       "component": true,
       "type": "object",
       "description": "What produced the text beside it: the request, for a model’s own output, or the call whose failure is being reported. Only output carries it — text a person or a system wrote has none.",
       "properties": {
         "source": {
+          "$id": "urn:uuid:150990e5-5275-4cfd-a10a-1deaeec40bfc",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the entry that produced it"
         },
         "id": {
+          "$id": "urn:uuid:5b70ffe7-ed93-4faf-a015-e3f3f922142c",
           "type": "string",
           "description": "the provider's id for this piece of output, as `call.id` is its id for the call — what a later revision of the same item is matched on"
         },
         "value": {
+          "$id": "urn:uuid:3a2db3a9-ff01-4959-9459-ff5fb958eb8d",
           "type": "object",
           "description": "the same output as data, for a reader that parses rather than reads: a tool that declares an outputSchema answers its structured content here, beside the text a person reads"
         },
         "images": {
+          "$id": "urn:uuid:7f24d529-e2be-43e3-9621-41925209d7a8",
           "type": "array",
           "description": "Images returned beside the text and structured value, each with base64 bytes and a media type; an MCP client displays these as image content blocks.",
           "items": {
@@ -113,28 +133,33 @@
       }
     },
     "refusal": {
+      "$id": "urn:uuid:74d3b5e3-ecb0-43a7-96b5-30a86de3454a",
       "component": true,
       "type": "object",
       "description": "A deliberate no: the tool or provider refused the request. Never tracked; its prose is on the content component beside it.",
       "properties": {
         "code": {
+          "$id": "urn:uuid:085bba21-9dfd-4503-9093-1e72f5289d6c",
           "type": "string",
           "description": "the tool or provider's reason for refusing"
         }
       }
     },
     "exception": {
+      "$id": "urn:uuid:4ae23737-e785-44c0-8d2a-d9787f75fd61",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "What was thrown, retained in an answer or transcript entry. The catcher reports the original failure to the tracker separately.",
       "properties": {
         "type": {
+          "$id": "urn:uuid:7687f404-6470-46d9-8d45-726402bc5b96",
           "type": "string",
           "stamped": true,
           "description": "The thrown value’s class."
         },
         "value": {
+          "$id": "urn:uuid:ddb436d8-736d-4974-ae1b-8a94de995134",
           "type": "string",
           "stamped": true,
           "description": "The thrown value’s message."
@@ -142,11 +167,13 @@
       }
     },
     "execution": {
+      "$id": "urn:uuid:ac8d8de3-6126-440e-a1b9-109506ef6579",
       "component": true,
       "type": "object",
       "description": "Who holds a recorded tool invocation; its state is computed from the interruption mark and explicitly named answers.",
       "properties": {
         "state": {
+          "$id": "urn:uuid:0d436b78-3c23-4cdf-9359-49c11d118cd3",
           "type": "string",
           "enum": [
             "running",
@@ -158,6 +185,7 @@
           "computed": true
         },
         "by": {
+          "$id": "urn:uuid:60a9981c-91ef-4094-a9b5-6060958f6f39",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -166,28 +194,34 @@
       }
     },
     "tool": {
+      "$id": "urn:uuid:05a09cbb-4bde-4e55-b4ff-ef684129f51f",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "A registered tool that callers can invoke.",
       "properties": {
         "name": {
+          "$id": "urn:uuid:4d896271-9c38-4cc0-a5c5-f17aded47f51",
           "type": "string",
           "identity": true,
           "description": "what callers call it; the entity id is derived from it"
         },
         "title": {
+          "$id": "urn:uuid:9ab3d73f-c550-45b4-9d60-4fbae24665e5",
           "type": "string",
           "description": "what a person reads in place of the name: an imperative phrase, such as Read or write app files"
         },
         "step": {
+          "$id": "urn:uuid:39e64fe0-fd32-4fe8-9bcc-c030a49878e3",
           "type": "object",
           "description": "how a call reads to a person, as locale strings: doing while it runs (Texting %{person}…) and done once it answered (Texted %{person}), each %{name} filled from the call's arguments and the person it works for; under by, by argument then its value ('' when left out), the step of each thing the arguments choose"
         },
         "description": {
+          "$id": "urn:uuid:061a138b-9a0b-4a2a-be50-83a5d8fef0e9",
           "type": "string"
         },
         "revision": {
+          "$id": "urn:uuid:f1b4f742-4e7b-4eef-ae14-9484f7d97d80",
           "type": "string",
           "description": "implementation revision used by builders to detect changed code"
         }
@@ -204,12 +238,14 @@
       "description": "Run a scheduled call when its wake writes fired, if the call has no result. In a graph without wake components, call_ready handles every unclaimed call."
     },
     "finding": {
+      "$id": "urn:uuid:ea4f2420-b960-4858-8084-dcc16b67c00c",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "What a check measured: fail for a violated contract, warn for a leak or a verdict it could not establish.",
       "properties": {
         "level": {
+          "$id": "urn:uuid:8db9b998-722c-4745-a588-1995f73fab8c",
           "type": "string",
           "enum": [
             "fail",
@@ -221,6 +257,7 @@
   },
   "kinds": {
     "tool": {
+      "$id": "urn:uuid:05a09cbb-4bde-4e55-b4ff-ef684129f51f",
       "description": "A registered tool that callers can invoke."
     }
   }

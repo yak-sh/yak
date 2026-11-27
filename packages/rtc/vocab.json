@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:c44d6568-b6c0-4af6-bead-8d67bb438d85",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
@@ -11,6 +12,7 @@
       "description": "Close the tracks of a Realtime session whose lease fired, then drop its row."
     },
     "rtc": {
+      "$id": "urn:uuid:48ff9518-622e-4147-9588-af21f41038c9",
       "component": true,
       "type": "object",
       "sync": "peers",
@@ -19,25 +21,30 @@
       "description": "What this entity is saying out loud this moment: the Realtime session it publishes from, the tracks a listener asks for, and whether it is muted or talking. Relayed and kept by nobody, so it goes with the tab that wrote it, and a listener stops hearing it then.",
       "properties": {
         "session": {
+          "$id": "urn:uuid:1c8a0d52-bed4-47f6-a124-8327d8cb02c8",
           "type": "string",
           "description": "the Realtime session the tracks are published from"
         },
         "tracks": {
+          "$id": "urn:uuid:e5159060-3c2e-43b2-925f-5a1f444f8852",
           "type": "array",
           "items": { "type": "string" },
           "description": "the names of the tracks it publishes, each asked for as a remote track of the session"
         },
         "muted": {
+          "$id": "urn:uuid:e278296b-1af1-4243-9c05-83b3a1412f73",
           "type": "boolean",
           "description": "its microphone is off"
         },
         "talking": {
+          "$id": "urn:uuid:3d95492b-8c4e-47f9-981b-0685ff135f14",
           "type": "boolean",
           "description": "its microphone hears a voice this moment"
         }
       }
     },
     "sfu": {
+      "$id": "urn:uuid:5c35d67a-deec-4d04-89c8-534cbd8eca4d",
       "component": true,
       "journal": false,
       "type": "object",
@@ -45,11 +52,13 @@
       "description": "A Realtime session this app's door opened, while its lease holds: the wake beside it is when the lease ends, and the session's tracks close when it does.",
       "properties": {
         "session": {
+          "$id": "urn:uuid:944b1083-e409-40e2-af75-7a797a583333",
           "type": "string",
           "unique": true,
           "description": "the session's id at Cloudflare Realtime"
         },
         "key": {
+          "$id": "urn:uuid:0e384019-d0dc-4a3d-93ce-4e78ca760486",
           "type": "string",
           "description": "the SHA-256 of the key the door handed whoever opened it, which every change to the session carries"
         }

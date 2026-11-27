@@ -1,10 +1,12 @@
 {
+  "$id": "urn:uuid:ea9c19e2-5172-4542-a283-2aec314b6f5b",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "trial",
   "$defs": {
     "trial": {
+      "$id": "urn:uuid:346edc89-dd20-4655-88b4-76b15f6593d4",
       "component": true,
       "type": "object",
       "identity": [
@@ -14,44 +16,52 @@
       "description": "one variant scored on one case: whether the fact the case's agent lacked was in front of it, unasked, before it erred, and whether a search with the words it was answering finds it. Its eid is derived from the case and the variant, so a rerun replaces the score",
       "properties": {
         "case": {
+          "$id": "urn:uuid:3897734d-7313-4e48-b039-151d5c801170",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the entity wearing miss{entry, needed, across, told}"
         },
         "variant": {
+          "$id": "urn:uuid:ed72f490-f7bf-41f9-9f98-367a89896d24",
           "type": "string",
           "ref": "persona",
           "death": "cascade",
           "description": "the persona whose context was assembled"
         },
         "unasked": {
+          "$id": "urn:uuid:85181377-f33d-4952-af16-73625f057189",
           "type": "boolean",
           "description": "the case's needed entity was among what the variant put in front of the agent before its entry: the persona, the compaction summary, notices, knocks delivered and hit rows returned. Its own searches and a pointer from a person do not count"
         },
         "asked": {
+          "$id": "urn:uuid:20e02c6a-121b-43b6-8d8d-15338bf22917",
           "type": "boolean",
           "description": "a search with the words of the message the agent was answering (its first twelve words) returns the needed entity among its first five rows that predate the entry"
         },
         "tokens": {
+          "$id": "urn:uuid:07b74c5f-d98a-4e3d-b265-0601ee7d3fd4",
           "type": "integer",
           "description": "the size of what the variant put in front of the agent, at four characters a token"
         }
       }
     },
     "round": {
+      "$id": "urn:uuid:1f7c4e96-f27a-48db-9de4-f699347805a3",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "one round of a skill trial: attempts at cases under variants, the pairs a person compares and the judges' scores, read back to plan the next round. Its title is its `doc`. What its writers are told is its `writers`, and the model they and its judges are asked is its `using` (@yaks/session)",
       "properties": {
         "skill": {
+          "$id": "urn:uuid:158fb75a-fb7e-4da7-ad9d-24c8ff5bcb16",
           "type": "string",
           "ref": "skill",
           "death": "detach",
           "description": "the skill the round develops, a @yaks/persona `skill{…}` row. A round file names it by its title (`copywriting`), found again as `skill:copywriting`, and its variants and cases are named under that title (`variant:copywriting:none`)"
         },
         "parts": {
+          "$id": "urn:uuid:57a68991-ea52-4d78-8e37-0bdb354784d5",
           "type": "array",
           "items": {
             "type": "string"
@@ -61,44 +71,52 @@
       }
     },
     "writers": {
+      "$id": "urn:uuid:c007dbb1-b95d-4f27-9c4d-bab081ec2a36",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "on a round: the wording every writer in it is given, with the variant and the case filled in. It is the skill's own: the runner holds no words of it, and reads what comes back as the last ```json block of the reply, one key for each of the round's `parts`",
       "properties": {
         "task": {
+          "$id": "urn:uuid:cee8ab3d-b037-4955-a920-90bb47cf1049",
           "type": "string",
           "description": "what a writer is asked: `$case` is the case's text, `$skill` the variant's and `$rule` the `rule` where it applies"
         },
         "skilled": {
+          "$id": "urn:uuid:ae2d1067-dda6-4788-a222-6cf10833273e",
           "type": "string",
           "description": "what a writer handed a variant with a text is asked instead; `task` where absent"
         },
         "rule": {
+          "$id": "urn:uuid:f464cfc0-f01b-408a-acd2-55817c5474eb",
           "type": "string",
           "description": "what a writer of a `riddle` case is also told, so the answer is not given away: it fills `$rule`, which is empty for any other case"
         }
       }
     },
     "passing": {
+      "$id": "urn:uuid:77818b68-e686-4d48-97b8-2160d39ee60f",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "on a round: how much of what a judge sat it must get right before its verdicts count. A person sets it (`yak trial pass`); a round without one has passed no judge. It refuses nothing: the tally prints a judge that falls short apart, as not to be used",
       "properties": {
         "share": {
+          "$id": "urn:uuid:060764b9-0714-452c-aa8d-8e8f368380ee",
           "type": "number",
           "minimum": 0,
           "maximum": 1,
           "description": "the least share, 0 to 1, of the known answers a judge sat on which its pick must be the winner"
         },
         "at": {
+          "$id": "urn:uuid:00c8942e-b3d7-47f4-b5af-71d81286c086",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was set"
         },
         "by": {
+          "$id": "urn:uuid:c6c9d87d-1987-4b5b-9521-fa26ff4a99a4",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -106,6 +124,7 @@
           "description": "who set it"
         },
         "via": {
+          "$id": "urn:uuid:77c37c13-a687-40a8-9586-5d5cf96aff28",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -115,23 +134,27 @@
       }
     },
     "capped": {
+      "$id": "urn:uuid:e604c3e4-ba80-475f-b289-0e558b4157bc",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "on a round: the most its writers' and judges' calls may cost in all, in dollars at list price, counting every call of it that carries a cost. Setting it runs the round (`round_run`): each call it still owes is asked until what they cost would pass it. Set by someone of the space that pays (`trial_cap`)",
       "properties": {
         "dollars": {
+          "$id": "urn:uuid:84e9afa6-c060-405f-b990-01f37c0f2936",
           "type": "number",
           "minimum": 0,
           "description": "the cap: `2` for two dollars"
         },
         "at": {
+          "$id": "urn:uuid:ecb7af37-3b5d-44ce-8df5-803549b2d11b",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was set"
         },
         "by": {
+          "$id": "urn:uuid:5c1f25cf-87d6-4209-a06f-225aa46baf10",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -139,6 +162,7 @@
           "description": "who set it, and on yaks.app the space whose budget pays"
         },
         "via": {
+          "$id": "urn:uuid:9697f694-08c5-4e99-8acf-689e4949a45f",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -148,20 +172,24 @@
       }
     },
     "judge": {
+      "$id": "urn:uuid:f835ddda-0aea-4a48-b31b-7b5856c03510",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "an automated judge of a skill trial: anything that compares or scores writings and is not a person (the guessing game in one form, a reader, a selector built from a person's taps). Its title is its `doc`. Each verdict names it (`preference{judge}`, `guess{judge}`), and its verdicts count in a round only once it agrees with enough of the round's known answers (`passing{share}`). One that guesses is shown an attempt at a `riddle` case and asked what it describes; the model it is asked is its own `using` (@yaks/session), or else its round's",
       "properties": {
         "taught": {
+          "$id": "urn:uuid:dfe8068c-3916-48a6-ad25-f74c320cdcf0",
           "type": "boolean",
           "description": "it was handed known answers as examples (a selector), a person's taps among them, so those taps cannot test it: it is scored only on known answers whose pair is `held_out`. A selector may be handed any known answer that is not held out, a planted one as well as a tap"
         },
         "form": {
+          "$id": "urn:uuid:028677bf-facf-45ab-ba59-e747bf008c9f",
           "type": "string",
           "description": "how it guesses. `open`: it lists guesses in order, as `{\"guesses\": [names]}`; `among`: it also sees the texts of every case in the riddle's group, labelled by letter, and ranks the letters, as `{\"ranking\": [letters]}`. `pair`: it sees two attempts as A and B and answers `{\"chose\": \"A\" | \"B\" | \"neither\", \"why\": \"...\"}`, asked once in each order so a lean to the first or the second shows as a split"
         },
         "shown": {
+          "$id": "urn:uuid:50321572-68b7-430e-a933-c17658e6aab7",
           "type": "array",
           "items": {
             "type": "string"
@@ -169,38 +197,46 @@
           "description": "the parts of an attempt it is shown, of the round's `parts`: `[\"headline\"]`; all of them where absent"
         },
         "question": {
+          "$id": "urn:uuid:d94c129b-4d60-4d23-b725-509f6e7353ac",
           "type": "string",
           "description": "what it is asked: `$output` is the parts shown, and in the `among` form `$n` is how many cases it chooses among and `$sheets` their texts. In the `pair` form `$a` and `$b` are the parts shown of the first and second attempt"
         },
         "cap": {
+          "$id": "urn:uuid:2da36899-a4cf-4610-8cf6-0bbe26392bbe",
           "type": "integer",
           "description": "how many guesses it is allowed in the `open` form (default 10)"
         }
       }
     },
     "variant": {
+      "$id": "urn:uuid:83b9db92-d33b-46a8-a618-0477a6cb48e2",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "a candidate text of a skill, handed to a writer in a skill trial and installed nowhere. Its title is its `doc`; it is kept out of search and embedding so no agent meets it unasked",
       "properties": {
         "body": {
+          "$id": "urn:uuid:d956903e-75a0-4a57-aef5-0682c1cc7765",
           "type": "string",
           "description": "the text handed to the writer; empty for the control that gets no skill"
         },
         "theory": {
+          "$id": "urn:uuid:5fd1b3eb-b1fc-47c5-b823-75c1bc28a2a2",
           "type": "string",
           "description": "one line: what this variant believes makes the work good"
         },
         "source": {
+          "$id": "urn:uuid:656bba46-6e54-4a81-9fd2-41d86c477a70",
           "type": "string",
           "description": "where the text came from when it was not written here: a URL, or `path@sha`"
         },
         "licence": {
+          "$id": "urn:uuid:7320468c-477d-4d07-a9a5-c53ceb180eef",
           "type": "string",
           "description": "the licence the source gives the text under"
         },
         "from": {
+          "$id": "urn:uuid:a7887045-bfd8-418e-9c40-e6077c5e656c",
           "type": "string",
           "ref": "variant",
           "death": "detach",
@@ -209,24 +245,28 @@
       }
     },
     "adopted": {
+      "$id": "urn:uuid:bebb5754-5f6a-49a6-afe4-c1d567614cce",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "on a variant: it became its skill's text, the skill's next version. Each adopted variant is a version, oldest first, and what it came `from` is the version before",
       "properties": {
         "skill": {
+          "$id": "urn:uuid:057315de-f0ca-4ae8-a691-609665b3b3b2",
           "type": "string",
           "ref": "skill",
           "death": "cascade",
           "description": "the skill whose text it became"
         },
         "at": {
+          "$id": "urn:uuid:4e07f9d7-edf7-4687-a140-56da7bea7f1b",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it became the skill's text"
         },
         "by": {
+          "$id": "urn:uuid:5aa3fba1-d607-4a55-baab-dba30b6b18dc",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -234,6 +274,7 @@
           "description": "who made it the skill's text"
         },
         "via": {
+          "$id": "urn:uuid:f3d25aa0-f8b0-450f-9a2b-bd3dcf8a5528",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -243,16 +284,19 @@
       }
     },
     "case": {
+      "$id": "urn:uuid:832ae6a4-163a-4037-9d7e-3d99b9004672",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "what a writer in a skill trial is handed to work on: a brief, or (wearing `riddle`) a fact sheet. Its title is its `doc`",
       "properties": {
         "body": {
+          "$id": "urn:uuid:7516e00c-25f9-4540-a5c7-ebf2a303e4c8",
           "type": "string",
           "description": "the text the writer is handed"
         },
         "base": {
+          "$id": "urn:uuid:bf3ac8db-88e7-4610-936d-2b6e0794f6fa",
           "type": "string",
           "ref": "case",
           "death": "detach",
@@ -261,15 +305,18 @@
       }
     },
     "riddle": {
+      "$id": "urn:uuid:944a287f-2a30-4f01-8895-a26b0a24fb39",
       "component": true,
       "type": "object",
       "description": "on a case: the writer describes a named thing from its fact sheet without naming it, and a judge who sees only the attempt guesses what it is",
       "properties": {
         "name": {
+          "$id": "urn:uuid:93121f78-d3e4-4e0a-ba10-3889182ad2df",
           "type": "string",
           "description": "the answer: the thing's name"
         },
         "aliases": {
+          "$id": "urn:uuid:6922afad-47b2-4a69-8e84-f2570fa485e5",
           "type": "array",
           "items": {
             "type": "string"
@@ -277,6 +324,7 @@
           "description": "other guesses that count as right"
         },
         "forbidden": {
+          "$id": "urn:uuid:b9937737-7c11-46f7-81d5-04825b79ec10",
           "type": "array",
           "items": {
             "type": "string"
@@ -284,6 +332,7 @@
           "description": "substrings an attempt may not contain, in any case"
         },
         "forbidden_exact": {
+          "$id": "urn:uuid:12a7e27f-8006-4310-97c2-8d1aa97ad308",
           "type": "array",
           "items": {
             "type": "string"
@@ -291,84 +340,100 @@
           "description": "whole words an attempt may not contain, case-sensitive"
         },
         "group": {
+          "$id": "urn:uuid:88f184dd-06d0-454f-b8e4-15e1c6068e41",
           "type": "string",
           "description": "the cluster of similar things it sits in; a judge choosing `among` sees the group's fact sheets"
         }
       }
     },
     "found": {
+      "$id": "urn:uuid:8697c5f4-71ca-43e8-b202-bdaf17ca3078",
       "component": true,
       "type": "object",
       "description": "on a case: something its maker published themselves (a first home page, a launch post), found and kept to learn a judge's taste. Its one attempt holds the text with the name masked in `output` and the original in `reply`, and a page showing it says nothing that names it",
       "properties": {
         "name": {
+          "$id": "urn:uuid:d544e9d0-1760-4134-abe2-5a66fbf64d89",
           "type": "string",
           "description": "who published it"
         },
         "source": {
+          "$id": "urn:uuid:6f1430d5-c1ab-4777-aa7e-1de83207501d",
           "type": "string",
           "description": "where it was read: a URL"
         }
       }
     },
     "writing": {
+      "$id": "urn:uuid:794af4c8-17d5-4748-9873-9357dccc9228",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "what one writer returned for one case in a skill trial. A model's attempt names its variant, persona, run and model, and wears `usage` and `cost`; a person's own attempt names only its round and case, and its writer is its `created.by`",
       "properties": {
         "round": {
+          "$id": "urn:uuid:8a8d27bd-d0c7-465e-836b-ba74f2461f85",
           "type": "string",
           "ref": "round",
           "death": "cascade",
           "description": "the round it was written in"
         },
         "case": {
+          "$id": "urn:uuid:69fd4c8a-b242-46d0-9419-7e9c11cc3fbb",
           "type": "string",
           "ref": "case",
           "death": "cascade",
           "description": "the case the writer was handed"
         },
         "variant": {
+          "$id": "urn:uuid:713f85d3-936a-4c34-ac5c-d9f844219e2a",
           "type": "string",
           "ref": "variant",
           "death": "cascade",
           "description": "the skill text the writer was handed; absent on a person's own attempt"
         },
         "persona": {
+          "$id": "urn:uuid:4d2f1290-4fea-48e9-b1f5-00c9927662ca",
           "type": "string",
           "ref": "entity",
           "death": "detach",
           "description": "the persona the writer carried; absent when it carried none (a blank model)"
         },
         "run": {
+          "$id": "urn:uuid:62d885e4-9744-4fba-8c0a-72ced394eab8",
           "type": "integer",
           "description": "which of the repeated runs of the same case, variant and persona"
         },
         "model": {
+          "$id": "urn:uuid:d028f4f0-8cd8-4136-bfd8-79c314a9e719",
           "type": "string",
           "ref": "model",
           "death": "keep",
           "description": "the model that wrote it"
         },
         "at": {
+          "$id": "urn:uuid:6567c972-25ce-4af2-bf57-9097023d38f5",
           "type": "string",
           "format": "date-time",
           "description": "when the writer ran"
         },
         "ms": {
+          "$id": "urn:uuid:1debf2d6-5fb7-4489-8504-cc9aaaa69f4e",
           "type": "integer",
           "description": "how long the writer took"
         },
         "reply": {
+          "$id": "urn:uuid:78742d1c-dd9c-4706-a8df-390a035cf3a3",
           "type": "string",
           "description": "everything the writer said, its working included"
         },
         "output": {
+          "$id": "urn:uuid:8e7d1dfb-9aeb-4c95-8ab2-b45d030e1fdc",
           "type": "object",
           "description": "the work itself, by the round's `parts`: `{headline, brief, description}`"
         },
         "session": {
+          "$id": "urn:uuid:acb644ee-da66-4438-80bc-7982b0cd6b29",
           "type": "string",
           "ref": "session",
           "death": "detach",
@@ -377,46 +442,54 @@
       }
     },
     "pair": {
+      "$id": "urn:uuid:ce66d1b8-4a3b-4e0f-a6f4-a57bee8b1733",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "two sides a judge is asked to compare under one question, planned by whoever ran the round. A side is any entity: an attempt, an image, a document. The same two sides are one pair under each question asked of them, so copy and layout are judged apart even when one draft changes both. Which is shown first is the page's to shuffle",
       "properties": {
         "round": {
+          "$id": "urn:uuid:658f5630-3bf2-484c-b627-f87dd1333ce1",
           "type": "string",
           "ref": "round",
           "death": "cascade",
           "description": "the round whose deck it is in"
         },
         "a": {
+          "$id": "urn:uuid:049748e7-e8d3-4a73-8bb9-ed08283957ab",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "one side"
         },
         "b": {
+          "$id": "urn:uuid:12e625a5-42d8-4cbc-9ac4-ba82a3d0c849",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the other"
         },
         "ord": {
+          "$id": "urn:uuid:7374b355-605a-43a2-9abc-f10f46c1c2fe",
           "type": "number",
           "description": "its place in the deck"
         },
         "question": {
+          "$id": "urn:uuid:c5b9cac4-27c3-4b5a-b845-fa1c495775e1",
           "type": "string",
           "description": "what the judge is asked of the two, one aspect at a time: `Which says it better?`, `Which looks better?`. Absent asks which they would rather have as a whole"
         }
       }
     },
     "known": {
+      "$id": "urn:uuid:17734a41-1658-4aaf-853d-5f8ee51d14ae",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "on a pair: its winner was settled when it was planned, such as something published set against a deliberately weak rewrite of the same facts. A planted known answer, slipped into the deck to test each judge; nothing a judge is handed says which pairs wear it. A person's tap on the pair outranks it",
       "properties": {
         "winner": {
+          "$id": "urn:uuid:bd945648-4c8f-4c0e-9317-f71200dfa94b",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
@@ -425,18 +498,21 @@
       }
     },
     "held_out": {
+      "$id": "urn:uuid:23320ac5-918b-4993-a250-012936987541",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "on a pair: a person's tap on it is kept out of every selector's examples, so a selector can be tested on it. Marked before the pair is tapped (`yak trial hold`) and never moved, so the split is the same on every run",
       "properties": {
         "at": {
+          "$id": "urn:uuid:35ca5bea-0ecd-408c-be34-4fa9c52f4851",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was held out"
         },
         "by": {
+          "$id": "urn:uuid:7587b7c8-d8d2-46e7-9f6e-281bab3cafac",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -444,6 +520,7 @@
           "description": "who held it out"
         },
         "via": {
+          "$id": "urn:uuid:1a190510-9f29-41a0-bdfe-d5ad29d0fb29",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -453,52 +530,61 @@
       }
     },
     "preference": {
+      "$id": "urn:uuid:e73eeff2-4722-45ce-a3ec-a7c74a183cb5",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "one comparison of two sides: which the judge chose under the pair's question, or neither. One row per judge and pair; choosing again changes it. A person's tap names no `judge` (they are its `created.by`), and with a `chose` it is a known answer: the pick every automated judge of the round is scored against. The rating of each side is computed from these rows (@yaks/trial/rating), never stored",
       "properties": {
         "first": {
+          "$id": "urn:uuid:6d5a645e-919f-4a0b-92a7-cf212ad44909",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the side shown first"
         },
         "second": {
+          "$id": "urn:uuid:426f4072-a702-474d-a978-1077baf13c58",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the side shown second"
         },
         "chose": {
+          "$id": "urn:uuid:8c4841d7-7b52-4e34-b0f4-0237778e38ac",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the one chosen; absent when neither was"
         },
         "pair": {
+          "$id": "urn:uuid:d78e9d16-dec2-49b4-9047-9ae6e23bb061",
           "type": "string",
           "ref": "pair",
           "death": "cascade",
           "description": "the pair it answers, and so the question it was asked; absent where a person's own attempt was set against the round's, which asks the whole"
         },
         "judge": {
+          "$id": "urn:uuid:f3b9684e-88bf-4e9f-b584-f25f0a0dff40",
           "type": "string",
           "ref": "judge",
           "death": "cascade",
           "description": "the automated judge that made the comparison; absent on a person's own. A model's row must name one, or it is read as a person's"
         },
         "why": {
+          "$id": "urn:uuid:65ea39ab-519d-407a-97b7-0036cf8dc325",
           "type": "string",
           "description": "a few words of why. A judge's row always has one, so a row naming a judge with neither a `chose` nor a `why` is planned and not yet returned"
         },
         "model": {
+          "$id": "urn:uuid:88c2f7a6-2557-4488-a9bb-5d06b398fd38",
           "type": "string",
           "ref": "model",
           "death": "keep",
           "description": "the model that judged"
         },
         "session": {
+          "$id": "urn:uuid:61bcffc8-5735-4fdd-9985-dd1742caf4cc",
           "type": "string",
           "ref": "session",
           "death": "detach",
@@ -507,12 +593,14 @@
       }
     },
     "grabbed": {
+      "$id": "urn:uuid:d48eeb39-96a9-4983-8206-41a10eb51580",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "its writer (`created.by`) found this side appealing on its own, whatever it was compared with. Deleting the row takes the mark back",
       "properties": {
         "attempt": {
+          "$id": "urn:uuid:94eeff9f-15bc-4d3e-b418-de8b55fdeef8",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
@@ -521,24 +609,28 @@
       }
     },
     "guess": {
+      "$id": "urn:uuid:5e5f3fe7-0ead-45af-bade-40bff8cf330d",
       "component": true,
       "type": "object",
       "embed": false,
       "description": "one judge's guesses at what a riddle attempt describes, having seen only the attempt",
       "properties": {
         "attempt": {
+          "$id": "urn:uuid:2ff1ae1b-777d-417a-abf0-b74b0c549b43",
           "type": "string",
           "ref": "writing",
           "death": "cascade",
           "description": "the attempt guessed at"
         },
         "judge": {
+          "$id": "urn:uuid:e48fd550-2319-475a-81f5-7e2e8c60ff1c",
           "type": "string",
           "ref": "judge",
           "death": "cascade",
           "description": "the automated judge that guessed; absent on a person's own. A model's row must name one, or it is read as a person's"
         },
         "form": {
+          "$id": "urn:uuid:d4c6fac9-eac6-47d2-a9e2-f0087a772be0",
           "type": "string",
           "enum": [
             "open",
@@ -547,12 +639,14 @@
           "description": "`open`: the judge lists guesses in order; `among`: the judge also sees the fact sheets of the case's group and picks"
         },
         "model": {
+          "$id": "urn:uuid:6c0990bd-b622-4614-a58f-d9f861bdbee8",
           "type": "string",
           "ref": "model",
           "death": "keep",
           "description": "the model that judged"
         },
         "guesses": {
+          "$id": "urn:uuid:4484db13-4f15-45b5-9984-26151cd6ce80",
           "type": "array",
           "items": {
             "type": "string"
@@ -560,6 +654,7 @@
           "description": "what it guessed, in order"
         },
         "among": {
+          "$id": "urn:uuid:a85597d3-22cb-430d-a306-fae6ee89ec8f",
           "type": "array",
           "items": {
             "type": "string"
@@ -567,14 +662,17 @@
           "description": "the choices it was shown, in the `among` form"
         },
         "rank": {
+          "$id": "urn:uuid:8fb6a17d-7825-43d2-8972-a41af98eb491",
           "type": "integer",
           "description": "the 1-based place of the right answer among its guesses; absent when it was not within `cap`"
         },
         "cap": {
+          "$id": "urn:uuid:c706c2b2-c2b9-4c07-b8cb-a32ff4611945",
           "type": "integer",
           "description": "how many guesses it was allowed"
         },
         "leaked": {
+          "$id": "urn:uuid:982c4cad-8269-4470-926b-beb28165ce38",
           "type": "array",
           "items": {
             "type": "string"
@@ -582,6 +680,7 @@
           "description": "forbidden strings found in the attempt, which give the answer away"
         },
         "session": {
+          "$id": "urn:uuid:b8f4107e-900d-44fa-a8b2-fef9aef5e15d",
           "type": "string",
           "ref": "session",
           "death": "detach",

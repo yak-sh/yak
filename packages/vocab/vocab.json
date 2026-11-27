@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:c624522c-96db-4c2f-b7a9-144cd5bcee5d",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/edge": true
@@ -6,6 +7,7 @@
   "title": "vocab",
   "$defs": {
     "_package": {
+      "$id": "urn:uuid:ee3291b2-41e2-41d9-b192-483d1831053c",
       "component": true,
       "journal": false,
       "type": "object",
@@ -13,6 +15,7 @@
       "description": "a package whose vocabulary declares components or extends them. Its doc.title is its name, its doc.body its description",
       "properties": {
         "name": {
+          "$id": "urn:uuid:f1e94958-7df2-4fc3-ab85-f3c07223de01",
           "type": "string",
           "identity": true,
           "description": "the name it is published under"
@@ -20,6 +23,7 @@
       }
     },
     "_comp": {
+      "$id": "urn:uuid:3a4331e3-349a-4769-b66e-be277c7aab16",
       "component": true,
       "journal": false,
       "type": "object",
@@ -27,74 +31,90 @@
       "description": "a component a vocabulary declares: one aspect an entity carries. Its doc.title is its name, its doc.body its description",
       "properties": {
         "name": {
+          "$id": "urn:uuid:7ce3e706-c50a-46a3-b5fb-a3a89c9d9585",
           "type": "string",
           "identity": true,
           "description": "the name a bundle writes it under"
         },
         "package": {
+          "$id": "urn:uuid:023d7b4c-b78f-4d2f-92d6-4dccd6106b9c",
           "type": "string",
           "ref": "_package",
           "death": "cascade",
           "description": "the package whose vocabulary declares it"
         },
         "wire": {
+          "$id": "urn:uuid:c3661765-e530-4e07-9181-34586d22e228",
           "type": "boolean",
           "description": "false = clients read it and never write it"
         },
         "embed": {
+          "$id": "urn:uuid:2fea3b6e-5cf9-41e3-8f0a-2cb6754721d4",
           "type": "boolean",
           "description": "false = an entity wearing it is never embedded: no vector is made of it"
         },
         "computed": {
+          "$id": "urn:uuid:ebdaa2b5-c06e-4513-995f-d161e15f2747",
           "type": "boolean",
           "description": "true = no table holds it: its entities are another package's rows, read and never written"
         },
         "sync": {
+          "$id": "urn:uuid:661cdbe1-8d9b-4813-a6a6-359aac4b65a9",
           "type": "string",
           "enum": ["none", "server", "peers"],
           "description": "who is told about a write to it"
         },
         "durable": {
+          "$id": "urn:uuid:22e231e7-9ae1-4719-ad13-41c3ce9c4365",
           "type": "string",
           "description": "how long one of its values lives: forever, connection, or a duration"
         },
         "pace": {
+          "$id": "urn:uuid:039aa9ee-3eff-425e-a719-c4df0c02308a",
           "type": "string",
           "description": "how often a writer's value is taken, as a duration"
         },
         "search": {
+          "$id": "urn:uuid:b52d51ab-1e73-4c31-b4d7-bab2893b798a",
           "type": "array",
           "items": { "type": "string" },
           "description": "the text its entities are found by, as comp.prop names of another component"
         },
         "identity": {
+          "$id": "urn:uuid:87d55130-89fe-4b75-aa05-a8a87cf26b9b",
           "type": "array",
           "items": { "type": "string" },
           "description": "the properties, in order, its entities' ids are derived from"
         },
         "unique": {
+          "$id": "urn:uuid:4f60f3be-6333-4d13-af49-3b601a0eaae0",
           "type": "array",
           "description": "the property lists no two of its rows share"
         },
         "index": {
+          "$id": "urn:uuid:9843cb32-45f9-435f-9490-89d3d1dd9fa0",
           "type": "array",
           "description": "the property lists kept indexed"
         },
         "constraints": {
+          "$id": "urn:uuid:9d7e459f-f6fd-4333-8693-19242dc5624e",
           "type": "array",
           "description": "numeric bounds over a whole row"
         },
         "examples": {
+          "$id": "urn:uuid:be138323-efb2-4955-a539-6a3d6bf5d0fe",
           "type": "array",
           "description": "sample values"
         },
         "keywords": {
+          "$id": "urn:uuid:f2e0d15c-f72f-4654-bb2f-35e56121ca1b",
           "type": "object",
           "description": "every other keyword its entry says, as written: another package's (prefix, by_name, edge) and JSON Schema's own"
         }
       }
     },
     "_kind": {
+      "$id": "urn:uuid:2f3e187d-d745-405e-96df-aaeac10080c8",
       "component": true,
       "journal": false,
       "type": "object",
@@ -102,36 +122,43 @@
       "description": "a kind a vocabulary declares: the components that make an entity that kind of thing, and what a whole one also carries. Its doc.title is its title, or its name where it has none; its doc.body its description",
       "properties": {
         "name": {
+          "$id": "urn:uuid:83776ca8-2ffb-47cf-9ffc-a7d16ddd8059",
           "type": "string",
           "identity": true,
           "description": "the name .kind= and an entity's kind answer it by"
         },
         "package": {
+          "$id": "urn:uuid:b538ef6d-bd58-4dc4-b7df-f4abc8e86196",
           "type": "string",
           "ref": "_package",
           "death": "cascade",
           "description": "the package whose vocabulary declares it"
         },
         "is": {
+          "$id": "urn:uuid:4b57e5ae-3516-4bbc-a1cc-2461d6f4d404",
           "type": "array",
           "items": { "type": "string" },
           "description": "the components an entity carries to be this kind"
         },
         "with": {
+          "$id": "urn:uuid:64b2986c-7c1b-4863-b998-a16dec058b1f",
           "type": "object",
           "description": "what a whole one also carries, by component: true where its writer supplies it, or the values a rule gives it where it is missing"
         },
         "prefix": {
+          "$id": "urn:uuid:db5c69f5-2250-4a64-a580-336d7eb7946a",
           "type": "string",
           "description": "the letter its human ids are numbered in (@yaks/id)"
         },
         "examples": {
+          "$id": "urn:uuid:68f866cc-5818-4c85-a455-f4a00e50f1e7",
           "type": "array",
           "description": "whole bundles of one"
         }
       }
     },
     "_effect": {
+      "$id": "urn:uuid:da94054b-e450-4c46-a366-15c1a2cc6206",
       "component": true,
       "journal": false,
       "type": "object",
@@ -139,74 +166,89 @@
       "description": "an effect a vocabulary declares: what a commit owes a run of, by name (@yaks/effects runs it). Its doc.title is its name, its doc.body its description",
       "properties": {
         "name": {
+          "$id": "urn:uuid:b2431f6a-8a02-4fda-b549-296a40255a77",
           "type": "string",
           "identity": true,
           "description": "the name a recorded run names, and the code that runs it is registered under"
         },
         "package": {
+          "$id": "urn:uuid:c47b1693-b0be-49f5-9cf5-b26679e01f2b",
           "type": "string",
           "ref": "_package",
           "death": "cascade",
           "description": "the package whose vocabulary declares it"
         },
         "created": {
+          "$id": "urn:uuid:c4861f9e-d055-46c0-8854-d8ff3127fda6",
           "type": "array",
           "items": { "type": "string" },
           "description": "the components whose appearance on an entity owes a run"
         },
         "changed": {
+          "$id": "urn:uuid:73ed61e8-0a5a-4e6f-8612-1b3962f747df",
           "type": "array",
           "items": { "type": "string" },
           "description": "the components, or comp.prop properties, whose patch owes a run"
         },
         "removed": {
+          "$id": "urn:uuid:23192019-0478-44a1-8d4d-6da9e2646e8e",
           "type": "array",
           "items": { "type": "string" },
           "description": "the components whose removal owes a run"
         },
         "match": {
+          "$id": "urn:uuid:c500aa3f-a6dd-4be1-b624-cd934e2c9a19",
           "type": "string",
           "format": "query",
           "description": "a query that owes a run wherever a batch made it hold"
         },
         "target": {
+          "$id": "urn:uuid:9a9a73d2-57cc-4442-9759-da6f6c95ddc1",
           "type": "string",
           "format": "query",
           "description": "the query a trigger's subject matches, before or after the write, for a commit to owe a run"
         },
         "eligible": {
+          "$id": "urn:uuid:1a76a7dd-52df-448e-bd03-8de1d1a9f72c",
           "type": "string",
           "format": "query",
           "description": "the query a subject must match after the write and when dispatched"
         },
         "active": {
+          "$id": "urn:uuid:07f7d0f9-1ec2-4afa-a792-14928fa632a0",
           "type": "string",
           "format": "query",
           "description": "the query that must match an entity for a commit to owe a run"
         },
         "start": {
+          "$id": "urn:uuid:2952f9ad-870d-4903-b652-a7ce19fdd83b",
           "type": "boolean",
           "description": "true = a run is owed each time a process starts working the effects"
         },
         "option": {
+          "$id": "urn:uuid:caafbb7f-6c97-4320-8615-f5f9109cd107",
           "type": "string",
           "description": "the declaring plugin's boolean option that must be true for a run to be owed"
         },
         "tries": {
+          "$id": "urn:uuid:bee4c53c-979f-4a4e-8687-2e0d76f1f1b1",
           "type": "integer",
           "description": "the most attempts a run gets before it is left failed"
         },
         "idempotent": {
+          "$id": "urn:uuid:942dea8c-978b-4c97-9e40-87851e040b63",
           "type": "boolean",
           "description": "false = running it twice is not the same as running it once"
         },
         "keywords": {
+          "$id": "urn:uuid:b21030de-9ebd-4436-a990-e188f53b344e",
           "type": "object",
           "description": "every other keyword its entry says, as written"
         }
       }
     },
     "_prop": {
+      "$id": "urn:uuid:e0cceffb-a76c-4ade-979a-1f5f8f045b50",
       "component": true,
       "journal": false,
       "type": "object",
@@ -215,115 +257,141 @@
       "description": "a property of a component. Its doc.title is comp.prop, its doc.body its description",
       "properties": {
         "comp": {
+          "$id": "urn:uuid:240cd923-c8d8-4875-99da-804abc348b4b",
           "type": "string",
           "ref": "_comp",
           "death": "cascade",
           "description": "the component it belongs to"
         },
         "name": {
+          "$id": "urn:uuid:01287163-b623-4a30-ac4a-69f59cb84fe2",
           "type": "string",
           "description": "its name within the component"
         },
         "ord": {
+          "$id": "urn:uuid:38376a24-d9e6-40e5-b8a3-069b4e50e035",
           "type": "integer",
           "description": "its position among the properties its entry declares, from 0"
         },
         "package": {
+          "$id": "urn:uuid:c1a397f1-e709-4e3f-adc6-71b289cdd96f",
           "type": "string",
           "ref": "_package",
           "death": "cascade",
           "description": "the package whose vocabulary declares it: the component's own, or one that extends it"
         },
         "type": {
+          "$id": "urn:uuid:757167c5-8a8b-4ade-9a1d-b2130c414fbf",
           "type": ["string", "array"],
           "description": "the JSON type it holds, or a union of them: string, number, integer, boolean, object, array"
         },
         "format": {
+          "$id": "urn:uuid:bcb551b8-173f-40bf-a412-dc09383c47f7",
           "type": "string",
           "description": "what a string or number means: date-time, uri, query, json, priority"
         },
         "enum": {
+          "$id": "urn:uuid:cb9485df-9b02-412b-88e9-76463676483f",
           "type": "array",
           "items": { "type": "string" },
           "description": "the closed set of values it holds"
         },
         "const": {
+          "$id": "urn:uuid:3e764710-5e0e-4991-80b7-65de708c4b7f",
           "type": ["string", "number", "boolean", "object", "array"],
           "description": "the one value it may hold"
         },
         "default": {
+          "$id": "urn:uuid:07e0a5a0-230d-4240-afd1-a25fee5c3a36",
           "type": ["string", "number", "boolean", "object", "array"],
           "description": "what a row holds when its writer supplied nothing; {\"now\": true} is the clock"
         },
         "examples": {
+          "$id": "urn:uuid:670707d4-e647-4590-8347-886632a33a0e",
           "type": "array",
           "description": "sample values"
         },
         "ref": {
+          "$id": "urn:uuid:0a235661-cc6a-4713-a80c-2726380b1045",
           "type": "string",
           "description": "the component a reference names; entity is any"
         },
         "death": {
+          "$id": "urn:uuid:ac708923-ad1b-4035-870a-dbd60501637e",
           "type": "string",
           "enum": ["cascade", "detach", "release", "keep"],
           "description": "what deleting the referenced entity does to this one"
         },
         "required": {
+          "$id": "urn:uuid:020feb1d-8300-4a04-bece-663398c3b91a",
           "type": "boolean",
           "description": "true = every row holds it"
         },
         "stamped": {
+          "$id": "urn:uuid:6d81b38d-2eb2-46d3-8aa6-6424f064b670",
           "type": "boolean",
           "description": "true = the server owns it: clients read it, never write it"
         },
         "computed": {
+          "$id": "urn:uuid:6de37322-0751-40dc-938e-775a70719ea7",
           "type": "boolean",
           "description": "true = derived, never stored"
         },
         "reads": {
+          "$id": "urn:uuid:6bb9e6ae-7c8f-4e8b-ae7e-11ab1b5e39f7",
           "type": "array",
           "items": { "type": "string" },
           "description": "on a computed property, the components on other entities it reads"
         },
         "search": {
+          "$id": "urn:uuid:a85332ff-b97e-419f-8389-0bda87a79937",
           "type": "boolean",
           "description": "true = full-text indexed"
         },
         "unique": {
+          "$id": "urn:uuid:b9c134f1-aadd-451f-8ace-cc506a2457b9",
           "type": "boolean",
           "description": "true = no two rows share it"
         },
         "index": {
+          "$id": "urn:uuid:3f5c9d65-f03e-4910-9632-703058c01fa5",
           "type": "boolean",
           "description": "true = kept indexed"
         },
         "identity": {
+          "$id": "urn:uuid:53594fa5-c626-411c-8917-c66c52148ac0",
           "type": "boolean",
           "description": "true = its entity's id is derived from it"
         },
         "validate": {
+          "$id": "urn:uuid:5862cce6-045a-4471-a758-f48a4f17f84a",
           "type": "boolean",
           "description": "true = a write is checked against its whole JSON Schema"
         },
         "aliases": {
+          "$id": "urn:uuid:b46a0bd2-97f8-4138-bbb7-f3ce020a5c76",
           "type": "object",
           "description": "input forms that resolve to an enum member"
         },
         "properties": {
+          "$id": "urn:uuid:3e3ad011-754e-4f3e-8862-1a61fc7f3d38",
           "type": "object",
           "description": "the declared structure of an object value, as written"
         },
         "items": {
+          "$id": "urn:uuid:481a8fa8-8d68-47ab-ad5b-f48a7c06d191",
           "type": ["object", "boolean"],
           "description": "the declared structure of an array's elements, as written"
         },
         "keywords": {
+          "$id": "urn:uuid:13921f33-c441-42cc-a50a-0f3c370b4e90",
           "type": "object",
           "description": "every other keyword it says, as written: another package's (store) and JSON Schema's own (minLength, maximum)"
         }
       }
     },
     "_before": {
+      "$id": "urn:uuid:08d28523-214e-45df-80a0-df0741270030",
       "component": true,
       "journal": false,
       "type": "object",
@@ -332,6 +400,7 @@
       "description": "the edge from a _kind to a _kind it sorts before, where containment does not settle it; edge.ord keeps the order its entry lists them in"
     },
     "_extends": {
+      "$id": "urn:uuid:3041bbb4-f09f-4199-92ab-5cfa79d09dc8",
       "component": true,
       "journal": false,
       "type": "object",
@@ -340,24 +409,28 @@
       "description": "a package's extension of a component another package declares. The properties it adds are _prop rows; its doc.title is comp+package, its doc.body its description",
       "properties": {
         "comp": {
+          "$id": "urn:uuid:dd305036-7494-4bab-b482-1af473d4b89f",
           "type": "string",
           "ref": "_comp",
           "death": "cascade",
           "description": "the component it extends"
         },
         "package": {
+          "$id": "urn:uuid:4a7fbac2-cf39-4225-be04-4744c2c9db9c",
           "type": "string",
           "ref": "_package",
           "death": "cascade",
           "description": "the package whose vocabulary extends it"
         },
         "status": {
+          "$id": "urn:uuid:97a7f72c-e9f3-4429-955b-af759cfb03c7",
           "type": "object",
           "description": "the rungs it adds to the component's status ladder, in order: each component to the status it gives"
         }
       }
     },
     "_vocab": {
+      "$id": "urn:uuid:5ce83a6e-586f-42ff-b825-c3f0796112ee",
       "component": true,
       "journal": false,
       "type": "object",
@@ -365,6 +438,7 @@
       "description": "the vocabulary the other rows describe, as a whole: one entity per graph, whose hash says what they were last brought into line with, so a graph already describing it is known to without reading them",
       "properties": {
         "hash": {
+          "$id": "urn:uuid:8ddcc404-1fbe-4a23-8cfc-e6a7c077b102",
           "type": "string",
           "description": "the SHA-256 of every row as the vocabulary described them"
         }
@@ -373,36 +447,42 @@
   },
   "kinds": {
     "_package": {
+      "$id": "urn:uuid:ee3291b2-41e2-41d9-b192-483d1831053c",
       "description": "a package whose vocabulary declares components or extends them. Its doc.title is its name, its doc.body its description",
       "with": {
         "doc": true
       }
     },
     "_comp": {
+      "$id": "urn:uuid:3a4331e3-349a-4769-b66e-be277c7aab16",
       "description": "a component a vocabulary declares: one aspect an entity carries. Its doc.title is its name, its doc.body its description",
       "with": {
         "doc": true
       }
     },
     "_kind": {
+      "$id": "urn:uuid:2f3e187d-d745-405e-96df-aaeac10080c8",
       "description": "a kind a vocabulary declares: the components that make an entity that kind of thing, and what a whole one also carries. Its doc.title is its title, or its name where it has none; its doc.body its description",
       "with": {
         "doc": true
       }
     },
     "_effect": {
+      "$id": "urn:uuid:da94054b-e450-4c46-a366-15c1a2cc6206",
       "description": "an effect a vocabulary declares: what a commit owes a run of, by name (@yaks/effects runs it). Its doc.title is its name, its doc.body its description",
       "with": {
         "doc": true
       }
     },
     "_prop": {
+      "$id": "urn:uuid:e0cceffb-a76c-4ade-979a-1f5f8f045b50",
       "description": "a property of a component. Its doc.title is comp.prop, its doc.body its description",
       "with": {
         "doc": true
       }
     },
     "_extends": {
+      "$id": "urn:uuid:3041bbb4-f09f-4199-92ab-5cfa79d09dc8",
       "description": "a package's extension of a component another package declares. The properties it adds are _prop rows; its doc.title is comp+package, its doc.body its description",
       "with": {
         "doc": true

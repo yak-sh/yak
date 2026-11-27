@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:146f1fca-6f6a-45d3-8eec-450799f772c7",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
@@ -6,6 +7,7 @@
   "description": "Page-only browser game controls. Pure rules declare no state.",
   "$defs": {
     "Controls": {
+      "$id": "urn:uuid:89535ff1-a2df-439e-8357-32215cd09b2d",
       "component": true,
       "type": "object",
       "sync": "none",
@@ -13,6 +15,7 @@
       "description": "Controlled input state on a consumer-named entity. All keys, gestures and preferences live here; a remount reads the same row.",
       "properties": {
         "move": {
+          "$id": "urn:uuid:f847d6c5-32c8-4a4c-b020-18af7edbfe00",
           "type": "array",
           "items": {
             "type": "number"
@@ -20,6 +23,7 @@
           "description": "move coordinates; absent when no pointer or click"
         },
         "look": {
+          "$id": "urn:uuid:055fa783-d6ff-49fb-9716-367c459743d9",
           "type": "array",
           "items": {
             "type": "number"
@@ -27,6 +31,7 @@
           "description": "look coordinates; absent when no pointer or click"
         },
         "orbit": {
+          "$id": "urn:uuid:a82e2d96-a581-4b3a-97bd-b4dbaaafa084",
           "type": "array",
           "items": {
             "type": "number"
@@ -34,6 +39,7 @@
           "description": "orbit coordinates; absent when no pointer or click"
         },
         "pointer": {
+          "$id": "urn:uuid:33c9c1a1-3b5d-4b09-8a76-9a9800262bae",
           "type": "array",
           "items": {
             "type": "number"
@@ -41,6 +47,7 @@
           "description": "pointer coordinates; absent when no pointer or click"
         },
         "click": {
+          "$id": "urn:uuid:6e93373a-1cac-4b8e-82e4-1d1826218a5d",
           "type": "array",
           "items": {
             "type": "number"
@@ -48,6 +55,7 @@
           "description": "click coordinates; absent when no pointer or click"
         },
         "press_at": {
+          "$id": "urn:uuid:ed96b12c-eed1-4710-8c41-dc89df90c41e",
           "type": "array",
           "items": {
             "type": "number"
@@ -55,6 +63,7 @@
           "description": "press_at coordinates; absent when no pointer or click"
         },
         "held": {
+          "$id": "urn:uuid:3b5f09c2-f3f8-430a-9a8b-92473a7133c9",
           "type": "array",
           "items": {
             "type": "string"
@@ -62,6 +71,7 @@
           "description": "held input codes or action bindings"
         },
         "pressed": {
+          "$id": "urn:uuid:61a8700f-ad1a-4261-a1b7-bec08bb82156",
           "type": "array",
           "items": {
             "type": "string"
@@ -69,6 +79,7 @@
           "description": "pressed input codes or action bindings"
         },
         "pad": {
+          "$id": "urn:uuid:0e1f36f0-aafb-44cd-b342-0b851e66a311",
           "type": "array",
           "items": {
             "type": "string"
@@ -76,42 +87,52 @@
           "description": "pad input codes or action bindings"
         },
         "swapped": {
+          "$id": "urn:uuid:2d3372a5-2994-4ab3-91e8-94f190460939",
           "type": "boolean",
           "description": "swapped browser control state"
         },
         "strafe": {
+          "$id": "urn:uuid:9b2bb8ab-9134-46ca-9219-af3f31e53a75",
           "type": "boolean",
           "description": "strafe browser control state"
         },
         "hide_cursor": {
+          "$id": "urn:uuid:d0e30fc4-ec95-4717-8f78-f53fae8d743a",
           "type": "boolean",
           "description": "hide_cursor browser control state"
         },
         "locking": {
+          "$id": "urn:uuid:f115656d-67fd-42a9-8ecf-9d400e611c8e",
           "type": "boolean",
           "description": "locking browser control state"
         },
         "focused": {
+          "$id": "urn:uuid:0f9df150-64b0-423f-964e-d2ac65a7cd22",
           "type": "boolean",
           "description": "focused browser control state"
         },
         "looked": {
+          "$id": "urn:uuid:efbeb2c4-614c-43ab-9ff6-41ac8ad722ca",
           "type": "boolean",
           "description": "looked browser control state"
         },
         "zoom": {
+          "$id": "urn:uuid:c18470da-0beb-4c20-a886-d9466b8546bd",
           "type": "number",
           "description": "wheel delta since the last frame"
         },
         "stick": {
+          "$id": "urn:uuid:3ba0b536-e68d-4c0b-82d8-43318f0a9c7a",
           "type": "object",
           "description": "stick gesture state, interpreted by the browser controls"
         },
         "drags": {
+          "$id": "urn:uuid:eaa5dcbf-26ab-498e-98ca-51a55f09931e",
           "type": "object",
           "description": "drags gesture state, interpreted by the browser controls"
         },
         "mouse": {
+          "$id": "urn:uuid:1bc992b1-274a-4290-b268-43c346002aa9",
           "type": "object",
           "description": "mouse gesture state, interpreted by the browser controls"
         }

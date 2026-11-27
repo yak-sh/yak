@@ -1,15 +1,19 @@
 {
+  "$id": "urn:uuid:71cfb63d-06df-4d9f-981d-77c388d141f1",
   "title": "anthropic",
   "$defs": {
     "anthropic": {
+      "$id": "urn:uuid:73e79444-fb2c-4bd9-923a-0c8d59e4eae3",
       "component": true,
       "journal": false,
       "description": "Anthropic message metadata; the Messages API keeps nothing to continue from.",
       "properties": {
         "response_id": {
+          "$id": "urn:uuid:9512c0a1-320e-4d49-8d18-ebc07fc19e0e",
           "type": "string"
         },
         "cache_expires_at": {
+          "$id": "urn:uuid:933e5867-582c-4212-92f4-1cd978d68739",
           "type": "string",
           "format": "date-time",
           "description": "the recorded expiry of this request’s cached prefix: request start plus the documented five minutes. Missing means unknown, not warm"

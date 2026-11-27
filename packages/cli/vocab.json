@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:30982e84-79d3-44dd-882d-aa41c0e58087",
   "title": "cli",
   "$defs": {
     "help": {

@@ -1,21 +1,25 @@
 {
+  "$id": "urn:uuid:69a48a69-13b9-4364-b23b-efc091dd79b6",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "egress",
   "$defs": {
     "calls": {
+      "$id": "urn:uuid:bb4c65c9-cb8e-4161-8cb3-26bc90222f76",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "the calls that went out through a `uses` link (@yaks/connections) in one month, each with the link's credential in place of its sentinel: what the link's cap is measured against. Only the egress counts them, and a new month starts the count over",
       "properties": {
         "month": {
+          "$id": "urn:uuid:6ac0a109-7199-4ed6-a792-00a0cd136320",
           "type": "string",
           "stamped": true,
           "description": "the UTC month it counts, as YYYY-MM"
         },
         "count": {
+          "$id": "urn:uuid:bfd10f59-477a-4f33-873f-d66d72294ede",
           "type": "number",
           "stamped": true,
           "description": "how many calls went out through the link that month"
@@ -23,12 +27,14 @@
       }
     },
     "called": {
+      "$id": "urn:uuid:c383898d-ca49-4b59-9ffb-760f259f2a74",
       "component": true,
       "durable": "0s",
       "type": "object",
       "description": "an event: one call just went out through this `uses` link. The graph adds it to the link's `calls` inside the write's own transaction, so two at once both count, and never stores it",
       "properties": {
         "month": {
+          "$id": "urn:uuid:4a64fddb-3cc7-4199-8092-58eecbc64783",
           "type": "string",
           "stamped": true,
           "description": "the UTC month the call went out in, as YYYY-MM"

@@ -1,15 +1,18 @@
 {
+  "$id": "urn:uuid:7a3e7e12-be9b-4b8e-b587-3c8b2a8023e7",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "phone",
   "$defs": {
     "phone": {
+      "$id": "urn:uuid:e29a5cd9-71c6-4eb6-87c7-1409e45aa1ee",
       "component": true,
       "type": "object",
       "description": "a phone number, as a component of what it reaches \u2014 on a person, their mobile, beside the `email{address}` they wear",
       "properties": {
         "number": {
+          "$id": "urn:uuid:f00536ce-3037-4020-b595-28fe70177404",
           "type": "string",
           "description": "the number in E.164 form (see `mobile`)",
           "examples": [
@@ -19,11 +22,13 @@
       }
     },
     "own_number": {
+      "$id": "urn:uuid:13890af2-1192-430b-88a6-c9c66a4a23c3",
       "component": true,
       "type": "object",
       "description": "a number held by a person's own account at a phone provider, as it was listed when they connected it: what it is called there, whether it texts, where its texts went before its host pointed them at itself, and the 10DLC campaign it texts many people under. Its eid is derived from its connection and number",
       "properties": {
         "connection": {
+          "$id": "urn:uuid:95c0633d-f6a4-4d00-ad85-675008497f1d",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
@@ -31,6 +36,7 @@
           "description": "the connection to the account that holds it"
         },
         "number": {
+          "$id": "urn:uuid:759a76c7-a75c-4717-b010-16cafd242b36",
           "type": "string",
           "identity": true,
           "description": "the number in E.164 form",
@@ -39,10 +45,12 @@
           ]
         },
         "sms": {
+          "$id": "urn:uuid:03f68a64-cdb9-493c-80b4-99cc744b3f82",
           "type": "boolean",
           "description": "whether it sends and receives texts"
         },
         "label": {
+          "$id": "urn:uuid:50565f5a-529d-43a4-a06b-5cc57e7d089b",
           "type": "string",
           "description": "what the account calls it, as the person named it there",
           "examples": [
@@ -50,14 +58,17 @@
           ]
         },
         "callback": {
+          "$id": "urn:uuid:857ea0ba-2db7-48a7-b713-8bc1d9db0bee",
           "type": "string",
           "description": "the URL its texts were sent to before its host pointed them at itself; absent when none was. They go back there when the number stops taking texts in"
         },
         "pointed": {
+          "$id": "urn:uuid:ae5536f3-8594-4d05-ab79-d39021559c4a",
           "type": "boolean",
           "description": "whether the carrier last had this connection's SMS callback, or the host tried to set it and has yet to confirm the result"
         },
         "campaign": {
+          "$id": "urn:uuid:76bb1e22-6235-46f2-aa81-de33b23348eb",
           "type": "string",
           "description": "the 10DLC campaign id its texts to many people are registered under, recorded once the provider approved it; absent until then, while carriers block those texts",
           "examples": [
@@ -67,11 +78,13 @@
       }
     },
     "keyword_replies": {
+      "$id": "urn:uuid:0964ba95-9272-45a1-bbfe-4eaf874ac1ae",
       "component": true,
       "type": "object",
       "description": "the words a number answers carrier keywords with, as its 10DLC campaign registers them, on the row that holds the number beside its campaign. A keyword with no words here is answered in defaults naming the number's space (`replies`)",
       "properties": {
         "start": {
+          "$id": "urn:uuid:08f7f5e6-6ced-4b94-aa2e-b8adea38a189",
           "type": "string",
           "description": "the opt-in confirmation, answered to JOIN, START or YES",
           "examples": [
@@ -79,22 +92,26 @@
           ]
         },
         "stop": {
+          "$id": "urn:uuid:cce8d978-60e5-486f-ac00-c5414e3128f9",
           "type": "string",
           "description": "the opt-out confirmation, answered to STOP, END, CANCEL, UNSUBSCRIBE or QUIT"
         },
         "help": {
+          "$id": "urn:uuid:37594180-25f6-4662-b76f-d8143348cfe7",
           "type": "string",
           "description": "who is texting and how to reach them, answered to HELP or INFO"
         }
       }
     },
     "sms_consent": {
+      "$id": "urn:uuid:0cc16a71-cb2c-436b-9651-05ebab86e8ae",
       "component": true,
       "type": "object",
       "description": "a person agreed to be texted at their `phone{number}`, in these words; removed when they stop texts; in an app, read only by its owners and editors, whatever the app's access",
       "readers": "editor",
       "properties": {
         "person": {
+          "$id": "urn:uuid:76730d55-862d-4fd7-83fe-b0c95144dcf9",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
@@ -102,21 +119,25 @@
           "description": "who agreed; the eid is derived from it, so a person has one consent"
         },
         "consent": {
+          "$id": "urn:uuid:fbd3e51c-fae1-4d41-9a59-312616b44256",
           "type": "string",
           "description": "the words they agreed to, exactly as they were shown"
         },
         "source": {
+          "$id": "urn:uuid:05439f0d-b240-4cdf-9fc7-a7ab663d7ecd",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the conversation entry or authenticated form confirmation that gave this consent"
         },
         "at": {
+          "$id": "urn:uuid:c19c0a62-6b94-4d81-83a6-fc74a559f67b",
           "type": "string",
           "format": "date-time",
           "description": "when they agreed"
         },
         "space": {
+          "$id": "urn:uuid:7451bd6f-b24a-426e-98f9-a2e7a06e6665",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -125,12 +146,14 @@
       }
     },
     "text": {
+      "$id": "urn:uuid:a5d13d52-0637-42de-9a56-20ecbe72a539",
       "component": true,
       "type": "object",
       "description": "one SMS or RCS text message, sent or received; its words are `doc{body}`. One with @yaks/mail's `deliver{to}` asks to be sent to the `phone{number}` of `deliver.to`, and its outcome is `delivered` or `bounced`; in an app, read only by its owners and editors, whatever the app's access",
       "readers": "editor",
       "properties": {
         "from": {
+          "$id": "urn:uuid:6446f986-f863-4296-bbd9-c1c87dda45e6",
           "type": "string",
           "description": "the number it came from, in E.164 form; on one sent, the number it left from, written once it leaves (absent before, when it goes from the sender's own)",
           "examples": [
@@ -138,6 +161,7 @@
           ]
         },
         "to": {
+          "$id": "urn:uuid:e414defd-678f-4d52-99e0-81f6d0036ce7",
           "type": "string",
           "description": "the number it went to, or the RCS agent's id for an RCS text that arrived; written on one sent once it leaves",
           "examples": [
@@ -145,19 +169,23 @@
           ]
         },
         "at": {
+          "$id": "urn:uuid:3942a3ed-a606-4d53-a841-b01f2875e1ab",
           "type": "string",
           "format": "date-time",
           "description": "when it arrived"
         },
         "message_id": {
+          "$id": "urn:uuid:ed9eebd4-9c2f-4f68-98ca-21da82189701",
           "type": "string",
           "description": "the provider's id for it: read from one that arrived, or returned by the sender for one that left"
         },
         "rcs": {
+          "$id": "urn:uuid:9c1f0032-3e08-47b6-8bba-19af0d82a630",
           "type": "boolean",
           "description": "whether it came, or goes, as RCS rather than SMS"
         },
         "via": {
+          "$id": "urn:uuid:95e871b7-a5f6-45b2-ba6e-4bb278c72459",
           "type": "string",
           "description": "The transport that carried the message, scoping its opaque message_id."
         }
@@ -174,11 +202,13 @@
       "description": "Hand an outbound text to the sender and record its outcome. A send the sender knows never left is tried again."
     },
     "sender": {
+      "$id": "urn:uuid:7dce26e3-24e2-4108-9581-a2ab08b943c3",
       "component": true,
       "type": "object",
       "description": "The phone provider selected for this entity; its sending number is phone{number}. Without one the host selection applies. Credentials belong to the host.",
       "properties": {
         "via": {
+          "$id": "urn:uuid:8debb673-22e9-4439-abf6-9e97fa6833bf",
           "type": "string",
           "description": "The phone provider, such as telnyx, voipms or pinnacle."
         }

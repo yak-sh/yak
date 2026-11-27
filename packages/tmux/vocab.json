@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:c7401eb3-2984-4aa4-abd4-abdd9a52f967",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true
@@ -6,17 +7,20 @@
   "title": "tmux",
   "$defs": {
     "tmux": {
+      "$id": "urn:uuid:d543eb5a-1d0d-4af9-ae45-d20c5a4bfd3f",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "of": {
+          "$id": "urn:uuid:0236f0ff-66bc-477f-9a14-f946b987ba1d",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "what is running in the pane — a session, a process, anything that runs"
         },
         "pane": {
+          "$id": "urn:uuid:3a70ece3-d3c5-4d84-9096-bf75642335ec",
           "type": "string",
           "description": "the target string tmux accepts: a pane id (`%42`), or `session:window.pane`"
         }
@@ -26,6 +30,7 @@
   },
   "kinds": {
     "tmux": {
+      "$id": "urn:uuid:d543eb5a-1d0d-4af9-ae45-d20c5a4bfd3f",
       "description": "a terminal somebody can watch: one tmux pane, and what is running in it"
     }
   }

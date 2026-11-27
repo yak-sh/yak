@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:86a85e39-cea0-4863-8507-938931b53026",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
@@ -8,6 +9,7 @@
   "title": "model",
   "$defs": {
     "submitted": {
+      "$id": "urn:uuid:2e72be08-b402-4615-a013-25564210edda",
       "component": true,
       "type": "object",
       "wire": false,
@@ -15,6 +17,7 @@
       "description": "the original model ask was submitted for a paid generation; an uncertain acknowledgement still counts as submitted",
       "properties": {
         "at": {
+          "$id": "urn:uuid:8117e9d2-b101-4129-bb61-5173fb5319f9",
           "type": "string",
           "format": "date-time",
           "stamped": true,
@@ -23,17 +26,20 @@
       }
     },
     "provider": {
+      "$id": "urn:uuid:17523bb7-2863-41b5-aeca-e0c975e991f2",
       "component": true,
       "type": "object",
       "by_name": true,
       "description": "a service that runs models",
       "properties": {
         "name": {
+          "$id": "urn:uuid:e8d22917-739b-43e2-9b1f-caeff3f710bb",
           "type": "string",
           "identity": true,
           "description": "what the provider is called; the entity id is derived from it"
         },
         "transport": {
+          "$id": "urn:uuid:352edde2-7537-4c67-b057-516fd48c0e47",
           "type": "string",
           "enum": [
             "process",
@@ -43,53 +49,65 @@
           "description": "how its models are reached: `process` is a command line this host runs, `http` an API it calls, `machine` another machine's own providers, asked one step at a time"
         },
         "machine": {
+          "$id": "urn:uuid:2daf8c8e-e100-40ed-b1c4-1e25f52f70e6",
           "type": "string",
           "ref": "machine",
           "death": "keep",
           "description": "the machine whose providers answer, where `transport` is `machine`, and a row naming none is served by nobody; where it is `process`, the developer's machine that runs its command line, whose runner takes each session asked of it (@yaks/spawn/machines)"
         },
         "credential": {
+          "$id": "urn:uuid:8e78d506-1902-4d6a-98d2-07cd16448d29",
           "type": "string"
         },
         "base": {
+          "$id": "urn:uuid:ab38364a-a8dd-4b3c-a7f7-9f889d034c73",
           "type": "string",
           "format": "uri",
           "description": "where a provider reached over HTTP answers: its root URL, without a path"
         },
         "api": {
+          "$id": "urn:uuid:3a4ceb72-e417-4f6c-b2f1-e9f57a104dfe",
           "type": "string",
           "description": "the API it speaks, which names the code that reaches it: over HTTP, `ollama`, or `openai` for an OpenAI-compatible one; for a `process`, the CLI whose command line it takes and whose stream it prints (`claude`, `codex`), its own name where it names none"
         },
         "command": {
+          "$id": "urn:uuid:2fcf200d-f797-4fc6-9c45-1f429f49a022",
           "type": "string",
           "description": "the program a `process` provider is run as, in place of its CLI's own: a name on the PATH or a path. It is given the command line of the CLI named in `api` and prints that CLI's stream"
         },
         "recorded": {
+          "$id": "urn:uuid:24a992db-24fd-44ad-8416-b8bc5eb1df04",
           "type": "boolean",
           "description": "its runs play recordings (packages/spawn/standin.ts), so how one ends is chosen: an ending that is not clean is written on the session, and no failure is reported of it"
         },
         "fallback": {
+          "$id": "urn:uuid:6ff4319e-b1ef-40a8-a18a-3750b0c4d245",
           "type": "boolean"
         },
         "context": {
+          "$id": "urn:uuid:0eac0b1a-db28-4679-83e0-8873c2f1f91a",
           "type": "integer",
           "minimum": 1,
           "description": "the context window, in tokens, assumed for a model it serves whose own row names none"
         },
         "offered": {
+          "$id": "urn:uuid:930b1054-e9b1-4866-83a2-911863908da1",
           "type": "boolean"
         },
         "cache_retention": {
+          "$id": "urn:uuid:fe691054-fc11-486c-b717-e51b47a97494",
           "type": "integer",
           "minimum": 1,
           "description": "documented cached-prefix retention in seconds for this provider\u2019s configured endpoint and models; used from request start only when the answer has no explicit expiry. Missing means unknown"
         },
         "stall_timeout": {
+          "$id": "urn:uuid:1a5b2997-e0b3-43b5-bf0b-a89534b16c5b",
           "type": "integer",
           "minimum": 0,
           "description": "how long, in seconds, a stream from this provider may go without progress before its request fails as stalled; 0 for no limit. Missing means the default, five minutes"
         },
         "plan": {
+          "$id": "urn:uuid:91b724cc-9552-4a09-9208-6236a875ab9c",
           "type": "string",
           "ref": "provider",
           "death": "keep",
@@ -98,10 +116,12 @@
       }
     },
     "cache": {
+      "$id": "urn:uuid:2afc4c61-0ad3-42cb-baac-e2bf8fe5eec1",
       "component": true,
       "type": "object",
       "properties": {
         "retention": {
+          "$id": "urn:uuid:20756fef-cfed-4b3c-b93d-ae45fa7267ec",
           "type": "integer",
           "minimum": 1,
           "description": "seconds its sessions' model requests ask the provider to keep their cached prefix (`Request.cacheRetention`)"
@@ -110,20 +130,24 @@
       "description": "how long a persona's conversations ask their model's provider to keep a cached prefix, in place of the provider's own"
     },
     "model": {
+      "$id": "urn:uuid:a36bc876-472c-4126-a604-c3769951eb8a",
       "component": true,
       "type": "object",
       "by_name": true,
       "description": "a model, whoever serves it",
       "properties": {
         "name": {
+          "$id": "urn:uuid:dcf23619-71ba-4372-8456-ffcdf062e404",
           "type": "string",
           "identity": true,
           "description": "the model's own name; the entity id is derived from it"
         },
         "vendor": {
+          "$id": "urn:uuid:61a97bee-de1c-4b0d-86a1-62e85286d8f9",
           "type": "string"
         },
         "grade": {
+          "$id": "urn:uuid:21d22f8d-9fdb-4110-85f0-70513f79273f",
           "type": "string",
           "enum": [
             "frontier",
@@ -132,10 +156,12 @@
           ]
         },
         "label": {
+          "$id": "urn:uuid:67947c53-9be2-4bb6-9ec3-2964a045201c",
           "type": "string",
           "description": "what a person sees the model called (\"Sonnet 5.5\", \"GPT-6.2 Sol\"), read by @yaks/model `labelOf`; its name is an id, for tools and logs"
         },
         "modalities": {
+          "$id": "urn:uuid:2337fb5e-7b1c-493a-b88a-9a102c7a737a",
           "type": "array",
           "items": {
             "type": "string",
@@ -149,26 +175,32 @@
           "description": "the outputs requested when this model is asked"
         },
         "efforts": {
+          "$id": "urn:uuid:6c75b697-ffd1-43b6-8492-d57bd620b74c",
           "type": "string"
         },
         "effort": {
+          "$id": "urn:uuid:8437a53e-815f-4213-a2bc-4bc73b6fcc34",
           "type": "string",
           "description": "the reasoning effort requested, unless a session overrides it"
         },
         "context": {
+          "$id": "urn:uuid:5e16c540-576f-4c92-b8f8-6c2168e5df95",
           "type": "integer",
           "minimum": 1,
           "description": "the model's context window, in tokens: the most one request holds, its input and reply together; read from its provider's catalog, or set by hand. A transcript is compacted at a share of it"
         },
         "offered": {
+          "$id": "urn:uuid:ae398525-8505-4c8a-a42f-879b55352865",
           "type": "boolean"
         },
         "output": {
+          "$id": "urn:uuid:445e23ac-9c98-4417-9fd7-4f357a1a126c",
           "type": "integer",
           "minimum": 1,
           "description": "the model's maximum reply length in tokens, including reasoning, as its provider's catalogue lists it"
         },
         "enforced": {
+          "$id": "urn:uuid:4bda7681-b793-4a61-b48f-2380ba9dbceb",
           "type": "integer",
           "minimum": 1,
           "stamped": true,
@@ -177,6 +209,7 @@
       }
     },
     "serves": {
+      "$id": "urn:uuid:2cfb78ac-71a3-4e7e-bcfb-e821d6089421",
       "component": true,
       "type": "object",
       "edge": "serves",
@@ -184,12 +217,14 @@
       "description": "an edge relation: this provider serves that model",
       "properties": {
         "name": {
+          "$id": "urn:uuid:8d033c44-314b-43b4-9a8a-eeeae8025d1d",
           "type": "string",
           "description": "what the provider calls the model, sent as the model of every request it serves"
         }
       }
     },
     "routes": {
+      "$id": "urn:uuid:e9025af4-bf59-4b96-b091-2fe8287b78eb",
       "component": true,
       "type": "object",
       "edge": "routes",
@@ -197,6 +232,7 @@
       "description": "an edge relation, from a row whose `using` is a default to an offering (a `serves` edge): the default is chosen among the offerings it routes, the pinned one, else the one whose plan has the most usage left, and its own `using` answers only where none is pinned and no plan has a reading",
       "properties": {
         "pinned": {
+          "$id": "urn:uuid:81c26234-ee32-46f3-81a7-95824002977f",
           "type": "string",
           "format": "date-time",
           "description": "when this offering was pinned: while the mark is set the default is this offering whatever the plans read, and removing it resumes routing"
@@ -204,121 +240,147 @@
       }
     },
     "usage": {
+      "$id": "urn:uuid:5fbb9aaf-9b32-4609-9d5e-add9525277be",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "provider-reported token counts for one completed model request, stored on the entry for that request; not cumulative, and not an estimate of current context size",
       "properties": {
         "input_tokens": {
+          "$id": "urn:uuid:11c8aa4c-e270-4584-9cd8-c2ec572bef64",
           "type": "integer",
           "description": "input context tokens, including cached tokens"
         },
         "output_tokens": {
+          "$id": "urn:uuid:91866db8-3bbe-4e91-9356-4eb3372f91da",
           "type": "integer",
           "description": "generated tokens, including reasoning tokens"
         },
         "total_tokens": {
+          "$id": "urn:uuid:006b4695-a231-40b0-863b-d7375e4bbe62",
           "type": "integer",
           "description": "total input and output tokens reported by the provider"
         },
         "cached_tokens": {
+          "$id": "urn:uuid:ed675c3c-f227-47f3-9e6a-ffdf65969021",
           "type": "integer",
           "description": "input tokens read from the provider cache; not a guarantee of future cache availability"
         },
         "cache_write_tokens": {
+          "$id": "urn:uuid:b4b0f32d-3871-4bd7-ba0c-4226ce6cd8ce",
           "type": "integer",
           "description": "input tokens written to the provider cache by this request, within input_tokens"
         },
         "cache_write_1h_tokens": {
+          "$id": "urn:uuid:69db044c-77b2-4787-ae6a-a7c7d17f3ddc",
           "type": "integer",
           "description": "of the cache writes, those kept an hour rather than minutes, which a provider can price higher"
         },
         "cache_write_12h_tokens": {
+          "$id": "urn:uuid:e0277c9e-de55-4120-af31-3e9103c6f02c",
           "type": "integer",
           "description": "of the cache writes, those billed at a 12-hour lifetime"
         },
         "reasoning_tokens": {
+          "$id": "urn:uuid:7a3dce8b-c868-454e-b5d1-c64db37c8de7",
           "type": "integer",
           "description": "reasoning tokens within output tokens"
         },
         "web_searches": {
+          "$id": "urn:uuid:3f247ef3-4916-4ce1-a2ba-6b64eeba66f3",
           "type": "integer",
           "description": "web searches the provider ran for the request, each billed at the model's web_search price"
         }
       }
     },
     "price": {
+      "$id": "urn:uuid:7a123476-b227-4f09-8276-ebcb9aad494d",
       "component": true,
       "type": "object",
       "description": "what a model costs, in dollars per million tokens and per web search, on the model's own row; a request its provider reports no dollars for is weighed at it",
       "properties": {
         "input": {
+          "$id": "urn:uuid:e6616db0-c509-473b-855a-b8bda15dc8cd",
           "type": "number",
           "description": "dollars per million input tokens"
         },
         "output": {
+          "$id": "urn:uuid:79201017-3670-4c64-8b41-d2d193933437",
           "type": "number",
           "description": "dollars per million output tokens, reasoning included"
         },
         "cached": {
+          "$id": "urn:uuid:d4021148-ecdb-4676-a1b3-9bcb51b8f48d",
           "type": "number",
           "description": "dollars per million input tokens read from the provider cache; the input price where absent"
         },
         "cache_write": {
+          "$id": "urn:uuid:13189979-b590-452b-8cc3-ea274eabf1fc",
           "type": "number",
           "description": "dollars per million input tokens written to the provider cache; the input price where absent"
         },
         "cache_write_1h": {
+          "$id": "urn:uuid:8b71af73-a377-4459-ab0f-7936f2cf941e",
           "type": "number",
           "description": "dollars per million input tokens written to the cache for an hour; the cache_write price where absent"
         },
         "cache_write_12h": {
+          "$id": "urn:uuid:b7763148-559b-4d40-b617-e37ca484135e",
           "type": "number",
           "description": "dollars per million input tokens written to the cache for 12 hours; the cache_write price where absent"
         },
         "web_search": {
+          "$id": "urn:uuid:90dff11c-e90e-4bf3-987e-d6539ac85161",
           "type": "number",
           "description": "dollars per web search the provider runs for a request"
         }
       }
     },
     "cost": {
+      "$id": "urn:uuid:ebd7b339-8456-4194-9ce6-cb59bfe12cef",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "what one model request or tool call cost, in dollars, on the entity that spent it: a request's entry beside its `usage`, or a call",
       "properties": {
         "dollars": {
+          "$id": "urn:uuid:f3714d76-6f62-4da3-a286-7d9e9d6002d9",
           "type": "number",
           "index": true
         },
         "reported": {
+          "$id": "urn:uuid:ecee53f1-d7a8-449f-8935-e2d4a3baa87a",
           "type": "boolean",
           "description": "true when the provider reported the dollars; false when they were weighed from the model's `price`"
         }
       }
     },
     "account": {
+      "$id": "urn:uuid:d5a06699-0a3a-41fb-bb05-e1209a195dfd",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "an account a provider's CLI keeps on this machine: the config directory it signs in from and keeps its transcripts in (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). Each has a plan of its own, and a second account is one more row: `/home/me/.claude-teams` beside `/home/me/.claude`",
       "properties": {
         "home": {
+          "$id": "urn:uuid:81988bf2-d35e-4650-b4b9-732717d5242d",
           "type": "string",
           "identity": true,
           "description": "the account's directory, `/Users/erik/.claude-work`; the entity id is derived from it"
         },
         "provider": {
+          "$id": "urn:uuid:7d53b14a-422a-4aa0-9cbc-4b920024d060",
           "type": "string",
           "ref": "provider",
           "description": "the provider whose CLI keeps it"
         },
         "offered": {
+          "$id": "urn:uuid:faa4853a-02e7-4824-a0d5-a63c350f6e27",
           "type": "boolean",
           "description": "a run may be given it: a spawn that names no account runs on the offered account of its provider further under its weekly pace (@yaks/model `freest`)"
         },
         "expires": {
+          "$id": "urn:uuid:cccb30a0-ec55-4944-98d8-6ac997e314d3",
           "type": "string",
           "format": "date-time",
           "description": "when its plan ends, a subscription taken for a trial: from then on no run is given it, offered or not"
@@ -326,12 +388,14 @@
       }
     },
     "rate_limit": {
+      "$id": "urn:uuid:809084be-e82c-4e47-b3d0-39f176cf45f6",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "how much of a plan limit is used: one row per provider, window, account and, for a limit on one model, model, holding its latest reading",
       "properties": {
         "provider": {
+          "$id": "urn:uuid:9e36a3d3-6250-4ff8-96c2-d3d8c6c95b5c",
           "type": "string",
           "ref": "provider",
           "death": "cascade",
@@ -339,17 +403,20 @@
           "identity": true
         },
         "window": {
+          "$id": "urn:uuid:c0595996-d133-4e45-bf7e-eaae8fd66698",
           "type": "integer",
           "description": "the limit's window in minutes: 10080 for a week, 300 for five hours",
           "identity": true
         },
         "account": {
+          "$id": "urn:uuid:a9069211-0ade-4e85-8803-a42e786b8c08",
           "type": "string",
           "ref": "account",
           "description": "the account whose plan it is, where the reading came from one: a transcript or a run of that account, its status line, or a native session's request it answered",
           "identity": true
         },
         "model": {
+          "$id": "urn:uuid:278a60ad-34d6-418c-8db5-7ea64ebb34d5",
           "type": "string",
           "ref": "model",
           "death": "cascade",
@@ -357,15 +424,18 @@
           "identity": true
         },
         "used": {
+          "$id": "urn:uuid:6244b5cd-5291-4458-babe-6ed0c984f18e",
           "type": "number",
           "description": "percent of the window's limit used, as the provider reported it"
         },
         "resets": {
+          "$id": "urn:uuid:b1db17b5-4410-43be-bc76-e1e399491525",
           "type": "string",
           "format": "date-time",
           "description": "when the window resets"
         },
         "at": {
+          "$id": "urn:uuid:4691c584-f2a7-4905-a1d9-7f4566191965",
           "type": "string",
           "format": "date-time",
           "description": "when the provider reported it"
@@ -373,6 +443,7 @@
       }
     },
     "stream_item": {
+      "$id": "urn:uuid:bf737cfc-e4d1-41ba-a102-0f2f2d96d339",
       "component": true,
       "sync": "none",
       "wire": false,
@@ -381,14 +452,17 @@
       "description": "the provider-neutral identity of a streamed text item, retained on its output entry for completed-result recovery",
       "properties": {
         "index": {
+          "$id": "urn:uuid:97a08dde-8e36-4556-a2cc-0f5b9fd26ecf",
           "type": "integer"
         },
         "id": {
+          "$id": "urn:uuid:dcbc1307-188f-4c13-9060-f2b759d89258",
           "type": "string"
         }
       }
     },
     "model_result": {
+      "$id": "urn:uuid:930f56ab-043f-4dc5-a26f-e54017582fd3",
       "component": true,
       "sync": "none",
       "journal": false,
@@ -397,11 +471,13 @@
       "description": "provider evidence on the original ask, saved before billing settlement and transcript delivery so either can recover without generation",
       "properties": {
         "pending": {
+          "$id": "urn:uuid:dd1e87d2-60ae-4dd2-aa9f-2de0d0702079",
           "type": "string",
           "store": "blob",
           "description": "the provider acknowledgement and the accounting terms of a generation that can be retrieved"
         },
         "body": {
+          "$id": "urn:uuid:63786c43-0aaa-40b2-a441-171aa056fc8f",
           "type": "string",
           "store": "blob",
           "description": "the completed ModelResult, including usage and known cost; absent cost remains unknown"
@@ -409,59 +485,71 @@
       }
     },
     "response": {
+      "$id": "urn:uuid:36d801ce-ee71-4bf7-975b-7a2275951e1b",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "what a provider answered a model request that failed, as it arrived, kept beside the line recording the failure so the failure can be read rather than reconstructed; never the request's credentials",
       "properties": {
         "body": {
+          "$id": "urn:uuid:ef14205f-e872-40f4-8179-4ab28c32804e",
           "type": "string",
           "store": "blob",
           "description": "the body of an error status, or the event that ended the stream, as sent"
         },
         "headers": {
+          "$id": "urn:uuid:dd6e8931-614d-45a0-a53f-dacbef7c0521",
           "type": "object",
           "description": "the headers that speak of the provider's limits (retry-after, rate limits, plan usage), by lowercase name"
         }
       }
     },
     "questions": {
+      "$id": "urn:uuid:fba536e9-3c23-493b-a306-d560537b98c3",
       "component": true,
       "type": "object",
       "description": "typed questions about the transcript, asked with the next request and answered by one `answer` entry each rather than in prose",
       "properties": {
         "asked": {
+          "$id": "urn:uuid:464b2c98-e46a-4a9f-bcea-cf9bcc3d81e3",
           "type": "object",
           "description": "each question by its name, in Jev's terms: {type: noul, choice or score, instructions, criteria}"
         }
       }
     },
     "answer": {
+      "$id": "urn:uuid:62229acf-52c2-4942-bb22-827e7614468c",
       "component": true,
       "type": "object",
       "description": "a model's answer to one typed question, in the terms it was asked in",
       "properties": {
         "question": {
+          "$id": "urn:uuid:4be4d3b3-1969-4acc-8e88-6e67dfd59828",
           "type": "string",
           "description": "the name of the question it answers"
         },
         "noul": {
+          "$id": "urn:uuid:dcbcc188-6140-4953-9eaf-5d36ed3b6069",
           "type": "number",
           "description": "for a noul, the probability that it holds"
         },
         "choice": {
+          "$id": "urn:uuid:0ad86ffe-d317-4968-be2b-8181d89def4c",
           "type": "string",
           "description": "for a choice, the option chosen"
         },
         "score": {
+          "$id": "urn:uuid:672c74fd-fcf2-4d1f-9355-542608061439",
           "type": "number",
           "description": "for a score, where along its criteria the answer falls"
         },
         "confidence": {
+          "$id": "urn:uuid:53859cbb-109a-4253-a7d8-290b497d79be",
           "type": "number",
           "description": "how sure the model is of a choice or a score, from 0 to 1"
         },
         "probabilities": {
+          "$id": "urn:uuid:86152233-40bd-4a05-93ef-9cbb9a998166",
           "type": "object",
           "description": "each option's probability, by the option's name or place"
         }
@@ -482,6 +570,7 @@
       ]
     },
     "inference": {
+      "$id": "urn:uuid:bd15c54c-a2af-4d6f-b1f3-e7c4c7e43dda",
       "component": true,
       "type": "object",
       "wire": false,
@@ -490,14 +579,17 @@
       "description": "the pinned executor and private frozen request and completed receipt references for the original model ask",
       "properties": {
         "executor": {
+          "$id": "urn:uuid:6151c004-8ffe-4859-a826-676a7b038b0a",
           "type": "string",
           "description": "the independently deployed executor release that accepted this ask"
         },
         "request": {
+          "$id": "urn:uuid:8d3e4e7d-3c78-47dd-85fe-9033e3a1a3b5",
           "type": "string",
           "description": "private frozen request object reference"
         },
         "receipt": {
+          "$id": "urn:uuid:f1d0b70f-81c2-400a-a5ca-8645c7677e00",
           "type": "string",
           "description": "private completed receipt object reference; absent while pending"
         }
@@ -506,10 +598,12 @@
   },
   "kinds": {
     "provider": {
+      "$id": "urn:uuid:17523bb7-2863-41b5-aeca-e0c975e991f2",
       "description": "a service that runs models",
       "prefix": "Y"
     },
     "model": {
+      "$id": "urn:uuid:a36bc876-472c-4126-a604-c3769951eb8a",
       "description": "a model, whoever serves it",
       "prefix": "O"
     }

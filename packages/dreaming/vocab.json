@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:361af1ff-bdfa-4abf-b662-7da1973f275a",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
@@ -7,10 +8,12 @@
   "title": "dreaming",
   "$defs": {
     "dream": {
+      "$id": "urn:uuid:1affad8e-c0ed-49b6-bddd-af387520971a",
       "component": true,
       "type": "object",
       "properties": {
         "scope": {
+          "$id": "urn:uuid:11f9e56d-0fdb-4b19-98da-dfc9ad9bfde2",
           "type": "string",
           "ref": "project",
           "death": "cascade",
@@ -20,28 +23,33 @@
       "description": "a standing intention filed under a project; it wears @yaks/builders' `builder`, which says when it runs"
     },
     "meta": {
+      "$id": "urn:uuid:d2ec8d8a-1d97-483a-80a0-d7fd5fb10f4f",
       "component": true,
       "type": "object",
       "properties": {},
       "description": "a note written in a transcript: never delivered to anyone live, read later by a dream"
     },
     "recall": {
+      "$id": "urn:uuid:496b0362-c969-40c8-b126-44903153b798",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "count": {
+          "$id": "urn:uuid:c44bbcfa-2812-4416-bffa-fc9979148280",
           "type": "number",
           "stamped": true,
           "description": "how many times it has been recalled"
         },
         "first_at": {
+          "$id": "urn:uuid:b8701e97-a18b-4129-8c6f-a0f5082e433c",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was first recalled"
         },
         "last_at": {
+          "$id": "urn:uuid:67d645ff-7c25-44a6-a395-1a81b8dc2b6b",
           "type": "string",
           "format": "date-time",
           "stamped": true,
@@ -51,6 +59,7 @@
       "description": "how many times an entity has been recalled, and when it last was"
     },
     "recalled": {
+      "$id": "urn:uuid:188352d4-f2a0-4617-a622-1a07e6ecf938",
       "component": true,
       "journal": false,
       "type": "object",
@@ -58,11 +67,13 @@
       "reversed": "recalled by",
       "properties": {
         "source": {
+          "$id": "urn:uuid:c5c5d233-0f4c-43ec-ad09-e5d551301338",
           "type": "string",
           "ref": "entry",
           "death": "keep"
         },
         "at": {
+          "$id": "urn:uuid:c799521b-9bf3-43d0-8ea5-7de24a013ea1",
           "type": "string",
           "format": "date-time"
         }
@@ -72,6 +83,7 @@
   },
   "kinds": {
     "dream": {
+      "$id": "urn:uuid:1affad8e-c0ed-49b6-bddd-af387520971a",
       "description": "a standing intention filed under a project; it wears @yaks/builders' `builder`, which says when it runs",
       "with": {
         "builder": true

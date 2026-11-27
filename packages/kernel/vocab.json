@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:23a698c6-89f3-4a64-95af-a04fa6a6db8f",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
@@ -7,6 +8,7 @@
   "title": "kernel",
   "$defs": {
     "about": {
+      "$id": "urn:uuid:0d9318a9-9f83-4070-8f42-a7bcc9ff3cb6",
       "component": true,
       "type": "object",
       "edge": "about",
@@ -15,16 +17,19 @@
       "description": "edge tag: this entity is about that one"
     },
     "archived": {
+      "$id": "urn:uuid:491c831d-6b4c-49e6-8225-b0d0ef02fad1",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:bf4b0c9f-a8e1-4602-9599-1ab9b946f17f",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was archived"
         },
         "by": {
+          "$id": "urn:uuid:0e6101a9-257c-40dd-a7db-4fde7338935e",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -32,6 +37,7 @@
           "description": "who archived it — kept as history when that entity is deleted"
         },
         "via": {
+          "$id": "urn:uuid:32eae0a4-5ea5-42c0-9a2c-4118904175d0",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -42,16 +48,19 @@
       "description": "Hidden from ordinary listings, without stopping execution or deleting history."
     },
     "broken": {
+      "$id": "urn:uuid:5de7ccbb-28c5-4955-bb7d-2531d479f924",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:5d44ef1b-29cd-4f45-b9a3-74bcf83faf4f",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was found broken"
         },
         "by": {
+          "$id": "urn:uuid:5593df17-d046-4258-a7fd-4141bc72c6c0",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -59,6 +68,7 @@
           "description": "who found it broken — kept as history when that entity is deleted"
         },
         "via": {
+          "$id": "urn:uuid:4262b9e3-18f2-4fbd-b91f-6948190a711e",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -66,6 +76,7 @@
           "description": "what the write came in through — the session or client that made it"
         },
         "code": {
+          "$id": "urn:uuid:fa10e5b7-32ff-434e-9b2d-a798f8f6f0f1",
           "type": "string",
           "description": "the other side's word for what broke: an OAuth error code, a hostname check's status"
         }
@@ -73,15 +84,18 @@
       "description": "Something outside the graph stopped honoring what this entity holds: a connection whose grant was revoked, a hostname whose check failed. It is a standing condition of a long-lived thing, not one refusal. Removing the mark says it holds again."
     },
     "comment": {
+      "$id": "urn:uuid:ca88d3f6-7480-4b59-a138-5b6e6c4467c9",
       "component": true,
       "type": "object",
       "properties": {
         "target": {
+          "$id": "urn:uuid:f75ee188-cd00-45c4-a776-23696eb81926",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "reply_to": {
+          "$id": "urn:uuid:d2f9ff7d-de3c-43af-ac4e-4f7802907045",
           "type": "string",
           "ref": "comment",
           "death": "detach",
@@ -91,12 +105,14 @@
       "description": "a comment on a thread: target is the entity it hangs on, reply_to the comment it answers; doc holds the text"
     },
     "cites": {
+      "$id": "urn:uuid:47c279b3-a2fb-4256-b84f-4cf332ba9789",
       "component": true,
       "type": "object",
       "edge": true,
       "reversed": "cited by",
       "properties": {
         "hash": {
+          "$id": "urn:uuid:08e902ad-2cb0-419c-b2ae-429be776edd4",
           "type": "string",
           "description": "the cited entity's content hash when this citation was verified"
         }
@@ -104,6 +120,7 @@
       "description": "this entity cites that one; its hash says whether the cited content still holds"
     },
     "completed": {
+      "$id": "urn:uuid:dc8d75d8-b158-4b33-bdf7-937ad3747fad",
       "component": true,
       "type": "object",
       "index": [
@@ -113,12 +130,14 @@
       ],
       "properties": {
         "at": {
+          "$id": "urn:uuid:9d597217-ae02-4bbf-badc-862301a7983b",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was finished"
         },
         "by": {
+          "$id": "urn:uuid:fcb7c484-38b7-4f19-b11b-f6e429480009",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -126,6 +145,7 @@
           "description": "who finished it — kept as history when that entity is deleted"
         },
         "via": {
+          "$id": "urn:uuid:1f3820bc-ca13-4ae1-858f-9328b8838b4f",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -136,21 +156,25 @@
       "description": "The work this entity records was finished: a task done. Who finished it is kept across later writes of the mark. Removing the mark reopens the work."
     },
     "decided": {
+      "$id": "urn:uuid:f380d329-da28-49cf-905b-771df67d7a17",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:c7712977-2917-409d-89cd-9ade2ddb69d8",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "by": {
+          "$id": "urn:uuid:74cc3f60-1322-47e4-9c82-e4ed276e9467",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "verdict": {
+          "$id": "urn:uuid:8e5187c9-ba63-4068-829f-2bbab66e99ee",
           "type": "string",
           "enum": [
             "approved",
@@ -158,12 +182,14 @@
           ]
         },
         "via": {
+          "$id": "urn:uuid:767b7144-1bf9-4186-8bdb-01f6468c1976",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "choice": {
+          "$id": "urn:uuid:3e5181c4-6d71-4ab3-ad1d-11c1ced17c02",
           "type": "string",
           "minLength": 1,
           "description": "The chosen label or custom answer to a decision question."
@@ -172,6 +198,7 @@
       "description": "A verdict or chosen answer, by whom and when."
     },
     "delegates": {
+      "$id": "urn:uuid:6cec3aca-74eb-44b6-b603-af989636f483",
       "component": true,
       "type": "object",
       "edge": "delegates",
@@ -180,11 +207,13 @@
       "description": "edge tag: this entity handed work off to that one"
     },
     "entity": {
+      "$id": "urn:uuid:1873db7d-db02-4c9f-af07-5b7111afdaa5",
       "component": true,
       "type": "object",
       "wire": false,
       "properties": {
         "archetype": {
+          "$id": "urn:uuid:a489a545-4328-4754-8b28-84d19b391a5f",
           "type": "string",
           "ref": "archetype",
           "death": "keep",
@@ -195,16 +224,19 @@
       "description": "every entity has one: the identity row, carrying the archetype its set of components adds up to and whatever else a plugin keeps beside every entity"
     },
     "failed": {
+      "$id": "urn:uuid:d80cb068-2311-4eb3-a796-3743a6d5c20e",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:2df9ddf5-ff7a-4dbb-aafc-442beb658221",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it failed"
         },
         "by": {
+          "$id": "urn:uuid:14995d73-f8fb-4395-9838-29605f6654ba",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -212,6 +244,7 @@
           "description": "who gave up on it — kept as history when that entity is deleted"
         },
         "via": {
+          "$id": "urn:uuid:2fd1c68a-cd91-4162-bc5c-c71a87f1adc3",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -219,6 +252,7 @@
           "description": "what the write came in through — the session or client that made it"
         },
         "reason": {
+          "$id": "urn:uuid:b29df1b4-ec4a-4809-96dd-e2933b9a1bb3",
           "type": "string",
           "description": "why it failed, in the words of whatever refused"
         }
@@ -226,10 +260,12 @@
       "description": "The work this entity records was tried and given up on, and is not tried again on its own: a checkout that could not be made. Removing the mark says it is being tried again."
     },
     "favorite": {
+      "$id": "urn:uuid:bc3c8b57-c713-484a-a3f5-07baa17b24db",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:905a9e6e-9d16-4fed-873f-eefa5bb82d8a",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -238,35 +274,42 @@
       "description": "somebody marked it a favorite"
     },
     "image": {
+      "$id": "urn:uuid:4ec30e56-9253-4156-827e-f3535357d0d1",
       "component": true,
       "type": "object",
       "properties": {
         "w": {
+          "$id": "urn:uuid:29db71dd-69e3-43fe-9319-0bf18c3deff8",
           "type": "number"
         },
         "h": {
+          "$id": "urn:uuid:ac66e432-02b1-40a8-b30c-c16a7f5851b5",
           "type": "number"
         }
       },
       "description": "this entity is an image, with its pixel dimensions"
     },
     "opened": {
+      "$id": "urn:uuid:14844cbd-a5e0-40e7-b5fb-65add8650400",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:043006c1-018d-4415-82fd-6632bd8e1fa4",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "by": {
+          "$id": "urn:uuid:8bb3b899-d0e6-4e12-863b-8124fc3ed386",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:f636d273-7cce-4bd5-addc-9168b85f6543",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -276,21 +319,25 @@
       "description": "somebody looked at it"
     },
     "proposed": {
+      "$id": "urn:uuid:ec61e732-ac4a-4d95-8d82-e90659e676fb",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:7cf4b8f1-089d-4839-af47-22236f5c717c",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "by": {
+          "$id": "urn:uuid:1d874079-9aa8-4ed8-8cdb-8aa71b72a6b0",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:624e66f8-b036-42a2-86b6-0538f98f006f",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -300,22 +347,26 @@
       "description": "put forward for a decision, by whom and when"
     },
     "quarantined": {
+      "$id": "urn:uuid:1ed224e6-b368-454c-bfbd-d2771958a009",
       "component": true,
       "type": "object",
       "found": false,
       "properties": {
         "at": {
+          "$id": "urn:uuid:8dcff296-51d4-4bdf-b39e-c770ce38577b",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "by": {
+          "$id": "urn:uuid:85a6b2d3-1d46-455c-8150-9f0f5c7aa17d",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:e18e748d-316c-4154-9398-02b67343f97d",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -325,6 +376,7 @@
       "description": "set aside as harmful to act on: readable, never handed out as guidance"
     },
     "reads": {
+      "$id": "urn:uuid:9f48bee1-e295-4b73-8645-0169fed999c5",
       "component": true,
       "type": "object",
       "edge": "reads",
@@ -333,16 +385,19 @@
       "description": "edge tag: this entity reads that one"
     },
     "redaction": {
+      "$id": "urn:uuid:6bc9a147-7b84-4981-8951-beb721ba8df5",
       "component": true,
       "type": "object",
       "properties": {
         "target": {
+          "$id": "urn:uuid:294fa4eb-0164-4570-8e8d-0adffa998ea7",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "prop": {
+          "$id": "urn:uuid:6a30a758-3327-419f-b85b-6d225962832c",
           "type": "string",
           "enum": [
             "title",
@@ -352,6 +407,7 @@
           "description": "which property was replaced"
         },
         "hash": {
+          "$id": "urn:uuid:b3ca62be-28c1-4dfb-a5ab-5d09844566b6",
           "type": "string",
           "stamped": true,
           "description": "the digest of what was there, so a claim about it can still be checked"
@@ -360,6 +416,7 @@
       "description": "one property of one entity, replaced — the hash proves what was there without keeping it"
     },
     "references": {
+      "$id": "urn:uuid:68bd829a-d8e3-420d-ab0f-24470b58156e",
       "component": true,
       "type": "object",
       "edge": "referenced",
@@ -368,16 +425,19 @@
       "description": "edge tag: this entity refers to that one"
     },
     "resolved": {
+      "$id": "urn:uuid:bd7af9f9-3ecb-420b-9187-303236795552",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:49d8f582-d336-47f7-a98a-3fb8938d847f",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was resolved"
         },
         "by": {
+          "$id": "urn:uuid:49263c9d-2052-44ab-ab15-62d9bc156f79",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -385,6 +445,7 @@
           "description": "who resolved it — kept as history when that entity is deleted"
         },
         "via": {
+          "$id": "urn:uuid:b27c1ece-4962-4408-aaec-a40fc2f5ce1d",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -395,6 +456,7 @@
       "description": "The problem this entity records is over: a bug whose fix is live, a settled comment thread, a finished conflict between two sessions. It is not `completed`, which says a piece of work was finished; a problem can stop with no task done. Removing the mark says the problem is back."
     },
     "supersedes": {
+      "$id": "urn:uuid:6b323137-b3c4-4e31-a525-3188e6955cc7",
       "component": true,
       "type": "object",
       "edge": "supersedes",
@@ -403,6 +465,7 @@
       "description": "edge tag: this entity replaces that one"
     },
     "supervises": {
+      "$id": "urn:uuid:a1e2a570-cbcf-4031-9be4-bcc5b8057cb1",
       "component": true,
       "type": "object",
       "edge": "supervises",
@@ -411,21 +474,25 @@
       "description": "edge tag: this entity oversees that one"
     },
     "verified": {
+      "$id": "urn:uuid:2b7437a2-23c5-4649-8eca-a7646dec2b21",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:008cba61-3c17-4c56-9e90-05cf539401d3",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "by": {
+          "$id": "urn:uuid:c12f3c20-fb07-435f-9ff8-eff12f6f8aeb",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:d6cb140c-2324-48c8-a9d5-0df8bcebd839",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -435,6 +502,7 @@
       "description": "somebody checked this entity against what it claims and found it holds; only the act of checking writes it, never an edit to the entity"
     },
     "wants": {
+      "$id": "urn:uuid:dde65506-dd1b-4897-995c-8055f6db0914",
       "component": true,
       "type": "object",
       "edge": "wants",
@@ -443,6 +511,7 @@
       "description": "edge tag: this entity wants that one"
     },
     "worked": {
+      "$id": "urn:uuid:8bd96111-9933-481c-993a-e62f3c3c25b4",
       "component": true,
       "type": "object",
       "edge": "worked",
@@ -483,6 +552,7 @@
       ]
     },
     "admitted": {
+      "$id": "urn:uuid:b630b3b0-8ec8-48ac-af10-b2b99d2040a0",
       "component": true,
       "journal": false,
       "type": "object",
@@ -493,12 +563,14 @@
       ],
       "properties": {
         "at": {
+          "$id": "urn:uuid:74a57112-45db-4810-b360-30dacc9fb270",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the child took a place"
         },
         "by": {
+          "$id": "urn:uuid:dabfdc44-b10d-4837-bea3-72657b30e1dd",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -506,6 +578,7 @@
           "description": "who wrote the mark — kept as history when that entity is deleted"
         },
         "via": {
+          "$id": "urn:uuid:72ce64ca-2298-4f51-8a2b-1368b11925ed",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -516,6 +589,7 @@
       "description": "A child holds a place under the concurrency bound. Removing the mark gives up that place."
     },
     "waiting": {
+      "$id": "urn:uuid:97c10ecf-f97f-43d0-b01f-019d84015ae2",
       "component": true,
       "journal": false,
       "type": "object",
@@ -526,12 +600,14 @@
       ],
       "properties": {
         "at": {
+          "$id": "urn:uuid:4cb4f63c-0155-467c-a44a-809c397ede87",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the child began waiting"
         },
         "by": {
+          "$id": "urn:uuid:b4780b8d-ceca-4cea-bb36-cc78c5d716eb",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -539,6 +615,7 @@
           "description": "who wrote the mark — kept as history when that entity is deleted"
         },
         "via": {
+          "$id": "urn:uuid:8b0a2e06-7aea-481d-8f7d-eb38d5aac11a",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -549,17 +626,20 @@
       "description": "A child has stepped aside while it waits for its own children. Removing the mark queues it again."
     },
     "pending": {
+      "$id": "urn:uuid:feda8d55-e3f1-48d1-a8a4-8aba67bd664a",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:f26696cb-304c-46e1-b05c-61280edf5008",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it began awaiting confirmation"
         },
         "by": {
+          "$id": "urn:uuid:e2b52583-63a3-41d4-9480-ae38785963a3",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -567,6 +647,7 @@
           "description": "who requested confirmation"
         },
         "via": {
+          "$id": "urn:uuid:5c16850f-e531-4c02-830c-c555244e2d4b",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -577,17 +658,20 @@
       "description": "Awaiting its first successful answer or confirmation."
     },
     "interrupted": {
+      "$id": "urn:uuid:6da31ba4-b2b4-4b1e-b3eb-61423f3e0579",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:4a4d6a1f-17d5-47ba-8ffe-cc91fdec4e85",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was found broken"
         },
         "by": {
+          "$id": "urn:uuid:b2bd7b34-a682-4b7b-8062-9885ceddc1e7",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -595,6 +679,7 @@
           "description": "who found it broken — kept as history when that entity is deleted"
         },
         "via": {
+          "$id": "urn:uuid:7edab9ff-7bed-4482-97ba-d31dce83253b",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -602,6 +687,7 @@
           "description": "what the write came in through — the session or client that made it"
         },
         "code": {
+          "$id": "urn:uuid:36ac541d-af64-4e7c-839a-d759dc2881e4",
           "type": "string",
           "description": "why the work was interrupted: transport, restart, superseded or a signal"
         }
@@ -609,17 +695,20 @@
       "description": "A request or call was cut off before it finished. Removing the mark allows a deliberate retry; its code records why it was interrupted."
     },
     "cancelled": {
+      "$id": "urn:uuid:91105b77-de14-4974-abc6-5dccf4e6a04c",
       "component": true,
       "type": "object",
       "description": "the mark on something that was called off",
       "properties": {
         "at": {
+          "$id": "urn:uuid:8360e935-1530-4a05-a137-db8db8e6ce49",
           "type": "string",
           "format": "date-time",
           "description": "when it was called off",
           "stamped": true
         },
         "by": {
+          "$id": "urn:uuid:63e19a00-887f-4f59-bfe7-bbc43d085c5a",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -627,10 +716,12 @@
           "stamped": true
         },
         "reason": {
+          "$id": "urn:uuid:557b5e7b-9aa3-4318-8d98-1926fcc9ba12",
           "type": "string",
           "description": "why it was called off"
         },
         "via": {
+          "$id": "urn:uuid:786c3acd-403a-45bf-b595-74157b8dd501",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -640,6 +731,7 @@
       }
     },
     "unchecked": {
+      "$id": "urn:uuid:90a5bfeb-60cc-42b4-99b6-fde216018a6d",
       "component": true,
       "type": "object",
       "properties": {},
@@ -648,6 +740,7 @@
   },
   "kinds": {
     "comment": {
+      "$id": "urn:uuid:ca88d3f6-7480-4b59-a138-5b6e6c4467c9",
       "description": "a comment on a thread: target is the entity it hangs on, reply_to the comment it answers; doc holds the text",
       "with": {
         "doc": true
@@ -665,6 +758,7 @@
       ]
     },
     "redaction": {
+      "$id": "urn:uuid:6bc9a147-7b84-4981-8951-beb721ba8df5",
       "description": "one property of one entity, replaced — the hash proves what was there without keeping it"
     }
   }

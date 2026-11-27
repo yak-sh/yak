@@ -1,10 +1,12 @@
 {
+  "$id": "urn:uuid:d0368ce8-755f-4f0a-bee4-f2977679f7fd",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "chat",
   "kinds": {
     "chat_message": {
+      "$id": "urn:uuid:bc315e2a-800c-4f21-94a6-3773fd45a10d",
       "description": "a message said in a room of a chat platform, its words in `doc{body}`",
       "with": {
         "doc": true
@@ -26,11 +28,13 @@
   },
   "$defs": {
     "chat_message": {
+      "$id": "urn:uuid:bc315e2a-800c-4f21-94a6-3773fd45a10d",
       "component": true,
       "type": "object",
       "description": "one message said in a room of a chat platform; its words are `doc{body}`. Its eid is derived from `via` and `message_id` (@yaks/chat `messageEid`), so hearing it twice writes one. One with @yaks/mail's `deliver{to}` asks to be posted in the `chat_room` `deliver.to` names, by the bot of its `connection`, and its outcome is `delivered` or `bounced`",
       "properties": {
         "via": {
+          "$id": "urn:uuid:e97a84b6-cfc3-424b-b658-746418a52de6",
           "type": "string",
           "description": "the chat platform it was said on, by its plugin's name",
           "examples": [
@@ -38,35 +42,42 @@
           ]
         },
         "room": {
+          "$id": "urn:uuid:aec0670f-7d17-4e0a-9d22-d57120bdf91c",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the `chat_room` it was said in"
         },
         "author": {
+          "$id": "urn:uuid:a951aa07-a086-4fb6-a061-7ba5bfe9cb6d",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the `chat_account` that said it"
         },
         "message_id": {
+          "$id": "urn:uuid:4ae23a9d-0adb-4a98-a706-04fd1ac42876",
           "type": "string",
           "description": "the platform's id for it"
         },
         "reply_to": {
+          "$id": "urn:uuid:f99709ea-5559-4041-968e-34820325f41f",
           "type": "string",
           "description": "the platform's id for the message it answers, where it answers one"
         },
         "thread": {
+          "$id": "urn:uuid:4c3b456e-9cd5-4285-83e4-a18e8dd6c5cb",
           "type": "string",
           "description": "the platform's id for the first message of the thread this message is in"
         },
         "at": {
+          "$id": "urn:uuid:2da48a2d-6572-4c87-b176-73e45e760a86",
           "type": "string",
           "format": "date-time",
           "description": "when it was said"
         },
         "addressed": {
+          "$id": "urn:uuid:f7f09e72-75ba-49ee-9d2d-b3541674a927",
           "type": "string",
           "enum": [
             "mention",
@@ -76,6 +87,7 @@
           "description": "how it was said to the bot that heard it, where it was: naming it, replying to it, or to it alone. Whether a message is answered is the listener's to decide, from this and its words"
         },
         "controls": {
+          "$id": "urn:uuid:024f991f-56d6-4a19-b08d-800e1b18830f",
           "type": "array",
           "items": {
             "type": "object",
@@ -93,104 +105,125 @@
           "description": "the buttons posted with it, or, on a private one (`chat_private`), with its words to the one it is for"
         },
         "connection": {
+          "$id": "urn:uuid:5a21f8aa-d563-4530-9b07-7492d26310c4",
           "type": "string",
           "description": "the eid of the connection whose bot heard it, or speaks it (@yaks/connections): yaks.app's own bot added to a server, or a bot a space brought. Kept as an id, not a reference: the connection lives in its owner's directory, not beside the message"
         }
       }
     },
     "chat_room": {
+      "$id": "urn:uuid:c1f07974-cedb-4a40-b4a5-1b1d3a4e5ca2",
       "component": true,
       "type": "object",
       "description": "a place messages are said on a chat platform: a Discord or Slack channel, a direct conversation, a Telegram chat. Its eid is derived from `via` and `id` (`roomEid`)",
       "properties": {
         "via": {
+          "$id": "urn:uuid:641214ea-8536-4a40-9872-7b35862d078b",
           "type": "string",
           "description": "the chat platform, by its plugin's name"
         },
         "id": {
+          "$id": "urn:uuid:c65ab368-9a36-4346-b782-73a947566fd8",
           "type": "string",
           "description": "the platform's id for it"
         },
         "server": {
+          "$id": "urn:uuid:94a00b0a-640e-4a1d-8ef0-7fec7eb28523",
           "type": "string",
           "description": "the platform's id for the server or workspace it belongs to; none for a direct conversation"
         },
         "name": {
+          "$id": "urn:uuid:30e3a319-f3c2-4c4a-8c37-9ef90cdb09eb",
           "type": "string",
           "description": "what the platform calls it, where it says"
         },
         "platform_bot": {
+          "$id": "urn:uuid:8cc9ed3b-3356-4af8-84b5-28ea5437f8bd",
           "type": "boolean",
           "stamped": true,
           "description": "this direct room was heard by the host's own bot and replies in it use that bot"
         },
         "private": {
+          "$id": "urn:uuid:c55bb12c-0a35-45a7-9485-1bf1e7db60c6",
           "type": "boolean",
           "description": "the space says only its own people talk here: a server or channel it connected, closed to the public. There, anyone whose role allows an act may vouch for the person who asked for it, not only that person (yaks.app's operator-route.ts)"
         }
       }
     },
     "chat_account": {
+      "$id": "urn:uuid:904a8b09-2503-4094-95dc-9b30cc35d4f8",
       "component": true,
       "type": "object",
       "description": "someone on a chat platform. Which person here they are is said by that person's connection to the platform's sign-in, whose account is `id`, never on this row. Its eid is derived from `via` and `id` (`accountEid`)",
       "properties": {
         "via": {
+          "$id": "urn:uuid:e34a685b-96ac-4e0d-ab06-1aa267da581a",
           "type": "string",
           "description": "the chat platform, by its plugin's name"
         },
         "id": {
+          "$id": "urn:uuid:5f7d14d0-e7f7-4a5e-b098-7bf77fd9968a",
           "type": "string",
           "description": "the platform's id for them"
         },
         "name": {
+          "$id": "urn:uuid:5e753a6e-ec34-406b-9436-6e3895a1e969",
           "type": "string",
           "description": "the name they go by there"
         }
       }
     },
     "chat_private": {
+      "$id": "urn:uuid:9f760d94-7b08-495d-8b84-18f0e0e8ed34",
       "component": true,
       "type": "object",
       "description": "on a `chat_message` to post, that its words are for one account in its room alone: the room gets a line naming them, pinging them alone, with a Show me button, and a press of it by them answers the words to them alone (Discord's ephemeral messages). Anyone else who presses it is told it is not theirs",
       "properties": {
         "to": {
+          "$id": "urn:uuid:30e0d7d4-bcf6-4867-b9a3-680dc719910a",
           "type": "string",
           "description": "the platform's id for the one account it is for"
         }
       }
     },
     "chat_hears": {
+      "$id": "urn:uuid:1a39ff46-3c05-402e-9bbd-20c43a22e2b4",
       "component": true,
       "type": "object",
       "description": "on a chat connection (@yaks/connections), the room of its server where its owner's Operator hears every message, not only those said to its bot: the room the space chose in the Operator's settings. Without it, the Operator hears only what is said to the bot",
       "properties": {
         "room": {
+          "$id": "urn:uuid:073c71ad-aaae-4704-be67-b35f8fa187ce",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the `chat_room` it hears, by its derived eid (`roomEid`), which names the room in every store though its row is kept beside its messages"
         },
         "id": {
+          "$id": "urn:uuid:fd5e99bc-e6ab-4ec0-9498-9aa2cf10519e",
           "type": "string",
           "description": "the platform's id for the room, which a link to it needs"
         },
         "server": {
+          "$id": "urn:uuid:c61e238c-f99a-44ec-ad2c-c03d4416e3d5",
           "type": "string",
           "description": "the platform's id for the server the room is in"
         },
         "name": {
+          "$id": "urn:uuid:d4272387-dd43-41db-99bb-031d73e00959",
           "type": "string",
           "description": "what the room was called when it was chosen, as the platform said, so a page names it without asking the platform"
         }
       }
     },
     "chat_serves": {
+      "$id": "urn:uuid:c895a50f-09e4-464d-b835-c9d96f2606c3",
       "component": true,
       "type": "object",
       "description": "on the chat connection of a bot a space brought (@yaks/connections, a pasted bot token), the servers that bot is in, as its platform last said over its socket: where its space's apps may post through it and whose rooms its space may choose to hear in full. A connection that added yaks.app's own bot to a server serves its `account` instead, and keeps only its name here",
       "properties": {
         "servers": {
+          "$id": "urn:uuid:13627761-1e8c-4eda-8c46-2ed0b679c673",
           "type": "array",
           "items": {
             "type": "string"
@@ -198,6 +231,7 @@
           "description": "the platform's ids for the servers, sorted"
         },
         "names": {
+          "$id": "urn:uuid:6173c0f5-d142-420a-9ba2-c78cac7f8026",
           "type": "object",
           "additionalProperties": {
             "type": "string"

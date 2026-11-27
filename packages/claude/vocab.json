@@ -1,17 +1,22 @@
 {
+  "$id": "urn:uuid:e31364d1-810f-46a0-8bde-efe8ea80f02e",
   "title": "Claude Code",
   "$defs": {
     "claude": {
+      "$id": "urn:uuid:b8dc199b-4bb4-4e36-b48e-11c9742269e5",
       "component": true,
       "description": "Claude Code one-turn identifiers; not resumable graph anchors.",
       "properties": {
         "response_id": {
+          "$id": "urn:uuid:b2818a0e-0603-4bc7-8687-303b5fbe3526",
           "type": "string"
         },
         "session_id": {
+          "$id": "urn:uuid:a6f39d38-ee29-4be8-addc-32e54660983c",
           "type": "string"
         },
         "cache_expires_at": {
+          "$id": "urn:uuid:e6e99f9f-34ae-4943-bc62-5d58c426e81e",
           "type": "string",
           "format": "date-time",
           "description": "the recorded expiry of this request’s cached prefix: request start plus the lifetime its provider row records (`provider{cache_retention}`). Missing means unknown, not warm"

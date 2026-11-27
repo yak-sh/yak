@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:35c70371-3101-4bfb-8ffb-5995f14c1092",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
@@ -7,6 +8,7 @@
   "title": "canvas",
   "$defs": {
     "camera": {
+      "$id": "urn:uuid:2832c8bc-1c70-40c3-8e47-5ad790e64f04",
       "component": true,
       "journal": false,
       "type": "object",
@@ -20,40 +22,48 @@
       "description": "where one window is looking at one canvas — synced to the server so another tab, or a tool, can read it and move it",
       "properties": {
         "client": {
+          "$id": "urn:uuid:08a85bd6-6418-4a70-8e6e-47f78c2de85b",
           "type": "string",
           "ref": "client",
           "death": "cascade",
           "description": "the window doing the looking"
         },
         "canvas": {
+          "$id": "urn:uuid:f19528f7-dbf6-45af-90a8-950a8d4ca6bc",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the canvas it is looking at"
         },
         "x": {
+          "$id": "urn:uuid:a3819ce9-f5b3-418c-bb0a-6b00bbce0855",
           "type": "number",
           "description": "viewport centre, in canvas units"
         },
         "y": {
+          "$id": "urn:uuid:59bc9e3b-ecba-4597-923c-4a3edee0890d",
           "type": "number",
           "description": "viewport centre, in canvas units"
         },
         "zoom": {
+          "$id": "urn:uuid:82c1d33d-43a0-42f1-8b14-aa0c02319c65",
           "type": "number",
           "description": "scale — 2 draws everything twice as large"
         },
         "w": {
+          "$id": "urn:uuid:6659bfd3-4bd4-4323-859d-41bb9317781d",
           "type": "number",
           "description": "viewport width, in pixels"
         },
         "h": {
+          "$id": "urn:uuid:51e40a03-a8e4-4ac1-8598-a60114d0d7ac",
           "type": "number",
           "description": "viewport height, in pixels"
         }
       }
     },
     "canvas": {
+      "$id": "urn:uuid:aeb5a601-1227-4cf0-96fc-89b8441a700e",
       "component": true,
       "type": "object",
       "by_name": true,
@@ -62,24 +72,28 @@
       "properties": {}
     },
     "card": {
+      "$id": "urn:uuid:96b001be-18d6-476b-8685-86e55cb58d5a",
       "component": true,
       "type": "object",
       "sync": "server",
       "description": "one entity shown on a canvas",
       "properties": {
         "target": {
+          "$id": "urn:uuid:57cc8830-7cf9-4904-8b44-f727b46b5a88",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the entity shown — the card is deleted with it, because a card showing nothing is nothing"
         },
         "view": {
+          "$id": "urn:uuid:ee075b8c-1fae-4bbc-9690-001a3295e813",
           "type": "string",
           "description": "the view it is rendered in"
         }
       }
     },
     "client": {
+      "$id": "urn:uuid:557b0c46-5ab1-4386-adb9-f6baee1585b8",
       "component": true,
       "journal": false,
       "type": "object",
@@ -87,16 +101,19 @@
       "description": "one open window — what a camera, a cursor, a fold and a shelf each belong to",
       "properties": {
         "user_agent": {
+          "$id": "urn:uuid:ebda9795-3980-4797-9738-3554880dec1a",
           "type": "string",
           "description": "the user-agent string the window reported"
         },
         "actor": {
+          "$id": "urn:uuid:33bd1149-d72f-4105-b841-40e7a09169af",
           "type": "string",
           "ref": "entity",
           "death": "detach",
           "description": "who is at the window — the property is cleared, not the row deleted, when they are gone"
         },
         "ip": {
+          "$id": "urn:uuid:2f149ae1-2865-4590-90e0-3bbfbcc281d6",
           "type": "string",
           "stamped": true,
           "description": "the address it connected from — written by the server"
@@ -104,6 +121,7 @@
       }
     },
     "cursor": {
+      "$id": "urn:uuid:0dd8cb45-2b52-4661-ba43-7c2142602897",
       "component": true,
       "journal": false,
       "type": "object",
@@ -116,24 +134,28 @@
       "description": "what one window has open — synced to the server, so a tool can move someone there by writing it",
       "properties": {
         "client": {
+          "$id": "urn:uuid:1c4d9dd8-a0a6-4ff5-982f-83dc3c6345a5",
           "type": "string",
           "ref": "client",
           "death": "cascade",
           "description": "the window"
         },
         "target": {
+          "$id": "urn:uuid:ee6b746b-2286-4b54-96f0-0890196adc24",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the entity it is showing — kept when that entity is deleted, so the history still makes sense"
         },
         "view": {
+          "$id": "urn:uuid:2dc520c2-a61e-42b3-a7f6-f2bfd2bfdc9c",
           "type": "string",
           "description": "the view it is showing it in"
         }
       }
     },
     "fold": {
+      "$id": "urn:uuid:5d90cfbe-da63-45dc-96a7-794f5df15ba4",
       "component": true,
       "journal": false,
       "type": "object",
@@ -147,24 +169,28 @@
       "description": "the sections of a list one window has collapsed",
       "properties": {
         "client": {
+          "$id": "urn:uuid:bfec5731-e1ce-44dc-89ad-bc9d4a59440b",
           "type": "string",
           "ref": "client",
           "death": "cascade",
           "description": "the window"
         },
         "board": {
+          "$id": "urn:uuid:a2526a02-91b6-4358-9933-fd653ea0450b",
           "type": "string",
           "ref": "board",
           "death": "cascade",
           "description": "the list whose sections are collapsed — a `board` in your own vocabulary"
         },
         "statuses": {
+          "$id": "urn:uuid:7bd6b538-1de6-484d-bfc2-228384fba3c3",
           "type": "string",
           "description": "which sections are collapsed"
         }
       }
     },
     "layout": {
+      "$id": "urn:uuid:f894d9ba-8700-4ec7-a3bb-8ec46f77f8ce",
       "component": true,
       "type": "object",
       "by_name": true,
@@ -172,6 +198,7 @@
       "description": "a named split of the screen into panes",
       "properties": {
         "root": {
+          "$id": "urn:uuid:c91c8db3-1254-457b-82c5-78aac9500c42",
           "type": "string",
           "ref": "pane",
           "death": "detach",
@@ -180,32 +207,38 @@
       }
     },
     "pane": {
+      "$id": "urn:uuid:bfc1a894-1b38-4fc3-bfe5-074a72d7a815",
       "component": true,
       "type": "object",
       "sync": "server",
       "description": "one region of a layout: either a split, or a region showing an entity",
       "properties": {
         "layout": {
+          "$id": "urn:uuid:8f2e141c-a1e8-4fdf-b32d-efdea7892a1e",
           "type": "string",
           "ref": "layout",
           "death": "cascade",
           "description": "the layout it belongs to"
         },
         "parent": {
+          "$id": "urn:uuid:e1461e8c-6604-4fb2-9704-1fff0efaaec3",
           "type": "string",
           "ref": "pane",
           "death": "cascade",
           "description": "the pane it sits inside"
         },
         "size": {
+          "$id": "urn:uuid:43933bdf-54a9-4ce8-89b9-618451017439",
           "type": "number",
           "description": "its share of the parent"
         },
         "order": {
+          "$id": "urn:uuid:83f4afa1-fde2-4aad-8bb8-7dcc3f64494b",
           "type": "number",
           "description": "its place among its siblings"
         },
         "dir": {
+          "$id": "urn:uuid:ceb15bfd-7d2a-4ce3-9b11-a1cbbd44a3b5",
           "type": "string",
           "enum": [
             "h",
@@ -214,52 +247,62 @@
           "description": "how it splits: side by side, or stacked"
         },
         "content": {
+          "$id": "urn:uuid:25d4cbd4-7975-431b-8813-d1c35da736d5",
           "type": "string",
           "ref": "entity",
           "death": "detach",
           "description": "the entity shown in it, if it shows one"
         },
         "view": {
+          "$id": "urn:uuid:66ea451d-38d4-42b6-b6be-25aa1446ba9d",
           "type": "string",
           "description": "the view that entity is shown in"
         }
       }
     },
     "pin": {
+      "$id": "urn:uuid:fe4c99d3-8a42-4515-85a9-0b65f6a80164",
       "component": true,
       "type": "object",
       "sync": "server",
       "description": "where a card sits on a canvas",
       "properties": {
         "canvas": {
+          "$id": "urn:uuid:112a3d8b-4ebd-4db0-be50-d0cb26265467",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the canvas it is pinned to"
         },
         "x": {
+          "$id": "urn:uuid:60eec654-7e11-4fe1-a860-9eaaaa1cfe8b",
           "type": "number",
           "description": "left edge, in canvas units"
         },
         "y": {
+          "$id": "urn:uuid:d979b53f-3cab-485d-8265-a9a0d99aa357",
           "type": "number",
           "description": "top edge, in canvas units"
         },
         "w": {
+          "$id": "urn:uuid:1d47e304-7ccd-41d1-9f04-5ad2d4c0dbba",
           "type": "number",
           "description": "width, or 0 for automatic"
         },
         "h": {
+          "$id": "urn:uuid:0196d042-923e-4f2e-b306-a607aaecf728",
           "type": "number",
           "description": "height, or 0 for automatic"
         },
         "z": {
+          "$id": "urn:uuid:48e031ab-2a80-47e8-9d26-c547f8dbe53d",
           "type": "number",
           "description": "stacking order — higher is front"
         }
       }
     },
     "shelf": {
+      "$id": "urn:uuid:cdc13d11-af29-4193-89be-b5e25d2b8723",
       "component": true,
       "journal": false,
       "type": "object",
@@ -272,6 +315,7 @@
       "description": "what one window is holding aside, off the canvas",
       "properties": {
         "client": {
+          "$id": "urn:uuid:e1f48694-ce5d-4a20-bed9-a86b2d03fadc",
           "type": "string",
           "ref": "client",
           "death": "release",
@@ -282,9 +326,11 @@
   },
   "kinds": {
     "camera": {
+      "$id": "urn:uuid:2832c8bc-1c70-40c3-8e47-5ad790e64f04",
       "description": "where one window is looking at one canvas — synced to the server so another tab, or a tool, can read it and move it"
     },
     "canvas": {
+      "$id": "urn:uuid:aeb5a601-1227-4cf0-96fc-89b8441a700e",
       "description": "a plane things are arranged on",
       "examples": [
         {
@@ -293,6 +339,7 @@
       ]
     },
     "card": {
+      "$id": "urn:uuid:96b001be-18d6-476b-8685-86e55cb58d5a",
       "description": "one entity shown on a canvas",
       "examples": [
         {
@@ -303,15 +350,19 @@
       ]
     },
     "client": {
+      "$id": "urn:uuid:557b0c46-5ab1-4386-adb9-f6baee1585b8",
       "description": "one open window — what a camera, a cursor, a fold and a shelf each belong to"
     },
     "cursor": {
+      "$id": "urn:uuid:0dd8cb45-2b52-4661-ba43-7c2142602897",
       "description": "what one window has open — synced to the server, so a tool can move someone there by writing it"
     },
     "fold": {
+      "$id": "urn:uuid:5d90cfbe-da63-45dc-96a7-794f5df15ba4",
       "description": "the sections of a list one window has collapsed"
     },
     "layout": {
+      "$id": "urn:uuid:f894d9ba-8700-4ec7-a3bb-8ec46f77f8ce",
       "description": "a named split of the screen into panes",
       "with": {
         "doc": true
@@ -327,6 +378,7 @@
       ]
     },
     "pane": {
+      "$id": "urn:uuid:bfc1a894-1b38-4fc3-bfe5-074a72d7a815",
       "description": "one region of a layout: either a split, or a region showing an entity",
       "examples": [
         {

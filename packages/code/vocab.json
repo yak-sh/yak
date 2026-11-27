@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:47d95c29-9269-48b4-aaa6-2325f7eaf425",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/edge": true
@@ -6,21 +7,25 @@
   "title": "code",
   "$defs": {
     "package": {
+      "$id": "urn:uuid:4e7f534f-1d9b-4173-b34f-28004ae3d78b",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "a package, read from its manifest; its entity id is derived from its name, so every checkout of it is one entity",
       "properties": {
         "name": {
+          "$id": "urn:uuid:d4d38f68-b443-42d3-80e8-f3889a449e45",
           "type": "string",
           "identity": true,
           "description": "the name its manifest publishes it under"
         },
         "version": {
+          "$id": "urn:uuid:99f506f9-5e2c-4892-88cd-324fbedf7582",
           "type": "string",
           "description": "the version its manifest says"
         },
         "manifest": {
+          "$id": "urn:uuid:e35b811f-9024-4d4a-91ed-de5aa17fdb3e",
           "type": "string",
           "ref": "entity",
           "death": "detach",
@@ -29,16 +34,19 @@
       }
     },
     "module": {
+      "$id": "urn:uuid:0aa20cd5-74ee-4807-9fa6-4d4b740346d0",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "one file of a codebase, read from the file itself; it wears the `file` it was read from, which identifies it, and its `doc` is its opening paragraph",
       "properties": {
         "blob": {
+          "$id": "urn:uuid:30375da0-4467-4ebc-933f-a3451b29ace2",
           "type": "string",
           "description": "the Git blob id of the text it was read from; a sync reads the file again only when this moved"
         },
         "package": {
+          "$id": "urn:uuid:e5f016eb-0e75-4c6e-8f44-37b9b56aded0",
           "type": "string",
           "ref": "entity",
           "death": "detach",
@@ -47,6 +55,7 @@
       }
     },
     "symbol": {
+      "$id": "urn:uuid:e5d62994-2376-4509-aa48-920ce0bb4d19",
       "component": true,
       "journal": false,
       "type": "object",
@@ -54,26 +63,31 @@
       "description": "a definition a module exports; identified by the module and its name, so a citation of it survives the file moving around it. Its `doc` is its doc comment",
       "properties": {
         "module": {
+          "$id": "urn:uuid:c406e0e7-60a4-4400-a7aa-b583a8be2e0e",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the module that exports it"
         },
         "name": {
+          "$id": "urn:uuid:45f53b01-4481-44ea-9dbe-f8d09b647769",
           "type": "string",
           "description": "the name it is exported under"
         },
         "kind": {
+          "$id": "urn:uuid:578023a1-10ec-4547-b8fa-3fc3f4d70eb7",
           "type": "string",
           "description": "what it is, as `deno doc` says: function, variable, class, interface, typeAlias, enum or namespace"
         },
         "line": {
+          "$id": "urn:uuid:f9f4d474-bdf1-4e37-9526-db1c29d00591",
           "type": "number",
           "description": "the line it is declared on, counting from 1"
         }
       }
     },
     "imports": {
+      "$id": "urn:uuid:dbcc052a-76e0-4ae3-8590-04a32a38374f",
       "component": true,
       "journal": false,
       "type": "object",
@@ -104,12 +118,14 @@
   },
   "kinds": {
     "package": {
+      "$id": "urn:uuid:4e7f534f-1d9b-4173-b34f-28004ae3d78b",
       "description": "a package, read from its manifest; its entity id is derived from its name, so every checkout of it is one entity",
       "with": {
         "doc": true
       }
     },
     "module": {
+      "$id": "urn:uuid:0aa20cd5-74ee-4807-9fa6-4d4b740346d0",
       "description": "one file of a codebase, read from the file itself; it wears the `file` it was read from, which identifies it, and its `doc` is its opening paragraph",
       "with": {
         "doc": true,
@@ -117,6 +133,7 @@
       }
     },
     "symbol": {
+      "$id": "urn:uuid:e5d62994-2376-4509-aa48-920ce0bb4d19",
       "description": "a definition a module exports; identified by the module and its name, so a citation of it survives the file moving around it. Its `doc` is its doc comment",
       "with": {
         "doc": true

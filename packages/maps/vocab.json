@@ -1,45 +1,55 @@
 {
+  "$id": "urn:uuid:62e1431e-a6b6-4818-9850-a7f3ed434871",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "maps",
   "$defs": {
     "map_tiles": {
+      "$id": "urn:uuid:093ee9f3-c92f-4ced-a79f-b7349f47d8fa",
       "component": true,
       "type": "object",
       "description": "where a map's tiles come from, as data: a PMTiles archive in the host's bucket, which the host serves, or a style another site hosts. A map is drawn from one of these, and changing which one a host serves changes no app",
       "properties": {
         "name": {
+          "$id": "urn:uuid:891a5ff0-c52e-485d-91e5-6cbc1befa05e",
           "type": "string",
           "identity": true,
           "description": "what a host names it by: protomaps, openfreemap"
         },
         "title": {
+          "$id": "urn:uuid:636b3bbc-8687-4d33-9b1f-edcd1afcd395",
           "type": "string",
           "description": "what a person calls it, as its maker writes it"
         },
         "archive": {
+          "$id": "urn:uuid:5415ddf9-d019-4f05-bbe5-9fa5dcd680fd",
           "type": "string",
           "description": "the key of its PMTiles archive in the host's maps bucket; one with none is drawn from its style"
         },
         "glyphs": {
+          "$id": "urn:uuid:b1b690a9-149e-45ff-9f92-966ad08b5270",
           "type": "string",
           "description": "the key prefix in the host's maps bucket under which its label fonts are kept, as `<prefix>/<fontstack>/<range>.pbf`"
         },
         "style": {
+          "$id": "urn:uuid:d101a982-c0aa-43e4-a1a5-4a96d972b304",
           "type": "string",
           "format": "uri",
           "description": "the address of a MapLibre style another site hosts and serves its tiles for; a map drawn from one wears that site's look"
         },
         "attribution": {
+          "$id": "urn:uuid:803479d5-1ee5-481f-aa9a-fd45c0ffe8fe",
           "type": "string",
           "description": "what every map drawn from it says it is made of, as HTML its licence asks for"
         },
         "max_zoom": {
+          "$id": "urn:uuid:577e022c-14ba-4ca0-9b06-e86cb6c8a174",
           "type": "integer",
           "description": "the deepest zoom its archive holds; a map looks closer by enlarging those tiles"
         },
         "builds": {
+          "$id": "urn:uuid:85cc7bba-cb91-48ac-8b73-f9fdffe27c72",
           "type": "string",
           "format": "uri",
           "description": "where a fresh build of its archive is downloaded from, with `{date}` for the build's day as YYYYMMDD"
@@ -47,61 +57,74 @@
       }
     },
     "geocoder": {
+      "$id": "urn:uuid:5595a12a-5c3d-42a3-8dcf-8b8aa05a2f04",
       "component": true,
       "type": "object",
       "description": "a service that finds where a place is from its name or address, as data: how it is asked, how often it may be, and what a map showing its answer owes it",
       "properties": {
         "name": {
+          "$id": "urn:uuid:2dce3b9f-82af-4c8d-b4a5-6594f7997aba",
           "type": "string",
           "identity": true,
           "description": "what an answer names it by: nominatim"
         },
         "title": {
+          "$id": "urn:uuid:c4e98911-e715-446a-a3bd-d559137a8a5d",
           "type": "string",
           "description": "what a person calls it"
         },
         "search": {
+          "$id": "urn:uuid:01def465-6732-439e-8a02-de45bcf102dc",
           "type": "string",
           "format": "uri",
           "description": "the address it is asked at, with `{query}` for the words asked and `{lang}` for the language its answer is written in"
         },
         "interval": {
+          "$id": "urn:uuid:16487303-3d60-4df1-9fae-6c2fa965dfc2",
           "type": "integer",
           "description": "the fewest milliseconds between two calls to it from one host, as its usage policy asks"
         },
         "attribution": {
+          "$id": "urn:uuid:137dc1f3-4126-4451-ab92-d437883911bd",
           "type": "string",
           "description": "what is said beside an answer it gave"
         }
       }
     },
     "geocode": {
+      "$id": "urn:uuid:c9b5fafd-0a64-40b9-be55-15a4f89ccef6",
       "component": true,
       "type": "object",
       "identity": ["provider", "query"],
       "description": "one answer a geocoder gave, kept so the same words are never asked of it again; its eid is derived from the provider and the words",
       "properties": {
         "provider": {
+          "$id": "urn:uuid:cf51c25b-5811-4562-a40b-bdfa14a33964",
           "type": "string",
           "description": "the geocoder's name"
         },
         "query": {
+          "$id": "urn:uuid:de4295db-a183-46b2-9fc9-f489bf2c4522",
           "type": "string",
           "description": "the words it was asked, trimmed and lower-cased"
         },
         "lat": {
+          "$id": "urn:uuid:e92f79aa-4c4a-4361-bc75-817b303355bb",
           "type": "number",
           "description": "the place's latitude, in degrees north"
         },
         "lng": {
+          "$id": "urn:uuid:15780d04-1b64-4721-b1b0-8b6a346596c9",
           "type": "number",
           "description": "the place's longitude, in degrees east"
         },
         "address": {
+          "$id": "urn:uuid:49d6316b-efca-4656-8d47-0cab0e98ebdc",
           "type": "string",
           "description": "the place as the geocoder names it; none when it found nothing"
         },
         "at": {
+          "$id": "urn:uuid:d23d1f73-ed0b-49b7-b379-f4853b257206",
           "type": "string",
           "format": "date-time",
           "description": "when it answered"

@@ -1,16 +1,20 @@
 {
+  "$id": "urn:uuid:07399ffd-99d9-4a9b-b57c-2df26be2eafc",
   "title": "openai",
   "$defs": {
     "openai": {
+      "$id": "urn:uuid:45090b06-11f3-49a5-b328-cc01ecc104c0",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "what the Responses API keeps about an ask: the reply's id, which anchors a later request when the provider stored it",
       "properties": {
         "response_id": {
+          "$id": "urn:uuid:1fdb2c86-7ee7-4c39-84cc-f215110103f5",
           "type": "string"
         },
         "cache_expires_at": {
+          "$id": "urn:uuid:c2f6ead1-4776-4372-a597-aa547e859b5c",
           "type": "string",
           "format": "date-time",
           "description": "the recorded expiry of this request\u2019s cached prefix; provider-reported where present, otherwise request start plus documented provider retention. Missing means unknown, not warm"

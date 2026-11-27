@@ -1,101 +1,121 @@
 {
+  "$id": "urn:uuid:80a05f48-1d47-484b-b540-42e19f5c3f75",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "domains",
   "$defs": {
     "domain_order": {
+      "$id": "urn:uuid:7f300f58-88b6-4c25-bd7d-4380483b437a",
       "component": true,
       "type": "object",
       "wire": false,
       "description": "a domain a space bought at checkout, held in the platform's registrar account; domain_registered{at, expires} once the registry holds it, domain_refused{at, why} where it could not be registered, and domain_refunded{at, refund} once its payment is returned",
       "properties": {
         "name": {
+          "$id": "urn:uuid:d85303d8-8843-4665-82ec-84adc791abfd",
           "type": "string",
           "description": "the domain bought"
         },
         "space": {
+          "$id": "urn:uuid:dcb9bca4-6c0a-433d-86a4-0069e697f5ee",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the space currently responsible for renewal"
         },
         "bought_by": {
+          "$id": "urn:uuid:dde39cd1-2f63-4a2b-86f3-06c742cfedcb",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the space that paid for the first year, recorded when renewal first moves to another space"
         },
         "serves": {
+          "$id": "urn:uuid:b38041cf-1b6a-45eb-b128-4b6cf834502b",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the checkout’s initial destination on older orders, if chosen"
         },
         "checkout": {
+          "$id": "urn:uuid:10a5758e-da2e-4784-8fda-b09448e75ff1",
           "type": "string",
           "description": "the paid checkout, which names the order however often its payment is told"
         },
         "cents": {
+          "$id": "urn:uuid:98eb4ecc-0591-4ecf-be55-a0075f0d51ad",
           "type": "number",
           "description": "what the person paid, in cents: the registry's price for the first year"
         },
         "renews": {
+          "$id": "urn:uuid:8f4a345a-3c0d-47e4-b64f-eb0cbceefc98",
           "type": "number",
           "description": "the registrar’s yearly renewal quote at checkout, in cents"
         },
         "renewalTerms": {
+          "$id": "urn:uuid:47f97723-135c-4c29-975d-10686a092352",
           "type": "boolean",
           "description": "the owner bought the domain under the capped renewal terms"
         },
         "live": {
+          "$id": "urn:uuid:16357dae-2434-4938-aa2c-f00713ff5b2d",
           "type": "boolean",
           "description": "whether its payment moved money; a sandbox payment's order registers nothing and is refunded"
         }
       }
     },
     "domain_registered": {
+      "$id": "urn:uuid:77f05c12-cde3-4c32-9c8e-12fc7267c54e",
       "component": true,
       "type": "object",
       "wire": false,
       "description": "a bought domain the registry holds, with its DNS written, and when its year ends",
       "properties": {
         "at": {
+          "$id": "urn:uuid:fb7d1208-a0c9-4ae3-a538-50c9d568cb41",
           "type": "string",
           "format": "date-time"
         },
         "expires": {
+          "$id": "urn:uuid:3c6efaa5-26a5-4a7e-a491-d256e720d723",
           "type": "string",
           "format": "date-time"
         }
       }
     },
     "domain_refused": {
+      "$id": "urn:uuid:0e611163-75b7-43f5-9e32-11a286dac1b4",
       "component": true,
       "type": "object",
       "wire": false,
       "description": "a bought domain that could not be registered, and why: a sandbox payment, a name another checkout bought first, or the registry's refusal; its payment is owed back until domain_refunded",
       "properties": {
         "at": {
+          "$id": "urn:uuid:f04e41b6-4b60-45e8-9a10-982e2da8ff8f",
           "type": "string",
           "format": "date-time"
         },
         "why": {
+          "$id": "urn:uuid:46e00936-0254-4a76-8754-43a27aa7cf48",
           "type": "string"
         }
       }
     },
     "domain_refunded": {
+      "$id": "urn:uuid:e40d64c3-43f4-46b8-99b4-78e887622c1e",
       "component": true,
       "type": "object",
       "wire": false,
       "description": "a refused domain order whose payment was returned whole, and the payment provider's refund",
       "properties": {
         "at": {
+          "$id": "urn:uuid:a56b8d46-38c2-479e-9822-6de1b3d7fd31",
           "type": "string",
           "format": "date-time"
         },
         "refund": {
+          "$id": "urn:uuid:cbed4b54-934c-4320-9e1c-55460d6cce83",
           "type": "string"
         }
       }
@@ -123,12 +143,14 @@
       "description": "Reconcile a transferred domain and the included-domain choices in both spaces"
     },
     "domain_choice": {
+      "$id": "urn:uuid:a55516f6-f849-4022-b95c-162b014a46aa",
       "component": true,
       "type": "object",
       "wire": false,
       "description": "the order a space chooses for its domain renewal allowance",
       "properties": {
         "order": {
+          "$id": "urn:uuid:f81301d1-f956-4709-a9e0-2f830e0075d2",
           "type": "string",
           "ref": "entity",
           "death": "keep"
@@ -136,55 +158,85 @@
       }
     },
     "domain_credit_used": {
+      "$id": "urn:uuid:4df56427-cc31-4198-87ce-11ba08292e9e",
       "component": true,
       "type": "object",
       "wire": false,
       "description": "The renewal through which a space last spent its annual domain credit",
       "properties": {
-        "order": { "type": "string", "ref": "entity", "death": "keep" },
-        "expires": { "type": "string", "format": "date-time" }
+        "order": {
+          "$id": "urn:uuid:faae9430-52f3-4da9-b7d3-db5544175fa5",
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "expires": {
+          "$id": "urn:uuid:cf5b179c-bb16-4c85-886b-fa1f4c1298d6",
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "domain_renewal": {
+      "$id": "urn:uuid:df2bc139-37fe-4325-bb3b-9912e99fa31e",
       "component": true,
       "type": "object",
       "wire": false,
       "description": "the current annual renewal of a bought domain with its quoted registrar price in cents and its paid checkout, once paid",
       "properties": {
         "expires": {
+          "$id": "urn:uuid:0fc81aa7-1e06-4c3c-b9c1-aa28fd4638f1",
           "type": "string",
           "format": "date-time"
         },
         "cents": {
+          "$id": "urn:uuid:addc406c-5fbe-42e3-9bfc-67071e6ffb15",
           "type": "number"
         },
-        "credit": { "type": "number" },
+        "credit": {
+          "$id": "urn:uuid:166611f8-9779-4d65-aa2a-42a1691c2483",
+          "type": "number"
+        },
         "checkout": {
+          "$id": "urn:uuid:3efab3ea-3d24-4cd9-a6bd-016ac5fb2591",
           "type": "string"
         }
       }
     },
     "domain_renewal_paid": {
+      "$id": "urn:uuid:7004367c-a581-4030-9bf7-628dafa7021c",
       "component": true,
       "type": "object",
       "wire": false,
       "description": "A checkout that paid for one renewal of a registered domain",
       "properties": {
-        "order": { "type": "string", "ref": "entity", "death": "keep" },
-        "expires": { "type": "string", "format": "date-time" }
+        "order": {
+          "$id": "urn:uuid:95699678-aa5f-4ccd-a325-5f7462c2dca7",
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "expires": {
+          "$id": "urn:uuid:036153e1-7d14-4d28-9786-ec10bfd66c36",
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "domain_courtesy": {
+      "$id": "urn:uuid:f658ccdc-e597-4c67-a612-14e38adf6e6a",
       "component": true,
       "type": "object",
       "wire": false,
       "description": "the last renewal covered under the former plan terms, for the space that held the order when the terms changed",
       "properties": {
         "expires": {
+          "$id": "urn:uuid:e96a8ee9-1310-47b2-94be-3027bc1b1530",
           "type": "string",
           "format": "date-time"
         },
         "space": {
+          "$id": "urn:uuid:cf9a4758-0c35-464c-9c9b-6f181fd83d05",
           "type": "string",
           "ref": "entity",
           "death": "keep"

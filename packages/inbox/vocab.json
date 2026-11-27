@@ -1,10 +1,12 @@
 {
+  "$id": "urn:uuid:a7a33d26-7181-4318-a9c5-db771bcc8c65",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "inbox",
   "$defs": {
     "conversation": {
+      "$id": "urn:uuid:58669bf4-7cb0-4b61-a198-5489fece75a2",
       "component": true,
       "type": "object",
       "description": "a thread with no other subject; doc holds the person's words and its first line as the title",
@@ -31,38 +33,46 @@
       ]
     },
     "inbox_summary": {
+      "$id": "urn:uuid:477dffa1-acd1-4078-94b5-5bfab68387b5",
       "component": true,
       "computed": true,
       "type": "object",
       "description": "Exact person inbox thread summaries, derived at read; history bodies are included only for an explicitly requested thread or server-side search.",
       "properties": {
         "actor": {
+          "$id": "urn:uuid:e71e71f5-5823-4d13-a73c-6dfee4114382",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the person whose attention is read"
         },
         "text": {
+          "$id": "urn:uuid:3b6c72f9-b867-439b-8a42-10277cd99579",
           "type": "string",
           "description": "text to find in said or received words"
         },
         "direction": {
+          "$id": "urn:uuid:bbe61a11-80ca-4a48-b49b-fa1a98efcebc",
           "type": "string",
           "description": "said or received; empty for both"
         },
         "all": {
+          "$id": "urn:uuid:70264e1c-7e2a-4e8e-a99d-3fbf866bfa28",
           "type": "boolean",
           "description": "include archived threads"
         },
         "lane": {
+          "$id": "urn:uuid:1541ebc9-a49b-4c73-bc86-6257e441a465",
           "type": "string",
           "description": "one lane, or empty for every lane"
         },
         "thread": {
+          "$id": "urn:uuid:58da44b7-d83e-45fc-b2f8-47d75b33aac3",
           "type": "string",
           "description": "one thread requested in full, or empty for summaries"
         },
         "threads": {
+          "$id": "urn:uuid:ccd730e1-6d30-4d66-b8a1-dc3d392d9960",
           "type": "array",
           "items": {
             "type": "object"
@@ -148,29 +158,34 @@
       ]
     },
     "mail_notice": {
+      "$id": "urn:uuid:0d6ffa72-4100-4812-8a0e-4d47d8dfb013",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "An email rendering of inbox activity, not new conversation; its snapshot prevents re-sending the same activity. A digest has no mail.target.",
       "properties": {
         "activity": {
+          "$id": "urn:uuid:4698c8c5-3958-4528-b231-c1a4862b1584",
           "type": "string",
           "format": "date-time",
           "description": "the inbox activity cutoff represented by this letter, kept as it was when rendered"
         },
         "comment": {
+          "$id": "urn:uuid:1b3c8752-1f6a-41e2-bf5a-e0263b1ac4e8",
           "type": "string",
           "ref": "comment",
           "death": "keep",
           "description": "the comment presented in the letter, which an email reply answers"
         },
         "thread": {
+          "$id": "urn:uuid:e6c6dc4b-441b-4800-bf57-a0e7f703167f",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the thread included in a digest snapshot"
         },
         "letter": {
+          "$id": "urn:uuid:69a825fb-fdea-4754-8bcd-cb90a7fa4239",
           "type": "string",
           "ref": "mail",
           "death": "keep",
@@ -208,6 +223,7 @@
   },
   "kinds": {
     "conversation": {
+      "$id": "urn:uuid:58669bf4-7cb0-4b61-a198-5489fece75a2",
       "description": "a thread with no other subject; doc holds the person's words and its first line as the title",
       "with": {
         "doc": true

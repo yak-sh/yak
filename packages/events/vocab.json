@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:5f622bfb-2859-412d-a416-3bdccdec2900",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/member": true
@@ -6,6 +7,7 @@
   "title": "events",
   "$defs": {
     "feed": {
+      "$id": "urn:uuid:690a05a1-0f27-43a9-a9cb-76ddeee58dcb",
       "component": true,
       "type": "object",
       "readers": "editor",
@@ -14,40 +16,48 @@
       "required": ["person", "token"],
       "properties": {
         "person": {
+          "$id": "urn:uuid:dbe686d2-ebce-40e5-9d5f-b08ba46d6523",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the person whose accepted registrations select the events"
         },
         "token": {
+          "$id": "urn:uuid:92e0e915-a7a3-4e81-8e89-d9a0525ac158",
           "type": "string",
           "description": "unguessable, replaceable capability for this calendar alone"
         }
       }
     },
     "event": {
+      "$id": "urn:uuid:da4a5972-d2c8-4ce4-b917-2899e21df34b",
       "component": true,
       "type": "object",
       "description": "a calendar event or recurring series, with its title and description in doc",
       "required": ["starts"],
       "properties": {
         "starts": {
+          "$id": "urn:uuid:0d0c1a66-0d0f-43b7-bd5a-adb2ffbffea8",
           "type": "string",
           "description": "ISO date-time with UTC offset, a local date-time when zone is set, or YYYY-MM-DD for an all-day event"
         },
         "ends": {
+          "$id": "urn:uuid:3e61c3fc-89d0-429a-9717-bd651b22b7f9",
           "type": "string",
           "description": "exclusive end, in the same date or date-time form as starts; absent means one day for an all-day event, or a point in time"
         },
         "repeats": {
+          "$id": "urn:uuid:d793b150-b07d-45a7-bc02-8f09c83ef0da",
           "type": "string",
           "description": "RFC 5545 RRULE, such as FREQ=WEEKLY;BYDAY=SU; timed recurrences follow zone"
         },
         "place": {
+          "$id": "urn:uuid:8b7544e6-64d0-4609-82a0-5d4a8e485b1c",
           "type": "string",
           "description": "where the event takes place"
         },
         "zone": {
+          "$id": "urn:uuid:0863d0d7-8309-4852-8969-6cb9574d0e65",
           "type": "string",
           "description": "IANA time zone for this event's local times and recurrence, such as America/Detroit; absent means UTC"
         }

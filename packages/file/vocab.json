@@ -1,10 +1,12 @@
 {
+  "$id": "urn:uuid:1c8dcb0e-55e7-4a02-8ea4-c399495fa792",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "file",
   "$defs": {
     "file": {
+      "$id": "urn:uuid:440c1876-e66c-46ad-af19-99a679f0b9ed",
       "component": true,
       "journal": false,
       "type": "object",
@@ -15,10 +17,12 @@
       "description": "a file, as a path read in a root, so anything in the graph can refer to one; its entity id is derived from the path and the root. It carries its contents as `content.body` where the graph keeps them, and goes without where the bytes are kept elsewhere",
       "properties": {
         "path": {
+          "$id": "urn:uuid:da3f25b0-cbab-4a52-87a3-49e4a2b70604",
           "type": "string",
           "description": "the path from the root, `/`-separated and with no leading `/`: as Git spells it in a repository, from the mount on a volume"
         },
         "root": {
+          "$id": "urn:uuid:b9534748-31da-45a8-b6c6-ae37af22921f",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -27,28 +31,33 @@
       }
     },
     "lines": {
+      "$id": "urn:uuid:fdae8002-a72f-48f2-b587-e25c7b3ac2dc",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "where in a file this entity sits: lines `start` through `end`. An entry read from a transcript wears the line it was read from; a citation of some lines is a `cites` edge to an entity wearing them, with the text it quoted as `content.body`",
       "properties": {
         "file": {
+          "$id": "urn:uuid:e9708e6f-e3c8-4dec-8433-99a9ec83fdbe",
           "type": "string",
           "ref": "file",
           "death": "keep",
           "description": "the file"
         },
         "start": {
+          "$id": "urn:uuid:90469e2e-0d2b-4cb2-894d-86c6e70a9919",
           "type": "number",
           "description": "the first line, counting from 1"
         },
         "end": {
+          "$id": "urn:uuid:44393591-2804-43c9-974c-25e33e375b97",
           "type": "number",
           "description": "the last line, inclusive; absent when it is the first line alone"
         }
       }
     },
     "volume": {
+      "$id": "urn:uuid:8d7d701a-aee8-432f-b7de-0e1529f617c1",
       "component": true,
       "journal": false,
       "type": "object",
@@ -60,18 +69,21 @@
       "description": "a filesystem as a machine mounts it, and the root of the files on it; a path on the machine sits on the volume with the longest mount that contains it. Its entity id is derived from the machine and the mount, so the same disk mounted by another machine is another volume",
       "properties": {
         "machine": {
+          "$id": "urn:uuid:967a4457-5219-4d3e-a8ae-3165e349d7f3",
           "type": "string",
           "ref": "machine",
           "death": "keep",
           "description": "the computer that mounts it"
         },
         "mount": {
+          "$id": "urn:uuid:83967747-6ea3-4953-9104-0ad7ef996c1d",
           "type": "string",
           "description": "the absolute directory the machine mounts it at, such as `/`"
         }
       }
     },
     "occupancy": {
+      "$id": "urn:uuid:dbe3a12a-ac98-4b53-ac92-0258fb69b799",
       "component": true,
       "journal": false,
       "wire": false,
@@ -84,42 +96,50 @@
       "description": "how full a volume was on one UTC day and what filled it, from that day's latest look: the filesystem's bytes, used and free, the bytes a walk of it could read, and the bytes each directory and file on it that takes at least a thousandth of it holds. A later look that day replaces the earlier, so a run of days is how it is trending",
       "properties": {
         "volume": {
+          "$id": "urn:uuid:560583bc-8196-4d9b-bcdc-402529ec7715",
           "type": "string",
           "ref": "volume",
           "death": "cascade",
           "description": "the volume looked at"
         },
         "day": {
+          "$id": "urn:uuid:8051c8f9-9df5-41df-a143-55a7602e9d39",
           "type": "string",
           "description": "the UTC day, `2026-10-21`"
         },
         "at": {
+          "$id": "urn:uuid:dd32e975-0b56-4350-bda7-6fdde7d915b3",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when it was looked at"
         },
         "size": {
+          "$id": "urn:uuid:ac56a259-4d2f-402e-b167-c0d8e0b9e75d",
           "type": "integer",
           "stamped": true,
           "description": "the filesystem's bytes"
         },
         "used": {
+          "$id": "urn:uuid:03e7e229-be21-4607-8c9f-afceb9025cbd",
           "type": "integer",
           "stamped": true,
           "description": "the bytes in use"
         },
         "free": {
+          "$id": "urn:uuid:562729e3-c4f7-4d37-9580-709c09de945d",
           "type": "integer",
           "stamped": true,
           "description": "the bytes still free to write; a filesystem may keep more back for its administrator"
         },
         "counted": {
+          "$id": "urn:uuid:1f5c0c7d-e141-4bd7-a29d-ebce3be44c5f",
           "type": "integer",
           "stamped": true,
           "description": "the bytes the walk could read under the mount; the rest of `used` is in directories it could not read, or kept by the filesystem itself"
         },
         "paths": {
+          "$id": "urn:uuid:cfd4ef44-277e-4170-8995-e4d1223ad5c1",
           "type": "object",
           "additionalProperties": {
             "type": "integer"
@@ -132,9 +152,11 @@
   },
   "kinds": {
     "file": {
+      "$id": "urn:uuid:440c1876-e66c-46ad-af19-99a679f0b9ed",
       "description": "a file, as a path read in a root, so anything in the graph can refer to one; its entity id is derived from the path and the root. It carries its contents as `content.body` where the graph keeps them, and goes without where the bytes are kept elsewhere"
     },
     "volume": {
+      "$id": "urn:uuid:8d7d701a-aee8-432f-b7de-0e1529f617c1",
       "description": "a filesystem as a machine mounts it, and the root of the files on it; a path on the machine sits on the volume with the longest mount that contains it. Its entity id is derived from the machine and the mount, so the same disk mounted by another machine is another volume"
     }
   }

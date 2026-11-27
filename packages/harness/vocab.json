@@ -1,20 +1,24 @@
 {
+  "$id": "urn:uuid:2630b038-0912-4339-93e3-6e25d3b9a38c",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "harness",
   "$defs": {
     "home": {
+      "$id": "urn:uuid:09ec100f-bd68-4f8b-9aeb-f5937cb0273d",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "a session's default file-and-command target, not its permissions or the location of the agent; no home means no implicit local filesystem",
       "properties": {
         "cwd": {
+          "$id": "urn:uuid:d4e7be00-95fd-4543-86b7-309cf2646baa",
           "type": "string",
           "description": "an optional absolute command directory interpreted in the workspace filesystem; absent means workspace.root"
         },
         "workspace": {
+          "$id": "urn:uuid:be36ec11-1f0e-41ac-970b-2ac17cb63a15",
           "type": "string",
           "ref": "workspace",
           "death": "keep",
@@ -436,12 +440,14 @@
       ]
     },
     "lands": {
+      "$id": "urn:uuid:2dc24291-1bfc-40ca-933e-8861a7c1cf2d",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "on a session the host started to land a patch that a session outside words started handed it (@yaks/harness/isolated `submit_patch`); it holds the box's tools",
       "properties": {
         "from": {
+          "$id": "urn:uuid:0d12582e-39d3-4ffb-8420-532c8d3fb567",
           "type": "string",
           "ref": "entity",
           "death": "keep",

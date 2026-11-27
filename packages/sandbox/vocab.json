@@ -1,6 +1,8 @@
 {
+  "$id": "urn:uuid:07824ad7-e2f0-422e-8d00-576ece48ef68",
   "$defs": {
     "sandbox": {
+      "$id": "urn:uuid:9e9953ea-5b63-46da-b069-0042bf703361",
       "component": true,
       "journal": false,
       "type": "object",
@@ -14,38 +16,45 @@
       },
       "properties": {
         "provider": {
+          "$id": "urn:uuid:c82d2713-697c-4b11-8b86-15c5caefc3b5",
           "type": "string",
           "description": "the configured sandbox implementation, not an LLM provider entity"
         },
         "address": {
+          "$id": "urn:uuid:be208818-c3fb-4885-a765-732c4c2dc9d7",
           "type": "string",
           "description": "the external sandbox resource locator, not a computer address"
         },
         "from": {
+          "$id": "urn:uuid:82e94613-d442-41f4-a14b-6cccfe10e10c",
           "type": "string",
           "ref": "gitobj",
           "death": "keep",
           "description": "the initial Git commit; provenance does not reconstruct subsequent edits"
         },
         "image": {
+          "$id": "urn:uuid:133aa6a9-013a-4ab0-a955-e9d4f7cb96de",
           "type": "string",
           "description": "the requested image when the backend supports images"
         }
       }
     },
     "released": {
+      "$id": "urn:uuid:19604f71-2ce8-4da0-9098-9034c9e6c88f",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "sandbox retained in recoverable trash after its provider stops execution; restored by sandbox_restore; never purged automatically",
       "properties": {
         "at": {
+          "$id": "urn:uuid:fee97d3b-3e59-4338-bcae-3fa83771b0c3",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when disposal was confirmed"
         },
         "by": {
+          "$id": "urn:uuid:db3ebd8f-13b1-4f96-be15-89dbbdc72107",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -53,6 +62,7 @@
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:4f368063-9b46-4d92-a4c1-3f07b7d76d30",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -62,24 +72,28 @@
       }
     },
     "lent": {
+      "$id": "urn:uuid:6a5be510-b2ee-4699-ab60-6c813f12a529",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "a sandbox lent to one person within a group that allows only so many awake at once; kept while it sleeps, so the group's erasure finds every one",
       "properties": {
         "to": {
+          "$id": "urn:uuid:eba4d307-9eb1-4845-b678-b18538c651a5",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "the person it is lent to; a group lends each person one"
         },
         "within": {
+          "$id": "urn:uuid:ffd52cae-3002-4029-b95f-cacfe5204baa",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "the group whose allowance of awake sandboxes it counts against, such as a space"
         },
         "until": {
+          "$id": "urn:uuid:f9e541dc-3567-4b7a-bc81-6aed3a6072dd",
           "type": "string",
           "format": "date-time",
           "description": "when it sleeps on its own unless called again; absent once it is known to be asleep"

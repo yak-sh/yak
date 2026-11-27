@@ -1,26 +1,32 @@
 {
+  "$id": "urn:uuid:0a95cf11-7886-4f5a-8043-ef0b4091e74c",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "speech",
   "$defs": {
     "speech": {
+      "$id": "urn:uuid:a9069972-af45-4c9e-b53d-c42bd37d7d2e",
       "component": true,
       "type": "object",
       "properties": {
         "voice": {
+          "$id": "urn:uuid:5f0140f0-851d-449d-8e63-24c6fe5e8dee",
           "type": "string",
           "description": "the voice it speaks in, by id; the id names its provider"
         },
         "pace": {
+          "$id": "urn:uuid:3a5074fd-ba88-4de2-b0cb-ed7a78ee205d",
           "type": "string",
           "description": "how fast it speaks, by the host's name for a pace"
         },
         "model": {
+          "$id": "urn:uuid:92e1f685-b36b-4256-9664-e3637dc78ed9",
           "type": "string",
           "description": "the model that answers it on a call"
         },
         "backend": {
+          "$id": "urn:uuid:5e354cdb-d03e-4538-8436-a1bf99b627e8",
           "type": "string",
           "description": "the larger model the talking model hands a hard request to on its provider's side"
         }

@@ -1,27 +1,33 @@
 {
+  "$id": "urn:uuid:a1825b9a-12b5-45f5-a031-66024df3d868",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "artifact",
   "$defs": {
     "artifact": {
+      "$id": "urn:uuid:a8ff0ffa-d707-47dc-b9d9-11c614788afd",
       "component": true,
       "type": "object",
       "description": "Bytes stored in the configured blob store: their SHA-256 address, media type and size.",
       "properties": {
         "size": {
+          "$id": "urn:uuid:b9e6c8cb-1677-48fe-a9c5-3b5a49f53d27",
           "type": "number"
         },
         "address": {
+          "$id": "urn:uuid:535a5bce-2f4b-459f-9456-002fdd755b03",
           "type": "string",
           "address": true
         },
         "media_type": {
+          "$id": "urn:uuid:b7e5faa4-d3e8-45ef-9e3b-76a5b89397a0",
           "type": "string"
         }
       }
     },
     "representation": {
+      "$id": "urn:uuid:6ba79db6-37ab-405c-bd39-781be6cb7ec7",
       "component": true,
       "journal": false,
       "wire": false,
@@ -30,47 +36,57 @@
       "required": ["scope", "address", "media_type"],
       "properties": {
         "scope": {
+          "$id": "urn:uuid:5c678473-92a2-406b-bb4d-583bb0e5bdaf",
           "type": "string",
           "stamped": true
         },
         "address": {
+          "$id": "urn:uuid:7d0273ae-2074-40d8-9150-0966def25298",
           "type": "string",
           "stamped": true,
           "address": true
         },
         "media_type": {
+          "$id": "urn:uuid:ef76901d-ae84-4975-b570-85c7c1e4ef01",
           "type": "string",
           "stamped": true
         },
         "name": {
+          "$id": "urn:uuid:dee98d0f-1e17-436c-bd28-17dcbe6636aa",
           "type": "string",
           "stamped": true
         }
       }
     },
     "attachment": {
+      "$id": "urn:uuid:6ae7005c-d65e-40eb-b7aa-411f2d844a90",
       "component": true,
       "type": "object",
       "description": "A file attached to a session entry: the artifact entity holding its bytes, and the model call that produced it.",
       "properties": {
         "message": {
+          "$id": "urn:uuid:f700554f-1fca-4be8-84f6-477cbf615553",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "The message this file came with."
         },
         "artifact": {
+          "$id": "urn:uuid:b287b8ea-854a-46f3-8cf3-3c5cc86bbff6",
           "type": "string",
           "ref": "artifact",
           "death": "keep"
         },
         "media_type": {
+          "$id": "urn:uuid:577f281c-8e80-45e7-a2f1-1eae0c96ecbe",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:d809c048-949d-44cd-9d36-7c59998f10a1",
           "type": "string"
         },
         "audience": {
+          "$id": "urn:uuid:93a34607-6c5f-4d32-9532-079445e32ccb",
           "type": "string",
           "enum": [
             "user",
@@ -78,15 +94,19 @@
           ]
         },
         "revision": {
+          "$id": "urn:uuid:708b2eb7-cd14-4a84-ad96-3a34f2c28d45",
           "type": "string"
         },
         "call": {
+          "$id": "urn:uuid:30df12d9-376b-44a9-b68a-56b4f2f7a847",
           "type": "string"
         },
         "revised_prompt": {
+          "$id": "urn:uuid:28ff9c0a-360f-4084-a4fa-dc1784739569",
           "type": "string"
         },
         "text": {
+          "$id": "urn:uuid:bebb7f45-ac21-4a78-a7b6-e70f5116f7b4",
           "type": "string",
           "store": "blob",
           "description": "The words read from the file for a model that cannot read it as it is: a document's text, a picture's contents described. Absent until something reads them."
@@ -96,6 +116,7 @@
   },
   "kinds": {
     "attachment": {
+      "$id": "urn:uuid:6ae7005c-d65e-40eb-b7aa-411f2d844a90",
       "description": "A file attached to a session entry: the artifact entity holding its bytes, and the model call that produced it."
     }
   }

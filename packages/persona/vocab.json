@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:6bc0e00a-ea63-4aef-9f34-3f428c816d24",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/edge": true,
@@ -9,6 +10,7 @@
   "title": "persona",
   "$defs": {
     "person": {
+      "$id": "urn:uuid:c743d98e-0b7b-4461-b222-9e3a35a8fecb",
       "component": true,
       "type": "object",
       "by_name": true,
@@ -16,11 +18,13 @@
       "description": "a human being, as this graph knows them"
     },
     "relationship": {
+      "$id": "urn:uuid:ca33fb2d-bb08-46e6-a59e-594856a70ce9",
       "component": true,
       "type": "object",
       "edge": true,
       "properties": {
         "role": {
+          "$id": "urn:uuid:20e3fb49-b2e5-400b-8763-4b3393c2ee9a",
           "type": "string",
           "index": true,
           "description": "how the person at edge.from is related to the person at edge.to, such as brother, mother or friend"
@@ -29,18 +33,21 @@
       "description": "a relationship known between two people"
     },
     "persona": {
+      "$id": "urn:uuid:f6028db6-760b-413e-8a89-d8f398b491a0",
       "component": true,
       "type": "object",
       "by_name": true,
       "governed": true,
       "properties": {
         "home": {
+          "$id": "urn:uuid:3376c2f3-eaf4-418a-8950-1a6370010302",
           "type": "string",
           "ref": "project",
           "death": "detach",
           "description": "the project it works for"
         },
         "base": {
+          "$id": "urn:uuid:3058887d-894e-4a26-9ec2-e30f190c3787",
           "type": "string",
           "description": "the persona this one is worn on, whose text and documents come first; it may be kept in another store, which whoever wears this one reads it from"
         }
@@ -113,10 +120,12 @@
       "option": "files"
     },
     "skill": {
+      "$id": "urn:uuid:37ac2058-224a-43a1-a0e0-52b3e7e5d864",
       "component": true,
       "type": "object",
       "properties": {
         "invoke": {
+          "$id": "urn:uuid:be83a7c7-7e51-4e6d-a2a3-8ddf07e397e6",
           "type": "string",
           "enum": [
             "user",
@@ -126,6 +135,7 @@
           "description": "who may load the skill; both when omitted"
         },
         "arguments": {
+          "$id": "urn:uuid:5b747841-922f-4bc6-8e17-590aae5a0d51",
           "type": "array",
           "items": {
             "type": "string"
@@ -133,6 +143,7 @@
           "description": "the argument names the skill accepts"
         },
         "paths": {
+          "$id": "urn:uuid:63a3746e-a178-4513-85f1-e8dd927f1dd0",
           "type": "array",
           "items": {
             "type": "string"
@@ -140,10 +151,12 @@
           "description": "the path globs the skill applies under"
         },
         "fork": {
+          "$id": "urn:uuid:fdbde148-afee-45f0-9fb0-e5ab549705bf",
           "type": "boolean",
           "description": "run in a context of its own"
         },
         "options": {
+          "$id": "urn:uuid:f470ea6b-ffba-4c1b-a59a-f8a0ce564720",
           "type": "object",
           "additionalProperties": true,
           "description": "other Claude frontmatter options, preserved without interpreting or executing them"
@@ -196,6 +209,7 @@
   },
   "kinds": {
     "person": {
+      "$id": "urn:uuid:c743d98e-0b7b-4461-b222-9e3a35a8fecb",
       "description": "a human being, as this graph knows them",
       "with": {
         "doc": true
@@ -214,6 +228,7 @@
       ]
     },
     "persona": {
+      "$id": "urn:uuid:f6028db6-760b-413e-8a89-d8f398b491a0",
       "description": "instructions an agent runs with: the doc body on the same entity is the instruction text",
       "with": {
         "doc": true
@@ -230,6 +245,7 @@
       ]
     },
     "skill": {
+      "$id": "urn:uuid:37ac2058-224a-43a1-a0e0-52b3e7e5d864",
       "description": "instructions loaded on demand: doc.title is the name and folder, doc.body the description an agent decides by, content.body the instructions. A references edge points to its repository file; names do not determine its identity",
       "with": {
         "doc": true,

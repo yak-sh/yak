@@ -1,6 +1,8 @@
 {
+  "$id": "urn:uuid:22e6bf4d-8dfd-413c-b1d4-cb8ce8d8e4be",
   "$defs": {
     "_lens": {
+      "$id": "urn:uuid:a1c160ab-ceef-4529-adb8-60a89108256c",
       "component": true,
       "journal": false,
       "type": "object",
@@ -9,17 +11,20 @@
       "description": "One immutable forward step in a package's vocabulary, named by a UTC YYYYMMDDHHMMSS timestamp.",
       "properties": {
         "package": {
+          "$id": "urn:uuid:79725c80-a180-493e-8efc-7939614be83a",
           "type": "string",
           "ref": "_package",
           "death": "cascade",
           "description": "The package whose vocabulary changes."
         },
         "step": {
+          "$id": "urn:uuid:8ab6ca4c-95f2-45c7-bc85-52c74f04a22f",
           "type": "integer",
           "minimum": 0,
           "description": "The UTC YYYYMMDDHHMMSS timestamp; landed pilot steps retain their original zero-based names."
         },
         "ops": {
+          "$id": "urn:uuid:2ad3c41e-668e-4b05-be08-961d4426807b",
           "type": "array",
           "description": "The operations in this step, in order."
         }

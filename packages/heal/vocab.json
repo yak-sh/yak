@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:eaadf3da-891d-4747-9bcb-18d91cb0d37f",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true
@@ -6,12 +7,14 @@
   "title": "heal",
   "$defs": {
     "fixer": {
+      "$id": "urn:uuid:c30424ff-9e40-40da-99f6-c832e738f5b7",
       "component": true,
       "journal": false,
       "type": "object",
       "description": "on a session started to fix a bug",
       "properties": {
         "bug": {
+          "$id": "urn:uuid:456484b9-3166-4c0c-979a-292ac3917239",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -21,6 +24,7 @@
       }
     },
     "nofix": {
+      "$id": "urn:uuid:c8eeeb41-d6ce-46b8-9cca-1a8b634ce72f",
       "component": true,
       "type": "object",
       "properties": {},

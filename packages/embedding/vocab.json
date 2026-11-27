@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:67c4b537-be1d-400e-bc0f-9ba3f59477fd",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },

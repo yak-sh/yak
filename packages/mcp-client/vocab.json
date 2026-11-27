@@ -1,63 +1,78 @@
 {
+  "$id": "urn:uuid:cad605a6-2293-4754-8023-fe51c8a53b8d",
   "title": "mcp-client",
   "$defs": {
     "mcp_server": {
+      "$id": "urn:uuid:abb7af2e-ddbf-4766-b2a5-2583db7577a4",
       "component": true,
       "type": "object",
       "description": "A shared remote MCP server. Entity identity and tool display names are separate.",
       "properties": {
         "owner": {
+          "$id": "urn:uuid:d88b5d93-0059-4250-942c-4ec52ff6b5de",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "The person who configured this server; hosted discovery and calls use only their own definition and credentials."
         },
         "space": {
+          "$id": "urn:uuid:bf8264b6-878b-4ac3-ad56-48d077b5b2df",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "The space this server is connected in: that space's Operator and connections page reach it, for its owner. Absent on a server connected before servers had a space, which reaches its owner in every space and at their own connector."
         },
         "everyone": {
+          "$id": "urn:uuid:f6d730e6-1771-4004-9e3e-afb165c0981d",
           "type": "boolean",
           "description": "True serves everyone its space's Operator works with, each call carrying the credential of the person who connected it; absent or false serves that person alone."
         },
         "name": {
+          "$id": "urn:uuid:510571db-e723-49ec-96a3-1298a7c373e7",
           "type": "string",
           "description": "Display name; normalized into a readable local tool namespace."
         },
         "url": {
+          "$id": "urn:uuid:204cb30c-413e-4b0d-9276-1d4912b58902",
           "type": "string",
           "description": "Streamable HTTP endpoint without embedded credentials; with `machine`, its path on that machine's own server."
         },
         "machine": {
+          "$id": "urn:uuid:efd22818-77cb-42f9-8c39-d90ab63f49ba",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "description": "The entity whose tunnel (`tunnel{id, service, adopted}`) reaches the machine this server runs on, a space on a hosting platform. The server is then asked through that tunnel with no sign-in, and only for the tunnel's owner; absent for a server on the public internet."
         },
         "enabled": {
+          "$id": "urn:uuid:bc7537a6-45e5-4c73-9648-3d4eedbfadda",
           "type": "boolean",
           "description": "False disables discovery; omission enables it."
         },
         "allow": {
+          "$id": "urn:uuid:aa743aaf-9d34-47f4-8665-d7b4c1447098",
           "type": "string",
           "description": "Optional JSON array of exact remote tool names; [] exposes none."
         },
         "header": {
+          "$id": "urn:uuid:044ec735-2081-45ae-b1a6-6f68b51dc8a6",
           "type": "string",
           "description": "The request header the server's credential is sent in, such as X-API-Key, for a server that takes a key; absent sends it as `Authorization: Bearer`. The credential is the person's connection to the integration `mcp:<eid>`."
         },
         "redirect_url": {
+          "$id": "urn:uuid:82af4773-e67c-4780-ab29-8e9b9b967e18",
           "type": "string"
         },
         "client_id": {
+          "$id": "urn:uuid:66255a0a-359c-4d01-812a-03f66dbb1068",
           "type": "string"
         },
         "client_metadata_url": {
+          "$id": "urn:uuid:5f37f7dd-0aea-4abf-83cd-5a86ac819c0a",
           "type": "string"
         },
         "scope": {
+          "$id": "urn:uuid:36ff3d60-2764-483e-932e-860a4af9d88b",
           "type": "string"
         }
       }
