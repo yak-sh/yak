@@ -66,6 +66,7 @@ import {
   type Space,
   SPACE_PARTS,
   spaceOf,
+  TESTED,
   testIs,
 } from './directory.ts'
 import { paid } from '@yaks/platform/plans'
@@ -149,9 +150,7 @@ let COUNTED: CensusFields = {
   people: [
     'person',
     'doc.title',
-    'email.address',
-    'phone.number',
-    'newcomer',
+    ...TESTED,
     'signed_in.at',
     'used.at',
     'started.space',
