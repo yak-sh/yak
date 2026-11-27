@@ -129,8 +129,11 @@
 .Rows_Toggle:disabled {
   visibility: hidden;
 }
+/* Beneath the row, across it, even in a row of like things that lays its
+   parts side by side. */
 .Rows_Detail {
   display: grid;
+  flex-basis: 100%;
   gap: var(--half-gap);
   margin: var(--half-gap) 0 var(--gap) var(--gap);
   padding-left: var(--gap);

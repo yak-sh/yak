@@ -4,6 +4,16 @@
 
 export { fill, type Filled, writes } from './fill.ts'
 export { type Feed, feeds, type Mapped, needs } from './map.ts'
+export {
+  type Count,
+  type Flow,
+  flow,
+  named,
+  open,
+  type Placed,
+  type Read,
+  type Rows,
+} from './flow.ts'
 export { DEPTH, rerun, type Step, steps, workflows } from './run.ts'
-export { outdated } from './outdated.ts'
+export { type Journaled, outdated } from './outdated.ts'
 export { description, docs, workflowDoc } from './vocab.ts'

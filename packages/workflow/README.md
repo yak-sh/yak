@@ -11,11 +11,12 @@ step creates for a case carries `made{case, step}`.
 deno add jsr:@yaks/workflow
 ```
 
-| Import                 | Exports                                                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `@yaks/workflow`       | `workflows`, `rerun`, `steps`, `Step`, `DEPTH`; `fill`, `writes`; `feeds`, `needs`; `outdated`; the vocabulary |
-| `@yaks/workflow/vocab` | `workflowDoc`, `docs`, `description`                                                                           |
-| `@yaks/workflow/graph` | `plugins()`: the step runner                                                                                   |
+| Import                 | Exports                                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/workflow`       | `workflows`, `rerun`, `steps`, `Step`, `DEPTH`; `fill`, `writes`; `feeds`, `needs`; `flow`, `open`, `named`; `outdated`; the vocabulary |
+| `@yaks/workflow/vocab` | `workflowDoc`, `docs`, `description`                                                                                                    |
+| `@yaks/workflow/graph` | `plugins()`: the step runner                                                                                                            |
+| `@yaks/workflow/views` | `inspectViews`, `tabs`, `destinations`: a workflow's page in browse, in a browser and a terminal                                        |
 
 ## A step
 
@@ -83,3 +84,27 @@ Editing a step changes what happens next, never what was made.
 read from the journal ([@yaks/journal](../journal)'s `_change` and `_tx`), with
 no fingerprint stored on them. `rerun(graph, step, cases)` runs the step again
 for the cases chosen, whatever it made for them before.
+
+## A workflow's page
+
+`flow(rows, vocab?)` reads a workflow whole, pure: its steps in stages (the
+first those nothing feeds, each later one those whose feeders stand before;
+steps feeding each other in a loop make a last stage), and each case: what each
+step made for it, which of those rows are outdated, the steps it stands at, the
+open calls (no `result` names them) and tasks (not `completed` or `cancelled`)
+holding it, and whether it is done. A case stands at a step that made something
+for it and that no step it reached follows, or whose call or task for it is
+open; it is done when nothing holds it and nothing follows. Each step counts the
+cases standing at it not done, the cases it made rows for and its outdated rows.
+
+The `/views` facet draws it in [@yaks/browse](../browse): the `Workflow` tab a
+workflow opens on, the same page wherever one is asked for (`Inspect.Page`), and
+the sidebar's Workflows. The page asks for the steps the workflow `contains`,
+their `requires` edges, its cases, the rows made for them and the results
+answering their calls, and reads the journal for what is outdated. A row a step
+made is drawn by its own renderer, asked for as
+`Workflow.Inspect.Reference.Inline`, so a task reads as a task and a call as a
+call, and a task filed to someone says who.
+
+It replaces an app's Workflow tab on yaks.app (packages/platform/app-made.ts
+`runs`, drawn from @yaks/builders `workflow`) once app workflows are steps.

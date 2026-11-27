@@ -6261,12 +6261,21 @@ importers:
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/inspect':
+        specifier: 0.2.30
+        version: link:../inspect
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/ui':
+        specifier: 0.2.30
+        version: link:../ui
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
+      preact:
+        specifier: 10.29.7
+        version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -6289,6 +6298,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/render':
+        specifier: 0.2.24
+        version: link:../render
       '@yaks/sqlite':
         specifier: 0.2.30
         version: link:../sqlite
@@ -6298,9 +6310,18 @@ importers:
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools
+      '@yaks/tui':
+        specifier: 0.2.24
+        version: link:../tui
       '@yaks/wake':
         specifier: 0.2.24
         version: link:../wake
+      linkedom:
+        specifier: ^0.18.12
+        version: 0.18.15(patch_hash=ae9d51f619d4301c9f713be07f6105d144e3b3522827888a5debf4d584aae0e5)
+      preact-render-to-string:
+        specifier: 6.7.0
+        version: 6.7.0(preact@10.29.7)
 
   packages/yaml:
     dependencies:

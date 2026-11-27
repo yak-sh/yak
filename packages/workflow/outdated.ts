@@ -5,13 +5,19 @@
 // someone picks (./run.ts `rerun`) makes them again.
 
 import { after, together } from '@yaks/fp'
-import { type Access, type Bundle, type Comp, type Eid } from '@yaks/graph'
+import type { Access, Bundle, Comp, Eid } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { whole } from '@yaks/query'
 
+/** What `outdated` reads through: a graph, or a view's reader (@yaks/inspect
+ * `useReading`) with the vocabulary beside it. */
+export type Journaled = Pick<Access, 'vocab' | 'read'> & {
+  get: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
+}
+
 // The latest transaction, by sequence, of each change's target.
 let latest = (
-  g: Access,
+  g: Journaled,
   changes: Bundle[],
 ): Map<Eid, number> | Promise<Map<Eid, number>> => {
   let txs = [
@@ -35,11 +41,11 @@ let latest = (
  * each one whose `made` was written in an earlier transaction than that edit.
  * Needs the journal's rows; a graph without them is refused.
  */
-export let outdated = (g: Access, step: Eid): Eid[] | Promise<Eid[]> => {
+export let outdated = (g: Journaled, step: Eid): Eid[] | Promise<Eid[]> => {
   if (!g.vocab.comp('_change')) {
     throw new Refused('outdated reads the journal, and this graph has none')
   }
-  let read = (q: string) => g.read(whole(q)) as Bundle[] | Promise<Bundle[]>
+  let read = (q: string) => g.read(whole(q))
   return after(
     together([
       read(`._change.target=${step}, _change.component=step`),
