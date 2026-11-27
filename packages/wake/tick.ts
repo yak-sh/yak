@@ -10,6 +10,7 @@ import type { Bundle, Graph } from '@yaks/graph'
 import { line, sub, whole } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
+import { statusOf } from '@yaks/tools/errors'
 import { WAKE } from './comp.ts'
 import { due, next, owed, ring, wakeOf } from './due.ts'
 import { cadence, matches } from './while.ts'
@@ -22,6 +23,23 @@ export type Driver = Pick<Graph, 'read' | 'apply'>
 // How many times a wake another writer keeps moving is read before it is
 // left due and refused.
 let TRIES = 3
+
+// A look its reader refused for the query's own sake (an app that is gone, a
+// reader with no right to it: 400 to 404) is refused again however often it
+// is asked, so it is answered as a look: the wake fires once, saying why, and
+// moves on as a firing does. A race, a pace or an outage (409, 429, 5xx)
+// leaves it due, to be read again.
+let answered = async (read: () => Bundle[] | Promise<Bundle[]>) => {
+  try {
+    return { rows: await read() }
+  } catch (error) {
+    let status = statusOf(error)
+    if (status < 400 || status > 404) throw error
+    return {
+      refused: `The watched query was refused: ${(error as Error).message}`,
+    }
+  }
+}
 
 /** A committed firing and a rejected attempt are separate outcomes. Effect
  * failures are reported through the graph's error reporter instead: their
@@ -43,7 +61,8 @@ export type TickOpts = {
  * Fire the due wakes, one transaction per wake, each with a precondition on
  * what it read. A wake that watches a query (`watch`) is read again first and
  * fires only when its rows changed, with `watch.changes` saying how; a look
- * that finds nothing new moves `at` on without firing. `now` is in epoch milliseconds and becomes both `fired.at` and
+ * that finds nothing new moves `at` on without firing. A look the reader
+ * refuses for the query's own sake fires once, `watch.changes` saying why. `now` is in epoch milliseconds and becomes both `fired.at` and
  * the graph's `#Now` resource. Missed occurrences collapse into one firing, and
  * the recurrence advances past now — at the cadence of the first `while`
  * condition that holds at `now`, else its own `every`, else not at all.
@@ -100,8 +119,11 @@ export let tick = async (
   let once = async (wake: Bundle, every: string | null | undefined) => {
     let w = wakeOf(wake) ?? {}
     let watch = watchOf(wake)
-    let looked = watch &&
-      await look(watch.seen ?? {}, await watching(wake, watch))
+    let read = watch && await answered(() => watching(wake, watch))
+    let looked = read &&
+      ('refused' in read
+        ? { seen: watch?.seen ?? {}, changes: read.refused }
+        : await look(watch?.seen ?? {}, read.rows))
     let firing = looked && !looked.changes
       ? { entity: wake.entity, [WAKE]: { at: next({ ...w, every }, now) } }
       : { ...ring(wake, now, {}, every), ...looked ? { watch: looked } : {} }

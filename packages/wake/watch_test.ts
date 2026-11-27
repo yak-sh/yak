@@ -6,6 +6,7 @@ import type { Bundle } from '@yaks/graph'
 import { HOUR, store, T0, woken } from './testing.ts'
 import { tick } from './tick.ts'
 import { look, SOON, stir } from './watch.ts'
+import { CallError } from '@yaks/tools/errors'
 
 let iso = (t: number) => new Date(t).toISOString()
 let g = woken(store())
@@ -89,4 +90,41 @@ test('a commit stirs a resting watch to look a beat later, once a burst', async 
   // It looks, finds nothing new, and rests again with no `at`.
   await tick(h, T0 + SOON)
   equal(await at(), [null, null])
+})
+
+test('a look refused for its own sake fires once with why, and an outage stays due', async () => {
+  let h = woken(store())
+  await h.apply([
+    {
+      entity: { eid: 'gone' },
+      wake: { at: iso(T0) },
+      watch: { query: '.in=a/b' },
+    },
+    {
+      entity: { eid: 'down' },
+      wake: { at: iso(T0) },
+      watch: { query: '.in=a/c' },
+    },
+  ])
+  let { fired, refused } = await tick(h, T0, {
+    watching: (_, w) => {
+      throw w.query == '.in=a/b'
+        ? new CallError('missing', 'no app a/b')
+        : new CallError('unavailable', 'try later')
+    },
+  })
+  let [gone, down] = await h.get(['gone', 'down'])
+  equal([
+    fired.map((b) => b.entity.eid),
+    refused.map((r) => r.wake.entity.eid),
+    (gone.watch as { changes?: string }).changes,
+    (gone.wake as { at?: string }).at ?? null,
+    (down.wake as { at?: string }).at,
+  ], [
+    ['gone'],
+    ['down'],
+    'The watched query was refused: no app a/b',
+    null,
+    iso(T0),
+  ])
 })

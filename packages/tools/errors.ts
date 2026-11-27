@@ -51,6 +51,20 @@ let codes: Record<string, number> = {
   unavailable: 503,
 }
 
+/** The HTTP status a failure answers with: a refusal's, by its code, else
+ * the graph's table (@yaks/graph `status`, 500 for a defect).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { CallError, statusOf } from './errors.ts'
+ *
+ * assertEquals(statusOf(new CallError('missing', 'no app a/b')), 404)
+ * assertEquals(statusOf(new Error('boom')), 500)
+ * ```
+ */
+export let statusOf = (e: unknown): number =>
+  e instanceof CallError ? codes[e.code] ?? 400 : status(e)
+
 /** A thrown invocation refusal as its JSON HTTP answer, and a service that
  * did not answer for now (@yaks/graph `unheard`) as `unavailable`. Defects
  * are thrown through so the host's failure boundary can report them. */
@@ -62,7 +76,7 @@ export let refused = (e: unknown): Response => {
     : e instanceof Error
     ? e.name.toLowerCase()
     : 'refused'
-  let statusCode = e instanceof CallError ? codes[code] ?? 400 : status(e)
+  let statusCode = statusOf(e)
   if (statusCode >= 500 && !(e instanceof CallError) && !unheard(e)) throw e
   return Response.json({
     error: { code, message: e instanceof Error ? e.message : String(e) },

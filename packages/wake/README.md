@@ -102,6 +102,12 @@ otherwise: `tick(graph, now, { watching })` reads a wake's query the host's way,
 as yaks.app reads one that is not `local` over everything the wake's person
 reaches.
 
+A look the reader refuses for the query's own sake (status 400 to 404, such as
+an app that is gone) would be refused again on every retry. It fires once
+instead, `changes` saying why and `seen` kept, and the wake moves on as any
+firing does. A race, a pace or an outage (409, 429, 5xx) leaves the wake due, so
+it is read again.
+
 A watch needs no cadence. Its host hears each commit to what the query reads and
 calls `stir(graph, now, { which })`: each watching wake `which` picks comes due
 `SOON` (two seconds) later unless it is due sooner, so a burst of commits is one
