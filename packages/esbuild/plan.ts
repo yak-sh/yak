@@ -37,6 +37,8 @@ export type App = {
   read: Read
   /** The server source, when the app has one. */
   main?: string
+  /** Compile just this server entry, including one with no imports. */
+  entryOnly?: boolean
   /** Its compatibility flags (`nodejs_compat` changes how it compiles). */
   flags?: string[]
   /** The folder its pages are served from, when not its root (a build's
@@ -283,7 +285,10 @@ export let plan = async (app: App): Promise<Plan | null> => {
     let graph = await walk(readApp, main)
     let { files: reached, named: specs, texts, linked } = graph
     let packages = specs.filter((s) => packageOf(s))
-    if ([...reached.keys()].some(typed) || packages.length || texts.size) {
+    if (
+      app.entryOnly || [...reached.keys()].some(typed) || packages.length ||
+      texts.size
+    ) {
       inputs.worker = send(graph)
       worker = {
         entry: main,
@@ -301,9 +306,9 @@ export let plan = async (app: App): Promise<Plan | null> => {
   let loads = new Map<string, string[][]>()
   let started = new Set<string>()
   let served = app.served ? `${app.served}/` : ''
-  let pagesOf = app.paths.filter((p) =>
-    /\.html?$/i.test(p) && p.startsWith(served)
-  )
+  let pagesOf = app.entryOnly
+    ? []
+    : app.paths.filter((p) => /\.html?$/i.test(p) && p.startsWith(served))
   let documents: string[][] = []
   for (let page of pagesOf) {
     let html = await text(page) ?? ''

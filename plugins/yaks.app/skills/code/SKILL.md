@@ -57,6 +57,27 @@ return { checked }
   `result_handle` after 40 seconds, pass it to `result_wait` for the answer.
   Script execution spends from the space budget.
 
+## App Tests
+
+Use `app_test` to compile and run the draft's `*_test.ts` and `*_test.js` files.
+Pass `paths` to run specific files or `draft` to choose an open draft. Each file
+runs in its own isolate. Its tests share a temporary branch of the app store
+with the other files in the run. The branch is dropped afterward.
+
+```ts ignore
+Deno.test('cards have titles', async ({ store }) => {
+  const { result } = await store.query('.card .limit=20')
+  if (result.some((row) => !row.card.title)) {
+    throw new Error('Missing card title')
+  }
+})
+```
+
+Use `test(name, callback)` or `Deno.test(name, callback)`. The callback receives
+`store.query(line)` and `store.apply(bundles)` for the branch. Test helpers can
+import other draft files. The answer includes passes and failures by file and
+test name.
+
 ## When an app needs a worker
 
 Most apps do not need a worker. A page reads and writes the app's own graph

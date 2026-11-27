@@ -289,6 +289,18 @@ app_files:
     by the about tool; like vocab.json it is never served on the web.
     NOTES.md is limited to 4096 bytes.
     Documentation: https://yaks.app/docs/files.
+app_test:
+  title: Run app tests
+  step:
+    doing: 'Running tests…'
+    done: 'Ran app tests'
+  description: >-
+    Compile and run the app draft’s *_test.ts and *_test.js files in separate
+    isolates against a temporary branch of its store. Use test(name, callback)
+    or Deno.test(name, callback). The callback receives store with query and
+    apply. The answer includes each test’s name and outcome. Pass paths to run
+    selected test files. If the connector returns a result_handle, use
+    result_wait. Documentation: https://yaks.app/docs/code#app-tests.
 sandbox_shell:
   title: Run a sandbox command
   step:

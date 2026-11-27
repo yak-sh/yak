@@ -287,6 +287,32 @@ export let branches = (env: Env, space: Space, app: App): Branches => ({
   },
 })
 
+/** Set the branch's app vocabulary from the selected draft. */
+export let branchWords = async (
+  env: Env,
+  space: Space,
+  app: App,
+  store: ReturnType<typeof appStore>,
+  who: Who,
+  keys: string[],
+  read: (path: string) => Promise<Uint8Array | null>,
+): Promise<void> => {
+  let vocabFile = keys.includes('vocab.yml') ? 'vocab.yml' : 'vocab.json'
+  let doc = stated(
+    decode(await read(vocabFile)) ?? '{}',
+    vocabFile,
+    decode(await read('package.json')) ?? undefined,
+  )
+  // A word the app's release already declares stays the app's here as in
+  // its deploys (vocab.ts `unsaid`), though the link's store never held it.
+  let held = Object.keys(
+    (await declarationOf(env, space, app)).vocab.$defs ?? {},
+  )
+  await post(store, '/vocab', vocabFile, doc, who, {
+    [ACCEPTED]: JSON.stringify(held),
+  })
+}
+
 let branching = (env: Env, space: Space, app: App) =>
   appStore(env.STORE, space, app, env).consume(
     '/branches',
@@ -411,20 +437,7 @@ let built = async (
   // Only a branch is set up: a link with none shows what was released, whose
   // words and rows are the live app's own.
   if (branch != null && resets(d.files, prev)) {
-    let vocabFile = keys.includes('vocab.yml') ? 'vocab.yml' : 'vocab.json'
-    let doc = stated(
-      decode(await read(vocabFile)) ?? '{}',
-      vocabFile,
-      decode(await read('package.json')) ?? undefined,
-    )
-    // A word the app's release already declares stays the app's here as in
-    // its deploys (vocab.ts `unsaid`), though the link's store never held it.
-    let held = Object.keys(
-      (await declarationOf(ctx.env, space, app)).vocab.$defs ?? {},
-    )
-    await post(store, '/vocab', vocabFile, doc, who, {
-      [ACCEPTED]: JSON.stringify(held),
-    })
+    await branchWords(ctx.env, space, app, store, who, keys, read)
   }
   // The rows a release would seed: only an app no release has seeded yet
   // takes its seed files (tools.ts `willSeed`), and its draft's branch with it.

@@ -5,6 +5,7 @@ import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
 import { hostedFeedback } from './feedback.ts'
 import { base64 } from './bytes.ts'
+import { appTest } from './app-test.ts'
 import { FILE_BYTES } from '@yaks/code-mode'
 import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
@@ -8871,6 +8872,7 @@ let appBuildTools = new Set([
 /** The fixed public roster, named once per release (T-34541). */
 export let TOOLS: Tool[] = [
   ...previewTools,
+  worded(appTest),
   worded(transferTool),
   ...friendTools.map(worded),
   ...OURS.map(worded),

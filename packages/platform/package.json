@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./app-outbound": "./app-outbound.ts",
+    "./app-tests": "./app-tests.ts",
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./names": "./names.ts",

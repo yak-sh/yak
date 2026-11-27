@@ -243,6 +243,53 @@ let asked = async (
   )
 }
 
+/** Compile an executable module with the same compiler and dependencies as
+ * an app release, leaving the draft and published files untouched. */
+export let compileEntry = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  source: Omit<import('@yaks/esbuild').App, 'entryOnly' | 'strip'>,
+): Promise<{ main: string; code: string }> => {
+  if (!ctx.env.ESBUILD) {
+    throw refuse('unavailable', 'The app compiler is unavailable')
+  }
+  let no = refusedSpend(space, 'seconds', ctx.env)
+  if (no) throw refuse('limit', no)
+  let entry
+  try {
+    entry = await plan({
+      ...source,
+      entryOnly: true,
+      strip: stripping(ctx.env),
+    })
+  } catch (error) {
+    if (error instanceof Unplanned || error instanceof SyntaxError) {
+      throw refuse('arguments', error.message)
+    }
+    throw error
+  }
+  if (!entry?.ask.worker) throw refuse('missing', 'No app module to compile')
+  let began = Date.now()
+  try {
+    let answer = await asked(ctx.env, entry.ask, app, ctx.clock)
+    if (answer.errors.length) {
+      throw refuse('arguments', answer.errors.join('\n'))
+    }
+    if (!answer.worker) {
+      throw new Error('Compiler omitted the requested app module')
+    }
+    return answer.worker
+  } finally {
+    await countedSpend(
+      ctx.env,
+      space,
+      0,
+      Math.max(1, Math.ceil((Date.now() - began) / 1000)),
+    )
+  }
+}
+
 /** TypeScript and JSX read as JavaScript by yak-esbuild, over the binding.
  * sucrase is in that Worker's upload rather than this one's, where every
  * isolate compiled it at start for the few requests that strip (T-133988). A

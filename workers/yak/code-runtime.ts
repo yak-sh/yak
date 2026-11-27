@@ -10,7 +10,7 @@ export type Outbound = { fetch(req: Request): Promise<Response> }
 export type CodeEvaluate = (
   ...args: [
     ...Parameters<Evaluate>,
-    options?: { caller?: Caller; bill?: ScriptBill },
+    options?: { caller?: Caller; bill?: ScriptBill; isolated?: boolean },
   ]
 ) => ReturnType<Evaluate>
 export type Tail = { tail(events: ScriptTrace[]): Promise<void> }
@@ -44,7 +44,7 @@ export let evaluator = (
   outbound?: (caller?: Caller) => Outbound,
   permit?: Permit,
 ): CodeEvaluate =>
-async (modules, bridge, signal, { caller, bill } = {}) => {
+async (modules, bridge, signal, { caller, bill, isolated } = {}) => {
   let held: Awaited<ReturnType<Permit>> | undefined
   let sent = false
   try {
@@ -57,7 +57,7 @@ async (modules, bridge, signal, { caller, bill } = {}) => {
       mainModule: 'script.js',
       modules,
       env: {},
-      globalOutbound: outbound?.(caller) ?? null,
+      globalOutbound: isolated ? null : outbound?.(caller) ?? null,
       limits: { cpuMs: HOSTED_LIMITS.cpuMs, subRequests: 128 },
       ...held ? { tails: [held.tail] } : {},
     })
