@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { system } from '@yaks/fp'
+import { type Clock, system } from '@yaks/fp'
 import { durable } from './store-state-probe.ts'
 export { durable } from './store-state-probe.ts'
 import { bindings } from './binding-probe.ts'
@@ -400,7 +400,14 @@ export let lasting = (
   let armed = new Set<string>()
   // Each armed object's own alarm, by the name its state is kept under.
   let alarms = new Map<string, () => Promise<void>>()
-  let time = vars.CLOCK ?? system
+  // The clock the objects read (env.CLOCK, which a test may set as it
+  // prepares the platform), read when asked: the runtime delivers an alarm by
+  // the time the object that armed it keeps.
+  let clock = (): Clock => env.CLOCK ?? system
+  let time: Clock = {
+    now: () => clock().now(),
+    after: (ms, callback) => clock().after(ms, callback),
+  }
   let event = AsyncLocalStorage.snapshot()
   let timers = new Map<string, () => void>()
   let failed: unknown[] = []
@@ -604,7 +611,7 @@ export let lasting = (
   // so a platform on one waits, as it closes, for what settles without it:
   // work left waiting on that clock (a line kept a beat after its answer)
   // would otherwise wait on a test that has ended, and is left.
-  let queued = (time as Partial<Virtual>).pending
+  let queued = (clock() as Partial<Virtual>).pending
   let moving = async (queued: () => number) => {
     for (let work = pending(); work.length; work = pending()) {
       let moved = await Promise.race([
