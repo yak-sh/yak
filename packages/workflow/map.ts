@@ -24,9 +24,12 @@ export type Mapped = {
  * `requires` from an edge. */
 export type Feed = { from: Eid; to: Eid; by: 'data' | 'requires' }
 
+/** The component a case is: named apart from @yaks/trial's `case`. */
+export const CASE = 'workflow_case'
+
 // What the workflow package stamps on every row a step makes: every step
 // writes them, so they say nothing about which step feeds which.
-let stamped = new Set(['made', 'workflow_case'])
+let stamped = new Set(['made', CASE])
 
 /** What a match needs present, by component (with what the references it
  * follows point at, given a vocabulary), and the values it compares to

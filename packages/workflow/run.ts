@@ -7,11 +7,16 @@
 //   anchored to that batch, so what it writes commits with it or not at all.
 //   What it writes joins the batch and the steps are asked again, so one step
 //   can feed the next inside the same write.
-// - `when: 'commit'` (the default) runs after that write commits, anchored to
-//   it, as a write of its own, signed by the same actor.
+// - `when: 'commit'` (the default) runs after that write commits, as a write
+//   of its own signed by the same actor. The write that matched owes it, in its
+//   own transaction: one `step_due` per binding, naming the step, the binding's
+//   entities and the actor, which owes the `step_run` effect (@yaks/effects),
+//   so the pool runs it with its retries and a crash or restart never drops
+//   it. The run asks the match again anchored to those entities, so it acts on
+//   the present, and deletes the `step_due` in the same write.
 // - A step carrying `wake` or `watch` (@yaks/wake) runs when one fires: the
-//   firing writes `fired` on the step, and the step's match is asked of the
-//   whole graph.
+//   firing writes `fired` on the step, which owes `step_fire`, and the step's
+//   match is asked of the whole graph.
 //
 // A step a workflow `contains` acts for a case: the case one of the matched
 // entities was made for in that workflow, else a new one for the first matched
@@ -33,15 +38,18 @@ import {
   identityEid,
   type Match,
   match,
+  mint,
   type Plugin,
   reads,
   type ReadTx,
   signed,
 } from '@yaks/graph'
 import type { Actor } from '@yaks/graph'
-import { whole } from '@yaks/query'
+import { and, limit, parse, whole } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import type { Handlers } from '@yaks/effects'
 import { fill } from './fill.ts'
+import { CASE } from './map.ts'
 
 /** A step as the runner holds it: its row, read, with its match parsed and
  * the workflow containing it. */
@@ -62,6 +70,9 @@ export type Step = {
  * step whose output keeps matching it. */
 export const DEPTH = 32
 const GEN = '$step'
+/** The component an owed after-commit run is, and the effects that run steps
+ * after a commit and on a firing. */
+export const DUE = 'step_due', RUN = 'step_run', FIRE = 'step_fire'
 
 type Row = { step: Step; binding: Binding }
 
@@ -75,8 +86,18 @@ let plan = (text: string): Match => {
   return held
 }
 
+// Whether a graph holds any step: one row, read on every write, so a store
+// with none pays an index probe rather than a whole read.
+let any = and(...parse('.step').clauses, limit(1))
+
 /** The steps a graph holds, each with the workflow that contains it. */
 export let steps = (tx: ReadTx): Step[] | Promise<Step[]> =>
+  after(
+    tx.read(any) as Bundle[] | Promise<Bundle[]>,
+    (one) => one.length ? held(tx) : [],
+  )
+
+let held = (tx: ReadTx): Step[] | Promise<Step[]> =>
   after(q(tx, '.step'), (rows) => {
     if (!rows.length) return []
     return after(q(tx, '.workflow'), (flows) =>
@@ -134,17 +155,11 @@ let caseOf = (
     let cases = ids.map((id) => comp(marks, id, 'made', 'case'))
       .filter((c): c is Eid => !!c)
     let item = ids[0]
-    let derived = identityEid('workflow_case', [w, item])
-    return after(tx.get([...cases, derived], ['workflow_case']), (rows) => {
-      let found = cases.find((c) =>
-        comp(rows, c, 'workflow_case', 'workflow') == w
-      )
+    let derived = identityEid(CASE, [w, item])
+    return after(tx.get([...cases, derived], [CASE]), (rows) => {
+      let found = cases.find((c) => comp(rows, c, CASE, 'workflow') == w)
       let eid = found ?? derived
-      return {
-        eid,
-        item,
-        known: !!comp(rows, eid, 'workflow_case', 'workflow'),
-      }
+      return { eid, item, known: !!comp(rows, eid, CASE, 'workflow') }
     })
   })
 }
@@ -177,10 +192,7 @@ let wrote = (
           : b
       )
       return kase.known ? stamped : [
-        {
-          entity: { eid: kase.eid },
-          workflow_case: { workflow: w, for: kase.item },
-        },
+        { entity: { eid: kase.eid }, [CASE]: { workflow: w, for: kase.item } },
         ...stamped,
       ]
     })
@@ -226,14 +238,74 @@ let writing = (
     (out) => out,
   )
 
+let depthOf = (bundles: Bundle[]): number =>
+  Number(bundles.find((b) => b[GEN] != null)?.[GEN] ?? 0)
+
+let actorOf = (bundles: Bundle[]): Actor | undefined =>
+  bundles.find((b) => b.$actor)?.$actor as Actor | undefined
+
+let looping = (list: Step[]) =>
+  new Error(
+    `steps wrote ${DEPTH} times in a chain after a commit: ` +
+      list.map((s) => s.eid).join(', ') +
+      ' — a step whose match does not exclude its own output',
+  )
+
+// What a set of rows writes, with `also`, applied as one write signed by
+// `who`, `depth` after-commit step writes deep.
+let perform = (
+  g: Access,
+  tx: ReadTx,
+  rows: Row[],
+  who: Actor | undefined,
+  depth: number,
+  also: Bundle[] = [],
+): unknown =>
+  after(writing(tx, rows, []), (wrote) => {
+    let out = [...wrote, ...also]
+    if (!out.length) return null
+    let marked = out.map((b) => ({ ...b, [GEN]: depth }))
+    return g.apply(who ? signed(marked, who) : marked)
+  })
+
+// The runs this batch owes its `commit` steps: a `step_due` for each binding
+// anchored to it.
+let owed = (
+  tx: ReadTx,
+  v: Vocab,
+  list: Step[],
+  batch: Bundle[],
+): Bundle[] | Promise<Bundle[]> =>
+  after(bound(tx, v, list, batch), (rows) => {
+    if (!rows.length) return batch
+    let depth = depthOf(batch)
+    if (depth >= DEPTH) throw looping(rows.map((r) => r.step))
+    let actor = actorOf(batch)
+    return [
+      ...batch,
+      ...rows.map(({ step, binding }): Bundle => ({
+        entity: { eid: mint() },
+        [DUE]: {
+          step: step.eid,
+          binding: binding.entities.map((e) => e ?? ''),
+          ...actor?.by ? { by: actor.by } : {},
+          ...actor?.via ? { via: actor.via } : {},
+          depth,
+        },
+      })),
+    ]
+  })
+
 /** The `rules` hook: the `write` steps, run over the batch until they write
- * nothing more. Each binding runs once in a write. */
+ * nothing more (each binding once in a write), then the runs the `commit`
+ * steps are owed. */
 let inWrite: Hook = (bundles, tx, _err, context) => {
   let v = (context?.graph as Graph | undefined)?.vocab
   if (!v || !tx.bindings) return bundles
   return after(steps(tx), (all) => {
     let list = all.filter((s) => s.when == 'write' && !s.fires)
-    if (!list.length) return bundles
+    let commit = all.filter((s) => s.when == 'commit' && !s.fires)
+    if (!list.length && !commit.length) return bundles
     let ran = new Set<string>()
     let round = (batch: Bundle[]): Bundle[] | Promise<Bundle[]> =>
       after(bound(tx, v, list, batch), (rows) => {
@@ -245,74 +317,63 @@ let inWrite: Hook = (bundles, tx, _err, context) => {
           return round([...batch, ...admit(out, v)])
         })
       })
-    return round(bundles)
-  })
-}
-
-let actorOf = (bundles: Bundle[]): Actor | undefined =>
-  bundles.find((b) => b.$actor)?.$actor as Actor | undefined
-
-/** The `effect` hook: after a commit, the `commit` steps anchored to it, and
- * each step whose wake or watch the commit fired, over the whole graph. What
- * they write is one more write, signed by the commit's actor (a firing by the
- * step's writer). */
-let afterCommit: Hook = (bundles, tx, _err, context) => {
-  let g = context?.graph as Graph | undefined
-  if (!g || !tx.bindings) return bundles
-  let gen = Number(bundles.find((b) => b[GEN] != null)?.[GEN] ?? 0)
-  let v = g.vocab
-  let actor = actorOf(context?.bundles ?? bundles)
-  let fired = new Set(bundles.filter((b) => b.fired).map((b) => b.entity.eid))
-  return after(steps(tx), (all) => {
-    let commit = all.filter((s) => s.when == 'commit' && !s.fires)
-    let firing = all.filter((s) => s.fires && fired.has(s.eid))
-    if (!commit.length && !firing.length) return bundles
-    if (gen >= DEPTH) {
-      throw new Error(
-        `steps wrote ${DEPTH} times in a chain after a commit: ` +
-          commit.map((s) => s.eid).join(', ') +
-          ' — a step whose match does not exclude its own output',
-      )
-    }
-    // Each run: its steps, the batch they are anchored to (none for a firing),
-    // and whom they write as.
-    let runs: [Step[], Bundle[], Actor | undefined][] = [
-      [commit, bundles, actor],
-      ...firing.map((s): [Step[], Bundle[], Actor | undefined] => [
-        [s],
-        [],
-        s.by ? { by: s.by } : actor,
-      ]),
-    ]
     return after(
-      each(
-        runs,
-        null as null,
-        (_, [list, batch, who]) =>
-          after(
-            bound(tx, v, list, batch),
-            (rows) =>
-              after(writing(tx, rows, []), (out) => {
-                if (!out.length) return null
-                let marked = out.map((b) => ({ ...b, [GEN]: gen + 1 }))
-                return after(
-                  g.apply(who ? signed(marked, who) : marked),
-                  () => null,
-                )
-              }),
-          ),
-      ),
-      () => bundles,
+      list.length ? round(bundles) : bundles,
+      (batch) => commit.length ? owed(tx, v, commit, batch) : batch,
     )
   })
 }
 
-/** The workflow plugin: runs the graph's steps in each write, after each
- * commit, and on a step's wake firing. */
+/** The workflow plugin: runs the graph's steps in each write, and owes the
+ * runs of those that run after it commits. */
 export let workflows = (): Plugin => ({
   name: 'workflow',
   requests: [GEN],
-  hooks: { rules: inWrite, effect: afterCommit },
+  hooks: { rules: inWrite },
+})
+
+/**
+ * The code of `step_run` and `step_fire`, writing through `g`.
+ *
+ * `step_run` runs one owed binding: the step's match asked again anchored to
+ * the entities the binding named, the rows that still bind them written,
+ * signed as the write that matched, with its `step_due` deleted in the same
+ * write, so a run repeated after a crash finds nothing owed. `step_fire` runs
+ * a step whose wake or watch fired, its match asked of the whole graph,
+ * written as the step's writer. A step deleted or changed since does what it
+ * now says.
+ */
+export let handlers = (g: Access): Handlers => ({
+  [RUN]: (e, tx) => {
+    // Run already, or its step deleted with it: nothing is owed.
+    if (!e.comp) return null
+    let due = e.comp
+    let binding = (due.binding ?? []) as string[]
+    let done = [{ entity: { eid: e.entity.eid }, $delete: true }]
+    let who = due.by
+      ? { by: due.by as Eid, ...due.via ? { via: due.via as Eid } : {} }
+      : undefined
+    let depth = Number(due.depth ?? 0) + 1
+    return after(steps(tx), (all) => {
+      let s = all.find((x) => x.eid == due.step)
+      let anchor = binding.filter((x) => x).map((eid) => ({ entity: { eid } }))
+      let same = (r: Row) =>
+        r.binding.entities.every((x, i) => (x ?? '') == (binding[i] ?? ''))
+      return after(
+        s ? bound(tx, g.vocab, [s], anchor) : [],
+        (rows) => perform(g, tx, rows.filter(same), who, depth, done),
+      )
+    })
+  },
+  [FIRE]: (e, tx) =>
+    after(steps(tx), (all) => {
+      let s = all.find((x) => x.eid == e.entity.eid)
+      if (!s?.fires) return null
+      return after(
+        bound(tx, g.vocab, [s], []),
+        (rows) => perform(g, tx, rows, s.by ? { by: s.by } : undefined, 1),
+      )
+    }),
 })
 
 /**

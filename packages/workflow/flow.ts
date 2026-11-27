@@ -10,7 +10,7 @@
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { type Feed, feeds, type Mapped } from './map.ts'
+import { CASE, type Feed, feeds, type Mapped } from './map.ts'
 
 /** A step on the map: its eid, its name and the steps that feed it. */
 export type Placed = { eid: Eid; title: string; after: Eid[] }
@@ -181,7 +181,7 @@ export let flow = (rows: Rows, vocab?: Vocab): Flow => {
     if (!done) { for (let s of at) counts[s].at++ }
     let old = (byCase.get(eid) ?? []).map((r) => r.entity.eid)
       .filter((r) => stale.has(r))
-    let item = str(comp(b, 'workflow_case').for)
+    let item = str(comp(b, CASE).for)
     return { eid, item, made, outdated: old, at, held, done }
   })
   return { stages, feeds: fed, cases, counts }

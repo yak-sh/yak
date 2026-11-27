@@ -9,7 +9,8 @@ import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { docDoc } from '@yaks/doc/vocab'
 import { executionComputed, runner, toolEid, toolsDoc } from '@yaks/tools'
 import { loadVocab } from '@yaks/vocab'
-import { workflowDoc, workflows } from './mod.ts'
+import { effects } from '@yaks/effects'
+import { handlers, workflowDoc, workflows } from './mod.ts'
 
 let vocab = loadVocab([
   kernelDoc,
@@ -28,13 +29,16 @@ let vocab = loadVocab([
 let ada = { by: 'ada', via: 'session' }
 let echo = { to: toolEid('echo'), args: {} }
 
-// One workflow per `when`, each calling `echo` for the orders that say it.
+// One workflow per `when`, each calling `echo` for the orders that say it. The
+// store keeps no effect pool, so a step owed after commit runs in this process.
 let world = async () => {
+  let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
   let g = graph({
     vocab,
     storage: ram(vocab, { computed: executionComputed }),
-    plugins: [edges(vocab), workflows()],
+    plugins: [edges(vocab), workflows(), fx],
   })
+  fx.handle(handlers(g))
   let seen = new Map<string, Actor | null>()
   let r = runner(g, {
     tools: [{

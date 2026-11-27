@@ -6,11 +6,13 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
-    "./views": "./views.ts"
+    "./views": "./views.ts",
+    "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
   "description": "Steps stored as rows, run in a write, after it commits or when a wake fires; workflows of steps, the cases moving through them, and which step made each row.",
   "dependencies": {
+    "@yaks/effects": "0.2.33",
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.33",
     "@yaks/inspect": "0.2.30",

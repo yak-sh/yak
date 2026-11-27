@@ -72,6 +72,58 @@
           "description": "the step that wrote it"
         }
       }
+    },
+    "step_due": {
+      "component": true,
+      "type": "object",
+      "journal": false,
+      "description": "one after-commit run a step owes, written in the transaction of the write that matched so a crash or restart never loses it; `step_run` runs it and deletes it in the same write",
+      "properties": {
+        "step": {
+          "type": "string",
+          "ref": "step",
+          "death": "cascade",
+          "stamped": true,
+          "description": "the step to run"
+        },
+        "binding": {
+          "type": "array",
+          "items": { "type": "string" },
+          "stamped": true,
+          "description": "the entities its match bound, in its patterns' order (`''` for one it left unbound); the run asks the match again anchored to them, so it acts on the present"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who wrote the write that matched, whom the step's write is signed as"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the session or client that write came in on"
+        },
+        "depth": {
+          "type": "number",
+          "stamped": true,
+          "description": "how many after-commit step writes came before the one that matched: past 32, the chain is taken for a step whose output keeps matching it"
+        }
+      }
+    },
+    "step_run": {
+      "effect": true,
+      "created": ["step_due"],
+      "description": "run a step after the write that matched it commits, for the binding its `step_due` names, and delete the `step_due` in the same write"
+    },
+    "step_fire": {
+      "effect": true,
+      "created": ["fired"],
+      "changed": ["fired.at"],
+      "target": ".step",
+      "description": "run a step whose wake or watch fired, its match asked of the whole graph, written as the step's writer"
     }
   },
   "kinds": {

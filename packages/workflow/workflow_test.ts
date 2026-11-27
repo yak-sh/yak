@@ -7,7 +7,7 @@ import type { Comp } from '@yaks/graph'
 import { link } from '@yaks/edge'
 import { tick } from '@yaks/wake'
 import { feeds, outdated, rerun, steps } from './mod.ts'
-import { ask, fixture, ship, vocab } from './testing.ts'
+import { ask, fixture, process, ship, vocab } from './testing.ts'
 
 test('a step calls out, and the next matches its answer', async () => {
   let { g, apply, read, flow } = fixture()
@@ -124,7 +124,7 @@ test('editing a step leaves what it made, which reads as outdated', async () => 
 })
 
 test('a step with a wake runs when it fires, over the whole graph', async () => {
-  let { g, apply, read } = fixture()
+  let { g, apply, read, settle } = fixture()
   await apply([
     { entity: { eid: 'o1' }, order: {} },
     { entity: { eid: 'o2' }, order: {} },
@@ -139,10 +139,30 @@ test('a step with a wake runs when it fires, over the whole graph', async () => 
   }])
   equal(await read('.note'), [])
   await tick(g, Date.parse('2026-11-27T01:00:00Z'))
+  await settle()
   equal((await read('.note')).map((n) => (n.note as Comp).text).sort(), [
     'o1',
     'o2',
   ])
+})
+
+test('an owed step survives a stop, and a fresh process runs it once', async () => {
+  let { db, read, flow } = fixture()
+  await flow('orders', ask)
+  // The order commits, owing its step, and the process stops before working
+  // the pool.
+  await process(db, true).g.apply([{ entity: { eid: 'o1' }, order: {} }])
+  equal(await read('.call'), [])
+  equal((await read('.step_due')).length, 1)
+
+  let fresh = process(db)
+  await fresh.settle()
+  await fresh.settle()
+  let [call, ...more] = await read('.call&?made')
+  equal(more, [])
+  equal(call.call, { name: 'pack', args: { order: 'o1' } })
+  equal(await read('.step_due'), [])
+  equal(await read('.effect'), [])
 })
 
 test('the map follows matches and writes, and requires edges', async () => {

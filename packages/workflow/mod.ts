@@ -3,7 +3,7 @@
 // step wrote a row.
 
 export { fill, type Filled, writes } from './fill.ts'
-export { type Feed, feeds, type Mapped, needs } from './map.ts'
+export { CASE, type Feed, feeds, type Mapped, needs } from './map.ts'
 export {
   type Count,
   type Flow,
@@ -14,6 +14,16 @@ export {
   type Read,
   type Rows,
 } from './flow.ts'
-export { DEPTH, rerun, type Step, steps, workflows } from './run.ts'
+export {
+  DEPTH,
+  DUE,
+  FIRE,
+  handlers,
+  rerun,
+  RUN,
+  type Step,
+  steps,
+  workflows,
+} from './run.ts'
 export { type Journaled, outdated } from './outdated.ts'
 export { description, docs, workflowDoc } from './vocab.ts'

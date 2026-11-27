@@ -1,7 +1,9 @@
-// A store to run steps in, for this package's tests: SQLite with a journal,
-// steps written as rows, and a shop's words (orders, shipments, tasks filed to
-// people). A call is answered the way any runner answers one, by writing its
-// `result`; a person's step is a task they complete.
+// A store to run steps in, for this package's tests: SQLite with a journal and
+// an effect pool, steps written as rows, and a shop's words (orders,
+// shipments, tasks filed to people). A call is answered the way any runner
+// answers one, by writing its `result`; a person's step is a task they
+// complete. A write returns once the pool has run what it owed, as a worker
+// beside the store does.
 
 import { whole } from '@yaks/query'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
@@ -14,8 +16,9 @@ import { journalDoc } from '@yaks/journal/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { wakeDoc, wakes } from '@yaks/wake'
 import { loadVocab, metaDoc } from '@yaks/vocab'
+import { effectDoc, effects } from '@yaks/effects'
 import { workflowDoc } from './vocab.ts'
-import { workflows } from './run.ts'
+import { handlers, workflows } from './run.ts'
 
 let shop = {
   $defs: {
@@ -40,9 +43,48 @@ let shop = {
   },
 }
 export let vocab = loadVocab(
-  [workflowDoc, docDoc, edgeDoc, toolsDoc, wakeDoc, journalDoc, metaDoc, shop],
+  [
+    workflowDoc,
+    docDoc,
+    edgeDoc,
+    toolsDoc,
+    wakeDoc,
+    journalDoc,
+    metaDoc,
+    effectDoc,
+    shop,
+  ],
   [edgeKeywords],
 )
+
+type Db = ReturnType<typeof open>
+
+/** One process over the store in `db`: its graph, and `settle` to work the
+ * effect pool. `defer` leaves the runs its own commits owe to whoever works
+ * the pool next. */
+export let process = (db: Db, defer = false) => {
+  let fx = effects(vocab, {
+    defer,
+    write: (b) => g.apply(b, { trusted: true }),
+  })
+  let g = graph({
+    storage: storage(db, vocab, {
+      backed: backed(vocab),
+      extend: [traverse(vocab)],
+    }),
+    vocab,
+    actor: { by: 'ada' },
+    plugins: [
+      journal(log({ rows: (s) => db.query(s) }), vocab),
+      edges(vocab),
+      wakes(),
+      workflows(),
+      fx,
+    ],
+  })
+  fx.handle(handlers(g))
+  return { g, settle: () => fx.work(g) }
+}
 
 /** A fresh store: the graph, a write, a read, and `flow` to write a
  * workflow holding some steps. */
@@ -65,18 +107,12 @@ export let fixture = () => {
       _comp: { name },
     })),
   ], { trusted: true })
-  let g = graph({
-    storage: store,
-    vocab,
-    actor: { by: 'ada' },
-    plugins: [
-      journal(log({ rows: (s) => db.query(s) }), vocab),
-      edges(vocab),
-      wakes(),
-      workflows(),
-    ],
-  })
-  let apply = async (b: Bundle[]) => await g.apply(b)
+  let { g, settle } = process(db)
+  let apply = async (b: Bundle[]) => {
+    let out = await g.apply(b)
+    await settle()
+    return out
+  }
   let read = async (q: string) => await g.read(whole(q))
   // A workflow holding these steps, each `{eid, ...step}`.
   let flow = (w: string, ...list: (Comp & { eid: string })[]) =>
@@ -85,7 +121,7 @@ export let fixture = () => {
       ...list.map(({ eid, ...step }) => ({ entity: { eid }, step })),
       ...list.map((s) => link(w, 'contains', s.eid)),
     ])
-  return { g, store, apply, read, flow }
+  return { db, g, store, apply, read, flow, settle }
 }
 
 // Step 1 calls a tool for each order; step 2 ships once the call is answered.

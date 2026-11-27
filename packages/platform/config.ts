@@ -212,6 +212,9 @@ export let appConfig: Config = {
         'step_answer',
       ],
     },
+    // Steps stored as rows (D-483): run in a write, after it commits through
+    // the effect pool, or when a step's wake fires.
+    '@yaks/workflow',
     { use: '@yaks/effects', words: ['provisional', 'effect', 'lease'] },
     '@yaks/rtc',
     'yak/app',

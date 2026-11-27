@@ -6255,6 +6255,9 @@ importers:
 
   packages/workflow:
     dependencies:
+      '@yaks/effects':
+        specifier: 0.2.33
+        version: link:../effects
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp
@@ -6719,6 +6722,9 @@ importers:
       '@yaks/workers-ai':
         specifier: 0.2.25
         version: link:../../packages/workers-ai
+      '@yaks/workflow':
+        specifier: 0.2.0
+        version: link:../../packages/workflow
       '@yaks/yaml':
         specifier: 0.2.24
         version: link:../../packages/yaml

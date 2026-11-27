@@ -13,12 +13,13 @@ packages may declare one label.
 deno add jsr:@yaks/workflow
 ```
 
-| Import                 | Exports                                                                                                                                 |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/workflow`       | `workflows`, `rerun`, `steps`, `Step`, `DEPTH`; `fill`, `writes`; `feeds`, `needs`; `flow`, `open`, `named`; `outdated`; the vocabulary |
-| `@yaks/workflow/vocab` | `workflowDoc`, `docs`, `description`                                                                                                    |
-| `@yaks/workflow/graph` | `plugins()`: the step runner                                                                                                            |
-| `@yaks/workflow/views` | `inspectViews`, `tabs`, `destinations`: a workflow's page in browse, in a browser and a terminal                                        |
+| Import                   | Exports                                                                                                                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/workflow`         | `workflows`, `handlers`, `rerun`, `steps`, `Step`, `DEPTH`, `CASE`, `DUE`, `RUN`, `FIRE`; `fill`, `writes`; `feeds`, `needs`; `flow`, `open`, `named`; `outdated`; the vocabulary |
+| `@yaks/workflow/vocab`   | `workflowDoc`, `docs`, `description`                                                                                                                                              |
+| `@yaks/workflow/graph`   | `plugins()`: the step runner                                                                                                                                                      |
+| `@yaks/workflow/effects` | `effects(host)`: `step_run` and `step_fire`, the runs the step runner owes                                                                                                        |
+| `@yaks/workflow/views`   | `inspectViews`, `tabs`, `destinations`: a workflow's page in browse, in a browser and a terminal                                                                                  |
 
 ## A step
 
@@ -47,13 +48,19 @@ When it runs:
   phase, anchored to that batch. What it writes joins the batch and the steps
   are asked again, so one step can feed the next in one write. Each binding runs
   once in a write.
-- `when: 'commit'`, the default, runs after that write commits, anchored to it,
-  as a write of its own signed by the same actor. A chain of these deeper than
-  `DEPTH` (32) is refused as a step whose output keeps matching it. It runs in
-  the process that committed, not through the effect pool, so a crash between
-  the commit and the step loses that run; `rerun` makes it.
+- `when: 'commit'`, the default, runs after that write commits, as a write of
+  its own signed by the same actor. The write that matched owes it in its own
+  transaction: a `step_due{step, binding, by, via, depth}` for each binding,
+  which owes the `step_run` effect ([@yaks/effects](../effects)), so the pool
+  runs it with its retries, and a crash or restart never drops it. The run asks
+  the match again anchored to the binding's entities, so it acts on the present,
+  and deletes its `step_due` in the same write, so a run repeated after a crash
+  finds nothing owed. A chain of these deeper than `DEPTH` (32) is refused as a
+  step whose output keeps matching it.
 - A step carrying a `wake` or a `watch` ([@yaks/wake](../wake)) runs when the
-  wake fires, its match asked of the whole graph, written as the step's writer.
+  wake fires: the firing writes `fired` on the step, which owes the `step_fire`
+  effect, and the step's match is asked of the whole graph, written as the
+  step's writer.
 
 A step calls out by writing a row: `call{to, args}` for a tool
 ([@yaks/tools](../tools)), with `using{…}` for a model, and whoever answers the
