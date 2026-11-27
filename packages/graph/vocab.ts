@@ -24,7 +24,7 @@ import manifest from './package.json' with { type: 'json' }
 /** Largest explicit page size for entity reads through graph_query. */
 export const MOST = 10_000
 
-export const queryPages =
+export const queryPages: string =
   `.limit= accepts up to ${MOST.toLocaleString('en-US')} rows per page. ` +
   `For the next page, repeat the query with .after=<id> set to the last entity's id.`
 
