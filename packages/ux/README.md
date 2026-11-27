@@ -846,9 +846,10 @@ supplies `count`, `onSave`, `onDiscard` and optional `busy` and `message` props.
 values, persistence and writes.
 
 Server-rendered pages can use `bindSave` from `@yaks/ux/save`. It groups named
-controls in `form[data-save]`, counts changed names, marks their fields, and
-saves all changed forms from one bar. A radio group is one change. The
-`data-save` value is a stable draft place for that form. Drafts supply reactive
+controls in `form[data-save]`, counts changed names, and marks their fields. One
+bar saves page forms together. Dialog forms save individually and can place
+their actions with `Save.Slot`. A radio group is one change. The `data-save`
+value is a stable draft place for that form. Drafts supply reactive
 `text(place)` and synchronous `type(place, text)`; an optional asynchronous
 `spend(place)` acknowledges clearing before `saved()` runs. The
 [@yaks/draft](../draft/README.md) desk supplies these methods and recovery.
@@ -867,11 +868,11 @@ let binding = bindSave(document, {
 binding.close()
 ```
 
-A save shows at once: its fields read as saved and the bar says "Saved" while
-the writes go out behind it, each save after the one before. A field's draft
-stays until its write is answered. A failed write puts its fields back to
-unsaved, keeps their drafts and says why. Newer edits typed during a write stay
-pending; Discard restores the values the page last showed saved.
+The controls say “Saving…” while the write is out, then show the receipt or
+refusal. A field's draft stays until its write is confirmed. Newer edits remain
+pending and Discard restores the last submitted values. A form with
+`data-save-reset` clears its confirmed edits back to their initial values, for
+fields such as pasted keys.
 
 ## Sorting tables
 

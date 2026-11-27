@@ -49,6 +49,22 @@ export let specimens = (): Specimen[] => [[
     ),
   ),
 ], [
+  'Save beside a field in a dialog',
+  h(
+    Form.Line,
+    null,
+    h(Field, {
+      'aria-label': 'Key',
+      type: 'password',
+      placeholder: '••••••••',
+    }),
+    h(
+      Save,
+      { mod: 'inline' },
+      h(Save.Actions, null, h(Button, { type: 'button', mod: 'go' }, 'Save')),
+    ),
+  ),
+], [
   'A changed field',
   h(
     Save.Field,

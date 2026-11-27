@@ -9,10 +9,19 @@ export type SaveProps = {
   message?: string
   /** what the last save said, such as "Saved", shown while it fades */
   done?: string
+  inline?: boolean
   mod?: Props['mod']
   onSave: () => unknown
   onDiscard: () => unknown
 }
+
+/** The place beside a field where bindSave draws the form's actions. */
+let Slot = () =>
+  h(
+    'div',
+    { 'data-save-slot': '' },
+    h('noscript', null, h(Button, { type: 'submit', mod: 'go' }, 'Save')),
+  )
 
 export type SaveFieldProps = Props & {
   changed: boolean
@@ -36,47 +45,55 @@ let Field = (
  * "Saving…" while it saves, then what the save said until it fades. */
 export let Save: ((props: SaveProps) => JSX.Element | null) & {
   Field: typeof Field
+  Slot: typeof Slot
 } = Object.assign(
-  ({ count, busy, message, done, mod, onSave, onDiscard }: SaveProps) =>
-    count || message || done
+  ({ count, busy, message, done, inline, mod, onSave, onDiscard }: SaveProps) =>
+    inline || count || busy || message || done
       ? h(
         Paint,
         {
-          mod: [...[mod].flat(), !count && !message && 'done'],
-          'aria-label': count ? 'Unsaved changes' : 'Saved',
-          'aria-busy': busy || undefined,
+          mod: [
+            ...[mod].flat(),
+            inline && 'inline',
+            !inline && !busy && !count && !message && done && 'done',
+          ],
+          'aria-label': 'Changes',
         },
         h(
           Paint.Count,
           { role: 'status', 'aria-live': 'polite' },
           busy
             ? 'Saving…'
-            : count
+            : count && !inline
             ? `${count} ${count == 1 ? 'change' : 'changes'}`
             : message
             ? ''
             : done,
         ),
-        count
+        count ||
+          inline
           ? h(
             Paint.Actions,
             {},
+            count
+              ? h(Button, {
+                type: 'button',
+                mod: 'quiet',
+                disabled: busy,
+                onClick: onDiscard,
+              }, 'Discard')
+              : null,
             h(Button, {
-              type: 'button',
-              mod: 'quiet',
-              disabled: busy,
-              onClick: onDiscard,
-            }, 'Discard'),
-            h(Button, {
-              type: 'button',
+              type: inline ? 'submit' : 'button',
               mod: 'go',
+              'aria-busy': busy || undefined,
               disabled: busy,
-              onClick: onSave,
+              onClick: inline ? undefined : onSave,
             }, 'Save'),
           )
           : null,
         message && h(Paint.Notice, { role: 'alert' }, message),
       )
       : null,
-  { Field },
+  { Field, Slot },
 )

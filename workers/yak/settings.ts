@@ -30,8 +30,7 @@ let refused = async (response: Response) => {
 
 /** The page's settings, with drafts kept under its signed-in person. */
 export let settings = (root: Document = document) => {
-  let forms = root.querySelectorAll<HTMLFormElement>('form[data-save]')
-  if (!forms.length) return
+  if (!root.querySelector('form[data-save],[data-bind-save]')) return
   tips(root)
   let by = root.querySelector<HTMLElement>('[data-save-person]')?.dataset
     .savePerson

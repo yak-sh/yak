@@ -2,13 +2,13 @@
 // config.ts `phoneConfig` names, lent under its name (lent.ts) with
 // the options its entry gives it. The Operator's texts and calls, app texts,
 // and sign-in texts use the selected phone with the platform's keys.
-import { Blocked, type Transport } from '@yaks/phone'
+import { Blocked, type Own, type Transport } from '@yaks/phone'
 import { directoryOf } from './directory.ts'
 import type { Phone } from '@yaks/phone/plugin'
 import { phoneConfig } from './config.ts'
 import type { Env } from './env.ts'
 import { sharing } from './lib/shared.ts'
-import { keyed } from './platform-keys.ts'
+import { keyed, keysOn } from './platform-keys.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a secret put after the first text is used by the next.
@@ -20,13 +20,20 @@ let lend = async (env: Env) =>
     string,
     Phone
   >
+let configured = (env: Env) => sharing(held, env, () => lend(env))
 
 /** Every phone config.ts `phoneConfig` lends, by name. Two plugins lending
  * one name are refused: which answers would be an accident of order. */
-export let phones = async (env: Env): Promise<Record<string, Phone>> => {
-  let options = await keyed(env)
-  return sharing(held, options, () => lend(options))
-}
+export let phones = async (env: Env): Promise<Record<string, Phone>> =>
+  configured(await keyed(env))
+
+/** The phones that open accounts using each person's own credentials. */
+export let ownPhones = async (env: Env): Promise<Record<string, Own>> =>
+  Object.fromEntries(
+    Object.entries(await configured(keysOn(env))).flatMap(([via, phone]) =>
+      phone.own ? [[via, phone.own]] : []
+    ),
+  )
 
 /** The phone config.ts `phoneConfig` lends as `via`, where one does. */
 export let phoneNamed = async (

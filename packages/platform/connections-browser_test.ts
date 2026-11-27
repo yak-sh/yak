@@ -81,7 +81,7 @@ let bound = (
     let body = new FormData()
     for (let [k, v] of Object.entries(fields)) body.set(k, v)
     return root.querySelector<SavingForm>(
-      '[data-connection="c-weather"] form[data-save]',
+      '[data-connection="c-weather"] form[data-save]:not([data-save-reset])',
     )![SAVE_THROUGH]!(body)
   }
   let click = (link: Element) =>
@@ -146,13 +146,19 @@ test('a dialog keeps its very fields when it closes and opens again, so what is 
   )
 })
 
+let custom = () =>
+  connections({
+    list: [{ ...shown('weather'), about: {} }],
+  })
+
 test('a press is written as an act at the page’s address, and says what the door said of it', async () => {
-  let { g, press } = bound({ at: '?enable=cal#weather' })
-  equal(await press({ do: 'key', connection: 'c-weather', key: 'k' }), 'Saved.')
+  let { g, press } = bound({ at: '?enable=cal#weather', c: custom() })
+  let form = { do: 'about', connection: 'c-weather', tagline: 'A forecast' }
+  equal(await press(form), 'Saved.')
   equal(g.wrote.map((b) => b.map((one) => one.connectionAct)), [[{
     space: SPACE,
     page: '/manage/ada/connections?enable=cal',
-    form: { do: 'key', connection: 'c-weather', key: 'k' },
+    form,
   }]])
 })
 
@@ -164,12 +170,13 @@ test('a refusal is said where the press was made, and a sign-in goes to the serv
         message: 'Paste the key first.',
       } as never),
     )
-  let no = bound({ at: '#weather', answer: refused })
+  let no = bound({ c: custom(), at: '#weather', answer: refused })
   equal(
-    await no.press({ do: 'key' }).catch((e) => e.message),
+    await no.press({ do: 'about' }).catch((e) => e.message),
     'Paste the key first.',
   )
   let away = bound({
+    c: custom(),
     at: '#weather',
     answer: (b) =>
       Promise.resolve([

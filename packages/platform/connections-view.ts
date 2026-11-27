@@ -35,6 +35,7 @@ import { More } from '@yaks/ui/More'
 import { Notice } from '@yaks/ui/Notice'
 import { Rows } from '@yaks/ui/Rows'
 import { Time } from '@yaks/ui/Time'
+import { Save } from '@yaks/ux'
 import { type Host, spaceHost, url } from './host.ts'
 import { FRIENDS_ACCESS } from './app-friends.ts'
 import { enabling, managePath } from './routes.ts'
@@ -275,6 +276,7 @@ let connection = (
         method: 'post',
         action,
         ...at,
+        'data-key': at['data-save'],
         class: ['Page_Form', at.class].filter(Boolean).join(' '),
       },
       held('connection', c.eid),
@@ -311,15 +313,27 @@ let connection = (
     : c.lacking.length && reconnects(c)
     ? noticed(FULLER)
     : null
-  let paste = keying && open
-    ? editing(
-      'key',
-      keyBox(
-        id('key'),
-        'Paste the key',
+  let paste = keying
+    ? h(
+      More,
+      { open, 'data-save-fold': '' },
+      h(More.Summary, null, open ? 'Paste the key' : 'Replace the key'),
+      h(
+        More.Body,
         null,
-        reach(c.hosts),
-        c.face.fields,
+        form(
+          [
+            held('do', 'key'),
+            keyBox(
+              id('key'),
+              'Key',
+              h(Save.Slot, {}),
+              reach(c.hosts),
+              c.face.fields,
+            ),
+          ],
+          { 'data-save': id('key'), 'data-save-reset': '' },
+        ),
       ),
     )
     : null
@@ -426,18 +440,6 @@ let connection = (
         h('code', null, `env.${c.binding}`),
         '. An agent can rename it later.',
       ],
-    )
-    : null
-  let replace = keying && !open
-    ? editing(
-      'key',
-      keyBox(
-        id('key'),
-        'Replace the key',
-        null,
-        reach(c.hosts),
-        c.face.fields,
-      ),
     )
     : null
   // Where a key nobody pastes here goes, and what a sign-in granted.
@@ -576,7 +578,6 @@ let connection = (
     h(Form.Hint, null, connects(c.face, c.keyed)),
     ...lent,
     named,
-    replace,
     reached,
     listing,
     told,
@@ -653,7 +654,12 @@ let borrowing = (
         class: ['Page_Form', part].filter(Boolean).join(' '),
         method: 'post',
         action,
-        ...edit ? { 'data-save': `own-${b.eid}-${b.app.app}` } : {},
+        ...edit
+          ? {
+            'data-save': `own-${b.eid}-${b.app.app}`,
+            'data-save-reset': '',
+          }
+          : {},
       },
       edit ? held('do', 'own') : null,
       held('connection', connection),
@@ -684,7 +690,7 @@ let borrowing = (
           keyBox(
             id,
             'Paste your key',
-            null,
+            h(Save.Slot, {}),
             reach(b.hosts),
             b.face.fields,
           ),
@@ -1266,7 +1272,7 @@ export let connectionsView = (
   let action = `${context.pathname}${context.search}`
   // The service the page was opened to add: a key to paste, or a sign-in to
   // start, and which space it goes to.
-  let close = h(Button, {
+  let close = h(Modal.Close, {
     href: `${action}#`,
     mod: 'quiet',
     'data-modal-close': '',
@@ -1644,6 +1650,7 @@ export let connectionsView = (
     bodies.map(([k, body]) =>
       cloneElement(body, {
         key: k,
+        'data-key': k,
         'data-modal-key': k,
         hidden: k != showing,
       })
@@ -1656,6 +1663,7 @@ export let connectionsView = (
       class: 'Desk_Connections',
       inert: setup ? true : undefined,
       'data-connections': '',
+      'data-bind-save': '',
     }, [
       told(),
       c.plan ? full(view.space.slug, c.plan) : null,

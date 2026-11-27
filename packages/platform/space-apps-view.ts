@@ -180,7 +180,7 @@ export let fixing = (a: Broken, space: string) => {
       heading(title, {
         status: status(n == 1 ? '1 error' : `${n} errors`, 'negative'),
         actions: h(
-          Button,
+          Modal.Close,
           {
             ...shut,
             mod: 'quiet',

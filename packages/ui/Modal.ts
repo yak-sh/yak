@@ -20,10 +20,10 @@ import type { Colors, Specimen } from './theme.ts'
  * it is a `Layer`, sliding up from the foot as it opens. */
 export let Modal:
   & Part
-  & Record<'Body' | 'Backdrop' | 'Main' | 'Actions', Part> = block(
+  & Record<'Body' | 'Backdrop' | 'Close' | 'Main' | 'Actions', Part> = block(
     layer('dialog'),
     'Modal',
-    { Body: Card, Backdrop: 'a', Main: 'div', Actions: 'aside' },
+    { Body: Card, Backdrop: 'a', Close: Button, Main: 'div', Actions: 'aside' },
   )
 
 export let description = 'A dialog holding one card above the page.'
@@ -57,7 +57,7 @@ export let specimens = (): Specimen[] => [[
         Card.Head,
         null,
         h(Card.Title, null, 'Weather API'),
-        h(Card.Actions, null, h(Button, { href: '#' }, 'Close')),
+        h(Card.Actions, null, h(Modal.Close, { href: '#' }, 'Close')),
       ),
       h(
         Modal.Main,

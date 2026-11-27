@@ -149,6 +149,7 @@ export { EID }
 import { vaulted, vaultOf } from './vault.ts'
 import { hold, take, waiting } from './attempts.ts'
 import { drawn } from './theirs.ts'
+import { type Clock, clock } from './timing.ts'
 import { adopting, BROKER, instructionsOf, offersOf } from './catalog.ts'
 
 /** Where a service sends a person back after they sign in there. */
@@ -510,13 +511,16 @@ export let ended = async (
 // that could not be brought up to date is ours to hear about, not theirs.
 export let rebound = async (env: Env, apps: string[]) => {
   let dir = dirOf(env)
-  for (let eid of apps) {
-    let at = await dir.appAt(eid)
-    if (!at) continue
-    await rebind(env, at.space, at.app).catch((e) =>
-      caught(e, { request: 'rebind', app: at.app.slug })
-    )
-  }
+  await Promise.all(
+    apps.map(async (eid) => {
+      let at = await dir.appAt(eid)
+      if (at) {
+        await rebind(env, at.space, at.app).catch((e) =>
+          caught(e, { request: 'rebind', app: at.app.slug })
+        )
+      }
+    }),
+  )
 }
 
 /** The testing integrations a page was opened for: `?enable=<name>`, several
@@ -1425,6 +1429,7 @@ export let connecting = async (
   space: Space,
   who: Who,
   form: FormData,
+  timing: Clock = clock(),
 ): Promise<Response | Said> => {
   let field = (k: string) => String(form.get(k) ?? '').trim()
   let act = field('do')
@@ -1528,7 +1533,7 @@ export let connecting = async (
       }
     }
     let [b] = EID.test(eid)
-      ? await c.graph.read(line`.entity.eid=${eid}&.${CONNECTION}`)
+      ? await c.graph.read(line`.entity.eid=${eid}&.${CONNECTION}&*`)
       : []
     let owner = comp(b, CONNECTION).owner
     let app = field('app')
@@ -1686,21 +1691,22 @@ export let connecting = async (
         again,
       )
     }
-    let given = await pasted(integrationOf(b))
+    let integration = integrationOf(b)
+    let i = await known(c.graph.read, integration)
+    let given = givenOf(form, fieldsOf(i))
     if (typeof given == 'string') return no(given)
-    await connect(c, eid, given)
-    await rebound(env, apps)
-    let [now] = await c.graph.read(line`.entity.eid=${eid}&.${CONNECTION}&*`)
-    if (now?.exception) {
-      return no(
-        String(comp(now, 'content').body ?? 'The key could not be saved.'),
-      )
-    }
-    await heard(env, eid)
+    await timing.time('connection_write', () => connect(c, eid, given))
+    await timing.time('connection_ready', () => ready(env, eid))
     // A person's own number is set up once its key is kept, where a phone
     // connects one through this integration (operator-line.ts).
-    let { lined } = await import('./operator-line.ts')
-    let number = await lined(env, integrationOf(now), eid)
+    let [number] = await Promise.all([
+      timing.time('connection_check', async () => {
+        let { lined } = await import('./operator-line.ts')
+        return await lined(env, integration, eid)
+      }),
+      timing.time('connection_bindings', () => rebound(env, apps)),
+      ...i?.chat ? [timing.time('connection_chat', () => heard(env, eid))] : [],
+    ])
     if (number) return number
     return {
       say: 'Saved. The key is kept safe and never shown again.',

@@ -227,7 +227,7 @@ test('a save shows at once, then what the save said, until it fades', async () =
   using p = page(390, stash(), { save: () => pending.promise, linger: 0 })
   p.type('name', 'Our space')
   let saving = p.binding.save()
-  equal(p.$('.Save-done .Save_Count').textContent, 'Saved')
+  equal(p.$('.Save_Count').textContent, 'Saving…')
   equal(p.binding.count, 0)
   equal(p.$('body').querySelectorAll('[data-changed]').length, 0)
   ok(p.drafts.text('space:name'))
@@ -239,7 +239,7 @@ test('a save shows at once, then what the save said, until it fades', async () =
   equal(p.$('.Save'), null)
 })
 
-test('a write that fails after the page showed it saved puts its field back, saying why', async () => {
+test('a refused save puts its field back, saying why', async () => {
   let pending = Promise.withResolvers<unknown>()
   let drafts = stash()
   using p = page(1280, drafts, { save: () => pending.promise })
@@ -255,6 +255,44 @@ test('a write that fails after the page showed it saved puts its field back, say
   equal(p.$('[role="alert"]').textContent, 'Connection interrupted')
   equal(drafts.text('space:name'), copy)
   equal(p.saved(), 0)
+})
+
+test('a dialog added after binding saves its own form and keeps its paste until confirmation', async () => {
+  let reply = Promise.withResolvers<string>()
+  let sent = Promise.withResolvers<FormData>()
+  using p = page(390, stash(), {
+    save: (_form, body) => {
+      sent.resolve(body)
+      return reply.promise
+    },
+  })
+  p.type('name', 'A separate page edit')
+  p.$('main').insertAdjacentHTML(
+    'beforeend',
+    `
+    <dialog open><form data-save="connection" data-save-reset>
+      <input type="password" name="key" required>
+      <div data-save-slot></div>
+    </form></dialog>`,
+  )
+  await Promise.resolve()
+  let form = p.$('dialog form')
+  equal(
+    form.querySelector('[data-save-slot] button[type=submit]')?.textContent,
+    'Save',
+  )
+  // Autofill may leave a value without firing input.
+  p.field('key').value = 'pasted key'
+  p.fire(form, 'submit')
+  equal(form.querySelector('.Save_Count')?.textContent, 'Saving…')
+  equal(Object.fromEntries(await sent.promise), { key: 'pasted key' })
+  ok(p.drafts.text('connection:key').includes('pasted key'))
+  reply.resolve('Key saved.')
+  await Promise.resolve()
+  equal(form.querySelector('.Save_Count')?.textContent, 'Key saved.')
+  equal(p.field('key').value, '')
+  equal(p.drafts.text('connection:key'), '')
+  equal(p.binding.count, 1)
 })
 
 test('saves made while one is out are written after it, in order', async () => {
@@ -309,6 +347,7 @@ test('Save awaits the draft clear receipt before announcing completion', async (
   let saving = p.binding.save()
   await entered.promise
   equal(order, ['write', 'spend'])
+  equal(p.$('.Save_Count').textContent, 'Saved')
   equal(drafts.text('operator:instructions'), '')
   accepted.resolve(true)
   await saving

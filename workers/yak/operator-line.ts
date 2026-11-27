@@ -55,7 +55,7 @@ import {
 } from '@yaks/phone'
 import { caught } from './defects.ts'
 import { mobile } from '@yaks/phone/mobile'
-import { phoneOf, phones } from './phones.ts'
+import { ownPhones as owned, phoneOf } from './phones.ts'
 import { charged } from './text-spend.ts'
 import type { Texter } from '@yaks/host/senders'
 import type { Tool } from '@yaks/session'
@@ -70,18 +70,11 @@ import { meta } from './meta.ts'
 import type { OperatorStore } from './operator-store.ts'
 import type { Routed } from './operator-route.ts'
 
+export { ownPhones as owned } from './phones.ts'
+
 type Store = OperatorStore
 
 let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
-
-/** The phones a person connects a number of their own through, by the name
- * each is lent under, which is the integration its connection names. */
-export let owned = async (env: Env): Promise<Record<string, Own>> =>
-  Object.fromEntries(
-    Object.entries(await phones(env)).flatMap(([via, phone]) =>
-      phone.own ? [[via, phone.own]] : []
-    ),
-  )
 
 /** The account a connection to `via` opens, read through its credential:
  * each field its provider's `own` names; null while one is missing. It asks

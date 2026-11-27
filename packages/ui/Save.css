@@ -22,6 +22,20 @@
 .Save-sample {
   position: static;
 }
+.Save-inline {
+  position: static;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.Save-inline > .Save_Actions {
+  order: -1;
+}
+.Save-inline > .Save_Count:empty {
+  display: none;
+}
 .Save_Count {
   flex: 1 1 auto;
 }
@@ -74,6 +88,6 @@
     animation: none;
   }
 }
-body:has(.Save:not(.Save-sample)) {
+body:has(.Save:not(.Save-sample, .Save-inline)) {
   padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
 }

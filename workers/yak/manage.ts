@@ -534,7 +534,7 @@ export let manage = async (
     let { numberLogin } = await import('./number-login.ts')
     return numberLogin(req, env, dir, space, person, softphone)
   }
-  if (req.method == 'POST') return saved(req, env, dir, space, who, view)
+  if (req.method == 'POST') return saved(req, env, dir, space, who, view, c)
   if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
   if (view == 'billing' && url.searchParams.has('domain')) {
     return redirect(
@@ -1258,6 +1258,7 @@ let saved = async (
   space: Space,
   who: Owner,
   view: Exclude<SpaceView, Talk | 'versions'>,
+  c: Clock,
 ): Promise<Response> => {
   let refused = (view: Exclude<SpaceView, Talk | 'versions'>, said: Said) =>
     refusal(req, said, () => desk(req, env, dir, space, who, view, said))
@@ -1280,7 +1281,7 @@ let saved = async (
   // `do`, answered with the page saying what came of it, or sent on to a
   // service to sign in there.
   if (form.has('do')) {
-    let said = await connecting(req, env, space, who, form)
+    let said = await connecting(req, env, space, who, form, c)
     return said instanceof Response
       ? said
       : said.no

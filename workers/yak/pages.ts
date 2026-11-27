@@ -322,7 +322,7 @@ ${
       ? `<script src="${file('note.js')}" defer></script>`
       : ''
   }${
-    main.includes('data-save=')
+    main.includes('data-save=') || main.includes('data-bind-save')
       ? `<script type="module" src="${file('_settings.js')}"></script>`
       : ''
   }${

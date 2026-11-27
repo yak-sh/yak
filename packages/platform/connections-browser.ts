@@ -57,8 +57,11 @@ export let VIEW = '[data-view="connections"]'
 let KEPT = {
   leave: (n: Node) => {
     let e = n as Element
-    return e.localName == 'script' || e.hasAttribute?.('data-said')
+    return e.localName == 'script' || e.hasAttribute?.('data-said') ||
+      e.hasAttribute?.('data-save-mounted')
   },
+  keeps: (e: Element, name: string) =>
+    name == 'open' && e.hasAttribute('data-save-fold'),
 }
 
 /** What the address's hash opens, if anything: `#find` is the search, and
@@ -165,9 +168,10 @@ export let bindConnections = (
       asking(askOf(asked))
     }
     drawConnections(root, view, held, key ?? null)
-    // A form the page's Save bar sends presses through the graph too.
+    // Settings without a credential use the graph's write door. The key
+    // form posts directly so the page graph never queues the pasted value.
     for (let form of root.querySelectorAll<SavingForm>('form[data-save]')) {
-      form[SAVE_THROUGH] = press
+      if (!form.hasAttribute('data-save-reset')) form[SAVE_THROUGH] = press
     }
   }
   // The page at `to`, whose search is what the page asks of its row.
@@ -264,6 +268,7 @@ export let bindConnections = (
     timer = setTimeout(() => searching(form), 200)
   }
   let sent = async (e: Event) => {
+    if (e.defaultPrevented) return
     let event = e as SubmitEvent
     let form = event.target as HTMLFormElement
     if (form.matches('[data-find]')) {

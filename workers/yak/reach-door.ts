@@ -493,6 +493,7 @@ export let reachDoor = async (
           seat.space,
           { ...who, role: seat.role },
           formOf(act.form),
+          c,
         )
         if (said instanceof Response) {
           return Response.json([
@@ -502,7 +503,10 @@ export let reachDoor = async (
         if (said.no) throw new CallError('arguments', said.say)
         return Response.json([
           actedRow(act.eid, { say: said.say }),
-          ...await connectionsAt(seat, askOf(at.searchParams)),
+          ...await c.time(
+            'connections_readback',
+            () => connectionsAt(seat, askOf(at.searchParams)),
+          ),
         ])
       }
       if (reachedWrites(bundles)) {

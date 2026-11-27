@@ -139,7 +139,7 @@ let dialog = (title: string, body: ComponentChildren) => {
       heading(title, {
         id: TERMS + '-title',
         actions: h(
-          Button,
+          Modal.Close,
           {
             ...shut,
             mod: 'quiet',
