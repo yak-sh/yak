@@ -281,8 +281,10 @@ compute time, together with the sandbox's.
 - `./api/client.js` is not bundled. The browser imports it relative to the
   compiled script's own address, so import it from a file beside the page's
   script.
-- JSX compiles to `React.createElement` calls; `/** @jsx h */` at the top of a
-  file names another function.
+- Declaring `react` selects the React JSX runtime for `.jsx` and `.tsx` files.
+  An app that declares `preact` without `react` uses Preact's JSX runtime. If
+  neither is declared, JSX uses `React.createElement` by default, and a
+  `/** @jsx h */` pragma can name another factory.
 
 ## The platform's `@yaks/` packages
 

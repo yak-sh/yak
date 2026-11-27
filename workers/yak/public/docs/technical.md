@@ -40,6 +40,12 @@ memory: an app whose six page scripts bundle three.js, Preact and the platform
 toolkit, the largest to 1.5 MB, peaks near 300 MB. A compile that runs out of it
 is refused, and `app_deploy` says so.
 
+Use React for a new kit-built app. Declare `react` and `react-dom` as npm
+dependencies and `@yaks/ui` and `@yaks/ux` as platform dependencies. The app
+compiler shares the React runtime across the page and the kits.
+[The @yaks/preact plugin](https://jsr.io/@yaks/preact) supports Preact apps. A
+Preact app uses the same kits through `preact/compat`.
+
 Files are served from R2 through Cloudflare's cache. A cached file can be
 returned from the edge without reading R2. Every HTML file is a page at the
 address a static host gives it: `about.html` at `/about`, `docs/index.html` at

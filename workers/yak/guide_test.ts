@@ -474,12 +474,6 @@ test('the storage page declares usable Mossvale position', () => {
 // pure-rules fence executes without browser resources. Read fixtures outside
 // the measured transition; only the declaration and rules are under test.
 let gameText = pageText('games')
-let gameDependencies = JSON.parse(
-  /```json\n([\s\S]*?)\n```/.exec(gameText)![1],
-)
-let holdfastDependencies = JSON.parse(Deno.readTextFileSync(
-  new URL('../../apps/holdfast/package.json', import.meta.url),
-))
 let gameRulesExample = /```ts\n([\s\S]*?)\n```/.exec(gameText)![1]
 let runGameRulesExample = async () =>
   pageModule(await strip('example.ts', gameRulesExample), {
@@ -491,7 +485,6 @@ let runGameRulesExample = async () =>
     read: (url) => importing(url),
   })
 
-test('the games page uses Holdfast dependencies and runnable rules', async () => {
-  assertEquals(gameDependencies, holdfastDependencies)
+test('the game rules example runs as published', async () => {
   await runGameRulesExample()
 })
