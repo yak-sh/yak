@@ -1,3 +1,4 @@
+import { friendsAt } from '@yaks/game/friends'
 import { kit, Party } from '@yaks/game/hud'
 import { themes } from '@yaks/ui/ui'
 import { wear } from '@yaks/ui/wear'
@@ -57,13 +58,8 @@ let remember = (room: string) => {
   history.replaceState(null, '', url)
 }
 
-// The app's own store doors, for the yaks.app friend list.
-let app = (path: string) => new URL('api/' + path, document.baseURI)
-let read = async (line: string) => {
-  let res = await fetch(app('query?q=' + encodeURIComponent(line)))
-  if (!res.ok) throw new Error(`Friends: HTTP ${res.status}`)
-  return await res.json() as Record<string, Record<string, unknown>>[]
-}
+// The person's yaks.app friend list, with their consent.
+let yaks = friendsAt()
 
 let next = (a: { x: number; z: number }, b: { x: number; z: number }) =>
   Math.abs(a.x - b.x) + Math.abs(a.z - b.z) === 1
@@ -198,18 +194,17 @@ let playRoom = async (member: Joined) => {
   // Friends come from the person's yaks.app friend list, with their consent.
   friend.addEventListener('click', () => {
     void (async () => {
-      let [{ app_friends: access }] = await read('.app_friends')
-      if (!access?.signed_in) {
+      let shown = await yaks.list()
+      if (shown.kind == 'signed-out') {
         throw new RoomRefused('Sign in to invite friends.')
       }
-      if (!access.allowed) return location.assign(app('allow?at=friends'))
-      let rows = await read('.app_friend')
-      if (!rows.length) throw new RoomRefused('No friends on yaks.app yet.')
+      if (shown.kind == 'ask') return location.assign(shown.allow)
+      if (!shown.friends.length) {
+        throw new RoomRefused('No friends on yaks.app yet.')
+      }
       friends.replaceChildren(
         new Option('Choose a friend', ''),
-        ...rows.map((r) =>
-          new Option(String(r.app_friend.name), String(r.entity.eid))
-        ),
+        ...shown.friends.map((f) => new Option(f.name, f.person)),
       )
       friends.hidden = false
       friends.focus()
@@ -220,15 +215,7 @@ let playRoom = async (member: Joined) => {
     if (!to) return
     void (async () => {
       let url = await invite()
-      let res = await fetch(app('apply'), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify([{
-          entity: { eid: crypto.randomUUID() },
-          friend_invite: { to, path: 'room' + url.search + url.hash },
-        }]),
-      })
-      if (!res.ok) throw new Error(`Invite: HTTP ${res.status}`)
+      await yaks.invite(to, 'room' + url.search + url.hash)
       status.textContent = `Invited ${friends.selectedOptions[0].text}.`
       friends.hidden = true
     })().catch(show)
