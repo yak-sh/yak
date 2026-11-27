@@ -1,9 +1,10 @@
 // The list prices and labels a graph gives a model the first time it meets one
 // (packages/model/prices.json, read by @yaks/model `listPrice` and
 // `listLabel`), from
-// OpenRouter's public listing of Anthropic's and OpenAI's models, under the
-// names Claude Code and Codex write in their transcripts: Anthropic's with
-// dashes for dots (`claude-opus-4-6`), OpenAI's as listed (`gpt-5.1-codex`).
+// OpenRouter's public listing of Anthropic's, OpenAI's and xAI's models, under
+// the names Claude Code, Codex and Grok write in their transcripts:
+// Anthropic's with dashes for dots (`claude-opus-4-6`), the others as listed
+// (`gpt-5.1-codex`, `grok-4.7`).
 // OpenRouter lists no hour-long cache write; Anthropic's pricing page sets it
 // at twice the input price
 // (https://platform.claude.com/docs/en/about-claude/pricing).
@@ -13,9 +14,9 @@
 import { listing } from '@yaks/openrouter'
 import type { Listed, Price } from '@yaks/model'
 
-let VENDOR = /^(anthropic|openai)\/([^:]+)$/
+let VENDOR = /^(anthropic|openai|x-ai)\/([^:]+)$/
 
-// A listing's Anthropic and OpenAI models, each by its transcripts' name.
+// A listing's Anthropic, OpenAI and xAI models, each by its transcripts' name.
 let named = (listed: Listed[]): [string, string, Listed][] =>
   listed.flatMap((l): [string, string, Listed][] => {
     let [, vendor, name] = l.name.match(VENDOR) ?? []
@@ -27,7 +28,7 @@ let named = (listed: Listed[]): [string, string, Listed][] =>
     ]]
   }).sort(([, a], [, b]) => a < b ? -1 : 1)
 
-/** A listing's Anthropic and OpenAI models' prices, by their transcripts'
+/** A listing's Anthropic, OpenAI and xAI models' prices, by their transcripts'
  * names. */
 export let prices = (listed: Listed[]): Record<string, Price> =>
   Object.fromEntries(
@@ -40,7 +41,7 @@ export let prices = (listed: Listed[]): Record<string, Price> =>
     ),
   )
 
-/** What a person sees each of a listing's Anthropic and OpenAI models
+/** What a person sees each of a listing's Anthropic, OpenAI and xAI models
  * called, by their transcripts' names: OpenRouter's name for it without its
  * vendor, and Claude's models without "Claude" ("Sonnet 5.5"). */
 export let labels = (listed: Listed[]): Record<string, string> =>

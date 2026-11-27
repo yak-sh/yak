@@ -9,12 +9,15 @@ test('a listing becomes prices under the names transcripts use', () => {
       { name: 'openai/gpt-5.1-codex', price },
       { name: 'anthropic/claude-opus-4.6', price },
       { name: 'anthropic/claude-opus-4.6:batch', price },
+      { name: 'x-ai/grok-4.7', price },
+      { name: 'x-ai/grok-4.7:batch', price },
       { name: 'google/gemini-3-pro', price },
       { name: 'openai/gpt-audio' },
     ]),
     {
       'claude-opus-4-6': { ...price, cache_write_1h: 4 },
       'gpt-5.1-codex': price,
+      'grok-4.7': price,
     },
   )
 })
@@ -27,9 +30,14 @@ test('a listing labels its models without their vendor, and Claude without "Clau
         name: 'anthropic/claude-sonnet-5.5',
         label: 'Anthropic: Claude Sonnet 5.5',
       },
+      { name: 'x-ai/grok-4.7', label: 'SpaceXSI: Grok 4.7' },
       { name: 'google/gemini-3-pro', label: 'Google: Gemini 3 Pro' },
       { name: 'openai/gpt-audio' },
     ]),
-    { 'claude-sonnet-5-5': 'Sonnet 5.5', 'gpt-6.2-sol': 'GPT-6.2 Sol' },
+    {
+      'claude-sonnet-5-5': 'Sonnet 5.5',
+      'gpt-6.2-sol': 'GPT-6.2 Sol',
+      'grok-4.7': 'Grok 4.7',
+    },
   )
 })
