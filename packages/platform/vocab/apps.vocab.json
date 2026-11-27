@@ -7,6 +7,7 @@
     "product": {
       "component": true,
       "type": "object",
+      "description": "Something for sale. The checkout reads its price from `price_cents` on this row, never from the buyer.",
       "kind": true,
       "before": [
         "doc"
@@ -16,40 +17,46 @@
           "type": "number"
         },
         "sizes": {
-          "type": "string"
+          "type": "string",
+          "description": "The variants the seller offers, comma-separated; a page turns the one chosen into the `options` on a cart line."
         },
         "stock": {
-          "type": "number"
+          "type": "number",
+          "description": "The seller's own count; nothing here decrements it."
         },
         "image": {
           "type": "string",
           "format": "uri"
         }
       },
-      "$comment": "Something for sale (sell.ts, T-34525). Platform's rather than each app's for the reason every other word here is platform's — a `product` in one shop is the same word as a `product` in the next, so one filter reads both — and for one more: the checkout door reads `price_cents` off this row, and a door that took the price off the wire would take a price a buyer can edit. A word the platform charges money against is a word the platform declares.\n\n`sizes` is the variants the seller offers, comma-separated, and what a page turns into the `options` on a cart line. `stock` is the seller's own count — nothing here decrements it, because a shop that oversells by one is a conversation and a shop that loses an order to a race is a bug."
+      "$comment": "sell.ts, T-34525. Platform's rather than each app's for the reason every other word here is platform's — a `product` in one shop is the same word as a `product` in the next, so one filter reads both — and for one more: a door that took the price off the wire would take a price a buyer can edit. A word the platform charges money against is a word the platform declares.\n\nNothing decrements `stock`, because a shop that oversells by one is a conversation and a shop that loses an order to a race is a bug."
     },
     "fund": {
       "component": true,
       "type": "object",
+      "description": "What a space takes gifts for; its `doc.title` is the fund's name the donor reads first.",
       "kind": true,
       "before": [
         "doc"
       ],
       "properties": {
         "holder": {
-          "type": "string"
+          "type": "string",
+          "description": "The legal name a receipt says received the gift."
         },
         "amounts_cents": {
-          "type": "string"
+          "type": "string",
+          "description": "The suggested amounts, comma-separated."
         },
         "statement": {
-          "type": "string"
+          "type": "string",
+          "description": "What a receipt says was given in return, where the default (\"no goods or services\") is not the case."
         },
         "test": {
           "type": "boolean"
         }
       },
-      "$comment": "What a space takes gifts for (sell.ts `giving`, T-3630): `doc.title` is the fund's name the donor reads first, `holder` the legal name a receipt says received the gift, `amounts_cents` the suggested amounts, comma-separated, and `statement` what a receipt says was given in return, where the default (\"no goods or services\") is not the case. Platform's for the reason `product` is: the giving door reads it."
+      "$comment": "sell.ts `giving`, T-3630. Platform's for the reason `product` is: the giving door reads it."
     },
     "fund_receipt": {
       "component": true,
@@ -68,6 +75,7 @@
     "gift": {
       "component": true,
       "type": "object",
+      "description": "A gift received: one row per payment, a one-time gift's checkout or one month of a monthly gift's invoice, written by the payment provider's webhook.",
       "kind": true,
       "readers": "editor",
       "before": [
@@ -90,10 +98,12 @@
         },
         "subscription": {
           "type": "string",
+          "description": "The provider's subscription for a monthly gift, which the receipt's cancel link opens the portal for.",
           "stamped": true
         },
         "payer": {
           "type": "string",
+          "description": "The provider's customer; the receipt's cancel link opens the provider's portal for them.",
           "stamped": true
         },
         "account": {
@@ -102,10 +112,12 @@
         },
         "total_cents": {
           "type": "number",
+          "description": "What was paid.",
           "stamped": true
         },
         "covered_cents": {
           "type": "number",
+          "description": "Of `total_cents`, what the donor added to cover the provider's fee.",
           "stamped": true
         },
         "test": {
@@ -141,7 +153,7 @@
           "stamped": true
         }
       },
-      "$comment": "A gift received (sell.ts `gave`): one row per payment, a one-time gift's checkout or one month of a monthly gift's invoice, written by the shops webhook as `order` is. `total_cents` is what was paid, of which `covered_cents` the donor added to cover the provider's fee. `payer` and `subscription` are the provider's, and name what the receipt's cancel link opens the portal for."
+      "$comment": "sell.ts `gave`; written by the shops webhook as `order` is."
     },
     "refund_request": {
       "component": true,
@@ -168,8 +180,7 @@
           "type": "string",
           "stamped": true
         }
-      },
-      "$comment": "Something sold (sell.ts, T-34526): one row per completed checkout at the payment provider, written into the app's own store by its shops webhook, as the app. Platform's rather than each app's for the reason `product` is: the platform writes it, and a word the platform writes is a word the platform declares — an app that declared its own `order` would have the platform writing into a shape it does not know.\n\nIt is the whole record of a sale on this side. The money itself is the provider's: `session` and `intent` are how a seller finds it there, and `account` says whose books it landed on. Nothing here is authoritative about the payment — the provider is — and the row exists so the seller knows what to put in the box and who to post it to.\n\n`items` is the cart as JSON in one text property, the way `home.first` is; a property is a scalar, and this is a list.\n\nEvery property is server-owned: the webhook writes it through the kernel's door (sell.ts `asApp`), and no page, member or visitor can say an order was paid (T-37881). Who may remove one is graph.ts `FLOORS`."
+      }
     },
     "refund_sent": {
       "component": true,
@@ -255,6 +266,7 @@
     "order": {
       "component": true,
       "type": "object",
+      "description": "Something sold: one row per completed checkout at the payment provider, written into the app's own store by the provider's webhook. The provider is authoritative about the payment; this row tells the seller what to send and to whom. Every property is written by the platform, so no page, member or visitor can say an order was paid.",
       "kind": true,
       "readers": "editor",
       "before": [
@@ -263,18 +275,22 @@
       "properties": {
         "session": {
           "type": "string",
+          "description": "With `intent`, how a seller finds the payment at the provider.",
           "stamped": true
         },
         "intent": {
           "type": "string",
+          "description": "With `session`, how a seller finds the payment at the provider.",
           "stamped": true
         },
         "account": {
           "type": "string",
+          "description": "Whose books at the provider the payment landed on.",
           "stamped": true
         },
         "items": {
           "type": "string",
+          "description": "The cart, as JSON text.",
           "stamped": true
         },
         "quote": {
@@ -352,7 +368,8 @@
           ],
           "stamped": true
         }
-      }
+      },
+      "$comment": "sell.ts, T-34526. Platform's rather than each app's for the reason `product` is: the platform writes it, and a word the platform writes is a word the platform declares — an app that declared its own `order` would have the platform writing into a shape it does not know.\n\n`items` is JSON in one text property, the way `home.first` is; a property is a scalar, and this is a list.\n\nThe webhook writes through the kernel's door (sell.ts `asApp`, T-37881). Who may remove one is graph.ts `FLOORS`."
     },
     "sale_access": {
       "component": true,

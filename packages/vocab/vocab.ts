@@ -224,6 +224,21 @@ let extended = (
   return more.status ? appended(name, out, more.status) : out
 }
 
+// A schema without its `$comment` notes. A note is for whoever edits the
+// document; what a reader needs is the word's description, so nothing loaded
+// from a document carries one. A property named `$comment` is declared as a
+// schema of its own, an object, and stays.
+let unnoted = <T>(s: T): T =>
+  Array.isArray(s)
+    ? s.map(unnoted) as T
+    : s && typeof s == 'object'
+    ? Object.fromEntries(
+      Object.entries(s).filter(([k, v]) =>
+        k != '$comment' || typeof v != 'string'
+      ).map(([k, v]) => [k, unnoted(v)]),
+    ) as T
+    : s
+
 // An extension that only adds rungs to a status, where no document here
 // declares the component: a graph composed without the package that declares
 // it has none of its entities to read a status of, as with `search`.
@@ -1074,7 +1089,8 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   let declared = new Map<string, Declared[]>()
   let adding: [string, PropSchema][] = []
   for (let doc of docs) {
-    for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
+    for (let [name, said] of Object.entries(doc.$defs ?? {})) {
+      let schema = unnoted(said)
       if (
         schema?.tool === true || schema?.rule === true ||
         schema?.effect === true

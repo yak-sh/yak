@@ -471,7 +471,7 @@
     "owner": {
       "component": true,
       "journal": false,
-      "description": "Whose this is in the Operator's store, the one person who reads it: named by it or by what it hangs on (its conversation, its session, the session a helper works for, the request files came with). Without a person it is named as more than one person's, or by something that names nobody, and nobody reads it. An entity without an owner is nobody's, and everyone who reads the store sees it.",
+      "description": "Whose this is in the Operator's store, the one person who reads it: named by it or by what it hangs on (its conversation, its session, the session a helper works for, the request files came with). Without a person it is named as more than one person's, or by something that names nobody, and nobody reads it. An entity without an owner is nobody's, and everyone who reads the store sees it. The store keeps it, in the commit that makes or changes what it is read from; nobody else writes it.",
       "properties": {
         "person": {
           "type": "string",
@@ -480,7 +480,7 @@
           "stamped": true
         }
       },
-      "$comment": "Kept by the store's rule (./operator-owner.ts `owning`) in the commit that makes or changes what it is read from; nobody else writes it."
+      "$comment": "./operator-owner.ts `owning`"
     },
     "operator_files": {
       "component": true,
@@ -675,7 +675,7 @@
     },
     "operator_line": {
       "component": true,
-      "description": "One of the numbers a person's own connected phone account holds (own_number in the directory), as the person chose for their Operator: outbound, its phone_send texts go from it; inbound, texts that reach it come to the Operator. Each is on only when true, and the two are independent.",
+      "description": "One of the numbers a person's own connected phone account holds (own_number in the directory), as the person chose for their Operator: outbound, its phone_send texts go from it; inbound, texts that reach it come to the Operator. Each is on only when true, and the two are independent. Its own setting, written by phone_numbers or any write to its store.",
       "properties": {
         "connection": {
           "type": "string",
@@ -698,7 +698,7 @@
           "description": "Whether texts that reach it come to the Operator: on, its SMS callback is pointed at yaks.app; off, its callback is left as the person had it, or put back."
         }
       },
-      "$comment": "Which of the person's own numbers the Operator uses, and how: its own setting, written by phone_numbers or any write to its store (operator-line.ts)."
+      "$comment": "operator-line.ts"
     },
     "operator_handoff": {
       "component": true,

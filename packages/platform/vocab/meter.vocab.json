@@ -26,18 +26,21 @@
         },
         "source": {
           "type": "string",
-          "$comment": "What the dollars buy, for the admin's spend by source (meter.ts `SOURCES`): a model provider, voice, texts or the browser."
+          "description": "What the dollars buy: a model provider, voice, texts or the browser.",
+          "$comment": "Read for the admin's spend by source (meter.ts `SOURCES`)."
         },
         "visitor": {
           "type": "boolean"
         },
         "likely": {
           "type": "number",
-          "$comment": "What the call most likely cost should it end with nothing measured (@yaks/model `likely`), and the moment past which it can no longer be running: a hold still open then is settled at `likely` (workers/yak model-spend.ts `expired`). A hold with no `until` is its owner's to settle, however long it waits."
+          "description": "What the call most likely cost, should it end with nothing measured: a hold still open at `until` is settled at this. A hold with no `until` is its owner's to settle, however long it waits.",
+          "$comment": "@yaks/model `likely`; workers/yak model-spend.ts `expired`."
         },
         "until": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "The moment past which the call can no longer be running."
         }
       }
     },
@@ -45,6 +48,7 @@
       "component": true,
       "wire": false,
       "type": "object",
+      "description": "A call's hold settled at an estimate, nothing having measured it, and whom it was held for. A measured cost arriving later replaces the estimate on the same space's month.",
       "properties": {
         "space": {
           "type": "string",
@@ -69,12 +73,13 @@
           "type": "boolean"
         }
       },
-      "$comment": "A call's hold settled at an estimate, nothing having measured it, and whom it was held for: a measured cost arriving later replaces the estimate on the same space's month (workers/yak model-spend.ts `settled`)."
+      "$comment": "workers/yak model-spend.ts `settled`."
     },
     "visitor_calls": {
       "component": true,
       "wire": false,
       "type": "object",
+      "description": "The model calls one visitor has asked a space's apps for on `day`, counted against the calls a visitor may ask for in a day.",
       "properties": {
         "space": {
           "type": "string",
@@ -88,12 +93,13 @@
           "type": "number"
         }
       },
-      "$comment": "The model calls one visitor has asked a space's apps for on `day` (model-spend.ts `reserved`), against meter.ts `visitorCalls`."
+      "$comment": "model-spend.ts `reserved`, against meter.ts `visitorCalls`."
     },
     "newcomer_builds": {
       "component": true,
       "wire": false,
       "type": "object",
+      "description": "The newcomers' spaces opened on `day`: one row for everybody and one per address they came from, each counted against a daily limit.",
       "properties": {
         "day": {
           "type": "string"
@@ -102,7 +108,7 @@
           "type": "number"
         }
       },
-      "$comment": "The newcomers' spaces opened on `day` (newcomer.ts `counted`): one row for everybody and one per address they came from, against newcomer.ts `DAILY` and `PER_SOURCE`."
+      "$comment": "newcomer.ts `counted`, against newcomer.ts `DAILY` and `PER_SOURCE`."
     },
     "account_usage": {
       "component": true,

@@ -3,7 +3,7 @@
   "reserved": false,
   "$defs": {
     "referral_code": {
-      "description": "The code a person's invite to yaks.app carries: whoever signs up sending it was invited by them.",
+      "description": "The code a person's invite to yaks.app carries: whoever signs up sending it was invited by them. Minted the first time their invite page opens; unique, so a code names one person.",
       "component": true,
       "type": "object",
       "unique": [
@@ -17,10 +17,10 @@
           "stamped": true
         }
       },
-      "$comment": "The code a person's invite carries (referral.ts `words`), on their own row, minted the first time their invite page opens. Unique, so a code names one person and the sign-up that sends it finds them."
+      "$comment": "referral.ts `words`"
     },
     "referral": {
-      "description": "One person who signed up for yaks.app through another's invite: who invited them.",
+      "description": "One person who signed up for yaks.app through another's invite: who invited them. A person is invited once, by whoever's code their first message carried; its `created` stamp is when.",
       "component": true,
       "type": "object",
       "kind": true,
@@ -41,20 +41,22 @@
           "stamped": true
         }
       },
-      "$comment": "One person who signed up through another's invite (referral.ts `credit`): who invited them. Its eid is derived from the invitee, so a person is invited once, by whoever's code their first message carried; its `created` stamp is when."
+      "$comment": "referral.ts `credit`. Its eid is derived from the invitee, which is what makes a person invited once."
     },
     "rewarded": {
-      "description": "The free month of the Plus plan a referral gave its inviter's space when the invitee built their first app.",
+      "description": "The free month of the Plus plan a referral gave its inviter's space when the invitee built their first app. A mark, written once.",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
           "type": "string",
           "format": "date-time",
+          "description": "When the month was given.",
           "stamped": true
         },
         "space": {
           "type": "string",
+          "description": "The space given the month.",
           "ref": "entity",
           "death": "keep",
           "stamped": true
@@ -62,17 +64,19 @@
         "until": {
           "type": "string",
           "format": "date-time",
+          "description": "The day that space's free time now runs through.",
           "stamped": true
         },
         "subscription": {
           "type": "string",
+          "description": "For a space already paying, the provider's subscription whose next charge moved a month later.",
           "stamped": true
         }
       },
-      "$comment": "The month of the Plus plan a referral gave its inviter once the invitee built their first app (referral.ts `rewarding`): when, to which space, the day that space's free time now runs through, and, for a space already paying, the provider's subscription whose next charge moved a month later. A mark, written once."
+      "$comment": "referral.ts `rewarding`"
     },
     "comped": {
-      "description": "The Plus plan given to a space free, through `until`, with nothing billed for it.",
+      "description": "The Plus plan given to a space free, through `until`, with nothing billed for it. Each reward adds a month after the later of now and the free time it already had.",
       "component": true,
       "type": "object",
       "properties": {
@@ -82,44 +86,50 @@
           "stamped": true
         }
       },
-      "$comment": "The Plus plan given to a space free, through `until`, where the payment provider bills it nothing (plans.ts `tierOf`): each reward adds a month after the later of now and the free time it already had."
+      "$comment": "plans.ts `tierOf`"
     },
     "plan_trial": {
-      "description": "A space's 30-day trial of the Plus plan, whose clock stops while its owners are away.",
+      "description": "A space's 30-day trial of the Plus plan, whose clock stops while its owners are away. Running, paused or ended is computed from its properties. The platform writes it.",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
           "type": "string",
           "format": "date-time",
+          "description": "When it began.",
           "stamped": true
         },
         "through": {
           "type": "string",
           "format": "date-time",
+          "description": "The day it ends, moved later by each time its owners were away.",
           "stamped": true
         },
         "paused": {
           "type": "string",
           "format": "date-time",
+          "description": "When its clock stopped; none while it runs.",
           "stamped": true
         },
         "resumed": {
           "type": "string",
           "format": "date-time",
+          "description": "When it last started again.",
           "stamped": true
         },
         "subscribed": {
           "type": "string",
           "format": "date-time",
+          "description": "When the space subscribed during it, which gave the early credit once.",
           "stamped": true
         },
         "told": {
           "type": "string",
+          "description": "The notes its owners were sent, by key.",
           "stamped": true
         }
       },
-      "$comment": "A space's trial of the Plus plan (D-476, @yaks/platform/trial): when it began and the day it ends, moved later by each time its owners were away; when its clock stopped, none while it runs; when it last started again; when the space subscribed during it, which gave the early credit once; and the notes its owners were sent, by key. Running, paused or ended is computed from these. The platform's to write."
+      "$comment": "D-476, @yaks/platform/trial"
     },
     "reward_referral": {
       "effect": true,

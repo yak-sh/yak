@@ -357,6 +357,37 @@ test('a registered extension keyword is carried, not interpreted', () => {
   assertEquals(v.prop('task', 'priority')?.keywords, {})
 })
 
+test('a `$comment` note is for the document, never the loaded word', () => {
+  let w = loadVocab([{
+    $defs: {
+      shelf: {
+        component: true,
+        type: 'object',
+        $comment: 'for whoever edits this',
+        properties: {
+          label: { type: 'string', $comment: 'also a note' },
+          $comment: { type: 'string' }, // a property of that name stays
+        },
+      },
+    },
+  }, {
+    $defs: {
+      shelf: {
+        component: true,
+        extends: true,
+        $comment: 'a note on an extension',
+        properties: { spine: { type: 'string' } },
+      },
+    },
+  }] as VocabDoc[])
+  assertEquals(w.def('shelf')?.properties, {
+    label: { type: 'string' },
+    $comment: { type: 'string' },
+    spine: { type: 'string' },
+  })
+  assert(!('$comment' in w.def('shelf')!))
+})
+
 test('the meta-schema composes with an extension vocabulary', () => {
   let words = {
     uri: 'https://example.com/vocab/shelf',

@@ -10,23 +10,25 @@
       "$comment": "An app whose pages in folders resolve their relative URLs from the app's root, the base every page had until each page was based at its own folder (apps.ts `asset`). Worn by the apps whose pages were written against the old base (app-grep found one, thecompanygardener's openai-math, T-124410); nothing else wears it."
     },
     "publishing": {
-      "description": "The paths an app has published files at, so a request at one of them is answered its file before the app runs.",
+      "description": "The paths an app has published files at, so a request at one of them is answered its file before the app runs. A request at any other path goes on to the app without asking. An app that never published wears none.",
       "component": true,
       "type": "object",
       "properties": {
         "paths": {
-          "type": "string"
+          "type": "string",
+          "description": "The paths, sorted, as a JSON list in one text property."
         }
       },
-      "$comment": "The paths an app has published files at (public-files.ts), so a request at one of them asks the directory for its file before the app runs, and a request at any other path goes on to the app without asking. The list is JSON in one text property, sorted, as `home.first` is. The directory keeps it in the transaction that writes the files themselves (./publishing-graph.ts); an app that never published wears none."
+      "$comment": "public-files.ts. The directory keeps it in the transaction that writes the files themselves (./publishing-graph.ts)."
     },
     "join": {
-      "description": "Who may join an app through its own rows, set by its space's owner.",
+      "description": "Who may join an app through its own rows, set by its space's owner. Only the kernel writes it, and a copy of an app uses only its owner's policy.",
       "component": true,
       "type": "object",
       "properties": {
         "policy": {
           "type": "object",
+          "description": "The space owner's policy.",
           "properties": {
             "emails": {
               "type": "array",
@@ -58,6 +60,7 @@
         },
         "declared": {
           "type": "object",
+          "description": "The policy the original app's deployed manifest declares.",
           "properties": {
             "emails": {
               "type": "array",
@@ -87,8 +90,7 @@
           },
           "stamped": true
         }
-      },
-      "$comment": "The owner's policy and the original app's deployed manifest policy. Only the kernel writes either. A copy uses only its owner's policy."
+      }
     }
   }
 }

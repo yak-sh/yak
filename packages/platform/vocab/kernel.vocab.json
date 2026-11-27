@@ -7,6 +7,7 @@
     "error": {
       "component": true,
       "type": "object",
+      "description": "A known failure the platform reports deliberately, as against a break nobody chose.",
       "kind": true,
       "before": [
         "doc"
@@ -22,20 +23,22 @@
           "stamped": true
         },
         "code": {
-          "type": "string"
+          "type": "string",
+          "description": "What a refused call says about itself, written by the tool runner rather than stamped by the platform."
         }
       },
-      "$comment": "A known failure state the platform reports deliberately, as against a break nobody chose. `app_errors` reads both facets in every store, so both are declared in every store.\n\n`code` is @yaks/tools' half of this word: what a refused call says about itself, written by the runner rather than stamped by the platform. One word, both meanings, so a store never has to choose."
+      "$comment": "`app_errors` reads both facets in every store, so both are declared in every store. `code` is @yaks/tools' half of this word: one word, both meanings, so a store never has to choose."
     },
     "blob": {
       "component": true,
       "type": "object",
+      "description": "An upload's content, addressed by its sha; the attachment that uses it is a row of its own.",
       "properties": {
         "bytes": {
           "type": "number"
         }
       },
-      "$comment": "The two rows a page's upload makes (./uploads.ts): the content, addressed by its sha, and the use of it, addressed off that. They stay apart because they are two things, and because a component may not point at its own entity."
+      "$comment": "The two rows a page's upload makes (./uploads.ts) stay apart because they are two things, and because a component may not point at its own entity."
     },
     "attachment": {
       "component": true,
@@ -76,7 +79,8 @@
         },
         "source": {
           "type": "string",
-          "$comment": "The web address the file was fetched from (library-tools.ts)."
+          "description": "The web address the file was fetched from.",
+          "$comment": "library-tools.ts"
         }
       }
     },
@@ -146,7 +150,7 @@
     "hearing": {
       "component": true,
       "type": "object",
-      "description": "An upload asked to be heard through ./api/speech/hear.",
+      "description": "An upload asked to be heard through ./api/speech/hear. It is asked on the upload's own entity, the one its `attachment` is on: the store hears the recording whole and writes each turn, then `heard`, or `failed` with why. Only the speech door asks, so only whoever may ask the app's models spends its space's budget on it.",
       "properties": {
         "at": {
           "type": "string",
@@ -154,7 +158,7 @@
           "stamped": true
         }
       },
-      "$comment": "A recording the app keeps, heard whole (hearings.ts): the speech door asks with `hearing` on the upload's own entity, the one its `attachment` is on, and the store's effect hears it and writes each turn, then `heard`, or `failed` with why. Only the door asks, so only whoever may ask the app's models spends its space's budget on it."
+      "$comment": "hearings.ts"
     },
     "heard": {
       "component": true,
@@ -182,9 +186,10 @@
       "properties": {
         "recording": {
           "type": "string",
+          "description": "The upload heard; deleting it deletes its turns.",
           "ref": "entity",
           "death": "cascade",
-          "$comment": "Not stamped, so deleting the upload deletes its turns: a cascade never follows a stamped reference (@yaks/vocab `deaths`)."
+          "$comment": "Not stamped, so the cascade follows it: a cascade never follows a stamped reference (@yaks/vocab `deaths`)."
         },
         "speaker": {
           "type": "number",
