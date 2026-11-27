@@ -39,6 +39,7 @@ export let roomView = (canvas: HTMLCanvasElement) => {
       rows: Bundle[],
       { party, foes: enemies }: Battle,
       dt: number,
+      elapsed: number,
       member?: Seat,
     ) {
       let seat = member?.seat
@@ -69,7 +70,7 @@ export let roomView = (canvas: HTMLCanvasElement) => {
         actor.visible = foe.hp > 0
         actor.position.set(foe.x, 0, foe.z)
       }
-      view.draw({ x: me.x, y: 0, z: me.z, yaw: 0 }, still, dt)
+      view.draw({ x: me.x, y: 0, z: me.z, yaw: 0 }, still, dt, elapsed)
     },
   }
 }

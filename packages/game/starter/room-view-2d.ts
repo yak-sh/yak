@@ -7,7 +7,13 @@ export let roomView = (canvas: HTMLCanvasElement) => {
   let view = board(canvas)
   return {
     ...view,
-    draw(rows: Bundle[], { party, foes }: Battle, _dt: number, member?: Seat) {
+    draw(
+      rows: Bundle[],
+      { party, foes }: Battle,
+      _dt: number,
+      _elapsed: number,
+      member?: Seat,
+    ) {
       let seat = member?.seat
       let pawns = party.map((p) => ({
         x: p.x,

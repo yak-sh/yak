@@ -76,7 +76,12 @@ export let play = async (world: THREE.Object3D, actor: THREE.Object3D) => {
         ])).catch(reportError)
       }
     }
-    view.draw(poseOf(poses.value[0]), { ...intent, snap: false }, dt)
+    view.draw(
+      poseOf(poses.value[0]),
+      { ...intent, snap: false },
+      dt,
+      elapsed,
+    )
   }
   frames(frame, () => {
     disposeScreen()

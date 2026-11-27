@@ -488,8 +488,9 @@ unchanged. Dispose its resources and the controls when the page leaves.
 
 The [game starter](#start-with-a-game-starter) wires the renderer, frame
 callback and orbit camera from `@yaks/stage`. Its `look.ts` takes the game's
-geometry and draws a supplied player pose. Replace the example world in
-`world.ts` and supply the player's pose from the page graph.
+geometry and draws a supplied player pose, and on slow frames
+`keepUp(quality(...))` sheds pixels and then shadows; keep it. Replace the
+example world in `world.ts` and supply the player's pose from the page graph.
 
 The voxel starter builds its geometry with `geometry(packedQuads)` and
 `soft(...)` from `@yaks/voxel/three`. Its `trees.ts` is one example of a voxel

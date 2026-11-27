@@ -41,7 +41,8 @@ let live:
   | undefined
 let now = () => battle(live?.watch.value ?? [], live?.member.room ?? '')
 frames(
-  (_now, dt) => view.draw(live?.watch.value ?? [], now(), dt, live?.member),
+  (_now, dt, elapsed) =>
+    view.draw(live?.watch.value ?? [], now(), dt, elapsed, live?.member),
   () => {
     disposeScreen()
     live?.front.close()
