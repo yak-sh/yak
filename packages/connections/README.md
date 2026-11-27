@@ -163,7 +163,8 @@ the `google` client is enabled once in its Cloud project (project 538693127965);
 until then Google refuses every call with "API has not been used in project … or
 it is disabled". `openai` is built for the native harness's ChatGPT sign-in; it
 uses a public OAuth client, asks for a refreshable grant, and sends its bearer
-to `chatgpt.com`.
+to `chatgpt.com`. `openai-api` takes an OpenAI project key and sends it to
+`api.openai.com`.
 
 An integration reached by OAuth signs in as the client it names
 (`client: 'google'`), registered once with the service and shared by every
@@ -188,7 +189,7 @@ The two an untrusted caller may ask are the tools. Each returns bundles for the
 caller to apply in its own name:
 
 - `need(read, {owner, integration, app?, task?, keep?, scopes?, hosts?,
-  fields?, each?, binding?, direct?, title?, tagline?, site?, instructions?,
+  fields?, each?, binding?, separate?, direct?, title?, tagline?, site?, instructions?,
   check?})`
   makes a `needed` connection and the `uses` link from the app, read by
   `binding` (default: the integration's name in capitals, `bindingOf`). For a
@@ -200,15 +201,17 @@ caller to apply in its own name:
   a `direct` key, handed to the app's code) is sent nowhere until its owner asks
   with them, and hosts that differ from ones already named are refused. An app
   that already uses a connection through that integration is answered with it,
-  and with its link renamed where `binding` or `direct` was given. `need` never
+  and with its link changed where `binding` or `direct` was given. With
+  `separate: true`, give a binding to identify its own shared connection. An app
+  can ask for several credentials through one integration this way. `need` never
   links an app to a connection that holds a credential: giving an app a person's
   account is the person's act. With `each`, the owner is the space asking each
   person, or a person making their own, and an app is answered with the one that
   owner holds. An ask the owner already has standing through that integration
   for the same scopes is answered instead of a new one, with the app linked to
-  it: one ask per service. `task` links the task asking for it (`asks`), and
-  `keep` says where else its key goes; only a pasted key is kept anywhere but
-  the vault. The connection comes first in what it returns.
+  it. Separate asks also match by binding. `task` links the task asking for it
+  (`asks`), and `keep` says where else its key goes; only a pasted key is kept
+  anywhere but the vault. The connection comes first in what it returns.
 - `list(read, owner)` returns the owner's connections, the `uses` links to them,
   and the integrations they go through.
 
@@ -243,9 +246,10 @@ asks it when it installs a copy, and again when it updates one, which adds the
 asks for what the new version gained and leaves the rest as the copy's person
 made it.
 
-`using(read, {app, integration, owner?, each?})` answers the connection an app
-uses through an integration: the shared one, or with `each`, the one the owner
-holds. A host reads the space's ask with it before a person connects their own.
+`using(read, {app, integration, binding?, owner?, each?})` answers the
+connection an app uses through an integration, optionally by binding. With
+`each`, it is the one the owner holds. A host reads the space's ask with it
+before a person connects their own.
 
 `known(read, name)` is an integration by name, and `installed(read)` every built
 one a graph holds. `install(read)` returns the bundles that install the built
@@ -302,19 +306,19 @@ its vault, and the redirect):
   its `title`, and keeps the scopes the service says it granted. Another account
   makes another connection; the same account renews behind its held handle.
   Connecting answers the owner's other asks through the same integration and
-  scopes: each closes, and the apps it served are linked to the connection now
-  connected.
+  scopes, and the same binding for separate asks. Each closes, and the apps it
+  served are linked to the connection now connected.
 - `disconnect(ctx, connection)` trashes the connection and retains its
   credential in the vault’s trash for restoration. Each app that shared it is
   linked to a new `needed` connection in the same batch, by the same name, as
   directly and as openly; a person's own is not replaced, since the app still
   asks them.
-- `resolve(ctx, app, integration, person?)` returns the connected connection an
-  app uses through an integration for that person, its `uses` link and the
-  sentinel for each field of its credential by name (`key` for one key or a
-  sign-in), or nothing. `used(ctx, app, person?)` returns every one: the shared
-  ones, and the person's own. Whether the caller may use a shared one is the
-  egress's check.
+- `resolve(ctx, app, integration, person?, binding?)` returns the connected
+  connection an app uses through an integration for that person, its `uses` link
+  and the sentinel for each field of its credential by name (`key` for one key
+  or a sign-in), or nothing. `used(ctx, app, person?)` returns every one: the
+  shared ones, and the person's own. Whether the caller may use a shared one is
+  the egress's check.
 - `envOf(ctx, app, person?)` is what the app's code is handed, by binding: the
   sentinel for each connected connection it uses, or the key itself where the
   link is direct, and for several fields each under its own name.

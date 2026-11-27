@@ -444,6 +444,11 @@ let CONNECTIONS: Row[] = [
           "the name worker.js reads it as, env.NAME; omit for the service's " +
             'name in capitals',
         ),
+        separate: {
+          type: 'boolean',
+          description:
+            'ask for a separate shared connection under this binding',
+        },
         direct: {
           type: 'boolean',
           description: 'hand worker.js the key itself rather than a ' +

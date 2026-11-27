@@ -706,7 +706,8 @@ page (`yaks.app/manage/<slug>/connections`). The key goes from there to the
 vault; it never appears in this chat, the app's data, its history or any tool's
 response. Never ask the person to paste a key to you, and never invent one. The
 app reads it by its **binding**: the integration's name in capitals (`ESV`), or
-the `binding` you give.
+the `binding` you give. Set `separate: true` and give each request its own
+`binding` when the app needs several credentials through the same integration.
 
 The person can also do all of it on that page without you: **Add a key** with
 the service's name and the hosts it may be sent to, then, under the connection,

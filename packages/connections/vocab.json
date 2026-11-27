@@ -477,6 +477,11 @@
           "type": "string",
           "description": "the name the app's code reads it by, env.NAME in a worker: the sentinel for its credential, or the credential itself where the link is direct"
         },
+        "separate": {
+          "$id": "urn:uuid:06770ac8-3ecb-4bdc-81c6-24b39060dfad",
+          "type": "boolean",
+          "description": "the app asks for a separate shared credential through this integration by binding"
+        },
         "direct": {
           "$id": "urn:uuid:d0f18f49-31b2-4dc0-8efb-0c6dc5cd8855",
           "type": "boolean",
@@ -519,7 +524,7 @@
       "noun": "connection",
       "verb": "need",
       "title": "Say an app needs a connection",
-      "description": "Say that an app or a task needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it, owned by the asking space; give it instructions too, markdown for a person and their agent saying how to get the key (where to sign up, which page issues it, what to paste), and a title, tagline and site. Its owner asking again with any of those changes them. A key kept before it is used may have no hosts yet, and is sent nowhere until its owner asks again with them; once named, its hosts never change. With each, every person who uses the app connects their own instead, and the owner connects nothing. An app that already uses a connection through that integration is answered with it. Returns the applied bundles: JSON objects with entity ids and the components written, followed by the integration the connection goes through, its instructions among it, to walk the person through getting the key. Asked for a task, the task shows the person the box the key is pasted in, and is completed once the key is given, kept where keep says and checked.",
+      "description": "Say that an app or a task needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it, owned by the asking space; give it instructions too, markdown for a person and their agent saying how to get the key (where to sign up, which page issues it, what to paste), and a title, tagline and site. Its owner asking again with any of those changes them. A key kept before it is used may have no hosts yet, and is sent nowhere until its owner asks again with them; once named, its hosts never change. With each, every person who uses the app connects their own instead, and the owner connects nothing. An app that already uses a connection through that integration is answered with it. With separate: true, the binding identifies a separate shared connection through that integration. Returns the applied bundles: JSON objects with entity ids and the components written, followed by the integration the connection goes through, its instructions among it, to walk the person through getting the key. Asked for a task, the task shows the person the box the key is pasted in, and is completed once the key is given, kept where keep says and checked.",
       "input": {
         "app": {
           "type": "string",
@@ -586,6 +591,10 @@
         "binding": {
           "type": "string",
           "description": "the name the app's code reads it by (env.NAME); omit for the integration's name in capitals"
+        },
+        "separate": {
+          "type": "boolean",
+          "description": "ask for a separate shared connection under the given binding, even if the app already uses this integration under another binding"
         },
         "direct": {
           "type": "boolean",

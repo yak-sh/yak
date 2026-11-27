@@ -1,0 +1,11 @@
+{
+  "name": "openai-api",
+  "title": "OpenAI API",
+  "tagline": "OpenAI models on an API project key.",
+  "site": "https://platform.openai.com",
+  "hosts": [
+    "api.openai.com"
+  ],
+  "instructions": "Open [API keys](https://platform.openai.com/api-keys) in the OpenAI project for this connection. Create a project key and paste it here.",
+  "example": "sk-proj-••••••••"
+}

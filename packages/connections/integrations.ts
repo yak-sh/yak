@@ -42,6 +42,7 @@ import googleSearchConsole from './google-search-console.json' with {
 import lulu from './lulu.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }
 import openai from './openai.json' with { type: 'json' }
+import openaiApi from './openai-api.json' with { type: 'json' }
 import voipms from './voipms.json' with { type: 'json' }
 
 /** An outside service, as data. */
@@ -174,6 +175,7 @@ let SEEDS: Integration[] = [
   googleSearchConsole,
   lulu,
   { ...openai, refresh_encoding: 'json' },
+  openaiApi,
   { ...openrouter, answers: 'key' },
   { ...slack, scope_separator: slack.scope_separator as ',' },
   voipms,

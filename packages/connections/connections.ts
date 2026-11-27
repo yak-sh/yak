@@ -143,6 +143,8 @@ export type Need = About & {
   /** the name the app's code reads it by (default: the integration's name in
    * capitals) */
   binding?: string
+  /** ask for a separate shared connection under this binding */
+  separate?: boolean
   /** hand the app's code the key itself rather than a sentinel */
   direct?: boolean
   /** the task that asks a person for the key, linked to it by `asks` */
@@ -266,24 +268,53 @@ let links = (read: Read, at: 'from' | 'to', eid: Eid | Eid[]) =>
 let far = (l: Bundle, at: 'from' | 'to'): Eid =>
   String(comp(l, EDGE)[at == 'from' ? 'to' : 'from'])
 
-/** The connection an app uses through an integration: the one it shares with
- * every caller, or, where `each` person connects their own, the one `owner`
- * holds. */
-export let using = async (
+type Use = {
+  app: Eid
+  integration: string
+  owner?: Eid
+  each?: boolean
+  binding?: string
+}
+
+type AppUse = { connection: Bundle; link: Bundle }
+
+let appUses = async (
   read: Read,
-  a: { app: Eid; integration: string; owner?: Eid; each?: boolean },
-): Promise<Bundle | undefined> => {
+  a: Use,
+): Promise<AppUse[]> => {
   let out = (await links(read, 'from', a.app))
     .filter((l) => !comp(l, USES).each == !a.each)
-  if (!out.length) return undefined
+  if (!out.length) return []
   let found = await read(
     line`.entity.eid=${out.map((l) => far(l, 'from'))}&.${CONNECTION}`,
   )
-  return found.find((b) => {
+  return found.flatMap((b) => {
     let c = comp(b, CONNECTION)
-    return c.integration == a.integration && (!a.each || c.owner == a.owner)
+    if (c.integration != a.integration || a.each && c.owner != a.owner) {
+      return []
+    }
+    return [{
+      connection: b,
+      link: out.find((l) => far(l, 'from') == b.entity.eid)!,
+    }]
   })
 }
+
+let boundAs = <T extends AppUse>(uses: T[], binding: string): T | undefined =>
+  uses.find((m) => comp(m.link, USES).binding == binding)
+let shared = <T extends AppUse>(uses: T[]): T | undefined =>
+  uses.find((m) => !comp(m.link, USES).separate)
+let byIntegration = <T extends AppUse>(uses: T[]): T | undefined =>
+  shared(uses) ?? (uses.length == 1 ? uses[0] : undefined)
+let usingLink = async (read: Read, a: Use) => {
+  let uses = await appUses(read, a)
+  return a.binding == null ? byIntegration(uses) : boundAs(uses, a.binding)
+}
+
+/** The connection an app uses through an integration, optionally by binding.
+ * With `each`, it is the one `owner` holds. */
+export let using = async (read: Read, a: Use): Promise<Bundle | undefined> =>
+  (await usingLink(read, a))?.connection
 
 let same = (a: string[], b: string[]) =>
   [...a].sort().join('\n') == [...b].sort().join('\n')
@@ -338,24 +369,25 @@ export let bindingOf = (integration: string): string =>
 let linked = (
   app: Eid,
   to: Eid,
-  u: { binding: string; direct: boolean; each?: boolean },
+  u: { binding: string; direct: boolean; each?: boolean; separate?: boolean },
 ): Bundle => ({
   ...link(app, USES, to),
   [USES]: {
     binding: u.binding,
     ...u.direct ? { direct: true } : {},
     ...u.each ? { each: true } : {},
+    ...u.separate ? { separate: true } : {},
   },
 })
 
 // The asks `owner` has standing through an integration for these scopes:
-// connections needing a credential, but for one where each person connects
-// their own, which is only the space's side of everyone's.
+// shared connections needing a credential, grouped by binding for separate asks.
 let asksOf = async (
   read: Read,
   owner: Eid,
   integration: string,
   scopes: string[],
+  binding?: string,
 ): Promise<Bundle[]> => {
   let needed = (await read(
     line`.${CONNECTION}.owner=${owner}&.${CONNECTION}.status=${'needed'}${
@@ -366,13 +398,20 @@ let asksOf = async (
     return c.integration == integration && same(strs(c.scopes), scopes)
   })
   if (!needed.length) return []
-  let each = new Set(
-    (await links(read, 'to', needed.map((b) => b.entity.eid)))
-      .filter((l) => comp(l, USES).each)
-      .map((l) => String(comp(l, EDGE).to)),
-  )
-  return needed.filter((b) => !each.has(b.entity.eid))
+  let used = await links(read, 'to', needed.map((b) => b.entity.eid))
+  return needed.filter((b) => {
+    let uses = used.filter((l) => far(l, 'from') == b.entity.eid)
+      .map((l) => comp(l, USES))
+    return binding == null
+      ? uses.every((u) => !u.each && !u.separate)
+      : uses.length > 0 && uses.every((u) => u.separate && u.binding == binding)
+  })
 }
+
+// A separate credential only answers other asks for its binding.
+let separately = async (read: Read, eid: Eid) =>
+  (await links(read, 'to', eid)).map((l) => comp(l, USES))
+    .find((u) => u.separate)?.binding as string | undefined
 
 // What connecting `b` answers: every other ask its owner has standing through
 // the same integration and scopes closes, and each app it served is linked to
@@ -384,6 +423,7 @@ let answered = async (read: Read, b: Bundle, to: Eid): Promise<Bundle[]> => {
     String(c.owner),
     String(c.integration),
     strs(c.scopes),
+    await separately(read, b.entity.eid),
   )).filter((o) => o.entity.eid != b.entity.eid && o.entity.eid != to)
   if (!asks.length) return []
   let served = await links(read, 'to', asks.map((o) => o.entity.eid))
@@ -404,11 +444,10 @@ let answered = async (read: Read, b: Bundle, to: Eid): Promise<Bundle[]> => {
  * by whoever made it. Its hosts may wait: a key kept before anyone uses it is
  * sent nowhere, and its owner names them once, asking with them, after which
  * they never change. What is said about it (`About`) is written with it, or
- * changed by its owner asking again. An app that already uses a connection
- * through that integration is answered with it: with `each`, the one the
- * owner holds. An ask the owner already has standing through that integration
- * for the same scopes is the one answered, with the app linked to it: one ask
- * per service. The connection comes first. */
+ * changed by its owner asking again. An ask the owner already has standing
+ * through that integration for the same scopes is reused. With `separate`,
+ * the binding also identifies the ask. With `each`, each owner asks for
+ * their own. The connection comes first. */
 export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   let keep = placesOf(a.keep)
   if (keep.length) {
@@ -488,6 +527,12 @@ let asked = async (read: Read, a: Need): Promise<Bundle[]> => {
     )
   }
   let binding = a.binding ?? bindingOf(name)
+  if (a.separate && (!a.app || a.binding == null || a.each)) {
+    throw new CallError(
+      'separate',
+      'A separate connection needs an app and a binding shared by its callers',
+    )
+  }
   if (!NAME.test(binding)) {
     throw new CallError(
       'binding',
@@ -508,7 +553,7 @@ let asked = async (read: Read, a: Need): Promise<Bundle[]> => {
       `a key each person connects is theirs, and is never handed to the app`,
     )
   }
-  let u = { binding, direct: !!a.direct, each: a.each }
+  let u = { binding, direct: !!a.direct, each: a.each, separate: a.separate }
   // Said again of one that stands, it is its owner's change to make.
   let retold = [
     ...i && Object.keys(about).length ? await set(read, a) : [],
@@ -521,13 +566,12 @@ let asked = async (read: Read, a: Need): Promise<Bundle[]> => {
       }]
       : [],
   ]
-  let used = a.app ? await using(read, { ...a, app: a.app }) : undefined
+  let uses = a.app ? await appUses(read, { ...a, app: a.app }) : []
+  let used = (a.binding != null ? boundAs(uses, binding) : undefined) ??
+    (a.separate ? undefined : shared(uses) ?? boundAs(uses, binding))
   if (used) {
     if (a.direct) {
-      let [l] = await read(
-        line`.entity.eid=${edgeEid(a.app!, USES, used.entity.eid)}&.${USES}`,
-      )
-      let loan = comp(l, USES)
+      let loan = comp(used.link, USES)
       if (loan.lender != null || loan.lends != null) {
         throw new CallError(
           'direct',
@@ -544,21 +588,27 @@ let asked = async (read: Read, a: Need): Promise<Bundle[]> => {
     }
     return [
       // Answered with the integration it goes through, as it already does.
-      { entity: { eid: used.entity.eid }, [CONNECTION]: { integration: name } },
+      {
+        entity: { eid: used.connection.entity.eid },
+        [CONNECTION]: { integration: name },
+      },
       ...said
         ? [{
-          ...link(a.app!, USES, used.entity.eid),
+          ...link(a.app!, USES, used.connection.entity.eid),
           [USES]: patch,
         }]
         : [],
       ...retold,
     ]
   }
-  // One ask per service: an ask its owner already has standing for it, for
-  // the same scopes, is the one asked again.
-  let standing = a.each
-    ? undefined
-    : (await asksOf(read, a.owner, name, a.scopes ?? []))[0]
+  // Reuse an ask standing for the same scopes and group.
+  let standing = a.each ? undefined : (await asksOf(
+    read,
+    a.owner,
+    name,
+    a.scopes ?? [],
+    a.separate ? binding : undefined,
+  ))[0]
   if (standing) {
     return [
       {
@@ -600,7 +650,12 @@ let borrowing = (app: Eid, lent: Bundle, lender: Eid): Bundle => {
   let u = comp(lent, USES)
   return {
     ...link(app, USES, far(lent, 'from')),
-    [USES]: { binding: u.binding, cap: u.lends, lender },
+    [USES]: {
+      binding: u.binding,
+      cap: u.lends,
+      lender,
+      ...u.separate ? { separate: true } : {},
+    },
   }
 }
 
@@ -625,9 +680,7 @@ export let carry = async (
   let to = await read(
     line`.entity.eid=${out.map((l) => far(l, 'from'))}&.${CONNECTION}`,
   )
-  // One ask for each integration, shared or each: every person's own
-  // connection is linked by the name and scopes of the ask it answers. What
-  // the copy uses already, as `using` finds it, is not asked for again.
+  // One ask for each integration and mode, with a binding for separate asks.
   let had = new Set<string>()
   let asks = new Map<string, Need | Bundle>()
   for (let l of out) {
@@ -637,7 +690,11 @@ export let carry = async (
     // (./sources.ts), not something the app's code asks for.
     if (u.binding == null && u.lender == null) continue
     let each = u.each == true
-    let key = `${each} ${c.integration}`
+    let key = JSON.stringify([
+      each,
+      c.integration,
+      u.separate ? u.binding : null,
+    ])
     if (comp(l, EDGE).from == a.app) {
       if (!each || c.owner == a.owner) had.add(key)
     } else if (
@@ -653,6 +710,7 @@ export let carry = async (
         each,
         binding: typeof u.binding == 'string' ? u.binding : undefined,
         direct: u.direct == true,
+        separate: u.separate == true,
       })
     }
   }
@@ -675,7 +733,7 @@ export let carry = async (
  * a connection the app itself borrows. */
 export let lend = async (
   read: Read,
-  a: { app: Eid; integration: string; cap: number | null },
+  a: { app: Eid; integration: string; binding?: string; cap: number | null },
   owners: Owners,
 ): Promise<Bundle[]> => {
   if (a.cap != null && !(Number.isInteger(a.cap) && a.cap > 0)) {
@@ -684,16 +742,15 @@ export let lend = async (
       'a cap is a whole number of calls a month, at least one',
     )
   }
-  let c = await using(read, { app: a.app, integration: a.integration })
-  if (!c) {
+  let used = await usingLink(read, a)
+  if (!used) {
     throw new CallError(
       'integration',
-      `the app shares no ${a.integration} connection to lend; one each ` +
-        'person connects is theirs',
+      `Choose a shared ${a.integration} connection by binding to lend it`,
     )
   }
-  let eid = edgeEid(a.app, USES, c.entity.eid)
-  let u = comp((await read(line`.entity.eid=${eid}&.${USES}`))[0], USES)
+  let eid = used.link.entity.eid
+  let u = comp(used.link, USES)
   if (u.direct) {
     throw new CallError(
       'integration',
@@ -708,7 +765,12 @@ export let lend = async (
     )
   }
   let lends = { entity: { eid }, [USES]: { lends: a.cap } }
-  let loans = await read(line`.${USES}.lender=${a.app}${sub(ALL)}`)
+  let loans = (await read(line`.${USES}.lender=${a.app}${sub(ALL)}`))
+    .filter((l) => {
+      let loan = comp(l, USES)
+      return !!loan.separate == !!u.separate &&
+        (!u.separate || loan.binding == u.binding)
+    })
   let connections = loans.length
     ? await read(
       line`.entity.eid=${loans.map((l) => far(l, 'from'))}&.${CONNECTION}`,
@@ -793,39 +855,47 @@ export let attach = async (
     throw new Error('Choose a connected connection owned by this space')
   }
   let integration = String(grant.integration)
-  let old = await using(read, { app: a.app, integration })
-  let previous = old?.entity.eid
-  let oldLink = previous && (await read(
-    line`.entity.eid=${edgeEid(a.app, USES, previous)}&.${USES}${sub(ALL)}`,
-  ))[0]
-  if (previous == a.connection) {
+  let uses = await appUses(read, { app: a.app, integration })
+  let current = uses.find((m) => m.connection.entity.eid == a.connection)?.link
+  let selected = a.binding == null ? undefined : boundAs(uses, a.binding)
+  if (current) {
     // Attached again, it is renamed when given a new name, and otherwise
     // already is what was asked.
-    let had = comp(oldLink || undefined, USES).binding
+    let had = comp(current, USES).binding
     if (a.binding == null || a.binding == had) return []
     if (!NAME.test(a.binding)) {
       throw new Error('The binding must be a name code can read')
     }
+    if (selected && selected.link.entity.eid != current.entity.eid) {
+      throw new Error(
+        'This app already uses another connection under that binding',
+      )
+    }
     return [{
-      entity: { eid: edgeEid(a.app, USES, previous) },
+      entity: current.entity,
       [USES]: { binding: a.binding },
       $was: { [USES]: { binding: had == null ? null : token(had) } },
     }]
   }
-  if (comp(oldLink || undefined, USES).direct) {
+  let old = selected ??
+    (a.binding == null
+      ? byIntegration(uses) ?? boundAs(uses, bindingOf(integration))
+      : shared(uses))
+  let previous = old?.connection.entity.eid
+  let u = comp(old?.link, USES)
+  if (u.direct) {
     throw new Error(
       'This app asks for the key itself; attach requires a sentinel',
     )
   }
-  let binding = a.binding ?? comp(oldLink || undefined, USES).binding ??
-    bindingOf(integration)
+  let binding = a.binding ?? u.binding ?? bindingOf(integration)
   if (typeof binding != 'string' || !NAME.test(binding)) {
     throw new Error('The binding must be a name code can read')
   }
-  if (old && comp(old, CONNECTION).status == 'needed') {
+  if (old && comp(old.connection, CONNECTION).status == 'needed') {
     let i = await known(read, integration)
     if (i?.token) {
-      let wanted = strs(comp(old, CONNECTION).scopes)
+      let wanted = strs(comp(old.connection, CONNECTION).scopes)
       let granted = strs(grant.scopes)
       wanted = wanted.length ? wanted : i.scopes ?? []
       granted = granted.length ? granted : i.scopes ?? []
@@ -851,14 +921,18 @@ export let attach = async (
     ...previous
       ? [{ entity: { eid: edgeEid(a.app, USES, previous) }, tombstone: {} }]
       : [],
-    ...previous && alone && comp(old, CONNECTION).status == 'needed'
+    ...previous && alone && comp(old?.connection, CONNECTION).status == 'needed'
       ? [{
         entity: { eid: previous },
         tombstone: {},
         $was: { [CONNECTION]: { status: token('needed') } },
       }]
       : [],
-    linked(a.app, a.connection, { binding, direct: false }),
+    linked(a.app, a.connection, {
+      binding,
+      direct: false,
+      separate: u.separate == true,
+    }),
   ]
 }
 
@@ -1023,18 +1097,21 @@ let bound = async (
 }
 
 /** The connection an app calls out through for an integration, for a person
- * or for nobody in particular, and the sentinel it is handed for its
- * credential; nothing while none is connected. Whether the caller may use it
- * is the egress's question. */
+ * or for nobody in particular, optionally by binding. It includes the
+ * credential's sentinel. Whether the caller may use it is the egress's
+ * question. */
 export let resolve = async (
   c: Ctx,
   app: Eid,
   integration: string,
   person: Eid | null = null,
-): Promise<Resolved | undefined> =>
-  (await used(c, app, person)).find((r) =>
+  binding?: string,
+): Promise<Resolved | undefined> => {
+  let uses = (await used(c, app, person)).filter((r) =>
     comp(r.connection, CONNECTION).integration == integration
   )
+  return binding == null ? byIntegration(uses) : boundAs(uses, binding)
+}
 
 /** Choose an owner's account. Without a name, the person's own address wins,
  * otherwise the oldest connection. No remembered selection can let a newer
@@ -1470,21 +1547,29 @@ let keepGrant = async (
 ): Promise<Bundle[]> => {
   let connection = b.entity.eid
   let grant = comp(b, CONNECTION)
-  let existing = account
+  let binding = await separately(c.graph.read, connection)
+  let existing = account && binding == null
     ? (await c.graph.read(
       line`.${CONNECTION}.owner=${String(grant.owner)}${sub(ALL)}`,
     ))
-      .find((other) =>
+      .filter((other) =>
         other.entity.eid != connection &&
         comp(other, CONNECTION).integration == grant.integration &&
         String(comp(other, CONNECTION).account ?? '').toLowerCase() ==
           account!.toLowerCase()
       )
     : undefined
+  let reserved = existing?.length
+    ? new Set(
+      (await links(c.graph.read, 'to', existing.map((o) => o.entity.eid)))
+        .filter((l) => comp(l, USES).separate).map((l) => far(l, 'from')),
+    )
+    : new Set<Eid>()
+  let kept = existing?.find((o) => !reserved.has(o.entity.eid))
   // A different account never overwrites what the person already holds.
   let different = grant.status == 'connected' && grant.account && account &&
     String(grant.account).toLowerCase() != account.toLowerCase()
-  let target = existing ??
+  let target = kept ??
     (different
       ? fresh(
         String(grant.owner),
@@ -1492,12 +1577,12 @@ let keepGrant = async (
         strs(grant.scopes),
       )
       : b)
-  if (!existing) await admitting(c, different ? target : b)
-  let transient = existing && grant.status != 'connected'
+  if (!kept) await admitting(c, different ? target : b)
+  let transient = kept && grant.status != 'connected'
   let out = transient ? await links(c.graph.read, 'to', connection) : []
   return c.graph.apply([
     stillHeld(b),
-    ...existing ? [stillHeld(existing)] : [],
+    ...kept ? [stillHeld(kept)] : [],
     {
       entity: { eid: target.entity.eid },
       ...target.$was ? { $was: target.$was } : {},
@@ -1564,18 +1649,16 @@ let linking = async (
 }
 
 // What takes the place of `was`, links to a connection going away or no
-// longer lent: a connection needing a credential for each owner, in its own
-// space for the apps that shared it and in each copy's own for a copy that
-// borrowed it, and every app linked to its owner's as it was to the old one,
-// by the same name, as directly and as open. A copy's link keeps only its
-// name, since its cap was the lend's.
+// longer lent: a connection needing a credential for each owner, and for
+// each separate binding. The app keeps its binding and access settings.
+// Borrowers keep their binding and ask in their own space.
 let reasked = async (b: Bundle, was: Bundle[], owners?: Owners) => {
   let { integration, owner, scopes } = comp(b, CONNECTION)
   let loans = was.filter((l) => comp(l, USES).lender != null)
   let whose = loans.length && owners
     ? await owners(loans.map((l) => far(l, 'to')))
     : {}
-  let asks = new Map<Eid, Bundle>()
+  let asks = new Map<string, Bundle>()
   let out: Bundle[] = []
   for (let l of was) {
     let app = far(l, 'to')
@@ -1586,14 +1669,18 @@ let reasked = async (b: Bundle, was: Bundle[], owners?: Owners) => {
         `no space is known for ${app}, which borrows ${b.entity.eid}`,
       )
     }
-    let again = asks.get(at)
+    let key = JSON.stringify([at, u.separate ? u.binding : null])
+    let again = asks.get(key)
     if (!again) {
-      asks.set(at, again = fresh(at, String(integration), strs(scopes)))
+      asks.set(key, again = fresh(at, String(integration), strs(scopes)))
       out.push(again)
     }
     out.push({
       ...link(app, USES, again.entity.eid),
-      [USES]: u.lender == null ? u : { binding: u.binding },
+      [USES]: u.lender == null ? u : {
+        binding: u.binding,
+        ...u.separate ? { separate: true } : {},
+      },
     })
   }
   return out

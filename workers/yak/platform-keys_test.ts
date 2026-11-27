@@ -12,10 +12,11 @@ import { line } from '@yaks/query'
 import { ELEVENLABS } from '@yaks/speech'
 import { test } from '@yaks/testing'
 import { d1 } from '../../packages/d1/testing.ts'
-import { ctxOf } from './connections.ts'
+import { comp, connecting, ctxOf } from './connections.ts'
 import { directoryOf, seeding, stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
 import { meta } from './meta.ts'
+import { invokePackage } from './package-tools.ts'
 import { phoneOf, textable } from './phones.ts'
 import { keyed } from './platform-keys.ts'
 import { speaking } from './speech.ts'
@@ -93,6 +94,81 @@ test('Telnyx can send a platform text on the connection alone', async () => {
     })
   } finally {
     await telnyx.stop()
+  }
+})
+
+test('four OpenAI project keys can be requested and pasted separately, each over its Worker secret', async () => {
+  let dir = directoryOf(p.env.STORE)
+  let space = (await dir.space('yak'))!
+  let person = mint()
+  let who = { person, role: 'owner' as const }
+  await stamp(p.env, {
+    entities: [
+      { entity: { eid: person }, person: {} },
+      {
+        entity: { eid: mint() },
+        member: { space: space.eid, person, role: 'owner' },
+      },
+    ],
+  })
+  let bindings = [
+    'OPENAI_API_KEY',
+    'OPENAI_VOICE_KEY',
+    'OPENAI_MODELS_KEY',
+    'OPENAI_OPERATOR_API_KEY',
+  ]
+  let fallback = Object.fromEntries(
+    bindings.map((binding) => [binding, 'fallback']),
+  )
+  let ask = async (binding: string) => {
+    let made = await invokePackage(
+      { env: p.env, dir, person },
+      'connection_need',
+      {
+        space: 'yak',
+        app: 'platform',
+        owner: 'yak',
+        integration: 'openai-api',
+        binding,
+        separate: true,
+      },
+    )
+    let connection = made.find((b) => b.connection)!
+    assertEquals(comp(connection, 'connection').integration, 'openai-api')
+    return connection.entity.eid
+  }
+  let requests = []
+  for (let binding of bindings) requests.push(await ask(binding))
+  assertEquals(new Set(requests).size, 4)
+  assertEquals(await ask(bindings[0]), requests[0])
+  for (let [index, binding] of bindings.entries()) {
+    let fields = new FormData()
+    fields.set('do', 'key')
+    fields.set('connection', requests[index])
+    fields.set('key', `key-${index}`)
+    let said = await connecting(
+      new Request('https://yaks.app/manage/yak/connections'),
+      p.env,
+      space,
+      who,
+      fields,
+    )
+    if (said instanceof Response) {
+      throw new Error(`Unexpected response ${said.status}`)
+    }
+    if (said.no) throw new Error(said.say)
+    fallback[binding] = `key-${index}`
+    let env = await keyed(
+      fresh(
+        Object.fromEntries(bindings.map((binding) => [binding, 'fallback'])),
+      ),
+    )
+    assertEquals(
+      Object.fromEntries(
+        bindings.map((binding) => [binding, env[binding as keyof typeof env]]),
+      ),
+      fallback,
+    )
   }
 })
 

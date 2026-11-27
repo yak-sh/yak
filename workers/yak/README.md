@@ -437,6 +437,9 @@ yak command store_connection_need --space yak --owner yak --app platform \
   --integration elevenlabs --binding ELEVENLABS_API_KEY --as admin
 ```
 
+For the four OpenAI project keys, use `--integration openai-api --separate` with
+each key's binding.
+
 The owner pastes the key once at
 `https://yaks.app/manage/connections?space=yak`, and it is kept in the vault
 like any space's. Each isolate reads these connections (@yaks/connections

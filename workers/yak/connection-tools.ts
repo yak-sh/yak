@@ -122,6 +122,7 @@ let CONNECTIONS: Row[] = [
         integration: str(
           'the integration of a shared connection this app uses',
         ),
+        binding: str('the binding of the connection to lend'),
         cap: {
           type: ['integer', 'null'],
           minimum: 1,
@@ -134,9 +135,16 @@ let CONNECTIONS: Row[] = [
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args)
       let integration = text(args.integration, 'integration')
+      let binding = args.binding == null
+        ? undefined
+        : text(args.binding, 'binding')
       let c = ctxOf(ctx.env)
       // An app with none to lend is told so by `lend`.
-      let connection = await using(c.graph.read, { app: app.eid, integration })
+      let connection = await using(c.graph.read, {
+        app: app.eid,
+        integration,
+        binding,
+      })
       let refused = connection &&
         barred('lend', await holdOf(ctx.env, space, who, connection, app.eid))
       if (refused) throw refuse('access', refused)
@@ -147,7 +155,7 @@ let CONNECTIONS: Row[] = [
         )
       }
       let cap = args.cap as number | null
-      await lending(ctx.env, app.eid, integration, cap)
+      await lending(ctx.env, app.eid, integration, cap, binding)
       return {
         space,
         text: cap == null

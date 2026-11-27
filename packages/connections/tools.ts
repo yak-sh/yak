@@ -32,6 +32,7 @@ export let runs = (): Runs => ({
       hosts: strs(args.hosts),
       each: args.each == true,
       binding: args.binding == null ? undefined : str(args.binding),
+      separate: args.separate == true,
       direct: args.direct == null ? undefined : args.direct == true,
       task: args.task == null ? undefined : str(args.task),
       keep: Array.isArray(args.keep) ? args.keep : undefined,

@@ -1034,11 +1034,12 @@ export let lending = async (
   app: string,
   integration: string,
   cap: number | null,
+  binding?: string,
 ) => {
   let c = ctxOf(env)
   let bundles = await lend(
     c.graph.read,
-    { app, integration, cap },
+    { app, integration, cap, binding },
     ownersOf(env),
   )
   // A source may have replaced its own connection since lending to a copy.
@@ -1079,6 +1080,7 @@ let attached = async (
   space: Space,
   app: string,
   connection: string,
+  binding?: string,
 ) => {
   let at = await dirOf(env).appAt(app)
   if (
@@ -1091,6 +1093,7 @@ let attached = async (
     owner: space.eid,
     app,
     connection,
+    binding,
   })
   if (bundles.length) await c.graph.apply(bundles)
   await rebound(env, [app])
@@ -1263,6 +1266,7 @@ type Held = {
   back: string
   /** the copy replacing a borrowed connection after a successful sign-in */
   app?: string
+  binding?: string
 }
 
 // The connections page of a space, where a sign-in begun there comes back to.
@@ -1382,6 +1386,7 @@ let signingIn = async (
   back = enabling(pageOf(env, space.slug), enabled(req)),
   app?: string,
   again = false,
+  binding?: string,
 ): Promise<Response> => {
   let { url: to, attempt } = await begin(c, eid, again)
   // A brokered sign-in returns to its broker, and is settled from there.
@@ -1398,6 +1403,7 @@ let signingIn = async (
     attempt,
     back,
     ...app ? { app } : {},
+    ...binding ? { binding } : {},
   }
   await hold(env, ATTEMPT, attempt.state, held)
   return new Response(null, { status: 303, headers: { location: to } })
@@ -1531,6 +1537,13 @@ export let connecting = async (
     if (act == 'own') {
       let integration = integrationOf(b)
       let i = await known(c.graph.read, integration)
+      let [l] = await c.graph.read(
+        line`.entity.eid=${edgeEid(app, USES, eid)}&.${USES}`,
+      )
+      let u = comp(l, USES)
+      let binding = u.separate && typeof u.binding == 'string'
+        ? u.binding
+        : undefined
       let given = await pasted(integration)
       if ((!i || keyed(i)) && typeof given == 'string') return no(given)
       await c.admit!(space.eid)
@@ -1543,12 +1556,23 @@ export let connecting = async (
       )
       let own = made[0].entity.eid
       if (i && !keyed(i)) {
-        return await signingIn(req, env, c, space, who, own, undefined, app)
+        return await signingIn(
+          req,
+          env,
+          c,
+          space,
+          who,
+          own,
+          undefined,
+          app,
+          false,
+          binding,
+        )
       }
       await connect(c, own, given as Given)
       await ready(env, own)
       await heard(env, own)
-      await attached(env, who, space, app, own)
+      await attached(env, who, space, app, own, binding)
       return { say: 'The app uses your own connection now.', no: false }
     }
     let apps = await usersOf(env, eid)
@@ -1577,7 +1601,17 @@ export let connecting = async (
     }
     if (act == 'lend') {
       let cap = field('cap') == '' ? null : Number(field('cap'))
-      await lending(env, app, integrationOf(b), cap)
+      let [l] = await c.graph.read(
+        line`.entity.eid=${edgeEid(app, USES, eid)}&.${USES}`,
+      )
+      let binding = comp(l, USES).binding
+      await lending(
+        env,
+        app,
+        integrationOf(b),
+        cap,
+        typeof binding == 'string' ? binding : undefined,
+      )
       return {
         say: cap == null
           ? 'Stopped lending to installed copies.'
@@ -1687,12 +1721,13 @@ export let finishConnection = async (env: Env, saved: Bundle[], app?: {
   who: Who
   space: Space
   eid: string
+  binding?: string
 }) => {
   let eid = saved.find((b) => comp(b, CONNECTION).status == 'connected')?.entity
     .eid
   if (!eid) throw new Error('The service did not return a connected account.')
   await ready(env, eid)
-  if (app) await attached(env, app.who, app.space, app.eid, eid)
+  if (app) await attached(env, app.who, app.space, app.eid, eid, app.binding)
   // The person is sent back as soon as the connection stands: its bot starts
   // listening and its apps are bound to it after the answer, each failure
   // reported where it happens.
@@ -1819,7 +1854,9 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
     await finishConnection(
       env,
       saved,
-      held.app ? { who, space: at, eid: held.app } : undefined,
+      held.app
+        ? { who, space: at, eid: held.app, binding: held.binding }
+        : undefined,
     )
     return told(back, 'connected')
   } catch (e) {

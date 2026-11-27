@@ -461,6 +461,63 @@ test(
   },
 )
 
+let separateAsks = await setup()
+test('separate asks reuse their binding and connecting one leaves the others pending', async () => {
+  let { g, c, needs } = separateAsks
+  let ask = (binding: string, app = 'app') =>
+    needs({ app, integration: 'texts', separate: true, binding, direct: true })
+  let first = await ask('FIRST')
+  let second = await ask('SECOND')
+  assert(first != second)
+  assertEquals(await ask('SECOND', 'other'), second)
+  let shared = await needs({ app: undefined, integration: 'texts' })
+  await connect(c, shared, { key: 'unbound' })
+  await connect(c, first, { key: 'first-key' })
+  assertEquals(await envOf(c, 'app'), { FIRST: 'first-key' })
+  assertEquals(await ask('SECOND'), second)
+  await connect(c, second, { key: 'second-key' })
+  assertEquals(await envOf(c, 'app'), {
+    FIRST: 'first-key',
+    SECOND: 'second-key',
+  })
+  assertEquals(
+    (await resolve(c, 'app', 'texts', null, 'SECOND'))?.connection.entity.eid,
+    second,
+  )
+  assertEquals(await envOf(c, 'other'), { SECOND: 'second-key' })
+  await disconnect(c, first)
+  assertEquals(await envOf(c, 'app'), { SECOND: 'second-key' })
+  let replacement = await ask('FIRST')
+  assert(replacement != first && replacement != second)
+  assertEquals(of(await at(g, replacement), 'connection').status, 'needed')
+})
+
+let separateCopy = await setup()
+await separateCopy.needs({
+  integration: 'texts',
+  binding: 'FIRST',
+  separate: true,
+})
+await separateCopy.needs({
+  integration: 'texts',
+  binding: 'SECOND',
+  separate: true,
+})
+test('a copy asks for each separately bound connection once', async () => {
+  let { g } = separateCopy
+  let copy = { source: 'app', app: 'other', owner: 'ann' }
+  let made = await g.apply(await carry(g.read, copy))
+  assertEquals(made.filter((b) => b.connection).length, 2)
+  assertEquals(
+    made.filter((b) => b.uses).map((b) => of(b, 'uses').binding).sort(),
+    [
+      'FIRST',
+      'SECOND',
+    ],
+  )
+  assertEquals(await carry(g.read, copy), [])
+})
+
 test(
   'need: a key for an unbuilt service names its hosts, which no later need may change',
   async () => {
