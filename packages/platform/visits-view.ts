@@ -27,7 +27,9 @@ export type VisitsView = { person: string; space: string; site: string }
 // Short enough for the ends of an axis.
 let axisDay = (iso: string) => day(iso, 'UTC')
 
-let chart = (days: Counted['daily']) =>
+/** A bar a day over `days`, the first and last day under it: the chart every
+ * visits report draws, a space's and the platform's (./admin-visits-view.ts). */
+export let chart = (days: Counted['daily']) =>
   h(
     Report.Plot,
     null,
@@ -44,7 +46,12 @@ let chart = (days: Counted['daily']) =>
     ),
   )
 
-let column = (head: string, rows: Line[]) =>
+/** A line of a top list, with the page it opens where there is one. */
+export type Linked = Line & { href?: string }
+
+/** A short list under its heading, a name and its views a line; nothing for
+ * an empty list. */
+export let column = (head: string, rows: Linked[]) =>
   rows.length
     ? h(
       Report.Column,
@@ -57,7 +64,11 @@ let column = (head: string, rows: Line[]) =>
           h(
             Report.Item,
             null,
-            h(Report.Label, { title: r.name }, r.name),
+            h(
+              Report.Label,
+              { title: r.name },
+              r.href ? h('a', { href: r.href }, r.name) : r.name,
+            ),
             h(Report.Value, null, count(r.views)),
           )
         ),

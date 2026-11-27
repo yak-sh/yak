@@ -30,6 +30,8 @@ import {
   lastDay,
   NOT_ON,
   perDay,
+  platformApps,
+  platformDays,
   point,
   ran,
   referred,
@@ -245,6 +247,24 @@ test('the four queries, in full', () => {
   assert(text(topFrom).includes("AND blob5 != ''"), text(topFrom))
   assert(text(topCountries).includes("AND blob4 != ''"), text(topCountries))
   assert(!text(topPages).includes("blob3 != ''"), 'every view has a path')
+})
+
+test("the platform's two queries name no app and leave out its funnel's steps", () => {
+  assertEquals(
+    analytics(platformDays(7)),
+    "SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, " +
+      'blob1 AS space, blob6 AS client, sum(_sample_interval) AS views ' +
+      "FROM yak_views WHERE index1 != 'yaks.app' " +
+      "AND timestamp >= NOW() - INTERVAL '7' DAY " +
+      'GROUP BY day, space, client ORDER BY day LIMIT 10000',
+  )
+  assertEquals(
+    analytics(platformApps(30)),
+    'SELECT index1 AS app, blob6 AS client, sum(_sample_interval) AS views ' +
+      "FROM yak_views WHERE index1 != 'yaks.app' " +
+      "AND timestamp >= NOW() - INTERVAL '30' DAY " +
+      'GROUP BY app, client ORDER BY views DESC LIMIT 10000',
+  )
 })
 
 test('nothing reaches the SQL text unshaped', () => {

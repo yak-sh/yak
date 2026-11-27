@@ -23,6 +23,8 @@ import { Form, Head } from '@yaks/ui/parts'
 // page says how many builds the home page's box opened today against the
 // day's cap, what each spent against its budget and which were kept by
 // signing up (newcomer.ts, D-146737).
+// The Visits page counts every space's and app's visits together, test
+// spaces apart, from one platform-wide analytics read (views.ts `platformOf`).
 // The Letters page lists the outreach trials (@yaks/platform/outreach-trial):
 // what every space's Operator would email its people, one letter a space
 // beside what it was told, never sent.
@@ -89,7 +91,9 @@ import { deskFrame } from './desk-pages.ts'
 import { FRAMED } from './frame.ts'
 import { type IconName, icons } from './icons.ts'
 import { type Host, spaceHost, url } from '@yaks/platform/host'
-import { DAYS, NOT_ON, statsFor, statsOf } from './views.ts'
+import { DAYS, NOT_ON, platformOf, statsFor, statsOf } from './views.ts'
+import { platformVisits } from '@yaks/platform/admin-visits'
+import { adminVisitsView } from '@yaks/platform/admin-visits-view'
 import { appVisits } from '@yaks/platform/visits-view'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
 import { arrivals } from './arrivals.ts'
@@ -217,6 +221,7 @@ let READS: Record<string, CensusFields> = {
   invites: fieldsOf(COUNTED, { agents: APP_TILES.agents }),
   sessions: fieldsOf(COUNTED, OPERATORS),
   spending: fieldsOf(COUNTED, OPERATORS),
+  visits: fieldsOf(COUNTED, { apps: ['app.slug'] }),
 }
 /** What every list's rows draw, and every count: what a row's own page reads
  * beside its row. */
@@ -235,6 +240,7 @@ let NAMED = new Set([
   'spending',
   'letters',
   'funnel',
+  'visits',
 ])
 
 let latest = (...at: (string | null | undefined)[]) =>
@@ -792,6 +798,7 @@ let desk = (
     | 'spending'
     | 'support-contracts'
     | 'funnel'
+    | 'visits'
     | 'invites'
     | 'builds'
     | 'letters'
@@ -852,6 +859,7 @@ let desk = (
       'chart-no-axes-column-increasing',
       'Funnel',
     ),
+    link('visits', `${PATH}/visits`, 'eye', 'Visits'),
     link(
       'invites',
       `${PATH}/invites${tested(d)}`,
@@ -1313,6 +1321,37 @@ let spendingPage = async (d: Reading, env: Env, person: string) => {
   )
 }
 
+// Every space's and app's visits together (@yaks/platform/admin-visits), from
+// one platform-wide read of the analytics Site keeps a few minutes, never a
+// read a space. A test space's are counted apart.
+let visitsPage = async (d: Reading, env: Env) => {
+  let read = platformOf(env)
+  let tallied = read && await read.catch((e) => {
+    caught(e, { request: 'admin visits' })
+    return e instanceof Error ? e : new Error(String(e))
+  })
+  let places = {
+    spaces: d.census.spaces.map((r) => ({
+      eid: r.entity.eid,
+      slug: r.space!.slug ?? '',
+      test: !!d.uses.get(r.entity.eid)?.test,
+    })),
+    apps: d.census.apps.map((r) => ({
+      eid: r.entity.eid,
+      slug: r.app!.slug ?? '',
+      space: appSpace(r),
+    })),
+  }
+  return desk(
+    d,
+    'Visits',
+    'visits',
+    tallied instanceof Error
+      ? h(Form.Hint, null, `Visits could not be counted: ${tallied.message}`)
+      : adminVisitsView(tallied && platformVisits(tallied, places), PATH),
+  )
+}
+
 let pct = (share: number) => `${Math.round(share * 100)}%`
 
 // How far strangers got, a line a stage, and where most of them stop.
@@ -1588,6 +1627,7 @@ export let answer = async (
     )
   }
   if (rest == 'spending') return await spendingPage(d, env, who)
+  if (rest == 'visits') return await visitsPage(d, env)
   if (rest == 'letters') return lettersPage(d, await dir.trials())
   if (rest.startsWith('letters/')) {
     let trial = rest.slice('letters/'.length)

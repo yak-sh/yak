@@ -678,3 +678,67 @@ test("an app's page and its space's say who visited, as the owner's Visits page 
     sql.done()
   }
 })
+
+test("the Visits page counts every space's and app's visits, people first and test spaces apart", async () => {
+  let today = `${new Date().toISOString().slice(0, 10)} 00:00:00`
+  let platform = {
+    ...admin,
+    census: () =>
+      Promise.resolve({
+        ...EMPTY,
+        people: census().people,
+        spaces: [made('home', 'ann'), made('lab', 'lab')],
+        apps: [
+          { entity: { eid: 'a1' }, app: { slug: 'notes', space: 'home' } },
+          { entity: { eid: 'a2' }, app: { slug: 'try', space: 'lab' } },
+        ] as Row[],
+        seats: census().seats.filter((s) => s.member!.space != 'shop'),
+      }),
+  } as Directory
+  let day = (space: string, client: string, views: number) => ({
+    day: today,
+    space,
+    client,
+    views,
+  })
+  let sql = analytics((q) =>
+    q.includes('GROUP BY day, space, client')
+      ? [
+        day('ann', 'browser', 5),
+        day('ann', 'bot', 2),
+        day('lab', 'browser', 9),
+      ]
+      : [
+        { app: 'a2', client: 'browser', views: 9 },
+        { app: 'a1', client: 'browser', views: 5 },
+        { app: 'a1', client: 'bot', views: 2 },
+      ]
+  )
+  try {
+    let on = { ...env, CF_ANALYTICS_TOKEN: 't', CF_ACCOUNT: 'a' } as Env
+    let [req, , path] = asking('/admin/visits', 'root')
+    let page = (await answer(req, on, path, platform))!
+    assertEquals(page.status, 200)
+    let { document } = parseHTML(await page.text())
+    // Two queries across the platform, whatever its size: no app is named.
+    assertEquals(sql.asked.length, 2)
+    assertEquals(sql.asked.some((q) => q.includes('index1 IN')), false)
+    let block = (id: string) => {
+      let at = document.querySelector(`[aria-labelledby="visits-${id}"]`)
+      return [
+        at?.querySelector('.Report_Total')?.textContent,
+        [...at?.querySelectorAll('.Report_Label a') ?? []]
+          .map((a) => `${a.textContent} ${a.getAttribute('href')}`),
+      ]
+    }
+    assertEquals(block('people'), ['5 visits', [
+      'ann /admin/home',
+      'ann/notes /admin/home',
+    ]])
+    assertEquals(block('others'), ['2 visits', []])
+    assertEquals(block('tests'), ['9 visits', ['lab /admin/lab']])
+    assertStringIncludes(document.body.textContent!, 'counted just now')
+  } finally {
+    sql.done()
+  }
+})

@@ -47,6 +47,8 @@
     "./visit-counts": "./visit-counts.ts",
     "./visits-view": "./visits-view.ts",
     "./visits-browser": "./visits-browser.ts",
+    "./admin-visits": "./admin-visits.ts",
+    "./admin-visits-view": "./admin-visits-view.ts",
     "./agents": "./agents.ts",
     "./agent-guide": "./agent-guide.ts",
     "./agents-view": "./agents-view.ts",

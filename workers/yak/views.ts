@@ -56,7 +56,8 @@ import type { Answer } from './apps.ts'
 import { background, caught } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
 import { failure, resent } from '@yaks/cloudflare/api'
-import { isView, pointOf, type Visited } from './view-point.ts'
+import { FUNNEL, isView, pointOf, type Visited } from './view-point.ts'
+import type { Tallied } from '@yaks/platform/admin-visits'
 import { appTag, type Seen } from '@yaks/platform/kept'
 import { countRows, dayRows, NOT_ON } from '@yaks/platform/visit-counts'
 import type { Bundle } from '@yaks/graph'
@@ -207,12 +208,13 @@ let over = (
   ...more: Expr[]
 ) => ({
   from: table(dataset),
-  where: and(
-    among(APP, apps.map(lit)),
-    ge(TIMESTAMP, op('-', fn('NOW'), interval(whole(days, KEPT_DAYS), 'DAY'))),
-    ...more,
-  ),
+  where: and(among(APP, apps.map(lit)), since(days), ...more),
 })
+
+let since = (days: number) =>
+  ge(TIMESTAMP, op('-', fn('NOW'), interval(whole(days, KEPT_DAYS), 'DAY')))
+
+let DAY = as(fn('toStartOfInterval', TIMESTAMP, interval(1, 'DAY')), 'day')
 
 /**
  * Views per app per day, oldest first: the bars. A day nobody came is absent
@@ -223,7 +225,7 @@ export let perDay = (apps: string[], days = DAYS, dataset = DATASET) =>
   select({
     cols: [
       as(APP, 'app'),
-      as(fn('toStartOfInterval', TIMESTAMP, interval(1, 'DAY')), 'day'),
+      DAY,
       as(COUNT, 'views'),
     ],
     ...over(apps, days, dataset),
@@ -264,6 +266,47 @@ export let topCountries = top(COUNTRY, 'country', true)
 
 /** Browser, bot or agent, and how many of each. */
 export let byClient = top(CLIENT, 'client', true)
+
+// ---- every app at once (T-4011) --------------------------------------------
+
+// Every app's views, the platform's own funnel steps left out
+// (view-point.ts `FUNNEL`): those are steps, not pages of an app.
+let everyApp = (days: number, dataset: string) => ({
+  from: table(dataset),
+  where: and(ne(APP, lit(FUNNEL)), since(days)),
+})
+
+/** How many rows a platform-wide answer may hold: a day, a space and a kind
+ * of client a row, or an app and a kind of client. */
+export let PLATFORM_ROWS = 10_000
+
+/** Every app's views by day, the space they were served under and the kind
+ * of client that asked: the platform's chart, test spaces told apart by
+ * their slug. */
+export let platformDays = (days = DAYS, dataset = DATASET) =>
+  select({
+    cols: [
+      DAY,
+      as(col(SPACE), 'space'),
+      as(col(CLIENT), 'client'),
+      as(COUNT, 'views'),
+    ],
+    ...everyApp(days, dataset),
+    group: [col('day'), col('space'), col('client')],
+    order: [col('day')],
+    limit: lit(PLATFORM_ROWS),
+  })
+
+/** Every app's views over the window by the kind of client, busiest first:
+ * the platform's top spaces and apps. */
+export let platformApps = (days = DAYS, dataset = DATASET) =>
+  select({
+    cols: [as(APP, 'app'), as(col(CLIENT), 'client'), as(COUNT, 'views')],
+    ...everyApp(days, dataset),
+    group: [col('app'), col('client')],
+    order: [desc(col('views'))],
+    limit: lit(PLATFORM_ROWS),
+  })
 
 // The SQL API's default format, which is what these queries get back: the
 // schema, the rows, and the count. A number wider than a double arrives as a
@@ -553,8 +596,17 @@ export let statsAt = (app: string, days = DAYS) =>
 export let KEEP = `public, max-age=${FRESH / 1000}, ` +
   'stale-while-revalidate=86400'
 
+/** Where Site keeps the platform's answer over `days` ({@link tallied}),
+ * beside each app's. */
+export let PLATFORM = 'platform'
+
+/** The key Site keeps the platform's answer over `days` under. */
+export let platformAt = (days = DAYS) =>
+  `https://site.invalid${COUNTED}${PLATFORM}/${whole(days, KEPT_DAYS)}`
+
 /** Site's half: the answer at a {@link statsAt} key, kept with its app's tag
- * so the app's erasure purges it. A failure is never kept. */
+ * so the app's erasure purges it, or at {@link platformAt}. A failure is never
+ * kept. */
 export let counted = async (env: Env, path: string): Promise<Response> => {
   let [app, days] = path.slice(COUNTED.length).split('/')
   let unkept = (status: number, said: string) =>
@@ -565,6 +617,11 @@ export let counted = async (env: Env, path: string): Promise<Response> => {
   if (!statsOn(env)) return unkept(404, NOT_ON)
   try {
     let window = whole(Number(days), KEPT_DAYS)
+    if (app == PLATFORM) {
+      return Response.json(await tallied(env, window), {
+        headers: { 'cache-control': KEEP },
+      })
+    }
     let all = await asked(env, [eid(app)], window, Date.now())
     return Response.json(all.get(app), {
       headers: { 'cache-control': KEEP, 'cache-tag': appTag(app) },
@@ -583,25 +640,80 @@ export let statsOf = (
   app: string,
   days = DAYS,
   now = Date.now(),
-): Promise<Stats> | null => {
-  if (!statsOn(env)) return null
-  let here = () => statsFor(env, [app], days, now)!.then((all) => all.get(app)!)
+): Promise<Stats> | null =>
+  statsOn(env)
+    ? kept(
+      env,
+      statsAt(app, days),
+      () => statsFor(env, [app], days, now)!.then((all) => all.get(app)!),
+      { app },
+    )
+    : null
+
+/** Every app's views over the last `days`, as Cloudflare's analytics answer
+ * them across the platform at once: by day, space and kind of client, and by
+ * app and kind of client. The admin's Visits page tells them apart
+ * (@yaks/platform/admin-visits). */
+export let tallied = async (
+  env: Env,
+  days = DAYS,
+  now = Date.now(),
+): Promise<Tallied> => {
+  let dataset = env.VIEWS_DATASET ?? DATASET
+  let [daily, apps] = await Promise.all([
+    ran(env, platformDays(days, dataset)),
+    ran(env, platformApps(days, dataset)),
+  ])
+  return {
+    at: new Date(now).toISOString(),
+    days: whole(days, KEPT_DAYS),
+    daily: daily.map((r) => ({
+      day: word(r.day),
+      space: word(r.space),
+      client: word(r.client),
+      views: num(r.views),
+    })),
+    apps: apps.map((r) => ({
+      app: word(r.app),
+      client: word(r.client),
+      views: num(r.views),
+    })),
+  }
+}
+
+/** The platform's visits: Site's kept answer where Site is bound, else
+ * {@link tallied} here; null where analytics are not switched on. */
+export let platformOf = (env: Env, days = DAYS): Promise<Tallied> | null =>
+  statsOn(env)
+    ? kept(env, platformAt(days), () => tallied(env, days), {
+      app: PLATFORM,
+    })
+    : null
+
+// The answer Site keeps at `key`, or `here`'s where Site is slower than HIT
+// or not bound; Site's counting goes on behind to keep it for the next asker.
+let kept = <T>(
+  env: Env,
+  key: string,
+  here: () => Promise<T>,
+  tags: { app: string },
+): Promise<T> => {
   let site = env.SITE
   if (!site) return here()
-  let kept = (async () => {
-    let res = await site.fetch(new Request(statsAt(app, days)))
+  let held = (async () => {
+    let res = await site.fetch(new Request(key))
     if (!res.ok) {
       throw failure(
         res.status,
         `analytics ${res.status}: ${(await res.text()).slice(0, 200)}`,
       )
     }
-    return await res.json() as Stats
+    return await res.json() as T
   })()
   background(
-    kept.then(() => {}, (e) => caught(e, { request: 'views keep', app })),
+    held.then(() => {}, (e) => caught(e, { request: 'views keep', ...tags })),
   )
-  return elapsed('analytics_wait', () => hedged(() => kept, HIT, timeout, here))
+  return elapsed('analytics_wait', () => hedged(() => held, HIT, timeout, here))
 }
 
 /** How long ago an answer was counted, said once it is older than FRESH. */
