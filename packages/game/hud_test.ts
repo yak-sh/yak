@@ -112,6 +112,7 @@ test('the party panel marks whose turn it is, low health and the knocked out', (
   ok(html.includes('Party_Member-low'))
   ok(html.includes('Party_Member-down'))
   ok(html.includes('aria-valuenow="0.9"'))
+  ok(html.includes('aria-label="Wren health 9 of 10"'))
 })
 
 test('the party panel reads health in the terminal', () => {

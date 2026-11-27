@@ -39,7 +39,11 @@ export let Party: FunctionComponent<PartyProps> = (
         List.Member,
         { mod: marks(m), 'aria-current': m.turn ? 'true' : undefined },
         h(List.Name, {}, m.name),
-        h(Meter, { value: m.hp / m.most, width: 10 }),
+        h(Meter, {
+          value: m.hp / m.most,
+          width: 10,
+          'aria-label': `${m.name} health ${m.hp} of ${m.most}`,
+        }),
         h(List.Hp, {}, m.hp > 0 ? `${m.hp}/${m.most}` : 'Down'),
       )
     ),
