@@ -329,19 +329,16 @@ let host = (name: 'workers' | 'browser') =>
         name,
         dir,
         config: `${dir}/config.json`,
-        options: name == 'workers'
-          ? {
-            ...config.compilerOptions,
-            // SSR imports shared views that use DOM types for their effects.
-            lib: [...config.compilerOptions.lib, 'dom', 'dom.iterable'],
-          }
-          : config.compilerOptions,
+        options: config.compilerOptions,
         globals: async (): Promise<Record<string, string>> =>
           name == 'workers'
             ? {
               'workers.d.ts': await Deno.readTextFile(
                 `${CHECKOUT}/node_modules/@cloudflare/workers-types/latest/index.d.ts`,
               ),
+              // SSR imports shared views that use DOM types for their effects.
+              'view.d.ts': '/// <reference lib="dom" />\n' +
+                '/// <reference lib="dom.iterable" />\n',
               // Encoding creates a new ordinary buffer, as DOM's declaration does.
               'utf8.d.ts':
                 'interface TextEncoder { encode(input?: string): Uint8Array<ArrayBuffer> }',
