@@ -5,11 +5,10 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { graph, Stale } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { kernelDoc } from '@yaks/kernel'
-import { directoryDoc } from '@yaks/platform/directory-vocab'
 import { sellerRule } from './seller-move.ts'
+import { platformDocs } from './vocab.ts'
 
-let vocab = loadVocab([kernelDoc, directoryDoc, sellerRule.source!])
+let vocab = loadVocab([...platformDocs(), sellerRule.source!])
 let store = async (stripe: Record<string, unknown>[]) => {
   let g = graph({ vocab, storage: ram(vocab) })
   await g.apply(
