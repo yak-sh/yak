@@ -60,6 +60,7 @@ import { endpoints } from './endpoints.ts'
 import { chatPath } from '@yaks/platform/routes'
 import { REPLIES, textDoor, textSend } from './operator-texts.ts'
 import { textSigned } from './operator-channels.ts'
+import { embeds } from './testing.ts'
 import { PER_SEGMENT } from './text-spend.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Lines } from './operator-draw.ts'
@@ -684,14 +685,17 @@ f.env.MODEL_FETCH = () =>
   Promise.resolve(
     new Response('$1 per M input tokens, $2 per M output tokens'),
   )
-f.env.AI = {
-  gateway: () => ({ getUrl: () => Promise.resolve('https://unused') }),
+// Workers AI answering every model in words, and the store's embedding
+// model with vectors, as the binding does.
+let gateway = () => ({ getUrl: () => Promise.resolve('https://unused') })
+f.env.AI = embeds({
+  gateway,
   run: () =>
     Promise.resolve({
       response: 'Which date and time?',
       usage: { input_tokens: 10, output_tokens: 5 },
     }),
-}
+})
 f.env.MAIL = {
   send: (letter) => {
     letters.push(letter)
@@ -882,13 +886,16 @@ let media = operatorMemory()
 let mediaAsks: Request[] = [], ocrInputs: unknown[] = []
 let beforeMedia = (await f.dir.at(f.space.eid))!.meter!.models
 f.env.MODEL_FETCH = () => Promise.resolve(modelPage(0.1, 0.3))
-f.env.AI!.run = (_name, input) => {
-  ocrInputs.push(input)
-  return Promise.resolve({
-    response: 'Signed minutes approve the road millage.',
-    usage: { input_tokens: 10, output_tokens: 5 },
-  })
-}
+f.env.AI = embeds({
+  gateway,
+  run: (_name: string, input: unknown) => {
+    ocrInputs.push(input)
+    return Promise.resolve({
+      response: 'Signed minutes approve the road millage.',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    })
+  },
+})
 f.env.RASTER = {
   fetch: (req) =>
     Promise.resolve(Response.json(
@@ -1003,11 +1010,14 @@ f.env.IMAGES = {
     output: () => Promise.reject(new Error('Images is down')),
   }),
 }
-f.env.AI!.run = () =>
-  Promise.resolve({
-    response: 'The church sign reads Sunday 10am.',
-    usage: { input_tokens: 10, output_tokens: 5 },
-  })
+f.env.AI = embeds({
+  gateway,
+  run: () =>
+    Promise.resolve({
+      response: 'The church sign reads Sunday 10am.',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    }),
+})
 let stuckAsks: Request[] = []
 let stuckOperator = operatorOf(stuck, f.env, (req) => {
   stuckAsks.push(req)

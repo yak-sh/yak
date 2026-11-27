@@ -18,7 +18,7 @@ import { READS } from '@yaks/anthropic/reads'
 import { addressOf } from '@yaks/blob'
 import { inputOf } from '@yaks/session/intake'
 import { directoryOf } from './directory.ts'
-import { platform } from './testing.ts'
+import { embeds, platform } from './testing.ts'
 import { operatorService } from './operator-testing.ts'
 import { chatPage, operatorAnswer } from './operator-page.ts'
 import { onPage } from './operator-view.ts'
@@ -404,13 +404,14 @@ let operator = operating(store, p.env, {
   providers: { openai: nativeModel },
   price,
 })
-p.env.AI = {
+// No inference but the store's own embedding, which the binding answers.
+p.env.AI = embeds({
   run: () => Promise.reject(new Error('No inference expected')),
-  toMarkdown: async ({ blob }) => ({
+  toMarkdown: async ({ blob }: { blob: Blob }) => ({
     data: await blob.text(),
     format: 'markdown',
   }),
-}
+})
 let docxBytes = new TextEncoder().encode(
   'A document handled natively does not need conversion.',
 )
