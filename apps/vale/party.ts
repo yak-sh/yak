@@ -1,6 +1,11 @@
 // Party state at the graph edge: each hero's owner writes new membership steps,
 // invitations, and replies. Watches cover only this hero's inbox and the
 // current party; pure party-state.ts decides which authored rows count.
+// Friends are the player's yaks.app friends (@yaks/game/friends): inviting one
+// invites each of their heroes and sends them a link, `?party=<hero>`, which
+// opens the game with that hero's invitation waiting for whichever hero they
+// play.
+import { type Friends, friendsAt } from '@yaks/game/friends'
 import { comp, num, str } from './bundle.ts'
 import { writer } from './chat.ts'
 import { LEVELS } from './levels.ts'
@@ -10,8 +15,21 @@ import type { Invite, Member } from './party-state.ts'
 import type { Frame, Vec3 } from './play.ts'
 import type { Body } from './sim.ts'
 
-export let parties = (net: Net) => {
+/** The query parameter a friend's invitation link names the inviter in. */
+export let LINK = 'party'
+
+export let parties = (
+  net: Net,
+  { link = null, friendsOf = () => friendsAt(net.store) }: {
+    link?: string | null
+    friendsOf?: () => ReturnType<typeof friendsAt>
+  } = {},
+) => {
   type Watch = ReturnType<Net['client']['watch']>
+  let yaks: ReturnType<typeof friendsAt> | null = null
+  let friends: Friends | null = null
+  // The invitation a link brought, for the hero this tab plays.
+  let linked: Invite | null = null
   let who: Me | null = null
   let hero = ''
   let group = ''
@@ -67,6 +85,16 @@ export let parties = (net: Net) => {
       seenInvites.clear()
       first = true
       issuedAt = 0
+      linked = null
+      if (hero && link && link != hero) {
+        let from = link, to = hero
+        know(from)
+        void net.partyOf(from).then((group) => {
+          if (group && hero == to) {
+            linked = { eid: `link:${from}`, from, to, group }
+          }
+        }).catch(() => {})
+      }
       if (hero) {
         let q = JSON.stringify(hero)
         own = net.client.watch(`.party_step.player=${q}&*`)
@@ -134,14 +162,22 @@ export let parties = (net: Net) => {
     }
   }
 
-  let open = () =>
-    invitations(
+  let open = () => {
+    let found = invitations(
       inbox?.value ?? [],
       replies?.value ?? [],
       hero,
       net.now(),
       owners,
-    ).filter((i) => i.group != group)
+    )
+    let waiting = linked &&
+        !found.some((i) => i.from == linked!.from && i.group == linked!.group)
+      ? [linked]
+      : []
+    return [...found, ...waiting].filter((i) => i.group != group)
+  }
+  let ready = () =>
+    !!who?.person && who.writes && owners.get(hero) == who.person
 
   let listed = () =>
     [...players.keys()].flatMap((id) => {
@@ -180,10 +216,24 @@ export let parties = (net: Net) => {
     }
   }
 
+  // Invitations from this hero to `to`, founding the party first when there is
+  // none, so a link names a hero whose party exists.
+  let inviting = (to: string[]): Bundle[] => {
+    let id = group || hero
+    let at = new Date(net.now()).toISOString()
+    return [
+      ...group ? [] : [step(id)],
+      ...to.map((eid) => ({
+        entity: { eid: crypto.randomUUID() },
+        party_invite: { from: hero, to: eid, group: id, at },
+      })),
+    ]
+  }
+
   return {
     me: (m: Me) => who = m,
     get canJoin() {
-      return !!who?.person && who.writes && owners.get(hero) == who.person
+      return ready()
     },
     get signIn() {
       return who?.signIn ?? null
@@ -218,24 +268,37 @@ export let parties = (net: Net) => {
       return fresh
     },
     invite: async (to: string) => {
-      if (
-        !who?.person || !who.writes || owners.get(hero) != who.person ||
-        !hero || to == hero
-      ) return false
+      if (!ready() || !hero || to == hero) return false
       try {
         if (!(await net.about(to)).by) return false
-        let id = group || hero
-        let bundles: Bundle[] = group ? [] : [step(id)]
-        bundles.push({
-          entity: { eid: crypto.randomUUID() },
-          party_invite: {
-            from: hero,
-            to,
-            group: id,
-            at: new Date(net.now()).toISOString(),
-          },
-        })
-        await net.client.mutate(bundles)
+        await net.client.mutate(inviting([to]))
+        return true
+      } catch {
+        return false
+      }
+    },
+    /** The player's yaks.app friends, once read; null while reading. */
+    get friends() {
+      return friends
+    },
+    /** Read the friend list again, as the sheet opens. */
+    readFriends: async () => {
+      if (!ready()) return
+      yaks ??= friendsOf()
+      friends = await yaks.list().catch(() => friends)
+    },
+    /** Whether a person already plays a hero in this party. */
+    together: (person: string) =>
+      listed().some((m) => owners.get(m.eid) == person),
+    /** Invite a friend: each of their heroes here, and them on yaks.app with a
+     * link that brings this invitation to a hero they make later. */
+    inviteFriend: async (person: string) => {
+      if (!ready() || !hero || person == who?.person) return false
+      try {
+        let theirs = (await net.heroes(person)).map((h) => h.eid)
+        await net.client.mutate(inviting(theirs))
+        yaks ??= friendsOf()
+        await yaks.invite(person, `?${LINK}=${encodeURIComponent(hero)}`)
         return true
       } catch {
         return false
@@ -243,16 +306,19 @@ export let parties = (net: Net) => {
     },
     accept: async (i: Invite) => {
       if (
-        !who?.person || !who.writes || owners.get(hero) != who.person ||
-        i.to != hero ||
+        !ready() || i.to != hero ||
         !open().some((v) => v.eid == i.eid)
       ) return false
       try {
         if (await net.partyOf(i.from) != i.group) return false
-        await net.client.mutate([step(i.group), {
-          entity: { eid: crypto.randomUUID() },
-          party_reply: { invite: i.eid, to: hero, accept: true },
-        }])
+        await net.client.mutate([
+          step(i.group),
+          ...i == linked ? [] : [{
+            entity: { eid: crypto.randomUUID() },
+            party_reply: { invite: i.eid, to: hero, accept: true },
+          }],
+        ])
+        if (i == linked) linked = null
         return true
       } catch {
         return false
@@ -260,10 +326,13 @@ export let parties = (net: Net) => {
     },
     decline: async (i: Invite) => {
       if (
-        !who?.person || !who.writes || owners.get(hero) != who.person ||
-        i.to != hero ||
+        !ready() || i.to != hero ||
         !open().some((v) => v.eid == i.eid)
       ) return false
+      if (i == linked) {
+        linked = null
+        return true
+      }
       try {
         await net.client.mutate([{
           entity: { eid: crypto.randomUUID() },
@@ -276,8 +345,7 @@ export let parties = (net: Net) => {
     },
     leave: async () => {
       if (
-        !who?.person || !who.writes || owners.get(hero) != who.person ||
-        !hero || !group
+        !ready() || !hero || !group
       ) return false
       try {
         await net.client.mutate([step('')])

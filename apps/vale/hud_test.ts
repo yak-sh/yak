@@ -288,6 +288,8 @@ let party = {
   },
   name: () => 'Ada',
   location: () => 'Mossvale · 12 m N',
+  friends: { kind: 'friends', friends: [] },
+  readFriends: () => Promise.resolve(),
 } as unknown as ReturnType<typeof parties>
 type Told = (h: ReturnType<typeof hud>) => () => void
 let TOLD: [string, Told][] = [

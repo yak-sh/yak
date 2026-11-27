@@ -139,6 +139,8 @@ let party = {
   ],
   name: () => 'Ada',
   location: () => 'Mossvale · 12 m N',
+  friends: { kind: 'friends', friends: [] },
+  readFriends: () => Promise.resolve(),
 } as unknown as ReturnType<typeof parties>
 let deal = {
   eid: 'deal',

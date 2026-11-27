@@ -1,4 +1,5 @@
-import { equal, ok, test } from '@yaks/testing'
+import { equal, ok, test, until } from '@yaks/testing'
+import type { Friends } from '@yaks/game/friends'
 import { withDom } from './dom_fixture.ts'
 import { memberOf } from './party-state.ts'
 import { partybox } from './partybox.ts'
@@ -30,6 +31,8 @@ test('party details show live character stats and gear, then clear them when awa
         return members
       },
       location: () => 'Mossvale · 12 m N',
+      friends: { kind: 'friends', friends: [] },
+      readFriends: () => Promise.resolve(),
     } as unknown as ReturnType<typeof parties>
     let view = partybox(
       { body, open: true, show() {}, close() {}, toggle() {}, head() {} },
@@ -62,4 +65,50 @@ test('party details show live character stats and gear, then clear them when awa
     ok(text().includes('Live stats unavailable'))
     ok(!text().includes(ITEMS.sword1.name))
     ok(text().includes('Equipment unavailable'))
+  }))
+
+test('friends are listed to invite, or the player is asked to allow them', () =>
+  withDom(async (_, body) => {
+    let invited: string[] = []
+    let friends: Friends = { kind: 'ask', allow: 'https://yaks.test/allow' }
+    let party = {
+      canJoin: true,
+      invites: [],
+      members: [],
+      group: '',
+      get friends() {
+        return friends
+      },
+      readFriends: () => Promise.resolve(),
+      together: (person: string) => person == 'p2',
+      inviteFriend: (person: string) =>
+        Promise.resolve((invited.push(person), true)),
+    } as unknown as ReturnType<typeof parties>
+    let toasts: string[] = []
+    let view = partybox(
+      { body, open: true, show() {}, close() {}, toggle() {}, head() {} },
+      party,
+      (s) => toasts.push(s),
+    )
+    let frame = { body: { x: 0, z: 0 } } as Frame
+    view.paint(frame)
+    let allow = body.querySelector<HTMLAnchorElement>('a[href]')
+    equal(allow?.getAttribute('href'), 'https://yaks.test/allow')
+    friends = {
+      kind: 'friends',
+      friends: [
+        { person: 'p1', name: 'Wren', avatar: '', presence: 'online' },
+        { person: 'p2', name: 'Tam', avatar: '', presence: 'away' },
+      ],
+    }
+    view.paint(frame)
+    let text = () => body.textContent!
+    ok(text().includes('Wren') && text().includes('In your party'))
+    body.querySelector<HTMLElement>('[data-select="friend:p2"]')!.click()
+    equal(body.querySelector('[data-act="invite-friend"]'), null)
+    body.querySelector<HTMLElement>('[data-select="friend:p1"]')!.click()
+    body.querySelector<HTMLElement>('[data-act="invite-friend"]')!.click()
+    await until(() => toasts.length > 0)
+    equal(invited, ['p1'])
+    equal(toasts, ['Invited Wren to your party.'])
   }))

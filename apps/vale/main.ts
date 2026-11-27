@@ -59,7 +59,7 @@ import { guide, tasksOf, tracked } from './journal.ts'
 import { journal } from './journalbook.ts'
 import { pack } from './pack.ts'
 import { pace } from '@yaks/stage/pace'
-import { parties } from './party.ts'
+import { LINK, parties } from './party.ts'
 import { partybox } from './partybox.ts'
 import { character } from './character.ts'
 import { anyLook, anyName } from './make.ts'
@@ -178,7 +178,14 @@ let deal = deals(net)
 let folk = village(net, deal)
 let camp = fires(net)
 let explored = exploration(net)
-let party = parties(net)
+// A friend's invitation link names the inviting hero; the party keeps the
+// invitation, so the address drops it and a reload does not bring it back.
+let link = new URL(location.href)
+let party = parties(net, { link: link.searchParams.get(LINK) })
+if (link.searchParams.has(LINK)) {
+  link.searchParams.delete(LINK)
+  history.replaceState(history.state, '', link.href)
+}
 let g = game(net, folk.at)
 let toil = working(net)
 let walking = withoutSpent(v, (p) => toil.spent(p, net.now()))

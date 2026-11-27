@@ -2,7 +2,8 @@
 // current or last known lands. Actions stay on the sheet while its graph rows
 // arrive, so accepting an invitation does not require walking back to them.
 // A member picked shows how they fare: their health, what they are doing,
-// and what they wear.
+// and what they wear. The player's yaks.app friends are listed to invite,
+// read again each time the sheet opens.
 import { type ComponentChildren, h } from 'preact'
 import { Body, Button, Pairs, Rows, Tile } from '@yaks/ui'
 import { glyph } from './glyphs.ts'
@@ -13,6 +14,7 @@ import { split } from './ui/split.ts'
 import { ITEMS } from './items.ts'
 import { SLOT_NAMES, SLOTS } from './arms.ts'
 import type { Member } from './party-state.ts'
+import type { Friend } from '@yaks/game/friends'
 import { ValeMeter } from './kit/ValeMeter.ts'
 import { head, hint, part, picture } from './tile.ts'
 
@@ -48,6 +50,13 @@ let details = (m: Member) => [
   ),
 ]
 
+let PRESENCE: Record<Friend['presence'], string> = {
+  online: 'Online',
+  building: 'Building',
+  away: 'Away',
+  unknown: 'Status unknown',
+}
+
 export let partybox = (
   panel: Panel,
   party: ReturnType<typeof parties>,
@@ -70,6 +79,7 @@ export let partybox = (
       party.members.map((
         m,
       ) => [m.eid, m.name, m.online, m.vitals, m.gear, m.status]),
+      party.friends,
       picked,
       member && frame && party.location(member, [frame.body.x, frame.body.z]),
     ])
@@ -91,7 +101,12 @@ export let partybox = (
     let invites = party.invites, members = party.members
     let invite = invites.find((i) => `invite:${i.eid}` == picked)
     let member = members.find((m) => `member:${m.eid}` == picked)
-    if (!invite && !member && !(picked == 'party' && party.group)) {
+    let known = party.friends
+    let friends = known?.kind == 'friends' ? known.friends : []
+    let friend = friends.find((f) => `friend:${f.person}` == picked)
+    if (
+      !invite && !member && !friend && !(picked == 'party' && party.group)
+    ) {
       picked = null
     }
     let location = (m: typeof members[number]) =>
@@ -118,6 +133,8 @@ export let partybox = (
         h(Tile.Title, {}, title),
         h(Tile.Sub, {}, sub),
       )
+    let standing = (f: Friend) =>
+      party.together(f.person) ? 'In your party' : PRESENCE[f.presence]
     let rows = h(
       'div',
       { class: 'Pack' },
@@ -157,12 +174,39 @@ export let partybox = (
               )
             ),
           )
-          : hint('Talk to a nearby hero to invite them.'),
+          : hint('Invite a friend, or talk to a nearby hero.'),
       ),
       party.group && h(
         Rows,
         {},
         row('party', 'users', 'Party details', `${members.length} members`),
+      ),
+      part(
+        'Friends',
+        !known ? hint('Reading your friends…') : known.kind == 'ask'
+          ? [
+            hint('Let Mossvale see your yaks.app friends to invite them.'),
+            h(Button, {
+              mod: 'go',
+              href: known.allow,
+              target: '_blank',
+            }, 'Allow'),
+          ]
+          : friends.length
+          ? h(
+            Rows,
+            {},
+            friends.map((f) =>
+              row(
+                `friend:${f.person}`,
+                'user',
+                f.name,
+                standing(f),
+                f.presence == 'online' ? 'positive' : undefined,
+              )
+            ),
+          )
+          : hint('Add friends on yaks.app to invite them here.'),
       ),
     )
     let content: ComponentChildren = invite
@@ -189,6 +233,19 @@ export let partybox = (
         ),
         ...details(member),
       ]
+      : friend
+      ? head(
+        picture(glyph('user'), {
+          mod: friend.presence == 'online' && 'positive',
+        }),
+        friend.name,
+        [standing(friend)],
+        !party.together(friend.person) &&
+          act('invite-friend', 'Invite to party', {
+            mod: 'go',
+            'data-friend': friend.person,
+          }),
+      )
       : picked == 'party'
       ? head(picture(glyph('users')), 'Your party', [
         `${members.length} members`,
@@ -205,15 +262,30 @@ export let partybox = (
   let paint = (f: Frame) => {
     frame = f
     if (!panel.open) return void (drawn = '')
+    if (!drawn) reread()
     if (shows() != drawn) draw()
   }
+  let reread = () => void party.readFriends().then(() => frame && paint(frame))
+  // Allowing the friend list happens in another tab; coming back reads it.
+  addEventListener('focus', () => {
+    if (panel.open) reread()
+  })
   panel.body.addEventListener('click', async (e) => {
     let button = e.target instanceof Element
       ? e.target.closest<HTMLButtonElement>('button[data-act]')
       : null
     let act = button?.dataset.act
     let invite = party.invites.find((i) => i.eid == button?.dataset.invite)
-    if (act == 'leave') {
+    let friend = button?.dataset.friend
+    if (act == 'invite-friend' && friend) {
+      let name = party.friends?.kind == 'friends' &&
+        party.friends.friends.find((f) => f.person == friend)?.name
+      toast(
+        await party.inviteFriend(friend)
+          ? `Invited ${name || 'your friend'} to your party.`
+          : 'Could not invite your friend. Try again.',
+      )
+    } else if (act == 'leave') {
       toast(
         await party.leave()
           ? 'You left the party.'

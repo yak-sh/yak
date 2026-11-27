@@ -11,7 +11,8 @@
     "./starter": "./starter.ts",
     "./vocab": "./vocab.ts",
     "./ui": "./ui.ts",
-    "./page": "./page.ts"
+    "./page": "./page.ts",
+    "./friends": "./friends.ts"
   },
   "license": "Apache-2.0",
   "description": "Game rules, browser controls and HUD parts over values, without a graph or a game world.",

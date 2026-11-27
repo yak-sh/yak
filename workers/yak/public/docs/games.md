@@ -205,40 +205,41 @@ private game still requires its room invite to join an expedition.
 
 ## Inviting friends
 
-Offer an **Invite a friend** button beside the game's share link. Use
-`query('.app_friends')` from `./api/client.js` to read
-`app_friends{signed_in, allowed}`. If the player is signed out, use the sign-in
-link from `me()`. If they are signed in and `allowed` is false, link to
-`./api/allow?at=friends`. yaks.app asks whether this app may see their friends.
-The permission applies to this player and app, and the player can remove it
-under **Connections → Friends access**.
+Offer an **Invite a friend** button beside the game's share link, and list the
+player's yaks.app friends with `@yaks/game/friends`. The game keeps no friend
+list of its own.
 
-After permission is granted, `query('.app_friend')` returns one row per
-confirmed friend. The recipient ID is `entity.eid`. The
-`app_friend{name, avatar, presence}` component holds the display name, a
-monogram image URL, and `online`, `building`, `away`, or `unknown`. Hidden
-presence is `unknown`. Read the list when opening the picker and keep the result
-in the current page.
+```ts ignore
+import { friendsAt } from '@yaks/game/friends'
 
-When the player chooses a friend, send one bundle with `apply`.
-
-```js ignore
-import { apply } from './api/client.js'
-
-export async function invite(friend, roomCode, eid = crypto.randomUUID()) {
-  return await apply({
-    entity: { eid },
-    friend_invite: { to: friend.entity.eid, path: 'play#' + roomCode },
-  })
+let friends = friendsAt()
+let shown = await friends.list()
+if (shown.kind == 'friends') {
+  await friends.invite(shown.friends[0].person, 'play#' + roomCode)
 }
 ```
 
-The optional `path` is relative to the app's root. It can include a room code in
-the query or fragment. An omitted path opens the app's main page. The invitation
-appears in the friend's Friends conversation and Updates with a link to join.
-The link uses the game's existing access rules, so a private game needs a
-working guest link or a share for the recipient. Keep the same invitation UUID
-if the write needs to be retried.
+`list()` answers one of three things. `{kind: 'signed-out'}` means show the
+sign-in link from `me()`. `{kind: 'ask', allow}` means the player has not let
+this app see their friends yet: link to `allow` (open it in a new tab and read
+the list again when the player returns). yaks.app asks them once for this app,
+and they can remove it under **Connections → Friends access**.
+`{kind: 'friends', friends}` lists each friend as
+`{person, name, avatar, presence}`, with online friends first. `avatar` is a
+monogram image URL and `presence` is `online`, `building`, `away`, or `unknown`
+(also used for hidden presence). Read the list when the picker opens.
+
+`invite(person, path)` sends the friend a link to `path`, relative to the app's
+root. The path can carry a room code in the query or fragment, and an omitted
+path opens the app's main page. The invitation appears in the friend's Friends
+conversation and Updates. The link uses the game's existing access rules, so a
+private game needs a working guest link or a share for the recipient.
+
+Underneath, these are the app's own query and apply doors:
+`query('.app_friends')` answers `app_friends{signed_in, allowed}`,
+`query('.app_friend')` answers `app_friend{name, avatar, presence}` with the
+friend's person ID as `entity.eid`, and one `friend_invite{to, path}` bundle
+sent with `apply` invites them.
 
 ## Platform dependencies and vocabulary
 

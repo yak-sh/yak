@@ -13,6 +13,7 @@
     "./controls",
     "./hud",
     "./page",
+    "./friends",
     "./screen"
   ],
   "resources": [
