@@ -66,6 +66,11 @@ binding for HTTP requests. Pass `app` to use that app's connection sentinels.
 Egress holds the credentials and sends them to destinations the connection
 permits.
 
+A host that passes `browser`, puppeteer's module, gives a script that names
+`browser` a `browser.launch()`: puppeteer launches on the Worker's
+`env.BROWSER`, which the host lends, and every browser the script launched is
+closed when the run ends. A script that does not name it loads no puppeteer.
+
 The runtime contract follows Cloudflare's
 [Worker Loader API](https://developers.cloudflare.com/dynamic-workers/api-reference/),
 [egress control](https://developers.cloudflare.com/dynamic-workers/usage/egress-control/)

@@ -1,6 +1,6 @@
 import { clock, equal, match, ok, test, throws } from '@yaks/testing'
 import { connector, endpoint, fresh, meta, seed } from './probe.ts'
-import { evaluate } from '../../packages/code-mode/testing.ts'
+import { evaluate, evaluating } from '../../packages/code-mode/testing.ts'
 import {
   catalog,
   declarations,
@@ -122,6 +122,41 @@ test('code mode compiles TS, preserves identity, records calls and validates eac
   match(bad.value, { isError: true })
   equal(bad.calls.map((c) => [c.isError, typeof c.error]), [[true, 'string']])
   equal(echoed.length, 1)
+})
+
+test('a script that names browser launches on the lent binding, and its browsers close when the run ends', async () => {
+  let closed = 0
+  let state = globalThis as { closedBrowsers?: () => void }
+  state.closedBrowsers = () => closed++
+  // A puppeteer whose launch hands back the endpoint it was given.
+  let puppeteer = `export default { launch: async (endpoint, options) => ({
+    title: async () => (await endpoint.fetch('https://chrome.invalid/')).text(),
+    options,
+    close: async () => globalThis.closedBrowsers(),
+  }) }`
+  let read = 0
+  let browser = () => (read++, Promise.resolve(puppeteer))
+  let chrome = { fetch: () => Promise.resolve(new Response('a page')) }
+  let run = (script: string) =>
+    execute(
+      script,
+      one.catalog,
+      one.run,
+      one.asked,
+      evaluating({ BROWSER: chrome }),
+      strip,
+      { browser },
+    )
+  let out = await run(
+    'let b = await browser.launch({keep_alive: 1}); return [await b.title(), b.options]',
+  )
+  equal(out.value, ['a page', { keep_alive: 1 }])
+  equal(closed, 1)
+  equal((await run('return 1')).value, 1)
+  equal(read, 1)
+  ok(codeMode(one.catalog, one.run, evaluate, strip, { files: {}, browser })
+    .description!.includes('browser.launch()'))
+  delete state.closedBrowsers
 })
 
 test('code mode names its tool sets, and a guessed set or name says which exist', async () => {

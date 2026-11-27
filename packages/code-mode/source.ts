@@ -16,6 +16,17 @@ export let TOO = {
     'accidental result, so narrow the query or calculation',
 }
 
+/** What a script is given beside its tools. */
+export type Given = {
+  wallMs?: number
+  /** `fs`, over /tmp and the app mount */
+  files?: boolean
+  /** puppeteer's module, as `puppeteer.js`, for a script given `browser`: it
+   * launches on the evaluator's `env.BROWSER`, and every browser it launched
+   * is closed when the run ends */
+  browser?: string
+}
+
 /** User code lives in its own module, its TypeScript read as JavaScript by
  * the host's `strip`. The trusted entrypoint loads it inside its catch, with
  * no bindings and no lexical access to the bridge. */
@@ -24,16 +35,17 @@ export let source = async (
   entries: Entry[],
   most: number,
   strip: Strip,
-  wallMs = 30_000,
-  files = false,
+  { wallMs = 30_000, files = false, browser }: Given = {},
 ): Promise<Record<string, string>> => ({
   ...files ? { 'files.js': fileModule } : {},
+  ...browser ? { 'puppeteer.js': browser } : {},
   'user.js': await strip(
     'user.ts',
-    `export default async function execute(tools, results, fs) {\n${script}\n}`,
+    `export default async function execute(tools, results, fs, browser) {\n${script}\n}`,
   ),
   'script.js': `import { WorkerEntrypoint } from 'cloudflare:workers';
 ${files ? "import { filesystem } from './files.js';" : ''}
+${browser ? "import puppeteer from './puppeteer.js';" : ''}
 const wait = scheduler.wait.bind(scheduler);
 const race = Promise.race.bind(Promise);
 const stringify = JSON.stringify.bind(JSON);
@@ -46,6 +58,7 @@ export default class extends WorkerEntrypoint {
     let deadline = wait(${wallMs}, {signal:timer.signal}).then(() => ({error:${
     JSON.stringify(timedOut(wallMs))
   }}));
+    let launched = [];
     try {
       let tools = Object.create(null);
       for (let [set, name] of ${JSON.stringify(entries.map((e) => e.path))}) {
@@ -72,8 +85,16 @@ export default class extends WorkerEntrypoint {
       tools = named(tools, (k) => \`tools.\${k} is not a tool set; the sets are \`, () => Object.keys(tools).map((s) => 'tools.' + s).join(', '));
       let work = async () => {
         let {default: execute} = await import('./user.js');
-        let value = await execute(tools, {read: (id) => bridge.read(id)}${
-    files ? ', filesystem((app, args) => bridge.file(app, args))' : ''
+        let value = await execute(tools, {read: (id) => bridge.read(id)}, ${
+    files ? 'filesystem((app, args) => bridge.file(app, args))' : 'undefined'
+  }, ${
+    browser
+      ? `{launch: async (options) => {
+          let opened = await puppeteer.launch(this.env.BROWSER, options);
+          launched.push(opened);
+          return opened;
+        }}`
+      : 'undefined'
   });
         return {value: value === undefined ? null : value};
       };
@@ -84,7 +105,10 @@ export default class extends WorkerEntrypoint {
       return text;
     } catch (error) {
       return stringify({error: String(error?.message ?? error).slice(0,1024)});
-    } finally { cancel(); }
+    } finally {
+      cancel();
+      await Promise.allSettled(launched.map((opened) => opened.close()));
+    }
   }
 }`,
 })

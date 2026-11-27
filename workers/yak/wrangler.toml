@@ -570,6 +570,15 @@ binding = "BROWSER"
 service = "yak-browser"
 remote = true
 
+# The same Worker's `Session` entrypoint: Cloudflare's browser itself, which
+# code-runtime.ts lends a script that launches one, so the script's puppeteer
+# drives it.
+[[services]]
+binding = "BROWSER_SESSION"
+service = "yak-browser"
+entrypoint = "Session"
+remote = true
+
 # The OAuth provider's own store (identity.ts): registered clients, grants,
 # and tokens. `wrangler dev` simulates it and ignores the id.
 [[kv_namespaces]]
@@ -916,6 +925,12 @@ service = "yak-raster-staging"
 [[env.staging.services]]
 binding = "BROWSER"
 service = "yak-browser-staging"
+remote = true
+
+[[env.staging.services]]
+binding = "BROWSER_SESSION"
+service = "yak-browser-staging"
+entrypoint = "Session"
 remote = true
 
 [[env.staging.kv_namespaces]]

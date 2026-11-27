@@ -12,8 +12,8 @@ commands and keeps files while it works. `sandbox_write` puts a file in,
 
 ## Uses
 
-Use `code_mode` for JavaScript, TypeScript, HTTP requests and app draft files.
-See
+Use `code_mode` for JavaScript, TypeScript, HTTP requests, app draft files and
+browser scripts. See
 [JavaScript and TypeScript Scripts](https://yaks.app/docs/code#javascript-and-typescript-scripts).
 
 - Run native tools or Python libraries over an attachment. Use `sandbox_write`
@@ -54,10 +54,15 @@ Use `app_preview` for a draft or for the signed-in private release. Its `steps`
 argument can tap controls and fill fields. Steps on the released app act on its
 live data.
 
-For a scripted check in the sandbox, open the draft address from
-`app_preview({app, screenshot: false})`, or open a guest's invitation in a fresh
-context. Run a CommonJS file with Node and load Playwright with
-`require('playwright')`. Use software WebGL for 3D scenes:
+For a scripted check, use `code_mode`'s `browser`, a headless Chrome on
+Cloudflare that puppeteer drives (see
+[JavaScript and TypeScript Scripts](https://yaks.app/docs/code#javascript-and-typescript-scripts)).
+Open the draft address from `app_preview({app, screenshot: false})`, or a
+guest's invitation in a fresh page.
+
+The sandbox's Playwright is for a check that needs software WebGL, such as a 3D
+scene. Run a CommonJS file with Node and load Playwright with
+`require('playwright')`:
 
 ```js ignore
 const { chromium } = require('playwright')

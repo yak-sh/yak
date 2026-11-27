@@ -332,6 +332,9 @@ export type Env = {
   // browser (browser.ts), including under local dev. Absent in a test run and
   // the workerd probes.
   BROWSER?: Fetcher
+  // yak-browser's `Session`: Cloudflare's browser as it is, lent to a script
+  // as its `env.BROWSER` (code-runtime.ts), which drives it with puppeteer.
+  BROWSER_SESSION?: Fetcher
   // The single static token OpenAI's apps directory fetches to verify the
   // domain (apex.ts serves it at /.well-known/openai-apps-challenge). A
   // secret so the open-source repo carries no token; unset, that path 404s.

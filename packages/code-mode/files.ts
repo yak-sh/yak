@@ -1,5 +1,6 @@
-// The script's two mounts. Workerd owns the request-local /tmp filesystem;
-// the app mount sees its draft through the caller's recorded tool calls.
+// The script's two mounts, and its browser. Workerd owns the request-local
+// /tmp filesystem; the app mount sees its draft through the caller's recorded
+// tool calls.
 export const FILE_BYTES = 1024 * 1024
 
 export type FileScope = { space?: string; app?: string; draft?: string }
@@ -12,6 +13,12 @@ declare const fs: {
   readdir(path: string): Promise<string[]>
   unlink(path: string): Promise<void>
   mkdir(path: string, options?: { recursive?: boolean }): Promise<void>
+}`
+
+export let browserDeclarations = `
+/** A puppeteer Browser (@cloudflare/puppeteer) on Cloudflare's headless Chrome. */
+declare const browser: {
+  launch(options?: { keep_alive?: number }): Promise<import('@cloudflare/puppeteer').Browser>
 }`
 
 export let fileModule = `import * as tmp from 'node:fs/promises';

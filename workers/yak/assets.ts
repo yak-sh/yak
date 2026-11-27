@@ -288,7 +288,8 @@ export let chatChunks = (dir: string) =>
   )
 
 /** What the build draws: the Operator store's words as its chat page's
- * graph holds them, the site's pages and the kit's sheet. */
+ * graph holds them, the site's pages, the kit's sheet, and the puppeteer a
+ * script's browser runs. */
 export let drawn = async (): Promise<Asset[]> => {
   let [{ page, PAGES }, { operatorVocab }, sheet] = await Promise.all([
     import('./site/mod.ts'),
@@ -302,6 +303,10 @@ export let drawn = async (): Promise<Asset[]> => {
         `export default ${JSON.stringify(pageDocs(operatorVocab.docs))}\n`,
     },
     ...Object.keys(PAGES).map((name) => ({ name, body: () => page(name) })),
+    {
+      name: '_puppeteer.js',
+      body: async () => (await import('./puppeteer-asset.ts')).puppeteer(),
+    },
     ...sheet,
   ]
 }

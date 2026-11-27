@@ -590,6 +590,9 @@ export let SOURCES: Record<string, string> = {
   models: 'Other models',
 }
 
+/** What Browser Rendering charges for a browser kept open `ms`. */
+export let browserDollars = (ms: number): number => ms / 1000 * 0.09 / 3600
+
 /** Marginal price of a fresh Dynamic Worker, one invocation, and its CPU. */
 export let scriptDollars = (cpuMs: number): number =>
   (2_000_000 + 300 + Math.round(cpuMs * 20)) / 1_000_000_000

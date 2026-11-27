@@ -44,7 +44,7 @@ let shelved = (env: Env): Env => ({
 // Agent entrypoints share the same isolated code evaluator, loaded with the
 // first of them.
 let agentEnv = async () => {
-  let [{ evaluator }, { reserveScript }] = await Promise.all([
+  let [{ evaluator }, { reserveScript, browseScript }] = await Promise.all([
     import('../code-runtime.ts'),
     import('../script-spend.ts'),
   ])
@@ -80,6 +80,12 @@ let agentEnv = async () => {
             let tail = services.ScriptTail({ props: { call: bill.call } })
             return { tail, release: await reserveScript(env, bill) }
           },
+          env.BROWSER_SESSION
+            ? {
+              session: env.BROWSER_SESSION,
+              hold: (bill, work) => browseScript(env, bill, work),
+            }
+            : undefined,
         ),
       }
       : {}),

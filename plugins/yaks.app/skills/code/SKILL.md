@@ -49,6 +49,10 @@ return { checked }
   body. To call through a connection, pass the app as `app` and use its
   connection sentinel where the service expects its credential. Egress resolves
   the sentinel for destinations allowed by the connection.
+- Use `await browser.launch()` for a headless Chrome on Cloudflare. It returns a
+  [puppeteer](https://pptr.dev/api/puppeteer.browser) `Browser`, and every
+  browser the script launched closes when the run ends. Browser time spends from
+  the space budget, as `app_preview` does.
 - Use `tools.yaks.<tool>(args)` for other platform tools and `results.read(id)`
   for kept results. Call `code_mode` without `script` for declarations.
 - A run has up to 30 seconds of CPU, two minutes of elapsed time and 64 tool
@@ -57,6 +61,20 @@ return { checked }
   `result_handle` after 40 seconds, pass it to `result_wait` for the answer.
   Script execution spends from the space budget, and a space runs four scripts
   at once.
+
+A browser script opens any address, including a draft's private address from
+`app_preview({app, screenshot: false})`:
+
+```ts ignore
+const chrome = await browser.launch()
+const page = await chrome.newPage()
+await page.setViewport({ width: 390, height: 844 })
+await page.goto('https://example.com/')
+await page.click('a')
+const shot = await page.screenshot({ type: 'png' })
+await fs.writeFile('/apps/reports/after-click.png', shot)
+return { title: await page.title(), url: page.url() }
+```
 
 ## App Tests
 

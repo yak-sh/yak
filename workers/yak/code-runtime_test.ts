@@ -96,3 +96,41 @@ test('evaluator lends the scoped egress binding and hosted resource limits to ea
     'done',
   )
 })
+
+test('evaluator lends the browser only to a script that brings puppeteer, holding its run on the budget', async () => {
+  let session: Outbound = { fetch: () => Promise.resolve(new Response()) }
+  let envs: unknown[] = []
+  let held: unknown[] = []
+  let loader: Loader = {
+    load: (code) => {
+      envs.push(code.env)
+      return {
+        getEntrypoint: () => ({
+          run: () =>
+            Object.assign(Promise.resolve('done'), {
+              [Symbol.dispose]: () => {},
+            }),
+        }),
+      }
+    },
+  }
+  let bill = { space: {} as never, person: 'a person', call: 'a call' }
+  let permit = () =>
+    Promise.resolve({
+      tail: { tail: () => Promise.resolve() },
+      release: () => Promise.resolve(true),
+    })
+  let run = evaluator(loader, (b) => b, undefined, permit, {
+    session,
+    hold: (bill, work) => (held.push(bill.call), work()),
+  })
+  let signal = new AbortController().signal
+  equal(await run({ 'puppeteer.js': '' }, bridge, signal, { bill }), 'done')
+  equal(await run({}, bridge, signal, { bill }), 'done')
+  equal(envs, [{ BROWSER: session }, {}])
+  equal(held, ['a call'])
+  await throws(
+    () => evaluator(loader, (b) => b)({ 'puppeteer.js': '' }, bridge, signal),
+    'no browser is bound here',
+  )
+})

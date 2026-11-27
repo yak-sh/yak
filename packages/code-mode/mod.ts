@@ -21,7 +21,12 @@ import {
 } from '@yaks/tools'
 import { catalog, declarations } from './types.ts'
 import { source, timedOut, TOO } from './source.ts'
-import { FILE_BYTES, fileDeclarations, type FileScope } from './files.ts'
+import {
+  browserDeclarations,
+  FILE_BYTES,
+  fileDeclarations,
+  type FileScope,
+} from './files.ts'
 export { catalog, declarations, type Entry } from './types.ts'
 export { TOO } from './source.ts'
 export { FILE_BYTES } from './files.ts'
@@ -102,6 +107,9 @@ let finished = (
 export type Options = Pick<Opts, 'clock' | 'report' | 'refused'> & {
   /** The app mount's tool arguments, scoped by the host. */
   files?: FileScope
+  /** puppeteer's module, read only for a script that names `browser`, which
+   * launches a browser on the evaluator's `env.BROWSER` */
+  browser?: () => Promise<string>
   /** Execution limits advertised by this host. */
   limits?: typeof LIMITS
   /** the runner each nested call reaches, asked anew for every call
@@ -305,7 +313,14 @@ export let execute = async (
   })
   try {
     let text = await Promise.race([
-      source(script, entries, LIMITS.systemBytes, strip, limits.wallMs, !!files)
+      (async () =>
+        source(script, entries, LIMITS.systemBytes, strip, {
+          wallMs: limits.wallMs,
+          files: !!files,
+          browser: opts.browser && /\bbrowser\b/.test(script)
+            ? await opts.browser()
+            : undefined,
+        }))()
         .then((modules) => {
           controller.signal.throwIfAborted()
           return evaluate(modules, {
@@ -397,12 +412,15 @@ type Definition = Omit<Tool, 'run' | 'inputSchema'> & {
  * their registry or publishing any of the nested tools' schemas. */
 export let definition = (
   providers: readonly Provider[],
-  opts: Pick<Options, 'files' | 'limits'> = {},
+  opts: Pick<Options, 'files' | 'limits' | 'browser'> = {},
 ): Definition => ({
   ...fields,
   description:
     (opts.files
-      ? 'Run JavaScript or TypeScript here. Use an async function body with return and await. Use fs for temporary files under /tmp and app draft files under /apps/<app>. Use fetch for HTTP requests. '
+      ? 'Run JavaScript or TypeScript here. Use an async function body with return and await. Use fs for temporary files under /tmp and app draft files under /apps/<app>. Use fetch for HTTP requests. ' +
+        (opts.browser
+          ? "Use await browser.launch() for a puppeteer Browser on Cloudflare's headless Chrome; it closes when the run ends. "
+          : '')
       : 'Use this for bulk reads, imports, reconciles and writes: keep source data and whole tool results inside a short JS/TS function body with return and await. ') +
     pathsOf(providers) +
     ' calls the same scoped tools, returning MCP content and structuredContent. Check isError before using a result. The answer is your return value plus a receipt per call. Large return values and tool results are kept in the graph; the answer gives their id, size, shape and preview. Use await results.read(id) to load a kept result. Omit script to read generated TypeScript declarations, with search, offset and limit for discovery. ' +
@@ -435,7 +453,8 @@ export let tool = (
       ? {
         declarations: declarations(matches.slice(start, end)) +
           '\ndeclare const results: { read(id: string): Promise<any> }' +
-          (opts.files ? fileDeclarations : ''),
+          (opts.files ? fileDeclarations : '') +
+          (opts.browser ? browserDeclarations : ''),
         tools: matches.slice(start, end).map((
           { path, description, inputSchema, outputSchema },
         ) => ({ path, description, inputSchema, outputSchema })),

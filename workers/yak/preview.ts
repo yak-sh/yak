@@ -133,8 +133,8 @@ import { sourceOf } from './wrangler_app.ts'
 import { walled } from '@yaks/platform/installs'
 import { screen as screenAt } from './screen.ts'
 import { sharing } from './lib/shared.ts'
+import { browserDollars } from '@yaks/platform/meter'
 
-let RATE = 0.09 / 3600
 let encode = (value: string) => new TextEncoder().encode(value)
 let decode = (value: Uint8Array | null) =>
   value && new TextDecoder().decode(value)
@@ -699,11 +699,11 @@ let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
   let rendered = await onHold(
     ctx.env,
     space,
-    previewTime(visit) / 1000 * RATE,
+    browserDollars(previewTime(visit)),
     'models',
     (spent) =>
       render(ctx.env, visit, (duration) => {
-        spent(duration / 1000 * RATE)
+        spent(browserDollars(duration))
         return Promise.resolve()
       }, { space: space.slug, app: app.slug }),
     { source: 'browser', person: ctx.person },
@@ -715,7 +715,7 @@ let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
   let { image, text, shots: _, ...diagnostics } = rendered
   return {
     png: image,
-    cost: rendered.duration / 1000 * RATE,
+    cost: browserDollars(rendered.duration),
     diagnostics,
     images: [{ data: image, mime_type: 'image/png' }],
     said: (where: string) =>

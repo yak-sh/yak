@@ -1,14 +1,16 @@
 // A fresh script reserves its maximum CPU cost in the same ledger as an
 // app preview or a model call. The Dynamic Worker's tail settles the receipt,
 // so a script's open hold is the script running: a space runs at most `RUNS`.
+// A script that launches a browser holds its most browser time too, and is
+// charged the time its run took, as app_preview is (preview.ts `rendering`).
 import { HOSTED_LIMITS } from '@yaks/code-mode'
 import { ModelError } from '@yaks/model'
 import { line } from '@yaks/query'
 import { meta } from './meta.ts'
-import { scriptDollars } from '@yaks/platform/meter'
+import { browserDollars, scriptDollars } from '@yaks/platform/meter'
 import { type Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { reserved, settled } from './model-spend.ts'
+import { onHold, reserved, settled } from './model-spend.ts'
 import { refuse } from './tool.ts'
 
 export type ScriptBill = { space: Space; person: string; call: string }
@@ -66,4 +68,33 @@ export let settleScript = async (
       'A Dynamic Worker trace arrived without a script reservation',
     )
   }
+}
+
+/** `work`, a run whose script may launch a browser, charged to the space for
+ * the time it took: no browser outlives its run (@yaks/code-mode `source`). */
+export let browseScript = <T>(
+  env: Env,
+  bill: ScriptBill,
+  work: () => Promise<T>,
+): Promise<T> => {
+  let now = () => env.CLOCK?.now() ?? Date.now()
+  return onHold(
+    env,
+    bill.space,
+    browserDollars(HOSTED_LIMITS.wallMs),
+    'models',
+    async (spent) => {
+      let began = now()
+      try {
+        return await work()
+      } finally {
+        spent(browserDollars(now() - began))
+      }
+    },
+    { source: 'browser', person: bill.person },
+  ).catch((error) => {
+    throw error instanceof ModelError && error.code == 'limit'
+      ? refuse('limit', error.message)
+      : error
+  })
 }

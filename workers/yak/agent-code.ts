@@ -29,6 +29,22 @@ import { outlasted } from './outlast.ts'
 import { connectedTools } from './connected-mcp.ts'
 import { admitted, hearing } from './refusals.ts'
 import { reporter } from './defects.ts'
+import { sharing } from './lib/shared.ts'
+import { url } from '@yaks/platform/host'
+import type { Env } from './env.ts'
+
+// The puppeteer a script's browser runs (puppeteer-asset.ts), read from this
+// version's assets once per isolate, and only by a script that browses.
+let modules = new WeakMap<Env['ASSETS'], string>()
+let puppeteer = (env: Env) =>
+  sharing(modules, env.ASSETS, async () => {
+    let r = await env.ASSETS.fetch(new Request(url(env, '/_puppeteer.js')))
+    if (r.ok) return await r.text()
+    await r.body?.cancel()
+    throw new Error(`script puppeteer ${r.status}`)
+  })
+// Whether a script here may launch a browser.
+let browsing = (env: Env) => !!(env.LOADER && env.BROWSER_SESSION)
 // Both agent doors offer short executions over the connector's tools. Each
 // nested call reads the caller's reach anew, including apps just deployed.
 // A host that narrows a turn once it heard words it cannot vouch for says
@@ -117,6 +133,7 @@ export let coded = <T extends Options>(
       {
         files,
         limits: HOSTED_LIMITS,
+        ...browsing(ctx.env) ? { browser: () => puppeteer(ctx.env) } : {},
         clock: ctx.env.CLOCK,
         report: opts.report,
         refused: opts.refused,
@@ -153,6 +170,7 @@ export let coded = <T extends Options>(
   let described = definition([yaks, { name: 'mcp', tools: remoteTools }], {
     files: {},
     limits: HOSTED_LIMITS,
+    ...browsing(ctx.env) ? { browser: () => puppeteer(ctx.env) } : {},
   })
   let code: Tool = {
     ...described,
