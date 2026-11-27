@@ -1,7 +1,8 @@
 // A wake aimed at a persona knocks its operator each time it fires, committed
 // and run as `session_woken` is: the session a person opened wearing it, else
 // the project, where the knock waits for the next session at work. One aimed
-// at a topic knocks the session opened on it.
+// at a topic knocks the session opened on it, and one aimed at a session
+// knocks that session, whose listener says it.
 
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -26,6 +27,7 @@ import { sessionDoc } from './comp.ts'
 import { statusComputed } from './state.ts'
 import { running } from './run.ts'
 import { awaited } from './woken.ts'
+import { listen } from './listen.ts'
 
 let vocab = loadVocab([
   kernelDoc,
@@ -194,6 +196,50 @@ for (let [who, sessions, heard, lines = []] of attended) {
     )
   })
 }
+
+// A session's own wake to come back to something later.
+let BACK = 'The window has reset: start T-4036.'
+let back = (b: Awaited<ReturnType<typeof box>>, target: string) =>
+  b.g.apply([{
+    entity: { eid: 'back' },
+    wake: { at: new Date(SAT).toISOString(), target, note: BACK },
+  }], { trusted: true })
+
+let aimed: [string, [string, object][], string][] = [
+  ['that session', [['operator', { operator: true }], ['me', {}]], 'me'],
+  [
+    "its project's operator once that session is over",
+    [['operator', { operator: true }], ['me', { ended: true }]],
+    'operator',
+  ],
+]
+for (let [who, sessions, target] of aimed) {
+  test(`a wake aimed at a session knocks ${who}`, async () => {
+    let b = await box(...sessions)
+    await back(b, 'me')
+    equal((await fire(b, SAT)).filter((k) => k.body == BACK), [{
+      target,
+      body: BACK,
+    }])
+  })
+}
+
+test('a wake that fires while its session listens is a line the listener says', async () => {
+  let b = await box(['operator', { operator: true }], ['me', {}])
+  await back(b, 'me')
+  let lines: string[] = [], waits = 0
+  await listen(b.g, null, 'me', {
+    out: (line) => lines.push(line),
+    // the listener waits with nothing to say, and the wake fires meanwhile
+    every: async () => {
+      if (waits++) throw new Error('the fired wake was never said')
+      await tick(b.g, SAT)
+      await b.fx.idle()
+    },
+    once: true,
+  })
+  equal([waits, lines.length, lines[0].endsWith(BACK)], [1, 1, true])
+})
 
 test('a wake still to fire names the session it reaches as awaited', async () => {
   let { g } = await box(['head', on], ['asked', on], ['worker', {}])

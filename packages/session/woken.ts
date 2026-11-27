@@ -10,6 +10,11 @@
 // its project, where the knock waits for the next session at work
 // (./listen.ts).
 //
+// Aimed at a session, it knocks that session, which hears it in its
+// `yak session listen` (./listen.ts): an agent that sets a wake to come back
+// to something later aims it at itself. Once that session is over, the knock
+// goes to its project's operator, else its project ({@link targets}).
+//
 // Aimed at a topic, it knocks the session opened on that topic (@yaks/topic's
 // `session.topic`, read by name too): a goal that is its own topic, as a
 // project is, has one long-lived session that stays on it, which nobody opened
@@ -77,9 +82,10 @@ export let awaited = async (g: G): Promise<Set<Eid>> => {
   return new Set(reached.filter((s): s is Eid => !!s))
 }
 
-/** The knock a wake owes for its latest firing: to its persona's operator, or
- * to the session opened on its topic. None where `eid` is no wake aimed at
- * either, it has not fired, or that firing was knocked for already. */
+/** The knock a wake owes for its latest firing: to the session it is aimed
+ * at, to its persona's operator, or to the session opened on its topic. None
+ * where `eid` is no wake aimed at any of them, it has not fired, or that
+ * firing was knocked for already. */
 export let woken = async (g: G, eid: Eid): Promise<Bundle[]> => {
   if (!g.vocab.comp('knock') || !g.vocab.comp('wake')) return []
   let [row] = await g.get(
@@ -92,9 +98,11 @@ export let woken = async (g: G, eid: Eid): Promise<Bundle[]> => {
   if (!target || !at) return []
   let knock = derivedEid(`session woken ${eid} ${at}`)
   if ((await g.get([knock], ['knock']))[0]?.knock) return []
-  let persona = g.vocab.comp('persona') &&
-    (await g.get([target], ['persona']))[0]?.persona
-  let to = persona
+  let [aim] = await g.get(
+    [target],
+    [SESSION, 'persona'].filter((c) => g.vocab.comp(c)),
+  )
+  let to = aim?.persona || aim?.[SESSION]
     ? (await targets(g, [target], new Set()))[0]
     : await attending(g, target)
   if (!to) return []
