@@ -43,6 +43,15 @@
 // statements and a handful of bound parameters, whatever is already in the
 // file. See overlay_test.ts, which measures it.
 //
+// That holds only while SQLite reads the CTE in place, which takes two things.
+// Each CTE is `not materialized`, or SQLite copies one a statement names twice
+// whole. And each column of the batch's arm has its committed column's
+// affinity (`typed`): SQLite flattens a `union all` into the statement that
+// joins it only when its arms' columns agree in affinity, and a value read
+// out of JSON has none. Flattened, a join on the owner is a primary-key lookup
+// into the committed table; left whole, it is a scan of the committed table,
+// on every write, whatever the batch.
+//
 // A possible client-side extension, unbuilt on purpose: this is all just a
 // query, so a browser that keeps its cache as tables could run the same
 // compiled rule against the same overlay. Nothing here assumes a server — but
@@ -55,10 +64,12 @@ import { comps, dead } from '@yaks/graph/bundle'
 import {
   as,
   call,
+  cast,
   col,
   type Cte,
   type Driver,
   each,
+  type Expr,
   fn,
   lit,
   not,
@@ -113,6 +124,24 @@ let stored = (v: Vocab, comp: string): string[] =>
 // The spine's own columns. Fixed, because the identity table is fixed (ddl.ts
 // SPINE); `archetype` rides with it where the vocabulary knows one.
 let SPINE = ['id', 'eid', 'num', 'prefix', 'archetype']
+// Their affinities, as ddl.ts declares them.
+let SPINED: Record<string, Affinity> = {
+  id: 'integer',
+  eid: 'text',
+  num: 'integer',
+  prefix: 'text',
+  archetype: 'integer',
+}
+
+type Affinity = 'text' | 'real' | 'integer' | 'blob'
+
+// A batch value read out of its JSON row, with the affinity of the committed
+// column it stands beside. Every value here was lowered for that column
+// (`lower`), so the cast changes no value the column would have kept: a JSON
+// value's text becomes the binary JSON the column holds, which `json()` reads
+// the same.
+let typed = (e: Expr, affinity: Affinity, json: boolean): Expr =>
+  cast(json ? fn('jsonb', e) : e, affinity)
 
 // What a property stores, the way ./write.ts lowers it: a boolean is 0/1, a
 // reference is its target's integer id, a JSON value is its JSON text (which
@@ -218,36 +247,57 @@ export let overlay = (
   // of it is committed.
   let unwritten = new Set(unraised(driver, vocab))
   // One component's arm: the committed rows it did not touch, then its own.
+  // `kinds` is each column's affinity, the key's first, and whether it holds
+  // JSON.
   let arm = (
     comp: string,
-    cols: string[],
     key: string,
+    cols: string[],
+    kinds: [Affinity, boolean][],
     from: string,
     out: number[],
     rows: Param[][],
   ) => {
     let names = [key, ...cols.map(field)]
-    let q: Query = select({
-      cols: names.map((c) => unwritten.has(from) ? as(lit(null), c) : col(c)),
-      ...unwritten.has(from) ? { where: lit(0) } : {
+    let mine = rows.length
+      ? select({
+        cols: names.map((c, i) =>
+          as(
+            typed(
+              fn('json_extract', col('value'), lit(`$[${i}]`)),
+              ...kinds[i],
+            ),
+            c,
+          )
+        ),
+        from: call('json_each', [val(JSON.stringify(rows))]),
+      })
+      : undefined
+    let committed = (): Query =>
+      select({
+        cols: names.map((c) => col(c)),
         from: table(from),
         where: out.length ? not(oneOf(col(key), out)) : undefined,
-      },
-    })
-    if (rows.length) {
-      q = unionAll(
-        q,
-        select({
-          cols: names.map((_, i) =>
-            fn('json_extract', col('value'), lit(`$[${i}]`))
-          ),
-          from: call('json_each', [val(JSON.stringify(rows))]),
-        }),
-      )
-    }
-    parts.push({ name: OVER + comp, q })
+      })
+    // A table nothing has raised holds no committed rows: the batch's are
+    // the whole of it.
+    let q: Query = unwritten.has(from)
+      ? mine ??
+        select({ cols: names.map((c) => as(lit(null), c)), where: lit(0) })
+      : mine
+      ? unionAll(committed(), mine)
+      : committed()
+    parts.push({ name: OVER + comp, q, materialized: false })
     covers.push(comp)
   }
+  // What a component's columns store as, its owner first.
+  let kinds = (comp: string, cols: string[]): [Affinity, boolean][] => [
+    ['integer', false],
+    ...cols.map((c): [Affinity, boolean] => [
+      vocab.prop(comp, c)!.affinity,
+      isJsonb(vocab, comp, c),
+    ]),
+  ]
 
   for (let [comp, rows] of touched) {
     let cols = stored(vocab, comp)
@@ -271,8 +321,9 @@ export let overlay = (
     }
     arm(
       comp,
-      cols,
       'entity',
+      cols,
+      kinds(comp, cols),
       comp,
       [...rows.keys()].map((e) => ids.get(e)!),
       [...rows].flatMap(([eid, patch]) => {
@@ -297,8 +348,9 @@ export let overlay = (
     let cols = (vocab.comp('archetype') ? SPINE : SPINE.slice(0, 4)).slice(1)
     arm(
       'entity',
-      cols,
       'id',
+      cols,
+      ['id', ...cols].map((c): [Affinity, boolean] => [SPINED[c], false]),
       'entity',
       [...killed].map((e) => ids.get(e)!),
       fresh.map((
@@ -322,7 +374,8 @@ export let overlay = (
   // touch, reads as one nobody wears.
   for (let comp of only ?? []) {
     if (unwritten.has(comp) && !touched.has(comp)) {
-      arm(comp, stored(vocab, comp), 'entity', comp, [], [])
+      let cols = stored(vocab, comp)
+      arm(comp, 'entity', cols, kinds(comp, cols), comp, [], [])
     }
   }
   let over = new Set(covers)

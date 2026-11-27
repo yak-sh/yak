@@ -4035,6 +4035,12 @@ export let bound = (
  * references the way a `.fields` projection does
  * (`speaker.recording.meeting`), so a rule's variables (./match.ts) are read
  * exactly as every other query reads them.
+ *
+ * It is bound correlated: a rule's pattern is one table of a join whose rows
+ * come from its batch or from the pattern it joins, so each test probes the
+ * row in hand. Selecting every owner of a component as a set instead reads
+ * the whole of it, and under a batch's overlay (@yaks/sqlite overlay.ts) that
+ * is every row the file holds, on every write.
  */
 export let boundReads = (
   ast: And,
@@ -4050,7 +4056,7 @@ export let boundReads = (
     opts,
     d,
     reads,
-    undefined,
+    { correlated: true },
     undefined,
     fields,
   )

@@ -43,17 +43,15 @@ test('one pattern is the ordinary query it looks like', () => {
   assertEquals(hits.map((h) => h.entities), [['p1']])
 })
 
-test('a gate is a left join that found nothing', () => {
+test('a gate is a component the matched entity does not wear', () => {
   let { driver, s } = floor()
   // A gate is about the matched entity: `+!shelf` is a product that is not on
-  // a shelf. The gate joins `shelf` under a name of its own and requires the
-  // owner column to be null.
+  // a shelf.
   let m = match('.product, +!shelf')
   assertEquals(matched(driver, m, shop).map((h) => h.entities[0]).sort(), [
     'p1',
     'p2',
   ])
-  assert(render(rule(m, shop)).sql.includes('is null'))
   s.tx((tx) => tx.patch([{ entity: { eid: 'p1' }, shelf: { aisle: 'a' } }]))
   assertEquals(matched(driver, m, shop).map((h) => h.entities[0]), ['p2'])
 })

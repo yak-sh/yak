@@ -43,17 +43,25 @@ export let matched = (
       opts,
       anchored ? on : { ...on, touched: undefined },
     )
+    // The statement is not `distinct` (@yaks/sql match.ts), so a binding it
+    // finds twice is kept once here.
+    let seen = new Set<string>()
     return driver.query({
       ...statement,
       with: [...over, ...statement.with ?? []],
-    }).map((row: Row) => ({
-      entities: plan.patterns.map((p, i) =>
-        p.makes ? null : String(row[`e${i}`])
-      ),
-      vars: Object.fromEntries(
-        plan.vars.map((name) => [name, row[`v_${name}`]]),
-      ),
-    }))
+    }).flatMap((row: Row) => {
+      let key = JSON.stringify(row)
+      if (seen.has(key)) return []
+      seen.add(key)
+      return [{
+        entities: plan.patterns.map((p, i) =>
+          p.makes ? null : String(row[`e${i}`])
+        ),
+        vars: Object.fromEntries(
+          plan.vars.map((name) => [name, row[`v_${name}`]]),
+        ),
+      }]
+    })
   })
 
 /**
