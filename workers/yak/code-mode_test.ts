@@ -1,6 +1,6 @@
 import { clock, equal, match, ok, test, throws } from '@yaks/testing'
 import { connector, endpoint, fresh, meta, seed } from './probe.ts'
-import { evaluate, evaluating } from '../../packages/code-mode/testing.ts'
+import { evaluate, evaluating, repl } from '../../packages/code-mode/testing.ts'
 import {
   catalog,
   declarations,
@@ -157,6 +157,39 @@ test('a script that names browser launches on the lent binding, and its browsers
   ok(codeMode(one.catalog, one.run, evaluate, strip, { files: {}, browser })
     .description!.includes('browser.launch()'))
   delete state.closedBrowsers
+})
+
+test('a REPL carries top-level values, declarations and its storage from cell to cell', async () => {
+  let cells = repl()
+  let cell = (script: string) =>
+    execute(script, one.catalog, one.run, one.asked, cells, strip, {
+      repl: 'a repl',
+    })
+  let first = await cell(`
+    const shared = { n: 1 }
+    let alias = shared, count: number = 2
+    function twice(x: number) { return x * 2 }
+    class Box { constructor(public v: number) {} }
+    let fn = () => 1
+    storage.kv.put('note', 'kept')
+    return count`)
+  equal(first.value, 2)
+  equal(first.repl, 'a repl')
+  equal(first.dropped, ['fn'])
+  let second = await cell(`
+    shared.n++
+    count = twice(count)
+    let made = new Box(alias.n)
+    return [alias.n, count, made.v, storage.kv.get('note'), typeof fn]`)
+  equal(second.value, [2, 4, 2, 'kept', 'undefined'])
+  equal(second.dropped, undefined)
+  let third = await cell(`
+    let twice = 'now a value'
+    throw new Error(twice + ' ' + count)`)
+  equal(third.error, 'now a value 4')
+  let fourth = await cell('return [twice, made.v]')
+  equal(fourth.error, undefined)
+  equal(fourth.value, ['now a value', 2])
 })
 
 test('code mode names its tool sets, and a guessed set or name says which exist', async () => {

@@ -1,0 +1,80 @@
+{
+  "$id": "urn:uuid:fa38c4a3-8386-495c-924b-614410fc79ef",
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "code mode",
+  "kinds": {
+    "repl": {
+      "$id": "urn:uuid:451d280d-87cd-4a37-94a8-4fe02fd151fc",
+      "description": "A REPL on yaks.app: code_mode cells whose top-level values and storage last from one cell to the next until it ends.",
+      "examples": [
+        {
+          "repl": {
+            "until": "2026-11-27T19:00:00Z"
+          }
+        }
+      ]
+    },
+    "cell": {
+      "$id": "urn:uuid:e778f3d9-17dd-4268-b268-b1c5111f0b4e",
+      "description": "One script run in a REPL, and what it answered.",
+      "examples": [
+        {
+          "cell": {
+            "repl": "<repl eid>",
+            "script": "let rows = await fs.readFile('/tmp/rows.json', 'utf8')\nreturn rows.length",
+            "answer": { "value": 2, "calls": [] }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "repl": {
+      "$id": "urn:uuid:451d280d-87cd-4a37-94a8-4fe02fd151fc",
+      "component": true,
+      "type": "object",
+      "properties": {
+        "app": {
+          "$id": "urn:uuid:bfd16d67-a577-485a-b313-d892d95a2428",
+          "type": "string",
+          "death": "keep",
+          "description": "the app its cells' connection sentinels and /apps draft default to, by eid; none for a REPL started without one"
+        },
+        "until": {
+          "$id": "urn:uuid:c0462e38-de04-4a94-8fef-8603af188b26",
+          "type": "string",
+          "format": "date-time",
+          "description": "when it ends unless another cell runs: an hour after its last cell. Its values and storage are dropped then."
+        }
+      },
+      "description": "A REPL: code_mode cells run with repl set to its id share their top-level values and `storage`, kept in a Durable Object facet of its own."
+    },
+    "cell": {
+      "$id": "urn:uuid:e778f3d9-17dd-4268-b268-b1c5111f0b4e",
+      "component": true,
+      "type": "object",
+      "properties": {
+        "repl": {
+          "$id": "urn:uuid:2487f24d-d5c0-4292-8ad1-60ced2656076",
+          "type": "string",
+          "ref": "repl",
+          "death": "cascade",
+          "description": "the REPL it ran in"
+        },
+        "script": {
+          "$id": "urn:uuid:9a736f4a-f8cf-41ca-b54e-c9f1b5b13b1a",
+          "type": "string",
+          "description": "the JavaScript or TypeScript it ran"
+        },
+        "answer": {
+          "$id": "urn:uuid:d7103cc1-0d28-4fda-b420-f1e75273de41",
+          "type": "object",
+          "description": "what code_mode answered: value, calls, error, and dropped, the top-level names whose values could not be kept"
+        }
+      },
+      "description": "One script run in a REPL, and its answer."
+    }
+  }
+}

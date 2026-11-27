@@ -25,7 +25,23 @@ export type Given = {
    * launches on the evaluator's `env.BROWSER`, and every browser it launched
    * is closed when the run ends */
   browser?: string
+  /** a REPL's cell: the Worker exports `Cell`, a Durable Object class whose
+   * storage is the REPL's, and keeps the cell's top-level values there
+   * (./repl.ts) */
+  cell?: boolean
 }
+
+/** Where a cell keeps its top-level values, in its storage's kv. */
+export let VALUES = '$repl:values'
+
+// The signature user code runs in, and a cell's two more: its storage and
+// what it carries from the cells before it.
+let signature = (cell?: boolean) =>
+  `export default async function execute(tools, results, fs, browser${
+    cell ? ', storage, $carried' : ''
+  }) {`
+/** Where ./repl.ts `carry` declares what a cell carries, before its code. */
+export let CARRIED = '/*carried*/'
 
 /** User code lives in its own module, its TypeScript read as JavaScript by
  * the host's `strip`. The trusted entrypoint loads it inside its catch, with
@@ -35,15 +51,18 @@ export let source = async (
   entries: Entry[],
   most: number,
   strip: Strip,
-  { wallMs = 30_000, files = false, browser }: Given = {},
+  { wallMs = 30_000, files = false, browser, cell }: Given = {},
 ): Promise<Record<string, string>> => ({
   ...files ? { 'files.js': fileModule } : {},
   ...browser ? { 'puppeteer.js': browser } : {},
-  'user.js': await strip(
-    'user.ts',
-    `export default async function execute(tools, results, fs, browser) {\n${script}\n}`,
-  ),
-  'script.js': `import { WorkerEntrypoint } from 'cloudflare:workers';
+  'user.js': cell
+    ? `${signature(cell)}\n${CARRIED}\n${
+      body(await strip('user.ts', `${signature(cell)}\n${script}\n}`))
+    }\n}`
+    : await strip('user.ts', `${signature()}\n${script}\n}`),
+  'script.js': `import { ${
+    cell ? 'DurableObject' : 'WorkerEntrypoint'
+  } } from 'cloudflare:workers';
 ${files ? "import { filesystem } from './files.js';" : ''}
 ${browser ? "import puppeteer from './puppeteer.js';" : ''}
 const wait = scheduler.wait.bind(scheduler);
@@ -51,14 +70,27 @@ const race = Promise.race.bind(Promise);
 const stringify = JSON.stringify.bind(JSON);
 const encode = new TextEncoder().encode.bind(new TextEncoder());
 const Controller = AbortController;
-export default class extends WorkerEntrypoint {
+${cell ? keeping : ''}
+${
+    cell
+      ? 'export class Cell extends DurableObject {'
+      : 'export default class extends WorkerEntrypoint {'
+  }
   async run(bridge) {
     let timer = new Controller();
     let cancel = timer.abort.bind(timer);
     let deadline = wait(${wallMs}, {signal:timer.signal}).then(() => ({error:${
     JSON.stringify(timedOut(wallMs))
   }}));
-    let launched = [];
+    let launched = [];${
+    cell
+      ? `
+    let kv = this.ctx.storage.kv;
+    let carried = {values: kv.get(${
+        JSON.stringify(VALUES)
+      }) ?? {}, capture: null};`
+      : ''
+  }
     try {
       let tools = Object.create(null);
       for (let [set, name] of ${JSON.stringify(entries.map((e) => e.path))}) {
@@ -95,16 +127,21 @@ export default class extends WorkerEntrypoint {
           return opened;
         }}`
       : 'undefined'
-  });
+  }${cell ? ', {sql: this.ctx.storage.sql, kv}, carried' : ''});
         return {value: value === undefined ? null : value};
       };
-      let text = stringify(await race([work(), deadline]));
+      let answer = await race([work(), deadline]);${
+    cell ? '\n      Object.assign(answer, keep(kv, carried));' : ''
+  }
+      let text = stringify(answer);
       if (encode(text).length > ${most}) throw new Error(${
     JSON.stringify(TOO.system)
   });
       return text;
     } catch (error) {
-      return stringify({error: String(error?.message ?? error).slice(0,1024)});
+      return stringify({error: String(error?.message ?? error).slice(0,1024)${
+    cell ? ', ...keep(kv, carried)' : ''
+  }});
     } finally {
       cancel();
       await Promise.allSettled(launched.map((opened) => opened.close()));
@@ -112,3 +149,32 @@ export default class extends WorkerEntrypoint {
   }
 }`,
 })
+
+// The body of the function `strip` read, between its signature's line and
+// its closing brace.
+let body = (stripped: string) =>
+  stripped.slice(stripped.indexOf('{\n') + 2, stripped.lastIndexOf('}'))
+
+// What a cell keeps of its top-level values once it ends, however it ended:
+// each a structured clone can copy, together in one value so two names for
+// one object stay one object. Each other (a function, a promise, a socket)
+// is dropped, and the answer names it.
+let keeping = `function keep(kv, carried) {
+  let values = carried.capture ? carried.capture() : carried.values;
+  let kept = {};
+  let dropped = [];
+  for (let [name, value] of Object.entries(values)) {
+    try {
+      structuredClone(value);
+      kept[name] = value;
+    } catch {
+      dropped.push(name);
+    }
+  }
+  try {
+    kv.put(${JSON.stringify(VALUES)}, kept);
+  } catch (error) {
+    return {$kept: [], dropped: Object.keys(values), unkept: String(error?.message ?? error).slice(0, 1024)};
+  }
+  return {$kept: Object.keys(kept), ...dropped.length ? {dropped} : {}};
+}`

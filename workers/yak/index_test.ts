@@ -11,6 +11,7 @@ import {
   OUTLAST,
   PUBLIC_DIRECTORY,
   PURGER,
+  REPL,
   STORE,
   WIRE,
 } from './facets/kernel-worker.ts'
@@ -22,6 +23,7 @@ import { Purger } from '@yaks/workerd/purge'
 import { Outlast } from './outlast-object.ts'
 import { LexiconStore } from './lexicon.ts'
 import { Listening } from './chat.ts'
+import { Repl } from './repl-object.ts'
 
 // Every method the tracker's wrap gives the class, inherited ones too.
 let methods = (C: { prototype: object }) =>
@@ -38,6 +40,7 @@ test('each deferred object answers every method its class has', () => {
       OUTLAST,
       LEXICON,
       CHATS,
+      REPL,
     ]
       .map((m) => [...m].sort()),
     [
@@ -49,6 +52,7 @@ test('each deferred object answers every method its class has', () => {
       Outlast,
       LexiconStore,
       Listening,
+      Repl,
     ]
       .map(methods),
   )

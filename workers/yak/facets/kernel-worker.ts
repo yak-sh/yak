@@ -41,13 +41,10 @@ let shelved = (env: Env): Env => ({
   OPERATOR_CACHE: openOperators,
 })
 
-// Agent entrypoints share the same isolated code evaluator, loaded with the
-// first of them.
-let agentEnv = async () => {
-  let [{ evaluator }, { reserveScript, browseScript }] = await Promise.all([
-    import('../code-runtime.ts'),
-    import('../script-spend.ts'),
-  ])
+// What a script's Worker is lent (code-runtime.ts `Lend`), the same for a
+// script run in the request and a REPL's cell run in its object: egress for
+// its caller, the tail that settles its bill, and yak-browser's browser.
+let lending = (env: Env): import('../code-runtime.ts').Lend => {
   let services = loopback as {
     ScriptOutbound(
       opts: { props: { caller?: Caller } },
@@ -56,6 +53,21 @@ let agentEnv = async () => {
       opts: { props: { call: string } },
     ): import('../code-runtime.ts').Tail
   }
+  return {
+    outbound: (caller) =>
+      services.ScriptOutbound({ props: caller ? { caller } : {} }),
+    tail: (call) => services.ScriptTail({ props: { call } }),
+    ...env.BROWSER_SESSION ? { browser: env.BROWSER_SESSION } : {},
+  }
+}
+
+// Agent entrypoints share the same isolated code evaluator, loaded with the
+// first of them.
+let agentEnv = async () => {
+  let [{ evaluator }, { reserveScript, browseScript }] = await Promise.all([
+    import('../code-runtime.ts'),
+    import('../script-spend.ts'),
+  ])
   return (env: Env): Env => ({
     ...shelved(env),
     ...(env.LOADER
@@ -74,18 +86,17 @@ let agentEnv = async () => {
                 return bridge.file!(app, args)
               }
             }(),
-          (caller) =>
-            services.ScriptOutbound({ props: caller ? { caller } : {} }),
-          async (bill) => {
-            let tail = services.ScriptTail({ props: { call: bill.call } })
-            return { tail, release: await reserveScript(env, bill) }
+          {
+            lend: lending(env),
+            permit: (bill) => reserveScript(env, bill),
+            browse: (bill, work) => browseScript(env, bill, work),
+            ...env.REPLS
+              ? {
+                repls: (repl: string) =>
+                  env.REPLS!.get(env.REPLS!.idFromName(repl)),
+              }
+              : {},
           },
-          env.BROWSER_SESSION
-            ? {
-              session: env.BROWSER_SESSION,
-              hold: (bill, work) => browseScript(env, bill, work),
-            }
-            : undefined,
         ),
       }
       : {}),
@@ -178,6 +189,7 @@ export let PURGER = ['purge', ...DURABLE] as const
 export let OUTLAST = ['call', ...DURABLE] as const
 export let LEXICON = ['admit', 'grow', 'put', 'forget', ...DURABLE] as const
 export let CHATS = ['listen', 'stop', 'alarm', 'voice', 'voiced'] as const
+export let REPL = ['run', 'alarm'] as const
 
 // An entrypoint or object whose every call enters the tracker's boundary as
 // `<Name> <method>`, answered by what `make` returns from its context and env.
@@ -272,6 +284,18 @@ export let classes: Record<string, Deferred> = {
   ),
   // A bot listening on a chat platform's socket (chat.ts): yaks.app's own,
   // hearing each server a space added it to, or one a space brought.
+  // One object per REPL, running each of its cells as its facet
+  // (repl-object.ts).
+  Repl: entered(
+    DurableObject,
+    REPL,
+    async (ctx: never, env) =>
+      new (await import('../repl-object.ts')).Repl(
+        ctx,
+        env.LOADER!,
+        lending(env),
+      ),
+  ),
   Chats: entered(
     DurableObject,
     CHATS,

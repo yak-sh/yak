@@ -262,6 +262,8 @@ export let operatorConfig: Config = {
     { use: '@yaks/anthropic', facets: ['vocab'] },
     { use: '@yaks/openai', facets: ['vocab'] },
     { use: '@yaks/tools', facets: ['vocab'] },
+    // Its REPLs and their cells (repl.ts).
+    { use: '@yaks/code-mode', facets: ['vocab'] },
     { use: '@yaks/context', facets: ['vocab'] },
     { use: '@yaks/effects', facets: ['vocab'] },
     { use: '@yaks/edge', facets: ['vocab'] },

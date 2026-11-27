@@ -17,6 +17,7 @@ export let {
   Outlast,
   Lexicon,
   Chats,
+  Repl,
   Files,
   Site,
   Uses,

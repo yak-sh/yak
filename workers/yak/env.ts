@@ -394,6 +394,13 @@ export type Env = {
   // facets/kernel-worker.ts `Chats`). A test run binds none, so nothing
   // listens.
   CHATS?: import('./chat.ts').Chats
+  // One object per REPL, running its cells as its facet (repl-object.ts,
+  // facets/kernel-worker.ts `Repl`). A test run binds none, so code_mode
+  // refuses a REPL.
+  REPLS?: {
+    idFromName(name: string): unknown
+    get(id: unknown): ReturnType<import('./code-runtime.ts').Repls>
+  }
   // yak-esbuild, whose container compiles an app's TypeScript and npm imports
   // at deploy, and which strips TypeScript to JavaScript for the module walk
   // and code mode, so sucrase is in its upload and not this one (esbuild.ts

@@ -29,6 +29,8 @@ import { outlasted } from './outlast.ts'
 import { connectedTools } from './connected-mcp.ts'
 import { admitted, hearing } from './refusals.ts'
 import { reporter } from './defects.ts'
+import { opened, operatorOf, ran } from './repl.ts'
+import type { Answer } from '@yaks/code-mode'
 import { sharing } from './lib/shared.ts'
 import { url } from '@yaks/platform/host'
 import type { Env } from './env.ts'
@@ -115,18 +117,19 @@ export let coded = <T extends Options>(
       ? { app: at.app.eid, level: at.who.role, person: ctx.person }
       : undefined
     let evaluate = ctx.env.CODE_MODE ?? unavailable
-    return codeMode(
+    let spaced = async () => at?.space ?? (await inSpace(runCtx, args)).space
+    let repl = await replOf(args, spaced, at?.app.eid)
+    let tool = codeMode(
       scripts(),
       scriptRunner(),
       async (modules, bridge, signal) => {
-        let paying = ctx.env.LOADER
-          ? at?.space ?? (await inSpace(runCtx, args)).space
-          : undefined
+        let paying = ctx.env.LOADER ? await spaced() : undefined
         return await evaluate(modules, bridge, signal, {
           caller,
           bill: paying
             ? { space: paying, person: ctx.person, call }
             : undefined,
+          ...repl ? { repl: repl.eid } : {},
         })
       },
       ctx.env.ESBUILD ? stripping(ctx.env) : unavailable,
@@ -163,8 +166,48 @@ export let coded = <T extends Options>(
         },
         kept: resultStore(ctx, args, local),
         hears: opts.hears,
+        ...repl ? { repl: repl.eid } : {},
       },
     )
+    if (!repl || args.script === undefined) return tool
+    return {
+      ...tool,
+      run: async (asked, graph) => {
+        let answer = await tool.run(asked, graph)
+        let value = valueIn(answer)?.value as Answer | undefined
+        if (value) {
+          await ran(repl.operator, repl.eid, String(args.script), value, {
+            person: ctx.person!,
+            now: ctx.env.CLOCK?.now() ?? Date.now(),
+          })
+        }
+        return answer
+      },
+    } satisfies Tool
+  }
+  // The REPL a script asks to run in (repl.ts): its rows are its space's.
+  let replOf = async (
+    args: Args,
+    spaced: () => Promise<{ eid: string }>,
+    app?: string,
+  ) => {
+    if (args.repl == null) return
+    if (typeof args.repl != 'string' || !args.repl) {
+      throw refuse('arguments', 'repl takes "new" or a REPL id')
+    }
+    if (args.script === undefined) {
+      throw refuse('arguments', 'A REPL runs a script; pass script with repl.')
+    }
+    if (!ctx.env.REPLS || !ctx.person) {
+      throw refuse('unavailable', 'REPLs are unavailable here')
+    }
+    let operator = operatorOf(ctx.env, (await spaced()).eid)
+    let eid = await opened(operator, args.repl, {
+      person: ctx.person,
+      app,
+      now: ctx.env.CLOCK?.now() ?? Date.now(),
+    })
+    return { eid, operator }
   }
   let yaks = { name: 'yaks', tools: [...appTools(tools), ...own?.tools ?? []] }
   let described = definition([yaks, { name: 'mcp', tools: remoteTools }], {
@@ -187,6 +230,13 @@ export let coded = <T extends Options>(
         draft: str(
           'An open draft id for this app. Omit to use app_files draft selection.',
         ),
+        ...ctx.env.REPLS
+          ? {
+            repl: str(
+              'Run the script as a cell of a REPL: "new" starts one, and the answer\'s repl is its id for the next cell. A cell\'s top-level let, const and var values carry to the next cell when structured clone can copy them (the answer lists dropped names), function and class declarations carry as source, and storage.sql and storage.kv are its SQLite database. /tmp lasts one cell. A REPL ends an hour after its last cell. Omit for a fresh run.',
+            ),
+          }
+          : {},
       },
     },
     run: async (call, graph) => {

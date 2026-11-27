@@ -288,6 +288,12 @@ class_name = "Lexicon"
 name = "CHATS"
 class_name = "Chats"
 
+# One object per REPL: each code_mode cell run with `repl` runs as its facet,
+# so the cells share one database (repl-object.ts, index.ts `Repl`).
+[[durable_objects.bindings]]
+name = "REPLS"
+class_name = "Repl"
+
 # Each deploy starts its own timer. The earliest expiry resets an active
 # object onto the latest code, including work that started after that deploy.
 # Give a busy Operator time for the model and its tools across a deploy burst.
@@ -351,6 +357,10 @@ deleted_classes = ["Workspaces"]
 [[migrations]]
 tag = "v12"
 new_sqlite_classes = ["Chats"]
+
+[[migrations]]
+tag = "v13"
+new_sqlite_classes = ["Repl"]
 
 # Outbound mail as a binding rather than the REST API (T-33684): Cloudflare
 # Email Sending, authorized by this deploy instead of by a token, so nothing
@@ -761,6 +771,10 @@ class_name = "Lexicon"
 name = "CHATS"
 class_name = "Chats"
 
+[[env.staging.durable_objects.bindings]]
+name = "REPLS"
+class_name = "Repl"
+
 # As above: a busy object finishes on its code for up to 30 minutes.
 [env.staging.durable_objects.code_update_strategy]
 mode = "deferred"
@@ -813,6 +827,10 @@ deleted_classes = ["Workspaces"]
 [[env.staging.migrations]]
 tag = "v12"
 new_sqlite_classes = ["Chats"]
+
+[[env.staging.migrations]]
+tag = "v13"
+new_sqlite_classes = ["Repl"]
 
 [[env.staging.send_email]]
 name = "MAIL"

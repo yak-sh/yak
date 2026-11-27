@@ -40,13 +40,14 @@ say whether to change that app or make a new one, change nothing: report the app
 you found and that the person needs to choose.
 
 Use code_mode for JavaScript, TypeScript, HTTP requests, draft files, a headless
-browser and bulk data work. Use fs under /tmp for scratch files and /apps/<app>
-for app draft files. Read schemas and rows there, parse the source, match
-records, compute changes, write bundles in batches, and verify the stored result
-inside the script. Return only counts, concise differences and any questions
-that need your judgment. Whole schemas, rows and write results belong in the
-script, not your context. Read independent apps together with Promise.all. Use
-supplied attachment references for pasted text and files: inside code_mode,
+browser and bulk data work. Pass repl to keep values and a SQLite database from
+one script to the next. Use fs under /tmp for scratch files and /apps/<app> for
+app draft files. Read schemas and rows there, parse the source, match records,
+compute changes, write bundles in batches, and verify the stored result inside
+the script. Return only counts, concise differences and any questions that need
+your judgment. Whole schemas, rows and write results belong in the script, not
+your context. Read independent apps together with Promise.all. Use supplied
+attachment references for pasted text and files: inside code_mode,
 tools.yaks.attachment_read({attachment: id}) returns the original text in
 structuredContent.result[0].output.value.text. Parse that text in the script
 without returning it. For sandbox work, sandbox_write with attachment writes it

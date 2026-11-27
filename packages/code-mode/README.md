@@ -71,6 +71,15 @@ A host that passes `browser`, puppeteer's module, gives a script that names
 `env.BROWSER`, which the host lends, and every browser the script launched is
 closed when the run ends. A script that does not name it loads no puppeteer.
 
+A host that passes `repl` runs the script as a cell of that REPL
+(`@yaks/code-mode/repl`). The cell's Worker exports `Cell`, a Durable Object
+class the host runs as one facet for every cell, so `storage.sql` and
+`storage.kv` are one database across cells. When a cell ends, its top-level
+values that structured clone can copy are kept there, and the host keeps their
+names and each function and class declaration's source (`cells`), so the next
+cell declares them again before its own code (`carry`). `declared` (./scan.ts)
+reads what a cell declares from its tokens.
+
 The runtime contract follows Cloudflare's
 [Worker Loader API](https://developers.cloudflare.com/dynamic-workers/api-reference/),
 [egress control](https://developers.cloudflare.com/dynamic-workers/usage/egress-control/)

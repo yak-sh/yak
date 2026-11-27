@@ -20,6 +20,7 @@ import {
   valueIn,
 } from '@yaks/tools'
 import { catalog, declarations } from './types.ts'
+import { described } from './repl.ts'
 import { source, timedOut, TOO } from './source.ts'
 import {
   browserDeclarations,
@@ -62,7 +63,15 @@ export type Receipt = {
   /** the tool or `Options.hears` marked the answer `heard` */
   heard?: true
 }
-export type Answer = { value: unknown; calls: Receipt[]; error?: string }
+export type Answer = {
+  value: unknown
+  calls: Receipt[]
+  error?: string
+  /** the REPL the cell ran in */
+  repl?: string
+  /** the cell's top-level names whose values could not be kept */
+  dropped?: string[]
+}
 /** The host admits reads of results kept by its model-facing harness. */
 export type Kept = {
   keep(value: unknown, source: Bundle): Promise<unknown>
@@ -87,6 +96,7 @@ let finished = (
   value: unknown,
   calls: Receipt[],
   error?: string,
+  more: Pick<Answer, 'repl' | 'dropped'> = {},
 ): Answer => {
   if (bytes(value) > LIMITS.systemBytes) {
     throw new CallError('limit', TOO.system)
@@ -95,6 +105,7 @@ let finished = (
     value,
     calls: structuredClone(calls),
     ...(error ? { error } : {}),
+    ...more,
   }
   return out
 }
@@ -110,6 +121,9 @@ export type Options = Pick<Opts, 'clock' | 'report' | 'refused'> & {
   /** puppeteer's module, read only for a script that names `browser`, which
    * launches a browser on the evaluator's `env.BROWSER` */
   browser?: () => Promise<string>
+  /** the REPL this execution is a cell of: its top-level values and its
+   * `storage` last from cell to cell (./repl.ts) */
+  repl?: string
   /** Execution limits advertised by this host. */
   limits?: typeof LIMITS
   /** the runner each nested call reaches, asked anew for every call
@@ -142,6 +156,7 @@ export let execute = async (
     limits = LIMITS,
     files,
   } = opts
+  let repl = opts.repl ? { repl: opts.repl } : {}
   if (
     script.length > LIMITS.scriptBytes || bytes(script) > LIMITS.scriptBytes
   ) {
@@ -320,7 +335,9 @@ export let execute = async (
           browser: opts.browser && /\bbrowser\b/.test(script)
             ? await opts.browser()
             : undefined,
+          cell: !!opts.repl,
         }))()
+        .then((modules) => opts.repl ? described(modules) : modules)
         .then((modules) => {
           controller.signal.throwIfAborted()
           return evaluate(modules, {
@@ -340,13 +357,22 @@ export let execute = async (
       new TextEncoder().encode(text).length > LIMITS.systemBytes
     ) throw new CallError('limit', TOO.system)
     let answer = JSON.parse(text)
+    let error = typeof answer.unkept == 'string'
+      ? `the cell's values could not be kept: ${answer.unkept}`
+      : answer.error
     return await finished(
       answer.value ?? null,
       calls,
-      typeof answer.error == 'string' ? answer.error.slice(0, 1024) : undefined,
+      typeof error == 'string' ? error.slice(0, 1024) : undefined,
+      {
+        ...repl,
+        ...Array.isArray(answer.dropped) && answer.dropped.length
+          ? { dropped: answer.dropped.map(String) }
+          : {},
+      },
     )
   } catch (e) {
-    return await finished(null, calls, message(e))
+    return await finished(null, calls, message(e), repl)
   } finally {
     active = false
     controller.abort()

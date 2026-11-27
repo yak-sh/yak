@@ -96,6 +96,40 @@ await fs.writeFile('/apps/reports/after-click.png', shot)
 return { title: await page.title(), url: page.url() }
 ```
 
+## A REPL
+
+Pass `repl: "new"` with a script to start a REPL, and pass the `repl` id from
+its answer to run the next cell in it. Each cell is a script like any other, and
+these carry from one cell to the next:
+
+- Top-level `let`, `const` and `var` values that structured clone can copy:
+  objects, arrays, maps, dates, bytes. Two names for one object stay one object.
+  The answer's `dropped` names a value that cannot be copied, such as a function
+  value or a promise.
+- `function` and `class` declarations, as their source.
+- `storage.sql`, a SQLite database, and `storage.kv`, a key-value store, which
+  last as long as the REPL.
+
+```ts ignore
+// repl: "new"
+const rows = await (await fetch('https://example.com/rows.json')).json()
+storage.sql.exec('create table seen (id text primary key)')
+return rows.length
+```
+
+```ts ignore
+// repl: the id the first cell's answer gave
+for (const row of rows) {
+  storage.sql.exec('insert or ignore into seen values (?)', row.id)
+}
+return storage.sql.exec('select count(*) as n from seen').one().n
+```
+
+`/tmp` lasts one cell. A REPL ends an hour after its last cell, and its values
+and storage go with it, so write what should last to an app with `fs` under
+`/apps/<app>` or with `tools.yaks`. Each cell and its answer is a
+`cell{repl, script, answer}` row in the space's Operator store.
+
 ## App Tests
 
 Use `app_test` to compile and run the draft's `*_test.ts` and `*_test.js` files.

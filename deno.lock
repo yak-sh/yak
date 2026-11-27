@@ -3827,7 +3827,8 @@
           "dependencies": [
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
-            "npm:@yaks/tools@0.2.30"
+            "npm:@yaks/tools@0.2.30",
+            "npm:@yaks/vocab@0.2.32"
           ]
         }
       },
