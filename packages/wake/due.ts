@@ -52,7 +52,7 @@ export let wakeOf = (b: Bundle): Wake | undefined =>
  *
  * This is the only read the package makes, and it is an ordinary query, so an
  * application that would rather run its own (a narrower filter, a page at a
- * time) can: `.wake.at<=<instant>&?watch`.
+ * time) can: `.wake.at<=now&?watch`, read at the instant.
  *
  * ```ts
  * import { due, ring } from '@yaks/wake'
@@ -69,11 +69,13 @@ export let due = (
   storage: Reads,
   now: number = Date.now(),
 ): Bundle[] | Promise<Bundle[]> =>
-  storage.read(line`${sub(owed(now))}&.order=${WAKE}.at`, { now })
+  storage.read(line`${sub(owed)}&.order=${WAKE}.at`, { now })
 
-/** The query clauses a wake due at `now` matches, with what it watches. */
-export let owed = (now: number): Built =>
-  line`.${WAKE}.at<=${iso(now)}&?${WATCH}`
+/** The query clauses a due wake matches, with what it watches: read with the
+ * instant as the read's `now`. The instant is the clock a statement binds, not
+ * a word of the query, so every read of it is one statement (@yaks/sql
+ * `compile`). */
+export let owed: Built = line`.${WAKE}.at<=now&?${WATCH}`
 
 /**
  * The next ISO instant after `now`, computed from a recurrence string or from a
@@ -170,9 +172,7 @@ export let soonest = (
   now: number = Date.now(),
 ): number | null | Promise<number | null> =>
   after(
-    storage.read(line`.${WAKE}.at>${iso(now)}&.order=${WAKE}.at&.limit=1`, {
-      now,
-    }),
+    storage.read(line`.${WAKE}.at>now&.order=${WAKE}.at&.limit=1`, { now }),
     ([b]) => {
       let at = wakeOf(b ?? { entity: {} as Entity })?.at
       return at ? Date.parse(at) : null

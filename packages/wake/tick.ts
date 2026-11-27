@@ -107,7 +107,7 @@ export let tick = async (
         if (!(error instanceof Stale) || tries == TRIES) throw error
       }
       let [fresh] = await graph.read(
-        line`.entity.eid=${wake.entity.eid}&${sub(owed(now))}`,
+        line`.entity.eid=${wake.entity.eid}&${sub(owed)}`,
         { now },
       )
       if (!fresh) return []
