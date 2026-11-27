@@ -1,7 +1,8 @@
 import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
-import { bindDashboard } from './dashboard-browser.ts'
+import { REDRAWN } from '@yaks/inbox/actions-browser'
+import { bindDashboard, drawDashboard } from './dashboard-browser.ts'
 import {
   agentWork,
   dismissal,
@@ -12,6 +13,7 @@ import {
   workRows,
 } from './dashboard.ts'
 import { type DashboardView, VIEW_ATTR } from './dashboard-view.ts'
+import { drawnRows } from './page-graph.ts'
 import { graph } from './page-graph_fixture_test.ts'
 import { managePath } from './routes.ts'
 import { listedRows, spaceApps } from './space-apps.ts'
@@ -214,6 +216,45 @@ test('a release that lands is in Recent work at once', () => {
     ...work,
   ])
   equal(texts('.Dash_DidTitle')[0], 'Hazel updated Notes')
+})
+
+test('a Dashboard keeps its drawn apps while live reads open, then takes new rows', () => {
+  let { document } = parseHTML(`<div ${VIEW_ATTR}='${JSON.stringify(view)}'>
+    <script type="application/json" data-page-graph>${
+    drawnRows(ADA, apps)
+  }</script>
+  </div>`)
+  let root = document.querySelector<HTMLElement>(`[${VIEW_ATTR}]`)!
+  drawDashboard(root, view, apps)
+  let app = () => root.querySelector('.Dash_AppName')?.textContent
+  let g = graph((b: Bundle[]) => Promise.resolve(b))
+  let arrived = false, redraws = 0
+  root.addEventListener(REDRAWN, () => redraws++)
+  bindDashboard(root, {
+    mutate: g.mutate,
+    watch: (line, opts) => {
+      let watch = g.watch(line, opts)
+      let fixes = line == operatorFixes(SPACE)
+      return {
+        ...watch,
+        get value() {
+          return watch.value
+        },
+        get ready() {
+          return opts?.remote === false || arrived && !fixes
+        },
+        get refused() {
+          return arrived && fixes ? 'Unavailable' : undefined
+        },
+      }
+    },
+  })
+  equal([app(), redraws], ['Strides', 0])
+  arrived = true
+  g.set(spaceApps(SPACE), apps)
+  equal([app(), redraws], ['Strides', 0])
+  g.set(spaceApps(SPACE), apps.slice(0, 1))
+  equal([app(), redraws], ['Roster', 1])
 })
 
 test('a suggestion row from before its request was kept fills the box with its line', () => {

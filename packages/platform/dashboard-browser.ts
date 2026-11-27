@@ -22,7 +22,7 @@ import type { Client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { actionWords, REDRAWN } from '@yaks/inbox/actions-browser'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
-import { pageGraph } from './page-graph.ts'
+import { drawn, pageGraph } from './page-graph.ts'
 import {
   agentWork,
   dashboardWords,
@@ -31,6 +31,7 @@ import {
   suggestions,
 } from './dashboard.ts'
 import {
+  type Dashboard,
   dashboardOf,
   type DashboardView,
   dashboardView,
@@ -46,17 +47,13 @@ export let VIEW = '[data-view="dashboard"]'
 // The rows the page carried for its first paint stay as they are.
 let KEPT = { leave: (n: Node) => (n as Element).localName == 'script' }
 
-/** Draw `root` again from `rows`, as `view` asks it. */
-export let drawDashboard = (
+let paint = (
   root: HTMLElement,
   view: DashboardView,
-  rows: Bundle[],
-  pending = false,
+  read: Dashboard,
 ): void => {
   let t = root.ownerDocument.createElement('template')
-  t.innerHTML = renderToString(
-    h(Fragment, null, dashboardView(view, dashboardOf(view, rows, pending))),
-  )
+  t.innerHTML = renderToString(h(Fragment, null, dashboardView(view, read)))
   let next = root.cloneNode(false) as HTMLElement
   next.append(t.content)
   morph(root, next, KEPT)
@@ -66,6 +63,14 @@ export let drawDashboard = (
     }),
   )
 }
+
+/** Draw `root` again from `rows`, as `view` asks it. */
+export let drawDashboard = (
+  root: HTMLElement,
+  view: DashboardView,
+  rows: Bundle[],
+  pending = false,
+): void => paint(root, view, dashboardOf(view, rows, pending))
 
 /** The lines the Dashboard of the space `eid` watches. */
 export let dashboardLines = (eid: string): string[] => [
@@ -85,20 +90,24 @@ export let bindDashboard = (
 ): () => void => {
   let view = JSON.parse(root.getAttribute(VIEW_ATTR)!) as DashboardView
   let { eid } = view.space
-  let watches = [
-    ...dashboardLines(eid).map((line) => graph.watch(line)),
-    graph.watch(`.dismissSuggestion.space=${eid}`, { remote: false }),
-  ]
-  let said = ''
-  // Its apps say whether it is in: until they answer, the rows it was drawn
-  // from stand, or its frame.
+  let remote = dashboardLines(eid).map((line) => graph.watch(line))
+  let dismissals = graph.watch(`.dismissSuggestion.space=${eid}`, {
+    remote: false,
+  })
+  let watches = [...remote, dismissals]
+  let held = drawn(view.person, root)?.rows
+  let said = held && JSON.stringify(dashboardOf(view, held))
+  // The server's panels stand until the live reads answer. Dismissals are
+  // local and can change those panels while the reads are still coming in.
   let draw = () => {
-    let rows = watches.flatMap((w) => w.value ?? [])
-    let pending = !watches[0].ready && !watches[0].value.length
-    let next = JSON.stringify([pending, rows])
+    if (held && remote.every((w) => w.ready || w.refused)) held = undefined
+    let rows = held ?? remote.flatMap((w) => w.value)
+    let pending = !held && !remote[0].ready && !remote[0].value.length
+    let read = dashboardOf(view, [...rows, ...dismissals.value], pending)
+    let next = JSON.stringify(read)
     if (next == said) return
     said = next
-    drawDashboard(root, view, rows, pending)
+    paint(root, view, read)
   }
   let click = (e: Event) => {
     let pressed = e.target as Element
