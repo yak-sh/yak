@@ -75,7 +75,10 @@ filter. A malformed clause throws rather than becoming a search term.
   (`!.task is written !task`).
 - The empty query selects nothing, and `graph_query` refuses it. It refuses a
   line that only asks (`?topic .limit=3`) too, since that answers the newest
-  entities of every kind, naming the line it meant (`.topic&.limit=3`).
+  entities of every kind, naming the line it meant (`.topic&.limit=3`). A
+  line that filters nothing and names no window (`*`, `.order=hot`) and any
+  `.limit` past 10,000 are refused before anything is read, since one `*`
+  over the platform store reset it (bug be9051e2).
 
 The query page uses the query string itself: `/?.task&.created.at=2026-10-27`.
 `querySearch` and `queryAt` in @yaks/query own this URL boundary. Grammar
@@ -197,7 +200,9 @@ page past the last valued row reaches them. With no `.order`, a window (`.limit`
 `.after`) of a query with words is ranked by `search` (best match first, a
 title that is exactly the words before all); any other window is newest first,
 and a whole answer oldest first. `graph_query` gives a
-search that asks for no window its best 20.
+search that asks for no window its best 20. So adding a `.limit` to someone
+else's read is never neutral: it reverses an unwindowed list (62b1243c5 did
+that to every app's list and was reverted).
 A trailing `~` in `.fields` mutes that property from a subscription's change
 signal.
 
