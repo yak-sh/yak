@@ -6516,7 +6516,7 @@ export class Store extends Durable {
     // copy at the newer revision, even if its response arrives afterwards.
     let copy = this.#get('name') == PLATFORM_STORE ? this.#copy() : undefined
     if (copy && new URL(request.url).searchParams.get('mend') == '1') {
-      await mend(copy, this.#committed)
+      await this.#mend(copy)
     }
     let revision = this.#get('name') == PLATFORM_STORE
       ? this.#get('directory-revision') ?? '0'
@@ -6552,6 +6552,16 @@ export class Store extends Durable {
     route: () => '/query',
     tags: () => this.#tags(),
   })
+
+  // One mend at a time: the reads that ask for one while it runs join it. A
+  // fenced deploy's blob reads each refill the copy and each asks for a mend,
+  // and 31 of them sent 31 `revision` and `settle` calls to the copy at once,
+  // which kept every one waiting 670-750 ms (T-4201). `mend` never throws.
+  #mending: Promise<void> | null = null
+  #mend = (copy: ServingCopyDoor): Promise<void> =>
+    this.#mending ??= mend(copy, this.#committed).finally(() => {
+      this.#mending = null
+    })
 
   #directoryRead = queryCache(
     () => revision(this.#sql, 'data'),

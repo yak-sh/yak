@@ -781,6 +781,23 @@ await proof(
   },
 )
 
+// Reads that ask for a mend together share one: each fenced blob read of a
+// deploy asked for its own, and 31 at once kept every one waiting (T-4201).
+await proof('mend reads asked together send the copy one mend', async () => {
+  let f = await fixture()
+  f.core().finish(f.core().begin())
+  let asked = 0
+  f.onRevision(() => (asked++, Promise.resolve()))
+  let reads = await Promise.all([f.read(true), f.read(true), f.read(true)])
+  let epochs = reads.map((r) => Number(r.headers.get(EPOCH)))
+  await Promise.all(reads.map((r) => r.body?.cancel()))
+  return () => {
+    equal(asked, 1)
+    equal(epochs, [f.initial, f.initial, f.initial])
+    ok(f.core().valid(f.initial))
+  }
+})
+
 // A copy left open at a revision the directory does not hold is moved to the
 // committed one by the next read that asks for a mend.
 await proof('an open copy at another revision is mended', async () => {
