@@ -132,6 +132,31 @@ test('seed does not load an unused catalog and preserves ordinary npm asks', () 
   })
 })
 
+test('toolkit dependencies can supply the renderer of an existing app', () => {
+  let local = {
+    ...catalog,
+    '@yaks/kit': pkg({ 'react': '^19' }),
+    '@yaks/preact': {
+      ...pkg(),
+      renderer: {
+        dependency: 'preact',
+        unless: 'react',
+        aliases: { react: 'preact/compat' },
+      },
+    },
+  }
+  let dependencies = { '@yaks/client': 'platform', '@yaks/kit': 'platform' }
+  let legacy = seed(files(dependencies), local)
+  assertEquals(legacy.jsxImportSource, 'preact')
+  assertEquals(legacy.aliases?.react, 'preact/compat')
+  assertEquals(legacy.dependencies.react, undefined)
+
+  let react = seed(files({ ...dependencies, react: '^19' }), local)
+  assertEquals(react.jsxImportSource, 'react')
+  assertEquals(react.aliases, undefined)
+  assertEquals(react.dependencies.react, '^19')
+})
+
 test('together finds one version for two asks, or refuses', () => {
   let cases: [string, string, string | null][] = [
     ['18.2.0', '18.2.0', '18.2.0'],

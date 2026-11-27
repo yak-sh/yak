@@ -171,25 +171,13 @@ export let seed = (files: Record<string, string>, catalog: Catalog): Seed => {
   }
   let noted = (note: string) => out.notes.push(note)
   let roots = dependencies(files['package.json'] ?? null)
-  let renderer = Object.values(catalog).map((p) => p.renderer).find((r) =>
-    r && roots[r.dependency] && (!r.unless || !roots[r.unless])
-  )
-  if (renderer) {
-    out.aliases = renderer.aliases
-    out.jsxImportSource = renderer.dependency
-  } else if (roots.preact && !roots.react) {
-    out.jsxImportSource = 'preact'
-  } else if (roots.react) out.jsxImportSource = 'react'
+  let npm: [string, string][] = []
   let visit = (name: string, version: string) => {
     if (!toolkit(name)) {
-      if (out.aliases?.[name] && !roots[name]) return
       if (version == 'platform') {
         throw new Error(`${name}: only @yaks toolkit packages use "platform"`)
       }
-      let prior = out.dependencies[name]
-      out.dependencies[name] = prior
-        ? together(name, prior, version, noted)
-        : version
+      npm.push([name, version])
       return
     }
     if (version != 'platform') {
@@ -229,5 +217,22 @@ export let seed = (files: Record<string, string>, catalog: Catalog): Seed => {
     for (let [dep, range] of Object.entries(pkg.dependencies)) visit(dep, range)
   }
   for (let [name, range] of Object.entries(roots)) visit(name, range)
+  let npmNames = new Set(npm.map(([name]) => name))
+  let renderer = Object.values(catalog).map((p) => p.renderer).find((r) =>
+    r && npmNames.has(r.dependency) && (!r.unless || !roots[r.unless])
+  )
+  if (renderer) {
+    out.aliases = renderer.aliases
+    out.jsxImportSource = renderer.dependency
+  } else if (roots.preact && !roots.react) {
+    out.jsxImportSource = 'preact'
+  } else if (roots.react) out.jsxImportSource = 'react'
+  for (let [name, version] of npm) {
+    if (out.aliases?.[name] && !roots[name]) continue
+    let prior = out.dependencies[name]
+    out.dependencies[name] = prior
+      ? together(name, prior, version, noted)
+      : version
+  }
   return out
 }
