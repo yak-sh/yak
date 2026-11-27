@@ -271,6 +271,11 @@ export let slotsOf = <K extends string = string>(
     })
     cache.set(key, value)
   },
+  /** `key` read as `value` from now on, before it is written: a reader that
+   * holds a word must still `write` it. */
+  hold: (key: K, value: string) => {
+    cache.set(key, value)
+  },
 })
 
 /** Rewrite held declarations before any graph or schema reads them. */

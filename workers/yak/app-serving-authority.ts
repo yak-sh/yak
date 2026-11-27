@@ -15,6 +15,8 @@ type Word = 'name' | 'app' | 'space' | 'access' | 'mail' | 'phone' | 'policy'
 type Host = {
   read(key: Word): string | null
   write(key: Word, value: string): void
+  /** `key` read as `value` at once, and written once the answer has left. */
+  hold(key: Word, value: string): void
   copy(): unknown
   directory(): unknown
   now(): number
@@ -283,18 +285,23 @@ export let servingAuthority = (host: Host) => {
     told(news, host)
   }
   // A fitted listing can advance the same floor as learn(), provided the
-  // authority has no metadata to install or standing to refresh.
+  // authority has no metadata to install or standing to refresh. Its answer
+  // stands under the revision it was vouched at whether or not the floor is
+  // written yet, and a floor a reset loses leaves the store as it was before
+  // the read, so the floor is held at once and written behind the answer:
+  // a write before it would hold the answer until confirmed.
   let unchanged = (req: Request): boolean => {
     if (req.headers.has(ROUTE_MEMORY) || heard(req).length) return false
     let raw = req.headers.get('x-yak-policy')
     if (raw == null || !/^\d+$/.test(raw)) return false
     let revision = Number(raw)
-    if (
-      !Number.isSafeInteger(revision) || revision < Number(host.read('policy'))
-    ) {
+    let floor = host.read('policy')
+    if (!Number.isSafeInteger(revision) || revision < Number(floor)) {
       return false
     }
-    remember(req)
+    if (floor == null || revision > Number(floor)) {
+      host.hold('policy', String(revision))
+    }
     return true
   }
   return { learn, heard, recheck, unchanged }

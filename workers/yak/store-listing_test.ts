@@ -101,6 +101,7 @@ test('a fitted private listing checks fresh standing and keeps its policy floor'
     )).slice(0, 2),
     [403, false],
   )
+  await ctx.settled()
   equal((await open().fetch(request(listing, owner))).status, 503)
   await ctx.settled()
 })
@@ -135,6 +136,23 @@ test('a store that keeps versions lists without the full Store after a deploy', 
   equal(
     await read(await open(testVersion('next')).fetch(request(listing))),
     [200, false, expected],
+  )
+  await ctx.settled()
+})
+
+test('a listing under a newer policy writes its floor once the answer has left', async () => {
+  let { ctx, open, request, expected } = await cookbook()
+  using _db = ctx.storage
+  let floor = () => slotsOf(() => driver(ctx.storage)).read('policy')
+  let store = open(testVersion('next'))
+  let answer = await store.fetch(request(listing, { 'x-yak-policy': '5' }))
+  equal(floor(), '2')
+  equal(await read(answer), [200, false, expected])
+  await ctx.settled()
+  equal(floor(), '5')
+  equal(
+    (await store.fetch(request(listing, { 'x-yak-policy': '4' }))).status,
+    503,
   )
   await ctx.settled()
 })

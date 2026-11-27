@@ -414,7 +414,7 @@ import { beside, computed, type Reached, reached } from '@yaks/api/reached'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
-import { BEAT, skewed, versionOf } from './running.ts'
+import { BEAT, onceRead, skewed, versionOf } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { answered, KERNEL, type Meta, metaOf } from './meta.ts'
 import { BINARY } from '@yaks/vocab/wire'
@@ -2626,6 +2626,34 @@ export class Store extends Durable {
     this.#slots.write(k, v)
   }
 
+  // The words a read learned and answered under before writing them
+  // (app-serving-authority.ts `unchanged`), written once its answer has left.
+  #unwritten = new Set<Word>()
+  #writeHeld = () => {
+    for (let k of this.#unwritten) {
+      let v = this.#get(k)
+      if (v != null) this.#put(k, v)
+    }
+    this.#unwritten.clear()
+  }
+
+  // Work behind an answer, a beat after its caller read it through (running.ts
+  // `BEAT`, `onceRead`), so the answer never waits on that work's CPU or for
+  // its writes to be confirmed.
+  #behind(work: () => void) {
+    this.#ctx.waitUntil?.(
+      new Promise<void>((done) =>
+        clockOf(this.#time).after(this.#ctx.beat ?? BEAT, () => {
+          try {
+            work()
+          } finally {
+            done()
+          }
+        })
+      ),
+    )
+  }
+
   // What the kernel told this object about itself, on any request that carries
   // it. The address it was born at never moves; the app it holds and that
   // app's access mode are the directory's to say, so a changed mode is
@@ -2640,6 +2668,10 @@ export class Store extends Durable {
   #serving = servingAuthority({
     read: (key) => this.#get(key),
     write: (key, value) => this.#put(key, value),
+    hold: (key, value) => {
+      this.#slots.hold(key, value)
+      this.#unwritten.add(key)
+    },
     copy: () => this.#bind.SERVING_COPY,
     directory: () => this.#bind.STORE,
     now: () => this.#now(),
@@ -5174,12 +5206,17 @@ export class Store extends Durable {
     let answer = await this.#listed(request)
     // A full request could have taken over while authorization or reading
     // yielded. It may have selected different words or replayed a write.
-    if (this.#started.ran || this.#dormant) return null
+    if (this.#started.ran || this.#dormant) {
+      if (this.#unwritten.size) this.#behind(this.#writeHeld)
+      return null
+    }
     if (
       answer.ok && (request.headers.has('x-yak-person') ||
         request.headers.has('x-yak-via'))
     ) this.#used()
-    return answer
+    return this.#unwritten.size
+      ? onceRead(answer, () => this.#behind(this.#writeHeld))
+      : answer
   }
 
   // Why a waking listing took the full start instead (`#plain`): told on
@@ -6557,18 +6594,7 @@ export class Store extends Durable {
       write: (value) => this.#put('answered', value),
     }),
     (error) => defect(error, { request: 'query', store: this.#name() }),
-    (work) =>
-      this.#ctx.waitUntil?.(
-        new Promise<void>((done) =>
-          clockOf(this.#time).after(this.#ctx.beat ?? BEAT, () => {
-            try {
-              work()
-            } finally {
-              done()
-            }
-          })
-        ),
-      ),
+    (work) => this.#behind(work),
   )
 
   // The word a row is named by. `kind` is not a property and no client can

@@ -207,6 +207,7 @@ export let lifecycleStores = (
     let authority = servingAuthority({
       read,
       write,
+      hold: write,
       copy: () => env.SERVING_COPY,
       directory: () => env.STORE,
       now: () => Date.now(),

@@ -6,6 +6,7 @@ let app = '00000000-0000-4000-8000-000000000001'
 let authority = servingAuthority({
   read: (word) => word === 'app' ? app : null,
   write: () => {},
+  hold: () => {},
   copy: () => null,
   directory: () => null,
   now: () => 0,
