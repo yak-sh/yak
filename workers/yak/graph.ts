@@ -966,13 +966,16 @@ installContext({
 // asking for one and each run's marks on it raise no fence. A page opened
 // after a deploy asks for its release's remake, and each such ask once waited
 // on the copy's fence and the regional leases, seconds in a deploy's first
-// minute.
+// minute. A wake moved alone, as a sweep brought forward (rewrap.ts
+// `forward`, wake.ts `again`), stamps only the wake, so its stamp raises none
+// either.
 let UNNAMED = new Set([
   'signin',
   'signin_miss',
   'effect',
   'sweep',
   'release_remake',
+  'wake',
 ])
 let STAMPS = new Set(PROVENANCE)
 let UNFENCED = new Set([
@@ -980,7 +983,6 @@ let UNFENCED = new Set([
   'signed_in',
   'directory_order',
   'archetype',
-  'wake',
   ...UNNAMED,
 ])
 let UNHELD = new Set([...UNFENCED, ...STAMPS])

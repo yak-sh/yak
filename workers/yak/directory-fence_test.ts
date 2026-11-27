@@ -298,6 +298,26 @@ await proof('asking for a remake leaves serving checks standing', async () => {
   return () => equal(asked, { fences: 0, current: true })
 })
 
+// A sweep's schedule brought forward (rewrap.ts `forward`, wake.ts `again`)
+// patches its wake alone, and the stamp that patch carries is unfenced too.
+await proof(
+  'moving a sweep’s wake leaves serving checks standing',
+  async () => {
+    let f = await fixture()
+    await f.at.apply([{
+      entity: { eid: 'wrap' },
+      wake: { every: '@daily', note: 'Wrap app workers' },
+      sweep: { kind: 'wrap' },
+    }], KERNEL)
+    await f.at.apply([{
+      entity: { eid: 'wrap' },
+      wake: { at: new Date().toISOString() },
+    }], KERNEL)
+    let moved = { fences: f.begins.length, current: f.core().valid(f.initial) }
+    return () => equal(moved, { fences: 0, current: true })
+  },
+)
+
 // An effect's run deletes itself once it finishes; no serving check reads it
 // (T-147454). Deleting what one does read still fences.
 await proof(
