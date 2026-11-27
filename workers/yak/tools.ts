@@ -1,5 +1,3 @@
-import { type GameStarter, gameStarter, gameViews } from '@yaks/game/starter'
-import { GAME_STARTER } from './content.ts'
 import { DOMAIN_RENEWAL } from '@yaks/platform/plans'
 import { transferTool } from './app-transfer.ts'
 import { FRIEND, friendTools, recipientOf } from './friends.ts'
@@ -292,7 +290,7 @@ import { requested } from './confirm.ts'
 import { NARROW, PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
 import { BUDGET, paid, seconds, spending, workbench } from './sandbox.ts'
-import { CWD, seedTree } from '@yaks/sandbox/cloudflare'
+import { CWD } from '@yaks/sandbox/cloudflare'
 import {
   attachmentBytes,
   attachmentStream,
@@ -600,8 +598,7 @@ let FILE = {
 let TAKES: Record<string, string> = {
   list: 'an optional draft',
   read: 'path, paths, or neither for every text file',
-  write:
-    'path and content (base64 for bytes), files: [{path, content}, …], or starter',
+  write: 'path and content (base64 for bytes), or files: [{path, content}, …]',
   patch: 'path, find and replace, or edits: [{path, find, replace}, …]',
   fetch: 'path and url',
   delete: 'path',
@@ -621,7 +618,7 @@ let FILES_INPUT: Shape = {
       type: 'string',
       enum: OPS,
       description: OPS.map((op) => `${op}: ${TAKES[op]}`).join('; ') +
-        '. Left out, a call with files, content, base64 or starter is a write',
+        '. Left out, a call with files, content or base64 is a write',
     },
     draft: str(
       'Pass an open draft id when several drafts are open, or to choose ' +
@@ -693,28 +690,6 @@ let FILES_INPUT: Shape = {
       'for restore: put the file back to what it was at this moment, ' +
         'e.g. 2026-09-06T14:20:00Z',
     ),
-    starter: {
-      type: 'object',
-      description:
-        'Start a runnable game. In an Operator conversation the first starter for an unreleased app goes straight into a sandbox folder named for the app. ' +
-        'Set into to name a new sandbox folder explicitly, or draft to write to a draft. ' +
-        'Pass {} for 3D, or set multiplayer and view as needed. Files supplied with a draft starter replace starter files with those paths.',
-      properties: {
-        view: {
-          type: 'string',
-          enum: [...gameViews],
-          description:
-            '3d (the default), voxel (Three.js voxel geometry), or 2d (a board)',
-        },
-        multiplayer: {
-          type: 'boolean',
-          description: 'include private live rooms and an invitation link',
-        },
-        into: str(
-          'Write the starter into a new folder relative to /workspace. Edit it with sandbox_shell, then stage it with sandbox_ship. Leave draft, files and drafts out of this call.',
-        ),
-      },
-    },
     files: {
       type: 'array',
       items: FILE,
@@ -793,9 +768,7 @@ let shaped = <T extends Pick<Tool, 'run'>>(tool: T): T => ({
     try {
       return await tool.run(ctx, args)
     } catch (e) {
-      let batch = args.starter || [args.files, args.drafts].some(Array.isArray)
-        ? 1
-        : 0
+      let batch = [args.files, args.drafts].some(Array.isArray) ? 1 : 0
       let op = opOf(args, batch)
       if (!(e instanceof CallError) || e.code != 'arguments') throw e
       if (!OPS.includes(op) || e.summary.includes(TAKES[op])) throw e
@@ -4515,40 +4488,11 @@ let OURS: Row[] = [
     name: 'app_files',
     destructive: false,
     openWorld: true,
-    outlasts: (args, ctx) =>
-      (args.starter as { into?: unknown } | undefined)?.into == null
-        ? undefined
-        : sandboxJob(args, ctx),
     input: FILES_INPUT,
     run: async (ctx, args) => {
       let batch = files(args.files)
       let fan = entries(args.drafts)
-      let op = opOf(args, batch.length + fan.length + Number(!!args.starter))
-      let starter = args.starter as
-        | (GameStarter & { into?: string })
-        | undefined
-      let stages = ['draft', 'path', 'content', 'base64', 'files', 'drafts']
-        .some(
-          (key) => args[key] != null,
-        )
-      let folder = starter?.into == null
-        ? undefined
-        : appFolder(text(starter.into, 'starter.into'))
-      if (folder !== undefined && (!folder || stages)) {
-        throw refuse(
-          'arguments',
-          'starter.into takes a new sandbox folder without draft or file arguments.',
-        )
-      }
-      if (starter) {
-        if (op !== 'write') {
-          throw refuse('arguments', 'Use starter for a write.')
-        }
-        let paths = new Set(batch.map((file) => file.path.replace(/^\/+/, '')))
-        let base = gameStarter(starter, GAME_STARTER)
-          .filter((file) => !paths.has(file.path))
-        batch = [...files(base, 'starter'), ...batch]
-      }
+      let op = opOf(args, batch.length + fan.length)
       if (!OPS.includes(op)) throw refuse('arguments', opless(args))
       if (fan.length && op != 'write') {
         throw refuse('arguments', `drafts: for a write, not op: ${op}`)
@@ -4561,33 +4505,6 @@ let OURS: Row[] = [
         'inApp',
         () => inApp(ctx, args, write, !write),
       )
-      if (
-        starter && !stages && !app.version && ctx.env.WORKBENCH &&
-        ctx.who?.agent == 'operator'
-      ) folder ??= app.slug
-      if (folder) {
-        let seeded = await bench(
-          ctx,
-          space,
-          ({ provider, ref }) => {
-            ctx.doing?.('the sandbox is writing the starter files')
-            return seedTree(provider, ref, folder, batch)
-          },
-        )
-        let path = `${CWD}/${folder}`
-        if (!seeded) {
-          throw refuse(
-            'conflict',
-            `${path} already exists. Use that folder or choose a new starter.into.`,
-          )
-        }
-        return {
-          text:
-            `Wrote ${batch.length} starter files to ${path}. Edit the files there, then stage them with sandbox_ship({app: "${app.slug}", paths: ["${folder}"]}).`,
-          space,
-          value: { path, files: batch.map((file) => file.path) },
-        }
-      }
       let blobs = r2RawObjects(ctx.env.BLOBS)
       // `draft: 'new'` opens the draft named for this call, so the call run
       // again after it was cut off lands in it (written.ts `anew`).

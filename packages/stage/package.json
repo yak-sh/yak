@@ -16,7 +16,8 @@
     "./sound": "./sound.ts",
     "./samples": "./samples.ts",
     "./fx": "./fx.ts",
-    "./air": "./air.ts"
+    "./air": "./air.ts",
+    "./scene": "./scene.ts"
   },
   "license": "Apache-2.0",
   "description": "Three.js scenes, effects, instancing, orbit cameras, picking and positional sound over caller-supplied values.",

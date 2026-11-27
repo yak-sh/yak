@@ -84,14 +84,15 @@ it in the sandbox, ship the output into a folder, and name that folder in a
 wrangler.jsonc, {"assets": {"directory": "dist"}}
 (${url(env, '/docs/code.md')}).
 
-For a game, call guide with page games before writing its files. Start with
-app_files({app, starter: {into: app}}) to put a runnable Three.js starter in
-the sandbox. Edit its world, rules and interface there, then stage the folder
-with sandbox_ship. Use app_new with access 'private' and set
-starter.multiplayer to true when people play together. It adds live store
-subscriptions and scoped guest invites. Set starter.view to 'voxel' for voxel
-games or '2d' for requests and genres that call for 2D. Use app_preview with
-steps to interact with a draft or with the signed-in private release.
+For a game, call guide with page games before writing its files. Build it
+from the toolkit's game components, imported, never copied: @yaks/stage/scene
+for a lit Three.js scene with a camera that follows the player, @yaks/game/page
+for the page's graph, @yaks/game/screen for fullscreen play, and, when people
+play together, @yaks/game/rooms in the app's worker with @yaks/game/room in the
+page for live rooms with guest invites (make the app with access 'private').
+Use @yaks/voxel/three for voxel games, and 2D when the request or genre calls
+for it. Use app_preview with steps to interact with a draft or with the
+signed-in private release.
 
 Five steps:
 
@@ -99,8 +100,7 @@ Five steps:
    one, and every tool uses it unless they have several. Its address serves
    nothing until step 4, so say nothing to the person about the app yet.
 2. app_files — write index.html, and any css, js or images beside it; the
-   whole set in one call, as files: [{path, content}, ...], or use the game
-   starter above. Write an icon.svg
+   whole set in one call, as files: [{path, content}, ...]. Write an icon.svg
    beside index.html as well, as content: a square viewBox, a background that
    fills it, and shapes rather than <text>, which has no font. The platform
    draws it as the icon.png a phone's home screen shows. Put the pages'

@@ -4,7 +4,7 @@
     "https://yak.sh/vocab/core": true
   },
   "title": "game",
-  "description": "Page-only browser game controls. Pure rules declare no state.",
+  "description": "Page-only browser game controls, and a live room's invitation and seats. Pure rules declare no state.",
   "$defs": {
     "Controls": {
       "$id": "urn:uuid:89535ff1-a2df-439e-8357-32215cd09b2d",
@@ -135,6 +135,27 @@
           "$id": "urn:uuid:1bc992b1-274a-4290-b268-43c346002aa9",
           "type": "object",
           "description": "mouse gesture state, interpreted by the browser controls"
+        }
+      }
+    },
+    "game_room": {
+      "$id": "urn:uuid:ec7cee1d-643b-4fc9-8dc6-35bb42d9ba84",
+      "component": true,
+      "type": "object",
+      "description": "A live room (@yaks/game/rooms): the digest of its current invitation and its seats in the order they were taken. Only the app's worker reads it; a seat's query never names it.",
+      "properties": {
+        "invite": {
+          "$id": "urn:uuid:5167524e-bd8f-40b7-b595-e592c49e142c",
+          "type": "string",
+          "description": "the SHA-256 digest of the invitation a guest joins with"
+        },
+        "seats": {
+          "$id": "urn:uuid:c270ab20-2ab2-41d6-b7cf-107c87d159ce",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "each seat's entity id, the host's first"
         }
       }
     }

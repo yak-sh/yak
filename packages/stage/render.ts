@@ -65,18 +65,4 @@ export let quality = (
   },
 ]
 
-/** An animation callback with elapsed time and a bounded simulation step.
- * Scheduling is handed in, so the page owns starting and stopping it. */
-export let frameLoop = (
-  frame: (now: number, dt: number, elapsed: number) => void,
-  then: number,
-  schedule: (frame: FrameRequestCallback) => unknown = requestAnimationFrame,
-): FrameRequestCallback => {
-  let loop = (now: number) => {
-    schedule(loop)
-    let elapsed = Math.max(0, now - then) / 1000
-    then = Math.max(then, now)
-    frame(now, Math.min(0.05, elapsed), elapsed)
-  }
-  return loop
-}
+export { frameLoop } from './pace.ts'

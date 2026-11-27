@@ -496,59 +496,6 @@ export let cloudflareProvider = (
   }
 }
 
-/** Put a tree in a new workspace folder as one publication. A retry or another
- * build cannot replace files the caller has already started editing. */
-export let seedTree = async (
-  provider: Pick<CloudflareProvider, 'put' | 'exec'>,
-  ref: SandboxRef,
-  folder: string,
-  files: SandboxFile[],
-): Promise<boolean> => {
-  let packet = `/tmp/yak-seed-${crypto.randomUUID()}.json`
-  let body = {
-    folder,
-    files: files.map(({ path, bytes }) => [path, bytes.toBase64()]),
-  }
-  await provider.put(ref, {
-    path: packet,
-    bytes: new TextEncoder().encode(JSON.stringify(body)),
-  })
-  let ran = await provider.exec(
-    ref,
-    `python3 - ${packet} <<'PY'
-import base64, json, pathlib, subprocess, sys, tempfile
-
-packet = pathlib.Path(sys.argv[1])
-try:
-    tree = json.loads(packet.read_bytes())
-    folder = pathlib.Path(tree["folder"])
-    if not folder.parts or folder.is_absolute() or ".." in folder.parts:
-        raise ValueError("expected a workspace-relative folder")
-    folder.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=folder.parent) as temporary:
-        stage = pathlib.Path(temporary) / "files"
-        stage.mkdir()
-        for name, content in tree["files"]:
-            path = pathlib.Path(name)
-            if not path.parts or path.is_absolute() or ".." in path.parts:
-                raise ValueError("expected a relative file path")
-            output = stage / path
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_bytes(base64.b64decode(content))
-        subprocess.run(["mv", "-T", "-n", "--", stage, folder], check=True)
-        if stage.exists():
-            sys.exit(17)
-finally:
-    packet.unlink()
-PY`,
-  )
-  if (ran.exitCode == 17) return false
-  if (ran.exitCode !== 0) {
-    throw new Error(ran.stderr || 'Could not write workspace files')
-  }
-  return true
-}
-
 // What the container calls a process that has not ended yet.
 let RUNNING = new Set(['starting', 'running'])
 

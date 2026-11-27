@@ -5,8 +5,8 @@
 // `deno task test` on the one it tests, and `deno task vocab` by hand. Nobody
 // writes a `$id` by hand.
 //
-// An app's source (a directory with an `index.html`, such as @yaks/game's
-// starter) is left alone, since its deploy mints its words' ids, and so are
+// An app's source (a directory with an `index.html`, such as an app under
+// apps/) is left alone, since its deploy mints its words' ids, and so are
 // test fixtures.
 //
 //   deno task vocab    # prints each file it wrote, and formats it

@@ -21,12 +21,22 @@ let point = groundRay(
 console.log(point) // { x: 0, y: 0, z: 4 }
 ```
 
-`/render` creates a WebGL renderer. `frameLoop` schedules the next frame and
-supplies both elapsed seconds and a simulation step capped at 50 ms; the page
-decides when to start it. `keepUp(quality(renderer, sun,
-scene, density))`
+`/render` creates a WebGL renderer. `frameLoop` (in `/pace`, which imports no
+Three.js) schedules the next frame and supplies both elapsed seconds and a
+simulation step capped at 50 ms; the page decides when to start it.
+`pageLoop(frame, dispose)` starts it for a page: it rests while the page is
+hidden, so the first frame back is not one long frame, and runs `dispose` once
+when the page is left for good. `keepUp(quality(renderer, sun, scene, density))`
 lowers pixel density and then shadows over successive slow windows. Call it only
 while the app wants frame performance measured.
+
+`/scene` is a lit scene with a camera that follows the player:
+`followScene(canvas, world, actor, {blocked, sky})` adds the caller's world and
+actor meshes under a sky and a sun. `draw(pose, intent, dt, elapsed)` places the
+actor at a `{x, y, z, yaw}` pose, steers the camera by a camera intent, and
+lowers quality on slow frames. `pick(x, y)` answers the ground point under a
+screen position, for tapping where to go. `dispose()` frees every mesh it holds
+and the renderer.
 
 `/cam` takes a camera state and a small camera intent, not an input controller.
 `aim` takes a `blocked(point)` callback and an optional minimum pitch. The app

@@ -733,12 +733,14 @@ grouped approximately by function, **not** by dependency order.
   runner loads every test module into one runtime, runs the examples beside the
   code (fenced blocks and `///` doctests) as tests, and leaves out a file that
   passed while nothing it depends on has changed.
-- **[@yaks/game](./game)** — game rules, browser controls and HUD parts over
-  values: randomness, progression, paths, combat, timed effects and peer motion.
+- **[@yaks/game](./game)** — game rules, browser controls, HUD parts and live
+  rooms over values: randomness, progression, paths, combat, timed effects, peer
+  motion, a party panel, and invitation-only rooms served from an app's worker.
   Its root is safe in a worker; each game owns its graph and world.
 - **[@yaks/stage](./stage)** — Three.js presentation over supplied values:
-  renderer and frame loop, ordinary-geometry instancing, effects, cameras,
-  picking and positional sound; no graph or game-world dependencies.
+  renderer and frame loop, a lit scene with a following camera,
+  ordinary-geometry instancing, effects, cameras, picking and positional sound;
+  no graph or game-world dependencies.
 - **[@yaks/voxel](./voxel)** — voxel and box meshing into packed quads with
   baked lamp light, distance-based chunk detail and cached heightfield charts,
   with the voxel look at `/three`. The root is renderer-free and worker-safe;

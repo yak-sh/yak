@@ -12,6 +12,7 @@
     "./aim",
     "./cam",
     "./render",
+    "./scene",
     "./halo",
     "./flames",
     "./instances",

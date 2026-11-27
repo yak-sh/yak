@@ -1,5 +1,0 @@
-{
-  "assets": {
-    "public": ["icon.svg", "room-page.ts", "style.css"]
-  }
-}

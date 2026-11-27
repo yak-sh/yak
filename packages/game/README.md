@@ -1,12 +1,14 @@
 # @yaks/game
 
-Game rules, a full-viewport screen, browser controls and HUD parts. The root and
-`@yaks/game/rules` are the same pure API, safe in a browser or a worker. Each
-game reads its graph, passes values, and writes the result in its own batch.
+Game rules, a full-viewport screen, browser controls, HUD parts and live rooms.
+A game imports these; it never copies them. The root and `@yaks/game/rules` are
+the same pure API, safe in a browser or a worker. Each game reads its graph,
+passes values, and writes the result in its own batch.
 
 The first parts come from Mossvale. The move keeps the random sequences, named
 entity ids, level curve and peer motion unchanged, so existing worlds and saved
-progress keep their meaning. This package declares no stored words.
+progress keep their meaning. The one stored word it declares is a live room's
+`game_room{invite, seats}`.
 
 ## Randomness, levels and motion
 
@@ -38,25 +40,6 @@ graph, vocabulary, world and decisions remain in apps/vale.
 
 Run `deno task test packages/game` from the repository root.
 
-## Exploration starter
-
-On yaks.app, pass `starter: {}` to `app_files` for the 3D starter. Set
-`view: 'voxel'` for a voxel scene, `view: '2d'` for a board, or multiplayer:
-true`to add rooms to any view. Set`starter.into`to place the
-starter in a new sandbox folder. Edit the files there and stage them with`sandbox_ship`. Without`into`,
-the starter goes into the app's draft.
-
-The [starter](./starter/) is a complete yaks app. Copy its files to an app draft
-and deploy with the normal compiler. Open the app root for the low-poly world or
-`voxel.html` for the voxel world. Both use the same controls, lit scene and
-player-following camera. The compiler shares Three.js between the page and the
-toolkit.
-
-Supply the world and player meshes to `play`. The app decides how input changes
-the player's pose, and `look` draws from that pose. The voxel entry uses
-`@yaks/voxel/three` to build meshes from the app's boxes. Keep that entry and
-dependency when building a voxel world.
-
 ## Page graph
 
 `page` from `@yaks/game/page` loads the app's `./api/vocab.json` and composes
@@ -66,9 +49,10 @@ returns the `@yaks/client` client. Use `ent(eid)` for indexed reads and
 batch per simulation step with `mutate`. Components declared as `sync: none`
 stay in RAM. Stored components go through the app store.
 
-The exploration starter passes input and the current pose to its movement rule,
-then draws from a local watch on `PlayerPose{x, y, z, yaw}`. A turn-based game
-can use the same client to apply a batch on each action.
+A 3D game passes input and the current pose to its movement rule, then draws
+from a local watch on its pose, such as `Pose{x, y, z, yaw}`, with `followScene`
+from `@yaks/stage/scene`. A turn-based game uses the same client to apply a
+batch on each action.
 
 ## Friends
 
@@ -78,25 +62,26 @@ A player's yaks.app friends, and inviting one, are every app's:
 
 ## Live rooms
 
-The starter's `room.html` can host, join and reconnect to an invitation-only
-room. Deploy the app with private access and share the link from **Copy
-invite**. The app worker binds the browser to its seat, opens only that room's
-watch and exposes only the components needed to play. Keep the browser's
-invitation in the link fragment and its digest in the store.
+`rooms(rules)` from `@yaks/game/rooms` is an app worker's `fetch` for
+invitation-only rooms. Deploy the app with private access. The app's owner or an
+editor hosts a room; a guest joins with the invitation, which the host can
+replace, and comes back to the same seat. Each seat is bound to the browser that
+took it, reads only the rows `rules.line(room)` names through the room's own
+query and socket, and relays only what `rules.relay` passes on. An action writes
+the batch `rules.act` answers, or a refusal when it throws `RoomRefused`.
+`rules.open` and `rules.seat` give the rows a room and a seat start with. The
+room's invitation digest and seats live in `game_room`, which only the worker
+reads.
 
-`room-client.ts` opens the room-scoped page graph. `room-wire.ts` carries the
-subscription and peer motion through the store's socket. The app's
-`room-rules.ts` checks turn order and returns the batch the worker saves. Moving
-the pointer on the field shares a transient aim marker. Tapping a tile up to
-three steps away walks the pawn there; tapping a foe beside it strikes, and
-tapping a knocked-out ally beside it revives them. A strike rolls a d6 against
-the foe's guard and `blow` sets the damage. Each hit is a `play_hit` row, and
-`hpOf` sums a target's hits on its current life, so health is never stored and a
-revive is a new life. When the last standing player ends a turn, every foe walks
-toward the nearest player and strikes back. The store pushes the new turn,
-positions and hits to each page. `room-party.ts` paints the `Party` panel of
-every player's and standing foe's health bar into `#party` from the room's
-watch; `connectRoom` starts it, so a page that is rewritten keeps it.
+`@yaks/game/room` is the page's side: `hostRoom`, `joinRoom`, `linkedRoom` (the
+`?room=` and `#invite=` an invitation opens), `rememberRoom`, `inviteLink` and
+`connectRoom(seat, line)`, which answers the room's page graph and its watch.
+Both modules export `Seat`, `roomPath`, `roomId` and `RoomRefused`, so a rules
+module the page and the worker share throws the one refusal both catch.
+
+`partyPanel(watch, lists)` from `@yaks/game/party` paints `Party` lists (a
+health bar for each player and foe) into the HUD's `#party` from a live watch,
+now and on every change, adding `#party` when the page has none.
 
 ## Paths
 

@@ -4253,11 +4253,13 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/client@0.2.24",
+            "npm:@yaks/graph@0.2.33",
             "npm:@yaks/platform@0.2.30",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
+            "npm:@yaks/workerd@0.2.24",
             "npm:linkedom@~0.18.12",
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7"

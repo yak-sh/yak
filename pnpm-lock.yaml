@@ -2304,6 +2304,9 @@ importers:
       '@yaks/client':
         specifier: 0.2.24
         version: link:../client
+      '@yaks/graph':
+        specifier: 0.2.33
+        version: link:../graph
       '@yaks/platform':
         specifier: 0.2.30
         version: link:../platform
@@ -2316,6 +2319,9 @@ importers:
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
+      '@yaks/workerd':
+        specifier: 0.2.24
+        version: link:../workerd
       preact:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)

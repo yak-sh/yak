@@ -8,20 +8,24 @@
     "./controls": "./controls.ts",
     "./hud": "./hud.ts",
     "./screen": "./screen.ts",
-    "./starter": "./starter.ts",
     "./vocab": "./vocab.ts",
     "./ui": "./ui.ts",
     "./page": "./page.ts",
-    "./friends": "./friends.ts"
+    "./friends": "./friends.ts",
+    "./room": "./room.ts",
+    "./rooms": "./rooms.ts",
+    "./party": "./party.ts"
   },
   "license": "Apache-2.0",
-  "description": "Game rules, browser controls and HUD parts over values, without a graph or a game world.",
+  "description": "Game rules, browser controls, HUD parts and live rooms over values, without a game world.",
   "dependencies": {
     "@yaks/client": "0.2.24",
+    "@yaks/graph": "0.2.33",
     "@yaks/platform": "0.2.30",
     "@yaks/tui": "0.2.24",
     "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",
+    "@yaks/workerd": "0.2.24",
     "preact": "10.29.7"
   },
   "devDependencies": {

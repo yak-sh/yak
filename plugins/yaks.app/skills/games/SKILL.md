@@ -1,6 +1,6 @@
 ---
 name: games
-description: 'Multiplayer Games (yaks.app). Design the whole game first. Start a game with app_files and the game starter. Choose a 3D, voxel or 2D view, then add live rooms for multiplayer. Covers fullscreen play, local and stored game state, guest invites, controls, HUD, rendering, fixed-step timing and retrying lost writes.'
+description: "Multiplayer Games (yaks.app). Design the whole game first. Build it from the toolkit's game components: a lit 3D scene with a following camera, voxel meshes or a 2D surface, and live rooms for multiplayer. Covers fullscreen play, local and stored game state, guest invites, controls, HUD, rendering, fixed-step timing and retrying lost writes."
 ---
 
 # Multiplayer Games
@@ -12,10 +12,9 @@ another page can read the same game state and a different renderer can draw it.
 
 ## Design the whole game first
 
-The starter is wiring, not a game: its field, its wolves and troll, and its
-fights only show how a turn travels. Before you build, design the whole game
-from the person's request with good game design principles, and write it in the
-app as `design.md`. Decide every part yourself; don't stop to ask.
+Before you build, design the whole game from the person's request with good game
+design principles, and write it in the app as `design.md`. Decide every part
+yourself; don't stop to ask.
 
 When the person names a game they love, it is the default for everything they
 don't specify: its genre, mechanics, strategy, pacing, mood and the feel of its
@@ -55,48 +54,172 @@ Build from the design, and answer with its main points beside the game's
 address. When the person changes any part, change `design.md` first, then redo
 every part of the game that depended on it.
 
-## Start with a game starter
+## Build from the components
 
-Create an app with `app_new`. For a multiplayer game, call
-`app_files({app, starter: {multiplayer: true, into: app}})` to put the starter
-files in `/workspace/<app>` in the sandbox. For a solo game, omit `multiplayer`.
-The default view is a lit Three.js scene with a camera that follows the player.
-Use `view: 'voxel'` for voxels, or `view: '2d'` for card games, puzzle grids or
-a requested 2D view.
+A game imports its parts from the toolkit's packages; it never copies them.
+Declare each package as a `"platform"` dependency in package.json (see
+[Platform dependencies](#platform-dependencies-and-vocabulary)). The game's own
+files hold its world, its rules and its interface.
 
-For multiplayer, create the app with `access: 'private'`. You can combine
-`multiplayer: true` with any view.
+- **`@yaks/stage/scene`**: `followScene(canvas, world, actor, {blocked, sky})`
+  is a lit Three.js scene around your world and actor meshes, with a camera that
+  follows the player. `draw(pose, intent, dt, elapsed)` places the actor at its
+  `{x, y, z, yaw}` pose, steers the camera, and on slow frames sheds pixels and
+  then shadows. `pick(x, y)` answers the ground point under a tap, for moving by
+  tapping where to go. `dispose()` frees its meshes.
+- **`@yaks/stage/pace`**: `pageLoop(frame, dispose)` calls
+  `frame(now, dt,
+  elapsed)` every animation frame, rests while the page is
+  hidden, and runs `dispose` when the page is left.
+- **`@yaks/game/page`**: `page({words})` opens the app's vocabulary in a graph
+  in the page, with the page-only words you pass.
+- **`@yaks/game/screen`**: the full-viewport game screen and the fullscreen
+  button ([Fullscreen play](#fullscreen-play)).
+- **`@yaks/game/controls`**: keyboard, mouse, touch stick and gamepad input as
+  actions you name ([Input controls](#input-controls-and-the-hud)).
+- **`@yaks/game`**: rules over values: `fixedStep` for a frame-driven game,
+  `blow` and `hpOf` for fights, `aStar` for paths, and more
+  ([Game rules](#game-rules-with-yaksgame)).
+- **`@yaks/game/hud`**: `Party` (a health bar for each player or foe), `Stats`,
+  `Grid` and `Stick`, painted from values you supply.
+- **`@yaks/game/party`**: `partyPanel(watch, lists)` paints `Party` lists into
+  the HUD's `#party` from a live watch on every change, adding `#party` when the
+  page has none.
+- **`@yaks/game/rooms`**: `rooms(rules)` is the app worker's `fetch` for live
+  rooms: invitation-only rooms of up to four seats, each seat bound to the
+  browser that took it, and an action written only when your rules accept it.
+- **`@yaks/game/room`**: the page's side of a room: `hostRoom()`,
+  `joinRoom(room, invite)`, `linkedRoom()` for the room and invitation in the
+  page's address, `inviteLink(member)`, and `connectRoom(seat, line)` for the
+  room's watch.
+- **`@yaks/voxel/three`**: voxel meshes from boxes
+  ([Rendering](#rendering-with-yaksstage-and-yaksvoxel)).
 
-Read and edit the files in the sandbox with `sandbox_shell`. Start with
-`room-model.ts`, `room-rules.ts` and `room-page.ts` for multiplayer, and
-`world.ts` for 3D terrain. Reuse the page graph, game loop and room wiring. Name
-the game and update its manifest and icon. Then stage the folder with
-`sandbox_ship({app, paths: [app]})`. To start directly in a draft, pass
-`draft: 'new'` instead of `starter.into`. Edit individual files in that draft
-with `app_files`.
+Use the 3D scene by default. Use voxels for a voxel game, and a 2D canvas or SVG
+on the same screen for card games, puzzle grids or a requested 2D view.
 
-The starter opens the app vocabulary with `@yaks/game/page`. Use `ent(eid)` for
-indexed reads, `watch` for projections and `mutate` for batches. Declare
-page-only components as `sync: none` and use local watches with
-`{remote: false}`. Apply a frame simulation batch per `fixedStep` step or a turn
-batch per accepted action.
+### The page's graph and the game loop
 
-The app worker checks each guest invitation and writes a turn batch only when
-the rules accept the action. The multiplayer starter already has a party panel
-with every player's health bar, foes that walk up and strike back, knock-out and
-revive, and moving by tapping where to go: build the game's fights on them, and
-never add arrow buttons. `room-party.ts` paints the panel into `#party` on its
-own; keep it, and leave `#party` out of a page you rewrite. Health is a ledger:
-`play_hit{target, life, dmg, roll, need}` rows summed by `hpOf`, and a revive
-starts a new `play_pawn{life}`. `play_motion{room, seat, x, z}` is a transient
-aim marker. Use peer components for frequent motion, with an appropriate `pace`.
+`page` gives the page a graph. Use `ent(eid)` for indexed reads, `watch` for
+projections and `mutate` for batches. Declare page-only components, such as the
+player's pose, as `sync: none` and use local watches with `{remote: false}`.
+Apply a frame simulation batch per `fixedStep` step or a turn batch per accepted
+action. A solo 3D game is these parts joined:
 
-Keep the watch returned by `connectRoom` in `room-client.ts` as the source of
-room state. It delivers the initial snapshot, accepted turns and a fresh
-snapshot on every reconnect. Use `watch.ready` to enable turn controls after the
-snapshot arrives and `watch.refused` to show a refusal. The watch can keep
-drawing the last state while it reconnects. Room reads on a timer or after each
-action are unnecessary.
+```ts ignore
+import { fixedStep } from '@yaks/game'
+import { listen } from '@yaks/game/controls'
+import { page } from '@yaks/game/page'
+import { fullscreenButton, screenStyle } from '@yaks/game/screen'
+import { pageLoop } from '@yaks/stage/pace'
+import { followScene } from '@yaks/stage/scene'
+import { field, hero } from './world.ts' // the game's meshes
+import { move, words } from './rules.ts' // the game's pose and how it moves
+
+screenStyle(document)
+let stop = fullscreenButton(document.querySelector('#fullscreen'), reportError)
+let canvas = document.querySelector('canvas')
+let front = await page({ words })
+let scene = followScene(canvas, field(), hero())
+let player = { eid: crypto.randomUUID() }
+let controls = { eid: crypto.randomUUID() }
+await front.mutate([
+  { entity: player, Pose: { x: 0, y: 0, z: 0, yaw: 0 } },
+  { entity: controls, Controls: {} },
+])
+let hands = listen(canvas, canvas, () => false, {
+  axes: { KeyW: [0, 1], KeyS: [0, -1], KeyA: [-1, 0], KeyD: [1, 0] },
+  turns: {},
+  keys: {},
+  cursor: (x, y) => [x, y],
+  get: () => front.ent(controls.eid),
+  onChange: (bundle) => void front.mutate([bundle]),
+})
+let remainder = 0
+pageLoop((_now, dt, elapsed) => {
+  let intent = hands.read(dt)
+  let plan = fixedStep(elapsed * 1000, remainder)
+  remainder = plan.remainder
+  for (let i = 0; i < plan.steps; i++) {
+    let pose = move(front.ent(player.eid).Pose, intent.move, plan.dt / 1000)
+    void front.mutate([{ entity: player, Pose: pose }])
+  }
+  scene.draw(
+    front.ent(player.eid).Pose,
+    { ...intent, snap: false },
+    dt,
+    elapsed,
+  )
+}, () => {
+  stop()
+  hands.dispose()
+  front.close()
+  scene.dispose()
+})
+```
+
+### Live rooms
+
+For multiplayer, create the app with `access: 'private'`. The app's worker
+serves its rooms, with your rules, and the page joins one:
+
+```ts ignore
+// worker.ts, beside a wrangler.json, with rules.ts shared with the page
+import { rooms } from '@yaks/game/rooms'
+import { act, line, open, relay, seat } from './rules.ts'
+
+export default { fetch: rooms({ line, open, seat, act, relay }) }
+```
+
+- `line(room)` is the query for the rows the room shows its seats, the same on
+  the page and in the worker. Keep every row of a room pointing at the room,
+  such as `play_pawn{room}`. Never name `game_room` in it: that row, which
+  `@yaks/game` declares, holds the invitation's digest and the seats.
+- `open(member)` answers the rows a new room starts with, such as its first
+  turn; `seat(member, order)` the rows a seat brings, such as its piece.
+- `act(member, seats, rows, action, random)` answers the batch an action writes,
+  or throws `RoomRefused` with words for the player. Guard the turn with `$was`,
+  so of two answers to one turn only the first lands.
+- `relay(member, bundle)` passes on a seat's peer component, such as where it
+  points, rebuilt from its seat. Use peer components for frequent motion, with
+  an appropriate `pace`.
+
+The worker answers `room`, the address an invitation opens, with `room.html`
+(set `ROOM_PAGE` in wrangler.json's `vars` for another page), and serves the
+manifest and icons to a signed-out guest. Only the app's owner or an editor
+hosts. On the page, join the room the address names or host one, then watch it:
+
+```ts ignore
+import {
+  connectRoom,
+  hostRoom,
+  joinRoom,
+  linkedRoom,
+  rememberRoom,
+} from '@yaks/game/room'
+import { partyPanel } from '@yaks/game/party'
+import { line, party } from './rules.ts'
+
+let { room, invite } = linkedRoom()
+let member = room ? await joinRoom(room, invite) : await hostRoom()
+rememberRoom(member.room)
+let { front, watch } = await connectRoom(member, line(member.room))
+partyPanel(watch, (rows) => party(rows, member))
+```
+
+Keep the watch as the source of room state. It delivers the room as it is,
+accepted turns, and the whole room again on every reconnect. Use `watch.ready`
+to enable turn controls after the first rows arrive and `watch.refused` to show
+a refusal. Room reads on a timer or after each action are unnecessary. Send an
+action with `postRoom(roomPath(member.room) + 'action', action)`. The host's
+**Copy invite** copies `inviteLink(member)`; **Invite a friend** sends the same
+link with `friends` ([Inviting friends](#inviting-friends)).
+
+In a fight, show every player's and foe's health with `partyPanel`, and let a
+player move by tapping where to go, strike a foe beside them, and revive a
+knocked-out ally; never add arrow buttons. Keep health as a ledger: a row per
+hit, summed by `hpOf`, and a revive starts a new life, so health is never
+stored.
 
 Use `app_preview({app, steps: [{tap: '#host'}]})` to try the host button in the
 draft. Use the selector from your page. Draft actions stay on the preview
@@ -479,16 +602,16 @@ values. The look holds GPU and audio handles; it keeps no copy of the game
 state. Replacing it should leave `rules.ts`, spending receipts and saved runs
 unchanged. Dispose its resources and the controls when the page leaves.
 
-The [game starter](#start-with-a-game-starter) wires the renderer, frame
-callback and orbit camera from `@yaks/stage`. Its `look.ts` takes the game's
-geometry and draws a supplied player pose, and on slow frames
-`keepUp(quality(...))` sheds pixels and then shadows; keep it. Replace the
-example world in `world.ts` and supply the player's pose from the page graph.
+`followScene` from `@yaks/stage/scene` is the lit scene and following camera for
+a game that has no look of its own: hand it the game's world and actor meshes
+and draw the player's pose from the page graph each frame. It lowers quality on
+slow frames.
 
-The voxel starter builds its geometry with `geometry(packedQuads)` and
-`soft(...)` from `@yaks/voxel/three`. Its `trees.ts` is one example of a voxel
-mesh built from app-authored boxes. The compiler shares the same Three.js module
-across the scene and these packages.
+For voxels, build each mesh from boxes the app authors:
+`cuboids(out(), boxes, size)` and `pack` from `@yaks/voxel`, then
+`geometry(packed)` and the `soft(...)` material from `@yaks/voxel/three`. Give
+those meshes to the scene. The compiler shares the same Three.js module across
+the scene and these packages.
 
 ## Recovering lost writes without charging twice
 

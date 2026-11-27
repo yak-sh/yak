@@ -1,29 +1,68 @@
 import { client } from '@yaks/client'
-import { equal, ok, test, throws } from '@yaks/testing'
+import type { Bundle } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
+import { equal, ok, test } from '@yaks/testing'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
-import type { Bundle } from '@yaks/graph'
+import { partyPanel } from './party.ts'
 import {
-  type Choice,
-  motionId,
-  roomLine,
+  roomFrames,
+  RoomRefused,
+  type RoomRules,
+  rooms,
   type Seat,
-  type Turn,
-} from './starter/room-model.ts'
-import {
-  act,
-  ActionRefused,
-  battle,
-  FOES,
-  HERO,
-  REACH,
-} from './starter/room-rules.ts'
-import { partyPanel } from './starter/room-party.ts'
-import { roomFrames } from './starter/room-wire.ts'
-import { rooms } from './starter/worker.ts'
-import words from './starter/vocab.json' with { type: 'json' }
+} from './rooms.ts'
+import { docs } from './vocab.ts'
 
-let store = client(loadVocab(words as VocabDoc))
+// The least game a room holds: the seats take turns passing, and each shares
+// where it points.
+type Turn = { seat: string; number: number }
+let words: VocabDoc = {
+  $defs: {
+    play_turn: {
+      component: true,
+      type: 'object',
+      properties: { seat: { type: 'string' }, number: { type: 'integer' } },
+    },
+    play_motion: {
+      component: true,
+      type: 'object',
+      sync: 'peers',
+      durable: 'connection',
+      properties: {
+        room: { type: 'string' },
+        seat: { type: 'string' },
+        x: { type: 'number' },
+      },
+    },
+  },
+}
+let rules: RoomRules<{ number: number }> = {
+  line: (room) => `(.entity.eid=${room}&.play_turn)|.play_motion.room=${room}`,
+  open: ({ room, seat }) => [{
+    entity: { eid: room },
+    play_turn: { seat, number: 1 },
+  }],
+  act: ({ room, seat }, seats, rows, { number }) => {
+    let turn = rows.find((r) => r.entity.eid === room)?.play_turn as Turn
+    if (turn.seat !== seat) throw new RoomRefused('Wait for your turn.')
+    let next = seats[(seats.indexOf(seat) + 1) % seats.length]
+    return [{
+      entity: { eid: room },
+      play_turn: { seat: next, number: number + 1 },
+      $was: { play_turn: { number: token(number) } },
+    }]
+  },
+  relay: ({ room, seat }, { play_motion }) => {
+    let x = (play_motion as { x?: unknown } | undefined)?.x
+    if (typeof x !== 'number') return
+    return { entity: { eid: seat }, play_motion: { room, seat, x } }
+  },
+}
+let serve = rooms(rules)
+
+let vocab = [...docs, words]
+let store = client(loadVocab(vocab))
 let app = {
   APP: {
     fetch: async (path: string, init?: RequestInit): Promise<Response> => {
@@ -36,7 +75,7 @@ let app = {
           return new Response(error.message, { status: 409 })
         }
       }
-      if (path === '/vocab.json') return Response.json([words])
+      if (path === '/vocab.json') return Response.json(vocab)
       let url = new URL(path, 'https://store.test')
       return Response.json(store.read(url.searchParams.get('q')!))
     },
@@ -45,7 +84,7 @@ let app = {
 }
 
 let request = (who: string, path: string, body?: unknown) =>
-  rooms(
+  serve(
     new Request('https://game.test/game/' + path, {
       method: body === undefined ? 'GET' : 'POST',
       headers: {
@@ -71,7 +110,11 @@ let joined =
     .json() as Seat
 let state = () => store.ent(first.room)?.play_turn as Turn
 
-test('a guest resumes only the room they joined and reads its public components', async () => {
+test('only an editor hosts a room', async () => {
+  equal((await request('guest', 'rooms', {})).status, 403)
+})
+
+test('a guest resumes only the room they joined and reads none of its invitation', async () => {
   equal(
     (await request('guest', `rooms/${other.room}/join`, {
       invite: first.invite,
@@ -81,14 +124,26 @@ test('a guest resumes only the room they joined and reads its public components'
   equal((await request('guest', `rooms/${other.room}/query`)).status, 403)
   equal((await request('guest', path + 'join', {})).status, 200)
   let snapshot = await (await request('guest', path + 'query')).json()
-  ok(snapshot.some((row: { play_turn?: unknown }) => row.play_turn))
-  ok(snapshot.every((row: { play_room?: unknown }) => !row.play_room))
+  ok(snapshot.some((row: Bundle) => row.play_turn))
+  ok(snapshot.every((row: Bundle) => !row.game_room))
 })
 
-test('a ticketed draft can load its module and open a live room from an opaque origin', async () => {
+test('a new invitation shuts out the old one, and a full room takes nobody', async () => {
+  let room = await open()
+  let at = `rooms/${room.room}/`
+  let next = await (await request('host', at + 'invite', {})).json()
+  equal((await request('guest', at + 'invite', {})).status, 403)
+  equal((await request('a', at + 'join', { invite: room.invite })).status, 403)
+  for (let who of ['a', 'b', 'c']) {
+    equal((await request(who, at + 'join', next)).status, 200)
+  }
+  equal((await request('d', at + 'join', next)).status, 409)
+})
+
+test('a ticketed draft opens a live room from an opaque origin, and its files pass through', async () => {
   let mount = '/game/~k3f9x2ab7q1z/'
   let preview = (path: string, method = 'GET') =>
-    rooms(
+    serve(
       new Request('https://game.test' + mount + path, {
         method,
         headers: {
@@ -101,7 +156,7 @@ test('a ticketed draft can load its module and open a live room from an opaque o
       app,
     )
   // A 404 lets the platform serve the compiled module.
-  equal((await preview('room-page.ts')).status, 404)
+  equal((await preview('main.ts')).status, 404)
   let hosted = await preview('rooms', 'POST')
   equal(hosted.status, 200)
   let { room } = await hosted.json() as Seat
@@ -111,7 +166,7 @@ test('a ticketed draft can load its module and open a live room from an opaque o
 
 test('only one accepted action advances a turn, and only for its active seat', async () => {
   let turn = state()
-  let action = { number: turn.number, kind: 'pass' }
+  let action = { number: turn.number }
   equal((await request('guest', path + 'action', action)).status, 409)
   equal(state(), turn)
   let results = await Promise.all([
@@ -119,21 +174,20 @@ test('only one accepted action advances a turn, and only for its active seat', a
     request('host', path + 'action', action),
   ])
   equal(results.map((r) => r.status).sort(), [204, 409])
-  equal(state().seat, joined.seat)
-  equal(state().number, turn.number + 1)
-  store.close()
+  equal(state(), { seat: joined.seat, number: turn.number + 1 })
 })
 
 test('a room socket scopes subscriptions and relays to the connected seat', () => {
-  let emit = roomFrames(joined)
+  let emit = roomFrames(rules, joined)
   let frame = (message: unknown) => JSON.parse(emit(JSON.stringify(message))!)
+  let line = rules.line(first.room)
   equal(
-    emit(JSON.stringify({ subscribe: roomLine(other.room), id: 's1' })),
+    emit(JSON.stringify({ subscribe: rules.line(other.room), id: 's1' })),
     undefined,
   )
-  equal(frame({ subscribe: roomLine(first.room), id: 's1' }), {
+  equal(frame({ subscribe: line, id: 's1' }), {
     id: 's1',
-    subscribe: roomLine(first.room),
+    subscribe: line,
     acks: true,
     frames: true,
   })
@@ -142,170 +196,54 @@ test('a room socket scopes subscriptions and relays to the connected seat', () =
       relay: [{
         entity: { eid: first.seat },
         play_turn: { seat: first.seat, number: 100 },
-        play_motion: { room: other.room, seat: first.seat, x: 1, z: 4 },
+        play_motion: { room: other.room, seat: first.seat, x: 1 },
       }],
     }),
     {
       relay: [{
-        entity: { eid: motionId(joined) },
-        play_motion: { room: first.room, seat: joined.seat, x: 1, z: 4 },
+        entity: { eid: joined.seat },
+        play_motion: { room: first.room, seat: joined.seat, x: 1 },
       }],
     },
   )
+  equal(emit(JSON.stringify({ relay: [{ entity: { eid: 'x' } }] })), undefined)
 })
 
-// A room in rows: hero seats at tiles, foes by kind, and the ledger so far.
-let R = 'r'
-let rows = (
-  heroes: [string, number, number, number?][],
-  foes: [string, string, number, number][] = [],
-  hits: [string, number, number?][] = [],
-  steps = REACH,
-): Bundle[] => [
-  { entity: { eid: R }, play_turn: { seat: heroes[0][0], number: 1, steps } },
-  ...heroes.map(([eid, x, z, life = 0]) => ({
-    entity: { eid },
-    play_pawn: { room: R, name: eid, x, z, life },
-  })),
-  ...foes.map(([eid, kind, x, z]) => ({
-    entity: { eid },
-    play_foe: { room: R, kind, x, z },
-  })),
-  ...hits.map(([target, dmg, life = 0], i) => ({
-    entity: { eid: `hit${i}` },
-    play_hit: {
-      room: R,
-      target,
-      by: 'x',
-      life,
-      dmg,
-      roll: 6,
-      need: 1,
-      number: i,
-    },
-  })),
-]
-// Play one action and fold its batch into the rows. `rolls` feed the d6 and
-// the damage spread in turn: 0.99 rolls a 6, 0 a 1 and the least damage.
-let play = (
-  before: Bundle[],
-  seats: string[],
-  choice: Choice,
-  rolls: number[] = [],
-) => {
-  let seat = (before[0].play_turn as Turn).seat
-  let batch = act(
-    { room: R, seat },
-    seats,
-    before,
-    { ...choice, number: 1 },
-    () => rolls.shift() ?? 0,
-  )
-  let after = structuredClone(before)
-  for (let { entity, $was: _, ...parts } of batch) {
-    let row = after.find((r) => r.entity.eid === entity.eid)
-    if (!row) after.push(row = { entity })
-    for (let [name, value] of Object.entries(parts)) {
-      row[name] = { ...row[name] as object, ...value as object }
-    }
-  }
-  return { ...battle(after, R), rows: after }
-}
-let refused = async (fn: () => unknown) =>
-  ok((await throws(fn)) instanceof ActionRefused)
-
-test('a move spends steps and keeps the turn, never past them or onto someone', async () => {
-  let start = rows([['a', 0, 0], ['b', 0, 2]], [['w', 'wolf', 2, 0]])
-  let walked = play(start, ['a', 'b'], { kind: 'move', x: 1, z: -1 })
-  equal(walked.party[0], { ...walked.party[0], x: 1, z: -1 })
-  equal(walked.turn, { seat: 'a', number: 2, steps: REACH - 2 })
-  for (let [x, z] of [[0, 0], [REACH, 1], [0.5, 0], [0, 2], [2, 0]]) {
-    await refused(() => play(start, ['a', 'b'], { kind: 'move', x, z }))
-  }
-  await refused(() =>
-    play(walked.rows, ['a', 'b'], { kind: 'move', x: 1, z: 2 })
-  )
-})
-
-test('a strike rolls against the foe and writes the ledger, hit or miss', async () => {
-  let start = rows([['a', 0, 0], ['b', 0, 3]], [['w', 'wolf', 1, 0]])
-  let hit = play(start, ['a', 'b'], { kind: 'strike', foe: 'w' }, [0.99, 0])
-  equal(hit.foes[0].hp, FOES.wolf.most - 3)
-  equal(hit.hits[0], { ...hit.hits[0], by: 'a', roll: 6, need: 3, dmg: 3 })
-  equal(hit.turn?.seat, 'b')
-  let miss = play(start, ['a', 'b'], { kind: 'strike', foe: 'w' }, [0])
-  equal([miss.foes[0].hp, miss.hits[0].dmg], [FOES.wolf.most, 0])
-  await refused(() =>
-    play(rows([['a', 0, 0]], [['w', 'wolf', 2, 0]]), ['a'], {
-      kind: 'strike',
-      foe: 'w',
-    })
-  )
-})
-
-test('when the round ends every foe walks to the nearest hero and strikes', () => {
-  let start = rows([['a', 0, 0], ['b', 6, 0]], [['w', 'wolf', 2, 0]])
-  let next = { ...start[0], play_turn: { seat: 'b', number: 1, steps: 3 } }
-  let round = play([next, ...start.slice(1)], ['a', 'b'], { kind: 'pass' }, [
-    0.99,
-    0,
-  ])
-  equal(round.foes[0], { ...round.foes[0], x: 1, z: 0 })
-  equal(round.party.map((p) => p.hp), [HERO.most - 2, HERO.most])
-  equal(round.turn, { seat: 'a', number: 2, steps: REACH })
-})
-
-test('a knocked-out hero loses their turns until an ally beside them revives them', async () => {
-  let start = rows([['a', 0, 0], ['b', 0, 1], ['c', 5, 5]], [], [[
-    'b',
-    HERO.most,
-  ]])
-  let passed = play(start, ['a', 'b', 'c'], { kind: 'pass' })
-  equal(passed.turn?.seat, 'c')
-  let revived = play(start, ['a', 'b', 'c'], { kind: 'revive', seat: 'b' })
-  equal(revived.party[1], { ...revived.party[1], life: 1, hp: HERO.most })
-  equal(revived.turn?.seat, 'b')
-  await refused(() =>
-    play(start, ['a', 'b', 'c'], { kind: 'revive', seat: 'c' })
-  )
-  let fallen = rows([['a', 0, 0]], [['w', 'wolf', 1, 0]], [[
-    'a',
-    HERO.most - 1,
-  ]])
-  let last = play(fallen, ['a'], { kind: 'pass' }, [0.99, 0])
-  equal(last.party[0].hp, 0)
-  await refused(() => play(last.rows, ['a'], { kind: 'pass' }))
-})
-
-test('the party panel paints a health bar for each player and standing foe, with no page code', () => {
+test('the party panel paints a health bar for each one the app lists, with no page code', () => {
   let { document } = parseHTML(
     '<html><head></head><body><div class="GameScreen_Hud"></div></body></html>',
   )
   let changed = () => {}
   let room = {
-    value: rows([['a', 0, 0], ['b', 0, 2]], [['w', 'wolf', 1, 0], [
-      'd',
-      'wolf',
-      5,
-      5,
-    ]], [['d', FOES.wolf.most]]),
+    value: [] as Bundle[],
     ready: false,
     subscribe: (fn: () => void) => {
       changed = fn
       return () => {}
     },
   }
+  let lists = (rows: Bundle[]) => [
+    {
+      members: rows.map((r) =>
+        r.hero as { name: string; hp: number; most: number }
+      ),
+    },
+    { label: 'Foes', members: [] },
+  ]
   let global = globalThis as { document?: Document }
   global.document = document
   try {
-    partyPanel(room, { room: R, seat: 'b' }, document)
+    partyPanel(room, lists, { doc: document })
     let panel = document.querySelector<HTMLElement>('.GameScreen_Hud > #party')!
     ok(panel.hidden)
     room.ready = true
-    room.value = play(room.value, ['a', 'b'], { kind: 'strike', foe: 'w' }, [
-      0.99,
-      0,
-    ]).rows
+    room.value = [
+      {
+        entity: { eid: 'a' },
+        hero: { name: 'a', hp: 10, most: 10, turn: true },
+      },
+      { entity: { eid: 'b' }, hero: { name: 'b', hp: 0, most: 10 } },
+    ]
     changed()
     ok(!panel.hidden)
     equal(
@@ -317,13 +255,11 @@ test('the party panel paints a health bar for each player and standing foe, with
           m.querySelector('.Party_Hp')!.textContent,
         ].join(' ')
       ),
-      [
-        ' a true 10/10',
-        'Party_Member-turn Party_Member-own b true 10/10',
-        ' Wolf true 3/6',
-      ],
+      ['Party_Member-turn a true 10/10', 'Party_Member-down b true Down'],
     )
+    equal(panel.querySelectorAll('ul').length, 1)
   } finally {
     delete global.document
+    store.close()
   }
 })

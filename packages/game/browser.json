@@ -14,7 +14,10 @@
     "./hud",
     "./page",
     "./friends",
-    "./screen"
+    "./screen",
+    "./room",
+    "./party",
+    "./rooms"
   ],
   "resources": [
     "hud/*.css",
