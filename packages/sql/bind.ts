@@ -604,7 +604,11 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
   // identities or a disjunction's candidates already supply the owners.
   // Probe each owner's key instead of building its entire owning set first: a page's
   // `!references` beside its few links read all 36,600 `references` rows to
-  // answer for three.
+  // answer for three. `limit 1` keeps the probe where it is written: SQLite
+  // turns a plain EXISTS into a join, which it may run after the joins that
+  // read values. A text search's 4,700 candidates had every body read before
+  // 1,300 of them were found to be comments: 14,480 pages, where probing
+  // first read 6,097.
   return ctx.correlated || ctx.bounded || ctx.narrowed || ctx.present ||
       ctx.walk ||
       ctx.candidates || ctx.few || ctx.half == 'numbered'
@@ -613,7 +617,7 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
         ctx.d.ownerKey(comp)
       } = ${ctx.owner ?? ctx.d.ownerKey('entity')}${
         where ? ` and (${where})` : ''
-      })`,
+      } limit 1)`,
       params: [],
     })
     : cond({
@@ -624,11 +628,15 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
     })
 }
 
-// Whether the selected row wears `comp`, probed by its own key, for a driving
-// set already chosen. Its owning set is never built: a scoped source (a
-// visibility policy) can build one only by reading every row it holds.
-let probed = (ctx: Ctx, comp: string): Cond =>
-  owned({ ...ctx, correlated: true, owner: ctx.d.ownerKey('entity') }, comp)
+// Whether the selected row wears `comp`, probed by its own key (`owner`, the
+// selected row's by default), for a driving set already chosen. Its owning set
+// is never built: a scoped source (a visibility policy) can build one only by
+// reading every row it holds.
+let probed = (
+  ctx: Ctx,
+  comp: string,
+  owner = ctx.d.ownerKey('entity'),
+): Cond => owned({ ...ctx, correlated: true, owner }, comp)
 
 // The two halves of the extension point. `claims` reports whether any
 // registered extension handles a clause kind, so that a directive that would
@@ -1035,10 +1043,11 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       ctx.present && !ctx.archetypes?.held && hop.comp != 'entity' &&
       !computed(ctx.v, hop.comp)
     ) {
+      // Kept where it is written, as `owned` keeps its probe.
       let hit = cond({
         sql: `exists (select 1 from ${ctx.d.table(hop.comp)} where ${
           ctx.d.ownerKey(hop.comp)
-        } = ${ctx.d.ownerKey('entity')})`,
+        } = ${ctx.d.ownerKey('entity')} limit 1)`,
         params: [],
       })
       return present ? hit : not(hit)
@@ -3776,8 +3785,16 @@ let indexedRelation = (
       // A forced cross join already checks it; otherwise probe the owner's key.
       where: and(
         s.where ? holding(s.where, ctx.candidates.test) : TRUE,
+        // Probed on the candidate's id, so a candidate that does not wear
+        // it costs no read of its entity row.
         ...ctx.present && !(s.joins ?? []).some(drives)
-          ? [probed(ctx, ctx.present)]
+          ? [
+            probed(
+              ctx,
+              ctx.present,
+              ctx.candidates.whole ? undefined : '"__candidates"."id"',
+            ),
+          ]
           : [],
       ),
       // Owners in the answer's order sort their keys alone, read from the

@@ -137,7 +137,11 @@ let theirs = (
   let kinds = [
     ...has('entry') ? [typed] : [],
     ...has('comment') ? [line`.comment ${sub(by)}`] : [],
-    ...has('comment') && name ? [line`.comment .doc.body~=${name + ', '}`] : [],
+    // Only a verbatim quotation is their words (ownWords), and asking for
+    // both strings halves the bodies read: "Jeff, " alone is in 4,751 docs.
+    ...has('comment') && name
+      ? [line`.comment .doc.body~=${name + ', '} .doc.body~=${', verbatim: '}`]
+      : [],
   ]
   return line`(.created.at<${before}) (${sub(joined(kinds, '|'))})`
 }
