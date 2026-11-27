@@ -35,7 +35,7 @@ let fast = await send([point('open-gallery', 8), point('open-gallery', 16)])
 let slow = await send([
   point('open-gallery', 100),
   point('open-gallery', 145),
-  point('open-gallery', 158),
+  point('open-gallery', 230),
   point('open-pricing', 26),
 ])
 let mixed = [...fast, ...slow, ...slow]
@@ -57,19 +57,22 @@ await consume(
 )
 await g.drain()
 
-test('a browser batch records exact thresholds and makes one bug per page and target', async () => {
+test('a browser batch records exact thresholds, and makes one bug per page and target only past twice its budget', async () => {
   equal(batch(fast[0]).scope, platform)
   equal(ack, 3)
   let timing = interactionSummary(await g.graph.read('.timing *'))
   equal([timing.n, timing.under16, timing.under100], [6, 1, 3])
   equal(timing.kinds.map((p) => [p.name, p.max]), [
-    ['home → open-gallery', 158],
+    ['home → open-gallery', 230],
     ['home → open-pricing', 26],
   ])
   let bugs = await g.bugs()
   equal(bugs.length, 1)
-  equal((bugs[0].bug as Comp).hits, 2)
+  equal((bugs[0].bug as Comp).hits, 1)
   let occurrences = await g.graph.read('.error *')
+  let filed = ({ error }: Bundle) =>
+    `${(error as Comp).level} ${!!(error as Comp).bug}`
+  equal(occurrences.map(filed).sort(), ['error true', 'warning false'])
   for (let { error } of occurrences) {
     let tags = (error as Comp).tags as Comp
     equal([tags.page, tags.target, tags.server, tags.render, tags.input], [
@@ -87,7 +90,7 @@ test('the platform digest includes interactions from its tracker store', async (
   let [mail] = await g.graph.read('.mail *')
   let body = String((mail.doc as Comp).body)
   ok(body.includes('16.7% under 16 ms and 50.0% under 100 ms'))
-  ok(body.includes('| home → open-gallery | 5 | 158 ms | 85 ms |'))
+  ok(body.includes('| home → open-gallery | 5 | 230 ms | 100 ms |'))
   ok(body.includes('Slow interaction'))
 })
 

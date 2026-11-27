@@ -58,22 +58,24 @@ test('the digest names new, fixed and open bugs, whom they reached and who is on
   ok(!body.includes('Error: old'))
   ok(
     body.startsWith(
-      '![Bugs opened and fixed each day, and time to fix](https://c.example/chart.png?d=2026-11-07&',
+      '![Bugs opened and fixed each day, warnings, and time to fix](https://c.example/chart.png?d=2026-11-07&',
     ),
   )
 })
 
-test('the chart counts openings and fixes on their days, and its address carries them', () => {
-  let drawn = series(rows, now)
+test('the chart counts openings, fixes and warnings on their days, and its address carries them', () => {
+  let warned = ['2026-11-20T10:00:00Z', '2026-11-20T11:00:00Z', '2026-10-01']
+  let drawn = series(rows, now, warned.map(Date.parse))
   equal(drawn.length, 14)
-  equal(drawn.at(-1), { day: '2026-11-20', opened: 1, fixed: 0 })
+  equal(drawn.at(-1), { day: '2026-11-20', opened: 1, fixed: 0, warned: 2 })
   equal(drawn.at(-2), {
     day: '2026-11-19',
     opened: 1,
     fixed: 1,
+    warned: 0,
     fix: 7_200_000,
   })
-  equal(drawn[3], { day: '2026-11-10', opened: 1, fixed: 0 })
+  equal(drawn[3], { day: '2026-11-10', opened: 1, fixed: 0, warned: 0 })
   equal(days(new URLSearchParams(query(drawn))), drawn)
 })
 

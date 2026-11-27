@@ -2,7 +2,8 @@
 // says what opened and what was fixed since yesterday's, how long the fixes
 // took, what is still open and who is on it, and which of them reached a
 // person, above a chart of the last two weeks. It is written from the bug
-// rows alone; agents heard of each bug when it opened (@yaks/heal).
+// rows, and the chart counts the warnings too, which open no bug; agents
+// heard of each bug when it opened (@yaks/heal).
 
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
@@ -12,7 +13,7 @@ import { headline, whom } from './brief.ts'
 import { fixtime, opened, span, spread } from './fixtime.ts'
 import { type Day, query } from './chart.ts'
 import { platform as PLATFORM, remoteBug } from './reading.ts'
-import { and, eq, every, ge, le, present } from '@yaks/query'
+import { and, eq, every, fields, ge, le, present } from '@yaks/query'
 import {
   FRAME,
   INTERACTION,
@@ -53,10 +54,18 @@ let openings = (b: Bundle) =>
   [at(b, 'bug', 'first'), at(b, 'regressed')].filter(Number.isFinite)
 
 /** The chart's days: the `n` days up to and including `now`'s, each with the
- * bugs that opened and were fixed on it and the median time to fix. */
-export let series = (bugs: Bundle[], now: number, n = SPAN): Day[] => {
+ * bugs that opened and were fixed on it, the warnings caught on it (from
+ * their times), and the median time to fix. */
+export let series = (
+  bugs: Bundle[],
+  now: number,
+  warnings: number[] = [],
+  n = SPAN,
+): Day[] => {
   let keys = Array.from({ length: n }, (_, i) => day(now - (n - 1 - i) * DAY))
-  let days = new Map(keys.map((k) => [k, { opened: 0, fixes: [] as number[] }]))
+  let days = new Map(
+    keys.map((k) => [k, { opened: 0, warned: 0, fixes: [] as number[] }]),
+  )
   let on = (t: number) => Number.isFinite(t) ? days.get(day(t)) : undefined
   for (let b of bugs) {
     for (let t of openings(b)) {
@@ -66,13 +75,18 @@ export let series = (bugs: Bundle[], now: number, n = SPAN): Day[] => {
     let ms = fixtime(b), d = on(at(b, 'resolved'))
     if (d && ms != undefined) d.fixes.push(ms)
   }
+  for (let t of warnings) {
+    let d = on(t)
+    if (d) d.warned++
+  }
   return keys.map((k) => {
-    let { opened, fixes } = days.get(k)!
+    let { opened, warned, fixes } = days.get(k)!
     let median = spread(fixes.map((ms) => ({ ms, of: 0 }))).median
     return {
       day: k,
       opened,
       fixed: fixes.length,
+      warned,
       ...median == undefined ? {} : { fix: median },
     }
   })
@@ -134,6 +148,10 @@ let when = (t: number) =>
     day: 'numeric',
   }).format(t)
 
+/** What the digest is written from besides the bugs: the day's interactions
+ * on the platform, and the times of the chart's warnings. */
+export type Seen = { timing?: InteractionSummary; warnings?: number[] }
+
 /**
  * The digest of `bugs` at `now`: what opened and was fixed in the day before
  * it, what is open, and the chart of the days before that.
@@ -154,7 +172,7 @@ export let digest = (
   bugs: Bundle[],
   now: number,
   places: Places,
-  timing?: InteractionSummary,
+  { timing, warnings }: Seen = {},
 ): { title: string; body: string } => {
   let since = now - DAY
   let hits = (b: Bundle) => Number(comp(b, 'bug').hits ?? 1)
@@ -168,7 +186,7 @@ export let digest = (
   ).sort(rank((b) => fixtime(b)!))
   let still = bugs.filter(open).sort(rank(hits))
   let hit = new Set([...fresh, ...fixed, ...still].filter(person))
-  let days = series(bugs, now)
+  let days = series(bugs, now, warnings)
   let fixes = spread(fixed.map((b) => ({ ms: fixtime(b)!, of: b })))
   // A section lists its first fifteen and counts the rest.
   let section = (
@@ -189,12 +207,12 @@ export let digest = (
   let body = [
     ...places.chart
       ? [
-        `![Bugs opened and fixed each day, and time to fix](${places.chart}${
+        `![Bugs opened and fixed each day, warnings, and time to fix](${places.chart}${
           places.chart.includes('?') ? '&' : '?'
         }${query(days)})`,
         `Last ${SPAN} days, ${when(now - (SPAN - 1) * DAY)} to ${
           when(now)
-        }: opened in red, fixed in green, and the median time to fix of each day's fixes in amber (the highest ${
+        }: opened in red, fixed in green, warnings in grey (a press or an open slower than its budget but within twice it, which opens no bug), and the median time to fix of each day's fixes in amber (the highest ${
           span(Math.max(1, ...days.map((d) => d.fix ?? 0)))
         }).`,
       ]
@@ -304,10 +322,18 @@ export let send = async (
       )),
     )
     : undefined
+  let warnings = await g.read(and(
+    eq('error.level', 'warning'),
+    ge('error.at', since),
+    fields('error.at'),
+  ))
   let { title, body } = digest([...found.values()], now, {
     bug: (bug) => link(remoteBug('yaks.app', bug, { scope: store })),
     ...chart ? { chart } : {},
-  }, timings)
+  }, {
+    timing: timings,
+    warnings: warnings.map((b) => Date.parse(str(comp(b, 'error').at))),
+  })
   let extra = more
     ? await more(now).catch((e) => {
       report(e)

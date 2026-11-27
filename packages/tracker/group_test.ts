@@ -208,23 +208,27 @@ test('old code counts without reopening; a new commit regresses once', async () 
   equal(comp((await bugs(g))[0], 'bug').status, 'archived')
 })
 
-test('a warning after the resolution counts without reopening; an error reopens', async () => {
+let warned = (id: string, at?: string): Bundle => {
+  let row = occurrence(id)
+  let e = comp(row, 'error')
+  return { ...row, error: { ...e, level: 'warning', at: at ?? e.at } }
+}
+
+test('a warning joins no bug, and its grouping clears those older than the chart', async () => {
   let g = fixture()
-  await put(g, occurrence('1'))
+  await put(g, warned('1'))
+  await put(g, occurrence('2'))
   let [bug] = await bugs(g)
   await g.apply([{
     entity: bug.entity,
-    resolved: { at: '2026-10-02T00:00:01Z' },
+    resolved: { at: '2026-10-02T00:00:03Z' },
   }], {
     trusted: true,
   })
-  let warning = occurrence('2', b)
-  warning.error = { ...comp(warning, 'error'), level: 'warning' }
-  await put(g, warning)
+  await put(g, warned('4', new Date().toISOString()))
   let [still] = await bugs(g)
-  equal([comp(still, 'bug').status, comp(still, 'bug').hits], ['resolved', 2])
-  await put(g, occurrence('3', b))
-  equal(comp((await bugs(g))[0], 'regressed').error, '3')
+  equal([comp(still, 'bug').status, comp(still, 'bug').hits], ['resolved', 1])
+  equal((await g.read('.error.level=warning')).map((r) => r.entity.eid), ['4'])
 })
 
 let versions = await (async () => {

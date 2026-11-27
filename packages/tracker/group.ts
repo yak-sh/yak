@@ -22,6 +22,7 @@ import {
 import { faultOf, rerunOf, stablePlace } from './fault.ts'
 import { enrichFrames } from './frames.ts'
 import { comp, type Desk, type Frame, str, title } from './model.ts'
+import { SPAN } from './digest.ts'
 
 export type Enrich = (row: Bundle) => Bundle | Promise<Bundle>
 export let bugEid = (app: string, fault: string): string =>
@@ -69,16 +70,12 @@ let inherited = (row: Bundle, bug: Bundle | undefined, before: Bundle[]) => {
 let past = (row: Bundle, bug: Bundle): boolean =>
   !imported(row) && !!bug.resolved &&
   str(comp(row, 'error').at) > str(comp(bug, 'resolved').at)
-// A failure past its line after the resolution: a warning only counts.
-let bringsBack = (row: Bundle, bug: Bundle): boolean =>
-  comp(row, 'error').level != 'warning' && past(row, bug)
 /** A resolved bug comes back when it happens after its resolution, unless the
  * occurrence names a release the group saw by then: that is old code still
  * running. An occurrence naming no release (a systemd unit's failure, reported
- * from outside the process that ran) has only its time to go by. A warning,
- * a failure near its line, never brings one back: it is counted. */
+ * from outside the process that ran) has only its time to go by. */
 export let regresses = (row: Bundle, bug: Bundle, before: Bundle[]): boolean =>
-  bringsBack(row, bug) &&
+  past(row, bug) &&
   !(release(row) && before.some((old) => release(old) == release(row)))
 
 /** Where frames place a bug: their top in-app symbol is its culprit, or
@@ -262,12 +259,12 @@ let earlier = (
   if (!bug) return []
   let of = eq('error.bug', bug.entity.eid)
   if (imported(row)) return g.read(and(of, ...MARKS.map((m) => want(m))))
-  if (!bringsBack(row, bug) || !release(row)) return []
+  if (!past(row, bug) || !release(row)) return []
   return sharing(g, bug, row)
 }
 
 /** One occurrence of a bug from before its resolution that shares this one's
- * release, if any is kept: a warning since names no release as old. */
+ * release, if any is kept. */
 let sharing = (g: Desk, bug: Bundle, row: Bundle) => {
   let e = comp(row, 'error')
   return g.read(and(
@@ -302,10 +299,37 @@ let spent = (g: Desk): Bundle[] | Promise<Bundle[]> =>
       })),
   )
 
+/** Whether an occurrence is a warning: a failure near its line, such as a
+ * press a little past its budget. It files under no bug, and the digest's
+ * chart counts it on its day (./digest.ts `series`). */
+let warning = (row: Bundle | undefined): boolean =>
+  comp(row, 'error').level == 'warning'
+// The most faded warnings one grouping clears.
+let FADED = 100
+/** The deletes of the warnings older than the digest's chart, which no letter
+ * counts again: each warning's grouping clears them, as a probe's clears the
+ * spent receipts. */
+let faded = (g: Desk, now = Date.now()): Bundle[] | Promise<Bundle[]> =>
+  after(
+    g.read(and(
+      eq('error.level', 'warning'),
+      lt('error.at', new Date(now - SPAN * 86_400_000).toISOString()),
+      absent('error.bug'),
+      fields('error.at'),
+      limit(FADED),
+    )),
+    (rows) =>
+      rows.map((b) => ({
+        entity: b.entity,
+        $delete: true,
+        $was: { error: { at: token(comp(b, 'error').at) } },
+      })),
+  )
+
 /** Existing groups can have migrated eids. New groups have deterministic ids;
  * guarded counters serialize competing workers without process-local locks.
  * Contention rebases here, without spending the effect's failure attempts.
- * Answers the bug the occurrence joined, if this call grouped it. */
+ * A warning joins none. Answers the bug the occurrence joined, if this call grouped it. */
 export let group = async (
   g: Desk,
   eid: string,
@@ -317,6 +341,16 @@ export let group = async (
       !row?.error || row.refusal || comp(row, 'error').bug ||
       comp(row, 'probe').grouped
     ) return
+    if (warning(row)) {
+      try {
+        let gone = await faded(g)
+        if (gone.length) await g.apply(gone, { trusted: true })
+        return
+      } catch (error) {
+        if (!(error instanceof Stale)) throw error
+        continue
+      }
+    }
     let full = await (enrich ?? enrichFrames())(row)
     let fault = faultOf(full)
     let app = str(comp(full, 'during').app)

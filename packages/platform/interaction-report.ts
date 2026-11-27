@@ -143,8 +143,8 @@ let batch = (
 
 // A sample past its budget is slow, and past twice its budget it is a
 // failure. Within that, a phone's busy frame is enough to cross the line: a
-// warning, counted and opening a bug when none is open, never bringing back
-// one an agent fixed and saw fast.
+// warning, which the tracker files under no bug and the daily digest's chart
+// counts.
 let graded = (ms: number, budget: number): Context['level'] =>
   ms > 2 * budget ? 'error' : 'warning'
 

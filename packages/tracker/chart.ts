@@ -1,21 +1,29 @@
-// The digest's chart: bugs opened and fixed each day, and the median time to
-// fix of the day's fixes, drawn as a PNG a mail client shows. Its numbers ride
-// in its address, so whoever draws it reads nothing and needs no ticket: the
-// image is a pure function of the query string.
+// The digest's chart: bugs opened and fixed each day, the warnings that opened
+// none, and the median time to fix of the day's fixes, drawn as a PNG a mail
+// client shows. Its numbers ride in its address, so whoever draws it reads
+// nothing and needs no ticket: the image is a pure function of the query
+// string.
 
 import { png } from '@yaks/blob/png'
 
 /** One day of the chart: bugs opened (first seen or regressed) and fixed,
- * and the median time to fix of that day's fixes, in milliseconds. */
-export type Day = { day: string; opened: number; fixed: number; fix?: number }
+ * the warnings that opened none, and the median time to fix of that day's
+ * fixes, in milliseconds. */
+export type Day = {
+  day: string
+  opened: number
+  fixed: number
+  warned: number
+  fix?: number
+}
 
 // The most days an address may carry, and the largest count it draws.
 let MOST = 31, TOP = 9999
 
-/// query([{ day: '2026-11-19', opened: 3, fixed: 1, fix: 240_000 }, { day: '2026-11-20', opened: 0, fixed: 2 }])
-///   -> 'd=2026-11-19&o=3,0&f=1,2&t=4,'
+/// query([{ day: '2026-11-19', opened: 3, fixed: 1, warned: 5, fix: 240_000 }, { day: '2026-11-20', opened: 0, fixed: 2, warned: 0 }])
+///   -> 'd=2026-11-19&o=3,0&f=1,2&t=4,&w=5,0'
 /** A chart's days as the query string its image is drawn from: the first
- * day, then opened, fixed and minutes to fix, a day each. */
+ * day, then opened, fixed, minutes to fix and warnings, a day each. */
 export let query = (days: Day[]): string =>
   new URLSearchParams({
     d: days[0]?.day ?? '',
@@ -23,32 +31,41 @@ export let query = (days: Day[]): string =>
     f: days.map((d) => d.fixed).join(','),
     t: days.map((d) => d.fix == undefined ? '' : Math.round(d.fix / 60_000))
       .join(','),
+    w: days.map((d) => d.warned).join(','),
   }).toString().replace(/%2C/g, ',')
 
 let after = (day: string, n: number) =>
   new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString()
     .slice(0, 10)
 
-/// days(new URLSearchParams('d=2026-11-30&o=3,0&f=1,2&t=4,'))
-///   -> [{ day: '2026-11-30', opened: 3, fixed: 1, fix: 240_000 }, { day: '2026-12-01', opened: 0, fixed: 2 }]
+/// days(new URLSearchParams('d=2026-11-30&o=3,0&f=1,2&t=4,&w=5,0'))
+///   -> [{ day: '2026-11-30', opened: 3, fixed: 1, warned: 5, fix: 240_000 }, { day: '2026-12-01', opened: 0, fixed: 2, warned: 0 }]
+/// days(new URLSearchParams('d=2026-11-30&o=3&f=1&t='))
+///   -> [{ day: '2026-11-30', opened: 3, fixed: 1, warned: 0 }]
 /// days(new URLSearchParams('d=nope&o=1&f=1&t=')) -> undefined
 /** The days a chart's query string carries, or undefined for one that is
- * not a chart's. */
+ * not a chart's. An address from before warnings were counted draws none. */
 export let days = (q: URLSearchParams): Day[] | undefined => {
   let first = q.get('d') ?? ''
   if (!/^\d{4}-\d{2}-\d{2}$/.test(first) || !Date.parse(first)) return
   let list = (k: string) => (q.get(k) ?? '').split(',')
   let [o, f, t] = [list('o'), list('f'), list('t')]
-  if (o.length > MOST || f.length != o.length || t.length != o.length) return
+  let w = q.has('w') ? list('w') : o.map(() => '0')
+  if (
+    o.length > MOST || f.length != o.length || t.length != o.length ||
+    w.length != o.length
+  ) return
   let count = (s: string) => /^\d{1,4}$/.test(s) ? Number(s) : NaN
   let out = o.map((s, i): Day => ({
     day: after(first, i),
     opened: count(s),
     fixed: count(f[i]),
+    warned: count(w[i]),
     ...t[i] ? { fix: count(t[i]) * 60_000 } : {},
   }))
   return out.every((d) =>
-      d.opened <= TOP && d.fixed <= TOP && !Number.isNaN(d.fix ?? 0)
+      d.opened <= TOP && d.fixed <= TOP && d.warned <= TOP &&
+      !Number.isNaN(d.fix ?? 0)
     )
     ? out
     : undefined
@@ -58,6 +75,7 @@ export let days = (q: URLSearchParams): Day[] | undefined => {
 export let COLOURS = {
   opened: [209, 73, 91],
   fixed: [60, 154, 95],
+  warned: [150, 160, 180],
   fix: [224, 161, 0],
 } as const
 let INK = [110, 110, 110], RULE = [215, 215, 215]
@@ -129,14 +147,21 @@ export let chart = (days: Day[]): Promise<Uint8Array> => {
     }
   }
   let n = Math.max(days.length, 1), slot = (W - 2 * PAD) / n
-  let most = Math.max(1, ...days.flatMap((d) => [d.opened, d.fixed]))
+  let most = Math.max(
+    1,
+    ...days.flatMap((d) => [d.opened, d.fixed, d.warned]),
+  )
   let slowest = Math.max(1, ...days.map((d) => d.fix ?? 0))
   let tall = BASE - ROOF - 10
   box(PAD, BASE, W - 2 * PAD, 1, RULE)
   let points: ([number, number] | undefined)[] = days.map((d, i) => {
-    let x = PAD + i * slot, bar = Math.max(2, slot * 0.3)
+    let x = PAD + i * slot, bar = Math.max(2, slot * 0.28)
     let mid = x + slot / 2
-    ;([['opened', mid - bar], ['fixed', mid]] as const).forEach(([k, left]) => {
+    ;([
+      ['opened', mid - 1.5 * bar],
+      ['fixed', mid - 0.5 * bar],
+      ['warned', mid + 0.5 * bar],
+    ] as const).forEach(([k, left]) => {
       let h = d[k] / most * tall
       if (!d[k]) return
       box(left, BASE - h, bar, h, COLOURS[k])

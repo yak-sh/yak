@@ -151,17 +151,18 @@ owns one letter (its eid derives from the store, recipient and day), so a
 retried firing writes nothing more.
 
 Above the tables is a chart of the last fourteen days: bugs opened (red) and
-fixed (green) each day, and the median time to fix of the day's fixes (amber).
-It is a PNG, since a mail client draws no SVG and fetches what it shows: the
-letter's image points at the `chart` option's `/chart.png` with the days in its
-query string (`query()` in `./chart`), and `serve()` draws it from that alone,
-so the door that serves it reads nothing and needs no ticket.
+fixed (green) each day, the warnings caught that day (grey), and the median time
+to fix of the day's fixes (amber). It is a PNG, since a mail client draws no SVG
+and fetches what it shows: the letter's image points at the `chart` option's
+`/chart.png` with the days in its query string (`query()` in `./chart`), and
+`serve()` draws it from that alone, so the door that serves it reads nothing and
+needs no ticket.
 
 ```ts
 import { equal } from '@yaks/testing'
 import { days, query } from '@yaks/tracker/chart'
 
-let week = [{ day: '2026-11-19', opened: 3, fixed: 1, fix: 240_000 }]
+let week = [{ day: '2026-11-19', opened: 3, fixed: 1, warned: 5, fix: 240_000 }]
 equal(days(new URLSearchParams(query(week))), week)
 ```
 
@@ -179,10 +180,13 @@ An occurrence regresses a resolved bug when its `error.at` is later than
 `resolved.at`, unless its commit (or version without a commit) was seen in the
 group by then: that is old code still running. One naming no release, such as a
 systemd unit's failure reported from outside the unit, regresses on its time
-alone. An occurrence whose `error.level` is `warning`, a failure near its line
-such as a press a little past its budget, never regresses one. Warnings, earlier
-occurrences and occurrences at the resolution timestamp still count, but retain
-`resolved` and `notified` without adding `regressed`.
+alone. Earlier occurrences and occurrences at the resolution timestamp still
+count, but retain `resolved` and `notified` without adding `regressed`.
+
+An occurrence whose `error.level` is `warning`, a failure near its line such as
+a press or an open slower than its budget but within twice it, joins no bug: the
+digest's chart counts it on its day. Its grouping deletes the warnings older
+than the chart's fourteen days.
 
 ### Probes
 
