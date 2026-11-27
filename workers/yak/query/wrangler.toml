@@ -45,6 +45,19 @@ name = "SERVING_COPY"
 class_name = "PublicDirectory"
 script_name = "yak"
 
+# A refusal an app's own page caused is filed from here (apps.ts `mistake`,
+# unseen.ts `noted`): it tells the space's members on their Wire and asks the
+# space's Operator to fix it on its Builder.
+[[durable_objects.bindings]]
+name = "WIRE"
+class_name = "Wire"
+script_name = "yak"
+
+[[durable_objects.bindings]]
+name = "BUILDER"
+class_name = "Builder"
+script_name = "yak"
+
 [[queues.producers]]
 binding = "ERRORS"
 queue = "yak-errors"
@@ -95,6 +108,19 @@ script_name = "yak-staging"
 [[env.staging.durable_objects.bindings]]
 name = "SERVING_COPY"
 class_name = "PublicDirectory"
+script_name = "yak-staging"
+
+# A refusal an app's own page caused is filed from here (apps.ts `mistake`,
+# unseen.ts `noted`): it tells the space's members on their Wire and asks the
+# space's Operator to fix it on its Builder.
+[[env.staging.durable_objects.bindings]]
+name = "WIRE"
+class_name = "Wire"
+script_name = "yak-staging"
+
+[[env.staging.durable_objects.bindings]]
+name = "BUILDER"
+class_name = "Builder"
 script_name = "yak-staging"
 
 [[env.staging.queues.producers]]
