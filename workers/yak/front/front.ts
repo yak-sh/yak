@@ -68,7 +68,7 @@ import {
 } from '@yaks/platform/routes'
 import { type Clock, within } from '@yaks/fp'
 import { VERSION } from '@yaks/workerd/worker'
-import { answerBy, resending } from '@yaks/workerd/fetch'
+import { answerBy, hedged, resending } from '@yaks/workerd/fetch'
 import { workerWaits } from '@yaks/platform/app-worker'
 import { wakeStore } from '@yaks/platform/store-wake'
 import type { Namespace } from '@yaks/durable-object/door'
@@ -147,6 +147,8 @@ let session = (req: Request, env: Host) => {
 // the gateway uses for its own.
 let served = 0
 let SITE_WAIT = 60
+// Leave most of the 1.5 s picture-open budget for the answer and its paint.
+let CONNECTIONS_GRACE = 650
 let finished = (
   res: Response,
   env: Host,
@@ -405,10 +407,15 @@ let serving = async (
   env: FrontEnv,
   ctx: Lent,
   waiting: (name: string) => void,
+  signal: AbortSignal,
 ) => {
   let at = Date.now(), cold = served++ == 0, said: string[] = []
   let host = hostOf(req, env)
   let path = new URL(req.url).pathname
+  let manageRequest = host == apex(env) && shareable(req, path)
+    ? collapsed(req)
+    : null
+  let manage = manageRequest && managed(new URL(manageRequest.url).pathname)
   let appLoad = host != apex(env) && (documentPath(path) || fixed(path)) &&
     shareable(req, path) && !spaceDoor(path)
   let refused: number | null = null
@@ -423,13 +430,10 @@ let serving = async (
       if (asset) return finished(asset, env, at, cold, said)
     }
     if (
-      hostOf(req, env) == apex(env) && shareable(req) && !routedCookie(req, env)
+      manageRequest && manage && !('moved' in manage) && !('door' in manage) &&
+      !routedCookie(req, env)
     ) {
-      let page = collapsed(req)
-      let manage = managed(new URL(page.url).pathname)
-      if (manage && !('moved' in manage) && !('door' in manage)) {
-        return finished(signInReturn(page, env), env, at, cold, said)
-      }
+      return finished(signInReturn(manageRequest, env), env, at, cold, said)
     }
     waiting('site_wait')
     let page = appLoad
@@ -445,6 +449,10 @@ let serving = async (
   let app = hostOf(req, env) != apex(env) || homed(path) ||
     path.startsWith('/home/')
   let retry = app ? workerWaits.page + 5_000 : undefined
+  let connections = manage && (
+    'view' in manage && manage.view == 'connections' ||
+    'legacy' in manage && manage.legacy == 'connections'
+  )
   let forwarded = req
   if (appLoad || req.headers.has(SITE_CHECKED)) {
     let headers = new Headers(req.headers)
@@ -466,7 +474,16 @@ let serving = async (
     }
   }
   if (!query) waiting('kernel_wait')
-  let res = query ?? await resending(env.KERNEL, forwarded, env.CLOCK, retry)
+  let res = query ?? (connections
+    ? await hedged(
+      env.KERNEL,
+      new Request(forwarded, {
+        signal: AbortSignal.any([forwarded.signal, signal]),
+      }),
+      CONNECTIONS_GRACE,
+      env.CLOCK,
+    )
+    : await resending(env.KERNEL, forwarded, env.CLOCK, retry))
   routed(req, res, env, ctx, query ? 'query' : 'kernel')
   if (path == VERSION) {
     let out = new Response(res.body, res)
@@ -486,13 +503,13 @@ let serving = async (
     )
   }
   let mount = res.headers.get(UNKEPT_AT)
-  if (res.status == 101 || !mount && !appLoad) return res
+  if (res.status == 101 || !mount && !appLoad && !connections) return res
   // An app whose pages are never kept pays the hop to Site once in a while,
   // not on every view.
   if (mount) remember(env.SITE, scope(host, null, mount))
   let out = new Response(res.body, res)
   out.headers.delete(UNKEPT_AT)
-  if (appLoad) {
+  if (appLoad || connections) {
     let timing = [
       out.headers.get('server-timing'),
       ...said,
@@ -510,7 +527,7 @@ export let serve = (
 ): Promise<Response> => {
   let waiting = 'front fetch'
   return answerBy(
-    () => serving(req, env, ctx, (name) => waiting = name),
+    (signal) => serving(req, env, ctx, (name) => waiting = name, signal),
     55_000,
     (ms) => {
       report(

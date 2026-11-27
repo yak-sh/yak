@@ -763,6 +763,84 @@ test('an unanswered MCP read reaches a fresh kernel hop before its caller gives 
   lost.reject(new DOMException('aborted', 'AbortError'))
 })
 
+let connections = 'https://yaks.app/manage/yak/connections'
+let signedIn = { headers: { cookie: 'yak_session=' + body({ person: 'me' }) } }
+
+test('a stalled Connections open can use a fresh kernel answer within its picture budget', async () => {
+  let time = clock(), first = Promise.withResolvers<Response>()
+  let calls = 0
+  let f = front(
+    () => page(),
+    () =>
+      ++calls == 1 ? first.promise : new Response('live Connections', {
+        headers: { 'server-timing': 'gateway;dur=236' },
+      }),
+  )
+  f.env.CLOCK = time
+  let result = f.go(connections, signedIn)
+  await time.advance(400)
+  assertEquals(f.forwarded.length, 1)
+  await time.advance(600)
+  await time.advance(0)
+  assertEquals(f.forwarded.length, 2)
+  let answer = await result
+  assertEquals(await answer.text(), 'live Connections')
+  assertStringIncludes(answer.headers.get('server-timing')!, 'gateway;dur=236')
+  assertStringIncludes(answer.headers.get('server-timing')!, 'front;dur=')
+  assertEquals(f.forwarded.map((r) => r.signal.aborted), [true, false])
+  let discarded = false
+  first.resolve(
+    new Response(
+      new ReadableStream({
+        cancel: () => void (discarded = true),
+      }),
+    ),
+  )
+  await time.advance(0)
+  assertEquals(discarded, true)
+})
+
+test('a Connections read can still use its original answer once a second hop starts', async () => {
+  let time = clock()
+  let first = Promise.withResolvers<Response>()
+  let second = Promise.withResolvers<Response>()
+  let calls = 0
+  let f = front(
+    () => page(),
+    () => ++calls == 1 ? first.promise : second.promise,
+  )
+  f.env.CLOCK = time
+  let result = f.go('https://yaks.app/manage/connections?space=yak', signedIn)
+  await time.advance(1000)
+  await time.advance(0)
+  assertEquals(f.forwarded.map((r) => r.signal.aborted), [false, false])
+  first.resolve(
+    new Response(null, {
+      status: 301,
+      headers: { location: connections },
+    }),
+  )
+  let response = await result
+  assertEquals([response.status, response.headers.get('location')], [
+    301,
+    connections,
+  ])
+  assertEquals(f.forwarded.map((r) => r.signal.aborted), [false, true])
+  second.resolve(new Response(null))
+})
+
+test('a Connections save stays on its original kernel request', async () => {
+  let time = clock(), saved = Promise.withResolvers<Response>()
+  let f = front(() => page(), () => saved.promise)
+  f.env.CLOCK = time
+  let result = f.go(connections, { ...signedIn, method: 'POST', body: 'save' })
+  await time.advance(5000)
+  assertEquals(f.forwarded.length, 1)
+  assertEquals(await f.forwarded[0].text(), 'save')
+  saved.resolve(new Response(null, { status: 303 }))
+  assertEquals((await result).status, 303)
+})
+
 test('the front keeps one kernel hop while an app page reaches its deadline', async () => {
   let time = clock(), answer = Promise.withResolvers<Response>()
   let entered = Promise.withResolvers<void>()

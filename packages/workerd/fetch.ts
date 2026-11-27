@@ -8,6 +8,9 @@ export type Bound = {
   fetch(req: Request, init?: Pick<RequestInit, 'signal'>): Promise<Response>
 }
 
+let readable = (req: Request) =>
+  (req.method == 'GET' || req.method == 'HEAD') && !req.headers.has('upgrade')
+
 /** Answer by a wall-clock deadline. An answer that arrives later has no
  * reader. A response that arrives in time keeps its own body lifetime. */
 export let answerBy = async (
@@ -79,9 +82,7 @@ export let resending = async (
   time: Clock = system,
   patience = 5000,
 ): Promise<Response> => {
-  if (
-    !['GET', 'HEAD'].includes(req.method) || req.headers.has('upgrade')
-  ) return door.fetch(req)
+  if (!readable(req)) return door.fetch(req)
   let late = false, stop = new AbortController()
   let expired = Promise.withResolvers<null>()
   let cancel = time.after(patience, () => {
@@ -104,4 +105,52 @@ export let resending = async (
   if (answer) return answer
   req.signal.throwIfAborted()
   return door.fetch(req)
+}
+
+/** Give a read one more route to an answer after its grace period. The first
+ * answer wins, even if it is the original read finishing during the retry.
+ * Cancel the other hop and discard its response if the binding still sends it. */
+export let hedged = async (
+  door: Bound,
+  req: Request,
+  grace: number,
+  time: Clock = system,
+): Promise<Response> => {
+  if (!readable(req)) return door.fetch(req)
+  req.signal.throwIfAborted()
+  let flights: { stop: AbortController; answer: Promise<Response> }[] = []
+  let send = () => {
+    let stop = new AbortController()
+    let signal = AbortSignal.any([req.signal, stop.signal])
+    let answer = Promise.resolve().then(() => {
+      signal.throwIfAborted()
+      return door.fetch(new Request(req, { signal }), { signal })
+    })
+    flights.push({ stop, answer })
+    return answer.then((response) => ({ stop, response }))
+  }
+  let first = send()
+  let elapsed = Promise.withResolvers<null>()
+  let cancel = time.after(grace, () => elapsed.resolve(null))
+  let left = Promise.withResolvers<never>()
+  let leave = () => left.reject(req.signal.reason)
+  req.signal.addEventListener('abort', leave, { once: true })
+  let won: AbortController | undefined
+  try {
+    let early = await Promise.race([first, elapsed.promise, left.promise])
+    let kept = early ?? await Promise.race([
+      Promise.any([first, send()]),
+      left.promise,
+    ])
+    won = kept.stop
+    return kept.response
+  } finally {
+    cancel()
+    req.signal.removeEventListener('abort', leave)
+    for (let { stop, answer } of flights) {
+      if (stop == won) continue
+      stop.abort()
+      void answer.then((r) => r.body?.cancel()).catch(() => {})
+    }
+  }
 }
