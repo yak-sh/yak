@@ -12,6 +12,7 @@
 
 import { stringify } from '@yaks/vocab/wire'
 import { type Stale, STATUS, status } from '@yaks/graph/errors'
+import { FILED } from './headers.ts'
 
 /** A refusal, as a client reads it: the error's name, its message, and any
  * fields the error carried (a {@link https://jsr.io/@yaks/graph | Stale}
@@ -101,7 +102,7 @@ export let faults = (report: Reporter): () => void => {
 
 /** The header on an answer whose failure was reported where it was caught:
  * a caller that relays the answer files it no second time. */
-export let FILED = 'x-yak-filed'
+export { FILED }
 
 /** Whether a host's reporter hears this package's failures ({@link faults}). */
 export let reporting = (): boolean => reporters.length > 0

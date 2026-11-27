@@ -287,10 +287,9 @@ export let classes: Record<string, Deferred> = {
       purge: (await import('@yaks/workerd/cache')).purging(ctx.cache),
     }),
   ),
-  // What yak-front (front/) owes for a page it answered from the edge: the
-  // app was used, and its store starts for the page's scripts. Each call
-  // answers once its work is sent and held: an invocation ends with its
-  // call, and work begun after it returned was cut off with it (T-150366).
+  // The use receipt for a page yak-front answered from the edge. The wake
+  // also serves earlier front deploys until they are replaced by the front
+  // that reaches the Store directly.
   Uses: entered(WorkerEntrypoint, ['used', 'wake'], async (_ctx, env) => {
     let { scheduleUse, wake } = await import('../used.ts')
     return {

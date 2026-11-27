@@ -8,10 +8,11 @@
 // translation in the grammar goes only once nothing sends it (T-123000).
 import type { Plugin } from '@yaks/graph'
 import { parse, retired } from '@yaks/query'
-import { ahead, storeOf, WAKE, WARM } from './door.ts'
+import { ahead, storeOf, WARM } from './door.ts'
 import { type Namespace } from '@yaks/durable-object/door'
 import { jittered, overloaded } from '@yaks/durable-object/resets'
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { wakeStore } from '@yaks/platform/store-wake'
 import { answered, KERNEL } from './meta.ts'
 import { background, defect, within } from './defects.ts'
 import type { Env } from './env.ts'
@@ -232,55 +233,43 @@ export let scheduleUse = (
   retain?: (work: Promise<void>) => void,
 ): void => schedule(env, used(eid), retain)
 
-// A start a caller sends a store ahead of what it will ask (door.ts
-// `ahead`).
-let starting = (path: string, request: string) =>
-(
-  env: Partial<Env>,
-  store: string,
-  retain?: (work: Promise<void>) => void,
-): void => {
-  let STORE = env.STORE
-  if (!STORE) return
-  ahead(
-    () => storeOf(STORE, store)(path, {}, KERNEL),
-    { request, store },
-    retain,
-  )
-}
-
-// A store woken a moment ago is still up. A burst of views (a crawler
-// walking an app's pages) sends its store one wake per binding per `AWAKE`,
-// not one per view queued behind the reads the views make (T-1112).
-let AWAKE = 10_000
-let WOKEN = 1024
-let woken = new WeakMap<Namespace, Map<string, number>>()
-let waking = starting(WAKE, 'store wake')
-
 /** Boot the store `store` names (door.ts `WAKE`) for a page's scripts, whose
  * first `/api/` call would otherwise wait out its whole start and boot
  * (T-149697, T-150366), unless this isolate woke it in the last ten seconds. */
 export let wake = (
   env: Partial<Env>,
   store: string,
-  retain?: (work: Promise<void>) => void,
+  retain: (work: Promise<void>) => void = background,
 ): void => {
   let ns = env.STORE
   if (!ns) return
-  let held = woken.get(ns)
-  if (!held) woken.set(ns, held = new Map())
-  let now = (env.CLOCK ?? system).now()
-  if (now - (held.get(store) ?? -Infinity) < AWAKE) return
-  held.delete(store)
-  held.set(store, now)
-  if (held.size > WOKEN) held.delete(held.keys().next().value!)
-  waking(env, store, retain)
+  let tags = { request: 'store wake', store }
+  retain(
+    within(
+      env,
+      tags,
+      () =>
+        wakeStore(ns, store, (error) => defect(error, tags), env.CLOCK?.now()),
+    ),
+  )
 }
 
 /** Start the object a birth names (door.ts `WARM`) for its first write
  * (T-143307). Its store holds nothing yet, and the start reads nothing, so one
  * nobody follows up keeps nothing. */
-export let start = starting(WARM, 'store warm')
+export let start = (
+  env: Partial<Env>,
+  store: string,
+  retain?: (work: Promise<void>) => void,
+): void => {
+  let ns = env.STORE
+  if (!ns) return
+  ahead(
+    () => storeOf(ns, store)(WARM, {}, KERNEL),
+    { request: 'store warm', store },
+    retain,
+  )
+}
 
 /** A write changed this app's store, or its code reported an error. */
 export let scheduleMark = (

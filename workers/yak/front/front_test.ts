@@ -40,9 +40,10 @@ let front = (
 ) => {
   let asked: string[] = [], forwarded: Request[] = [], used: string[] = []
   let files: string[] = []
-  let warmed: string[] = []
+  let warmed: { store: string; request: Request }[] = []
   let points: unknown[] = [], errors: unknown[] = [], retained: unknown[] = []
   let told: Conversion[] = []
+  let wake = Promise.withResolvers<Response>()
   let env: FrontEnv = {
     APEX: 'yaks.app',
     SITE: {
@@ -68,10 +69,15 @@ let front = (
         used.push(eid)
         return Promise.resolve()
       },
-      wake: (store) => {
-        warmed.push(store)
-        return Promise.resolve()
-      },
+    },
+    STORE: {
+      idFromName: (name) => name,
+      get: (store) => ({
+        fetch: (request) => {
+          warmed.push({ store: String(store), request })
+          return wake.promise
+        },
+      }),
     },
     ADS: {
       told: (c) => {
@@ -99,6 +105,7 @@ let front = (
     files,
     used,
     warmed,
+    wake,
     points,
     errors,
     retained,
@@ -263,22 +270,33 @@ test('a kept page starts the store its scripts ask next', async () => {
     app: 'a',
     space: 'ada',
     slug: 'cookbook',
-    store: 'ada/cookbook.abc123',
+    store: 'ada/recipes.abc123',
   })
   let script = { 'content-type': 'text/javascript', [SEEN]: store }
   let cases: [Response, RequestInit, string[]][] = [
-    [page({ [SEEN]: store }), {}, ['ada/cookbook.abc123']],
+    [page({ [SEEN]: store }), {
+      headers: { [SEEN]: '{"store":"ada/other"}', 'x-store': 'ada/other' },
+    }, ['ada/recipes.abc123']],
     [page({ [SEEN]: store }), { headers: { 'if-none-match': '"v1"' } }, [
-      'ada/cookbook.abc123',
+      'ada/recipes.abc123',
     ]],
-    [page({ [SEEN]: store }), { method: 'HEAD' }, ['ada/cookbook.abc123']],
+    [page({ [SEEN]: store }), { method: 'HEAD' }, ['ada/recipes.abc123']],
     [page(script), {}, []],
     [page(), {}, []],
   ]
   for (let [kept, init, warmed] of cases) {
     let f = front(() => kept)
     await f.go(at, init)
-    assertEquals(f.warmed, warmed, JSON.stringify(init))
+    // The Store was asked before the page answered. Its response is pending.
+    assertEquals(f.warmed.map((w) => w.store), warmed, JSON.stringify(init))
+    for (let { store, request } of f.warmed) {
+      assertEquals([request.method, request.url], ['GET', 'http://store/wake'])
+      assertEquals(request.headers.get('x-store'), store)
+      assertEquals(request.headers.get('x-yak-kernel'), '1')
+      assertEquals(request.headers.get(SEEN), null)
+    }
+    f.wake.resolve(new Response(null, { status: 204 }))
+    await Promise.all(f.retained)
   }
 })
 

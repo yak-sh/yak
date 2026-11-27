@@ -63,6 +63,11 @@ binding = "USES"
 service = "yak"
 entrypoint = "Uses"
 
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "Store"
+script_name = "yak"
+
 [[services]]
 binding = "ADS"
 service = "yak"
@@ -146,6 +151,11 @@ entrypoint = "Site"
 binding = "USES"
 service = "yak-staging"
 entrypoint = "Uses"
+
+[[env.staging.durable_objects.bindings]]
+name = "STORE"
+class_name = "Store"
+script_name = "yak-staging"
 
 [[env.staging.services]]
 binding = "ADS"

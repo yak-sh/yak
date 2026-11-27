@@ -22,6 +22,7 @@ import { type Refusal, refuse } from '@yaks/api'
 import { FILED } from '@yaks/api/refuse'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { ROUTE_MEMORY, routedWrite } from '@yaks/platform/route-memory'
+import { objectOf, placed } from '@yaks/platform/store-wake'
 import { retried, unserved } from '@yaks/durable-object/resets'
 import {
   type Call,
@@ -31,10 +32,17 @@ import {
   type Namespace,
   received,
   resending,
-  type Stub,
   stubOf,
   thrown,
 } from '@yaks/durable-object/door'
+
+export {
+  objectOf,
+  placed,
+  PLATFORM_OBJECT,
+  STORES_AT,
+  WAKE,
+} from '@yaks/platform/store-wake'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn, how long it waited to start when this fetch woke it, and
@@ -104,40 +112,12 @@ export type Dispatch = {
   ): Fetcher
 }
 
-/** Where the directory's file stands. Its name, @yaks/platform/names
- * `PLATFORM_STORE`, is what the directory is;
- * this is the object holding it, first reached from a Worker in ORD so that it
- * stands near Chicago (relocate.ts, T-134094). An object can't move, so a move
- * is a new name here. */
-export let PLATFORM_OBJECT = 'yak/platform/ord'
-
-/** The name of the Durable Object a store lives in. */
-export let objectOf = (name: string): string =>
-  name == PLATFORM_STORE ? PLATFORM_OBJECT : name
-
 /** The store the git object graph lives in (git.ts, D-34943). One object for
  * the whole platform, because a git object is named by its own bytes: the same
  * blob deployed by two apps in two spaces is one row, and a graph that were
  * per-app or per-space could not say so. Refs are the directory's — access to
  * an app is decided there — so this object holds objects and nothing else. */
 export let GIT_STORE = 'yak/git'
-
-/** Where an object is created: beside the kernel, whose fetch handler runs in
- * aws:us-east-2 (wrangler.toml `[placement]`) and makes every call a store
- * answers, and beside the directory in ORD. Cloudflare uses a hint only at an
- * object's first get and never moves an object, so one created near a person
- * elsewhere answers every call from an ocean away, for good: a store in VIE
- * answers the kernel about 95 ms later than one in ATL. The hint names a
- * region, and within it Cloudflare picks the colo near the Worker that first
- * reaches the object: every birth, reached first from the kernel, stood in ORD
- * (T-149707), and a store elsewhere in the region (EWR, MIA) answers it 10 to
- * 25 ms later, so a move's new object is reached first from the kernel too
- * (@yaks/admin relocate.ts `sited`). */
-export let STORES_AT = 'enam'
-
-/** The object a store's name stands in, created where `STORES_AT` says. */
-export let placed = (ns: Namespace, name: string): Stub =>
-  stubOf(ns, objectOf(name), STORES_AT)
 
 /** Word names vouched for by a previously accepted immutable release. */
 export let ACCEPTED = 'x-yak-accepted'
@@ -161,14 +141,6 @@ export let HEARD = '/heard'
  * object nobody goes on to use keeps nothing. A birth sends it while the
  * directory writes the app's row (tools.ts `warmed`, T-143307). */
 export let WARM = '/warm'
-/** The store path a caller about to ask a store that stands sends ahead of
- * it: the store comes up as any request brings it up (its boot, the release
- * it serves, the writes it owes) and answers nothing else, so the request
- * behind it finds the store booted. A page sends it for its scripts (used.ts
- * `wake`, T-150366); a birth sends WARM, since its store holds nothing yet.
- * A space's Builder takes it too, ahead of its chat and behind an answer that
- * says it owes work (build-door.ts `woken`). */
-export let WAKE = '/wake'
 /** Typed directory reads depend on stored data, never the clock or caller code. */
 export let STATIC_QUERY = 'x-yak-static-query'
 
@@ -394,8 +366,8 @@ let storeAnswer = async (name: string, req: Request, answer: Response) => {
 }
 
 /** The kernel's door to one store, sent again when the runtime resets it or
- * loses the call (@yaks/durable-object `resending`). Every call to a store
- * comes through here, so this is the one place a deploy's move is
+ * loses the call (@yaks/durable-object `resending`). Data calls come through
+ * here, so this is the one place a deploy's move is
  * answered: no caller handles a reset, and none can miss one. The stub is
  * taken per call (`placed`), since a door memoized for the isolate (meta.ts
  * `doors`) is reused on later requests and a stub is bound to the request

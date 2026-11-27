@@ -1093,6 +1093,7 @@ let asset = async (
   // A sandboxed app's page is woven these tags too: its storage (installed.ts
   // `stored`), asked for only once the file turns out to be a page.
   sandbox?: () => Promise<string>,
+  openPage?: () => void,
 ) => {
   let prefix = prefixOf(space, app)
   let decoded = decodedPath(path)
@@ -1174,6 +1175,7 @@ let asset = async (
       () => files.fileBytes(env, app.eid, prefix, path, app.source ?? ''),
     ) ?? nothingHere(env)
   }
+  if (got.status == 200) openPage?.()
   // A sandboxed page is woven its person's saved keys (installed.ts
   // `stored`) and carries a token for them: it is sent whole every time, and
   // no cache on the way may keep it.
@@ -3877,6 +3879,9 @@ let served = async (
       copy,
       bare,
       walls ? () => storing(env, space!, app!, who, at) : undefined,
+      itself || dir.stale
+        ? undefined
+        : () => wake(env, storeName(space!, app!)),
     )
     : null
   file?.catch(() => {})

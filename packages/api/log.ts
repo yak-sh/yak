@@ -70,9 +70,9 @@ import {
 import type { Vocab } from '@yaks/vocab'
 import { BINARY, decode, stringify, unpack } from '@yaks/vocab/wire'
 import { readBody, receiveBody } from './body.ts'
+import { IDEMPOTENCY } from './headers.ts'
 
-/** The header a caller names one write by, across its sends. */
-export let IDEMPOTENCY = 'idempotency-key'
+export { IDEMPOTENCY }
 
 // ---- a body as the log keeps it ---------------------------------------------
 

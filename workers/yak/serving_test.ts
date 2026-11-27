@@ -2105,6 +2105,56 @@ test('a direct open starts the app store alongside its worker', async () => {
   assertEquals(order, ['wake', 'worker'])
 })
 
+test('a verified HTML file starts its store before rendering its body', async () => {
+  await using k = await router()
+  k.put('ada/cookbook/index.html', '<body>file page</body>')
+  let name = storeName(k.space, k.app)
+  let order: string[] = []
+  let stores = k.env.STORE
+  k.env.STORE = {
+    ...stores,
+    get: (...args) => {
+      let stub = stores.get(...args)
+      return {
+        fetch: (req) => {
+          if (new URL(req.url).pathname == WAKE) {
+            order.push(req.headers.get('x-store')!)
+          }
+          return stub.fetch(req)
+        },
+      }
+    },
+  }
+  k.env.FILES = {
+    fetch: async (req) => {
+      let file = await fileDoor.fetch(req, k.env)
+      if (
+        !file.body || !file.headers.get('content-type')?.startsWith('text/html')
+      ) {
+        return file
+      }
+      let reader = file.body.getReader()
+      return new Response(
+        new ReadableStream({
+          async pull(out) {
+            let { value, done } = await reader.read()
+            if (done) out.close()
+            else {
+              if (!order.includes('body')) order.push('body')
+              out.enqueue(value)
+            }
+          },
+          cancel: () => reader.cancel(),
+        }, { highWaterMark: 0 }),
+        file,
+      )
+    },
+  }
+  let page = await k.at('/')
+  assertStringIncludes(await page.text(), 'file page')
+  assertEquals(order, [name, 'body'])
+})
+
 test('Site starts a worker page’s readable store before handing off', async () => {
   for (let access of ['public', 'private'] as const) {
     await using k = await router(() => {

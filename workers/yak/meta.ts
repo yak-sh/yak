@@ -27,6 +27,7 @@ import { storeOf } from './door.ts'
 import { coalesced, type Door, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { changingRoutes } from '@yaks/platform/route-memory'
+import { KERNEL } from '@yaks/platform/store-wake'
 import { jittered } from '@yaks/durable-object/resets'
 import type { Clock } from '@yaks/fp'
 import { Pending, said } from '@yaks/api/log'
@@ -71,8 +72,7 @@ export type Meta = {
   ) => Promise<Bundle[]>
 }
 
-/** The platform writing about its own data: server-owned properties admitted. */
-export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
+export { KERNEL }
 
 // A door's no, carrying the status it was answered with: a 4xx is the
 // caller's (defects.ts `refused`), anything else is the store falling over. A

@@ -5031,6 +5031,7 @@
             "npm:@yaks/data-editor@0.2.23",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/draft@0.2.24",
+            "npm:@yaks/durable-object@0.2.28",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/effects@0.2.33",
             "npm:@yaks/file@0.2.28",

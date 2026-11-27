@@ -3,6 +3,7 @@
   "version": "0.2.29",
   "type": "module",
   "exports": {
+    "./headers": "./headers.ts",
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./address": "./address.ts",

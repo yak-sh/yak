@@ -75,7 +75,8 @@ test('the front serves anonymous, authenticated and sandboxed queries through th
           throw Error('A query reached Site')
         },
       } as FrontEnv['SITE'],
-      USES: { used: () => {}, wake: () => {} },
+      USES: { used: () => {} },
+      STORE: env.STORE!,
       ROUTE_MEMORY: { writeDataPoint: (point) => routes.push(point) },
       CLI: {
         fetch: () => {

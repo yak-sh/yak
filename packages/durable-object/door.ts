@@ -10,7 +10,7 @@
 // the request in whatever else the caller always says. Nothing here knows what
 // the object is for.
 
-import { IDEMPOTENCY } from '@yaks/api/log'
+import { IDEMPOTENCY } from '@yaks/api/headers'
 import {
   type Clock,
   heard,
@@ -367,7 +367,7 @@ export let coalesced = (
 
 // The header that makes a resend safe: an object that applied a key answers
 // the next send of it as it answered the first (@yaks/api/receipts).
-export { IDEMPOTENCY } from '@yaks/api/log'
+export { IDEMPOTENCY }
 
 /**
  * The reset an answer carries, as the runtime throws it, or null. An object

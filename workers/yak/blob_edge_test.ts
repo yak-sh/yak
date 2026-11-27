@@ -112,7 +112,8 @@ let fixture = async (access = 'public', published = false) => {
     CLI: { fetch: () => Promise.resolve(new Response(null, { status: 404 })) },
     SITE: edge,
     KERNEL: { fetch: (req: Request) => (forwarded++, apps.fetch(req, env)) },
-    USES: { used: () => {}, wake: () => {} },
+    USES: { used: () => {} },
+    STORE: env.STORE!,
   } as FrontEnv
   return {
     env,

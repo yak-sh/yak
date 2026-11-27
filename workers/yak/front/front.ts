@@ -5,7 +5,8 @@
 // so the gateway's first question lives here, in an upload of its own.
 //
 // Everything else goes on to the kernel unchanged. The front answers if the
-// request reaches its deadline. It holds no secret and opens no store.
+// request reaches its deadline. It holds no secret and sends a background
+// wake to the Store a kept page names.
 // What it can't decide from the request alone (a
 // signature, who someone is, whether a custom domain is anybody's) is the
 // kernel's, so a person's cookie it may rely on is read only to route: a forged
@@ -69,6 +70,8 @@ import { type Clock, within } from '@yaks/fp'
 import { VERSION } from '@yaks/workerd/worker'
 import { answerBy, resending } from '@yaks/workerd/fetch'
 import { workerWaits } from '@yaks/platform/app-worker'
+import { wakeStore } from '@yaks/platform/store-wake'
+import type { Namespace } from '@yaks/durable-object/door'
 
 /** The header the front's own deploy is said in, beside the kernel's. */
 export let FRONT_VERSION = 'x-yak-front-version'
@@ -76,14 +79,13 @@ export let FRONT_VERSION = 'x-yak-front-version'
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
 export type FrontEnv = Host & {
-  // The kernel's uncached gateway, its cached Site, its use receipts, and the
-  // ad networks it tells (index.ts `Ads`).
+  // The uncached gateway, cached Site, and the Store named by a kept page.
   KERNEL: Pick<Fetcher, 'fetch'>
   QUERY?: Pick<Fetcher, 'fetch'>
   SITE: Pick<Fetcher, 'fetch'>
+  STORE: Namespace
   USES: {
     used(eid: string): Promise<void> | void
-    wake(store: string): Promise<void> | void
   }
   ADS?: { told(c: Conversion): Promise<void> }
   // The sandbox CLI this Worker's assets carry (wrangler.toml `[assets]`).
@@ -262,6 +264,18 @@ export let kept = (
     null,
     timer(said),
     (answer, at) => {
+      // Site's accepted answer names the Store for the page's first data call.
+      if (at.store && opens(answer)) {
+        let store = at.store
+        ctx.waitUntil(
+          wakeStore(
+            env.STORE,
+            store,
+            (error) => report(error, env, ctx, 'front wake', req),
+            env.CLOCK?.now(),
+          ),
+        )
+      }
       if (env.VIEWS && isView(answer)) {
         env.VIEWS.writeDataPoint(pointOf(req as Visited, answer, at))
       }
@@ -269,15 +283,6 @@ export let kept = (
         ctx.waitUntil(
           Promise.resolve(env.USES.used(at.app)).catch((e) =>
             report(e, env, ctx, 'front used', req)
-          ),
-        )
-      }
-      // The page's scripts ask its store next, and a store asleep takes longer
-      // to start and boot than they take to load (page-cache.ts `shown`).
-      if (at.store && opens(answer)) {
-        ctx.waitUntil(
-          Promise.resolve(env.USES.wake(at.store)).catch((e) =>
-            report(e, env, ctx, 'front wake', req)
           ),
         )
       }
