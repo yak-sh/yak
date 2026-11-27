@@ -23,7 +23,7 @@ let entity = {
   },
 }
 let app: VocabDoc = {
-  package: '@t/trip',
+  label: '@t/trip',
   $defs: {
     outing: {
       component: true,

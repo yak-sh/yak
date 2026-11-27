@@ -153,16 +153,17 @@ let cut = (vocab: Vocab, name: string): PropSchema => {
 }
 
 // A component whole: its entry as declared, with an example value where it
-// declares none of its own, and the package that declared it where the
+// declares none of its own, and the label of the namespace that declared it
+// where the
 // vocabulary says — which a reader loading this one document back needs, to
 // know whose views draw it (@yaks/cli `--host`).
 let whole = (vocab: Vocab, name: string): PropSchema => {
   let def = vocab.def(name)!
-  let from = vocab.comp(name)?.package
+  let from = vocab.comp(name)?.namespace?.label
   return {
     ...def,
     examples: def.examples ?? [example(vocab, name)],
-    ...(from ? { package: from } : {}),
+    ...(from ? { label: from } : {}),
   }
 }
 
@@ -283,7 +284,7 @@ let block = (vocab: Vocab, name: string, heading: string): string => {
 // name order, and the components under it. A vocabulary loaded without
 // packages has no such level, and its components sit one heading higher.
 let grouped = (vocab: Vocab): string => {
-  let from = (n: string) => vocab.comp(n)?.package
+  let from = (n: string) => vocab.comp(n)?.namespace?.label
   if (!vocab.all.some(from)) {
     return vocab.all.map((n) => block(vocab, n, '##')).join('\n\n')
   }
@@ -334,7 +335,7 @@ let page = (
       id.length &&
       `Identified by ${listed(id)}: the same values always name the same ` +
         'entity.',
-      info.package && `Declared by ${info.package}.`,
+      info.namespace?.label && `Declared by ${info.namespace.label}.`,
     ].filter(Boolean).join('\n'),
     props.length &&
     hd(depth + 1, 'Properties') + '\n\n' +
@@ -375,7 +376,7 @@ let kindPage = (vocab: Vocab, name: string, guide?: Guide): string => {
       k.description && sentence(k.description),
       `An entity carrying ${and(k.is)} is a ${name}.`,
       k.prefix != null && `Its short ids read ${k.prefix}-1, ${k.prefix}-2, ….`,
-      k.package && `Declared by ${k.package}.`,
+      k.namespace?.label && `Declared by ${k.namespace.label}.`,
     ].filter(Boolean).join('\n'),
     carried.length && '## With\n\n' + carried.join('\n'),
     '## Example\n\n    ' + inline({ entity: { eid: '$1' }, ...whole }),

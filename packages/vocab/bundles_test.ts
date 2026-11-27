@@ -25,7 +25,7 @@ import { facts } from './testing.ts'
 // Two packages: a kitchen declaring recipes, and a tagger adding a property to
 // them and a component found by a recipe's text.
 let kitchen: VocabDoc = {
-  package: '@t/kitchen',
+  label: '@t/kitchen',
   description: 'recipes and notes',
   $defs: {
     recipe: {
@@ -102,7 +102,7 @@ let kitchen: VocabDoc = {
 }
 
 let tagger: VocabDoc = {
-  package: '@t/tags',
+  label: '@t/tags',
   $defs: {
     recipe: {
       component: true,
@@ -135,7 +135,7 @@ test('a vocabulary loads back from its bundles as it was', () => {
 
 test('a kind of its own component’s name is said on that component', () => {
   let doc: VocabDoc = {
-    package: '@t/menus',
+    label: '@t/menus',
     $defs: { menu: { component: true } },
     kinds: { menu: { prefix: 'M' } },
   }
@@ -169,14 +169,14 @@ test('a saved peer-relayed declaration survives a vocabulary bundle roundtrip', 
 
 test('the rungs another package adds to a status ladder survive', () => {
   let chores: VocabDoc = {
-    package: '@t/chores',
+    label: '@t/chores',
     $defs: {
       chore: { component: true, status: { finished: 'done', default: 'open' } },
       finished: { component: true },
     },
   }
   let helpers: VocabDoc = {
-    package: '@t/helpers',
+    label: '@t/helpers',
     $defs: {
       chore: { component: true, extends: true, status: { held: 'wip' } },
       held: { component: true },
@@ -240,7 +240,7 @@ let described = () => {
 
 test('the queries that describe a vocabulary answer from its entities', async () => {
   let { g, id, put, titles } = described()
-  let meta = { ...metaDoc, package: '@yaks/vocab' }
+  let meta = { ...metaDoc, label: '@yaks/vocab' }
   await put([kitchen, tagger, meta, docDoc])
   // The index: every component, a readable name each.
   assertEquals((await titles('._comp')).sort(), [

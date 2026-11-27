@@ -25,13 +25,13 @@ import { spelling } from './tool.ts'
 // A server's graph as a host composes one: each document stamped with the
 // package that declared it, including a server-only package with no local views.
 let vocab = loadVocab([
-  { ...kernelDoc, package: '@yaks/kernel' },
-  { ...idDoc, package: '@yaks/id' },
-  { ...docDoc, package: '@yaks/doc' },
-  { ...taskDoc, package: '@yaks/task' },
-  { ...toolsDoc, package: '@yaks/tools' },
+  { ...kernelDoc, label: '@yaks/kernel' },
+  { ...idDoc, label: '@yaks/id' },
+  { ...docDoc, label: '@yaks/doc' },
+  { ...taskDoc, label: '@yaks/task' },
+  { ...toolsDoc, label: '@yaks/tools' },
   {
-    package: new URL('../../workers/yak/app', import.meta.url).pathname,
+    label: new URL('../../workers/yak/app', import.meta.url).pathname,
     $defs: {
       space: {
         component: true,
@@ -106,7 +106,7 @@ test('a server’s answer is drawn through its packages’ views', async () => {
     assert(/^T-\d+ Ship it done$/.test(lines[1]), lines.join('\n'))
     // The vocabulary is asked once and kept beside the tool list.
     assertEquals(
-      (await cached(c.host, c.state))?.vocab?.$defs?.task?.package,
+      (await cached(c.host, c.state))?.vocab?.$defs?.task?.label,
       '@yaks/task',
     )
   })

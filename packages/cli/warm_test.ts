@@ -19,11 +19,11 @@ import type { Declared } from './words.ts'
 import { warm } from './warm.ts'
 
 let vocab = loadVocab([
-  { ...kernelDoc, package: '@yaks/kernel' },
-  { ...idDoc, package: '@yaks/id' },
-  { ...docDoc, package: '@yaks/doc' },
-  { ...taskDoc, package: '@yaks/task' },
-  { ...toolsDoc, package: '@yaks/tools' },
+  { ...kernelDoc, label: '@yaks/kernel' },
+  { ...idDoc, label: '@yaks/id' },
+  { ...docDoc, label: '@yaks/doc' },
+  { ...taskDoc, label: '@yaks/task' },
+  { ...toolsDoc, label: '@yaks/tools' },
 ], [kernelKeywords, idKeywords])
 
 let DB = '/box/yak.db'

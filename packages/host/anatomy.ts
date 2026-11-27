@@ -265,11 +265,11 @@ export let compositionAnatomy = (
     source.effects = projected.effects
     source.rules = projected.rules
     for (let doc of docs) {
-      if (!doc.package) continue
-      vocabulary.add(doc.package)
-      let f = forFacet(doc.package, 'vocab')
+      if (!doc.label) continue
+      vocabulary.add(doc.label)
+      let f = forFacet(doc.label, 'vocab')
       f.declared = f.loaded = true
-      ownerOf(doc.package).loaded = true
+      ownerOf(doc.label).loaded = true
     }
     for (let c of source.comps ?? []) {
       let info = vocab.comp(c.name)

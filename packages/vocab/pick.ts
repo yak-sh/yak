@@ -80,7 +80,7 @@ export let pick = (
   return {
     ...(doc.$id ? { $id: doc.$id } : {}),
     ...(doc.$vocabulary ? { $vocabulary: doc.$vocabulary } : {}),
-    ...(doc.package ? { package: doc.package } : {}),
+    ...(doc.label ? { label: doc.label } : {}),
     ...(title ? { title } : {}),
     $defs: Object.fromEntries(names.map((n) => [n, $defs![n]])),
     ...(kinds ? { kinds } : {}),

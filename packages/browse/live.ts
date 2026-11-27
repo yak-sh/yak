@@ -1292,7 +1292,7 @@ let publishLocal = (
 
 // Whether the host composed a plugin: `capable('spawn')` is @yaks/spawn.
 export let capable = (name: string) =>
-  vocab.docs.some((d) => (d as { package?: string }).package == `@yaks/${name}`)
+  vocab.docs.some((d) => d.label == `@yaks/${name}`)
 
 // Consumers that care about canonical live edits subscribe here.
 let listeners = new Set<(changes: Change[]) => void>()
@@ -2371,7 +2371,9 @@ export let findEid = (id: string): string | undefined => {
       (eid) => idGraph[eid]?.entity ?? {},
     )
     if (eids.length > 1) {
-      throw new IdError(`${id} is an ambiguous id — matches ${eids.join(', ')}`)
+      throw new IdError(
+        `${id} is an ambiguous id — matches ${eids.join(', ')}`,
+      )
     }
     return eids[0]
   }

@@ -63,7 +63,7 @@ export let derive = async (
     vocabs.flatMap(({ plugin, value }, i) =>
       documents(value, i).map((d) => ({
         ...d,
-        package: plugin,
+        label: plugin,
         description: value?.description,
       }))
     ),

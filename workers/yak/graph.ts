@@ -3840,8 +3840,8 @@ export class Store extends Durable {
       rows = rows.filter((r) => !held.has(r.entity.eid))
       if (rows.length) {
         await this.#graph.apply([{
-          entity: { eid: packageEid(doc.package!) },
-          _package: { name: doc.package! },
+          entity: { eid: packageEid(doc.label!) },
+          _package: { name: doc.label! },
         }, ...rows], { trusted: true })
       }
     }
@@ -3851,8 +3851,8 @@ export class Store extends Durable {
       if (rows.length) {
         await this.#trust([
           {
-            entity: { eid: packageEid(doc.package!) },
-            _package: { name: doc.package! },
+            entity: { eid: packageEid(doc.label!) },
+            _package: { name: doc.label! },
           },
           ...rows,
         ], null)

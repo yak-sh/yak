@@ -23,7 +23,7 @@ export let plugins = (
 ): Plugin[] => [
   mailbox({ domain: options.domain }),
   ...['email', 'deliver', 'recipient'].every((n) =>
-      vocab.comp(n)?.package == '@yaks/mail'
+      vocab.comp(n)?.namespace?.label == '@yaks/mail'
     )
     ? [recipients()]
     : [],

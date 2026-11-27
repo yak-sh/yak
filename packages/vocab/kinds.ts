@@ -9,8 +9,9 @@
 // before every kind whose `is` its own `is` and `with` contain, so a decision
 // (`task` + `decision`) is named before a task.
 
-import type { PropSchema, VocabDoc } from './types.ts'
+import type { Namespace, PropSchema, VocabDoc } from './types.ts'
 import { kindOrder } from './order.ts'
+import { apart, type Declared, idOf, namespaceOf } from './namespace.ts'
 
 /** What a component in a kind's `with` is: `true` when the writer supplies
  * it, or the values a rule gives it when an entity of the kind lacks it. A
@@ -20,6 +21,8 @@ export type With = boolean | Record<string, unknown>
 
 /** A kind, as a document declares it under `kinds`. */
 export type KindDecl = {
+  /** its identity, as `urn:uuid:…` */
+  $id?: string
   title?: string
   description?: string
   /** the components an entity carries to be this kind; left out, the
@@ -37,7 +40,14 @@ export type KindDecl = {
 
 /** A kind, loaded. */
 export type Kind = {
+  /** the name this vocabulary holds it under: its label, or its identity
+   * where two namespaces declare that label */
   name: string
+  /** its label: the key its document declares it under */
+  label: string
+  /** its identity, from its declaration's `$id`; a component's kind is the
+   * component's own */
+  id?: string
   title?: string
   description?: string
   is: string[]
@@ -45,8 +55,8 @@ export type Kind = {
   before: string[]
   prefix?: string
   examples: Record<string, unknown>[]
-  /** the package whose document declared it, where one says */
-  package?: string
+  /** the namespace whose document declared it, where one says */
+  namespace?: Namespace
 }
 
 /** Whether a component declares the kind of its own name, the way every
@@ -55,8 +65,15 @@ export let namesKind = (def: PropSchema): boolean =>
   def.kind === true || def.prefix != null
 
 // The kind a component declares of its own name.
-let fromComp = (name: string, def: PropSchema, pkg?: string): Kind => ({
+let fromComp = (
+  name: string,
+  label: string,
+  def: PropSchema,
+  ns?: Namespace,
+): Kind => ({
   name,
+  label,
+  ...(idOf(def.$id) ? { id: idOf(def.$id) } : {}),
   ...(def.title ? { title: def.title as string } : {}),
   ...(def.description ? { description: def.description } : {}),
   is: [name],
@@ -64,16 +81,24 @@ let fromComp = (name: string, def: PropSchema, pkg?: string): Kind => ({
   before: def.before ?? [],
   ...(def.prefix != null ? { prefix: def.prefix as string } : {}),
   examples: [],
-  ...(pkg ? { package: pkg } : {}),
+  ...(ns ? { namespace: ns } : {}),
 })
 
-let fromDecl = (name: string, d: KindDecl, pkg?: string): Kind => {
+let fromDecl = (
+  name: string,
+  label: string,
+  d: KindDecl,
+  ns?: Namespace,
+): Kind => {
   let is = d.is ?? [name]
   if (!Array.isArray(is) || !is.length) {
     throw new Error(`kind '${name}' says no component it is`)
   }
+  let id = idOf(d.$id)
   return {
     name,
+    label,
+    ...(id ? { id } : {}),
     ...(d.title ? { title: d.title } : {}),
     ...(d.description ? { description: d.description } : {}),
     is,
@@ -81,7 +106,7 @@ let fromDecl = (name: string, d: KindDecl, pkg?: string): Kind => {
     before: d.before ?? [],
     ...(d.prefix != null ? { prefix: d.prefix } : {}),
     examples: d.examples ?? [],
-    ...(pkg ? { package: pkg } : {}),
+    ...(ns ? { namespace: ns } : {}),
   }
 }
 
@@ -102,11 +127,14 @@ export let declOf = (
 })
 
 /** Every kind the documents declare, under `kinds` or as a component of the
- * kind's name, by name. A name declared twice throws, as a component does. */
+ * kind's name, by name. A label declared twice throws, as a component's does,
+ * unless each is a word of its own namespace, when each is held under its
+ * identity. */
 export let kindsIn = (
   docs: VocabDoc[],
   defs: Record<string, PropSchema>,
-  from: Record<string, string>,
+  from: Record<string, Namespace>,
+  labels: Record<string, string> = {},
 ): Map<string, Kind> => {
   let out = new Map<string, Kind>()
   let add = (k: Kind) => {
@@ -114,12 +142,21 @@ export let kindsIn = (
     out.set(k.name, k)
   }
   for (let name of Object.keys(defs).sort()) {
-    if (namesKind(defs[name])) add(fromComp(name, defs[name], from[name]))
+    if (namesKind(defs[name])) {
+      add(fromComp(name, labels[name] ?? name, defs[name], from[name]))
+    }
   }
+  let declared = new Map<string, (Declared & { schema: KindDecl })[]>()
   for (let doc of docs) {
     let kinds = (doc.kinds ?? {}) as Record<string, KindDecl>
-    for (let [name, d] of Object.entries(kinds)) {
-      add(fromDecl(name, d, doc.package))
+    let ns = namespaceOf(doc)
+    for (let [name, schema] of Object.entries(kinds)) {
+      declared.set(name, [...declared.get(name) ?? [], { schema, ns }])
+    }
+  }
+  for (let [label, all] of declared) {
+    for (let [name, { schema, ns }] of apart('kind', label, all)) {
+      add(fromDecl(name, label, schema, ns))
     }
   }
   return out

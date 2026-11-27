@@ -6,7 +6,7 @@ import type { NamedTool, Plugin as GraphPlugin } from '@yaks/graph'
 import { workerAnatomy } from './anatomy.ts'
 
 let words = loadVocab([{
-  package: 'fixture',
+  label: 'fixture',
   $defs: {
     note: { component: true, properties: { text: { type: 'string' } } },
     note_seen: { effect: true, created: ['note'] },
@@ -15,7 +15,7 @@ let words = loadVocab([{
 }])
 
 let effectWords = loadVocab([{
-  package: 'fixture',
+  label: 'fixture',
   $defs: {
     note: { component: true, properties: {} },
     note_seen: { effect: true, created: ['note'] },

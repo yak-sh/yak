@@ -66,7 +66,12 @@ export type AnatomyRule = AnatomyPart & {
 }
 export type AnatomyRoute = AnatomyPart & { method: string; path: string }
 export type AnatomySkill = AnatomyPart & { path?: string }
-export type AnatomyEdge = { id: string; from: string; to: string; kind: string }
+export type AnatomyEdge = {
+  id: string
+  from: string
+  to: string
+  kind: string
+}
 export type AnatomyGroup =
   | 'packages'
   | 'roles'
@@ -459,7 +464,7 @@ export let anatomyDocuments = (documents: unknown): {
   let effects: AnatomySeed<AnatomyEffect>[] = []
   let rules: AnatomySeed<AnatomyRule>[] = []
   array(documents).forEach((doc, ordinal) => {
-    let owner = text(doc, 'package')
+    let owner = text(doc, 'label')
     let docKey = `${text(doc, '$id') ?? text(doc, 'title') ?? ''}:${ordinal}`
     for (let [name, def] of entries(value(doc, '$defs'))) {
       let description = text(def, 'description')

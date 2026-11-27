@@ -77,7 +77,7 @@ export let docsOf = (docs: VocabDoc[]): VocabDoc[] => {
   return Object.keys($defs).length
     ? [{
       title: 'invocation',
-      package: '@yaks/tools',
+      label: '@yaks/tools',
       description: toolsAbout,
       $defs,
     }, ...docs]

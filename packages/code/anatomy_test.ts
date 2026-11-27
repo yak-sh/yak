@@ -80,7 +80,7 @@ test('anatomy is a descriptor-safe allowlist with all seventeen groups', () => {
 let docs = anatomyDocuments([
   {
     title: 'base',
-    package: 'base',
+    label: 'base',
     $defs: {
       book: {
         component: true,
@@ -100,7 +100,7 @@ let docs = anatomyDocuments([
   },
   {
     title: 'extra',
-    package: 'extra',
+    label: 'extra',
     $defs: {
       book: {
         component: true,

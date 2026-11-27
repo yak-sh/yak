@@ -18,7 +18,8 @@
       "type": "string"
     },
     "$id": {
-      "type": "string"
+      "type": "string",
+      "description": "As urn:uuid:…, the identity of the namespace these words belong to; any other URI names no namespace"
     },
     "$vocabulary": {
       "type": "object",
@@ -33,9 +34,9 @@
       "type": "string",
       "description": "Instructions this vocabulary contributes to an agent's MCP initialize response"
     },
-    "package": {
+    "label": {
       "type": "string",
-      "description": "the package that declares these components, written by the host that loads the document"
+      "description": "the label of the namespace these words belong to: the package's name or the app's address, written by the host that loads the document"
     },
     "description": {
       "type": "string"
@@ -201,6 +202,11 @@
     "component": {
       "type": "object",
       "properties": {
+        "$id": {
+          "type": "string",
+          "pattern": "^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "the component's identity, or on an extension the identity of the component it extends, as urn:uuid:…; minted by the tools, never written by hand"
+        },
         "component": {
           "const": true
         },
@@ -348,9 +354,9 @@
         "by_name": {
           "type": "boolean"
         },
-        "package": {
+        "label": {
           "type": "string",
-          "description": "the package that declared this component, written by whoever reports it from a vocabulary loaded out of several packages (the graph_schema tool); a document says it once, beside $defs"
+          "description": "the label of the namespace that declared this component, written by whoever reports it from a vocabulary loaded out of several namespaces (the graph_schema tool); a document says it once, beside $defs"
         }
       },
       "additionalProperties": false,
@@ -375,6 +381,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "$id": {
+          "type": "string",
+          "pattern": "^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "the kind's identity, as urn:uuid:…; minted by the tools, never written by hand"
+        },
         "title": { "type": "string" },
         "description": { "type": "string" },
         "$comment": { "type": "string" },
@@ -591,6 +602,11 @@
       "description": "One property. Every property declares its `type`. A property whose type is object or array, or a union of types, holds a JSON value and may declare its structure with `properties` or `items`; a graph checks that structure when the property declares `validate: true`.",
       "type": "object",
       "properties": {
+        "$id": {
+          "type": "string",
+          "pattern": "^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "the property's identity, as urn:uuid:…; minted by the tools, never written by hand"
+        },
         "type": {
           "anyOf": [
             {

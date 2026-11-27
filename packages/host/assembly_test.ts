@@ -119,7 +119,8 @@ test('portable assembly imports only the facets of its served roles', async () =
 
 let toolImports: string[] = []
 let lazy =
-  (await assembly(config, ['graph'], loading(toolImports))).bind(binding()).host
+  (await assembly(config, ['graph'], loading(toolImports))).bind(binding())
+    .host
 await lazy.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
 test('portable assembly loads tool code once on its first call', async () => {
   equal(toolImports, ['vocab', 'graph'])
@@ -211,7 +212,7 @@ test('chosen words admit writes and omit unselected tools from declarations and 
 })
 
 let own: VocabDoc[] = [{
-  package: 'catalogue',
+  label: 'catalogue',
   $defs: {
     book: {
       component: true,
@@ -435,8 +436,13 @@ test('decoded graph-owned words keep independent storage and changed declaration
     book: { author: 'Le Guin' },
   }])
   equal((await decoded.graph.get(['copy']))[0].book, { author: 'Herbert' })
-  equal((await decodedAgain.graph.get(['copy']))[0].book, { author: 'Le Guin' })
-  await revised.graph.apply([{ entity: { eid: 'copy' }, book: { pages: 412 } }])
+  equal((await decodedAgain.graph.get(['copy']))[0].book, {
+    author: 'Le Guin',
+  })
+  await revised.graph.apply([{
+    entity: { eid: 'copy' },
+    book: { pages: 412 },
+  }])
   equal((await revised.graph.get(['copy']))[0].book, { pages: 412 })
   await throws(
     () =>
@@ -558,7 +564,10 @@ let vocabOnly = (await assembly(
   ['graph', 'effects', 'web', 'library'],
   selectedLoad,
 )).bind(binding()).host
-await vocabOnly.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
+await vocabOnly.graph.apply([{
+  entity: { eid: 'b' },
+  book: { title: 'Dune' },
+}])
 let vocabOnlyAnatomy = vocabOnly.anatomy()
 test('facet selection excludes hooks, tools and preloads across served roles', async () => {
   equal(prefetched, ['vocab'])

@@ -416,19 +416,54 @@ component is not loaded is omitted; a rung naming a computed component throws.
 [@yaks/sql](../sql/README.md) and [@yaks/match](../match/README.md) evaluate the
 same ladder.
 
+## Identity and labels
+
+A document carries identities in JSON Schema's own `$id`, as `urn:uuid:…`: the
+document's `$id` is its namespace's identity, each `$defs` entry's its
+component's, each property schema's its property's, and each `kinds` entry's its
+kind's. The keys they are written under are labels, which may change while the
+identity stays. The tools mint a `$id`; nobody writes one by hand.
+
+A namespace's label is the package's name (`@yaks/model`) or the app's address
+(`yourname/trip`), written into the document as `label` by the host that loads
+it. `comp(name).id`, `prop(comp, name).id` and `kind(name).id` give a word's
+identity, `comp(name).namespace` the namespace that declared it, and `word(id)`
+what an identity names.
+
+```ts
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let id = crypto.randomUUID()
+let v = loadVocab({
+  label: '@example/catalog',
+  $defs: { book: { $id: `urn:uuid:${id}`, component: true, type: 'object' } },
+})
+equal(v.comp('book')?.id, id)
+equal(v.comp('book')?.namespace, { label: '@example/catalog' })
+equal(v.word(id), { comp: 'book' })
+```
+
+Two namespaces may declare one label. Each is then a word of its own, held under
+its identity (`comp(id)`), and nothing is read by the shared label alone. A
+label one namespace declares twice, or that words with no identity share, is
+refused, as are two properties of one label on one component. A word with no
+`$id` is held under its label.
+
 ## Composition
 
 A component has one declaring vocabulary document. `pick(doc, names)` selects
 its declarations without copying them into another package. Duplicate component
-declarations throw.
+declarations throw, except across namespaces (above).
 
 An **extension** is a component entry marked `extends: true` that adds
 properties, required properties or status rungs to another vocabulary document's
-component. Existing properties and rungs cannot be overridden. Other metadata
-belongs to the declaring vocabulary document. Property extensions are applied
-after all declarations; status rungs append in load order and cannot change the
-default. A status-only extension of an unloaded component is skipped; other
-extensions of unloaded components throw.
+component. It names the component by its label, or, where two namespaces share
+that label, by carrying the component's `$id`. Existing properties and rungs
+cannot be overridden. Other metadata belongs to the declaring vocabulary
+document. Property extensions are applied after all declarations; status rungs
+append in load order and cannot change the default. A status-only extension of
+an unloaded component is skipped; other extensions of unloaded components throw.
 
 ```ts
 import { loadVocab, pick } from '@yaks/vocab'
@@ -977,7 +1012,7 @@ const id = (
   values: Record<string, unknown>,
 ) => derive[comp](values, { entity: { eid: '' } })
 const doc = {
-  package: '@example/catalog',
+  label: '@example/catalog',
   $defs: {
     book: {
       component: true,
@@ -989,7 +1024,7 @@ const doc = {
 const rows = toBundles(doc, id)
 const [restored] = fromBundles(rows)
 equal(docs, [metaDoc])
-equal(restored.package, '@example/catalog')
+equal(restored.label, '@example/catalog')
 equal(restored.$defs?.book.properties?.title.minLength, 1)
 equal(loadVocab(restored).all, ['book'])
 ```

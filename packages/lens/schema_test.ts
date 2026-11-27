@@ -4,7 +4,7 @@ import { compile, lensesIn, packageEid, versions } from './mod.ts'
 
 let early = 20261003140000, late = 20261004102000
 let app: VocabDoc = {
-  package: 'kitchen',
+  label: 'kitchen',
   $defs: {
     recipe: { component: true, properties: { yield: { type: 'number' } } },
     first: {
@@ -45,7 +45,7 @@ test('old vocabulary follows the read inverse across package documents and times
 
 test('a within-component vocabulary rename carries required metadata without the replaced field', () => {
   let docs: VocabDoc[] = [{
-    package: 'kitchen',
+    label: 'kitchen',
     $defs: {
       recipe: {
         properties: { heading: { type: 'string', description: 'A name' } },
@@ -64,7 +64,7 @@ test('a within-component vocabulary rename carries required metadata without the
 
 test('an inverse consumes a same-component destination declared by an extension', () => {
   let docs: VocabDoc[] = [{
-    package: 'kitchen',
+    label: 'kitchen',
     $defs: {
       recipe: { component: true, properties: {} },
       first: app.$defs!.first,

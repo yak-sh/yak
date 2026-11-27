@@ -146,7 +146,7 @@ let pluginsOf = (doc: VocabDoc): Taken<'vocab'> => [
  * them: for a reader composing the words of several apps at once. */
 export let lentDocs = (doc: VocabDoc): VocabDoc[] =>
   lent(packagesOf(doc), declares(doc)).flatMap(([v, , pkg, names]) =>
-    selected(v.docs ?? [], names, pkg).map((d) => ({ ...d, package: pkg }))
+    selected(v.docs ?? [], names, pkg).map((d) => ({ ...d, label: pkg }))
   )
 
 // Existing readers ask for a store's documents; these are projections of its

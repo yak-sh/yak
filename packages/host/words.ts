@@ -152,7 +152,7 @@ let spoken = (
   let docs: VocabDoc[] = vocabs.flatMap(([v, , plugin, names]) =>
     selected(v.docs ?? [], names, plugin).map((d) => ({
       ...d,
-      package: plugin,
+      label: plugin,
       description: v.description,
     }))
   )

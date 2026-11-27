@@ -40,7 +40,7 @@ import { CENSUS } from './census.ts'
 // A graph of tasks, their owners and the edges between them.
 let vocab = loadVocab([{
   $vocabulary: { [EDGE_URI]: true },
-  package: '@t/tasks',
+  label: '@t/tasks',
   $defs: {
     doc: {
       component: true,
@@ -339,14 +339,18 @@ test('a comment is drawn once on its page even when notes and other comments coe
 
 test('a note is drawn under its heading before the page links', () => {
   let t = noted
-  let page = renderToString(h(t.Door, { e: commentPage, view: 'Inspect.Page' }))
+  let page = renderToString(
+    h(t.Door, { e: commentPage, view: 'Inspect.Page' }),
+  )
   let [facts] = page.split('data-section="Links"')
   assert(facts.includes('owner should be required'))
 })
 
 test('a comment that is not a note is drawn among the page links', () => {
   let t = said
-  let page = renderToString(h(t.Door, { e: commentPage, view: 'Inspect.Page' }))
+  let page = renderToString(
+    h(t.Door, { e: commentPage, view: 'Inspect.Page' }),
+  )
   let [, links] = page.split('data-section="Links"')
   assert(links.includes(`<a href="${pagePath('c2')}">N-c2</a>`))
 })

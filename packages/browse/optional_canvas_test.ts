@@ -10,9 +10,7 @@ import './components/Entity.tsx' // the app's renderers
 import { held, host } from './host_testing.ts'
 
 let docs = vocab.docs
-let without = docs.filter((d) =>
-  (d as { package?: string }).package != '@yaks/canvas'
-)
+let without = docs.filter((d) => d.label != '@yaks/canvas')
 let fixture = () => {
   cache.value = {
     owner: {

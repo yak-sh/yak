@@ -138,7 +138,9 @@ let PackageTree = ({ io, census, packages, declared, effects }: Schema) => {
   // How many entities carry any of a package's components.
   let reach = new Map<string, number>()
   for (let s of sets) {
-    let own = new Set(tables(s).map((t) => vocab.comp(t)?.package ?? ''))
+    let own = new Set(
+      tables(s).map((t) => vocab.comp(t)?.namespace?.label ?? ''),
+    )
     for (let p of own) {
       reach.set(p, (reach.get(p) ?? 0) + (tally[s.entity.eid] ?? 0))
     }
@@ -161,7 +163,7 @@ let PackageTree = ({ io, census, packages, declared, effects }: Schema) => {
           plural(comps.length, 'component', 'components'),
           acts.length ? plural(acts.length, 'effect', 'effects') : '',
         ].filter(Boolean).join(' · '),
-        about: vocab.docs.find((d) => d.package == name)?.description,
+        about: vocab.docs.find((d) => d.label == name)?.description,
         entities: reach.get(name) ?? 0,
         kids: [...comps.map(compRow), ...acts.map(effectRow)],
       }
@@ -255,8 +257,10 @@ let ComponentList = ({ io, census: { carried, ready } }: Schema) => {
       },
       {
         name: 'package',
-        value: (b) => vocab.comp(str(b, '_comp', 'name'))?.package ?? '',
-        cell: (b) => vocab.comp(str(b, '_comp', 'name'))?.package ?? '',
+        value: (b) =>
+          vocab.comp(str(b, '_comp', 'name'))?.namespace?.label ?? '',
+        cell: (b) =>
+          vocab.comp(str(b, '_comp', 'name'))?.namespace?.label ?? '',
       },
       {
         name: 'what it is',
@@ -355,8 +359,10 @@ let RelationList = ({ io, census: { carried, ready } }: Schema) => {
       },
       {
         name: 'package',
-        value: (b) => vocab.comp(str(b, '_comp', 'name'))?.package ?? '',
-        cell: (b) => vocab.comp(str(b, '_comp', 'name'))?.package ?? '',
+        value: (b) =>
+          vocab.comp(str(b, '_comp', 'name'))?.namespace?.label ?? '',
+        cell: (b) =>
+          vocab.comp(str(b, '_comp', 'name'))?.namespace?.label ?? '',
       },
     ],
   })
@@ -462,17 +468,17 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
   let vocab = io.vocab
   let declared = groupBy(
     vocab.all.toSorted(),
-    (n) => vocab.comp(n)?.package ?? '',
+    (n) => vocab.comp(n)?.namespace?.label ?? '',
   )
   // Every package the vocabulary declares, even one declaring no component
   // (it only extends another's), and the components no package declares.
   let effects = groupBy(
     vocab.docs.flatMap((d) =>
-      effectsIn(d).map((x) => ({ ...x, package: d.package ?? '' }))
+      effectsIn(d).map((x) => ({ ...x, package: d.label ?? '' }))
     ).toSorted((a, b) => a.name.localeCompare(b.name)),
     (x) => x.package,
   )
-  let named = [...new Set(vocab.docs.flatMap((d) => d.package ?? []))]
+  let named = [...new Set(vocab.docs.flatMap((d) => d.label ?? []))]
     .toSorted()
   let packages = declared.has('') || effects.has('') ? [...named, ''] : named
   let slice = SLICES.includes(me(io).slice ?? '') ? me(io).slice! : SLICES[0]

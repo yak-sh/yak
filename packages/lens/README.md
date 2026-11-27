@@ -127,7 +127,7 @@ entry:
 import { compile, lensesIn, versions } from '@yaks/lens'
 
 let docs = [{
-  package: 'kitchen',
+  label: 'kitchen',
   $defs: {
     title: {
       lens: true,

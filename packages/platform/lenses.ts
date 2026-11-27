@@ -21,7 +21,7 @@ import { sessionDoc } from '@yaks/session/vocab'
 export let sessionStep = 20261018010000
 export let sessionPackage: string = packageEid('@yaks/session')
 export let sessionLens: VocabDoc = {
-  package: '@yaks/session',
+  label: '@yaks/session',
   $defs: {
     session_sending: {
       lens: true,
@@ -52,7 +52,7 @@ export let declaredLenses = (doc: VocabDoc): boolean =>
 
 export let lensDocAt = (name: string, doc: VocabDoc): VocabDoc => ({
   ...doc,
-  package: `@app/${name}`,
+  label: `@app/${name}`,
 })
 
 /** The directory keeps the newest store vocabulary while code rolls back. */

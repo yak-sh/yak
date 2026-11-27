@@ -34,12 +34,12 @@ let note = (properties: Record<string, PropSchema>, before = ['doc']) => ({
   properties,
 })
 let p = (props: Record<string, PropSchema>, before?: string[]): VocabDoc => ({
-  package: '@t/p',
+  label: '@t/p',
   description: 'Notes.',
   $defs: { note: note(props, before) },
 })
 let q: VocabDoc = {
-  package: '@t/q',
+  label: '@t/q',
   $defs: {
     note: {
       component: true,

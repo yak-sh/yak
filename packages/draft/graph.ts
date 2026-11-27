@@ -10,6 +10,8 @@ import { drafts } from './plugin.ts'
 export let plugins = ({ vocab }: { vocab: Vocab }): Plugin[] =>
   // An app may have held either word before this package was composed there.
   // Its declaration stays its own, and its writes cannot acquire our merge.
-  ['draft', 'typed'].every((name) => vocab.comp(name)?.package == '@yaks/draft')
+  ['draft', 'typed'].every((name) =>
+      vocab.comp(name)?.namespace?.label == '@yaks/draft'
+    )
     ? [drafts()]
     : []

@@ -268,7 +268,7 @@ test('compose takes each facet from its own subpath, and mounts the doors', asyn
   try {
     assertEquals(host.vocab.comp('book')?.name, 'book')
     // Each component is known by the plugin that declared it.
-    assertEquals(host.vocab.comp('book')?.package, 'shop')
+    assertEquals(host.vocab.comp('book')?.namespace?.label, 'shop')
     // The generic tier is this graph's own, ahead of the plugins': one list,
     // which the command line runs and `/mcp` restates for itself. `search` is
     // there because a property of this vocabulary said `search: true`, and

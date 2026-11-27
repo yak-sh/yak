@@ -20,7 +20,7 @@ export let reported = async (
   { views: Registry; vocab: Vocab; components: () => Promise<Held> }
 > => {
   let vocab = loadVocab([doc], understood())
-  let plugins = vocab.all.flatMap((n) => vocab.comp(n)?.package ?? [])
+  let plugins = vocab.all.flatMap((n) => vocab.comp(n)?.namespace?.label ?? [])
   let named = [...new Set(plugins)]
   await subpaths(named.map((p) => [p, 'views'] as const)).catch((error) =>
     elsewhere(error) ? null : Promise.reject(error)

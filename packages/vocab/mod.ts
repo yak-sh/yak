@@ -16,6 +16,8 @@
 //   keywords.ts  the extension point: another package registers its own
 //                keywords, and the loader carries them without interpreting
 //                them
+//   namespace.ts a word's identity, from its `$id`, and the namespace (an
+//                identity and a label) a document declares its words in
 //   vocab.ts     loadVocab(docs) → Vocab: the query and routing API a storage
 //                binder (@yaks/sql) calls — property types, path routing,
 //                kindOrder/kindOf, delete worklists, instance checks
@@ -40,6 +42,7 @@
 //                entities in the meta vocabulary, and back
 
 export * from './types.ts'
+export { idOf, namespaceOf } from './namespace.ts'
 export * from './order.ts'
 export * from './kinds.ts'
 export * from './pick.ts'

@@ -20,6 +20,7 @@ import type {
   Identity,
   Index,
   Ladder,
+  Namespace,
   Prop,
   PropSchema,
   Scalar,
@@ -29,6 +30,13 @@ import type { Keywords } from './keywords.ts'
 import { kept, paced, said, saved, type Sync } from './lifetime.ts'
 import { type Kind, kindsIn, orderKinds } from './kinds.ts'
 import { appended, ladderOf, statusProp } from './status.ts'
+import {
+  apart,
+  type Declared,
+  idOf,
+  namespaceOf,
+  namespaces,
+} from './namespace.ts'
 
 /** A name this vocabulary does not know. One error for every caller, raised
  * here because the vocabulary is what decides: `aim()` raises it for a name no
@@ -172,6 +180,7 @@ export let valueless = (
 // mistake rather than an override. `status` adds rungs to the ladder the
 // declaring document gives it (./status.ts).
 let ADDABLE = [
+  '$id',
   'component',
   'extends',
   'type',
@@ -298,7 +307,14 @@ export let jsonb = (s: PropSchema): boolean =>
 // Every property says what it holds. A property with no `type` is refused
 // rather than read as text: the schema is what a reader expects back, and a
 // guess is not a promise.
-export let TYPES = ['string', 'number', 'integer', 'boolean', 'object', 'array']
+export let TYPES = [
+  'string',
+  'number',
+  'integer',
+  'boolean',
+  'object',
+  'array',
+]
 let typed = (comp: string, prop: string, s: PropSchema): void => {
   if (typesOf(s).length) return
   throw new Error(
@@ -398,9 +414,11 @@ let propOf = (
     : 'scalar'
   let scalar = category == 'scalar' ? scalarOf(s) : undefined
   let death = deathOf(s.death)
+  let id = idOf(s.$id)
   return {
     comp,
     prop,
+    ...(id ? { id } : {}),
     description: s.description,
     category,
     scalar,
@@ -467,6 +485,10 @@ export type Vocab = {
   /** One kind's declaration, loaded; undefined for a name no kind has. */
   kind: (name: string) => Kind | undefined
   comp: (name: string) => CompInfo | undefined
+  /** What an identity names here: a component, by the name it is held under,
+   * one of its properties, or a kind; undefined for an identity no word
+   * loaded here carries. */
+  word: (id: string) => Word | undefined
   /** A component's `$defs` entry as its documents declare it, with every
    * `extends` applied — the JSON Schema itself, for a reader that wants the
    * schema rather than the facts this load read out of it. */
@@ -506,6 +528,10 @@ export type Vocab = {
     opts?: { stamped?: boolean },
   ) => string[]
 }
+
+/** What a word's identity names in a vocabulary: a component or one of its
+ * properties, as a {@link Hop} names them, or a kind. */
+export type Word = { comp: string; prop?: string } | { kind: string }
 
 // The composite lists a component declares under one keyword, each entry read
 // to its properties and the properties it needs present. A boolean there is
@@ -1025,9 +1051,8 @@ export let loadVocab = (
 let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   let compWords = new Set(keywords.flatMap((k) => k.comp ?? []))
   let propWords = new Set(keywords.flatMap((k) => k.prop ?? []))
-  // Merge every document's component entries into one table; a name declared
-  // twice is a conflict (one name, one home). `$defs` is JSON Schema's own
-  // reuse slot, so an entry carries a marker saying what it is:
+  // Merge every document's component entries into one table. `$defs` is JSON
+  // Schema's own reuse slot, so an entry carries a marker saying what it is:
   // `component: true` is a component, `tool: true` is a tool declaration
   // (tools.ts `toolsIn` reads those), `rule: true` is a rule (rules.ts
   // `rulesIn`) and `effect: true` is an effect (effects.ts `effectsIn`), all of
@@ -1037,12 +1062,16 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   // component whose marker was forgotten, and creating no table for it would
   // silently lose the component.
   //
+  // An entry's key is its label. A label one namespace declares names its
+  // component here; where several namespaces declare it, each is a word of
+  // its own, held under its identity (`apart`), and a label said twice any
+  // other way is a conflict.
+  //
   // `extends: true` is the one entry that may name a component another document
   // already declared: it adds properties to it (`extended`). Those are applied
   // after every document is read, so the order the documents were loaded in
   // decides nothing.
-  let defs: Record<string, PropSchema> = {}
-  let from: Record<string, string> = {} // a component → the package declaring it
+  let declared = new Map<string, Declared[]>()
   let adding: [string, PropSchema][] = []
   for (let doc of docs) {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
@@ -1063,24 +1092,41 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
         adding.push([name, schema])
         continue
       }
-      let pkg = schema.package ?? doc.package
-      if (name in defs) {
-        // Which two said it, where both documents say whose they are; one
-        // package saying it twice was loaded twice, as a config naming it twice.
-        let by = !from[name] || !pkg
-          ? ''
-          : from[name] == pkg
-          ? `, by ${pkg} loaded twice`
-          : `, by ${from[name]} and by ${pkg}`
-        throw new Error(`component '${name}' is declared twice${by}`)
-      }
-      defs[name] = schema
-      if (pkg) from[name] = pkg
+      let ns = namespaceOf(doc, schema.label ?? doc.label)
+      declared.set(name, [...declared.get(name) ?? [], { schema, ns }])
     }
   }
+  let defs: Record<string, PropSchema> = {}
+  let from: Record<string, Namespace> = {} // a component → its namespace
+  let labels: Record<string, string> = {} // a component → its label
+  for (let [label, all] of declared) {
+    for (let [key, { schema, ns }] of apart('component', label, all)) {
+      defs[key] = schema
+      labels[key] = label
+      if (ns) from[key] = ns
+    }
+  }
+  let held = new Map<string, string>() // a component's identity → its key
+  for (let [name, schema] of Object.entries(defs)) {
+    let id = idOf(schema.$id)
+    if (id) held.set(id, name)
+  }
+  // What an `extends` entry adds to: the component its `$id` names, else the
+  // one its label names, which may not be a label several namespaces share.
+  let extendee = (name: string, schema: PropSchema): string => {
+    let id = idOf(schema.$id)
+    if (id) return held.get(id) ?? name
+    let all = declared.get(name) ?? []
+    if (all.length < 2) return name
+    throw new Error(
+      `'${name}' extends a component ${namespaces(all)} each declare — ` +
+        'give the entry the $id of the one it extends',
+    )
+  }
   for (let [name, schema] of adding) {
-    if (!defs[name] && rungsOnly(schema)) continue
-    defs[name] = extended(name, defs[name], schema)
+    let key = extendee(name, schema)
+    if (!defs[key] && rungsOnly(schema)) continue
+    defs[key] = extended(name, defs[key], schema)
   }
   // A component's `status` ladder gives it a computed `status` property, which
   // every reader below then sees as declared (./status.ts).
@@ -1130,14 +1176,17 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
 
   // Every kind, by name; a component names a kind when it is the kind of its
   // own name.
-  let kindsBy = kindsIn(docs, defs, from)
+  let kindsBy = kindsIn(docs, defs, from, labels)
   let own = (name: string) => kindsBy.get(name)?.is.join() == name
 
   let info = (name: string): CompInfo => {
     let d = defs[name]
     let entries = Object.keys(props(name))
+    let id = idOf(d.$id)
     return {
       name,
+      label: labels[name],
+      ...(id ? { id } : {}),
       description: d.description,
       wire: wire(name),
       computed: d.computed === true,
@@ -1147,7 +1196,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       journal: d.journal !== false,
       kind: own(name),
       mark: mark(name),
-      ...(from[name] ? { package: from[name] } : {}),
+      ...(from[name] ? { namespace: from[name] } : {}),
       before: own(name) ? kindsBy.get(name)!.before : d.before ?? [],
       // A computed property is readable, never writable — like a stamped one,
       // but with no storage either.
@@ -1229,6 +1278,33 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   let dying = new Map<string, [string, string][]>()
 
   let kinds = orderKinds(kindsBy, mark)
+
+  // Every identity a word here carries, to what it names. One identity on two
+  // words is a mistake in whatever minted them, so it is refused.
+  let words = new Map<string, Word>()
+  let name = (w: Word) =>
+    'kind' in w ? w.kind : w.prop ? `${w.comp}.${w.prop}` : w.comp
+  let carry = (id: string | undefined, w: Word) => {
+    if (!id) return
+    let had = words.get(id)
+    if (had) {
+      throw new Error(
+        `'${name(had)}' and '${name(w)}' are both declared as ${id}`,
+      )
+    }
+    words.set(id, w)
+  }
+  for (let comp of names) {
+    carry(idOf(defs[comp].$id), { comp })
+    for (let p of read.get(comp)!.read.values()) {
+      carry(p.id, { comp, prop: p.prop })
+    }
+  }
+  // A component that is the kind of its own name is one word with it.
+  for (let k of kindsBy.values()) {
+    let w = k.id ? words.get(k.id) : undefined
+    if (!w || 'kind' in w || w.comp != k.name) carry(k.id, { kind: k.name })
+  }
   let shapes = kinds.map((k) => kindsBy.get(k)!.is)
 
   // Where a path leads, what a component indexes and what identifies its
@@ -1252,6 +1328,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
     all: names,
     kinds,
     comp: infoOf,
+    word: (id) => words.get(id),
     def: (name) => defs[name],
     props: (comp) => routes.get(comp) ?? [],
     prop: propFor,

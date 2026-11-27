@@ -23,8 +23,8 @@ import {
 import { lensRule } from '../../workers/yak/lenses.ts'
 import { grew } from '../../workers/yak/vocab.ts'
 
-let app = { ...words, package: '@app/vale-compat' }
-let speaks = { [packageEid(app.package)]: 0 }
+let app = { ...words, label: '@app/vale-compat' }
+let speaks = { [packageEid(app.label)]: 0 }
 let moment = '2026-10-03T18:00:00.000Z', time = Date.parse(moment)
 let person = {
   by: '11111111-1111-4111-8111-111111111111',
@@ -80,8 +80,8 @@ let setup = async (guard = false, expanded = false, shuffled = false) => {
     { entity: { eid: 'club' }, space: { name: 'Vale' } },
     { entity: { eid: 'owner' }, person: { name: 'Owner' } },
     {
-      entity: { eid: packageEid(app.package) },
-      _package: { name: app.package },
+      entity: { eid: packageEid(app.label) },
+      _package: { name: app.label },
     },
     ...lensesIn([app]),
     {
@@ -658,8 +658,8 @@ test('deploying the Vale view preserves stored eid text when the request becomes
     g.install()
     await g.apply([
       {
-        entity: { eid: packageEid(app.package) },
-        _package: { name: app.package },
+        entity: { eid: packageEid(app.label) },
+        _package: { name: app.label },
       },
       ...lensesIn([app]),
     ], { trusted: true })
@@ -773,7 +773,7 @@ test('empty Vale view sources leave the active vocabulary while rename membershi
     expanded.$defs.seen,
   )
   let renamed = {
-    package: 'recipe',
+    label: 'recipe',
     $defs: {
       recipe: {
         component: true,

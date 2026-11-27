@@ -9,7 +9,7 @@ import { described, lensesIn, packageEid } from './described.ts'
 import { compile } from './compile.ts'
 
 let kitchen = {
-  package: 'kitchen',
+  label: 'kitchen',
   $defs: {
     recipe: {
       component: true,

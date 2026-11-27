@@ -15,7 +15,7 @@ import { toolCheck } from '../vocab/tools.ts'
 import { memberKeywords, permitsIn, permitted } from './keywords.ts'
 
 let declaration: VocabDoc = {
-  package: '@test/requests',
+  label: '@test/requests',
   $defs: {
     entity: { component: true, type: 'object', properties: {} },
     request: {

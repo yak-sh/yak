@@ -61,10 +61,10 @@ test('bare, it is the index: every component, what it is, its types', async () =
 
 test('the index nests each component under the package declaring it', () => {
   let vocab = loadVocab([
-    { package: '@shop/books', $defs: { book: shop.def('book')! } },
-    { package: '@shop/words', $defs: { doc: shop.def('doc')! } },
+    { label: '@shop/books', $defs: { book: shop.def('book')! } },
+    { label: '@shop/words', $defs: { doc: shop.def('doc')! } },
   ])
-  assertEquals(vocab.comp('book')?.package, '@shop/books')
+  assertEquals(vocab.comp('book')?.namespace?.label, '@shop/books')
   let said = proseOf(vocab)
   assertStringIncludes(
     said,

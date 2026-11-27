@@ -76,7 +76,7 @@ let SHAPE = [
   'kind',
   'prefix',
   'before',
-  'package',
+  'label',
 ]
 
 // What an effect entry says by its shape: that it is one, and what it does.
@@ -97,7 +97,7 @@ let row = (s: PropSchema, cols: string[], skip: string[]) => {
 
 /**
  * One document's vocabulary as bundles: a `_package` where the document names
- * its `package` (its `description` the package's), a `_comp` for each component
+ * its namespace's `label` (its `description` the package's), a `_comp` for each component
  * it declares, a `_kind` for each kind it declares, under `kinds` or as a
  * component of the kind's name, an `_extends` for each component it extends, a
  * `_prop` for each property it declares or adds, a `_before` edge for each
@@ -119,14 +119,14 @@ let row = (s: PropSchema, cols: string[], skip: string[]) => {
  * ```
  */
 export let toBundles = (doc: VocabDoc, id: Ids): Bundle[] => {
-  let pkg = doc.package ? id('_package', { name: doc.package }) : null
+  let pkg = doc.label ? id('_package', { name: doc.label }) : null
   let comp = (name: string) => id('_comp', { name })
   let kind = (name: string) => id('_kind', { name })
   let packages: Bundle[] = pkg
     ? [{
       entity: { eid: pkg },
-      _package: { name: doc.package },
-      doc: { title: doc.package, body: doc.description ?? null },
+      _package: { name: doc.label },
+      doc: { title: doc.label, body: doc.description ?? null },
     }]
     : []
   let comps: Bundle[] = []
@@ -157,7 +157,7 @@ export let toBundles = (doc: VocabDoc, id: Ids): Bundle[] => {
         entity: { eid: id('_extends', { comp: c, package: pkg }) },
         _extends: { comp: c, package: pkg, status: s.status ?? null },
         doc: {
-          title: `${name}+${doc.package ?? ''}`,
+          title: `${name}+${doc.label ?? ''}`,
           body: s.description ?? null,
         },
       })
@@ -350,7 +350,7 @@ export let fromBundles = (bundles: Bundle[]): VocabDoc[] => {
   }
   for (let pkg of declared.keys()) defs(pkg)
   return [...docs].map(([pkg, $defs]) => ({
-    ...(pkg ? { package: pkg } : {}),
+    ...(pkg ? { label: pkg } : {}),
     $defs,
     ...declared.has(pkg) ? { kinds: declared.get(pkg) } : {},
   }))

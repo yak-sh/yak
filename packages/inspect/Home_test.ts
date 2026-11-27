@@ -19,7 +19,7 @@ import type { Answer, Host } from './host.ts'
 
 let vocab = loadVocab([{
   $vocabulary: { [EDGE_URI]: true },
-  package: '@test/work',
+  label: '@test/work',
   description: 'Work and what holds it up.',
   $defs: {
     task: {
@@ -47,7 +47,7 @@ let vocab = loadVocab([{
     task: { prefix: 'T', description: 'Work to be done.' },
     closed: { is: ['task', 'done'], with: { blocks: true } },
   },
-}, { package: '@test/more', $defs: {} }], [edgeKeywords])
+}, { label: '@test/more', $defs: {} }], [edgeKeywords])
 
 let names = new Map([
   ...vocab.all.map((n) => [compEid(n), n] as const),

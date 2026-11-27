@@ -9,7 +9,7 @@ let roles = {
   web: ['routes'],
 }
 let docs: VocabDoc[] = [{
-  package: 'shop',
+  label: 'shop',
   $defs: {
     book: {
       component: true,

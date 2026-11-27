@@ -14,7 +14,7 @@ import { Conversation, SessionPage, SessionTile } from '../session/inspect.ts'
 import { BeliefPage } from '../memory/inspect.ts'
 
 let vocab = loadVocab([{
-  package: '@test/loading',
+  label: '@test/loading',
   $defs: {
     task: { component: true, properties: {} },
     doc: { component: true, properties: { title: { type: 'string' } } },
@@ -49,7 +49,9 @@ let io = (answers: Record<string, Partial<Answer>> = {}): Io => ({
   when: (at) => at,
 })
 let page = (node: ComponentChildren) =>
-  parseHTML(renderToString(h('main', {}, node))).document.querySelector('main')!
+  parseHTML(renderToString(h('main', {}, node))).document.querySelector(
+    'main',
+  )!
 let section = (node: ComponentChildren, name: string) =>
   page(node).querySelector(`[data-section="${name}"]`)!
 let props = (host: Io, e: Bundle = item) => ({ io: host, e, got: {}, ctx: {} })

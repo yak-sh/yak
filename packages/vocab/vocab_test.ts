@@ -498,7 +498,9 @@ test('number and priority properties refuse non-finite values', () => {
       },
     })
     for (let value of [NaN, Infinity, -Infinity]) {
-      assertEquals(w.check('reading', { value }), ['reading.value is a number'])
+      assertEquals(w.check('reading', { value }), [
+        'reading.value is a number',
+      ])
     }
     for (let value of [null, 0, -1, 1.5, Number.MAX_VALUE]) {
       assertEquals(w.check('reading', { value }), [])
@@ -583,7 +585,7 @@ let shapes = (
   extra: Record<string, PropSchema> = {},
 ) =>
   loadVocab({
-    package: '@shop/task',
+    label: '@shop/task',
     $defs: {
       task: { component: true, kind: true, prefix: 'T', before: ['doc'] },
       doc: { component: true, kind: true },
@@ -606,23 +608,25 @@ test('a kind is declared beside $defs, or by a component of its name', () => {
   })
   assertEquals(w.kind('decision'), {
     name: 'decision',
+    label: 'decision',
     title: 'Decision',
     is: ['task', 'decision'],
     with: { doc: true, proposed: {} },
     before: [],
     prefix: 'Q',
     examples: [{ task: {}, decision: {}, doc: { title: 'Ship?' } }],
-    package: '@shop/task',
+    namespace: { label: '@shop/task' },
   })
   // `kind: true`, its `before` and `prefix` load as the kind of that name
   assertEquals(w.kind('task'), {
     name: 'task',
+    label: 'task',
     is: ['task'],
     with: {},
     before: ['doc'],
     prefix: 'T',
     examples: [],
-    package: '@shop/task',
+    namespace: { label: '@shop/task' },
   })
   // `is` left out is the component of the kind's own name
   assertEquals(shapes({ proposed: {} }).kind('proposed')?.is, ['proposed'])
@@ -747,8 +751,8 @@ test('a word has one home across documents', () => {
   assertThrows(
     () =>
       loadVocab([
-        { package: '@a/one', $defs: { doc } },
-        { package: '@a/two', $defs: { doc } },
+        { label: '@a/one', $defs: { doc } },
+        { label: '@a/two', $defs: { doc } },
       ]),
     Error,
     "component 'doc' is declared twice, by @a/one and by @a/two",
@@ -756,8 +760,8 @@ test('a word has one home across documents', () => {
   assertThrows(
     () =>
       loadVocab([
-        { package: '@a/one', $defs: { doc } },
-        { package: '@a/one', $defs: { doc } },
+        { label: '@a/one', $defs: { doc } },
+        { label: '@a/one', $defs: { doc } },
       ]),
     Error,
     "component 'doc' is declared twice, by @a/one loaded twice",
@@ -997,14 +1001,164 @@ test('a component names the text its entities are found by, from another package
   )
 })
 
-test('a component says which package declared it, or its document does', () => {
+test('a component says which namespace declared it, or its document does', () => {
   let one = (comp: PropSchema, doc: Partial<VocabDoc> = {}) =>
-    loadVocab({ ...doc, $defs: { book: comp } }).comp('book')?.package
+    loadVocab({ ...doc, $defs: { book: comp } }).comp('book')?.namespace
   let book: PropSchema = { component: true, type: 'object' }
   assertEquals(one(book), undefined)
-  assertEquals(one(book, { package: '@yaks/shelf' }), '@yaks/shelf')
+  assertEquals(one(book, { label: '@yaks/shelf' }), { label: '@yaks/shelf' })
+  assertEquals(one(book, { $id: urn(SHELF), label: '@yaks/shelf' }), {
+    id: SHELF,
+    label: '@yaks/shelf',
+  })
   // A vocabulary reported out of several packages says it per component.
-  assertEquals(one({ ...book, package: '@yaks/shop' }), '@yaks/shop')
+  assertEquals(one({ ...book, label: '@yaks/shop' }), { label: '@yaks/shop' })
+})
+
+// Identities, as a vocab.json carries them.
+let urn = (id: string) => `urn:uuid:${id}`
+let [SHELF, TRIP, MODEL, COST, TRIP_COST, EUROS, DOLLARS, TIP, TAB] = Array
+  .from({ length: 9 }, () => crypto.randomUUID())
+let cost = (
+  id: string,
+  prop: string,
+  pid: string,
+): PropSchema => ({
+  $id: urn(id),
+  component: true,
+  type: 'object',
+  properties: { [prop]: { $id: urn(pid), type: 'number' } },
+})
+let model: VocabDoc = {
+  $id: urn(MODEL),
+  label: '@yaks/model',
+  $defs: { cost: cost(COST, 'dollars', DOLLARS) },
+}
+let trip: VocabDoc = {
+  $id: urn(TRIP),
+  label: 'yourname/trip',
+  $defs: { cost: cost(TRIP_COST, 'euros', EUROS) },
+}
+
+test('each component and property carries the identity its $id gives', () => {
+  let v = loadVocab(model)
+  assertEquals(v.comp('cost')?.id, COST)
+  assertEquals(v.comp('cost')?.namespace, { id: MODEL, label: '@yaks/model' })
+  assertEquals(v.prop('cost', 'dollars')?.id, DOLLARS)
+  assertEquals(v.word(COST), { comp: 'cost' })
+  assertEquals(v.word(DOLLARS), { comp: 'cost', prop: 'dollars' })
+  assertEquals(v.word(TRIP_COST), undefined)
+  // A word with no $id, or one that is not a urn:uuid, has no identity.
+  let plain = loadVocab({
+    $id: 'https://example.test/plain',
+    $defs: {
+      note: { component: true, properties: { text: { type: 'string' } } },
+    },
+  })
+  assertEquals(plain.comp('note')?.id, undefined)
+  assertEquals(plain.comp('note')?.namespace, undefined)
+  assertEquals(plain.prop('note', 'text')?.id, undefined)
+})
+
+test('two namespaces may declare one label, each held under its identity', () => {
+  let v = loadVocab([model, trip])
+  assertEquals(v.all, [COST, TRIP_COST].sort())
+  assertEquals(v.comp('cost'), undefined)
+  assertEquals(v.word(TRIP_COST), { comp: TRIP_COST })
+  assertEquals(v.comp(TRIP_COST)?.namespace?.label, 'yourname/trip')
+  assertEquals(v.comp(TRIP_COST)?.label, 'cost')
+  assertEquals(v.props(COST), ['dollars'])
+  assertEquals(v.prop(TRIP_COST, 'euros')?.id, EUROS)
+  // A label one namespace says twice is still refused, as is one said by
+  // words with no identity to tell them apart.
+  assertThrows(
+    () => loadVocab([model, { ...trip, $id: urn(MODEL) }]),
+    Error,
+    "component 'cost' is declared twice",
+  )
+  let bare = (label: string): VocabDoc => ({
+    label,
+    $defs: { cost: { component: true, type: 'object' } },
+  })
+  assertThrows(
+    () => loadVocab([bare('@yaks/model'), bare('yourname/trip')]),
+    Error,
+    "component 'cost' is declared twice, by @yaks/model and by yourname/trip",
+  )
+  // One identity on two words is refused too.
+  assertThrows(
+    () =>
+      loadVocab([model, {
+        ...trip,
+        $defs: { tab: cost(COST, 'euros', EUROS) },
+      }]),
+    Error,
+    `'cost' and 'tab' are both declared as ${COST}`,
+  )
+})
+
+test('two properties of one label on one component are still refused', () => {
+  let tip: VocabDoc = {
+    $id: urn(TRIP),
+    label: 'yourname/trip',
+    $defs: {
+      cost: {
+        $id: urn(COST),
+        component: true,
+        extends: true,
+        properties: { tip: { $id: urn(TIP), type: 'number' } },
+      },
+    },
+  }
+  // An extension names the word it extends by identity where its label is
+  // shared, and the property it adds carries its own.
+  let v = loadVocab([model, trip, tip])
+  assertEquals(v.props(COST), ['dollars', 'tip'])
+  assertEquals(v.word(TIP), { comp: COST, prop: 'tip' })
+  assertThrows(
+    () =>
+      loadVocab([model, trip, {
+        label: 'yourname/tab',
+        $defs: { cost: { component: true, extends: true } },
+      }]),
+    Error,
+    "'cost' extends a component @yaks/model and yourname/trip each declare",
+  )
+  assertThrows(
+    () =>
+      loadVocab([model, {
+        $defs: {
+          cost: {
+            component: true,
+            extends: true,
+            properties: { dollars: { $id: urn(TAB), type: 'number' } },
+          },
+        },
+      }]),
+    Error,
+    "'cost' already declares a 'dollars' property",
+  )
+})
+
+test('a kind carries its identity, and two namespaces may declare one', () => {
+  let kind = (ns: VocabDoc, id: string, is = 'cost'): VocabDoc => ({
+    ...ns,
+    kinds: { bill: { $id: urn(id), is: [is] } },
+  })
+  let one = loadVocab(kind(model, TAB))
+  assertEquals(one.kind('bill')?.id, TAB)
+  assertEquals(one.word(TAB), { kind: 'bill' })
+  assertEquals(one.kind('cost'), undefined)
+  let v = loadVocab([model, kind({ ...trip, $defs: {} }, TIP)])
+  assertEquals(v.kind('bill')?.namespace?.label, 'yourname/trip')
+  let both = loadVocab([
+    kind({ ...model, $defs: {} }, TAB),
+    kind({ ...trip, $defs: {} }, TIP, 'tab'),
+  ])
+  assertEquals(both.kind(TAB)?.namespace?.label, '@yaks/model')
+  assertEquals(both.kind(TIP)?.namespace?.label, 'yourname/trip')
+  assertEquals(both.kind(TIP)?.label, 'bill')
+  assertEquals(both.kind('bill'), undefined)
 })
 
 // A value compared with a component is refused with the forms that compare
@@ -1059,7 +1213,12 @@ test('a value compared with a component names the properties that hold one', () 
         'signed has no properties, so it is present (.signed) or absent (!signed)',
       ],
     ]
-  ) assert(valueless(w, path, op, value).includes(said), `${path}${op}${value}`)
+  ) {
+    assert(
+      valueless(w, path, op, value).includes(said),
+      `${path}${op}${value}`,
+    )
+  }
 })
 
 // A property no component declares is refused with the component's shape, and

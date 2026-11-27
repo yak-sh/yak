@@ -54,6 +54,9 @@ export type Scalar =
 export type Prop = {
   comp: string
   prop: string
+  /** the property's identity: the UUID its schema's `$id` gives, absent for
+   * a property that has none yet */
+  id?: string
   /** what the property means, as its schema describes it — the text a schema
    * listing hands an agent, so a property is not read off its name alone */
   description?: string
@@ -111,7 +114,14 @@ export type Default = { now: true } | { value: string | number | boolean }
 // facts, and whatever extension keywords a caller registered (keywords.ts) —
 // copied verbatim, never interpreted here.
 export type CompInfo = {
+  /** the name this vocabulary holds it under: its label, or its identity
+   * where two namespaces declare that label (`Vocab.word` finds either) */
   name: string
+  /** its label: the key its document declares it under */
+  label: string
+  /** its identity: the UUID its `$defs` entry's `$id` gives, absent for a
+   * component that has none yet */
+  id?: string
   description?: string // what the component means, as its schema describes it
   wire: boolean // false = a component clients read but cannot write
   /** derived, never stored: no table holds it and nobody writes it — its
@@ -133,7 +143,8 @@ export type CompInfo = {
    * with a `by` or `via`, filled the first time it is written. A kind that is
    * a mark follows every kind it does not sort before (kindOrder). */
   mark: boolean
-  package?: string // the package whose document declared it, where one says
+  /** the namespace whose document declared it, where one says */
+  namespace?: Namespace
   before: string[] // kinds this kind sorts before (feeds kindOrder)
   writable: string[] // property names a client may write
   stamped: string[] // property names only the server writes
@@ -203,6 +214,13 @@ export type Assoc = { comp: string; prop: string }
 // (@yaks/archetype) take this type, so it lives under neither of them.
 export type Presence = { all?: readonly string[]; none?: readonly string[] }
 
+/** A vocabulary's namespace: its identity, the UUID its document's `$id`
+ * gives, and its label, the package's name (`@yaks/model`) or the app's
+ * address (`yourname/trip`). A label may change; the identity never does.
+ * Either may be absent: a test fixture says neither, and a document written
+ * before identities has a label alone. */
+export type Namespace = { id?: string; label?: string }
+
 // A vocabulary document, as authored: a JSON Schema whose `$defs` are the
 // components. Loose on purpose — the meta-schema and loadVocab() are what
 // validate it; this is just enough shape for the reader.
@@ -212,12 +230,12 @@ export type VocabDoc = {
   title?: string
   /** instructions this vocabulary contributes to an agent's MCP handshake */
   instructions?: string
-  /** the package that declares these components — written by the host that
-   * loads the document (@yaks/cli `compose`), so a reader can say where each
-   * component comes from */
-  package?: string
+  /** its namespace's label: the package's name or the app's address, written
+   * by the host that loads the document (@yaks/cli `compose`), so a reader can
+   * say where each component comes from. The namespace itself is `$id`. */
+  label?: string
   /** what that package is: the host writes its package.json's description here
-   * beside `package`, since a package says it once, in its manifest */
+   * beside `label`, since a package says it once, in its manifest */
   description?: string
   /** Whether a host reserves this document's names for its own declarations.
    * False lets graph-owned components share names with internal controls;
@@ -232,6 +250,9 @@ export type VocabDoc = {
 // One component's schema (a `$defs` entry): an object schema whose `properties`
 // are its properties, plus the yaks comp-level keywords.
 export type PropSchema = {
+  // The identity of the word this entry declares, as `urn:uuid:…`: a
+  // component's on a `$defs` entry, a property's on a property schema.
+  $id?: string
   // One JSON type, or a union of them. Every property declares one.
   type?: string | string[]
   properties?: Record<string, PropSchema>
@@ -314,9 +335,10 @@ export type PropSchema = {
   prose?: boolean | string[]
   kind?: boolean
   before?: string[]
-  // On a component reported out of a vocabulary of several packages: the one
-  // that declared it (@yaks/graph `schemaOf`). A document says it once instead.
-  package?: string
+  // On a component reported out of a vocabulary of several namespaces: the
+  // label of the one that declared it (@yaks/graph `schemaOf`). A document
+  // says it once instead.
+  label?: string
   wire?: boolean
   embed?: boolean
   found?: boolean

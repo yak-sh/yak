@@ -8,17 +8,17 @@ import { history } from './steps.ts'
 export let packageEid = (name: string): string => derivedEid(`_package|${name}`)
 
 /** Authored `$defs` lens entries as private `_lens{package, step, ops}` rows.
- * A document must name its declaring package. Components and other entries
+ * A document must carry its namespace's label. Components and other entries
  * are left to their own readers. */
 export let lensesIn = (docs: VocabDoc[]): Bundle[] => {
   let rows: Bundle[] = []
   for (let doc of docs) {
     for (let s of Object.values(doc.$defs ?? {})) {
       if (s.lens !== true) continue
-      if (!doc.package) {
-        throw new Error('Lens: a declaring document needs package')
+      if (!doc.label) {
+        throw new Error('Lens: a declaring document needs its label')
       }
-      let pkg = packageEid(doc.package)
+      let pkg = packageEid(doc.label)
       rows.push({
         entity: { eid: derivedEid(`_lens|${pkg}|${s.step}`) },
         _lens: { package: pkg, step: s.step, ops: s.ops },
@@ -32,7 +32,7 @@ export let lensesIn = (docs: VocabDoc[]): Bundle[] => {
 /** The latest step timestamp a set of declaring documents speaks. */
 export let versions = (docs: VocabDoc[]): Speaks => {
   let out: Speaks = Object.fromEntries(
-    docs.filter((d) => d.package).map((d) => [packageEid(d.package!), 0]),
+    docs.filter((d) => d.label).map((d) => [packageEid(d.label!), 0]),
   )
   let groups = new Map<string, { step: number }[]>()
   for (let b of lensesIn(docs)) {

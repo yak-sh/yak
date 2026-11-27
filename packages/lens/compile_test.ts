@@ -26,7 +26,7 @@ import { lensesIn, packageEid, versions } from './described.ts'
 import { docs } from './vocab.ts'
 
 let doc = {
-  package: 'kitchen',
+  label: 'kitchen',
   $defs: {
     title: {
       lens: true,
@@ -215,7 +215,7 @@ test('authored steps pass vocabulary loading and derive the declared identities'
   ok(vocab.comp('_lens'))
   equal(rows[0].entity.eid, derivedEid(`_lens|${pkg}|0`))
   equal(versions([doc]), { [pkg]: 1 })
-  equal(versions([{ package: 'kitchen' }]), { [pkg]: 0 })
+  equal(versions([{ label: 'kitchen' }]), { [pkg]: 0 })
   await throws(() => lensesIn([{ $defs: doc.$defs }]))
   await throws(() =>
     compile([{ ...rows[0], _lens: { ...(rows[0]._lens as object), step: 2 } }])
@@ -241,7 +241,7 @@ test('timestamp histories accept gaps, compose sorted suffixes and speak per pac
     from: string,
     to: string,
   ) => ({
-    package: packageName,
+    label: packageName,
     $defs: { change: { lens: true, step, ops: [{ rename: { from, to } }] } },
   })
   let docs = [
@@ -269,7 +269,10 @@ test('timestamp histories accept gaps, compose sorted suffixes and speak per pac
     suffix.get(b({ recipe: { heading: 'Cake' } })),
     b({ recipe: { name: 'Cake' } }),
   )
-  equal(suffix.ask(parse('.recipe.name~=cake')), parse('.recipe.heading~=cake'))
+  equal(
+    suffix.ask(parse('.recipe.name~=cake')),
+    parse('.recipe.heading~=cake'),
+  )
   let current = b({ recipe: { heading: 'Cake' } })
   ok(compile(rows, versions(docs)).put(current) === current)
   // A cutoff describes all changes up to that timestamp, even in a gap.
