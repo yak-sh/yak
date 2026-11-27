@@ -1,6 +1,6 @@
 ---
 name: games
-description: 'Multiplayer Games (yaks.app). Design the whole game first and play it to its ending before release. Start a game with app_files and the game starter. Choose a 3D, voxel or 2D view, then add live rooms for multiplayer. Covers fullscreen play, local and stored game state, guest invites, controls, HUD, rendering, fixed-step timing and retrying lost writes.'
+description: 'Multiplayer Games (yaks.app). Design the whole game first. Start a game with app_files and the game starter. Choose a 3D, voxel or 2D view, then add live rooms for multiplayer. Covers fullscreen play, local and stored game state, guest invites, controls, HUD, rendering, fixed-step timing and retrying lost writes.'
 ---
 
 # Multiplayer Games
@@ -50,15 +50,6 @@ Work top down, so every part follows from the one above it:
 Build from the design, and answer with its main points beside the game's
 address. When the person changes any part, change `design.md` first, then redo
 every part of the game that depended on it.
-
-## Play it from start to end
-
-Before releasing, play the game through to its ending. The rules are pure, so a
-script in the sandbox can play whole runs through them: that shows the ending is
-reachable and the balance holds. Then play it in the browser as the person
-would, through the opening, the main challenge and the ending screen, with two
-seats for multiplayer. Fix what is broken, dull or lopsided, and play again. Say
-in the answer what you played and where play stopped.
 
 ## Start with a game starter
 

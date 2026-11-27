@@ -30,13 +30,13 @@ no page for the recipe (the five steps, the store and `./api/client.js`), the
 page for each feature the app uses, and the design page before its first page.
 
 For a game, read `guide` with page `games`, design the whole game as its first
-section says, and use `app_files` with `starter` as the first file write. Before
-releasing, play it from start to end. The starter includes the vocabulary and
-turns the same guide into runnable files. Choose its lit 3D scene and following
-camera for exploration, the voxel view for voxels, or 2D when the person or
-genre calls for it. For multiplayer, make a private app and set
-`starter: {multiplayer: true}`. Read the files it wrote and build the person's
-world, rules and interface on the page graph, game screen and live room wiring.
+section says, and use `app_files` with `starter` as the first file write. The
+starter includes the vocabulary and turns the same guide into runnable files.
+Choose its lit 3D scene and following camera for exploration, the voxel view for
+voxels, or 2D when the person or genre calls for it. For multiplayer, make a
+private app and set `starter: {multiplayer: true}`. Read the files it wrote and
+build the person's world, rules and interface on the page graph, game screen and
+live room wiring.
 
 While you make an app, the column beside the chat shows it being made, read from
 its draft as each write lands. Data shows the kinds of things the app keeps.
