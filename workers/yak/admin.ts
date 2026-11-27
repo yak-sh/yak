@@ -70,7 +70,6 @@ import {
   type Space,
   SPACE_PARTS,
   spaceOf,
-  TESTED,
   testIs,
 } from './directory.ts'
 import { paid } from '@yaks/platform/plans'
@@ -162,10 +161,12 @@ export type { Census }
 // who is a test and each person's and space's sums.
 let COUNTED: CensusFields = {
   people: [
-    'person',
+    'person.test',
     'directory_order',
     'doc.title',
-    ...TESTED,
+    'email.address',
+    'phone.number',
+    'newcomer',
     'signed_in.at',
     'used.at',
     'started.space',
@@ -623,7 +624,11 @@ export let uses = (c: Figures, now = new Date()): Map<string, Uses> => {
   let everyIn = group(c.apps, appSpace)
   let seatsIn = group(c.seats, seatSpace)
   let seatsOf = group(c.seats, seatPerson)
-  let tests = new Set(c.people.filter(testIs).map((r) => r.entity.eid))
+  let tests = new Set(
+    c.people.filter((r) =>
+      typeof r.person?.test == 'boolean' ? r.person.test : testIs(r)
+    ).map((r) => r.entity.eid),
+  )
   let tested = (space: string) => {
     let seats = seatsIn.get(space) ?? []
     return seats.length > 0 && seats.every((s) => tests.has(seatPerson(s)))

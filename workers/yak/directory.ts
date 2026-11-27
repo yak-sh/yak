@@ -1043,10 +1043,6 @@ export let newcomerIs = (r?: Pick<Row, 'newcomer' | 'email' | 'phone'>) =>
  * ].map(testIs), [true, true, true, true, false, false, false, false])
  * ```
  */
-/** What {@link testIs} reads of a person's row: a read that asks it whether
- * someone is nobody's reads these (admin.ts `COUNTED`). */
-export let TESTED = ['email.address', 'phone.number', 'newcomer', 'test']
-
 export let testIs = (
   r?: Pick<Row, 'newcomer' | 'email' | 'phone' | 'test'>,
 ) =>
