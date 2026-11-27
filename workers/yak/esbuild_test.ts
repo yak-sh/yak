@@ -5,6 +5,7 @@
 // test says it compiled; @yaks/esbuild's own tests hold the plan and the
 // compile.
 import { test } from '@yaks/testing'
+import { system } from '@yaks/fp'
 import {
   assert,
   assertEquals,
@@ -480,27 +481,39 @@ let behindDirectory = await (async () => {
   let release = await s.release()
   let asks = s.asks.length
   let job = { app: app.eid, source: app.source! }
+  let now = Date.now()
+  s.env.CLOCK = { ...system, now: () => now }
+  let earlier = { ...s.env }
+  let graph = meta(s.env)
+  let queued = () => graph.query('.release_remake&?wake')
+  let due = async () => ((await queued())[0]?.wake as { at?: string })?.at
   let back = later(s)
-  await apps.refresh(s.env, space, app)
-  back()
-  await remade(s.env, job)
-  let kept = { asked: s.asks.length - asks, same: await s.release() == release }
-  back = later(s)
   try {
-    await remade(s.env, job)
+    await apps.refresh(s.env, space, app)
+    let [row] = await queued()
+    await remade(earlier, job)
+    let kept = {
+      asked: s.asks.length - asks,
+      same: await s.release() == release,
+    }
+    // The old directory completed its alarm while the release stayed live.
+    await graph.apply([{ entity: row.entity, wake: { at: null } }], KERNEL)
+    await apps.refresh(s.env, space, app)
+    let coalesced = !await due()
+    now += 60_000
+    await apps.refresh(s.env, space, app)
+    let retried = !!await due()
+    if (retried) await remade(s.env, job)
+    return { kept, coalesced, retried, remade: await s.release() != release }
   } finally {
     back()
   }
-  return {
-    asked: (await meta(s.env).query('.release_remake')).length,
-    kept,
-    remade: await s.release() != release,
-  }
 })()
 
-test('a remake from a directory still on the release’s own toolkit waits for the new one', () => {
-  assertEquals(behindDirectory.asked, 1)
+test('a later page wakes the remake again after an older directory left the release live', () => {
   assertEquals(behindDirectory.kept, { asked: 0, same: true })
+  assert(behindDirectory.coalesced)
+  assert(behindDirectory.retried)
   assert(behindDirectory.remade)
 })
 
