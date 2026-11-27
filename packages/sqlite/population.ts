@@ -1,7 +1,7 @@
 // Exact entity populations by archetype. One migration reads existing owners;
 // afterwards entity triggers move only the old and new buckets, in the same
 // transaction as the entity. Ordinary component property writes do no work.
-import { type And, bare, parse } from '@yaks/query/core'
+import { type And, bare, type Clause, parse } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
 import { type Filter, filter } from '@yaks/match'
 import {
@@ -291,23 +291,35 @@ export let classified = (driver: Driver): boolean =>
 export let populationCount = (
   driver: Driver,
   component?: string,
+  kept?: Presence,
 ): number | undefined =>
-  installed(driver) ? counting(driver, component) : undefined
-let counting = (driver: Driver, component?: string): number => {
+  installed(driver) ? counting(driver, component, kept) : undefined
+let counting = (
+  driver: Driver,
+  component?: string,
+  kept?: Presence,
+): number => {
   let p = table(POPULATION, 'p')
+  let member = (name: string) =>
+    entryIs(col('component', 'm'), driver.stored?.v, name)
+  let bucket = eq(col('archetype', 'p'), col('archetype', 'm'))
+  let wearing = (name: string) =>
+    exists(select({
+      cols: [lit(1)],
+      from: table(MEMBERSHIP, 'm'),
+      where: and(member(name), bucket),
+    }))
+  let by = component && component != 'entity' ? component : undefined
   let row = driver.query(
     select({
       cols: [as(fn('coalesce', fn('sum', col('n', 'p')), lit(0)), 'n')],
-      from: component && component != 'entity' ? table(MEMBERSHIP, 'm') : p,
-      ...component && component != 'entity'
-        ? {
-          joins: [{ how: 'cross' as const, src: p }],
-          where: and(
-            entryIs(col('component', 'm'), driver.stored?.v, component),
-            eq(col('archetype', 'p'), col('archetype', 'm')),
-          ),
-        }
-        : {},
+      from: by ? table(MEMBERSHIP, 'm') : p,
+      joins: by ? [{ how: 'cross' as const, src: p }] : [],
+      where: and(
+        ...by ? [member(by), bucket] : [],
+        ...(kept?.all ?? []).filter((c) => c != by).map(wearing),
+        ...(kept?.none ?? []).map((c) => not(wearing(c))),
+      ),
     }),
   )[0]
   return Number(row?.n ?? 0)
@@ -404,31 +416,44 @@ export let census = (driver: Driver): Census => ({
   },
 })
 
-/** A presence-only entity policy selects whole buckets. Value-based policies
- * and component-specific visibility still need the ordinary scoped query. */
-let visible = (vocab: Vocab, opts: BindOpts) => {
-  if (Object.keys(opts.visibility?.components ?? {}).length) return
-  let policy = opts.visibility?.entity
-  let clauses = typeof policy == 'string'
-    ? parse(policy).clauses
-    : policy?.clauses ?? []
+type Presence = { all: string[]; none: string[] }
+
+let presence = (
+  vocab: Vocab,
+  opts: BindOpts,
+  clauses: Clause[],
+): Presence | undefined => {
   let all: string[] = [], none: string[] = []
   for (let c of clauses) {
     if (
-      c.kind != 'pred' || !bare(c) || c.op == '?' || c.not || c.where ||
+      c.kind != 'pred' || !bare(c) || c.op == '?' || c.where ||
       opts.extend?.some((e) => e.compile[c.kind]) ||
-      c.path[0] == 'entity' || !vocab.comp(c.path[0]) ||
+      !vocab.comp(c.path[0]) ||
       vocab.comp(c.path[0])?.computed ||
       derivedOf(vocab, opts.derived)[c.path[0]] || opts.backed?.[c.path[0]]
     ) return
-    let into = c.op == '!' ? all : none
+    let present = c.op == '!' && !c.not
+    // Every live row already has its entity spine.
+    if (c.path[0] == 'entity') {
+      if (present) continue
+      return
+    }
+    let into = present ? all : none
     into.push(c.path[0])
   }
-  return (tables: string[]) =>
-    all.every((c) => tables.includes(c)) &&
-    none.every((c) => !tables.includes(c))
+  return { all, none }
 }
 
+/** A presence-only entity policy selects whole buckets. */
+let visible = (vocab: Vocab, opts: BindOpts) => {
+  if (Object.keys(opts.visibility?.components ?? {}).length) return
+  let policy = opts.visibility?.entity
+  return presence(
+    vocab,
+    opts,
+    typeof policy == 'string' ? parse(policy).clauses : policy?.clauses ?? [],
+  )
+}
 // A clause that leaves a count's matches as they are: a declared component or
 // property asked for with `?`, which carries it without filtering, and the
 // row-shaping directives an aggregate ignores. An undeclared name is left to
@@ -450,6 +475,7 @@ export let cardinality = (
   tally: boolean
   comp?: string
   visible: (tables: string[]) => boolean
+  presence?: Presence
   archetype?: Filter
 } | undefined => {
   let cs = parsed.clauses
@@ -473,21 +499,17 @@ export let cardinality = (
       (c.op == '!' && !c.value || ['=', '!='].includes(c.op) &&
           (!c.value || c.value.kind == 'scalar' && c.value.raw == ''))
     )
-  let f = filters[0]
-  let comp = filters.length == 1 && f.kind == 'pred' && !f.not &&
-      f.op == '!' && !f.value && f.path.length == 1
-    ? f.path[0]
-    : undefined
-  let plain = count && (!filters.length || !!comp || metadata)
-  // A component with no table is worn by nobody, and so by no bucket.
-  if (
-    !(tally || plain) || comp && (!vocab.comp(comp) || opts.backed?.[comp] ||
-        vocab.comp(comp)?.computed || derivedOf(vocab, opts.derived)[comp])
-  ) return
+  let parts = presence(vocab, opts, filters)
+  if (!(tally || count && (parts || metadata))) return
+  let all = [...accepts.all, ...parts?.all ?? []]
+  let none = [...accepts.none, ...parts?.none ?? []]
   return {
     tally,
-    comp,
-    visible: accepts,
+    comp: all[0],
+    visible: (tables) =>
+      all.every((c) => tables.includes(c)) &&
+      none.every((c) => !tables.includes(c)),
+    ...parts || tally ? { presence: { all, none } } : {},
     ...metadata
       ? { archetype: filter({ kind: 'and', clauses: filters }, vocab) }
       : {},

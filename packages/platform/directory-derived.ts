@@ -1,13 +1,5 @@
-// What the directory says of a person or a space that no row stores: whether
-// it is a test account or space, and when it was last active. Each is read
-// from the rows it follows from (./vocab/directory.vocab.json `person`,
-// `space`), so a query can filter, count and order by it (`.space.test=false
-// &.order=-space.active&.limit=50`) and a reader asks for only the rows it
-// draws: the admin's lists page through them (workers/yak admin.ts).
-//
-// workers/yak admin.ts `uses` works out the same of rows it holds, for what a
-// row draws; the two agree (admin_test.ts).
-
+// The directory's query spellings for visibility and latest activity. Old
+// rows are read from their source until the mover has indexed them.
 import type { Derived } from '@yaks/sql'
 import {
   among,
@@ -27,6 +19,7 @@ import {
   select,
   sub,
   table,
+  when,
 } from '@yaks/sql/core'
 import { ADMIN, BOT, DEMO, NUMBERS } from './bots.ts'
 import { PLATFORM_SPACE } from './names.ts'
@@ -56,7 +49,7 @@ let usedAt = (owner: Expr) =>
  * directory.ts `testIs` say: an address or a number the fleet holds (the
  * admin's and the demo's addresses aside), the `test` mark, or a newcomer a
  * browser did not open. */
-export let personTest = (owner: Expr): Expr =>
+let personTestBefore = (owner: Expr): Expr =>
   or(
     has('test', owner),
     has('email', owner, (e) => {
@@ -83,7 +76,7 @@ export let personTest = (owner: Expr): Expr =>
 
 /** Whether the space `owner` is a test space: somebody sits in it, and
  * nobody who does is anybody's. */
-export let spaceTest = (owner: Expr): Expr =>
+let spaceTestBefore = (owner: Expr): Expr =>
   and(
     seated(owner),
     not(exists(select({
@@ -91,7 +84,7 @@ export let spaceTest = (owner: Expr): Expr =>
       from: table('member', 'm'),
       where: and(
         eq(col('space', 'm'), owner),
-        not(personTest(col('person', 'm'))),
+        not(personTestBefore(col('person', 'm'))),
       ),
     }))),
   )
@@ -103,7 +96,7 @@ let seated = (owner: Expr) =>
   }))
 
 /** When the space `owner` was last used, or any app in it not in the trash. */
-export let spaceActive = (owner: Expr): Expr =>
+let spaceActiveBefore = (owner: Expr): Expr =>
   latest(
     usedAt(owner),
     sub(select({
@@ -122,7 +115,7 @@ export let spaceActive = (owner: Expr): Expr =>
 /** When the person `owner` was last active: their last use, their last
  * sign-in, and the latest activity of each space they own but the
  * platform's own. */
-export let personActive = (owner: Expr): Expr =>
+let personActiveBefore = (owner: Expr): Expr =>
   latest(
     usedAt(owner),
     sub(select({
@@ -131,7 +124,7 @@ export let personActive = (owner: Expr): Expr =>
       where: eq(col('entity', 'si'), owner),
     })),
     sub(select({
-      cols: [fn('max', spaceActive(col('space', 'o')))],
+      cols: [fn('max', spaceActiveBefore(col('space', 'o')))],
       from: table('member', 'o'),
       where: and(
         eq(col('person', 'o'), owner),
@@ -141,6 +134,24 @@ export let personActive = (owner: Expr): Expr =>
       ),
     })),
   )
+
+let indexed =
+  (before: (owner: Expr) => Expr, read: (owner: Expr) => Expr) =>
+  (owner: Expr): Expr =>
+    when([[has('directory_order', owner), read(owner)]], before(owner))
+
+let marked = (owner: Expr) => has('test', owner)
+let ordered = (owner: Expr) =>
+  sub(select({
+    cols: [col('at', 'o')],
+    from: table('directory_order', 'o'),
+    where: eq(col('entity', 'o'), owner),
+  }))
+
+let personTest = indexed(personTestBefore, marked)
+let spaceTest = indexed(spaceTestBefore, marked)
+let personActive = indexed(personActiveBefore, ordered)
+let spaceActive = indexed(spaceActiveBefore, ordered)
 
 /** The directory's computed `person` and `space` properties, for the
  * directory store's derived-property registry (@yaks/sql `Derived`). Neither

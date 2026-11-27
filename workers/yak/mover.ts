@@ -78,6 +78,7 @@ import { dateDirect } from '@yaks/chat'
 import { recipientRule } from './recipient-move.ts'
 import { demoFeaturedRule, integrationFeaturedRule } from './featured-move.ts'
 import { draftRule } from './draft-move.ts'
+import { directoryIndexMove } from '@yaks/platform/directory-index-move'
 import { checkNewcomerRule } from './check-newcomer-move.ts'
 export type MoveContext = { store: string; app?: string; space?: string }
 
@@ -93,6 +94,8 @@ export type Rule = {
   /** One candidate's patch. `read` looks up evidence synchronously without
    * adding reached rows to the candidate page or cursor. */
   move: (row: Bundle, read?: (line: Line) => Bundle[]) => Bundle[]
+  /** A receipt to write with the final batch, including an empty final page. */
+  finish?: () => Bundle[]
   /** Retired declarations, visible only while reading/applying this move. */
   source?: VocabDoc
   /** Durable records delivered before the guarded source patches commit.
@@ -219,6 +222,11 @@ export let RULES: Rule[] = [
   demoFeaturedRule,
   draftRule,
   checkNewcomerRule,
+  {
+    ...directoryIndexMove,
+    stores: [PLATFORM_STORE],
+    live: 'all',
+  },
   starterRule,
   holdExpiryRule,
   {
@@ -362,7 +370,10 @@ export let step = (
       unspoken,
     }
   }
-  if (patch.length) sync(m.apply(patch))
+  let writes = rows.length < n && rule.finish
+    ? [...patch, ...rule.finish()]
+    : patch
+  if (writes.length) sync(m.apply(writes))
   if (rows.length < n && rule.drop?.length) {
     if (!m.drop) {
       throw new Error('a store mover must support property contraction')

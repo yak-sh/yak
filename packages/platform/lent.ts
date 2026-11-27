@@ -9,6 +9,7 @@ import type { VocabDoc } from '@yaks/vocab'
 export type Lent = {
   /** the store's name: an app's address, or the platform's own store */
   name: string
+  now?: () => number
   /** what an app holds, told to whoever meters it once a write has committed */
   weigh: (bundles: Bundle[]) => Bundle[]
   /** the sleeping wakes a committed write makes hold, roused */

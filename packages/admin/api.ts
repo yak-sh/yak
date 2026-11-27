@@ -1144,26 +1144,55 @@ let storeRead = async (
   return body
 }
 
-type Docs = { docs?: { $defs?: Record<string, { properties?: object }> }[] }
+type Defs = Record<string, { properties?: object }>
+type Docs = { docs?: { $defs?: Defs }[] }
 
-/** Every word the app `space/app` speaks, the platform's and its own, as its
- * store loaded them: each component with its properties. The read for what
- * an app declares, so nobody asks its store for a word it lacks to learn its
- * words from the refusal. */
+let propertiesOf = (defs: Defs) =>
+  Object.fromEntries(
+    Object.entries(defs).map(([name, def]) => [
+      name,
+      Object.keys(def.properties ?? {}),
+    ]),
+  )
+
+let directorySchema = async (session: string) => {
+  let call = rpc(session)
+  let reply: Reply = await call('tools/call', {
+    name: 'graph_schema',
+    arguments: { app: PLATFORM_STORE },
+  })
+  saidBy(reply)
+  let schema = reply.structuredContent as { id?: string; $defs?: Defs }
+  if (schema.$defs) return propertiesOf(schema.$defs)
+  let part: Reply = await call('tools/call', {
+    name: 'result_query',
+    arguments: {
+      id: schema.id,
+      query:
+        '.structuredContent["$defs"] | with_entries(.value |= ((.properties // {}) | keys))',
+    },
+  })
+  saidBy(part)
+  return (part.structuredContent as { values: Record<string, string[]>[] })
+    .values[0]
+}
+
+/** Every word the app or the platform directory speaks, with its properties. */
 export let storeSchema = async (
   session: string,
   at: string,
 ): Promise<Record<string, string[]>> => {
+  if (at == PLATFORM_STORE) return directorySchema(session)
   if (where(at).length != 2) {
     throw new CallError('where', `name an app as space/app, not "${at}"`)
   }
-  let read = await storeRead(session, at, '/vocab', 'its vocabulary')
-  let { docs = [] } = read as Docs
-  return Object.fromEntries(
-    docs.flatMap((d) => Object.entries(d.$defs ?? {})).map((
-      [name, def],
-    ) => [name, Object.keys(def.properties ?? {})]),
-  )
+  let { docs = [] } = await storeRead(
+    session,
+    at,
+    '/vocab',
+    'its vocabulary',
+  ) as Docs
+  return Object.assign({}, ...docs.map((d) => propertiesOf(d.$defs ?? {})))
 }
 
 /** The words the app `space/app` borrows from its siblings (workers/yak/sweep.ts

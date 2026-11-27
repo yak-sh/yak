@@ -49,7 +49,7 @@ let SELF_APPLY = {
 let APP = {
   graph_query: str(
     'the app slug, as in <space>.yaks.app/<app>/, to read only its rows; ' +
-      'omitted, every app you can reach',
+      'use yak/platform for the platform directory; omitted, every app you can reach',
   ),
   graph_show: str(
     'the app slug, as in <space>.yaks.app/<app>/, to read the ids in that ' +
@@ -175,6 +175,7 @@ let spaceSchema = (
   ctx: Ctx,
   tool: Tool,
   vocabIn: (space: string) => Promise<Vocab>,
+  vocabAt: (app: string) => Promise<Vocab>,
 ): Tool => {
   let schema = inputSchemaOf(tool)
   return {
@@ -183,6 +184,9 @@ let spaceSchema = (
       ...schema,
       properties: {
         ...schema.properties as Record<string, unknown>,
+        app: str(
+          'Read one app’s vocabulary. Use space/app, or yak/platform for the platform directory.',
+        ),
         space: str(
           'Read the vocabulary of the apps you can reach in this space. ' +
             'Give its slug, id or former slug. Omit for all reachable apps.',
@@ -190,12 +194,15 @@ let spaceSchema = (
       },
     },
     run: async (call, graph) => {
-      let { space: slug, ...args } = argsOf(call)
-      if (slug == null) return tool.run(call, graph)
-      let { space } = await inSpace(ctx, { space: slug })
+      let { space: slug, app, ...args } = argsOf(call)
+      let at = named(slug, app)
+      if (!at && slug == null) return tool.run(call, graph)
+      let vocab = at
+        ? await vocabAt(at)
+        : await vocabIn((await inSpace(ctx, { space: slug })).space.eid)
       return tool.run(
         { ...call, call: { ...call.call as object, args } },
-        { ...graph, vocab: await vocabIn(space.eid) },
+        { ...graph, vocab },
       )
     },
   }
@@ -210,10 +217,11 @@ export let attachmentCore = (
   ctx: Ctx,
   opts: CoreOpts,
   vocabIn: (space: string) => Promise<Vocab>,
+  vocabAt: (app: string) => Promise<Vocab>,
 ): Tool[] =>
   core(opts).map((tool) => {
     let name = tool.name ?? ''
-    if (name == 'graph_schema') return spaceSchema(ctx, tool, vocabIn)
+    if (name == 'graph_schema') return spaceSchema(ctx, tool, vocabIn, vocabAt)
     if (!scoped(name)) return tool
     let schema = inputSchemaOf(tool)
     let writes = name == 'graph_apply'

@@ -978,6 +978,7 @@ let STAMPS = new Set(PROVENANCE)
 let UNFENCED = new Set([
   ...RECEIPTS,
   'signed_in',
+  'directory_order',
   'archetype',
   'wake',
   ...UNNAMED,
@@ -1042,6 +1043,7 @@ let HOLDING = new Set([
   'spend',
   'meter',
   'trend',
+  'work_spend',
   'created',
   'updated',
 ])
@@ -4572,9 +4574,12 @@ export class Store extends Durable {
         try {
           let m = this.#mover(held, rule)
           let copy = name == PLATFORM_STORE ? this.#copy() : undefined
-          let plan = this.#tx(() => batch(m, rule, was, size))
-          if (plan.rows.length) left--
-          if (plan.forward.length) {
+          // Only forwarding takes its snapshot before the fence. Ordinary
+          // moves read and write together so a live write cannot stale them.
+          let plan = rule.forward
+            ? this.#tx(() => batch(m, rule, was, size))
+            : undefined
+          if (plan?.forward.length) {
             if (!this.#bind.ERRORS) {
               throw new Error('mover delivery is unavailable')
             }
@@ -4597,6 +4602,7 @@ export class Store extends Durable {
                 return s
               }))
           s = copy ? await this.#fenced(copy, moved) : moved()
+          if (s.moved > (was?.moved ?? 0)) left--
         } catch (e) {
           this.#kv.clear()
           // Stopped, the batch unwound and the rule is no failure: the alarm

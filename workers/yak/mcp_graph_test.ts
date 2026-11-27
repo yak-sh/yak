@@ -127,11 +127,32 @@ test('the reads answer rows that fit the schema their tools are listed with', as
     let admin = connector(k, k.owner.cookie)
     let directory = await admin.call('tools/call', {
       name: 'graph_query',
-      arguments: { app: 'yak/platform', q: '.space .limit=1' },
+      arguments: {
+        app: 'yak/platform',
+        q: '.space.test=false&.limit=1&.fields=space.slug,space.test',
+      },
     })
     let row = directory.structuredContent.result[0]
     assertEquals(typeof row.space, 'object')
     assert(row.space.slug)
+    assertEquals(row.space.test, false)
+    let schema = await admin.call('tools/call', {
+      name: 'graph_schema',
+      arguments: { app: 'yak/platform', component: 'space' },
+    })
+    assertEquals(
+      schema.structuredContent.$defs.space.properties.test.type,
+      'boolean',
+    )
+    await assertRejects(
+      () =>
+        outsider.tool('graph_schema', {
+          app: 'yak/platform',
+          component: 'space',
+        }),
+      Error,
+      'not a member',
+    )
     let refused = await assertRejects(
       () =>
         admin.tool('graph_query', {

@@ -13,7 +13,7 @@ import { Card, type Col, Empty, Group, Table } from '@yaks/ui/parts'
 import { Sort, sortAt, type SortRow, type SortValue } from '@yaks/ux'
 import { type ByDay, columns, series, sparkline, summed } from '@yaks/ui/chart'
 import { count, dollars } from '@yaks/platform/standing'
-import { byPerson, SOURCES } from '@yaks/platform/meter'
+import { type byPerson, SOURCES } from '@yaks/platform/meter'
 import { day } from './html.ts'
 import { NAMES as PLANS, type Tier } from '@yaks/platform/plans'
 import {
@@ -177,12 +177,11 @@ let bySource = (byDay: Record<string, ByDay>, now: number) =>
 // work spent (@yaks/platform/meter `byPerson`): for watching who uses what,
 // while each space's budget and bill stay its own.
 let byWho = (
-  spaces: Counted[],
+  { people, nobody }: ReturnType<typeof byPerson>,
   names: Map<string, string>,
   base: string,
   now: number,
 ) => {
-  let { people, nobody } = byPerson(spaces.map((s) => s.trend))
   let lines: Line[] = Object.entries(people).map(([eid, days]) => {
     let name = names.get(eid)
     return name
@@ -634,6 +633,7 @@ export let spendingBody = (
   base: string,
   now = Date.now(),
   names: Map<string, string> = new Map(),
+  attributed: ReturnType<typeof byPerson> = { people: {}, nobody: {} },
 ): VNode => {
   let runs = runsOf(asked)
   let unread = asked.filter((a) => a.spending instanceof Error)
@@ -641,7 +641,7 @@ export let spendingBody = (
     Fragment,
     null,
     daily(spaces, asked, now),
-    byWho(spaces, names, base, now),
+    byWho(attributed, names, base, now),
     section('Top spaces', topSpaces(spaces, base, now)),
     section('Top conversations', topRuns(runs, base)),
     section('Conversations and helpers, newest first', sessions(runs, base)),

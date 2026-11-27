@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert'
-import { type Comp, mint } from '@yaks/graph'
+import { mint } from '@yaks/graph'
 import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { investigatorOf } from './operator-escalate.ts'
@@ -7,6 +7,7 @@ import { operatorMemory } from './operator-testing.ts'
 import { platform } from './testing.ts'
 import { stamp } from './directory.ts'
 import { meta } from './meta.ts'
+import type { WorkSpend } from '@yaks/platform/meter'
 import { spendBackfill, SPENT_PEOPLE } from './spend-move.ts'
 
 let p = platform('spend people')
@@ -68,11 +69,18 @@ test("an Operator's asks before spends named a person are kept under each conver
   assertEquals(await spendBackfill(store, p.env, NOW), false)
   assertEquals(kept.get(SPENT_PEOPLE), 'done')
   let people = async () =>
-    ((await meta(p.env).query(line`.entity.eid=${space}`))[0].trend as Comp)
-      ?.people
-  let want = {
+    Object.fromEntries(
+      (await meta(p.env).query(
+        line`.work_spend.space=${space}&.fields=work_spend`,
+      ))
+        .map((row) => {
+          let { person, days } = row.work_spend as WorkSpend
+          return [person, days]
+        }),
+    )
+  let want: Record<string, WorkSpend['days']> = {
     [JEFF]: { '2026-11-20': 1.5 },
-    [TOG]: { '2026-11-21': 2, '2026-11-27': 1 },
+    [TOG]: { '2026-11-21': 2 },
   }
   assertEquals(await people(), want)
   await spendBackfill(store, p.env, NOW)

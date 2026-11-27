@@ -862,29 +862,29 @@ The complete list of reserved names:
     completed connection connection_given contains content conversation cost
     counted created credit credit_block decided decision decision_ask
     delegates delete_retired_files delete_upload deliver delivered demo
-    deploy desk_aside desk_sidebar dismissed_suggestions dispatch doc
-    document_extract document_page document_text domain_choice
-    domain_courtesy domain_credit_used domain_order domain_refunded
-    domain_refused domain_registered domain_renewal domain_renewal_paid
-    domain_renewals_due domain_transfer domain_transfer_answer draft
-    draft_rows draft_writer durable_retirement edge effect email entity
-    entry error event exception execution failed favorite featured fee feed
-    feedback file file_retirement filed finding fired form form_guest
-    form_mail form_phone form_post former free_ai_budget free_spaces
-    friend_invite fund fund_receipt gallery geocode gift gitobj grant
-    grants_listed handoff_spent heard heard_turn hearing held home hook
-    hostname image inference install installed integration
-    integration_install interrupted invite inviting key keyword_replies
-    knock last_deploy lease lent lines located made mail mail_answered
-    mail_dismissed mail_domain mail_post mail_task mcp_list mcp_server
-    member memory mentions meter miss model model_estimate model_reservation
-    model_result newcomer newcomer_builds notice notice_confirmed
-    notice_letter notice_posted notice_subscription notified notify_deaths
-    notify_trash oauth_grant occupancy occurrence offer openai opened
-    openrouter operator operator_alerts operator_reach order output
-    output_of outreach_batch outreach_letter outreach_read outreach_trial
-    outreach_write outreach_written own_number parent pending person
-    person_name persona phone phone_line phone_login phone_release
+    deploy desk_aside desk_sidebar directory_indexed directory_order
+    dismissed_suggestions dispatch doc document_extract document_page
+    document_text domain_choice domain_courtesy domain_credit_used
+    domain_order domain_refunded domain_refused domain_registered
+    domain_renewal domain_renewal_paid domain_renewals_due domain_transfer
+    domain_transfer_answer draft draft_rows draft_writer durable_retirement
+    edge effect email entity entry error event exception execution failed
+    favorite featured fee feed feedback file file_retirement filed finding
+    fired form form_guest form_mail form_phone form_post former
+    free_ai_budget free_spaces friend_invite fund fund_receipt gallery
+    geocode gift gitobj grant grants_listed handoff_spent heard heard_turn
+    hearing held home hook hostname image inference install installed
+    integration integration_install interrupted invite inviting key
+    keyword_replies knock last_deploy lease lent lines located made mail
+    mail_answered mail_dismissed mail_domain mail_post mail_task mcp_list
+    mcp_server member memory mentions meter miss model model_estimate
+    model_reservation model_result newcomer newcomer_builds notice
+    notice_confirmed notice_letter notice_posted notice_subscription
+    notified notify_deaths notify_trash oauth_grant occupancy occurrence
+    offer openai opened openrouter operator operator_alerts operator_reach
+    order output output_of outreach_batch outreach_letter outreach_read
+    outreach_trial outreach_write outreach_written own_number parent pending
+    person person_name persona phone phone_line phone_login phone_release
     phone_slow plan play_invite preview price pro_grant product project
     proposed provider provisional public_file published push_subscription
     quarantined question questions rating reads recalled recipient
@@ -906,8 +906,8 @@ The complete list of reserved names:
     trend tunnel tunnel_trashed typed unchecked untrashed updated upstream
     usage uses using verified visit visitor_build visitor_calls
     visitor_share volume waitlisted wake wake_run wants watch web
-    whereabouts withdrawn worked workflow workflow_case worktree written
-    yaks_account
+    whereabouts withdrawn work_spend worked workflow workflow_case worktree
+    written yaks_account
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as

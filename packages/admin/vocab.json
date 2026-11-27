@@ -745,11 +745,11 @@
           }
         }
       },
-      "description": "Every word an app's store speaks, the platform's and the app's own, each component with its property names. Read an app’s words here; never query a store for a made-up word to learn them from the refusal, which reaches the person’s tracker.\n\n  yak admin schema jeff/recipes --as admin",
+      "description": "Every word an app’s store or the platform directory speaks, each component with its property names. Use yak/platform for the directory. Read an app’s words here; never query a store for a made-up word to learn them from the refusal, which reaches the person’s tracker.\n\n  yak admin schema jeff/recipes --as admin",
       "input": {
         "where": {
           "type": "string",
-          "description": "the app, as space/app"
+          "description": "the app as space/app, or yak/platform"
         },
         "as": {
           "type": "string",

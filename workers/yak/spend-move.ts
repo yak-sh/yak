@@ -1,5 +1,5 @@
 // What a space's Operator spent before spends named a person (T-4174), kept
-// under each person in the space's `trend.people` as its spends now are
+// in the space's indexed work-spend rows as its spends now are
 // (@yaks/platform/meter `trended`): each model request's dollars under the
 // person its conversation works for. Once, from the Builder's alarm beside
 // the store's other passes, over the days the trend still holds and that no
@@ -10,9 +10,11 @@ import type { Meta } from '@yaks/sqlite'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import type { ByDay } from '@yaks/ui/chart'
+import type { WorkSpend } from '@yaks/platform/meter'
+import { workRow } from '@yaks/platform/meter-graph'
 import { investigatorOf } from './operator-escalate.ts'
 import { spaceOf } from './operator-root.ts'
-import { meta } from './meta.ts'
+import { KERNEL, meta } from './meta.ts'
 import type { Env } from './env.ts'
 
 /** The store's mark once the pass is done. */
@@ -125,25 +127,40 @@ export let spendBackfill = async (
   }))
   let directory = meta(env as Env)
   while (true) {
-    let [row] = await directory.query(line`.entity.eid=${space}`)
-    if (!row) break
-    let had = (comp(row, 'trend')?.people ?? undefined) as
-      | Record<string, ByDay>
-      | undefined
-    // The first day a spend named a person: from it on, the trend says.
-    let first = Object.values(had ?? {}).flatMap(Object.keys).sort()[0]
+    let [[row], work] = await Promise.all([
+      directory.query(
+        line`.entity.eid=${space}&.fields=space,trend.spend,trend.people`,
+        { live: true },
+      ),
+      directory.query(line`.work_spend.space=${space}&.fields=work_spend`, {
+        live: true,
+      }),
+    ])
+    if (!row?.space) break
+    let trend = comp(row, 'trend')
+    let legacy = (trend?.people ?? {}) as Record<string, ByDay>
+    let held = Object.fromEntries(work.map((row) => {
+      let { person, days } = row.work_spend as WorkSpend
+      return [person, days]
+    }))
+    // The first day a spend named a person: from it on, the meter says.
+    let first = [...Object.values(legacy), ...Object.values(held)]
+      .flatMap(Object.keys).sort()[0]
     let found = attributed(spent, since, first ?? ymd(now + DAY))
     if (!Object.keys(found).length) break
-    let merged = { ...had }
-    for (let [person, days] of Object.entries(found)) {
-      merged[person] = { ...days, ...had?.[person] }
-    }
     try {
-      await directory.apply([{
-        entity: { eid: space },
-        $was: { trend: { people: token(had) } },
-        trend: { people: merged },
-      }])
+      await directory.apply([
+        {
+          entity: { eid: space },
+          $was: {
+            trend: { spend: token(trend?.spend), people: token(trend?.people) },
+          },
+        },
+        ...Object.entries(found).map(([person, days]) => ({
+          ...workRow(space, person, { ...days, ...held[person] }),
+          $was: { work_spend: { days: token(held[person]) } },
+        })),
+      ], KERNEL)
       break
     } catch (error) {
       // A spend landed meanwhile: read again.

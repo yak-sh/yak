@@ -32,7 +32,7 @@ export type Hold = {
   /** a visitor's call, held against their share of the budget as well */
   visitor?: boolean
   /** the person whose work it is, for the admin's watching of each person's
-   * use (`trend.people`); none for work no person started */
+   * use (`work_spend`); none for work no person started */
   person?: string
 }
 /** Who a hold is spent for: what it buys, the source that sells it (a model

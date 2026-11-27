@@ -696,6 +696,7 @@ export type Row = MeteredRow & {
   // What a read names of the directory's computed words, which no row stores
   // (@yaks/platform/directory-derived).
   space?: { test?: boolean | null; active?: string | null }
+  directory_order?: { kind: string; visible_kind?: string; at?: string | null }
   release_view?: import('@yaks/platform/release-index').ReleaseView
   free_ai_budget?: { dollars?: number | null }
   app_transfer?: TransferOffer

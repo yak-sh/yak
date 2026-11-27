@@ -16,6 +16,8 @@ import {
   type Row,
 } from './directory.ts'
 import type { Meter } from '@yaks/platform/meter'
+import { directoryIndexMove } from '@yaks/platform/directory-index-move'
+import { workRow } from '@yaks/platform/meter-graph'
 import { STARTER } from '@yaks/platform/plans'
 import { analytics, platform } from './testing.ts'
 import type { Env } from './env.ts'
@@ -274,18 +276,45 @@ test("the directory's own test and activity agree with what each row's figures s
 })
 
 test("a person's figures count their work in a space they don't own", async () => {
-  let today = new Date().toISOString().slice(0, 10)
   await dir.stamp({
     entities: [{
       entity: { eid: 'eves-work' },
       space: { slug: 'eves-work' },
-      trend: { people: { eve: { [today]: 0.25 } } },
+      spend: { models: 0.25, person: 'eve' },
     }],
   })
   let [eve] = inviting.people.filter((r) => r.entity.eid == 'eve')
   assertEquals(uses(await gather(dir, { people: [eve] })).get('eve')?.spend, {
     spent: 0.25,
   })
+})
+
+test('the directory mover merges existing attribution into the indexed work exactly once', async () => {
+  let day = new Date().toISOString().slice(0, 10)
+  let space = 'eves-legacy-work'
+  await dir.stamp({
+    entities: [
+      {
+        entity: { eid: space },
+        space: { slug: space },
+        trend: { people: { eve: { [day]: 0.25 } } },
+      },
+      workRow(space, 'eve', { [day]: 0.5 }),
+    ],
+  })
+  let source =
+    line`.entity.eid=${space}&.fields=directory_order.kind,space.slug,trend.people`
+  let [row] = await dir.read(source)
+  let work = await dir.read(line`.work_spend.space=${space}&.fields=work_spend`)
+  await dir.stamp({ entities: directoryIndexMove.move(row, () => work) })
+  let [after] = await dir.read(source)
+  assertEquals(directoryIndexMove.move(after, () => work), [])
+  let [eve] = inviting.people.filter((r) => r.entity.eid == 'eve')
+  let figures = await gather(dir, { people: [eve] })
+  assertEquals(
+    figures.work?.find((r) => r.space == space)?.days,
+    { [day]: 0.75 },
+  )
 })
 
 test('a page reads which app each release is of and when, never its files', async () => {

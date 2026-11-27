@@ -3,6 +3,8 @@
 // number's month asked of the host (./lent.ts `job`).
 import { after, each } from '@yaks/fp'
 import { type Bound, hook, type Plugin, type Tx } from '@yaks/graph'
+import { type ByDay, kept } from '@yaks/ui/chart'
+import { derivedEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
 import { line } from '@yaks/query'
 import { FREE_BUDGET_QUERY, freeBudgetOf } from './budget.ts'
@@ -13,6 +15,7 @@ import {
   meteredOf,
   type MeteredRow,
   meterOf,
+  spendDollars,
   trended,
   used,
   usesFreeBudget,
@@ -130,6 +133,40 @@ let spend = (row: Bound, space: ReturnType<typeof meteredOf> | null) => {
   }
 }
 
+export let workEid = (space: string, person: string) =>
+  derivedEid(JSON.stringify(['work_spend', space, person]))
+
+export let workRow = (space: string, person: string, days: ByDay) => ({
+  entity: { eid: workEid(space, person) },
+  work_spend: {
+    space,
+    person,
+    days,
+    last: Object.keys(days).sort().at(-1) ?? '',
+  },
+})
+
+// The meter rules consume spend in this same transaction. Attribute the
+// dollars to the caller who started the work, even across spaces.
+let attributed = (now: () => number) =>
+  hook(['spend'], (bundles, tx) => {
+    let time = now()
+    return each(bundles, bundles, (out, { entity: { eid }, spend }) => {
+      let said = props(spend)
+      let person = said.person
+      let dollars = spendDollars(said)
+      if (typeof person != 'string' || !dollars) return out
+      return after(tx.get([workEid(eid, person)], ['work_spend']), ([row]) => {
+        let before = props(row?.work_spend).days as ByDay | undefined
+        let at = said.at ? Date.parse(String(said.at)) : time
+        let days = kept(before, dollars, time, undefined, at)
+        return Object.keys(days).length
+          ? [...out, workRow(eid, person, days)]
+          : out
+      })
+    })
+  })
+
 export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
   name: 'yak/meter',
   admission: () => true,
@@ -145,7 +182,16 @@ export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
           : reading
     },
   },
-  hooks: { precondition: refunds },
+  hooks: {
+    precondition: hook(
+      ['spend'],
+      (bundles, tx) =>
+        after(
+          refunds(bundles, tx),
+          (rows) => attributed(store.now ?? Date.now)(rows, tx),
+        ),
+    ),
+  },
   rules: [{
     // The hourly meter, fired by its wake row: the platform's job `meter`
     // (@yaks/platform/lent `job`).

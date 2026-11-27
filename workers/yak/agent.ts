@@ -738,6 +738,10 @@ export let connected = (ctx: Ctx, reach: Reach[], graph: Graph) => ({
       narrow: NARROW,
     },
     (space) => spoken(ctx, reach.filter((r) => r.space.eid == space)),
+    async (app) => {
+      let target = await named(ctx, app)
+      return app == META_STORE ? platformVocab() : spoken(ctx, [target])
+    },
   ),
   search: searching(ctx, reach),
   // Where a component is documented at length, so graph_schema hands over the

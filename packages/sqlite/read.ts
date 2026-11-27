@@ -132,7 +132,7 @@ export let rows = (
             }]
         }
       } else {
-        let n = populationCount(driver, shape.comp)
+        let n = populationCount(driver, shape.comp, shape.presence)
         if (n != undefined) return [{ value: '', n }]
       }
     }

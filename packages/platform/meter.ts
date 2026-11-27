@@ -633,9 +633,6 @@ export let sourceOf = (spend: Record<string, unknown>): string =>
  *   sources: { texts: { '2026-10-31': 0.25 } },
  *   paid: { '2026-10-31': 0.25 },
  * })
- * equal(trended({}, { models: 2, person: 'p' }, now).people, {
- *   p: { '2026-10-31': 2 },
- * })
  * equal(trended({}, { emails: 1 }, now), {})
  * let held = Date.parse('2026-10-30T23:00:00Z')
  * equal(trended({ spend: { '2026-10-30': 9 } }, { models: -8 }, now, false, held), {
@@ -651,77 +648,40 @@ export let trended = (
   paying: boolean = false,
   at: number = now,
 ): Record<string, unknown> => {
-  let cost = DOLLARS.reduce((sum, k) => sum + Number(spend[k] ?? 0), 0)
+  let cost = spendDollars(spend)
   if (!cost) return {}
   let source = sourceOf(spend)
   let sources = (trend?.sources ?? {}) as Record<string, ByDay>
   let on = (days: ByDay | undefined) => kept(days, cost, now, undefined, at)
-  let person = typeof spend.person == 'string' ? spend.person : ''
   return {
     spend: on(trend?.spend as ByDay),
     sources: { ...sources, [source]: on(sources[source]) },
     ...paying ? { paid: on(trend?.paid as ByDay) } : {},
-    ...person ? { people: peopleOn(trend?.people, person, on, now) } : {},
   }
 }
 
-// Each person's days with one more spend on theirs, and anyone whose days
-// have all passed out of the window dropped.
-let peopleOn = (
-  people: unknown,
-  person: string,
-  on: (days: ByDay | undefined) => ByDay,
-  now: number,
-) => {
-  let all = (people ?? {}) as Record<string, ByDay>
-  let out: Record<string, ByDay> = {}
-  for (let [p, days] of Object.entries(all)) {
-    let left = kept(days, 0, now, undefined, 0)
-    if (Object.keys(left).length) out[p] = left
-  }
-  out[person] = on(all[person])
-  return out
+export let spendDollars = (spend: Record<string, unknown>) =>
+  DOLLARS.reduce((sum, k) => sum + Number(spend[k] ?? 0), 0)
+
+export type WorkSpend = {
+  space: string
+  person: string
+  days: ByDay
+  last: string
 }
 
-/**
- * Each person's dollars by day, over the spaces' `trend`s ({@link trended}):
- * the work they did, in whichever space they did it, and nobody's under
- * `nobody`, the days' dollars no person's work spent (a sweep, an app's own
- * automation, a spend from before spends named a person). For watching who
- * uses what; a space's budget and its bill are the space's own.
- *
- * ```ts
- * import { byPerson } from '@yaks/platform/meter'
- * import { equal } from '@yaks/testing'
- *
- * equal(
- *   byPerson([
- *     { spend: { '2026-10-31': 3 }, people: { jeff: { '2026-10-31': 2 } } },
- *     { spend: { '2026-10-31': 1 }, people: { tog: { '2026-10-31': 1 } } },
- *     { spend: { '2026-10-30': 4 } },
- *   ]),
- *   {
- *     people: { jeff: { '2026-10-31': 2 }, tog: { '2026-10-31': 1 } },
- *     nobody: { '2026-10-31': 1, '2026-10-30': 4 },
- *   },
- * )
- * ```
- */
+/** Work by person in any space, with the remaining platform spend under nobody. */
 export let byPerson = (
-  trends: (Record<string, unknown> | null | undefined)[],
+  work: Pick<WorkSpend, 'person' | 'days'>[],
+  totals: (ByDay | undefined)[] = [],
 ): { people: Record<string, ByDay>; nobody: ByDay } => {
   let people: Record<string, ByDay> = {}
-  let all: ByDay[] = []
-  for (let trend of trends) {
-    all.push(trend?.spend as ByDay)
-    let theirs = (trend?.people ?? {}) as Record<string, ByDay>
-    for (let [p, days] of Object.entries(theirs)) {
-      people[p] = summed([people[p], days])
-      all.push(negated(days))
-    }
+  for (let { person, days } of work) {
+    people[person] = summed([people[person], days])
   }
   let nobody = Object.fromEntries(
-    Object.entries(summed(all)).filter(([, n]) => n > 0),
+    Object.entries(summed([...totals, ...Object.values(people).map(negated)]))
+      .filter(([, n]) => n > 0),
   )
   return { people, nobody }
 }

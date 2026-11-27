@@ -1,3 +1,4 @@
+import { directoryIndex } from '@yaks/platform/directory-index'
 // A person's own space minted inside the write that mints it (T-148852): the
 // request `$own{person, want?}` becomes the batch directory.ts `owning`
 // decides over this transaction's own reads, so it reads the person's seats,
@@ -465,4 +466,5 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [
   friendsPlugin(),
   reclaimFiles(),
   seatsHeard(options),
+  directoryIndex(),
 ]

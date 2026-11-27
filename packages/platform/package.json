@@ -145,6 +145,8 @@
     "./support-contract-service": "./support-contract-service.ts",
     "./support-contract-view": "./support-contract-view.ts",
     "./directory-vocab": "./directory-vocab.ts",
+    "./directory-index-move": "./directory-index-move.ts",
+    "./directory-index": "./directory-index.ts",
     "./directory-derived": "./directory-derived.ts",
     "./sweep-vocab": "./sweep-vocab.ts",
     "./trash-vocab": "./trash-vocab.ts",

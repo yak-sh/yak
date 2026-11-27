@@ -1815,9 +1815,80 @@
       "$id": "urn:uuid:18d41815-2927-48de-8549-23f11399e053",
       "component": true,
       "type": "object",
-      "description": "A person one of the fleet's numbers made, whose row keeps no number of its own: a sender a fleet number (@yaks/platform/bots `NUMBERS`) texted a person's line as. A test account, which admin's people and the funnel count apart (directory.ts `testIs`). Written with the row, never moved after.",
-      "properties": {},
-      "$comment": "operator-line.ts `lineSender`, directory.ts `testIs`."
+      "description": "A fleet test account, a space seated only by test accounts, an app in such a space, or an invite involving a test account.",
+      "properties": {
+        "inferred": {
+          "$id": "urn:uuid:f4014573-77f8-4e19-965c-0e8f03de1007",
+          "type": "boolean",
+          "description": "The directory maintains the mark from account or membership data. A fleet guest can be marked explicitly."
+        }
+      },
+      "journal": false
+    },
+    "directory_order": {
+      "$id": "urn:uuid:7283bde0-d20e-4f21-aac6-3c2cbf4d9b78",
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "description": "The indexed order of a directory listing, as its account, space or app was last active.",
+      "index": [["kind", "at"], ["visible_kind", "at"]],
+      "properties": {
+        "kind": {
+          "$id": "urn:uuid:688fce4a-235b-49d5-b4bb-5aae5f59c670",
+          "type": "string"
+        },
+        "visible_kind": {
+          "$id": "urn:uuid:7959aed0-a582-4ca9-a61a-749f1f7d5149",
+          "type": "string"
+        },
+        "at": {
+          "$id": "urn:uuid:5d8cd4ee-b186-4d8b-80c5-6715e8eb9890",
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "directory_indexed": {
+      "$id": "urn:uuid:15f62319-5c51-4a9b-a60f-80712d92b309",
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "description": "The directory listing and work-spend indexes are populated."
+    },
+    "work_spend": {
+      "$id": "urn:uuid:bdbeb51a-3995-410a-b2bc-c6c19e1332b4",
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "description": "What a person's work spent in one space, by day, for monitoring.",
+      "unique": [["space", "person"]],
+      "index": [["person", "last"]],
+      "properties": {
+        "space": {
+          "$id": "urn:uuid:e0f61279-d7f3-48cb-9f90-3d4dbc6822d1",
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        },
+        "person": {
+          "$id": "urn:uuid:7f88a5e6-c71b-4c78-bf42-c70e4aa99083",
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "days": {
+          "$id": "urn:uuid:d9642ba9-eaba-45e9-9bcc-9ae0813327c3",
+          "type": "object"
+        },
+        "last": {
+          "$id": "urn:uuid:c83ba3af-2a42-4177-9f46-3fb26b5cc639",
+          "type": "string",
+          "index": true
+        }
+      }
     },
     "arrived": {
       "$id": "urn:uuid:9bd90cf9-8dc8-44f4-a12d-4bfdbeff0d2a",
@@ -1993,7 +2064,7 @@
         "person": {
           "$id": "urn:uuid:0660afc8-2929-4730-85d8-886380fcfa33",
           "type": "string",
-          "description": "The person whose work its dollars paid for, kept by the day in the space's `trend.people`: the one in the Operator conversation, the one who pressed build, or the app's caller. None for work no person started (background runs, sweeps).",
+          "description": "The person whose work its dollars paid for, kept by the day in `work_spend`: the one in the Operator conversation, the one who pressed build, or the app's caller. None for work no person started (background runs, sweeps).",
           "$comment": "For the admin's watching of each person's use; billing stays the space's."
         }
       },
