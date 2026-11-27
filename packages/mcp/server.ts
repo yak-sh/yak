@@ -221,6 +221,13 @@ export type Options = {
   roster?: (
     names: string[],
   ) => Notice | undefined | Promise<Notice | undefined>
+  /** where this request's time has gone so far, as `Server-Timing` entries:
+   * the host's own stopwatch (yaks.app's `door;dur=12, hops;dur=3, …`). A
+   * call whose arguments ask `timing: true` is answered with it as a line
+   * beside its result, the line `yak --timing` prints from the response's
+   * header, since an MCP client never shows a caller the header. Absent, the
+   * line is the call's own `total;dur=` in milliseconds. */
+  timing?: () => string
 
   /** a calling program with more than tools to serve — resources, prompts,
    * capabilities of its own — registers them on the same server here, after
@@ -602,7 +609,7 @@ export let server = (
   }
   let call = async (name: string, args: Record<string, unknown>) => {
     let names = tools().map((t) => t.name)
-
+    let started = Date.now()
     let out: CallToolResult
     let id = mint()
     let input = translated(name, args ?? {})
@@ -660,6 +667,12 @@ export let server = (
     }
     let unfit = misfit(t, out)
     if (unfit) await report(unfit, asked, t.name)
+    if (input.timing === true) {
+      out = noting(
+        out,
+        `timing ${opts.timing?.() ?? `total;dur=${Date.now() - started}`}`,
+      )
+    }
     notice?.said?.()
     return noting(out, notice?.line)
   }

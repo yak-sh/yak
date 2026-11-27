@@ -790,6 +790,8 @@ let WRITTEN: Record<string, string> = {
     'a query is its own where: write each clause as .component.property=value, joined with & or |',
   $was:
     "$was guards a write with the hash of a value as it was read, and no row holds one; a query reads a row's history as .updated.at and .created.at",
+  timing:
+    "a query has no timing: graph_query's timing: true answers with where the call's time went, the Server-Timing line yak --timing prints",
 }
 
 // Words other query languages spell as operators, which this grammar writes
@@ -828,6 +830,7 @@ OPERATORS.contains = (p) => OPERATORS.like(p).replace('no like', 'no contains')
  *     'a property of that name',
  * )
  * assertStringIncludes(unknownName('$was', []), '.updated.at and .created.at')
+ * assertStringIncludes(unknownName('timing', []), "graph_query's timing: true")
  * assertEquals(
  *   unknownName('in', ['blocked'], () => ['on'], 'task.status'),
  *   'unknown prop: .in — a query has no in: a list value is membership, so ' +

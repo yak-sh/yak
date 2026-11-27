@@ -34,6 +34,21 @@ test('an answer of entities says only the news beside its result', async () => {
   equal(quiet, undefined)
 })
 
+test('a query asking timing: true says where its time went', async () => {
+  let timed = await saidBy('graph_query', { q: '.book', timing: true })
+  assert(/^timing total;dur=\d+$/.test(timed.said ?? ''), timed.said)
+  equal((timed.out.content as { text: string }[]).at(-1)?.text, timed.said)
+  equal(result(timed.out), [])
+  let host = await saidBy('graph_query', { q: '.book', timing: true }, {
+    timing: () => 'door;dur=12, hops;dur=3',
+  })
+  equal(host.said, 'timing door;dur=12, hops;dur=3')
+  equal((await saidBy('graph_query', { q: '.book' })).said, undefined)
+  // A caller who wrote it into the query is pointed at the argument.
+  let read = text((await saidBy('graph_query', { q: '.timing=true' })).out)
+  assertStringIncludes(read, "graph_query's timing: true")
+})
+
 test('graph_schema says its prose beside the vocabulary', async () => {
   let { out, data, said } = await saidBy(
     'graph_schema',

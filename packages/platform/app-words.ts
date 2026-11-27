@@ -14,10 +14,10 @@ export let ELSEWHERE: Record<string, string> = {
     'many properties wait for a pick, and each is a decision in the ' +
     "person's Updates, read with conversation_inbox",
   timing:
-    "an app's store keeps no timings: the platform times its own requests " +
-    'where no space reads them. Time a slow page in the browser, with its ' +
-    'resource timings and the Server-Timing header every response carries: ' +
-    'call guide with page speed',
+    "an app's store keeps no timings: graph_query's timing: true answers " +
+    "with where the call's time went, and a slow page is timed in the " +
+    'browser, with its resource timings and the Server-Timing header every ' +
+    'response carries: call guide with page speed',
 }
 
 /** An app store's refusal of a word, said in the words the app speaks: a

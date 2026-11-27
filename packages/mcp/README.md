@@ -310,6 +310,12 @@ a quick tool outran is still held for a later result; this stateless HTTP
 handler does not maintain sessions. A release change without a tool-name change
 changes the version but produces no notice.
 
+A call whose arguments ask `timing: true` (graph_query declares it) is answered
+with a `timing` line beside its result: `Options.timing`, the host's
+`Server-Timing` entries for the request so far, or the call's own
+`total;dur=<ms>` where the host keeps no stopwatch. It is the line
+`yak --timing` prints, for a client that never shows the response's header.
+
 A renamed argument keeps answering under its former name: every call is put
 through `translated(tool, args)` before it is recorded or checked, so a client
 whose list predates the rename is answered and the tool sees one shape. Where a

@@ -517,6 +517,9 @@ let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
           ...listed,
           agent: ctx.who?.agent ?? '',
         }, c),
+      // A call asking `timing: true` is told this request's Server-Timing
+      // as it stands when the tool answers (@yaks/mcp `Options.timing`).
+      timing: () => c.header(),
     }),
   }
 }

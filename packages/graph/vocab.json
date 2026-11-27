@@ -200,7 +200,7 @@
           }
         }
       },
-      "description": "Query .component.property=value with & (and), | (or), bare search words, presence .component/!component (a kind's name reads as the components the kind is), or ?component to include without filtering. A name alone is a component, so always qualify a property with its component: .app.version, never .version. q is the whole query, with no .where or .query around it, e.g. .doc.title~=recipe&.created.at>2026-11-01 .order=-created.at .limit=5. Each store has its own components: call graph_schema first and name only what it lists. It reads live entities only: a deleted one has no component to query, and there is no .tombstone. Every row is an entity, so .entity alone names nothing: a query names the components its rows carry. Filter by id with .entity.eid=T-12, .entity.eid=#3b5bc70420, or .eid=T-12. Supply an id after =. graph_show reads entities by id. Operators: != ~= < >, lists a,b, ranges 1..9. To match part of a value, ~= (.web.url~=cloudflare); there is no bare ~. To find text by its words, use bare search words; by meaning, .near=T-12. Use .order=doc.title to sort by a property. Use .fields=doc.title to return one property or .fields=doc to return the whole component. Other directives include .limit=20 and .refs=T-12. filters narrow all of q. Returns named components; * or no named component returns whole entities. Bare search defaults to 20 compact hits. doc.body includes $was. graph_show reads whole entities. A guessed name is refused with the declared names nearest it. https://yaks.app/docs/querying",
+      "description": "Query .component.property=value with & (and), | (or), bare search words, presence .component/!component (a kind's name reads as the components the kind is), or ?component to include without filtering. A name alone is a component, so always qualify a property with its component: .app.version, never .version. q is the whole query, with no .where or .query around it, e.g. .doc.title~=recipe&.created.at>2026-11-01 .order=-created.at .limit=5. Each store has its own components: call graph_schema first and name only what it lists. It reads live entities only: a deleted one has no component to query, and there is no .tombstone. Every row is an entity, so .entity alone names nothing: a query names the components its rows carry. Filter by id with .entity.eid=T-12, .entity.eid=#3b5bc70420, or .eid=T-12. Supply an id after =. graph_show reads entities by id. Operators: != ~= < >, lists a,b, ranges 1..9. To match part of a value, ~= (.web.url~=cloudflare); there is no bare ~. To find text by its words, use bare search words; by meaning, .near=T-12. Use .order=doc.title to sort by a property. Use .fields=doc.title to return one property or .fields=doc to return the whole component. Other directives include .limit=20 and .refs=T-12. filters narrow all of q. Returns named components; * or no named component returns whole entities. Bare search defaults to 20 compact hits. doc.body includes $was. graph_show reads whole entities. A guessed name is refused with the declared names nearest it. A query has no .timing: timing: true answers with where the call's time went, the Server-Timing line yak --timing prints. https://yaks.app/docs/querying",
       "input": {
         "q": {
           "type": "string",
@@ -225,6 +225,10 @@
         "branch": {
           "type": "integer",
           "description": "Read on this branch (branch_list) rather than main."
+        },
+        "timing": {
+          "type": "boolean",
+          "description": "Answer with where the call's time went, as Server-Timing entries (the line yak --timing prints), beside the rows."
         }
       },
       "required": [
