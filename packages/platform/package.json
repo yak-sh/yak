@@ -8,6 +8,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./names": "./names.ts",
+    "./platform-credentials": "./platform-credentials.ts",
     "./store-wake": "./store-wake.ts",
     "./store-listing": "./store-listing.ts",
     "./cookie": "./cookie.ts",

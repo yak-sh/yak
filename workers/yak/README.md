@@ -428,17 +428,31 @@ proved. Existing queued letters and receiving cursors are retained.
 
 **yaks.app's own keys** — the platform's speech, model, Resend sending and
 Telnyx keys are connections of its own space, `yak`, used by its `platform` app
-under the name the table below gives each one (platform-keys.ts). Ask for one
-with `connection_need` on that space and app, naming the integration and that
-name as `binding`:
+under the name the table below gives each one (platform-keys.ts).
+
+Import a key already held by the Worker with the platform admin account.
+
+```sh
+yak command platform_connection_import --binding OPENAI_VOICE_KEY --as admin
+```
+
+The Worker reads the same-named binding and seals it into the connection. For an
+OpenAI binding, `--project <ID>` issues a service-account key in that project
+using `OPENAI_ADMIN_KEY` from the platform vault or Worker. If the connection
+already serves, the command preserves it. A Worker secret can be removed once
+the command confirms `workerMatches: true`. Tool arguments and results carry
+binding names, project IDs and status only.
+
+When nobody holds the key and the platform cannot issue it, request the key with
+`connection_need` on that space and app.
 
 ```sh
 yak command store_connection_need --space yak --owner yak --app platform \
   --integration elevenlabs --binding ELEVENLABS_API_KEY --as admin
 ```
 
-For the four OpenAI project keys, use `--integration openai-api --separate` with
-each key's binding.
+For an OpenAI paste request, use `--integration openai-api --separate` with the
+binding for that project.
 
 The owner pastes the key once at
 `https://yaks.app/manage/connections?space=yak`, and it is kept in the vault

@@ -874,6 +874,13 @@ integration_publish:
     exposes its description, input schema, revision and permission floor from
     the current app release. Only the app owner publishes it. listed: false
     withdraws discovery and preserves customer orders and connections.
+platform_connection_import:
+  title: Import a platform provider key
+  description: >
+    Platform admin only. Fill a provider binding on yak/platform from the
+    Worker secret of the same name, or issue an OpenAI service-account key
+    when given its project ID. An existing serving connection is preserved.
+    The result names the connection and whether it matches the Worker secret.
 integration_set:
   title: Describe or list a custom integration
   step:

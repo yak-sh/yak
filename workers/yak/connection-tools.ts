@@ -16,12 +16,25 @@ import {
 } from '@yaks/connections'
 import { edgeEid } from '@yaks/edge'
 import { url } from '@yaks/platform/host'
-import { APP, inApp, inSpace, refuse, SPACE, str, text } from './tool.ts'
+import { reveal } from '@yaks/secrets'
+import {
+  admin,
+  APP,
+  asCaller,
+  inApp,
+  inSpace,
+  refuse,
+  SPACE,
+  str,
+  text,
+} from './tool.ts'
 import { type Row, worded } from './tool-words.ts'
 import { serviceOffer } from './app-services.ts'
 import { declarationOf } from './declaration.ts'
 import { INTEGRATIONS, rating, said } from './integrations.ts'
 import { EITHER } from './preauth.ts'
+import { workerKey } from './platform-keys.ts'
+import { vaulted } from './vault.ts'
 import {
   barred,
   comp,
@@ -37,6 +50,63 @@ import {
 // Attaching a connected credential remains a platform verb. The package owns
 // need and list; published.ts translates their former connector arguments.
 let CONNECTIONS: Row[] = [
+  {
+    name: 'platform_connection_import',
+    role: 'owner',
+    destructive: false,
+    openWorld: true,
+    input: {
+      type: 'object',
+      properties: {
+        binding: str('the platform provider binding'),
+        project: str('OpenAI project ID to mint a key for, if needed'),
+      },
+      required: ['binding'],
+    },
+    run: async (ctx, args) => {
+      let { who, env } = ctx
+      if (
+        !who || who.via == 'grant' || who.space || who.spaceEid ||
+        !await admin(ctx)
+      ) {
+        throw refuse('access', 'Platform admin sign-in required')
+      }
+      if (!vaulted(env)) {
+        throw refuse('vault', 'The platform vault is unavailable')
+      }
+      let [{ importCredential }, { projectId, projectKey }] = await Promise.all(
+        [
+          import('@yaks/platform/platform-credentials'),
+          import('@yaks/openai/project-keys'),
+        ],
+      )
+      let binding = text(args.binding, 'binding')
+      let project = args.project
+      if (project != null && !projectId(project)) {
+        throw refuse('project', 'Give an OpenAI project ID')
+      }
+      let c = ctxOf(env, asCaller(ctx, 'owner'))
+      let value = await importCredential(c, binding, {
+        worker: (name) => workerKey(env, name),
+        mint: project == null ? undefined : async () => {
+          let name = 'OPENAI_ADMIN_KEY'
+          let key = await reveal(c.vault, name, { env: () => undefined }) ??
+            workerKey(env, name)
+          if (!key) {
+            throw refuse(
+              'source',
+              'The platform has no OpenAI Admin API credential',
+            )
+          }
+          return projectKey(key, project, `yaks.app ${binding}`)
+        },
+      })
+      return {
+        text: `${value.binding} is serving from its platform connection.`,
+        value,
+      }
+    },
+  },
   {
     name: 'connection_attach',
     role: 'owner',

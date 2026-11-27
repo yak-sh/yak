@@ -6,7 +6,8 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./provider": "./provider.ts",
-    "./batches": "./batches.ts"
+    "./batches": "./batches.ts",
+    "./project-keys": "./project-keys.ts"
   },
   "license": "Apache-2.0",
   "description": "Implements the model interface over OpenAI's streaming Responses API using fetch, with API-key or Codex sign-in authentication.",

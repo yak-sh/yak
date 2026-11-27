@@ -194,7 +194,9 @@ export type Resolved = {
 /** How a connection's credential arrives: a pasted key, each field its
  * integration names, or the return from the service's sign-in page with the
  * attempt `begin` gave. */
-export type Given = { key: string } | { fields: Record<string, string> } | {
+export type Given = { key: string; expect?: Status } | {
+  fields: Record<string, string>
+} | {
   attempt: Attempt
   callback: string | URL
   /** A website session obtained alongside a bot OAuth sign-in, kept only in the vault. */
@@ -1499,9 +1501,12 @@ export let connect = async (
       throw new Error(`${name} is connected by signing in, not with a key`)
     }
     await admitting(c, b)
+    let held = stillHeld(b)
+    let expect = 'key' in given ? given.expect : undefined
+    if (expect) held.$was![CONNECTION] = { status: token(expect) }
     return c.graph.apply([{
       ...pasted(b, name, fieldsOf(i), given),
-      ...stillHeld(b),
+      ...held,
       [CONNECTION]: now,
     }, ...await answered(c.graph.read, b, connection)])
   }

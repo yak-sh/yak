@@ -1,9 +1,8 @@
 // yaks.app's own provider keys (ElevenLabs, Deepgram and the rest): the
 // connections its own space (`yak`) holds, which its `platform` app uses, each
 // under the name the Worker reads it by (`ELEVENLABS_API_KEY`), as any app's
-// code reads env.NAME. A key is asked for with `connection_need` on that space
-// and app, pasted once on the space's connections page and kept in the vault
-// like every other (@yaks/connections `keysOf`).
+// code reads env.NAME. A held key is imported by the platform admin. A key
+// nobody holds can be given on the space's connections page.
 //
 // `keyed` is the Worker's env with those keys over any Worker secret of the
 // same name, which answers only until its connection is given. An isolate
@@ -61,6 +60,12 @@ export let keyed = async <E extends object>(env: E): Promise<E> => {
 /** `env`'s overlay as last read, without reading: the object `keyed`
  * refreshes, for what holds an env from before its first request. */
 export let keysOn = <E extends object>(env: E): E => overlay(env).env as E
+
+/** The Worker binding before any platform connection overlays it. */
+export let workerKey = (env: Env, name: string): string | undefined => {
+  let value = overlay(env).base[name]
+  return typeof value == 'string' ? value : undefined
+}
 
 let overlay = (env: object): Held => {
   let h = held.get(env)

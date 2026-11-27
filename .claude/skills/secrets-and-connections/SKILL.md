@@ -152,7 +152,13 @@ one paste and nothing else to think about.
   OpenAI, Anthropic) is a connection of the `yak` space that its `platform`
   app uses under the name the Worker reads it by
   (workers/yak/platform-keys.ts; workers/yak/README.md, "yaks.app's own
-  keys"). Ask for it on yaks.app with `yak command store_connection_need
+  keys"). First try `yak command platform_connection_import --binding <NAME>
+  --as admin`. It checks the serving connection and imports a same-named
+  Worker secret if needed. For OpenAI, add `--project <ID>` to issue a project
+  key with the platform's Admin API credential. Remove a copied Worker secret
+  once the import confirms `workerMatches: true`. File a paste task only for
+  a key nobody holds and the platform cannot issue. Request that key with
+  `yak command store_connection_need
   --space yak --owner yak --app platform --integration <name> --binding <NAME>
   --as admin` (a custom integration also gives `--hosts`, `--title` and
   `--instructions`), and file his task with the

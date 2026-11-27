@@ -2,7 +2,7 @@
 // its `platform` app uses under a name answers that name over the Worker
 // secret of it, which answers alone until one is given; and ElevenLabs speaks
 // on that key for a space without its own account, charged to the space.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { connect, need } from '@yaks/connections'
 import type { D1Like } from '@yaks/d1'
 import { mint } from '@yaks/graph'
@@ -19,6 +19,8 @@ import { meta } from './meta.ts'
 import { invokePackage } from './package-tools.ts'
 import { phoneOf, textable } from './phones.ts'
 import { keyed } from './platform-keys.ts'
+import { connector, fresh as kernel, signIn } from './probe.ts'
+import type { Env } from './env.ts'
 import { speaking } from './speech.ts'
 import { platform } from './testing.ts'
 
@@ -170,6 +172,83 @@ test('four OpenAI project keys can be requested and pasted separately, each over
       fallback,
     )
   }
+})
+
+let workerKeys = {
+  OPENAI_API_KEY: 'images-key',
+  OPENAI_VOICE_KEY: 'voice-key',
+  OPENAI_MODELS_KEY: 'models-key',
+  OPENAI_OPERATOR_API_KEY: 'operator-key',
+}
+let importedFrom!: Env
+let k = await kernel({
+  ...workerKeys,
+  VAULT: d1() as unknown as D1Like,
+  VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
+}, (env) => importedFrom = env)
+let platformAdmin = connector(k, k.owner.cookie)
+let stranger = connector(k, (await signIn(k, 'key-import@example.test')).cookie)
+
+test('only the platform admin can import a Worker binding', async () => {
+  await assertRejects(
+    () =>
+      stranger.tool('platform_connection_import', {
+        binding: 'OPENAI_API_KEY',
+      }),
+    Error,
+    'Platform admin sign-in required',
+  )
+  await assertRejects(
+    () =>
+      platformAdmin.tool('platform_connection_import', {
+        binding: 'SESSION_SECRET',
+      }),
+    Error,
+    'Choose a supported platform provider binding',
+  )
+})
+
+test('platform credential import fills existing requests and serves all four keys without Worker bindings', async () => {
+  for (let [binding, key] of Object.entries(workerKeys)) {
+    let made = await invokePackage(
+      { env: importedFrom, dir: k.dir, person: k.owner.person },
+      'connection_need',
+      {
+        space: 'yak',
+        app: 'platform',
+        owner: 'yak',
+        integration: 'openai-api',
+        binding,
+        separate: true,
+      },
+    )
+    let connection = made.find((b) => b.connection)!.entity.eid
+    let answer = () =>
+      platformAdmin.answer('platform_connection_import', { binding })
+    let imported = await answer()
+    assertEquals(imported.value, {
+      binding,
+      connection,
+      status: 'imported',
+      workerMatches: true,
+    })
+    assertEquals(JSON.stringify(imported).includes(key), false)
+    assertEquals((await answer()).value, {
+      binding,
+      connection,
+      status: 'connected',
+      workerMatches: true,
+    })
+  }
+  let noWorkerKeys = { ...importedFrom } as Record<string, unknown>
+  for (let binding of Object.keys(workerKeys)) delete noWorkerKeys[binding]
+  let served = await keyed(noWorkerKeys)
+  assertEquals(
+    Object.fromEntries(
+      Object.keys(workerKeys).map((binding) => [binding, served[binding]]),
+    ),
+    workerKeys,
+  )
 })
 
 test('keying is idempotent: an env and its keyed env key to one object', async () => {
