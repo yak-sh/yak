@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { RESULT, type ResultEvent } from '@yaks/ui/interaction'
@@ -19,7 +19,9 @@ let home = () => {
       `<a class="Nav_Open" href="/manage">Open yaks.app</a></div></body></html>`,
   )
   let address = new URL('https://yaks.app/')
+  let time = clock()
   let loads: string[] = []
+  let errors: string[] = []
   let moved = (to: string) => address = new URL(to, address)
   let tab = {
     document,
@@ -55,8 +57,9 @@ let home = () => {
     scrollTo: () => {},
     fetch: () => new Promise(() => {}),
     requestAnimationFrame: () => 0,
-    setTimeout: () => 0,
-    clearTimeout: () => {},
+    setTimeout: (callback: () => void, ms: number) => time.after(ms, callback),
+    clearTimeout: (cancel: () => void) => cancel(),
+    reportError: (error: Error) => errors.push(error.message),
   }
   let measured: string[] = []
   document.addEventListener(
@@ -83,8 +86,8 @@ let home = () => {
   globalThis.window = was
   let view = document.querySelector('[data-site-frame]') as HTMLElement
   let press = () => open(new Event('click'))
-  // The page `/manage` redirects to, once its stylesheet loads.
-  let answer = async (html: string | null, url = 'https://yaks.app/ada') => {
+  // The page `/manage` redirects to, before its assets load.
+  let respond = (html: string | null, url = 'https://yaks.app/ada') => {
     answered.resolve(
       html == null ? null : {
         ok: true,
@@ -93,15 +96,7 @@ let home = () => {
         text: () => Promise.resolve(html),
       } as Response,
     )
-    for (
-      let tick = 0;
-      tick < 5 && !document.head.querySelector('link');
-      tick++
-    ) {
-      await new Promise((go) => setTimeout(go))
-    }
-    document.head.querySelector('link')?.dispatchEvent(new Event('load'))
-    await new Promise((go) => setTimeout(go))
+    return time.advance(0)
   }
   let seen = () => ({
     address: address.pathname,
@@ -112,12 +107,30 @@ let home = () => {
     shows: view.textContent!.trim(),
   })
   let link = document.querySelector('.Nav_Open')!
-  // A script of the view's page done loading.
-  let loaded = async (script: Element) => {
-    script.dispatchEvent(new Event('load'))
-    await new Promise((go) => setTimeout(go))
+  let loaded = (asset: Element) => {
+    asset.dispatchEvent(new Event('load'))
+    return time.advance(0)
   }
-  return { press, answer, seen, measured, loads, view, link, loaded }
+  let sheet = () => document.head.querySelector('link[rel=stylesheet]')!
+  let answer = async (...args: Parameters<typeof respond>) => {
+    await respond(...args)
+    if (sheet()) await loaded(sheet())
+  }
+  return {
+    press,
+    respond,
+    answer,
+    seen,
+    measured,
+    loads,
+    errors,
+    view,
+    link,
+    loaded,
+    sheet,
+    document,
+    advance: time.advance,
+  }
 }
 
 test('a press before the signed-in page comes draws its frame in its own frame, and the page fills it', async () => {
@@ -167,6 +180,58 @@ test("the signed-in page's scripts run before the navigator takes its links", as
   assertEquals(link.hasAttribute(READY), false)
   await loaded(view.querySelector('script[src]')!)
   assertEquals(link.hasAttribute(READY), true)
+})
+
+test('the signed-in view keeps starting while its page, sheets, and scripts arrive', async () => {
+  let { press, respond, seen, loaded, sheet, advance, link, view, loads } =
+    home()
+  await press()
+  await advance(6_000)
+  await respond(WORKSPACE.replace(
+    '</main>',
+    '</main><script type="module" src="/_talk-views.js"></script>',
+  ))
+  await advance(6_000)
+  assertEquals(seen().busy, true)
+  await loaded(sheet())
+  await advance(6_000)
+  assertEquals(link.hasAttribute(READY), false)
+  await loaded(view.querySelector('script[src]')!)
+  assertEquals([seen().workspace, seen().shows, link.hasAttribute(READY)], [
+    true,
+    'The chat',
+    true,
+  ])
+  assertEquals(loads, [])
+})
+
+test('the signed-in view starts its module preloads alongside its stylesheet', async () => {
+  let { respond, document, seen } = home()
+  await respond(
+    WORKSPACE.replace(
+      '<link rel="stylesheet"',
+      '<link rel="modulepreload" href="./chat.js"><link rel="stylesheet"',
+    ),
+    'https://yaks.app/ada/operator',
+  )
+  assertEquals(
+    document.head.querySelector('link[rel=modulepreload]')?.getAttribute(
+      'href',
+    ),
+    'https://yaks.app/ada/chat.js',
+  )
+  assertEquals(seen().busy, true)
+})
+
+test('a stalled stylesheet falls back to the full page and reports the phase', async () => {
+  let { press, respond, advance, loads, errors, view } = home()
+  await press()
+  await respond(WORKSPACE)
+  await advance(10_000)
+  await advance(0)
+  assertEquals(view.isConnected, false)
+  assertEquals(loads, ['https://yaks.app/ada'])
+  assertEquals(errors, ['The signed-in view timed out loading stylesheets'])
 })
 
 test('a page not to be had is loaded, whether pressed before or after', async () => {

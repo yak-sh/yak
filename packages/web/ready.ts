@@ -12,6 +12,7 @@ import { SCROLL, TURNS } from './picture.ts'
 
 let HOME = '[data-site-home]'
 let RUNS = /^(|module|text\/javascript|application\/javascript)$/
+let WAIT = 10_000
 
 let loaded = (at: HTMLElement, event: string, name: string) =>
   new Promise<void>((done, fail) => {
@@ -103,7 +104,7 @@ export let ready = (
   // stays in its own layout while the workspace is built at viewport size.
   doc.body.setAttribute('data-site-views', '')
   doc.body.append(view)
-  let sheets: HTMLLinkElement[] = []
+  let assets: HTMLLinkElement[] = []
   let shown = () => !view.inert
   let visible = (workspace: boolean) => {
     if (view.inert == !workspace) return
@@ -140,23 +141,34 @@ export let ready = (
     if (view.isConnected) doc.dispatchEvent(new win.Event(LEAVE))
     view.remove()
     home.removeAttribute(TURNS)
-    for (let sheet of sheets) sheet.remove()
+    for (let asset of assets) asset.remove()
     doc.body.removeAttribute('data-site-views')
     link.removeAttribute(READY)
   }
   // The page is not to be had: a view a press showed loads it instead.
   let fail = (error?: unknown) => {
-    if (error) globalThis.reportError?.(error)
     if (gone) return
+    if (error) win.reportError?.(error)
     let was = shown()
     discard()
     if (was) win.location.replace(at.href)
+  }
+  // A slow phase gets time to finish even when the phases before it were slow.
+  let wait = <T>(pending: Promise<T>, phase: string): Promise<T> => {
+    let { promise, reject } = Promise.withResolvers<never>()
+    let timer = win.setTimeout(
+      () => reject(Error(`The signed-in view timed out ${phase}`)),
+      WAIT,
+    )
+    return Promise.race([pending, promise]).finally(() =>
+      win.clearTimeout(timer)
+    )
   }
 
   // The page and its sheets, in the view, and the scripts the document ran
   // before it; false where it is not to be had.
   let fill = async (): Promise<Set<string> | false> => {
-    let response = await first
+    let response = await wait(first, 'getting the page')
     if (
       !response?.ok ||
       !response.headers.get('content-type')?.includes('text/html')
@@ -168,18 +180,26 @@ export let ready = (
     ) return false
     at = answered
     let page = new win.DOMParser().parseFromString(
-      await response.text(),
+      await wait(response.text(), 'reading the page'),
       'text/html',
     )
     if (!page.querySelector(`script[${TAKES}]`)) return false
     let map = (owner: Document) =>
       owner.querySelector('script[type=importmap]')?.textContent
     if (map(doc) != map(page)) return false
-    sheets = [...page.querySelectorAll<HTMLLinkElement>('link[rel=stylesheet]')]
-      .map((sheet) => doc.importNode(sheet, true))
-    let styles = sheets.map((sheet) => loaded(sheet, 'load', sheet.href))
-    doc.head.append(...sheets)
-    await Promise.all(styles)
+    // Discover the page's modules while its sheets load, as its own parser would.
+    assets = [...page.querySelectorAll<HTMLLinkElement>(
+      'link[rel=stylesheet][href], link[rel=modulepreload][href]',
+    )].map((asset) => {
+      let link = doc.importNode(asset, true)
+      link.href = new URL(asset.getAttribute('href')!, answered).href
+      return link
+    })
+    let styles = assets.filter((link) => link.rel == 'stylesheet').map((
+      sheet,
+    ) => loaded(sheet, 'load', sheet.href))
+    doc.head.append(...assets)
+    await wait(Promise.all(styles), 'loading stylesheets')
     if (gone) return false
     let nodes = [...page.body.childNodes].map((n) => doc.importNode(n, true))
     for (
@@ -208,7 +228,7 @@ export let ready = (
   let boot = async () => {
     let ran = await fill()
     if (!ran) return fail()
-    await scripts(view, at.href, ran)
+    await wait(scripts(view, at.href, ran), 'starting scripts')
     if (gone) return
     win.removeEventListener('popstate', popped)
     doc.addEventListener(DRAW, (event) => {
@@ -240,11 +260,7 @@ export let ready = (
       else win.location.reload()
     })
   }
-  let timeout = win.setTimeout(
-    () => !go && fail(Error('The signed-in view did not start')),
-    10_000,
-  )
-  boot().catch(fail).finally(() => win.clearTimeout(timeout))
+  boot().catch(fail)
 
   return (input) => {
     let began = Math.min(win.performance.now(), input.timeStamp)
