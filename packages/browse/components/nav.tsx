@@ -222,7 +222,7 @@ export let clickProps = (e: Ent) => {
   return {
     href,
     onClick: follow(href, e.eid),
-    onDblClick: follow(href),
+    onDoubleClick: follow(href),
     onContextMenu: menuAt(e),
   }
 }

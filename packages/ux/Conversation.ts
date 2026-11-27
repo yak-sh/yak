@@ -310,6 +310,19 @@ let carries = (ev: DragEvent) => !!ev.dataTransfer?.types.includes('Files')
 // beside it (`defaultPrevented`) leaves it be.
 let useTaking = (onFiles?: (files: File[]) => void) => {
   let [over, setOver] = useState(false)
+  let box = useRef<HTMLElement>(null)
+  useLayoutEffect(() => {
+    let node = box.current
+    if (!node || !onFiles) return
+    let paste = (ev: ClipboardEvent) => {
+      let files = [...ev.clipboardData?.files ?? []]
+      if (!files.length) return
+      ev.preventDefault()
+      onFiles(files)
+    }
+    node.addEventListener('paste', paste)
+    return () => node.removeEventListener('paste', paste)
+  }, [onFiles])
   if (!onFiles) return {}
   let hover = (ev: DragEvent) => {
     if (!carries(ev)) return
@@ -319,14 +332,7 @@ let useTaking = (onFiles?: (files: File[]) => void) => {
   }
   return {
     over,
-    // Lower case, so Preact listens for `paste` in a document whose
-    // elements have no `onpaste` (linkedom's), as a browser's do.
-    onpaste: (ev: ClipboardEvent) => {
-      let files = [...ev.clipboardData?.files ?? []]
-      if (!files.length) return
-      ev.preventDefault()
-      onFiles(files)
-    },
+    elRef: box,
     onDragEnter: hover,
     onDragOver: hover,
     onDragLeave: (ev: DragEvent) => {

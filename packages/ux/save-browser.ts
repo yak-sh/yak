@@ -3,8 +3,7 @@
  * A save shows as pending at once. A field's draft stays until its write is
  * answered, and a refusal puts its fields back to unsaved, saying why. */
 import { createElement as h } from 'react'
-import { flushSync } from 'react-dom'
-import { createRoot } from 'react-dom/client'
+import { surface as drawSurface } from '@yaks/react/draw'
 import { Save } from './Save.ts'
 import { result } from '@yaks/ui/interaction'
 
@@ -169,7 +168,7 @@ let bindForms = (
     labels.push(label)
   }
   let message = '', done = '', closed = false
-  let face = createRoot(mount)
+  let face = drawSurface(mount)
   // Drafts this binding keeps from the fields it reads are already what
   // those fields show: a change it makes itself is not put back on them.
   let own = false
@@ -201,7 +200,7 @@ let bindForms = (
       field.classList.toggle('Save_Field-changed', pending)
       field.toggleAttribute('data-changed', pending)
     }
-    face.render(
+    face.draw(
       h(Save, {
         count: count(),
         busy: waiting > 0,
@@ -340,7 +339,7 @@ let bindForms = (
     say('')
     queued++
     waiting++
-    flushSync(draw)
+    draw()
     measured?.drawn(0)
     return writing = writing.then(() => send(sends))
   }
@@ -405,7 +404,7 @@ let bindForms = (
       }
       for (let face of tagged) face.classList.remove('Save_Label')
       for (let label of labels) label.replaceWith(...label.childNodes)
-      face.unmount()
+      face.close()
       mount.remove()
     },
   }
