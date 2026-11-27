@@ -21,7 +21,7 @@ import { confirmedRefusal } from './query-line.ts'
 import { type Refusal, refuse } from '@yaks/api'
 import { FILED } from '@yaks/api/refuse'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { ROUTE_MEMORY } from '@yaks/platform/route-memory'
+import { ROUTE_MEMORY, routedWrite } from '@yaks/platform/route-memory'
 import { retried, unserved } from '@yaks/durable-object/resets'
 import {
   type Call,
@@ -410,7 +410,14 @@ export let storeOf = (
   app?: Served,
   wait?: (ms: number) => Promise<void>,
 ): Door => {
-  let open = async (req: Request) =>
+  // A write to the directory moves routes this isolate remembers (apps.ts
+  // `page`), whoever sent it: an app's access set through graph_apply is
+  // heard on the next request, not up to 30 s later.
+  let open = (req: Request) =>
+    name == PLATFORM_STORE
+      ? routedWrite(ns, req, () => reached(req))
+      : reached(req)
+  let reached = async (req: Request) =>
     storeAnswer(name, req, await placed(ns, name).fetch(req))
   return resending(doorOf(open, name, app), {
     report: (e, path) =>

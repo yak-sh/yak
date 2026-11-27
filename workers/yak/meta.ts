@@ -240,7 +240,9 @@ export let metaOf = (
 })
 
 // Keep each directory's adapter stable within its binding. The directory's
-// seed and its isolate's route invalidation both follow that binding.
+// seed and its isolate's route invalidation both follow that binding. A write
+// through the store's door forgets routes there (door.ts `storeOf`); the
+// directory asked in-process (`META`) has no door, so its adapter does.
 let doors = new WeakMap<object, WeakMap<Namespace, Meta>>()
 
 let invalidating = (ns: Namespace, live: Meta): Meta => ({
@@ -280,7 +282,7 @@ export let meta = (
   if (!adapters) doors.set(source, adapters = new WeakMap())
   let held = adapters.get(ns)
   if (held) return held
-  let live = env.META ?? metaOf(
+  held = env.META ? invalidating(ns, env.META) : metaOf(
     coalesced(
       storeOf(env.STORE, PLATFORM_STORE, undefined, jittered(env.CLOCK)),
       (request) => {
@@ -301,6 +303,6 @@ export let meta = (
     {},
     PLATFORM_STORE,
   )
-  adapters.set(ns, held = invalidating(ns, live))
+  adapters.set(ns, held)
   return held
 }

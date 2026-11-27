@@ -113,3 +113,20 @@ export let changingRoutes = <T>(
     write,
   )
 }
+
+/** A request to the directory's store, sent by `send`: a write forgets the
+ * routes it may move, whichever door made it. A read goes straight through.
+ * An `/apply` names its bundles; any other write forgets every route. */
+export let routedWrite = async <T>(
+  binding: object,
+  req: Request,
+  send: () => Promise<T>,
+): Promise<T> => {
+  if (req.method == 'GET' || req.method == 'HEAD' || !memories.has(binding)) {
+    return send()
+  }
+  let bundles = new URL(req.url).pathname == '/apply'
+    ? await req.clone().json().catch(() => null)
+    : null
+  return changingRoutes(binding, Array.isArray(bundles) ? bundles : null, send)
+}
