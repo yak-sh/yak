@@ -3,7 +3,14 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { asked as idsOf, BEST, loadTools, textSearch, tier } from './tools.ts'
+import {
+  asked as idsOf,
+  BEST,
+  loadTools,
+  MOST,
+  textSearch,
+  tier,
+} from './tools.ts'
 import { graph } from './graph.ts'
 import { ram } from '@yaks/ram'
 import { declared } from './vocab.ts'
@@ -169,11 +176,17 @@ test('generic declarations describe the search capability and reported keywords'
 })
 
 let query = tier().find((t) => t.name == 'graph_query')!
-let asked = async (q: string) =>
-  await query.run(
-    { entity: { eid: 'c' }, call: { args: { q } } },
-    { read: () => [], vocab: loadVocab({ $defs: {} }) } as unknown as Graph,
-  )
+// A graph that reads nothing, and the reads it took.
+let counting = () => {
+  let reads: string[] = []
+  let g = {
+    read: (q: string) => (reads.push(q), []),
+    vocab: loadVocab({ $defs: {} }),
+  } as unknown as Graph
+  return { reads, ask: async (q: string) => await query.run(call(q), g) }
+}
+let call = (q: string) => ({ entity: { eid: 'c' }, call: { args: { q } } })
+let asked = counting().ask
 test('graph_query refuses a line that only asks, with the line it meant', async () => {
   await assertRejects(
     () => asked('?topic ?content .limit=3'),
@@ -187,6 +200,17 @@ test('graph_query refuses a line that only asks, with the line it meant', async 
   for (let q of ['?doc .topic', '?doc moss', '?doc .near=T-1', '* .limit=2']) {
     assertEquals(await asked(q), [])
   }
+})
+
+test('graph_query refuses every entity or a window past its ceiling, before reading', async () => {
+  let { reads, ask } = counting()
+  for (let q of ['*', `.doc&.limit=${MOST + 1}`]) {
+    await assertRejects(() => ask(q), Refused, `${MOST}`)
+  }
+  for (let q of [`* .limit=${MOST}`, '* .doc', '* dragon', '* .near=T-1']) {
+    assertEquals(await ask(q), [])
+  }
+  assertEquals(reads.length, 4)
 })
 
 // A shelf of books one word finds, one more than a search answers unasked.

@@ -139,6 +139,33 @@ export type Seams = {
  * best, as the `search` tool's are. */
 export let BEST = 20
 
+/** The widest window one `graph_query` asks for, and refused with how to
+ * page before anything is read: an agent's `*` built all 198,395 entities of
+ * yaks.app's platform store, 20 s of the object's CPU, then its memory, and
+ * every request queued behind it failed (bug be9051e2). No context holds an
+ * answer that size. */
+export let MOST = 10_000
+
+// Why a query would answer more than `MOST` entities, if it would: its window
+// is wider, or it has none and nothing on it filters, so it selects every
+// entity the graph holds (`*` alone). A query that filters is read as asked.
+let past = (ast: Query): string | undefined => {
+  let n = ast.clauses.find((c) => c.kind == 'limit')?.n
+  if (n != null) {
+    return n > MOST
+      ? `.limit=${n} asks for more than ${MOST}, the most one graph_query answers`
+      : undefined
+  }
+  let filters = ast.clauses.some((c) =>
+    c.kind == 'near' || c.kind == 'text' || !directive(c) &&
+      !(c.kind == 'pred' && c.op == '?')
+  )
+  return filters
+    ? undefined
+    : `it filters nothing, so it selects every entity the graph holds, and ` +
+      `one graph_query answers at most ${MOST}`
+}
+
 /**
  * The search a graph's own reads answer: every word a text clause, so a row
  * matches when it holds them all, best first where the storage ranks words
@@ -493,6 +520,14 @@ export let runs = (seams: Seams = {}): Runs => {
       if (ask) throw new Refused(asksOnly(ast, ask))
       let op = aggregate(ast)
       if (!op) {
+        let wide = past(ast)
+        if (wide) {
+          throw new Refused(
+            `${q}: ${wide}. Name a filter, or read it in pages of .limit=${MOST} or ` +
+              `fewer, each continuing with .after= the last entity it ` +
+              `answered; .count says how many there are`,
+          )
+        }
         let said = words(ast)
         let windowed = ast.clauses.some((c) => c.kind == 'limit')
         let rows = await graph.read(
