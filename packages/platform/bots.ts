@@ -27,14 +27,16 @@ export let isTestAddress = (address: string): boolean =>
   isFleetAddress(address) && address != ADMIN && address != DEMO
 
 // The numbers the fleet texts and calls from, as the bot domain is the
-// addresses it signs in with: the platform's own sender (workers/yak
-// wrangler.toml `PHONE_SENDER`), the box's line (@yaks/voipms on the box),
+// addresses it signs in with: the platform's own senders (workers/yak
+// wrangler.toml `PHONE_SENDER`, and the toll-free number beside it on its
+// Telnyx profile), TaskMaster's line (@yaks/voipms on the box),
 // the checks space's line and its bot's phone, and the number bought for
 // T-2541's live check. Whoever texts from one is one of our tools, so a
 // person the platform makes for it is a test account. A number our tools
 // come to text from is added here.
 export let NUMBERS: ReadonlySet<string> = new Set([
   '+18663141594',
+  '+18557292688',
   '+12692347774',
   '+12692383446',
   '+12694929622',
