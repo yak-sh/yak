@@ -61,6 +61,7 @@ import {
   vouchOf,
   writer,
 } from '@yaks/platform/app-authority'
+import { ROUTE_MEMORY } from '@yaks/platform/route-memory'
 export {
   appGuard,
   authenticating,
@@ -1136,8 +1137,33 @@ export class Store extends Durable {
       },
       ready: (request) => store.#ready(request),
       serve: (request) => store.#serve(request),
-      commit: (request, mark) => store.#apply.apply(request, mark),
-      authorize: (request) => store.#apply.authorize(request),
+      commit: async (request, mark) => {
+        if (request.headers.has(ROUTE_MEMORY)) {
+          try {
+            await store.#learn(request)
+          } catch (error) {
+            if (
+              error instanceof Refused &&
+              (error as Refused & { status?: number }).status != 503
+            ) {
+              return refuse(error)
+            }
+            throw error
+          }
+        }
+        return store.#routeStanding(request, () =>
+          store.#apply.apply(request, mark))
+      },
+      authorize: async (request) => {
+        if (request.headers.has(ROUTE_MEMORY)) {
+          await store.#learn(request)
+        }
+        await store.#routeStanding(
+          request,
+          () =>
+            store.#apply.authorize(request),
+        )
+      },
       keeps: (told) => !keyed(told),
       answer: (request, response) => store.#apply.answer(request, response),
       refused: () => store.#refused,
@@ -2225,7 +2251,9 @@ export class Store extends Durable {
     this.#auth = authenticating(
       policy(g.storage, { ignore: this.#staleGrant }),
       () => this.#get('app'),
-      (v) => this.#vouch(v),
+      (v) => {
+        if (!this.#rememberedVouch.getStore()) this.#vouch(v)
+      },
     )
     ;({
       live: this.#live,
@@ -2609,6 +2637,12 @@ export class Store extends Durable {
     deploymentMoved: boolean
     effects: (() => void | Promise<void>)[]
   } {
+    if (
+      req.headers.has(ROUTE_MEMORY) &&
+      Number(req.headers.get('x-yak-policy')) < Number(this.#get('policy'))
+    ) {
+      req.headers.delete('x-yak-release')
+    }
     return selectDeclaration(req, {
       read: (key) => this.#get(key as Word),
       write: (key, value) => this.#put(key as Word, value),
@@ -2753,6 +2787,13 @@ export class Store extends Durable {
   }
 
   #vouched = new Map<string, Vouch>()
+  #rememberedVouch = new AsyncLocalStorage<Vouch | undefined>()
+  #routeStanding<T>(request: Request, answer: () => T): T {
+    let vouch = request.headers.has(ROUTE_MEMORY) ? vouchOf(request) : undefined
+    return vouch || this.#rememberedVouch.getStore()
+      ? this.#rememberedVouch.run(vouch, answer)
+      : answer()
+  }
   #delegated = new Map<string, Vouch>()
   // What the kernel vouched for a browser with nobody signed in, by its
   // instrument: a visitor reading the sample or in a store of their own.
@@ -2781,6 +2822,14 @@ export class Store extends Durable {
   }
 
   #authority(actor: Actor | null | undefined): Vouch | undefined {
+    let route = this.#rememberedVouch.getStore()
+    if (
+      route && actor &&
+      (actor.by
+        ? actor.by == (route.actor ?? route.person) &&
+          actor.via == (route.via ?? undefined)
+        : actor.via && instrumentEid(actor.via) == route.via)
+    ) return route
     return actor?.by
       ? this.#delegated.get(this.#writerKey(actor)) ??
         this.#vouched.get(actor.by)
@@ -5498,7 +5547,11 @@ export class Store extends Durable {
   }
 
   /** Every door but the write log's, for an object that is ready. */
-  async #serve(request: Request): Promise<Response> {
+  #serve(request: Request): Promise<Response> {
+    return this.#routeStanding(request, () => this.#answer(request))
+  }
+
+  async #answer(request: Request): Promise<Response> {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     // Brought up for the request behind it (door.ts `WAKE`), and nothing more.

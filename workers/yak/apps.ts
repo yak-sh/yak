@@ -2881,6 +2881,7 @@ let routeApp = (
   let dir = view ?? directory(direct, {
     copy: serving,
     time: env.CLOCK,
+    memory: env.STORE,
     public: edge,
     used: copied,
     regional: region && nearby
@@ -2927,16 +2928,56 @@ let routeApp = (
     // revision current and no write's fence is up (directory-copy.ts
     // `signedDirectory`), so the directory is asked once for them all. Site's
     // fill keeps its own reading, which says what it kept from a copy.
-    page: async (space, app) => {
+    page: async (space, app, path) => {
       let { person } = await identity()
-      let route = (req.method == 'GET' || req.method == 'HEAD') &&
+      let reading = req.method == 'GET' || req.method == 'HEAD'
+      let route = reading &&
           (uploaded(url.pathname) || !person && !edge)
-        ? directory(direct, { copy: serving, time: env.CLOCK, copyFirst: true })
+        ? directory(direct, {
+          copy: serving,
+          time: env.CLOCK,
+          copyFirst: true,
+          memory: env.STORE,
+        })
         : dir
       let views = edge && fence.page(url.pathname)
+      let data = !edge && appApi(url.pathname) &&
+        (path.startsWith('/api/') || url.pathname.startsWith('/api/'))
+      let remember = data && !checking(url.pathname) &&
+        !url.pathname.endsWith('/api/ws') && !bearing(req) &&
+        !req.headers.has('authorization') && !req.headers.has('upgrade')
+      let candidate = (page: Awaited<ReturnType<Directory['page']>>) =>
+        path.startsWith('/api/') ? page.app : !page.app ? page.home : null
       let read = c.time(
         'route',
-        () => route.page(space, app, person, false, undefined, views),
+        () =>
+          route.page(
+            space,
+            app,
+            person,
+            false,
+            undefined,
+            views,
+            remember
+              ? (page) => {
+                let app = candidate(page)
+                if (
+                  !page.space || page.space.trashed || !app || app.trashed ||
+                  sandboxed(app)
+                ) return false
+                let role = page.role ?? page.grants?.get(app.eid) ?? null
+                return (reading ? reads : edits)(mode(app.access), role)
+              }
+              : undefined,
+          ),
+        (page) =>
+          data && (path.startsWith('/api/') || !page.app)
+            ? page.remembered
+              ? '"memory"'
+              : remember
+              ? '"directory"'
+              : '"fresh"'
+            : null,
       )
       let credential = sessionReading(req, env, dir)
       // The name `/who` tells a person beside their standing (api `/who`, and

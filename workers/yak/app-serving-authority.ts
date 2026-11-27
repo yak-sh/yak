@@ -6,6 +6,7 @@ import { Refused } from '@yaks/graph/errors'
 import { type Mode, mode } from '@yaks/member'
 import { EPOCH, FENCE_WAIT } from './directory-copy.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { ROUTE_MEMORY } from '@yaks/platform/route-memory'
 import { VISIT, type Vouch, vouchOf } from '@yaks/platform/app-authority'
 import { appAbout, type Row } from './directory.ts'
 import { visitEdge, visitOfRow, visitorRole } from '@yaks/platform/visits'
@@ -49,6 +50,40 @@ export let servingAuthority = (host: Host) => {
         })
       }
       let began = host.now()
+      let memory = req.headers.get(ROUTE_MEMORY)
+      let floor = Number(host.read('policy') ?? 0)
+      let expired: { space: string | null } | undefined
+      if (memory != null) {
+        let app = host.read('app')
+        if (app && app !== req.headers.get('x-yak-app')) {
+          throw new Refused('app unavailable')
+        }
+        if (/^\d+$/.test(memory) && began < Number(memory)) {
+          if (revision < floor) {
+            // The remembered standing can answer this request. The Store's
+            // current declaration and metadata still govern the Store.
+            req.headers.delete('x-yak-release')
+            return
+          }
+        } else {
+          // A write kept in the log can land well after the kernel sent it.
+          // Refresh its standing without carrying old metadata forward.
+          expired = {
+            space: req.headers.get('x-yak-space') ?? host.read('space'),
+          }
+          for (
+            let header of [
+              ROUTE_MEMORY,
+              'x-yak-release',
+              'x-yak-space',
+              'x-yak-mail',
+              'x-yak-phone',
+              'x-yak-at',
+            ]
+          ) req.headers.delete(header)
+          revision = await recheck(req, expired)
+        }
+      }
       while (revision < Number(host.read('policy') ?? 0)) {
         if (!host.directory() || host.now() - began >= FENCE_WAIT) {
           throw Object.assign(
@@ -58,7 +93,7 @@ export let servingAuthority = (host: Host) => {
             },
           )
         }
-        revision = await recheck(req)
+        revision = await recheck(req, expired)
       }
     }
     // Reject outside the transaction: that helper treats a failure as a broken schema.
@@ -80,7 +115,10 @@ export let servingAuthority = (host: Host) => {
   // Reread metadata and standing in one directory snapshot; never carry an
   // old role into a newly accepted revision. A stranger with no seat stands
   // by their browser's visit to the app (@yaks/platform/visits `visitorRole`).
-  let recheck = async (req: Request): Promise<number> => {
+  let recheck = async (
+    req: Request,
+    expired?: { space: string | null },
+  ): Promise<number> => {
     let app = req.headers.get('x-yak-app') ?? host.read('app')
     let person = req.headers.get('x-yak-person')
     let via = req.headers.get('x-yak-via')
@@ -93,9 +131,17 @@ export let servingAuthority = (host: Host) => {
       ? line`|.member.person=${person}&?member|.grant.app=${at}&.grant.person=${person}&?grant`
       : line``
     let visit = edge ? line`|.entity.eid=${edge}&?visit` : line``
-    let q = line`.entity.eid=${at}&?app&?published&?demo${sub(seat)}${
-      sub(visit)
-    }`
+    let definitionAt = line`.entity.eid=${at}&?app&?published&?demo`
+    let live = expired
+      ? line`(${sub(definitionAt)}&?trashed)${
+        sub(
+          expired.space
+            ? line`|(.entity.eid=${expired.space}&?space&?trashed)`
+            : line``,
+        )
+      }`
+      : definitionAt
+    let q = line`${sub(live)}${sub(seat)}${sub(visit)}`
     let answer = await host.transport().fetch(
       new Request(`http://directory/query?q=${encodeURIComponent(q)}`),
     )
@@ -108,10 +154,18 @@ export let servingAuthority = (host: Host) => {
     let rows: Bundle[] = await answer.json()
     let row = rows.find((r) => r.entity.eid == app && r.app)
     let definition = row?.app as Comp | undefined
-    if (!definition || definition.trashed) throw new Refused('app unavailable')
+    if (!definition || definition.trashed || (expired && row?.trashed)) {
+      throw new Refused('app unavailable')
+    }
     let space = typeof definition.space == 'string'
       ? definition.space
       : (definition.space as { eid?: string } | undefined)?.eid
+    if (
+      expired?.space && (expired.space != space ||
+        rows.some((r) => r.entity.eid == space && r.trashed))
+    ) {
+      throw new Refused('app unavailable')
+    }
     let member = rows.find((r) => {
       let m = r.member as Comp | undefined
       let held = typeof m?.space == 'string'
@@ -131,6 +185,7 @@ export let servingAuthority = (host: Host) => {
     // the app's live row, since it has no seat in its own roster.
     let role = itself ? 'editor' : member?.role ?? grant?.access ?? visitor
     req.headers.set('x-yak-app', app!)
+    if (expired && space) req.headers.set('x-yak-space', space)
     req.headers.set('x-yak-access', mode(definition.access))
     req.headers.set('x-yak-policy', raw)
     req.headers.delete('x-yak-role')

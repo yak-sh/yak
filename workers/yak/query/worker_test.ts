@@ -1,5 +1,10 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import type { Env } from '../env.ts'
 import { type FrontEnv, serve } from '../front/front.ts'
 import { handler } from '../kernel.ts'
@@ -46,11 +51,16 @@ test('the front serves anonymous, authenticated and sandboxed queries through th
     await put('sandbox', 'Sandbox row')
     let host = `${space}.${k.host}`
     let cookie = owner.cookie
+    // A second isolate sees the same Store through a separate binding.
+    let other = { ...env, STORE: { ...env.STORE } }
+    let elsewhere = (at: string, path: string, init?: RequestInit) =>
+      handler.fetch(new Request(`https://${at}${path}`, init), other)
     let page = await k.at(host, '/sandbox/', { headers: { cookie } })
     let path = /<base href="([^"]+)"/.exec(await page.text())![1]
     let token = path.split('/')[2].slice(1)
     let bearer = await bearerFor(k, cookie)
     let kernelCalls = 0
+    let routes: unknown[] = []
     let front: FrontEnv = {
       APEX: k.host,
       QUERY: { fetch: (req: Request) => fetch(req, env) } as FrontEnv['QUERY'],
@@ -66,6 +76,7 @@ test('the front serves anonymous, authenticated and sandboxed queries through th
         },
       } as FrontEnv['SITE'],
       USES: { used: () => {}, wake: () => {} },
+      ROUTE_MEMORY: { writeDataPoint: (point) => routes.push(point) },
       CLI: {
         fetch: () => {
           throw Error('A query reached CLI')
@@ -98,13 +109,50 @@ test('the front serves anonymous, authenticated and sandboxed queries through th
     let query = 'api/query?.doc'
     let publicHeaders = await row('/public/' + query, 'Public row')
     assertStringIncludes(publicHeaders.get('set-cookie')!, 'yak_session=')
-    await agent.tool('app_set', { app: 'public', home: true })
+    let publicAgain = await row('/public/' + query, 'Public row')
+    assertMatch(
+      publicAgain.get('server-timing')!,
+      /route;dur=\d+;desc="memory"/,
+    )
+    assertEquals(
+      publicAgain.get('server-timing')!.includes('directory_wait;'),
+      false,
+    )
+    await connector({ host: k.host, at: elsewhere }, cookie).tool('app_set', {
+      app: 'public',
+      home: true,
+    })
+    let movedPage = await k.at(host, '/public/', { redirect: 'manual' })
+    assertEquals(movedPage.status, 302)
+    assertEquals(movedPage.headers.get('location'), '/')
+    await movedPage.body?.cancel()
+    let stillWarm = await row('/public/' + query, 'Public row')
+    assertMatch(stillWarm.get('server-timing')!, /route;dur=\d+;desc="memory"/)
     await row('/' + query, 'Public row')
     await row('/public//' + query, 'Public row')
-    await row('/private/' + query, 'Private row', { cookie })
-    await row('/private/' + query, 'Private row', {
+    let beforePrivate = routes.length
+    let privateHeaders = await row('/private/' + query, 'Private row', {
+      cookie,
+    })
+    assertMatch(
+      privateHeaders.get('server-timing')!,
+      /route;dur=\d+;desc="directory"/,
+    )
+    let privateAgain = await row('/private/' + query, 'Private row', { cookie })
+    let remembered = /route;dur=(\d+);desc="memory"/.exec(
+      privateAgain.get('server-timing')!,
+    )
+    assert(remembered)
+    assertEquals(routes.length, beforePrivate + 2)
+    assertEquals(routes.at(-1), {
+      indexes: ['query'],
+      blobs: ['memory', 'query'],
+      doubles: [Number(remembered[1])],
+    })
+    let machine = await row('/private/' + query, 'Private row', {
       authorization: `Bearer ${bearer}`,
     })
+    assertMatch(machine.get('server-timing')!, /route;dur=\d+;desc="fresh"/)
     let walled = await row(path + query, 'Sandbox row', { origin: 'null' })
     assertEquals(walled.get('access-control-allow-origin'), '*')
     assertEquals(walled.get('access-control-allow-credentials'), null)
@@ -172,6 +220,25 @@ test('the front serves anonymous, authenticated and sandboxed queries through th
     assertEquals(forged.status, 401)
     await forged.body?.cancel()
 
+    let warmPrivate = await row('/private/' + query, 'Private row', { cookie })
+    assertMatch(
+      warmPrivate.get('server-timing')!,
+      /route;dur=\d+;desc="memory"/,
+    )
+    let logout = await elsewhere(k.host, '/logout', {
+      method: 'POST',
+      headers: { cookie },
+    })
+    assertEquals(logout.status, 303)
+    await logout.body?.cancel()
+    let signedOut = await send('/private/' + query, { cookie })
+    assertEquals(signedOut.status, 401)
+    assertMatch(
+      signedOut.headers.get('server-timing')!,
+      /route;dur=\d+;desc="memory"/,
+    )
+    await signedOut.body?.cancel()
+
     front.QUERY = {
       fetch: (req: Request) =>
         fetch(req, { ...env, SESSION_SECRET: undefined }),
@@ -180,6 +247,7 @@ test('the front serves anonymous, authenticated and sandboxed queries through th
     assertEquals(passed.headers.has(QUERY_VERSION), false)
     assertEquals(kernelCalls, 1)
     assertEquals((await passed.json())[0].doc.title, 'Public row')
+    assertEquals((routes.at(-1) as { blobs: string[] }).blobs[1], 'kernel')
   } finally {
     await k.stop()
   }

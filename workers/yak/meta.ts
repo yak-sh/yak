@@ -26,6 +26,7 @@ import { knownOptions, Stale, STATUS } from '@yaks/graph/errors'
 import { storeOf } from './door.ts'
 import { coalesced, type Door, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { changingRoutes } from '@yaks/platform/route-memory'
 import { jittered } from '@yaks/durable-object/resets'
 import type { Clock } from '@yaks/fp'
 import { Pending, said } from '@yaks/api/log'
@@ -276,7 +277,21 @@ export let meta = (
         wait: (seated) => waiting('directory_wait', seated),
       },
     )
-    doors.set(ns, held = metaOf(door, {}, PLATFORM_STORE))
+    let live = metaOf(door, {}, PLATFORM_STORE)
+    doors.set(
+      ns,
+      held = {
+        ...live,
+        apply: (bundles, headers, opts) =>
+          changingRoutes(ns, bundles, () => live.apply(bundles, headers, opts)),
+        restoreTrash: (...args) =>
+          changingRoutes(ns, null, () => live.restoreTrash!(...args)),
+        purgeTrash: (...args) =>
+          changingRoutes(ns, null, () => live.purgeTrash!(...args)),
+        purgeTrashEntities: (...args) =>
+          changingRoutes(ns, null, () => live.purgeTrashEntities!(...args)),
+      },
+    )
   }
   return held
 }

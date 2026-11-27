@@ -21,6 +21,7 @@ import { confirmedRefusal } from './query-line.ts'
 import { type Refusal, refuse } from '@yaks/api'
 import { FILED } from '@yaks/api/refuse'
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { ROUTE_MEMORY } from '@yaks/platform/route-memory'
 import { retried, unserved } from '@yaks/durable-object/resets'
 import {
   type Call,
@@ -194,6 +195,7 @@ let VOUCH = [
   'x-yak-space',
   'x-yak-access',
   'x-yak-policy',
+  ROUTE_MEMORY,
   'x-yak-mail',
   'x-yak-at',
   'x-yak-phone',
@@ -226,6 +228,7 @@ let VOUCH = [
 export type Served = {
   /** Directory authorization revision, checked independently by the Store. */
   policy?: number
+  remembered?: number
   eid: string
   space?: string
   access: string
@@ -258,6 +261,9 @@ let vouched = (req: Request, name: string, app?: Served) => {
   if (app.space) req.headers.set('x-yak-space', app.space)
   req.headers.set('x-yak-access', app.access)
   if (app.policy != null) req.headers.set('x-yak-policy', String(app.policy))
+  if (app.remembered != null) {
+    req.headers.set(ROUTE_MEMORY, String(app.remembered))
+  }
   if (app.mail) req.headers.set('x-yak-mail', app.mail)
   if (app.at) req.headers.set('x-yak-at', app.at)
   // Said even when empty, so a number taken away is heard.

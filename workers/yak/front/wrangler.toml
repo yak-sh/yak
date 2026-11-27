@@ -76,6 +76,10 @@ queue = "yak-errors"
 binding = "VIEWS"
 dataset = "yak_views"
 
+[[analytics_engine_datasets]]
+binding = "ROUTE_MEMORY"
+dataset = "yak_route_memory"
+
 # The workspace files this Worker reads. Each is named here because esbuild
 # has no idea about the workspace, and the kernel's written-out `paths` carry
 # hundreds of names this Worker must not grow to need.
@@ -120,6 +124,10 @@ queue = "yak-errors"
 [[env.staging.analytics_engine_datasets]]
 binding = "VIEWS"
 dataset = "yak_views_staging"
+
+[[env.staging.analytics_engine_datasets]]
+binding = "ROUTE_MEMORY"
+dataset = "yak_route_memory_staging"
 
 [[env.staging.services]]
 binding = "KERNEL"

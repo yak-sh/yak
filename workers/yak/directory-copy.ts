@@ -4,8 +4,7 @@ import { HOST_COOKIE } from './browser-cookie.ts'
 // when it stalls: publicDirectory for anonymous pages, signedDirectory for
 // signed access, where a copied body stands only while the independent serving
 // copy holds its revision current. Directory mutations fence that revision
-// before committing, not through cache purge. Cold/fenced copies still wait
-// for the directory; no TTL grants standing.
+// before committing, so cold and fenced copies wait for the directory.
 import { type Fetcher } from './door.ts'
 import { reset } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'

@@ -12,6 +12,7 @@ import {
   whole,
 } from '@yaks/query'
 import { after, system, together } from '@yaks/fp'
+import { changingRoutes, routesOf } from '@yaks/platform/route-memory'
 import {
   PAGE_ROUTE,
   regionalLook,
@@ -108,6 +109,7 @@ import {
 import { ADMIN, isTestAddress } from '@yaks/platform/bots'
 import {
   ambient,
+  apart,
   elapsed,
   forget,
   recall,
@@ -125,7 +127,7 @@ import {
   restored,
   written,
 } from './meta.ts'
-import { caught, refusing } from './defects.ts'
+import { background, caught, refusing } from './defects.ts'
 import { mailFrom } from '@yaks/platform/host'
 import { payments } from './config.ts'
 import { firstOf } from '@yaks/platform/routes'
@@ -280,7 +282,7 @@ export type Space = Metered & {
   tunnel: Tunnel | null
   tunnelTrashed?: string | null
 }
-export type App = AppInfo & { policy: number }
+export type App = AppInfo & { policy: number; remembered?: number }
 /** A site rebuilt from its web address, and when the box was given it. */
 export type Preview = { site: string; at: string }
 let previewOf = (r: Row): Preview | null =>
@@ -2151,6 +2153,7 @@ let tagged = (name: string, eid: string) =>
 // `storeOf` directly.
 let served = (space: Space, app: App, env: HostEnv) => ({
   policy: app.policy,
+  remembered: app.remembered,
   eid: app.eid,
   space: space.eid,
   access: app.access,
@@ -2427,6 +2430,7 @@ let revised = async (
 }
 
 export type Page = ReturnType<typeof paged>
+type RoutePage = Awaited<ReturnType<ReturnType<typeof directoryRows>['page']>>
 
 let appIdentity = (name: string) =>
   minted(name) || BARE.test(name) || SHORT.test(name)
@@ -2691,10 +2695,13 @@ export let listingOf = async (
 // What is kept is the text: every caller parses rows of its own.
 export let directory = (
   via: Fetcher,
-  options: ServingDirectoryOptions = {},
+  options: ServingDirectoryOptions & { memory?: object } = {},
 ) => {
   let serving = servingDirectory(via, options)
   let door = remote(via)
+  let memory = options.memory && routesOf<RoutePage>(options.memory)
+  let change = <T>(bundles: Bundle[] | null, write: () => Promise<T>) =>
+    options.memory ? changingRoutes(options.memory, bundles, write) : write()
   let query = (
     q: string,
     read = () => revised(serving, q),
@@ -2734,17 +2741,60 @@ export let directory = (
       )
     })
   }
-  return directoryRows({
+  let rows = directoryRows({
     query,
     pageQuery,
-    apply: door.apply,
+    apply: (bundles, headers) =>
+      change(bundles, () => door.apply(bundles, headers)),
     whereabouts: door.whereabouts,
     trash: door.trash,
-    restoreTrash: door.restoreTrash,
-    purgeTrash: door.purgeTrash,
-    purgeTrashEntities: door.purgeTrashEntities,
+    restoreTrash: (...args) => change(null, () => door.restoreTrash(...args)),
+    purgeTrash: (...args) => change(null, () => door.purgeTrash(...args)),
+    purgeTrashEntities: (...args) =>
+      change(null, () => door.purgeTrashEntities(...args)),
     get stale() {
       return serving.stale
+    },
+  })
+  let page = rows.page
+  return Object.assign(rows, {
+    page: async (
+      slug: string,
+      app?: string | null,
+      person?: string | null,
+      over = false,
+      every = !app,
+      files = false,
+      admits?: (page: RoutePage) => boolean,
+    ): Promise<RoutePage & { remembered?: number }> => {
+      let read = (refreshing?: true): Promise<RoutePage> => {
+        let look = refreshing
+          ? directory(via, { ...options, memory: undefined, copyFirst: false })
+            .page
+          : page
+        return look(slug, app, person, over, every, files)
+      }
+      if (!memory || !admits || over || every !== !app || files) return read()
+      let { value, remembered } = await memory.read(
+        JSON.stringify([slug, app ?? null, person ?? null]),
+        (options.time ?? system).now,
+        read,
+        (value) => admits(value) ? value.space?.eid ?? null : null,
+        (work) =>
+          background(
+            apart(work).catch((error) => {
+              caught(error, { request: 'refresh route', space: slug, app })
+            }),
+          ),
+      )
+      return remembered
+        ? {
+          ...value,
+          remembered,
+          app: value.app && { ...value.app, remembered },
+          home: value.home && { ...value.home, remembered },
+        }
+        : value
     },
   })
 }

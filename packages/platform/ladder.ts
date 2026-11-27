@@ -81,7 +81,7 @@ export type Looks<R extends Reading> = {
   kept: () => Promise<Response | null>
   /** the directory's reading of the space and of the app, if a segment named
    * one */
-  page: (space: string, app: string | null) => Promise<R>
+  page: (space: string, app: string | null, path: string) => Promise<R>
   /** the space that answered at this name before a rename moved it */
   formerly: (space: string) => Promise<{ slug: string } | null>
   /** the app of `space` that answered at this slug before a rename moved it */
@@ -212,7 +212,7 @@ export let rung = async <R extends Reading>(
   // on the directory.
   let kept = await looks.kept()
   if (kept) return { to: 'kept', page: kept }
-  let read = await looks.page(r.space, r.app)
+  let read = await looks.page(r.space, r.app, r.path)
   let space = read.space as Space<R> | null
   // Not a space here, but it may be where one used to be: a rename keeps the
   // old name pointing at it, whole path and query, as a renamed app's old

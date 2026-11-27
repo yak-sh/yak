@@ -99,6 +99,7 @@
     "./serving-copy": "./serving-copy.ts",
     "./regional-serving-copy": "./regional-serving-copy.ts",
     "./regional-route": "./regional-route.ts",
+    "./route-memory": "./route-memory.ts",
     "./regional-route-storage": "./regional-route-storage.ts",
     "./preview": "./preview.ts",
     "./draft-choice": "./draft-choice.ts",

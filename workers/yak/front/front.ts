@@ -88,6 +88,7 @@ export type FrontEnv = Host & {
   // The sandbox CLI this Worker's assets carry (wrangler.toml `[assets]`).
   CLI: Pick<Fetcher, 'fetch'>
   VIEWS?: { writeDataPoint(point: unknown): void }
+  ROUTE_MEMORY?: { writeDataPoint(point: unknown): void }
   ERRORS?: { send: (body: never) => Promise<void> }
   WORKER_NAME?: string
   CF_VERSION_METADATA?: { id: string }
@@ -337,6 +338,33 @@ let report = (
   )
 }
 
+// Record only the route stage of the answer the front hands back. A retry
+// or a query passed to the kernel counts once, and the point identifies
+// neither its app nor its caller.
+let routed = (
+  req: Request,
+  res: Response,
+  env: FrontEnv,
+  ctx: Lent,
+  worker: 'kernel' | 'query',
+) => {
+  if (!env.ROUTE_MEMORY) return
+  let timing = res.headers.get('server-timing') ?? ''
+  let route =
+    /(?:^|,\s*)route;dur=(\d+(?:\.\d+)?);desc="(memory|directory|fresh)"(?=,|$)/
+      .exec(timing)
+  if (!route) return
+  try {
+    env.ROUTE_MEMORY.writeDataPoint({
+      indexes: [worker],
+      blobs: [route[2], worker],
+      doubles: [Number(route[1])],
+    })
+  } catch (error) {
+    report(error, env, ctx, 'front route memory', req)
+  }
+}
+
 /** Whether this is the apex's sandbox CLI (../sandbox/launch.ts fetches it),
  * which this Worker's assets hold and the kernel's don't. A local dev run's
  * bare loopback host is its apex, as it is the kernel's. */
@@ -433,6 +461,7 @@ let serving = async (
   }
   if (!query) waiting('kernel_wait')
   let res = query ?? await resending(env.KERNEL, forwarded, env.CLOCK, retry)
+  routed(req, res, env, ctx, query ? 'query' : 'kernel')
   if (path == VERSION) {
     let out = new Response(res.body, res)
     out.headers.set(FRONT_VERSION, env.CF_VERSION_METADATA?.id ?? '')
