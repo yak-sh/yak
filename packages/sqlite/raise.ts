@@ -192,16 +192,22 @@ let standing = (driver: Driver, vocab: Vocab): Standing => {
   }
   let got = k.by.get(vocab)
   if (!got) {
+    let names = tables(vocab)
+    // Main's receipt can omit a table first raised under a branch's words.
+    // A mode also sees the tables already present in the shared schema.
+    let present = driver.views && all
+      ? new Set([...all, ...componentTables(driver, [...all], names)])
+      : all
     let raised = new Set(
-      tables(vocab).filter((c) => lazy(vocab, c) && (!all || all.has(c))),
+      names.filter((c) => lazy(vocab, c) && (!present || present.has(c))),
     )
     got = {
       raised,
       unraised: Object.freeze(
-        tables(vocab).filter((c) => lazy(vocab, c) && !raised.has(c)),
+        names.filter((c) => lazy(vocab, c) && !raised.has(c)),
       ) as string[],
       stood: Object.freeze(
-        tables(vocab).filter((c) => !lazy(vocab, c) || raised.has(c)),
+        names.filter((c) => !lazy(vocab, c) || raised.has(c)),
       ) as string[],
     }
     k.by.set(vocab, got)
