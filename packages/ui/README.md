@@ -1,15 +1,16 @@
 # @yaks/ui
 
-Preact parts with semantic variants, CSS and terminal sheet entries. Use the
-same parts in a browser and [@yaks/tui](../tui/README.md), compose kits with
-themes and skins, and inspect their specimens in the style guide.
+Parts with semantic variants, CSS and terminal sheet entries for React and
+Preact. Use the same parts in a browser and [@yaks/tui](../tui/README.md),
+compose kits with themes and skins, and inspect their specimens in the style
+guide.
 
 ## Parts and rendering
 
-A **part** is a Preact component with a named CSS class, such as `Dot`,
-rendering `<span class="Dot">` (`Part`). A **variant** is a `mod` value that
-adds a class to a part: `mod: 'ring'` adds `Dot-ring`. `block` attaches named
-parts using an underscore: `Menu.Item` renders `Menu_Item`.
+A **part** is a React component with a named CSS class, such as `Dot`, rendering
+`<span class="Dot">` (`Part`). A **variant** is a `mod` value that adds a class
+to a part: `mod: 'ring'` adds `Dot-ring`. `block` attaches named parts using an
+underscore: `Menu.Item` renders `Menu_Item`.
 
 A **piece** carries a part's `Component`, stylesheet, terminal `sheet` function,
 optional `native` function, `description` and `specimens` function (`Piece`).
@@ -17,7 +18,7 @@ optional `native` function, `description` and `specimens` function (`Piece`).
 (`Native`), which a native host such as the iOS shell draws its views with
 ([@yaks/native](../native/README.md)). A **kit** names pieces (`Kit`); `kit`
 contains the base pieces, `groups` arranges them for the guide, and `kits`
-registers that kit as `base`. A **specimen** is a label and a Preact tree
+registers that kit as `base`. A **specimen** is a label and a React element
 showing a part or variant (`Specimen`).
 
 Parts present what their caller supplies. The caller chooses variants, owns
@@ -38,8 +39,8 @@ stylesheets next to a module: `let at = beside(import.meta.url)`, then
 `css: at('./Tile.css')`.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { Dot, Tile } from '@yaks/ui'
 import { equal } from '@yaks/testing'
 
@@ -82,8 +83,8 @@ skin supplies the shared edge, shadow and interaction tokens. Every composition
 includes these primitives, including a subset kit.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { block, el, Surface } from '@yaks/ui'
 import { equal } from '@yaks/testing'
 
@@ -111,8 +112,8 @@ href becomes `role="link"` with `data-href`. The application handles following
 `data-href`.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { Id, Tile } from '@yaks/ui'
 import { equal } from '@yaks/testing'
 
@@ -201,8 +202,8 @@ tile given an `onClick` is a button, picked from its list: `aria-current` says
 whether it is the one `on`.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { Tile } from '@yaks/ui'
 import { equal } from '@yaks/testing'
 
@@ -228,7 +229,7 @@ equal(
 
 ```ts
 import { kit } from '@yaks/ui'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { equal } from '@yaks/testing'
 
 for (const piece of Object.values(kit)) {
@@ -246,8 +247,8 @@ terminal's `data-caret`; a browser uses its own caret. `Stamp` displays words
 supplied by its caller; `relative` can produce those words from a time.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { Field, relative, Stamp } from '@yaks/ui'
 import { equal } from '@yaks/testing'
 
@@ -278,8 +279,8 @@ deep for each row it is under, and an `Indent` stands where a row holds none. An
 parent's, in a browser and in a terminal. What a `Toggle` opens is its caller's.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { Table } from '@yaks/ui'
 import { parseHTML } from 'linkedom'
 import { equal } from '@yaks/testing'
@@ -397,7 +398,7 @@ package. `ux` holds descriptions and specimens for controlled
 [@yaks/ux](../ux/README.md) components; the guide does not load their behavior.
 
 ```ts
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { gather } from '@yaks/ui/contributions'
 import { kits, skins, themes } from '@yaks/ui/ui'
 import { type Composition, parts } from '@yaks/ui'
@@ -423,21 +424,17 @@ uses the skin or the kit. `Contents` links to each entry. A **stop** is the id
 of the whole guide, a group or an entry (`stopsOf`); `Page` renders one stop.
 
 ```ts
-import { h, toChildArray, type VNode } from 'preact'
-import { renderToString as html } from 'preact-render-to-string'
-import { composition, Gallery, ledger, Specimens } from '@yaks/ui'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as html } from 'react-dom/server'
+import { composition, ledger } from '@yaks/ui'
 import { Contents, Page, stopsOf } from '@yaks/ui/guide'
 import { equal } from '@yaks/testing'
 
 const c = { ...composition, skin: ledger }
 equal(stopsOf(c).includes('Button'), true)
-const page = Page({ stop: 'Button', composition: c })
-const selected = page.props.children as VNode<Parameters<typeof Specimens>[0]>
-const specimen = (selected.type as typeof Specimens)(selected.props)
-equal(specimen.props['data-skin'], 'skin')
-const metadata = toChildArray(specimen.props.children)
-  .filter((node) => (node as VNode).type !== Gallery)
-equal(html(h('div', {}, metadata)).includes('skin rendering'), true)
+const page = html(h(Page, { stop: 'Button', composition: c }))
+equal(page.includes('data-skin="skin"'), true)
+equal(page.includes('skin rendering'), true)
 
 const entry = (stop: string) => ({ href: `#${stop}` })
 equal(
@@ -484,7 +481,7 @@ yak ui
 
 `Float` renders its children into an `Overlay` fixed on `document.body`,
 positioned on its anchor's live rectangle and carrying the originating tree's
-Preact context. This avoids clipping and scaling by ancestors. `place` places a
+React context. This avoids clipping and scaling by ancestors. `place` places a
 fixed element above or below a rectangle, flipping and clamping to the viewport;
 `placeAt` positions it at a point, optionally aligned right. `usePlaceAt`
 repeats placement when the element resizes. `tips()` installs one delegated
@@ -495,7 +492,8 @@ the Deno example runner cannot run it. The supplied point is inside a viewport
 larger than the overlay.
 
 ```ts ignore
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from '@yaks/react/draw'
 import { Float, placeAt, Tip, tips } from '@yaks/ui'
 import { equal } from '@yaks/testing'
 

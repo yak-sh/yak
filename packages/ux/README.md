@@ -1,9 +1,9 @@
 # @yaks/ux
 
-Controlled Preact components for editing properties, opening disclosures,
-completing input, rendering controlled fields and submitting durable drafts.
-Component state lives in a page graph; drafts and emitted bundles belong to the
-caller.
+Controlled components for React and Preact that handle editing properties,
+opening disclosures, completing input, rendering controlled fields and
+submitting durable drafts. Component state lives in a page graph; drafts and
+emitted bundles belong to the caller.
 
 A **UX component** supplies behavior between [@yaks/ui](../ui/README.md)'s
 presentation and an application's data. It takes a
@@ -13,7 +13,7 @@ or through its host's `write` when `onChange` is absent. Its state is a
 [graph](../graph/README.md#data-model), rather than private component state.
 
 A **host** (`Host`) supplies the vocabulary, page graph, drafts, writes and
-presentation callbacks to UX components. `Ux` passes it down a Preact tree. An
+presentation callbacks to UX components. `Ux` passes it down the tree. An
 **owner** is the consumer named by `Ux`'s `at`; nested names join with `/`.
 Owners distinguish two editors of the same property while their
 [draft](../draft/README.md) is shared by the property's place (`place`).
@@ -29,8 +29,9 @@ edited. This example supplies host-owned drafts with signals; a persistent host
 can use [@yaks/draft](../draft/README.md).
 
 ```ts
-import { h, render } from 'preact'
-import { signal } from '@preact/signals'
+import { createElement as h } from 'react'
+import { render } from '@yaks/react/draw'
+import { signal } from '@preact/signals-core'
 import { parseHTML } from 'linkedom'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
@@ -120,7 +121,7 @@ event), never `forever`. A UX kit brings no rules, effects or tools. Values it
 edits and persistent typing drafts belong to its caller, not to this vocabulary.
 
 ```ts
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { defineKit, kitDocs } from '@yaks/ux'
 import { equal } from '@yaks/testing'
 import { type Bundle } from '@yaks/graph'
@@ -190,7 +191,7 @@ for page-only state rather than requesting a server subscription.
 
 A package's `./ui` facet exports `ux = {toggle}` beside any `kits`, `themes` and
 `skins` it contributes. `@yaks/ux/ui` exports `kit` and `ux = {base: kit}`:
-`Edit`, `Disclosure`, `Order`, `Submit` and `Text`, with labelled Preact
+`Edit`, `Disclosure`, `Order`, `Submit` and `Text`, with labelled component
 specimens. `Text` shares `Edit` state. **Refused** is the transient event
 component emitted when input cannot be read; its `said` property is the reason.
 The guide reads `components[name].description` and `specimens()` without
@@ -221,7 +222,7 @@ A [body](../blob/README.md) (`store: 'blob'`) the bundle does not carry is one
 the page has not loaded, and is not offered for typing over.
 
 ```ts
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Edit, editorViews, formatProp, reading } from '@yaks/ux'
 import { loadVocab } from '@yaks/vocab'
 import { equal } from '@yaks/testing'
@@ -286,8 +287,8 @@ button over the same `e`, such as a phone mark in a caller's words. Without `e`
 a disclosure is a plain `details` its host opens by itself.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { disclosed, Disclosure, disclosureAt, isOpen } from '@yaks/ux'
 import { equal } from '@yaks/testing'
 
@@ -345,8 +346,8 @@ the page then holds it so; drawn again, it is open. A line inside a fold (a
 call's turn) owns its folds when it is drawn under a `Folds` of its own.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import {
   Conversation,
   conversationAt,
@@ -385,8 +386,8 @@ they are held over it; its owner holds them, within what it takes, and draws
 them in its slots.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
+import { createElement as h } from 'react'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { Conversation, stopped } from '@yaks/ux'
 import { equal } from '@yaks/testing'
 
@@ -419,7 +420,7 @@ Choices supply `options` and `multiple`; repeats supply visible `entries` and
 validation and the values themselves.
 
 ```ts
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Fields, type FieldSpec, putValue, type Values } from '@yaks/ux'
 import { equal } from '@yaks/testing'
 
@@ -498,7 +499,7 @@ the state bundles from `onChange` as a disclosure's owner does. Without
 its text, clicking into it and typing never pick it up.
 
 ```ts
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { landed, landing, Order, orderAt, placing } from '@yaks/ux'
 import { equal } from '@yaks/testing'
 
@@ -680,12 +681,12 @@ try {
 
 `Field` supplies a managed input; `bind` attaches the same behavior to an
 existing input and `List` draws its candidates. Render these components in your
-Preact tree. Constructing a managed field does not require mounting a DOM:
+component tree. Constructing a managed field does not require mounting a DOM:
 
 ```ts
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { client } from '@yaks/client'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { loadVocab } from '@yaks/vocab'
 import { docs } from '@yaks/ux/vocab'
 import { completion } from '@yaks/ux/completion'
