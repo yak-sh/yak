@@ -298,7 +298,10 @@ export let readThread = (
     let left = slow - own(ran, s)
     if (left > 0 && (s?.wait ?? 0) >= 1000 && !job.starved) {
       job.starved = true
-      starved(how('a read worker', ran, s), (error) => told(error))
+      starved(
+        `${how('a read worker', ran, s)}; ${doing(lane)}`,
+        (error) => told(error),
+      )
     }
     if (!looked || at - due >= 1000 || left > 0) {
       return again(Math.max(1000, left))

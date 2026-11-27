@@ -355,7 +355,7 @@ test('a CPU-delayed read below its own deadline reports the scheduler delay', as
   ], { starved: (evidence) => void waits.push(evidence) })
   assertEquals(reports, [])
   assertEquals(waits.length, 1)
-  assertMatch(waits[0], /waited 5\.0 s for one/)
+  assertMatch(waits[0], /waited 5\.0 s for one.*; worker operation: /)
 })
 
 // A read given to a worker still starting (loading its modules, composing its
