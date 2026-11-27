@@ -3,7 +3,7 @@
 // capture listener owns every key, so canvas and mode handlers beneath it
 // cannot act on a hidden surface.
 import { useObserved } from '@yaks/ux'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { useEffect, useRef } from 'react'
 import { capable, mode } from '../live.ts'
 import { webKeys } from '../keybindings.ts'

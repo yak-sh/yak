@@ -13,7 +13,6 @@
   "license": "Apache-2.0",
   "description": "The graph browsing app: domain views, editing and navigation, painted through @yaks/ui in browsers and terminals.",
   "dependencies": {
-    "@preact/signals": "2.9.4",
     "@preact/signals-core": "1.14.5",
     "@yaks/api": "0.2.29",
     "@yaks/archetype": "0.2.24",
@@ -91,7 +90,8 @@
     "@yaks/testing": "0.2.30",
     "@yaks/tmux": "0.2.23",
     "@yaks/wake": "0.2.24",
-    "react": "npm:@preact/compat@18.3.2"
+    "react": "npm:@preact/compat@18.3.2",
+    "@preact/signals": "2.9.4"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"

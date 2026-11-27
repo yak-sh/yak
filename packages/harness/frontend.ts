@@ -3,7 +3,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { type Client, client, type Vault, type Watch } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import doc from './frontend/vocab.json' with { type: 'json' }
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 
 export let frontendVocab = loadVocab([doc])
 

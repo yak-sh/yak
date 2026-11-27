@@ -2,7 +2,7 @@
 import { useObserved } from '@yaks/ux'
 import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'react'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { base, capable, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
 import {
   catalog,

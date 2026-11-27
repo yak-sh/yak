@@ -2,7 +2,7 @@
 import { drafts } from '@yaks/draft/input'
 import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'react'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import {
   camera,
   capable,

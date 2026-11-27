@@ -194,6 +194,7 @@ patchedDependencies:
   linkedom@0.18.15: e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef
 
 importers:
+
   .:
     dependencies:
       '@cfworker/json-schema':
@@ -705,9 +706,6 @@ importers:
 
   packages/browse:
     dependencies:
-      '@preact/signals':
-        specifier: 2.9.4
-        version: 2.9.4(preact@10.29.7)
       '@preact/signals-core':
         specifier: 1.14.5
         version: 1.14.5
@@ -844,6 +842,9 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
+      '@preact/signals':
+        specifier: 2.9.4
+        version: 2.9.4(preact@10.29.7)
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -1761,9 +1762,9 @@ importers:
 
   packages/draft:
     dependencies:
-      '@preact/signals':
-        specifier: 2.9.4
-        version: 2.9.4(preact@10.29.7)
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp
@@ -1777,6 +1778,9 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
+      '@preact/signals':
+        specifier: 2.9.4
+        version: 2.9.4(preact@10.29.7)
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -2522,9 +2526,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.32.2(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@3.25.76)
-      '@preact/signals':
-        specifier: 2.9.4
-        version: 2.9.4(preact@10.29.7)
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@yaks/api':
         specifier: 0.2.29
         version: link:../api
@@ -2643,6 +2647,9 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
+      '@preact/signals':
+        specifier: 2.9.4
+        version: 2.9.4(preact@10.29.7)
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -3033,9 +3040,9 @@ importers:
 
   packages/inspect:
     dependencies:
-      '@preact/signals':
-        specifier: 2.9.4
-        version: 2.9.4(preact@10.29.7)
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@yaks/edge':
         specifier: 0.2.24
         version: link:../edge
@@ -3070,6 +3077,9 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
+      '@preact/signals':
+        specifier: 2.9.4
+        version: 2.9.4(preact@10.29.7)
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -5933,9 +5943,9 @@ importers:
 
   packages/tui:
     dependencies:
-      '@preact/signals':
-        specifier: 2.9.4
-        version: 2.9.4(preact@10.29.7)
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@yaks/dom':
         specifier: 0.2.24
         version: link:../dom
@@ -5955,6 +5965,9 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
+      '@preact/signals':
+        specifier: 2.9.4
+        version: 2.9.4(preact@10.29.7)
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -6123,9 +6136,9 @@ importers:
 
   packages/visualize:
     dependencies:
-      '@preact/signals':
-        specifier: 2.9.4
-        version: 2.9.4(preact@10.29.7)
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@yaks/api':
         specifier: 0.2.29
         version: link:../api
@@ -6172,6 +6185,9 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
+      '@preact/signals':
+        specifier: 2.9.4
+        version: 2.9.4(preact@10.29.7)
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'

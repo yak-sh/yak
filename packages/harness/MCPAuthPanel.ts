@@ -2,7 +2,7 @@ import { useObserved, useWatch } from '@yaks/ux'
 import { derivedEid } from '@yaks/graph/identity'
 /** Authorization input is private component memory, deliberately outside draft/graph persistence. */
 import { createElement as h, useLayoutEffect, useMemo } from 'react'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import type { Frontend } from './frontend.ts'
 import type { UIAgent } from './panels.ts'
 import type { Comp } from '@yaks/graph'

@@ -7,7 +7,7 @@
 // cache), the near-term backing D-17120 keeps; T-17125 drops an IndexedDB
 // implementation behind the SAME interface with zero call-site churn — live.ts
 // (queryEids) and useQuery call the seam, never a concrete cache.
-import { type Signal, signal, untracked } from '@preact/signals'
+import { type Signal, signal, untracked } from '@preact/signals-core'
 import {
   type Field,
   fieldsOf,

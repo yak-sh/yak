@@ -21,7 +21,6 @@
   "description": "Runs an agent on this machine over a yak graph: the machine the session runner is lent, the machine and graph tools, and the terminal app.",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@preact/signals": "2.9.4",
     "@yaks/api": "0.2.29",
     "@yaks/blob": "0.2.30",
     "@yaks/cli": "0.2.33",
@@ -60,7 +59,8 @@
     "@yaks/vocab": "0.2.32",
     "preact": "10.29.7",
     "@yaks/react": "0.2.33",
-    "@yaks/ux": "0.2.23"
+    "@yaks/ux": "0.2.23",
+    "@preact/signals-core": "1.14.5"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
@@ -75,7 +75,8 @@
     "@yaks/testing": "0.2.30",
     "@yaks/tracker": "0.2.33",
     "@yaks/tunnel": "0.2.24",
-    "react": "npm:@preact/compat@18.3.2"
+    "react": "npm:@preact/compat@18.3.2",
+    "@preact/signals": "2.9.4"
   },
   "peerDependencies": {
     "react": "^18.3.0 || ^19.0.0"

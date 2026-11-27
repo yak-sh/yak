@@ -5,7 +5,7 @@ import { useDerived } from './read.ts'
 // destination, the schema), the one you are on lit. Every line is a plain
 // link; a phone folds the sidebar behind the bar's menu, and going anywhere
 // folds it again.
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { derivedEid } from '@yaks/graph/identity'
 import { Button, Shell } from '@yaks/ui'
 import { hosting, pagePath } from '../hosting.ts'

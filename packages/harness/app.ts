@@ -23,7 +23,7 @@ import {
 import { type ComponentRenderer, render as renderView } from '@yaks/react'
 import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { type Frontend, frontend } from './frontend.ts'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import {

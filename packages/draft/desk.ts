@@ -18,7 +18,13 @@
  * @module
  */
 
-import { batch, effect, type Signal, signal, untracked } from '@preact/signals'
+import {
+  batch,
+  effect,
+  type Signal,
+  signal,
+  untracked,
+} from '@preact/signals-core'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { merge } from './merge.ts'

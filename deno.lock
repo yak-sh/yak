@@ -4016,6 +4016,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/doc@0.2.24",
@@ -4358,6 +4359,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@modelcontextprotocol/sdk@^1.29.0",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/benchmark@0.2.30",
@@ -4561,6 +4563,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/draft@0.2.24",
@@ -5835,6 +5838,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/dom@0.2.24",
             "npm:@yaks/fp@0.2.23",
@@ -5915,6 +5919,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/cli@0.2.33",

@@ -1,5 +1,5 @@
 /** Browser boot: one local page graph, one shared-stream lease, no inspector. */
-import { effect } from '@preact/signals'
+import { effect } from '@preact/signals-core'
 import { createElement as h } from 'react'
 import { render } from '@yaks/react/draw'
 import { Atlas } from './Atlas.tsx'

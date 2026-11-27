@@ -1,6 +1,6 @@
 // The interface's drafts and the boxes that type into them. A host supplies
 // its watch/write doors, identity and storage; no draft knows its app.
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { useCallback, useLayoutEffect, useSyncExternalStore } from 'react'
 import type { Bundle } from '@yaks/graph'
 import { type Client, desk, type Drafts, type Stash } from './desk.ts'

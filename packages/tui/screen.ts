@@ -12,7 +12,7 @@ import { interceptKey } from './keymap.ts'
  */
 
 import { visualKey } from './visual.ts'
-import { computed, type Signal, signal } from '@preact/signals'
+import { computed, type Signal, signal } from '@preact/signals-core'
 import {
   useCallback,
   useLayoutEffect,

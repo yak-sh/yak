@@ -1,5 +1,5 @@
 /** A plain browser field on the same desk as every other draft interface. */
-import { effect, signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals-core'
 import type { Bundle } from '@yaks/graph'
 import { type Desk, desk, type DeskOpts, type Stash } from './desk.ts'
 import { merge } from './merge.ts'

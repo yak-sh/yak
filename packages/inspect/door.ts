@@ -15,7 +15,7 @@
 
 import { createElement as h, type FunctionComponent } from 'react'
 import { useObserved } from '@yaks/ux'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { type Context, resolve, type Selection } from '@yaks/render'
 import type { Bundle, Host, Io, View } from './host.ts'
 

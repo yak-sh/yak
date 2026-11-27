@@ -4,7 +4,7 @@
 // either) are the way back. An entry keeps how far its page was scrolled when it was left, so the
 // way back finds the place too.
 import { queryRedirect } from '@yaks/query'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import {
   type HistoryEntry,
   type HistoryPort,

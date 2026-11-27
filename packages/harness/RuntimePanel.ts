@@ -2,7 +2,7 @@ import { useObserved, useWatch } from '@yaks/ux'
 import { derivedEid } from '@yaks/graph/identity'
 /** Optional runtime view. Application selection and feedback remain graph state. */
 import { createElement as h, useLayoutEffect, useMemo } from 'react'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { type Bundle, type Comp } from '@yaks/graph'
 import { define, type Renderer, type Rendering } from '@yaks/render'
 import { parse } from '@yaks/query'

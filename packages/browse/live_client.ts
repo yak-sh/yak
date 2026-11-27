@@ -1,4 +1,4 @@
-import { batch } from '@preact/signals'
+import { batch } from '@preact/signals-core'
 // Browse's learned projection and patch adapter over generic named watches.
 import { entire, namedClient, quiet, type Told } from '@yaks/client/named'
 import type { ClientOpts } from '@yaks/client'

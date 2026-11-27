@@ -2,7 +2,7 @@
 import { useObserved } from '@yaks/ux'
 import { localPath } from '../hosting.ts'
 import { addressId, entityPath } from '../url.ts'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { useRef } from 'react'
 import * as ui from '@yaks/ui'
 import { copy } from '../clipboard.ts'

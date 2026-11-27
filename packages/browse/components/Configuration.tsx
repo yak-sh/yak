@@ -3,7 +3,7 @@ import { useObserved } from '@yaks/ux'
 // Configuration restores the host's secrets and sign-ins using their existing
 // graph and authorization doors. Credential input stays private and is never
 // prefilled; each entity's public face is drawn by the shared renderer.
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { useEffect, useMemo } from 'react'
 import { Button, Field, Rows, Section } from '@yaks/ui'
 import { saveSecret, signIn } from '../configuration.ts'

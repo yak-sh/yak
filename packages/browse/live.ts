@@ -25,7 +25,7 @@ import {
   type Signal,
   signal,
   untracked,
-} from '@preact/signals'
+} from '@preact/signals-core'
 import {
   aliasOf,
   awake,

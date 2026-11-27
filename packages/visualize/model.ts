@@ -1,6 +1,6 @@
 /** The page's domain state lives in a local graph, not component state or a
  * second record store. Resource indexes contain only bounded UUID mappings. */
-import { computed, signal } from '@preact/signals'
+import { computed, signal } from '@preact/signals-core'
 import { client } from '@yaks/client'
 import { desk, drafts } from '@yaks/draft'
 import type { Bundle } from '@yaks/graph'

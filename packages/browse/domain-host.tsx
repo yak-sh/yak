@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 // Bind portable domain components to Browse's replica and page graph. Domain
 // packages know these interfaces, never the app that supplies them.
-import { computed, effect } from '@preact/signals'
+import { computed, effect } from '@preact/signals-core'
 import type { Bundle } from '@yaks/graph'
 import { configureDrafts } from '@yaks/draft/input'
 import { configureComments } from '@yaks/kernel/comment-host'
