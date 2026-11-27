@@ -208,6 +208,25 @@ test('old code counts without reopening; a new commit regresses once', async () 
   equal(comp((await bugs(g))[0], 'bug').status, 'archived')
 })
 
+test('a warning after the resolution counts without reopening; an error reopens', async () => {
+  let g = fixture()
+  await put(g, occurrence('1'))
+  let [bug] = await bugs(g)
+  await g.apply([{
+    entity: bug.entity,
+    resolved: { at: '2026-10-02T00:00:01Z' },
+  }], {
+    trusted: true,
+  })
+  let warning = occurrence('2', b)
+  warning.error = { ...comp(warning, 'error'), level: 'warning' }
+  await put(g, warning)
+  let [still] = await bugs(g)
+  equal([comp(still, 'bug').status, comp(still, 'bug').hits], ['resolved', 2])
+  await put(g, occurrence('3', b))
+  equal(comp((await bugs(g))[0], 'regressed').error, '3')
+})
+
 let versions = await (async () => {
   let g = fixture()
   let versioned = (id: string, version: number, commit: string | null) => {

@@ -176,11 +176,13 @@ release, and none while the bug's hits are within the newest it keeps. Reframing
 writes a bug's culprit or spot only where it moved.
 
 An occurrence regresses a resolved bug when its `error.at` is later than
-`resolved.at`, unless its commit (or version without a commit) was already seen
-in the group: that is old code still running. One naming no release, such as a
+`resolved.at`, unless its commit (or version without a commit) was seen in the
+group by then: that is old code still running. One naming no release, such as a
 systemd unit's failure reported from outside the unit, regresses on its time
-alone. Earlier occurrences and occurrences at the resolution timestamp still
-count, but retain `resolved` and `notified` without adding `regressed`.
+alone. An occurrence whose `error.level` is `warning`, a failure near its line
+such as a press a little past its budget, never regresses one. Warnings, earlier
+occurrences and occurrences at the resolution timestamp still count, but retain
+`resolved` and `notified` without adding `regressed`.
 
 ### Probes
 

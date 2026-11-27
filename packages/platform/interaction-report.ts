@@ -141,6 +141,13 @@ let batch = (
   if (safe.every((p) => p != null)) return { id, at, points: safe }
 }
 
+// A sample past its budget is slow, and past twice its budget it is a
+// failure. Within that, a phone's busy frame is enough to cross the line: a
+// warning, counted and opening a bug when none is open, never bringing back
+// one an agent fixed and saw fast.
+let graded = (ms: number, budget: number): Context['level'] =>
+  ms > 2 * budget ? 'error' : 'warning'
+
 type Reporting = {
   sink: Sink
   now?: () => number
@@ -174,6 +181,7 @@ let slowOpen = (
       environment,
       eid: derivedEid(`open|${seen.id}|${name}`),
       at: new Date(seen.at).toISOString(),
+      level: graded(ms, budget),
       fault: `interaction|${kind}`,
       during: { kind: 'browser interaction' },
       tags: {
@@ -231,6 +239,7 @@ let rows = (
       environment,
       eid: derivedEid(`interaction|${seen.id}|${i}`),
       at: new Date(seen.at).toISOString(),
+      level: cause ? 'error' : graded(p.ms, budget),
       fault: `interaction|${name}`,
       during: { kind: 'browser interaction' },
       tags: {

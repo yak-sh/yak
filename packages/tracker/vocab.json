@@ -27,10 +27,11 @@
           "$id": "urn:uuid:421cd90d-8d82-401a-b6d1-d6b4b7d2bfd8",
           "type": "string",
           "stamped": true,
-          "description": "What it cost the caller.",
+          "description": "What it cost the caller. A warning is a failure near its line, such as a press a little past its budget: it opens a bug when none is open, and never brings back a resolved one.",
           "enum": [
             "fatal",
-            "error"
+            "error",
+            "warning"
           ]
         },
         "message": {

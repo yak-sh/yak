@@ -8,7 +8,17 @@ import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { after, same } from '@yaks/fp'
-import { absent, and, eq, fields, limit, lt, present, want } from '@yaks/query'
+import {
+  absent,
+  and,
+  eq,
+  fields,
+  le,
+  limit,
+  lt,
+  present,
+  want,
+} from '@yaks/query'
 import { faultOf, rerunOf, stablePlace } from './fault.ts'
 import { enrichFrames } from './frames.ts'
 import { comp, type Desk, type Frame, str, title } from './model.ts'
@@ -59,12 +69,16 @@ let inherited = (row: Bundle, bug: Bundle | undefined, before: Bundle[]) => {
 let past = (row: Bundle, bug: Bundle): boolean =>
   !imported(row) && !!bug.resolved &&
   str(comp(row, 'error').at) > str(comp(bug, 'resolved').at)
+// A failure past its line after the resolution: a warning only counts.
+let bringsBack = (row: Bundle, bug: Bundle): boolean =>
+  comp(row, 'error').level != 'warning' && past(row, bug)
 /** A resolved bug comes back when it happens after its resolution, unless the
- * occurrence names a release the group already saw: that is old code still
+ * occurrence names a release the group saw by then: that is old code still
  * running. An occurrence naming no release (a systemd unit's failure, reported
- * from outside the process that ran) has only its time to go by. */
+ * from outside the process that ran) has only its time to go by. A warning,
+ * a failure near its line, never brings one back: it is counted. */
 export let regresses = (row: Bundle, bug: Bundle, before: Bundle[]): boolean =>
-  past(row, bug) &&
+  bringsBack(row, bug) &&
   !(release(row) && before.some((old) => release(old) == release(row)))
 
 /** Where frames place a bug: their top in-app symbol is its culprit, or
@@ -248,15 +262,17 @@ let earlier = (
   if (!bug) return []
   let of = eq('error.bug', bug.entity.eid)
   if (imported(row)) return g.read(and(of, ...MARKS.map((m) => want(m))))
-  if (!past(row, bug) || !release(row)) return []
-  return sharing(g, bug.entity.eid, row)
+  if (!bringsBack(row, bug) || !release(row)) return []
+  return sharing(g, bug, row)
 }
 
-/** One occurrence of a bug that shares this one's release, if any is kept. */
-let sharing = (g: Desk, bug: string, row: Bundle) => {
+/** One occurrence of a bug from before its resolution that shares this one's
+ * release, if any is kept: a warning since names no release as old. */
+let sharing = (g: Desk, bug: Bundle, row: Bundle) => {
   let e = comp(row, 'error')
   return g.read(and(
-    eq('error.bug', bug),
+    eq('error.bug', bug.entity.eid),
+    le('error.at', str(comp(bug, 'resolved').at)),
     ...e.commit
       ? [eq('error.commit', str(e.commit))]
       : [absent('error.commit'), eq('error.version', Number(e.version))],

@@ -117,6 +117,18 @@ test('a reload nobody chose is filed to the tracker with its cause', async () =>
   }
 })
 
+test('a sample past its budget is a warning, and past twice its budget an error', async () => {
+  let levels = async (points: unknown[]) =>
+    (await send(points))[0].flatMap((r) =>
+      r.error ? [(r.error as Comp).level] : []
+    )
+  equal(await levels([point('open-admin', 107), point('open-admin', 201)]), [
+    'warning',
+    'error',
+  ])
+  equal(await levels([point('reload-discarded', 40)]), ['error'])
+})
+
 test('a save behind what the page shows is counted, and filed only past its budget', async () => {
   let saved = (ms: number) => ({ ...point('saved', ms), page: 'app' })
   let [rows] = await send([saved(1200)])

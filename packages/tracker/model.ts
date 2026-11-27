@@ -5,7 +5,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 /** The part of a graph the tracker's handlers read and write through: a
  * bug's grouping, its frames and its letters. */
 export type Desk = Pick<Graph, 'vocab' | 'get' | 'read' | 'apply'>
-export type Level = 'fatal' | 'error'
+export type Level = 'fatal' | 'error' | 'warning'
 /** A mark a fixer or a resolution puts on a bug. */
 export type Mark = 'taken' | 'resolved' | 'archived'
 export type Frame = {
