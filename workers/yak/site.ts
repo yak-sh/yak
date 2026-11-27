@@ -186,7 +186,7 @@ let fromHome = async (env: Env, path: string, dir: dirPart.Directory) => {
  * can be kept when the directory confirmed the home release. The app answering
  * a page this deploy has a file for
  * with 404 is a page new in this deploy, which the app's release after it
- * carries (packages/admin service.ts `RELEASED`, `afterWorker`), as a
+ * carries (packages/admin service.ts `RELEASED`), as a
  * changed page is another drawing until then; any other answer of the
  * app's that is no page is a failure. */
 let sitePage = async (

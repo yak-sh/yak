@@ -554,27 +554,34 @@ test('each destination releases changed source and retries a failed release inde
   equal(reports, ['release:first/demo: Error: 503'])
 })
 
-test('a landing releases yak.sh and the demo before the Worker goes live', async () => {
+// T-4251: Voiced Video's page imported `morph` from a client the Worker did
+// not serve yet, released while its build ran.
+test('an app is released once the Worker its page imports from is live, and at once from a head that changes no Worker source', async () => {
+  let NEXT = 'next', WORKER = 'worker'
+  let heads = [HEAD, HEAD, NEXT, WORKER]
   let f = fixture({ sha: HEAD })
   let stop = new AbortController()
   let pushed: string[] = []
-  f.doors.tree = (_sha, to) =>
+  f.doors.main = () => Promise.resolve({ sha: heads[0], at: landed })
+  f.doors.same = (_a, b) => Promise.resolve(b != WORKER)
+  f.doors.tree = (sha, to) =>
     Promise.resolve(
-      ['yak-sh', 'recipes', 'home'].includes(to.app) ? to.dir : undefined,
+      ['yak-sh', 'recipes', 'home'].includes(to.app)
+        ? `${sha} ${to.dir}`
+        : undefined,
     )
   f.doors.release = (sha, to) => {
-    pushed.push(`${sha}:${to.space}/${to.app}:${f.looked}`)
+    pushed.push(`${sha}:${to.space}/${to.app}`)
     return Promise.resolve([])
   }
   f.doors.wait = () => {
-    if (f.at.now == landed) f.at.now += LATE
-    else stop.abort()
+    f.at.now += LATE
+    heads.shift()
+    if (!heads.length) stop.abort()
     return Promise.resolve()
   }
   await service(host(f.g, f.report), {}, stop.signal, f.doors)
-  equal(pushed, [
-    `${HEAD}:jeff/yak-sh:0`,
-    `${HEAD}:yourname/recipes:0`,
-    `${HEAD}:yak/home:1`,
-  ])
+  let apps = (sha: string) =>
+    ['yak/home', 'jeff/yak-sh', 'yourname/recipes'].map((a) => `${sha}:${a}`)
+  equal(pushed, [...apps(HEAD), ...apps(NEXT)])
 })

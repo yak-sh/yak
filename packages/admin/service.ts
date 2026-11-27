@@ -29,8 +29,8 @@
 // page is asked a few times apart, since a fresh deploy can leave it cold for
 // seconds.
 //
-// The apps main keeps in git are pushed from its committed files. The
-// platform home app follows the live Worker, which builds its pages too.
+// The apps main keeps in git are pushed from its committed files, each once
+// the Worker its pages import from is live (`ready` in the catch-up).
 
 import { checkout } from './checkout.ts'
 import { account } from './account.ts'
@@ -130,7 +130,6 @@ export type Release = {
   as?: string
   links?: string[]
   keep?: string[]
-  afterWorker?: boolean
   /** who may use the app when the release makes it; an app keeps its own */
   access?: Target['access']
 }
@@ -140,16 +139,9 @@ let repoApps = (space: string, apps: string[], as?: string): Release[] =>
 
 /** The apps whose files are maintained in this repo. */
 export let RELEASED: Release[] = [
-  { dir: 'apps/home', app: 'home', space: 'yak', afterWorker: true },
+  { dir: 'apps/home', app: 'home', space: 'yak' },
   ...repoApps('yak', ['home-preview']),
-  // Its page imports @yaks/data-editor, which the compiler's catalog holds
-  // once the Worker that carries it is live.
-  {
-    dir: 'apps/back-office',
-    app: 'back-office',
-    space: 'yak',
-    afterWorker: true,
-  },
+  { dir: 'apps/back-office', app: 'back-office', space: 'yak' },
   {
     dir: 'apps/yak-sh',
     app: 'yak-sh',
@@ -697,21 +689,25 @@ let catchUp = async (
   let live: string | undefined
   let failing = false
   let unanswered = 0
-  let landed = releases(doors, report, RELEASED.filter((to) => !to.afterWorker))
-  let deployed = releases(
-    doors,
-    report,
-    RELEASED.filter((to) => to.afterWorker),
-  )
+  let released = releases(doors, report, RELEASED)
+  // An app's page imports what the Worker serves (`./api/client.js`, the
+  // compiler's catalog), so an app is released from a commit whose Worker
+  // source is live: main's head where it changed none since the commit known
+  // live, else that commit until the head goes live.
+  let ready = async (tip: string) =>
+    live && (live == tip || await doors.same(live, tip)) ? tip : live
   for (;;) {
     try {
       let tip = await doors.main()
       unanswered = 0
-      await landed(tip.sha)
+      let sha = await ready(tip.sha)
+      if (sha) await released(sha)
       let done = await pass(g, doors, report, options, settled, tip)
       if (SETTLED.includes(done.step)) settled = done.sha
-      if (done.step == 'live') live = done.sha
-      if (live) await deployed(live)
+      if (done.step == 'live' && live != done.sha) {
+        live = done.sha
+        await released(live)
+      }
       failing = false
     } catch (error) {
       if (!(error instanceof Interrupted)) {
