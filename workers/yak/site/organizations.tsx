@@ -317,7 +317,12 @@ export let Organizations = () => (
           plans: <a href='/pricing' {...text('organizations.cost.plans')} />,
         })}
       />
-      <p class='Note Note-small' {...text('pricing.plans.support')} />
+      <p
+        class='Note Note-small'
+        {...text('organizations.cost.contract', {
+          mail: <a href='mailto:hello@yaks.app'>hello@yaks.app</a>,
+        })}
+      />
     </section>
     <Card class='Join' aria-labelledby='join'>
       <h2 class='Title' id='join' {...text('organizations.join.title')} />
