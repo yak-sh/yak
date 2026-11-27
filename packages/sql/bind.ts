@@ -2292,6 +2292,21 @@ let facetOf = (
   return { comp: hop.comp, present: op == '~' || op == EXISTS }
 }
 
+// The presence of the component whose stored property a `.distinct` or
+// `.tally` counts. A row without the component has no value to count, so the
+// aggregate reads that component's owners, never every entity:
+// `.order=hot&.tally=task.status` read the box's 6.3 million entities in 10 s
+// to count its 14 thousand tasks (bug 5871af2038).
+let heldBy = (ctx: Ctx, agg?: Distinct | Tally): Clause | undefined => {
+  let [comp, prop] = agg?.path ?? []
+  if (prop == null) return
+  let has: Clause = { kind: 'pred', path: [comp], op: '!', value: null }
+  let p = ctx.v.prop(comp, prop)
+  if (!p || p.computed || ctx.derived[`${comp}.${prop}`]) return
+  let facet = facetOf(ctx, has)
+  return facet?.present && facet.comp == comp ? has : undefined
+}
+
 // The component a clause admits only an entity holding: one it tests the
 // presence of, or one a stored property of which it tests as `needs` a row
 // for (`.edge.to=<eid>` holds only for an entity with an edge).
@@ -4941,6 +4956,11 @@ let lower = (
     throw new Unsupported('.near', 'query extension is unavailable')
   }
   let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))
+  let holds = heldBy(
+    ctx,
+    find<Distinct>(cs, 'distinct') ?? find<Tally>(cs, 'tally'),
+  )
+  if (holds) filters.push(holds)
   let counting = find<Count>(cs, 'count')
   // A count of one physical component needs its owners and their graves,
   // without loading every archetype or joining unused entity columns.
