@@ -386,6 +386,25 @@ test("a row's figures carry their days, and a person's are their spaces' added",
   assertEquals(quiet.includes('data-chart'), false)
 })
 
+// A directory that fails every read: a page that asks it fails.
+let unread = new Proxy({}, {
+  get: () => () => Promise.reject(new Error('the directory was read')),
+}) as Directory
+
+test('a look ahead at an admin page reads nothing and holds nothing', async () => {
+  let ahead = async (path: string, headers: Record<string, string>) => {
+    let req = new Request(`https://yaks.app${path}`, {
+      headers: { cookie: SIGNED_IN.root, ...headers },
+    })
+    let page = (await answer(req, env, path, unread))!
+    return [page.status, page.headers.get('content-type')]
+  }
+  for (let path of ['/admin/apps', '/admin/apps/some-app', '/admin']) {
+    assertEquals(await ahead(path, { purpose: 'prefetch' }), [204, null])
+    assertEquals(await ahead(path, { 'sec-purpose': 'prefetch' }), [204, null])
+  }
+})
+
 test("the admin's funnel shows each step's count", async () => {
   let sql = analytics((q) =>
     q.includes('GROUP BY step') ? [{ step: 'home', n: 12 }] : []

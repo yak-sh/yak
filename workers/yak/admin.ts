@@ -110,7 +110,7 @@ import {
   managePath,
   type MarkedApp,
 } from '@yaks/platform/routes'
-import { NAMES } from '@yaks/ui/navigate'
+import { lookingAhead, NAMES } from '@yaks/ui/navigate'
 import { admin } from './tool.ts'
 import { adminWho } from './asking.ts'
 import { browsingAdmin } from './browse.ts'
@@ -1585,6 +1585,12 @@ export let answer = async (
   c: Clock = clock(),
 ): Promise<Response | null> => {
   if (!adminPath(path)) return null
+  // Every page here reads the whole census from the directory, and a look
+  // ahead (a pointer resting on a link, a browser's prefetch) is answered
+  // with nothing to hold: a pointer passing down a list's rows asked for
+  // one census a row, more than the directory's memory holds at once. A
+  // press draws the frame at once and reads the page then.
+  if (lookingAhead(req)) return new Response(null, { status: 204 })
   let asked = new URL(req.url)
   // Signed out: sent to sign in and handed back here. Signed in as anybody
   // but the platform's admin: nothing is here, the same as a wrong address.
