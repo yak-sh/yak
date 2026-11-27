@@ -1,6 +1,7 @@
 // The platform's own script in every page an app serves: the reporter
 // (public/report.js), the release listener (public/release.js), the framed
-// address reporter (public/location.js), the badge (public/badge.js) in a page
+// address reporter (public/location.js), the note that the page ran
+// (public/seen.js) where the app's doors are under its mount, the badge (public/badge.js) in a page
 // of a space on the free plan, the corner (public/edit.js), its note to the
 // Operator and its pencil, in a page served to a member who may write the
 // app, and the visitor's bar (public/visit.js) in a
@@ -27,6 +28,7 @@ import { sharing } from './lib/shared.ts'
 import { inline, type Script, tagged } from '@yaks/platform/woven'
 import { INTERACTION_PATH } from '@yaks/timing/interaction'
 import { openScript } from '@yaks/platform/open-script'
+import { SEEN } from '@yaks/platform/ladder'
 
 type Assets = { fetch: (req: Request) => Promise<Response> }
 
@@ -38,6 +40,7 @@ let FILES = [
   '/location.js',
   '/edit.js',
   '/_install.js',
+  '/seen.js',
 ]
 
 /** The platform's scripts a page wears beyond the reporter and the release
@@ -91,10 +94,8 @@ export let pageScript = async (
   { badge, draft, bar, preview, byline, edit, note, api }: Scripts,
 ) => {
   try {
-    let [report, release, badged, barred, location, pencil, install] =
-      await scripts(
-        assets,
-      )
+    let [report, release, badged, barred, location, pencil, install, ran] =
+      await scripts(assets)
     if (draft) {
       return tagged(at, version, [
         [location],
@@ -112,6 +113,11 @@ export let pageScript = async (
       [location, {}],
       [install, {}],
     ]
+    // The home app's doors are the apex's, which count its visits as the
+    // funnel's own steps (funnel.ts `loaded`).
+    if (!api) {
+      worn.push([ran, { 'data-yak-seen': at.replace(/\/$/, '') + SEEN }])
+    }
     if (badge != null) {
       worn.push([badged, {
         'data-yak-badge': badge,

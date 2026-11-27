@@ -25,11 +25,17 @@ let STATS: Row[] = [
             'how far back, in days (default 30). Cloudflare keeps three ' +
             'months, so anything past 90 is the same answer as 90.',
         },
+        bots: {
+          type: 'boolean',
+          description:
+            "count bots' page loads too (default false: people's alone)",
+        },
       },
     },
     run: async (ctx, args) => {
       let days = args.days == null ? undefined : Number(args.days)
-      if (args.app == null) return await everyApp(ctx, args, days)
+      let bots = args.bots === true
+      if (args.app == null) return await everyApp(ctx, args, days, bots)
       let { space, app } = await inApp(ctx, args)
       // No token, no numbers — one sentence rather than an error, because
       // there is nothing the agent or the person can do about it (views.ts).
@@ -44,7 +50,7 @@ let STATS: Row[] = [
           ...uptake.rated ? [ratedAs(uptake.rated)] : [],
         ]
         : []
-      let asked = statsOf(ctx.env, app.eid, days)
+      let asked = statsOf(ctx.env, app.eid, days, Date.now(), bots)
       if (!asked) return { text: [NOT_ON, ...took].join('\n'), space }
       let seen = await asked
       let list = (head: string, rows: { name: string; views: number }[]) =>
@@ -57,6 +63,13 @@ let STATS: Row[] = [
             seen.total == 1 ? 'visit' : 'visits'
           } in ${seen.days} ` +
           `days${ago(seen)} (${appUrl(space, app, ctx.env)})`,
+          ...seen.split
+            ? [
+              `Of every page load: ${seen.split.people} people, ` +
+              `${seen.split.bots} likely bots, ` +
+              `${seen.split.verified} verified bots`,
+            ]
+            : [],
           ...list('Pages', seen.pages),
           ...list('Came from', seen.from),
           ...list('Countries', seen.countries),
@@ -73,12 +86,13 @@ let STATS: Row[] = [
 let everyApp = async (
   ctx: Parameters<Row['run']>[0],
   args: Parameters<Row['run']>[1],
-  days?: number,
+  days: number | undefined,
+  bots: boolean,
 ) => {
   let { space } = await inSpace(ctx, args)
   let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
   let asked = apps.length
-    ? statsFor(ctx.env, apps.map((a) => a.eid), days)
+    ? statsFor(ctx.env, apps.map((a) => a.eid), days, Date.now(), bots)
     : null
   if (!apps.length) return { text: `${space.slug} has no apps.`, space }
   if (!asked) return { text: NOT_ON, space }
@@ -88,7 +102,9 @@ let everyApp = async (
   let [first] = seen
   return {
     text: [
-      `${space.slug}, visits in ${first!.stats.days} days${ago(first!.stats)}:`,
+      `${space.slug}, ${bots ? 'visits with bots' : "people's visits"} in ${
+        first!.stats.days
+      } days${ago(first!.stats)}:`,
       ...seen.map(({ app, stats }) =>
         `- ${app.slug} — ${stats.total} (${appUrl(space, app, ctx.env)})`
       ),

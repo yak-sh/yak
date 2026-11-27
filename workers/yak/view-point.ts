@@ -1,10 +1,11 @@
 // One page view as Analytics Engine keeps it: what views.ts counts and reads
 // back, and what yak-front (front/) writes for a page it answers from the edge.
-// Nothing here imports past arrival.ts, crawlers.ts and variant.ts, which
-// import at most @yaks/platform/cookie, and @yaks/ui/navigate's
-// `lookingAhead`, so the front Worker can hold it.
+// Nothing here imports past arrival.ts, @yaks/platform/visitor and
+// variant.ts, which import at most @yaks/platform/cookie, isbot and
+// @yaks/sql/core, and @yaks/ui/navigate's `lookingAhead`, so the front Worker
+// can hold it.
 import { arrival, cameFrom, campaign } from './arrival.ts'
-import { classed, isPerson, type Visited } from './crawlers.ts'
+import { classed, isPerson, type Visited } from '@yaks/platform/visitor'
 import { PATHS } from './variant.ts'
 import { lookingAhead } from '@yaks/ui/navigate'
 
@@ -79,6 +80,29 @@ export let pointOf = (
     status: res.status,
   })
 }
+
+/**
+ * The data point a page that ran is written as (views.ts `ran`): a person's
+ * visit, at the path the page says it is and from the site it says linked
+ * here, with the country its post came from. Its request was counted as the
+ * page was answered (`pointOf`); this says the page ran in a browser.
+ */
+export let ranOf = (
+  req: Visited,
+  said: { path?: unknown; from?: unknown },
+  at: { app: string; space: string; slug: string },
+) =>
+  point({
+    ...at,
+    path: typeof said.path == 'string' ? said.path : '',
+    country: req.cf?.country ?? '',
+    from: referred(
+      typeof said.from == 'string' ? said.from : null,
+      new URL(req.url).host,
+    ),
+    client: 'person',
+    status: 200,
+  })
 
 // ---- yaks.app's own funnel (funnel.ts, D-123514) ---------------------------
 

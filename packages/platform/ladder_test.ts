@@ -239,6 +239,16 @@ test('door: the data editor is a page for whoever holds a level', () => {
   })
 })
 
+test('door: a page says it ran to whoever may see it', () => {
+  assertEquals(at('/_web/seen', viewer, 'POST'), { to: 'seen' })
+  assertEquals(
+    door({ path: '/_web/seen', method: 'POST', who: nobody, access: 'public' }),
+    { to: 'seen' },
+  )
+  // A stranger to a private app has no page to have run.
+  assertEquals(at('/_web/seen', nobody, 'POST').to, 'refused')
+})
+
 test('door: the web page is a member’s, refused in JSON', () => {
   assertEquals(at('/_web', nobody), {
     to: 'refused',

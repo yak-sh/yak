@@ -1,9 +1,11 @@
 /**
  * The admin's Visits page (./admin-visits.ts): the platform's visits drawn as
- * a space's Visits page draws an app's (./visits-view.ts `chart`, `column`).
- * People first, a bar a day and the spaces and apps they opened most, each
- * opening on its space's admin page; then bots and agents, a bar a day; then
- * the platform's own test spaces, apart.
+ * a space's Visits page draws an app's (./visits-view.ts `chart`, `column`),
+ * under the same tabs (`botTabs`): people's visits alone by default, a bar a
+ * day and the spaces and apps they opened most, each opening on its space's
+ * admin page; or every visit, bots' too, and then the likely bots and the
+ * verified bots, a bar a day each. The split of people and bots is said
+ * either way, and the platform's own test spaces are counted apart.
  *
  * @module
  */
@@ -12,8 +14,16 @@ import { Card } from '@yaks/ui/Card'
 import { Form } from '@yaks/ui/Form'
 import { Report } from '@yaks/ui/Report'
 import { count } from './standing.ts'
-import { chart, column, type Linked } from './visits-view.ts'
+import {
+  botsAt,
+  botTabs,
+  chart,
+  column,
+  type Linked,
+  says,
+} from './visits-view.ts'
 import { counted, type Place, type PlatformVisits } from './admin-visits.ts'
+import { all, type Split } from './visitor.ts'
 import { NOT_ON } from './visit-counts.ts'
 import type { Day } from './visit-counts.ts'
 
@@ -37,56 +47,69 @@ let report = (id: string, title: string, total: number, ...body: unknown[]) =>
     ...body as never[],
   )
 
-/** The admin's Visits page from `v`, each place opening at `base/<space>`;
- * one sentence where the platform cannot count (`v` null). */
+/** The admin's Visits page from `v`, each place opening at `base/<space>`,
+ * people's visits alone or every visit (`bots`); one sentence where the
+ * platform cannot count (`v` null). */
 export let adminVisitsView = (
   v: PlatformVisits | null,
   base: string,
+  bots = false,
   now = Date.now(),
 ) => {
   if (!v) return h(Form.Hint, null, NOT_ON)
-  let lines = (all: Place[], views: (p: Place) => number): Linked[] =>
-    all.map((p) => ({
+  let lines = (places: Place[], views: (p: Place) => number): Linked[] =>
+    places.map((p) => ({
       name: p.name,
       views: views(p),
       href: `${base}/${encodeURIComponent(p.space)}`,
     })).filter((l) => l.views > 0)
-  let people = sum(v.people)
-  let others = sum(v.others)
-  let tested = v.tests.people + v.tests.others
+  let total: Split = {
+    people: sum(v.people),
+    bots: sum(v.bots),
+    verified: sum(v.verified),
+  }
+  let by = bots ? all : (p: Place) => p.people
+  let shown = bots
+    ? v.people.map((d, i) => ({
+      day: d.day,
+      views: d.views + v.bots[i].views + v.verified[i].views,
+    }))
+    : v.people
+  let bars = (id: string, title: string, days: Day[]) => {
+    let n = sum(days)
+    return report(id, title, n, n ? chart(days) : null)
+  }
   return [
     h(
       Form.Hint,
       null,
-      `The last ${v.days} days on every space, ${counted(v.at, now)}. ` +
+      `The last ${v.days} days on every space, ${counted(v.at, now)}: ` +
+        `${says(total)}. ` +
         'Test spaces, whose every member is a test account, are counted apart.',
     ),
+    botTabs(bots, botsAt),
     report(
       'people',
-      'People',
-      people,
-      people ? chart(v.people) : null,
+      bots ? 'Every visit' : 'People',
+      bots ? all(total) : total.people,
+      sum(shown) ? chart(shown) : null,
       h(
         Report.Tops,
         null,
-        column('Spaces', lines(v.spaces, (p) => p.people)),
-        column('Apps', lines(v.apps, (p) => p.people)),
+        column('Spaces', lines(v.spaces, by)),
+        column('Apps', lines(v.apps, by)),
       ),
     ),
-    report(
-      'others',
-      'Bots and agents',
-      others,
-      others ? chart(v.others) : null,
-    ),
+    bots ? bars('bots', 'Likely bots', v.bots) : null,
+    bots ? bars('verified', 'Verified bots', v.verified) : null,
     report(
       'tests',
       'Test spaces',
-      tested,
+      all(v.tests.split),
       h(
         Report.Tops,
         null,
-        column('Spaces', lines(v.tests.spaces, (p) => p.people + p.others)),
+        column('Spaces', lines(v.tests.spaces, all)),
       ),
     ),
   ]

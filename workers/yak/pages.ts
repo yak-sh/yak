@@ -648,6 +648,8 @@ export type DeskPage = {
   /** what the apps page was asked to find and how to order it
    * (@yaks/platform/space-apps-view `sifted`) */
   sift?: { q: string; sort: string }
+  /** Whether Visits counts bots' visits beside people's (`?bots`) */
+  bots?: boolean
   name?: string
   email?: string
   sessions?: import('./browser-sessions.ts').BrowserSession[]

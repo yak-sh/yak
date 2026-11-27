@@ -166,7 +166,7 @@ test('a page is served with its base and its reporter', async () => {
   assertEquals(page.status, 200)
   let html = await page.text()
   assert(html.includes('<base href="/cookbook/">'), html)
-  assertEquals(woven(html).length, 5, html)
+  assertEquals(woven(html).length, 6, html)
   assertStringIncludes(html, 'data-yak-at="/cookbook/" data-yak-version="1"')
   // And the client an app imports is the platform's own, beside the doors it
   // wraps.
@@ -867,7 +867,11 @@ test('a page view is one data point, and it names no visitor', async () => {
 // What the fake SQL API answers each of the four queries with, for one app:
 // each row names the app it was grouped by, as `index1 AS app` asks.
 let ROWS: Record<string, Record<string, unknown>[]> = {
-  day: [{ day: `${new Date().toISOString().slice(0, 10)} 00:00:00`, views: 5 }],
+  day: [{
+    day: `${new Date().toISOString().slice(0, 10)} 00:00:00`,
+    kind: 'person',
+    views: 5,
+  }],
   path: [{ path: '/cookbook/dinner', views: '4' }],
   site: [{ site: 'news.example.com', views: 3 }],
   country: [{ country: 'US', views: 5 }],
@@ -1534,8 +1538,8 @@ test('worker HTML carries its reporter without changing its page or headers', as
       )
       let body = await page.text()
       let scripts = woven(body)
-      assertEquals(scripts.length, 5)
-      assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 5)
+      assertEquals(scripts.length, 6)
+      assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 6)
       assertStringIncludes(unwoven(body), html)
       // The worker's own policy still holds, and lets the platform's inline
       // scripts run by their hashes and nothing else.
@@ -1550,7 +1554,7 @@ test('worker HTML carries its reporter without changing its page or headers', as
     })
     let page = await k.at('/cookbook/menu')
     let body = await page.text()
-    assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 5)
+    assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 6)
     assertStringIncludes(unwoven(body), html)
   }
 })
@@ -2775,7 +2779,7 @@ test("a visitor's page wears the bar that keeps what they made", async () => {
     tags,
     'data-yak-keep="https://yaks.app/install?name=notes" data-yak-keep-says="Keep it"',
   )
-  assertEquals(hashes.length, 5)
+  assertEquals(hashes.length, 6)
 })
 
 // The badge is a door (T-131901): a published app's opens its own page on

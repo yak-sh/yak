@@ -296,6 +296,7 @@ let visitsPage = (at: DeskPage, site: string) => {
     person: at.person ?? '',
     space: at.spaceEid ?? '',
     site,
+    bots: !!at.bots,
   }
   let rows = at.drawn ?? []
   return h(
@@ -304,7 +305,7 @@ let visitsPage = (at: DeskPage, site: string) => {
     visitsView(
       view,
       appsOf(rows, view.space),
-      countsOf(rows, view.space),
+      countsOf(rows, view.space, view.bots),
     ),
     drawing(at),
   )

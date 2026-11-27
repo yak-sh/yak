@@ -3,15 +3,16 @@ doc:
   title: Visitor Analytics
 guide:
   slug: stats
-  brief: page view counts for an app, by page, referrer and country
+  brief: page view counts for an app, by page, referrer and country, people apart from bots
   description: >-
     Visitor analytics for an app: what counts as a visit (a page view), the
     six fields each one records (app, space and slug, path, country, referrer
     hostname, client label) and what is never recorded (no IP address, no
-    visitor id or cookie, no user-agent string), the app_stats tool and its
-    days window, the Visits page in the app manager, the ./api/stats endpoint
-    a page reads its own counts from, sampling, and why a small number is
-    usually crawlers.
+    visitor id or cookie, no user-agent string), how people are told from
+    likely bots and verified bots (the page's own script says it ran), the
+    app_stats tool and its days and bots options, the Visits page in the app
+    manager and its People and With bots tabs, the ./api/stats endpoint a
+    page reads its own counts from, and sampling.
 ---
 
 # Visitor Analytics
@@ -47,9 +48,14 @@ Each visit records these six fields and nothing else:
 - the **hostname** of the site that linked to the app, and no other part of the
   referrer: no path and no query string, so a search term a visitor arrived with
   is dropped before anything is written
-- one of three labels for the kind of client: `browser`, `bot` or `agent` (an AI
-  assistant fetching the page). A browser asking from an ad network's own
-  network, such as Meta reviewing an ad's landing page, is a `bot`
+- one label for the kind of client: `browser`, `bot`, `agent` (an AI assistant
+  fetching the page) or `verified` (a bot Cloudflare verified, such as a search
+  engine's). A browser asking from an ad network's own network, such as Meta
+  reviewing an ad's landing page, is a `bot`
+
+When the page then runs in a browser, the platform's script woven into it
+records the visit once more with the label `person`, from the same six fields. A
+program that fetches the page without running it never sends that.
 
 ## What is never recorded
 
@@ -66,15 +72,30 @@ than looking for another way to find out.
 
 Counts are kept for about three months and then deleted.
 
+## People and bots
+
+Every count is split three ways:
+
+- **people**: pages that ran in a browser
+- **likely bots**: every other request for a page, including a browser's whose
+  page never ran, a crawler's and an AI assistant's
+- **verified bots**: requests Cloudflare verified as a known bot's
+
+The counts and lists are people's by default. Asked for **with bots**, they
+count every request for a page instead. Visits recorded before 2026-11-27, when
+pages began saying they ran, count a browser's request as a person's.
+
 ## Reading visits with `app_stats`
 
     app_stats(app: 'recipes')
     app_stats(app: 'recipes', days: 7)
+    app_stats(app: 'recipes', bots: true)
 
 It returns, for the window of days:
 
-- **total** visits, and **daily**: one entry per day, oldest first, including
-  days with no visits
+- **total** visits, people's or with bots, and the split of people, likely bots
+  and verified bots
+- **daily**: one entry per day, oldest first, including days with no visits
 - **pages**: the most-opened paths
 - **from**: the sites that linked to the app, most visits first
 - **countries**: the visitors' countries
@@ -89,8 +110,9 @@ pages does not include permission to read its visit counts.
 
 ## The Visits page and the `./api/stats` endpoint
 
-The **Visits** page in the person's app manager shows each app's total, a daily
-chart, and the same three lists.
+The **Visits** page in the person's app manager shows each app's total, the
+split of people and bots, a daily chart, and the same three lists. Its
+**People** and **With bots** tabs choose what is counted.
 
 An app's own page can also read its counts from `./api/stats` when the person
 viewing it is a member:
@@ -98,10 +120,11 @@ viewing it is a member:
     let seen = await (await fetch('./api/stats')).json()
     if (seen.on) show(seen.total, seen.daily)
 
-Add `?days=7` for a shorter window. When the platform has no analytics reader
-configured, it returns `{on: false}` with a message. That is the one case to
-handle: show the message, and do not treat it as an error. This endpoint returns
-no per-visitor data either: a member reading it gets the same numbers you get.
+Add `?days=7` for a shorter window, and `?bots` to count bots' visits too. When
+the platform has no analytics reader configured, it returns `{on: false}` with a
+message. That is the one case to handle: show the message, and do not treat it
+as an error. This endpoint returns no per-visitor data either: a member reading
+it gets the same numbers you get.
 
 ## Accuracy, sampling and bots
 
@@ -110,9 +133,10 @@ of visits and records how many visits each kept row represents, and every total
 in the report is already scaled back up by that number. A large count is a good
 estimate and a small one is exact. Do not present the counts as an exact record.
 
-Bots and AI agents are counted alongside people. A new page with eleven visits
-that nobody has been told about has usually been opened by eleven crawlers, so
-treat a small number with caution before telling the person it is an audience.
+People are pages that ran in a browser, so a crawler that only fetches a page is
+a bot, and so is a scanner that names a browser. A crawler that runs pages in a
+real browser can still be counted as a person, so treat a small number of people
+with some caution before telling the person it is an audience.
 
 An app with few visits is not broken. Before building a feature to raise the
 number, ask the person whether anyone has been given the link. Usually nobody

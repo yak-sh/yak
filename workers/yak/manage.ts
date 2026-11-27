@@ -896,7 +896,7 @@ let desk = async (
         brokenOf(env, dir, space, who),
       ]).then((rows) => rows.flat())
       : view == 'visits'
-      ? visitsRows(env, dir, owner, space.eid).then((r) => [
+      ? visitsRows(env, dir, owner, space.eid, q.has('bots')).then((r) => [
         ...r.apps,
         ...r.counts,
       ])
@@ -963,6 +963,7 @@ let desk = async (
       gallery: pilled(standing(a)),
     })),
     sift: { q: q.get('q') ?? '', sort: q.get('sort') ?? '' },
+    bots: q.has('bots'),
     binned: here.filter((a) => a.trashed).length +
       lines.filter((l) => l.trashed).length,
     shops: provider.shops.on(),

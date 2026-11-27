@@ -810,7 +810,8 @@ export let directoryDoc: VocabDoc = {
     // (arrival.ts `campaign`), '' for none, which the funnel counts their
     // steps under when no request of theirs is there to say it (directory.ts
     // `stepper`). `client` is what kind of client opened it, as the funnel
-    // says it (crawlers.ts `classed`): `browser`, `agent` or `bot`, or `test`
+    // says it (@yaks/platform/visitor `classed`): `browser`, `verified`,
+    // `agent` or `bot`, or `test`
     // for one whose arrival names an agent's check (@yaks/platform/bots
     // `CHECK`). Only a browser's is a person's (directory.ts `testIs`): a
     // script's, such as an agent checking the box through curl or Deno's

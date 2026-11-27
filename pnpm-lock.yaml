@@ -4165,6 +4165,9 @@ importers:
       es-module-lexer:
         specifier: 2.3.2
         version: 2.3.2
+      isbot:
+        specifier: 5.2.4
+        version: 5.2.4
       lucide:
         specifier: 1.31.0
         version: 1.31.0
@@ -9410,6 +9413,12 @@ packages:
       integrity: sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ==,
     }
 
+  isbot@5.2.4:
+    resolution: {
+      integrity: sha512-qFPSy82nnxEUrHdKpIQPVpYwsGJqL/+VGWYVYP5c8XMOyRRPDVb1C5ZMwmKs3nB4Evsw/ux0WqHBkf2UUawC1A==,
+    }
+    engines: { node: '>=18' }
+
   isexe@2.0.0:
     resolution: {
       integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==,
@@ -11974,6 +11983,8 @@ snapshots:
   is-potential-custom-element-name@1.0.1: {}
 
   is-promise@4.0.0: {}
+
+  isbot@5.2.4: {}
 
   isexe@2.0.0: {}
 

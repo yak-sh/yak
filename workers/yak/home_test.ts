@@ -442,7 +442,9 @@ test('who visited is drawn from the rows the page carries, and only for the owne
   let recipes = { eid: 'recipes', slug: 'recipes', title: 'Recipes' }
   let counted = {
     days: 3,
+    bots: false,
     total: 9,
+    split: { people: 9, bots: 0, verified: 0 },
     daily: [{ day: '2026-09-06', views: 9 }],
     pages: [{ name: '/dinner', views: 9 }],
     from: [],

@@ -643,6 +643,7 @@ test("an app's page and its space's say who visited, as the owner's Visits page 
     {
       app: eid,
       day: today,
+      kind: 'person',
       views: 5,
       path: '/recipes',
       site: 'news.example',
@@ -695,49 +696,77 @@ test("the Visits page counts every space's and app's visits, people first and te
         seats: census().seats.filter((s) => s.member!.space != 'shop'),
       }),
   } as Directory
-  let day = (space: string, client: string, views: number) => ({
-    day: today,
-    space,
-    client,
-    views,
-  })
+  // Seven pages a browser asked for, five of which ran; a crawler's two, a
+  // verified bot's one; and a test space's, from before pages said they ran.
+  let kinds: [string, number][] = [
+    ['person', 5],
+    ['browser', 7],
+    ['bot', 2],
+    ['verified', 1],
+  ]
   let sql = analytics((q) =>
-    q.includes('GROUP BY day, space, client')
+    q.includes('GROUP BY day, space, kind')
       ? [
-        day('ann', 'browser', 5),
-        day('ann', 'bot', 2),
-        day('lab', 'browser', 9),
+        ...kinds.map(([kind, views]) => ({
+          day: today,
+          space: 'ann',
+          kind,
+          views,
+        })),
+        { day: today, space: 'lab', kind: 'early', views: 9 },
       ]
       : [
-        { app: 'a2', client: 'browser', views: 9 },
-        { app: 'a1', client: 'browser', views: 5 },
-        { app: 'a1', client: 'bot', views: 2 },
+        { app: 'a2', kind: 'early', views: 9 },
+        ...kinds.map(([kind, views]) => ({ app: 'a1', kind, views })),
       ]
   )
   try {
     let on = { ...env, CF_ANALYTICS_TOKEN: 't', CF_ACCOUNT: 'a' } as Env
-    let [req, , path] = asking('/admin/visits', 'root')
-    let page = (await answer(req, on, path, platform))!
-    assertEquals(page.status, 200)
-    let { document } = parseHTML(await page.text())
+    let read = async (at: string) => {
+      let [req, , path] = asking(at, 'root')
+      let page = (await answer(req, on, path, platform))!
+      assertEquals(page.status, 200)
+      let { document } = parseHTML(await page.text())
+      let block = (id: string) => {
+        let at = document.querySelector(`[aria-labelledby="visits-${id}"]`)
+        return at && [
+          at.querySelector('.Card_Title')?.textContent,
+          at.querySelector('.Report_Total')?.textContent,
+          [...at.querySelectorAll('.Report_Label a')]
+            .map((a) => `${a.textContent} ${a.getAttribute('href')}`),
+        ]
+      }
+      let tabs = [...document.querySelectorAll('.Tabs_Tab')]
+        .map((t) => `${t.textContent} ${t.getAttribute('href')}`)
+      return { text: document.body.textContent!, block, tabs }
+    }
+    let people = await read('/admin/visits')
     // Two queries across the platform, whatever its size: no app is named.
     assertEquals(sql.asked.length, 2)
     assertEquals(sql.asked.some((q) => q.includes('index1 IN')), false)
-    let block = (id: string) => {
-      let at = document.querySelector(`[aria-labelledby="visits-${id}"]`)
-      return [
-        at?.querySelector('.Report_Total')?.textContent,
-        [...at?.querySelectorAll('.Report_Label a') ?? []]
-          .map((a) => `${a.textContent} ${a.getAttribute('href')}`),
-      ]
-    }
-    assertEquals(block('people'), ['5 visits', [
+    assertEquals(people.tabs, ['People ?', 'With bots ?bots'])
+    assertEquals(people.block('people'), ['People', '5 visits', [
       'ann /admin/home',
       'ann/notes /admin/home',
     ]])
-    assertEquals(block('others'), ['2 visits', []])
-    assertEquals(block('tests'), ['9 visits', ['lab /admin/lab']])
-    assertStringIncludes(document.body.textContent!, 'counted just now')
+    assertEquals([people.block('bots'), people.block('verified')], [null, null])
+    assertEquals(people.block('tests'), ['Test spaces', '9 visits', [
+      'lab /admin/lab',
+    ]])
+    assertStringIncludes(people.text, 'counted just now')
+    // The two pages a browser asked for that never ran are a bot's.
+    assertStringIncludes(people.text, '5 people, 4 likely bots, 1 verified bot')
+
+    let all = await read('/admin/visits?bots')
+    assertEquals(all.block('people'), ['Every visit', '10 visits', [
+      'ann /admin/home',
+      'ann/notes /admin/home',
+    ]])
+    assertEquals(all.block('bots')?.slice(0, 2), ['Likely bots', '4 visits'])
+    assertEquals(all.block('verified')?.slice(0, 2), [
+      'Verified bots',
+      '1 visit',
+    ])
   } finally {
     sql.done()
   }

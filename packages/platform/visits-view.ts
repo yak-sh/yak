@@ -13,16 +13,56 @@ import { h, type VNode } from 'preact'
 import { Card } from '@yaks/ui/Card'
 import { Form } from '@yaks/ui/Form'
 import { Report } from '@yaks/ui/Report'
+import { Tabs } from '@yaks/ui/Tabs'
 import { columns } from '@yaks/ui/chart'
 import { day } from '@yaks/ui/relative'
 import type { MarkedApp } from './routes.ts'
 import { count } from './standing.ts'
 import { empty } from './page-parts.ts'
 import { type Counted, type Line, NOT_ON } from './visit-counts.ts'
+import type { Split } from './visitor.ts'
 
 /** What the Visits page says about itself beside the rows: whose page it is,
- * the space it counts (its eid), and where its apps are served. */
-export type VisitsView = { person: string; space: string; site: string }
+ * the space it counts (its eid), where its apps are served, and whether it
+ * counts bots' visits beside people's. */
+export type VisitsView = {
+  person: string
+  space: string
+  site: string
+  bots?: boolean
+}
+
+/** How many of a window's visits were people's, likely bots' and verified
+ * bots' (@yaks/platform/visitor), in a line. */
+/// says({ people: 1, bots: 1200, verified: 3 }) -> '1 person, 1,200 likely bots, 3 verified bots'
+export let says = (s: Split) =>
+  [
+    `${count(s.people)} ${s.people == 1 ? 'person' : 'people'}`,
+    `${count(s.bots)} likely bot${s.bots == 1 ? '' : 's'}`,
+    `${count(s.verified)} verified bot${s.verified == 1 ? '' : 's'}`,
+  ].join(', ')
+
+/** The two ways visits are counted, each a link (`href`): people alone, the
+ * default, or every visit with bots'. The Visits page and the admin's pages
+ * draw the same tabs. */
+export let botTabs = (bots: boolean, href: (bots: boolean) => string) =>
+  h(
+    Tabs,
+    { role: 'group', 'aria-label': 'Visits counted' },
+    h(Tabs.Tab, {
+      href: href(false),
+      mod: !bots && 'on',
+      'aria-current': !bots ? 'true' : undefined,
+    }, 'People'),
+    h(Tabs.Tab, {
+      href: href(true),
+      mod: bots && 'on',
+      'aria-current': bots ? 'true' : undefined,
+    }, 'With bots'),
+  )
+
+/** Where a page's tabs go: its own address, with `?bots` or without. */
+export let botsAt = (bots: boolean) => bots ? '?bots' : '?'
 
 // Short enough for the ends of an axis.
 let axisDay = (iso: string) => day(iso, 'UTC')
@@ -76,7 +116,8 @@ export let column = (head: string, rows: Linked[]) =>
     )
     : null
 
-/** One app's block of the Visits page: its total, a bar per day and the
+/** One app's block of the Visits page: its total, people's or every visit's
+ * as `c` counts them, the split of people and bots, a bar per day and the
  * pages, sites and countries, served at `site`. The admin's page of the app
  * draws the same block (yaks.app's admin.ts). */
 export let appVisits = (app: MarkedApp, c: Counted, site: string) =>
@@ -102,6 +143,7 @@ export let appVisits = (app: MarkedApp, c: Counted, site: string) =>
         h(Report.Unit, null, c.total == 1 ? 'visit' : 'visits'),
       ),
     ),
+    c.split ? h(Form.Hint, null, says(c.split)) : null,
     c.total
       ? [
         chart(c.daily),
@@ -116,9 +158,9 @@ export let appVisits = (app: MarkedApp, c: Counted, site: string) =>
       : null,
   )
 
-/** The Visits page: each of `apps` with its views in `counts`, an app not
- * yet counted left out until it is; one sentence where the platform cannot
- * count (`counts` null). */
+/** The Visits page: its tabs, then each of `apps` with its views in
+ * `counts`, an app not yet counted left out until it is; one sentence where
+ * the platform cannot count (`counts` null). */
 export let visitsView = (
   view: VisitsView,
   apps: MarkedApp[],
@@ -131,7 +173,10 @@ export let visitsView = (
     )
     : counts == null
     ? h(Form.Hint, null, NOT_ON)
-    : apps.flatMap((a) => {
-      let c = counts.get(a.eid)
-      return c ? [appVisits(a, c, view.site)] : []
-    })
+    : [
+      botTabs(!!view.bots, botsAt),
+      ...apps.flatMap((a) => {
+        let c = counts.get(a.eid)
+        return c ? [appVisits(a, c, view.site)] : []
+      }),
+    ]

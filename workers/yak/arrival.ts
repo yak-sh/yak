@@ -15,8 +15,8 @@
 // The funnel counts its steps by the campaign and the home page (funnel.ts),
 // and an ad network is told of a visit its click brought (conversions.ts).
 // Nothing here imports past @yaks/platform/cookie, @yaks/platform/names,
-// crawlers.ts and variant.ts, so yak-front (front/) holds it.
-import { isPerson } from './crawlers.ts'
+// @yaks/platform/visitor and variant.ts, so yak-front (front/) holds it.
+import { isPerson } from '@yaks/platform/visitor'
 import { shown, VARIANTS } from './variant.ts'
 import { cookieValue } from '@yaks/platform/cookie'
 import { INVITED } from '@yaks/platform/names'
@@ -266,7 +266,7 @@ export type Conversion = {
 /**
  * What this request tells an ad network, or null when no ad network's click
  * brought it or no person sent it: a visit nobody's ad sent is told to nobody,
- * and nor is a crawler following an ad's link (crawlers.ts), the network's
+ * and nor is a crawler following an ad's link (@yaks/platform/visitor), the network's
  * own among them.
  */
 export let conversionOf = (

@@ -3612,6 +3612,15 @@ let served = async (
       to.signIn ? signInAt(req.url, env) : undefined,
     )
   }
+  if (to.to == 'seen') {
+    if (edge) return passed()
+    let { pageRan } = await import('./views.ts')
+    return await pageRan(env, req, {
+      app: app.eid,
+      space: space.slug,
+      slug: app.slug,
+    })
+  }
   if (to.to == 'data') {
     if (edge) return passed()
     if (to.part == 'interaction') {

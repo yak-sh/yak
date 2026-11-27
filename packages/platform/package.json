@@ -233,7 +233,8 @@
     "./open-script": "./open-script.ts",
     "./early-report": "./early-report.ts",
     "./opening": "./opening.ts",
-    "./splash": "./splash.ts"
+    "./splash": "./splash.ts",
+    "./visitor": "./visitor.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
@@ -285,6 +286,7 @@
     "@yaks/vocab": "0.2.32",
     "@yaks/yaml": "0.2.24",
     "es-module-lexer": "2.3.2",
+    "isbot": "5.2.4",
     "lucide": "1.31.0",
     "preact": "10.29.7",
     "preact-render-to-string": "6.7.0",

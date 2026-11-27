@@ -1669,11 +1669,13 @@ app_stats:
     done: 'Checked how many people visit %{app}'
   description: >-
     Return page-view counts for an app: the total over the last 30 days by
-    default, and counts by page, referring site and country. Leave app out
-    for every app in the space, a total each, busiest first, as its Visits
-    page shows them. These count
-    page loads, not distinct people. Pass days for a different window, up to
-    90 days; if analytics is not configured, returns that fact instead. For
+    default, how many were people's, likely bots' and verified bots', and
+    counts by page, referring site and country. Leave app out for every app
+    in the space, a total each, busiest first, as its Visits page shows them.
+    These count page loads, not distinct people: by default only the pages
+    that ran in a browser, or every page load with bots true. Pass days for a
+    different window, up to 90 days; if analytics is not configured, returns
+    that fact instead. For
     a published app, it also says how many other spaces installed a copy.
     Aggregate counts and nothing else: no visitor is identified, no address
     and no session is kept, so this can never say who someone was or what

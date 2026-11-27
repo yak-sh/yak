@@ -67,6 +67,7 @@
     "npm:gpt-tokenizer@3.4.0": "3.4.0",
     "npm:highlight.js@11.11.1": "11.11.1",
     "npm:html-rewriter-wasm@0.4.1": "0.4.1",
+    "npm:isbot@5.2.4": "5.2.4",
     "npm:jsdom@26.1.0": "26.1.0",
     "npm:jsdom@^26.1.0": "26.1.0",
     "npm:libphonenumber-js@^1.13.15": "1.13.17",
@@ -2337,6 +2338,9 @@
     },
     "is-promise@4.0.0": {
       "integrity": "sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ=="
+    },
+    "isbot@5.2.4": {
+      "integrity": "sha512-qFPSy82nnxEUrHdKpIQPVpYwsGJqL/+VGWYVYP5c8XMOyRRPDVb1C5ZMwmKs3nB4Evsw/ux0WqHBkf2UUawC1A=="
     },
     "isexe@2.0.0": {
       "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw=="
@@ -5066,6 +5070,7 @@
             "npm:@yaks/vocab@0.2.32",
             "npm:@yaks/yaml@0.2.24",
             "npm:es-module-lexer@2.3.2",
+            "npm:isbot@5.2.4",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact-render-to-string@6.7.0",

@@ -250,16 +250,23 @@ export let personRows = async (
 
 /** What the Visits page of the space `eid` is drawn from: its apps as the
  * side lists them to `person`, and their views from Cloudflare's analytics
- * (@yaks/platform/visit-counts), which no store holds. None for a space they
- * hold no seat in that lets them change it. */
+ * (@yaks/platform/visit-counts), which no store holds, people's or every
+ * visit (`bots`). None for a space they hold no seat in that lets them change
+ * it. */
 export let visitsRows = async (
   env: Env,
   dir: Directory,
   person: string,
   eid: string,
+  bots = false,
 ): Promise<{ apps: Bundle[]; counts: Bundle[] }> => {
   let apps = await personRows(dir, person, appsLine(eid))
-  let counts = await visitRows(env, eid, appsOf(apps, eid).map((a) => a.eid))
+  let counts = await visitRows(
+    env,
+    eid,
+    appsOf(apps, eid).map((a) => a.eid),
+    bots,
+  )
   return { apps, counts }
 }
 

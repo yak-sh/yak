@@ -11,7 +11,7 @@ import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import type { Host } from '@yaks/platform/host'
 import { fromOurs } from './page-report.ts'
-import { isPerson } from './crawlers.ts'
+import { isPerson } from '@yaks/platform/visitor'
 import { CHECK, isFleetAddress } from '@yaks/platform/bots'
 import { FUNNEL, stepOf, type Visited } from './view-point.ts'
 import { VARIANTS } from './variant.ts'
@@ -187,7 +187,7 @@ export type Who = string | null | readonly (string | null)[]
  * Count one step. Fire-and-forget, as a view is (views.ts `viewed`): nothing
  * waits on it, and a throw is one report rather than a broken door. A step
  * taken through a request is a person's only when a browser asked
- * (crawlers.ts `isPerson`): a crawler's, an assistant's or a script's, such
+ * (@yaks/platform/visitor `isPerson`): a crawler's, an assistant's or a script's, such
  * as an agent going through the sign-up live, counts as nothing. One for a
  * test account (`who`, @yaks/platform/bots), such as an agent signing up
  * through a browser, or for the admin or the demo's holder, is counted apart

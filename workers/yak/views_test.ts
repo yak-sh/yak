@@ -16,12 +16,11 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { Env } from './env.ts'
-import type { Visited } from './crawlers.ts'
 import { fetch as siteFetch } from './site.ts'
+import { SINCE } from '@yaks/platform/visitor'
 import {
   ago,
   APPS,
-  classed,
   cut,
   daily,
   FRESH,
@@ -29,6 +28,7 @@ import {
   KEEP,
   lastDay,
   NOT_ON,
+  pageRan,
   perDay,
   platformApps,
   platformDays,
@@ -47,93 +47,6 @@ import {
   viewed,
   visited,
 } from './views.ts'
-
-// A request from this user agent, and from this network as Cloudflare reads it.
-let asked = (ua: string | null, cf?: Visited['cf']) =>
-  Object.assign(
-    new Request('https://ada.yaks.app/', {
-      headers: ua == null ? {} : { 'user-agent': ua },
-    }),
-    { cf },
-  )
-
-let CHROME =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
-
-test('classed: an assistant, a crawler, a person, a script', () => {
-  // The AI clients read first: almost all of them spell themselves `…Bot`.
-  for (
-    let ua of [
-      'Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)',
-      'Mozilla/5.0 AppleWebKit (KHTML, like Gecko); compatible; ChatGPT-User/1.0',
-      'Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)',
-      'Mozilla/5.0 (compatible; PerplexityBot/1.0)',
-      'Mozilla/5.0 (compatible; OAI-SearchBot/1.0)',
-    ]
-  ) assertEquals(classed(asked(ua)), 'agent', ua)
-
-  for (
-    let ua of [
-      'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-      'Mozilla/5.0 (compatible; bingbot/2.0)',
-      'curl/8.7.1',
-      'python-requests/2.32.3',
-      'facebookexternalhit/1.1',
-      'Pingdom.com_bot_version_1.4',
-      'Deno/2.5.6',
-      'node',
-      'Bun/1.3.1',
-      // What the funnel counted as people's until T-2299: scanners and the
-      // fleet's own checks, in words a browser uses but not in its shape.
-      'Mozilla/5.0 (compatible; CMS-Checker/1.0; +https://example.com)',
-      'Mozilla/5.0 (l9scan/2.0.039313e213e26323e2430313; +https://leakix.net)',
-      'Hello from Palo Alto Networks, find out more about our scans in ' +
-      'https://docs-cortex.paloaltonetworks.com/r/1/Cortex-Xpanse/Scanning-activity',
-      'Mozilla/5.0 (compatible)',
-      'Mozilla/5.0',
-      'Mozilla/5.0 (Macintosh) AppleWebKit Safari',
-      'Mozilla/5.0 agent-check',
-      'yaks-agent-check/1.0 (T-154822)',
-      'site-check',
-      'Google-Lens',
-    ]
-  ) assertEquals(classed(asked(ua)), 'bot', ua)
-
-  for (
-    let ua of [
-      CHROME,
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 ' +
-      '(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
-      'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0',
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 27_2_1 like Mac OS X) AppleWebKit/605.1.15 ' +
-      '(KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/530.0.0.0]',
-      'Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 ' +
-      '(KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36',
-    ]
-  ) assertEquals(classed(asked(ua)), 'browser', ua)
-
-  // No user-agent at all is a script, never a person: every browser sends one.
-  assertEquals(classed(asked(null)), 'bot')
-  assertEquals(classed(asked('')), 'bot')
-})
-
-test("classed: a browser on an ad network's own network is its crawler", () => {
-  let meta = { country: 'SE', asn: 32934, asOrganization: 'Facebook, Inc.' }
-  assertEquals(classed(asked(CHROME, meta)), 'bot')
-  assertEquals(
-    classed(asked(CHROME, { asOrganization: 'Meta Platforms, Inc.' })),
-    'bot',
-  )
-  assertEquals(
-    classed(asked(CHROME, { asn: 7922, asOrganization: 'Comcast' })),
-    'browser',
-  )
-  assertEquals(
-    classed(asked(CHROME, { asOrganization: 'Metanet AG' })),
-    'browser',
-  )
-})
 
 test('referred: the host, never the path — and never ourselves', () => {
   assertEquals(
@@ -199,6 +112,14 @@ test('point: inside every Analytics Engine limit, even given junk', () => {
 // ---- reading it back -------------------------------------------------------
 
 let APP = A_VIEW.app
+let CHROME =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+// What a visit is, by its word and when it was written
+// (@yaks/platform/visitor `kindOf`).
+let EARLY = `timestamp < toDateTime('${SINCE}')`
+let KIND = `if(blob6 = 'browser' AND ${EARLY}, 'early', ` +
+  `if(blob6 = 'person' AND ${EARLY}, 'none', blob6))`
 let BOX = 'b0000000-0000-4000-8000-00000000000b'
 let ONE = [APP]
 
@@ -229,18 +150,22 @@ test('the four queries, in full', () => {
     analytics(perDay([APP, BOX], 7)),
     'SELECT index1 AS app, ' +
       "toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, " +
-      'sum(_sample_interval) AS views ' +
+      `${KIND} AS kind, sum(_sample_interval) AS views ` +
       `FROM yak_views WHERE index1 IN ('${APP}', '${BOX}') ` +
       "AND timestamp >= NOW() - INTERVAL '7' DAY " +
-      'GROUP BY app, day ORDER BY day',
+      'GROUP BY app, day, kind ORDER BY day',
   )
-  assertEquals(
-    analytics(topPages(ONE, 30, 3)),
+  // A list counts people's visits, or every request where bots are shown.
+  let pages = (bots: boolean) =>
     'SELECT index1 AS app, blob3 AS path, sum(_sample_interval) AS views ' +
-      `FROM yak_views WHERE index1 IN ('${APP}') ` +
-      "AND timestamp >= NOW() - INTERVAL '30' DAY " +
-      'GROUP BY app, path ORDER BY views DESC LIMIT 3',
-  )
+    `FROM yak_views WHERE index1 IN ('${APP}') ` +
+    "AND timestamp >= NOW() - INTERVAL '30' DAY " +
+    (bots
+      ? "AND blob6 != 'person' "
+      : `AND (blob6 = 'person' AND NOT ${EARLY} OR blob6 = 'browser' AND ${EARLY}) `) +
+    'GROUP BY app, path ORDER BY views DESC LIMIT 3'
+  assertEquals(analytics(topPages(ONE, 30, 3)), pages(false))
+  assertEquals(analytics(topPages(ONE, 30, 3, 'yak_views', true)), pages(true))
   // A direct visit refers nothing and an unknown country is not a country, so
   // both lists drop the empty column rather than leading with it.
   let text = (q: typeof topFrom) => analytics(q(ONE))
@@ -253,17 +178,17 @@ test("the platform's two queries name no app and leave out its funnel's steps", 
   assertEquals(
     analytics(platformDays(7)),
     "SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, " +
-      'blob1 AS space, blob6 AS client, sum(_sample_interval) AS views ' +
+      `blob1 AS space, ${KIND} AS kind, sum(_sample_interval) AS views ` +
       "FROM yak_views WHERE index1 != 'yaks.app' " +
       "AND timestamp >= NOW() - INTERVAL '7' DAY " +
-      'GROUP BY day, space, client ORDER BY day LIMIT 10000',
+      'GROUP BY day, space, kind ORDER BY day LIMIT 10000',
   )
   assertEquals(
     analytics(platformApps(30)),
-    'SELECT index1 AS app, blob6 AS client, sum(_sample_interval) AS views ' +
+    `SELECT index1 AS app, ${KIND} AS kind, sum(_sample_interval) AS views ` +
       "FROM yak_views WHERE index1 != 'yaks.app' " +
       "AND timestamp >= NOW() - INTERVAL '30' DAY " +
-      'GROUP BY app, client ORDER BY views DESC LIMIT 10000',
+      'GROUP BY app, kind ORDER BY views DESC LIMIT 10000',
   )
 })
 
@@ -294,22 +219,30 @@ test("the endpoint is the account's own", () => {
   )
 })
 
-test('daily: a dense series, gaps and all', () => {
+test("daily: a dense series of people's visits, or every visit", () => {
   let now = Date.parse('2026-09-06T11:00:00Z')
-  let series = daily(
-    // Cloudflare answers a DateTime, and a wide number as a string.
-    [
-      { day: '2026-09-06 00:00:00', views: '12' },
-      { day: '2026-09-04 00:00:00', views: 3 },
-    ],
-    4,
-    now,
-  )
-  assertEquals(series, [
-    { day: '2026-09-03', views: 0 },
-    { day: '2026-09-04', views: 3 },
-    { day: '2026-09-05', views: 0 },
-    { day: '2026-09-06', views: 12 },
+  // Cloudflare answers a DateTime, and a wide number as a string; a day a
+  // row a kind of visit.
+  let rows = [
+    { day: '2026-09-06 00:00:00', kind: 'person', views: '12' },
+    { day: '2026-09-06 00:00:00', kind: 'browser', views: 15 },
+    { day: '2026-09-06 00:00:00', kind: 'bot', views: 40 },
+    { day: '2026-09-04 00:00:00', kind: 'early', views: 3 },
+    { day: '2026-09-04 00:00:00', kind: 'verified', views: 1 },
+  ]
+  let views = (bots: boolean) =>
+    daily(rows, 4, now, bots).map((d) => [d.day, d.views])
+  assertEquals(views(false), [
+    ['2026-09-03', 0],
+    ['2026-09-04', 3],
+    ['2026-09-05', 0],
+    ['2026-09-06', 12],
+  ])
+  assertEquals(views(true), [
+    ['2026-09-03', 0],
+    ['2026-09-04', 4],
+    ['2026-09-05', 0],
+    ['2026-09-06', 55],
   ])
 })
 
@@ -344,6 +277,7 @@ test('staging analytics reads and cached counts stay in their dataset', async ()
       data: [{
         app,
         day: '2026-09-06',
+        kind: 'person',
         views: q.includes('FROM yak_views_staging ') ? 2 : 9,
       }],
     }),
@@ -416,8 +350,9 @@ test('every app of a page is asked about in the same four queries', async () => 
     body: JSON.stringify({
       data: asks(q) == 'day'
         ? [
-          { app: app, day: '2026-09-06 00:00:00', views: 3 },
-          { app: box, day: '2026-09-06 00:00:00', views: 5 },
+          { app: app, day: '2026-09-06 00:00:00', kind: 'person', views: 3 },
+          { app: box, day: '2026-09-06 00:00:00', kind: 'early', views: 5 },
+          { app: box, day: '2026-09-06 00:00:00', kind: 'bot', views: 8 },
         ]
         : asks(q) == 'path'
         ? [
@@ -442,10 +377,38 @@ test('every app of a page is asked about in the same four queries', async () => 
     assertEquals(all?.get(app)?.total, 3)
     assertEquals(all?.get(app)?.pages, [{ name: '/cookbook/', views: 3 }])
     assertEquals(all?.get(box)?.total, 5)
+    assertEquals(all?.get(box)?.split, { people: 5, bots: 8, verified: 0 })
     assertEquals(all?.get(box)?.pages, [{ name: '/box/', views: 5 }])
     // Held for a few minutes: asked again, nothing is asked.
     await statsOf(env(), box, 3, Date.parse('2026-09-06T12:01:00Z'))
     assertEquals(api.asked.length, 4)
+  } finally {
+    api.done()
+  }
+})
+
+test("with bots shown, an app's lists count every visit, held apart", async () => {
+  let app = crypto.randomUUID()
+  let api = sql((q) => ({
+    body: JSON.stringify({
+      data: asks(q) == 'day'
+        ? [
+          { app, day: '2026-09-06 00:00:00', kind: 'person', views: 2 },
+          { app, day: '2026-09-06 00:00:00', kind: 'browser', views: 9 },
+        ]
+        : [],
+    }),
+  }))
+  try {
+    let now = Date.parse('2026-09-06T12:00:00Z')
+    let people = (await statsFor(env(), [app], 3, now))!.get(app)!
+    let all = (await statsFor(env(), [app], 3, now, true))!.get(app)!
+    assertEquals([people.bots, people.total], [false, 2])
+    assertEquals([all.bots, all.total], [true, 9])
+    assertEquals(all.split, { people: 2, bots: 7, verified: 0 })
+    assertEquals(api.asked.length, 8)
+    let lists = api.asked.slice(4).filter((q) => asks(q) != 'day')
+    assert(lists.every((q) => q.includes("blob6 != 'person'")), lists[0])
   } finally {
     api.done()
   }
@@ -457,7 +420,12 @@ test('a platform of apps is asked about in queries the SQL API takes', async () 
     assert(q.length <= 10000, `${q.length} characters`)
     return {
       body: JSON.stringify({
-        data: named(q).map((app) => ({ app, day: '2026-09-06', views: 1 })),
+        data: named(q).map((app) => ({
+          app,
+          day: '2026-09-06',
+          kind: 'person',
+          views: 1,
+        })),
       }),
     }
   })
@@ -582,6 +550,46 @@ test('the counter records HTML pages and skips files and redirects', () => {
   assertEquals(wrote.length, 1)
 })
 
+test("a page that ran is a person's visit, where a browser said so", async () => {
+  let wrote: { blobs: string[] }[] = []
+  let env = {
+    VIEWS: { writeDataPoint: (p: { blobs: string[] }) => void wrote.push(p) },
+  } as unknown as Env
+  let at = { app: 'e', space: 'one', slug: 'app' }
+  let ran = (ua: string, body: string) =>
+    pageRan(
+      env,
+      Object.assign(
+        new Request('https://one.yaks.app/app/_web/seen', {
+          method: 'POST',
+          headers: { 'user-agent': ua },
+          body,
+        }),
+        { cf: { country: 'NZ' } },
+      ),
+      at,
+    )
+  let said = JSON.stringify({
+    path: '/app/cakes',
+    from: 'https://news.example.com/story?q=cake',
+  })
+  assertEquals((await ran(CHROME, said)).status, 204)
+  assertEquals(wrote.map((p) => p.blobs), [[
+    'one',
+    'app',
+    '/app/cakes',
+    'NZ',
+    'news.example.com',
+    'person',
+  ]])
+  // A script posting the same counts nothing, nor does a post that says
+  // nothing, and each is answered alike.
+  for (let [ua, body] of [['curl/8.7.1', said], [CHROME, 'not json']]) {
+    assertEquals((await ran(ua, body)).status, 204)
+  }
+  assertEquals(wrote.length, 1)
+})
+
 test('the last day’s visits are one query over a day, held for a few minutes', async () => {
   let [app, other] = [crypto.randomUUID(), crypto.randomUUID()]
   let api = sql(() => ({
@@ -645,7 +653,12 @@ test("one app's counts are kept at Site, so an isolate's first ask waits on none
   let answer = (q: string) => ({
     body: JSON.stringify({
       data: asks(q) == 'day'
-        ? [{ app, day: new Date().toISOString().slice(0, 10), views: 4 }]
+        ? [{
+          app,
+          day: new Date().toISOString().slice(0, 10),
+          kind: 'person',
+          views: 4,
+        }]
         : [],
     }),
   })
@@ -681,7 +694,12 @@ test('an answer Site has not kept yet is counted here as well, and kept behind i
   let api = sql((q) => ({
     body: JSON.stringify({
       data: asks(q) == 'day'
-        ? [{ app, day: new Date().toISOString().slice(0, 10), views: 2 }]
+        ? [{
+          app,
+          day: new Date().toISOString().slice(0, 10),
+          kind: 'person',
+          views: 2,
+        }]
         : [],
     }),
   }))

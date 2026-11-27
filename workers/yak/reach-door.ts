@@ -208,9 +208,11 @@ export let reachDoor = async (
   let visitsOf = (line: string) => {
     let counted = countsSpace(line)
     if (counted != undefined) {
+      let { space, bots } = counted
       return {
-        space: counted,
-        read: async () => (await visitsRows(env, dir, person, counted)).counts,
+        space,
+        read: async () =>
+          (await visitsRows(env, dir, person, space, bots)).counts,
       }
     }
     let day = daySpace(line)

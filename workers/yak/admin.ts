@@ -94,7 +94,7 @@ import { type Host, spaceHost, url } from '@yaks/platform/host'
 import { DAYS, NOT_ON, platformOf, statsFor, statsOf } from './views.ts'
 import { platformVisits } from '@yaks/platform/admin-visits'
 import { adminVisitsView } from '@yaks/platform/admin-visits-view'
-import { appVisits } from '@yaks/platform/visits-view'
+import { appVisits, botsAt, botTabs } from '@yaks/platform/visits-view'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
 import { arrivals } from './arrivals.ts'
 import { splitSays, stopped } from '@yaks/platform/funnel'
@@ -981,13 +981,14 @@ export let possessions = (d: Reading, r: Row) => {
 
 // Who visited these apps of one space, each drawn as its owner's Visits page
 // draws it (@yaks/platform/visits-view), read as the admin.
-let visiting = async (env: Env, d: Reading, apps: Row[]) => {
+let visiting = async (env: Env, d: Reading, apps: Row[], bots: boolean) => {
   if (!apps.length) return null
   let eids = apps.map((a) => a.entity.eid)
-  let one = apps.length == 1 ? statsOf(env, eids[0]) : null
+  let now = Date.now()
+  let one = apps.length == 1 ? statsOf(env, eids[0], DAYS, now, bots) : null
   let read = one
     ? one.then((s) => new Map([[eids[0], s]]))
-    : statsFor(env, eids)
+    : statsFor(env, eids, DAYS, now, bots)
   let counts = read && await read.catch((e) => {
     caught(e, { request: 'admin visits' })
     return e instanceof Error ? e : new Error(String(e))
@@ -997,6 +998,7 @@ let visiting = async (env: Env, d: Reading, apps: Row[]) => {
     Fragment,
     null,
     h(Group, null, 'Visits'),
+    botTabs(bots, botsAt),
     !counts
       ? h(Form.Hint, null, NOT_ON)
       : counts instanceof Error
@@ -1016,7 +1018,13 @@ let marked = (r: Row): MarkedApp => ({
 })
 
 // One row's page: its own facts, drawn by its renderer, then what it holds.
-export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
+export let page = async (
+  d: Reading,
+  dir: Directory,
+  r: Row,
+  env: Env,
+  bots = false,
+) => {
   let c = d.census
   let byId = (eid: string) =>
     [...c.people, ...c.spaces, ...c.apps].find((x) => x.entity.eid == eid)
@@ -1034,7 +1042,7 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     let [support, retry, visits] = await Promise.all([
       supportFor(env, space),
       setupWaiting(env, space),
-      visiting(env, d, apps),
+      visiting(env, d, apps, bots),
     ])
     let subscription = space.plan?.status == 'canceled' ||
         space.plan?.status == 'incomplete_expired'
@@ -1074,7 +1082,7 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     let from = r.installed?.of ? d.apps.get(idOf(r.installed.of)) : undefined
     let [deploys, visits] = await Promise.all([
       dir.deploys(appAbout(r)),
-      visiting(env, d, [r]),
+      visiting(env, d, [r], bots),
     ])
     ctx.home = home ? refOf(d, home) : undefined
     ctx.from = from ? refOf(d, from) : undefined
@@ -1324,7 +1332,7 @@ let spendingPage = async (d: Reading, env: Env, person: string) => {
 // Every space's and app's visits together (@yaks/platform/admin-visits), from
 // one platform-wide read of the analytics Site keeps a few minutes, never a
 // read a space. A test space's are counted apart.
-let visitsPage = async (d: Reading, env: Env) => {
+let visitsPage = async (d: Reading, env: Env, bots: boolean) => {
   let read = platformOf(env)
   let tallied = read && await read.catch((e) => {
     caught(e, { request: 'admin visits' })
@@ -1348,7 +1356,11 @@ let visitsPage = async (d: Reading, env: Env) => {
     'visits',
     tallied instanceof Error
       ? h(Form.Hint, null, `Visits could not be counted: ${tallied.message}`)
-      : adminVisitsView(tallied && platformVisits(tallied, places), PATH),
+      : adminVisitsView(
+        tallied && platformVisits(tallied, places, bots),
+        PATH,
+        bots,
+      ),
   )
 }
 
@@ -1627,7 +1639,9 @@ export let answer = async (
     )
   }
   if (rest == 'spending') return await spendingPage(d, env, who)
-  if (rest == 'visits') return await visitsPage(d, env)
+  if (rest == 'visits') {
+    return await visitsPage(d, env, asked.searchParams.has('bots'))
+  }
   if (rest == 'letters') return lettersPage(d, await dir.trials())
   if (rest.startsWith('letters/')) {
     let trial = rest.slice('letters/'.length)
@@ -1674,5 +1688,5 @@ export let answer = async (
   }
   return part
     ? await operatorPage(d, env, r, who, open)
-    : await page(d, dir, r, env)
+    : await page(d, dir, r, env, asked.searchParams.has('bots'))
 }

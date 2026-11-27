@@ -6,8 +6,10 @@
 //
 // What a data point carries is the whole privacy rule, and it is short on
 // purpose: the app it was a page of, the space and app it was served under,
-// the path, the visitor's country, the site that linked them here, and one of
-// three words for what kind of client asked. Never the IP, never a visitor id
+// the path, the visitor's country, the site that linked them here, and one
+// word for what kind of client asked (@yaks/platform/visitor): a request's,
+// as the page is answered, and `person` once more where the page ran in a
+// browser (`pageRan`). Never the IP, never a visitor id
 // or a cookie, never the user-agent string itself — a UA is a fingerprint and
 // a class is a word. Nothing here identifies a person, and nothing here can be
 // joined back to one.
@@ -56,13 +58,22 @@ import type { Answer } from './apps.ts'
 import { background, caught } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
 import { failure, resent } from '@yaks/cloudflare/api'
-import { FUNNEL, isView, pointOf, type Visited } from './view-point.ts'
+import { FUNNEL, isView, pointOf, ranOf, type Visited } from './view-point.ts'
+import {
+  all,
+  isPerson,
+  kindOf,
+  people,
+  requests,
+  type Split,
+  split,
+} from '@yaks/platform/visitor'
 import type { Tallied } from '@yaks/platform/admin-visits'
 import { appTag, type Seen } from '@yaks/platform/kept'
 import { countRows, dayRows, NOT_ON } from '@yaks/platform/visit-counts'
 import type { Bundle } from '@yaks/graph'
 import { type Space, storeName } from './directory.ts'
-export { classed } from './crawlers.ts'
+export { classed } from '@yaks/platform/visitor'
 export { point, referred, type View } from './view-point.ts'
 
 /** How long Cloudflare keeps a data point. Said in one place. */
@@ -114,6 +125,28 @@ export let viewed = (
   } catch (e) {
     caught(e, { request: 'views write', space: at.space, app: at.slug })
   }
+}
+
+/**
+ * A page of an app saying it ran (public/seen.js): one person's visit, counted
+ * beside the request `viewed` counted, where a browser posted it. Whatever
+ * else posts is answered alike and counts nothing.
+ */
+export let pageRan = async (
+  env: Env,
+  req: Request,
+  at: { app: string; space: string; slug: string },
+): Promise<Response> => {
+  let said = await req.text().then((t) => JSON.parse(t.slice(0, 4096)))
+    .catch(() => null)
+  if (env.VIEWS && said && typeof said == 'object' && isPerson(req)) {
+    try {
+      env.VIEWS.writeDataPoint(ranOf(req as Visited, said, at))
+    } catch (e) {
+      caught(e, { request: 'views ran', space: at.space, app: at.slug })
+    }
+  }
+  return new Response(null, { status: 204 })
 }
 
 // ---- reading it back (T-34497) ---------------------------------------------
@@ -216,44 +249,64 @@ let since = (days: number) =>
 
 let DAY = as(fn('toStartOfInterval', TIMESTAMP, interval(1, 'DAY')), 'day')
 
+let CLIENT_COL = col(CLIENT)
+
+/** What kind of visit a data point is, for counting
+ * (@yaks/platform/visitor `kindOf`). */
+let KIND = as(kindOf(CLIENT_COL, TIMESTAMP), 'kind')
+
+/** The data points a list counts: every visit where bots are shown, else
+ * people's alone. */
+let counting = (bots: boolean) =>
+  bots ? requests(CLIENT_COL) : people(CLIENT_COL, TIMESTAMP)
+
 /**
- * Views per app per day, oldest first: the bars. A day nobody came is absent
- * from the answer and filled in by `daily` below, because a gap in a chart is
- * a quiet day and not a missing one.
+ * Views per app per day by kind of visit, oldest first: the bars, and how
+ * many were people's and bots'. A day nobody came is absent from the answer
+ * and filled in by `daily` below, because a gap in a chart is a quiet day and
+ * not a missing one.
  */
 export let perDay = (apps: string[], days = DAYS, dataset = DATASET) =>
   select({
-    cols: [
-      as(APP, 'app'),
-      DAY,
-      as(COUNT, 'views'),
-    ],
+    cols: [as(APP, 'app'), DAY, KIND, as(COUNT, 'views')],
     ...over(apps, days, dataset),
-    group: [col('app'), col('day')],
+    group: [col('app'), col('day'), col('kind')],
     order: [col('day')],
   })
 
-/** Each app's views over the window, one row an app that had any. */
+/** Each app's views by people over the window, one row an app that had
+ * any. */
 export let totals = (apps: string[], days = DAYS, dataset = DATASET) =>
   select({
     cols: [as(APP, 'app'), as(COUNT, 'views')],
-    ...over(apps, days, dataset),
+    ...over(apps, days, dataset, counting(false)),
     group: [col('app')],
   })
 
 // The three "top" lists are one query with a different column, so they are one
 // function. `skip` drops the rows that never had the fact: a direct visit has
 // no referring site, and an unknown country is not a country.
-let top =
-  (blob: string, name: string, skip: boolean) =>
-  (apps: string[], days = DAYS, limit = TOP, dataset = DATASET) =>
-    select({
-      cols: [as(APP, 'app'), as(col(blob), name), as(COUNT, 'views')],
-      ...over(apps, days, dataset, ...skip ? [ne(col(blob), lit(''))] : []),
-      group: [col('app'), col(name)],
-      order: [desc(col('views'))],
-      limit: lit(whole(limit, ROWS)),
-    })
+let top = (blob: string, name: string, skip: boolean) =>
+(
+  apps: string[],
+  days = DAYS,
+  limit = TOP,
+  dataset = DATASET,
+  bots = false,
+) =>
+  select({
+    cols: [as(APP, 'app'), as(col(blob), name), as(COUNT, 'views')],
+    ...over(
+      apps,
+      days,
+      dataset,
+      counting(bots),
+      ...skip ? [ne(col(blob), lit(''))] : [],
+    ),
+    group: [col('app'), col(name)],
+    order: [desc(col('views'))],
+    limit: lit(whole(limit, ROWS)),
+  })
 
 /** The most-visited pages. Every view has a path, so none is skipped. */
 export let topPages = top(PATH, 'path', false)
@@ -263,9 +316,6 @@ export let topFrom = top(FROM, 'site', true)
 
 /** Where the visitors were. An unknown country is left out. */
 export let topCountries = top(COUNTRY, 'country', true)
-
-/** Browser, bot or agent, and how many of each. */
-export let byClient = top(CLIENT, 'client', true)
 
 // ---- every app at once (T-4011) --------------------------------------------
 
@@ -281,29 +331,24 @@ let everyApp = (days: number, dataset: string) => ({
 export let PLATFORM_ROWS = 10_000
 
 /** Every app's views by day, the space they were served under and the kind
- * of client that asked: the platform's chart, test spaces told apart by
- * their slug. */
+ * of visit (@yaks/platform/visitor `kindOf`): the platform's chart, test
+ * spaces told apart by their slug. */
 export let platformDays = (days = DAYS, dataset = DATASET) =>
   select({
-    cols: [
-      DAY,
-      as(col(SPACE), 'space'),
-      as(col(CLIENT), 'client'),
-      as(COUNT, 'views'),
-    ],
+    cols: [DAY, as(col(SPACE), 'space'), KIND, as(COUNT, 'views')],
     ...everyApp(days, dataset),
-    group: [col('day'), col('space'), col('client')],
+    group: [col('day'), col('space'), col('kind')],
     order: [col('day')],
     limit: lit(PLATFORM_ROWS),
   })
 
-/** Every app's views over the window by the kind of client, busiest first:
+/** Every app's views over the window by the kind of visit, busiest first:
  * the platform's top spaces and apps. */
 export let platformApps = (days = DAYS, dataset = DATASET) =>
   select({
-    cols: [as(APP, 'app'), as(col(CLIENT), 'client'), as(COUNT, 'views')],
+    cols: [as(APP, 'app'), KIND, as(COUNT, 'views')],
     ...everyApp(days, dataset),
-    group: [col('app'), col('client')],
+    group: [col('app'), col('kind')],
     order: [desc(col('views'))],
     limit: lit(PLATFORM_ROWS),
   })
@@ -389,11 +434,15 @@ export type Day = { day: string; views: number }
 /** One line of a top list. */
 export type Line = { name: string; views: number }
 
-/** What an app's people are shown, and when it was counted. */
+/** What an app's people are shown, and when it was counted: people's visits
+ * alone, or every visit where `bots`, and the split of the window's visits
+ * either way (@yaks/platform/visitor). */
 export type Stats = {
   at: string
   days: number
+  bots: boolean
   total: number
+  split: Split
   daily: Day[]
   pages: Line[]
   from: Line[]
@@ -406,10 +455,30 @@ let YMD = (t: number) => new Date(t).toISOString().slice(0, 10)
  * The day series, dense: one entry per day in the window whether or not
  * anybody came, so a chart's flat stretches are quiet days rather than gaps.
  * Cloudflare answers a DateTime (`2026-09-01 00:00:00`) and the day is its
- * date part.
+ * date part; a day's rows, one a kind of visit, are split
+ * (@yaks/platform/visitor `split`) and counted as people's, or every visit
+ * where `bots`.
  */
-export let daily = (rows: Rows, days: number, now = Date.now()): Day[] => {
-  let had = new Map(rows.map((r) => [word(r.day).slice(0, 10), num(r.views)]))
+export let daily = (
+  rows: Rows,
+  days: number,
+  now = Date.now(),
+  bots = false,
+): Day[] => {
+  let kinds = new Map<string, Record<string, number>>()
+  for (let r of rows) {
+    let day = word(r.day).slice(0, 10)
+    let of = kinds.get(day) ?? {}
+    let kind = word(r.kind)
+    of[kind] = (of[kind] ?? 0) + num(r.views)
+    kinds.set(day, of)
+  }
+  let had = new Map(
+    [...kinds].map(([day, of]) => {
+      let s = split(of)
+      return [day, bots ? all(s) : s.people]
+    }),
+  )
   let out: Day[] = []
   for (let i = days - 1; i >= 0; i--) {
     let day = YMD(now - i * 86_400_000)
@@ -456,9 +525,10 @@ let listed = async (
   apps: string[],
   days: number,
   dataset: string,
+  bots: boolean,
 ) => {
   let limit = apps.length > 1 ? ROWS : TOP
-  let rows = await ran(env, query(apps, days, limit, dataset))
+  let rows = await ran(env, query(apps, days, limit, dataset, bots))
   let each = new Map(
     [...byApp(rows, apps)].map(([app, rows]) => [app, lines(rows, col)]),
   )
@@ -466,7 +536,7 @@ let listed = async (
     cut(rows, limit, each).map(async (app) => {
       each.set(
         app,
-        lines(await ran(env, query([app], days, TOP, dataset)), col),
+        lines(await ran(env, query([app], days, TOP, dataset, bots)), col),
       )
     }),
   )
@@ -489,19 +559,21 @@ let held = new Map<string, { at: number; stats: Stats }>()
 /**
  * Who visited these apps, one answer an app — or `null` where nobody has set
  * CF_ANALYTICS_TOKEN, which is the platform saying analytics are not switched
- * on rather than an error every caller has to handle. Only the apps with no
- * answer held are asked about, all of them in the same four queries.
+ * on rather than an error every caller has to handle. People's visits alone,
+ * or every visit where `bots`. Only the apps with no answer held are asked
+ * about, all of them in the same four queries.
  */
 export let statsFor = (
   env: Env,
   apps: string[],
   days = DAYS,
   now = Date.now(),
+  bots = false,
 ): Promise<Map<string, Stats>> | null => {
   if (!statsOn(env)) return null
   let window = whole(days, KEPT_DAYS)
   let key = (app: string) =>
-    `${sqlAt(env)}:${env.VIEWS_DATASET ?? DATASET}:${app}:${window}`
+    `${sqlAt(env)}:${env.VIEWS_DATASET ?? DATASET}:${app}:${window}:${bots}`
   let fresh = (app: string) => {
     let kept = held.get(key(app))
     return kept && now - kept.at < FRESH ? kept.stats : undefined
@@ -515,8 +587,8 @@ export let statsFor = (
   }
   let inOrder = () => new Map(apps.map((app) => [app, found.get(app)!]))
   if (!missing.length) return Promise.resolve(inOrder())
-  return remember(asked(env, missing, window, now), (all) => {
-    for (let [app, stats] of all) {
+  return remember(asked(env, missing, window, now, bots), (answer) => {
+    for (let [app, stats] of answer) {
       let id = key(app)
       if ((held.get(id)?.at ?? -Infinity) <= now) {
         held.set(id, { at: now, stats })
@@ -527,9 +599,9 @@ export let statsFor = (
 }
 
 /**
- * Every app's views over the last `days` ({@link DAYS} by default), one query
- * a batch of {@link APPS}, for the hourly reading to keep on each row
- * (usage.ts): an app absent from the answer had none.
+ * Every app's views by people over the last `days` ({@link DAYS} by
+ * default), one query a batch of {@link APPS}, for the hourly reading to keep
+ * on each row (usage.ts): an app absent from the answer had none.
  */
 export let visited = (
   env: Env,
@@ -547,7 +619,8 @@ let lastDays = new Map<
   { at: number; views: Map<string, number> }
 >()
 
-/** Each app's views over the last day, for a space's Updates (updates.ts),
+/** Each app's views by people over the last day, for a space's Updates
+ * (updates.ts),
  * held for {@link FRESH}; `null` where analytics are not switched on. */
 export let lastDay = (
   env: Env,
@@ -588,9 +661,12 @@ export let HIT = 60
 /** Where Site keeps one app's answer. */
 export let COUNTED = '/stats/'
 
-/** The key Site keeps an app's answer over `days` under. */
-export let statsAt = (app: string, days = DAYS) =>
-  `https://site.invalid${COUNTED}${eid(app)}/${whole(days, KEPT_DAYS)}`
+/** The key Site keeps an app's answer over `days` under, people's or every
+ * visit (`bots`). */
+export let statsAt = (app: string, days = DAYS, bots = false) =>
+  `https://site.invalid${COUNTED}${eid(app)}/${whole(days, KEPT_DAYS)}${
+    bots ? '/bots' : ''
+  }`
 
 /** How long Site keeps an answer fresh, and then stale while it counts. */
 export let KEEP = `public, max-age=${FRESH / 1000}, ` +
@@ -608,7 +684,7 @@ export let platformAt = (days = DAYS) =>
  * so the app's erasure purges it, or at {@link platformAt}. A failure is never
  * kept. */
 export let counted = async (env: Env, path: string): Promise<Response> => {
-  let [app, days] = path.slice(COUNTED.length).split('/')
+  let [app, days, bots] = path.slice(COUNTED.length).split('/')
   let unkept = (status: number, said: string) =>
     new Response(said, {
       status,
@@ -622,8 +698,8 @@ export let counted = async (env: Env, path: string): Promise<Response> => {
         headers: { 'cache-control': KEEP },
       })
     }
-    let all = await asked(env, [eid(app)], window, Date.now())
-    return Response.json(all.get(app), {
+    let answer = await asked(env, [eid(app)], window, Date.now(), !!bots)
+    return Response.json(answer.get(app), {
       headers: { 'cache-control': KEEP, 'cache-tag': appTag(app) },
     })
   } catch (e) {
@@ -633,19 +709,21 @@ export let counted = async (env: Env, path: string): Promise<Response> => {
 
 let statsOn = (env: Env) => !!env.CF_ANALYTICS_TOKEN && !!env.CF_ACCOUNT
 
-/** Who visited one app: Site's kept answer where Site is bound, else
- * {@link statsFor} asked about it alone. */
+/** Who visited one app, people or everyone (`bots`): Site's kept answer
+ * where Site is bound, else {@link statsFor} asked about it alone. */
 export let statsOf = (
   env: Env,
   app: string,
   days = DAYS,
   now = Date.now(),
+  bots = false,
 ): Promise<Stats> | null =>
   statsOn(env)
     ? kept(
       env,
-      statsAt(app, days),
-      () => statsFor(env, [app], days, now)!.then((all) => all.get(app)!),
+      statsAt(app, days, bots),
+      () =>
+        statsFor(env, [app], days, now, bots)!.then((each) => each.get(app)!),
       { app },
     )
     : null
@@ -670,12 +748,12 @@ export let tallied = async (
     daily: daily.map((r) => ({
       day: word(r.day),
       space: word(r.space),
-      client: word(r.client),
+      kind: word(r.kind),
       views: num(r.views),
     })),
     apps: apps.map((r) => ({
       app: word(r.app),
-      client: word(r.client),
+      kind: word(r.kind),
       views: num(r.views),
     })),
   }
@@ -732,18 +810,27 @@ let asked = (
   apps: string[],
   days: number,
   now: number,
+  bots: boolean,
 ): Promise<Map<string, Stats>> =>
-  batched(apps, (apps) => askedOf(env, apps, days, now))
+  batched(apps, (apps) => askedOf(env, apps, days, now, bots))
+
+// The window's views of one app by kind of visit, from its days' rows.
+let kinds = (rows: Rows) => {
+  let of: Record<string, number> = {}
+  for (let r of rows) of[word(r.kind)] = (of[word(r.kind)] ?? 0) + num(r.views)
+  return of
+}
 
 let askedOf = async (
   env: Env,
   apps: string[],
   days: number,
   now: number,
+  bots: boolean,
 ): Promise<Map<string, Stats>> => {
   let dataset = env.VIEWS_DATASET ?? DATASET
   let list = (query: ReturnType<typeof top>, col: string) =>
-    listed(env, query, col, apps, days, dataset)
+    listed(env, query, col, apps, days, dataset, bots)
   let [day, pages, from, countries] = await Promise.all([
     ran(env, perDay(apps, days, dataset)).then((rows) => byApp(rows, apps)),
     list(topPages, 'path'),
@@ -751,11 +838,13 @@ let askedOf = async (
     list(topCountries, 'country'),
   ])
   return new Map(apps.map((app) => {
-    let series = daily(day.get(app)!, days, now)
+    let series = daily(day.get(app)!, days, now, bots)
     return [app, {
       at: new Date(now).toISOString(),
       days,
+      bots,
       total: series.reduce((n, d) => n + d.views, 0),
+      split: split(kinds(day.get(app)!)),
       daily: series,
       pages: pages.get(app)!,
       from: from.get(app)!,
@@ -781,14 +870,15 @@ export let visitRows = async (
   env: Env,
   space: string,
   apps: string[],
+  bots = false,
 ): Promise<Bundle[]> => {
-  if (!apps.length) return countRows(space, new Map())
-  let asked = statsFor(env, apps)
+  if (!apps.length) return countRows(space, new Map(), bots)
+  let asked = statsFor(env, apps, DAYS, Date.now(), bots)
   try {
-    return countRows(space, asked && await asked)
+    return countRows(space, asked && await asked, bots)
   } catch (e) {
     caught(e, { request: 'views' })
-    return countRows(space, null)
+    return countRows(space, null, bots)
   }
 }
 
@@ -820,8 +910,15 @@ export let visitDayRows = async (
 export let stats: Answer = async (at) => {
   if (at.path != '/stats') return null
   if (!at.who.role) return at.refuse('not_a_reader')
-  let days = new URL(at.req.url).searchParams.get('days')
-  let asked = statsOf(at.env, at.app.eid, days ? Number(days) : undefined)
+  let q = new URL(at.req.url).searchParams
+  let days = q.get('days')
+  let asked = statsOf(
+    at.env,
+    at.app.eid,
+    days ? Number(days) : undefined,
+    Date.now(),
+    q.has('bots'),
+  )
   if (!asked) return Response.json({ on: false, say: NOT_ON })
   try {
     return Response.json({ on: true, ...await asked })

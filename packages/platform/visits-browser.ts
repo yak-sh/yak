@@ -44,7 +44,7 @@ export let drawVisits = (
       visitsView(
         view,
         appsOf(rows.apps, view.space),
-        countsOf(rows.counts, view.space),
+        countsOf(rows.counts, view.space, !!view.bots),
       ),
     ),
   )
@@ -58,7 +58,7 @@ export let bindVisits = (
 ): () => void => {
   let view = JSON.parse(root.dataset.visitsView!) as VisitsView
   let apps = graph.watch(sideApps(view.space))
-  let counts = graph.watch(visitCounts(view.space))
+  let counts = graph.watch(visitCounts(view.space, !!view.bots))
   // A line neither answered nor carried by the page leaves what is drawn.
   let held = (w: typeof apps) => w.ready || w.value.length > 0
   let draw = () =>
