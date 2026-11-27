@@ -80,7 +80,7 @@ import {
 import type { Batch, Delta, Entry, Patch } from './batch.ts'
 import { dec, enc } from './value.ts'
 import { heldRows, heldSql } from './held.ts'
-import { names } from './names.ts'
+import { names, words, wordTable } from './names.ts'
 
 /** A statement, run for its rows: the whole of what the caller has to supply.
  * A write goes through it too — `insert … returning id` returns a row. */
@@ -170,7 +170,16 @@ export type LogOpts = {
 // property history, before-value lookup and undo self-contained and stops a
 // value leaking across a removal and a later recreation. `ref` names content-
 // addressed bytes the graph already holds, and then `value` stays null.
-export let ddl = (spine = 'entity'): Stmt[] => {
+//
+// Beside them, `journal_word` holds the names `vocab` gives each word a row
+// records, which reads take labels from (./names.ts `words`): written here, so
+// a store holds its vocabulary's words wherever it installs this schema.
+export let ddl = (vocab: Vocab, spine = 'entity'): Stmt[] => [
+  ...tables(spine),
+  ...words(vocab),
+]
+
+let tables = (spine: string): Stmt[] => {
   let id = { name: 'id', type: 'integer', pk: true }
   let to = (t: string, required = false) => ({
     type: 'integer',
@@ -233,6 +242,7 @@ export let ddl = (spine = 'entity'): Stmt[] => {
     index('journal_change_comp', 'journal_change', ['component']),
     index('journal_field_change', 'journal_field', ['change', 'ordinal']),
     index('journal_field_ref', 'journal_field', ['ref'], notNull(col('ref'))),
+    wordTable,
   ]
 }
 
@@ -242,7 +252,7 @@ export let ddl = (spine = 'entity'): Stmt[] => {
  * rows one at a time, and refuses where a reference holds one), and each
  * table's indexes with it. */
 export let dropDdl = (): Drop[] =>
-  ddl().flatMap((s): Drop[] =>
+  tables('entity').flatMap((s): Drop[] =>
     s.t == 'create table'
       ? [{ t: 'drop', kind: 'table', name: s.name, ifExists: true }]
       : []

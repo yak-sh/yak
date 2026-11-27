@@ -95,7 +95,7 @@ export let fixture = () => {
     extend: [traverse(vocab)],
   })
   store.install()
-  for (let s of ddl()) db.query(s)
+  for (let s of ddl(vocab)) db.query(s)
   // ada writes and bea is assigned work, people the store knows; and the
   // store describes the components the journal's changes name, as a host
   // does at start.

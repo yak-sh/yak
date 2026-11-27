@@ -136,7 +136,7 @@ let logged = loadVocab([defs, journalDoc])
 let db = open(':memory:')
 let store = storage(db, logged, { backed: backed(logged) })
 store.install()
-for (let s of ddl()) db.query(s)
+for (let s of ddl(logged)) db.query(s)
 let kept = fixture(graph({
   vocab: logged,
   storage: store,

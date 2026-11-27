@@ -24,7 +24,7 @@ let fixture = (changes: number) => {
   let store = storage(sql, vocab)
   store.install()
   store.raise()
-  for (let s of ddl()) sql.query(s)
+  for (let s of ddl(vocab)) sql.query(s)
   sql.query(insert('entity', ...[1, 2, 3].map((id) => ({ id, eid: `e${id}` }))))
   sql.query(insert('journal_tx', { id: 1, ts: '2026-11-17' }))
   let record = (entity: number, component: string, operation = 'upsert') => ({

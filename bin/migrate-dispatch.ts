@@ -234,7 +234,7 @@ let run = async () => {
       })}
     db = open(target)
     let before = objects(db)
-    let planned = [...schema(vocab, loaded.derived), ...journalDdl()]
+    let planned = [...schema(vocab, loaded.derived), ...journalDdl(vocab)]
     let expected = new Map(planned.flatMap((stmt) => {
       let key = identity(stmt)
       return key

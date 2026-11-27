@@ -32,7 +32,7 @@ import { doorOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { grantEid, Store, type Time } from './graph.ts'
 import { visitEdge } from '@yaks/platform/visits'
-import { platformVocab } from './vocab.ts'
+import { platformVocab, storeWords } from './vocab.ts'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { metaOf } from './meta.ts'
@@ -2069,7 +2069,12 @@ let journaled = await (async () => {
   let { ctx, store } = await recipe()
   let drive = db(ctx)
   let rows = (name: string) => drive.query(select({ from: table(name) }))
-  for (let stmt of journalDdl()) drive.query(stmt)
+  // The journal's tables as they stood then, before it kept its words.
+  for (let stmt of journalDdl(storeWords('app').vocab)) {
+    if (stmt.t == 'create table' && stmt.name != 'journal_word') {
+      drive.query(stmt)
+    } else if (stmt.t == 'create index') drive.query(stmt)
+  }
   drive.query({
     t: 'insert',
     into: 'journal_tx',

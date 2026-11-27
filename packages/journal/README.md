@@ -34,6 +34,7 @@ unless it was imported into the journal.
 | `journal_tx`     | Transaction sequence, timestamp, actor references, host and note |
 | `journal_change` | Ordered component upserts/removals, or an entity deletion        |
 | `journal_field`  | Ordered property values after each change                        |
+| `journal_word`   | The label of each name a row records, from the vocabulary        |
 
 An empty component still has a change row. Component removal records null values
 for the fields known to the journal, keeping their history continuous across
@@ -47,7 +48,9 @@ vocabulary reads those identities now, so a renamed word's history reads under
 its new label. Rows written before identities name each word by its label and
 read the same way, until every store's journal is rewritten to identities. The
 log is given the vocabulary for this: `log({ rows, vocab })`, or the host's
-through `@yaks/journal/graph`.
+through `@yaks/journal/graph`. A query reads labels from `journal_word`, which
+`ddl(vocab)` writes from the vocabulary each time the schema is installed, so a
+statement over the journal stays short however large the vocabulary is.
 
 A property the store keeps in another form, such as the address @yaks/blob keeps
 in place of a body, is recorded as stored and read back through the store's read
@@ -104,7 +107,7 @@ let vocab = loadVocab([{
 let driver = open(':memory:')
 let store = storage(driver, vocab)
 store.install()
-for (let s of ddl()) driver.query(s)
+for (let s of ddl(vocab)) driver.query(s)
 let j = logFor({ storage: { statements: statements(driver) }, vocab })
 let g = graph({ storage: store, vocab, plugins: [journal(j, vocab)] })
 
@@ -325,7 +328,7 @@ let vocab = loadVocab([{
 let driver = open(':memory:')
 let store = storage(driver, vocab)
 store.install()
-for (let s of ddl()) driver.query(s)
+for (let s of ddl(vocab)) driver.query(s)
 let j = logFor({ storage: { statements: statements(driver) }, vocab })
 let g = graph({ storage: store, vocab, plugins: [journal(j, vocab)] })
 
@@ -485,8 +488,8 @@ reversible changes returns `[]`.
 The root exports `ddl`, `dropDdl`, `log`, `journal`, `backed`, `applied`,
 `undone`, `undo`, `Final`, `merge`, `merged`, value encoding helpers, and types
 including `Log`, `LogOpts`, `Batch`, `Entry`, `Patch`, `Delta`, `Cas`, `Merged`,
-`Conflict` and `Choice`. `dropDdl()` drops what `ddl()` created, for a store
-that stops keeping a journal.
+`Conflict` and `Choice`. `dropDdl()` drops what `ddl(vocab)` created, for a
+store that stops keeping a journal.
 
 | Sub-module export       | Purpose                                                                |
 | ----------------------- | ---------------------------------------------------------------------- |

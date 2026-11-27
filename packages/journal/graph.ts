@@ -103,10 +103,14 @@ export let feedFor = (host: Bound): Feed => {
   return found
 }
 
-/** The journal's tables and the feed's, which a writing host adds with the
- * rest of its composed schema; a store an older journal made gains the columns
- * it predates there (@yaks/sqlite `grow`). */
-export let schema = (): Stmt[] => [...ddl(), ...feedDdl()]
+/** The journal's tables and the feed's, and the words of the host's
+ * vocabulary (./names.ts), which a writing host adds with the rest of its
+ * composed schema; a store an older journal made gains the columns it
+ * predates there (@yaks/sqlite `grow`). */
+export let schema = (host: { vocab: Vocab }): Stmt[] => [
+  ...ddl(host.vocab),
+  ...feedDdl(),
+]
 
 /**
  * Which aspects of history a config switches on (D-130964), each covering the

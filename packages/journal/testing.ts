@@ -123,7 +123,7 @@ let ACTORS = ['ada', 'bob', 'cli']
 let base = { derived, schemaReady: () => true }
 let empty = snapshot(wiki, base, [
   ...blobSchema(),
-  ...ddl(),
+  ...ddl(wiki),
   ...feedDdl(),
   {
     t: 'insert',

@@ -446,7 +446,7 @@ let journaled = (() => {
   let d = mem()
   let s = storage(d, v)
   s.install()
-  for (let s of ddl()) d.query(s)
+  for (let s of ddl(v)) d.query(s)
   let j = log({ rows: (s) => d.query(s), vocab: v })
   let g = graph({
     storage: s,

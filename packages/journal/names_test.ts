@@ -8,8 +8,8 @@ import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
 import { whole } from '@yaks/query'
 import { col, select, table } from '@yaks/sql'
-import { loadVocab, metaDoc, type Vocab } from '@yaks/vocab'
-import { mem } from '../sqlite/testing.ts'
+import { loadVocab, metaDoc, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { bounded, mem } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
 import { backed, ddl, journal, type Log, log } from './mod.ts'
 import { journalDoc } from './vocab.ts'
@@ -20,11 +20,16 @@ let urn = (id: string) => `urn:uuid:${id}`
 
 // `page{title, text}`, under other labels when given, and without its
 // identities where `ids` is false: what a journal wrote before identities.
-let words = (labels = ['page', 'title', 'text'], ids = true): Vocab => {
+let words = (
+  labels = ['page', 'title', 'text'],
+  ids = true,
+  more: VocabDoc['$defs'] = {},
+): Vocab => {
   let [comp, title, text] = labels
   let $id = (id: string) => ids ? { $id: urn(id) } : {}
   return loadVocab([metaDoc, journalDoc, {
     $defs: {
+      ...more,
       [comp]: {
         ...$id(PAGE),
         component: true,
@@ -39,12 +44,10 @@ let words = (labels = ['page', 'title', 'text'], ids = true): Vocab => {
 }
 
 // One store, and a graph journaling into it in `vocab`'s words.
-let store = () => {
-  let db = mem()
-  let v = words()
+let store = (v = words(), db = mem()) => {
   let s = storage(db, v, { backed: backed(v) })
   s.install()
-  for (let stmt of ddl()) db.query(stmt)
+  for (let stmt of ddl(v)) db.query(stmt)
   let as = (vocab: Vocab) => {
     let j = log({ rows: (stmt) => db.query(stmt), vocab })
     let g = graph({ storage: s, vocab, plugins: [journal(j, vocab)] })
@@ -167,4 +170,37 @@ test('a scope judges a deleted entity by what either shape last told', () => {
     ).map((b) => b.entity.eid)
   equal(seen('.page.title=Kickoff'), ['p1'])
   equal(seen('.page.title=Retro'), ['p2'])
+})
+
+test('a history reads in one short statement however many words the vocabulary has', () => {
+  // Forty components of fifty properties, each with its identity: their names
+  // alone run past the 100,000 bytes workerd allows a statement.
+  let more = Object.fromEntries(
+    Array.from({ length: 40 }, (_, c) => [`c${c}`, {
+      $id: urn(mint()),
+      component: true,
+      type: 'object',
+      properties: Object.fromEntries(
+        Array.from(
+          { length: 50 },
+          (_, p) => [`p${p}`, { $id: urn(mint()), type: 'string' }],
+        ),
+      ),
+    }]),
+  )
+  let v = words(undefined, true, more)
+  let s = store(v, bounded({ sqlLength: 100_000 }))
+  let now = s.as(v)
+  now.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
+  now.apply([{ entity: { eid: 'p1' }, c39: { p49: 'last' } }])
+  let read = (q: string) =>
+    sync(now.g.read(whole(q))).map((b) => {
+      let { component, value } = b._change as Comp
+      return [component, value]
+    })
+  equal(read('._change.target=p1'), [
+    ['page', { title: 'Kickoff' }],
+    ['c39', { p49: 'last' }],
+  ])
+  equal(read('._change.component=c39'), [['c39', { p49: 'last' }]])
 })

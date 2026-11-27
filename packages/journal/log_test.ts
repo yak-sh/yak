@@ -311,7 +311,7 @@ test('a content-addressed property is recorded by its address', () => {
   let db = mem()
   let store = storage(db, wiki)
   store.install()
-  for (let s of ddl()) db.query(s)
+  for (let s of ddl(wiki)) db.query(s)
   db.query(raised(
     'body',
     { name: 'id', type: 'integer', pk: true },

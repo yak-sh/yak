@@ -232,7 +232,7 @@ test('the feed keeps a commit for a while, and says what a follower missed', () 
 
 test('a store an older journal made takes the host once it is opened again', () => {
   let db = mem()
-  let old = ddl().map((s) =>
+  let old = ddl(wiki).map((s) =>
     s.t == 'create table' && s.name == 'journal_tx'
       ? { ...s, cols: s.cols.filter((c) => c.name != 'host') }
       : s
@@ -242,7 +242,7 @@ test('a store an older journal made takes the host once it is opened again', () 
     db.query({ t: 'pragma', name: 'table_info', arg: 'journal_tx' })
       .map((c) => String(c.name))
   assertEquals(columns().includes('host'), false)
-  add(db, schema())
+  add(db, schema({ vocab: wiki }))
   let host = { storage: { statements: statements(db) } }
   plugins({ ...host, vocab: wiki })
   assertEquals(columns().includes('host'), true)

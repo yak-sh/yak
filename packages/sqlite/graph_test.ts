@@ -29,7 +29,7 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 let one = (g: ReturnType<typeof shopGraph>, q: string) =>
   (g.read(whole(q)) as Bundle[])[0]
 
-let journalSchema = snapshot(shop, {}, ddl())
+let journalSchema = snapshot(shop, {}, ddl(shop))
 let journalStore = preparedStore(shop, {}, journalSchema)
 let j = log({
   rows: (stmt) => journalStore.statements.query(stmt),

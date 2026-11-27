@@ -131,7 +131,7 @@ export let shapeOf = (
   let after = () => [
     ...ftsSchema(searchable, read),
     ...vectorSchema(),
-    ...(kept || vocab.comp('_tx') ? journalDdl() : []),
+    ...(kept || vocab.comp('_tx') ? journalDdl(vocab) : []),
   ]
   let history = kept ? historyOf(versions.with) : undefined
   // The print is the box's (packages/cli/host.ts): the storage's own print,
@@ -301,7 +301,7 @@ export let install = (
     // read a body's text out of it.
     ...add(d, [
       ...blobSchema(),
-      ...(history || vocab.comp('_tx') ? journalDdl() : []),
+      ...(history || vocab.comp('_tx') ? journalDdl(vocab) : []),
     ]),
     // What it leaves undone is answered here, for the caller to report once.
     // Versions a store begins to keep are seeded a page at a time, by its

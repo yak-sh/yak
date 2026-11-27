@@ -44,7 +44,7 @@ let build = (
   let db = mem()
   let store = storage(db, vocab, { derived, backed: registry })
   store.install()
-  for (let s of [...blobSchema(), ...ddl()]) db.query(s)
+  for (let s of [...blobSchema(), ...ddl(vocab)]) db.query(s)
   actors(graph({ storage: store, vocab }))
   let g = graph({
     storage: store,

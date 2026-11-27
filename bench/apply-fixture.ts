@@ -70,7 +70,7 @@ let prepared = (db?: ReturnType<typeof open>) => {
   let g = graph({ storage: store, vocab: applyVocab, plugins: plugins() })
   g.install()
   if (db) {
-    for (let stmt of ddl()) db.query(stmt)
+    for (let stmt of ddl(applyVocab)) db.query(stmt)
     g.use(
       journal(
         log({ rows: (stmt) => db.query(stmt), vocab: applyVocab }),

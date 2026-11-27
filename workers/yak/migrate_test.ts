@@ -20,6 +20,7 @@ import { mem } from '../../packages/sqlite/testing.ts'
 import { ddl as journalDdl } from '@yaks/journal'
 import { Store } from './graph.ts'
 import { loadVocab } from '@yaks/vocab'
+import { storeWords } from './vocab.ts'
 import { documented, respelled, unholed, unworded } from './migrate.ts'
 import { passed } from './store-schema.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -947,7 +948,12 @@ let unjournaled = await (async () => {
   let d = db(ctx)
   let on = (s: Stmt) =>
     s.t == 'create table' ? s.name : s.t == 'create index' ? s.on : ''
-  run(ctx, ...journalDdl().filter((s) => on(s) != 'journal_field'))
+  run(
+    ctx,
+    ...journalDdl(storeWords('app').vocab).filter((s) =>
+      on(s) != 'journal_field'
+    ),
+  )
   let [one] = scan(d, 'entity', by({ eid: ONE }), ['id'])
   run(
     ctx,

@@ -115,7 +115,7 @@ let valueOf = (derived: Derived, named: Names) =>
     sub(select({
       cols: [fn(
         'json_group_object',
-        named.propLabelOf(jf('field')),
+        named.labelOf(jf('field')),
         fieldOf(derived, named),
       )],
       from: table('journal_field', 'jf'),
@@ -132,7 +132,7 @@ let tells = (id: string, named: Names) =>
     cols: [
       as(jc(id), 'entity'),
       as(jc('entity'), 'about'),
-      as(named.compLabelOf(jc('component')), 'component'),
+      as(named.labelOf(jc('component')), 'component'),
     ],
     from: table('journal_change', 'jc'),
   })
@@ -241,7 +241,7 @@ let registry = (vocab: Vocab, derived: Derived): Backings => {
           as(jc('tx'), 'tx'),
           as(jc('entity'), 'target'),
           as(comp, 'comp'),
-          as(named.compLabelOf(jc('component')), 'component'),
+          as(named.labelOf(jc('component')), 'component'),
           as(value, 'value'),
         ],
         from: table('journal_change', 'jc'),
