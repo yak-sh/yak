@@ -21,7 +21,7 @@ import {
   type Specimen,
 } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 
 let Base = block('div', 'Grid', {
   Picture: 'span',
@@ -68,7 +68,7 @@ let { Picture, Label, Name, Tier, Need, Count } = Grid
 let pick = () => {}
 // A rarity's colour, or a role's where a theme has no rarities.
 let rare = (r: string, role: string) => ({
-  style: `--rarity: var(--${r}, var(--${role}))`,
+  style: { '--rarity': `var(--${r}, var(--${role}))` },
 })
 export let specimens = (): Specimen[] => [
   [

@@ -33,7 +33,8 @@
     "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",
     "preact": "10.29.7",
-    "@yaks/ux": "0.2.23"
+    "@yaks/ux": "0.2.23",
+    "@yaks/react": "0.2.33"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

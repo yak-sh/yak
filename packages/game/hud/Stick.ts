@@ -3,7 +3,7 @@
  * dx/dy, and rest puts both back in the CSS resting position. */
 import { block, type Specimen } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
-import { Fragment, type FunctionComponent, h } from 'preact'
+import { createElement as h, Fragment, type FunctionComponent } from 'react'
 
 /** Display values only; input handling belongs to the controls consumer. */
 export type StickProps = {

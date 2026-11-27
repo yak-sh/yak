@@ -6,7 +6,8 @@ import type { Bundle } from '@yaks/graph'
 import type { Theme } from '@yaks/ui'
 import { themes } from '@yaks/ui/ui'
 import { wearIn } from '@yaks/ui/wear'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from '@yaks/react/draw'
 import { kit, Party, type PartyProps } from './hud.ts'
 
 /** What the panel reads of a watch, such as the one `connectRoom` answers. */

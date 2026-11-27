@@ -4,7 +4,7 @@
 // does in `data-do` (and a site in `data-site`); the popup's glue runs that.
 
 import { Field } from '@yaks/ui/parts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import type { Config } from './connect.ts'
 import { spaceHost } from './connect.ts'

@@ -2149,6 +2149,9 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/feedback:
     dependencies:
@@ -2347,6 +2350,9 @@ importers:
       '@yaks/platform':
         specifier: 0.2.30
         version: link:../platform
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/tui':
         specifier: 0.2.24
         version: link:../tui
@@ -2375,6 +2381,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/git:
     dependencies:
@@ -6141,6 +6150,9 @@ importers:
       '@yaks/host':
         specifier: 0.2.29
         version: link:../host
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools

@@ -6,7 +6,7 @@
  * room for them. */
 import { block, type Colors, type Part, type Specimen } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 
 export let Stats:
   & Part

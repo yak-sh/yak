@@ -26,12 +26,17 @@
     "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",
     "@yaks/workerd": "0.2.24",
-    "preact": "10.29.7"
+    "preact": "10.29.7",
+    "@yaks/react": "0.2.33"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
     "@yaks/testing": "0.2.30",
     "linkedom": "^0.18.12",
-    "preact-render-to-string": "6.7.0"
+    "preact-render-to-string": "6.7.0",
+    "react": "npm:@preact/compat@18.3.2"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0"
   }
 }

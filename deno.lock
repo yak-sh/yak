@@ -4175,6 +4175,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@types/chrome@~0.3.7",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/fp@0.2.23",
@@ -4277,9 +4278,11 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/platform@0.2.30",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.30",
@@ -5922,6 +5925,7 @@
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/host@0.2.29",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tools@0.2.30",
             "npm:@yaks/trace@0.2.23",

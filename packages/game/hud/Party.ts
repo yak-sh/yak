@@ -5,7 +5,7 @@
  * it faces; the caller supplies every value and owns what a tap does. */
 import { block, type Colors, Meter, type Specimen } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 
 /** One line's values: health from 0 to `most`. */
 export type Member = {

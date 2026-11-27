@@ -2,7 +2,8 @@
  * The consumer reads a named Controls bundle and applies every emitted bundle.
  * Event closures hold only DOM resources; all gesture/settings state is in Controls.
  */
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from '@yaks/react/draw'
 import { Stick } from './hud.ts'
 
 export type MotionBindings = {
