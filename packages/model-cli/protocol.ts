@@ -55,7 +55,8 @@ let failure = (
   )
 }
 
-let count = (value: unknown, grok: boolean): Usage | undefined => {
+// Each CLI counts its cached input apart from the rest, which `Usage` counts.
+let count = (value: unknown): Usage | undefined => {
   let row = object(value)
   if (
     !row || typeof row.input_tokens != 'number' ||
@@ -64,8 +65,8 @@ let count = (value: unknown, grok: boolean): Usage | undefined => {
   let cached = row.cache_read_input_tokens ?? row.cache_read_tokens
   let written = row.cache_creation_input_tokens
   let input = row.input_tokens +
-    (grok && typeof cached == 'number' ? cached : 0) +
-    (grok && typeof written == 'number' ? written : 0)
+    (typeof cached == 'number' ? cached : 0) +
+    (typeof written == 'number' ? written : 0)
   return {
     input_tokens: input,
     output_tokens: row.output_tokens,
@@ -134,7 +135,7 @@ let grok: Protocol = {
       id,
       output: frame.structuredOutput,
       model: models.length == 1 ? models[0] : undefined,
-      usage: count(frame.usage, true),
+      usage: count(frame.usage),
     }
   },
 }
@@ -214,7 +215,7 @@ let antigravity: Protocol = {
       id: result.conversation_id,
       output: result.structured_output,
       model: typeof init?.model == 'string' ? init.model : undefined,
-      usage: count(result.usage, false),
+      usage: count(result.usage),
     }
   },
 }

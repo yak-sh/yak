@@ -720,8 +720,11 @@ export let antigravityStream: Reader = (e) => {
     : event == 'result'
     ? ended(
       r.status == 'SUCCESS' ? '' : str(r.error) || 'the turn failed',
+      // Its `input_tokens` leaves out the cached ones, which `usage` counts.
       usage(
-        count(u.input_tokens),
+        u.input_tokens == null
+          ? undefined
+          : (count(u.input_tokens) ?? 0) + (count(u.cache_read_tokens) ?? 0),
         count(u.output_tokens),
         count(u.cache_read_tokens),
         { reasoning_tokens: count(u.thinking_tokens) },

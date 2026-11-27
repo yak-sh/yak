@@ -36,7 +36,7 @@ let stdout = (vendor: Vendor, turn: unknown) =>
           conversation_id: 'ask',
           status: 'SUCCESS',
           structured_output: turn,
-          usage: { input_tokens: 12, cache_read_tokens: 2, output_tokens: 3 },
+          usage: { input_tokens: 10, cache_read_tokens: 2, output_tokens: 3 },
         },
       },
     ].map((frame) => JSON.stringify(frame)).join('\n')

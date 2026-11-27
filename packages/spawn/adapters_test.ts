@@ -278,7 +278,8 @@ test("gemini's and agy's streams read as transcripts, their threads named by the
         result: {
           status: 'SUCCESS',
           response: 'Look',
-          usage: { input_tokens: 9, output_tokens: 2, cache_read_tokens: 4 },
+          // agy counts the cached input apart from the rest.
+          usage: { input_tokens: 5, output_tokens: 2, cache_read_tokens: 4 },
         },
       },
     ]],
