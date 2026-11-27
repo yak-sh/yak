@@ -80,6 +80,16 @@ test('a row in a step’s bracket anchors it: a new member runs it again', async
   equal((await read('.call')).length, 2)
 })
 
+test('a step naming a word the store lacks refuses no write, its own fix included', async () => {
+  let { apply, read, flow } = fixture()
+  await flow('orders', { ...ask, match: '$o .order, crates>=1' })
+  await apply([{ entity: { eid: 'o1' }, order: {} }])
+  equal(await read('.call'), [])
+  await apply([{ entity: { eid: 'ask' }, step: { match: '$o .order' } }])
+  await apply([{ entity: { eid: 'o2' }, order: {} }])
+  equal((await read('.call')).length, 1)
+})
+
 test('a person’s step is a task, and the next step matches its completion', async () => {
   let { apply, read, flow } = fixture()
   await flow('orders', {

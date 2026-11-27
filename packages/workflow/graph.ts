@@ -2,7 +2,10 @@
 // `@yaks/workflow/graph` to run the graph's steps in its writes.
 
 import type { Plugin } from '@yaks/graph'
-import { workflows } from './run.ts'
+import { type Report, workflows } from './run.ts'
 
-/** The step runner: in each write, after each commit, and on a firing. */
-export let plugins = (): Plugin[] => [workflows()]
+/** The step runner: in each write, after each commit, and on a firing. A
+ * step that cannot run is the host's to report. */
+export let plugins = (host: { report?: Report } = {}): Plugin[] => [
+  workflows(host.report),
+]

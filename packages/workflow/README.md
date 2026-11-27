@@ -61,6 +61,9 @@ When it runs:
   wake fires: the firing writes `fired` on the step, which owes the `step_fire`
   effect, and the step's match is asked of the whole graph, written as the
   step's writer.
+- A step whose match names a word the store does not have runs nowhere and is
+  reported once, to the `report` the host gives `plugins()` (else
+  `console.error`). It never refuses a write, the write that fixes it included.
 
 A step calls out by writing a row: `call{to, args}` for a tool
 ([@yaks/tools](../tools)), with `using{…}` for a model, and whoever answers the

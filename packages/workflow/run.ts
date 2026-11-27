@@ -222,6 +222,38 @@ let wrote = (
   })
 }
 
+/** Where a step that cannot run is reported. */
+export type Report = (error: unknown) => void
+
+// A step that cannot be asked (its match names a word the store does not
+// have) is told once to `report`, and runs nowhere: it never refuses a write,
+// the write that fixes it included.
+let told = new Set<string>()
+let tell = (s: Step, e: unknown, report?: Report) => {
+  let said = `${s.eid} ${s.match}`
+  if (!report || told.has(said)) return
+  told.add(said)
+  report(
+    new Error(
+      `step ${s.eid} cannot run: ${e instanceof Error ? e.message : e}`,
+      { cause: e },
+    ),
+  )
+}
+
+// `f`, or what `fail` makes of its error, thrown or rejected.
+let attempt = <T>(
+  f: () => T | Promise<T>,
+  fail: (e: unknown) => T | Promise<T>,
+): T | Promise<T> => {
+  try {
+    let r = f()
+    return r instanceof Promise ? r.catch(fail) as Promise<T> : r
+  } catch (e) {
+    return fail(e)
+  }
+}
+
 // A match widened by one of its brackets: the bracket's patterns joined to
 // the outer ones, so a member the batch touches anchors it. Its bindings'
 // first entities are the outer match's.
@@ -240,11 +272,37 @@ let widened = (plan: Match): Match[] =>
 let bound = (
   tx: ReadTx,
   vocab: Vocab,
-  list: Step[],
+  steps: Step[],
   batch: Bundle[],
+  report?: Report,
 ): Row[] | Promise<Row[]> => {
+  let list = steps
   if (!list.length || !tx.bindings) return []
-  let ask = tx.bindings.bind(tx)
+  let bindings = tx.bindings.bind(tx)
+  // Every step's plan asked at once; when that fails, each alone, and those
+  // that fail alone answer nothing.
+  let ask = (
+    plans: Match[],
+    owners: Step[],
+    batch: Bundle[],
+    covers: string[],
+  ): Binding[][] | Promise<Binding[][]> =>
+    attempt(
+      () => bindings(plans, batch, covers),
+      () =>
+        each(
+          plans.map((p, i) => [p, i] as const),
+          [] as Binding[][],
+          (out, [p, i]) =>
+            after(
+              attempt(() => bindings([p], batch, covers), (e) => {
+                tell(owners[i], e, report)
+                return [[]]
+              }),
+              (one) => [...out, one[0] ?? []],
+            ),
+        ),
+    )
   let plans = list.map((s) => s.plan)
   let covers = [...new Set(plans.flatMap((p) => reads(p, vocab)))]
   let wide = batch.length
@@ -264,11 +322,13 @@ let bound = (
     return [...more].map((eid) => ({ entity: { eid } }))
   }
   return after(
-    wide.length ? ask(wide.map((w) => w.plan), batch, covers) : [],
+    wide.length
+      ? ask(wide.map((w) => w.plan), wide.map((w) => w.s), batch, covers)
+      : [],
     (members) => {
       let extra = anchor(members)
       return after(
-        ask(plans, [...batch, ...extra], covers),
+        ask(plans, list, [...batch, ...extra], covers),
         (found) =>
           list.flatMap((step, i) =>
             (found[i] ?? []).map((binding) => ({ step, binding }))
@@ -334,8 +394,9 @@ let owed = (
   v: Vocab,
   list: Step[],
   batch: Bundle[],
+  report?: Report,
 ): Bundle[] | Promise<Bundle[]> =>
-  after(bound(tx, v, list, batch), (rows) => {
+  after(bound(tx, v, list, batch, report), (rows) => {
     if (!rows.length) return batch
     let depth = depthOf(batch)
     if (depth >= DEPTH) throw looping(rows.map((r) => r.step))
@@ -359,7 +420,7 @@ let owed = (
  * nothing more (each binding once in a write), then the runs the `commit`
  * steps are owed. A batch only checked (`admission`, such as a peer's relayed
  * value) is never kept, so no step acts on it, and it reads nothing. */
-let inWrite: Hook = (bundles, tx, _err, context) => {
+let inWrite = (report?: Report): Hook => (bundles, tx, _err, context) => {
   let v = (context?.graph as Graph | undefined)?.vocab
   if (!v || !tx.bindings || context?.admission) return bundles
   return after(steps(tx), (all) => {
@@ -368,7 +429,7 @@ let inWrite: Hook = (bundles, tx, _err, context) => {
     if (!list.length && !commit.length) return bundles
     let ran = new Set<string>()
     let round = (batch: Bundle[]): Bundle[] | Promise<Bundle[]> =>
-      after(bound(tx, v, list, batch), (rows) => {
+      after(bound(tx, v, list, batch, report), (rows) => {
         let next = rows.filter((r) => !ran.has(key(r)))
         for (let r of next) ran.add(key(r))
         if (!next.length) return batch
@@ -379,20 +440,21 @@ let inWrite: Hook = (bundles, tx, _err, context) => {
       })
     return after(
       list.length ? round(bundles) : bundles,
-      (batch) => commit.length ? owed(tx, v, commit, batch) : batch,
+      (batch) => commit.length ? owed(tx, v, commit, batch, report) : batch,
     )
   })
 }
 
 /** The workflow plugin: runs the graph's steps in each write, and owes the
- * runs of those that run after it commits. */
-export let workflows = (): Plugin => ({
+ * runs of those that run after it commits. A step that cannot run is told
+ * to `report`. */
+export let workflows = (report: Report = console.error): Plugin => ({
   name: 'workflow',
   requests: [GEN],
   // A check keeps nothing, and the steps leave it alone (`inWrite`), so it
   // needs no dry run of its own.
   admission: () => true,
-  hooks: { rules: inWrite },
+  hooks: { rules: inWrite(report) },
 })
 
 /**
