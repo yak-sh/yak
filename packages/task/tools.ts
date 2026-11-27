@@ -217,30 +217,42 @@ let updates = async (args: Args, graph: Graph): Promise<Bundle[]> => {
   ]
 }
 
+// A decision on `args.question` and `args.choices`: asked, recommending
+// `pick`, or, given `why`, already made by its writer, who took `pick`.
+let decision = (args: Args, pick: unknown, why?: string): Bundle[] => {
+  let question = String(args.question).trim()
+  let filed = filedIn(args)
+  let choices = args.choices as (Choice & { shows?: string })[]
+  let made: Bundle = {
+    entity: { eid: '$decision' },
+    task: {},
+    doc: { title: question, ...(why ? { body: why } : {}) },
+    decision: {
+      question,
+      choices: choices.map(({ label, description }) => ({
+        label,
+        description,
+      })),
+      recommended: pick,
+    },
+    ...(why == null ? {} : { decided: { choice: String(pick).trim() } }),
+    ...(filed ? { filed } : {}),
+  }
+  check(made)
+  return [made, ...shows('$decision', choices)]
+}
+
 /** The implementations behind ./vocab.json. Scalar changes are data; partial
  * text changes read through the graph and keep the shared compiler's guard. */
 export let runs = (): Runs => ({
   decision_new: (call): Bundle[] => {
     let args = argsOf(call)
-    let question = String(args.question).trim()
-    let filed = filedIn(args)
-    let choices = args.choices as (Choice & { shows?: string })[]
-    let asked: Bundle = {
-      entity: { eid: '$decision' },
-      task: {},
-      doc: { title: question },
-      decision: {
-        question,
-        choices: choices.map(({ label, description }) => ({
-          label,
-          description,
-        })),
-        recommended: args.recommended,
-      },
-      ...(filed ? { filed } : {}),
-    }
-    check(asked)
-    return [asked, ...shows('$decision', choices)]
+    return decision(args, args.recommended)
+  },
+
+  decision_record: (call): Bundle[] => {
+    let args = argsOf(call)
+    return decision(args, args.chose, String(args.why).trim())
   },
 
   decision_answer: (call): Bundle[] => {

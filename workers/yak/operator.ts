@@ -704,6 +704,7 @@ let OWN_WORDS = new Set([
   'task_list',
   'task_update',
   'decision_new',
+  'decision_record',
   'decision_relay',
   'goal_new',
   'goal_list',

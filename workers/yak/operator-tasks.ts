@@ -36,11 +36,19 @@ export let workDocs = [taskDoc, goalDoc, spawnDoc, kernelDoc]
 // goes on into their conversation (operator-updates.ts), or in their own
 // words to it, which it records as theirs (operator-relay.ts
 // `decisionRelay`). So the Operator never answers one itself, and the
-// connector, whose caller is that person, offers neither half.
+// connector, whose caller is that person, offers neither half. A choice the
+// Operator made itself, it keeps as a decision already made
+// (`decision_record`), answered as its own and asked of nobody: the
+// connector offers that neither, since its caller's choices are the person's.
 //
 // A wait holds its request open until a run ends, and a Worker answers at
 // once: `session_peek` says where a run stands.
-let unlisted = new Set(['decision_new', 'decision_answer', 'session_wait'])
+let unlisted = new Set([
+  'decision_new',
+  'decision_answer',
+  'decision_record',
+  'session_wait',
+])
 
 /** The work tools the Operator holds. */
 export let held = (): NamedTool[] =>

@@ -721,6 +721,78 @@
         "choice"
       ]
     },
+    "decision_record": {
+      "tool": true,
+      "destructive": false,
+      "noun": "decision",
+      "verb": "record",
+      "title": "Record a decision you made",
+      "step": {
+        "doing": "Noting a choice…",
+        "done": "Noted a choice"
+      },
+      "description": "Record a choice you made yourself between 2–4 options, the one you took and why, so it can be read later beside the work it shaped. It asks nobody, is answered as yours, and is done at once. Returns applied bundles.",
+      "input": {
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What was chosen, as a question: “How does the game look?”"
+        },
+        "choices": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              },
+              "shows": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Id of an entity the choice presents, drawn beside it: an image (an artifact), prose (a doc), or a page (a draft of an app)."
+              }
+            },
+            "required": [
+              "label",
+              "description"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The options you weighed, each a label and a line saying what it means."
+        },
+        "chose": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The label of the option you took."
+        },
+        "why": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why you took it, in a line."
+        },
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "Project id or name."
+        }
+      },
+      "required": [
+        "question",
+        "choices",
+        "chose",
+        "why"
+      ],
+      "positional": [
+        "question"
+      ]
+    },
     "decision_answered": {
       "rule": true,
       "match": ".task .decision .decided !cancelled, +!completed",

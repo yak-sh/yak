@@ -3,7 +3,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, type Graph, Stale, token } from '@yaks/graph'
 import { statusOf } from './words.ts'
 import { Refused } from '@yaks/graph/errors'
-import { store, teamGraph } from './testing.ts'
+import { store, team, teamGraph } from './testing.ts'
 import { listing, runs } from './tools.ts'
 
 // The runs, built the way a host builds them: a facet is a factory.
@@ -212,4 +212,25 @@ test('decision_new refuses a recommendation naming none of its labels, listing t
   assertEquals([refused!.comp, refused!.prop], ['decision', 'recommended'])
   let [made] = ask('Warm & traditional') as Bundle[]
   assertEquals(comp(made, 'decision').recommended, 'Warm & traditional')
+})
+
+test('decision_record keeps a choice already made: the options, the pick and why, answered and done', async () => {
+  let { g } = teamGraph()
+  let choices = [
+    { label: '3D', description: 'A lit scene and a following camera' },
+    { label: '2D', description: 'A flat board seen from above' },
+  ]
+  let [made] = await g.apply(
+    tools.decision_record!(...asked({
+      question: 'How does the game look?',
+      choices,
+      chose: '2D',
+      why: 'A board game reads best from above',
+    })) as Bundle[],
+  )
+  let [row] = await g.get([made.entity.eid])
+  assertEquals(comp(row, 'decision').choices, choices)
+  assertEquals(comp(row, 'decided').choice, '2D')
+  assertEquals(comp(row, 'doc').body, 'A board game reads best from above')
+  assertEquals(statusOf(team, row), 'done')
 })

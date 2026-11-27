@@ -11,6 +11,7 @@ import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorModel, operatorService, promptOf } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
+import { updatesOf } from './operator-updates.ts'
 
 let p = platform('operator-decide')
 let [ada, eid] = [crypto.randomUUID(), crypto.randomUUID()]
@@ -205,4 +206,32 @@ test('relaying what is not theirs names whose it is and what waits on them', asy
     )
     assertStringIncludes(sent, 'Which cup?')
   }
+})
+
+test('a choice the Operator made is kept as its own, beside the session, and asks the person nothing', async () => {
+  let question = 'How does the game look?'
+  replies.push(
+    () =>
+      call('decision_record', {
+        question,
+        choices: [
+          { label: '3D', description: 'A lit scene and a following camera' },
+          { label: '2D', description: 'A flat board seen from above' },
+        ],
+        chose: '2D',
+        why: 'A board game reads best from above',
+      }),
+    () => said('Making it 2D.'),
+  )
+  await say('Make me a checkers game')
+  let row = await decision(question)
+  let decided = row.decided as Comp
+  assertEquals(decided.choice, '2D')
+  assertEquals(decided.by == ada, false)
+  let [session] = await store.g.read(
+    line`.session&.entity.eid=${String(decided.via)}&*`,
+  )
+  assertEquals(!!session, true)
+  let { updates } = await updatesOf(store, ada, eid)
+  assertEquals(updates.some((u) => u.words == question), false)
 })
