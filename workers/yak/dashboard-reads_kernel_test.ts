@@ -9,6 +9,7 @@ import { WAKE } from './door.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import type { Stored } from '@yaks/workerd/cache'
 import { system } from '@yaks/fp'
+import { parseHTML } from 'linkedom'
 
 // Every call through `ns`, by its path, each let through once `gate` opens.
 let watched = (ns: Namespace, calls: string[], gate: () => Promise<void>) => {
@@ -71,6 +72,25 @@ test('a Dashboard asks the directory once for everything it draws', async () => 
   directory.length = 0
   assertEquals(await open(), 200)
   assertEquals(directory, ['/reads'])
+})
+
+test('a Dashboard sends its apps and ask box before its activity', async () => {
+  let res = await k.at('yaks.app', dashboardPath(slug), {
+    headers: { cookie: them.cookie },
+  })
+  let body = res.body!.getReader()
+  let decode = new TextDecoder()
+  let first = decode.decode((await body.read()).value)
+  let opening = parseHTML(first).document
+  assertEquals(opening.querySelector('.Dash_AppName')?.textContent, 'Notes')
+  assert(opening.querySelector('.Dash_Ask textarea[name=say]'))
+  assertEquals(opening.querySelector('.Dash_Updates'), null)
+  let last = decode.decode((await body.read()).value)
+  let full = parseHTML(first + last).document
+  assert(full.querySelector('.Dash_Work'))
+  assert(full.querySelector('.Dash_Updates'))
+  assert(full.querySelector('.Dash script[data-page-graph]'))
+  assertEquals((await body.read()).done, true)
 })
 
 test('a Dashboard starts its Operator before the directory answers', async () => {

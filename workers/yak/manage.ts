@@ -438,7 +438,7 @@ export let manage = async (
       'page_modules',
       () => import('./operator-page.ts'),
     )
-    return ready(dashboardPage(env, space, who, dir, sidebar(), c))
+    return ready(dashboardPage(env, space, who, dir, sidebar(false), c))
   }
   // Its Matches are its members' to pick in (matches.ts).
   if (view == 'matches' && writes(who.role) && !space.trashed) {
@@ -583,8 +583,7 @@ let foresee = (
   chat = false,
 ) => {
   let seats = dir.seated(person)
-  let sided = view == 'matches' || view == 'dashboard' ||
-    view == 'operator' && chat
+  let sided = view == 'matches' || view == 'operator' && chat
   void Promise.allSettled([
     dir.nameAt(person),
     seats,

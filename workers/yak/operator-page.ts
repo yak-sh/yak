@@ -179,6 +179,7 @@ import {
   suggestions,
 } from '@yaks/platform/dashboard'
 import {
+  dashboardActivity,
   dashboardOf,
   type DashboardView,
   dashboardView,
@@ -1410,7 +1411,7 @@ let talkPage = (
     views.push(allBeside(env, space, who, beside))
   }
   if (!held(dashboardPath(space.slug))) {
-    views.push(dashboardOn(env, space, who, null))
+    views.push(dashboardOn(dashboardAt(env, space, who), null))
   }
   let slot = views.find((v) => v.canvasSlot)?.canvasSlot
   // The column stands, hidden, around a slot for lists not in yet, and shows
@@ -2286,57 +2287,44 @@ export let allUpdatesPage = async (
     ))
 }
 
-// The space's Dashboard as one of its page's views (@yaks/platform/
-// dashboard-view): drawn from `rows`, which the page carries for the browser
-// to draw it again from as they move; or, standing beside another view, its
-// frame alone, which the browser fills once it is shown.
+let dashboardAt = (env: Env, space: Space, who: Who): DashboardView => ({
+  person: who.person ?? '',
+  space: {
+    eid: space.eid,
+    slug: space.slug,
+    title: space.title,
+    operator: space.operator,
+  },
+  at: `https://${spaceHost(env, space.slug)}`,
+  chat: chatPath(space.slug),
+  updates: talkPath('updates', space.slug),
+})
+
+// When opened at its own address, the Dashboard draws its apps and ask box
+// first. Beside another view, its frame stands until the browser shows it.
 let dashboardOn = (
-  env: Env,
-  space: Space,
-  who: Who,
+  view: DashboardView,
   rows: Bundle[] | null,
-  waiting = 0,
-): TalkPage => {
-  let person = who.person ?? ''
-  let view: DashboardView = {
-    person,
-    space: {
-      eid: space.eid,
-      slug: space.slug,
-      title: space.title,
-      operator: space.operator,
+  activity?: Node,
+): TalkPage => ({
+  title: 'Dashboard',
+  sub: new URL(view.at).host,
+  status: 200,
+  waiting: 0,
+  listed: null,
+  current: ['dashboard'],
+  here: dashboardPath(view.space.slug),
+  skip: ['#content', 'Skip to content'],
+  main: h(
+    'div',
+    {
+      class: 'Dash',
+      'data-view': 'dashboard',
+      [DASHBOARD]: JSON.stringify(view),
     },
-    at: `https://${spaceHost(env, space.slug)}`,
-    chat: chatPath(space.slug),
-    updates: talkPath('updates', space.slug),
-  }
-  return {
-    title: 'Dashboard',
-    sub: spaceHost(env, space.slug),
-    status: 200,
-    waiting,
-    listed: null,
-    current: ['dashboard'],
-    here: dashboardPath(space.slug),
-    skip: ['#content', 'Skip to content'],
-    main: h(
-      'div',
-      {
-        class: 'Dash',
-        'data-view': 'dashboard',
-        [DASHBOARD]: JSON.stringify(view),
-      },
-      dashboardView(view, dashboardOf(view, rows ?? [], !rows)),
-      rows
-        ? h('script', {
-          type: 'application/json',
-          'data-page-graph': '',
-          dangerouslySetInnerHTML: { __html: drawnRows(person, rows) },
-        })
-        : null,
-    ),
-  }
-}
+    dashboardView(view, dashboardOf(view, rows ?? [], !rows), activity),
+  ),
+})
 
 /** A space's Dashboard (@yaks/platform/dashboard-view), at its own address,
  * beside the chat app's side: its apps to open, what it could use next, what
@@ -2363,29 +2351,46 @@ export let dashboardPage = async (
         return none
       },
     )
-  let [apps, work, offered, fixes, news, beside] = await Promise.all([
-    spared('apps', personRows(dir, person, spaceApps(space.eid)), []),
-    spared('work', personRows(dir, person, agentWork(space.eid)), []),
-    spared('suggestions', personRows(dir, person, suggestions(space.eid)), []),
+  let activity = Promise.all([
     spared(
       'fixes',
       operatorDoor(env, space, who, 'fixes', {}) as Promise<Fix[]>,
       [],
     ),
     spared('updates', updatesOf(env, space, who, false, dir), null),
+  ])
+  let [apps, work, offered, beside] = await Promise.all([
+    spared('apps', personRows(dir, person, spaceApps(space.eid)), []),
+    spared('work', personRows(dir, person, agentWork(space.eid)), []),
+    spared('suggestions', personRows(dir, person, suggestions(space.eid)), []),
     Promise.resolve(side).then((out) => reached('dashboard_side', out)),
   ])
-  let rows = [
-    ...apps,
-    ...work,
-    ...offered,
-    ...fixRows(person, space.eid, fixes),
-    ...(news?.read ?? []).flatMap((r) => [
-      ...updateRows(person, r.space.eid, r.cards),
-      ...offerRows(person, r.space.eid, r.offers),
-    ]),
-  ]
-  let waiting = news?.updates.filter((u) => u.needs).length ?? 0
+  let view = dashboardAt(env, space, who)
+  let rows = [...apps, ...work, ...offered]
+  let finish = (all: Bundle[], waiting = 0) =>
+    html([
+      dashboardActivity(view, dashboardOf(view, all)),
+      h('script', {
+        type: 'application/json',
+        'data-page-graph': '',
+        dangerouslySetInnerHTML: { __html: drawnRows(person, all) },
+      }),
+      waiting ? run(addWaiting(String(waiting), true)) : null,
+    ])
+  let contents = activity.then(([fixes, news]) =>
+    finish([
+      ...rows,
+      ...fixRows(person, space.eid, fixes),
+      ...(news?.read ?? []).flatMap((r) => [
+        ...updateRows(person, r.space.eid, r.cards),
+        ...offerRows(person, r.space.eid, r.offers),
+      ]),
+    ], news?.updates.filter((u) => u.needs).length)
+  ).catch((error) => {
+    caught(error, { request: 'dashboard activity', space: space.slug })
+    return finish(rows)
+  })
+  let slot = h('template', { 'data-dashboard-activity': '' })
   let chat = openingParts(env, space, who, 'new', beside)
   return c.measure('render', () =>
     talkPage(
@@ -2393,8 +2398,9 @@ export let dashboardPage = async (
       space,
       who,
       beside,
-      dashboardOn(env, space, who, rows, waiting),
+      dashboardOn(view, rows, slot),
       [chat],
+      { marker: html(slot), contents },
     ))
 }
 

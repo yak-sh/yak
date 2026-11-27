@@ -387,10 +387,19 @@ let updatesPart = (view: DashboardView, read: Dashboard) => {
   )
 }
 
-/** The Dashboard of `view`'s space, as `read` says it. */
-export let dashboardView = (view: DashboardView, read: Dashboard) => [
-  appsPart(view, read),
-  askPart(view, read.suggestions),
+/** The work and Updates the Dashboard can send after its opening panels. */
+export let dashboardActivity = (view: DashboardView, read: Dashboard) => [
   workPart(view, read),
   updatesPart(view, read),
+]
+
+/** The Dashboard of `view`'s space, as `read` says it. */
+export let dashboardView = (
+  view: DashboardView,
+  read: Dashboard,
+  activity: Kids = dashboardActivity(view, read),
+) => [
+  appsPart(view, read),
+  askPart(view, read.suggestions),
+  activity,
 ]
