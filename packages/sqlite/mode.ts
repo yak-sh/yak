@@ -29,6 +29,7 @@ import {
   type Driver,
   lit,
   render,
+  revision,
   select,
   star,
   type Stmt,
@@ -125,8 +126,12 @@ type Dialed = {
 
 // The driver a mode reads through, over `driver`: every statement it runs is
 // dressed for the mode `on` holds. Its memory is its own (no `connection`),
-// since what it reads is not what main's driver reads.
+// since what it reads is not what main's driver reads. What it does to the
+// file is the file's, though: each statement still passes `driver`'s, so a
+// table it raises moves the schema main's driver reads (@yaks/sql
+// `revision`), and main never records its tables from a stale look.
 let through = (driver: Driver, on: () => Dialed): Driver => {
+  revision(driver, 'schema')
   let { connection: _, ...rest } = driver
   let query = driver.query.bind(driver)
   let run = driver.run?.bind(driver)

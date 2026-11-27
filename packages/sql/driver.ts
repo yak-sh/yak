@@ -19,7 +19,7 @@ import {
   table,
 } from './ast.ts'
 import { render } from './render.ts'
-import { asWritten } from './catalogue.ts'
+import { asWritten, faultAsWritten } from './catalogue.ts'
 
 /** One row, a bag of column values keyed by name. */
 export type Row = Record<string, unknown>
@@ -155,10 +155,21 @@ export let storeAs = (driver: Driver, v: Vocab): void => {
   let text = (s: Stmt): Stmt =>
     s.t == 'raw' ? s : render(s, undefined, undefined, at.v)
   let query = driver.query.bind(driver)
-  driver.query = (s) => asWritten(s, query(text(s)), at.v)
+  driver.query = (s) => labeled(() => asWritten(s, query(text(s)), at.v), at.v)
   if (driver.run) {
     let run = driver.run.bind(driver)
-    driver.run = (s) => run(text(s))
+    driver.run = (s) => labeled(() => run(text(s)), at.v)
+  }
+}
+
+/** What `ran` answers, or its refusal under the names its statement wrote
+ * (./catalogue.ts `faultAsWritten`): how every driver bound to a vocabulary
+ * runs a statement. */
+export let labeled = <T>(ran: () => T, v?: Vocab): T => {
+  try {
+    return ran()
+  } catch (e) {
+    throw faultAsWritten(e, v)
   }
 }
 

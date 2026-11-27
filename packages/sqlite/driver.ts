@@ -6,6 +6,7 @@ import {
   asWritten,
   type Driver,
   excerpt,
+  labeled,
   type Param,
   renderStable,
   type Row,
@@ -44,9 +45,10 @@ export let driver = (
 ): Driver => {
   let run = naming(ran)
   let stored: { v?: Vocab } = {}
-  // Rows come back under the names the statement wrote (@yaks/sql
-  // `asWritten`).
-  let query = (s: Stmt): Row[] => asWritten(s, ask(s), stored.v)
+  // Rows come back, and a refusal is told, under the names the statement
+  // wrote (@yaks/sql `asWritten`, `labeled`).
+  let query = (s: Stmt): Row[] =>
+    labeled(() => asWritten(s, ask(s), stored.v), stored.v)
   let ask = (s: Stmt): Row[] => {
     opts.before?.(s)
     // Each statement is kept by its text (./native.ts `prepared`), and a list

@@ -23,6 +23,7 @@ import {
   DEPTH,
   type Driver,
   fn,
+  labeled,
   type Param,
   type Raw,
   renderStable,
@@ -242,9 +243,10 @@ export let driver = (
       }
     }
   }
-  // Rows come back under the names the statement wrote (@yaks/sql
-  // `asWritten`).
-  let query = (s: Stmt): Row[] => asWritten(s, told(s), stored.v)
+  // Rows come back, and a refusal is told, under the names the statement
+  // wrote (@yaks/sql `asWritten`, `labeled`).
+  let query = (s: Stmt): Row[] =>
+    labeled(() => asWritten(s, told(s), stored.v), stored.v)
   let told = (s: Stmt): Row[] => {
     let c = peek()
     if (!c) return execute(s)

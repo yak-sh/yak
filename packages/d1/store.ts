@@ -80,6 +80,7 @@ import {
   DEEP,
   doomSql,
   eq,
+  faultAsWritten,
   isNull,
   looseSql,
   narrow,
@@ -229,15 +230,23 @@ export let storage = <S extends Prepared<S>>(
   let report = base.report ?? logged
   let prep = (s: Stmt): S => prepare(db, s, vocab)
 
-  // One statement, one round trip.
+  // One statement, one round trip. A refusal is told under the names the
+  // statement wrote (@yaks/sql `faultAsWritten`), as its rows are.
   let one = async (s: Stmt): Promise<Row[]> =>
-    asWritten(s, (await prep(s).all<Row>()).results.map(unbind), vocab)
+    asWritten(
+      s,
+      (await prep(s).all<Row>().catch(said)).results.map(unbind),
+      vocab,
+    )
+  let said = (e: unknown): never => {
+    throw faultAsWritten(e, vocab)
+  }
 
   // Many statements, still one round trip — and, when they are writes, one
   // transaction. The answers come back per statement, in order.
   let send = async (stmts: readonly Stmt[]): Promise<Row[][]> =>
     stmts.length
-      ? (await db.batch(stmts.map(prep))).map((r, i) =>
+      ? (await db.batch(stmts.map(prep)).catch(said)).map((r, i) =>
         asWritten(stmts[i], r.results.map(unbind), vocab)
       )
       : []

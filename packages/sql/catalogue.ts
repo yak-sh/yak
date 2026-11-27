@@ -159,6 +159,46 @@ export let columnAsWritten = (
   name: string,
 ): string => v ? columnsBack(v, table).get(name) ?? name : name
 
+/** An engine's refusal under the names its statement wrote: a constraint it
+ * says failed names each `table.column` as the file stores them
+ * (`UNIQUE constraint failed: hostname.name`, not the two identities), so the
+ * person a refusal reaches reads the words they wrote. The error is the same
+ * one, its message reworded; anything else passes as it came.
+ *
+ * ```ts
+ * import { faultAsWritten } from '@yaks/sql'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let [tag, name] = [crypto.randomUUID(), crypto.randomUUID()]
+ * let v = loadVocab({ $defs: { tag: {
+ *   $id: `urn:uuid:${tag}`, component: true,
+ *   properties: { name: { $id: `urn:uuid:${name}`, type: 'string' } },
+ * } } })
+ * let e = new Error(`UNIQUE constraint failed: ${tag}.${name}`)
+ * equal(
+ *   (faultAsWritten(e, v) as Error).message,
+ *   'UNIQUE constraint failed: tag.name',
+ * )
+ * ```
+ */
+export let faultAsWritten = (e: unknown, v?: Vocab): unknown => {
+  if (!v || !(e instanceof Error)) return e
+  let message = e.message.replace(
+    /(constraint failed: )(.+)$/i,
+    (_, head: string, names: string) =>
+      head + names.split(', ').map((name) => {
+        let dot = name.indexOf('.')
+        if (dot < 0) return name
+        let table = tableAsWritten(v, name.slice(0, dot))
+        let column = columnAsWritten(v, table, name.slice(dot + 1))
+        return `${table}.${column == '$entity' ? 'entity' : column}`
+      }).join(', '),
+  )
+  if (message != e.message) e.message = message
+  return e
+}
+
 /** Every object the file's schema holds, in name order: read once while the
  * schema stands, and again after it moves. */
 export let catalogue = (driver: Driver): readonly SchemaObject[] =>

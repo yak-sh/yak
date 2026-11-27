@@ -105,6 +105,7 @@ export {
 export {
   type Driver,
   effect,
+  labeled,
   queryPhysical,
   type Row,
   scan,
@@ -129,6 +130,7 @@ export {
   catalogue,
   columnAsWritten,
   erect,
+  faultAsWritten,
   type SchemaObject,
   tableAsWritten,
 } from './catalogue.ts'

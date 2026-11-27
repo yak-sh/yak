@@ -9,6 +9,8 @@ import {
   objects,
 } from '@yaks/sqlite'
 import { tally } from '@yaks/sql'
+import { identity } from '@yaks/vocab'
+import { sessionDoc } from '@yaks/session'
 import { compose } from '@yaks/cli/host'
 import type { Facets, Load } from '@yaks/host'
 import { local } from './local.ts'
@@ -137,7 +139,7 @@ test('migration observation stops admission but drains current model before data
     release.resolve()
     await a.close()
     assertEquals(closed, true)
-    assertEquals(tally(peer, 'entry') > 0, true)
+    assertEquals(tally(peer, identity(sessionDoc, 'entry')) > 0, true)
   } finally {
     release.resolve()
     await a.close()
