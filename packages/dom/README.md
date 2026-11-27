@@ -10,7 +10,8 @@ so the same kit-built app is one tree for each of them:
   own widgets.
 
 ```ts ignore
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from '@yaks/react/draw'
 import { install, onPaint } from '@yaks/dom'
 
 let { root, free } = install()

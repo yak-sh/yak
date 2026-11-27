@@ -19,7 +19,8 @@
     "@yaks/process": "0.2.28",
     "@yaks/text": "0.2.24",
     "preact": "10.29.7",
-    "@preact/signals-core": "1.14.5"
+    "@preact/signals-core": "1.14.5",
+    "@yaks/react": "0.2.33"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
-import { act } from 'preact/test-utils'
+import { act } from '@yaks/react/testing'
 import type { Bundle } from '@yaks/graph'
 import { applyLocal, cache, config, ent } from '../../live.ts'
 import { host, reader } from '../../host_testing.ts'

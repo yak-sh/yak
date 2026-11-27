@@ -1,8 +1,8 @@
-import { clock, equal, test, tick } from '@yaks/testing'
+import { clock, equal, test, until } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { createElement as h } from 'react'
-import { frames } from '../preact/draw.ts'
-import { render } from 'preact'
+import { act } from '@yaks/react/testing'
+import { render } from '@yaks/react/draw'
 import { parse } from '@yaks/query'
 import { pickLine, useHits } from './hits.ts'
 
@@ -36,7 +36,6 @@ test('a picker asks find once the line rests, for the newest line only', async (
   // the next turn, as a browser's next frame would.
   let { document } = parseHTML('<main></main>')
   let root = document.querySelector('main')!
-  let restoreFrames = frames((f) => setTimeout(f))
   Object.defineProperty(globalThis, 'document', {
     value: document,
     configurable: true,
@@ -45,22 +44,20 @@ test('a picker asks find once the line rests, for the newest line only', async (
     [Symbol.dispose]: () => {
       render(null, root)
       delete (globalThis as { document?: unknown }).document
-      restoreFrames()
     },
   }
   let draw = async (line: string, ms: number) => {
-    render(h(Picker, { line }), root)
-    await tick()
-    await time.advance(ms)
+    await act(() => render(h(Picker, { line }), root))
+    await act(() => time.advance(ms))
   }
   await draw('a *', 100)
   await draw('ab *', 149)
   equal(asked, [])
-  await time.advance(1)
+  await act(() => time.advance(1))
   equal(asked, ['ab *'])
-  await tick()
+  await until(() => shown[0] === 'ab *')
   equal(shown, ['ab *'])
   await draw('', 150)
-  await tick()
+  await until(() => shown.length === 0)
   equal([asked, shown], [['ab *'], []])
 })

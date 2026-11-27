@@ -17,7 +17,7 @@
  * @module
  */
 import { createElement as h, Fragment } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import type { Client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { actionWords, REDRAWN } from '@yaks/inbox/actions-browser'

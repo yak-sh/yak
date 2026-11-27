@@ -2,7 +2,8 @@
 // The Sessions switch reads and edits the follower's persisted home mute.
 // A RAM graph exercises both the metadata route and remount recovery.
 import '../browse/testing.ts'
-import { signal } from '@preact/signals'
+import { useValue } from '@yaks/react/testing'
+import { signal } from '@preact/signals-core'
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -32,7 +33,7 @@ let turn = signal(0)
 let io = {
   ...inspectIo,
   ask: () => {
-    turn.value
+    useValue(turn)
     return { home: { rows: [row], ready: true } }
   },
   apply: async (rows: Parameters<typeof g.apply>[0]) => {

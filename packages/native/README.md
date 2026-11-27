@@ -35,7 +35,7 @@ anywhere. The iOS shell (`native/kit.tsx` at the repository root) is the host
 that turns each node into a React Native view.
 
 ```ts ignore
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { look, mount } from '@yaks/native'
 
 let unmount = mount(h(App, {}), look(colors), (node) => draw(node))

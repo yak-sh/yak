@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { Menu } from './Menu.ts'
 import { menus } from './menus.ts'
 

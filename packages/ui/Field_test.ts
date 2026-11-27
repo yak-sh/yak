@@ -1,12 +1,12 @@
 /** A text field keeps what is typed in it and its caret while its value is
  * drawn again, and moves the caret with the text when a new value arrives. */
 import { equal, test, typist } from '@yaks/testing'
-import { signal } from '@preact/signals'
+import { signal } from '@preact/signals-core'
 import { parseHTML } from 'linkedom'
 import { createElement as h } from 'react'
-import { render } from 'preact'
-import { act } from 'preact/test-utils'
-import { renderToString } from 'preact-render-to-string'
+import { render } from '@yaks/react/draw'
+import { actNow as act, useValue } from '@yaks/react/testing'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { Field, moved } from './Field.ts'
 
 test('an offset stays before the change, moves after it, and goes to the end of a span it was inside', () => {
@@ -35,7 +35,7 @@ let field = (value = '') => {
     h(Field, {
       placeholder: 'Write a sentence…',
       lines: true,
-      value: text.value,
+      value: useValue(text),
       onInput: (e: Event) =>
         text.value = (e.currentTarget as HTMLTextAreaElement).value,
     })

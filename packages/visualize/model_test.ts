@@ -1,5 +1,5 @@
 /** Page-model contracts, with no server, polling clock or guessed sleeps. */
-import { effect } from '@preact/signals'
+import { effect } from '@preact/signals-core'
 import { equal, ok, test } from '@yaks/testing'
 import { type Activity, atlas, causes, type ModelOptions } from './model.ts'
 import { GROUPS, type Snapshot } from './snapshot.ts'

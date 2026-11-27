@@ -5,8 +5,8 @@ import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { createElement as h } from 'react'
-import { render } from 'preact'
-import { act } from 'preact/test-utils'
+import { render } from '@yaks/react/draw'
+import { act } from '@yaks/react/testing'
 import { parseHTML } from 'linkedom'
 import {
   backlinks,

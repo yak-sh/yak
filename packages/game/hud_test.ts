@@ -4,7 +4,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { everforest, sheet } from '@yaks/ui'
 import { print } from '@yaks/tui/print'
 import { createElement as h, type ReactElement } from 'react'
-import { render } from 'preact-render-to-string'
+import { renderToStaticMarkup as render } from 'react-dom/server'
 import { Grid, kit, Party, Stats, Stick } from './hud.ts'
 
 let dress = sheet({ kits: { game: kit }, theme: everforest })

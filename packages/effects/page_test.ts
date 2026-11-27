@@ -4,7 +4,7 @@ import { querySearch } from '@yaks/query'
 // the numbers up top, a row for each worker, what is running, and what each
 // handler is owed.
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { equal, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'

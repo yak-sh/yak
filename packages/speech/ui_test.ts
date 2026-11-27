@@ -2,7 +2,7 @@
 // offered, the one picked now checked in each field, each voice with the ways
 // that speak in it and where its sample plays from.
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { equal, test } from '@yaks/testing'
 import { type Offer, VoiceCard } from './ui.ts'

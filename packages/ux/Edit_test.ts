@@ -4,7 +4,7 @@ import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { createElement as h, type ReactNode } from 'react'
 import { frames } from '../preact/draw.ts'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { client } from '@yaks/client'
 import { desk, draftDoc, drafts } from '@yaks/draft'
 import { mint } from '@yaks/graph'
@@ -114,9 +114,10 @@ let page = (more: Partial<Host> = {}) => {
     ...more,
   }
   let root = document.querySelector('main')!
-  let fire = async (el: Element, type: string, key?: string) => {
+  let fire = async (el: Element, type: string, key?: string, taken = false) => {
     let ev = new window.Event(type, { bubbles: true, cancelable: true })
     if (key) Object.defineProperty(ev, 'key', { value: key })
+    if (taken) ev.preventDefault()
     el.dispatchEvent(ev)
     await tick()
   }
@@ -432,12 +433,8 @@ let escaped = await (async () => {
   p.draw(value('domain'))
   let esc = async (taken: boolean) => {
     await press(p)
-    let doc = p.root.ownerDocument
-    let take = (e: Event) => taken && e.preventDefault()
-    doc.addEventListener('keydown', take)
-    await p.fire(p.$('.Overlay .Prop_Find'), 'keydown', 'Escape')
-    doc.removeEventListener('keydown', take)
-    return !!doc.querySelector('.Overlay')
+    await p.fire(p.$('.Overlay .Prop_Find'), 'keydown', 'Escape', taken)
+    return !!p.root.ownerDocument.querySelector('.Overlay')
   }
   return [await esc(false), await esc(true)]
 })()

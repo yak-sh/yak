@@ -13,7 +13,7 @@
  * @module
  */
 import { createElement as h, Fragment } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import type { Bundle } from '@yaks/graph'
 import type { Client } from '@yaks/client'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'

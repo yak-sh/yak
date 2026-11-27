@@ -3,8 +3,8 @@ import { equal, ok, test } from '@yaks/testing'
 import { dispatch, install, TElement } from '@yaks/dom'
 import { event, interaction } from './interaction.ts'
 import { createElement as h } from 'react'
-import { render } from 'preact'
-import { act } from 'preact/test-utils'
+import { render } from '@yaks/react/draw'
+import { act } from '@yaks/react/testing'
 
 test('terminal keyboard activates an anchor, edits its native field and submits the form', async () => {
   let screen = install()

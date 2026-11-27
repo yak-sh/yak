@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { print } from '@yaks/tui/print'
 // deno-lint-ignore no-control-regex -- read the terminal's words
 let plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')

@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { createElement as h, type ReactElement } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { block, el } from './el.ts'
 import { Field } from './Field.ts'
 import { Site } from '@yaks/markdown/site'

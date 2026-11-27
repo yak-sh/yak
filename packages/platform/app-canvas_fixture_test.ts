@@ -1,6 +1,6 @@
 import type { Bundle } from '@yaks/graph'
 import { createElement as h, Fragment } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { appRows, sideApps } from './side-rows.ts'
 import { appMaking, type Making, makingRow } from './app-canvas.ts'

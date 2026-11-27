@@ -2,7 +2,7 @@
 // The icon vocabulary keeps Lucide behind one stable, data-driven component.
 import { test } from '@yaks/testing'
 import '../testing.ts'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { assertEquals, assertExists } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { Icon } from './icons.tsx'

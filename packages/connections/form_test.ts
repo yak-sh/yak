@@ -4,7 +4,7 @@
 import { test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { createElement as h } from 'react'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { parseHTML } from 'linkedom'
 import { KeyForm, type Pasted } from './form.ts'
 

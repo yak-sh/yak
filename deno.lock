@@ -39,7 +39,8 @@
     "npm:@noble/hashes@2.4.0": "2.4.0",
     "npm:@pdf-lib/fontkit@1.1.1": "1.1.1",
     "npm:@preact/compat@18.3.2": "18.3.2_preact@10.29.7",
-    "npm:@preact/signals-core@^1.14.0": "1.14.4",
+    "npm:@preact/signals-core@1.14.5": "1.14.5",
+    "npm:@preact/signals-core@^1.14.0": "1.14.5",
     "npm:@preact/signals@2.9.4": "2.9.4_preact@10.29.7",
     "npm:@protomaps/basemaps@5.7.2": "5.7.2",
     "npm:@resvg/resvg-wasm@2.6.2": "2.6.2",
@@ -1129,8 +1130,8 @@
         "preact"
       ]
     },
-    "@preact/signals-core@1.14.4": {
-      "integrity": "sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA=="
+    "@preact/signals-core@1.14.5": {
+      "integrity": "sha512-vcRv7Ityz5JVmeiVqIluLFzT/PDS/AlhHUpw3/aUWqcVUs6bDGIPXE/6RSC4evBNWYvnniozg5Syfj33al3gkg=="
     },
     "@preact/signals@2.9.4_preact@10.29.7": {
       "integrity": "sha512-JzAZXcRkmCNf9wVuxNI7UWseu3++Mm0dZ6UFyjFby44CyKIl7Y06oOsW3KA5Nx0L8tpE87OY5pLe0uQ0xcWKrg==",
@@ -3776,6 +3777,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@yaks/alias@0.2.24",
             "npm:@yaks/benchmark@0.2.30",
             "npm:@yaks/fp@0.2.23",
@@ -3872,6 +3874,7 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/testing@0.2.30",
@@ -4222,11 +4225,13 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/draft@0.2.24",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/query@0.2.32",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ux@0.2.23",
@@ -4253,6 +4258,7 @@
             "npm:@yaks/member@0.2.25",
             "npm:@yaks/phone@0.2.30",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tui@0.2.24",
             "npm:@yaks/ui@0.2.30",
@@ -4420,6 +4426,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/client@0.2.24",
@@ -4441,6 +4448,7 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/session@0.2.33",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.30",
@@ -4526,6 +4534,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/cli@0.2.33",
@@ -4544,6 +4553,7 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/session@0.2.33",
             "npm:@yaks/sql@0.2.30",
@@ -4577,6 +4587,7 @@
             "npm:@yaks/match@0.2.30",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tui@0.2.24",
@@ -5015,6 +5026,7 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/task@0.2.23",
             "npm:@yaks/testing@0.2.30",
@@ -5090,6 +5102,7 @@
             "npm:@yaks/git@0.2.30",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/host@0.2.29",
+            "npm:@yaks/html@0.2.24",
             "npm:@yaks/id@0.2.23",
             "npm:@yaks/inbox@0.2.30",
             "npm:@yaks/key@0.2.24",
@@ -5260,6 +5273,7 @@
           "dependencies": [
             "npm:@preact/compat@18.3.2",
             "npm:@yaks/dom@0.2.24",
+            "npm:@yaks/preact@0.2.24",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32"
@@ -5580,6 +5594,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@preact/signals@2.9.4",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/draft@0.2.24",
@@ -5594,6 +5609,7 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tools@0.2.30",
@@ -5668,6 +5684,7 @@
             "npm:@yaks/preact@0.2.24",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/text@0.2.24",
@@ -5782,6 +5799,7 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/sql@0.2.30",
@@ -5847,6 +5865,7 @@
             "npm:@yaks/markdown@0.2.30",
             "npm:@yaks/preact@0.2.24",
             "npm:@yaks/process@0.2.28",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/text@0.2.24",
             "npm:preact@10.29.7"
@@ -5882,8 +5901,10 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/markdown@0.2.30",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tui@0.2.24",
@@ -5898,6 +5919,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@preact/compat@18.3.2",
+            "npm:@preact/signals-core@1.14.5",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/draft@0.2.24",
             "npm:@yaks/fp@0.2.23",
@@ -6073,6 +6095,7 @@
             "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/sqlite@0.2.30",
             "npm:@yaks/testing@0.2.30",

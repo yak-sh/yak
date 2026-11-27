@@ -4,14 +4,8 @@
  * the app's own store on yaks.app. Tab walks its controls, a field takes what
  * is typed, Enter and Space press, as @yaks/tui/interaction does for any
  * page; `q` outside a field quits. */
-import * as preact from 'preact'
-import * as hooks from 'preact/hooks'
-import * as compat from 'preact/compat'
-import * as compatJsx from 'preact/jsx-runtime'
-import * as compatClient from 'preact/compat/client'
-import { draw as drawPreact } from '@yaks/preact/draw'
 import { bundle } from '@yaks/cli/page'
-import { aliases } from '@yaks/preact/renderer'
+import { aliases, modules, paint } from '@yaks/preact/renderer'
 import * as react from 'react'
 import * as jsx from 'react/jsx-runtime'
 import * as ui from '@yaks/ui'
@@ -31,36 +25,26 @@ import {
 /** What a view loaded into this process imports its platform packages as:
  * the copies @yaks/tui renders by. */
 export let carried: Carried = {
-  preact,
-  'preact/hooks': hooks,
+  ...modules,
   react,
   'react/jsx-runtime': jsx,
   '@yaks/ui': ui,
 }
 
 let legacy = async (): Promise<Carried> => {
-  let kits = {
-    preact,
-    'preact/hooks': hooks,
-    'preact/compat': compat,
-    'preact/compat/client': compatClient,
-    'preact/jsx-runtime': compatJsx,
-  }
   let code = await bundle(new URL(import.meta.resolve('@yaks/ui')), undefined, {
     alias: aliases,
-    external: Object.keys(kits),
+    external: Object.keys(modules).filter((name) => name.startsWith('preact')),
     format: 'cjs',
   })
   let module = { exports: {} }
   new Function('require', 'module', 'exports', code)(
-    (name: keyof typeof kits) => kits[name],
+    (name: string) => modules[name],
     module,
     module.exports,
   )
   return {
-    ...kits,
-    react: compat,
-    'react/jsx-runtime': compatJsx,
+    ...modules,
     '@yaks/ui': module.exports,
   }
 }
@@ -84,13 +68,7 @@ export let appAt = async (
   )
   return ({ store }) => {
     let root = useRef<HTMLDivElement>(null)
-    useLayoutEffect(() =>
-      drawPreact(
-        preact.h(View as unknown as preact.ComponentType<{ store: Store }>, {
-          store,
-        }),
-        root.current!,
-      ), [store])
+    useLayoutEffect(() => paint(View, { store }, root.current!), [store])
     return h('div', { ref: root })
   }
 }

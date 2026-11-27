@@ -1,6 +1,6 @@
 // Sidebar draws the supplied navigation and selection, including form actions.
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'

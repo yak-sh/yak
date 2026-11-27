@@ -5,7 +5,7 @@ in a browser or `@yaks/tui` in a terminal. It uses Marked 18.2.0 for parsing,
 never generates HTML strings, and does not store or fetch documents.
 
 ```ts
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Bold, Heading, Markdown } from '@yaks/markdown'
 
 h(Markdown, { source: '# Hello\n\n**Shared** rendering.' })

@@ -10,7 +10,7 @@
  * @module
  */
 import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import type { Client } from '@yaks/client'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
 import { ACCOUNT, accountOf, accountWords } from './account-rows.ts'

@@ -2,7 +2,7 @@
 // person reads it, a host's kinds ahead of these, a margin where a view loads
 // one, and which entries make a line (./lines.ts `joined`).
 import { equal, test } from '@yaks/testing'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { createElement as h, Fragment } from 'react'
 import { define } from '@yaks/render'
 import type { Bundle } from '@yaks/graph'

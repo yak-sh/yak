@@ -3,7 +3,7 @@
 import * as fs from '@yaks/file/io'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
-import { h as node } from 'preact'
+import { createElement as node } from 'react'
 import { App } from './app.ts'
 import { frontend } from './frontend.ts'
 import { at, harness, mount } from './testing.ts'

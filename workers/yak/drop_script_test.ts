@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { fileDrop } from '@yaks/platform/page-parts'
 
 let code = await Deno.readTextFile(

@@ -1,6 +1,6 @@
 import { querySearch } from '@yaks/query'
 import { createElement as h, type ReactNode } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { equal, ok, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'

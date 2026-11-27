@@ -281,7 +281,7 @@ such as `/directory/api/form/kids-club`. The adapter reads the form with
 page writes no form code.
 
 ```ts
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Submit, submitAt, submitOf } from '@yaks/ux'
 import { type Door, fill } from '@yaks/forms/fill'
 import { equal } from '@yaks/testing'
@@ -326,7 +326,8 @@ to the existing [draft desk](../draft/README.md). This binding needs the page's
 live connection and host:
 
 ```ts ignore
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from '@yaks/react/draw'
 import { Ux } from '@yaks/ux'
 import { desk } from '@yaks/draft'
 

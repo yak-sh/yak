@@ -5,7 +5,8 @@ import { createElement as h, useState } from 'react'
 import { mount } from './testing.ts'
 import { Textarea } from './Textarea.ts'
 import { useKeys } from './screen.ts'
-import { signal } from '@preact/signals'
+import { useValue } from '@yaks/react/testing'
+import { signal } from '@preact/signals-core'
 
 let items = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ id: String(i), text: String(i) }))
@@ -314,7 +315,7 @@ test('mounted generic controlled list reveals offscreen selection lazily', async
     () =>
       h(VirtualList, {
         items: data,
-        selected: selected.value,
+        selected: useValue(selected),
         onSelect: (id: string) => {
           selected.value = id
         },
@@ -398,8 +399,8 @@ test('partial ranges load neighbors without mistaking a page boundary for the en
   let ui = await mount(
     () =>
       h(VirtualList, {
-        items: visible.value,
-        value: value.value,
+        items: useValue(visible),
+        value: useValue(value),
         onViewportChange: (next) => {
           value.value = next as typeof value.value
         },
@@ -433,7 +434,7 @@ let pageAnswers = await (async () => {
   let ui = await mount(
     () =>
       h(VirtualList, {
-        items: visible.value,
+        items: useValue(visible),
         value: { anchor: { id: '9', offset: 0 }, follow: false },
         range: { before: false, after: true },
         onRange: (request) => {
@@ -525,9 +526,9 @@ let pendingWindow = await (async () => {
   const ui = await mount(
     () =>
       h(VirtualList<{ id: string; text: string }>, {
-        id: identity.value,
-        pending: pending.value,
-        items: data.value,
+        id: useValue(identity),
+        pending: useValue(pending),
+        items: useValue(data),
         scrollbar: true,
         renderItem: (item: { id: string; text: string }) => {
           renders++

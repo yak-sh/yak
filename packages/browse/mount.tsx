@@ -3,7 +3,7 @@ import './domain-host.tsx'
 import './browser-links.ts'
 // Mount the browsing app with the configured plugins’ shared views and home
 // query. The door chooses the facets; domains own their queries and readings.
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { agreementProbe, boot, clientId, config } from './live.ts'
 import { restore } from './components/nav.tsx'
 import { App } from './components/App.tsx'

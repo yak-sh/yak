@@ -6,8 +6,8 @@
 import { test, tick, until } from '../../testing.ts'
 import { test as preparedTest } from '@yaks/testing'
 import { createElement as h } from 'react'
-import { render } from 'preact'
-import { act } from 'preact/test-utils'
+import { render } from '@yaks/react/draw'
+import { act } from '@yaks/react/testing'
 import { parseHTML } from 'linkedom'
 import { assert, assertEquals, assertExists } from '@std/assert'
 import {

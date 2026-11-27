@@ -54,7 +54,7 @@ the service worker. `noticeOf(tree)` is the push surface's host: function
 components are called, elements become their text, and a link is its label.
 
 ```ts
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { noticeOf, Notification, said } from '@yaks/push/notice'
 
 let notice = noticeOf(

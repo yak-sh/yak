@@ -16,7 +16,7 @@ import {
   useLayoutEffect,
   useRef,
 } from 'react'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { TElement, touch } from '@yaks/dom'
 import { clip, lay, type Line, viewports } from './paint.ts'
 import { type Sheet, type Style } from './theme.ts'

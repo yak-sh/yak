@@ -5,6 +5,7 @@ import { flushSync, version } from 'react-dom'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 
 type Surface = { draw: (node: ReactNode) => void; close: () => void }
+let commit = parseInt(version) >= 19 ? flushSync : <T>(draw: () => T) => draw()
 
 // React DOM consults window and the iframe constructor for focus restoration.
 // The in-memory document has neither a window of its own nor frame elements.
@@ -163,7 +164,7 @@ export let surface = (
       failure = undefined
       committing = true
       try {
-        flushSync(() => root.render(node))
+        commit(() => root.render(node))
       } finally {
         committing = false
       }

@@ -9,7 +9,7 @@ scroll, measurement, and selection state in memory. Applications own durable
 data and pass it into their component tree.
 
 ```ts ignore
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Frame, run, Scroll, Textarea } from '@yaks/tui'
 
 let App = () =>

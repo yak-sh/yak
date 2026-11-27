@@ -2,10 +2,10 @@
 // app's client.js drafts, bundled apart): a draft typed in another tab, or
 // restored once the person is known, still draws.
 import { createElement as h, useState } from 'react'
-import { render } from 'preact'
-import { act } from 'preact/test-utils'
+import { render } from '@yaks/react/draw'
+import { act } from '@yaks/react/testing'
 import { parseHTML } from 'linkedom'
-import { equal, lend, test } from '@yaks/testing'
+import { equal, lend, test, until } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { Submit } from './Submit.ts'
 
@@ -44,7 +44,7 @@ test('a draft typed elsewhere draws, and stops being followed on unmount', async
   let root = document.querySelector('main')!
   try {
     await act(() => render(h(Form, {}), root))
-    await act(async () => {}) // the form's content arrives
+    await until(() => root.querySelector('p'))
     equal(root.textContent, '')
     await act(() =>
       desk.type('note:body', JSON.stringify({ body: 'Back on Monday' }))

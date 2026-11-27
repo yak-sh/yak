@@ -90,7 +90,8 @@ Kampala is `[32.58, 0.35]`.
 `main.ts` draws one place:
 
 ```ts ignore
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from '@yaks/react/draw'
 import { Place } from '@yaks/maps/Place'
 
 render(
@@ -119,7 +120,8 @@ The directions link opens OpenStreetMap's route planner to the place.
 as pins, and draw it again when they change:
 
 ```ts ignore
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from '@yaks/react/draw'
 import { Map } from '@yaks/maps/Map'
 
 let { subscribe } = await import(

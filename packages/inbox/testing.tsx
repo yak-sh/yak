@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // What the inbox views' tests draw them with: a page of their own (linkedom),
 // a graph that answers the summary as a server does, and a host standing in
 // for a browsing app's. The host holds each line the views ask while they are
@@ -7,10 +7,11 @@
 // entities through a small registry of shared renderers, behind the
 // inspector's own door (@yaks/inspect `inspector`). Comments and drafts are
 // bound to it as a browsing app binds them.
-import { signal } from '@preact/signals'
-import { type ComponentChild, render } from 'preact'
-import { act } from 'preact/test-utils'
-import { useLayoutEffect } from 'preact/hooks'
+import { signal } from '@preact/signals-core'
+import { type ReactNode as ComponentChild } from 'react'
+import { render } from '@yaks/react/draw'
+import { act } from '@yaks/react/testing'
+import { useLayoutEffect, useSyncExternalStore } from 'react'
 import { parseHTML } from 'linkedom'
 import { until } from '@yaks/testing'
 import { and, parse, querySearch } from '@yaks/query'
@@ -94,16 +95,16 @@ let shared: View[] = [
     view: 'Tile',
     match: and(),
     Render: ({ e, io }) => (
-      <a class='Tile' href={io.link(e.entity.eid)}>
-        <span class='Tile_Title'>{title(e)}</span>
-        <span class='Id'>{io.id(e)}</span>
+      <a className='Tile' href={io.link(e.entity.eid)}>
+        <span className='Tile_Title'>{title(e)}</span>
+        <span className='Id'>{io.id(e)}</span>
       </a>
     ),
   },
   {
     view: 'Full',
     match: and(),
-    Render: ({ e }) => <section class='Full'>{body(e)}</section>,
+    Render: ({ e }) => <section className='Full'>{body(e)}</section>,
   },
   {
     view: 'Full',
@@ -123,12 +124,12 @@ let shared: View[] = [
   {
     view: 'Inline',
     match: and(),
-    Render: ({ e, io }) => <b class='Inline'>{io.name(e.entity.eid)}</b>,
+    Render: ({ e, io }) => <b className='Inline'>{io.name(e.entity.eid)}</b>,
   },
   {
     view: 'Id',
     match: and(),
-    Render: ({ e, io }) => <span class='Id'>{io.id(e)}</span>,
+    Render: ({ e, io }) => <span className='Id'>{io.id(e)}</span>,
   },
 ]
 
@@ -183,7 +184,10 @@ export let host = (
         }
       }
     }, [JSON.stringify(lines)])
-    let now = answers.value
+    let now = useSyncExternalStore(
+      (changed) => answers.subscribe(changed),
+      () => answers.value,
+    )
     return Object.fromEntries(
       Object.entries(asks).map((
         [name, a],

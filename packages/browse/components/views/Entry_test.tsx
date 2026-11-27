@@ -3,7 +3,7 @@
 // view picker without a server or session transcript.
 import { test } from '../../testing.ts'
 import { createElement as h } from 'react'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { type Ent } from '../../types.ts'

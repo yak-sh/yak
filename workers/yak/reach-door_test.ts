@@ -20,7 +20,7 @@ import {
   sideWords,
 } from '@yaks/platform/side-rows'
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { friendSide } from '@yaks/platform/friends'
 import {
   ACCOUNT,

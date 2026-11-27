@@ -5,7 +5,7 @@
 
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { accountEid, messageEid, roomEid, type Said } from '@yaks/chat'
 import { registration, seeds } from '@yaks/connections'
 import { integrationLogo } from '@yaks/platform/routes'

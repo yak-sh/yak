@@ -5,7 +5,7 @@
 
 import { Field } from '@yaks/ui/parts'
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import type { Config } from './connect.ts'
 import { spaceHost } from './connect.ts'
 import { type Consent, host } from './consent.ts'

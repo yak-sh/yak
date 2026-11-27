@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertStringIncludes } from '@std/assert'
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { print } from '@yaks/tui/print'
 import { everforest, kits, rosepine, sheet, stylesheet } from './mod.ts'
 import { specimens as rows } from './Rows.ts'

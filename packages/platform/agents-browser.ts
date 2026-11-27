@@ -15,7 +15,7 @@
  * @module
  */
 import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
 import { copying, shown } from '@yaks/ui/copy-browser'

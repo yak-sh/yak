@@ -9,7 +9,7 @@ import './testing.ts'
 import { anchor, emptyIndex, indexAll } from './index.ts'
 import { parseQuery, type Pred } from './query.ts'
 import { memoryResolver, type Resolver, type Store } from './resolver.ts'
-import { effect, signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals-core'
 import { assertEquals } from '@std/assert'
 
 type Row = Record<string, Record<string, unknown> | undefined>

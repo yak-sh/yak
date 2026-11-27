@@ -4,7 +4,7 @@ import { querySearch } from '@yaks/query'
 // sits, the beliefs about it, the comments on it, the tree with its cycle cut,
 // and the shelves every topic stands on, found by what is typed.
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { equal, ok, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'

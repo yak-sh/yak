@@ -85,7 +85,7 @@ import { edgeEid, link } from './edge.ts'
 import { type Ask, held as owned, host } from './host_testing.ts'
 import { EXISTS, parseQuery, type Pred, PROJECT, resolveRefs } from './query.ts'
 import { type Change, type Ent } from './types.ts'
-import { effect } from '@preact/signals'
+import { effect } from '@preact/signals-core'
 import {
   assertEquals,
   assertNotStrictEquals,

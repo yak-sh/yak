@@ -2,7 +2,7 @@
 // A wake reads from its clock and addressing facets, never a stored title.
 import { test } from '@yaks/testing'
 import '../../testing.ts'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cache, ent } from '../../live.ts'

@@ -3,7 +3,7 @@
 // Drawn through the inspector contract browse uses, in a browser document and
 // in a terminal.
 import { createElement as h } from 'react'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { parseHTML } from 'linkedom'
 import { equal, lend, ok, test } from '@yaks/testing'
 import { parse } from '@yaks/query'

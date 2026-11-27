@@ -2,8 +2,9 @@
 // reads is answered, says when it has read everything, and reads again when a
 // write moves what it read.
 import { createElement as h } from 'react'
-import { render } from 'preact'
-import { signal } from '@preact/signals'
+import { render } from '@yaks/react/draw'
+import { useValue } from '@yaks/react/testing'
+import { signal } from '@preact/signals-core'
 import { parseHTML } from 'linkedom'
 import { equal, lend, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
@@ -34,7 +35,7 @@ let written = signal(0)
 let io = {
   vocab,
   ask: (asks: Record<string, string>) => {
-    written.value
+    useValue(written)
     return Object.fromEntries(
       Object.entries(asks).map(([k, line]) => [k, {
         rows: store.read(line),

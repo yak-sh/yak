@@ -8,8 +8,8 @@
 // plus a free() that unmounts and restores the document global. Pair every
 // mount() with free() — a try/finally, or the end of the test.
 import { createElement as h, type ReactNode } from 'react'
-import { render } from 'preact'
-import { act } from 'preact/test-utils'
+import { render } from '@yaks/react/draw'
+import { act } from '@yaks/react/testing'
 import { parseHTML } from 'linkedom'
 import { Ux } from '@yaks/ux'
 import { ux } from './registry.ts'

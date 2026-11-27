@@ -6,7 +6,7 @@ import { host, reader } from '../../host_testing.ts'
 import { test as preparedTest } from '@yaks/testing'
 import { identityEid } from '@yaks/graph/identity'
 import { createElement as h } from 'react'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import {

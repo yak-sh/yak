@@ -2,7 +2,7 @@
 // every transcript does: a call and the result that answered it are one line.
 import { equal, test } from '@yaks/testing'
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { resolve } from '@yaks/render'
 import { loadVocab } from '@yaks/vocab'

@@ -4,9 +4,10 @@ import { client } from '@yaks/client'
 import { type Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { createElement as h } from 'react'
-import { render } from 'preact'
-import { renderToString } from 'preact-render-to-string'
-import { signal } from '@preact/signals'
+import { render } from '@yaks/react/draw'
+import { useValue } from '@yaks/react/testing'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
+import { signal } from '@preact/signals-core'
 import { parseHTML } from 'linkedom'
 import { mount } from '../tui/testing.ts'
 import {
@@ -136,7 +137,7 @@ test('a terminal disclosure follows the same supplied bundle, and shows only its
   let e = signal<Bundle>({ entity: { eid: disclosureAt('terminal') } })
   let App = () =>
     h(Disclosure, {
-      e: e.value,
+      e: useValue(e),
       onChange: (b) => e.value = b,
       summary: 'Completed',
     }, h('div', {}, 'Saved the village'))

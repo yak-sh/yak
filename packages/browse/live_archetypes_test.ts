@@ -8,7 +8,7 @@ import { vocab } from './types.ts'
 import { applyLocal, type Comps, config } from './live.ts'
 import { host } from './host_testing.ts'
 import { tick } from './testing.ts'
-import { effect } from '@preact/signals'
+import { effect } from '@preact/signals-core'
 
 test('local table names prove the spine without reading component bodies', () => {
   let tables = ['doc', 'local_plugin', 'task'], id = eidOf(tables)

@@ -1,5 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import { bindInvite, type Sharer } from './invite-browser.ts'

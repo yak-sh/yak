@@ -6,7 +6,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, mint } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
 import { createElement as h, Fragment } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { mcpConnect } from './connected-mcp.ts'
 import { machineOf } from './machine-testing.ts'
 import {

@@ -6,9 +6,9 @@ import { querySearch } from '@yaks/query'
 // where it shows on a click, with nothing on it to drag; a new document
 // written into a list; and a skill's instructions.
 import { createElement as h } from 'react'
-import { render } from 'preact'
-import { act as flush } from 'preact/test-utils'
-import { renderToString } from 'preact-render-to-string'
+import { render } from '@yaks/react/draw'
+import { act as flush } from '@yaks/react/testing'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { equal, lend, ok, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'

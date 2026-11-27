@@ -2,7 +2,7 @@
 // where it would land, and dropped there it is put there; a list that puts
 // nothing in order is a plain one.
 import { createElement as h } from 'react'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { parseHTML } from 'linkedom'
 import { equal, lend, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'

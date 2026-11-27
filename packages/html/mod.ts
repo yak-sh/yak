@@ -25,7 +25,7 @@
 import { render as react } from '@yaks/react'
 import type { Bundle, Context, Registry } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab'
-import { renderToStaticMarkup } from 'preact-render-to-string'
+import { renderToStaticMarkup } from 'react-dom/server'
 import {
   createContext,
   createElement as h,

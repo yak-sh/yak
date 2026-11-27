@@ -14,7 +14,7 @@ import {
 import { REACH } from '@yaks/platform/page-graph'
 import { UPDATE_WAITING, waitingCounts } from '@yaks/platform/update-waiting'
 import type { Bundle } from '@yaks/graph'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { updates } from './updates.ts'

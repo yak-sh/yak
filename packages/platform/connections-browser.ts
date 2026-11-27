@@ -24,7 +24,7 @@
  * @module
  */
 import { createElement as h, Fragment } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { markup as renderToString } from '@yaks/html'
 import type { Bundle } from '@yaks/graph'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'

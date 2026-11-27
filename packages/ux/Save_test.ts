@@ -1,7 +1,7 @@
 import { equal, test } from '@yaks/testing'
 import { Field, Form } from '@yaks/ui/parts'
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { Save } from './Save.ts'
 

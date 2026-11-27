@@ -1285,6 +1285,9 @@ importers:
 
   packages/client:
     dependencies:
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@yaks/alias':
         specifier: 0.2.24
         version: link:../alias
@@ -1521,6 +1524,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
@@ -1976,6 +1982,9 @@ importers:
       react:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+      react-dom:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/egress:
     dependencies:
@@ -2142,6 +2151,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react-dom:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -2226,6 +2238,9 @@ importers:
       '@preact/signals':
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -2238,6 +2253,9 @@ importers:
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
@@ -2305,6 +2323,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
@@ -2388,6 +2409,9 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+      react-dom:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
@@ -2758,6 +2782,9 @@ importers:
       '@preact/signals':
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -2779,6 +2806,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/task':
         specifier: 0.2.23
         version: link:../task
@@ -2898,6 +2928,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react-dom:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -2994,6 +3027,9 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -3021,6 +3057,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -3103,6 +3142,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
@@ -3113,6 +3155,9 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+      react-dom:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
@@ -4050,6 +4095,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -4066,6 +4114,9 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+      react-dom:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
@@ -4199,6 +4250,9 @@ importers:
       '@yaks/host':
         specifier: 0.2.29
         version: link:../host
+      '@yaks/html':
+        specifier: 0.2.24
+        version: link:../html
       '@yaks/id':
         specifier: 0.2.23
         version: link:../id
@@ -4310,6 +4364,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react-dom:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
       ua-parser-js:
         specifier: 1.0.41
         version: 1.0.41
@@ -4583,6 +4640,9 @@ importers:
 
   packages/react:
     dependencies:
+      '@yaks/preact':
+        specifier: 0.2.24
+        version: link:../preact
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -4923,6 +4983,9 @@ importers:
       react:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+      react-dom:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/slack:
     dependencies:
@@ -5058,6 +5121,9 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+      react-dom:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
@@ -5377,6 +5443,9 @@ importers:
       '@preact/signals':
         specifier: 2.9.4
         version: 2.9.4(preact@10.29.7)
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -5395,6 +5464,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
@@ -5553,6 +5625,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
@@ -5569,6 +5644,9 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+      react-dom:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
@@ -5739,6 +5817,9 @@ importers:
       react:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+      react-dom:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/trace:
     devDependencies:
@@ -5836,6 +5917,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/sqlite':
         specifier: 0.2.30
         version: link:../sqlite
@@ -5849,6 +5933,9 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
       react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
+      react-dom:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
@@ -5963,6 +6050,9 @@ importers:
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/text':
         specifier: 0.2.24
         version: link:../text
@@ -6068,9 +6158,15 @@ importers:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
     devDependencies:
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
@@ -6114,6 +6210,9 @@ importers:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
     devDependencies:
+      '@preact/signals-core':
+        specifier: 1.14.5
+        version: 1.14.5
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
@@ -6498,6 +6597,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -6992,6 +7094,9 @@ importers:
       es-module-lexer:
         specifier: 2.3.2
         version: 2.3.2
+      react-dom:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
 packages:
   '@asamuzakjp/css-color@3.2.0':

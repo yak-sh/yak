@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { createElement as h } from 'react'
-import { act } from 'preact/test-utils'
+import { act } from '@yaks/react/testing'
 import { mount } from '@yaks/tui/testing'
 import { composition, sheet } from '@yaks/ui'
 import { mount as native, type Node } from '@yaks/native'

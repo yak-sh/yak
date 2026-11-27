@@ -22,9 +22,9 @@ import {
 } from './readings.ts'
 import { inspectViews } from './inspect.ts'
 import { views } from './views.ts'
-import { render as preact } from '@yaks/preact'
+import { render as preact } from '@yaks/react'
 import { render as text } from '@yaks/text'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { createElement as h } from 'react'
 import type { Answer, Bundle, Io } from '@yaks/inspect'
 let vocab = loadVocab([kernelDoc, toolsDoc, docDoc, trackerDoc, timingDoc], [

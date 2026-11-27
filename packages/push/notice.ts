@@ -94,7 +94,7 @@ let tidy = (text: string) =>
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { h } from 'preact'
+ * import { createElement as h } from 'react'
  * import { Action, Notification, noticeOf } from '@yaks/push/notice'
  * let tree = h(
  *   Notification,

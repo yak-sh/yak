@@ -6,7 +6,7 @@
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { h } from 'preact'
+ * import { createElement as h } from 'react'
  * import { print } from '@yaks/tui/print'
  *
  * let tree = h('dl', null, h('dt', null, 'size'), h('dd', null, h('b', null, 'big')))
@@ -17,7 +17,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { install } from '@yaks/dom'
 import { printout } from './paint.ts'
 import type { Sheet } from './theme.ts'

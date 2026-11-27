@@ -8,7 +8,7 @@
  * @module
  */
 
-import { type ComponentType, h } from 'preact'
+import { type ComponentType, createElement as h } from 'react'
 import { draw as show } from '@yaks/preact/draw'
 import { install, onPaint, place } from '@yaks/dom'
 import { decode } from './input.ts'

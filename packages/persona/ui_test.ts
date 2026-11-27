@@ -1,7 +1,7 @@
 // The name card as a browser reads it: one field holding the name now, no
 // longer than a name may be.
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { equal, test } from '@yaks/testing'
 import { LONGEST } from './name.ts'

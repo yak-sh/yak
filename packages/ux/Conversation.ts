@@ -433,6 +433,11 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
 ): JSX.Element => {
   let { take = TAKE, away = false } = conversingOf(e)
   let drawn = shown(lines, take, earlier)
+  let kept = new Set(
+    drawn.lines.filter((line) => line.html != null).map((line) =>
+      `row-${line.id}`
+    ),
+  )
   let root = useRef<HTMLElement>(null)
   // What the listeners read: the latest of what it was given, the place
   // that scrolls, and where the reader last was in it.
@@ -440,6 +445,7 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     e,
     onChange,
     state,
+    kept,
     away,
     pane: null as HTMLElement | null,
     y: 0,
@@ -448,7 +454,9 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     asked: 0,
     older: () => {},
   })
-  at.current = { ...at.current, e, onChange, state }
+  at.current = { ...at.current, e, onChange, state, kept }
+  let fromServer = (target: Element) =>
+    at.current.kept.has(target.closest?.('.Transcript_Row')?.id ?? '')
   let say = (away: boolean) => {
     if (away == at.current.away) return
     at.current.away = away
@@ -469,10 +477,12 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     let el = root.current
     if (!el || !state) return
     for (let fold of el.querySelectorAll('[data-disclosure]')) {
+      if (!fromServer(fold)) continue
       let open = isOpen(state(fold.getAttribute('data-disclosure')!))
       if (open != fold.hasAttribute('open')) fold.toggleAttribute('open', open)
     }
     for (let mark of el.querySelectorAll('[data-disclosure-mark]')) {
+      if (!fromServer(mark)) continue
       let open = isOpen(state(mark.getAttribute('data-disclosure-mark')!))
       mark.setAttribute('aria-expanded', String(open))
     }
@@ -536,6 +546,7 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     // one drawn from its state only says what it was told.
     let toggled = (ev: Event) => {
       let fold = ev.target as Element
+      if (!fromServer(fold)) return
       let eid = fold.getAttribute?.('data-disclosure')
       if (!eid) return
       let open = fold.hasAttribute('open')
@@ -546,11 +557,12 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     // there hears: the page holds the other state at once, as a fold drawn
     // from its state does. Left to the browser, the fold would change first
     // and the page hear of it later, and a drawing in between (a scroll, a
-    // word streamed) would put it back as the page last held it. A fold or
-    // mark drawn from its state has said so already.
+    // word streamed) would put it back as the page last held it. Live
+    // components handle their own events through their renderer.
     let pressed = (ev: Event) => {
       if (ev.defaultPrevented) return
       let target = ev.target as Element
+      if (!fromServer(target)) return
       let mark = target.closest?.('[data-disclosure-mark]')
       let summary = mark ? null : target.closest?.('summary')
       let fold = summary?.parentElement

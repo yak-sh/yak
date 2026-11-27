@@ -1,13 +1,13 @@
 import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { createElement as h } from 'react'
-import { render as mountTree } from 'preact'
+import { render as mountTree } from '@yaks/react/draw'
 import { install, TElement } from '@yaks/dom'
 import { screenful } from '../tui/paint.ts'
 import { dress } from './sheet.ts'
 import { define, resolve } from '@yaks/render'
 import { assert, assertEquals } from '@std/assert'
-import { render } from '@yaks/preact'
+import { render } from '@yaks/react'
 import { words } from '@yaks/cli/host'
 import { at, mount, wears } from './testing.ts'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -109,10 +109,10 @@ test('queries outrank generic rows; overlapping facets use declared tie order', 
       vocab,
     )!
     let children = node.props.children as {
-      props?: { children?: unknown; class?: string }
+      props?: { children?: unknown; className?: string }
     }[]
-    assertEquals(children[2].props?.children, [label.padEnd(9)])
-    assertEquals(children[2].props?.class, color)
+    assertEquals([children[2].props?.children].flat(), [label.padEnd(9)])
+    assertEquals(children[2].props?.className, color)
   }
 })
 

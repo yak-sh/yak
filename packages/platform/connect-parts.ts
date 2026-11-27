@@ -8,12 +8,8 @@
  *
  * @module
  */
-import {
-  createElement as h,
-  type ReactElement,
-  type ReactNode as Kids,
-} from 'react'
-import { jsxTemplate } from 'preact/jsx-runtime'
+import { createElement as h, type ReactNode as Kids } from 'react'
+import { raw } from '@yaks/html'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Logo } from '@yaks/ui/Logo'
@@ -86,7 +82,7 @@ export let detail = (face: Face, keyed: boolean) => {
 
 /** Markup we made ourselves (a service's instructions, drawn from its
  * Markdown) put into a tree as it is. Never what a person typed. */
-export let raw = (html: string): ReactElement => jsxTemplate([html])
+export { raw }
 
 /** A service's logo at the head of its card, read from its integration's row
  * (./routes.ts `integrationLogo`); a neutral mark where it has none. */

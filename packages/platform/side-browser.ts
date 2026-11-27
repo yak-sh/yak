@@ -15,7 +15,7 @@
  * @module
  */
 import { createElement as h, Fragment, type ReactNode } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import type { Bundle } from '@yaks/graph'
 import type { Client, Watch } from '@yaks/client'
 import { morph, PAGE } from '@yaks/ui/navigate'

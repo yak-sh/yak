@@ -9,7 +9,7 @@ import '../domain-host.tsx'
 import { test } from '@yaks/testing'
 import '../testing.ts' // learns the vocabulary
 import './doc.ts' // installs the fake document — before anything renders
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { ansi, TElement } from '@yaks/tui'
 // Entity.tsx before Entry.tsx: the two form the registry's render cycle, and

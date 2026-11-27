@@ -17,7 +17,8 @@
     "@yaks/query": "0.2.32",
     "@yaks/ram": "0.2.24",
     "@yaks/sync": "0.2.24",
-    "@yaks/vocab": "0.2.32"
+    "@yaks/vocab": "0.2.32",
+    "@preact/signals-core": "1.14.5"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

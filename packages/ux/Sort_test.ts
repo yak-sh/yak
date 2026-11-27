@@ -1,7 +1,7 @@
 import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { createElement as h } from 'react'
-import { render } from 'preact-render-to-string'
+import { renderToStaticMarkup as render } from 'react-dom/server'
 import { Table } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { client } from '@yaks/client'

@@ -9,7 +9,8 @@
     "@yaks/render": "0.2.24",
     "@yaks/vocab": "0.2.32",
     "preact-render-to-string": "6.7.0",
-    "@yaks/react": "0.2.33"
+    "@yaks/react": "0.2.33",
+    "react-dom": "npm:@preact/compat@18.3.2"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

@@ -2,7 +2,7 @@
 import { clock, test, until } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
-import { effect } from '@preact/signals'
+import { effect } from '@preact/signals-core'
 import { held, host } from './host_testing.ts'
 import {
   aggValue,

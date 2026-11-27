@@ -2,7 +2,7 @@
  * over a document, here the terminal's, painted and measured. */
 import { equal, ok, test } from '@yaks/testing'
 import { createElement as h } from 'react'
-import { render } from 'preact'
+import { render } from '@yaks/react/draw'
 import {
   doc,
   install,
@@ -84,8 +84,8 @@ render(
       h('input', { type: 'checkbox' }),
     ),
     h('div', { tabIndex: 0, onClick: () => pressed++ }, 'Four'),
-    h('textarea', { value: 'notes' }),
-    h('button', { class: 'Gone' }, 'Gone'),
+    h('textarea', { value: 'notes', onInput: () => {} }),
+    h('button', { className: 'Gone' }, 'Gone'),
   ),
   root as unknown as Parameters<typeof render>[1],
 )

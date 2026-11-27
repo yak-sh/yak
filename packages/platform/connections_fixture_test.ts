@@ -1,5 +1,5 @@
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { markup as renderToString } from '@yaks/html'
 import { parseHTML } from 'linkedom'
 import type { Connections, Face, Offered, Shown } from './connections-page.ts'
 import { type ConnectionsView, connectionsView } from './connections-view.ts'

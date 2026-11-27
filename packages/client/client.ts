@@ -242,7 +242,7 @@ let paged =
  * import { client } from '@yaks/client'
  * import { mint } from '@yaks/graph'
  * import { loadVocab } from '@yaks/vocab'
- * import { signal } from '@preact/signals'
+ * import { signal } from '@preact/signals-core'
  *
  * let vocab = loadVocab(recipeBox)
  * let box = client(vocab, [], { url: 'https://recipes.example', signal })

@@ -1,6 +1,6 @@
 import { clock, equal, test } from '@yaks/testing'
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import { client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'

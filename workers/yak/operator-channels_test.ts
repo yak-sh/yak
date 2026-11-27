@@ -7,7 +7,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import type { Item, Model, Request } from '@yaks/model'
 import { type Directory, directoryOf, type Role } from './directory.ts'
 import { declared } from './directory-fixture.ts'

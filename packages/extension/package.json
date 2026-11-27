@@ -17,7 +17,8 @@
     "@yaks/ui": "0.2.30",
     "esbuild": "0.28.1",
     "preact": "10.29.7",
-    "preact-render-to-string": "6.7.0"
+    "preact-render-to-string": "6.7.0",
+    "react-dom": "npm:@preact/compat@18.3.2"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

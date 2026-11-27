@@ -8,9 +8,9 @@ import { loadVocab } from '@yaks/vocab'
 import { desk, merge } from '@yaks/draft'
 import { type Drafts, heldDrafts } from './host.ts'
 import { createElement as h } from 'react'
-import { hydrate, render } from 'preact'
-import { act } from 'preact/test-utils'
-import { renderToString } from 'preact-render-to-string'
+import { hydrate, render } from '@yaks/react/draw'
+import { act, actNow } from '@yaks/react/testing'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { parseHTML } from 'linkedom'
 import {
   Conversation,
@@ -151,7 +151,8 @@ let page = (hash = '') => {
       pane.scrollTop = to
       pane.dispatchEvent(new Event('scroll'))
     },
-    press: (at: Element) => at.dispatchEvent(new Event('click')),
+    press: (at: Element) =>
+      actNow(() => at.dispatchEvent(new Event('click', { bubbles: true }))),
     grow: (by: number) => (grown += by, grew.forEach((f) => f())),
     newest: () => pane.scrollTop == height() - tall(),
     keyboard: (px: number, quiet = false) => {
@@ -399,7 +400,9 @@ let served = () => {
       fold.dispatchEvent(new Event('toggle', { bubbles: true }))
     },
     press: (at: number) =>
-      (main.querySelectorAll('summary')[at] as HTMLElement).click(),
+      actNow(() =>
+        (main.querySelectorAll('summary')[at] as HTMLElement).click()
+      ),
     mark: () => main.querySelector('[data-disclosure-mark]')!,
     [Symbol.dispose]: () => {
       render(null, main)
@@ -448,7 +451,7 @@ test('a fold pressed open stays open as its line is drawn again, and closes when
 
 test("a mark opens and closes its fold, on the server's line as on one drawn again", () => {
   using p = served()
-  let pressed = () => (p.mark() as HTMLElement).click()
+  let pressed = () => actNow(() => (p.mark() as HTMLElement).click())
   pressed()
   equal(p.folds(), [true, false])
   equal(p.mark().getAttribute('aria-expanded'), 'true')
@@ -474,7 +477,7 @@ let boxed = (given?: Drafts) => {
   let sent: Bundle[] = [], stops: Bundle[] = []
   let root = document.getElementById('box')!
   let draw = (more: Record<string, unknown> = {}) =>
-    act(() =>
+    actNow(() =>
       render(
         h(Conversation.Box, {
           place: 'talk',
@@ -500,16 +503,21 @@ let boxed = (given?: Drafts) => {
     root,
     // typed, and the box drawn again, as a browser does before the next key
     type: (text: string) =>
-      act(() => {
+      actNow(() => {
         field().value = text
-        field().dispatchEvent(new Event('input'))
+        field().dispatchEvent(new Event('input', { bubbles: true }))
       }),
     key: (key: string, shiftKey = false) =>
-      field().dispatchEvent(
-        Object.assign(new Event('keydown', { cancelable: true }), {
-          key,
-          shiftKey,
-        }),
+      actNow(() =>
+        field().dispatchEvent(
+          Object.assign(
+            new Event('keydown', { bubbles: true, cancelable: true }),
+            {
+              key,
+              shiftKey,
+            },
+          ),
+        )
       ),
     [Symbol.dispose]: () => {
       render(null, root)
@@ -557,10 +565,10 @@ test('a box sending waits, and Stop says so on its conversation', () => {
 
 // An event on the field as a browser sends a person's paste or drop, and
 // whether the box took it as its own.
-let on = (b: ReturnType<typeof boxed>, type: string, extra: object) => {
+let on = async (b: ReturnType<typeof boxed>, type: string, extra: object) => {
   let { Event } = b.root.ownerDocument.defaultView!
   let e = new Event(type, { bubbles: true, cancelable: true })
-  act(() => void b.field().dispatchEvent(Object.assign(e, extra)))
+  await act(() => void b.field().dispatchEvent(Object.assign(e, extra)))
   return e.defaultPrevented
 }
 let carrying = (...names: string[]) => ({
@@ -571,23 +579,23 @@ let carrying = (...names: string[]) => ({
   },
 })
 
-test('given onFiles, a box takes files pasted or dropped on it, lit while they are held over it', () => {
+test('given onFiles, a box takes files pasted or dropped on it, lit while they are held over it', async () => {
   using b = boxed()
   let taken: string[][] = []
   b.draw({ onFiles: (fs: File[]) => void taken.push(fs.map((f) => f.name)) })
   let lit = () =>
     b.root.querySelector('.Composer')!.classList.contains('Drop-over')
   let pasted = (...files: File[]) => ({ clipboardData: { files } })
-  equal(on(b, 'paste', pasted()), false)
-  equal(on(b, 'paste', pasted(new File(['x'], 'shot.png'))), true)
-  equal([on(b, 'dragover', carrying()), lit()], [true, true])
-  equal([on(b, 'drop', carrying('a.pdf', 'b.txt')), lit()], [true, false])
+  equal(await on(b, 'paste', pasted()), false)
+  equal(await on(b, 'paste', pasted(new File(['x'], 'shot.png'))), true)
+  equal([await on(b, 'dragover', carrying()), lit()], [true, true])
+  equal([await on(b, 'drop', carrying('a.pdf', 'b.txt')), lit()], [true, false])
   equal(taken, [['shot.png'], ['a.pdf', 'b.txt']])
 })
 
-test('without onFiles, a box leaves files to the page', () => {
+test('without onFiles, a box leaves files to the page', async () => {
   using b = boxed()
-  equal(on(b, 'drop', carrying('a.pdf')), false)
+  equal(await on(b, 'drop', carrying('a.pdf')), false)
 })
 
 // A store as the draft plugin keeps one: each write merged over what it holds

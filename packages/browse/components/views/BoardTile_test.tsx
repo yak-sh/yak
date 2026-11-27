@@ -7,8 +7,8 @@
 // could still count them locally would hide the very regression this fixes.
 import { test } from '@yaks/testing'
 import { tick } from '../../testing.ts'
-import { render } from 'preact'
-import { act } from 'preact/test-utils'
+import { render } from '@yaks/react/draw'
+import { act } from '@yaks/react/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { boardTallyName, cache, ent, landSub } from '../../live.ts'

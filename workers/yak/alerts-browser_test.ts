@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { renderToString as render } from 'preact-render-to-string'
+import { renderToStaticMarkup as render } from 'react-dom/server'
 import { LONG_WORK, offer } from './alerts-browser.ts'
 import { alertsOffer } from './operator-page.ts'
 

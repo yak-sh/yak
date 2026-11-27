@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import * as preact from 'preact'
+import * as react from 'react'
 import { nativeOf, store, Unloadable, viewAt } from './remote.ts'
 
 let APP = 'https://a.yaks.app/trip/'
@@ -24,15 +24,17 @@ let served = (files: Record<string, string>) => {
 test('a page names its view, which loads with what it imports', async () => {
   let { go } = served({
     [APP]: '<base href="/trip/"><link rel="yaks-native" href="view.ts">',
-    [`${APP}view.ts`]: "import { h } from 'preact'\n" +
+    [`${APP}view.ts`]: "import { createElement as h } from 'react'\n" +
       "import { word } from './lib/word.ts'\n" +
       'export default (p: { store: unknown }) => h("p", {}, word)',
     [`${APP}lib/word.ts`]: "export let word: string = 'packed'",
   })
   let url = await nativeOf(APP, go)
   assertEquals(url, `${APP}view.ts`)
-  let View = await viewAt(url!, { preact }, go)
-  let p = (View as preact.FunctionComponent)({}) as preact.VNode
+  let View = await viewAt(url!, { react }, go)
+  let p = (View as react.FunctionComponent)({}) as react.ReactElement<
+    { children: string }
+  >
   assertEquals([p.type, p.props.children], ['p', 'packed'])
   assertEquals(await nativeOf(`${APP}gone/`, go), null)
 })
@@ -44,7 +46,7 @@ test('a view importing what the host does not carry is not loaded', async () => 
   })
   for (let [file, said] of [['view.ts', 'three'], ['none.ts', 'no default']]) {
     await assertRejects(
-      () => viewAt(`${APP}${file}`, { preact }, go),
+      () => viewAt(`${APP}${file}`, { react }, go),
       Unloadable,
       said,
     )

@@ -23,7 +23,7 @@ import {
 } from './operator-draw.ts'
 import { margins, metadata } from './operator-metadata.ts'
 import { define } from '@yaks/render'
-import { renderToString } from 'preact-render-to-string'
+import { renderToStaticMarkup as renderToString } from 'react-dom/server'
 import { namer } from '@yaks/session/conversation'
 import { HEARD, rows } from './operator-view.ts'
 import { sentRows } from './operator-testing.ts'

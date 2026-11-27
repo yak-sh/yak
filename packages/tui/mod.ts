@@ -6,7 +6,7 @@
  * another backend without changing a single widget.
  *
  * ```ts
- * import { h } from 'preact'
+ * import { createElement as h } from 'react'
  * import { Frame, Scroll, Textarea, run } from '@yaks/tui'
  *
  * let App = () =>

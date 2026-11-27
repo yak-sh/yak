@@ -3,7 +3,7 @@
 // place, a new conversation, and page state and words that outlive a remount.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { act } from 'preact/test-utils'
+import { act } from '@yaks/react/testing'
 import type { Bundle } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { parse, whole } from '@yaks/query'
