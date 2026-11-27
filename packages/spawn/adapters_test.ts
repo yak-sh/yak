@@ -226,7 +226,10 @@ test('gemini and agy run headless on their threads, the persona heading the prom
   assertEquals(flag(first, '--output-format'), 'stream-json')
   assertEquals(flag(first, '--approval-mode'), 'yolo')
   assertEquals(first.at(-1), `--prompt=${brief}`)
-  assertEquals(flag(gemini.argv({ ...job, thread: 'T1' }), '--resume'), 'T1')
+  let again = gemini.argv({ ...job, persona: 'Be brief.', thread: 'T1' })
+  assertEquals(flag(again, '--resume'), 'T1')
+  // The thread holds the persona from its first run.
+  assertEquals(again.at(-1), '--prompt=-x fix it')
   let agy = antigravity.argv({ ...job, persona: 'Be brief.' })
   assert(!agy.includes('--conversation'))
   assertEquals(flag(agy, '--output-format'), 'stream-json')

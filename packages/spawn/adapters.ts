@@ -296,9 +296,12 @@ let ownServers = (cli: string, j: Job) => {
 }
 
 // The instruction of a CLI with no flag for instructions of its own: the
-// persona goes first, in the prompt.
+// persona goes first, in the prompt of the thread's first run, and a run that
+// carries the thread on finds it in the conversation already.
 let briefed = (j: Job): string =>
-  j.persona ? `${j.persona}\n\n---\n\n${j.instruction}` : j.instruction
+  j.persona && !j.thread
+    ? `${j.persona}\n\n---\n\n${j.instruction}`
+    : j.instruction
 
 /**
  * `grok -p --output-format streaming-messages-json`, carrying on its thread

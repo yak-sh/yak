@@ -1,11 +1,11 @@
-// What a harness's log says, one line at a time. Claude Code and Codex each
-// write one JSON object per line, to a transcript file of their own and to
-// stdout when a managed run is read (@yaks/spawn), and a reader turns one line
-// into the entries it becomes: what a person typed, what the harness put in
-// front of the model, what the model said and thought, and the tool calls the
-// harness ran with what they returned. Code, and only code: which file belongs
-// to which session, and what the graph makes of an entry, is the importer's
-// (./tail.ts).
+// What a harness's log says, one line at a time. Each agent CLI (Claude Code,
+// Codex, Grok Build, Gemini CLI, Antigravity CLI) writes one JSON object per
+// line, to a transcript file of its own and to stdout when a managed run is
+// read (@yaks/spawn), and a reader turns one line into the entries it becomes:
+// what a person typed, what the harness put in front of the model, what the
+// model said and thought, and the tool calls the harness ran with what they
+// returned. Code, and only code: which file belongs to which session, and
+// what the graph makes of an entry, is the importer's (./tail.ts).
 //
 // A reader knows a format and nothing about the graph, so what it reports
 // carries no eids. It names each call's tool by name and the call by the
@@ -26,8 +26,10 @@
 // output is where a credential turns up. A person's words and the model's are
 // kept verbatim.
 //
-// The event shapes are copied from live runs of both CLIs and from the files
-// they keep, not from their docs.
+// The stream shapes are copied from live runs of each CLI, and Claude Code's
+// and Codex's files from the files they keep; Grok's and Antigravity's files
+// follow third-party descriptions until they are read from real ones
+// (T-2761).
 
 import { metered } from '@yaks/claude/limits'
 import type { Limit } from '@yaks/model'
@@ -576,11 +578,24 @@ export let grokStream: Reader = (e) => {
   )
 }
 
+// Why a Google CLI's turn failed: its plan's limit, a quota or a rate limit
+// spent ("You exceeded your current quota", RESOURCE_EXHAUSTED), is
+// `rate_limit`, as Claude's is, so the run ends as one its plan declined and
+// moves to an account with room (@yaks/spawn); anything else is an error.
+let googleFailed = (message: string): Comps => ({
+  refusal: {
+    code: /\bquota\b|resource.?exhausted|exhausted your capacity|rate.?limit/i
+        .test(message)
+      ? 'rate_limit'
+      : 'error',
+  },
+  content: { body: message },
+  output: {},
+})
+
 // A turn's end, with what it used, and why it failed where it did.
 let ended = (error: string, used: Comps): Comps[] => [
-  ...error
-    ? [{ refusal: { code: 'error' }, content: { body: error }, output: {} }]
-    : [],
+  ...error ? [googleFailed(error)] : [],
   { stop: {}, ...used },
 ]
 
@@ -598,6 +613,8 @@ let ended = (error: string, used: Comps): Comps[] => [
  * assertEquals(gemini(piece).part, { key: 'reply', entry: { content: { body: 'Hel' }, output: {} } })
  * let used = { type: 'tool_use', tool_name: 'read_file', tool_id: 't1', parameters: { file_path: 'a.ts' } }
  * assertEquals(gemini(used).entries, [{ call: { to: 'read_file', id: 't1', args: { file_path: 'a.ts' } } }])
+ * let spent = { type: 'result', status: 'error', error: { message: 'You exceeded your current quota' } }
+ * assertEquals(gemini(spent).entries[0].refusal, { code: 'rate_limit' })
  * ```
  */
 export let gemini: Reader = (e) => {
@@ -614,11 +631,7 @@ export let gemini: Reader = (e) => {
     )]
     : type == 'error'
     ? e.severity == 'error'
-      ? [{
-        refusal: { code: 'error' },
-        content: { body: str(e.message) },
-        output: {},
-      }]
+      ? [googleFailed(str(e.message))]
       : said(str(e.message), { notice: {} })
     : type == 'result'
     ? ended(
