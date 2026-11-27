@@ -9,7 +9,9 @@ import {
   desc,
   eq,
   fn,
+  from,
   insert,
+  join,
   lit,
   or,
   render,
@@ -145,6 +147,43 @@ test('a shared source still screens each probe whose owner can differ', () => {
     from: table('public'),
   }))[0].value
   assertEquals(JSON.parse(String(got)), ['secret', null, 'secret'])
+})
+
+test('a peer read through a subquery is screened by the rows the subquery reads', () => {
+  driver.query(insert('entity', { id: 3, eid: 'three' }))
+  driver.query(insert('private', { entity: 3, text: 'hidden too' }))
+  // The peer joins a subquery's entity: the subquery's own rows decide what
+  // it may see, so a row the scope hides finds no peer.
+  let through = (id: number) =>
+    sub(select({
+      cols: [col('text', 'peer')],
+      from: from(
+        select({
+          cols: [col('entity', 'x')],
+          from: table('private', 'x'),
+          where: eq(col('entity', 'x'), lit(id)),
+        }),
+        's',
+      ),
+      joins: [join(
+        table('private', 'peer'),
+        eq(col('entity', 'peer'), col('entity', 's')),
+      )],
+    }))
+  let scoped = visibleDerived(vocab, {
+    derived: {
+      'public.value': {
+        tag: 'text',
+        expr: () => fn('json_array', through(1), through(3)),
+      },
+    },
+    visibility: { entity: '.private.text=secret' },
+  })['public.value']
+  let got = driver.query(select({
+    cols: [as(scoped.expr(col('entity', 'public')), 'value')],
+    from: table('public'),
+  }))[0].value
+  assertEquals(JSON.parse(String(got)), ['secret', null])
 })
 
 // Several probes of the same protected relation must fit the engine's statement

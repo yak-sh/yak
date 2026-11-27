@@ -186,6 +186,12 @@ export type Source =
     as?: string
     /** Require a named index, or disable secondary indexes when false. */
     indexed?: string | false
+    /** Read only to choose between plans whose answers agree, such as
+     * whether a table holds any row at all: a reader's scope leaves it
+     * unscreened (bind.ts `visibleDerived`), since what it finds never
+     * reaches the answer. Read for anything else, it would show a reader
+     * rows their scope hides. */
+    gate?: boolean
   }
   | { t: 'from'; q: Query; as?: string }
 
@@ -536,6 +542,13 @@ export let call = (name: string, args: Expr[], as?: string): Source => ({
   as,
 })
 export let from = (q: Query, as?: string): Source => ({ t: 'from', q, as })
+/** A table read only to choose a plan (`gate` on a source). */
+export let gate = (name: string, as?: string): Source => ({
+  t: 'table',
+  name,
+  as,
+  gate: true,
+})
 
 /** Rewrite the named relations inside an expression, including its nested
  * subqueries. Raw compiler fragments and table-valued functions stay intact.

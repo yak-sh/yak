@@ -43,6 +43,7 @@ import {
   type Raw,
   raw,
   type Ref,
+  type Select,
   type Source,
   type Stmt,
   type Upsert,
@@ -63,6 +64,7 @@ type Ctx = {
   at?: At
   fired?: At
   ctes?: ReadonlySet<string>
+  reads?: Reads
 }
 
 // The table a write or schema statement is about: its component, the names a
@@ -419,7 +421,10 @@ let source: (s: Source, c: Ctx) => string = kept((s: Source, c: Ctx) => {
     !s.args && !s.physical && (s.schema || !c.ctes?.has(s.name)) &&
     renamed(c.v, s.name)
   ) {
-    return `${relationOf(c.v, s.name, indexed, schema)} as ${q(s.as ?? s.name)}`
+    let as = s.as ?? s.name
+    return `${relationOf(c.v, s.name, indexed, schema, c.reads?.(as))} as ${
+      q(as)
+    }`
   }
   return `${schema}${s.physical ? tableName(c, s.name) : q(s.name)}${
     s.args ? `(${list(s.args, c)})` : ''
@@ -431,7 +436,9 @@ let source: (s: Source, c: Ctx) => string = kept((s: Source, c: Ctx) => {
  * or, where the vocabulary stores it apart from its labels, the relation of
  * its stored columns under their labels. SQLite flattens the subquery, so a
  * read of it seeks the table and its indexes as a read of the plain name
- * would. `indexed` is the table's own `indexed by` or `not indexed`.
+ * would. `indexed` is the table's own `indexed by` or `not indexed`; `read`
+ * says which columns the statement may read, and the relation lists only
+ * those (`reading`).
  *
  * ```ts
  * import { relationOf } from '@yaks/sql/core'
@@ -445,7 +452,7 @@ let source: (s: Source, c: Ctx) => string = kept((s: Source, c: Ctx) => {
  * } } })
  * equal(
  *   relationOf(v, 'note'),
- *   `(select "entity", "${note}"."${body}" as "body" from "${note}")`,
+ *   `(select "entity", "${body}" as "body" from "${note}")`,
  * )
  * equal(relationOf(v, 'meta'), '"meta"')
  * ```
@@ -455,12 +462,13 @@ export let relationOf = (
   comp: string,
   indexed = '',
   schema = '',
+  read: (column: string) => boolean = () => true,
 ): string => {
   if (!renamed(v, comp)) return `${schema}${q(comp)}${indexed}`
-  let named = columns(v, comp).map((k) => {
+  let named = columns(v, comp).filter(read).map((k) => {
     if (!stoodColumn(v, comp, k)) return `null as ${q(k)}`
     let at = stored(v, comp, k)
-    return at == k ? q(k) : `${q(stored(v, comp))}.${q(at)} as ${q(k)}`
+    return at == k ? q(k) : `${q(at)} as ${q(k)}`
   })
   return `(select ${['"entity"', ...named].join(', ')} from ${schema}${
     q(stored(v, comp))
@@ -476,6 +484,61 @@ export let tableOf = (
   renamed(v, comp)
     ? `${relationOf(v, comp, indexed)} as ${q(comp)}`
     : `${q(comp)}${indexed}`
+
+// Which columns of each of a select's sources it may read, by the source's
+// name in it: a renamed component's relation lists only those
+// (`relationOf`), so a statement repeating a relation repeats no column it
+// never names. A column is read where a column node names it, qualified by
+// the source or by nothing; every column, where the select reads all of a
+// source (`*`, `"source".*`) or raw text names the source. Any other word in
+// raw text is read as an unqualified column. Reading too much costs only
+// text; a column left out would be refused by the engine, never misread.
+type Reads = (source: string) => (column: string) => boolean
+let readings = new WeakMap<Select, Reads>()
+let reading = (s: Select): Reads => {
+  let held = readings.get(s)
+  if (held) return held
+  let by = new Map<string, Set<string> | true>()
+  let bare = new Set<string>()
+  let all = !s.cols?.length || s.cols.some((e) => e.t == 'star' && !e.of)
+  let add = (of: string, name: string | true) => {
+    let at = by.get(of)
+    if (at === true) return
+    if (name === true) by.set(of, true)
+    else if (at) at.add(name)
+    else by.set(of, new Set([name]))
+  }
+  let walk = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(walk)
+    if (!node || typeof node != 'object') return
+    let n = node as Record<string, unknown>
+    if (n.t == 'col') {
+      if (typeof n.of == 'string') add(n.of, String(n.name))
+      else bare.add(String(n.name))
+      return
+    }
+    if (n.t == 'star' && typeof n.of == 'string') return add(n.of, true)
+    if (n.t == 'raw') {
+      let sql = String(n.sql)
+      for (let [, quoted, word] of sql.matchAll(/"((?:[^"]|"")*)"|(\w+)/g)) {
+        let name = quoted?.replaceAll('""', '"') ?? word
+        by.set(name, true)
+        bare.add(name)
+      }
+      return
+    }
+    for (let v of Object.values(n)) walk(v)
+  }
+  walk(s)
+  let reads: Reads = (source) => {
+    let named = all ? true : by.get(source)
+    return (column) =>
+      named === true || column == 'entity' || bare.has(column) ||
+      !!named?.has(column)
+  }
+  readings.set(s, reads)
+  return reads
+}
 
 let HOW = { join: 'join', left: 'left join', cross: 'cross join' }
 let joins = (js: Join[] | undefined, c: Ctx): string =>
@@ -544,11 +607,12 @@ let query: (s: Query, c: Ctx) => string = kept((s: Query, c: Ctx) => {
   }
   let from = s.from == null ? [] : Array.isArray(s.from) ? s.from : [s.from]
   c = shadowed(c, from, s.joins)
+  let own = c.v ? { ...c, reads: reading(s) } : c
   return withs(s.with, c) +
     `select${s.distinct ? ' distinct' : ''} ` +
     (s.cols?.length ? list(s.cols, c) : '*') +
-    (from.length ? ` from ${from.map((f) => source(f, c)).join(', ')}` : '') +
-    joins(s.joins, c) +
+    (from.length ? ` from ${from.map((f) => source(f, own)).join(', ')}` : '') +
+    joins(s.joins, own) +
     (s.where ? ` where ${expr(s.where, c)}` : '') +
     (s.group?.length ? ` group by ${list(s.group, c)}` : '') +
     (s.having ? ` having ${expr(s.having, c)}` : '') +

@@ -35,6 +35,7 @@ export {
   FALSE,
   fn,
   from,
+  gate,
   ge,
   gt,
   iff,

@@ -5630,6 +5630,10 @@ export let sourceScreen = (
   }
 }
 
+// The row a derived property's owner is read through under an entity scope
+// (`visibleDerived`).
+let OWNER = '__derived_owner'
+
 let scopedDerived = new WeakMap<
   Vocab,
   WeakMap<Derived, Map<string, Derived>>
@@ -5704,13 +5708,21 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   let policy = opts.visibility?.entity
   let keyed = policy && !screens.size && ownerKeyed(vocab, opts, parsed(policy))
   let scoping = <T extends Cond | Select>(node: T): T => {
-    let owned = entity && !screens.size
-      ? ownerReads(vocab, node, { shapes: !!keyed, peers: true })
+    let owned = entity
+      ? ownerReads(vocab, node, {
+        shapes: !!keyed,
+        peers: true,
+        plain: (name) => !screens.has(name),
+      })
       : new Set()
     return sources(
       node,
       (name, alias, src) =>
-        owned.has(src) ? table(name, alias) : source(name, alias),
+        gated(src)
+          ? src
+          : owned.has(src)
+          ? table(name, alias)
+          : source(name, alias),
     )
   }
   // Name each permission screen once per expression. A whole read with
@@ -5721,6 +5733,25 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
     return allowed.size
       ? sub(select({ with: [...allowed], cols: [scoped] }))
       : scoped
+  }
+  // Under an entity scope, a derived property that reads what the scope
+  // screens is read of its owner's row, screened once: each component of the
+  // owner is then read through that row (`ownerReads`) rather than screened
+  // at every read, and an owner the scope hides has no value at all. One that
+  // reads nothing screened stays as it was written.
+  let ofOwner = <T extends Cond | undefined | null>(
+    owner: Cond,
+    read: (owner: Cond) => T,
+  ): Cond | T => {
+    let c = read(owner)
+    if (!c) return c
+    let direct = expression(c)
+    if (!entity || !allowed.size) return direct
+    return sub(selection(select({
+      cols: [read(col('id', OWNER))!],
+      from: table('entity', OWNER),
+      where: eq(col('id', OWNER), owner),
+    })))
   }
   let selection = (query: Select): Select => {
     allowed = new Set()
@@ -5735,13 +5766,11 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
       path,
       {
         ...prop,
-        expr: (owner: Cond) => expression(prop.expr(owner, scope)),
+        expr: (owner: Cond) => ofOwner(owner, (o) => prop.expr(o, scope)),
         ...prop.test
           ? {
-            test: (owner: Cond, values: Cond[]) => {
-              let test = prop.test!(owner, values, scope)
-              return test && expression(test)
-            },
+            test: (owner: Cond, values: Cond[]) =>
+              ofOwner(owner, (o) => prop.test!(o, values, scope)),
           }
           : {},
         ...prop.select
@@ -6187,14 +6216,26 @@ let rowAdmits = (
   return (owner) => admitting(vocab, plain, scope, owner, alive)
 }
 
+// A source read only to choose a plan, which no scope screens (./ast.ts
+// `gate`).
+let gated = (src: Source): boolean => src.t == 'table' && !!src.gate
+
 // A row joined or probed by an owner already in scope needs no second read
-// of the same owner policy. This applies to peers only when every component
-// uses the same screen. An owner-keyed policy also admits the archetype an
-// admitted entity names: its shape is read through that entity (T-148077).
+// of the same owner policy. A peer is spared only where its component is
+// `plain`, screened by the entity's policy alone: one a component's own scope
+// also screens is read through that scope whatever row it is tied to, while a
+// row such a scope admits passed the entity's policy too, and vouches for its
+// peers. A gate (./ast.ts `gate`) is read unscreened, so it vouches for none.
+// An owner-keyed policy also admits the archetype an admitted entity names:
+// its shape is read through that entity (T-148077).
 let ownerReads = (
   vocab: Vocab,
   node: unknown,
-  { shapes, peers } = { shapes: true, peers: false },
+  { shapes, peers, plain = () => true }: {
+    shapes: boolean
+    peers: boolean
+    plain?: (comp: string) => boolean
+  } = { shapes: true, peers: false },
 ): Set<Source> => {
   let found = new Set<Source>()
   let required = new Set<Source>()
@@ -6210,8 +6251,92 @@ let ownerReads = (
     if (mine.of != alias || mine.name != key || !theirs.of) return
     return theirs
   }
-  let walk = (value: unknown, outer: Map<string, string>): void => {
-    if (Array.isArray(value)) return value.forEach((v) => walk(v, outer))
+  // What each alias in scope vouches for: the columns of it that hold the id
+  // of an entity a row the query reads was admitted as. A component's row
+  // vouches for its owner; a subquery or a common table expression, for each
+  // column it selects as such an id, by itself or as the first of several
+  // (`coalesce`).
+  type Vouched = Map<string, ReadonlySet<string>>
+  let NONE: ReadonlySet<string> = new Set()
+  let alias = (src: Source) =>
+    isRaw(src) ? undefined : src.as ?? (src.t == 'table' ? src.name : undefined)
+  // What a source vouches for, among `ctes`, the relations named in scope.
+  let vouching = (src: Source, outer: Vouched, ctes: Vouched) => {
+    let t = named(src)
+    if (t) {
+      if (gated(t) || t.name == 'archetype') return NONE
+      if (vocab.comp(t.name)) {
+        return new Set([t.name == 'entity' ? 'id' : 'entity'])
+      }
+      return ctes.get(t.name) ?? NONE
+    }
+    return !isRaw(src) && src.t == 'from' ? selected(src.q, outer, ctes) : NONE
+  }
+  // The columns a query selects that hold an admitted entity's id.
+  let selected = (
+    q: Query,
+    outer: Vouched,
+    ctes: Vouched,
+  ): ReadonlySet<string> => {
+    if (q.t == 'compound') {
+      let [first, ...rest] = q.parts.map((p) => selected(p, outer, ctes))
+      return new Set(
+        [...first ?? []].filter((c) => rest.every((r) => r.has(c))),
+      )
+    }
+    if (q.t != 'select') return NONE
+    let { scope } = scoped(q, outer, ctes)
+    let ids = (e: Cond): boolean =>
+      e.t == 'col'
+        ? !!e.of && !!scope.get(keyOf(e.of))?.has(e.name)
+        : e.t == 'fn' && e.name == 'coalesce' && e.args.length > 0 &&
+          e.args.every(ids)
+    let out = new Set<string>()
+    if (!q.cols?.length) {
+      for (let v of scope.values()) v.forEach((c) => out.add(c))
+      return out
+    }
+    for (let c of q.cols) {
+      if (c.t == 'star') {
+        for (let [a, v] of scope) {
+          if (!c.of || keyOf(c.of) == a) {
+            v.forEach((n) => out.add(n))
+          }
+        }
+      } else if (c.t == 'as') {
+        if (ids(c.e)) out.add(c.name)
+      } else if (c.t == 'col' && ids(c)) out.add(c.name)
+    }
+    return out
+  }
+  // A select's scope: the aliases it inherits, less those its own sources
+  // hide, and what each of its own sources vouches for; and the relations
+  // its common table expressions name.
+  let scoped = (q: Select, outer: Vouched, ctes: Vouched) => {
+    let sources = [[q.from ?? []].flat(), (q.joins ?? []).map((j) => j.src)]
+      .flat()
+    // A raw source can introduce an alias of its own, so only known local
+    // owners are used in that query.
+    let inherited: Map<string, ReadonlySet<string>> = new Map(
+      sources.some(isRaw) ? undefined : outer,
+    )
+    for (let src of sources) {
+      let a = alias(src)
+      if (a) inherited.delete(keyOf(a))
+    }
+    let named = new Map(ctes)
+    for (let c of q.with ?? []) {
+      named.set(c.name, selected(c.q, inherited, named))
+    }
+    let scope = new Map(inherited)
+    for (let src of sources) {
+      let a = alias(src)
+      if (a) scope.set(keyOf(a), vouching(src, inherited, named))
+    }
+    return { inherited, scope, named }
+  }
+  let walk = (value: unknown, outer: Vouched, ctes: Vouched): void => {
+    if (Array.isArray(value)) return value.forEach((v) => walk(v, outer, ctes))
     if (!value || typeof value != 'object' || isRaw(value)) return
     let obj = value as Record<string, unknown>
     if (obj.t == 'select') {
@@ -6219,33 +6344,29 @@ let ownerReads = (
       let joins = q.joins ?? []
       let from = [q.from ?? []].flat()
       let sources = [...from, ...joins.map((j) => j.src)]
-      // A local alias hides a correlated one. A raw source can introduce an
-      // alias of its own, so only known local owners are used in that query.
-      let inherited = new Map(sources.some(isRaw) ? undefined : outer)
-      for (let src of sources) {
-        if (!isRaw(src)) {
-          let alias = src.as ?? (src.t == 'table' ? src.name : undefined)
-          if (alias) inherited.delete(keyOf(alias))
-        }
-      }
-      let scope = new Map(inherited), owned = new Set<Source>()
-      if (peers) {
-        let admit = (src: Source, on?: Cond) => {
-          let t = named(src)
-          if (!t || t.name == 'archetype' || !vocab.comp(t.name)) return
-          let alias = t.as ?? t.name
+      let { inherited, named: here } = scoped(q, outer, ctes)
+      let scope: Map<string, ReadonlySet<string>> = new Map(inherited)
+      let owned = new Set<Source>()
+      // Each source in turn, admitted into the scope of those after it.
+      let admit = (src: Source, on?: Cond) => {
+        let a = alias(src)
+        let t = named(src)
+        if (
+          peers && t && t.name != 'archetype' && vocab.comp(t.name) &&
+          !gated(t) && plain(t.name)
+        ) {
           let key = t.name == 'entity' ? 'id' : 'entity'
           let tied = (p?: Cond): boolean => {
             if (p?.t == 'op' && p.op == 'and') return p.parts.some(tied)
-            let col = joined(p, alias, key)
-            return !!col && scope.get(keyOf(col.of!)) == col.name
+            let col = joined(p, a!, key)
+            return !!col && !!scope.get(keyOf(col.of!))?.has(col.name)
           }
           if (tied(on)) owned.add(src)
-          scope.set(keyOf(alias), key)
         }
-        for (let src of from) admit(src, q.where)
-        for (let { src, on } of joins) admit(src, on)
+        if (a) scope.set(keyOf(a), vouching(src, inherited, here))
       }
+      for (let src of from) admit(src, q.where)
+      for (let { src, on } of joins) admit(src, on)
       if (shapes) {
         let rows = new Set<string>()
         for (let src of sources) {
@@ -6277,10 +6398,10 @@ let ownerReads = (
         // must prove the same screen is redundant before replacing it.
         let reads = owned.has(src) ? found : required
         reads.add(src)
-        walk(src, inherited)
+        walk(src, inherited, here)
       }
-      walk(q.with, inherited)
-      for (let { on } of joins) walk(on, scope)
+      walk(q.with, inherited, here)
+      for (let { on } of joins) walk(on, scope, here)
       for (
         let part of [
           q.cols,
@@ -6292,13 +6413,13 @@ let ownerReads = (
           q.offset,
         ]
       ) {
-        walk(part, scope)
+        walk(part, scope, here)
       }
       return
     }
-    Object.values(obj).forEach((v) => walk(v, outer))
+    Object.values(obj).forEach((v) => walk(v, outer, ctes))
   }
-  walk(node, new Map())
+  walk(node, new Map(), new Map())
   for (let src of required) found.delete(src)
   return found
 }
@@ -6557,7 +6678,7 @@ let visible = (
     return sources(
       node,
       (name, alias, src) =>
-        !vocab.comp(name) ? table(name, alias) : raw(
+        gated(src) ? src : !vocab.comp(name) ? table(name, alias) : raw(
           `${
             owned.has(src) ? base.source?.(name) ?? quoted(name) : source(name)
           } as ${quoted(alias ?? name)}`,

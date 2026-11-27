@@ -48,6 +48,7 @@ import {
   type Expr,
   fn,
   from,
+  gate,
   ge,
   gt,
   iff,
@@ -610,8 +611,9 @@ export let sessionStatus = {
     ].filter(declared)
     // Older consumed imports classified a cancellation as a passive notice.
     // Interpret that format here without rewriting the owner's transcripts:
-    // whether the entry `alias` holds the prose such an import recorded.
-    let cancellation = (alias: string) =>
+    // whether the entry with the id `entry` holds the prose such an import
+    // recorded.
+    let cancellation = (entry: Expr) =>
       ['notice', 'content', 'lines'].every(declared)
         ? exists(select({
           cols: [lit(1)],
@@ -623,7 +625,7 @@ export let sessionStatus = {
             },
           ],
           where: and(
-            eq(col('entity', 'text'), col('entity', alias)),
+            eq(col('entity', 'text'), entry),
             among(text(col('body', 'text')), claudeStops.map(lit)),
           ),
         }))
@@ -667,7 +669,10 @@ export let sessionStatus = {
         where: eq(col('entity', 'm'), col('entity', alias)),
       }))
     let shapes = typed ? archetype('e') : []
-    let e = marks(typed ? shaped : probed('e'), cancellation('e'))
+    let e = marks(
+      typed ? shaped : probed('e'),
+      cancellation(col('entity', 'e')),
+    )
     // The newest entry a passive notice does not hide, whether it is a stop,
     // and, when it is a refusal, the request it refused.
     let latest = select({
@@ -795,7 +800,7 @@ export let sessionStatus = {
     // the rest, where the search reads the store's asks while they are few.
     let legacy = exists(select({
       cols: [lit(1)],
-      from: table('entry', 'old'),
+      from: gate('entry', 'old'),
       where: and(mine('old'), isNull(col('seq', 'old'))),
       limit: lit(1),
     }))
@@ -811,7 +816,7 @@ export let sessionStatus = {
               iff(
                 exists(select({
                   cols: [lit(1)],
-                  from: table(ASK),
+                  from: gate(ASK),
                   limit: lit(1),
                   offset: lit(64),
                 })),
@@ -848,7 +853,7 @@ export let sessionStatus = {
                   probed('boundary')('stop'),
                   iff(
                     probed('boundary')('notice'),
-                    cancellation('boundary'),
+                    cancellation(col('entity', 'boundary')),
                     lit(false),
                   ),
                 ),
@@ -949,7 +954,6 @@ export let sessionStatus = {
       ],
       where: or(isNull(anchor('newest_seq')), notNull(col('entity', 'i'))),
     })
-    let joins: Join[] = []
     let wears = typed
       ? (comp: string) =>
         gt(
@@ -978,6 +982,7 @@ export let sessionStatus = {
       'attempt',
       'execution',
     ]
+    let joins: Join[] = []
     if (!typed) {
       joins.push(
         ...comps.filter(declared).map((comp) =>
@@ -1019,7 +1024,11 @@ export let sessionStatus = {
         ),
         as(
           declared('notice')
-            ? iff(wears('notice'), cancellation('span'), lit(false))
+            ? iff(
+              wears('notice'),
+              cancellation(col('entity', 'span')),
+              lit(false),
+            )
             : lit(false),
           'cancelled',
         ),
@@ -1138,7 +1147,7 @@ export let sessionStatus = {
     let background = (unanswered: boolean): Expr =>
       declared('tool_async')
         ? iff(
-          exists(select({ cols: [lit(1)], from: table('tool_async') })),
+          exists(select({ cols: [lit(1)], from: gate('tool_async') })),
           sub(select({
             cols: [lit(1)],
             from: table('entry', 'pe'),
@@ -1262,7 +1271,7 @@ export let sessionStatus = {
         eq(col('entity', 'b'), col('n_refused_source', 'f')),
       ),
     }))
-    let probe = marks(probed('e'), cancellation('e'))
+    let probe = marks(probed('e'), cancellation(col('entity', 'e')))
     let retries = sub(select({
       cols: [fn('sum', col('interrupted', 'r'))],
       from: from(
