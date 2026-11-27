@@ -1147,3 +1147,33 @@ Store's static closure (3.9 MB, 381 chunks: directory.ts, chat.ts, models.ts
 with @yaks/session and marked, signup.ts with libphonenumber, load.ts with every
 package's vocabulary) costs about 250 ms. The kernel takes `new_module_registry`
 again; what the Store's first call imports is the next cost to cut.
+
+### Live, November 27
+
+`3ac093885` (the registry) went live at 13:29:48 UTC and `b02adb21b` at
+13:38:04. `b02adb21b` cut graph.ts's static closure from 4.06 to 3.21 MB
+(esbuild output bytes): request-only doors load where they are asked, and
+`planting`, the space-mail door, `recognized` and the build keys moved out of
+the modules that brought @yaks/session, the builder, dispatch and pages, and
+libphonenumber with them.
+
+From the box (ORD), one `/api/query?q=.doc .limit=1` per yourname app, the
+server's `store_wait`, milliseconds, for the 11 apps asleep in the first round:
+
+| Round            | Code                          | Median | Range     | Faster than legacy |
+| ---------------- | ----------------------------- | -----: | --------- | -----------------: |
+| 13:27            | legacy registry               |    783 | 626–1,485 |                  — |
+| 13:32            | new registry                  |    768 | 532–1,263 |            9 of 11 |
+| 13:44            | new registry, smaller closure |    552 | 465–1,191 |           11 of 11 |
+| 13:48, no deploy | same                          |    482 | 432–1,072 |           11 of 11 |
+
+A warm second read took 15–57 ms throughout. In the 13:44 round the caller's
+wait less the Store invocation's wall was 56–131 ms, which is the object's start
+now; the Store's first call spent 359–723 ms of CPU, against 418–449 ms at 13:32
+and 163–279 ms under the legacy registry (T-149696), where the compile happened
+before the call. Reads with no deploy since the store's last wake skip the
+schema fit and still spent 310–902 ms of CPU, so the Store's boot is the
+remaining cost. `Uses` calls in a new isolate show their own load now: 16 of
+1,116 in 13:30–13:44 spent 50 ms of CPU or more (median 54.5 CPU, 68.5 wall),
+where under the legacy registry none did and the task measured 160–726 ms before
+such calls began.
