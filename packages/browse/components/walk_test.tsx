@@ -10,7 +10,8 @@ import { test, until } from '../testing.ts'
 import { equal } from '@yaks/testing'
 import '../domain-host.tsx'
 import './mount.ts'
-import { h, options, render } from 'preact'
+import { frames } from '../../preact/draw.ts'
+import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { terminalHistory } from '@yaks/tui/history'
@@ -33,7 +34,6 @@ let seen = await (async () => {
     innerWidth: globalThis.innerWidth,
     innerHeight: globalThis.innerHeight,
   }
-  let raf = options.requestAnimationFrame
   let before = config.host, fetcher = globalThis.fetch
   Object.defineProperty(globalThis, 'document', {
     value: document,
@@ -44,7 +44,7 @@ let seen = await (async () => {
     configurable: true,
   })
   Object.assign(globalThis, { innerWidth: 1280, innerHeight: 800 })
-  options.requestAnimationFrame = (fn) => setTimeout(fn, 0)
+  let restoreFrames = frames((fn) => setTimeout(fn, 0))
   config.host = 'walk.test'
   globalThis.fetch = () => Promise.resolve(Response.json([]))
   let server = host(() => ({
@@ -122,7 +122,7 @@ let seen = await (async () => {
     cache.value = {}
     config.host = before
     globalThis.fetch = fetcher
-    options.requestAnimationFrame = raf
+    restoreFrames()
     Object.assign(globalThis, size)
     if (media) Object.defineProperty(globalThis, 'matchMedia', media)
     else delete (globalThis as { matchMedia?: unknown }).matchMedia

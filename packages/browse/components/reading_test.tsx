@@ -1,7 +1,8 @@
 /** @jsxImportSource preact */
 import { assertEquals } from '@std/assert'
 import { test, tick } from '../testing.ts'
-import { h, options } from 'preact'
+import { frames } from '../../preact/draw.ts'
+import { h } from 'preact'
 import { cache, config, useRoute } from '../live.ts'
 import { host } from '../host_testing.ts'
 import { Page } from './App.tsx'
@@ -29,9 +30,8 @@ globalThis.fetch = () =>
   Promise.resolve(Response.json([{ entity: { eid: person }, person: {} }]))
 await lone()
 assertEquals(currentPerson(), person)
-let raf = options.requestAnimationFrame
 let effects: (() => void)[] = []
-options.requestAnimationFrame = (fn) => effects.push(fn)
+let restoreFrames = frames((fn) => effects.push(fn))
 config.client = client
 let wire = host(() => ({ bundles: [b] }))
 cache.value = {
@@ -72,7 +72,7 @@ try {
   await lone()
   globalThis.fetch = fetcher
   config.host = beforeHost
-  options.requestAnimationFrame = raf
+  restoreFrames()
   cache.value = {}
   learn(docs)
 }

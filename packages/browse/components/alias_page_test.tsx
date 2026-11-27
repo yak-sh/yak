@@ -1,7 +1,8 @@
 /** @jsxImportSource preact */
 import { assertEquals } from '@std/assert'
 import { test, tick } from '../testing.ts'
-import { h, options, render } from 'preact'
+import { frames } from '../../preact/draw.ts'
+import { h, render } from 'preact'
 import { cache, config } from '../live.ts'
 import { host } from '../host_testing.ts'
 import { Page } from './App.tsx'
@@ -11,9 +12,9 @@ import '../domain-host.tsx'
 // Load a human address before its canonical row exists, then update the row
 // through the same answer. The page must keep that subscription ready.
 let observed = await (async () => {
-  let beforeHost = config.host, raf = options.requestAnimationFrame
+  let beforeHost = config.host
   let effects: (() => void)[] = []
-  options.requestAnimationFrame = (fn) => effects.push(fn)
+  let restoreFrames = frames((fn) => effects.push(fn))
   config.host = 'alias-page.test'
   cache.value = {}
   let canonical = 'bb000000-0000-4000-8000-000000000077'
@@ -64,7 +65,7 @@ let observed = await (async () => {
     mounted.free()
     wire.free()
     config.host = beforeHost
-    options.requestAnimationFrame = raf
+    restoreFrames()
     cache.value = {}
   }
 })()

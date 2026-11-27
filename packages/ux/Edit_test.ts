@@ -3,7 +3,8 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { createElement as h, type ReactNode } from 'react'
-import { options, render } from 'preact'
+import { frames } from '../preact/draw.ts'
+import { render } from 'preact'
 import { client } from '@yaks/client'
 import { desk, draftDoc, drafts } from '@yaks/draft'
 import { mint } from '@yaks/graph'
@@ -87,8 +88,7 @@ let page = (more: Partial<Host> = {}) => {
     Object.defineProperty(globalThis, k, { value, configurable: true })
   }
   // Effects run on the next turn, as a browser's next frame would.
-  let raf = options.requestAnimationFrame
-  options.requestAnimationFrame = (f) => setTimeout(f)
+  let restoreFrames = frames((f) => setTimeout(f))
   let front = client(loadVocab(docs), [], { vault: false, wireVault: false })
   // The person's drafts, in a graph of their own.
   let by = mint()
@@ -147,7 +147,7 @@ let page = (more: Partial<Host> = {}) => {
       render(null, root)
       front.close()
       typed.close()
-      options.requestAnimationFrame = raf
+      restoreFrames()
       for (let [k, d] of prior) {
         if (d) Object.defineProperty(globalThis, k, d)
         else delete (globalThis as Record<string, unknown>)[k]
@@ -286,7 +286,11 @@ test('what is typed is the draft, and a remount types on from it', async () => {
 test('a draft shows open wherever its value is drawn, and Escape puts it back', async () => {
   using p = page()
   let title = (view: string) =>
-    h(Ux, { at: view }, h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' }))
+    h(
+      Ux,
+      { at: view },
+      h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' }),
+    )
   p.draw(h('div', null, title('bar'), title('body')))
   let edits = () => [...p.root.querySelectorAll<HTMLElement>('.Edit')]
   await p.fire(edits()[1], 'dblclick')
@@ -305,7 +309,11 @@ test('a draft shows open wherever its value is drawn, and Escape puts it back', 
 test('the same value drawn in each view of each card keeps a state of its own', async () => {
   using p = page()
   let title = (view: string) =>
-    h(Ux, { at: view }, h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' }))
+    h(
+      Ux,
+      { at: view },
+      h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' }),
+    )
   let card = (eid: string) => h(Ux, { at: eid }, title('bar'), title('body'))
   p.draw(h('div', null, card('c1'), card('c2')))
   let edits = () => [...p.root.querySelectorAll<HTMLElement>('.Edit')]

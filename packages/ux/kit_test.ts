@@ -5,7 +5,8 @@ import { test, tick } from '@yaks/testing'
 import { client, stash } from '@yaks/client'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { createElement as h } from 'react'
-import { options, render } from 'preact'
+import { frames } from '../preact/draw.ts'
+import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { defineKit, kitDocs } from './kit.ts'
 import { kit, ux } from './ui.ts'
@@ -135,8 +136,7 @@ test('base and external specimens draw, Disclosure emits and keeps its controlle
     configurable: true,
   })
   // Let effects run on the next turn, as on a browser frame.
-  let raf = options.requestAnimationFrame
-  options.requestAnimationFrame = (f) => setTimeout(f)
+  let restoreFrames = frames((f) => setTimeout(f))
   let root = document.querySelector('main')!
   try {
     for (
@@ -167,7 +167,7 @@ test('base and external specimens draw, Disclosure emits and keeps its controlle
     }
   } finally {
     render(null, root)
-    options.requestAnimationFrame = raf
+    restoreFrames()
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else Reflect.deleteProperty(globalThis, 'document')
   }

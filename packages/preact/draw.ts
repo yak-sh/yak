@@ -9,7 +9,18 @@
 import { type ComponentChildren, options, render } from 'preact'
 
 let mounted = 0
-let prior: typeof options.requestAnimationFrame
+let restore = () => {}
+
+/** Supply the paint scheduler while a host or test owns the document. */
+export let frames = (
+  schedule: NonNullable<typeof options.requestAnimationFrame>,
+): () => void => {
+  let prior = options.requestAnimationFrame
+  options.requestAnimationFrame = schedule
+  return () => {
+    options.requestAnimationFrame = prior
+  }
+}
 
 /** Draw `node` into `into`, an element of a tree its host paints itself (an
  * @yaks/dom tree, a test's document), and answer what takes it down. Such a
@@ -17,12 +28,9 @@ let prior: typeof options.requestAnimationFrame
  * are done, as a browser's next frame would run them, instead of Preact's
  * fallback a few dozen milliseconds later. */
 export let draw = (node: ComponentChildren, into: Element): () => void => {
-  if (mounted++ == 0) {
-    prior = options.requestAnimationFrame
-    options.requestAnimationFrame = queueMicrotask
-  }
+  if (mounted++ == 0) restore = frames(queueMicrotask)
   let release = () => {
-    if (--mounted == 0) options.requestAnimationFrame = prior
+    if (--mounted == 0) restore()
   }
   try {
     render(node, into)

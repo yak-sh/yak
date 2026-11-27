@@ -12,7 +12,7 @@ import { STORY } from './figure.ts'
 import { SHOP, YOURS } from './shop.ts'
 import { inboxAt, rendered } from '@yaks/inbox/letters'
 import { INSIDE, PHASES } from '@yaks/graph/plugin'
-import { options } from 'preact'
+import { frames } from '../../packages/preact/draw.ts'
 import type { Stash } from '@yaks/draft'
 import { PLACE } from './signin.ts'
 
@@ -27,9 +27,8 @@ let open = async (
 ) => {
   // A tab paints its next frame as soon as it can; preact's hooks wait 35 ms
   // for one where there is no requestAnimationFrame.
-  let raf = options.requestAnimationFrame
-  options.requestAnimationFrame = (fn) => setTimeout(fn)
-  cleanup(() => void (options.requestAnimationFrame = raf))
+  let restoreFrames = frames((fn) => setTimeout(fn))
+  cleanup(restoreFrames)
   let window = parseHTML(await Deno.readTextFile(new URL('index.html', dir)))
   let { document } = window
   Object.defineProperty(document, 'baseURI', { value: dir.href })

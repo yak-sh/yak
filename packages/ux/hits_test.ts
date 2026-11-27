@@ -1,7 +1,8 @@
 import { clock, equal, test, tick } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { createElement as h } from 'react'
-import { options, render } from 'preact'
+import { frames } from '../preact/draw.ts'
+import { render } from 'preact'
 import { parse } from '@yaks/query'
 import { pickLine, useHits } from './hits.ts'
 
@@ -35,8 +36,7 @@ test('a picker asks find once the line rests, for the newest line only', async (
   // the next turn, as a browser's next frame would.
   let { document } = parseHTML('<main></main>')
   let root = document.querySelector('main')!
-  let raf = options.requestAnimationFrame
-  options.requestAnimationFrame = (f) => setTimeout(f)
+  let restoreFrames = frames((f) => setTimeout(f))
   Object.defineProperty(globalThis, 'document', {
     value: document,
     configurable: true,
@@ -45,7 +45,7 @@ test('a picker asks find once the line rests, for the newest line only', async (
     [Symbol.dispose]: () => {
       render(null, root)
       delete (globalThis as { document?: unknown }).document
-      options.requestAnimationFrame = raf
+      restoreFrames()
     },
   }
   let draw = async (line: string, ms: number) => {
