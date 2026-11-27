@@ -1,5 +1,6 @@
 import { argsOf, type Bundle, type Graph, type Tool } from '@yaks/graph'
 import { valued } from '@yaks/tools/value'
+import { PATIENCE } from '@yaks/tools/outlast'
 import { CallError } from '@yaks/tools/errors'
 import { resultDoor } from './build-door.ts'
 import { opened } from './anon.ts'
@@ -138,9 +139,13 @@ export let resultTools = (ctx: Ctx, local?: ResultHost): Tool[] => [{
   name: 'result_wait',
   title: 'Get a pending tool result',
   description:
-    'Get the original answer to a tool call that is still running. ' +
-    'Pass the result_handle from that call. If it is still running, use the ' +
-    'same handle again. This does not start the tool again.',
+    'Get the answer to a tool call that said it is still running, by the ' +
+    `result_handle it gave. It waits up to ${
+      PATIENCE / 1000
+    } seconds for the answer, so call ` +
+    'it at once, without waiting first; if the call is still running then, ' +
+    'call result_wait again with the same handle. This does not start the ' +
+    'tool again.',
   inputSchema: {
     type: 'object',
     properties: { result_handle: { type: 'string' } },

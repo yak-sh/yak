@@ -15,7 +15,7 @@
 // call with the same key joins a run still going, or is handed the answer of
 // one nobody heard, once, in place of running again.
 import type { Bundle } from '@yaks/graph'
-import type { Heard } from '@yaks/tools/outlast'
+import { type Heard, PATIENCE } from '@yaks/tools/outlast'
 import { CallError } from '@yaks/tools/errors'
 import type { Caller } from './session.ts'
 import { opened, seal } from './lib/token.ts'
@@ -88,14 +88,19 @@ export let outlasted = async (
       } satisfies Result,
       secret,
     )
+    // One next step, taken at once: it waits for the answer itself, so a
+    // caller has no reason to sleep before it.
+    let wait = `it waits up to ${
+      Math.round((asked.patience ?? PATIENCE) / 1000)
+    } seconds for the answer, so call it now without waiting first.`
     return said(
       (doing
         ? `${name} asked at ${running} is still running: ${doing}.`
         : progress ??
           `${name} asked at ${running} is still running, and goes on.`) +
-        (handle ? ' Use result_wait with the result_handle. ' : ' ') +
-        `Call ${name} again with the same arguments to wait for it and hear ` +
-        'how it ended.',
+        (handle
+          ? ` Call result_wait with the result_handle: ${wait}`
+          : ` Call ${name} again with the same arguments: ${wait}`),
       {
         running: true,
         asked: running,

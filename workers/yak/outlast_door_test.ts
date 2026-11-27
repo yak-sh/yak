@@ -130,6 +130,10 @@ test('a draft preview returns progress while its compiler is busy', async () => 
     let progress = await first
     assertEquals(progress.value?.running, true)
     assertStringIncludes(progress.text, 'the draft is building')
+    assertStringIncludes(
+      progress.text,
+      'Call result_wait with the result_handle',
+    )
     compiled.resolve()
     let preview = await agent.answer('result_wait', {
       result_handle: progress.value?.result_handle,
@@ -198,7 +202,7 @@ test('sandbox_wait and sandbox_exec report progress and resume after workbench p
       let progress = await first
       assertEquals(progress.value?.running, true)
       assertStringIncludes(progress.text, 'the sandbox is waking')
-      assertStringIncludes(progress.text, `Call ${tool} again`)
+      assertStringIncludes(progress.text, 'Call result_wait')
     }
     let cmd = 'echo complete output'
     await pause('sandbox_exec', { cmd, space, timeout: 5 })

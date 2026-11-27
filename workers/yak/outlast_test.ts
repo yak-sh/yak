@@ -38,8 +38,8 @@ test('the door says a late answer was asked earlier, and a refusal stays one', a
   equal(
     (waking.content as { body: string }).body,
     'sandbox_shell asked at T is still running: the sandbox is waking. Call ' +
-      'sandbox_shell again with the same arguments to wait for it and hear ' +
-      'how it ended.',
+      'sandbox_shell again with the same arguments: it waits up to 40 ' +
+      'seconds for the answer, so call it now without waiting first.',
   )
   equal((waking.output as { value: unknown }).value, {
     running: true,
@@ -55,7 +55,8 @@ test('the door says a late answer was asked earlier, and a refusal stays one', a
   equal(
     (preparing.content as { body: string }).body,
     'The sandbox is preparing or running your command. Call sandbox_shell ' +
-      'again with the same arguments to wait for it and hear how it ended.',
+      'again with the same arguments: it waits up to 40 seconds for the ' +
+      'answer, so call it now without waiting first.',
   )
   let refused = await outlasted(
     objects({ refused: { code: 'limit', text: 'no' }, asked: 'T' }),

@@ -143,12 +143,13 @@ needed, so keep work in `/workspace`. The more a snapshot holds, the longer
 waking takes. Older snapshots are retained without an automatic purge. Processes
 stop at shutdown.
 
-When a sandbox tool reports that its call is still in progress, repeat the same
-call with the same arguments to retrieve its result. When the platform's
-containers are all busy, a new sandbox waits for a slot before running the
-command. If they stay busy, try the same call again shortly. When
-`sandbox_shell` returns a process ID for a running command, use `sandbox_wait`
-or `sandbox_stop` with that ID.
+A sandbox tool waits up to 40 seconds for its answer. When one reports that its
+call is still in progress, call `result_wait` with the `result_handle` it gave,
+at once: it waits for the answer the same way. When the platform's containers
+are all busy, a new sandbox waits for a slot before running the command. If they
+stay busy, try the same call again shortly. When `sandbox_shell` returns a
+process ID for a running command, use `sandbox_wait` or `sandbox_stop` with that
+ID.
 
 `sandbox_ship` copies files into an app independently, so the app serves them
 without waking the sandbox.

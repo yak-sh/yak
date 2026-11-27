@@ -3,8 +3,11 @@
  */
 import type { Bundle } from '@yaks/graph'
 
-/** How long a tool call can wait before returning progress. */
-export let PATIENCE: number = 4_000
+/** How long a tool call waits for its answer before saying it is still
+ * running: well inside the minute a client gives a call, so a caller hears
+ * the answer in the call it made, and only a run longer than this needs a
+ * second call. */
+export let PATIENCE: number = 40_000
 
 /** How long an answer nobody heard is kept for the next call to hear. */
 export let KEPT: number = 15 * 60_000

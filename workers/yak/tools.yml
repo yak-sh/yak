@@ -328,9 +328,9 @@ sandbox_shell:
     stops the container when it ends; separate MCP calls reuse it until
     five idle minutes put it to sleep. Changed files are snapshotted before
     either shutdown and restored when it wakes; older snapshots are retained
-    without automatic purge. Processes end at shutdown. If the connector says
-    the sandbox is still preparing or running the command, call again with
-    the same arguments to receive the original result. A
+    without automatic purge. Processes end at shutdown. If the answer says
+    the sandbox is still preparing or running the command, call result_wait
+    with its result_handle at once for the original result. A
     command ending within timeout milliseconds returns its exit code and
     output, stdout then stderr;
     one still running keeps running for at most 240 seconds, and the answer
@@ -348,8 +348,8 @@ sandbox_wait:
     and output, stdout then stderr, or says it is still
     running when timeout milliseconds pass (default 60000). Waiting keeps
     the sandbox awake, metered by the second as with sandbox_shell.
-    If the wait itself is still in progress, call sandbox_wait again with
-    the same arguments for its result.
+    If the wait itself is still in progress, call result_wait with its
+    result_handle at once for its result.
     Documentation: https://yaks.app/docs/sandbox.
 sandbox_stop:
   title: Stop a sandbox command
@@ -472,9 +472,9 @@ app_preview:
     besides. A step's element has {{find}} seconds to show. A released preview of a private
     app signs the browser in as you. Steps on a release can change live data.
     The browser runs on Cloudflare; no local files, CLI or computer is needed.
-    A draft build or browser check still in progress returns a pending result.
-    Use the result_handle with result_wait, or call app_preview again with
-    the same arguments to retrieve that result.
+    A draft build or browser check still in progress after 40 seconds
+    returns a pending result: call result_wait with its result_handle at
+    once to get the preview.
     The draft reads the app's live rows as they stood when it was first
     previewed, in the draft's vocabulary, on a branch of its own, so preview
     edits never change released app data unless app_deploy merges them
@@ -553,7 +553,7 @@ app_deploy:
     kept. To undo: app_rollback, which moves the live pointer to a kept
     version. Returns the new version, URL, and any schema, seed, command or
     worker details. A release still going after 40 seconds says so;
-    app_deploy again with the same arguments waits for how it ended.
+    result_wait with its result_handle waits for how it ended.
     Documentation: https://yaks.app/docs.
 store_load:
   title: Load a data file into the store
