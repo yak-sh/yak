@@ -11,6 +11,7 @@ import { audit, type Axe, type Checked, interruption } from './preview-audit.ts'
 import { FIT, type Fit } from './preview-fit.ts'
 import { bounded, BrowserTimeout } from './browser-time.ts'
 import { tracing } from './browser-trace.ts'
+import { recording } from './browser-record.ts'
 import {
   HTML_BYTES,
   HTML_LIMIT,
@@ -39,6 +40,7 @@ import {
 
 export { CONNECT, OPEN, RELEASE } from './browser-session.ts'
 export { bounded, BrowserTimeout } from './browser-time.ts'
+export { frameAt, frameName, type Recorded } from './browser-record.ts'
 
 /** A window: its size, how long to wait after loading, whether it is a
  * phone's (touch events, a mobile viewport), and whether the system asks for
@@ -46,7 +48,9 @@ export { bounded, BrowserTimeout } from './browser-time.ts'
  * holds the connection to a mobile one (`NETWORKS`), as a slower phone
  * opens the page; `cold` opens it with no cache, service worker or stored
  * data from an earlier visit, as a first open does. `trace` records what
- * the page's main thread did while the steps ran (./browser-trace.ts). */
+ * the page's main thread did while the steps ran (./browser-trace.ts), and
+ * `record` films the page while they ran, a frame each time it changed
+ * (./browser-record.ts). */
 export type View = {
   width: number
   height: number
@@ -57,6 +61,7 @@ export type View = {
   network?: Network
   cold?: boolean
   trace?: boolean
+  record?: boolean
 }
 /** Chrome DevTools' own mobile presets: round trip in ms, and bytes a
  * second each way. */
@@ -287,8 +292,11 @@ export type Browser = {
 /** A rendered page, and the browser time it took. */
 export type Rendered = {
   image: string
-  /** The screenshots its `shot` steps took, in order. */
+  /** The screenshots its `shot` steps took, in order, and a recording's
+   * frames after them. */
   shots: { name: string; image: string }[]
+  /** How long a recording ran, in ms from its first frame. */
+  recorded?: number
   /** The page's visible text, its start and end within `TEXT` characters. */
   text: string
   console: { type: string; text: string }[]
@@ -1070,6 +1078,9 @@ let loaded = async (
       let traced = view.trace
         ? await tracing(await page.createCDPSession())
         : undefined
+      let filming = view.record
+        ? await recording(await page.createCDPSession(), view)
+        : undefined
       for (let [i, step] of steps.entries()) {
         signal.throwIfAborted()
         if (!('wait' in step)) await ready()
@@ -1133,6 +1144,14 @@ let loaded = async (
       waitingFor('reading the trace')
       let trace = await traced?.()
       signal.throwIfAborted()
+      waitingFor('stopping the recording')
+      let film = await filming?.()
+      signal.throwIfAborted()
+      for (let [i, frame] of (film?.frames ?? []).entries()) {
+        waitingFor(`sending frame ${i + 1} of ${film!.frames.length}`)
+        if (screens) await screens.shot(frame.name, frame.image)
+        else shots.push(frame)
+      }
       waitingFor('taking the final screenshot')
       let image = await shoot()
       signal.throwIfAborted()
@@ -1147,6 +1166,7 @@ let loaded = async (
         errors,
         status,
         ...evaluated.length ? { evaluated } : {},
+        ...film ? { recorded: film.ms } : {},
         ...trace
           ? {
             traced: [

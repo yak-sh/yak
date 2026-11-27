@@ -21,7 +21,10 @@
 // A step a workflow `contains` acts for a case: the case one of the matched
 // entities was made for in that workflow, else a new one for the first matched
 // entity, its eid derived from the workflow and that item. It runs at most
-// once per case, and stamps `made{case, step}` on each row it creates. A bare
+// once per case for what its match bound (`bindingKey`: the entities, the
+// variables and the brackets' members), so touching a row it read starts
+// nothing, and changing a value it bound runs it again for that case. It
+// stamps `made{case, step, binding}` on each row it creates. A bare
 // step writes no case and no `made`; like a declared rule, its own output is
 // what must stop it matching.
 
@@ -42,6 +45,7 @@ import {
   type Plugin,
   reads,
   type ReadTx,
+  sha256,
   signed,
 } from '@yaks/graph'
 import type { Actor } from '@yaks/graph'
@@ -164,9 +168,26 @@ let caseOf = (
   })
 }
 
-// What one binding writes, each row it creates stamped with its case and
-// step. A workflow's step writes nothing for a case it already made something
-// for, unless `again` (a rerun) says to.
+// JSON with each object's keys in order, so equal values say the same.
+let canon = (v: unknown): string =>
+  Array.isArray(v)
+    ? `[${v.map(canon).join(',')}]`
+    : v && typeof v == 'object'
+    ? `{${
+      Object.keys(v).sort().map((k) =>
+        `${JSON.stringify(k)}:${canon((v as Record<string, unknown>)[k])}`
+      ).join(',')
+    }}`
+    : JSON.stringify(v ?? null)
+
+/** What a binding bound, as a short key: two bindings with the same
+ * entities, variables and bracket members have the same key. */
+export let bindingKey = ({ entities, vars, collections }: Binding): string =>
+  sha256(canon([entities, vars, collections ?? []])).slice(0, 32)
+
+// What one binding writes, each row it creates stamped with its case, step
+// and binding. A workflow's step writes nothing for a case it already made
+// something for from the same binding, unless `again` (a rerun) says to.
 let wrote = (
   tx: ReadTx,
   { step, binding }: Row,
@@ -176,20 +197,22 @@ let wrote = (
   let { bundles, fresh } = fill(step.write, binding.vars)
   let w = step.workflow
   if (!w) return bundles
+  let bk = bindingKey(binding)
   return after(caseOf(tx, w, binding, pending), (kase) => {
+    let made = { case: kase.eid, step: step.eid, binding: bk }
     let mine = (b: Bundle) => {
       let m = b.made as Comp | undefined
-      return m?.case == kase.eid && m?.step == step.eid
+      return m?.case == made.case && m?.step == made.step &&
+        m?.binding == made.binding
     }
-    let ran = again || !kase.known
-      ? []
-      : q(tx, `.made.case=${kase.eid}, made.step=${step.eid}`)
+    let ran = again || !kase.known ? [] : q(
+      tx,
+      `.made.case=${kase.eid}, made.step=${step.eid}, made.binding=${bk}`,
+    )
     return after(ran, (before) => {
       if (!again && (before.length || pending.some(mine))) return []
       let stamped = bundles.map((b) =>
-        fresh.includes(b.entity.eid)
-          ? { ...b, made: { case: kase.eid, step: step.eid } }
-          : b
+        fresh.includes(b.entity.eid) ? { ...b, made } : b
       )
       return kase.known ? stamped : [
         { entity: { eid: kase.eid }, [CASE]: { workflow: w, for: kase.item } },

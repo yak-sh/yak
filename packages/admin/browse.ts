@@ -80,7 +80,9 @@ let screenshots = async (
         files = []
         progress('waiting for the browser to render the page')
       } else if (head.kind == 'shot' && body) {
-        let name = head.name.replace(/[^\w.-]+/g, '-') + '.png'
+        // A recording's frames are JPEGs and say so; a screenshot is a PNG.
+        let name = head.name.replace(/[^\w.-]+/g, '-')
+        if (!name.endsWith('.jpg')) name += '.png'
         let slot = next++
         progress(`receiving screenshot ${name}`)
         if (!await receive(staging && `${staging}/${slot}`, body, signal)) {

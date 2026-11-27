@@ -5,21 +5,21 @@ binding of its `match` (a [query](../query/README.md#multi-entity-matches)), it
 writes `write`, a list of bundles with its variables filled in. A **workflow**
 (`workflow{}` with a `doc{title, body}`) `contains` its steps. A **case**
 (`workflow_case{workflow, for}`) is one item moving through a workflow, and
-every row a step creates for a case carries `made{case, step}`. The component is
-`workflow_case` because @yaks/trial declares `case`; it becomes `case` once two
-packages may declare one label.
+every row a step creates for a case carries `made{case, step, binding}`. The
+component is `workflow_case` because @yaks/trial declares `case`; it becomes
+`case` once two packages may declare one label.
 
 ```sh
 deno add jsr:@yaks/workflow
 ```
 
-| Import                   | Exports                                                                                                                                                                           |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/workflow`         | `workflows`, `handlers`, `rerun`, `steps`, `Step`, `DEPTH`, `CASE`, `DUE`, `RUN`, `FIRE`; `fill`, `writes`; `feeds`, `needs`; `flow`, `open`, `named`; `outdated`; the vocabulary |
-| `@yaks/workflow/vocab`   | `workflowDoc`, `docs`, `description`                                                                                                                                              |
-| `@yaks/workflow/graph`   | `plugins()`: the step runner                                                                                                                                                      |
-| `@yaks/workflow/effects` | `effects(host)`: `step_run` and `step_fire`, the runs the step runner owes                                                                                                        |
-| `@yaks/workflow/views`   | `inspectViews`, `tabs`, `destinations`: a workflow's page in browse, in a browser and a terminal                                                                                  |
+| Import                   | Exports                                                                                                                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/workflow`         | `workflows`, `handlers`, `rerun`, `bindingKey`, `steps`, `Step`, `DEPTH`, `CASE`, `DUE`, `RUN`, `FIRE`; `fill`, `writes`; `feeds`, `needs`; `flow`, `open`, `named`; `outdated`; the vocabulary |
+| `@yaks/workflow/vocab`   | `workflowDoc`, `docs`, `description`                                                                                                                                                            |
+| `@yaks/workflow/graph`   | `plugins()`: the step runner                                                                                                                                                                    |
+| `@yaks/workflow/effects` | `effects(host)`: `step_run` and `step_fire`, the runs the step runner owes                                                                                                                      |
+| `@yaks/workflow/views`   | `inspectViews`, `tabs`, `destinations`: a workflow's page in browse, in a browser and a terminal                                                                                                |
 
 ## A step
 
@@ -73,9 +73,12 @@ step matches its `completed`.
 A step a workflow contains acts for a case: the case one of the matched entities
 was made for in that workflow, else a new one for the first matched entity, its
 eid derived from the workflow and that item, so a rematch finds it. It runs at
-most once per case, and stamps `made{case, step}` on each row it creates. A bare
-step writes no case and no `made`; like a declared rule, its own output must
-stop it matching.
+most once per case for what its match bound: `bindingKey(binding)`, a short key
+of the matched entities, the variables and the brackets' members. Touching a row
+it read starts nothing; changing a value it bound runs it again for that case,
+so an edit reruns only the steps that read what changed. It stamps
+`made{case, step, binding}` on each row it creates. A bare step writes no case
+and no `made`; like a declared rule, its own output must stop it matching.
 
 ## The map
 

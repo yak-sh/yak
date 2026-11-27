@@ -15,6 +15,7 @@ export {
   type Rows,
 } from './flow.ts'
 export {
+  bindingKey,
   DEPTH,
   DUE,
   FIRE,

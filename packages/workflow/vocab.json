@@ -82,6 +82,11 @@
           "ref": "step",
           "death": "keep",
           "description": "the step that wrote it"
+        },
+        "binding": {
+          "$id": "urn:uuid:94ce5812-f913-41e4-8f57-a62779a585cb",
+          "type": "string",
+          "description": "what the step's match bound when it wrote this row (`bindingKey`): the step runs once per case for each such binding"
         }
       }
     },

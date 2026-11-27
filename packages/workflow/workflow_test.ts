@@ -28,7 +28,8 @@ test('a step calls out, and the next matches its answer', async () => {
   equal((tx._tx as Comp).by, 'bea')
   let [kase] = await read('.workflow_case')
   equal(kase.workflow_case, { workflow: 'orders', for: 'o1' })
-  equal(call.made, { case: kase.entity.eid, step: 'ask' })
+  let { binding: _b, ...made } = call.made as Comp
+  equal(made, { case: kase.entity.eid, step: 'ask' })
   equal(await read('.shipment'), [])
 
   // Whoever answers the call writes its result; the shipment is made in that
@@ -36,11 +37,34 @@ test('a step calls out, and the next matches its answer', async () => {
   await apply([{ entity: { eid: 'r1' }, result: { call: call.entity.eid } }])
   let [shipped] = await read('.shipment&?made')
   equal(shipped.shipment, { order: 'o1' })
-  equal(shipped.made, { case: kase.entity.eid, step: 'ship' })
+  let { binding: _s, ...shipMade } = shipped.made as Comp
+  equal(shipMade, { case: kase.entity.eid, step: 'ship' })
 
   // Touching the order again starts nothing: the case has its call.
   await apply([{ entity: { eid: 'o1' }, order: { item: 'teapot' } }])
   equal((await read('.call')).length, 1)
+  equal((await read('.workflow_case')).length, 1)
+})
+
+test('a step runs again for its case when a value it bound changes', async () => {
+  let { apply, read, flow } = fixture()
+  await flow('orders', {
+    ...ask,
+    match: '$o .order, order.item=$item',
+    write: [{
+      entity: { eid: '$c' },
+      call: { name: 'pack', args: { order: '$o', item: '$item' } },
+    }],
+  })
+  let items = async () =>
+    (await read('.call')).map((c) => (c.call as Comp).args).map((a) =>
+      (a as Comp).item
+    ).sort()
+  await apply([{ entity: { eid: 'o1' }, order: { item: 'kettle' } }])
+  await apply([{ entity: { eid: 'o1' }, order: { item: 'kettle' }, note: {} }])
+  equal(await items(), ['kettle'])
+  await apply([{ entity: { eid: 'o1' }, order: { item: 'teapot' } }])
+  equal(await items(), ['kettle', 'teapot'])
   equal((await read('.workflow_case')).length, 1)
 })
 

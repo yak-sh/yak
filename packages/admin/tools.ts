@@ -79,7 +79,7 @@ import {
 } from './api.ts'
 import { documentAt, mockupAt } from './browse-files.ts'
 import { visit } from './browse.ts'
-import type { Timing } from '@yaks/platform/browser-visit'
+import { frameAt, type Timing } from '@yaks/platform/browser-visit'
 import { deploys, git, type Login, rollback, table } from './deploys.ts'
 import type { Copying } from './copy.ts'
 import { copyThread } from './copy_thread.ts'
@@ -484,6 +484,7 @@ export let runs = (
           'network',
           'cold',
           'trace',
+          'record',
         ] as const)
           .filter((k) => a[k] != null)
           .map((k) => [k, a[k]]),
@@ -509,7 +510,13 @@ export let runs = (
           }: HTTP ${got.status}, ${
             Math.round(got.duration / 100) / 10
           }s of browser`,
-          ...got.files.map((f) => `shot      ${f}`),
+          ...got.files.filter((f) => frameAt(f) == null)
+            .map((f) => `shot      ${f}`),
+          ...got.recorded == null ? [] : [
+            `record    ${got.recorded} ms, ${
+              got.files.filter((f) => frameAt(f) != null).length
+            } frames in ${to}/rec-*.jpg, each named for its ms`,
+          ],
           ...got.missingShots
             ? [
               'warning  The screenshot directory disappeared during the visit.',
