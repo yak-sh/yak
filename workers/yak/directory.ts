@@ -101,6 +101,7 @@ import type {
 import { type Fetcher, STATIC_QUERY, storeOf } from './door.ts'
 import { type Door, type Namespace } from '@yaks/durable-object/door'
 import {
+  PLATFORM_SPACE,
   PLATFORM_STORE,
   RESERVED as KEPT,
   ROOT,
@@ -155,7 +156,7 @@ export let RESERVED: Set<string> = new Set([payments.via, ...KEPT])
 export let unspaced = (slug: string): boolean =>
   RESERVED.has(slug) || ROOT.has(slug)
 
-export let META = { space: 'yak', app: 'platform' }
+export let META = { space: PLATFORM_SPACE, app: 'platform' }
 // The meta space's own store, named the way every app's is. Its slugs are
 // the platform's own and never move, so the name is a constant — door.ts
 // builds it, beside the rest of what addresses a store.
@@ -692,6 +693,9 @@ export let walkTo = (slug: string, eid: string | Promise<string>): Walk => ({
  * each optional, since a row is whichever of them it wears, a space's plan
  * and meter among them (@yaks/platform/meter `MeteredRow`). */
 export type Row = MeteredRow & {
+  // What a read names of the directory's computed words, which no row stores
+  // (@yaks/platform/directory-derived).
+  space?: { test?: boolean | null; active?: string | null }
   release_view?: import('@yaks/platform/release-index').ReleaseView
   free_ai_budget?: { dollars?: number | null }
   app_transfer?: TransferOffer
@@ -2769,6 +2773,14 @@ export let directory = (
   }
   let rows = directoryRows({
     query,
+    count: (q) =>
+      recall(
+        META_STORE,
+        `${EPOCH} ${q}`,
+        () => revised(serving, q),
+        true,
+        ({ text }) => (JSON.parse(text) as { count: number }).count,
+      ),
     pageQuery,
     apply: (bundles, headers) =>
       change(bundles, () => door.apply(bundles, headers)),
@@ -3022,6 +3034,9 @@ export let directoryRows = (rows: {
   purgeTrashEntities?: (eids: string[]) => Promise<void>
   whereabouts?: (people: string[]) => Promise<WhereaboutsRow[]>
   query: (q: Line) => Promise<ReadRow[]>
+  /** how many entities a `.count` line matches, which only a reader that
+   * says a number asks */
+  count?: (q: Line) => Promise<number>
   pageQuery?: (q: Line, space: string, app: string | null) => Promise<ReadRow[]>
   apply: (
     entities: Bundle[],
@@ -3165,6 +3180,14 @@ export let directoryRows = (rows: {
     read: async <Q extends string>(asked: Q & Asked<Q>): Promise<Bundle[]> =>
       unnamed((await query(asked as Line)).map(({ policy: _, ...row }) => row))
         .map((row) => row as Bundle),
+    // How many entities `asked` matches, counted where they are kept: a page
+    // that says a number reads none of the rows it counts (admin.ts).
+    count: (asked: Built): Promise<number> => {
+      if (!rows.count) {
+        throw new Error('This directory cannot count: it was given no count')
+      }
+      return rows.count(line`${sub(asked)}&.count`)
+    },
     whereabouts: (people: string[]): Promise<WhereaboutsRow[]> =>
       rows.whereabouts?.(people) ??
         (people.length
@@ -4412,9 +4435,10 @@ export let directoryRows = (rows: {
       (await query(line`.space&${sub(SPACE_ABOUT)}`)).map(spaceOf),
     // Every person, space, app, seat, release, invite and agent there is,
     // each read with only the properties `fields` names for its kind, and a
-    // kind it names none for not read: the platform admin's directory
-    // (admin.ts), and nothing else, asks this, for what its page draws. Fresh,
-    // since the admin opens it to see what is.
+    // kind it names none for not read: an outreach trial, which writes to
+    // every space (outreach.ts), and nothing else, asks this. A page reads
+    // only the rows it draws (admin.ts `gather`). Fresh, since a trial reads
+    // what is.
     census: async (fields: CensusFields): Promise<Census> => {
       let read = (kind: keyof CensusFields, of: Built) => {
         let paths = fields[kind]

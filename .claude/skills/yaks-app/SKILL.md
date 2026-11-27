@@ -106,11 +106,15 @@ packages together (M-17).
   own line. So a page starts everything it needs at once and awaits it together
   (apps.ts `desk`, `foresee`), and only a read that needs another's answer comes
   after it: a second read waited on in turn is a wait, a second read started
-  beside the first costs nothing. A page that reads the whole directory (the
-  admin's census) answers a look ahead (@yaks/ui/navigate `lookingAhead`) 204
-  and reads nothing: a pointer resting on row after row of a list asks for one
-  page a row, and a dozen censuses at once filled the directory's 128 MB and
-  reset it (T-4179).
+  beside the first costs nothing. A page reads only what it draws: a list its
+  page of rows (`.order`, `.limit`, `.after`), a figure a `.count`, and the
+  rows those point at by key (admin.ts `gather`). A fact no row stores, such
+  as who is a test or when a space was last active, is a computed property
+  the store answers in SQL (@yaks/platform/directory-derived), never a reason
+  to read every row and work it out. Fourteen reads of the whole directory at
+  once filled its 128 MB and reset it (T-4179, T-4182). A page that asks many
+  stores (the admin's Sessions and Spending) answers a look ahead
+  (@yaks/ui/navigate `lookingAhead`) 204 and reads nothing.
 - **Serving an app**: `apps.ts` serves its files and `./api/*`; `door.ts` hands
   the store the caller's standing, including its access mode (`x-yak-access`).
   Every HTML page leaving for a browser is woven the platform's inline scripts

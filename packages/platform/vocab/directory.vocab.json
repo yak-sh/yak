@@ -539,6 +539,46 @@
       },
       "$comment": "D-34197, T-34227. One fact, one place: the app wearing `home` is the home app, and its globs are properties of the same word — a `space.home` beside it would be a second place to say the same thing, and two copies of one fact drift.\n\nThe vocabulary cannot say at most one — `unique` covers one component's own properties and `home` has no space of its own — so it is the directory's rule instead (directory.ts `homing`, where moving it is one batch that drops the old and adds the new).\n\nA property is a scalar (@yaks/vocab `storable`), so `first` is JSON in one text property, read back by router.ts `firstOf`. `former.slugs` splits on whitespace instead, which is the older form of a list here; JSON is the one that round-trips exactly what an agent passed."
     },
+    "person": {
+      "extends": true,
+      "component": true,
+      "type": "object",
+      "properties": {
+        "test": {
+          "$id": "urn:uuid:ae3873bd-0929-4b91-818f-20f482c8d27e",
+          "type": "boolean",
+          "computed": true,
+          "description": "Whether this person is nobody's: a test account, a guest one of the fleet's numbers made, or a newcomer a browser did not open (directory-derived.ts `personTest`, directory.ts `testIs`)."
+        },
+        "active": {
+          "$id": "urn:uuid:551b09c4-5c02-4b63-86b0-64c0ecc969ca",
+          "type": "string",
+          "format": "date-time",
+          "computed": true,
+          "description": "When this person was last active: the latest of their last use, their last sign-in and the latest activity of the spaces they own, the platform's own left out."
+        }
+      }
+    },
+    "space": {
+      "extends": true,
+      "component": true,
+      "type": "object",
+      "properties": {
+        "test": {
+          "$id": "urn:uuid:ab161237-d13c-48c1-887e-6c07c1f3452b",
+          "type": "boolean",
+          "computed": true,
+          "description": "Whether this space is a test space: somebody is seated in it and everyone seated in it is a test account (`person.test`)."
+        },
+        "active": {
+          "$id": "urn:uuid:79a56321-1896-4242-af10-4359ddde1f80",
+          "type": "string",
+          "format": "date-time",
+          "computed": true,
+          "description": "When this space was last active: the latest use of it or of any of its apps not in the trash."
+        }
+      }
+    },
     "member": {
       "$id": "urn:uuid:6357e2cc-8aa1-462c-9645-9ad8b2333972",
       "component": true,

@@ -9,7 +9,7 @@ import {
   todayOf,
 } from './support-contracts.ts'
 import { possessive } from '@yaks/text'
-import { line } from '@yaks/query'
+import { type Built, joined, line, sub } from '@yaks/query'
 import { Form, Head } from '@yaks/ui/parts'
 // The platform admin's directory (T-124291): every person, space and app on
 // yaks.app and what each uses, at /admin on the apex. A person's row says
@@ -32,8 +32,11 @@ import { Form, Head } from '@yaks/ui/parts'
 // Only an owner of the `yak` space sees it, signed in by the platform's
 // session cookie (`staff`); anybody else is told nothing is here, and an
 // agent reads the same rows through `yak admin query yak/platform`. It only
-// reads: six directory reads a page, one trip together, nothing written and
-// no socket, so an open tab costs the directory nothing. What a row says is
+// reads, and only what a page draws: a list's page of rows, in the order and
+// with the test accounts left out as the directory works them out
+// (@yaks/platform/directory-derived), each count down the side as a count,
+// and the rows those rows point at by key (`gather`). Nothing is written and
+// there is no socket, so an open tab costs the directory nothing. What a row says is
 // kept on the rows as the app changes (used.ts, usage.ts), so no store, tracker
 // or analytics read waits under a list.
 //
@@ -94,7 +97,11 @@ import { LIVE } from '@yaks/web/picture'
 import { type IconName, icons } from './icons.ts'
 import { type Host, spaceHost, url } from '@yaks/platform/host'
 import { DAYS, NOT_ON, platformOf, statsFor, statsOf } from './views.ts'
-import { platformVisits } from '@yaks/platform/admin-visits'
+import {
+  type Places,
+  platformVisits,
+  type Tallied,
+} from '@yaks/platform/admin-visits'
 import { adminVisitsView } from '@yaks/platform/admin-visits-view'
 import { appVisits, botsAt, botTabs } from '@yaks/platform/visits-view'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
@@ -142,10 +149,10 @@ let isList = (s: string): s is List => KEYS.some((k) => k == s)
 
 export type { Census }
 
-// What a page reads of each kind (directory.ts `census`): only the properties
-// it draws or counts, since the directory's bytes, more than its rows, are what
-// the page waits on (T-4002). Every page counts what the sidebar says, who is
-// a test, and each person's and space's sums.
+// What the admin reads of each kind (directory.ts `census` for outreach.ts):
+// only the properties a page draws or counts, since the directory's bytes,
+// more than its rows, are what a page waits on (T-4002). A row is counted by
+// who is a test and each person's and space's sums.
 let COUNTED: CensusFields = {
   people: [
     'person',
@@ -180,7 +187,7 @@ let COUNTED: CensusFields = {
   seats: ['member.space', 'member.person', 'member.role'],
   referrals: ['referral', 'rewarded', 'created'],
 }
-// What each list draws beside: a space's title and requests, and an app's
+// What each tile draws beside: a space's title and requests, and an app's
 // row whole as its tile says it, with its releases and the agents its stamps
 // name.
 let SPACE_TILES: CensusFields = { spaces: ['doc.title', 'trend.requests'] }
@@ -207,8 +214,6 @@ let APP_TILES: CensusFields = {
   deploys: ['deploy.app', 'created.at', 'created.by'],
   agents: ['acts_for', 'doc.title'],
 }
-// The pages that ask spaces' Operators hand each its space whole.
-let OPERATORS: CensusFields = { spaces: ['space', ...SPACE_PARTS, 'trend'] }
 /** The fields of each kind every one of `all` names, a property left out
  * where its component is read whole, since each path is a column of the read
  * and a store answers only so many (workerd's 100).
@@ -236,35 +241,248 @@ export let fieldsOf = (...all: CensusFields[]): CensusFields => {
   }
   return out
 }
-// What each page reads; a row's own page, every list's tiles.
-let READS: Record<string, CensusFields> = {
-  people: COUNTED,
-  spaces: fieldsOf(COUNTED, SPACE_TILES),
-  apps: fieldsOf(COUNTED, APP_TILES),
-  invites: fieldsOf(COUNTED, { agents: APP_TILES.agents }),
-  sessions: fieldsOf(COUNTED, OPERATORS),
-  spending: fieldsOf(COUNTED, OPERATORS),
-  visits: fieldsOf(COUNTED, { apps: ['app.slug'] }),
+/** What every tile draws, and every figure it says: what the admin reads of
+ * each row it shows or counts from. */
+export let TILES = fieldsOf(COUNTED, SPACE_TILES, APP_TILES) as Required<
+  CensusFields
+>
+
+// What a page that asks spaces' Operators reads of each: its space whole.
+let OPERATORS = ['space', ...SPACE_PARTS, 'trend']
+
+// How many rows a list draws to a page.
+export let PAGE = 50
+// How many eids one read names: a line carries them in its address.
+let CHUNK = 100
+
+let unique = (all: string[]) => [...new Set(all)]
+let eids = (rows: Row[] = []) => rows.map((r) => r.entity.eid)
+// Each read of `keys`, a hundred keys to a read, and none for no keys.
+let keyed = async (
+  dir: Directory,
+  keys: string[],
+  read: (some: string[]) => Built,
+): Promise<Row[]> => {
+  let all = unique(keys)
+  let reads = []
+  for (let i = 0; i < all.length; i += CHUNK) {
+    reads.push(dir.read(read(all.slice(i, i + CHUNK))))
+  }
+  return (await Promise.all(reads)).flat() as Row[]
 }
-/** What every list's rows draw, and every count: what a row's own page reads
- * beside its row. */
-export let TILES = fieldsOf(COUNTED, SPACE_TILES, APP_TILES)
-let pageOf = (rest: string) => rest.split('/')[0] || 'people'
-let named = (rest: string) => NAMED.has(pageOf(rest))
-/** What the page at `rest`, the path past {@link PATH}, reads of each kind. */
-export let readsOf = (rest: string): CensusFields =>
-  named(rest) ? READS[pageOf(rest)] ?? COUNTED : TILES
-let NAMED = new Set([
-  ...KEYS,
-  'invites',
-  'builds',
-  'sessions',
-  'support-contracts',
-  'spending',
-  'letters',
-  'funnel',
-  'visits',
-])
+// Rows by eid, the first of each kept: one a page read whole stays whole.
+let byEid = (...all: Row[][]) => {
+  let out = new Map<string, Row>()
+  for (let r of all.flat()) if (!out.has(r.entity.eid)) out.set(r.entity.eid, r)
+  return out
+}
+
+/** What a page draws: its rows of each kind, and the people and spaces it
+ * names without saying their figures. */
+export type Shown = Partial<Census> & {
+  named?: { people?: string[]; spaces?: string[] }
+}
+
+/**
+ * The rows a page draws and every row their figures are counted from
+ * (`uses`), each read by key: the platform's own space, whose free budget
+ * every space's is; each shown space's seats, who sits in it and its apps;
+ * each shown person's seats, the spaces they sit in and those spaces' apps;
+ * each shown app's space, as a shown space, and its releases; and whoever a
+ * stamp names. Nothing else is read.
+ */
+export let gather = async (dir: Directory, shown: Shown): Promise<Census> => {
+  let homes = unique([
+    ...eids(shown.spaces),
+    ...(shown.apps ?? []).map(appSpace),
+  ])
+  let [mine, seated, deploys, meta, worked] = await Promise.all([
+    keyed(
+      dir,
+      eids(shown.people),
+      (some) => line`.member.person=${some}&.fields=${TILES.seats}`,
+    ),
+    keyed(
+      dir,
+      homes,
+      (some) => line`.member.space=${some}&.fields=${TILES.seats}`,
+    ),
+    keyed(
+      dir,
+      eids(shown.apps),
+      (some) =>
+        line`.deploy.app=${some}&!deploy.app.last_deploy&.fields=${TILES.deploys}`,
+    ),
+    dir.read(line`.space.slug=${META.space}&.fields=${TILES.spaces}`),
+    // The spaces a shown person's work spent in, whoever's they are: what
+    // their work spent is summed from those (@yaks/platform/meter
+    // `byPerson`). The store keeps it as JSON on each space, which a query
+    // cannot look into, so this reads the spaces that kept anybody's work
+    // these thirty days and keeps those naming a shown person.
+    shown.people?.length
+      ? dir.read(line`.space&.trend.people&.fields=${TILES.spaces}`)
+      : [],
+  ])
+  let workers = new Set(eids(shown.people))
+  let spaces = byEid(
+    shown.spaces ?? [],
+    meta as Row[],
+    (worked as Row[]).filter((r) =>
+      Object.keys(r.trend?.people ?? {}).some((p) => workers.has(p))
+    ),
+  )
+  let people = byEid(shown.people ?? [])
+  let sat = unique([...homes, ...mine.map(seatSpace)])
+  let stamps = [...shown.apps ?? [], ...deploys]
+    .flatMap((r) => r.created?.by ? [idOf(r.created.by)] : [])
+  let missing = (held: Map<string, Row>, all: string[]) =>
+    all.filter((eid) => !held.has(eid))
+  let [more, who, apps] = await Promise.all([
+    keyed(
+      dir,
+      missing(spaces, [...sat, ...shown.named?.spaces ?? []]),
+      (some) => line`.entity.eid=${some}&.space&.fields=${TILES.spaces}`,
+    ),
+    keyed(
+      dir,
+      missing(people, [
+        ...seated.map(seatPerson),
+        ...shown.named?.people ?? [],
+        ...stamps,
+      ]),
+      (some) =>
+        line`.entity.eid=${some}&.fields=${[
+          ...TILES.people,
+          ...TILES.agents,
+        ]}`,
+    ),
+    keyed(
+      dir,
+      sat,
+      (some) => line`.app.space=${some}&.fields=${TILES.apps}`,
+    ),
+  ])
+  return {
+    people: [
+      ...byEid([...people.values()], who.filter((r) => r.person))
+        .values(),
+    ],
+    spaces: [...byEid([...spaces.values()], more).values()],
+    apps: [...byEid(shown.apps ?? [], apps).values()],
+    seats: [...byEid(mine, seated).values()],
+    deploys,
+    referrals: shown.referrals ?? [],
+    agents: who.filter((r) => r.acts_for),
+  }
+}
+
+// What each list holds, the test accounts' left out, and the order it is
+// read in: most recently active first, never-active last.
+let KIND: Record<List, Built> = {
+  people: line`.person`,
+  spaces: line`.space`,
+  apps: line`.app`,
+}
+let REAL: Record<List, Built> = {
+  people: line`.person.test=false`,
+  spaces: line`.space.test=false`,
+  apps: line`.app.space.space.test=false`,
+}
+let ORDER: Record<List, Built> = {
+  people: line`.order=-person.active`,
+  spaces: line`.order=-space.active`,
+  apps: line`.order=-used.at`,
+}
+let OF: Record<List, 'people' | 'spaces' | 'apps'> = {
+  people: 'people',
+  spaces: 'spaces',
+  apps: 'apps',
+}
+let anded = (...parts: (Built | null | false)[]) =>
+  joined(parts.filter((p): p is Built => !!p), '&')
+let where = (key: List, tests: boolean, q = '') =>
+  anded(KIND[key], !tests && REAL[key], !!q && searched(key, q))
+// What a search finds a row by: its id, its title, and a person's address
+// or number, a space's slug, an app's slug, published name or its space's
+// slug, and an app by its space and slug together.
+let searched = (key: List, q: string): Built => {
+  let [space, slug] = q.split('/')
+  let said = {
+    people: [
+      line`.doc.title~=${q}`,
+      line`.email.address~=${q}`,
+      line`.phone.number~=${q}`,
+    ],
+    spaces: [line`.doc.title~=${q}`, line`.space.slug~=${q}`],
+    apps: [
+      line`.doc.title~=${q}`,
+      line`.app.slug~=${q}`,
+      line`.published.name~=${q}`,
+      line`.app.space.space.slug~=${q}`,
+      ...slug == undefined
+        ? []
+        : [line`.app.space.space.slug~=${space}&.app.slug~=${slug}`],
+    ],
+  }[key]
+  return joined(
+    [...UUID.test(q) ? [line`.entity.eid=${q}`] : [], ...said],
+    '|',
+  )
+}
+let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Who invited whom, and the spaces the box opened newcomers, the test
+// accounts' left out.
+let INVITED = (tests: boolean) =>
+  tests
+    ? line`.referral`
+    : line`.referral&.referral.invitee.person.test=false&.referral.inviter.person.test=false`
+let BUILT = (tests: boolean) =>
+  anded(line`.space&.visitor_build`, !tests && line`.space.test=false`)
+
+/** How many each link down the side says: each list, the invites and the
+ * visitors' builds, counted where they are kept. */
+export type Counts = Record<List | 'invites' | 'builds', number>
+let countsOf = async (dir: Directory, tests: boolean): Promise<Counts> => {
+  let [people, spaces, apps, invites, builds] = await Promise.all(
+    [
+      where('people', tests),
+      where('spaces', tests),
+      where('apps', tests),
+      INVITED(tests),
+      BUILT(tests),
+    ].map((q) => dir.count(q)),
+  )
+  return { people, spaces, apps, invites, builds }
+}
+
+/** One page of a list: its rows in order, how many more a search finds among
+ * test accounts, and the row the next page starts after. */
+export type Page = { rows: Row[]; hidden: number; next: string | null }
+let pageOf = async (
+  dir: Directory,
+  key: List,
+  tests: boolean,
+  q: string,
+  after: string,
+): Promise<Page> => {
+  let kept = where(key, tests, q)
+  let [rows, every, shown] = await Promise.all([
+    dir.read(anded(
+      kept,
+      ORDER[key],
+      !!after && line`.after=${after}`,
+      line`.limit=${PAGE + 1}&.fields=${TILES[OF[key]]}`,
+    )) as Promise<Row[]>,
+    tests ? 0 : dir.count(where(key, true, q)),
+    tests ? 0 : dir.count(kept),
+  ])
+  return {
+    rows: rows.slice(0, PAGE),
+    hidden: every - shown,
+    next: rows.length > PAGE ? rows[PAGE - 1].entity.eid : null,
+  }
+}
 
 let latest = (...at: (string | null | undefined)[]) =>
   at.filter((a): a is string => !!a).sort().at(-1) ?? null
@@ -399,11 +617,13 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   return out
 }
 
-// One page's reading of the census: what each row uses, and the names a row
-// points at by.
+// One page's reading of the directory: the rows it draws and those their
+// figures are counted from (`gather`), what each row uses, the names a row
+// points at by, and how many each list holds.
 type Reading = {
   env: Host
   census: Census
+  counts: Counts
   uses: Map<string, Uses>
   /** what each writer a stamp names is called (stamps.ts `writers`) */
   writers: Writers
@@ -412,13 +632,23 @@ type Reading = {
   tests: boolean
 }
 
-export let read = (env: Host, census: Census, tests: boolean): Reading => {
+// What every space is given free each month: the platform space's word.
+let freeOf = (d: Reading) =>
+  freeBudgetOf(d.census.spaces.find((r) => r.space?.slug == META.space))
+
+export let read = (
+  env: Host,
+  census: Census,
+  tests: boolean,
+  counts: Counts = { people: 0, spaces: 0, apps: 0, invites: 0, builds: 0 },
+): Reading => {
   let freeMonthly = freeBudgetOf(
     census.spaces.find((r) => r.space?.slug == META.space),
   )
   return {
     env,
     census,
+    counts,
     uses: uses(census),
     writers: writers([...census.people, ...census.agents]),
     spaces: new Map(
@@ -454,17 +684,6 @@ let around = (d: Reading, r: Row) => {
       : '',
   }
 }
-
-// What a search finds a row by: an app by its space and slug together too.
-let said = (d: Reading, r: Row) =>
-  [
-    r.entity.eid,
-    r.doc?.title,
-    r.email?.address,
-    r.space?.slug,
-    r.published?.name,
-    r.app ? refOf(d, r).name : '',
-  ].filter(Boolean).join(' ').toLowerCase()
 
 // Who is shown: everyone with tests asked for, else nobody's work left out.
 let shown = (d: Reading, rows: Row[]) =>
@@ -704,7 +923,12 @@ let lettersPage = (d: Reading, trials: Row[]) =>
     ),
   )
 
-let trialPage = (d: Reading, trial: Row | undefined, letters: Row[]) => {
+let trialPage = (
+  d: Reading,
+  trial: Row | undefined,
+  letters: Row[],
+  spaces: Map<string, Row>,
+) => {
   if (!trial) {
     return desk(
       d,
@@ -715,7 +939,8 @@ let trialPage = (d: Reading, trial: Row | undefined, letters: Row[]) => {
       404,
     )
   }
-  let slugOf = (eid: unknown) => d.spaces.get(String(eid))?.slug ?? String(eid)
+  let slugOf = (eid: unknown) =>
+    spaces.get(String(eid))?.space?.slug ?? String(eid)
   let sorted = [...letters].sort((a, b) =>
     slugOf(a.outreach_letter?.space).localeCompare(
       slugOf(b.outreach_letter?.space),
@@ -806,11 +1031,6 @@ let invitesPage = (d: Reading) => {
   )
 }
 
-let lists = (c: Census): Record<List, Row[]> => ({
-  people: c.people,
-  spaces: c.spaces,
-  apps: c.apps,
-})
 let tested = (d: Reading) => d.tests ? '?tests=1' : ''
 
 // The desk: the three lists down the side, each with how many it holds, the
@@ -834,7 +1054,6 @@ let desk = (
   kicker: ComponentChildren = null,
   status = 200,
 ) => {
-  let all = lists(d.census)
   let link = (
     key: string,
     href: string,
@@ -859,7 +1078,7 @@ let desk = (
         `${PATH}/${key}${tested(d)}`,
         LISTS[key].icon,
         LISTS[key].title,
-        shown(d, all[key]).length,
+        d.counts[key],
       )
     ),
     link(
@@ -892,14 +1111,14 @@ let desk = (
       `${PATH}/invites${tested(d)}`,
       'qr-code',
       'Invites',
-      invited(d).length,
+      d.counts.invites,
     ),
     link(
       'builds',
       `${PATH}/builds${tested(d)}`,
       'bot',
       'Visitor builds',
-      builds(d).length,
+      d.counts.builds,
     ),
     link('letters', `${PATH}/letters`, 'mail', 'Letters'),
   ]
@@ -932,12 +1151,23 @@ let desk = (
   )
 }
 
-// One list, searched: a word finds every row that says it anywhere.
-export let listing = (d: Reading, key: List, q: string) => {
-  let all = shown(d, lists(d.census)[key])
-  let found = q ? all.filter((r) => said(d, r).includes(q.toLowerCase())) : all
-  let hidden = lists(d.census)[key].length - all.length
+// One page of a list, searched: a word finds every row that says it, and the
+// next page starts after the last row this one draws.
+export let listing = (
+  d: Reading,
+  key: List,
+  q: string,
+  { rows: found, hidden, next }: Page,
+) => {
   let what = LISTS[key].title.toLowerCase()
+  let asked = (more: Record<string, string>) => {
+    let at = new URLSearchParams({
+      ...q ? { q } : {},
+      ...d.tests ? { tests: '1' } : {},
+      ...more,
+    }).toString()
+    return `${PATH}/${key}${at ? `?${at}` : ''}`
+  }
   let toggle = d.tests
     ? h('a', {
       class: 'Directory_Toggle',
@@ -978,13 +1208,19 @@ export let listing = (d: Reading, key: List, q: string) => {
       toggle,
     ),
     found.length
-      ? rows(d, found)
+      ? card(found.map((r) => drawn(r, 'Directory.List.Tile', around(d, r))))
       : empty(q ? `Nothing here says “${q}”` : `No ${what} yet`),
+    next &&
+      h('a', {
+        class: 'Directory_Toggle',
+        [NAMES]: LISTS[key].title,
+        href: asked({ after: next }),
+      }, `Next ${PAGE}`),
   )
 }
 
-export let list = (d: Reading, key: List, q: string) =>
-  desk(d, LISTS[key].title, key, listing(d, key, q))
+export let list = (d: Reading, key: List, q: string, found: Page) =>
+  desk(d, LISTS[key].title, key, listing(d, key, q, found))
 
 export let possessions = (d: Reading, r: Row) => {
   let c = d.census
@@ -1270,8 +1506,17 @@ let SESSIONS = 100
 // Every person's sessions with the Operator in the most recently active
 // spaces, newest first, each saying its space and opening on its page, then
 // the spaces whose Operator could not be read.
-let sessionsPage = async (d: Reading, env: Env, person: string) => {
-  let spaces = ordered(d, shown(d, d.census.spaces)).slice(0, SPACES)
+let sessionsPage = async (
+  d: Reading,
+  dir: Directory,
+  env: Env,
+  person: string,
+) => {
+  let spaces = await dir.read(anded(
+    where('spaces', d.tests),
+    ORDER.spaces,
+    line`.limit=${SPACES}&.fields=${OPERATORS}`,
+  )) as Row[]
   let asked = await Promise.all(spaces.map(async (r) => ({
     r,
     items: await asking(env, spaceOf(r), person, 'work', { everyone: true }) as
@@ -1328,32 +1573,56 @@ let SPENDERS = 30
 // directory, and the conversations and requests of the Operators of the spaces
 // that spent most.
 // Every space counts, a test one too: its dollars were spent all the same.
-let spendingPage = async (d: Reading, env: Env, person: string) => {
+let spendingPage = async (
+  d: Reading,
+  dir: Directory,
+  env: Env,
+  person: string,
+) => {
   let now = Date.now()
-  let spaces: Counted[] = d.census.spaces.map((r) => ({
+  let read = await dir.read(
+    line`.space&.fields=${fieldsOf({
+      spaces: [...TILES.spaces, 'trend', 'space.test'],
+    }).spaces!}`,
+  ) as Row[]
+  let spaces: Counted[] = read.map((r) => ({
     eid: r.entity.eid,
     slug: r.space!.slug,
-    test: !!d.uses.get(r.entity.eid)?.test,
-    tier: d.spaces.get(r.entity.eid)!.tier ?? 'free',
+    test: !!r.space!.test,
+    tier: spaceOf(r).tier ?? 'free',
     paying: paid(r.plan?.tier),
     month: budget(spaceOf(r)).spent,
     trend: r.trend,
   }))
   let spent = (s: Counted) =>
     series(s.trend?.spend, DAYS, now).values.reduce((a, b) => a + b, 0)
-  let asked: Asked[] = await Promise.all(
-    spaces.filter((s) => spent(s) > 0)
-      .sort((a, b) => spent(b) - spent(a))
-      .slice(0, SPENDERS)
-      .map(async (space) => ({
-        space,
-        spending: await spendingRead(
-          env,
-          d.spaces.get(space.eid)!,
-          person,
-        ) as Spending | Error,
-      })),
+  let top = spaces.filter((s) => spent(s) > 0)
+    .sort((a, b) => spent(b) - spent(a))
+    .slice(0, SPENDERS)
+  let whole = byEid(
+    await keyed(
+      dir,
+      top.map((s) => s.eid),
+      (some) => line`.entity.eid=${some}&.fields=${OPERATORS}`,
+    ),
   )
+  let [asked, named] = await Promise.all([
+    Promise.all(top.map(async (space): Promise<Asked> => ({
+      space,
+      spending: await spendingRead(
+        env,
+        { ...spaceOf(whole.get(space.eid)!), freeMonthly: freeOf(d) },
+        person,
+      ) as Spending | Error,
+    }))),
+    // Whose work spent, by name.
+    keyed(
+      dir,
+      Object.keys(byPerson(spaces.map((s) => s.trend)).people),
+      (some) =>
+        line`.entity.eid=${some}&.person&.fields=doc.title,email.address,phone.number`,
+    ),
+  ])
   return desk(
     d,
     'Spending',
@@ -1363,7 +1632,7 @@ let spendingPage = async (d: Reading, env: Env, person: string) => {
       asked,
       PATH,
       now,
-      new Map(d.census.people.map((r) => [r.entity.eid, personName(r)])),
+      new Map(named.map((r) => [r.entity.eid, personName(r)])),
     ),
   )
 }
@@ -1371,24 +1640,19 @@ let spendingPage = async (d: Reading, env: Env, person: string) => {
 // Every space's and app's visits together (@yaks/platform/admin-visits), from
 // one platform-wide read of the analytics Site keeps a few minutes, never a
 // read a space. A test space's are counted apart.
-let visitsPage = async (d: Reading, env: Env, bots: boolean) => {
+let visitsPage = async (
+  d: Reading,
+  dir: Directory,
+  env: Env,
+  bots: boolean,
+) => {
   let read = platformOf(env)
   let tallied = read && await read.catch((e) => {
     caught(e, { request: 'admin visits' })
     return e instanceof Error ? e : new Error(String(e))
   })
-  let places = {
-    spaces: d.census.spaces.map((r) => ({
-      eid: r.entity.eid,
-      slug: r.space!.slug ?? '',
-      test: !!d.uses.get(r.entity.eid)?.test,
-    })),
-    apps: d.census.apps.map((r) => ({
-      eid: r.entity.eid,
-      slug: r.app!.slug ?? '',
-      space: appSpace(r),
-    })),
-  }
+  let counted = tallied && !(tallied instanceof Error) ? tallied : null
+  let places = await placesOf(dir, counted)
   return desk(
     d,
     'Visits',
@@ -1401,6 +1665,43 @@ let visitsPage = async (d: Reading, env: Env, bots: boolean) => {
         bots,
       ),
   )
+}
+
+// The spaces and apps the analytics named, read by key: a space by the slug
+// its views were served under, an app by its eid and its space by its own.
+let placesOf = async (dir: Directory, t: Tallied | null): Promise<Places> => {
+  let apps = await keyed(
+    dir,
+    t?.apps.map((r) => r.app) ?? [],
+    (some) => line`.entity.eid=${some}&.app&.fields=app.slug,app.space`,
+  )
+  let fields = ['space.slug', 'space.test']
+  let spaces = [
+    ...byEid(
+      await keyed(
+        dir,
+        t?.daily.map((r) => r.space) ?? [],
+        (some) => line`.space.slug=${some}&.fields=${fields}`,
+      ),
+      await keyed(
+        dir,
+        apps.map(appSpace),
+        (some) => line`.entity.eid=${some}&.space&.fields=${fields}`,
+      ),
+    ).values(),
+  ]
+  return {
+    spaces: spaces.map((r) => ({
+      eid: r.entity.eid,
+      slug: r.space!.slug ?? '',
+      test: !!r.space!.test,
+    })),
+    apps: apps.map((r) => ({
+      eid: r.entity.eid,
+      slug: r.app!.slug ?? '',
+      space: appSpace(r),
+    })),
+  }
 }
 
 let pct = (share: number) => `${Math.round(share * 100)}%`
@@ -1605,6 +1906,132 @@ export let trialsSince = async (
     now,
   )
 
+// The pages that draw no row of the directory's but the counts down the side,
+// or read their own (`sessionsPage`, `spendingPage`, `visitsPage`).
+let NAMED = new Set([
+  'invites',
+  'builds',
+  'sessions',
+  'support-contracts',
+  'spending',
+  'letters',
+  'funnel',
+  'visits',
+])
+
+/** What the page at `rest`, the path past {@link PATH}, draws: a list's page
+ * of rows, the invites and those given the starter, the visitors' builds,
+ * or a row read whole and the rows its page lists, each read by key. */
+export type At = { shown: Shown; found?: Page; row?: Row }
+let shownAt = async (
+  dir: Directory,
+  rest: string,
+  tests: boolean,
+  q: string,
+  after: string,
+): Promise<At> => {
+  if (isList(rest)) {
+    let found = await pageOf(dir, rest, tests, q, after)
+    return { shown: { [OF[rest]]: found.rows }, found }
+  }
+  let [head, part] = rest.split('/')
+  let read = (q: Built) => dir.read(q) as Promise<Row[]>
+  let seated = (some: string[]) =>
+    line`.member.space=${some}&.fields=${TILES.seats}`
+  if (head == 'invites') {
+    let [referrals, people] = await Promise.all([
+      read(line`${sub(INVITED(tests))}&.fields=${TILES.referrals}`),
+      read(anded(
+        line`.person&.started`,
+        !tests && line`.person.test=false`,
+        line`.fields=${TILES.people}`,
+      )),
+    ])
+    return { shown: { referrals, people, named: namedBy(referrals, people) } }
+  }
+  if (head == 'builds') {
+    return {
+      shown: {
+        spaces: await read(anded(BUILT(tests), line`.fields=${TILES.spaces}`)),
+      },
+    }
+  }
+  if (NAMED.has(head)) return { shown: {} }
+  let [row] = await read(line`.entity.eid=${head}`)
+  if (!row || part) return { shown: {}, row }
+  let eid = row.entity.eid
+  if (row.person) {
+    // Where they sit, the apps of the spaces they own, and whom they invited.
+    let [seats, referrals] = await Promise.all([
+      read(line`.member.person=${eid}&.fields=${TILES.seats}`),
+      read(line`.referral.inviter=${eid}&.fields=${TILES.referrals}`),
+    ])
+    let owned = seats.filter((s) => s.member!.role == 'owner').map(seatSpace)
+    let [spaces, apps] = await Promise.all([
+      keyed(
+        dir,
+        seats.map(seatSpace),
+        (some) => line`.entity.eid=${some}&.space&.fields=${TILES.spaces}`,
+      ),
+      keyed(
+        dir,
+        owned,
+        (some) => line`.app.space=${some}&.fields=${TILES.apps}`,
+      ),
+    ])
+    return {
+      row,
+      shown: {
+        people: [row],
+        spaces,
+        apps,
+        referrals,
+        named: namedBy(referrals, []),
+      },
+    }
+  }
+  if (row.space) {
+    // Who sits in it, and its apps.
+    let [seats, apps] = await Promise.all([
+      read(seated([eid])),
+      read(line`.app.space=${eid}&.fields=${TILES.apps}`),
+    ])
+    let people = await keyed(
+      dir,
+      seats.map(seatPerson),
+      (some) => line`.entity.eid=${some}&.person&.fields=${TILES.people}`,
+    )
+    return { row, shown: { spaces: [row], people, apps } }
+  }
+  if (row.app) {
+    // What it was installed from, and what was installed from it.
+    let [copies, from] = await Promise.all([
+      read(line`.installed.of=${eid}&.app&.fields=${TILES.apps}`),
+      row.installed?.of
+        ? read(
+          line`.entity.eid=${
+            idOf(row.installed.of)
+          }&.app&.fields=${TILES.apps}`,
+        )
+        : [],
+    ])
+    return { row, shown: { apps: [row, ...copies, ...from] } }
+  }
+  return { shown: {}, row }
+}
+// Who invited whom, the spaces each first app gave a month, and those the
+// starter went to: named on the Invites page, their own figures unsaid.
+let namedBy = (referrals: Row[], starters: Row[]) => ({
+  people: referrals.flatMap((r) => [
+    idOf(r.referral!.invitee),
+    idOf(r.referral!.inviter),
+  ]),
+  spaces: [
+    ...referrals.flatMap((r) => r.rewarded ? [idOf(r.rewarded.space)] : []),
+    ...starters.flatMap((r) => r.started?.space ? [idOf(r.started.space)] : []),
+  ],
+})
+
 /** The admin's directory, at {@link PATH}, or null for any other path. */
 export let answer = async (
   req: Request,
@@ -1614,11 +2041,10 @@ export let answer = async (
   c: Clock = clock(),
 ): Promise<Response | null> => {
   if (!adminPath(path)) return null
-  // Every page here reads the whole census from the directory, and a look
-  // ahead (a pointer resting on a link, a browser's prefetch) is answered
-  // with nothing to hold: a pointer passing down a list's rows asked for
-  // one census a row, more than the directory's memory holds at once. A
-  // press draws the frame at once and reads the page then.
+  // A look ahead (a pointer resting on a link, a browser's prefetch) is
+  // answered with nothing to hold: a pointer passing down a list's rows would
+  // ask the directory, and the Sessions and Spending pages thirty Operators,
+  // a row at a time. A press draws the frame at once and reads the page then.
   if (lookingAhead(req)) return new Response(null, { status: 204 })
   let asked = new URL(req.url)
   // Signed out: sent to sign in and handed back here. Signed in as anybody
@@ -1640,25 +2066,25 @@ export let answer = async (
   }
   if (!who || (req.method != 'GET' && req.method != 'HEAD')) return lost(env)
   let rest = path.slice(PATH.length + 1) || 'people'
-  // A row's own page reads the row whole, beside the census.
-  let [census, [whole]] = await c.time('directory_read', () =>
+  let tests = asked.searchParams.has('tests')
+  let q = asked.searchParams.get('q') ?? ''
+  let after = asked.searchParams.get('after') ?? ''
+  let [counts, at] = await c.time('directory_read', () =>
     Promise.all([
-      dir.census(readsOf(rest)),
-      named(rest) ? [] : dir.read(line`.entity.eid=${pageOf(rest)}`),
+      countsOf(dir, tests),
+      shownAt(dir, rest, tests, q, after),
     ]))
+  let census = await c.time('directory_gather', () => gather(dir, at.shown))
   let d = c.measure(
     'directory_summary',
-    () => read(env, census, asked.searchParams.has('tests')),
+    () => read(env, census, tests, counts),
   )
   if (isList(rest)) {
-    return c.measure(
-      'render',
-      () => list(d, rest, asked.searchParams.get('q') ?? ''),
-    )
+    return c.measure('render', () => list(d, rest, q, at.found!))
   }
   if (rest == 'invites') return invitesPage(d)
   if (rest == 'builds') return buildsPage(d, await opened(dir))
-  if (rest == 'sessions') return await sessionsPage(d, env, who)
+  if (rest == 'sessions') return await sessionsPage(d, dir, env, who)
   if (rest == 'support-contracts') {
     let rows = await allSupport(env)
     return desk(
@@ -1683,15 +2109,22 @@ export let answer = async (
         : empty('No support contracts'),
     )
   }
-  if (rest == 'spending') return await spendingPage(d, env, who)
+  if (rest == 'spending') return await spendingPage(d, dir, env, who)
   if (rest == 'visits') {
-    return await visitsPage(d, env, asked.searchParams.has('bots'))
+    return await visitsPage(d, dir, env, asked.searchParams.has('bots'))
   }
   if (rest == 'letters') return lettersPage(d, await dir.trials())
   if (rest.startsWith('letters/')) {
     let trial = rest.slice('letters/'.length)
     let [row] = (await dir.trials()).filter((r) => r.entity.eid == trial)
-    return trialPage(d, row, row ? await dir.letters(trial) : [])
+    let letters = row ? await dir.letters(trial) : []
+    // The spaces its letters were written to, by their slugs.
+    let spaces = await keyed(
+      dir,
+      letters.map((r) => String(r.outreach_letter?.space)),
+      (some) => line`.entity.eid=${some}&.space&.fields=space.slug`,
+    )
+    return trialPage(d, row, letters, byEid(spaces))
   }
   if (rest == 'funnel') {
     let days = Number(asked.searchParams.get('days')) || 7
@@ -1702,7 +2135,7 @@ export let answer = async (
     return funnelPage(d, f, days)
   }
   let [, part, open = ''] = rest.split('/')
-  let r = whole as Row | undefined
+  let r = at.row
   if (
     !r || !(r.person || r.space || r.app) ||
     part && !(part == 'operator' && r.space)

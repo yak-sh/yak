@@ -1,31 +1,42 @@
-import { platform as directoryPlatform } from './directory-rows-probe.ts'
+// The admin's door (admin.ts `answer`): who it is drawn for, and what a list's
+// search and a row's page find, read from the directory as it keeps them.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import {
-  answer,
-  type Census,
-  list,
-  listing,
-  page,
-  possessions,
-  read,
-  staff,
-} from './admin.ts'
-import { type Directory, META, type Space } from './directory.ts'
+import { answer, PAGE, staff } from './admin.ts'
+import { directoryOf, META } from './directory.ts'
 import { COOKIE, sign, verify } from './lib/token.ts'
-import { drawn } from './render/mod.ts'
 import { lost } from './pages.ts'
-import { markup } from './html.ts'
+import { platform } from './testing.ts'
 
-let root = { eid: 'meta', slug: META.space } as Space
-let auth = directoryPlatform('secret')
-await auth.dir.stamp({
-  entities: ['ann', 'root'].map((eid) => ({
-    entity: { eid },
-    person: {},
-  })),
+let world = platform('admin directory', { SESSION_SECRET: 'secret' })
+let env = world.env
+let dir = directoryOf(env.STORE)
+await dir.stamp({
+  entities: [
+    { entity: { eid: 'root' }, person: {} },
+    { entity: { eid: 'ann' }, person: {}, email: { address: 'ann@x.com' } },
+    { entity: { eid: 'home' }, space: { slug: 'ann', store: 'ann' } },
+    {
+      entity: { eid: 'notes' },
+      app: { slug: 'notes', space: 'home', version: 1, access: 'private' },
+      doc: { title: 'Field notes' },
+    },
+    {
+      entity: { eid: 'ann-home' },
+      member: { space: 'home', person: 'ann', role: 'owner' },
+    },
+  ],
 })
-let env = auth.env
+await dir.apply({
+  entities: [{
+    entity: { eid: 'root-seat' },
+    member: {
+      person: 'root',
+      space: (await dir.space(META.space))!.eid,
+      role: 'owner',
+    },
+  }],
+}, { 'x-yak-person': 'root', 'x-yak-role': 'owner', 'x-yak-kernel': '1' })
 
 let cookies = Object.fromEntries(
   await Promise.all(
@@ -43,41 +54,6 @@ let identities = await Promise.all(
   ),
 )
 assertEquals(identities.map((identity) => identity?.person), ['ann', 'root'])
-let records: Census = {
-  people: [{
-    policy: { revision: 0 },
-    entity: { eid: 'ann' },
-    person: {},
-    email: { address: 'ann@x.com' },
-  }],
-  spaces: [{
-    policy: { revision: 0 },
-    entity: { eid: 'home' },
-    space: { slug: 'ann', store: 'ann' },
-  }],
-  apps: [{
-    policy: { revision: 0 },
-    entity: { eid: 'notes' },
-    app: { slug: 'notes', space: 'home', version: 1, access: 'private' },
-    doc: { title: 'Field notes' },
-  }],
-  seats: [{
-    policy: { revision: 0 },
-    entity: { eid: 'ann-home' },
-    member: { space: 'home', person: 'ann', role: 'owner' },
-  }],
-  deploys: [],
-  referrals: [],
-  agents: [],
-}
-let dir = {
-  space: (slug: string) => Promise.resolve(slug == META.space ? root : null),
-  role: (_: Space, person: string) =>
-    Promise.resolve(person == 'root' ? 'owner' : null),
-  sitting: (person: string) =>
-    Promise.resolve(new Map(person == 'root' ? [[root.eid, 'owner']] : [])),
-  census: () => Promise.resolve(records),
-} as unknown as Directory
 let asking = (path: string, person?: string) =>
   [
     new Request(`https://yaks.app${path}`, {
@@ -87,15 +63,12 @@ let asking = (path: string, person?: string) =>
     path.split('?')[0],
     dir,
   ] as const
+let html = async (path: string) => {
+  let out = (await answer(...asking(path, 'root')))!
+  return { status: out.status, text: await out.text() }
+}
 let outsider = asking('/admin/people')
 let person = asking('/admin/people', 'ann')
-let entrance = asking('/admin?q=ann', 'root')
-let projected = read(env, records, false)
-assertEquals(projected.spaces.get('home')?.slug, 'ann')
-for (let row of [...records.people, ...records.spaces, ...records.apps]) {
-  drawn(row, 'Directory.List.Tile')
-}
-drawn(records.people[0], 'Directory.Page')
 let login = new Response(null, {
   status: 302,
   headers: { location: '/login?return=%2Fadmin%2Fpeople' },
@@ -120,40 +93,55 @@ test('the directory refusal page answers not found', () => {
 })
 
 test('the admin directory entrance opens its people list', async () => {
-  let door = (await answer(...entrance))!
-  assertEquals(door.status, 200)
+  assertEquals(await html('/admin?q=ann'), await html('/admin/people?q=ann'))
+})
+
+test("the admin's people list shows who a search finds, and nobody else", async () => {
+  let found = await html('/admin/people?q=ann')
+  assertEquals(found.status, 200)
+  assertStringIncludes(found.text, 'ann@x.com')
   assertEquals(
-    await door.text(),
-    await (await answer(
-      ...asking('/admin/people?q=ann', 'root'),
-    ))!.text(),
+    (await html('/admin/people?q=nobody')).text.includes('ann@x.com'),
+    false,
   )
 })
 
-test("the admin's people list shows who a search finds", () => {
-  assertStringIncludes(markup(listing(projected, 'people', 'ann')), 'ann@x.com')
+test('a person in the admin directory opens to the spaces they own', async () => {
+  let { status, text } = await html('/admin/ann')
+  assertEquals(status, 200)
+  assertStringIncludes(text, 'Owner of')
+  assertStringIncludes(text, 'ann.yaks.app')
 })
 
-test('a person in the admin directory opens to the spaces they own', () => {
-  let html = markup(possessions(projected, records.people[0]))
-  assertStringIncludes(html, 'Owner of')
-  assertStringIncludes(html, 'ann.yaks.app')
+test('the admin app search finds app names through their space', async () => {
+  for (let q of ['ann', 'ann/notes', 'field']) {
+    let { status, text } = await html(`/admin/apps?q=${q}`)
+    assertEquals(status, 200)
+    assertStringIncludes(text, 'Field notes')
+    assertStringIncludes(text, 'ann/notes')
+  }
 })
 
-test('the admin app search finds app names through their space', () => {
-  let html = markup(listing(projected, 'apps', 'ann'))
-  assertStringIncludes(html, 'Field notes')
-  assertStringIncludes(html, 'ann/notes')
-})
-
-test('a matched admin list answers a page', () => {
-  assertEquals(list(projected, 'people', 'ann').status, 200)
-})
-
-test('a matched admin app list answers a page', () => {
-  assertEquals(list(projected, 'apps', 'ann').status, 200)
-})
-
-test('a person in the admin directory answers a page', async () => {
-  assertEquals((await page(projected, dir, records.people[0], env)).status, 200)
+test('a list draws a page of its rows, most recently active first, and the next page after the last', async () => {
+  let at = (n: number) => new Date(Date.UTC(2026, 9, 1, 0, n)).toISOString()
+  let many = Array.from({ length: PAGE + 2 }, (_, i) => ({
+    entity: { eid: `paged-${i}` },
+    person: {},
+    email: { address: `paged-${i}@example.com` },
+    used: { at: at(i) },
+  }))
+  await dir.stamp({ entities: many })
+  // Each person the page draws, by number.
+  let paged = (text: string) =>
+    [...text.matchAll(/paged-(\d+)@example/g)].map((m) => +m[1])
+  let first = await html('/admin/people?q=paged-')
+  assertEquals(
+    paged(first.text),
+    Array.from({ length: PAGE }, (_, i) => PAGE + 1 - i),
+  )
+  let next = /href="([^"]*after=[^"]*)"/.exec(first.text)![1]
+    .replaceAll('&amp;', '&')
+  let rest = await html(next)
+  assertEquals(paged(rest.text), [1, 0])
+  assertEquals(rest.text.includes('after='), false)
 })

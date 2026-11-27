@@ -54,6 +54,7 @@ import {
 import { appDerived, appWords, numbered, storeWords } from './vocab.ts'
 import { texts } from './embedding-read.ts'
 import { versions } from '@yaks/platform/config'
+import { directoryDerived } from '@yaks/platform/directory-derived'
 
 let storeKind = (name: string) =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
@@ -127,7 +128,16 @@ export let shapeOf = (
   let words = own ? storeWords(storeKind(name)) : appWords(declared ?? {})
   let { vocab } = words
   let read = blobRead(vocab)
-  let derived = { ...read, ...(own ? {} : appDerived(vocab, read)) }
+  // The directory says who is a test and when each was last active, which
+  // no row stores (@yaks/platform/directory-derived).
+  let derived = {
+    ...read,
+    ...(name == PLATFORM_STORE
+      ? directoryDerived
+      : own
+      ? {}
+      : appDerived(vocab, read)),
+  }
   let searchable = indexed(vocab)
   // The blob table first: the `doc_value` view and the search triggers read a
   // body's text out of it, so it has to be standing before they are.

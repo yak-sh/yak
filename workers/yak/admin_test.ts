@@ -1,20 +1,19 @@
-import { platform as directoryPlatform } from './directory-rows-probe.ts'
 // The platform admin's directory (admin.ts): what each row uses, counted over
 // the whole directory, and the door that draws it for the admin alone.
 import { ownedBy } from './directory-fixture.ts'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { line } from '@yaks/query'
 import { factsOf, OUTREACH } from './outreach.ts'
 import { parseHTML } from 'linkedom'
-import { answer, type Census, readsOf, uses } from './admin.ts'
+import { answer, type Census, gather, TILES, uses } from './admin.ts'
+import { line } from '@yaks/query'
 import {
   type Directory,
   directory,
+  directoryOf,
   fetch as directoryFetch,
   META,
   type Row,
-  type Space,
 } from './directory.ts'
 import type { Meter } from '@yaks/platform/meter'
 import { STARTER } from '@yaks/platform/plans'
@@ -24,7 +23,6 @@ import { COOKIE, sign } from './lib/token.ts'
 import { drawn } from './render/mod.ts'
 import { referralEid } from './referral.ts'
 
-let ROOT = { eid: 'meta', slug: META.space } as Space
 let SECRET = 'secret'
 let EMPTY: Census = {
   people: [],
@@ -125,7 +123,7 @@ let census = (): Census => ({
   deploys: [
     {
       entity: { eid: 'd1' },
-      deploy: { app: 'a1' },
+      deploy: { app: 'a1', version: 1, files: '{"a.js":"sha"}' },
       created: { at: '2026-10-02T00:00:00Z' },
     },
     {
@@ -239,24 +237,11 @@ test("an app's row says whether it is published and in the gallery", () => {
   assertEquals(marks({ gallery: listed }), ['not published'])
 })
 
-let auth = directoryPlatform(SECRET)
-await auth.dir.stamp({
-  entities: ['ann', 'root'].map((eid) => ({
-    entity: { eid },
-    person: {},
-  })),
-})
-let env = auth.env
-
-let dir = {
-  space: (slug: string) => Promise.resolve(slug == META.space ? ROOT : null),
-  role: (_: Space, person: string) =>
-    Promise.resolve(person == 'root' ? 'owner' : null),
-  sitting: (person: string) =>
-    Promise.resolve(new Map(person == 'root' ? [[ROOT.eid, 'owner']] : [])),
-  census: () =>
-    Promise.resolve({ ...EMPTY, people: census().people.slice(0, 1) }),
-} as unknown as Directory
+// The directory every page here reads: the rows the cases draw, written as
+// the directory keeps them, and the platform's admin seated in its own space.
+let world = platform('admin pages', { SESSION_SECRET: SECRET })
+let env = world.env
+let dir = directoryOf(env.STORE)
 // The directory's words, and its renderers' queries compiled against them,
 // are made once an isolate, by the first page to draw a row: made here, so
 // a case times its own page.
@@ -271,44 +256,44 @@ let asking = (path: string, person?: string) =>
     path.split('?')[0],
     dir,
   ] as const
-test('the census reads which app each release is of and when, never its files, and who invited whom', async () => {
-  await using p = platform('census deploys')
-  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
-  let space = await ownedBy(dir, 'census-owner', 'census-deploys')
-  let invitee = crypto.randomUUID()
+test("the directory's own test and activity agree with what each row's figures say", async () => {
+  let u = uses(await dir.census(TILES))
+  let read = await dir.read(
+    line`.person|.space&.fields=person.test,person.active,space.test,space.active`,
+  ) as Row[]
+  assertEquals(read.length > 10, true)
+  for (let r of read) {
+    let said = (r.person ?? r.space) as { test?: boolean; active?: string }
+    let figures = u.get(r.entity.eid)!
+    assertEquals(
+      [!!said.test, said.active ?? null],
+      [figures.test, figures.active],
+      r.entity.eid,
+    )
+  }
+})
+
+test("a person's figures count their work in a space they don't own", async () => {
+  let today = new Date().toISOString().slice(0, 10)
   await dir.stamp({
-    entities: [{ entity: { eid: invitee }, person: {} }, {
-      entity: { eid: referralEid(invitee) },
-      referral: { inviter: 'census-owner', invitee },
+    entities: [{
+      entity: { eid: 'eves-work' },
+      space: { slug: 'eves-work' },
+      trend: { people: { eve: { [today]: 0.25 } } },
     }],
   })
-  await dir.apply({
-    entities: [
-      {
-        entity: { eid: 'census-app' },
-        app: {
-          slug: 'probe',
-          space: space.eid,
-          store: 'census-deploys/probe',
-          access: 'private',
-        },
-      },
-      {
-        entity: { eid: 'census-release' },
-        deploy: { app: 'census-app', version: 1, files: '{"a.js":"sha"}' },
-      },
-    ],
+  let [eve] = inviting.people.filter((r) => r.entity.eid == 'eve')
+  assertEquals(uses(await gather(dir, { people: [eve] })).get('eve')?.spend, {
+    spent: 0.25,
   })
-  let { deploys, people, referrals } = await dir.census(readsOf('apps'))
-  let [row] = deploys
-  assertEquals([deploys.length, row.deploy], [1, { app: 'census-app' }])
-  assertEquals(typeof row.created?.at, 'string')
-  // The owner was given the starter with their first space, and invited one.
-  let owner = people.find((r) => r.entity.eid == 'census-owner')
-  assertEquals(owner?.started, { space: space.eid })
+})
+
+test('a page reads which app each release is of and when, never its files', async () => {
+  let [a1] = census().apps
+  let { deploys } = await gather(dir, { apps: [a1] })
   assertEquals(
-    referrals.map((r) => [r.referral, typeof r.created?.at]),
-    [[{ inviter: 'census-owner', invitee }, 'string']],
+    deploys.map((r) => [JSON.stringify(r.deploy), typeof r.created?.at]),
+    [['{"app":"a1"}', 'string'], ['{"app":"a1"}', 'string']],
   )
 })
 
@@ -460,14 +445,17 @@ let invite = (
   day: string,
   rewarded?: NonNullable<Row['rewarded']>,
 ): Row => ({
-  entity: { eid: `${inviter}-${invitee}` },
+  entity: { eid: referralEid(invitee) },
   referral: { inviter, invitee },
   created: { at: on(day) },
   ...rewarded ? { rewarded } : {},
 })
+// Each holds the starter, as a person's first space is given it (directory.ts
+// `mint`).
 let made = (eid: string, slug: string, day?: string): Row => ({
   entity: { eid },
   space: { slug },
+  starter: { dollars: STARTER },
   ...day ? { created: { at: on(day) } } : {},
 })
 let inviting = {
@@ -504,16 +492,35 @@ let inviting = {
     }),
   ],
 } as Census
-// A row's page reads its row whole, as the directory keeps it.
-let admin = {
-  ...dir,
-  census: () => Promise.resolve(inviting),
-  read: (q: string) =>
-    Promise.resolve(
-      [...inviting.people, ...inviting.spaces, ...inviting.apps]
-        .filter((r) => q == line`.entity.eid=${r.entity.eid}`),
-    ),
-} as Directory
+let kernel = {
+  'x-yak-person': 'root',
+  'x-yak-role': 'owner',
+  'x-yak-kernel': '1',
+}
+await dir.stamp({
+  entities: [
+    { entity: { eid: 'root' }, person: {}, doc: { title: 'Root' } },
+    ...census().people,
+    ...census().spaces,
+    ...census().apps,
+    ...census().seats,
+    ...census().deploys,
+    ...inviting.people,
+    ...inviting.spaces,
+    ...inviting.referrals,
+  ],
+})
+await dir.apply({
+  entities: [{
+    entity: { eid: 'root-seat' },
+    member: {
+      person: 'root',
+      space: (await dir.space(META.space))!.eid,
+      role: 'owner',
+    },
+  }],
+}, kernel)
+let admin = dir
 // A page as the admin reads it: which side link is current, and each row
 // under a heading, where it opens, its name, the line under it, its tags and
 // its figures.
@@ -666,16 +673,8 @@ test("an app's page and its space's say who visited, as the owner's Visits page 
     app: { slug: 'notes', space: 'jhome', version: 1, access: 'public' },
     doc: { title: 'Notes' },
   }
-  let rows = [...inviting.spaces, notes]
-  let visited = {
-    ...admin,
-    census: () => Promise.resolve({ ...inviting, apps: [notes] }),
-    read: (q: string) =>
-      Promise.resolve(
-        rows.filter((r) => q == line`.entity.eid=${r.entity.eid}`),
-      ),
-    deploys: () => Promise.resolve([]),
-  } as Directory
+  await dir.stamp({ entities: [notes] })
+  let visited = admin
   let sql = analytics(() => [
     {
       app: eid,
@@ -719,20 +718,9 @@ test("an app's page and its space's say who visited, as the owner's Visits page 
 
 test("the Visits page counts every space's and app's visits, people first and test spaces apart", async () => {
   let today = `${new Date().toISOString().slice(0, 10)} 00:00:00`
-  let platform = {
-    ...admin,
-    census: () =>
-      Promise.resolve({
-        ...EMPTY,
-        people: census().people,
-        spaces: [made('home', 'ann'), made('lab', 'lab')],
-        apps: [
-          { entity: { eid: 'a1' }, app: { slug: 'notes', space: 'home' } },
-          { entity: { eid: 'a2' }, app: { slug: 'try', space: 'lab' } },
-        ] as Row[],
-        seats: census().seats.filter((s) => s.member!.space != 'shop'),
-      }),
-  } as Directory
+  // ann's space home holds notes (a1); the probe's test space lab holds try
+  // (a4).
+  let platform = admin
   // Seven pages a browser asked for, five of which ran; a crawler's two, a
   // verified bot's one; three a browser asked for before pages said they
   // ran; and a test space's, from then too.
@@ -755,7 +743,7 @@ test("the Visits page counts every space's and app's visits, people first and te
         { day: today, space: 'lab', kind: 'early', views: 9 },
       ]
       : [
-        { app: 'a2', kind: 'early', views: 9 },
+        { app: 'a4', kind: 'early', views: 9 },
         ...kinds.map(([kind, views]) => ({ app: 'a1', kind, views })),
       ]
   )

@@ -24,6 +24,9 @@ export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
  * the directory without importing its words or its store composition. */
 export let PLATFORM_STORE = 'yak/platform'
 
+/** The platform's own space, whose store {@link PLATFORM_STORE} is. */
+export let PLATFORM_SPACE = 'yak'
+
 /** Where a sign-in link is spent. Under `/login/`, so the platform routes it
  * with the rest of the sign-in surface. */
 export let LINK = '/login/link'
