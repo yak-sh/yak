@@ -433,11 +433,15 @@ export let waited = (error: unknown): Record<string, string> => {
 // page's error envelope, and the wait it asks for. A failure raised here is
 // reported with the door's tags and thrown on, never answered as the page's
 // mistake (defects.ts `refusing`).
-let rejection = (error: unknown, tags: Record<string, string>) =>
+let rejection = (
+  error: unknown,
+  tags: Record<string, string>,
+  hint?: string,
+) =>
   Response.json({
     error: {
       code: 'refused',
-      message: error instanceof Error ? error.message : String(error),
+      message: hint ?? (error instanceof Error ? error.message : String(error)),
       ...(error instanceof Error ? { name: error.name } : {}),
     },
   }, { status: refusing(error, tags), headers: waited(error) })
@@ -2187,9 +2191,10 @@ let queryStore = async (
   // @yaks/platform/page-wire `lineOf` turns into the Store's line. The ask
   // then carries the listing's own screen (listing.ts `asking`), so what a
   // count counts is what a list lists.
+  let line: string | null = null
   try {
     let url = new URL(req.url)
-    let line = lineOf(url)
+    line = lineOf(url)
     if (line == null) throw new Refused('/query needs a query: ?q=…')
     let friends = await queryFriends(
       dir,
@@ -2207,11 +2212,12 @@ let queryStore = async (
     // grammar or unknown word with 400. Other refusals stay quiet; platform
     // failures keep their own reporting.
     await mistake(req, env, space, app, e, 'query')
-    return rejection(e, {
-      request: 'GET /api/query',
-      space: space.slug,
-      app: app.slug,
-    })
+    let { queryRefusal } = await import('@yaks/platform/query-refusal')
+    return rejection(
+      e,
+      { request: 'GET /api/query', space: space.slug, app: app.slug },
+      await queryRefusal(e, line ?? '', `${space.slug}/${app.slug}`, true),
+    )
   }
 }
 

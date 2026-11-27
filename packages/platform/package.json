@@ -141,6 +141,7 @@
     "./schema": "./schema.ts",
     "./app-vocab": "./app-vocab.ts",
     "./app-words": "./app-words.ts",
+    "./query-refusal": "./query-refusal.ts",
     "./support-contract": "./support-contract.ts",
     "./support-contract-service": "./support-contract-service.ts",
     "./support-contract-view": "./support-contract-view.ts",

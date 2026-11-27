@@ -10,6 +10,11 @@
 // and what it does.
 export type Taught = { spell: string; word: string; means: string }
 
+/** The supported alternatives to an unqualified reference presence test. */
+export let BACKLINKS: string =
+  '.refs=<id> finds backlinks to one entity. Use a reference property such as ' +
+  '.comment.target for presence or !comment.target for absence.'
+
 // The predicate operators, in the order someone learns them. The word is the
 // reading for a time property (a phrase names a range, and the operator picks
 // which edge of it), which reads sensibly for ordinary values too.
@@ -47,8 +52,7 @@ export let DIRECTIVES: Taught[] = [
   {
     spell: '.refs=',
     word: 'backlinks',
-    means: '.refs=X everything referencing X; .refs references anything; ' +
-      '!refs references nothing',
+    means: BACKLINKS,
   },
   { spell: '.count', word: 'aggregate', means: 'how many match' },
   { spell: '.tally=', word: 'aggregate', means: "each value's count" },

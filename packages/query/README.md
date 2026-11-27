@@ -321,22 +321,24 @@ equal(
 A **directive** is a clause shaping the answer rather than selecting entities:
 ordering, projection, aggregation, or pagination. `directive()` identifies these
 clauses. Under OR, the parser lifts directives to the query's top-level clause
-list, so `.task|.note&.limit=2` limits the combined selection. `.refs` is a
-reserved name too, but it selects by references and is not a directive.
+list, so `.task|.note&.limit=2` limits the combined selection. `.refs=<id>`
+selects backlinks. The SQL and in-memory evaluators require a target id for
+`.refs`. Use a property such as `.comment.target` or `!comment.target` to test
+for a particular reference.
 
-| Written                        | Requested answer                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------- |
-| `.order=hot`                   | order by a ranking or a property path (`-created.at` descends)                  |
-| `.order[last]=doc.title`       | order by a property, the entities with no value last either way                 |
-| `.near=42`                     | similarity ranking relative to one entity                                       |
-| `.refs=42` / `.refs` / `!refs` | references to 42 / any references / no references                               |
-| `.count`                       | number of matches                                                               |
-| `.distinct=comp.prop`          | distinct property values                                                        |
-| `.tally=comp.prop`             | each property value with its count                                              |
-| `.fields=pin.x,pin.z~`         | selected properties; `~` excludes that property from subscription notifications |
-| `*` / `?*`                     | every component of each selected entity                                         |
-| `.limit=200`                   | at most 200 entities; `0` requests none                                         |
-| `.after=13882`                 | continue past one entity, by number, human id, or eid                           |
+| Written                  | Requested answer                                                                |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `.order=hot`             | order by a ranking or a property path (`-created.at` descends)                  |
+| `.order[last]=doc.title` | order by a property, the entities with no value last either way                 |
+| `.near=42`               | similarity ranking relative to one entity                                       |
+| `.refs=42`               | references to 42                                                                |
+| `.count`                 | number of matches                                                               |
+| `.distinct=comp.prop`    | distinct property values                                                        |
+| `.tally=comp.prop`       | each property value with its count                                              |
+| `.fields=pin.x,pin.z~`   | selected properties; `~` excludes that property from subscription notifications |
+| `*` / `?*`               | every component of each selected entity                                         |
+| `.limit=200`             | at most 200 entities; `0` requests none                                         |
+| `.after=13882`           | continue past one entity, by number, human id, or eid                           |
 
 A property path through a reference in `.fields` requests what it reaches as its
 own bundle. See [graph projections](../graph/README.md#projections). The parser

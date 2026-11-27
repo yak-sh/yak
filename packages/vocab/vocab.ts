@@ -1423,7 +1423,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
         let c = comp(a)
         if (!c) {
           let at = homes(a)
-          if (at.length) {
+          if (at.length && !v.kind(a)?.is.length) {
             refuse(a, unqualified(a, at, (c) => v.comp(c)?.description))
           }
           if (b != null || !facet) {

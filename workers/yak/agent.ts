@@ -86,7 +86,7 @@ import { appVocab, packagesOf, platformVocab } from './vocab.ts'
 import { CallError } from '@yaks/tools/errors'
 import { lined } from '@yaks/platform/page-wire'
 import { scope, unasked } from './query-line.ts'
-import { queryRefusal } from './query-refusal.ts'
+import { queryRefusal } from '@yaks/platform/query-refusal'
 import { apex, type Host, hosted } from '@yaks/platform/host'
 import { defaultSpace, refuse, unavailable } from './tool.ts'
 import { inReach } from './declared.ts'
@@ -525,8 +525,7 @@ let held = (
       return { answer, reduced: !!aggregate(parse(one)) }
     } catch (e) {
       let location = at && `${at.space.slug}/${at.app.slug}`
-      let hint = queryRefusal(e, location)
-      if (hint) throw refuse('arguments', hint)
+      let hint = await queryRefusal(e, one, location)
       if (e instanceof Error && e.name == 'Unknown' && 'prop' in e) {
         let path = e.prop
         if (
@@ -545,12 +544,13 @@ let held = (
             )
             throw new CallError(
               e.name,
-              e.message,
+              hint ?? e.message,
               `Try q: ${lines.join(' or ')}.`,
             )
           }
         }
       }
+      if (hint) throw refuse('arguments', hint)
       throw e
     }
   }

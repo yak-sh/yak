@@ -39,7 +39,7 @@ import {
   Value,
   WALK_DEPTH,
 } from './ast.ts'
-import { OPERATORS } from './teach.ts'
+import { BACKLINKS, OPERATORS } from './teach.ts'
 import { frozen } from '@yaks/fp'
 import { parse as parseId } from '@yaks/id'
 import { NAME, SEG, WORD } from './name.ts'
@@ -523,11 +523,14 @@ export let parseDot = (token: string): Clause[] | null => {
 
   if (pathStr == 'near' && op == '=') return [{ kind: 'near', value: val }]
   if (pathStr == 'refs') {
-    if (op == '=' && !rawValue) throw spelled(token, '!refs')
+    if (op == '=' && !val.trim()) {
+      throw new SyntaxError(
+        `${token} is written !refs for absence. ` +
+          `Stores require a target for .refs. ${BACKLINKS}`,
+      )
+    }
     if (op == '=') return [{ kind: 'refs', op: '=', value: val }]
-    throw new SyntaxError(
-      '.refs takes an id (.refs=T-3), presence (.refs) or absence (!refs)',
-    )
+    throw new SyntaxError(BACKLINKS)
   }
   // `.distinct=prop` / `.tally=prop` — an aggregate over one property. The
   // property stays raw segments; whether it is a single property or an invalid
@@ -576,13 +579,17 @@ export let parseDot = (token: string): Clause[] | null => {
     let n = cursor(val)
     return [n == null ? { kind: 'after', eid: val } : { kind: 'after', n }]
   }
-  if (!rawValue && (op == '=' || op == '!=')) {
-    if (pathStr == EID || pathStr == `${SPINE}.${EID}`) {
+  if (op == '=' || op == '!=') {
+    if ((pathStr == EID || pathStr == `${SPINE}.${EID}`) && !val.trim()) {
       throw new SyntaxError(
-        `${token} needs an entity id, for example .entity.eid${op}#3b5bc70420`,
+        `${token} needs an entity id, for example .entity.eid${op}#3b5bc70420. ` +
+          'Copy entity.eid from a result, or use bare search words or ' +
+          '.doc.title~="part of the title" to find the entity first.',
       )
     }
-    throw spelled(token, op == '=' ? `!${pathStr}` : `.${pathStr}`)
+    if (!rawValue) {
+      throw spelled(token, op == '=' ? `!${pathStr}` : `.${pathStr}`)
+    }
   }
 
   // An ordinary predicate. Contains (`~=`) is deliberately literal, so its

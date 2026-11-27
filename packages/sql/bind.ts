@@ -63,6 +63,7 @@ import type {
 } from '@yaks/query/core'
 import {
   absent,
+  BACKLINKS,
   bare,
   compares,
   directive,
@@ -1637,7 +1638,7 @@ let kindScope = (ctx: Ctx, value: string): Cond => {
 // with no reference properties has no backlinks to find.
 let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   if (r.op != '=' || !r.value) {
-    throw new Unsupported('.refs', 'only .refs=<id> compiles')
+    throw new Unsupported('.refs', BACKLINKS)
   }
   if (ctx.spine) throw new Unsupported('.refs', `over ${ctx.spine} entities`)
   let values = targets.get(r) ?? [r.value]

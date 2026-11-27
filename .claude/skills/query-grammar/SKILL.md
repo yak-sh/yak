@@ -23,16 +23,16 @@ ways. A token's shape says what it is, and anything it can't read for certain is
 refused, never guessed: a property named without its component, a malformed
 spelling, a stray word in a rule. Each refusal names the form that would have
 worked, so read it as the grammar teaching you. And look before inventing: what
-a design reaches for (include a component without filtering on it, say) is
-often already a prefix or a directive.
+a design reaches for (include a component without filtering on it, say) is often
+already a prefix or a directive.
 
 Every example below ran against the live graph.
 
 ## A token's shape decides what it is
 
-A clause starts with a prefix character or holds an operator; anything else is
-a full-text word. `crash on save .updated.at=today` is three words and one
-filter. A malformed clause throws rather than becoming a search term.
+A clause starts with a prefix character or holds an operator; anything else is a
+full-text word. `crash on save .updated.at=today` is three words and one filter.
+A malformed clause throws rather than becoming a search term.
 
 | written                        | means                                                  |
 | ------------------------------ | ------------------------------------------------------ |
@@ -46,102 +46,101 @@ filter. A malformed clause throws rather than becoming a search term.
 | `word`, `"two words"`, `lemo*` | full-text terms (see `search-and-embeddings`)          |
 
 - To find what someone said about something, use the `search` tool with the
-  words: it ranks memories, comments and transcript entries by words and
-  meaning in about 0.5 s, and its hits name their session. `memory_source`
-  finds the earliest place a named person wrote words verbatim. A query of
+  words: it ranks memories, comments and transcript entries by words and meaning
+  in about 0.5 s, and its hits name their session. `memory_source` finds the
+  earliest place a named person wrote words verbatim. A query of
   `.content.body~=<phrase> .entry` reads transcript text until it fills its
   page: use it for an exact substring words cannot match (an id, a path).
-- Whitespace, `&` and `,` between terms all mean AND; `&` survives a URL.
-  `|` is OR and binds looser: `.a .b|.c` is `(a and b) or c`; parentheses
-  group. Inside a value `,` means any-of, and a list has no spaces.
+- Whitespace, `&` and `,` between terms all mean AND; `&` survives a URL. `|` is
+  OR and binds looser: `.a .b|.c` is `(a and b) or c`; parentheses group. Inside
+  a value `,` means any-of, and a list has no spaces.
 - A quoted value is one literal: `+doc.body="Hi, there."` writes the sentence
   and `.p="1..5"` equals the text. A list of quoted values quotes each member:
   `.doc.title="Hi, there.","Bye"`, and a range each end:
   `.created.at="30s ago"...now`. Code builds a list with @yaks/query's
   `listed(values)`; quoting a joined list makes one literal that matches
-  nothing. A written word (`+`/`*comp.prop=`) takes one
-  value and refuses a list or range. The query string is a published door that
-  shipped apps keep sending, so a parser change preserves its answers.
+  nothing. A written word (`+`/`*comp.prop=`) takes one value and refuses a list
+  or range. The query string is a published door that shipped apps keep sending,
+  so a parser change preserves its answers.
 - A value with a space is quoted: `.created.at>'1 hour ago'`. Unquoted, the
   second word becomes a search term.
-- The leading dot may be dropped after an operator (`task.status=open`), but
-  not on a bare name: `.task` tests a component, `task` searches the word.
-- Suffix presence `.p!` and optional `.p?` are translated to `.p` and `?p`
-  by @yaks/query because kept app releases still send them (T-122930, M-37853).
+- The leading dot may be dropped after an operator (`task.status=open`), but not
+  on a bare name: `.task` tests a component, `task` searches the word.
+- Suffix presence `.p!` and optional `.p?` are translated to `.p` and `?p` by
+  @yaks/query because kept app releases still send them (T-122930, M-37853).
   They answer through every query door and in strict matches; released code
-  stays untouched. `retired(parse(q))` names the ones a query used, and
-  yaks.app records who still sends them (`yaks-app`, T-123000). Other old
-  forms (`!.p`, `.p=`) are refused with a message naming the accepted one
+  stays untouched. `retired(parse(q))` names the ones a query used, and yaks.app
+  records who still sends them (`yaks-app`, T-123000). Other old forms (`!.p`,
+  `.p=`) are refused with a message naming the accepted one
   (`!.task is written !task`).
 - The empty query selects nothing, and `graph_query` refuses it. It refuses a
   line that only asks (`?topic .limit=3`) too, since that answers the newest
-  entities of every kind, naming the line it meant (`.topic&.limit=3`). A
-  line that filters nothing and names no window (`*`, `.order=hot`) and any
-  `.limit` past 10,000 are refused before anything is read, since one `*`
-  over the platform store reset it (bug be9051e2).
+  entities of every kind, naming the line it meant (`.topic&.limit=3`). A line
+  that filters nothing and names no window (`*`, `.order=hot`) and any `.limit`
+  past 10,000 are refused before anything is read, since one `*` over the
+  platform store reset it (bug be9051e2).
 
 The query page uses the query string itself: `/?.task&.created.at=2026-10-27`.
-`querySearch` and `queryAt` in @yaks/query own this URL boundary. Grammar
-sigils select the query parameters; plain `side`, `bug` and `page` keys belong
-to the page (`/?.bug&side=yaks.app&bug=<eid>`, `/?page=spend`). `@` belongs to
-the query language, never to page state. Standalone bare words in URL
-parameters are ignored; the writer groups text-only queries as
-`/?(two%20words)` and keeps text after a clause inside its parameter
-(`.task&cake` becomes `/?.task%26cake`). Kept `?q=` page links redirect to this
-form, retaining plain state and dropping `@` state. The API's `/query?q=`
-remains its transport format.
+`querySearch` and `queryAt` in @yaks/query own this URL boundary. Grammar sigils
+select the query parameters; plain `side`, `bug` and `page` keys belong to the
+page (`/?.bug&side=yaks.app&bug=<eid>`, `/?page=spend`). `@` belongs to the
+query language, never to page state. Standalone bare words in URL parameters are
+ignored; the writer groups text-only queries as `/?(two%20words)` and keeps text
+after a clause inside its parameter (`.task&cake` becomes `/?.task%26cake`).
+Kept `?q=` page links redirect to this form, retaining plain state and dropping
+`@` state. The API's `/query?q=` remains its transport format.
 
 ## What comes back
 
 A row carries only the components the query names, by filtering on them
-(`.task`, `.doc.title~=cake`) or by asking for them (`?doc`); `*` carries
-every component. A query that names no component (`.entity.eid=T-12`, a bare
-word) answers whole. So `.task .task.status=open` returns task rows without
-their `doc`; add `?doc` or `.fields=doc.title` to read titles.
+(`.task`, `.doc.title~=cake`) or by asking for them (`?doc`); `*` carries every
+component. A query that names no component (`.entity.eid=T-12`, a bare word)
+answers whole. So `.task .task.status=open` returns task rows without their
+`doc`; add `?doc` or `.fields=doc.title` to read titles.
 
 `.doc` matches rows that carry `doc`. `?doc` includes all fields of `doc`
-without filtering on it. Use `.fields=doc` to project the whole component
-or `.fields=doc.title` to project one property.
+without filtering on it. Use `.fields=doc` to project the whole component or
+`.fields=doc.title` to project one property.
 
 ## A name alone is a component
 
 Many components share a property name, and a guess between them would be
 silently wrong, so a property is always named with its component:
 `.task.status=open`. A name by itself tests for a component, and a property
-named alone is refused with every form that names it, each with the head of
-its component's description: `.version` in yak/platform answers `.version is a
+named alone is refused with every form that names it, each with the head of its
+component's description: `.version` in yak/platform answers
+`.version is a
 property, not a component — name it .app.version (one app in a space),
-.deploy.version (one release of an app), …`. The refusal never picks one for
-you. The other way round,
-a value compared with a component is refused with the properties that hold one:
-`.topic~=moss` answers `.topic~=moss names a component, not a property: … write
-.topic.name~=moss, or the bare word moss to search all indexed text`. An
-operator written with spaces around it (`.doc.title ~= cake`) is refused with
+.deploy.version (one release of an app), …`.
+The refusal never picks one for you. The other way round, a value compared with
+a component is refused with the properties that hold one: `.topic~=moss` answers
+`.topic~=moss names a component, not a property: … write
+.topic.name~=moss, or the bare word moss to search all indexed text`.
+An operator written with spaces around it (`.doc.title ~= cake`) is refused with
 the clause it meant. A path followed by no operator the grammar has
-(`.web.url~cloudflare`, `.individual?created`) is refused with the operators
-it has: part of a value is `~=`, and there is no bare `~`, with or without
-the dot (`doc.title~copy` is refused, not searched as words). A path through a
-reference goes on with the target's own `comp.prop`
-(`.filed.project.doc.title~=yak`), and the entity's id is `.entity.eid`
-(`.eid=T-12` reads the same, since every entity has one eid). A kind's name
-where no component has it reads as the components the kind is: for a kind
-`booking` that is `seat` and `venue`, `.booking` is `.seat&.venue` (@yaks/query
-`kinded`, applied where a read addresses its ids), and `graph_schema` takes
-`booking` as the kind. A component written the way a bundle
-writes it, with one property given one value (`.space{slug="chata"}`), reads
-as `.space.slug="chata"`; any other brace form is refused with the clause it
-meant.
-Completion offers the qualified forms of a name as it is typed: `.ti` offers
-`.timing` and `.doc.title`, and a form whose component is already on the line
-comes first.
+(`.web.url~cloudflare`, `.individual?created`) is refused with the operators it
+has: part of a value is `~=`, and there is no bare `~`, with or without the dot
+(`doc.title~copy` is refused, not searched as words). A path through a reference
+goes on with the target's own `comp.prop` (`.filed.project.doc.title~=yak`), and
+the entity's id is `.entity.eid` (`.eid=T-12` reads the same, since every entity
+has one eid). A kind's name where no component has it reads as the components
+the kind is: for a kind `booking` that is `seat` and `venue`, `.booking` is
+`.seat&.venue` (@yaks/query `kinded`, applied where a read addresses its ids),
+and `graph_schema` takes `booking` as the kind. A component written the way a
+bundle writes it, with one property given one value (`.space{slug="chata"}`),
+reads as `.space.slug="chata"`; any other brace form is refused with the clause
+it meant. Completion offers the qualified forms of a name as it is typed: `.ti`
+offers `.timing` and `.doc.title`, and a form whose component is already on the
+line comes first.
 
 ## Values the vocabulary interprets
 
 The parser emits plain scalars; the compiler reads them by the property's type.
 
-- **Times:** `YYYY-MM-DD`, `today`, `yesterday`, `'1 hour ago'`, `'in 5m'`, or an ISO
-  instant. A bare ISO day spans that local day. `.task .created.at=today` is today's tasks; `>` and `<` compare
-  against the span (packages/query/time.ts).
+- **Times:** `YYYY-MM-DD`, `today`, `yesterday`, `'1 hour ago'`, `'in 5m'`, or
+  an ISO instant. A bare ISO day spans that local day. `.task .created.at=today`
+  is today's tasks; `>` and `<` compare against the span
+  (packages/query/time.ts).
 - **References:** a human id or eid, `.filed.project=P-1`.
 - **Computed properties** filter like stored ones: `.task.status=wip`, from the
   `status` keyword; a status filter binds as presence
@@ -151,13 +150,14 @@ The parser emits plain scalars; the compiler reads them by the property's type.
   referring component's plural (packages/vocab/README.md, "Routing and
   references"). A component with two references carries the property in the
   name: `comment{target, reply_to}` gives `comments_target`, so
-  `.task .comments_target>=3` counts the comments on each task. A `!` before
-  the child test is the all/none form: `.task
-  .comments_target!.created.by!=<person>` is the tasks with no comment by
-  anyone else. `!comments` alone is the none form with no child test. A
+  `.task .comments_target>=3` counts the comments on each task. A `!` before the
+  child test is the all/none form:
+  `.task
+  .comments_target!.created.by!=<person>` is the tasks with no comment
+  by anyone else. `!comments` alone is the none form with no child test. A
   plural already taken (a component that ends in `s` is its own plural) names
-  the property too: `._namespace !_lens_package` is the namespaces no
-  `_lens` names.
+  the property too: `._namespace !_lens_package` is the namespaces no `_lens`
+  names.
 
 ## Walks
 
@@ -175,40 +175,40 @@ The parser emits plain scalars; the compiler reads them by the property's type.
 
 A directive belongs to the whole line wherever it is written.
 
-| directive           | example                                     | answers                                                                                                          |
-| ------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `.count`            | `.task !completed !cancelled .count`        | `{"count": 1394}`                                                                                                |
-| `.tally=`           | `.task .tally=filed.project`                | each value with its count (references come back as eids)                                                         |
-| `.distinct=`        | `.distinct=filed.priority`                  | the values                                                                                                       |
-| `.fields=`          | `.fields=doc,filed.project.doc.title`       | the named properties or whole components; a path through a reference brings what it reaches as its own row        |
-| `*` / `?*`          | `.task *`                                   | every component of each row                                                                                      |
-| `.order=`           | `.order=-created.at`                        | `-` is descending; `similar` (with `.near`), `search` (with words) and `hot` are rankings                        |
-| `.limit=` `.after=` | `.limit=50&.after=T-13882`                  | a window; `.after` continues past an entity in any order                                                         |
-| `.refs=`            | `.refs=D-334 .count`                      | what references it; `.refs` / `!refs` alone                                                                      |
-| `.near=`            | `.task .near=T-6461 .limit=3`               | ranked by meaning (`search-and-embeddings`)                                                                      |
-| `.edges`            | `.edges[requires]`                          | a retired spelling: it answers as if absent; read edges as rows (`.requires&.edge.from=T-1`)                     |
+| directive           | example                               | answers                                                                                                    |
+| ------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `.count`            | `.task !completed !cancelled .count`  | `{"count": 1394}`                                                                                          |
+| `.tally=`           | `.task .tally=filed.project`          | each value with its count (references come back as eids)                                                   |
+| `.distinct=`        | `.distinct=filed.priority`            | the values                                                                                                 |
+| `.fields=`          | `.fields=doc,filed.project.doc.title` | the named properties or whole components; a path through a reference brings what it reaches as its own row |
+| `*` / `?*`          | `.task *`                             | every component of each row                                                                                |
+| `.order=`           | `.order=-created.at`                  | `-` is descending; `similar` (with `.near`), `search` (with words) and `hot` are rankings                  |
+| `.limit=` `.after=` | `.limit=50&.after=T-13882`            | a window; `.after` continues past an entity in any order                                                   |
+| `.refs=`            | `.refs=D-334 .count`                  | what references it. Test a particular reference with `.comment.target` or `!comment.target`                |
+| `.near=`            | `.task .near=T-6461 .limit=3`         | ranked by meaning (`search-and-embeddings`)                                                                |
+| `.edges`            | `.edges[requires]`                    | a retired spelling: it answers as if absent; read edges as rows (`.requires&.edge.from=T-1`)               |
 
-An order names a property, as in `.order=doc.title`. `.order=doc` is
-refused with `doc`'s qualified properties and the forms for matching or
-including the whole component.
+An order names a property, as in `.order=doc.title`. `.order=doc` is refused
+with `doc`'s qualified properties and the forms for matching or including the
+whole component.
 
 `.order`, `.limit` and `.after` shape rows, so an aggregate ignores them:
-`.count&.limit=20` counts every match. An ascending `.order` puts the
-entities with no value first, and every app relies on that; `.order[last]=x`
-puts them last either way (the query page's sorted columns), and a `.after`
-page past the last valued row reaches them. With no `.order`, a window (`.limit`,
-`.after`) of a query with words is ranked by `search` (best match first, a
-title that is exactly the words before all); any other window is newest first,
-and a whole answer oldest first. `graph_query` gives a
-search that asks for no window its best 20. So adding a `.limit` to someone
-else's read is never neutral: it reverses an unwindowed list (62b1243c5 did
-that to every app's list and was reverted).
-A trailing `~` in `.fields` mutes that property from a subscription's change
-signal.
+`.count&.limit=20` counts every match. An ascending `.order` puts the entities
+with no value first, and every app relies on that; `.order[last]=x` puts them
+last either way (the query page's sorted columns), and a `.after` page past the
+last valued row reaches them. With no `.order`, a window (`.limit`, `.after`) of
+a query with words is ranked by `search` (best match first, a title that is
+exactly the words before all); any other window is newest first, and a whole
+answer oldest first. `graph_query` gives a search that asks for no window its
+best 20. So adding a `.limit` to someone else's read is never neutral: it
+reverses an unwindowed list (62b1243c5 did that to every app's list and was
+reverted). A trailing `~` in `.fields` mutes that property from a subscription's
+change signal.
 
 ## Rules and matches
 
-A rule's or effect's `match` is the same grammar, parsed strict (`{ text: false
+A rule's or effect's `match` is the same grammar, parsed strict
+(`{ text: false
 }`: a stray word is refused, not searched), with more prefixes:
 
 | written              | in a rule                                        |
@@ -224,13 +224,13 @@ Patterns for several entities are separated by `;`, joined by shared variables,
 and a bracket gathers inner matches into one binding:
 
 - `$call .call, !execution, !results, !wake; +result.call=$call`
-  (packages/tools/vocab.json, `call_ready`): an unclaimed call, and a new
-  entity whose `result.call` is that call.
+  (packages/tools/vocab.json, `call_ready`): an unclaimed call, and a new entity
+  whose `result.call` is that call.
 - `$region .region; [$sfx .sfx .sfx.region=$region]`: one binding per region
   holding all its sfx (a builder runs one build per outer binding).
-- `$region .region; ![$sfx .sfx.region=$region, !mixed]`: only the regions
-  with no unmixed sfx. `![…]` is a collection that must stay empty, and nested
-  it says "every": `![$l .line.video=$v; ![$x .voicing.line=$l]]` is no line
+- `$region .region; ![$sfx .sfx.region=$region, !mixed]`: only the regions with
+  no unmixed sfx. `![…]` is a collection that must stay empty, and nested it
+  says "every": `![$l .line.video=$v; ![$x .voicing.line=$l]]` is no line
   without a voicing. A builder step that needs a whole set waits on one.
 
 How rules run is `effects-and-rules`.
@@ -238,15 +238,14 @@ How rules run is `effects-and-rules`.
 ## Writing one well
 
 - Completion is the quickest way to look: `complete(vocab, text, caret)`
-  (packages/query/complete.ts) is the engine behind every query field and
-  offers what can be typed at the caret; `graph_schema` with `<comp>` lists
-  properties.
+  (packages/query/complete.ts) is the engine behind every query field and offers
+  what can be typed at the caret; `graph_schema` with `<comp>` lists properties.
 - Rows are what a query costs, so the best answer is the least you'll read:
   `.count` over rows, `.fields` over whole bundles.
 - A saved query (a board, a wake's `while`, a builder's query) is data that
   outlives the names in it, so a rename moves it too (`data-migration`).
-- One grammar is worth more than any caller's convenience. Syntax a caller
-  needs goes into @yaks/query and every evaluator in the same change, so every
-  door gets it at once; a dialect private to one caller is a second grammar.
+- One grammar is worth more than any caller's convenience. Syntax a caller needs
+  goes into @yaks/query and every evaluator in the same change, so every door
+  gets it at once; a dialect private to one caller is a second grammar.
 
 When this skill is wrong or missing something, fix it in the same change.

@@ -30,6 +30,7 @@
 import { PAGES as CONTENT_PAGES } from './content.ts'
 import { apex, type Host, url } from '@yaks/platform/host'
 import { mailFrom } from '@yaks/platform/host'
+import { TRASH_QUERY } from '@yaks/platform/query-refusal'
 
 export type Page = {
   slug: string
@@ -536,10 +537,7 @@ export let NARROW =
   'declares. To find a person by email in the platform directory, use ' +
   'q ".person&.email.address=ada@example.com&.in=yak/platform". The ' +
   'person marker and email{address} belong to the same entity. ' +
-  "App trash is listed by app_list(space: '<space slug>'), including ids " +
-  'for app_restore. Platform admins can query the directory with ' +
-  "'.app .trashed ?doc ?former .in=yak/platform'; trashed{at, by} is a " +
-  'separate component, not app.trashed or .tombstone. To check a deleted ' +
+  `${TRASH_QUERY} To check a deleted ` +
   'data row, use store_inspect(space, app, eid); graph_query reads live rows.'
 
 export let whole = (env: Host = {}) => url(env, '/docs.md')

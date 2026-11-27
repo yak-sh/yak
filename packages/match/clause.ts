@@ -10,6 +10,7 @@
 // index is refused there and then, before any bundle is read.
 
 import {
+  BACKLINKS,
   bare,
   type Clause,
   compares,
@@ -329,7 +330,7 @@ let kindScope = (ctx: Ctx, value: string): Arm => {
 // query means.
 let refs = (ctx: Ctx, r: Refs): Test => {
   if (r.op != '=' || !r.value) {
-    throw new Unsupported('.refs', 'only .refs=<id> is answered', BY)
+    throw new Unsupported('.refs', BACKLINKS, BY)
   }
   let props = ctx.v.refProps()
   return (b, among) =>

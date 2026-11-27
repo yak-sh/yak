@@ -1345,7 +1345,7 @@ test('a name alone that names no component says what it is closest to', () => {
       seat: {
         component: true,
         type: 'object',
-        properties: { row: { type: 'string' } },
+        properties: { row: { type: 'string' }, booking: { type: 'string' } },
       },
       venue: {
         component: true,

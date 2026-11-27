@@ -74,6 +74,13 @@ A name by itself is a component, so `.serves` asks for entities that have a
 the refusal names the form to write: `.recipe.serves`. So a component you
 declare can never change what another name in a filter means.
 
+A kind listed by `graph_schema` can also be used as a presence filter. If a kind
+named `dish` consists of `recipe` and `doc`, `.dish` selects the same rows as
+`.recipe&.doc`. To filter by a property, name the component that declares it, as
+in `.recipe.serves>=4`. Each store has its own vocabulary. For example, the
+space's Operator reads its session rows with
+`graph_query(self: true, q: '.session')`.
+
 An empty filter selects nothing. There is no filter for "everything":
 `query('')` and a bare `query('limit=50')` both return `[]`. To list what you
 saved, name a component those rows have: `.doc`, `.recipe`.
@@ -138,7 +145,7 @@ A component that any predicate mentions counts as named, whatever the operator:
 absence (`!archived` asks for rows without one, so there is nothing to carry),
 the `*` form, which asks for all of them, and a bare word, which searches the
 docs without naming any component to leave out, so a filter of only words
-returns whole entities, as `id=` does.
+returns whole entities, as a filter by id does.
 
 A declared property that has never been written is on the row with the value
 `null`, not missing from it, so test the value and not `in`. The platform's own
@@ -342,11 +349,14 @@ points at.
     // whoever has been given something to do
     await query('.tasks_assignee&?doc')
 
-`.refs` is the union of all of them: everything that points at one entity,
-through any reference property:
+`.refs=<id>` returns the rows that reference that entity through any reference
+property. Supply the target's id after `=`.
 
-    await query(`.refs=${eid}&?doc`)   // what mentions this
-    await query('!refs&?doc')          // what mentions nothing
+    await query(`.refs=${eid}&?doc`)   // rows that reference this entity
+
+To test whether a particular reference is set, use `.comment.target`. To find
+rows where it is unset, use `!comment.target`. The store requires a target for
+`.refs` and refuses `.refs`, `.refs=` and `!refs`.
 
 ## Counting: `.count`, `.tally` and `.distinct`
 
@@ -399,13 +409,19 @@ bound is refused rather than ignored:
 A window without a filter selects nothing: `limit=50` alone returns `[]`,
 because an empty filter selects nothing.
 
-## Reading one entity by id (`id=`)
+## Reading entities by id
 
     await query(`id=${eid}`)
+    graph_query(q: '.entity.eid=#3b5bc70420')
 
-`id=` addresses an entity instead of selecting by component, and names no
-component to leave out, so it returns the whole bundle, including the stamps. To
-read several, use a comma list, or repeat it:
+Use the `entity.eid` from a result, a `#` handle, or a human id such as `T-12`
+in a store that assigns them. `id=<eid>` is the page form of
+`.entity.eid=<eid>`. To find an entity by its title, use a filter such as
+`.doc.title~="Lemon drizzle"` or search with bare words, then copy `entity.eid`
+from the result.
+
+A filter by id alone returns the whole bundle, including the stamps. To read
+several entities, use a comma-separated list.
 
     await query(`id=${a},${b}`)
 
@@ -427,6 +443,14 @@ Where two of the person's spaces have an app by that name, name the space too:
 page or a worker never writes it. Signed out, there is no set of reachable apps
 to narrow: `graph_query` takes the space and the app as arguments instead, and
 refuses `.in=`.
+
+## Listing apps in the trash
+
+Call `app_list(space: '<space slug>')` to list retained apps and their eids.
+Pass an eid from the Trash section to `app_restore(app: '<app eid>')`. Platform
+admins can query the directory with
+`graph_query(q: '.app&.trashed&?doc&?former&.in=yak/platform')`. In the
+directory, `trashed{at, by}` is a component on the app's entity.
 
 ## Full-text search
 
@@ -483,8 +507,6 @@ that names it, rather than doing something else:
 `.kind=` knows the platform's own components only (`.kind=task`,
 `.kind=comment`); a component the app declares is not a kind to it, and
 `.kind=recipe` is refused. Ask for the component instead: `.recipe`.
-
-This store supports the rest of the grammar.
 
 ## Example filters
 

@@ -117,6 +117,7 @@ test('graph_query gives a working rewrite for person.email and qualifies session
     () => ask('.session&.limit=1'),
     '.session is a property',
   ) as Error
+  ok(session.message.includes("self: true to graph_query with q: '.session'"))
   for (let field of ['support.session', 'tool_refusal.session']) {
     let corrected = `.${field}&.limit=1`
     ok(session.message.includes(corrected), session.message)
