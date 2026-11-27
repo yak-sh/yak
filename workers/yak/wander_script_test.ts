@@ -12,8 +12,13 @@ let at = (path: string) => new URL(path, import.meta.url)
 let html = home('index.html')
 let code = await Deno.readTextFile(at('./public/wander.js'))
 
-// `decode` is what the browser makes of decoding a strip ahead
-let page = async (column = 144, decode = () => Promise.resolve()) => {
+// `decode` is what the browser makes of decoding a strip ahead, and `net`
+// how a fetch of a strip is answered
+let page = async (
+  column = 144,
+  decode = () => Promise.resolve(),
+  net = (_file: string) => Promise.resolve({ ok: true, status: 200 }),
+) => {
   let { document, window, Event, CustomEvent } = parseHTML(html)
   let env = {
     scrollY: 0,
@@ -81,6 +86,7 @@ let page = async (column = 144, decode = () => Promise.resolve()) => {
       scrollMarginTop: '56px',
       scrollMarginBottom: '0px',
     }),
+    fetch: net,
     performance: { now: () => env.now },
     requestAnimationFrame: (f: (t: number) => void) => env.frames.push(f),
     addEventListener: (type: string, f: () => void) => env.on[type] = f,
@@ -260,14 +266,48 @@ test('a strip the browser will not decode ahead, but loads, still moves him', as
   assert(!p.where().startsWith('home'))
 })
 
-test('a strip that cannot load leaves him the logo, and says which', async () => {
-  let p = await page(144, loaded(0))
+test('a strip yaks.app does not serve leaves him the logo, and says which', async () => {
+  let p = await page(
+    144,
+    loaded(0),
+    () => Promise.resolve({ ok: false, status: 404 }),
+  )
   await assertRejects(
     () => p.started,
     Error,
-    "The wandering yak's down strip did not load",
+    "The wandering yak's down strip answered 404",
   )
   await p.scroll(1500)
   await p.step(3000)
   assertEquals(p.where(), 'logo')
+})
+
+test('a strip the network dropped leaves him the logo, quietly', async () => {
+  let p = await page(
+    144,
+    loaded(0),
+    () => Promise.reject(new TypeError('Failed to fetch')),
+  )
+  await p.started
+  await p.scroll(1500)
+  await p.step(3000)
+  assertEquals(p.where(), 'logo')
+})
+
+test('a strip the network dropped once loads when asked again, and moves him', async () => {
+  // the first load of each strip fails, the second comes in
+  let tries = new WeakMap<HTMLImageElement, number>()
+  let p = await page(144, function (this: HTMLImageElement) {
+    let n = (tries.get(this) ?? 0) + 1
+    tries.set(this, n)
+    Object.defineProperties(this, {
+      complete: { value: true, configurable: true },
+      naturalWidth: { value: n > 1 ? 768 : 0, configurable: true },
+    })
+    return refused()
+  })
+  await p.started
+  await p.scroll(1500)
+  await p.step(8000)
+  assert(!p.where().startsWith('home'))
 })

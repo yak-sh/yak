@@ -14,7 +14,7 @@
 // browser chose for the rest frame, and shown through its own object URL each
 // time so it starts from its first frame. A loop yaks.app does not serve
 // rejects, which the page's reporter files (report.js), and he goes on
-// waiting. A browser may refuse to decode ahead a loop that loads fine
+// waiting; one the network dropped is fetched again when it next comes. A browser may refuse to decode ahead a loop that loads fine
 // (Safari's "Loading error." on an animated picture), so only the load
 // counts; and a loop he was served that the browser will not load (some
 // Safaris, from its object URL) is the browser's, not ours: he leaves that
@@ -62,6 +62,8 @@
         return last = order.shift()
       }
       let blobs = new Map()
+      // a loop's bytes; none when the network dropped them, so it is
+      // fetched again when it next comes
       let fetched = (name) => {
         let file = (img.currentSrc || rest.src).replace(
           '/idle-rest-',
@@ -76,8 +78,8 @@
                   `The waiting yak's ${name} loop answered ${r.status}`,
                 )
               }
-              return r.blob()
-            }),
+              return r.blob().catch(() => undefined)
+            }, () => undefined),
           )
         }
         return blobs.get(name)
@@ -130,15 +132,14 @@
           img.checkVisibility?.({ visibilityProperty: true }) === false
         ) return wait(false)
         playing = true
-        let url
+        let blob
         try {
-          url = URL.createObjectURL(await fetched(name))
-        } catch (e) {
-          blobs.delete(name)
-          playing = false
-          wait(false)
-          throw e
+          blob = await fetched(name)
+        } finally {
+          if (!blob) blobs.delete(name), playing = false, wait(false)
         }
+        if (!blob) return
+        let url = URL.createObjectURL(blob)
         let shown = new Image()
         shown.src = url
         if (!await shows(shown)) {

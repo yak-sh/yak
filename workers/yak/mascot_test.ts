@@ -116,12 +116,14 @@ test('the waiting yak is drawn at the size it shows, at every density', async ()
 })
 
 // public/idle.js run over the waiting yak, its timers stepped by hand.
-// `decoding` is how each loop's picture answers decode(), and `loads` whether
-// the browser loads the loop at that object URL
+// `decoding` is how each loop's picture answers decode(), `loads` whether
+// the browser loads the loop at that object URL, and `net` whether the
+// network brings the file
 let waiting = (
   still = false,
   decoding = () => Promise.resolve(),
   loads = (_url: string) => true,
+  net = (_file: string) => true,
 ) => {
   let { document, Event, CustomEvent, MutationObserver } = parseHTML(
     `<main>${idle('Composer_Figure')}</main>`,
@@ -147,7 +149,9 @@ let waiting = (
     (
       file: string,
     ) => (fetched.push(file),
-      Promise.resolve({ ok: true, blob: () => Promise.resolve(file) })),
+      net(file)
+        ? Promise.resolve({ ok: true, blob: () => Promise.resolve(file) })
+        : Promise.reject(new TypeError('Failed to fetch'))),
     {
       createObjectURL: (file: string) => `blob:${file}`,
       revokeObjectURL: () => {},
@@ -280,6 +284,23 @@ test('a loop the browser will not load, he leaves out and rests where he would p
   }
   assert(!played.has('blob:/mascot/idle-tail-128.webp'))
   assertEquals(yak.fetched.filter((f) => f.includes('-tail-')).length, 1)
+})
+
+test('a loop the network drops, he rests through and fetches again when it next comes', async () => {
+  let drops = 1
+  let yak = waiting(
+    false,
+    undefined,
+    undefined,
+    (file) => !file.includes('-tail-') || !drops--,
+  )
+  yak.ask('tail')
+  await yak.step()
+  assertEquals(yak.shown(), yak.rest)
+  yak.ask('tail')
+  await yak.step()
+  assertEquals(yak.shown(), ['blob:/mascot/idle-tail-128.webp', null])
+  assertEquals(yak.fetched.filter((f) => f.includes('-tail-')).length, 2)
 })
 
 test('with less motion asked for, he stays at rest', async () => {

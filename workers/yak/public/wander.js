@@ -26,9 +26,11 @@
 // Every strip of frames is decoded before he first moves, and each one is a
 // layer of its own, shown or hidden whole, so no frame waits on a picture.
 // A browser may refuse to decode ahead a strip that loads fine (Chrome does
-// when a request is superseded), so a refusal only counts once the strip
-// itself fails to load; then he stays the logo, untouched, and the rejection names the
-// strip for the page's reporter (report.js).
+// when a request is superseded), so only the load counts. A strip that does
+// not load is asked for once more; if it still does not, he stays the logo,
+// untouched. Only a strip yaks.app does not serve rejects, naming the strip
+// for the page's reporter (report.js); one the network dropped or the browser
+// would not show is not ours, and he stays the logo quietly.
 {
   let slot = document.querySelector('[data-wander]')
   let still = slot?.querySelector('img')
@@ -101,17 +103,27 @@
     return Math.max(0, left)
   }
 
-  // `img` decoded, or at least loaded; rejects only when it cannot load
-  let ready = (img, name) =>
-    img.decode().catch(() =>
-      new Promise((ok, no) => {
-        let failed = () =>
-          no(new Error(`The wandering yak's ${name} strip did not load`))
-        if (img.complete) return img.naturalWidth ? ok() : failed()
-        img.addEventListener('load', ok, { once: true })
-        img.addEventListener('error', failed, { once: true })
-      })
-    )
+  // whether `img` loads: true once decoded, or at least loaded
+  let shows = (img) =>
+    img.decode().then(() => true, () =>
+      new Promise((ok) => {
+        if (img.complete) return ok(!!img.naturalWidth)
+        img.addEventListener('load', () => ok(true), { once: true })
+        img.addEventListener('error', () => ok(false), { once: true })
+      }))
+  // whether the strip in `img` is in. One that did not load is asked of
+  // yaks.app: served, it is loaded once more; not served, it rejects
+  let ready = async (img, name) => {
+    if (await shows(img)) return true
+    let file = img.currentSrc || img.src
+    let r = await fetch(file).catch(() => undefined)
+    if (r && !r.ok) {
+      throw new Error(`The wandering yak's ${name} strip answered ${r.status}`)
+    }
+    if (!r) return false
+    img.setAttribute('src', img.getAttribute('src')) // loads it again
+    return shows(img)
+  }
 
   let start = async () => {
     let yak = document.createElement('div')
@@ -130,9 +142,10 @@
       return [name, span]
     }))
     // the page is left as it is until every strip is in
-    await Promise.all(
+    let ins = await Promise.all(
       Object.entries(strips).map(([name, s]) => ready(s.firstChild, name)),
     )
+    if (!ins.every(Boolean)) return
     still.classList.add('Wander_Image')
     yak.append(still, ...Object.values(strips))
     slot.append(yak)
