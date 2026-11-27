@@ -17,7 +17,11 @@ import {
   type Renderer as PortableRenderer,
   resolve as select,
 } from '@yaks/render'
-import { type ComponentRenderer, type Events, render } from '@yaks/react'
+import {
+  type ComponentRenderer,
+  type Events,
+  renderSelected,
+} from '@yaks/react'
 import type { Host } from '@yaks/ux'
 import { Float } from '@yaks/ui'
 import { createElement as h, type ReactNode } from 'react'
@@ -200,25 +204,27 @@ export let renderView = (
   view?: string,
   ctx: Context & Events = {},
 ): ReactNode => {
-  let entry = select(registry, bundle(e), view, vocab)
-  return entry && !('Render' in entry)
-    ? h(Portable, { e, view, ctx, entry })
-    : mount(e, view, ctx)
+  let b = bundle(e)
+  let entry = select(registry, b, view, vocab, ctx)
+  if (!entry) return null
+  return 'Render' in entry
+    ? mount(e, b, entry, ctx)
+    : h(Portable, { e, b, ctx, entry })
 }
 
 // Portable views declare their reference reads; the browser holds them for
 // the component's life, just as the CLI looks them up for its answer.
-let Portable = ({ e, view, ctx, entry }: {
+let Portable = ({ e, b, ctx, entry }: {
   e: Ent
-  view?: string
+  b: Bundle
   ctx: Context & Events
   entry: PortableRenderer
 }) => {
-  useRows([e.eid, ...entry.needs?.(bundle(e)) ?? []])
-  return mount(e, view, ctx)
+  useRows([e.eid, ...entry.needs?.(b) ?? []])
+  return mount(e, b, entry, ctx)
 }
 
-let mount = (e: Ent, view?: string, ctx: Context & Events = {}) => {
+let mount = (e: Ent, b: Bundle, entry: Entry, ctx: Context & Events) => {
   let context: Context & Events = {
     id: ux.id,
     kind: ux.kind,
@@ -247,7 +253,7 @@ let mount = (e: Ent, view?: string, ctx: Context & Events = {}) => {
     },
     ...ctx,
   }
-  return render(registry, bundle(e), view, vocab, context, { e, ...context })
+  return renderSelected(registry, entry, b, vocab, context, { e, ...context })
 }
 
 // What a portable view asks the graph (`query`): each query read once, its

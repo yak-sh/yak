@@ -71,21 +71,43 @@ export type Part = FunctionComponent<Props>
 /** The link around this point of the tree: what an `href` inside it means. */
 export let Surround: Context<{ href?: string }> = createContext({})
 
-// An href with no link around it makes an <a>; the same href inside that
-// link drops; another href demotes to data-href.
-let anchor = (tag: string, href?: string, outer?: string) =>
-  !href || href == outer
-    ? { tag }
-    : outer
-    ? { tag, demote: href }
-    : { tag: 'a', href }
+let face = (
+  props: Record<string, unknown>,
+  className: string,
+  ref: unknown,
+  children: ReactNode,
+) => ({
+  ...props,
+  ref,
+  className,
+  ...(children !== undefined && { children }),
+})
 
-let classes = (base: string, mod: Props['mod'], extra?: string) =>
-  !mod && !extra ? base : [
-    base,
-    ...[mod].flat().filter(Boolean).map((m) => `${base}-${m}`),
-    extra,
-  ].filter(Boolean).join(' ')
+let Linked = ({ href, props, names, elRef, children }: {
+  href: string
+  props: Record<string, unknown>
+  names: string
+  elRef: unknown
+  children: ReactNode
+}) => {
+  let site = useContext(Site)
+  let surround = useMemo(() => ({ href }), [href])
+  return h(
+    Surround.Provider,
+    { value: surround },
+    h('a', face(away({ ...props, href }, site), names, elRef, children)),
+  )
+}
+
+let classes = (base: string, mod: Props['mod'], extra?: string) => {
+  let names = base
+  if (Array.isArray(mod)) {
+    for (let m of mod) if (m) names += ` ${base}-${m}`
+  } else if (mod) {
+    names += ` ${base}-${mod}`
+  }
+  return extra ? `${names} ${extra}` : names
+}
 
 // Which of a part's own tag and the `as` it is given is the element, and
 // which the part it is drawn as.
@@ -105,12 +127,12 @@ export let el = <P extends Props = Props>(
 (
   { mod, className, class: named, elRef, children, href, as, ...props }: Props,
 ) => {
-  let extra = [className, named].filter(Boolean).join(' ') || undefined
+  let extra = className && named ? `${className} ${named}` : className || named
+  let names = classes(base, mod, extra)
+  let outer = useContext(Surround).href
   let d = drawn(tag as string | Part, as)
-  // Drawn as another part, which makes the element and its link. Whether
-  // a part is drawn so is fixed where it is written, so hooks keep order.
+  // Drawn as another part, which makes the element and its link.
   if (d.look) {
-    let names = classes(base, mod, extra)
     return h(d.look, {
       ...props,
       as: d.tag,
@@ -120,21 +142,13 @@ export let el = <P extends Props = Props>(
       children,
     })
   }
-  let a = anchor(d.tag!, href, useContext(Surround).href)
-  let site = useContext(Site)
   // A part given no children passes none, rather than children that are
   // nothing: a textarea's `value` is its content only when it has none.
-  let node = h(a.tag, {
-    ...a.href ? away({ ...props, href: a.href }, site) : props,
-    ...(a.demote && { role: 'link', tabIndex: 0, 'data-href': a.demote }),
-    ref: elRef,
-    className: classes(base, mod, extra),
-    ...(children !== undefined && { children }),
-  })
-  // One value per href: a fresh object each render would wake every nested
-  // reader as a render of its own.
-  let surround = useMemo(() => ({ href: a.href }), [a.href])
-  return a.href ? h(Surround.Provider, { value: surround }, node) : node
+  if (href && !outer) return h(Linked, { href, props, names, elRef, children })
+  if (href && href != outer) {
+    props = { ...props, role: 'link', tabIndex: 0, 'data-href': href }
+  }
+  return h(d.tag!, face(props, names, elRef, children))
 }
 
 /** A block and its elements: `block('section', 'Card', { Head: 'header' })`

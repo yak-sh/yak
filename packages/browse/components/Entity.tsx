@@ -1,4 +1,5 @@
 /** @jsxImportSource react */
+import { createContext, useContext } from 'react'
 import '../domain-host.tsx'
 import { views as commentViews } from '@yaks/kernel/component-views'
 import { domainBundle } from '../domain-host.tsx'
@@ -557,13 +558,13 @@ defineActions([
 // the page.
 let Veil = block('section', 'Quarantine', { Reveal: 'button' })
 type FaceProps = { eid: string; view?: string; [x: string]: unknown }
-let EntityBody = (
+type Reading = { e: Ent; visible: boolean }
+let Current = createContext<Reading | undefined>(undefined)
+
+let draw = (
+  { e, visible }: Reading,
   { eid, view, ...rest }: FaceProps,
 ) => {
-  let { e, visible } = useDerived(
-    () => ({ e: ent(eid), visible: shown(eid) }),
-    [eid],
-  )
   if (!visible) {
     return (
       <Veil>
@@ -577,6 +578,26 @@ let EntityBody = (
   // A view drawn is a consumer of its own: the title in a card's bar and the
   // same title in its body keep two states (@yaks/ux).
   return <Ux at={view ?? 'default'}>{renderView(e, view, rest)}</Ux>
+}
+
+let ReadEntity = (props: FaceProps) => {
+  let { eid } = props
+  let reading = useDerived(
+    () => ({ e: ent(eid), visible: shown(eid) }),
+    [eid],
+  )
+  return (
+    <Current.Provider value={reading}>{draw(reading, props)}</Current.Provider>
+  )
+}
+
+// A tile, its metadata and its id can all draw the same live entity.
+// Share the snapshot while keeping each view's renderer and UX state.
+let EntityBody = (props: FaceProps) => {
+  let reading = useContext(Current)
+  return reading?.e.eid == props.eid
+    ? draw(reading, props)
+    : <ReadEntity {...props} />
 }
 
 let EntityFace = (props: FaceProps) => (

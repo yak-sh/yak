@@ -3,6 +3,7 @@ import { Decision } from '../Decision.tsx'
 import { Keys } from '../Keys.tsx'
 import { useReference, useRepoUrl, useRows } from '../subscriptions.ts'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import type { Bundle } from '@yaks/graph'
 import { type Ent, statusOf, vocab } from '../../types.ts'
 import { statusChanges } from '../../client.ts'
 import { FLOOR, textOf } from '../../twin.ts'
@@ -148,9 +149,9 @@ export let Pip = ({ e }: { e: Ent }) => {
 // the faces stay the board grammar's chips — Prio badge, domain chip,
 // project link — while the registry supplies each type's editor from the
 // vocabulary (number box, domain well, project search).
-let Rank = ({ e }: { e: Ent }) => (
+let rank = (e: Bundle) => (
   <Edit
-    e={bundle(e)}
+    e={e}
     comp='filed'
     prop='priority'
     editable
@@ -159,9 +160,9 @@ let Rank = ({ e }: { e: Ent }) => (
   />
 )
 
-let Facet = ({ e }: { e: Ent }) => (
+let facet = (e: Bundle) => (
   <Edit
-    e={bundle(e)}
+    e={e}
     comp='filed'
     prop='domain'
     editable
@@ -191,11 +192,11 @@ let By = (
     : null
 
 // Whose plate: the assignee face is a LINK to the person (or the project
-// standing in for its operator) — same grammar as Home. Claim (⚑, who's
+// standing in for its operator) — same grammar as the project. Claim (⚑, who's
 // on it NOW) renders separately.
-let Plate = ({ e }: { e: Ent }) => (
+let plate = (e: Bundle) => (
   <Edit
-    e={bundle(e)}
+    e={e}
     comp='filed'
     prop='assignee'
     editable
@@ -209,9 +210,9 @@ let Plate = ({ e }: { e: Ent }) => (
   />
 )
 
-let Home = ({ e }: { e: Ent }) => (
+let home = (e: Bundle) => (
   <Edit
-    e={bundle(e)}
+    e={e}
     comp='filed'
     prop='project'
     editable
@@ -573,6 +574,21 @@ let ProposalState = ({ e }: { e: Ent }) => {
   )
 }
 
+let ClaimLine = ({ session }: { session: string }) => {
+  let claimant = useReference(session)
+  return (
+    <Claim>
+      ⚑ {claimant.value
+        ? <Entity eid={session} view='Meta.Claim.Inline' />
+        : claimant.state?.status == 'failed'
+        ? 'could not load'
+        : claimant.ready
+        ? 'unavailable'
+        : 'Loading…'}
+    </Claim>
+  )
+}
+
 // The meta line — the union of the board row and Full's facts: prio · project
 // · domain · edge tallies · comments · assignee · claim · age. Every field
 // uses the same face everywhere and renders nothing when absent. In a card
@@ -586,7 +602,6 @@ export let Meta = (
     children?: ReactNode
   },
 ) => {
-  let claimant = useReference(e.claim?.session)
   useHold(!!vocab.prop('comment', 'target') && { comments: e.eid })
   let talk = commentCount(e.eid).value
   let edges = tallies(e)
@@ -602,15 +617,16 @@ export let Meta = (
   ) {
     return null
   }
+  let task = e.task && bundle(e)
   return (
     <MetaEl>
       {before}
       <ProposalState e={e} />
-      {e.task && (
+      {task && (
         <>
-          <Rank e={e} />
-          <Home e={e} />
-          <Facet e={e} />
+          {rank(task)}
+          {home(task)}
+          {facet(task)}
         </>
       )}
       {edges.map(([t, open, done]) =>
@@ -658,18 +674,8 @@ export let Meta = (
           {talk}
         </Talk>
       )}
-      {e.task && <Plate e={e} />}
-      {e.claim && (
-        <Claim>
-          ⚑ {claimant.value
-            ? <Entity eid={e.claim.session} view='Meta.Claim.Inline' />
-            : claimant.state?.status == 'failed'
-            ? 'could not load'
-            : claimant.ready
-            ? 'unavailable'
-            : 'Loading…'}
-        </Claim>
-      )}
+      {task && plate(task)}
+      {e.claim && <ClaimLine session={e.claim.session} />}
       <Stamp e={e} by={(comp) => <By e={e} comp={comp} />} />
       {id && <Id e={e} />}
       {children}

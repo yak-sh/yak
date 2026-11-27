@@ -12,7 +12,7 @@
 import { useStore } from '@yaks/ui/store'
 import { useMemo } from 'react'
 import type { Front } from './host.ts'
-import { useDraft, useHost, useOwner } from './host.ts'
+import { type Drafts, useHost, useOwner } from './host.ts'
 import { at, place, put, type Row, source } from './state.ts'
 
 type Edits = {
@@ -30,6 +30,40 @@ let editsOf = (front: Front): Edits => {
   edits = { read: () => seen.value, subscribe: (wake) => seen.subscribe(wake) }
   held.set(front, edits)
   return edits
+}
+
+// One snapshot for the two inputs that open an editor. Keep its identity
+// while neither input changes, even when a different Edit row wakes the watch.
+let editingAt = (
+  edits: Edits,
+  drafts: Drafts,
+  address: () => string,
+  place: string,
+) => {
+  let text = () => drafts.text(place)
+  let snapshot: { row: Row | undefined; text: string } | undefined
+  let read = () => {
+    let rows = edits.read()
+    let eid = rows.length ? address() : undefined
+    let row = rows.find((b) => b.entity.eid == eid)?.Edit as Row | undefined
+    let next = text()
+    if (snapshot && snapshot.row === row && snapshot.text === next) {
+      return snapshot
+    }
+    return snapshot = { row, text: next }
+  }
+  let subscribe = (wake: () => void) => {
+    let offDraft = drafts.follow?.(() => {
+      text()
+      wake()
+    })
+    let offEdit = edits.subscribe(wake)
+    return () => {
+      offEdit()
+      offDraft?.()
+    }
+  }
+  return { read, subscribe }
 }
 
 /** One `Edit`, as its owner and the component itself hold it: its eid, its
@@ -72,12 +106,16 @@ export let useEdit = (
 ): Editing => {
   let { front, drafts } = useHost()
   let owner = useOwner()
-  let me = named ?? at(owner, eid, comp, prop)
   let where = place(eid, comp, prop)
-  let acts = useMemo(() => {
-    let set = (patch: Row | null) => void front.mutate(put(me, patch))
-    let now = () => front.ent(me)?.Edit as Row | undefined
+  let { read, subscribe, address, ...acts } = useMemo(() => {
+    // Resolve the edit's id when a row can exist or an action needs it.
+    let key = named
+    let address = () => key ??= at(owner, eid, comp, prop)
+    let set = (patch: Row | null) => void front.mutate(put(address(), patch))
+    let now = () => front.ent(address())?.Edit as Row | undefined
     return {
+      ...editingAt(editsOf(front), drafts, address, where),
+      address,
       now,
       begin: () => set({ open: true }),
       end: () => now() && set(null),
@@ -85,12 +123,17 @@ export let useEdit = (
       spend: () => drafts.spend(where),
       search: (query: string) => set({ query }),
     }
-  }, [front, drafts, me, where])
-  let edits = editsOf(front)
-  let read = () =>
-    edits.read().find((b) => b.entity.eid == me)?.Edit as Row | undefined
-  let row = useStore(edits.subscribe, read)
-  let text = useDraft(where, drafts)
+  }, [front, drafts, named, owner, eid, comp, prop, where])
+  let { row, text } = useStore(subscribe, read)
   let open = !!row?.open || (!!text && text != source(value))
-  return { at: me, row, place: where, text, open, ...acts }
+  return {
+    get at() {
+      return address()
+    },
+    row,
+    place: where,
+    text,
+    open,
+    ...acts,
+  }
 }

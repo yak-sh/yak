@@ -157,9 +157,9 @@ export let QueryList = (
   let failed = boardRead?.state.status == 'failed' ? boardRead : undefined
   let rows = useDerived(() => {
     try {
-      let listed = boardPost({ eid }, false, page.eids).map(ent)
+      let listed = boardPost({ eid }, false, page.eids)
       return orderOf(parseQuery(saved)) == 'hot'
-        ? listed.toSorted(byWarmth(Date.now()))
+        ? listed.map(ent).sort(byWarmth(Date.now())).map((e) => e.eid)
         : listed
     } catch {
       return undefined
@@ -180,14 +180,14 @@ export let QueryList = (
   // part of this page's query, so the total follows it too.
   return (
     <Rows elRef={root} mod='ruled' aria-busy={!page.ready}>
-      {rows.map((t) => (
+      {rows.map((eid) => (
         // a feed row dragged onto a canvas spawns the entity as a card
         <Rows.Item
-          key={t.eid}
+          key={eid}
           draggable={capable('canvas')}
-          onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Full')}
+          onDragStart={(ev: DragEvent) => dragData(ev, eid, 'Full')}
         >
-          <Entity eid={t.eid} view='Feed.List.Tile' />
+          <Entity eid={eid} view='Feed.List.Tile' />
         </Rows.Item>
       ))}
       {!page.ready && (

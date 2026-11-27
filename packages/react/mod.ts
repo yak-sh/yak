@@ -124,6 +124,18 @@ export function render<E>(
 ): Node<E> | null {
   let renderer = resolve(registry, bundle, view, vocab, ctx)
   if (!renderer) return null
+  return renderSelected(registry, renderer, bundle, vocab, ctx, props)
+}
+
+/** Build the node for a renderer the host has already selected. */
+export let renderSelected = <E>(
+  registry: HostRegistry<E>,
+  renderer: Renderer | ComponentRenderer<E>,
+  bundle: Bundle,
+  vocab: Vocab,
+  ctx: Context & Events,
+  props?: Context & { e: E },
+): Node<E> | null => {
   let context: RenderContext<Node<E>> & Events = {
     ...ctx,
     render: (view, overrides) => {
