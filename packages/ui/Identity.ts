@@ -89,7 +89,7 @@ export let specimens = (): Specimen[] => [
     'Avatar tones',
     h(
       'div',
-      { style: 'display: flex; flex-wrap: wrap; gap: .5rem' },
+      { style: { display: 'flex', flexWrap: 'wrap', gap: '.5rem' } },
       TONES.map((mod, i) =>
         h(Identity.Avatar, { key: mod, mod }, String.fromCharCode(65 + i))
       ),

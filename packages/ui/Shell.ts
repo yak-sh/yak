@@ -122,7 +122,7 @@ export let specimens = (): Specimen[] => [
     'Shell, variants',
     h(
       Shell,
-      { mod: ['open', 'sheet'], style: 'height:10rem' },
+      { mod: ['open', 'sheet'], style: { height: '10rem' } },
       h(Shell.Shade, { 'aria-label': 'Close navigation' }),
       h(
         Shell.Main,
@@ -142,7 +142,7 @@ export let specimens = (): Specimen[] => [
     'Shell, Side, Brand, Find, Item, Item-on, Icon, Label, Count, Main, Bar, Title, Body, Aside',
     h(
       Shell,
-      { style: 'height: 18rem; width: 40rem; max-width: 100%' },
+      { style: { height: '18rem', width: '40rem', maxWidth: '100%' } },
       h(
         Side,
         {},
@@ -170,7 +170,10 @@ export let specimens = (): Specimen[] => [
     'Shell-shut, Aside',
     h(
       Shell,
-      { mod: 'shut', style: 'height: 8rem; width: 40rem; max-width: 100%' },
+      {
+        mod: 'shut',
+        style: { height: '8rem', width: '40rem', maxWidth: '100%' },
+      },
       h(Main, {}, h(Body, {}, h('p', {}, 'The page, in the whole width.'))),
       h(Shell.Aside, {}, h('p', {}, 'Put away.')),
     ),

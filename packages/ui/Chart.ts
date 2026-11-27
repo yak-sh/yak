@@ -47,11 +47,11 @@ export let specimens = (): Specimen[] => [
       null,
       cloneElement(columns(h as never, week) as ReactElement, {
         'data-on': '',
-        style: '--at: 50%',
+        style: { '--at': '50%' },
       }),
       h(
         'span',
-        { className: 'Chart_Tip', style: 'position: static' },
+        { className: 'Chart_Tip', style: { position: 'static' } },
         `${day('2026-10-04', 'UTC')}: 3 visits`,
       ),
     ),

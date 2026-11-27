@@ -62,7 +62,7 @@ export let specimens = (): Specimen[] => [
     'Panes, Pane-nav, Pane-aside, Pane-main',
     h(
       Panes,
-      { style: 'height: 12rem; width: 40rem; max-width: 100%' },
+      { style: { height: '12rem', width: '40rem', maxWidth: '100%' } },
       h(
         Pane,
         { mod: ['nav', 'aside'] },
@@ -80,7 +80,7 @@ export let specimens = (): Specimen[] => [
     'Panes, Pane-nav, Pane-main, Pane-on, Top, Body',
     h(
       Panes,
-      { style: 'height: 12rem; width: 40rem; max-width: 100%' },
+      { style: { height: '12rem', width: '40rem', maxWidth: '100%' } },
       h(
         Pane,
         { mod: 'nav' },

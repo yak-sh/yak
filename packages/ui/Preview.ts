@@ -43,7 +43,7 @@ export let specimens = (): Specimen[] => [
         mod: 'flat',
         title: 'Embedded page',
         srcdoc: '<p>A page.</p>',
-        style: 'height:8rem',
+        style: { height: '8rem' },
       }),
     ),
   ],
@@ -57,7 +57,7 @@ export let specimens = (): Specimen[] => [
       h(Preview.Frame, {
         title: 'Preview',
         srcdoc: '<p>A page preview.</p>',
-        style: 'height:8rem',
+        style: { height: '8rem' },
       }),
     ),
   ],

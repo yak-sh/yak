@@ -85,7 +85,7 @@ export let specimens = (): Specimen[] => [
     'Menu-below',
     h(
       'div',
-      { style: 'padding-bottom:4rem' } as HTMLAttributes<HTMLDivElement>,
+      { style: { paddingBottom: '4rem' } } as HTMLAttributes<HTMLDivElement>,
       h(
         Menu.Fold,
         { open: true },
@@ -99,7 +99,11 @@ export let specimens = (): Specimen[] => [
     h(
       'div',
       {
-        style: 'display:flex;justify-content:flex-end;padding-bottom:6rem',
+        style: {
+          display: 'flex',
+          justifyContent: 'flex-end',
+          paddingBottom: '6rem',
+        },
       } as HTMLAttributes<HTMLDivElement>,
       h(
         Menu.Fold,
@@ -118,7 +122,7 @@ export let specimens = (): Specimen[] => [
     'Menu-float',
     h(
       Menu,
-      { mod: 'float', style: 'position:static' },
+      { mod: 'float', style: { position: 'static' } },
       h(Item, { type: 'button' }, 'Copy'),
     ),
   ],

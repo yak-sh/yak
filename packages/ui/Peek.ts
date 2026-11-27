@@ -42,7 +42,7 @@ export let specimens = (): Specimen[] => [
     'Peek',
     h(
       Peek,
-      { style: 'position: static' },
+      { style: { position: 'static' } },
       h(
         Peek.Head,
         {},

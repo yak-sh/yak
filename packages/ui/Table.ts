@@ -163,7 +163,7 @@ let pair = (key: string, value: string, shape?: string) =>
   )
 
 // A specimen's own room, narrower than what its table holds.
-let narrow: Props = { style: 'max-width: 22rem' }
+let narrow: Props = { style: { maxWidth: '22rem' } }
 
 // A row of a tree: as deep as it is, a toggle when it holds rows.
 let branch = (
@@ -297,7 +297,7 @@ export let specimens = (): Specimen[] => [
     'Table, Scroll',
     h(
       Table.Scroll,
-      { style: 'max-width: 12rem' },
+      { style: { maxWidth: '12rem' } },
       h(
         Table,
         { cols: ['num', 'num', 'num'] },

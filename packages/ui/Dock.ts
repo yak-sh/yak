@@ -76,10 +76,10 @@ export let specimens = (): Specimen[] => [[
   'Dock, Launcher, Faces, Panel',
   h(
     Dock,
-    { style: 'position: relative; inset: auto' },
+    { style: { position: 'relative', inset: 'auto' } },
     h(
       Dock.Panel,
-      { style: 'position: relative; inset: auto; display: grid' },
+      { style: { position: 'relative', inset: 'auto', display: 'grid' } },
       h(
         Dock.Head,
         null,
@@ -124,14 +124,18 @@ export let specimens = (): Specimen[] => [[
   'Friend presence',
   h(
     'div',
-    { style: 'display: flex; flex-wrap: wrap; gap: 1rem' },
+    { style: { display: 'flex', flexWrap: 'wrap', gap: '1rem' } },
     [['Active', 'positive'], ['Away', 'caution'], ['Offline', 'offline']].map(
       ([label, mod]) =>
         h(
           'span',
           {
             key: mod,
-            style: 'display: inline-flex; align-items: center; gap: .4rem',
+            style: {
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '.4rem',
+            },
           },
           h(Dot, { mod, className: 'Dock_Presence', 'aria-hidden': 'true' }),
           label,

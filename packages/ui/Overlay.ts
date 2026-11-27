@@ -26,5 +26,8 @@ export let sheet = (_c: Colors): Sheet => ({})
 
 /** One holding a tip, kept in place here. */
 export let specimens = (): Specimen[] => [
-  ['Overlay', h(Overlay, { style: 'position: static' }, h(Tip, {}, 'floats'))],
+  [
+    'Overlay',
+    h(Overlay, { style: { position: 'static' } }, h(Tip, {}, 'floats')),
+  ],
 ]

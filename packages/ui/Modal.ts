@@ -41,14 +41,14 @@ export let specimens = (): Specimen[] => [[
     Modal,
     {
       open: true,
-      style: 'position: relative; height: auto',
+      style: { position: 'relative', height: 'auto' },
       'aria-label': 'Service details',
     },
     h(Modal.Backdrop, {
       href: '#',
       'aria-label': 'Close details',
       tabIndex: -1,
-      style: 'position: absolute',
+      style: { position: 'absolute' },
     }),
     h(
       Modal.Body,

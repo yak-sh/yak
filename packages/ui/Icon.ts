@@ -41,7 +41,7 @@ export let Icon: FunctionComponent<IconProps> = ({ of, ...props }) =>
       focusable: 'false',
       ...props,
     },
-    of.map(([tag, attrs]) => h(tag, attrs as Record<string, unknown>)),
+    ...of.map(([tag, attrs]) => h(tag, attrs as Record<string, unknown>)),
   )
 
 /** What it is, in a line. */
