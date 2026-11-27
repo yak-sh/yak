@@ -87,15 +87,17 @@ let read = (view: Element) => {
   }
 }
 
-/** Show `next` of the page's `views` in `doc`, the others hidden. The
- * page's layout is read once, before anything changes, and laid out once,
- * by putting the scroll back after every other change: a read or a write
- * between two changes lays the whole page out again, which is most of a
- * press's time on a long conversation. */
+/** Show `next` of the page's `views` in `doc`, the others hidden, and make
+ * the press's other changes (`also`, such as letting go of the app beside
+ * the chat) with them. The page's layout is read once, before anything
+ * changes, and laid out once, by putting the scroll back after every other
+ * change: a read or a write between two changes lays the whole page out
+ * again, which is most of a press's time on a long conversation. */
 export let show = (
   doc: Document,
   views: HTMLElement[],
   next: HTMLElement,
+  also = () => {},
 ): void => {
   let view = said(next)
   let body = doc.getElementById('content')
@@ -137,6 +139,7 @@ export let show = (
     )
   ) back.value = view.here
   light(doc, view)
+  also()
   if (body) {
     let kept = next.dataset.scroll ??
       (next.querySelector('[data-conversation]') ? 'end' : '0')
@@ -180,8 +183,9 @@ export let switching = (doc: Document, bind = canvases(doc)): void => {
     if (app ? !sameChat : !at && !sameChat) return
     asked.focusAfterPaint = !!sameChat && (!!app || !at?.el.hidden)
     asked.draw = () => {
-      if (at?.el.hidden) show(doc, views, at.el)
-      if (slot) chooseCanvas(doc, slot, here, app, bind)
+      let choose = () => slot && chooseCanvas(doc, slot, here, app, bind)
+      if (at?.el.hidden) show(doc, views, at.el, choose)
+      else choose()
     }
   })
 }

@@ -199,6 +199,22 @@ test('opening an app shows its shell before mounting its frame and keeps the cha
   equal(text.value, 'Keep my draft')
 })
 
+test('a press from an app to another view lays the page out once: the app is gone before the scroll is put back', () => {
+  let doc = page(true)
+  switching(doc, () => {})
+  press(doc, '/club?app=recipes')
+  // Putting the scroll back lays the page out: whatever changes after it is
+  // a second layout.
+  let body = doc.getElementById('content')!
+  let laid: boolean[] = []
+  Object.defineProperty(body, 'scrollTop', {
+    get: () => 0,
+    set: () => laid.push(!!doc.querySelector('[data-app], .Talk-app')),
+  })
+  press(doc, '/club/updates')
+  equal(laid, [false])
+})
+
 // An Operator page opened at a helper's conversation, the bar's title
 // wearing how the helper stands; its Updates hidden.
 let beside = () => {
