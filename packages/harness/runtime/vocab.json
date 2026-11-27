@@ -1,23 +1,29 @@
 {
+  "$id": "urn:uuid:668d6b13-f14a-4f0a-9bc1-f9a026a9ca7a",
   "title": "runtime projection",
   "$defs": {
     "session": {
+      "$id": "urn:uuid:96e3396f-d74e-4fb8-8e4c-0d2b25c78331",
       "component": true,
       "properties": {
         "status": {
+          "$id": "urn:uuid:867e4f98-7482-4b2a-b7b3-ac7cd4cb07b0",
           "type": "string"
         }
       }
     },
     "attempt": {
+      "$id": "urn:uuid:85b4b112-2fad-4c4c-b35a-033d6f6b1f9b",
       "component": true,
       "properties": {
         "by": {
+          "$id": "urn:uuid:1023852d-6cda-4df4-aef0-5f181bde057a",
           "type": "string"
         }
       }
     },
     "call": {
+      "$id": "urn:uuid:eb4360c1-1e93-4678-9d97-79a787a8478c",
       "component": true,
       "properties": {}
     },

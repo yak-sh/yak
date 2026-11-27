@@ -1,28 +1,37 @@
 {
+  "$id": "urn:uuid:623b4833-a6c6-4dbc-9255-8baabeb4a267",
   "$defs": {
     "agentWork": {
+      "$id": "urn:uuid:5322a829-5fc9-47cd-8e20-fb503af42346",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:ebaa9403-eccb-40e9-aadc-91b9b6a77e5a",
           "type": "string"
         },
         "app": {
+          "$id": "urn:uuid:5449ba45-60c0-4358-b74d-7ba4e211b8be",
           "type": "string"
         },
         "version": {
+          "$id": "urn:uuid:94f0ff38-63e4-427e-be9b-591c0287cf7a",
           "type": "integer"
         },
         "at": {
+          "$id": "urn:uuid:61427dea-65a3-4b4e-aa7f-bb947f3860e2",
           "type": "string"
         },
         "by": {
+          "$id": "urn:uuid:0f2410e9-510a-4454-8e7e-987d0eaab27a",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:60fd6ab4-db07-42f6-8120-a1aaf4dbd59d",
           "type": "string"
         },
         "operator": {
+          "$id": "urn:uuid:67f0dc67-b387-41c2-826a-c6d50a1330b2",
           "type": "boolean"
         }
       },
@@ -35,31 +44,40 @@
       ]
     },
     "operatorFix": {
+      "$id": "urn:uuid:dfe01967-ec6c-4551-a62a-03fc167c0f25",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:3a3e5569-e841-4579-9382-c8974dd79da2",
           "type": "string"
         },
         "request": {
+          "$id": "urn:uuid:d2c5170c-dd5b-4ad7-9654-457087a89851",
           "type": "string"
         },
         "app": {
+          "$id": "urn:uuid:352ddee5-ad2a-4ef1-95a0-f363343f9952",
           "type": "string"
         },
         "at": {
+          "$id": "urn:uuid:ee1c762f-c195-42d0-9328-7938bf5ca7b4",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:efe31a86-1ac6-4338-9d14-1b7b47e48a3f",
           "type": "string"
         },
         "failed": {
+          "$id": "urn:uuid:c4a32f51-93a5-4648-9f6f-4a04f12df0e6",
           "type": "boolean"
         },
         "working": {
+          "$id": "urn:uuid:8aad6566-4eca-43c4-a5e6-a8902ffd6256",
           "type": "boolean"
         },
         "asked": {
+          "$id": "urn:uuid:1fcd48a2-4458-4169-93aa-a05bd06690ff",
           "type": "string"
         }
       },
@@ -70,25 +88,32 @@
       ]
     },
     "suggestion": {
+      "$id": "urn:uuid:db032c89-55a7-466c-93b0-f0603c55c5a2",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:f25e1bcc-f15f-4e3a-8570-559c474e39c1",
           "type": "string"
         },
         "rank": {
+          "$id": "urn:uuid:4476c2a7-fca0-48b9-a7ff-75f9bca96970",
           "type": "integer"
         },
         "name": {
+          "$id": "urn:uuid:cd4ba444-9ec9-4f9f-a178-6df9e92a5bf4",
           "type": "string"
         },
         "says": {
+          "$id": "urn:uuid:68abe890-e781-4507-b05a-8821cf23c4f9",
           "type": "string"
         },
         "ask": {
+          "$id": "urn:uuid:3f001479-dbac-4316-aa1c-127745219cc7",
           "type": "string"
         },
         "app": {
+          "$id": "urn:uuid:827413a9-d200-4e4b-a71c-9cb110cab930",
           "type": "string"
         }
       },
@@ -101,13 +126,16 @@
       ]
     },
     "dismissSuggestion": {
+      "$id": "urn:uuid:ae8a63e5-e3ae-4c85-96a5-d4275a471afd",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:edbf2e98-47c4-46c8-84d4-7720edf1cd18",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:61d2d603-6576-44f3-a377-54ac0417b07f",
           "type": "string"
         }
       },

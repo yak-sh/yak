@@ -1,48 +1,59 @@
 {
+  "$id": "urn:uuid:c846ca45-fd27-4ffc-888b-ab548cf79da8",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "directory",
   "$defs": {
     "support_contract": {
+      "$id": "urn:uuid:7e5acbbf-1630-47b2-8a01-fbc036d8e435",
       "component": true,
       "description": "A space’s support fees in USD cents, included minutes per calendar month, direct channels, dates and the person supplying support.",
       "properties": {
         "annual": {
+          "$id": "urn:uuid:c62b458e-ae33-4e9c-92ac-88f2585c2840",
           "type": "integer",
           "stamped": true
         },
         "onboarding": {
+          "$id": "urn:uuid:afa75d46-addd-4ea4-a496-5ced73e61017",
           "type": "integer",
           "stamped": true
         },
         "monthly": {
+          "$id": "urn:uuid:d66810c7-caa4-458a-8772-17896c26aeed",
           "type": "integer",
           "stamped": true
         },
         "email": {
+          "$id": "urn:uuid:377c92a8-9771-46a8-8126-121c8fbea965",
           "type": "string",
           "stamped": true
         },
         "phone": {
+          "$id": "urn:uuid:1e5fdf9b-6b32-4eb5-8e8a-2ac9981f1e41",
           "type": "string",
           "stamped": true
         },
         "start": {
+          "$id": "urn:uuid:f2c84b83-3e70-4e11-8cf4-aa5dab652fda",
           "type": "string",
           "stamped": true
         },
         "renewal": {
+          "$id": "urn:uuid:614dff1c-fa62-4830-8974-323e82047fce",
           "type": "string",
           "stamped": true
         },
         "space": {
+          "$id": "urn:uuid:ff983531-b68e-4534-871d-604017d27e98",
           "type": "string",
           "ref": "space",
           "death": "cascade",
           "stamped": true
         },
         "provider": {
+          "$id": "urn:uuid:0ca6cb3e-16cd-4aa7-b9b6-732c73e0b022",
           "type": "string",
           "ref": "person",
           "death": "keep",
@@ -51,18 +62,22 @@
       }
     },
     "support_contract_pending": {
+      "$id": "urn:uuid:eb4b2549-d9df-4e10-ab0a-f5de6e5d097f",
       "component": true,
       "description": "An admin’s support contract terms waiting for the payment provider to accept them.",
       "properties": {
         "key": {
+          "$id": "urn:uuid:0497e142-efea-496e-acf8-8ff470c3ecf9",
           "type": "string",
           "stamped": true
         },
         "data": {
+          "$id": "urn:uuid:33ce3f93-f697-467f-b165-151a0dfdfb31",
           "type": "string",
           "stamped": true
         },
         "space": {
+          "$id": "urn:uuid:d7dcf7c9-1b7e-4897-a425-81e6e40b5575",
           "type": "string",
           "ref": "space",
           "death": "cascade",
@@ -71,24 +86,29 @@
       }
     },
     "support_contract_billing": {
+      "$id": "urn:uuid:5a233b0e-f293-4f55-991c-a1bf428e32e6",
       "component": true,
       "description": "The subscription, one-time invoice and any connected account that owns those Stripe objects.",
       "properties": {
         "subscription": {
+          "$id": "urn:uuid:fa2c838a-009d-49c2-abf1-41c89cd6dcae",
           "type": "string",
           "stamped": true
         },
         "invoice": {
+          "$id": "urn:uuid:4f394a40-c727-4911-8593-e6a25d89e56e",
           "type": "string",
           "stamped": true
         },
         "account": {
+          "$id": "urn:uuid:33c671cb-82c0-4e2b-83d5-0df3def22c7c",
           "type": "string",
           "stamped": true
         }
       }
     },
     "support_contract_time": {
+      "$id": "urn:uuid:8563c34d-1c99-4dac-bfca-70e86cb0a569",
       "component": true,
       "description": "Minutes of work on one space’s support contract, dated and described by the person recording it.",
       "index": [
@@ -99,52 +119,62 @@
       ],
       "properties": {
         "contract": {
+          "$id": "urn:uuid:7e972ad3-3474-49aa-9538-7b9a99761180",
           "type": "string",
           "ref": "support_contract",
           "death": "cascade",
           "stamped": true
         },
         "minutes": {
+          "$id": "urn:uuid:1936ed5f-e8a4-4f68-b67d-71518f8f6ab3",
           "type": "integer",
           "stamped": true
         },
         "day": {
+          "$id": "urn:uuid:45b2e39e-7083-4f65-84ab-76c01b6beda9",
           "type": "string",
           "stamped": true
         },
         "note": {
+          "$id": "urn:uuid:ebad1d63-a2b7-4d3e-a60a-4c18c1dd5cdc",
           "type": "string",
           "stamped": true
         }
       }
     },
     "release_view": {
+      "$id": "urn:uuid:ee9de7fc-907c-4445-8d5b-58ddc4242f54",
       "description": "Serving settings and a compressed Files index for the live source.",
       "component": true,
       "type": "object",
       "journal": false,
       "properties": {
         "source": {
+          "$id": "urn:uuid:10356edb-ae66-490b-9d60-781725262f2b",
           "type": "string",
           "stamped": true
         },
         "body": {
+          "$id": "urn:uuid:ac084e0d-53e3-47c9-8a22-2a46cb73c6a7",
           "type": "string",
           "stamped": true
         }
       }
     },
     "app_icon": {
+      "$id": "urn:uuid:8f76e8fb-8f8c-4a0a-8508-a09350058e16",
       "description": "The platform artwork requested and drawn for an app.",
       "component": true,
       "type": "object",
       "properties": {
         "requested": {
+          "$id": "urn:uuid:66e643a9-e32b-459f-abdd-9c211f54f698",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "drawn": {
+          "$id": "urn:uuid:ec3cd874-2fce-4945-8d18-c86cd8eb03ba",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -166,19 +196,23 @@
       "description": "Draw an icon for a released app without artwork of its own."
     },
     "app_splash": {
+      "$id": "urn:uuid:8f670216-f342-48f3-add1-e8ab2b55d5ea",
       "description": "The splash images drawn for an app, by the key of the set its pages name (@yaks/platform/splash): its icon on its background, for every iPhone and iPad screen, dark too where the app has a dark background. requested asks for the set again.",
       "component": true,
       "type": "object",
       "properties": {
         "key": {
+          "$id": "urn:uuid:0100e12b-dd56-4ab1-89d7-710d11002f66",
           "type": "string",
           "stamped": true
         },
         "dark": {
+          "$id": "urn:uuid:cd83a045-7616-451f-80ab-50af12e58e8b",
           "type": "boolean",
           "stamped": true
         },
         "requested": {
+          "$id": "urn:uuid:b21785bd-9f25-46b3-82c3-8d5d8cb1e8ae",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -203,11 +237,13 @@
       "description": "Draw a released app's splash images from its icon and background."
     },
     "person_name": {
+      "$id": "urn:uuid:74992177-8323-4e92-86f1-c757ae011027",
       "description": "Where a person's doc{title} came from.",
       "component": true,
       "type": "object",
       "properties": {
         "source": {
+          "$id": "urn:uuid:889f288b-5948-4dae-a542-9d793bdeb84b",
           "type": "string",
           "enum": [
             "fallback",
@@ -223,12 +259,14 @@
       }
     },
     "sessions_ended": {
+      "$id": "urn:uuid:ab103ff2-1e05-403c-a17c-40b66a425f8d",
       "description": "All browser credentials issued before session rows were ended.",
       "component": true,
       "type": "object",
       "journal": false,
       "properties": {
         "at": {
+          "$id": "urn:uuid:3e89debf-e02f-45a0-b00a-47d4b34b717a",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -236,6 +274,7 @@
       }
     },
     "browser_session": {
+      "$id": "urn:uuid:55bdda71-7ebe-422b-a383-b750d23141b9",
       "description": "One signed-in browser, ended by cancelling its row.",
       "component": true,
       "type": "object",
@@ -243,27 +282,32 @@
       "expire": ".browser_session.until<=now",
       "properties": {
         "person": {
+          "$id": "urn:uuid:bc74cb99-693f-4add-9c84-863b96ec6bc6",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:0c4e5560-9531-45c4-9caa-eb398dd02327",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "until": {
+          "$id": "urn:uuid:c94f5c7d-e9d4-4459-b9e3-70552bf291a6",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "agent": {
+          "$id": "urn:uuid:07fb9810-41c7-4d7a-95f8-cb996ba7f6be",
           "type": "string",
           "stamped": true
         },
         "place": {
+          "$id": "urn:uuid:0afb321b-2b03-4bed-9926-3c701e0816d2",
           "type": "string",
           "description": "Where its network placed it when it signed in or last renewed.",
           "stamped": true
@@ -271,6 +315,7 @@
       }
     },
     "located": {
+      "$id": "urn:uuid:e6961871-5378-4506-8118-e229d87ad1b9",
       "description": "Where one source puts one of a person's places, roughly: home, work, current (where they are now) or a place they named, as their own words (said), their billing address (billing) or their connection (network) put it. One row per person, place and source; never a street address or coordinates. Their phone's area code is read off their `phone{number}`, never kept here. Read only by the person and their own Operator.",
       "component": true,
       "type": "object",
@@ -282,17 +327,20 @@
       ],
       "properties": {
         "person": {
+          "$id": "urn:uuid:046b9aa3-77e3-4f7f-a8a9-8eb083534ff3",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "kind": {
+          "$id": "urn:uuid:4ccc8b51-3e4d-4e23-bb1a-ccb93b39521b",
           "type": "string",
           "stamped": true,
           "description": "home, work, current, or the name they gave a place"
         },
         "source": {
+          "$id": "urn:uuid:dc879da2-7bf0-4291-b6d1-3684493f043a",
           "type": "string",
           "enum": [
             "said",
@@ -303,30 +351,36 @@
           "description": "what put them there"
         },
         "city": {
+          "$id": "urn:uuid:41703f0d-a219-4d30-97d6-fe96f186e70d",
           "type": "string",
           "stamped": true
         },
         "region": {
+          "$id": "urn:uuid:321bb4fc-5c9e-49b2-97ae-429a7e6d6898",
           "type": "string",
           "stamped": true,
           "description": "its state or province as a code, such as MI"
         },
         "country": {
+          "$id": "urn:uuid:e9147a7e-5aaf-4ddc-aaea-1c1dc88769f2",
           "type": "string",
           "stamped": true,
           "description": "its two-letter country code, such as US"
         },
         "zone": {
+          "$id": "urn:uuid:d15891eb-8805-48f4-8bc8-9e2025a19716",
           "type": "string",
           "stamped": true,
           "description": "its IANA time zone, such as America/Detroit"
         },
         "area": {
+          "$id": "urn:uuid:0fae117e-5e8c-4e5e-b8ed-b44382ea8b51",
           "type": "string",
           "stamped": true,
           "description": "a three-digit telephone area code, such as 269"
         },
         "at": {
+          "$id": "urn:uuid:345a3698-4e7a-4a8b-833e-0a9c58ad0701",
           "type": "string",
           "format": "date-time",
           "stamped": true,
@@ -336,6 +390,7 @@
       "$comment": "@yaks/platform/located"
     },
     "cli_grant": {
+      "$id": "urn:uuid:7a458865-ae6a-4380-a5b8-a12fe8113311",
       "description": "One CLI grant: whose it is, its id, the space it is narrowed to and when it dies. Revoked by cancelling its row.",
       "component": true,
       "type": "object",
@@ -343,25 +398,30 @@
       "expire": ".cli_grant.until<=now",
       "properties": {
         "person": {
+          "$id": "urn:uuid:e5ef1185-5df8-4052-87e4-106e7733ea46",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "id": {
+          "$id": "urn:uuid:68ed51ae-5c23-4244-bda3-a1f7db47b0c8",
           "type": "string",
           "stamped": true
         },
         "until": {
+          "$id": "urn:uuid:fc3f8089-9914-4c3d-a376-84f1cde7a23b",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "space": {
+          "$id": "urn:uuid:2dcdcdb2-51be-4c75-b1a6-5eff547e58c3",
           "type": "string",
           "stamped": true
         },
         "space_eid": {
+          "$id": "urn:uuid:ed82680d-7fb2-4a8c-8e5c-ed3e4d679bfb",
           "type": "string",
           "stamped": true
         }
@@ -369,6 +429,7 @@
       "$comment": "workers/yak/grants.ts"
     },
     "standing_link": {
+      "$id": "urn:uuid:0618302b-368d-44a2-841e-b22ebd30ef15",
       "description": "One standing sign-in link, revoked by cancelling its row.",
       "component": true,
       "type": "object",
@@ -376,16 +437,19 @@
       "expire": ".standing_link.until<=now",
       "properties": {
         "person": {
+          "$id": "urn:uuid:dc30eae7-a42e-4edb-a7fe-4102e9089f37",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "id": {
+          "$id": "urn:uuid:0036f41b-8695-48d2-87dd-52fb336997ec",
           "type": "string",
           "stamped": true
         },
         "until": {
+          "$id": "urn:uuid:a70d461b-691a-4666-837f-8e601a301e00",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -394,6 +458,7 @@
       "$comment": "workers/yak/link.ts"
     },
     "binding": {
+      "$id": "urn:uuid:01820d24-c59b-40b2-9d63-729eed582c1e",
       "component": true,
       "type": "object",
       "description": "An app's storage binding, by name and type, and the account resource it holds. Storage survives config edits and renames. Only the kernel records resource ids, so an app cannot claim another tenant's data.",
@@ -410,16 +475,19 @@
       ],
       "properties": {
         "app": {
+          "$id": "urn:uuid:89653e09-1d29-4693-a0c2-e81f803534db",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "name": {
+          "$id": "urn:uuid:671b81cc-6559-4976-900a-c1268de6c6ac",
           "type": "string",
           "stamped": true
         },
         "type": {
+          "$id": "urn:uuid:cbd2af5e-1d90-46e7-a53a-82110ca33369",
           "type": "string",
           "enum": [
             "d1",
@@ -429,35 +497,42 @@
           "stamped": true
         },
         "id": {
+          "$id": "urn:uuid:202d9b1f-3832-4abd-8c3f-80da03037446",
           "type": "string",
           "stamped": true
         },
         "resource": {
+          "$id": "urn:uuid:a507c004-0445-475e-80dc-d2663192f13b",
           "type": "string",
           "stamped": true
         }
       }
     },
     "former": {
+      "$id": "urn:uuid:6957398f-d123-4578-985f-38629fff1bb8",
       "component": true,
       "type": "object",
       "description": "Every address an app or a space has answered at, oldest first: `slug` the one it was born at, `slugs` each one a rename left behind, separated by spaces, each still redirecting. Address history and nothing else: a rename moves an address, never a byte. An app's are bare slugs in its space's own namespace, so a space rename leaves every app's history standing. Not unique here: the tools decide whether an address is taken.",
       "properties": {
         "slug": {
+          "$id": "urn:uuid:cc08419b-1d7a-4e28-81b5-5744f22e1a42",
           "type": "string"
         },
         "slugs": {
+          "$id": "urn:uuid:4983b3dc-7808-44d4-bbf1-a8cb26cddaf3",
           "type": "string"
         }
       },
       "$comment": "An app's storage handle is @yaks/platform's `app.store` (T-34657); a space wears it for the same reason (T-34658). Uniqueness is over an address within a space for an app, and over the whole platform for a space, and neither is one property's own race (tools.ts `taken`).\n\nIt was named `alias` until T-34390, when that word became the platform's own (@yaks/alias, in {@link coreDocs}): a name any entity may wear in any store. Two things cannot share one word, and the one every store speaks wins — so the app's addresses are `former`, which is what the record is about."
     },
     "home": {
+      "$id": "urn:uuid:0afb73a0-490a-4fa2-8bb1-c2d7d8dd35ac",
       "component": true,
       "type": "object",
       "description": "The app wearing it is its space's front page. At most one app per space wears it.",
       "properties": {
         "first": {
+          "$id": "urn:uuid:14ff6d37-28f4-4bab-ab78-4e0f1d7944c1",
           "type": "string",
           "description": "The paths the space's worker sends to the home app before the app whose slug owns them, in order, as a JSON list in one text property."
         }
@@ -465,6 +540,7 @@
       "$comment": "D-34197, T-34227. One fact, one place: the app wearing `home` is the home app, and its globs are properties of the same word — a `space.home` beside it would be a second place to say the same thing, and two copies of one fact drift.\n\nThe vocabulary cannot say at most one — `unique` covers one component's own properties and `home` has no space of its own — so it is the directory's rule instead (directory.ts `homing`, where moving it is one batch that drops the old and adds the new).\n\nA property is a scalar (@yaks/vocab `storable`), so `first` is JSON in one text property, read back by router.ts `firstOf`. `former.slugs` splits on whitespace instead, which is the older form of a list here; JSON is the one that round-trips exactly what an agent passed."
     },
     "member": {
+      "$id": "urn:uuid:6357e2cc-8aa1-462c-9645-9ad8b2333972",
       "component": true,
       "type": "object",
       "kind": true,
@@ -479,16 +555,19 @@
       ],
       "properties": {
         "space": {
+          "$id": "urn:uuid:45a86671-f0ca-46cb-bce8-0c3d62cc95f4",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "person": {
+          "$id": "urn:uuid:b7b47e4b-c1da-48d0-b748-63bb112d8208",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "role": {
+          "$id": "urn:uuid:63f3a786-ff75-43f0-94ad-40f8c150279c",
           "type": "string",
           "enum": [
             "owner",
@@ -497,6 +576,7 @@
           ]
         },
         "own": {
+          "$id": "urn:uuid:c8edc01e-c988-44ac-bd73-e3b11f00e1dc",
           "type": "boolean",
           "description": "The space is the person's own: the one minted for them, which their settings and an unnamed tool call mean. A rename leaves it standing.",
           "$comment": "directory.ts `own`"
@@ -504,6 +584,7 @@
       }
     },
     "grant": {
+      "$id": "urn:uuid:2faca36f-4687-417a-9d5f-ed6364b8c03e",
       "component": true,
       "type": "object",
       "description": "One app's access for one person, at the levels a seat (`member`) has; a seat reaches every app in its space, and this reaches one. Somebody granted one app holds its data and its page as a member does, and no other app in the space. Never its files: writing an app's bytes stays a member's act.",
@@ -519,16 +600,19 @@
       ],
       "properties": {
         "app": {
+          "$id": "urn:uuid:e3ae8444-e420-43dc-83c2-72393860d381",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "person": {
+          "$id": "urn:uuid:1e32b253-867c-4286-81d6-ed3b6a3b779f",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "access": {
+          "$id": "urn:uuid:91d9bc22-3eef-4d0a-894a-df5e3f987f51",
           "type": "string",
           "enum": [
             "owner",
@@ -537,6 +621,7 @@
           ]
         },
         "build": {
+          "$id": "urn:uuid:577f3fac-7b8a-4ae2-93ea-7cadfacad360",
           "type": "boolean",
           "stamped": true,
           "description": "May edit and release the files of this app."
@@ -545,17 +630,20 @@
       "$comment": "T-37615. It is the word @yaks/member already uses for that, said here because the ladder a page is read by is the platform's roster and this is its other rung (apps.ts, public/docs/sharing.md)."
     },
     "app_transfer": {
+      "$id": "urn:uuid:b8f80a98-7fb0-4748-a23f-ab26b9212209",
       "description": "An owner offers an app to another person in the space they own.",
       "component": true,
       "type": "object",
       "properties": {
         "app": {
+          "$id": "urn:uuid:1833fc0a-fc44-435a-b206-a7432ddbd357",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "from": {
+          "$id": "urn:uuid:b2ca904b-5a21-4337-b976-2d4dbda19023",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -563,18 +651,21 @@
           "index": true
         },
         "to": {
+          "$id": "urn:uuid:61722ad1-e4f7-41dd-9ac6-9976a617eeb4",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "giver": {
+          "$id": "urn:uuid:8cc59a2d-3243-4298-bd8f-11a130ad857b",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "recipient": {
+          "$id": "urn:uuid:594d0bda-1b49-465a-a320-caa839954e92",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -582,22 +673,26 @@
           "index": true
         },
         "editor": {
+          "$id": "urn:uuid:014d09e7-bc87-4224-b98a-f5d5f72be6c2",
           "type": "boolean",
           "stamped": true
         }
       }
     },
     "app_transfer_answer": {
+      "$id": "urn:uuid:33830946-dc92-4724-95d6-33f8beb238c3",
       "description": "The recipient’s answer to an app transfer, with the addresses left behind on acceptance.",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:1c0530b2-75fa-4d1c-9fd8-8c86454023a9",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "answer": {
+          "$id": "urn:uuid:d455c6d9-3e7c-4812-9238-9f68271e6b1a",
           "type": "string",
           "enum": [
             "accept",
@@ -607,33 +702,39 @@
           "stamped": true
         },
         "slugs": {
+          "$id": "urn:uuid:aef51fae-1991-4c63-a6bb-0b20c789c491",
           "type": "string",
           "stamped": true
         }
       }
     },
     "domain_transfer": {
+      "$id": "urn:uuid:6af87feb-5b22-4988-a076-cf7bbc02603b",
       "description": "An owner offers a domain to the owners of another space.",
       "component": true,
       "type": "object",
       "properties": {
         "host": {
+          "$id": "urn:uuid:a44515d7-788d-410c-8dba-ceffca802278",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "name": {
+          "$id": "urn:uuid:3105da9a-fde8-4f32-8339-a7cdeef79e2d",
           "type": "string",
           "stamped": true
         },
         "from": {
+          "$id": "urn:uuid:0cf18d99-2d34-420c-b9b8-669159765fce",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "to": {
+          "$id": "urn:uuid:7453871a-663e-49a5-b674-bb027bf44d93",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -641,6 +742,7 @@
           "index": true
         },
         "giver": {
+          "$id": "urn:uuid:f29bd3b1-6376-4166-bbb2-3cd38a72e9ce",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -649,16 +751,19 @@
       }
     },
     "domain_transfer_answer": {
+      "$id": "urn:uuid:cbc0d7ba-f103-4ced-95c3-fd0a4ae7658b",
       "description": "An owner’s answer to a domain transfer, or withdrawal when another space accepted.",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:d562514f-db79-41dd-b222-0d50fad39f29",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "answer": {
+          "$id": "urn:uuid:b5c01895-cbd0-4e4f-a545-33ede41dd88d",
           "type": "string",
           "enum": [
             "accept",
@@ -670,6 +775,7 @@
       }
     },
     "operator_reach": {
+      "$id": "urn:uuid:009b4c88-deed-4a60-aae3-afd9995b49cb",
       "component": true,
       "type": "object",
       "description": "Another space's Operator let into this one: the Operator of `operator` works in `space` with `role`, for whoever may ask it there. A space's owner writes it on its People page, and `by` is who.",
@@ -685,16 +791,19 @@
       ],
       "properties": {
         "space": {
+          "$id": "urn:uuid:0c79b284-9379-4831-a5cd-3d1bb90d4b0b",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "operator": {
+          "$id": "urn:uuid:5850f803-d8a0-49b8-b6f3-27bffa82ac52",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "role": {
+          "$id": "urn:uuid:135e4efa-8afc-44a9-b7ee-27b6e34ed20c",
           "type": "string",
           "enum": [
             "editor",
@@ -702,6 +811,7 @@
           ]
         },
         "by": {
+          "$id": "urn:uuid:f74e52b0-2a14-49f2-8af3-83144e61aa70",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -711,20 +821,24 @@
       "$comment": "T-136179, operator-reach.ts"
     },
     "space_logo": {
+      "$id": "urn:uuid:ea15bddc-7ddd-41cd-9fdf-961dacb2ee4a",
       "component": true,
       "type": "object",
       "description": "The space's logo: the SHA-256 of its image's bytes and their type. Shown where the space's first letter stood. Its owner sets it in the space's settings, or takes it off.",
       "properties": {
         "sha": {
+          "$id": "urn:uuid:22f9813b-e290-48c8-9bc0-a88bcca35263",
           "type": "string"
         },
         "type": {
+          "$id": "urn:uuid:c786e156-7ab4-465d-9bdc-d54acabee510",
           "type": "string"
         }
       },
       "$comment": "pages.ts `choice`. The bytes are in the bucket under the space's handle (apps.ts `LOGO`)."
     },
     "byline": {
+      "$id": "urn:uuid:0c794cc7-19ba-43f0-a241-94050114ce66",
       "component": true,
       "type": "object",
       "description": "A paid space's choice to show \"Website by yaks.app\" at the foot of its apps' pages. Its owner turns it on in the space's settings or with space_set; off where it is not worn. A space on the free plan wears the badge instead.",
@@ -732,6 +846,7 @@
       "$comment": "@yaks/platform/woven `badged`, public/badge.js. It links to yaks.app's page for organizations."
     },
     "invite": {
+      "$id": "urn:uuid:b013c215-7805-4b35-8690-d90d0474599e",
       "component": true,
       "type": "object",
       "description": "A seat or a grant offered and not yet taken: `to` is the space (a seat) or the app (a grant). Accepting writes the `member` or `grant` row and drops this one. `sent` is when its latest letter went, and `by` who sent it, whom the letter's link names.",
@@ -747,16 +862,19 @@
       ],
       "properties": {
         "to": {
+          "$id": "urn:uuid:44d8c078-e498-4944-b88d-e70a78622942",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "person": {
+          "$id": "urn:uuid:7882529f-7cb7-49d8-bce8-3d16f5db3ede",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "role": {
+          "$id": "urn:uuid:7cd7a618-54bd-4818-8d7c-ec7ed74c2768",
           "type": "string",
           "enum": [
             "owner",
@@ -765,11 +883,13 @@
           ]
         },
         "sent": {
+          "$id": "urn:uuid:0412ca8d-7ea1-47d6-870f-3a2da871868d",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "by": {
+          "$id": "urn:uuid:b297498a-04a0-45c5-a42f-cc13a09ce7f6",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -779,15 +899,18 @@
       "$comment": "invite.ts, T-37880. `to` is one property the way `hostname.serves` is. A word of its own rather than a pending mark on the seat, so everything that reads `member` and `grant` (reach, the roster, a bare app slug) reads accepted rows and nothing else, with no filter for a new reader to forget. people.ts reads `sent` when the person says they cannot get in; pages.ts `invited` reads `by`."
     },
     "inviting": {
+      "$id": "urn:uuid:875cfe7b-1fda-4daa-bee0-ebcb1362d908",
       "component": true,
       "type": "object",
       "description": "How many invitations this person has sent in the hour it names, against an hourly cap.",
       "properties": {
         "hour": {
+          "$id": "urn:uuid:c7d27a33-3f55-4788-bf85-5e350e0a2339",
           "type": "string",
           "stamped": true
         },
         "sent": {
+          "$id": "urn:uuid:a6fd49ad-c51a-4c43-bb5c-196e5c42f5e4",
           "type": "number",
           "stamped": true
         }
@@ -795,20 +918,24 @@
       "$comment": "invite.ts `CAP`. On the inviter's own row, because the cap is theirs and an invitation row dies when it is accepted or withdrawn, which would hand a sender back the letter it had counted."
     },
     "email": {
+      "$id": "urn:uuid:39b32b2d-3283-437d-b2cd-82f5292681a2",
       "component": true,
       "type": "object",
       "properties": {
         "address": {
+          "$id": "urn:uuid:a40c4825-588c-411b-9652-31b0a3a9486d",
           "type": "string"
         }
       }
     },
     "operator_alerts": {
+      "$id": "urn:uuid:5ab799fa-b2a8-4779-8c00-69b3f77331db",
       "component": true,
       "type": "object",
       "description": "How a person is told what their Operators tell them away from the page: on the browsers they allowed, by text, by email, or only in their Updates. Without it, by text when they agreed to texts, else by email. `declined` is when they answered Not now to alerts on a device offered in the conversation, which is then not offered again; their settings still turn alerts on.",
       "properties": {
         "channel": {
+          "$id": "urn:uuid:e3f6bd0b-d304-4575-8017-16299180aba9",
           "type": "string",
           "enum": [
             "push",
@@ -818,6 +945,7 @@
           ]
         },
         "declined": {
+          "$id": "urn:uuid:18b10fcd-6525-4b10-97f7-e38fb3b4e7ea",
           "type": "string",
           "format": "date-time"
         }
@@ -825,11 +953,13 @@
       "$comment": "operator-alerts.ts"
     },
     "free_spaces": {
+      "$id": "urn:uuid:80b09e69-1cc7-4318-8c4b-3591b78878c4",
       "component": true,
       "type": "object",
       "description": "How many free spaces this person may own, where the platform raised it for them: a null `count` is no limit, and a person without one gets the default.",
       "properties": {
         "count": {
+          "$id": "urn:uuid:ec1d0409-a17b-43ec-a166-cdb95e98f19e",
           "type": "integer",
           "minimum": 0
         }
@@ -837,11 +967,13 @@
       "$comment": "admin_spaces, plans.ts `freeSpaces`; the default is `SPACES`."
     },
     "role_free_spaces": {
+      "$id": "urn:uuid:ff2acea8-ff1a-4351-b0ba-2b014c8e51e2",
       "component": true,
       "type": "object",
       "description": "How many free spaces a seat of each role in the platform's own space may own, on that space's row: beneath a person's own `free_spaces` and above the default.",
       "properties": {
         "owner": {
+          "$id": "urn:uuid:32a855fa-7524-4110-a40f-92985ecc4e08",
           "type": "object",
           "properties": {
             "count": {
@@ -851,6 +983,7 @@
           }
         },
         "editor": {
+          "$id": "urn:uuid:ac3e8f04-4f1f-446c-a4f8-097129857d06",
           "type": "object",
           "properties": {
             "count": {
@@ -860,6 +993,7 @@
           }
         },
         "viewer": {
+          "$id": "urn:uuid:2c2b75df-6a7a-4d41-be4c-dbd20e518118",
           "type": "object",
           "properties": {
             "count": {
@@ -872,33 +1006,39 @@
       "$comment": "admin_spaces with a role, plans.ts `freeSpaces`; the default is `SPACES`."
     },
     "desk_sidebar": {
+      "$id": "urn:uuid:914a61e4-3c6a-4d59-ac86-2c8d121a4233",
       "component": true,
       "type": "object",
       "description": "How a person keeps the side of their yaks.app pages: collapsed to a rail of icons, or open with each one's name beside it, as it is without this.",
       "properties": {
         "collapsed": {
+          "$id": "urn:uuid:9c9e07bc-f90a-4dec-8d78-fff742f5d8f3",
           "type": "boolean"
         }
       },
       "$comment": "desk-pages.ts `deskFrame`, operator-page.ts `side`"
     },
     "desk_aside": {
+      "$id": "urn:uuid:3f6aadb7-e460-4261-8438-935175f882b5",
       "component": true,
       "type": "object",
       "description": "Whether a person keeps what sits at the right of their yaks.app pages (the conversation's helpers and lists) put away to a rail, the page centered in the whole width; open without it.",
       "properties": {
         "shut": {
+          "$id": "urn:uuid:c53cea13-4d15-4eec-b915-21fc28b01c77",
           "type": "boolean"
         }
       },
       "$comment": "frame.ts `Aside`"
     },
     "dismissed_suggestions": {
+      "$id": "urn:uuid:680c8e2c-3f75-46d2-93f8-97bcca8066aa",
       "component": true,
       "type": "object",
       "description": "What a person dismissed of the suggestions on a space's Dashboard, each `<space eid> <feature>`; a dismissed suggestion never comes back.",
       "properties": {
         "keys": {
+          "$id": "urn:uuid:4d9768a6-69a5-4113-b2e9-088c06b144e9",
           "type": "array",
           "items": {
             "type": "string"
@@ -908,81 +1048,99 @@
       "$comment": "@yaks/platform/dashboard"
     },
     "mcp_list": {
+      "$id": "urn:uuid:efa91fd0-5143-499c-9d8b-d4973166f643",
       "component": true,
       "type": "object",
       "description": "One list an MCP server a person connected offers their Operator's page, drawn beside the conversation with no model turn, on an entity of its own whose `doc{title}` heads it: the `server`'s `tool` called with `args` (a JSON object, read whole), whose rows are drawn in its order. `waits` says its rows wait on the person, so the bar and the installed page's icon count them; `ord` is its place among the server's lists.",
       "properties": {
         "server": {
+          "$id": "urn:uuid:49048993-1b6a-4b80-8281-47dc3b0738a6",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "tool": {
+          "$id": "urn:uuid:3a235c4b-3896-4431-aeaf-975025e884b1",
           "type": "string"
         },
         "args": {
+          "$id": "urn:uuid:eba24652-433b-4118-b280-690cdb6a404b",
           "type": "string"
         },
         "waits": {
+          "$id": "urn:uuid:b3624980-a318-4920-9b67-b510e9502659",
           "type": "boolean"
         },
         "ord": {
+          "$id": "urn:uuid:e60bc00e-f6dd-4e34-9d28-ef51fc70fbc9",
           "type": "number"
         }
       },
       "$comment": "operator-lists.ts"
     },
     "mentions": {
+      "$id": "urn:uuid:afd68ea5-1a1c-4cae-af3b-884df8b92fc0",
       "component": true,
       "type": "object",
       "description": "On an `mcp_server` row: where an id that server's rows carry (such as T-123) opens, as `url` with `{id}` where the id goes. The Operator page links each such id in a reply there.",
       "properties": {
         "url": {
+          "$id": "urn:uuid:0cdbe93f-4513-4d12-80c6-89cea3b3e6d0",
           "type": "string"
         }
       },
       "$comment": "operator-draw.ts `opening`"
     },
     "oauth_grant": {
+      "$id": "urn:uuid:7fecc1c7-0031-4929-8119-ec4280990c69",
       "component": true,
       "type": "object",
       "description": "One OAuth grant a person holds, as their agents and services are listed: written as the provider writes the grant, cancelled when it deletes it, and holding none of its secrets. A token is refused once its grant's row is cancelled. Times are unix seconds; `until` is when a grant whose code was never exchanged goes.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:ae3c1860-96a6-4c2c-b3a9-489ce2ac3c9c",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "id": {
+          "$id": "urn:uuid:51d5323e-ba21-4172-a2d4-4d9696be1c86",
           "type": "string",
           "stamped": true
         },
         "client": {
+          "$id": "urn:uuid:52b0c6cd-b384-41bd-9aac-efb91b48cb7e",
           "type": "string",
           "stamped": true
         },
         "created": {
+          "$id": "urn:uuid:0383c6ca-3e27-4efa-a372-2163c3dd0a5d",
           "type": "number",
           "stamped": true
         },
         "redirect": {
+          "$id": "urn:uuid:fcefc85f-7442-4b26-943e-bcb5c3c88214",
           "type": "string",
           "stamped": true
         },
         "name": {
+          "$id": "urn:uuid:2a3a1381-e70c-4118-ba2e-878aeff3dd10",
           "type": "string",
           "stamped": true
         },
         "scope": {
+          "$id": "urn:uuid:f8c56659-5a3f-4a33-b621-b99668911af6",
           "type": "string",
           "stamped": true
         },
         "expires": {
+          "$id": "urn:uuid:c55ce831-d9df-493a-b3ba-5f1c6cff8c5a",
           "type": "number",
           "stamped": true
         },
         "until": {
+          "$id": "urn:uuid:6bc02fb9-ca70-4682-bbf6-cc00c3fe80a8",
           "type": "number",
           "stamped": true
         }
@@ -990,11 +1148,13 @@
       "$comment": "grant-rows.ts, asking.ts. The provider keeps grants in KV. Its eid is derived from the grant's id."
     },
     "grants_listed": {
+      "$id": "urn:uuid:bcb22cb0-14a8-4274-82b3-4255cf5ac3ba",
       "component": true,
       "type": "object",
       "description": "On a person's row: their `oauth_grant` rows are whole, every grant they held before the rows began copied in, since `at`.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:f6d02277-85bd-49ad-8372-efe2b1ab08b1",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -1002,6 +1162,7 @@
       }
     },
     "public_file": {
+      "$id": "urn:uuid:b1d1f285-b874-49e6-8a81-7fbc302e75eb",
       "description": "A file an app published at a path of its address, served to anyone before the app runs. Served whatever the app's access. An address holds one file; the bytes are the app's, under `public/<sha>`.",
       "component": true,
       "type": "object",
@@ -1012,24 +1173,29 @@
       ],
       "properties": {
         "app": {
+          "$id": "urn:uuid:cc62b64b-d7dd-4e47-87ff-2d1baea3fed7",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "path": {
+          "$id": "urn:uuid:4bce147c-dfb6-4371-8a65-5a100a4f9a1c",
           "type": "string",
           "stamped": true
         },
         "sha": {
+          "$id": "urn:uuid:6f2edae8-dbd6-4685-9de2-5d5048dce236",
           "type": "string",
           "stamped": true
         },
         "mime": {
+          "$id": "urn:uuid:34c6089b-02bb-4f7d-8a85-04af4f5bcd00",
           "type": "string",
           "stamped": true
         },
         "size": {
+          "$id": "urn:uuid:596951a0-533b-4172-8a36-4d0234e1eee4",
           "type": "number",
           "stamped": true
         }
@@ -1037,6 +1203,7 @@
       "$comment": "public-files.ts. Its eid is derived from the app and the path."
     },
     "restored": {
+      "$id": "urn:uuid:58517ae7-90f6-44b1-8e4f-e8df42811704",
       "component": true,
       "type": "object",
       "description": "One time this app's store, or this space's Operator (`space`), was put back to a moment: when it was asked for (`at`), the moment asked for (`to`), who asked (`by`), and the bookmark the store stood at before it moved (`from_bookmark`). One entity per restore, so a restore can itself be undone.",
@@ -1046,32 +1213,38 @@
       ],
       "properties": {
         "app": {
+          "$id": "urn:uuid:51f28e41-adf6-4a3e-8373-7736a7dadd98",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "space": {
+          "$id": "urn:uuid:d91b7ece-98cd-4fad-aba8-7fd8bd0cbd57",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "at": {
+          "$id": "urn:uuid:31263b48-d218-4352-8a43-b006268448c4",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "to": {
+          "$id": "urn:uuid:26b6a306-69b0-4ed5-a9de-e3fdb2b96dfe",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "by": {
+          "$id": "urn:uuid:a27147a9-9707-40bb-936b-e655b3afd0b3",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "from_bookmark": {
+          "$id": "urn:uuid:5e3d114d-7ba6-4e2d-8b09-af5958a69a30",
           "type": "string",
           "stamped": true
         }
@@ -1079,15 +1252,18 @@
       "$comment": "recover.ts, T-34507. An entity of its own per restore, like `deploy`, and not a word on the app row — because a second restore overwriting the first would take away the way back from it. It lives in the directory, which is a different object from the store it describes, so the trail survives the very recovery it is about: what the store held is wound back, and what happened to it is still written down here."
     },
     "trashed": {
+      "$id": "urn:uuid:eb1ccf4d-3d31-41f5-a466-68328f6f4e23",
       "component": true,
       "type": "object",
       "description": "That this app, or this space, is in the trash, and since when. A delete marks it and keeps everything: the bytes, the store, the slug. While it is worn the app answers nothing on the web, leaves everyone's tool and view lists, is not the front page whatever else it wears, and its mail bounces; a space wearing it does all of that for every app in it at once. `app_restore` and `space_restore` take the word off and give all of that back, and thirty days on the daily sweep erases it for good.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:e4a6e9af-f27d-44c1-9e01-06e3d79d97c6",
           "type": "string",
           "format": "date-time"
         },
         "by": {
+          "$id": "urn:uuid:3e9bcb27-8895-4e90-be81-bed1a30402f4",
           "type": "string",
           "ref": "entity",
           "death": "keep"
@@ -1096,15 +1272,18 @@
       "$comment": "erase.ts, T-34430, T-34431. One word on the row rather than a state property beside it, for the reason `home` is one: what is in the trash is what wears this, and a second copy of the same fact drifts from it. That is also why an app and a space share the word — it says one thing, thrown away and since when, and every reader asks the row in front of it."
     },
     "untrashed": {
+      "$id": "urn:uuid:12266143-7f6e-4d4e-9853-116a6313f1d1",
       "component": true,
       "type": "object",
       "description": "That this app came back out of the trash, and when; the next trash takes it off. It ranks the app among its space's homes: a word another app took while this one was away stays that app's for the space, and this app keeps its own for its own pages and rows.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:b78d416c-1b80-4845-bc45-5779e0206239",
           "type": "string",
           "format": "date-time"
         },
         "by": {
+          "$id": "urn:uuid:ab924ed4-0f95-48c3-88cf-9ab4f68b1eb6",
           "type": "string",
           "ref": "entity",
           "death": "keep"
@@ -1113,62 +1292,75 @@
       "$comment": "erase.ts `untrash`, directory.ts `ranked`"
     },
     "screenshot": {
+      "$id": "urn:uuid:9c2276c2-eab8-411c-b817-e82b9f1b927c",
       "component": true,
       "type": "object",
       "description": "An uploaded image the owner chose to represent this app. Its bytes and attachment live in the app's store; only the content address lives here.",
       "properties": {
         "blob": {
+          "$id": "urn:uuid:7bdc4081-f19b-4217-acf8-070591a469d2",
           "type": "string"
         }
       }
     },
     "theme": {
+      "$id": "urn:uuid:d037517e-ff23-492b-938c-63ffc70de462",
       "component": true,
       "type": "object",
       "description": "The colours an app's owner set for its installed chrome, through `app_set`, never guessed off its page. An app that names neither gets the platform's own palette instead of a browser's default grey.",
       "properties": {
         "theme_color": {
+          "$id": "urn:uuid:dc2332f0-1593-481b-92a5-f46cbe8aeb37",
           "type": "string"
         },
         "background_color": {
+          "$id": "urn:uuid:bfb6d34e-3e72-4216-8b8d-b34dc46a02d0",
           "type": "string"
         }
       },
       "$comment": "apps.ts `manifesting`/`pinned`, T-33055"
     },
     "seeded": {
+      "$id": "urn:uuid:18f7596f-96b2-4f10-bb3e-d821d8cc6433",
       "component": true,
       "type": "object",
       "description": "That this app's store has been seeded, and by which release. A redeploy finds it and writes nothing, so the data an app comes with never lands on top of what the person has changed since.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:c4cc33a4-2cb6-48e1-9cd8-2b4c32503f51",
           "type": "string",
           "format": "date-time"
         },
         "version": {
+          "$id": "urn:uuid:0098061e-d1df-4a35-aa63-05155e85333e",
           "type": "number"
         }
       },
       "$comment": "seed.ts, T-34327. It lives on the app rather than in the store because an install mints a new app row and a new store together, and the copy is meant to be seeded again."
     },
     "demo": {
+      "$id": "urn:uuid:4098e5e1-332b-4b28-a726-97b347dc2d95",
       "component": true,
       "type": "object",
       "description": "A private published app's sample store, which strangers read: `store` the handle of the store holding its published seed, `seed` the sha of the declaration and seed it was made from, and `version` and `release` what it was made at, which strangers are served. Only the platform writes it.",
       "properties": {
         "store": {
+          "$id": "urn:uuid:7b86c3c2-56dc-43c9-9d34-89f424d6afa2",
           "type": "string",
           "stamped": true
         },
         "seed": {
+          "$id": "urn:uuid:88224227-9358-4487-abbd-192d3686f16d",
           "type": "string",
           "stamped": true
         },
         "version": {
+          "$id": "urn:uuid:4449ea66-e638-469e-92db-4e93c2182925",
           "type": "number",
           "stamped": true
         },
         "release": {
+          "$id": "urn:uuid:347bc706-6edb-4eac-bed6-c3cc3f814318",
           "type": "string",
           "stamped": true
         }
@@ -1176,24 +1368,29 @@
       "$comment": "./visits.ts, D-134327. Server-owned: a handle an app could write is a door into another app's store."
     },
     "visit": {
+      "$id": "urn:uuid:b01a62a7-7b98-4b8d-9e71-29894d2a0cd0",
       "component": true,
       "type": "object",
       "description": "A browser's own store of an app it visited without a seat, on its `worked` edge to the app: `store` its handle and `blobs` where its uploads go, both written once at its first write; `seen` when it was last used, at most hourly; `adopted` the app it became when its person installed it. Only the platform writes it.",
       "properties": {
         "store": {
+          "$id": "urn:uuid:49123114-318d-40d1-b113-85c4b9a15275",
           "type": "string",
           "stamped": true
         },
         "blobs": {
+          "$id": "urn:uuid:e45f98eb-e1c9-4064-b368-055907f420cb",
           "type": "string",
           "stamped": true
         },
         "seen": {
+          "$id": "urn:uuid:254ce0e1-de3a-4b8f-bb1a-a27ddcb1901c",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "adopted": {
+          "$id": "urn:uuid:0208c6a7-88d3-4386-a641-97606796e087",
           "type": "string",
           "stamped": true
         }
@@ -1201,27 +1398,33 @@
       "$comment": "./visits.ts, D-134327. Server-owned for the reason `demo` is."
     },
     "seller": {
+      "$id": "urn:uuid:146a514e-a439-4eee-8bbc-62c9ea8136d8",
       "component": true,
       "type": "object",
       "description": "The connected account this space sells through, which is the merchant of its sales: `via` the payment provider it is held at (`stripe`), `account` the id every call names it by, `submitted` that they finished its form, and `ready` that it will take money for them. Everything else about the merchant is the provider's. `house` marks a space that sells on the platform's own account: the platform is the merchant and pays the provider's fees, no fee is taken, and there is no `account`. Only the platform writes it.",
       "properties": {
         "via": {
+          "$id": "urn:uuid:acbca2d1-cb85-47bc-9a82-c6b674c9c909",
           "type": "string",
           "stamped": true
         },
         "account": {
+          "$id": "urn:uuid:560b8110-a00a-43d9-8cc3-386bacd96c13",
           "type": "string",
           "stamped": true
         },
         "ready": {
+          "$id": "urn:uuid:64e567b1-2886-44f0-80aa-79d9f353efb0",
           "type": "boolean",
           "stamped": true
         },
         "submitted": {
+          "$id": "urn:uuid:22f8619d-0cd3-4be6-8b7f-c2f218317264",
           "type": "boolean",
           "stamped": true
         },
         "house": {
+          "$id": "urn:uuid:b0bddd33-e52a-4714-a071-27f6922a049f",
           "type": "boolean",
           "stamped": true
         }
@@ -1229,74 +1432,90 @@
       "$comment": "sell.ts, T-34524. Direct charges, so this is the whole of what the platform keeps about the merchant; their bank, business details and disputes stay with the provider.\n\nServer-owned for the reason `plan` is: `ready` is what the checkout door reads before it takes anybody's money, and a property a space could write for itself is a space selling before its provider ever said it may. Only the provider's webhook and `space_sell` write them, through the kernel's own door (directory.ts `stamp`).\n\n`house` (T-2983) is set only by the platform's owner, with `yak admin house`."
     },
     "phone_line": {
+      "$id": "urn:uuid:1c666135-6bf6-4ba1-9a00-785012ca6ab2",
       "component": true,
       "type": "object",
       "description": "A number the platform holds for a space: bought through the phone lent as `via`, on the platform's account, at `upfront` dollars once and `monthly`, with the toll-free `verification` filed for it by the provider's id. What it is approved for: calls where `voice`, texts to people who know it where `sms`, and texts to many once its 10DLC `campaign` is registered, by the campaign's id. `called` is when the last call charged to the space began. Whichever space or app row wears it as `phone{number}` is where it texts from; the line says only who holds it. The row wears the wake that charges each later month. A space's erasure leaves the line for the return job to release, with the platform paying any carrier charges after erasure. Only the number tools write it.",
       "properties": {
         "number": {
+          "$id": "urn:uuid:97f343c0-3171-459a-ac72-0287729f33fd",
           "type": "string",
           "unique": true,
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:a2203afd-a498-4f80-bb40-a6db6aca3d95",
           "type": "string",
           "stamped": true
         },
         "space": {
+          "$id": "urn:uuid:0b77e530-a60b-4102-b954-45ec9dd3cb3a",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "upfront": {
+          "$id": "urn:uuid:f49a9160-507f-42af-aff9-b7b22fe0483b",
           "type": "number",
           "stamped": true
         },
         "monthly": {
+          "$id": "urn:uuid:dfe83b0d-3332-406b-9922-dfb22e00e3b5",
           "type": "number",
           "stamped": true
         },
         "at": {
+          "$id": "urn:uuid:25076747-c158-4bf3-bea8-6a4dd736271b",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "verification": {
+          "$id": "urn:uuid:e5271506-e5c8-4585-bd2b-75d8c8fe0104",
           "type": "string",
           "stamped": true
         },
         "sms": {
+          "$id": "urn:uuid:506d1fa9-deaa-4893-9b07-8fa06248aa8f",
           "type": "boolean",
           "stamped": true
         },
         "voice": {
+          "$id": "urn:uuid:25f4899c-c416-4f7d-87c0-c82b2f711c68",
           "type": "boolean",
           "stamped": true
         },
         "campaign": {
+          "$id": "urn:uuid:f6742b98-711a-46ca-8791-37d653dc37c8",
           "type": "string",
           "stamped": true
         },
         "called": {
+          "$id": "urn:uuid:06f20173-68ae-445c-873a-1fe256ee272c",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "legacy_seat": {
+          "$id": "urn:uuid:88e725b8-4fa0-4c3f-865c-a2eb0ceeead1",
           "type": "string",
           "stamped": true
         },
         "ordering": {
+          "$id": "urn:uuid:19c91188-391d-4e76-b2bc-2b1baeb975a6",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "order_reported": {
+          "$id": "urn:uuid:35bbb827-63f1-49c0-ace2-4c59fabf2459",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "returned": {
+          "$id": "urn:uuid:88b7fda7-4e7c-46d9-9242-9704ce7ea73b",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -1305,23 +1524,27 @@
       "$comment": "numbers.ts `uses`, workers/yak/number-upkeep.ts, meter-graph.ts `lines`. Stamped, all of it, for the reason `seller` is: it is money the platform spends."
     },
     "phone_login": {
+      "$id": "urn:uuid:82f7fa04-6d1a-40b3-9d33-b15fda960e02",
       "description": "An owner seat that requested a softphone sign-in for a held number.",
       "component": true,
       "type": "object",
       "properties": {
         "line": {
+          "$id": "urn:uuid:1abe1deb-b150-4d81-a092-311292bb0d92",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "seat": {
+          "$id": "urn:uuid:dcc194f9-61eb-4374-b85d-32b285dfc937",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "attempted": {
+          "$id": "urn:uuid:bd16e636-3d60-47c4-89ec-1758fc134e50",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -1329,57 +1552,68 @@
       }
     },
     "phone_slow": {
+      "$id": "urn:uuid:5f6805ba-2b8f-4394-a5f9-46cace3b0407",
       "description": "A phone provider’s run of slow answers, reported once it lasts an hour.",
       "component": true,
       "type": "object",
       "properties": {
         "since": {
+          "$id": "urn:uuid:ef599eb9-e869-46c2-ad8c-54216b87a7a5",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "last": {
+          "$id": "urn:uuid:3ee60f51-b504-4793-91dd-7f5ed6c7d0ca",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "told": {
+          "$id": "urn:uuid:2a68b0ab-26c1-4810-9c5c-2f53ddf69799",
           "type": "boolean",
           "stamped": true
         }
       }
     },
     "phone_release": {
+      "$id": "urn:uuid:cde9ad39-c0e8-414a-9b9b-1221d4cceb8d",
       "description": "Carrier work to stop or permanently return a number after it or its space is deleted. Its line is the phone_line, which holds the number (phone_line.number).",
       "component": true,
       "type": "object",
       "properties": {
         "line": {
+          "$id": "urn:uuid:a3fa6748-8df5-4828-9786-242e1b042060",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "at": {
+          "$id": "urn:uuid:acd0e556-5b36-432a-ab87-00592c4d4eb2",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "permanent": {
+          "$id": "urn:uuid:014b36e0-065b-45d5-b249-194ee1c1bd7f",
           "type": "boolean",
           "stamped": true
         },
         "stopped_in": {
+          "$id": "urn:uuid:91385201-06a7-44ac-a8ad-e3cb709df93a",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "stopped_out": {
+          "$id": "urn:uuid:8639e83b-717f-4d4d-91ff-d99025fd66e8",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "reported": {
+          "$id": "urn:uuid:edc543bc-ae5d-4371-a4b8-a5349372a980",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -1387,11 +1621,13 @@
       }
     },
     "fee": {
+      "$id": "urn:uuid:d63cb30e-c5a3-4ab4-8d75-2a48d88064c3",
       "component": true,
       "type": "object",
       "description": "What the platform takes from one sale, in basis points, on the platform's own space row (`yak`). Unset reads as 0. Only the platform's owner writes it.",
       "properties": {
         "bps": {
+          "$id": "urn:uuid:4b6c675d-1746-4d8e-ba82-d48aef6f0249",
           "type": "number",
           "stamped": true
         }
@@ -1399,15 +1635,18 @@
       "$comment": "sell.ts `fee`, `fees`. A fee a space could write for itself is a seller choosing what they pay us; a fee written around that door is one the read cache would go on answering for a TTL, and the rate a sale is charged has to be the rate the owner set a moment ago."
     },
     "budget": {
+      "$id": "urn:uuid:5b2f7ef4-33f8-4bfa-a684-187d1107ab3c",
       "component": true,
       "type": "object",
       "description": "A space's monthly dollar budget for models and voice, in place of its plan's. Written only by the platform's owner, and by a newcomer's start, whose budget is one build's and says so (`newcomer`) until keeping the space lifts the budget whole.",
       "properties": {
         "dollars": {
+          "$id": "urn:uuid:2f07b963-5ba3-4749-9d5f-c39da1390db5",
           "type": "number",
           "stamped": true
         },
         "newcomer": {
+          "$id": "urn:uuid:131363f3-8291-4c9f-86d4-ff3120f732a0",
           "type": "boolean",
           "stamped": true
         }
@@ -1415,22 +1654,26 @@
       "$comment": "meter.ts `limitOf`, budget.ts, newcomer.ts `oneBuild`. Stamped for the reason the fee is."
     },
     "free_ai_budget": {
+      "$id": "urn:uuid:9e86e580-85fe-4ff0-b8bd-f81b1b7da79b",
       "description": "The Free plan’s monthly AI allowance in dollars, on the platform’s space.",
       "component": true,
       "type": "object",
       "properties": {
         "dollars": {
+          "$id": "urn:uuid:8ccd32cd-94e4-4d1d-b9f6-58eb6a3b2f63",
           "type": "number",
           "stamped": true
         }
       }
     },
     "starter": {
+      "$id": "urn:uuid:6aad08cb-c92b-49d7-b56c-6acdeb7774b5",
       "component": true,
       "type": "object",
       "description": "The dollars a space holds once, before its monthly budget, where that is other than the platform's starter amount: none on a person's later spaces. Only the platform writes it.",
       "properties": {
         "dollars": {
+          "$id": "urn:uuid:951b74e2-5c5a-4d54-a4a7-4d2c4befa39f",
           "type": "number",
           "stamped": true
         }
@@ -1438,25 +1681,30 @@
       "$comment": "plans.ts `STARTER`, directory.ts `mint`. Stamped for the reason the budget is."
     },
     "visitor_share": {
+      "$id": "urn:uuid:ae7cf50a-9942-4587-825d-720c7ffcc179",
       "component": true,
       "type": "object",
       "description": "The percent of a space's monthly budget for models and voice that its apps' visitors may spend together, and the model calls one visitor may ask for in a day, where its owner set them with space_set; without it, the platform's defaults. Its owner writes it.",
       "properties": {
         "percent": {
+          "$id": "urn:uuid:3db5ab56-49c2-40ce-9738-28e175865b15",
           "type": "number"
         },
         "calls": {
+          "$id": "urn:uuid:ca67f856-df3f-4441-855f-f0727547b947",
           "type": "number"
         }
       },
       "$comment": "meter.ts `visiting`, `visitorCalls`; the defaults are meter.ts `VISITORS` and `VISITOR_CALLS`."
     },
     "started": {
+      "$id": "urn:uuid:fdb4da55-8711-4743-8555-fb34020e4ff1",
       "component": true,
       "type": "object",
       "description": "The space a person's starter went to: worn from their first space on, and kept once that space is gone, so the starter is theirs once.",
       "properties": {
         "space": {
+          "$id": "urn:uuid:b7a5b61e-8d57-48f3-b555-e7e133cbff09",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -1466,11 +1714,13 @@
       "$comment": "directory.ts `mint`"
     },
     "subscribed": {
+      "$id": "urn:uuid:b24cb0c2-f105-4419-9d0c-9751589a5188",
       "component": true,
       "type": "object",
       "description": "The space a person's first paid subscription went to, kept when the space is gone.",
       "properties": {
         "space": {
+          "$id": "urn:uuid:f5c7c09c-36b6-492a-88d5-89e70e3eb790",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -1479,11 +1729,13 @@
       }
     },
     "pro_grant": {
+      "$id": "urn:uuid:c58f49a7-fd5b-42cb-93ba-1f0d49238e8b",
       "component": true,
       "type": "object",
       "description": "When a space first took the Pro plan, paid or comped, and was given its building credit: once per space.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:cf51c17e-8d6c-4ad9-be11-4afdeca9ced3",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -1492,18 +1744,22 @@
       "$comment": "plans.ts `PRO_GRANT`, billing.ts `granted`"
     },
     "newcomer": {
+      "$id": "urn:uuid:19681066-154a-4f37-9bd2-60316cc015ec",
       "component": true,
       "type": "object",
       "description": "When a person came in by the home page's box, before they had an address: a newcomer until they sign in on that browser or their space is erased, when the row goes. `campaign` is the one their arrival named, '' for none, which the funnel counts their steps under. `client` is what kind of client opened it: `browser`, `verified`, `agent` or `bot`, or `test` for one whose arrival names an agent's check. Only a browser's is a person's; a script's, such as an agent checking the box through curl, is counted apart.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:d01fca24-e3ee-423a-8e30-d3a3f8dae7a5",
           "type": "string",
           "format": "date-time"
         },
         "campaign": {
+          "$id": "urn:uuid:87525ec6-334a-4423-8c49-b81b6224ff6a",
           "type": "string"
         },
         "client": {
+          "$id": "urn:uuid:8efeb589-2ca6-4695-b46c-fae250ae9fac",
           "type": "string",
           "enum": [
             "browser",
@@ -1516,16 +1772,19 @@
       "$comment": "newcomer.ts, directory.ts `newcomer`, erase.ts `vacated`, arrival.ts `campaign`, directory.ts `stepper`, @yaks/platform/visitor `classed`, @yaks/platform/bots `CHECK`, directory.ts `testIs`."
     },
     "arrived": {
+      "$id": "urn:uuid:9bd90cf9-8dc8-44f4-a12d-4bfdbeff0d2a",
       "description": "Where a person came from when they signed up: the door, and the page, campaign, app, assistant or inviter that brought them. Written once, by the kernel, the first time they come in by any door, and never moved after. Somebody invited by another's code is that `referral`'s to say.",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:6bc88f7e-4ced-4c3a-9cd7-25ba16ef1a5a",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "door": {
+          "$id": "urn:uuid:c1ff567a-22f6-4ecb-8966-ed114634b457",
           "type": "string",
           "description": "The way in: the home page's box (`box`), the sign-in page (`login`), an assistant's connector (`connector`), an invitation's link (`invitation`), or a letter or a text to the platform (`email`, `text`).",
           "enum": [
@@ -1539,16 +1798,19 @@
           "stamped": true
         },
         "page": {
+          "$id": "urn:uuid:5ab97199-8692-48df-9bd9-c215db94a0c6",
           "type": "string",
           "description": "The home page they opened last.",
           "stamped": true
         },
         "campaign": {
+          "$id": "urn:uuid:a4d6b568-1594-4ad3-83bb-3b2682234d2c",
           "type": "string",
           "description": "The funnel's name for those tags, kept apart to filter and group on.",
           "stamped": true
         },
         "said": {
+          "$id": "urn:uuid:5c8a9cee-46d6-495a-b65c-75add518c0c4",
           "type": "object",
           "description": "The tags and click ids of the link that brought them, read whole.",
           "additionalProperties": {
@@ -1557,6 +1819,7 @@
           "stamped": true
         },
         "app": {
+          "$id": "urn:uuid:5e4747c9-3cad-4b70-8b3e-cb8c7c8c4679",
           "type": "string",
           "description": "The app whose badge they followed.",
           "ref": "entity",
@@ -1564,11 +1827,13 @@
           "stamped": true
         },
         "assistant": {
+          "$id": "urn:uuid:c09e59ef-ec7c-4fbf-a837-8226f70ce8ed",
           "type": "string",
           "description": "The name the connector's client registered under, its own choice.",
           "stamped": true
         },
         "inviter": {
+          "$id": "urn:uuid:b9217103-10aa-4597-bc8e-d2cc4ee6a9d8",
           "type": "string",
           "description": "Who sent the invitation.",
           "ref": "entity",
@@ -1579,11 +1844,13 @@
       "$comment": "workers/yak arrivals.ts `welcomed`; the browser's arrival is arrival.ts `Came`, and the home page variant.ts."
     },
     "visitor_build": {
+      "$id": "urn:uuid:c0429765-5302-4022-816d-4702cb9a519b",
       "component": true,
       "type": "object",
       "description": "When the home page's box opened this space for a newcomer. It stays once they keep it, so who kept each build is known after the newcomer's own row is gone.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:0c247d4c-05d7-42f8-b94c-b4b053164fc4",
           "type": "string",
           "format": "date-time"
         }
@@ -1591,15 +1858,18 @@
       "$comment": "newcomer.ts `oneBuild`; the platform admin's Visitor builds page (admin.ts) reads it."
     },
     "preview": {
+      "$id": "urn:uuid:a573859b-78b4-4b8d-86c3-5f3a7ce7a32d",
       "component": true,
       "type": "object",
       "description": "A site somebody else may own, rebuilt here from its web address. On a space: the box was given that address `at`, and the apps born here after are previews of it. On an app: it is one, private, marked on its pages and never indexed, until a domain of that site is verified on its space, which takes the mark off both rows.",
       "properties": {
         "site": {
+          "$id": "urn:uuid:79fb47c6-7401-4c2d-8b3e-1e4045cc5fe8",
           "type": "string",
           "stamped": true
         },
         "at": {
+          "$id": "urn:uuid:d6e95e97-d7ac-4ed6-ba0f-58eeeaf5be91",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -1608,53 +1878,67 @@
       "$comment": "newcomer.ts `previewing`, domains.ts `refresh`"
     },
     "spend": {
+      "$id": "urn:uuid:6e6cde67-354e-44d2-9bfb-572d469ffa98",
       "component": true,
       "type": "object",
       "description": "What a space just spent on its month: a letter, a model call, a voice's lease, an app's text, container seconds. It is added to the space's `meter` in the write's own transaction, so two spends at once both count, and is never kept. A `held` spend is a model call or a voice's lease holding its most before it starts, refused when it does not fit what is left of the month's budget. A `refunded` one is the platform owner's correction, `why` it was refunded. A `bought` one is a block of credit paid for, added to the space's `credit`. Only the platform writes it.",
       "properties": {
         "month": {
+          "$id": "urn:uuid:762bd949-94e5-4f2a-84de-595c741f237b",
           "type": "string"
         },
         "held": {
+          "$id": "urn:uuid:f8247ebc-f0cc-45f4-a59c-66da4c6ce7e6",
           "type": "boolean"
         },
         "emails": {
+          "$id": "urn:uuid:02482255-de1e-421f-b3e7-ad9fae2bb454",
           "type": "number"
         },
         "models": {
+          "$id": "urn:uuid:5c304f03-b77a-41b3-ab42-987996ef1baf",
           "type": "number"
         },
         "realtime": {
+          "$id": "urn:uuid:969d0a86-af4c-4b47-8396-529e13eaf541",
           "type": "number"
         },
         "texts": {
+          "$id": "urn:uuid:4730ad9a-18fa-4bce-a746-be734818cf32",
           "type": "number"
         },
         "seconds": {
+          "$id": "urn:uuid:372a1c5f-7190-4d91-83d3-95b630fed2c4",
           "type": "number"
         },
         "visitors": {
+          "$id": "urn:uuid:a2e45b73-763d-41ce-970b-7317f9284b7f",
           "type": "number"
         },
         "source": {
+          "$id": "urn:uuid:2bbda8f8-b2d8-46d5-8780-708395eb7d28",
           "type": "string",
           "description": "What its dollars bought, kept by the day in the space's `trend.sources`.",
           "$comment": "meter.ts `SOURCES`"
         },
         "at": {
+          "$id": "urn:uuid:a3f63481-941b-4873-b0df-1fa251b1671f",
           "type": "string",
           "format": "date-time",
           "description": "When its dollars were spent, where before the write: a settlement correcting a hold lands on the day the hold was made."
         },
         "refunded": {
+          "$id": "urn:uuid:db3da1b2-7339-4819-81bf-2cb2152a85d9",
           "type": "number",
           "stamped": true
         },
         "why": {
+          "$id": "urn:uuid:6654d185-ecc1-48ce-bf23-8808ec0e4b97",
           "type": "string",
           "stamped": true
         },
         "bought": {
+          "$id": "urn:uuid:44785c89-76b7-4ddb-bc9e-f335fc00c4c9",
           "type": "number",
           "stamped": true
         }
@@ -1662,21 +1946,25 @@
       "$comment": "meter.ts `spend`, model-spend.ts `reserved`, budget.ts, billing.ts `credited`. A refund is journaled with who wrote it, since the meter is not. Stamped for the reason the budget is."
     },
     "credit_block": {
+      "$id": "urn:uuid:df04d861-ae03-4a6e-b71e-1022c32bdf5d",
       "component": true,
       "type": "object",
       "description": "One block of credit paid for, named by the checkout that sold it, so a payment told twice is credited once. Only the platform writes it.",
       "properties": {
         "space": {
+          "$id": "urn:uuid:4935146d-3e5e-4673-945c-d6c4adcd138c",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "dollars": {
+          "$id": "urn:uuid:6bc9814d-4aa3-43b9-a516-042a5f6ee3cd",
           "type": "number",
           "stamped": true
         },
         "checkout": {
+          "$id": "urn:uuid:5389e27c-d004-40ec-9598-60b9a3b22b5c",
           "type": "string",
           "stamped": true
         }
@@ -1684,16 +1972,19 @@
       "$comment": "billing.ts `credited`: the row is written only where none is, in the write whose `spend{bought}` adds the block to the space's `credit`. Stamped for the reason the budget is."
     },
     "signed_in": {
+      "$id": "urn:uuid:a9aa8bcd-5283-4153-a17f-2f0f32c64109",
       "component": true,
       "type": "object",
       "description": "When this person last got in (`at`), and how (`via`): one row, so it holds the last way in rather than a trail. `first` is when they first got in, written once, which is the funnel's sign-up.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:fe46852f-d716-4700-a96d-51694ae2144e",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:8ef2b7eb-4573-4cdb-aa73-6bde3444fe37",
           "type": "string",
           "enum": [
             "code",
@@ -1703,6 +1994,7 @@
           "stamped": true
         },
         "first": {
+          "$id": "urn:uuid:4c554b78-673b-40aa-8f14-54c772579d9e",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -1711,6 +2003,7 @@
       "$comment": "signin.ts `stamped`, T-34351, T-149011. One row because the question a standing sign-in link raises is whether anybody used it at all. Not `kind`: it is a mark a person wears, never a thing of its own."
     },
     "built": {
+      "$id": "urn:uuid:433fab98-8094-404d-b94e-ee232d67a725",
       "description": "A Workers Build the kernel started through main's deploy hook, and the commit it rebuilds.",
       "component": true,
       "type": "object",
@@ -1718,6 +2011,7 @@
       "journal": false,
       "properties": {
         "commit": {
+          "$id": "urn:uuid:51f2107c-f0a2-4bb3-b341-cee272d373fe",
           "type": "string",
           "stamped": true
         }

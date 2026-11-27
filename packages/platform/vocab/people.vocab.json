@@ -1,43 +1,55 @@
 {
+  "$id": "urn:uuid:ce488529-3db9-480b-98ad-cec76e3cd0f5",
   "$defs": {
     "holder": {
+      "$id": "urn:uuid:5a7c6dbf-2095-4fb2-b821-2215799850ae",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:69d8a8c1-c801-4369-beea-7c83473c63cd",
           "type": "string"
         },
         "place": {
+          "$id": "urn:uuid:ff0e054e-ef8e-4191-b091-7cce3c27ce59",
           "type": "string"
         },
         "held": {
+          "$id": "urn:uuid:036cac96-c433-4a65-8e69-5d916d95f633",
           "type": "string"
         },
         "on": {
+          "$id": "urn:uuid:97c3da2d-c8fa-4ad0-ae81-1e9fce2c2423",
           "type": "string"
         },
         "person": {
+          "$id": "urn:uuid:e87f5462-ee2d-4cac-94e2-296232913986",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:93d2e5d0-32a5-4192-ba51-7f4e3e8f8afc",
           "type": "string"
         },
         "email": {
+          "$id": "urn:uuid:c530ffbd-7a85-4513-a6b9-290039b6447a",
           "type": [
             "string",
             "null"
           ]
         },
         "role": {
+          "$id": "urn:uuid:956a18f2-18a1-49c3-b3bd-8c3530a25e00",
           "type": "string"
         },
         "sent": {
+          "$id": "urn:uuid:3c3cebed-7a1d-4f0f-9340-9702d9f2578e",
           "type": [
             "string",
             "null"
           ]
         },
         "rank": {
+          "$id": "urn:uuid:ee98f7bb-ce50-4516-a507-3d9f084901c4",
           "type": "integer"
         }
       },
@@ -52,22 +64,28 @@
       ]
     },
     "admitted": {
+      "$id": "urn:uuid:344846ea-8043-4373-94df-6a513cfadef9",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:562008d8-bf75-472f-9efc-77a4e043a042",
           "type": "string"
         },
         "operator": {
+          "$id": "urn:uuid:52d471a9-7493-4bd6-8618-037eadfebdbc",
           "type": "string"
         },
         "slug": {
+          "$id": "urn:uuid:c19657df-d7be-4a02-af65-01aab15f2495",
           "type": "string"
         },
         "title": {
+          "$id": "urn:uuid:185157a5-f81d-46cf-b49e-9fe1ed5c42fc",
           "type": "string"
         },
         "role": {
+          "$id": "urn:uuid:0aa628ee-7d08-4754-ac90-aeaa2450155b",
           "type": "string"
         }
       },
@@ -79,16 +97,20 @@
       ]
     },
     "invitable": {
+      "$id": "urn:uuid:21b31542-bcaa-4860-8943-4e840e88f716",
       "component": true,
       "type": "object",
       "properties": {
         "person": {
+          "$id": "urn:uuid:f864b400-3543-4ae1-852c-7b12065d18dd",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:9a0da7e3-125d-4a04-acae-593ca91a32be",
           "type": "string"
         },
         "rank": {
+          "$id": "urn:uuid:7fa3d564-145c-4c45-9bdf-2ac0fadeb38b",
           "type": "integer"
         }
       },
@@ -99,28 +121,36 @@
       ]
     },
     "memberAdd": {
+      "$id": "urn:uuid:08b6d50c-13a2-49f7-8a9e-2ff20be503c2",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:78f0cc3e-d776-4c08-9add-65c173baafe5",
           "type": "string"
         },
         "friend": {
+          "$id": "urn:uuid:3743a158-8f38-4999-a68c-07af9df0ae1a",
           "type": "string"
         },
         "email": {
+          "$id": "urn:uuid:0f3fa6cb-15cd-4a2e-bd66-200208543f47",
           "type": "string"
         },
         "app": {
+          "$id": "urn:uuid:97f5bbe7-a039-4b5b-a6a2-69d5f2c77694",
           "type": "string"
         },
         "role": {
+          "$id": "urn:uuid:63724b40-926d-4e3d-b886-53dc3231cc88",
           "type": "string"
         },
         "note": {
+          "$id": "urn:uuid:94d71eda-ee7b-4573-ba74-f1439e0d5b7f",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:3b75a049-3d45-440d-99fe-e982f1ea0f4a",
           "type": "string"
         }
       },
@@ -129,19 +159,24 @@
       ]
     },
     "memberRemove": {
+      "$id": "urn:uuid:274c025a-859c-4f55-a6a2-256cc224952b",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:26e80539-2da8-417b-8b24-ae6f099c806a",
           "type": "string"
         },
         "email": {
+          "$id": "urn:uuid:c8d34ad1-7aed-49f3-8a47-52388c8fbfbe",
           "type": "string"
         },
         "app": {
+          "$id": "urn:uuid:05134d3f-1a87-4ae8-bc9b-60593b5c8b21",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:87770c9f-8486-4d27-9ddd-4d192f7edd98",
           "type": "string"
         }
       },
@@ -151,16 +186,20 @@
       ]
     },
     "inviteAgain": {
+      "$id": "urn:uuid:1af0300a-f682-4dad-84a6-daacaea05583",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:60a239a6-50f9-4006-9f3a-9b6ae703b46f",
           "type": "string"
         },
         "invite": {
+          "$id": "urn:uuid:24ed858a-2d14-4275-9da2-af4e433b5c48",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:e6381a69-779b-49d5-a70d-df90e6be3a68",
           "type": "string"
         }
       },
@@ -170,19 +209,24 @@
       ]
     },
     "operatorAdmit": {
+      "$id": "urn:uuid:12bbec40-aa71-4ba1-8454-cc1644918873",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:0e4a7691-a83e-484b-9936-fdd88937038f",
           "type": "string"
         },
         "operator": {
+          "$id": "urn:uuid:a383edb4-082c-4ea6-8aa5-9867690fae93",
           "type": "string"
         },
         "role": {
+          "$id": "urn:uuid:12ab6598-1ac0-4474-b22a-87e2b98a387d",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:585484d6-0175-4bac-b437-7ac2c10cf1b3",
           "type": "string"
         }
       },
@@ -192,16 +236,20 @@
       ]
     },
     "operatorOut": {
+      "$id": "urn:uuid:18457367-871f-4247-a2a2-3bcd716c837a",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:f6c6c3fd-4e9c-47cd-932e-dbf5c5dee350",
           "type": "string"
         },
         "operator": {
+          "$id": "urn:uuid:9d8fb162-2094-4bfb-b0bc-ee0ecb44f0de",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:e89237ba-3a58-4e18-ba01-f53db6c86e11",
           "type": "string"
         }
       },

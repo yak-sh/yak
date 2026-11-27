@@ -1,10 +1,12 @@
 {
+  "$id": "urn:uuid:5d6adbee-22ba-425d-88e9-7112da1a8861",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "apps",
   "$defs": {
     "product": {
+      "$id": "urn:uuid:a94731e2-d3e4-47d9-88c2-f87f92a8743d",
       "component": true,
       "type": "object",
       "description": "Something for sale. The checkout reads its price from `price_cents` on this row, never from the buyer.",
@@ -14,17 +16,21 @@
       ],
       "properties": {
         "price_cents": {
+          "$id": "urn:uuid:fb670fcb-00d3-4e7e-b710-e1eaac87764e",
           "type": "number"
         },
         "sizes": {
+          "$id": "urn:uuid:34836b98-13b9-4b9c-ae20-e49153c7f8ea",
           "type": "string",
           "description": "The variants the seller offers, comma-separated; a page turns the one chosen into the `options` on a cart line."
         },
         "stock": {
+          "$id": "urn:uuid:c6c141f7-39df-4782-a3e8-075527477d3d",
           "type": "number",
           "description": "The seller's own count; nothing here decrements it."
         },
         "image": {
+          "$id": "urn:uuid:1c893b28-46d3-4797-a88f-fbbe1ec997df",
           "type": "string",
           "format": "uri"
         }
@@ -32,6 +38,7 @@
       "$comment": "sell.ts, T-34525. Platform's rather than each app's for the reason every other word here is platform's — a `product` in one shop is the same word as a `product` in the next, so one filter reads both — and for one more: a door that took the price off the wire would take a price a buyer can edit. A word the platform charges money against is a word the platform declares.\n\nNothing decrements `stock`, because a shop that oversells by one is a conversation and a shop that loses an order to a race is a bug."
     },
     "fund": {
+      "$id": "urn:uuid:eff3c483-6510-4824-937d-7088483124dc",
       "component": true,
       "type": "object",
       "description": "What a space takes gifts for; its `doc.title` is the fund's name the donor reads first.",
@@ -41,38 +48,46 @@
       ],
       "properties": {
         "holder": {
+          "$id": "urn:uuid:d7bd37bc-c14a-4e3d-8920-cad48d8864f7",
           "type": "string",
           "description": "The legal name a receipt says received the gift."
         },
         "amounts_cents": {
+          "$id": "urn:uuid:e5801eb1-7c7a-45b3-a1c1-f929cb62cf62",
           "type": "string",
           "description": "The suggested amounts, comma-separated."
         },
         "statement": {
+          "$id": "urn:uuid:339c3c7b-91dd-401b-abc0-71551025edeb",
           "type": "string",
           "description": "What a receipt says was given in return, where the default (\"no goods or services\") is not the case."
         },
         "test": {
+          "$id": "urn:uuid:6edb14d4-9c6a-4788-aac0-f02344c10722",
           "type": "boolean"
         }
       },
       "$comment": "sell.ts `giving`, T-3630. Platform's for the reason `product` is: the giving door reads it."
     },
     "fund_receipt": {
+      "$id": "urn:uuid:f9cfd025-d71f-4ef7-8607-30ffd741f680",
       "component": true,
       "type": "object",
       "shown": "editor",
       "description": "The legal recipient and acknowledgement used in a fund’s receipts.",
       "properties": {
         "holder": {
+          "$id": "urn:uuid:f7cafe42-fd91-448e-abbe-e8508268372c",
           "type": "string"
         },
         "statement": {
+          "$id": "urn:uuid:01bbb306-f887-4f5b-820b-05e24f8bd6ec",
           "type": "string"
         }
       }
     },
     "gift": {
+      "$id": "urn:uuid:3146a51f-f26f-4cfc-af23-f1d6e34bb524",
       "component": true,
       "type": "object",
       "description": "A gift received: one row per payment, a one-time gift's checkout or one month of a monthly gift's invoice, written by the payment provider's webhook.",
@@ -83,64 +98,78 @@
       ],
       "properties": {
         "fund": {
+          "$id": "urn:uuid:0ac84df7-dba5-449a-8677-a1087624e942",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "session": {
+          "$id": "urn:uuid:599621a3-f588-4272-92b6-5eaf5cb84cfb",
           "type": "string",
           "stamped": true
         },
         "invoice": {
+          "$id": "urn:uuid:f87c5708-b7dc-4fe6-b309-61976eb55a07",
           "type": "string",
           "stamped": true
         },
         "subscription": {
+          "$id": "urn:uuid:d6175f0b-12ef-487b-ab26-a1ed135bebd4",
           "type": "string",
           "description": "The provider's subscription for a monthly gift, which the receipt's cancel link opens the portal for.",
           "stamped": true
         },
         "payer": {
+          "$id": "urn:uuid:fd547fa1-b015-48dd-b97a-225fdbad312a",
           "type": "string",
           "description": "The provider's customer; the receipt's cancel link opens the provider's portal for them.",
           "stamped": true
         },
         "account": {
+          "$id": "urn:uuid:2e085df1-51d4-4a95-bcb9-dd85387ea9b0",
           "type": "string",
           "stamped": true
         },
         "total_cents": {
+          "$id": "urn:uuid:5b257ca3-de88-4982-a32b-e4ed37fe0ba4",
           "type": "number",
           "description": "What was paid.",
           "stamped": true
         },
         "covered_cents": {
+          "$id": "urn:uuid:f5b8f9ed-a6c5-48e7-8883-928c4b04531e",
           "type": "number",
           "description": "Of `total_cents`, what the donor added to cover the provider's fee.",
           "stamped": true
         },
         "test": {
+          "$id": "urn:uuid:180bf741-0e76-4c72-a42d-9777e0d7f8d8",
           "type": "boolean",
           "stamped": true
         },
         "holder": {
+          "$id": "urn:uuid:69fc4cd2-f9de-4a2d-8758-5b9e87d78200",
           "type": "string",
           "stamped": true
         },
         "statement": {
+          "$id": "urn:uuid:4cbc788d-09b0-45cf-8dca-b82b1961b712",
           "type": "string",
           "stamped": true
         },
         "email": {
+          "$id": "urn:uuid:012055a1-cdb3-46a6-be9d-5de9495a20ab",
           "type": "string",
           "stamped": true
         },
         "name": {
+          "$id": "urn:uuid:ae05aaf3-3bf9-4c10-bc9e-d04567a74ede",
           "type": "string",
           "stamped": true
         },
         "per": {
+          "$id": "urn:uuid:b620c318-8be3-4355-b019-5d38589cead2",
           "type": "string",
           "enum": [
             "month"
@@ -148,6 +177,7 @@
           "stamped": true
         },
         "at": {
+          "$id": "urn:uuid:c185a64c-f4a6-46e7-9fde-d3109cbfb1c5",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -156,6 +186,7 @@
       "$comment": "sell.ts `gave`; written by the shops webhook as `order` is."
     },
     "refund_request": {
+      "$id": "urn:uuid:f99f6b12-977b-4b55-acc0-91972c82f128",
       "component": true,
       "type": "object",
       "readers": "editor",
@@ -167,58 +198,69 @@
       },
       "properties": {
         "order": {
+          "$id": "urn:uuid:7a827181-864f-4a5a-a233-f0940a7e05bf",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "amount": {
+          "$id": "urn:uuid:7368e3ca-5c47-4488-85e6-b545d36d1149",
           "type": "number",
           "stamped": true
         },
         "reason": {
+          "$id": "urn:uuid:2f0a8dac-74d8-40fa-9c89-34d8dd76023d",
           "type": "string",
           "stamped": true
         }
       }
     },
     "refund_sent": {
+      "$id": "urn:uuid:e020cd80-7299-4578-812c-51171903b7f7",
       "component": true,
       "type": "object",
       "readers": "editor",
       "properties": {
         "reference": {
+          "$id": "urn:uuid:b5d04be3-203f-4152-be60-84fe3e957a92",
           "type": "string",
           "stamped": true
         },
         "amount": {
+          "$id": "urn:uuid:26230a4b-1182-4893-8874-3d64e972c853",
           "type": "number",
           "stamped": true
         }
       }
     },
     "refund_failed": {
+      "$id": "urn:uuid:50ba1748-ca23-4db8-843d-fa71251b8525",
       "component": true,
       "type": "object",
       "readers": "editor",
       "properties": {
         "at": {
+          "$id": "urn:uuid:8a439260-d1c7-4c15-a74c-0a1b8b415bf5",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "reason": {
+          "$id": "urn:uuid:77e2bdd7-2813-41ff-a445-578200dc8125",
           "type": "string",
           "stamped": true
         }
       }
     },
     "refund_retry": {
+      "$id": "urn:uuid:3adbb3f6-a4c9-443b-8f16-29e7683d6016",
       "component": true,
       "type": "object",
       "readers": "editor",
       "properties": {
         "at": {
+          "$id": "urn:uuid:e4d59706-e44d-4920-b724-6575306235b7",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -238,32 +280,38 @@
       "description": "Refund a merchant payment under its durable request identity."
     },
     "service_checkout": {
+      "$id": "urn:uuid:6406bd01-065b-49e3-8fa1-e588b41b789a",
       "component": true,
       "type": "object",
       "readers": "editor",
       "properties": {
         "snapshot": {
+          "$id": "urn:uuid:d5acf11e-0a3c-4073-a538-e1be1e2e2b20",
           "type": "string",
           "stamped": true
         }
       }
     },
     "service_quote": {
+      "$id": "urn:uuid:f85747f7-1a98-4de7-be8a-422535eab53f",
       "component": true,
       "type": "object",
       "readers": "editor",
       "properties": {
         "snapshot": {
+          "$id": "urn:uuid:e661312f-d388-427b-b78e-672bb582dec1",
           "type": "string",
           "stamped": true
         },
         "hash": {
+          "$id": "urn:uuid:9070bb33-79c7-44e7-8e57-91f4e53291b0",
           "type": "string",
           "stamped": true
         }
       }
     },
     "order": {
+      "$id": "urn:uuid:4f8879e8-1652-477b-a669-c33d11b36aed",
       "component": true,
       "type": "object",
       "description": "Something sold: one row per completed checkout at the payment provider, written into the app's own store by the provider's webhook. The provider is authoritative about the payment; this row tells the seller what to send and to whom. Every property is written by the platform, so no page, member or visitor can say an order was paid.",
@@ -274,90 +322,109 @@
       ],
       "properties": {
         "session": {
+          "$id": "urn:uuid:00034fd6-fc1e-4925-bf46-f274907e9832",
           "type": "string",
           "description": "With `intent`, how a seller finds the payment at the provider.",
           "stamped": true
         },
         "intent": {
+          "$id": "urn:uuid:bb3e0877-3570-4d0e-8d69-5646080c0327",
           "type": "string",
           "description": "With `session`, how a seller finds the payment at the provider.",
           "stamped": true
         },
         "account": {
+          "$id": "urn:uuid:708c3a45-3583-4071-89e9-f839cad61959",
           "type": "string",
           "description": "Whose books at the provider the payment landed on.",
           "stamped": true
         },
         "items": {
+          "$id": "urn:uuid:c967ed38-6797-4279-9bb2-a26f164d11fc",
           "type": "string",
           "description": "The cart, as JSON text.",
           "stamped": true
         },
         "quote": {
+          "$id": "urn:uuid:0f860dfe-c78f-4158-9dbc-5eaabd781670",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "document": {
+          "$id": "urn:uuid:020ff561-af71-4626-8426-a417cc92b767",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "revision": {
+          "$id": "urn:uuid:fadc4af8-05a2-4323-89ce-09a6d0dc7852",
           "type": "string",
           "stamped": true
         },
         "specification": {
+          "$id": "urn:uuid:95c9d7bd-0d9c-4036-affe-75e409cf91d6",
           "type": "string",
           "stamped": true
         },
         "buyer": {
+          "$id": "urn:uuid:5615fd87-4b53-49ec-86d2-b574d7648971",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "source": {
+          "$id": "urn:uuid:22e78334-d7fb-4f8b-8c8b-41932e66b8b1",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "quantity": {
+          "$id": "urn:uuid:bc395200-93df-40e6-9071-c3db02e582f5",
           "type": "number",
           "stamped": true
         },
         "currency": {
+          "$id": "urn:uuid:e49f59a4-f55e-4042-8edf-a4cbbce40ce2",
           "type": "string",
           "stamped": true
         },
         "shipping_cents": {
+          "$id": "urn:uuid:7e522a18-41ed-4bf8-b7ce-d53f4ed29c16",
           "type": "number",
           "stamped": true
         },
         "tax_cents": {
+          "$id": "urn:uuid:ed05ec25-1ead-4d05-946b-8d8ddcc2466e",
           "type": "number",
           "stamped": true
         },
         "total_cents": {
+          "$id": "urn:uuid:9610bcb6-0d15-4656-89dc-a14305a12417",
           "type": "number",
           "stamped": true
         },
         "fee_cents": {
+          "$id": "urn:uuid:93d04388-1faa-4b48-8c4b-2203fad830f5",
           "type": "number",
           "stamped": true
         },
         "refunded_cents": {
+          "$id": "urn:uuid:79385e39-a2cd-4397-b040-7a3bcc8d6652",
           "type": "number",
           "stamped": true
         },
         "email": {
+          "$id": "urn:uuid:a40e07c3-488d-440d-936b-502e78efab3c",
           "type": "string",
           "stamped": true
         },
         "status": {
+          "$id": "urn:uuid:6cca0545-ca72-432a-b8fd-f557467d3ea3",
           "type": "string",
           "enum": [
             "paid",
@@ -372,6 +439,7 @@
       "$comment": "sell.ts, T-34526. Platform's rather than each app's for the reason `product` is: the platform writes it, and a word the platform writes is a word the platform declares — an app that declared its own `order` would have the platform writing into a shape it does not know.\n\n`items` is JSON in one text property, the way `home.first` is; a property is a scalar, and this is a list.\n\nThe webhook writes through the kernel's door (sell.ts `asApp`, T-37881). Who may remove one is graph.ts `FLOORS`."
     },
     "sale_access": {
+      "$id": "urn:uuid:e4ec2579-e13a-4d8a-862f-20fbf530eda7",
       "component": true,
       "type": "object",
       "readers": "editor",
@@ -379,12 +447,14 @@
       "description": "Customer authority for private sale records and artifacts.",
       "properties": {
         "buyer": {
+          "$id": "urn:uuid:b18c4171-7031-4088-8aca-36695472666b",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "via": {
+          "$id": "urn:uuid:53085786-677b-4e3f-81fe-3283e87c2a9e",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -393,6 +463,7 @@
       }
     },
     "sale_artifact": {
+      "$id": "urn:uuid:cb3344a2-d285-48d0-876a-51c65f5edb8f",
       "component": true,
       "type": "object",
       "readers": "editor",
@@ -400,6 +471,7 @@
       "description": "A customer’s entitlement to one private sale artifact.",
       "properties": {
         "artifact": {
+          "$id": "urn:uuid:6679ceba-8d8f-4275-80fb-910dfde12fbd",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
@@ -408,14 +480,17 @@
       }
     },
     "web": {
+      "$id": "urn:uuid:cd566bce-40cb-4fe3-a0cd-1d042902b13b",
       "component": true,
       "type": "object",
       "properties": {
         "url": {
+          "$id": "urn:uuid:366b42d8-5a75-447e-a7d7-b23368702fc9",
           "type": "string",
           "format": "uri"
         },
         "frozen_at": {
+          "$id": "urn:uuid:073880b5-3ddf-4dc9-a950-197879062d11",
           "type": "string",
           "format": "date-time",
           "stamped": true

@@ -1,26 +1,32 @@
 {
+  "$id": "urn:uuid:579ba501-c04c-4fb9-b9c2-2bc94b59ddd0",
   "$defs": {
     "notice_subscription": {
+      "$id": "urn:uuid:60df7dc3-04e4-4998-af5c-35d91b4e1ba8",
       "component": true,
       "type": "object",
       "floor": "owner",
       "personal": "owner",
       "properties": {
         "owner": {
+          "$id": "urn:uuid:996d0f34-d467-4c1d-ae85-7a6b8edfc468",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "root": {
+          "$id": "urn:uuid:34e99017-35c9-4d82-b384-142dcf8fa8d3",
           "type": "string",
           "stamped": true
         },
         "ticket": {
+          "$id": "urn:uuid:b637c506-a69f-40eb-88e0-7da2008f7281",
           "type": "string",
           "stamped": true
         },
         "requested_at": {
+          "$id": "urn:uuid:a79febf3-d331-4df3-b6c4-2c9aa2dcf6b2",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -29,11 +35,13 @@
       "description": "An email recipient asking for this app’s notices; confirmed only after opening the letter’s link."
     },
     "notice_confirmed": {
+      "$id": "urn:uuid:6a8e57a8-c3ab-4052-a8d6-ad5c044ea77a",
       "component": true,
       "type": "object",
       "floor": "owner",
       "properties": {
         "at": {
+          "$id": "urn:uuid:c6d4803e-1412-4365-b966-a34c93ab10dc",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -42,11 +50,13 @@
       "description": "The recipient confirmed that this address wants notices."
     },
     "notice_posted": {
+      "$id": "urn:uuid:7b5fd181-3f57-498e-aec7-73d66cd27503",
       "component": true,
       "type": "object",
       "floor": "editor",
       "properties": {
         "at": {
+          "$id": "urn:uuid:71001b39-d72b-49e4-858c-548bbca17836",
           "type": "string",
           "format": "date-time",
           "stamped": true,
@@ -58,12 +68,14 @@
       "description": "When a row first became a posted notice, independently of when its draft was created."
     },
     "notice_letter": {
+      "$id": "urn:uuid:8ef82b10-b5b0-4d4b-a266-a3dc91d788d7",
       "component": true,
       "type": "object",
       "floor": "owner",
       "personal": "owner",
       "properties": {
         "owner": {
+          "$id": "urn:uuid:974dd15d-8152-494d-8319-7f4b825201ce",
           "type": "string",
           "ref": "entity",
           "death": "keep",

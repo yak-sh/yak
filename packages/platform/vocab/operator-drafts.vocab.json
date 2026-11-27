@@ -1,10 +1,13 @@
 {
+  "$id": "urn:uuid:51f9c2f2-ae17-42f0-ba89-ea4e4b0e0c43",
   "$defs": {
     "operatorDraft": {
+      "$id": "urn:uuid:7b8e13b3-ba12-4fed-a52a-f57ff4fc2ba1",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:3b944ef8-875a-4708-8824-add3ab2b0150",
           "type": "string"
         }
       },

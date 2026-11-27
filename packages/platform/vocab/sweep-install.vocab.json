@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:845d1a7e-24d7-43aa-b0df-47b28d512e6d",
   "reserved": false,
   "$defs": {
     "sweep_install": {

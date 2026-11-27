@@ -1,22 +1,28 @@
 {
+  "$id": "urn:uuid:4e9078b6-3d40-400d-845f-0de5d376e139",
   "$defs": {
     "model_reservation": {
+      "$id": "urn:uuid:ba7b5cb8-7262-4c9e-9d74-089104eb70b8",
       "component": true,
       "wire": false,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:ccc82b4d-1e0c-4f80-91f9-b5c197a5678e",
           "type": "string",
           "ref": "space",
           "death": "cascade"
         },
         "month": {
+          "$id": "urn:uuid:2c3a88c3-cc94-4834-be42-982b60b1af7d",
           "type": "string"
         },
         "dollars": {
+          "$id": "urn:uuid:07ceb7cc-bd75-4f35-a678-89142035452c",
           "type": "number"
         },
         "what": {
+          "$id": "urn:uuid:19c10f29-1257-41f5-833e-9408362fa390",
           "type": "string",
           "enum": [
             "models",
@@ -25,19 +31,23 @@
           ]
         },
         "source": {
+          "$id": "urn:uuid:d92108e3-f46e-4715-b856-b70d4d623afc",
           "type": "string",
           "description": "What the dollars buy: a model provider, voice, texts or the browser.",
           "$comment": "Read for the admin's spend by source (meter.ts `SOURCES`)."
         },
         "visitor": {
+          "$id": "urn:uuid:9632fd70-aa29-4890-8343-47500f3138dd",
           "type": "boolean"
         },
         "likely": {
+          "$id": "urn:uuid:ffb6bed7-56c5-4ce9-a1ab-9a8f5e1ca6fa",
           "type": "number",
           "description": "What the call most likely cost, should it end with nothing measured: a hold still open at `until` is settled at this. A hold with no `until` is its owner's to settle, however long it waits.",
           "$comment": "@yaks/model `likely`; workers/yak model-spend.ts `expired`."
         },
         "until": {
+          "$id": "urn:uuid:9f5eec6b-a22b-4a03-bc1e-c6450eff9c20",
           "type": "string",
           "format": "date-time",
           "description": "The moment past which the call can no longer be running."
@@ -45,20 +55,24 @@
       }
     },
     "model_estimate": {
+      "$id": "urn:uuid:0a23c5ef-169f-4ec4-8df5-625862faf10b",
       "component": true,
       "wire": false,
       "type": "object",
       "description": "A call's hold settled at an estimate, nothing having measured it, and whom it was held for. A measured cost arriving later replaces the estimate on the same space's month.",
       "properties": {
         "space": {
+          "$id": "urn:uuid:74641908-be38-4320-8d8d-bf81f6caa5ad",
           "type": "string",
           "ref": "space",
           "death": "cascade"
         },
         "month": {
+          "$id": "urn:uuid:8a05a6bb-09f5-452a-bcea-a14e890d5d01",
           "type": "string"
         },
         "what": {
+          "$id": "urn:uuid:7f49aae8-4779-4809-86d8-7065ee2a6922",
           "type": "string",
           "enum": [
             "models",
@@ -67,108 +81,135 @@
           ]
         },
         "source": {
+          "$id": "urn:uuid:a687baca-06a8-4958-8b22-489311b85b8c",
           "type": "string"
         },
         "visitor": {
+          "$id": "urn:uuid:9ee3eab6-ad0d-47c5-bee3-66802dd7c380",
           "type": "boolean"
         }
       },
       "$comment": "workers/yak model-spend.ts `settled`."
     },
     "visitor_calls": {
+      "$id": "urn:uuid:60bb02f1-2155-4709-ade7-d6a2bba1642b",
       "component": true,
       "wire": false,
       "type": "object",
       "description": "The model calls one visitor has asked a space's apps for on `day`, counted against the calls a visitor may ask for in a day.",
       "properties": {
         "space": {
+          "$id": "urn:uuid:a9bf7833-8b68-4014-9457-23aa659e4217",
           "type": "string",
           "ref": "space",
           "death": "cascade"
         },
         "day": {
+          "$id": "urn:uuid:1e4dd697-08b6-4c02-9444-9b65fe10e33c",
           "type": "string"
         },
         "calls": {
+          "$id": "urn:uuid:ba2e3ed1-7f2b-4e3c-b848-814b7f300fc5",
           "type": "number"
         }
       },
       "$comment": "model-spend.ts `reserved`, against meter.ts `visitorCalls`."
     },
     "newcomer_builds": {
+      "$id": "urn:uuid:71c4bdf7-6d02-4aab-b65b-068f55b5db1d",
       "component": true,
       "wire": false,
       "type": "object",
       "description": "The newcomers' spaces opened on `day`: one row for everybody and one per address they came from, each counted against a daily limit.",
       "properties": {
         "day": {
+          "$id": "urn:uuid:b79615c4-635c-4b70-aba5-831c4ae86930",
           "type": "string"
         },
         "builds": {
+          "$id": "urn:uuid:101d2ba8-a239-4251-b793-6e814a2ec94a",
           "type": "number"
         }
       },
       "$comment": "newcomer.ts `counted`, against newcomer.ts `DAILY` and `PER_SOURCE`."
     },
     "account_usage": {
+      "$id": "urn:uuid:e47042d1-5336-4df0-8396-2aae11c6ede7",
       "component": true,
       "wire": false,
       "type": "object",
       "properties": {
         "month": {
+          "$id": "urn:uuid:2fb207d1-5939-447f-8419-1849082b46c8",
           "type": "string"
         },
         "at": {
+          "$id": "urn:uuid:bf740ce6-051d-4b3c-a806-b668d09bd500",
           "type": "string",
           "format": "date-time"
         },
         "requests": {
+          "$id": "urn:uuid:a96524da-297e-445b-a207-8346e51d04f4",
           "type": "number"
         },
         "rows_read": {
+          "$id": "urn:uuid:eb3aaf44-f762-4014-9dd9-043ed327137e",
           "type": "number"
         },
         "rows_written": {
+          "$id": "urn:uuid:cf4833c7-50fb-4105-b5ee-199d9b3fb6c2",
           "type": "number"
         },
         "duration": {
+          "$id": "urn:uuid:9a828b24-0b2f-493e-ac93-a7782c997d54",
           "type": "number"
         },
         "workers": {
+          "$id": "urn:uuid:153efdc8-3ebc-465c-844e-ef533d11f01b",
           "type": "number"
         },
         "cpu": {
+          "$id": "urn:uuid:01e39f05-121a-4d51-95a6-77fa91a4ac47",
           "type": "number"
         }
       }
     },
     "account_alert": {
+      "$id": "urn:uuid:23329b0c-60f1-4172-9444-2d5c485b0e21",
       "component": true,
       "wire": false,
       "type": "object",
       "properties": {
         "month": {
+          "$id": "urn:uuid:7bba5c49-6aa6-4195-b52c-3a33d087cc72",
           "type": "string"
         },
         "requests": {
+          "$id": "urn:uuid:ed93d280-c32a-47a8-b690-07296bc20636",
           "type": "string"
         },
         "rows_read": {
+          "$id": "urn:uuid:6c2f1ac7-53ff-4e44-8bc6-15e118210867",
           "type": "string"
         },
         "rows_written": {
+          "$id": "urn:uuid:531658d8-4787-467c-b1ab-0bda4132029d",
           "type": "string"
         },
         "duration": {
+          "$id": "urn:uuid:9823f7c0-d454-458c-874d-50c0d17df29f",
           "type": "string"
         },
         "workers": {
+          "$id": "urn:uuid:5f42df92-0ca2-4123-8f52-b95a24e50a7c",
           "type": "string"
         },
         "cpu": {
+          "$id": "urn:uuid:1f351617-5539-460c-8e16-df1dc4f16323",
           "type": "string"
         },
         "rate": {
+          "$id": "urn:uuid:097c55db-0199-4ebd-aab1-c22efc790392",
           "type": "string"
         }
       }

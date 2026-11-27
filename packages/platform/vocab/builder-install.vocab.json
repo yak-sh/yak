@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:77634127-d482-4190-b783-951b932514b8",
   "reserved": false,
   "$defs": {
     "builder_install": {

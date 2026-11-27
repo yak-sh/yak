@@ -1,13 +1,16 @@
 {
+  "$id": "urn:uuid:e553db9a-db62-4297-ab31-df1ddd287c6d",
   "title": "directory-presence",
   "reserved": false,
   "$defs": {
     "presence": {
+      "$id": "urn:uuid:25e08e02-8d40-426d-8863-9e29bf34c0d2",
       "component": true,
       "type": "object",
       "description": "Whether a person hides from their friends when they are on yaks.app, when they last were and what they have open; hiding it, they see none of their friends' either.",
       "properties": {
         "hidden": {
+          "$id": "urn:uuid:94745783-9d96-460a-ae1d-0cef80e126cc",
           "type": "boolean"
         }
       }

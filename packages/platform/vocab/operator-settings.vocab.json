@@ -1,37 +1,45 @@
 {
+  "$id": "urn:uuid:a56b7c1e-28d3-4345-b7a6-eaddadb7d6cb",
   "$defs": {
     "operatorSettings": {
+      "$id": "urn:uuid:ad037a62-85dd-43ac-bad4-40b5809ea6b6",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:cb68ae87-e281-4318-b49e-126a058e1e0d",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:1ee3315e-0f35-4d31-9617-e3b7ca78df6d",
           "type": [
             "string",
             "null"
           ]
         },
         "voice": {
+          "$id": "urn:uuid:4df3edf0-ba02-4fe2-92c5-d27f2edb13a0",
           "type": [
             "string",
             "null"
           ]
         },
         "voice_speed": {
+          "$id": "urn:uuid:0d689c63-a09e-40d9-95e9-a12745050710",
           "type": [
             "string",
             "null"
           ]
         },
         "voice_model": {
+          "$id": "urn:uuid:bbbb3efb-590f-4284-b47b-ce514a508dc3",
           "type": [
             "string",
             "null"
           ]
         },
         "voice_backend": {
+          "$id": "urn:uuid:2a6df5ff-8548-4720-ad23-1d1c53311993",
           "type": [
             "string",
             "null"
@@ -43,31 +51,38 @@
       ]
     },
     "alerting": {
+      "$id": "urn:uuid:44f59191-6961-4b37-92e8-0e35fed92d07",
       "component": true,
       "type": "object",
       "properties": {
         "channel": {
+          "$id": "urn:uuid:fb926507-73e9-4dc9-b678-7598fd9f3dfd",
           "type": [
             "string",
             "null"
           ]
         },
         "by": {
+          "$id": "urn:uuid:f214552c-ce83-4c5a-bdce-ce8e1767b396",
           "type": "string"
         },
         "browsers": {
+          "$id": "urn:uuid:fae0d5d8-7012-4a93-80a7-f89c7a005585",
           "type": "integer"
         }
       }
     },
     "texting": {
+      "$id": "urn:uuid:ec28c92f-a812-4f95-9c3d-d8a980900a56",
       "component": true,
       "type": "object",
       "properties": {
         "number": {
+          "$id": "urn:uuid:ae07298d-aecd-4c7c-8825-1c9de05756ca",
           "type": "string"
         },
         "at": {
+          "$id": "urn:uuid:a927f176-8d3d-4c8d-aacd-22e66117e3ae",
           "type": "string"
         }
       },
@@ -77,10 +92,12 @@
       ]
     },
     "allowPush": {
+      "$id": "urn:uuid:c8a5e504-df2b-4ca1-9cc2-5603b4e02eb0",
       "component": true,
       "type": "object",
       "properties": {
         "subscription": {
+          "$id": "urn:uuid:fa686cd1-c506-48fe-8760-350eb527bc5f",
           "type": "object"
         }
       },
@@ -89,19 +106,24 @@
       ]
     },
     "agreeTexts": {
+      "$id": "urn:uuid:8b34e453-81f3-4d6b-a6d4-4692b31d9a5c",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:66171698-5740-406e-93cf-b54ae0919c29",
           "type": "string"
         },
         "number": {
+          "$id": "urn:uuid:c32384aa-ef4a-4e26-9894-032302e554eb",
           "type": "string"
         },
         "agreed": {
+          "$id": "urn:uuid:07375712-42c9-4894-b982-99c025e6b086",
           "type": "boolean"
         },
         "code": {
+          "$id": "urn:uuid:e61fb47b-8c30-4fd2-a726-98698a8f48b7",
           "type": "string"
         }
       },
@@ -110,6 +132,7 @@
       ]
     },
     "stopTexts": {
+      "$id": "urn:uuid:277e8809-8ae6-4635-a802-b1fb0edaa9b5",
       "component": true,
       "type": "object",
       "properties": {}

@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:1a75ed39-a11c-4106-bf56-90c2f223dd18",
   "$defs": {
     "notify_trash": {
       "effect": true,

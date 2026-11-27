@@ -1,16 +1,21 @@
 {
+  "$id": "urn:uuid:b33f5c40-1329-4139-8542-ae7ff23a8ab2",
   "$defs": {
     "updateWaiting": {
+      "$id": "urn:uuid:0418a6da-2667-45d7-a314-01f3eeecb734",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:364c8443-baf1-4916-92c9-108210dd3434",
           "type": "string"
         },
         "slug": {
+          "$id": "urn:uuid:197f7a91-c547-4fa3-bc3b-f4b3a19ff190",
           "type": "string"
         },
         "count": {
+          "$id": "urn:uuid:2ce4e932-1afc-473f-aa6d-68fa2f78be44",
           "type": "integer"
         }
       },

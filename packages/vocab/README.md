@@ -428,8 +428,8 @@ identity stays.
 Nobody writes a `$id` by hand. `minted(text, mint)` from `@yaks/vocab/minted`
 gives a vocab.json's text a `$id` for every word that lacks one, the document's
 included, and keeps the rest of the text as written. The tools that read a
-checkout's vocabularies run it over each packages/*/vocab.json with
-@yaks/graph's `mint()`, like a lockfile: `yak serve`, the test runner and
+checkout's vocabularies run it over each vocabulary document under packages/
+with @yaks/graph's `mint()`, like a lockfile: `yak serve`, the test runner and
 `deno task vocab` (packages/cli/vocab-ids.ts). The author commits the ids with
 the word. An `extends` entry gets none, since it is the component it adds to; a
 kind of its own component's name shares the component's. Nothing refuses a word

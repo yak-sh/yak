@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:930f0c33-fb64-49c9-95d0-36cdb602e236",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/edge": true
@@ -6,6 +7,7 @@
   "title": "relations",
   "$defs": {
     "referenced": {
+      "$id": "urn:uuid:183f28a5-9a9e-4516-b8ab-535af90e4195",
       "component": true,
       "type": "object",
       "edge": true,

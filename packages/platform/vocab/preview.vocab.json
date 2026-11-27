@@ -1,8 +1,10 @@
 {
+  "$id": "urn:uuid:6a451efc-249a-42d1-9bdb-a9935d6489d5",
   "title": "directory-preview",
   "reserved": false,
   "$defs": {
     "preview_link": {
+      "$id": "urn:uuid:eb04a68f-dbe5-4d00-b2bf-b2bffef284f2",
       "description": "A preview link: the random code its address carries, the draft it shows or else the version of its app, as whom, and until when. Deleting it revokes the link.",
       "component": true,
       "type": "object",
@@ -10,43 +12,51 @@
       "journal": false,
       "properties": {
         "code": {
+          "$id": "urn:uuid:e1d24127-0319-4456-8f39-8861da75019c",
           "type": "string",
           "unique": true,
           "stamped": true
         },
         "app": {
+          "$id": "urn:uuid:cc154398-3045-4fb6-a5c6-01bc0e181244",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "space": {
+          "$id": "urn:uuid:cc3c7705-b761-421c-bdad-fed16e4e231d",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "person": {
+          "$id": "urn:uuid:6efd2a27-51f3-4a38-8367-af5df76b2e4f",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "draft": {
+          "$id": "urn:uuid:cbde78a2-f2cc-4199-b057-8fbb7c30f62d",
           "type": "string",
           "index": true,
           "stamped": true
         },
         "version": {
+          "$id": "urn:uuid:d77ad213-95d8-4525-bde4-cecef77298d0",
           "type": "number",
           "stamped": true
         },
         "until": {
+          "$id": "urn:uuid:7dccd0d5-4e89-4c6b-b682-0c771aa43e72",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "screen": {
+          "$id": "urn:uuid:1e6c6033-a40f-48a9-a0fd-0ba1eaebdc79",
           "type": "string",
           "stamped": true
         }

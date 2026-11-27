@@ -1,31 +1,41 @@
 {
+  "$id": "urn:uuid:fa14c1c5-fb28-4e08-bffe-2180330d70b9",
   "$defs": {
     "spaceSettings": {
+      "$id": "urn:uuid:f02131f9-ec01-49a2-968e-e48e004db29a",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:e2a78943-9957-4f8f-9321-e76fe9e8a631",
           "type": "string"
         },
         "slug": {
+          "$id": "urn:uuid:7b84b024-ca54-4fa7-b481-41dfcd606655",
           "type": "string"
         },
         "title": {
+          "$id": "urn:uuid:4865958a-25cb-4f87-8b55-f03cfc8dbcf6",
           "type": "string"
         },
         "home": {
+          "$id": "urn:uuid:6e9c79a9-fa2b-46d4-8543-1d55243db978",
           "type": "string"
         },
         "byline": {
+          "$id": "urn:uuid:b4f19456-ba47-4f6c-8a37-6e4de04bc6f8",
           "type": "boolean"
         },
         "paying": {
+          "$id": "urn:uuid:66348f22-79bd-49e5-81dc-77819123121a",
           "type": "boolean"
         },
         "included": {
+          "$id": "urn:uuid:721c5e64-f681-44ab-b5e0-efdb22dc5e74",
           "type": "boolean"
         },
         "logo": {
+          "$id": "urn:uuid:f8eb0a76-9b1c-4c9c-a05c-579365b386fb",
           "type": [
             "string",
             "null"
@@ -37,46 +47,60 @@
       ]
     },
     "ownedDomain": {
+      "$id": "urn:uuid:09e58191-0b24-41fc-b3ca-b11d4905c866",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:5cc806a1-6095-4d3f-bd5a-804dbe390ea7",
           "type": "string"
         },
         "rank": {
+          "$id": "urn:uuid:5c267c6e-b223-4f13-8d8b-98e3897b2486",
           "type": "integer"
         },
         "name": {
+          "$id": "urn:uuid:e6995241-2abd-48f0-996d-3efef53b5148",
           "type": "string"
         },
         "destination": {
+          "$id": "urn:uuid:6ad1600b-7e60-40e4-b888-5db468b4e9df",
           "type": "string"
         },
         "dns": {
+          "$id": "urn:uuid:d8873736-f9c0-47f2-9e8d-6bc7be9477ff",
           "type": "string"
         },
         "certificate": {
+          "$id": "urn:uuid:15387c17-d06f-4e7e-b03b-1d74c7345326",
           "type": "string"
         },
         "renewal": {
+          "$id": "urn:uuid:d67dd884-4c37-4633-8e2d-6931ef53ee23",
           "type": "string"
         },
         "chosen": {
+          "$id": "urn:uuid:adbc7c74-55c1-4872-84f9-3843fbd1fb2c",
           "type": "boolean"
         },
         "canChoose": {
+          "$id": "urn:uuid:cbe3672c-a1df-4cda-b7e4-101de970e9a0",
           "type": "boolean"
         },
         "payment": {
+          "$id": "urn:uuid:070a091d-8a2f-4f34-a433-37bfced94f9e",
           "type": "object"
         },
         "status": {
+          "$id": "urn:uuid:b092094a-81a1-455b-8844-e5532c9618fa",
           "type": "string"
         },
         "canPoint": {
+          "$id": "urn:uuid:35fe9dbf-dfdb-4005-ba9d-ce88cb448434",
           "type": "boolean"
         },
         "canTransfer": {
+          "$id": "urn:uuid:a09a2bc3-e500-4df0-84b5-4bcb053e2ae7",
           "type": "boolean"
         }
       },
@@ -88,25 +112,32 @@
       ]
     },
     "binned": {
+      "$id": "urn:uuid:5ab3c52e-bde4-4f33-9361-0c19844e17ed",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:a9c7ea0c-1b87-404c-a3e3-f86a21ac876e",
           "type": "string"
         },
         "rank": {
+          "$id": "urn:uuid:682959a2-48f1-49fa-b838-d6eb6902180a",
           "type": "integer"
         },
         "item": {
+          "$id": "urn:uuid:2d8efffe-857c-42a8-b8d9-17b98636da75",
           "type": "string"
         },
         "kind": {
+          "$id": "urn:uuid:c8c8122e-deb7-4fe2-8c1a-b75d03576ba2",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:dec9b376-78d6-414e-a025-8d356a68dfa3",
           "type": "string"
         },
         "monthly": {
+          "$id": "urn:uuid:e4432339-d177-4ec8-a4f8-318b9100077d",
           "type": "string"
         }
       },
@@ -119,22 +150,27 @@
       ]
     },
     "domainSearch": {
+      "$id": "urn:uuid:3a0f7d21-0481-4914-81c8-28b3e5b8ced6",
       "component": true,
       "type": "object",
       "properties": {
         "asked": {
+          "$id": "urn:uuid:c136a685-c3c1-4d47-b1ef-fa96544a7ae7",
           "type": "string"
         },
         "query": {
+          "$id": "urn:uuid:3b28c76e-63af-4fdb-b98b-4ff3ba7b6447",
           "type": "string"
         },
         "offers": {
+          "$id": "urn:uuid:1939a50b-759e-4ab6-8e70-91fa5e08b629",
           "type": "array",
           "items": {
             "type": "object"
           }
         },
         "error": {
+          "$id": "urn:uuid:1e195647-0cd4-4d9d-bdb1-6e46658010eb",
           "type": "string"
         }
       },
@@ -145,16 +181,20 @@
       ]
     },
     "restoreBinned": {
+      "$id": "urn:uuid:136d7eb5-7ff1-451e-a033-5b8486401068",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:01edb83f-80cf-4e98-bc9a-4448683f0d84",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:53782ba0-0cd0-4eb3-a0f7-81ba36a1c3e6",
           "type": "string"
         },
         "item": {
+          "$id": "urn:uuid:966399a3-1ddd-46c3-be07-7334753317c5",
           "type": "string"
         }
       },
@@ -164,19 +204,24 @@
       ]
     },
     "pointDomain": {
+      "$id": "urn:uuid:2ef8cb6e-c0e3-4261-bd2c-3a07e2684285",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:d12d38b1-449c-4e42-8d84-857d4e5c0845",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:5d3967c0-6037-4bd0-a0be-c418af796c34",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:0fb96c95-f984-49e8-b2a4-859ce1d700c4",
           "type": "string"
         },
         "destination": {
+          "$id": "urn:uuid:51601011-5674-411d-bbb7-d7e911dbcda8",
           "type": "string"
         }
       },
@@ -186,16 +231,20 @@
       ]
     },
     "chooseDomain": {
+      "$id": "urn:uuid:dff2237c-edf4-415f-8b92-5d536575910f",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:b2100c82-f8d9-4864-946c-3e88859133ce",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:d693a735-e5f0-4124-96fa-ba1d06f37888",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:01184a8d-0e4e-432c-a080-6ffb2e185e72",
           "type": "string"
         }
       },
@@ -205,19 +254,24 @@
       ]
     },
     "offerDomain": {
+      "$id": "urn:uuid:a134e160-9bca-43da-8d97-45029b9ac727",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:5d829d17-8534-47f5-a9ea-1be36a44464d",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:7e60cb0f-2708-441c-bbba-3541bd80e3f7",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:21776fef-552a-4ff2-81cd-06bd825df923",
           "type": "string"
         },
         "to": {
+          "$id": "urn:uuid:8673a226-142c-4570-81bb-5ef19650fe45",
           "type": "string"
         }
       },

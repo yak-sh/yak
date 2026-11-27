@@ -1,8 +1,10 @@
 {
+  "$id": "urn:uuid:24968236-309b-40f3-908c-50b037518115",
   "title": "directory-referral",
   "reserved": false,
   "$defs": {
     "referral_code": {
+      "$id": "urn:uuid:8b05a3bc-c47d-43cf-a2ae-762491614981",
       "description": "The code a person's invite to yaks.app carries: whoever signs up sending it was invited by them. Minted the first time their invite page opens; unique, so a code names one person.",
       "component": true,
       "type": "object",
@@ -13,6 +15,7 @@
       ],
       "properties": {
         "code": {
+          "$id": "urn:uuid:bb2a4b30-fa37-48d5-84bd-841b78dfe1f1",
           "type": "string",
           "stamped": true
         }
@@ -20,6 +23,7 @@
       "$comment": "referral.ts `words`"
     },
     "referral": {
+      "$id": "urn:uuid:950d73e5-259c-478b-b25e-6a989a3ff684",
       "description": "One person who signed up for yaks.app through another's invite: who invited them. A person is invited once, by whoever's code their first message carried; its `created` stamp is when.",
       "component": true,
       "type": "object",
@@ -29,12 +33,14 @@
       ],
       "properties": {
         "inviter": {
+          "$id": "urn:uuid:0102794b-ee11-4ba9-a72e-1f1810f34358",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "invitee": {
+          "$id": "urn:uuid:24360df5-5b0f-443a-a2e4-da016837e601",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
@@ -44,17 +50,20 @@
       "$comment": "referral.ts `credit`. Its eid is derived from the invitee, which is what makes a person invited once."
     },
     "rewarded": {
+      "$id": "urn:uuid:cf723ccc-4b17-4a80-9ded-ee972d7442f0",
       "description": "The free month of the Plus plan a referral gave its inviter's space when the invitee built their first app. A mark, written once.",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:63175ecd-d085-44af-a783-587e7e1acde4",
           "type": "string",
           "format": "date-time",
           "description": "When the month was given.",
           "stamped": true
         },
         "space": {
+          "$id": "urn:uuid:c6edd796-4060-4c65-9ab7-af97f0395ab5",
           "type": "string",
           "description": "The space given the month.",
           "ref": "entity",
@@ -62,12 +71,14 @@
           "stamped": true
         },
         "until": {
+          "$id": "urn:uuid:214ed0eb-1541-425b-ae7f-886ab06b1bd4",
           "type": "string",
           "format": "date-time",
           "description": "The day that space's free time now runs through.",
           "stamped": true
         },
         "subscription": {
+          "$id": "urn:uuid:f7ef99aa-a381-403b-bbd3-64ef5937e79a",
           "type": "string",
           "description": "For a space already paying, the provider's subscription whose next charge moved a month later.",
           "stamped": true
@@ -76,11 +87,13 @@
       "$comment": "referral.ts `rewarding`"
     },
     "comped": {
+      "$id": "urn:uuid:033cddd9-a34d-49ed-9047-576a31c84d8f",
       "description": "The Plus plan given to a space free, through `until`, with nothing billed for it. Each reward adds a month after the later of now and the free time it already had.",
       "component": true,
       "type": "object",
       "properties": {
         "until": {
+          "$id": "urn:uuid:5633e886-79fa-45d0-8a7d-60b0cc3c41f1",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -89,41 +102,48 @@
       "$comment": "plans.ts `tierOf`"
     },
     "plan_trial": {
+      "$id": "urn:uuid:5f7b7c11-1a37-4af8-af83-d25dcb197bfb",
       "description": "A space's 30-day trial of the Plus plan, whose clock stops while its owners are away. Running, paused or ended is computed from its properties. The platform writes it.",
       "component": true,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:cb4e646b-cad4-481b-b39f-ca5a4d2c092c",
           "type": "string",
           "format": "date-time",
           "description": "When it began.",
           "stamped": true
         },
         "through": {
+          "$id": "urn:uuid:ec5b3ed2-d551-4275-938f-6d20bba49a4c",
           "type": "string",
           "format": "date-time",
           "description": "The day it ends, moved later by each time its owners were away.",
           "stamped": true
         },
         "paused": {
+          "$id": "urn:uuid:dca8d942-6121-491a-af8e-db65aff78bbd",
           "type": "string",
           "format": "date-time",
           "description": "When its clock stopped; none while it runs.",
           "stamped": true
         },
         "resumed": {
+          "$id": "urn:uuid:752cea69-eb0b-4b97-8486-21625927f2ed",
           "type": "string",
           "format": "date-time",
           "description": "When it last started again.",
           "stamped": true
         },
         "subscribed": {
+          "$id": "urn:uuid:662a7d1c-2303-48b0-a035-78870378ab98",
           "type": "string",
           "format": "date-time",
           "description": "When the space subscribed during it, which gave the early credit once.",
           "stamped": true
         },
         "told": {
+          "$id": "urn:uuid:4d626efe-bfd5-4baf-9e30-cd27967f3005",
           "type": "string",
           "description": "The notes its owners were sent, by key.",
           "stamped": true
@@ -141,6 +161,7 @@
       "$comment": "An app made in a space whose owner was invited gives their inviter the month, the first time (facets/directory-effects.ts)."
     },
     "chat_dm": {
+      "$id": "urn:uuid:0bc62d3f-91d6-4146-a8f0-1fda995d3fef",
       "component": true,
       "type": "object",
       "journal": false,
@@ -153,31 +174,37 @@
       "description": "A direct message to the platform bot, kept for up to seven days while it waits for its sender’s Operator. A receipt prevents a Gateway replay from taking it twice.",
       "properties": {
         "via": {
+          "$id": "urn:uuid:0c162adb-1b28-4edb-aa67-af46ec8fa47d",
           "type": "string",
           "stamped": true
         },
         "account": {
+          "$id": "urn:uuid:ae1215fb-511a-4fa4-8ef4-cc9952053cc9",
           "type": "string",
           "stamped": true
         },
         "said": {
+          "$id": "urn:uuid:51e050d4-74d5-4480-aea9-3421bf410fa7",
           "type": "object",
           "additionalProperties": true,
           "stamped": true
         },
         "person": {
+          "$id": "urn:uuid:814f5abe-10ce-44c3-aeee-4a3c865e8a49",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "space": {
+          "$id": "urn:uuid:4822a6ae-728f-4764-a3da-d0f9883f6a0a",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true
         },
         "until": {
+          "$id": "urn:uuid:bedde8b0-d854-4d21-bdb5-9d9a1052c557",
           "type": "string",
           "format": "date-time",
           "index": true,

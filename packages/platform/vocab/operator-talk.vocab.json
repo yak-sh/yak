@@ -1,31 +1,41 @@
 {
+  "$id": "urn:uuid:191c9963-c7a0-4b05-b7f5-19ac61da9b06",
   "$defs": {
     "operatorTalk": {
+      "$id": "urn:uuid:c6a91ea5-60fd-43af-9bcc-6a991b09c2ce",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:851932a4-c457-4b51-85b2-448d4986f662",
           "type": "string"
         },
         "task": {
+          "$id": "urn:uuid:075bc9ae-5227-4afd-8a08-a8d25a51f233",
           "type": "string"
         },
         "opened": {
+          "$id": "urn:uuid:dee7db19-0d16-4716-b98d-7569c18f3164",
           "type": "string"
         },
         "standing": {
+          "$id": "urn:uuid:fb345bb2-93a5-4533-a3bd-f1e264eead08",
           "type": "string"
         },
         "n": {
+          "$id": "urn:uuid:6ca8f458-2127-43eb-9775-401ba61dba5e",
           "type": "integer"
         },
         "step": {
+          "$id": "urn:uuid:87b9a2d5-e01c-4c60-95d8-c9eadf4fa794",
           "type": "object"
         },
         "typing": {
+          "$id": "urn:uuid:24a99a71-b05f-4d93-9017-711cf542bf4b",
           "type": "string"
         },
         "writing": {
+          "$id": "urn:uuid:0731dacc-2ae3-4c60-a807-20d949468788",
           "type": "string"
         }
       },

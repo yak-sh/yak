@@ -1,16 +1,21 @@
 {
+  "$id": "urn:uuid:dd08c3d3-2cfc-4da4-9198-3ffe61ab52aa",
   "$defs": {
     "updateCard": {
+      "$id": "urn:uuid:fc6f8329-6a33-46da-bf2d-76fdce1cb164",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:71b04fa7-4776-49a2-bb11-90eaa67c4bd2",
           "type": "string"
         },
         "rank": {
+          "$id": "urn:uuid:2272b176-a1a1-413c-a37d-040d3941a65a",
           "type": "integer"
         },
         "update": {
+          "$id": "urn:uuid:dd94d6ae-e97d-4f34-8ce3-116b9ed2b39d",
           "type": "object"
         }
       },
@@ -21,16 +26,20 @@
       ]
     },
     "updateOffer": {
+      "$id": "urn:uuid:c82ff203-4541-4707-b61c-d6f0ce367893",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:650029ef-1a81-4ed3-8701-5bff9f4d6307",
           "type": "string"
         },
         "rank": {
+          "$id": "urn:uuid:0ccbf6df-7a04-464a-bf87-0c0e732c24b6",
           "type": "integer"
         },
         "update": {
+          "$id": "urn:uuid:13918e6b-4856-41a8-99dc-4ad5db8369f2",
           "type": "object"
         }
       },

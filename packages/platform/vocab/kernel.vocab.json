@@ -1,10 +1,12 @@
 {
+  "$id": "urn:uuid:a1c26e40-14e9-4d3f-8ae8-7e8cc9baf799",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
   "title": "kernel",
   "$defs": {
     "error": {
+      "$id": "urn:uuid:8b078536-480f-4441-b2c1-b35924b017e2",
       "component": true,
       "type": "object",
       "description": "A known failure the platform reports deliberately, as against a break nobody chose.",
@@ -14,15 +16,18 @@
       ],
       "properties": {
         "at": {
+          "$id": "urn:uuid:33994220-5d5c-4cdd-8de4-7c4ec37ef9d2",
           "type": "string",
           "format": "date-time",
           "stamped": true
         },
         "message": {
+          "$id": "urn:uuid:c449bd10-8919-4e1a-b816-2d417398c96a",
           "type": "string",
           "stamped": true
         },
         "code": {
+          "$id": "urn:uuid:b67d39b8-7427-4c83-b06f-d4498b2f4f77",
           "type": "string",
           "description": "What a refused call says about itself, written by the tool runner rather than stamped by the platform."
         }
@@ -30,17 +35,20 @@
       "$comment": "`app_errors` reads both facets in every store, so both are declared in every store. `code` is @yaks/tools' half of this word: one word, both meanings, so a store never has to choose."
     },
     "blob": {
+      "$id": "urn:uuid:cbb8183b-a1af-4560-a5f5-ef2aee1faaba",
       "component": true,
       "type": "object",
       "description": "An upload's content, addressed by its sha; the attachment that uses it is a row of its own.",
       "properties": {
         "bytes": {
+          "$id": "urn:uuid:da5b2120-b8e8-4584-90a9-86b188271870",
           "type": "number"
         }
       },
       "$comment": "The two rows a page's upload makes (./uploads.ts) stay apart because they are two things, and because a component may not point at its own entity."
     },
     "attachment": {
+      "$id": "urn:uuid:bfb45c00-9e84-4fa5-9e47-ae95ef5f9408",
       "component": true,
       "type": "object",
       "kind": true,
@@ -49,22 +57,27 @@
       ],
       "properties": {
         "blob": {
+          "$id": "urn:uuid:a22752c4-0389-4b44-a5d8-08eb95af09b7",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
         },
         "mime": {
+          "$id": "urn:uuid:60e58c8e-0be8-4313-8d9f-3570960b9845",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:fbcfd9da-d7ff-4dda-9f0b-30e5fffd8850",
           "type": "string"
         },
         "artifact": {
+          "$id": "urn:uuid:c05c86ad-4f1e-41be-ae7d-5a46d43e453d",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "audience": {
+          "$id": "urn:uuid:92018d66-4804-45e3-8115-a55b097aff33",
           "type": "string",
           "enum": [
             "user",
@@ -72,12 +85,15 @@
           ]
         },
         "call": {
+          "$id": "urn:uuid:80c64a61-b657-4496-b52c-6b4df6ebcd8d",
           "type": "string"
         },
         "revised_prompt": {
+          "$id": "urn:uuid:d8f67423-4e20-4b94-9744-7bb7de45b1f3",
           "type": "string"
         },
         "source": {
+          "$id": "urn:uuid:36353ce9-8f0e-4d11-9315-a0f4d4f9ec8f",
           "type": "string",
           "description": "The web address the file was fetched from.",
           "$comment": "library-tools.ts"
@@ -85,31 +101,37 @@
       }
     },
     "document_page": {
+      "$id": "urn:uuid:cc334f61-0eb2-43b5-8798-e2d3ada50d70",
       "component": true,
       "type": "object",
       "description": "Text extracted from one stored document page; searchable by words and meaning.",
       "properties": {
         "document": {
+          "$id": "urn:uuid:5ab9633e-2f1c-41ac-9558-f47f6c91a3c3",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "blob": {
+          "$id": "urn:uuid:3929ae82-a02d-4ac4-b48f-92370c9a2bfe",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "page": {
+          "$id": "urn:uuid:386686ea-06c1-40f3-aadc-5a6d93d1308a",
           "type": "number",
           "stamped": true
         },
         "location": {
+          "$id": "urn:uuid:5e7de9e0-d3c9-484e-806e-b4bbae7c6919",
           "type": "string",
           "stamped": true
         },
         "text": {
+          "$id": "urn:uuid:93b9c43a-95ef-43e1-a780-d4101e5b13ab",
           "type": "string",
           "search": true,
           "stamped": true
@@ -118,17 +140,20 @@
       "$comment": "Removing an upload's content row retains both the row in graph trash and its bytes for recovery. A permanent purge needs its owner's choice."
     },
     "document_text": {
+      "$id": "urn:uuid:524d65a3-6064-4dd0-8005-8b266d9fa89a",
       "component": true,
       "type": "object",
       "description": "Completed extraction of an attachment’s immutable bytes.",
       "properties": {
         "blob": {
+          "$id": "urn:uuid:062e5c37-5b0d-44b8-8f07-c4453e944405",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "pages": {
+          "$id": "urn:uuid:b94301d1-8354-4424-948b-0ecdf3014ffb",
           "type": "number",
           "stamped": true
         }
@@ -148,11 +173,13 @@
       "description": "Extract stored documents once into searchable pages, reading scanned pages too."
     },
     "hearing": {
+      "$id": "urn:uuid:eda2e484-3a19-49e0-8525-e94a5fc53e06",
       "component": true,
       "type": "object",
       "description": "An upload asked to be heard through ./api/speech/hear. It is asked on the upload's own entity, the one its `attachment` is on: the store hears the recording whole and writes each turn, then `heard`, or `failed` with why. Only the speech door asks, so only whoever may ask the app's models spends its space's budget on it.",
       "properties": {
         "at": {
+          "$id": "urn:uuid:8731c954-6776-4103-91d1-fd1078f01f8f",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -161,30 +188,36 @@
       "$comment": "hearings.ts"
     },
     "heard": {
+      "$id": "urn:uuid:e17a527f-cd74-4640-a250-73662cc0a3f5",
       "component": true,
       "type": "object",
       "description": "An upload heard whole: its seconds, its turns and whether they tell speakers apart.",
       "properties": {
         "seconds": {
+          "$id": "urn:uuid:a868e1c9-43e2-4710-a38f-27fc98fa2227",
           "type": "number",
           "stamped": true
         },
         "turns": {
+          "$id": "urn:uuid:f0cd26ca-fc72-4f01-9c9e-30f50a2a3d77",
           "type": "number",
           "stamped": true
         },
         "speakers": {
+          "$id": "urn:uuid:fc07c4af-0bf4-4ca5-80c1-9c6fcfb20fcd",
           "type": "boolean",
           "stamped": true
         }
       }
     },
     "heard_turn": {
+      "$id": "urn:uuid:7bf5236a-6ecb-4758-b97c-d2c75b49e8a9",
       "component": true,
       "type": "object",
       "description": "What one speaker said in a heard upload, and its seconds in the recording.",
       "properties": {
         "recording": {
+          "$id": "urn:uuid:5c88610d-0950-4fb9-842d-f0e0ff3b173d",
           "type": "string",
           "description": "The upload heard; deleting it deletes its turns.",
           "ref": "entity",
@@ -192,18 +225,22 @@
           "$comment": "Not stamped, so the cascade follows it: a cascade never follows a stamped reference (@yaks/vocab `deaths`)."
         },
         "speaker": {
+          "$id": "urn:uuid:4a31533e-51c1-4311-a5ad-53901f1e31be",
           "type": "number",
           "stamped": true
         },
         "text": {
+          "$id": "urn:uuid:0b5ab855-70e9-435d-8363-d680566775f5",
           "type": "string",
           "stamped": true
         },
         "from": {
+          "$id": "urn:uuid:fad7072c-3f6f-4966-9951-d37f72fdbb26",
           "type": "number",
           "stamped": true
         },
         "to": {
+          "$id": "urn:uuid:ca1fd1a1-bd67-4a75-96e5-c0760a7d2bb1",
           "type": "number",
           "stamped": true
         }

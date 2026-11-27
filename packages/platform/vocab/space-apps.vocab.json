@@ -1,49 +1,63 @@
 {
+  "$id": "urn:uuid:06001184-deda-45b8-a390-cc24d4a1e532",
   "$defs": {
     "spaceApp": {
+      "$id": "urn:uuid:1acf83b1-2c83-4d84-8c8e-650ea78c3bfa",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:99957e3d-b74b-4842-8c10-1eed0dd1257d",
           "type": "string"
         },
         "app": {
+          "$id": "urn:uuid:ce969782-6b97-4737-ad60-70a67050dc8e",
           "type": "string"
         },
         "slug": {
+          "$id": "urn:uuid:55bef76b-eac9-4353-90df-9575225b5558",
           "type": "string"
         },
         "title": {
+          "$id": "urn:uuid:7dedf5c1-d270-4019-8774-d7edb20a35d0",
           "type": "string"
         },
         "source": {
+          "$id": "urn:uuid:1447d60e-8d67-4260-94a8-dcc9b71a8c8c",
           "type": [
             "string",
             "null"
           ]
         },
         "generatedIcon": {
+          "$id": "urn:uuid:2c8d95c7-14bd-4c2e-8718-ce2305624091",
           "type": "string"
         },
         "home": {
+          "$id": "urn:uuid:1f7cf817-fcd9-4cb6-921b-5cd93c859798",
           "type": "boolean"
         },
         "access": {
+          "$id": "urn:uuid:bab2c262-fb5f-4f2a-a31f-ddbd7181ea71",
           "type": [
             "string",
             "null"
           ]
         },
         "gallery": {
+          "$id": "urn:uuid:b1c6809b-1b63-4541-9556-f80565fef276",
           "type": "string"
         },
         "installed": {
+          "$id": "urn:uuid:844d8bd6-3f29-4537-aa4a-ecceb351ef16",
           "type": "boolean"
         },
         "visits": {
+          "$id": "urn:uuid:7c99e662-7170-4b45-9829-9adafe5fcb40",
           "type": "integer"
         },
         "made": {
+          "$id": "urn:uuid:5e2b152b-35db-4fb4-bb44-46c8af62c46b",
           "type": [
             "object",
             "null"
@@ -64,6 +78,7 @@
           }
         },
         "deployed": {
+          "$id": "urn:uuid:c0f83f24-d31d-489b-a24a-f703c72797a8",
           "type": [
             "object",
             "null"
@@ -92,16 +107,20 @@
       ]
     },
     "appBroken": {
+      "$id": "urn:uuid:bca0479a-4806-4860-9b12-d269ad383828",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:618f1ed4-57b1-4fa0-bb22-023b51724a99",
           "type": "string"
         },
         "app": {
+          "$id": "urn:uuid:5d5e37ba-4300-4037-b35e-22cc143fb04d",
           "type": "string"
         },
         "errors": {
+          "$id": "urn:uuid:49688aaa-fb69-4851-9b19-d8c8df8d7784",
           "type": "array",
           "items": {
             "type": "object"

@@ -1,34 +1,43 @@
 {
+  "$id": "urn:uuid:ed8fdbd1-09db-4a40-9678-c2e6d77ad028",
   "$defs": {
     "appMaking": {
+      "$id": "urn:uuid:1b5f7e16-73e4-47fe-b46f-6b85d42dd380",
       "component": true,
       "type": "object",
       "properties": {
         "app": {
+          "$id": "urn:uuid:609ad3c6-57df-42f6-95ca-4d2229386701",
           "type": "string"
         },
         "made": {
+          "$id": "urn:uuid:37e2e98a-58d0-4064-afa6-5caf0cede8ed",
           "type": "object"
         },
         "pages": {
+          "$id": "urn:uuid:4dc53d2b-e56a-454f-8701-2bca9a476780",
           "type": "array"
         },
         "steps": {
+          "$id": "urn:uuid:8e81ba70-c9d9-494d-9e3a-48b55b52b504",
           "type": "array"
         },
         "draft": {
+          "$id": "urn:uuid:5464a28d-2871-4c8d-b9f2-d7f3e0b04bb8",
           "type": [
             "string",
             "null"
           ]
         },
         "edited": {
+          "$id": "urn:uuid:0029f3ba-c003-4296-8789-f5bbe1f5c55c",
           "type": [
             "string",
             "null"
           ]
         },
         "drafts": {
+          "$id": "urn:uuid:ccdcda36-2cfb-4669-9091-a0d80260c6e1",
           "type": "array"
         }
       },
@@ -40,17 +49,21 @@
       ]
     },
     "appDraftAct": {
+      "$id": "urn:uuid:5ded0352-196b-4d1e-8384-61b04700eda8",
       "component": true,
       "durable": "0s",
       "type": "object",
       "properties": {
         "app": {
+          "$id": "urn:uuid:eff23f90-632f-4305-90c8-1d275b959ba1",
           "type": "string"
         },
         "draft": {
+          "$id": "urn:uuid:4ebf9465-7dd9-4065-88cb-8b58c2c9058f",
           "type": "string"
         },
         "act": {
+          "$id": "urn:uuid:5a95e079-9887-4577-82dc-f79f35a079f1",
           "type": "string",
           "enum": [
             "release",
@@ -65,11 +78,13 @@
       ]
     },
     "appDraftActed": {
+      "$id": "urn:uuid:b1be5db2-d288-433f-81a8-8ca640f8ddf8",
       "component": true,
       "durable": "0s",
       "type": "object",
       "properties": {
         "said": {
+          "$id": "urn:uuid:5d893fcb-afc0-4199-b41f-2b2614417b27",
           "type": "string"
         }
       },
@@ -78,25 +93,31 @@
       ]
     },
     "appDrafted": {
+      "$id": "urn:uuid:0c25dd91-4249-45b9-acb7-82a579588eda",
       "component": true,
       "type": "object",
       "properties": {
         "app": {
+          "$id": "urn:uuid:b74c56bb-85c3-4ecf-b782-83e448714290",
           "type": "string"
         },
         "write": {
+          "$id": "urn:uuid:eaf8fa8a-c766-472b-bcc9-fc8110e9d853",
           "type": [
             "string",
             "null"
           ]
         },
         "drafts": {
+          "$id": "urn:uuid:956cbc58-05ea-484f-8a01-6cf02df22156",
           "type": "array"
         },
         "previews": {
+          "$id": "urn:uuid:51be4b39-8678-418e-8502-f89b99f81872",
           "type": "array"
         },
         "source": {
+          "$id": "urn:uuid:3874be2d-acfe-431b-8d48-7327138c226c",
           "type": [
             "string",
             "null"

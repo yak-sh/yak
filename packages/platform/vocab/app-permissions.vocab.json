@@ -1,35 +1,42 @@
 {
+  "$id": "urn:uuid:9dbbf959-31f6-4a6b-b300-fae34aa03502",
   "title": "app-permissions",
   "$defs": {
     "app_permission": {
+      "$id": "urn:uuid:89407157-3e4c-47c2-aba4-83b25208b1aa",
       "component": true,
       "type": "object",
       "description": "A person’s permission for one app and scope.",
       "properties": {
         "app": {
+          "$id": "urn:uuid:fa8f0611-2180-4edc-89ff-9b14b198eb62",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "person": {
+          "$id": "urn:uuid:a83f0341-1693-4310-a18e-a233d759a3eb",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "scope": {
+          "$id": "urn:uuid:0e819dc1-0990-4cdd-94bb-bc8405ef3930",
           "type": "string",
           "stamped": true
         }
       }
     },
     "play_invite": {
+      "$id": "urn:uuid:f7ab5491-d0fe-42d1-9233-c451f690ddca",
       "component": true,
       "type": "object",
       "description": "The link a friend can follow to play.",
       "properties": {
         "url": {
+          "$id": "urn:uuid:c703b970-2a81-4939-8eb0-ad9bee3fad62",
           "type": "string",
           "stamped": true
         }

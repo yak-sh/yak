@@ -1,36 +1,46 @@
 {
+  "$id": "urn:uuid:75f5edd4-badc-4373-86c9-b4d9f5128da1",
   "$defs": {
     "operator": {
+      "$id": "urn:uuid:c544ab63-1a21-40d7-a3a3-cda55acf249e",
       "component": true,
       "type": "object",
       "description": "Retired: the Operator's settings from before they were its persona's title, speech{} and cache{}, which the store moves them onto on its first read.",
       "properties": {
         "name": {
+          "$id": "urn:uuid:1e12f76d-8f0b-42df-948a-27adbb8f880b",
           "type": "string"
         },
         "voice": {
+          "$id": "urn:uuid:dc6a0744-1dec-4956-89f3-13b3017547e2",
           "type": "string"
         },
         "voice_speed": {
+          "$id": "urn:uuid:8fe120e1-d3af-4bcc-9f67-15733644f89a",
           "type": "string"
         },
         "voice_model": {
+          "$id": "urn:uuid:2b74ff98-0b85-4158-a148-056a4d37f39f",
           "type": "string"
         },
         "voice_backend": {
+          "$id": "urn:uuid:759d3a5e-bf4a-4400-802f-bca9102e5a35",
           "type": "string"
         },
         "cache_retention": {
+          "$id": "urn:uuid:76065ece-57be-4af1-bd21-e6d0dd6652b1",
           "type": "number"
         }
       },
       "$comment": "Retired: the Operator's settings as its persona held them before its name was the persona's title, its voice @yaks/speech's `speech` and its cache @yaks/model's `cache`. The store moves them onto those on its first read of the persona (operator-persona.ts `held`), and this goes once every store has (T-164108)."
     },
     "walkthrough": {
+      "$id": "urn:uuid:225e46a9-003f-4cfa-b63d-61bb14510f3b",
       "component": true,
       "description": "Marks a conversation as the recorded walkthrough of one of the space's apps: each of the person's requests in it is a step, ending in the release its last app_deploy of that app made. yaks.app's home page shows the demo space's walkthroughs beside the apps they built.",
       "properties": {
         "app": {
+          "$id": "urn:uuid:040083a2-9200-4a2b-95ca-0f02abbbe773",
           "type": "string",
           "index": true,
           "description": "the slug of the app the conversation built"
@@ -38,40 +48,49 @@
       }
     },
     "operator_approval": {
+      "$id": "urn:uuid:30b020f1-71b1-40cb-8dcf-afa15b0e768d",
       "component": true,
       "description": "A privileged act asked for in this person's conversation, waiting for their tap on a link: texted to their number where they wrote by text or call, else given in the Operator's answer (yaks.app's operator-approvals.ts). Approve marks it verified{} and carries it out; Decline marks it declined{} and runs nothing.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:21fd44e4-b03f-44e9-9cf3-191e6b8a3217",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "session": {
+          "$id": "urn:uuid:2c15c653-09ad-4b81-8432-4fe2c04ea13d",
           "type": "string",
           "ref": "session",
           "death": "keep"
         },
         "tool": {
+          "$id": "urn:uuid:b582a24f-4c26-44c4-adbd-b47ed466fb6c",
           "type": "string",
           "description": "The tool the act calls."
         },
         "args": {
+          "$id": "urn:uuid:fea2f6a3-0fb7-42be-b299-4cf9579313ee",
           "type": "object",
           "description": "Its arguments."
         },
         "say": {
+          "$id": "urn:uuid:0d2afe33-3b14-489a-bd36-42883d4fb20e",
           "type": "string",
           "description": "What it does, in the person's words."
         },
         "number": {
+          "$id": "urn:uuid:7deb3359-c68c-48e9-bd11-d6f564724312",
           "type": "string",
           "description": "Where the link was texted."
         },
         "expires": {
+          "$id": "urn:uuid:8fb9bd18-dbbf-4e4e-bbdc-85a28c482f8a",
           "type": "string",
           "format": "date-time"
         },
         "why": {
+          "$id": "urn:uuid:fa9defcd-f8ac-4c27-9b51-d6ab7cb81360",
           "type": "string",
           "enum": [
             "identity",
@@ -80,6 +99,7 @@
           "description": "Why it waits (yaks.app's operator-route.ts): identity, the act is within the person's role and only that it is theirs needs confirming; authority, their role does not allow it, and someone whose role does approves it, running it with their own tools. Identity where absent."
         },
         "approvers": {
+          "$id": "urn:uuid:a4880a58-2978-4695-bab5-64a250ec6979",
           "type": "array",
           "items": {
             "type": "string"
@@ -87,6 +107,7 @@
           "description": "Everyone who may answer it, any one for the rest; the person alone where absent."
         },
         "then": {
+          "$id": "urn:uuid:0af3c10b-76f0-45ba-8f44-891f7a00e0b2",
           "type": "array",
           "items": {
             "type": "string"
@@ -94,6 +115,7 @@
           "description": "Where the person's role does not allow it and their words came where nothing proves who sent them: who approves it once the person has confirmed it is theirs, asked anew then."
         },
         "raised": {
+          "$id": "urn:uuid:80430ad4-8d9f-4e7c-b1dc-837b9feb0a79",
           "type": "string",
           "index": true,
           "description": "The escalation (operator_request.raised) the turn that asked it was answering. Where the guest who raised it links their chat account to a member whose role allows it, it is theirs: this approval and its approval_ask decisions are cancelled{}, and its approvers told (yaks.app's operator-escalate.ts `linkedTo`)."
@@ -101,15 +123,18 @@
       }
     },
     "operator_escalation": {
+      "$id": "urn:uuid:ba7096ab-af03-4e39-84f9-0b82fb6f112b",
       "component": true,
       "description": "On a decision assigned to one of the space's people: what a stranger's conversation raised with them (yaks.app's operator-escalate.ts). It waits in their Updates and starts no turn; taken up (decided), it starts their conversation on it on the escalated channel, and let go, it is closed for everyone. A conversation has one open at a time, and what it raises meanwhile is added to it.",
       "properties": {
         "raised": {
+          "$id": "urn:uuid:61fbf3db-1f82-477d-9775-31e6d7230d9d",
           "type": "string",
           "index": true,
           "description": "The escalation this is one copy of: the same on the copy raised with each person who may answer it."
         },
         "from": {
+          "$id": "urn:uuid:3c98ce3d-41f4-418c-a705-8a806c9c2f11",
           "type": "string",
           "ref": "session",
           "death": "keep",
@@ -117,16 +142,19 @@
           "description": "The conversation that raised it, with the writer and only their permissions, which hears back only what escalation_answer sends it."
         },
         "address": {
+          "$id": "urn:uuid:7a789f83-1348-4b0f-9cec-c229fce3bf00",
           "type": "string",
           "description": "What the writer goes by: a name or an address."
         },
         "about": {
+          "$id": "urn:uuid:cc867753-8235-446d-bffd-a9e0de2c4303",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "The writer's reply it raises, to a letter or text the Operator sent for this person."
         },
         "answered_by": {
+          "$id": "urn:uuid:8cc46a5a-5e06-4a82-8967-be34119f2b77",
           "type": "string",
           "ref": "person",
           "death": "keep",
@@ -135,10 +163,12 @@
       }
     },
     "approval_ask": {
+      "$id": "urn:uuid:957abc2f-fdcc-4b41-88e2-685aa59200b1",
       "component": true,
       "description": "On a decision assigned to someone other than an operator_approval's person, who may answer it too: the approval it asks them about. Answered, it answers the approval as its card or link would, and once the approval is answered anywhere it is answered here too.",
       "properties": {
         "approval": {
+          "$id": "urn:uuid:945d6ec8-153a-418f-83b6-d84f801101ad",
           "type": "string",
           "ref": "entity",
           "death": "cascade"
@@ -146,64 +176,78 @@
       }
     },
     "declined": {
+      "$id": "urn:uuid:3bd81f1a-32f7-413b-9b6d-b5a0c1c0e33c",
       "component": true,
       "description": "On an operator_approval: the person pressed Decline on its link, so its act never runs and the link opens nothing more.",
       "properties": {}
     },
     "unverified": {
+      "$id": "urn:uuid:a9ec6fe5-07ef-4bd0-b056-427849ab9d09",
       "component": true,
       "description": "On a person's input: words that came where only the number they came from says who sent them (an SMS, RCS, or a call the carriers did not vouch for), which anyone can show. The model reads them marked unverified, and for a day a privileged act a later turn of the conversation does waits for a tap on a link texted to that number, unless that turn's own words ask for it (yaks.app's operator-approvals.ts).",
       "properties": {
         "number": {
+          "$id": "urn:uuid:b4b2413c-40ee-4af7-868b-dce381f08312",
           "type": "string",
           "description": "The number they came from."
         }
       }
     },
     "operator_contact": {
+      "$id": "urn:uuid:266ca6dc-76f6-4592-b240-3bb00f1a3cae",
       "component": true,
       "description": "A contact proposed in this person’s conversation; only confirmed contacts are written on their directory person.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:227778c2-3707-40f5-b7b1-c662cd61dd44",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "address": {
+          "$id": "urn:uuid:ad14f433-7eb8-4228-8ac0-fd2b2b826c3f",
           "type": "string"
         },
         "source": {
+          "$id": "urn:uuid:f97203c1-503e-4b49-92ad-dddc08e84af7",
           "type": "string",
           "ref": "entry",
           "death": "keep"
         },
         "request": {
+          "$id": "urn:uuid:d7f3b948-19c4-4076-a877-a947562a1ba0",
           "type": "string",
           "ref": "entry",
           "death": "keep",
           "description": "The original human request whose completion waits for this contact, retained across retries and address changes."
         },
         "session": {
+          "$id": "urn:uuid:b9f32dc3-52de-4f0b-9b6d-62961dd74d3a",
           "type": "string",
           "ref": "session",
           "death": "keep"
         },
         "code": {
+          "$id": "urn:uuid:37900604-6e26-4679-a8c5-7f2b4b4cbcd6",
           "type": "string",
           "description": "Retired duplicate digest; contact-move scopes its directory proof and clears it."
         },
         "expires": {
+          "$id": "urn:uuid:e2826f97-105b-4fc8-bca5-cc9bbf27670c",
           "type": "string",
           "format": "date-time"
         },
         "tries": {
+          "$id": "urn:uuid:ff6279ed-2b73-4852-848e-2eab5c87a469",
           "type": "number",
           "description": "Retired duplicate guess count, cleared by contact-move."
         },
         "consent": {
+          "$id": "urn:uuid:9f5ddaed-59d7-4c69-a1fa-a7d0f807584c",
           "type": "string"
         },
         "consent_source": {
+          "$id": "urn:uuid:705d9f1f-c2fc-40f3-b223-382a9e0d1c1f",
           "type": "string",
           "ref": "entity",
           "death": "keep"
@@ -211,47 +255,58 @@
       }
     },
     "operator_request": {
+      "$id": "urn:uuid:fa6fe087-2833-479b-ba26-226cd6c70776",
       "component": true,
       "description": "A received operator request and the channel to answer it on.",
       "properties": {
         "space": {
+          "$id": "urn:uuid:d6e51b58-8846-4134-b0ef-03bfabde258a",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "person": {
+          "$id": "urn:uuid:f26f9f4c-1f31-4d4d-a8b0-5d7625d964a8",
           "type": "string",
           "ref": "person",
           "death": "keep"
         },
         "task": {
+          "$id": "urn:uuid:40905b56-2449-4b7b-abc3-032d2cf1fd5d",
           "type": "string",
           "ref": "task",
           "death": "keep"
         },
         "session": {
+          "$id": "urn:uuid:66e28eed-569e-4f00-8e95-b723972fe24b",
           "type": "string",
           "ref": "session",
           "death": "keep",
           "description": "The session its words went to, whose end answers it."
         },
         "channel": {
+          "$id": "urn:uuid:d41daeba-a434-4cea-8a51-ee8dbcaecae8",
           "type": "string"
         },
         "administrative": {
+          "$id": "urn:uuid:99fcd66a-9c8b-47de-b861-41c9ca3d873b",
           "type": "boolean"
         },
         "address": {
+          "$id": "urn:uuid:4a5f6a2a-26ff-4d91-9541-daf568030ef2",
           "type": "string"
         },
         "reply_to": {
+          "$id": "urn:uuid:1d938623-404a-43d4-86b6-add0b01a25e7",
           "type": "string"
         },
         "via": {
+          "$id": "urn:uuid:3b944e31-11d1-41c0-b11c-5740bc7feab0",
           "type": "string",
           "description": "The phone transport a text arrived on, used for its reply."
         },
         "group": {
+          "$id": "urn:uuid:1c2c379e-eda0-4a00-b987-f8bed78d11a1",
           "type": "array",
           "items": {
             "type": "string"
@@ -259,6 +314,7 @@
           "description": "In a group text, everyone else in it besides its sender (`address`) and the number it reached (`reply_to`), who all read the answer unless any is `withheld`. Its `person` is the guest who stands for the group."
         },
         "withheld": {
+          "$id": "urn:uuid:b8ab380b-7f01-4f3a-bdde-14f413e76799",
           "type": "array",
           "items": {
             "type": "string"
@@ -266,88 +322,107 @@
           "description": "In a group text, those in `group` who have not agreed to texts from `reply_to` or replied STOP to it. While any are, the answer goes to its sender (`address`) alone."
         },
         "writer": {
+          "$id": "urn:uuid:1507d259-a48e-40b0-a4f0-4fffbc3c5651",
           "type": "string",
           "ref": "person",
           "death": "keep",
           "description": "In a group text, the person who wrote the words, whose they are kept as."
         },
         "addressed": {
+          "$id": "urn:uuid:fbf24a38-7a03-4e9d-9f74-94bd9b12f81d",
           "type": "boolean",
           "description": "In a group text, whether the words named the Operator."
         },
         "files": {
+          "$id": "urn:uuid:2b908aff-f59d-44d3-9d69-4511bf02b086",
           "type": "array",
           "items": {
             "type": "object"
           }
         },
         "provider": {
+          "$id": "urn:uuid:fd25a92f-3a4c-434f-8ff7-1c37fbf514be",
           "type": "string"
         },
         "model": {
+          "$id": "urn:uuid:6699a6e8-4456-482c-be44-83f373cefc64",
           "type": "string",
           "description": "The model that answers it, where not the Operator's own: a call's."
         },
         "app": {
+          "$id": "urn:uuid:08d821f8-f311-4dd0-82e9-bf53975eccf4",
           "type": "string",
           "description": "The app whose break started the request, on the error channel; the app open beside the chat, on the chat channel."
         },
         "page": {
+          "$id": "urn:uuid:ca997996-83db-4ec3-8ecd-7dc3808075ac",
           "type": "string",
           "description": "The address of the yaks.app page the words were written on, on the chat channel."
         },
         "pane": {
+          "$id": "urn:uuid:5c55f274-b85b-4276-b083-5bc515e304ea",
           "type": "string",
           "description": "The tab of the app open beside the chat that was in front of the person, on the chat channel: keeps (Data), does (Commands), runs (Workflow) or preview (Preview), the preview with which of the two it showed, as preview:draft or preview:live."
         },
         "about": {
+          "$id": "urn:uuid:1b4512bb-f0ab-45c6-b412-df8937ade54e",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "What the words are about: in their Updates, the update or question they answer; on the wake channel, the wake-up that fired; on the subscription channel, the subscription whose rows changed; on the letter and texted channels, the Operator's letter or text they reply to; on the escalated channel, that reply."
         },
         "raised": {
+          "$id": "urn:uuid:63ef4a4d-ce6a-4bed-9d59-5bc5b93f6beb",
           "type": "string",
           "index": true,
           "description": "On the escalated channel, the escalation these words are one copy of: the same on the copy raised with each person who may answer it (yaks.app's operator-route.ts)."
         },
         "answer": {
+          "$id": "urn:uuid:9f528e8d-887b-4819-a323-fd75baa115fa",
           "type": "string",
           "description": "On the escalated channel, what the person answered the escalation with in their Updates, in their own words, where they did not just take it up."
         },
         "from": {
+          "$id": "urn:uuid:cee4540c-3374-458f-8e7d-e99d19393da4",
           "type": "string",
           "ref": "session",
           "death": "keep",
           "description": "On the escalated channel, the conversation that raised the words: the Operator's own, with the reply's writer and only their permissions, which hears back only what escalation_answer sends it. The words are the Operator's, never the person's they are raised with. On the thread channel, the session that sent the note."
         },
         "role": {
+          "$id": "urn:uuid:592da4a7-2985-4e6c-bf48-cbddcd84d6c1",
           "type": "string",
           "description": "On the thread channel, the role in the space of the person whose thread sent the note; absent for one who is not a member."
         },
         "from_space": {
+          "$id": "urn:uuid:9517ae21-ac03-4d35-a81c-6ffb157f4cfb",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "The space whose Operator sent a handoff."
         },
         "rebuild": {
+          "$id": "urn:uuid:319cb6c9-3304-45b6-a019-3b6be6672446",
           "type": "boolean",
           "description": "Begun from a box given the web address of a site, on the chat channel: its words carry what to do with it."
         },
         "new_app": {
+          "$id": "urn:uuid:b43ef771-4956-4394-b602-fbbfa1c405ef",
           "type": "boolean",
           "description": "Asked for on the New app screen, on the chat channel: the words are a request for a new app."
         },
         "context": {
+          "$id": "urn:uuid:beaf81b1-f7cf-44fc-a515-eef687adae15",
           "type": "object",
           "description": "What an app's page gave beside the words: on the page channel, beside the words its code sent (`./api/operator/send`); on the chat channel, beside the person's note from the page's corner. Such as the passage they selected and the app's release. The app's own JSON."
         },
         "author": {
+          "$id": "urn:uuid:7294df65-1979-4d1b-a4d4-e5398ec97ce4",
           "type": "string",
           "description": "On the page channel, what the person who last put the app live is called: whose code chose the words."
         },
         "stepped": {
+          "$id": "urn:uuid:9554630f-af87-4145-ac49-ecdd388603b7",
           "type": "object",
           "description": "Begun from a step of a walkthrough on yaks.app's home page, on the chat channel: the conversation holds the demo's transcript through that step, and the words are the visitor's first.",
           "properties": {
@@ -369,33 +444,40 @@
           }
         },
         "signup": {
+          "$id": "urn:uuid:6585bdf6-f318-4d1f-af00-31e5e811a74d",
           "type": "boolean",
           "description": "Sent to yaks.app's sign-up address or number: the sender's first words, unless they had signed up before."
         },
         "call": {
+          "$id": "urn:uuid:bfe93e22-1bce-4a9f-8b54-066649c6fca7",
           "type": "string",
           "description": "The call whose talking model asked it, in that model's words for the caller rather than the caller's own."
         },
         "attested": {
+          "$id": "urn:uuid:b4d935d6-d973-4b03-80cf-857607f86db1",
           "type": "boolean",
           "description": "On a call, that the carriers vouched the caller holds the number they called from (STIR/SHAKEN full attestation, validated), so the call is trusted as chat is."
         },
         "linked": {
+          "$id": "urn:uuid:4e6ba4f0-6e58-4c0b-b912-a4c81ab44c14",
           "type": "boolean",
           "description": "On a chat platform or in its voice room, that the writer's account there is linked to a person here, not a guest's."
         }
       }
     },
     "operator_oracle": {
+      "$id": "urn:uuid:f887a0b2-727a-4bad-b8b3-ed8088d18097",
       "component": true,
       "description": "A topic, source or link projected with one person's reach into the Operator's store. A missing person quarantines a legacy projection whose reader is unknown.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:0b8cde58-8a33-442e-9fd4-afe79cba3cdc",
           "type": "string",
           "ref": "person",
           "death": "keep"
         },
         "subject": {
+          "$id": "urn:uuid:53fc28f9-2c8e-4006-8b57-6486e36eda47",
           "type": "string",
           "ref": "entity",
           "death": "keep"
@@ -403,65 +485,79 @@
       }
     },
     "stalled": {
+      "$id": "urn:uuid:2b7303e7-d294-4eed-a5c6-c47b6a837064",
       "component": true,
       "description": "An Operator conversation a yaks.app bug stopped before it finished, until the bug is fixed and it is taken up again (workers/yak/operator-rerun.ts).",
       "properties": {
         "fault": {
+          "$id": "urn:uuid:14002edb-8f8e-458f-b950-bb9b5422e4db",
           "type": "string",
           "description": "The fault its report was filed under (@yaks/tracker `faultOf`), which the bug's resolution names."
         }
       }
     },
     "operator_session": {
+      "$id": "urn:uuid:bab36758-4e26-4ce1-a718-c5e8561c7214",
       "component": true,
       "description": "What an Operator session works with: its space, the person whose reach it has (the newest words' sender), and the attachments it was given.",
       "properties": {
         "space": {
+          "$id": "urn:uuid:5994fe39-6fba-4fdd-845b-9888665e423a",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "person": {
+          "$id": "urn:uuid:0cead700-1836-4db4-9602-2f483d8b011e",
           "type": "string",
           "ref": "person",
           "death": "keep"
         },
         "administrative": {
+          "$id": "urn:uuid:1d7f2cb1-c2c3-404a-a57b-bb6a4744e19a",
           "type": "boolean"
         },
         "channel": {
+          "$id": "urn:uuid:18e2d6ef-2b2d-4d4b-9efa-26603454a58a",
           "type": "string",
           "description": "The newest input channel, inherited by helpers; reply channels carry no personal remote tools."
         },
         "confirm": {
+          "$id": "urn:uuid:f27ecf1e-632b-4fc1-a2fe-4822658e2520",
           "type": "string",
           "description": "The number the newest words came from where it is all that says who sent them (an SMS, an unverified call), inherited by helpers: the session's privileged acts wait for a tap on a link texted to it."
         },
         "signup": {
+          "$id": "urn:uuid:dcabaa93-fc39-466d-a79c-ed0a7487ccda",
           "type": "string",
           "description": "The reply phone of a form conversation; its tools are only sign-up operations."
         },
         "conversation": {
+          "$id": "urn:uuid:391ca627-8044-420c-9cfa-59dbf44364fd",
           "type": "boolean",
           "description": "The person's one conversation with the Operator (operator-channels.ts `rootAt`), whoever's it was begun as."
         },
         "files": {
+          "$id": "urn:uuid:314a3742-56af-4a9c-ae47-c011e661aaa5",
           "type": "array",
           "items": {
             "type": "object"
           }
         },
         "visitor": {
+          "$id": "urn:uuid:af2ac688-1a58-44a2-bce9-ec26a038a5e2",
           "type": "string",
           "description": "The visitor whose share of the space's budget an investigation spends: who holds no seat and reported what it looks into (operator-escalate.ts `oddReport`)."
         }
       }
     },
     "operator_memory": {
+      "$id": "urn:uuid:d6e1657c-a356-4bd1-9f80-a14b25601e2a",
       "component": true,
       "description": "The audience of a saved memory. A person makes it theirs. An empty mark shares it with the space, subject to the ownership of its source.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:e3ddd796-6c2c-4630-bf82-b4e4ccda0593",
           "type": "string",
           "ref": "person",
           "death": "keep"
@@ -469,11 +565,13 @@
       }
     },
     "owner": {
+      "$id": "urn:uuid:fe61adde-f9e0-4a46-a197-bf706ad0fa08",
       "component": true,
       "journal": false,
       "description": "Whose this is in the Operator's store, the one person who reads it: named by it or by what it hangs on (its conversation, its session, the session a helper works for, the request files came with). Without a person it is named as more than one person's, or by something that names nobody, and nobody reads it. An entity without an owner is nobody's, and everyone who reads the store sees it. The store keeps it, in the commit that makes or changes what it is read from; nobody else writes it.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:b2e3f3c7-8a27-428f-a964-3861cfb7f0a3",
           "type": "string",
           "ref": "person",
           "death": "keep",
@@ -483,15 +581,18 @@
       "$comment": "./operator-owner.ts `owning`"
     },
     "operator_files": {
+      "$id": "urn:uuid:f288012c-67ba-449c-a761-d55f3eec8b42",
       "component": true,
       "description": "The files an input came with, or a result brought back, as lines kept before they were found among the attachments (@yaks/blob `attachment{message}`) say them, until their store's pass moves them there (files-move.ts).",
       "properties": {
         "request": {
+          "$id": "urn:uuid:047392ba-8776-42ac-b2c4-ce94d480cb44",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "files": {
+          "$id": "urn:uuid:d923d77a-c9f5-4674-806d-68a656e7c2a7",
           "type": "array",
           "items": {
             "type": "object"
@@ -500,69 +601,84 @@
       }
     },
     "taken": {
+      "$id": "urn:uuid:f1b0a4fe-5253-4d9a-bc01-8341db7fbdd6",
       "component": true,
       "description": "The item an input's words came in, as 1ad52d4f7 wrote it for a few minutes before @yaks/session named it `intake{item}`; moved there by its store's pass (files-move.ts `intakeBackfill`).",
       "properties": {
         "item": {
+          "$id": "urn:uuid:193bdde5-63a7-46fe-aa30-dc8050f24474",
           "type": "string"
         }
       }
     },
     "operator_channel": {
+      "$id": "urn:uuid:ee6e4872-37c0-4494-93ed-31337ce5e24a",
       "component": true,
       "description": "How a person's words came into their conversation, as lines kept before @yaks/session's `channel{name, framing}` say it, until their store's pass moves them there (channel-move.ts `channelBackfill`).",
       "properties": {
         "channel": {
+          "$id": "urn:uuid:ef76cb9b-6a57-4b07-ab24-2a336b835ca0",
           "type": "string",
           "description": "The channel they came by (operator_request.channel)."
         },
         "framing": {
+          "$id": "urn:uuid:a88707da-66d6-4cd5-8edd-1d3e016e5a34",
           "type": "string",
           "description": "What the model reads before their words, saying how they came; the body starts with it."
         }
       }
     },
     "operator_hosted": {
+      "$id": "urn:uuid:27e49213-3322-4e9f-9206-344cbc86e3df",
       "component": true,
       "description": "A line telling a conversation that a hosted model answers it in place of its person's own machine, which did not answer a step (operator-machine.ts). It stands until the machine answers again, which marks it `completed`; while it stands the conversation is not told again.",
       "properties": {
         "code": {
+          "$id": "urn:uuid:9a99d882-5ef1-48af-97fc-7636355da2f0",
           "type": "string",
           "description": "The code of the machine's failure (@yaks/model `ModelError`): `unreachable`, `stalled`, or its provider's own."
         }
       }
     },
     "operator_call": {
+      "$id": "urn:uuid:d251d557-7252-4041-90ae-8ba81549dba7",
       "component": true,
       "description": "A line of a phone call its talking model hears and speaks, in the person's conversation: the caller's words or the model's, kept as a notice, or what the model asked the Operator.",
       "properties": {
         "call": {
+          "$id": "urn:uuid:e2b23a74-1181-42aa-821c-e0ff1abdc231",
           "type": "string",
           "description": "The line's id for the call."
         },
         "said": {
+          "$id": "urn:uuid:70b2874d-3a21-487d-9088-252d2d1932fb",
           "type": "boolean",
           "description": "The talking model's words, which the Operator reads as its own, rather than the caller's."
         },
         "began": {
+          "$id": "urn:uuid:114859c1-e8e6-45ea-935e-4b615c7eb1e0",
           "type": "boolean",
           "description": "That the call began here, rather than words said on it."
         },
         "asked": {
+          "$id": "urn:uuid:32b782c8-acec-4557-9069-2b7fd5edeab6",
           "type": "boolean",
           "description": "What the talking model asked the Operator for the caller (operator_request.call), rather than what either said aloud."
         },
         "notes": {
+          "$id": "urn:uuid:2eb7a44a-5669-465d-a998-379e4ddf6ce7",
           "type": "boolean",
           "description": "That notes of the call were asked for here, rather than words said on it: when the call ends, the Operator writes them from its lines, in Updates (operator-calls.ts `notesOf`)."
         }
       }
     },
     "operator_stopped": {
+      "$id": "urn:uuid:fe340154-ec25-4995-99a0-1a3a3c9556f2",
       "component": true,
       "description": "That the person stopped a helper from its page, said in their conversation when one of its helpers started it, so no report of the helper's reaches the conversation (operator.ts `stop`): a line of theirs, which the model reads as from them and which tells it to leave the helper stopped until they have talked. The page draws it as their act, not its words.",
       "properties": {
         "helper": {
+          "$id": "urn:uuid:b1ecd695-e2ec-4bff-9197-98d557412191",
           "type": "string",
           "ref": "session",
           "death": "keep",
@@ -571,50 +687,61 @@
       }
     },
     "operator_machine": {
+      "$id": "urn:uuid:6823865b-cd37-4004-8e44-716a4d4037fb",
       "component": true,
       "description": "A helper that runs on its person's own machine, reached through a space's tunnel, rather than in yaks.app's sandbox (workers/yak operator-helpers.ts): the space whose tunnel goes there, the task and session the machine keeps the run as, and the machine's name and the model asked of it. The machine's word about that task is the helper's report.",
       "properties": {
         "space": {
+          "$id": "urn:uuid:dfd84792-75fd-4628-909c-d2bc58296c0e",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "task": {
+          "$id": "urn:uuid:4093f947-59b9-490a-952f-b2d0f796b916",
           "type": "string",
           "description": "The task the machine filed the brief as, by its eid there."
         },
         "session": {
+          "$id": "urn:uuid:f4f0720b-b02e-4b6f-a626-58bf13e00560",
           "type": "string",
           "description": "The machine's session running it, by its eid there."
         },
         "names": {
+          "$id": "urn:uuid:5e3c0d7e-1975-4af6-9ece-44cb6f1d7cb3",
           "type": "string",
           "description": "The task's and the session's short ids there, as one line."
         },
         "machine": {
+          "$id": "urn:uuid:88f7018a-794e-4146-88cb-48ce72805501",
           "type": "string",
           "description": "The machine, by the name it gave itself in its answer (@yaks/spawn/routes `Spawned`)."
         },
         "model": {
+          "$id": "urn:uuid:578671e2-1c85-4dfa-80db-cbe7fde8e96d",
           "type": "string",
           "description": "The model the run was asked to use, by the machine's name for it; absent where it runs its provider's own."
         }
       }
     },
     "operator_letter": {
+      "$id": "urn:uuid:a165650b-6d14-404f-8d23-b8eac3b9e997",
       "component": true,
       "description": "A letter the Operator wrote for a person, to someone else or to them, beside its `mail` and `doc`: a reply that names it comes back into its writer's conversation, and the person it was written for is told when that is someone else.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:4d695730-9e54-4e63-b794-b51251403852",
           "type": "string",
           "ref": "person",
           "death": "keep"
         },
         "platform": {
+          "$id": "urn:uuid:8c9d099f-bc0a-4aa4-b191-6e7ad3d56bdb",
           "type": "boolean",
           "description": "A letter yaks.app owes the person, such as an invitation or a contact code, sent in the Operator's name: the space's monthly emails never count or refuse it."
         },
         "session": {
+          "$id": "urn:uuid:5beba065-4eb0-450d-b407-70dd648ec296",
           "type": "string",
           "ref": "session",
           "death": "keep",
@@ -623,61 +750,74 @@
       }
     },
     "operator_invite": {
+      "$id": "urn:uuid:32d770b1-5cff-48e6-b370-0dab7e21b28a",
       "component": true,
       "description": "What an invitation letter the Operator wrote invites its reader to, beside its `operator_letter`: a reply to it is answered knowing the place and the role it grants, which that reader's own permissions cannot see.",
       "properties": {
         "invite": {
+          "$id": "urn:uuid:e9f4f9d8-9e88-4cee-ad0d-b1f1cd78bae9",
           "type": "string",
           "description": "The invitation's eid in the directory."
         },
         "place": {
+          "$id": "urn:uuid:d0be01a8-91a5-4b76-91dc-ec23dec04db2",
           "type": "string",
           "description": "What accepting opens, as the letter names it: a title and the address it opens at."
         },
         "role": {
+          "$id": "urn:uuid:7d6d9f0e-a2dd-4d59-a411-cc5bcc8f4376",
           "type": "string",
           "description": "The role accepting gives them there: owner, editor or viewer."
         }
       }
     },
     "operator_text": {
+      "$id": "urn:uuid:1247f96a-4a7a-4dc0-abae-e1e36e0022a3",
       "component": true,
       "description": "A text the Operator sent for a person from their own number to someone else, beside its `text{from, to, at, message_id, via}` and `doc{body}`: a text back from that number comes into that person's conversation.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:4dfae2e0-e95c-4837-b2ce-412c51c36acd",
           "type": "string",
           "ref": "person",
           "death": "keep"
         },
         "session": {
+          "$id": "urn:uuid:6bd3acb2-ffd7-42db-b8b7-ca68d6b567ec",
           "type": "string",
           "ref": "session",
           "death": "keep",
           "description": "The session that sent it."
         },
         "from": {
+          "$id": "urn:uuid:aca4dc00-165e-476b-a866-3bf306f0838b",
           "type": "string",
           "description": "The person's own number it went from, in E.164 form."
         },
         "to": {
+          "$id": "urn:uuid:094497e7-3df2-467e-a158-e8e6dcc49b6f",
           "type": "string",
           "description": "The number it went to, in E.164 form."
         },
         "at": {
+          "$id": "urn:uuid:ed1d01df-257b-4096-9cd1-487e9ad85026",
           "type": "string",
           "format": "date-time"
         },
         "message_id": {
+          "$id": "urn:uuid:1828ddbf-f2e0-428d-8cc4-47b0c5adca46",
           "type": "string",
           "description": "The provider's id for it."
         }
       }
     },
     "operator_line": {
+      "$id": "urn:uuid:9cacc77d-3961-443a-934b-05849fb8d6d9",
       "component": true,
       "description": "One of the numbers a person's own connected phone account holds (own_number in the directory), as the person chose for their Operator: outbound, its phone_send texts go from it; inbound, texts that reach it come to the Operator. Each is on only when true, and the two are independent. Its own setting, written by phone_numbers or any write to its store.",
       "properties": {
         "connection": {
+          "$id": "urn:uuid:2a7595f6-f5c9-4a49-8577-3ba57969981d",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -685,15 +825,18 @@
           "description": "The connection to the account that holds it."
         },
         "number": {
+          "$id": "urn:uuid:d388c82e-52af-4fce-bff9-4b83a5b8852a",
           "type": "string",
           "identity": true,
           "description": "The number in E.164 form."
         },
         "outbound": {
+          "$id": "urn:uuid:e182b739-8d87-41fa-8705-5e49c760ece1",
           "type": "boolean",
           "description": "Whether phone_send texts go from it."
         },
         "inbound": {
+          "$id": "urn:uuid:a44f47fd-8abe-4045-b92d-8e168c69a4ef",
           "type": "boolean",
           "description": "Whether texts that reach it come to the Operator: on, its SMS callback is pointed at yaks.app; off, its callback is left as the person had it, or put back."
         }
@@ -701,35 +844,42 @@
       "$comment": "operator-line.ts"
     },
     "operator_handoff": {
+      "$id": "urn:uuid:49ba6d3b-0bfb-4d6d-9b02-0242a4c4fe47",
       "component": true,
       "description": "Work an Operator sent for a person to another space.",
       "properties": {
         "person": {
+          "$id": "urn:uuid:c16cdc0d-14a4-4b43-abc5-63839505def4",
           "type": "string",
           "ref": "person",
           "death": "keep"
         },
         "space": {
+          "$id": "urn:uuid:b3f7baef-ea8d-4244-b3c2-f327da44d8aa",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "session": {
+          "$id": "urn:uuid:2f184e84-d1fd-40df-b2b9-aca5c5b22006",
           "type": "string",
           "ref": "session",
           "death": "keep"
         },
         "task": {
+          "$id": "urn:uuid:919b895f-4e4d-41b0-9f9b-b533c50ef979",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "previous": {
+          "$id": "urn:uuid:7627d842-339d-43eb-9b28-2c04b5986041",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "report": {
+          "$id": "urn:uuid:0c7c843e-18b0-4cb4-80fe-2bb60ad3599f",
           "type": "string",
           "ref": "entity",
           "death": "keep"
@@ -737,28 +887,34 @@
       }
     },
     "operator_answer": {
+      "$id": "urn:uuid:a91ed938-0003-4a27-8d7d-490347296533",
       "component": true,
       "description": "An answer to a request, kept before its channel attempts delivery: a request is answered once on a task, and in a conversation once when the Operator starts on it and again when the work comes back.",
       "properties": {
         "request": {
+          "$id": "urn:uuid:92195382-86ea-4ecb-86d6-7ae43317c083",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "The request whose channel carries it; absent on an answer kept on its request."
         },
         "task": {
+          "$id": "urn:uuid:3a6003c1-eb29-4fdb-b8fc-681bb5b45f9b",
           "type": "string",
           "ref": "task",
           "death": "keep"
         },
         "text": {
+          "$id": "urn:uuid:1fe7edaf-3351-42e4-804d-6daacbc5c32c",
           "type": "string"
         },
         "message_id": {
+          "$id": "urn:uuid:316071d7-c7f0-4b7b-a786-0344e1ba2bd7",
           "type": "string",
           "description": "The id its channel gave it as it went: a text’s. An answer by email is carried by a letter of its own (`mail.target`), whose `mail.message_id` it threads by."
         },
         "with": {
+          "$id": "urn:uuid:d6ada07f-9f08-45a1-b85c-bf9df2c3df60",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -767,70 +923,86 @@
       }
     },
     "operator_ask": {
+      "$id": "urn:uuid:26239b79-8b14-4fca-81f3-2a41aa26ba48",
       "component": true,
       "description": "Retired: what the space's Operator was asked each time this row fired, now the wake's own for, note and brief.",
       "properties": {
         "space": {
+          "$id": "urn:uuid:2f3023a4-d3a1-4a01-9564-e6f66d0c33a9",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "person": {
+          "$id": "urn:uuid:7daf56e0-fdb6-4e87-8abd-b0cdedd26bbf",
           "type": "string",
           "ref": "person",
           "death": "keep"
         },
         "administrative": {
+          "$id": "urn:uuid:ee29af47-2d62-4664-b41a-add8824655e9",
           "type": "boolean"
         },
         "say": {
+          "$id": "urn:uuid:6444c313-d5fa-46b4-a081-93a05b9d8cfa",
           "type": "string"
         },
         "helper": {
+          "$id": "urn:uuid:a15fc9ff-6372-4b46-999f-4055e4544fc5",
           "type": "string"
         }
       },
       "$comment": "Retired, kept until contraction: a person's wake-ups, subscriptions and their runs are @yaks/wake's `wake{for, note, brief}`, `watch{query, local, seen}` and `occurrence{wake, at, call, error}` (operator-schedules.ts). A store's rows keep these beside the new words the pass wrote (wake-move.ts), so a rollback still reads every schedule; nothing else reads or writes them."
     },
     "operator_work": {
+      "$id": "urn:uuid:cb614b1f-2c1d-480c-a030-d3eb6e17c2c5",
       "component": true,
       "description": "Retired: one occurrence of scheduled Operator work, now @yaks/wake's occurrence.",
       "properties": {
         "schedule": {
+          "$id": "urn:uuid:aeee108a-c185-427a-8643-9ae528f6e49a",
           "type": "string",
           "ref": "entity",
           "death": "keep"
         },
         "at": {
+          "$id": "urn:uuid:88941bc1-5687-4b6c-a088-c0d2e0a29c5f",
           "type": "string",
           "format": "date-time"
         },
         "call": {
+          "$id": "urn:uuid:d9af1b06-89c7-48e8-b48c-552cd9cd78a8",
           "type": "string",
           "ref": "call",
           "death": "keep"
         },
         "helper": {
+          "$id": "urn:uuid:ee0d060d-40eb-411c-8c1e-4d0d5a5f1e24",
           "type": "string",
           "ref": "session",
           "death": "keep"
         },
         "error": {
+          "$id": "urn:uuid:eb5cd452-8216-4e70-ad61-47c3694cab26",
           "type": "string"
         }
       }
     },
     "operator_subscription": {
+      "$id": "urn:uuid:2442ffaa-8b3f-41aa-bdf5-16fb5b16aa80",
       "component": true,
       "description": "Retired: a query the space's Operator watched, now @yaks/wake's watch.",
       "properties": {
         "query": {
+          "$id": "urn:uuid:46de65c9-0001-4d27-b226-ddb93eb2cf0e",
           "type": "string"
         },
         "mine": {
+          "$id": "urn:uuid:bcdc66d2-1349-40a0-bc61-cef9e3eed90f",
           "type": "boolean"
         },
         "seen": {
+          "$id": "urn:uuid:1d2bc204-3358-4ba3-b6cb-66d92379fd89",
           "type": "object"
         }
       }
@@ -906,60 +1078,73 @@
       "$comment": "Declared here rather than beside @yaks/platform's `operator{name}`, which it writes, because only this store runs it: on the box every persona has a home, and nothing there would answer its runs."
     },
     "draft_conflict": {
+      "$id": "urn:uuid:b972875a-70ee-4702-8d0a-aa4b77cdf707",
       "component": true,
       "description": "A property a released draft's preview and the live app both changed since the draft began, which this decision asks the person to settle: the draft's value or the live one (draft-merge.ts).",
       "properties": {
         "app": {
+          "$id": "urn:uuid:2db6f374-7a4c-4c27-ad0e-2c74c8492781",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "The app whose live rows the draft merges into."
         },
         "branch": {
+          "$id": "urn:uuid:ab29aba2-591f-49df-a34d-e66c899ca985",
           "type": "number",
           "description": "The branch of the app's store the draft wrote on."
         },
         "draft": {
+          "$id": "urn:uuid:7176fcd0-3a99-4d01-97d4-5f7a95f458be",
           "type": "string",
           "description": "The draft released."
         },
         "eid": {
+          "$id": "urn:uuid:25cea060-6c03-406e-889b-21eb21941ba4",
           "type": "string",
           "description": "The entity both changed."
         },
         "comp": {
+          "$id": "urn:uuid:93a65627-c042-4451-83a1-c372ace8121e",
           "type": "string"
         },
         "prop": {
+          "$id": "urn:uuid:7352126e-6b7d-421e-b2c0-97ff95cdd7ff",
           "type": "string"
         },
         "live": {
+          "$id": "urn:uuid:a4129b68-255c-4e94-8d0c-68ed0eece474",
           "type": "string",
           "description": "The live value as it was asked about, as JSON: a pick that saw another settles nothing, so a change on the live app since is never lost."
         },
         "by": {
+          "$id": "urn:uuid:c40d5067-aaef-4bf4-9205-01ddcdb84b4b",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "Who released the draft, who the merge is written as."
         },
         "via": {
+          "$id": "urn:uuid:461d318e-720a-42c6-9da9-58e5873de726",
           "type": "string",
           "description": "The instrument the release came through."
         }
       }
     },
     "app_decision": {
+      "$id": "urn:uuid:9ca76785-2908-4fde-886e-3ea31db76c1c",
       "component": true,
       "description": "A decision of an app's, asked here in its person's Updates: their answer is written on the app's row as `decided{choice}` (app-decisions.ts).",
       "properties": {
         "app": {
+          "$id": "urn:uuid:24143e3d-0d20-43ff-a46a-c373cfc485dc",
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "description": "The app whose store holds the decision."
         },
         "row": {
+          "$id": "urn:uuid:061de5b4-d113-4f67-ba2b-d7f911d5cdd7",
           "type": "string",
           "description": "The decision's eid in the app's store."
         }

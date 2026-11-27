@@ -1,37 +1,49 @@
 {
+  "$id": "urn:uuid:453ec63a-9f75-4aa2-8e8d-53dc75f37df3",
   "$defs": {
     "planCard": {
+      "$id": "urn:uuid:53b72fe6-d1ca-4fb0-85da-0817d8fc8888",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:72e2d5e4-5be9-4372-b298-c5a7820206c9",
           "type": "string"
         },
         "tier": {
+          "$id": "urn:uuid:bd8d5d45-c4b1-4877-9cfb-70cd44660ee8",
           "type": "string"
         },
         "ends": {
+          "$id": "urn:uuid:799f3a4f-e7d2-4340-94f9-ecaea17b289f",
           "type": "string"
         },
         "known": {
+          "$id": "urn:uuid:cbdf28d7-bbef-4f57-990d-c0a9e93f0aba",
           "type": "boolean"
         },
         "free": {
+          "$id": "urn:uuid:2b82713e-4f4e-44a9-a196-02ceb0cded97",
           "type": "string"
         },
         "sold": {
+          "$id": "urn:uuid:156fffcb-666b-4dcd-919f-f613db4d2374",
           "type": "object"
         },
         "invoice": {
+          "$id": "urn:uuid:f7a1b0c3-f7c6-4e3b-97e6-effcc5b74aeb",
           "type": "integer"
         },
         "awaiting": {
+          "$id": "urn:uuid:c8aead79-639c-479a-b348-69fa4907a1cb",
           "type": "boolean"
         },
         "credit": {
+          "$id": "urn:uuid:1867578f-d280-4d5a-a1e4-97778e14878c",
           "type": "object"
         },
         "provider": {
+          "$id": "urn:uuid:5f266738-3074-4090-a2e8-f7a963d1d6a3",
           "type": "string"
         }
       },
@@ -41,28 +53,36 @@
       ]
     },
     "selling": {
+      "$id": "urn:uuid:74a3ca8f-7277-410a-9faa-0483f4c2d0ee",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:b69d09a9-6c5b-4e9f-a098-634107b45c67",
           "type": "string"
         },
         "state": {
+          "$id": "urn:uuid:0751aea9-799e-4a6b-ac8c-c251b7a02790",
           "type": "string"
         },
         "house": {
+          "$id": "urn:uuid:59b73c77-fb37-4fc4-8e63-468e9450fb9b",
           "type": "boolean"
         },
         "linkable": {
+          "$id": "urn:uuid:da692a8c-d7af-4821-8f39-1ccbd1a867b1",
           "type": "boolean"
         },
         "provider": {
+          "$id": "urn:uuid:2b449ac6-3d89-4d64-a393-49ea62a1e878",
           "type": "string"
         },
         "costs": {
+          "$id": "urn:uuid:1bf714f8-2944-4a2f-9af7-b30809268b73",
           "type": "object"
         },
         "fee": {
+          "$id": "urn:uuid:ac3018a4-79ed-4e6b-8679-de156f0f0931",
           "type": "integer"
         }
       },
@@ -72,16 +92,20 @@
       ]
     },
     "billedTo": {
+      "$id": "urn:uuid:92a670f9-ad88-4c4b-9309-4b8abab71098",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:e86db63c-772f-416a-b5df-ad018f31e066",
           "type": "string"
         },
         "email": {
+          "$id": "urn:uuid:a58e1838-99d4-4a5b-a3d5-38ad18692e47",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:318a8f51-5a93-4732-8a0f-cbf8441a8133",
           "type": "string"
         }
       },
@@ -90,19 +114,24 @@
       ]
     },
     "allowances": {
+      "$id": "urn:uuid:d694da7c-e552-4274-a03f-c098754fb0aa",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:7d5ba115-d27f-42f4-a4c9-ad36114e9cde",
           "type": "string"
         },
         "limits": {
+          "$id": "urn:uuid:7dc05673-c5c3-46e2-8759-9abb6c0285dc",
           "type": "object"
         },
         "budget": {
+          "$id": "urn:uuid:9da2f7fb-fd7c-4178-a7f7-7b9605af24de",
           "type": "object"
         },
         "read": {
+          "$id": "urn:uuid:3e40c7e9-3c71-4f1c-b292-2bae606b3779",
           "type": [
             "string",
             "null"
@@ -114,13 +143,16 @@
       ]
     },
     "creditCap": {
+      "$id": "urn:uuid:0f44d33b-6dcc-45c2-9437-69e575f88e0e",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:80b69cbe-c058-4fd6-8bbf-f1d9d004e69a",
           "type": "string"
         },
         "cap": {
+          "$id": "urn:uuid:d8da129b-32df-421b-aca6-fe05562cf6e3",
           "type": "integer"
         }
       },
@@ -130,16 +162,20 @@
       ]
     },
     "invoiceAsk": {
+      "$id": "urn:uuid:26daac67-06d5-4e7f-b5ea-4aae5984e140",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:402e4d82-817a-420f-bdeb-8cae4da1f1a3",
           "type": "string"
         },
         "email": {
+          "$id": "urn:uuid:6c532221-c1f0-4426-8b71-33a78a43970c",
           "type": "string"
         },
         "name": {
+          "$id": "urn:uuid:701c1356-8f5f-43ec-b673-d3d275e6e5ea",
           "type": "string"
         }
       },
@@ -148,10 +184,12 @@
       ]
     },
     "sellStop": {
+      "$id": "urn:uuid:7b4321f1-d9fc-40a6-a339-d912244aae08",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:c262a56e-784e-4558-9e5f-05e3343860ca",
           "type": "string"
         }
       },
@@ -160,22 +198,28 @@
       ]
     },
     "leave": {
+      "$id": "urn:uuid:adfdabd9-0a95-49f7-aa4c-ced46162c826",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:d0bc9688-37d6-4987-b885-a4a6422d2e90",
           "type": "string"
         },
         "door": {
+          "$id": "urn:uuid:749e91e7-73b7-40b1-ac12-cf506209deba",
           "type": "string"
         },
         "tier": {
+          "$id": "urn:uuid:dea54a5f-97a6-4be3-a41f-b4eaa93a9cbb",
           "type": "string"
         },
         "per": {
+          "$id": "urn:uuid:631fff97-d5d7-4b91-997b-c41d599029e2",
           "type": "string"
         },
         "url": {
+          "$id": "urn:uuid:29b7732d-8d2b-44fe-a66d-d99b097e1983",
           "type": "string"
         }
       },

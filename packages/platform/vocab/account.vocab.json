@@ -1,34 +1,44 @@
 {
+  "$id": "urn:uuid:ab2f5360-3d01-499e-99da-a1cff0d12eb6",
   "$defs": {
     "account": {
+      "$id": "urn:uuid:5ba84247-51cd-4fc8-acf1-71ae25b784db",
       "component": true,
       "type": "object",
       "properties": {
         "name": {
+          "$id": "urn:uuid:75b30ac4-14e7-4485-9670-a41d22c355ed",
           "type": "string"
         },
         "email": {
+          "$id": "urn:uuid:e7ac79bf-15d7-4884-85ee-585d1c8843f2",
           "type": "string"
         },
         "hidden": {
+          "$id": "urn:uuid:a9677c9a-a687-4ca8-b0e1-d7dd0524f2f7",
           "type": "boolean"
         },
         "first": {
+          "$id": "urn:uuid:02171342-8a20-412c-8e55-0f338d529a66",
           "type": "string"
         }
       }
     },
     "signedIn": {
+      "$id": "urn:uuid:3e42b6b3-534c-4565-93f2-8b83357be6ca",
       "component": true,
       "type": "object",
       "properties": {
         "agent": {
+          "$id": "urn:uuid:69ceb768-e4bf-4975-8864-314ba54ac387",
           "type": "string"
         },
         "place": {
+          "$id": "urn:uuid:4aa9b60d-ee8c-4c3d-8708-1daf42ab6cfa",
           "type": "string"
         },
         "at": {
+          "$id": "urn:uuid:7ccb1bb2-2f50-4f7e-bad8-e44c3d81bb95",
           "type": "string"
         }
       },
@@ -37,10 +47,12 @@
       ]
     },
     "signOut": {
+      "$id": "urn:uuid:87796504-6e1a-47b8-93c4-3b3590d56348",
       "component": true,
       "type": "object",
       "properties": {
         "session": {
+          "$id": "urn:uuid:773eb23a-eecc-4d02-a079-3ead5f86ba68",
           "type": "string"
         }
       },
@@ -49,19 +61,24 @@
       ]
     },
     "befriended": {
+      "$id": "urn:uuid:ef56d01e-a794-4d82-9b91-bcded327a8b7",
       "component": true,
       "type": "object",
       "properties": {
         "person": {
+          "$id": "urn:uuid:3bdad448-d822-42f5-9bdb-b5c2831b6bd6",
           "type": "string"
         },
         "rank": {
+          "$id": "urn:uuid:fe4a9b77-a037-4257-ac84-1ab0e42fdb09",
           "type": "integer"
         },
         "name": {
+          "$id": "urn:uuid:68156b6b-bed7-455d-97f7-0a16978f0c32",
           "type": "string"
         },
         "seen": {
+          "$id": "urn:uuid:66bdbbef-a27e-46c3-9d74-d6875ab514f2",
           "type": "object",
           "properties": {
             "state": {
@@ -115,6 +132,7 @@
           }
         },
         "shared": {
+          "$id": "urn:uuid:8bea01d1-ca35-4355-a93f-347543f537c1",
           "type": "array",
           "items": {
             "type": "object",
@@ -143,22 +161,28 @@
       ]
     },
     "sharedApp": {
+      "$id": "urn:uuid:1c9adfe3-5832-4b99-81d6-3e78df1028ef",
       "component": true,
       "type": "object",
       "properties": {
         "rank": {
+          "$id": "urn:uuid:cee54bd5-f12d-40a0-8085-d56bcc200b3d",
           "type": "integer"
         },
         "eid": {
+          "$id": "urn:uuid:bc154827-5ad7-4263-8b74-f7700e768d7f",
           "type": "string"
         },
         "slug": {
+          "$id": "urn:uuid:4aaf7c22-5f24-4cb7-811c-3a46f0cf6167",
           "type": "string"
         },
         "title": {
+          "$id": "urn:uuid:25edf8ad-000a-4a8e-bc49-41b9288d768e",
           "type": "string"
         },
         "space": {
+          "$id": "urn:uuid:086f1c3b-c433-4d48-87f0-349297c8225d",
           "type": "string"
         }
       },
@@ -171,31 +195,39 @@
       ]
     },
     "invitePage": {
+      "$id": "urn:uuid:0a48fcaa-687e-47a0-93ac-235d18458c4a",
       "component": true,
       "type": "object",
       "properties": {
         "said": {
+          "$id": "urn:uuid:a5a9365f-b0c7-40f3-9542-177f77d5deaf",
           "type": "string"
         },
         "link": {
+          "$id": "urn:uuid:af667c0c-9e16-40e6-8042-b17c0901fce1",
           "type": "string"
         },
         "text": {
+          "$id": "urn:uuid:0bf22e9f-c599-4cdc-93b8-ed64f585b50c",
           "type": [
             "string",
             "null"
           ]
         },
         "mail": {
+          "$id": "urn:uuid:26ba3393-d266-49c3-9a08-b9dc9802a8fa",
           "type": "string"
         },
         "address": {
+          "$id": "urn:uuid:364de6ff-61b9-4705-a248-afe972d999c4",
           "type": "string"
         },
         "joined": {
+          "$id": "urn:uuid:6c81ff70-59bb-46fb-88c3-2d140cdc7acc",
           "type": "integer"
         },
         "built": {
+          "$id": "urn:uuid:f074c121-c1e9-442a-8e85-f2ad8700003c",
           "type": "integer"
         }
       },
@@ -210,19 +242,24 @@
       ]
     },
     "chatLink": {
+      "$id": "urn:uuid:27554734-53a5-4ebd-900c-b5abe7c1d282",
       "component": true,
       "type": "object",
       "properties": {
         "rank": {
+          "$id": "urn:uuid:6aec0b14-f23a-4f01-90e4-838be46caaad",
           "type": "integer"
         },
         "platform": {
+          "$id": "urn:uuid:0663fad4-c0fc-4705-b467-e829a8de4987",
           "type": "string"
         },
         "integration": {
+          "$id": "urn:uuid:4655be8c-404f-49ac-9bf6-a920fa610c88",
           "type": "string"
         },
         "accounts": {
+          "$id": "urn:uuid:ad42b2db-311d-4228-a88b-5c44d8210f10",
           "type": "array",
           "items": {
             "type": "string"
@@ -237,28 +274,36 @@
       ]
     },
     "friendMessage": {
+      "$id": "urn:uuid:79608d1a-2fba-4b7c-a6d1-b42fbe1d689b",
       "component": true,
       "type": "object",
       "properties": {
         "from": {
+          "$id": "urn:uuid:e7ad24a6-5b29-4ad4-bcd4-d167cdb0263a",
           "type": "string"
         },
         "to": {
+          "$id": "urn:uuid:c149203f-eda7-42c7-a56f-c3bf9ccf28d6",
           "type": "string"
         },
         "words": {
+          "$id": "urn:uuid:a510a378-9603-4e98-a96b-efbe482cb081",
           "type": "string"
         },
         "at": {
+          "$id": "urn:uuid:00e1348e-5e33-4ac4-ab25-f5e5c8e7f68b",
           "type": "string"
         },
         "read": {
+          "$id": "urn:uuid:38591061-6e56-4058-ab58-1825c3fafb2b",
           "type": "boolean"
         },
         "operator": {
+          "$id": "urn:uuid:01b4673f-821c-4fc3-adef-b97074a6e36a",
           "type": "boolean"
         },
         "invite": {
+          "$id": "urn:uuid:22960b90-82d3-4bd8-a433-787f47114390",
           "type": "string"
         }
       },
@@ -268,10 +313,12 @@
       ]
     },
     "friendAsk": {
+      "$id": "urn:uuid:ce62ce34-e132-4163-9aed-b2dce7f23a16",
       "component": true,
       "type": "object",
       "properties": {
         "email": {
+          "$id": "urn:uuid:f8b7ffd9-884f-4819-bf98-09bb709cfe21",
           "type": "string"
         }
       },

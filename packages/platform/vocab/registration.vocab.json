@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:655e3959-2022-43e0-a15e-1df40c9243c6",
   "$defs": {
     "register_writes": {
       "effect": true,

@@ -1,8 +1,10 @@
 {
+  "$id": "urn:uuid:0068bf48-aaaf-462b-a9fc-32fa4b83fcd3",
   "title": "directory-use",
   "reserved": false,
   "$defs": {
     "used": {
+      "$id": "urn:uuid:25104da6-8741-41d0-939a-6f7de846384a",
       "description": "When a person or their app last used this entity.",
       "component": true,
       "type": "object",
@@ -10,6 +12,7 @@
       "journal": false,
       "properties": {
         "at": {
+          "$id": "urn:uuid:032a886d-b280-4cb2-a5e6-7111f2bf899c",
           "type": "string",
           "format": "date-time",
           "index": true,
@@ -18,6 +21,7 @@
       }
     },
     "changed": {
+      "$id": "urn:uuid:9b6c71f9-3fdd-4dc1-907f-099621dce490",
       "description": "When a write last changed this app's store, to the hour; an install or a schema move is no change.",
       "component": true,
       "type": "object",
@@ -25,6 +29,7 @@
       "journal": false,
       "properties": {
         "at": {
+          "$id": "urn:uuid:fc2a4a99-c3af-477e-b7d5-dca55bf9af3c",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -32,6 +37,7 @@
       }
     },
     "errored": {
+      "$id": "urn:uuid:7a40c868-2fed-4428-8e49-d9ac98c8e883",
       "description": "When this app's code last reported an error, to the hour.",
       "component": true,
       "type": "object",
@@ -39,6 +45,7 @@
       "journal": false,
       "properties": {
         "at": {
+          "$id": "urn:uuid:4bdaa0c3-3477-4a88-9d84-25738140db75",
           "type": "string",
           "format": "date-time",
           "stamped": true
@@ -46,6 +53,7 @@
       }
     },
     "translated": {
+      "$id": "urn:uuid:cf459142-811b-41e1-8195-e4692872efe5",
       "description": "A retired query spelling an app still sends, which the grammar translates, and the hour it last did.",
       "component": true,
       "type": "object",
@@ -57,16 +65,19 @@
       ],
       "properties": {
         "app": {
+          "$id": "urn:uuid:f23e9a71-01ae-4c8e-9922-b30c6565b0da",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
           "stamped": true
         },
         "spelling": {
+          "$id": "urn:uuid:2ee8de66-4880-4526-9f8e-ad97cf5bb981",
           "type": "string",
           "stamped": true
         },
         "at": {
+          "$id": "urn:uuid:f618cdcc-570e-488c-96e3-2c3cd3d14107",
           "type": "string",
           "format": "date-time",
           "stamped": true

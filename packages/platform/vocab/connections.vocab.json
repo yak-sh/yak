@@ -1,49 +1,65 @@
 {
+  "$id": "urn:uuid:de623afa-8b86-4e5f-a486-109869e123d9",
   "$defs": {
     "connectionsPage": {
+      "$id": "urn:uuid:0c1e8ce8-60d2-4ada-8099-9fd09439fba6",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:45c7963a-081d-4950-9dc6-c735c595e27c",
           "type": "string"
         },
         "ask": {
+          "$id": "urn:uuid:fe9926b7-a2af-4b83-8449-2561829d5693",
           "type": "string"
         },
         "on": {
+          "$id": "urn:uuid:ea9cbd82-059e-4649-b4a9-75b928fd8c10",
           "type": "boolean"
         },
         "list": {
+          "$id": "urn:uuid:3eb1def3-c5dd-41fb-8611-252a0989fa5b",
           "type": "array"
         },
         "borrowed": {
+          "$id": "urn:uuid:53357ec1-846c-48c2-b3eb-360da526892d",
           "type": "array"
         },
         "services": {
+          "$id": "urn:uuid:0553366b-3939-46a8-8b90-81f8163aa9ba",
           "type": "array"
         },
         "built": {
+          "$id": "urn:uuid:f4fe327a-779c-4245-bb09-4d55110e8a1e",
           "type": "array"
         },
         "mcp": {
+          "$id": "urn:uuid:9c04cc0a-6021-43f0-bc25-79a44b9d704b",
           "type": "object"
         },
         "catalog": {
+          "$id": "urn:uuid:53f866fa-2a16-4c83-b229-1a74fe26e668",
           "type": "object"
         },
         "asked": {
+          "$id": "urn:uuid:ba334f54-5fcf-4e54-b5f9-18e250f76d67",
           "type": "object"
         },
         "open": {
+          "$id": "urn:uuid:8aa2644f-abee-4897-96e0-d7eae74e8201",
           "type": "string"
         },
         "trash": {
+          "$id": "urn:uuid:859dc768-2f6d-4129-92ab-ab75ebebf796",
           "type": "array"
         },
         "enable": {
+          "$id": "urn:uuid:8ae69e09-32c7-48c4-b322-1ac8feedbdec",
           "type": "array"
         },
         "plan": {
+          "$id": "urn:uuid:3d02430a-98d1-4958-967e-40a2625248ea",
           "type": "object"
         }
       },
@@ -53,16 +69,20 @@
       ]
     },
     "connectionAct": {
+      "$id": "urn:uuid:34349273-65ee-49b5-8b68-b7cf34eeacfe",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:025bacb5-93ba-4caa-be55-9cb2b92a98bc",
           "type": "string"
         },
         "page": {
+          "$id": "urn:uuid:1ebcb202-39fa-4469-95da-36d83a351c1d",
           "type": "string"
         },
         "form": {
+          "$id": "urn:uuid:128de295-dcc6-4444-82c1-50a3618a55d2",
           "type": "object"
         }
       },
@@ -72,10 +92,12 @@
       ]
     },
     "connectionsMoved": {
+      "$id": "urn:uuid:6073db96-dd59-41e4-914a-262788525923",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:c7ccc307-4d32-4292-96d5-0af2e6d774a3",
           "type": "string"
         }
       },
@@ -84,16 +106,20 @@
       ]
     },
     "connectionActed": {
+      "$id": "urn:uuid:9ac125a3-b430-4160-8fd5-af2fa311654a",
       "component": true,
       "type": "object",
       "properties": {
         "say": {
+          "$id": "urn:uuid:83f3876f-75c7-4086-92ab-321fd209db2f",
           "type": "string"
         },
         "no": {
+          "$id": "urn:uuid:b561b2b9-ad63-472e-9d98-2bb39394aac9",
           "type": "boolean"
         },
         "go": {
+          "$id": "urn:uuid:1a6a25ee-3a08-4bdd-a08c-018181cdb78b",
           "type": "string"
         }
       }

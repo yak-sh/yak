@@ -1,34 +1,45 @@
 {
+  "$id": "urn:uuid:3b39bdcd-18e8-456e-b5c5-ba89d17b340e",
   "$defs": {
     "matchesPage": {
+      "$id": "urn:uuid:113e278d-b58c-44ea-893d-d5e1b3ee198e",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:ff65e2d3-b2ae-4226-9a0f-619dc6be61b0",
           "type": "string"
         },
         "round": {
+          "$id": "urn:uuid:e891a211-4d66-4e56-a97f-943e2239f905",
           "type": "string"
         },
         "rounds": {
+          "$id": "urn:uuid:6da60c8c-6521-4702-a510-30436265bd2b",
           "type": "array"
         },
         "title": {
+          "$id": "urn:uuid:58ef50f3-664d-4a56-b8e5-9bef445df17f",
           "type": "string"
         },
         "parts": {
+          "$id": "urn:uuid:bca269ff-cda0-40e7-959d-863db151199b",
           "type": "array"
         },
         "card": {
+          "$id": "urn:uuid:517d6c15-2cbf-4b5e-9b61-543e622de8b3",
           "type": "object"
         },
         "left": {
+          "$id": "urn:uuid:97a8d9a6-a345-479e-b615-425f26043691",
           "type": "integer"
         },
         "picked": {
+          "$id": "urn:uuid:1f594e9b-1851-46d3-84b9-6315dc4a167f",
           "type": "integer"
         },
         "places": {
+          "$id": "urn:uuid:56b80fed-7a2b-442b-a053-11a6e196c211",
           "type": "array"
         }
       },
@@ -38,22 +49,28 @@
       ]
     },
     "pickMatch": {
+      "$id": "urn:uuid:36e8e334-9fd3-4fe0-8a31-616f664eb936",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:47b1e7b1-5bb8-497c-a23f-65faef56838a",
           "type": "string"
         },
         "round": {
+          "$id": "urn:uuid:e24dccae-7960-468d-aa92-413630b4c1c2",
           "type": "string"
         },
         "pair": {
+          "$id": "urn:uuid:bbb6f23a-7c6d-4a27-a38b-78e13daf648a",
           "type": "integer"
         },
         "chose": {
+          "$id": "urn:uuid:8ba6dd16-d664-4d1b-95f4-a6de11c8932f",
           "type": "string"
         },
         "why": {
+          "$id": "urn:uuid:1ff5d3e6-b613-4981-a6ce-d3fabb827d5e",
           "type": "string"
         }
       },

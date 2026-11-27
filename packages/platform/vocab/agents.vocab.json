@@ -1,10 +1,13 @@
 {
+  "$id": "urn:uuid:80898620-6cde-46ba-9a82-193599443bc6",
   "$defs": {
     "agentsConnected": {
+      "$id": "urn:uuid:91502d1e-0662-411d-a700-94c039002f4c",
       "component": true,
       "type": "object",
       "properties": {
         "agents": {
+          "$id": "urn:uuid:6d7596ca-4e56-4fbb-8ac9-a0653bfc7848",
           "type": "array",
           "items": {
             "type": "object"
@@ -16,16 +19,20 @@
       ]
     },
     "agentGrant": {
+      "$id": "urn:uuid:ac6e6372-afe0-49a4-9ef2-9e500e3a654d",
       "component": true,
       "type": "object",
       "properties": {
         "id": {
+          "$id": "urn:uuid:3bbd366c-71c2-490a-9646-66d4ea5b9d5b",
           "type": "string"
         },
         "client": {
+          "$id": "urn:uuid:83b2dd86-8011-472e-b498-8335b523390c",
           "type": "string"
         },
         "created": {
+          "$id": "urn:uuid:4fd411b7-ab6e-4c35-8e63-46159612b897",
           "type": "integer"
         }
       },
@@ -36,13 +43,16 @@
       ]
     },
     "disconnectAgent": {
+      "$id": "urn:uuid:2d432795-2ac4-4f24-9b14-2d381b0d42e9",
       "component": true,
       "type": "object",
       "properties": {
         "agent": {
+          "$id": "urn:uuid:56d0f121-e4c2-4b2a-a358-eb96e1499349",
           "type": "string"
         },
         "said": {
+          "$id": "urn:uuid:c81dad69-9de1-417d-a7fe-101bce9703bf",
           "type": "string"
         }
       },

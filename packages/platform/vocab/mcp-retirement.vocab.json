@@ -1,7 +1,9 @@
 {
+  "$id": "urn:uuid:3a4403ae-2346-4660-9e93-57680af23dfd",
   "reserved": false,
   "$defs": {
     "mcp_retirement": {
+      "$id": "urn:uuid:8c857f86-1f6c-4fd1-94b4-5de633d0908e",
       "component": true,
       "type": "object",
       "wire": false,
@@ -9,6 +11,7 @@
       "description": "MCP credential erasure and the notices it owes.",
       "properties": {
         "rows": {
+          "$id": "urn:uuid:c9b6d309-b945-4187-b404-0a68e5a88f7e",
           "type": "array",
           "items": {
             "type": "string"
@@ -16,6 +19,7 @@
           "stamped": true
         },
         "secrets": {
+          "$id": "urn:uuid:d1233d9d-3abe-4cdc-a231-c89474d33ac0",
           "type": "array",
           "items": {
             "type": "string"
@@ -23,6 +27,7 @@
           "stamped": true
         },
         "notices": {
+          "$id": "urn:uuid:11d31ffb-64b9-427b-b404-5fb34aaeba51",
           "type": "array",
           "items": {
             "type": "object",

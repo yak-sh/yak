@@ -1,8 +1,10 @@
 {
+  "$id": "urn:uuid:243913c1-a07e-4898-a401-569368a633d2",
   "title": "directory-serving",
   "reserved": false,
   "$defs": {
     "rooted": {
+      "$id": "urn:uuid:272796a4-e5f8-429e-82af-54580773fd87",
       "description": "An app whose pages in folders resolve relative URLs from the app's root.",
       "component": true,
       "type": "object",
@@ -10,11 +12,13 @@
       "$comment": "An app whose pages in folders resolve their relative URLs from the app's root, the base every page had until each page was based at its own folder (apps.ts `asset`). Worn by the apps whose pages were written against the old base (app-grep found one, thecompanygardener's openai-math, T-124410); nothing else wears it."
     },
     "publishing": {
+      "$id": "urn:uuid:0d84b057-5c49-4859-935b-7f16317a0512",
       "description": "The paths an app has published files at, so a request at one of them is answered its file before the app runs. A request at any other path goes on to the app without asking. An app that never published wears none.",
       "component": true,
       "type": "object",
       "properties": {
         "paths": {
+          "$id": "urn:uuid:e20d7fb1-7b98-4cb4-901a-5e7b6c7b7b84",
           "type": "string",
           "description": "The paths, sorted, as a JSON list in one text property."
         }
@@ -22,11 +26,13 @@
       "$comment": "public-files.ts. The directory keeps it in the transaction that writes the files themselves (./publishing-graph.ts)."
     },
     "join": {
+      "$id": "urn:uuid:ebf83a8a-2669-499c-9024-5516455b5e5e",
       "description": "Who may join an app through its own rows, set by its space's owner. Only the kernel writes it, and a copy of an app uses only its owner's policy.",
       "component": true,
       "type": "object",
       "properties": {
         "policy": {
+          "$id": "urn:uuid:b262177d-dbe9-4bb0-bd41-5dd90e94d20a",
           "type": "object",
           "description": "The space owner's policy.",
           "properties": {
@@ -59,6 +65,7 @@
           "stamped": true
         },
         "declared": {
+          "$id": "urn:uuid:5723aec5-a1bc-414e-bbde-dc7482ad8265",
           "type": "object",
           "description": "The policy the original app's deployed manifest declares.",
           "properties": {

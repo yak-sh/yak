@@ -1,4 +1,5 @@
 {
+  "$id": "urn:uuid:4104dba8-8702-4efc-ad9f-4d1c1bd71aed",
   "$vocabulary": {
     "https://yak.sh/vocab/core": true
   },
@@ -7,6 +8,7 @@
   "$defs": {},
   "kinds": {
     "exception": {
+      "$id": "urn:uuid:f85cd2f6-b407-4bfd-8d9a-bbeff8873cb2",
       "description": "What was thrown, retained in an answer or transcript entry. The catcher reports the original failure to the tracker separately.",
       "before": [
         "doc"

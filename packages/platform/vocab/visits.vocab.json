@@ -1,25 +1,33 @@
 {
+  "$id": "urn:uuid:f6ebf593-37f9-4362-b3df-32a2ff0d1516",
   "$defs": {
     "visitCount": {
+      "$id": "urn:uuid:ae928be6-74fa-43f2-90c1-5fb3ec21c7ed",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:18bbe067-d0c6-4f75-b23e-907f99ca600e",
           "type": "string"
         },
         "app": {
+          "$id": "urn:uuid:4bb7146e-41db-4a82-b965-49e4e3786f66",
           "type": "string"
         },
         "days": {
+          "$id": "urn:uuid:f87f2681-15ec-407f-a64a-8776c8aa8753",
           "type": "integer"
         },
         "bots": {
+          "$id": "urn:uuid:31606473-6f55-41de-a38d-9a185ba1ac3f",
           "type": "boolean"
         },
         "total": {
+          "$id": "urn:uuid:0a9ed953-2c94-4385-aefd-307d79eb34a5",
           "type": "integer"
         },
         "split": {
+          "$id": "urn:uuid:23d3b650-8420-470a-a6de-88ac984cd221",
           "type": "object",
           "properties": {
             "people": {
@@ -37,6 +45,7 @@
           }
         },
         "daily": {
+          "$id": "urn:uuid:8a6804e5-6ac4-49fc-9363-1a6ff815db43",
           "type": "array",
           "items": {
             "type": "object",
@@ -51,6 +60,7 @@
           }
         },
         "pages": {
+          "$id": "urn:uuid:0b9cec34-fb27-4229-ab05-769a63f2c44b",
           "type": "array",
           "items": {
             "type": "object",
@@ -65,6 +75,7 @@
           }
         },
         "from": {
+          "$id": "urn:uuid:153739f8-c53a-4205-a1d0-eef4ca77bee9",
           "type": "array",
           "items": {
             "type": "object",
@@ -79,6 +90,7 @@
           }
         },
         "countries": {
+          "$id": "urn:uuid:08220990-33fe-439d-ac05-eb0926d5eeec",
           "type": "array",
           "items": {
             "type": "object",
@@ -93,6 +105,7 @@
           }
         },
         "off": {
+          "$id": "urn:uuid:0df213ff-c15b-40fa-97ce-364db93eb901",
           "type": "boolean"
         }
       },
@@ -101,19 +114,24 @@
       ]
     },
     "visitDay": {
+      "$id": "urn:uuid:009546d5-a27e-463a-8797-ba5342d69a2f",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:5a8cecca-0b37-40f5-94b6-86e6d5742242",
           "type": "string"
         },
         "app": {
+          "$id": "urn:uuid:090f773d-fb35-4b32-9d14-5b69bedab452",
           "type": "string"
         },
         "views": {
+          "$id": "urn:uuid:666f14a2-7dd5-41e3-8c35-bf59f6601c40",
           "type": "integer"
         },
         "off": {
+          "$id": "urn:uuid:f152dd59-69f3-42a8-94f3-4c9f1e36d3fe",
           "type": "boolean"
         }
       },

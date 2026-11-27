@@ -1,35 +1,43 @@
 {
+  "$id": "urn:uuid:2b4fa0b8-888e-4e91-a9a9-98cb18cbb900",
   "title": "app-friends",
   "$defs": {
     "app_friends": {
+      "$id": "urn:uuid:cc649084-ee6b-4547-a78f-4a171a431bb7",
       "component": true,
       "type": "object",
       "description": "The current player’s permission for this app.",
       "properties": {
         "signed_in": {
+          "$id": "urn:uuid:af4f79f0-edbd-47b1-b710-fc62c4f0a8f4",
           "type": "boolean",
           "stamped": true
         },
         "allowed": {
+          "$id": "urn:uuid:a34aede1-16c2-4098-b5f6-69128743b190",
           "type": "boolean",
           "stamped": true
         }
       }
     },
     "app_friend": {
+      "$id": "urn:uuid:8ba29d96-16dd-484f-8ce4-1151b3f6cd94",
       "component": true,
       "type": "object",
       "description": "A confirmed friend of the current player.",
       "properties": {
         "name": {
+          "$id": "urn:uuid:f523e9f3-ec1c-46e2-adbf-e8c85604320f",
           "type": "string",
           "stamped": true
         },
         "avatar": {
+          "$id": "urn:uuid:e1bdf30d-5a3d-438a-8ca4-f79f29dc45df",
           "type": "string",
           "stamped": true
         },
         "presence": {
+          "$id": "urn:uuid:81cebd14-0470-4f9e-ba5f-a04353bf6eb9",
           "type": "string",
           "enum": [
             "online",
@@ -42,15 +50,18 @@
       }
     },
     "friend_invite": {
+      "$id": "urn:uuid:5a10ea47-81eb-4f42-a784-a193305ae63d",
       "component": true,
       "type": "object",
       "description": "Invite a friend to an app-relative play link.",
       "properties": {
         "to": {
+          "$id": "urn:uuid:52edf805-26ae-4401-b3bd-46ce3aecf44c",
           "type": "string",
           "stamped": true
         },
         "path": {
+          "$id": "urn:uuid:8fc9d648-0dc3-47ad-bac3-b13060625f27",
           "type": "string",
           "stamped": true
         }

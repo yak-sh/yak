@@ -1,34 +1,45 @@
 {
+  "$id": "urn:uuid:c61c529a-9472-44c8-a055-c5100119520b",
   "$defs": {
     "sideSpace": {
+      "$id": "urn:uuid:d8c66d31-9541-4a24-9f0f-bb86fe89733a",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:16dcf2f5-9ce8-4704-822c-cec3085f2e75",
           "type": "string"
         },
         "rank": {
+          "$id": "urn:uuid:dc3042b8-7e89-4adf-bfc0-01b2a5d0b24c",
           "type": "integer"
         },
         "slug": {
+          "$id": "urn:uuid:e0ea6f2f-c85a-4eb7-b838-2c431a874e18",
           "type": "string"
         },
         "title": {
+          "$id": "urn:uuid:7f2d39f0-bf7b-42e1-b1a8-9cad6f0f064d",
           "type": "string"
         },
         "owner": {
+          "$id": "urn:uuid:48c03f50-7cc6-4801-a047-6d6fc351abea",
           "type": "boolean"
         },
         "own": {
+          "$id": "urn:uuid:a72ba2ec-db14-458c-8317-29d0c61848af",
           "type": "boolean"
         },
         "whose": {
+          "$id": "urn:uuid:a24687e7-7ff4-4a5c-b241-a639f846af24",
           "type": "string"
         },
         "operator": {
+          "$id": "urn:uuid:5b10a3fd-818e-4194-9bb8-e3fecc42c245",
           "type": "string"
         },
         "logo": {
+          "$id": "urn:uuid:4bc58083-5777-4727-b1a3-61e07460fac7",
           "type": "string"
         }
       },
@@ -42,31 +53,39 @@
       ]
     },
     "sideApp": {
+      "$id": "urn:uuid:3772f40f-3903-432b-9ac9-97f95ad652e1",
       "component": true,
       "type": "object",
       "properties": {
         "space": {
+          "$id": "urn:uuid:bca4928a-a79c-4876-b1bd-6f503a7386c3",
           "type": "string"
         },
         "rank": {
+          "$id": "urn:uuid:56d121cf-49a6-4db5-8d66-09159a6e0982",
           "type": "integer"
         },
         "app": {
+          "$id": "urn:uuid:c2551b00-9be3-4c25-8003-b6a6c9794081",
           "type": "string"
         },
         "slug": {
+          "$id": "urn:uuid:742e70e4-1f76-41eb-b595-8d1394b971ed",
           "type": "string"
         },
         "title": {
+          "$id": "urn:uuid:446ce7d5-e600-4ab3-bd50-7b6f32736bf4",
           "type": "string"
         },
         "source": {
+          "$id": "urn:uuid:bd85edee-4c5c-4831-9b68-81ea40cd7985",
           "type": [
             "string",
             "null"
           ]
         },
         "generatedIcon": {
+          "$id": "urn:uuid:6d6b3543-db98-4221-bbb9-20319b12c2ac",
           "type": "string"
         }
       },

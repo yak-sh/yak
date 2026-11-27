@@ -1,19 +1,24 @@
 {
+  "$id": "urn:uuid:9fb26afe-5eb1-46d5-bac0-6b6a921f55cd",
   "$defs": {
     "outreach_trial": {
+      "$id": "urn:uuid:cddbfd71-04fb-4d96-986f-1dd7f0640ac0",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "changelog": {
+          "$id": "urn:uuid:833fb391-7eb1-4b75-9bf0-ce4b3569476f",
           "type": "string",
           "description": "what yaks.app can do now that it could not lately, in the words the admin gave"
         },
         "provider": {
+          "$id": "urn:uuid:d3e5fc65-6d79-4395-b4da-59cd0f10c7db",
           "type": "string",
           "description": "the provider of the model each letter is written by: the admin's, else the one the Operator's base persona names, kept once the batch is sent"
         },
         "model": {
+          "$id": "urn:uuid:ba2ba896-4815-4255-958c-bac3fc0ee39f",
           "type": "string",
           "description": "the model each letter is written by, as `provider` is"
         }
@@ -21,24 +26,29 @@
       "description": "a trial run of the Operators writing to their people between visits: one letter per space, from its own apps and use and the changelog, written in one batch and kept as `outreach_letter` rows. Nothing is sent"
     },
     "outreach_batch": {
+      "$id": "urn:uuid:fa4fa637-21e3-480a-abd8-f007db96a431",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "id": {
+          "$id": "urn:uuid:d0ac96f8-67c5-4e9a-81db-45da2a2241d1",
           "type": "string",
           "description": "the provider's batch id"
         },
         "at": {
+          "$id": "urn:uuid:a3d12ead-f8e5-4f8a-a341-e2ffd720d7fc",
           "type": "string",
           "format": "date-time",
           "description": "when the batch was sent"
         },
         "spaces": {
+          "$id": "urn:uuid:22eaf116-b932-4279-92c6-16c2c34c5eee",
           "type": "number",
           "description": "how many spaces it asks for"
         },
         "shared": {
+          "$id": "urn:uuid:97dc081d-e8fd-438d-976f-411ea260ee20",
           "type": "string",
           "description": "the prefix every request began with: the Operator's base persona, how these emails are written and the changelog"
         }
@@ -46,20 +56,24 @@
       "description": "a trial's batch, sent to the model's provider; its wake reads it until it has ended"
     },
     "outreach_written": {
+      "$id": "urn:uuid:4a1c9d0a-bca6-4988-bef4-d99cfccfda48",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "at": {
+          "$id": "urn:uuid:5ee8f871-68c2-491a-8ab2-50a6939c4c73",
           "type": "string",
           "format": "date-time",
           "description": "when its letters were read back"
         },
         "letters": {
+          "$id": "urn:uuid:7540a632-631d-4259-8b2a-d19ce3155ee6",
           "type": "number",
           "description": "how many letters came back"
         },
         "dollars": {
+          "$id": "urn:uuid:c4f750de-bd08-455a-bf30-7cb138ad3ea3",
           "type": "number",
           "description": "what the whole batch cost, at batch prices"
         }
@@ -67,11 +81,13 @@
       "description": "a trial's letters, read back from its finished batch"
     },
     "outreach_letter": {
+      "$id": "urn:uuid:9d63ccd5-db4e-4897-a9fa-4e7eb3dc0c8a",
       "component": true,
       "journal": false,
       "type": "object",
       "properties": {
         "trial": {
+          "$id": "urn:uuid:d96d7265-f65e-4ec6-b6bb-75b05c3be7b3",
           "type": "string",
           "ref": "entity",
           "death": "cascade",
@@ -79,20 +95,24 @@
           "description": "the trial it was written in"
         },
         "space": {
+          "$id": "urn:uuid:60328f51-d543-4dfe-998b-fc593efe712c",
           "type": "string",
           "ref": "space",
           "death": "cascade",
           "description": "the space whose Operator wrote it"
         },
         "stage": {
+          "$id": "urn:uuid:530f953c-33d8-4a48-a722-bf157384392c",
           "type": "string",
           "description": "where the space stood: nothing built, quiet, building, in use"
         },
         "brief": {
+          "$id": "urn:uuid:cd9cfc4f-946b-4b05-9797-6273829c2e14",
           "type": "string",
           "description": "what its Operator was told of the space after the shared prefix: its people, its apps and their use"
         },
         "dollars": {
+          "$id": "urn:uuid:029ade42-071a-4d76-bd74-42216aacb14c",
           "type": "number",
           "description": "what writing it cost, at batch prices"
         }

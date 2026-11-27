@@ -1,6 +1,8 @@
 {
+  "$id": "urn:uuid:db296e5a-5801-43ab-b154-cbb300772313",
   "$defs": {
     "file_retirement": {
+      "$id": "urn:uuid:c3712a10-6cc4-4987-888d-a12f1d3a2d9d",
       "component": true,
       "type": "object",
       "wire": false,
@@ -8,17 +10,20 @@
       "description": "Unreferenced bucket keys, retained in trash until a person chooses to purge them.",
       "properties": {
         "keys": {
+          "$id": "urn:uuid:a757f5b1-63ed-4df8-84ca-c8e5d7ef9057",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "at": {
+          "$id": "urn:uuid:668acaac-f450-4246-8ee4-b47862cfd00b",
           "type": "string",
           "format": "date-time",
           "description": "When these keys were first observed unreferenced; absent while an erased owner still stands."
         },
         "owner": {
+          "$id": "urn:uuid:db615c9d-6b15-4761-8d04-5ac8e6167892",
           "type": "string",
           "ref": "entity",
           "death": "keep",
@@ -34,29 +39,35 @@
       "description": "Finish previously queued file retirements while retaining every recorded key in trash."
     },
     "release_remake": {
+      "$id": "urn:uuid:3a91e9ab-9bb1-4be0-9aa1-964577388450",
       "component": true,
       "type": "object",
       "description": "a release to make again as itself, compiled by the toolkit serving it now (toolkit.ts), done once by the remake sweep its row wakes",
       "properties": {
         "app": {
+          "$id": "urn:uuid:a3754b43-853d-4d69-9e90-11af2b5b5ab0",
           "type": "string",
           "description": "the app"
         },
         "source": {
+          "$id": "urn:uuid:7178caa2-fb41-4345-96d1-90ffa5e15a40",
           "type": "string",
           "description": "the release it serves that its toolkit has moved on from"
         },
         "fence": {
+          "$id": "urn:uuid:25c96f7a-8108-44ee-ac9e-3da2f8557806",
           "type": "string",
           "description": "the release fence the last run drew, kept before it took it; the next run lifts it if that run died holding it"
         }
       }
     },
     "sweep": {
+      "$id": "urn:uuid:6f91d8f5-aab0-405e-ac1c-6d7e60b3105f",
       "component": true,
       "type": "object",
       "properties": {
         "kind": {
+          "$id": "urn:uuid:1e4167a0-b0ae-4681-b593-8cb8c0073c97",
           "type": "string",
           "enum": [
             "domains",
@@ -71,24 +82,28 @@
           ]
         },
         "began": {
+          "$id": "urn:uuid:d049ab88-a088-4d43-9030-2e2d8123e4ec",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the run under way began; null once it ends"
         },
         "since": {
+          "$id": "urn:uuid:1b8ed35c-7568-4907-b4b8-4cab947a1675",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the first of the runs in a row that died unfinished, or that Cloudflare could not answer, began; null once one finishes"
         },
         "reported": {
+          "$id": "urn:uuid:c796db63-5f1e-41d1-b2ac-1196311b3843",
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when the runs since `since` that Cloudflare could not answer were reported as an outage, once; null once one finishes"
         },
         "through": {
+          "$id": "urn:uuid:f7d61ff3-567f-40ac-b7ad-e5191b1beb09",
           "type": "string",
           "format": "date-time",
           "stamped": true,
