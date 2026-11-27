@@ -360,7 +360,7 @@ The admin's Wrangler commands have a token of their own:
 `CLOUDFLARE_ADMIN_TOKEN` (Workers Scripts read and write, Workers Tail read;
 packages/admin/README.md).
 
-Workers Builds logs take a user-owned token; every account-owned one gets 403 or 12006. The 1Password item "cloudflare user read-only" (vault Yak Shaving LLC, field credential) is one, so an agent on the box reads a build's log with it: `op read` inside the script, sent as a Bearer token to `/accounts/<id>/builds/workers/<script tag>/builds` (the tag is the script's `tag` in `/workers/scripts`; yak's is f1694d3fa03d42dabe44ba70137c678a), then `/builds/builds/<uuid>/logs`. It is the owner's key and stays on the box. The Worker's `BUILD_LOG_TOKEN` is a scoped user token asked of him on T-123153 with `connection_need`, kept on yak's Worker and in 1Password once he pastes it.
+Workers Builds logs take a user-owned token; every account-owned one gets 403 or 12006. The 1Password item "cloudflare user read-only" (vault Yak Shaving LLC, field credential) is one, so an agent on the box reads a build's log with it: `op read` inside the script, sent as a Bearer token to `/accounts/<id>/builds/workers/<script tag>/builds` (the tag is the script's `tag` in `/workers/scripts`; yak's is f1694d3fa03d42dabe44ba70137c678a), then `/builds/builds/<uuid>/logs`. It is the owner's key and stays on the box. The Worker's `BUILD_LOG_TOKEN` is a separate user token he made, scoped to Workers CI Read on the yaks account (it sees no scripts or zones), kept in 1Password as "Cloudflare build logs" and set on yak with `wrangler secret put`.
 
 ## Minting a Cloudflare token
 
