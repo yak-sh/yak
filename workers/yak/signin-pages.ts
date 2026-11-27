@@ -4,7 +4,7 @@
 // so a page that only serves a space never compiles the sign-in's phone
 // numbers or the connector's words (T-148886).
 import { Button, Card, Field, Form, Rows } from '@yaks/ui/parts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { Face, Shown } from '@yaks/platform/connections-page'
 import { tile } from './render/mod.ts'
 import { shown } from '@yaks/phone'
@@ -85,9 +85,9 @@ let copying = (copy: Copy) => ({
   picture: copy.image
     ? h(
       'figure',
-      { class: 'Pictured' },
+      { className: 'Pictured' },
       h('img', {
-        class: 'Pictured_Image',
+        className: 'Pictured_Image',
         src: copy.image,
         alt: copy.title,
         width: 1200,
@@ -141,7 +141,7 @@ export let askEmail = (at: {
     copy?.picture,
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: '/login' },
+      { className: 'Page_Form', method: 'post', action: '/login' },
       carried(at.q ?? null, at.back),
       h(
         'p',
@@ -181,7 +181,7 @@ export let askEmail = (at: {
           }),
           h(
             'p',
-            { class: 'Note', id: 'by-text' },
+            { className: 'Note', id: 'by-text' },
             `${CODE_NOTE} Terms: `,
             h('a', { href: url(env, '/terms') }, 'yaks.app/terms'),
             ' Privacy: ',
@@ -204,11 +204,15 @@ export let askEmail = (at: {
     ),
     at.providers?.length
       ? [
-        h('p', { class: 'Note' }, 'Or'),
+        h('p', { className: 'Note' }, 'Or'),
         at.providers.map((p) =>
           h(
             'form',
-            { class: 'Page_Form', method: 'post', action: beginPath(p.name) },
+            {
+              className: 'Page_Form',
+              method: 'post',
+              action: beginPath(p.name),
+            },
             carried(at.q ?? null, at.back),
             h(
               Button,
@@ -223,7 +227,7 @@ export let askEmail = (at: {
     invite
       ? h(
         'p',
-        { class: 'Note' },
+        { className: 'Note' },
         'Or ',
         h('a', { href: url(env, '/') }, 'start building on the home page'),
         '.',
@@ -292,7 +296,7 @@ export let askCode = (at: {
     },
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: '/login/code' },
+      { className: 'Page_Form', method: 'post', action: '/login/code' },
       carried(q, back),
       h(
         'p',
@@ -305,7 +309,7 @@ export let askCode = (at: {
       ),
       held('address', address),
       h(Field, {
-        class: 'Code',
+        className: 'Code',
         placeholder: '6 digits from your code',
         name: 'code',
         inputmode: 'numeric',
@@ -320,7 +324,7 @@ export let askCode = (at: {
     ),
     h(
       'form',
-      { class: 'Again Page_Form', method: 'post', action: '/login' },
+      { className: 'Again Page_Form', method: 'post', action: '/login' },
       carried(q, back),
       held('address', address),
       h(Button, { type: 'submit' }, 'Send a new code'),
@@ -388,8 +392,8 @@ export let askDelete = (at: {
         ),
         h(
           'ol',
-          { class: 'Card_List' },
-          at.lines.map((l) => h('li', { class: 'Card_Item' }, l)),
+          { className: 'Card_List' },
+          at.lines.map((l) => h('li', { className: 'Card_Item' }, l)),
         ),
       )
       : null,
@@ -397,7 +401,7 @@ export let askDelete = (at: {
       h(
         'form',
         {
-          class: 'Page_Form',
+          className: 'Page_Form',
           method: 'post',
           action: `/space/${at.slug}/delete`,
         },
@@ -425,7 +429,7 @@ export let askDelete = (at: {
       ),
       h(
         'p',
-        { class: 'Note' },
+        { className: 'Note' },
         'Changed your mind? Close this page — nothing has happened.',
       ),
     ],
@@ -474,15 +478,15 @@ export let askConfirm = (at: {
         ),
         h(
           'ol',
-          { class: 'Card_List' },
-          at.lines.map((l) => h('li', { class: 'Card_Item' }, l)),
+          { className: 'Card_List' },
+          at.lines.map((l) => h('li', { className: 'Card_Item' }, l)),
         ),
       )
       : null,
     at.stop ? null : [
       h(
         'form',
-        { class: 'Page_Form', method: 'post', action: at.action },
+        { className: 'Page_Form', method: 'post', action: at.action },
         held('t', at.token),
         at.token ? null : [
           h(
@@ -505,7 +509,7 @@ export let askConfirm = (at: {
       ),
       h(
         'p',
-        { class: 'Note' },
+        { className: 'Note' },
         'Changed your mind? Close this page — nothing has happened.',
       ),
     ],
@@ -526,7 +530,7 @@ export let deleted = (said: string, forever = true, env: Host = {}) =>
     { title: "That's done.", lead: said },
     h(
       'p',
-      { class: 'Note' },
+      { className: 'Note' },
       forever
         ? 'The address is free again. Ask your assistant for a new space whenever you want one.'
         : 'Nothing was erased. The address is held for you, and restoring it puts everything back exactly as it was.',
@@ -540,7 +544,7 @@ export let deleted = (said: string, forever = true, env: Host = {}) =>
 let pressed = (o: Offer, env: Host) =>
   h(
     'form',
-    { class: 'Page_Form', method: 'post', action: INVITE },
+    { className: 'Page_Form', method: 'post', action: INVITE },
     held('t', o.t ?? ''),
     h(
       'p',
@@ -580,7 +584,7 @@ export let invited = (o: Offer, env: Host = {}) => {
     o.app
       ? h(
         Card,
-        { class: 'Identity_Cards' },
+        { className: 'Identity_Cards' },
         h(
           Rows,
           { as: 'ul' },
@@ -594,7 +598,7 @@ export let invited = (o: Offer, env: Host = {}) => {
       : null,
     o.signs ? pressed(o, env) : h(
       'form',
-      { class: 'Page_Form', method: 'post', action: '/login' },
+      { className: 'Page_Form', method: 'post', action: '/login' },
       held('address', o.email),
       held('return', o.back),
       h(
@@ -645,7 +649,7 @@ export let askConnect = (at: {
         actions: at.on && !at.keyed
           ? h(
             'form',
-            { class: 'Page_Form', method: 'post' },
+            { className: 'Page_Form', method: 'post' },
             signingIn(
               at.face,
               at.status == 'needed' ? 'Connect' : 'Connect again',
@@ -659,12 +663,16 @@ export let askConnect = (at: {
       !at.on ? h(Card.Sub, null, "Keys can't be saved here yet.") : at.keyed
         ? h(
           'form',
-          { class: 'Page_Form', method: 'post' },
+          { className: 'Page_Form', method: 'post' },
           keyBox('key', 'Paste your key', send('Save key'), '', at.face.fields),
         )
         : null,
     ),
-    h('p', { class: 'Note' }, h('a', { href: at.back }, `Back to ${at.app}`)),
+    h(
+      'p',
+      { className: 'Note' },
+      h('a', { href: at.back }, `Back to ${at.app}`),
+    ),
   )
 
 // A one-click link, opened (identity.ts LINK). Opening it spends nothing: a
@@ -696,7 +704,7 @@ export let askLink = (
     },
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: '/login/link' },
+      { className: 'Page_Form', method: 'post', action: '/login/link' },
       held('t', t),
       send('Sign in'),
     ),
@@ -722,7 +730,7 @@ export let askHandoff = (
     },
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: '/login/handoff' },
+      { className: 'Page_Form', method: 'post', action: '/login/handoff' },
       held('return', back),
       held('consent', consent),
       send(`Continue to ${host}`),
@@ -747,7 +755,7 @@ export let askAllow = (
     },
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: '/oauth/allow' },
+      { className: 'Page_Form', method: 'post', action: '/oauth/allow' },
       carried(q),
       held('consent', consent),
       send('Allow'),

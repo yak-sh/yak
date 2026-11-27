@@ -1,13 +1,13 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { Page } from './frame.tsx'
 import { text } from './copy.ts'
 import { mail, Section, Top } from './prose.tsx'
 
 // A cookie's name, as the browser keeps it.
-let cookie = (name: string) => <code class='Prose_Code'>{name}</code>
+let cookie = (name: string) => <code className='Prose_Code'>{name}</code>
 
 let privacy = (
-  <a class='Prose_Link' href='/privacy' {...text('cookies.privacy')} />
+  <a className='Prose_Link' href='/privacy' {...text('cookies.privacy')} />
 )
 
 export let Cookies = () => (

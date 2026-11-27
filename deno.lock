@@ -5041,6 +5041,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@types/ua-parser-js@0.7.39",
             "npm:@yaks/alias@0.2.24",
             "npm:@yaks/api@0.2.29",
@@ -5079,6 +5080,7 @@
             "npm:@yaks/push@0.2.33",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/session@0.2.33",
             "npm:@yaks/speech@0.2.33",
@@ -6067,6 +6069,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@jsr/std__path@1.1.2",
             "npm:@jsr/std__testing@1",
+            "npm:@preact/compat@18.3.2",
             "npm:@resvg/resvg-wasm@2.6.2",
             "npm:@yaks/admin@0.2.17",
             "npm:@yaks/alias@0.2.24",
@@ -6154,6 +6157,7 @@
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/reach@0.2.24",
+            "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/resend@0.2.30",
             "npm:@yaks/rtc@0.2.23",

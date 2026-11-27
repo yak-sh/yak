@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import { At } from '@yaks/ui/At'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
@@ -100,7 +100,7 @@ export let pasteLink = (link: string) =>
     copyable(link, 'the link for your agent'),
     h(
       'span',
-      { class: 'Note' },
+      { className: 'Note' },
       'Claude, ChatGPT, Claude Code, Cursor or another agent reads from it how to connect to yaks.app, does what it can itself, and tells you the one step that’s yours.',
     ),
   )
@@ -133,14 +133,14 @@ export let option = (value: string, label: string, chosen: boolean) =>
 
 /** The fields a card holds, one under the other. */
 export let fieldsOf = (...kids: Kids[]) =>
-  h(Form, { class: 'Page_Form', as: 'div' }, kids)
+  h(Form, { className: 'Page_Form', as: 'div' }, kids)
 
 /** Settings that join the page's Save bar; creation keeps its own action. */
 export let saving = (action: string, card: Kids, label = 'Save') =>
   h(
     Form,
     {
-      class: 'Page_Form',
+      className: 'Page_Form',
       method: 'post',
       action,
       ...label == 'Save' ? { 'data-save': action } : {},
@@ -249,7 +249,7 @@ export let dropZone = (slug?: string, to = '/deploy') =>
   h(
     'form',
     {
-      class: 'Deploy Page_Form',
+      className: 'Deploy Page_Form',
       method: 'post',
       action: to,
       enctype: 'multipart/form-data',

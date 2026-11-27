@@ -65,7 +65,7 @@ import { line } from '@yaks/query'
 import { steered, type Tool, type ToolContext, topOf } from '@yaks/session'
 import { integrationNamed } from '@yaks/session/conversation'
 import { Button, Logo } from '@yaks/ui/parts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { apex } from '@yaks/platform/host'
 import { APPROVE } from '@yaks/platform/routes'
 import type { Env } from './env.ts'
@@ -1020,7 +1020,7 @@ let PAGE = {
 let back = (env: Env, slug: string, { operator }: Whose) =>
   h(
     'a',
-    { class: 'Away', href: `https://${apex(env)}/manage/${slug}` },
+    { className: 'Away', href: `https://${apex(env)}/manage/${slug}` },
     `Back to ${operator}`,
   )
 
@@ -1105,7 +1105,7 @@ export let approvalDoor = async (req: Request, env: Env) => {
     standing.state == 'waiting'
       ? h(
         'form',
-        { class: 'Page_Form', method: 'post', action: APPROVE },
+        { className: 'Page_Form', method: 'post', action: APPROVE },
         held('t', t),
         h(
           Button,

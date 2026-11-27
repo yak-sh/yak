@@ -4,7 +4,7 @@
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 import { Button, Card } from '@yaks/ui/parts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 
 type Args = Record<string, unknown>
 

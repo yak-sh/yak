@@ -56,7 +56,7 @@ import {
   Rows,
 } from '@yaks/ui/parts'
 
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 
 import type { Face } from '@yaks/platform/connections-page'
 
@@ -97,7 +97,7 @@ import type { Held, SpaceView } from '@yaks/platform/space-pages-view'
 import { importMap } from './page-imports.ts'
 import { type Stage, staged } from '@yaks/web/stage'
 
-export type Kids = ComponentChildren
+export type Kids = ReactNode
 
 // A page's own script: constant code, which says nothing a person typed. A
 // page brought in place (@yaks/ui/navigate) runs it again, so it runs in a
@@ -117,7 +117,7 @@ ${code.trim()}
   })
 
 export let home = (env: Host) =>
-  h('a', { class: 'Away', href: url(env, '/') }, 'yaks.app')
+  h('a', { className: 'Away', href: url(env, '/') }, 'yaks.app')
 
 // The style guide's parts (public/style-guide.html, One design language),
 // said once: a card's head, a status word, and a field under its label.
@@ -478,13 +478,13 @@ export let spaceBinned = (at: {
     },
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: '/' },
+      { className: 'Page_Form', method: 'post', action: '/' },
       held('restore-space', at.slug),
       h(Button, { mod: 'go', type: 'submit' }, `Restore ${host}`),
     ),
     h(
       'p',
-      { class: 'Note' },
+      { className: 'Note' },
       'Its apps, their files and everything they saved come back exactly as they were.',
     ),
     home(env),
@@ -518,8 +518,8 @@ if (deploy) {
 export let address = (to: string) =>
   h(
     'p',
-    { class: 'Url' },
-    h('a', { href: to }, h('code', { class: 'Url_Code' }, to)),
+    { className: 'Url' },
+    h('a', { href: to }, h('code', { className: 'Url_Code' }, to)),
   )
 
 export let back = (env: Host, space: string) =>
@@ -527,7 +527,7 @@ export let back = (env: Host, space: string) =>
     'p',
     null,
     h('a', {
-      class: 'Away',
+      className: 'Away',
       href: url(env, managePath('apps', space)),
     }, 'Back to your apps'),
   )
@@ -563,8 +563,8 @@ export let dropped = (at: {
         ),
         h(
           'ol',
-          { class: 'Files Card_List' },
-          at.files.map((f) => h('li', { class: 'Files_Item' }, f)),
+          { className: 'Files Card_List' },
+          at.files.map((f) => h('li', { className: 'Files_Item' }, f)),
         ),
       )
       : null,
@@ -662,7 +662,7 @@ export type DeskPage = {
   /** whether the platform's payment provider takes sellers at all, which
    * puts Selling in the side on every manage page */
   shops?: boolean
-  support?: import('preact').ComponentChildren
+  support?: import('react').ReactNode
   supportAvailable?: boolean
   renewals?: Domain[]
   /** on a paid plan, which is what taking payments needs */
@@ -734,11 +734,11 @@ export let editor = (
     },
     h(
       'header',
-      { class: 'Desk_Head' },
+      { className: 'Desk_Head' },
       h(
         'div',
         null,
-        h('a', { class: 'Head_Address', href: `${at.at}/` }, `${at.app} ↗`),
+        h('a', { className: 'Head_Address', href: `${at.at}/` }, `${at.app} ↗`),
         h(Head.Title, { mod: 'page' }, 'Data'),
       ),
     ),
@@ -793,7 +793,7 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
   let ask = at.hidden
     ? h(
       'p',
-      { class: 'Note' },
+      { className: 'Note' },
       `${
         at.hidden == 1 ? 'One app here is' : `${at.hidden} apps here are`
       } private. Ask whoever runs this space to let you in.`,
@@ -878,7 +878,7 @@ export let provisioning = (
       status: 503,
       headers: { 'retry-after': '30' },
     },
-    h(Card, null, heading(host), h('pre', { class: 'Card_Pre' }, said)),
+    h(Card, null, heading(host), h('pre', { className: 'Card_Pre' }, said)),
     home(env),
   )
 
@@ -961,7 +961,7 @@ export let screenCode = (code: string, left: number, env: Host = {}) => {
     h(
       'section',
       {
-        class: 'Tv_Pair',
+        className: 'Tv_Pair',
         'data-tv': '',
         'data-code': code,
         'data-ask': 5000,
@@ -975,15 +975,15 @@ export let screenCode = (code: string, left: number, env: Host = {}) => {
         h('strong', null, `${apex(env)}/tv/pair`),
         ' and enter this code:',
       ),
-      h('p', { class: 'Tv_Code', 'aria-label': 'Your code' }, code),
+      h('p', { className: 'Tv_Code', 'aria-label': 'Your code' }, code),
       h(
         'a',
-        { class: 'Tv_Qr', href: at },
+        { className: 'Tv_Qr', href: at },
         raw(qr(at, 'Scan to pair this screen')),
       ),
       h(
         'p',
-        { class: 'Note' },
+        { className: 'Note' },
         'This screen only shows what you are building. It can change nothing.',
       ),
     ),
@@ -1004,7 +1004,7 @@ export let watching = (
     h(
       'section',
       {
-        class: 'Tv_Watch',
+        className: 'Tv_Watch',
         'data-tv': '',
         'data-ask': 15000,
         'data-title': shows?.title,
@@ -1012,11 +1012,11 @@ export let watching = (
       shows
         ? [
           h('iframe', {
-            class: 'Tv_Frame',
+            className: 'Tv_Frame',
             src: shows.url,
             title: shows.title,
           }),
-          h(Notice, { class: 'Tv_Said', role: 'status' }),
+          h(Notice, { className: 'Tv_Said', role: 'status' }),
         ]
         : h(
           Empty,
@@ -1059,13 +1059,13 @@ export let pairing = (
       : null,
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: '/tv/pair' },
+      { className: 'Page_Form', method: 'post', action: '/tv/pair' },
       labeled(
         'tv-code',
         'Code',
         h(Field, {
           id: 'tv-code',
-          class: 'Code',
+          className: 'Code',
           name: 'code',
           value: at.code ?? '',
           required: true,
@@ -1108,7 +1108,7 @@ export let pairing = (
                 h(
                   'form',
                   {
-                    class: 'Page_Form Rows_Form',
+                    className: 'Page_Form Rows_Form',
                     method: 'post',
                     action: '/tv/unpair',
                   },
@@ -1175,7 +1175,7 @@ export let joinable = (
     },
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: at.action },
+      { className: 'Page_Form', method: 'post', action: at.action },
       send('Join'),
     ),
     home(env),

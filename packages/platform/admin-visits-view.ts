@@ -10,7 +10,7 @@
  *
  * @module
  */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Card } from '@yaks/ui/Card'
 import { Form } from '@yaks/ui/Form'
 import { Report } from '@yaks/ui/Report'

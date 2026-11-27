@@ -18,7 +18,7 @@ import {
 import { bound, type Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
-import { type ComponentChildren, Fragment, h } from 'preact'
+import { createElement as h, Fragment, type ReactNode } from 'react'
 import { operatorDoor } from './build-door.ts'
 import { backTo, chatPath, talkPath } from '@yaks/platform/routes'
 import { apex } from '@yaks/platform/host'
@@ -223,13 +223,13 @@ export let dismissedUpdates = (
     null,
     h(
       'p',
-      { class: 'Note Update_About' },
+      { className: 'Note Update_About' },
       'What you dismissed. Each comes back to your Updates when something new happens on it. ',
       h('a', { href: talkPath('updates', space.slug) }, 'Back to Updates'),
     ),
     updates.length
       ? updates.map((u) => card({ space, apex: apex(env) }, u, apps))
-      : h('p', { class: 'Update_Meta' }, 'Nothing dismissed.'),
+      : h('p', { className: 'Update_Meta' }, 'Nothing dismissed.'),
   )
 
 /** How long the Updates page waits on the last day's visits before it is
@@ -274,7 +274,7 @@ export let updates = (
   }: {
     person: string
     friends: boolean
-    lists: ComponentChildren
+    lists: ReactNode
     apps?: MarkedApp[]
     news?: Updates & { read?: Read[] }
   },
@@ -295,14 +295,14 @@ export let updates = (
 let about = (space: Space) =>
   h(
     'p',
-    { class: 'Note Update_About' },
+    { className: 'Note Update_About' },
     `${space.operator} writes here when something happens in your apps, and asks here when something needs you. Ask about any of it, and the chat opens.`,
   )
 
 let dismissedLink = (space: Space) =>
   h(
     'p',
-    { class: 'Update_Meta' },
+    { className: 'Update_Meta' },
     h(
       'a',
       { href: talkPath('updates', space.slug) + '?dismissed' },
@@ -316,7 +316,7 @@ export let ALL = talkPath('updates')
 /** The introduction shared by the streamed page and the in-place view. */
 export let allUpdatesIntro = h(
   'p',
-  { class: 'Note Update_About' },
+  { className: 'Note Update_About' },
   'What the Operator of each of your spaces wrote or asked you, together. Ask about any of it, and its chat opens.',
 )
 
@@ -361,7 +361,7 @@ let listed = (
   return h(
     'div',
     {
-      class: 'Update_List',
+      className: 'Update_List',
       'data-view': 'updates',
       'data-updates-view': JSON.stringify(view),
     },
@@ -393,7 +393,7 @@ export let allUpdatesCards = (
     missed.map((space) =>
       h(
         'p',
-        { class: 'Note' },
+        { className: 'Note' },
         `${space.operator} in ${
           space.title || space.slug
         } could not be reached just now. Open this page again to try.`,

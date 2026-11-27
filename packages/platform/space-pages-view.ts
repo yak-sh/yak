@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Check } from '@yaks/ui/Check'
@@ -138,7 +138,7 @@ let logoCard = (s: SpaceSettings, note?: Note) =>
     h(
       Form,
       {
-        class: 'Desk_Logo Page_Form',
+        className: 'Desk_Logo Page_Form',
         method: 'post',
         action: logoUpload(s.slug),
         enctype: 'multipart/form-data',
@@ -160,7 +160,7 @@ let logoCard = (s: SpaceSettings, note?: Note) =>
     s.logo
       ? h(
         Form,
-        { class: 'Page_Form', as: 'div' },
+        { className: 'Page_Form', as: 'div' },
         h(Button, { type: 'button', 'data-unlogo': '' }, 'Remove logo'),
         noteOf(note),
       )

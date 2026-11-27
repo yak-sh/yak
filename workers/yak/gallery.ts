@@ -80,7 +80,7 @@ import { rootOf } from '@yaks/platform/files'
 import type { Letter } from './mail.ts'
 import { INTERNAL } from './mail-config.ts'
 import type { Actor, Bundle } from '@yaks/graph'
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { Button, Card, Form, Notice } from '@yaks/ui/parts'
 import { markup } from './html.ts'
 import { GALLERY } from './seo.ts'
@@ -456,7 +456,7 @@ export let pictureOf = async (env: Env, space: Space, app: App) =>
 export let card = (a: Shown) =>
   h(
     Card,
-    { as: 'li', class: 'Make_Card', id: a.name },
+    { as: 'li', className: 'Make_Card', id: a.name },
     h(
       Card.Head,
       null,
@@ -482,10 +482,15 @@ export let card = (a: Shown) =>
     ),
     h(
       'a',
-      { class: 'Make_Shot', href: a.at, tabindex: -1, 'aria-hidden': 'true' },
+      {
+        className: 'Make_Shot',
+        href: a.at,
+        tabindex: -1,
+        'aria-hidden': 'true',
+      },
       a.shot
         ? h('img', {
-          class: 'Make_Image',
+          className: 'Make_Image',
           src: a.shot,
           alt: '',
           loading: 'lazy',
@@ -493,7 +498,7 @@ export let card = (a: Shown) =>
           height: 630,
         })
         : h('img', {
-          class: 'Make_Image Make_Shot-none',
+          className: 'Make_Image Make_Shot-none',
           src: '/yak.webp',
           alt: '',
           loading: 'lazy',
@@ -507,17 +512,22 @@ export let card = (a: Shown) =>
 
 // The card a gallery page stands on: its heading, what it says, and what
 // follows from it.
-let join = (title: string, ...rest: ComponentChildren[]) =>
+let join = (title: string, ...rest: ReactNode[]) =>
   h(
     'main',
-    { class: 'Page' },
-    h(Card, { class: 'Join' }, h('h1', { class: 'Title' }, title), ...rest),
+    { className: 'Page' },
+    h(
+      Card,
+      { className: 'Join' },
+      h('h1', { className: 'Title' }, title),
+      ...rest,
+    ),
   )
-let note = (...said: ComponentChildren[]) => h('p', { class: 'Note' }, ...said)
+let note = (...said: ReactNode[]) => h('p', { className: 'Note' }, ...said)
 let back = () =>
   h(
     'p',
-    { class: 'Join_Doors' },
+    { className: 'Join_Doors' },
     h(Button, { mod: 'go', href: PATH }, 'The gallery'),
   )
 
@@ -557,33 +567,33 @@ ${
 </script>`,
     h(
       'main',
-      { class: 'Page' },
+      { className: 'Page' },
       h(
         'section',
-        { class: 'Make', 'aria-labelledby': 'gallery' },
+        { className: 'Make', 'aria-labelledby': 'gallery' },
         h(
           'div',
-          { class: 'Make_Intro' },
-          h('h1', { id: 'gallery', class: 'Title' }, 'The gallery'),
+          { className: 'Make_Intro' },
+          h('h1', { id: 'gallery', className: 'Title' }, 'The gallery'),
           note(
             'Explore apps made with yaks.app. Try one out or make it your own.',
           ),
         ),
-        all.length ? h('ul', { class: 'Make_List' }, all.map(card)) : note(
+        all.length ? h('ul', { className: 'Make_List' }, all.map(card)) : note(
           'No apps yet. ',
           h('a', { href: '/login' }, 'Make the first one.'),
         ),
       ),
       h(
         Card,
-        { class: 'Join', 'aria-labelledby': 'yours' },
-        h('h2', { id: 'yours', class: 'Title' }, 'Make one of your own'),
+        { className: 'Join', 'aria-labelledby': 'yours' },
+        h('h2', { id: 'yours', className: 'Title' }, 'Make one of your own'),
         note(
           'Describe what you need. Your assistant builds it, and we keep it online.',
         ),
         h(
           'p',
-          { class: 'Join_Doors' },
+          { className: 'Join_Doors' },
           h(Button, { mod: 'go', href: '/login' }, 'Start free'),
         ),
       ),

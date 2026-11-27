@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The landing page for a church office (variant.ts `church`): what a church
 // gets in the words its office uses, what yaks.app has built for one, and the
 // one plan a church pays for. Only its own address shows it, which is where an
@@ -13,7 +13,7 @@
 // 2 minutes 50 seconds through this page's box, and 3 minutes 40 seconds
 // before the Operator was told how (newcomer.ts `rebuilding`). The page first
 // showed after 83 and 81 seconds.
-import type { VNode } from 'preact'
+import type { ReactElement } from 'react'
 import { Button, Card, Field, Form } from '@yaks/ui'
 import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
@@ -32,20 +32,20 @@ let Plan = (
     price: string
     note: string
     items: Array<[string, Slots?]>
-    go: VNode
+    go: ReactElement
   },
 ) => (
-  <Card as='div' class={mod ? `Plan ${mod}` : 'Plan'}>
+  <Card as='div' className={mod ? `Plan ${mod}` : 'Plan'}>
     <h3
-      class='Plan_Price'
+      className='Plan_Price'
       {...text(price, {
-        per: <span class='Plan_Per' {...text('home.cost.per')} />,
+        per: <span className='Plan_Per' {...text('home.cost.per')} />,
       })}
     />
-    <p class='Note Note-small' {...text(note)} />
-    <ul class='Plan_List'>
+    <p className='Note Note-small' {...text(note)} />
+    <ul className='Plan_List'>
       {items.map(([item, slots]) => (
-        <li class='Plan_Item' {...text(item, slots)} />
+        <li className='Plan_Item' {...text(item, slots)} />
       ))}
     </ul>{' '}
     {go}
@@ -62,17 +62,17 @@ export let Churches = () => (
     kind='Home'
     head={<script src='cta.js' defer />}
   >
-    <section class='Hello' aria-labelledby='hello'>
-      <div class='Hello_Copy'>
-        <p class='Hello_Kicker' {...text('churches.hello.kicker')} />
-        <h1 class='Title Title-hero' id='hello'>
+    <section className='Hello' aria-labelledby='hello'>
+      <div className='Hello_Copy'>
+        <p className='Hello_Kicker' {...text('churches.hello.kicker')} />
+        <h1 className='Title Title-hero' id='hello'>
           <label for='say' {...text('churches.hello.title')} />
         </h1>
-        <p class='Note' {...text('churches.hello.note')} />
-        <form class='Hello_Ask' method='post' action={START}>
+        <p className='Note' {...text('churches.hello.note')} />
+        <form className='Hello_Ask' method='post' action={START}>
           <Form.Hidden name='org' value='church' />
           <Field
-            class='Hello_Field Hello_Field-line'
+            className='Hello_Field Hello_Field-line'
             id='say'
             name='say'
             required
@@ -90,23 +90,23 @@ export let Churches = () => (
             {...text('churches.hello.go')}
           />
         </form>
-        <p class='Note Note-small' {...text('churches.hello.try')} />
+        <p className='Note Note-small' {...text('churches.hello.try')} />
       </div>
     </section>
-    <section class='How' aria-labelledby='how'>
-      <h2 class='Title' id='how' {...text('churches.how.title')} />
-      <ol class='Steps'>
+    <section className='How' aria-labelledby='how'>
+      <h2 className='Title' id='how' {...text('churches.how.title')} />
+      <ol className='Steps'>
         {['watch', 'keep', 'ask', 'private'].map((step) => (
-          <li class='Steps_Item'>
-            <h3 class='Step_Name' {...text(`churches.how.${step}.name`)} />
-            <p class='Note' {...text(`churches.how.${step}.detail`)} />
+          <li className='Steps_Item'>
+            <h3 className='Step_Name' {...text(`churches.how.${step}.name`)} />
+            <p className='Note' {...text(`churches.how.${step}.detail`)} />
           </li>
         ))}
       </ol>
     </section>
-    <section class='Yours' aria-labelledby='built'>
-      <h2 class='Title' id='built' {...text('churches.built.title')} />
-      <dl class='Yours_List'>
+    <section className='Yours' aria-labelledby='built'>
+      <h2 className='Title' id='built' {...text('churches.built.title')} />
+      <dl className='Yours_List'>
         {Object.entries<Slots>({
           forms: {},
           directory: {
@@ -123,19 +123,22 @@ export let Churches = () => (
           calendar: {},
         }).map(([item, slots]) => (
           <div>
-            <dt class='Yours_Term' {...text(`churches.built.${item}.term`)} />
+            <dt
+              className='Yours_Term'
+              {...text(`churches.built.${item}.term`)}
+            />
             <dd
-              class='Yours_Detail'
+              className='Yours_Detail'
               {...text(`churches.built.${item}.detail`, slots)}
             />
           </div>
         ))}
       </dl>
     </section>
-    <section class='Cost' aria-labelledby='cost'>
-      <h2 class='Title' id='cost' {...text('churches.cost.title')} />
-      <p class='Note' {...text('churches.cost.note', { yours, domain })} />
-      <div class='Plans'>
+    <section className='Cost' aria-labelledby='cost'>
+      <h2 className='Title' id='cost' {...text('churches.cost.title')} />
+      <p className='Note' {...text('churches.cost.note', { yours, domain })} />
+      <div className='Plans'>
         <Plan
           price='home.cost.free.price'
           note='churches.cost.free.note'
@@ -170,7 +173,7 @@ export let Churches = () => (
         />
       </div>
       <p
-        class='Note Note-small'
+        className='Note Note-small'
         {...text('churches.cost.limits', {
           plans: <a href='/pricing' {...text('home.cost.plans')} />,
           behind: (
@@ -183,9 +186,9 @@ export let Churches = () => (
       />
       <SupportContract />
     </section>
-    <Card class='Join' aria-labelledby='join'>
-      <h2 class='Title' id='join' {...text('churches.join.title')} />
-      <p class='Join_Doors'>
+    <Card className='Join' aria-labelledby='join'>
+      <h2 className='Title' id='join' {...text('churches.join.title')} />
+      <p className='Join_Doors'>
         <Button
           mod='go'
           href='#say'
@@ -193,7 +196,7 @@ export let Churches = () => (
           {...text('churches.join.go')}
         />
       </p>
-      <p class='Note Note-small' {...text('churches.join.note')} />
+      <p className='Note Note-small' {...text('churches.join.note')} />
     </Card>
   </Page>
 )

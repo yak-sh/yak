@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { Button, Card } from '@yaks/ui'
 import { Plan } from '@yaks/platform/home'
 import { Page } from './frame.tsx'
@@ -20,11 +20,11 @@ let ITEMS = [
 // Terms and what each means, a pair under `<at>.<item>`: an item's slots fill
 // either of its lines.
 let Terms = ({ at, items }: { at: string; items: Record<string, Slots> }) => (
-  <dl class='Yours_List'>
+  <dl className='Yours_List'>
     {Object.entries(items).map(([item, slots]) => (
       <div>
-        <dt class='Yours_Term' {...text(`${at}.${item}.term`, slots)} />
-        <dd class='Yours_Detail' {...text(`${at}.${item}.detail`, slots)} />
+        <dt className='Yours_Term' {...text(`${at}.${item}.term`, slots)} />
+        <dd className='Yours_Detail' {...text(`${at}.${item}.detail`, slots)} />
       </div>
     ))}
   </dl>
@@ -32,7 +32,9 @@ let Terms = ({ at, items }: { at: string; items: Record<string, Slots> }) => (
 
 // A row of the limits table that explains itself: its name's note.
 let noted = (row: string) => ({
-  note: <small class='Limits_Note' {...text(`pricing.limits.${row}.note`)} />,
+  note: (
+    <small className='Limits_Note' {...text(`pricing.limits.${row}.note`)} />
+  ),
 })
 
 export let Pricing = () => (
@@ -41,18 +43,18 @@ export let Pricing = () => (
     path='/pricing'
     kind='Pricing'
   >
-    <section class='Hello' aria-labelledby='hello'>
+    <section className='Hello' aria-labelledby='hello'>
       <h1
-        class='Title Title-page'
+        className='Title Title-page'
         id='hello'
         {...text('pricing.hello.title')}
       />
-      <CostNote class='Note Note-lead' />
-      <p class='Note' {...text('pricing.hello.lead')} />
+      <CostNote className='Note Note-lead' />
+      <p className='Note' {...text('pricing.hello.lead')} />
     </section>
-    <section class='Cost' aria-labelledby='plans'>
-      <h2 class='Title' id='plans' {...text('pricing.plans.title')} />
-      <div class='Plans'>
+    <section className='Cost' aria-labelledby='plans'>
+      <h2 className='Title' id='plans' {...text('pricing.plans.title')} />
+      <div className='Plans'>
         {PLANS.map((plan) => (
           <Plan
             copy={{ attr, text }}
@@ -65,21 +67,21 @@ export let Pricing = () => (
         ))}
       </div>
       <SupportContract />
-      <p class='Note Note-small' {...text('pricing.plans.renewal')} />
-      <p class='Note Note-small' {...text('home.cost.ai')} />
+      <p className='Note Note-small' {...text('pricing.plans.renewal')} />
+      <p className='Note Note-small' {...text('home.cost.ai')} />
     </section>
     <section aria-labelledby='always'>
-      <h2 class='Title' id='always' {...text('pricing.always.title')} />
+      <h2 className='Title' id='always' {...text('pricing.always.title')} />
       <ul
-        class='Plan_List'
+        className='Plan_List'
         {...list(
           'pricing.always.items',
-          (says) => <li class='Plan_Item'>{says}</li>,
+          (says) => <li className='Plan_Item'>{says}</li>,
         )}
       />
     </section>
-    <section class='Yours' aria-labelledby='paying'>
-      <h2 class='Title' id='paying' {...text('pricing.paying.title')} />
+    <section className='Yours' aria-labelledby='paying'>
+      <h2 className='Title' id='paying' {...text('pricing.paying.title')} />
       <Terms
         at='pricing.paying'
         items={{
@@ -91,20 +93,20 @@ export let Pricing = () => (
           assistant: {},
           tax: {},
           // The rate sell.ts `quoted` splices in as the page is served.
-          fee: { fee: <span class='Fee'>0%</span> },
+          fee: { fee: <span className='Fee'>0%</span> },
         }}
       />
     </section>
-    <section class='Limits' aria-labelledby='limits'>
-      <h2 class='Title' id='limits' {...text('pricing.limits.title')} />
-      <div class='Limits_Table'>
-        <table class='Limits_Grid'>
+    <section className='Limits' aria-labelledby='limits'>
+      <h2 className='Title' id='limits' {...text('pricing.limits.title')} />
+      <div className='Limits_Table'>
+        <table className='Limits_Grid'>
           <thead>
             <tr>
-              <td class='Limits_Cell Limits_Value' />
+              <td className='Limits_Cell Limits_Value' />
               {PLANS.map((plan) => (
                 <th
-                  class='Limits_Cell Limits_Plan'
+                  className='Limits_Cell Limits_Plan'
                   scope='col'
                   {...text(`pricing.limits.plans.${plan}`)}
                 />
@@ -125,13 +127,13 @@ export let Pricing = () => (
             }).map(([row, slots]) => (
               <tr>
                 <th
-                  class='Limits_Cell Limits_Name'
+                  className='Limits_Cell Limits_Name'
                   scope='row'
                   {...text(`pricing.limits.${row}.name`, slots)}
                 />
                 {PLANS.map((plan) => (
                   <td
-                    class='Limits_Cell Limits_Value'
+                    className='Limits_Cell Limits_Value'
                     {...text(`pricing.limits.${row}.${plan}`)}
                   />
                 ))}
@@ -146,18 +148,18 @@ export let Pricing = () => (
       />
     </section>
     <section aria-labelledby='selling'>
-      <h2 class='Title' id='selling' {...text('pricing.selling.title')} />
+      <h2 className='Title' id='selling' {...text('pricing.selling.title')} />
       <p
-        class='Note'
+        className='Note'
         {...text('pricing.selling.note', {
           terms: <a href='/terms' {...text('pricing.selling.terms')} />,
         })}
       />
     </section>
-    <Card class='Join' aria-labelledby='start'>
-      <h2 class='Title' id='start' {...text('pricing.start.title')} />
-      <p class='Note' {...text('pricing.start.note')} />
-      <p class='Join_Doors'>
+    <Card className='Join' aria-labelledby='start'>
+      <h2 className='Title' id='start' {...text('pricing.start.title')} />
+      <p className='Note' {...text('pricing.start.note')} />
+      <p className='Join_Doors'>
         <Button mod='go' href='/login' {...text('pricing.start.go')} />
       </p>
     </Card>

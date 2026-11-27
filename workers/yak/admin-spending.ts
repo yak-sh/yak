@@ -8,7 +8,12 @@ import { Time } from '@yaks/ui/parts'
 // where they keep nothing for a range, the page says which.
 //
 // It only draws: admin.ts reads the rows and puts this on its desk.
-import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
+import {
+  createElement as h,
+  Fragment,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { Card, type Col, Empty, Group, Table } from '@yaks/ui/parts'
 import { Sort, sortAt, type SortRow, type SortValue } from '@yaks/ux'
 import { type ByDay, columns, series, sparkline, summed } from '@yaks/ui/chart'
@@ -95,8 +100,8 @@ let table = (cols: Col[], heads: string[], rows: SortRow[]) =>
     ),
   )
 let row = (
-  first: ComponentChildren,
-  nums: ComponentChildren[],
+  first: ReactNode,
+  nums: ReactNode[],
   values: SortValue[],
   mod?: string,
 ): SortRow => ({
@@ -108,7 +113,7 @@ let row = (
     nums.map((n) => h(Table.Cell, { mod: 'num' }, n)),
   ),
 })
-let indented = (said: ComponentChildren) =>
+let indented = (said: ReactNode) =>
   h(Fragment, null, h(Table.Indent, null), said)
 
 let facts = (all: [string, string][]) =>
@@ -117,19 +122,19 @@ let facts = (all: [string, string][]) =>
     { as: 'div' },
     h(
       'dl',
-      { class: 'Fields Directory_Facts' },
+      { className: 'Fields Directory_Facts' },
       all.map(([say, n]) =>
         h(
           'div',
-          { class: 'Fields_Row' },
-          h('dt', { class: 'Fields_Label' }, say),
-          h('dd', { class: 'Fields_Value' }, n),
+          { className: 'Fields_Row' },
+          h('dt', { className: 'Fields_Label' }, say),
+          h('dd', { className: 'Fields_Value' }, n),
         )
       ),
     ),
   )
-let note = (said: ComponentChildren) => h('p', { class: 'Spending_Note' }, said)
-let section = (title: string, ...body: ComponentChildren[]) =>
+let note = (said: ReactNode) => h('p', { className: 'Spending_Note' }, said)
+let section = (title: string, ...body: ReactNode[]) =>
   h(Fragment, null, h(Group, null, title), ...body)
 
 // The first day any of these maps holds.
@@ -140,7 +145,7 @@ let firstOf = (maps: (ByDay | undefined)[]) =>
 
 // A line's dollars over the window: the last 30 and 7 days, today, and the
 // line of its days, the lines that spent most first.
-type Line = { name: string; said?: ComponentChildren; days: ByDay }
+type Line = { name: string; said?: ReactNode; days: ByDay }
 let byLine = (lines: Line[], now: number) =>
   lines
     .map((l) => ({ ...l, n: total(l.days, now) }))
@@ -154,7 +159,7 @@ let byLine = (lines: Line[], now: number) =>
         sparkline(h as never, {
           ...series(days, DAYS, now),
           money: true,
-        }) as VNode,
+        }) as ReactElement,
       ], [
         name,
         n,
@@ -401,7 +406,7 @@ let sessions = (runs: Placed[], base: string) => {
   ]
   let line = (
     r: Ran & { space: Counted },
-    first: ComponentChildren,
+    first: ReactNode,
     mod?: string,
   ) =>
     h(
@@ -506,7 +511,7 @@ let sentOf = (p: Part) => p.read + p.write + p.fresh + p.generated
 // from the provider's cache, written to it and sent fresh, and what that
 // comes to a month at this rate.
 let partLine = (
-  said: ComponentChildren,
+  said: ReactNode,
   p: Part,
   month: number,
   mod?: string,
@@ -634,7 +639,7 @@ export let spendingBody = (
   now = Date.now(),
   names: Map<string, string> = new Map(),
   attributed: ReturnType<typeof byPerson> = { people: {}, nobody: {} },
-): VNode => {
+): ReactElement => {
   let runs = runsOf(asked)
   let unread = asked.filter((a) => a.spending instanceof Error)
   return h(
@@ -651,11 +656,11 @@ export let spendingBody = (
         'Could not be read',
         h(
           Card,
-          { as: 'ul', class: 'Directory' },
+          { as: 'ul', className: 'Directory' },
           unread.map((a) =>
             h(
               'li',
-              { class: 'Directory_Item' },
+              { className: 'Directory_Item' },
               `${a.space.slug}: ${(a.spending as Error).message}`,
             )
           ),

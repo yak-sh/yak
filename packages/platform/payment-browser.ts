@@ -13,7 +13,7 @@
  *
  * @module
  */
-import { type ComponentChildren, Fragment, h } from 'preact'
+import { createElement as h, Fragment, type ReactNode } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import type { Bundle } from '@yaks/graph'
 import type { Client, Watch } from '@yaks/client'
@@ -37,7 +37,7 @@ import { sideApps, sideWords } from './side-rows.ts'
 /** The Selling and Billing views. */
 export let VIEW = '[data-view="payment"]'
 
-let made = (doc: Document, node: ComponentChildren) => {
+let made = (doc: Document, node: ReactNode) => {
   let t = doc.createElement('template')
   t.innerHTML = renderToString(h(Fragment, null, node))
   return t.content

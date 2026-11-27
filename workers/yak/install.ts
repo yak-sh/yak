@@ -3,7 +3,7 @@ import { writes } from '@yaks/member'
 import type { Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { refusing } from './defects.ts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button, Card, Field, Form, Notice } from '@yaks/ui/parts'
 import { url } from '@yaks/platform/host'
 import { installAt, isBack, signInAt } from '@yaks/platform/routes'
@@ -40,8 +40,8 @@ let page = (
     ),
     h(
       'main',
-      { class: 'Page' },
-      h('h1', { class: 'Title' }, title),
+      { className: 'Page' },
+      h('h1', { className: 'Title' }, title),
       why ? h(Notice, { mod: 'negative', role: 'alert' }, why) : null,
       name
         ? h(

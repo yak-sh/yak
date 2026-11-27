@@ -14,7 +14,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import {
   Button,
   Card,
@@ -127,14 +127,14 @@ let leaving = (door: Door, label: string, want?: Want, quiet = false) =>
   h(Button, {
     type: 'button',
     mod: quiet ? 'quiet' : door != 'portal' && 'go',
-    class: 'Bill_Go',
+    className: 'Bill_Go',
     'data-door': door,
     'data-plan': want?.tier,
     'data-per': want?.per,
   }, label)
 
 // Where a card's buttons say how it went.
-let saying = () => h(Notice, { class: 'Bill_Say', role: 'status' })
+let saying = () => h(Notice, { className: 'Bill_Say', role: 'status' })
 
 // The plan card (T-33125). One card: the paid plans when they are free,
 // Manage billing when they are paying. Each button leaves for the page the
@@ -238,7 +238,7 @@ let planCard = (view: PaymentView, plan: PlanCard, payer?: Payer) => {
     : null
   return h(
     Card,
-    { class: 'Bill', id: 'plan' },
+    { className: 'Bill', id: 'plan' },
     heading('Plan', {
       status: tier == 'free' ? status('Free') : status(NAMES[tier], 'positive'),
       actions: doors.length ? doors : null,
@@ -268,7 +268,7 @@ let byInvoice = (due: number) =>
       null,
       h(
         Form,
-        { class: 'Page_Form', 'data-invoice': '' },
+        { className: 'Page_Form', 'data-invoice': '' },
         labeled(
           'invoice-email',
           'Send the invoice to',
@@ -311,7 +311,7 @@ let byInvoice = (due: number) =>
 let credit = (c: NonNullable<PlanCard['credit']>, space: string) =>
   h(
     Form,
-    { class: 'Page_Form', method: 'post', 'data-save': 'credit-cap' },
+    { className: 'Page_Form', method: 'post', 'data-save': 'credit-cap' },
     labeled(
       'credit-cap',
       'Monthly cap on AI credit',
@@ -486,7 +486,7 @@ let sellingPage = (view: PaymentView, rows: PaymentRows) => {
   let start = (title: string, lead?: Kids) =>
     h(
       Card,
-      { class: 'Bill' },
+      { className: 'Bill' },
       heading(title, {
         status: ready
           ? status('Connected', 'positive')

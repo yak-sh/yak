@@ -19,7 +19,7 @@
 // doing (T-144829, `MOVES`), and once it rests, what its helpers are
 // (operator-aside.ts `showing`).
 
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { Loading } from '@yaks/ui/parts'
 
@@ -99,15 +99,15 @@ export let MOVES: Record<
  * public/idle.js every several seconds one of his loops (`IDLE`), or while a
  * page names one in his `data-pose`, that pose. He is yaks.app's mark
  * wherever a page shows it (T-144354). */
-export let Idle = ({ class: className, base = '', size = 128 }: {
-  class?: string
+export let Idle = ({ className, base = '', size = 128 }: {
+  className?: string
   base?: string
   size?: number
 }) =>
   h('img', {
-    class: className,
+    className,
     src: `${base}/mascot/idle-rest-128.webp`,
-    srcset: srcset('idle-rest-128', base),
+    srcSet: srcset('idle-rest-128', base),
     width: size,
     height: size,
     alt: '',
@@ -117,4 +117,4 @@ export let Idle = ({ class: className, base = '', size = 128 }: {
 
 /** The yak waiting, as markup. */
 export let idle = (className?: string, base = '') =>
-  renderToString(h(Idle, { class: className, base }))
+  renderToString(h(Idle, { className, base }))

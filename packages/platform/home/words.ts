@@ -1,8 +1,8 @@
-import type { VNode } from 'preact'
+import type { ReactElement } from 'react'
 
 export type Copy = {
-  text: (key: string, slots?: Record<string, VNode>) => {
-    children: (VNode | string)[]
+  text: (key: string, slots?: Record<string, ReactElement>) => {
+    children: (ReactElement | string)[]
   }
   attr: <Name extends string>(name: Name, key: string) => Record<Name, string>
 }

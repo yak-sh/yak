@@ -1,4 +1,4 @@
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button, Card, Field, Form, More, Notice, Rows } from '@yaks/ui/parts'
 import { DOMAIN_RENEWAL } from './plans.ts'
 import { amount } from './price.ts'
@@ -90,7 +90,7 @@ export let offers = (
             ? h(
               Rows.Form,
               {
-                class: 'Rows_Actions',
+                className: 'Rows_Actions',
                 method: 'post',
                 action: path,
                 'data-domain-buy': '',
@@ -229,7 +229,7 @@ export let ownedDomain = (
       ? h(
         Rows.Form,
         {
-          class: 'Rows_Actions',
+          className: 'Rows_Actions',
           method: 'post',
           action: path,
           'data-domain-target': '',

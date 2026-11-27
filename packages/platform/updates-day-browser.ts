@@ -11,7 +11,7 @@
  * @module
  */
 import { renderToString } from 'preact-render-to-string'
-import { Fragment, h } from 'preact'
+import { createElement as h, Fragment } from 'react'
 import type { Client, Watch } from '@yaks/client'
 import { leaving, PAGE } from '@yaks/ui/navigate'
 import { accountWords, FRIENDS, friendsOf } from './account-rows.ts'

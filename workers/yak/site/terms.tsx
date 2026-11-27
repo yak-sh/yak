@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { Page } from './frame.tsx'
 import { text } from './copy.ts'
 import { link, mail, Postal, Section, Top } from './prose.tsx'
@@ -10,7 +10,7 @@ export let Terms = () => (
   >
     <Top at='terms.top' updated='2026-11-24T00:00:00Z' />
     <Section at='terms.about' says={{ reach: { mail } }}>
-      <p class='Prose_Text' {...text('terms.about.operator')} />
+      <p className='Prose_Text' {...text('terms.about.operator')} />
       <Postal at='terms.about.address' />
     </Section>
     <Section at='terms.service' says={{ hosts: {}, new: {} }} />

@@ -13,10 +13,10 @@
  */
 import {
   cloneElement,
-  type ComponentChildren as Kids,
-  h,
-  type VNode,
-} from 'preact'
+  createElement as h,
+  type ReactElement,
+  type ReactNode as Kids,
+} from 'react'
 // @ts-types="@yaks/ui/lucide"
 import X from 'lucide/dist/esm/icons/x.mjs'
 import { Button } from '@yaks/ui/Button'
@@ -104,7 +104,7 @@ let full = (slug: string, plan: { tier: Tier | null; held: number }) => {
   if (limit == null || plan.held < limit) return null
   return h(
     Card,
-    { class: 'Bill' },
+    { className: 'Bill' },
     h(
       Card.Sub,
       null,
@@ -119,13 +119,13 @@ let full = (slug: string, plan: { tier: Tier | null; held: number }) => {
       h(Button, {
         type: 'button',
         mod: 'go',
-        class: 'Bill_Go',
+        className: 'Bill_Go',
         'data-door': 'checkout',
         'data-plan': 'plus',
         'data-per': 'month',
       }, `Get ${planName('plus')} — $${count(PRICE.plus)} a month`),
     ),
-    h(Notice, { class: 'Bill_Say', role: 'status' }),
+    h(Notice, { className: 'Bill_Say', role: 'status' }),
   )
 }
 
@@ -141,7 +141,7 @@ export let installChoice = (
 ): Kids =>
   h(
     'form',
-    { class: 'Page_Form', method: 'post', action },
+    { className: 'Page_Form', method: 'post', action },
     held('install', state),
     labeled(
       'install-space',
@@ -161,7 +161,7 @@ export let installChoice = (
 export let approveConnect = (action: string): Kids =>
   h(
     'form',
-    { class: 'Page_Form', method: 'post', action },
+    { className: 'Page_Form', method: 'post', action },
     h(
       Button,
       { mod: 'go', type: 'submit', name: 'answer', value: 'connect' },
@@ -277,7 +277,7 @@ let connection = (
         action,
         ...at,
         'data-key': at['data-save'],
-        class: ['Page_Form', at.class].filter(Boolean).join(' '),
+        className: ['Page_Form', at.class].filter(Boolean).join(' '),
       },
       held('connection', c.eid),
       kids,
@@ -587,7 +587,7 @@ let connection = (
   // as, what uses it and what it may do; then, quieter, the service itself.
   let here = h(
     'section',
-    { class: 'Connection_Here', 'aria-labelledby': id('here') },
+    { className: 'Connection_Here', 'aria-labelledby': id('here') },
     h('h3', { id: id('here') }, 'This connection'),
     context,
     as && c.status == 'connected'
@@ -619,7 +619,7 @@ let connection = (
       service.length
         ? h(
           'section',
-          { class: 'Connection_About', 'aria-labelledby': id('about') },
+          { className: 'Connection_About', 'aria-labelledby': id('about') },
           h('h3', { id: id('about') }, `About ${c.face.title}`),
           service,
         )
@@ -651,7 +651,7 @@ let borrowing = (
     h(
       'form',
       {
-        class: ['Page_Form', part].filter(Boolean).join(' '),
+        className: ['Page_Form', part].filter(Boolean).join(' '),
         method: 'post',
         action,
         ...edit
@@ -793,7 +793,7 @@ let granting = (
 ) =>
   h(
     'form',
-    { method: 'post', action, class: 'Card_Form' },
+    { method: 'post', action, className: 'Card_Form' },
     held('app', a.eid),
     held('at', at),
     press(act, label, act == 'source-revoke'),
@@ -881,7 +881,7 @@ let mcpCredential = (
     return on
       ? h(
         'form',
-        { method: 'post', action, class: 'Page_Form' },
+        { method: 'post', action, className: 'Page_Form' },
         held('server', s.id),
         labeled(
           `mcp-header-${s.id}`,
@@ -902,7 +902,7 @@ let mcpCredential = (
     ? [
       h(
         'form',
-        { method: 'post', action, class: 'Page_Form' },
+        { method: 'post', action, className: 'Page_Form' },
         held('connection', s.connection),
         h(Form.Actions, null, press('signin', `Sign in to ${s.name}`, false)),
       ),
@@ -927,7 +927,7 @@ let mcpClient = (
       null,
       h(
         'form',
-        { method: 'post', action, class: 'Page_Form' },
+        { method: 'post', action, className: 'Page_Form' },
         held('server', s.id),
         labeled(
           `mcp-client-${s.id}`,
@@ -964,7 +964,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
   let form = (id: string, kids: Kids, at: Record<string, unknown> = {}) =>
     h(
       'form',
-      { method: 'post', action, class: 'Page_Form', ...at },
+      { method: 'post', action, className: 'Page_Form', ...at },
       held('server', id),
       kids,
     )
@@ -1088,7 +1088,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
         null,
         h(
           Form,
-          { class: 'Page_Form', method: 'post', action },
+          { className: 'Page_Form', method: 'post', action },
           held('do', 'mcp-add'),
           labeled(
             'mcp-url',
@@ -1299,7 +1299,7 @@ export let connectionsView = (
         ]
         : h(
           Form,
-          { class: 'Page_Form', method: 'post', action },
+          { className: 'Page_Form', method: 'post', action },
           held('integration', i.name),
           howTo(i.face, true),
           i.keyed
@@ -1317,7 +1317,7 @@ export let connectionsView = (
       i.face.mcp && i.available !== false
         ? h(
           Form,
-          { class: 'Page_Form', method: 'post', action },
+          { className: 'Page_Form', method: 'post', action },
           held('url', i.face.mcp),
           h(
             Form.Actions,
@@ -1440,7 +1440,7 @@ export let connectionsView = (
       c.on && reconnects(one)
         ? h(
           'form',
-          { method: 'post', action, class: 'Card_Form' },
+          { method: 'post', action, className: 'Card_Form' },
           held('connection', one.eid),
           reconnect(one),
         )
@@ -1493,7 +1493,7 @@ export let connectionsView = (
     ? h(
       Form,
       {
-        class: 'Page_Form',
+        className: 'Page_Form',
         method: 'get',
         action: managePath('connections', at.space),
         role: 'search',
@@ -1558,7 +1558,7 @@ export let connectionsView = (
     other && current && owned.length > 1
       ? h(
         'div',
-        { class: 'Connect_Space' },
+        { className: 'Connect_Space' },
         choice(
           current,
           owned,
@@ -1606,14 +1606,14 @@ export let connectionsView = (
   // hold is said as not here, or loading while the page asks for it.
   let showing = offered?.name ?? (open && keyOf(open)) ?? loan?.eid ??
     (server && `mcp:${server.id}`) ?? opened
-  let bodies: [string, VNode][] = [
-    ...offers.map((i): [string, VNode] => [i.name, offer(i)]),
-    ...c.list.map((one): [string, VNode] => [keyOf(one), contents(one)]),
-    ...c.borrowed.map((b): [string, VNode] => [
+  let bodies: [string, ReactElement][] = [
+    ...offers.map((i): [string, ReactElement] => [i.name, offer(i)]),
+    ...c.list.map((one): [string, ReactElement] => [keyOf(one), contents(one)]),
+    ...c.borrowed.map((b): [string, ReactElement] => [
       b.eid,
       borrowing(b, env, c.on, action, close, mine(b)),
     ]),
-    ...(c.mcp?.servers ?? []).map((s): [string, VNode] => [
+    ...(c.mcp?.servers ?? []).map((s): [string, ReactElement] => [
       `mcp:${s.id}`,
       serving(s),
     ]),
@@ -1660,7 +1660,7 @@ export let connectionsView = (
   let setup = showing
   return [
     h('div', {
-      class: 'Desk_Connections',
+      className: 'Desk_Connections',
       inert: setup ? true : undefined,
       'data-connections': '',
       'data-bind-save': '',

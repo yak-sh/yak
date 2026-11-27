@@ -2,7 +2,7 @@
 // (assets.ts): its conversation, mounted over what the server drew
 // (operator-talk-browser.ts), and the aside beside it, drawn as HTML for the parts of
 // the page the script puts in place.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import '@yaks/platform/updates-browser'
 import {

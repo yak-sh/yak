@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Node, h } from 'preact'
+import { createElement as h, type ReactNode as Node } from 'react'
 import { Button, Empty, Notice, Rows } from '@yaks/ui/parts'
 import { read } from '@yaks/yaml'
 import { readOnly, titleOf } from '@yaks/data-editor'

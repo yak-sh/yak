@@ -5,14 +5,14 @@
 // rel="nofollow ugc", since what it points at is the writer's to vouch for, not
 // ours. It is the kit's Body. The renderer loads when a page first draws some
 // (docs.ts `marked`).
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { renderToString } from 'preact-render-to-string'
 
 // The page's elements, with each link said to be the writer's.
 let theirs = ((
   tag: string,
   props: Record<string, unknown> | null,
-  ...children: ComponentChildren[]
+  ...children: ReactNode[]
 ) =>
   h(
     tag,

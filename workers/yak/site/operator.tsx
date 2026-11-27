@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The home page that pitches the Operator (kept-page.ts OPERATOR): its first
 // step is a number, which /login texts a code to, and the code lands a new
 // person in their own space's chat with their Operator (identity.ts
@@ -16,12 +16,12 @@ import { Page, Yours } from './frame.tsx'
 import { Examples } from './home.tsx'
 import { Idle } from '../mascot.ts'
 import { Sky, Walk } from '@yaks/platform/home/sky'
-import type { VNode } from 'preact'
+import type { ReactElement } from 'react'
 
 type By = 'text' | 'email'
 
 // What each way in asks for: its box, and the links its hint names.
-let ASK: Record<By, { field: VNode; hint: Slots }> = {
+let ASK: Record<By, { field: ReactElement; hint: Slots }> = {
   text: {
     field: (
       <Field
@@ -73,13 +73,13 @@ export let Operator = ({ by }: { by: By }) => {
       }
       before={<Sky />}
     >
-      <section class='Hello' aria-labelledby='hello'>
-        <div class='Hello_Copy'>
-          <div class='Hello_Yak' data-wander=''>
-            <Idle class='Wander_Image' base='.' />
+      <section className='Hello' aria-labelledby='hello'>
+        <div className='Hello_Copy'>
+          <div className='Hello_Yak' data-wander=''>
+            <Idle className='Wander_Image' base='.' />
           </div>
-          <p class='Hello_Kicker' {...text('operator.hello.kicker')} />
-          <h1 class='Title Title-hero' id='hello'>
+          <p className='Hello_Kicker' {...text('operator.hello.kicker')} />
+          <h1 className='Title Title-hero' id='hello'>
             <label for='address' {...text(own('label'))} />
           </h1>
           <Form method='post' action='/login' id='start'>
@@ -97,7 +97,7 @@ export let Operator = ({ by }: { by: By }) => {
             </Form.Field>
           </Form>
           <p
-            class='Note Note-small'
+            className='Note Note-small'
             {...text('operator.hello.note', {
               price: <a href='#cost' {...text('operator.hello.price')} />,
             })}
@@ -110,47 +110,50 @@ export let Operator = ({ by }: { by: By }) => {
           }}
         />
       </section>
-      <section class='How' aria-labelledby='how'>
-        <h2 class='Title' id='how' {...text('operator.how.title')} />
-        <ol class='Steps'>
+      <section className='How' aria-labelledby='how'>
+        <h2 className='Title' id='how' {...text('operator.how.title')} />
+        <ol className='Steps'>
           {Object.entries<Slots>({
             [own('first')]: {},
             'operator.how.meet': { yours: <Yours /> },
             'operator.how.ask': {},
           }).map(([step, slots]) => (
-            <li class='Steps_Item'>
-              <h3 class='Step_Name' {...text(`${step}.name`)} />
-              <p class='Note' {...text(`${step}.detail`, slots)} />
+            <li className='Steps_Item'>
+              <h3 className='Step_Name' {...text(`${step}.name`)} />
+              <p className='Note' {...text(`${step}.detail`, slots)} />
             </li>
           ))}
         </ol>
       </section>
-      <section class='Yours' aria-labelledby='does'>
-        <h2 class='Title' id='does' {...text('operator.does.title')} />
-        <dl class='Yours_List'>
+      <section className='Yours' aria-labelledby='does'>
+        <h2 className='Title' id='does' {...text('operator.does.title')} />
+        <dl className='Yours_List'>
           {['changes', 'calls', 'share'].map((item) => (
             <div>
-              <dt class='Yours_Term' {...text(`operator.does.${item}.term`)} />
+              <dt
+                className='Yours_Term'
+                {...text(`operator.does.${item}.term`)}
+              />
               <dd
-                class='Yours_Detail'
+                className='Yours_Detail'
                 {...text(`operator.does.${item}.detail`)}
               />
             </div>
           ))}
         </dl>
       </section>
-      <section class='Cost' aria-labelledby='cost'>
-        <h2 class='Title' id='cost' {...text('operator.cost.title')} />
+      <section className='Cost' aria-labelledby='cost'>
+        <h2 className='Title' id='cost' {...text('operator.cost.title')} />
         <p
-          class='Note'
+          className='Note'
           {...text('operator.cost.note', {
             plans: <a href='/pricing' {...text('home.cost.plans')} />,
           })}
         />
       </section>
-      <Card class='Join' aria-labelledby='join'>
-        <h2 class='Title' id='join' {...text('operator.join.title')} />
-        <p class='Join_Doors'>
+      <Card className='Join' aria-labelledby='join'>
+        <h2 className='Title' id='join' {...text('operator.join.title')} />
+        <p className='Join_Doors'>
           <Button
             mod='go'
             href='#start'
@@ -158,7 +161,7 @@ export let Operator = ({ by }: { by: By }) => {
             {...text(own('again'))}
           />
         </p>
-        <p class='Note Note-small' {...text('home.join.note')} />
+        <p className='Note Note-small' {...text('home.join.note')} />
       </Card>
     </Page>
   )

@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // What every page of the site wears around what it says: the head an engine
 // and a model read, the header with its nav, and the footer. A page is drawn
 // from these and the kit's parts (@yaks/ui) as the deploy writes it into
@@ -9,7 +9,7 @@
 // Signed in, a person reads "Open yaks.app" where "Sign in" is: the page
 // leaves with it (sheets.ts `sheeted`). The mark in both is the seated yak,
 // idling (mascot.ts `Idle`, idle.js); the home page's hero is its own.
-import type { ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import { Address } from '@yaks/ui'
 import {
   PLATFORM_BACKGROUND,
@@ -58,7 +58,7 @@ let Head = (
     path: string
     robots?: string
     sheet?: string
-    children?: ComponentChildren
+    children?: ReactNode
   },
 ) => (
   <head>
@@ -130,27 +130,27 @@ let jumps = (sections: string[]) =>
 let Top = ({ path, sections }: { path: string; sections?: string[] }) => {
   let home = path == '/'
   return (
-    <header class='Top'>
+    <header className='Top'>
       <a
-        class='Top_Name'
+        className='Top_Name'
         href='/'
         aria-current={home ? 'page' : undefined}
         {...attr('aria-label', 'frame.top.home')}
       >
-        {!home && <Idle class='Yak Yak-small' base='.' />}
+        {!home && <Idle className='Yak Yak-small' base='.' />}
         <span {...text('frame.top.name')} />
       </a>
-      <nav class='Nav' {...attr('aria-label', 'frame.nav.label')}>
+      <nav className='Nav' {...attr('aria-label', 'frame.nav.label')}>
         {(sections ? jumps(sections) : NAV).map(([href, key]) => (
           <a
-            class='Nav_Link'
+            className='Nav_Link'
             href={href}
             aria-current={href == path ? 'page' : undefined}
             {...text(`frame.nav.${home && key == 'how' ? 'how-home' : key}`)}
           />
         ))}
         <a
-          class='Nav_SignIn Nav_Link'
+          className='Nav_SignIn Nav_Link'
           href='/login'
           {...text('frame.nav.sign-in')}
         />
@@ -170,14 +170,14 @@ let FOOT = [
 ]
 
 let Foot = () => (
-  <footer class='Foot'>
-    <Idle class='Yak Yak-small' base='.' />
+  <footer className='Foot'>
+    <Idle className='Yak Yak-small' base='.' />
     <p {...text('frame.foot.by')} />
-    <ul class='Foot_Links'>
+    <ul className='Foot_Links'>
       {FOOT.map((name) => (
         <li>
           <a
-            class='Foot_Link'
+            className='Foot_Link'
             href={`/${name}`}
             {...text(`frame.foot.${name}`)}
           />
@@ -215,21 +215,21 @@ export let Page = (
     robots?: string
     sheet?: string
     sections?: string[]
-    head?: ComponentChildren
-    before?: ComponentChildren
-    after?: ComponentChildren
-    foot?: ComponentChildren
-    children: ComponentChildren
+    head?: ReactNode
+    before?: ReactNode
+    after?: ReactNode
+    foot?: ReactNode
+    children: ReactNode
   },
 ) => (
   <html lang='en'>
     <Head page={copy} path={path} robots={robots} sheet={sheet}>
       {head}
     </Head>
-    <body class={kind}>
+    <body className={kind}>
       {before}
       <Top path={path} sections={sections} />
-      <main class={kind ? 'Page' : 'Page Prose'}>{children}</main>
+      <main className={kind ? 'Page' : 'Page Prose'}>{children}</main>
       {foot ?? <Foot />}
       <script type='module' src='_dates.js' />
       {after}

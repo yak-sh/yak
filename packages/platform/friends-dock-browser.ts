@@ -26,7 +26,7 @@
  *
  * @module
  */
-import { type ComponentChildren, Fragment, h } from 'preact'
+import { createElement as h, Fragment, type ReactNode } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
@@ -62,7 +62,7 @@ export let VIEW = `#${DOCK}[data-friends-dock]`
 /** Where the open panel takes the screen (@yaks/ui/Dock.css). */
 export let PHONE = '(max-width: 700px)'
 
-let made = (doc: Document, node: ComponentChildren) => {
+let made = (doc: Document, node: ReactNode) => {
   let t = doc.createElement('template')
   t.innerHTML = renderToString(h(Fragment, null, node))
   return t.content

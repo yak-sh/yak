@@ -4166,6 +4166,9 @@ importers:
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -4245,6 +4248,9 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/preact:
     dependencies:
@@ -6694,6 +6700,9 @@ importers:
       '@yaks/reach':
         specifier: 0.2.24
         version: link:../../packages/reach
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../../packages/react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../../packages/render
@@ -6838,6 +6847,9 @@ importers:
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
       rollup:
         specifier: 4.65.1
         version: 4.65.1

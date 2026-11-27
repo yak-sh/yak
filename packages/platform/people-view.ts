@@ -13,7 +13,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import { possessive } from '@yaks/text/possessive'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
@@ -228,7 +228,7 @@ let holding = (p: Holder) =>
           `${p.role} · `,
           h(
             'span',
-            { class: 'People_Waiting' },
+            { className: 'People_Waiting' },
             p.sent ? ['invited ', h(Time, { at: p.sent }), ', '] : 'invited, ',
             'not accepted yet',
           ),

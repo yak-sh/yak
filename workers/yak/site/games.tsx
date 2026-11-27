@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The landing page for people who would make a game to play with their
 // friends: the home page's story (home.tsx `Told`) with its own words under
 // `games` in the copy, its own demos and the features a game needs

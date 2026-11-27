@@ -311,8 +311,13 @@ let cut = (file: string, tag: string, marker: string): string => {
 }
 
 // What fills an element the file left empty for it.
-let fill = (file: string, open: string, close: string, inner: string) =>
-  file.replace(`${open}>${close}`, `${open}>${inner}${close}`)
+let fill = (file: string, marker: string, close: string, inner: string) => {
+  let at = file.indexOf(marker)
+  if (at < 0) return file
+  let end = file.indexOf('>', at + marker.length)
+  if (end < 0 || !file.startsWith(close, end + 1)) return file
+  return file.slice(0, end + 1) + inner + file.slice(end + 1)
+}
 
 /**
  * A home page as served (gallery.ts `made`, `walks`): each app its file walks

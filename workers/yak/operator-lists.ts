@@ -11,7 +11,7 @@
 // drawn anyway.
 import type { Bundle, Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
-import { type ComponentChildren as Node, h } from 'preact'
+import { createElement as h, type ReactNode as Node } from 'react'
 import {
   Badge,
   Button,
@@ -368,7 +368,7 @@ let row = (
     Rows.Item,
     {
       as: 'li',
-      class: 'Asks_Item',
+      className: 'Asks_Item',
       ...waits ? { id: askAnchor(a.eid) } : {},
     },
     h(
@@ -403,7 +403,7 @@ let row = (
       a.choices.length
         ? h(
           More,
-          { class: 'Asks_Other' },
+          { className: 'Asks_Other' },
           h(More.Summary, {}, 'Other'),
           h(
             More.Body,
@@ -414,7 +414,7 @@ let row = (
               server,
               back,
               h(Field, {
-                class: 'Asks_Input',
+                className: 'Asks_Input',
                 lines: true,
                 name: 'choice',
                 required: true,
@@ -445,13 +445,13 @@ export let listOf = (listed: Listed, action: string, back: string): Node => {
   let rows = (some: Ask[]) =>
     h(
       Rows,
-      { as: 'ul', class: 'Asks' },
+      { as: 'ul', className: 'Asks' },
       some.map((a) => row(a, action, server, back, waits)),
     )
   let card = (...body: Node[]) =>
     h(
       Card,
-      { class: 'Talk_List' },
+      { className: 'Talk_List' },
       h(
         Card.Head,
         {},
@@ -464,9 +464,9 @@ export let listOf = (listed: Listed, action: string, back: string): Node => {
   return off
     ? h(
       Empty,
-      { class: 'Talk_List' },
+      { className: 'Talk_List' },
       h('p', null, `Your machine is off, so ${title} can’t be read now.`),
-      h('p', { class: 'Talk_List_Why' }, off),
+      h('p', { className: 'Talk_List_Why' }, off),
     )
     : asks.length
     ? card(
@@ -484,7 +484,7 @@ export let listOf = (listed: Listed, action: string, back: string): Node => {
     ? card(
       h(
         Rows,
-        { as: 'ul', class: 'Asks' },
+        { as: 'ul', className: 'Asks' },
         lines.map((l) =>
           h(
             Rows.Item,

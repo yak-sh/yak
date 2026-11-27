@@ -16,7 +16,7 @@
  *
  * @module
  */
-import { Fragment, h } from 'preact'
+import { createElement as h, Fragment } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import type { Bundle } from '@yaks/graph'
 import type { Client, Watch } from '@yaks/client'

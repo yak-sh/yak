@@ -15,7 +15,7 @@
  *
  * @module
  */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Card } from '@yaks/ui/Card'
 import type { Befriended, Seen } from './account-rows.ts'
 
@@ -28,7 +28,7 @@ export type Day = { person: string; space: string; friends: boolean }
 export let DAY = 'data-updates-day'
 
 export let daySlot = (day: Day) =>
-  h('div', { class: 'Update_Day', [DAY]: JSON.stringify(day) })
+  h('div', { className: 'Update_Day', [DAY]: JSON.stringify(day) })
 
 /** An app a day's visits are counted for. */
 export type Counted = { eid: string; slug: string; title?: string }
@@ -88,7 +88,7 @@ export let dayCards = (day: string, friends: string) =>
   [day, friends].filter(Boolean).map((words) =>
     h(
       Card,
-      { class: 'Update Update-day' },
-      h('p', { class: 'Update_Words' }, words),
+      { className: 'Update Update-day' },
+      h('p', { className: 'Update_Words' }, words),
     )
   )

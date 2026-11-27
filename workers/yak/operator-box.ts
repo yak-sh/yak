@@ -16,7 +16,7 @@
 // one is (@yaks/session/conversation `Filed`) with a button that takes it
 // back. The page holds them in the form's file input, so they go with the
 // words however the form is sent.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { appQuestion } from '@yaks/platform/app-canvas-view'
 import type { Bundle } from '@yaks/graph'
 import type { Drafts } from '@yaks/ux'
@@ -160,7 +160,7 @@ export let Ask = (
       name: 'say',
       placeholder: asked,
       mod: inline && 'inline',
-      class: 'Talk_Box Page_Form',
+      className: 'Talk_Box Page_Form',
       id: 'ask',
       method: 'post',
       action: at,
@@ -220,7 +220,12 @@ export let Ask = (
     // newest line, taking them back to it (the conversation's `away`).
     h(
       Button,
-      { type: 'button', class: 'Talk_Jump', hidden: !away, onClick: onNewest },
+      {
+        type: 'button',
+        className: 'Talk_Jump',
+        hidden: !away,
+        onClick: onNewest,
+      },
       h(Icon, { of: icons['arrow-down'] }),
       'Newest',
     ),

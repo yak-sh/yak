@@ -1,4 +1,4 @@
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button, Card, Field, Form, Notice } from '@yaks/ui/parts'
 import { type Choice, type Fund, money, type Rates, totalOf } from './giving.ts'
 
@@ -30,7 +30,7 @@ export let donorForm = (
     h(
       'form',
       {
-        class: 'Page_Form',
+        className: 'Page_Form',
         method: 'post',
         action: route,
         'data-giving': JSON.stringify(rates),
@@ -116,7 +116,7 @@ export let reviewForm = (
     ),
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: route },
+      { className: 'Page_Form', method: 'post', action: route },
       h('input', { type: 'hidden', name: 'fund', value: eid }),
       h('input', { type: 'hidden', name: 'key', value: choice.key }),
       h('input', { type: 'hidden', name: 'amount', value: choice.amount }),
@@ -152,7 +152,7 @@ export let fundForm = (
     fund ? h('p', null, h('a', { href: give }, 'Open giving page')) : null,
     h(
       'form',
-      { class: 'Page_Form', method: 'post', action: manage },
+      { className: 'Page_Form', method: 'post', action: manage },
       h('input', { type: 'hidden', name: 'fund', value: eid }),
       h(
         'label',
@@ -239,7 +239,7 @@ export let totalsView = (
     h('h2', null, 'Giving totals'),
     h(
       'form',
-      { class: 'Page_Form', method: 'get', action: manage },
+      { className: 'Page_Form', method: 'get', action: manage },
       h(
         'label',
         null,
@@ -261,7 +261,7 @@ export let totalsView = (
     year < today
       ? h(
         'form',
-        { class: 'Page_Form', method: 'post', action: manage },
+        { className: 'Page_Form', method: 'post', action: manage },
         h('input', { type: 'hidden', name: 'year', value: year }),
         h(
           Button,

@@ -1,7 +1,7 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { keys, read } from '@yaks/copy'
 import { Button, Card, Field, Form } from '@yaks/ui'
-import type { ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import {
   FEATURES,
   HOMEPAGE,
@@ -101,15 +101,15 @@ export let Examples = (
   },
 ) => (
   <section
-    class='Demo'
+    className='Demo'
     aria-labelledby='examples'
     aria-roledescription='carousel'
     data-carousel=''
   >
-    <h2 class='Demo_Title' id='examples' {...text('home.examples.title')} />
-    <ul class='Demo_Slides'>
+    <h2 className='Demo_Title' id='examples' {...text('home.examples.title')} />
+    <ul className='Demo_Slides'>
       {apps.map(([slug, title, sub]) => (
-        <Card as='li' class='Make_Card' data-demo={slug}>
+        <Card as='li' className='Make_Card' data-demo={slug}>
           <Card.Head>
             <Card.Title as='h3'>
               <Card.Link href={`https://yourname.yaks.app/${slug}/`}>
@@ -121,18 +121,18 @@ export let Examples = (
         </Card>
       ))}
     </ul>
-    <div class='Demo_Controls' hidden>
+    <div className='Demo_Controls' hidden>
       <Button
-        class='Demo_Step'
+        className='Demo_Step'
         type='button'
         data-step='-1'
         {...attr('aria-label', 'home.examples.previous')}
       >
         ‹
       </Button>{' '}
-      <div class='Demo_Dots' />{' '}
+      <div className='Demo_Dots' />{' '}
       <Button
-        class='Demo_Step'
+        className='Demo_Step'
         type='button'
         data-step='1'
         {...attr('aria-label', 'home.examples.next')}
@@ -140,12 +140,12 @@ export let Examples = (
         ›
       </Button>{' '}
       <Button
-        class='Demo_Pause'
+        className='Demo_Pause'
         type='button'
         {...text('home.examples.pause')}
       />
     </div>
-    <p class='Note Note-small' {...text(note, slots)} />
+    <p className='Note Note-small' {...text(note, slots)} />
   </section>
 )
 
@@ -173,32 +173,32 @@ export let stepsOf = (app: string) => under(`home.walk.apps.${app}.steps`)
 let Step = ({ app, step }: { app: string; step: string }) => {
   let at = `home.walk.apps.${app}.steps.${step}`
   return (
-    <li class='Walk_Step' data-walk-step={step}>
-      <div class='Walk_Copy'>
-        <h4 class='Walk_Title' {...text(`${at}.title`)} />
-        <p class='Note' {...text(`${at}.body`)} />
+    <li className='Walk_Step' data-walk-step={step}>
+      <div className='Walk_Copy'>
+        <h4 className='Walk_Title' {...text(`${at}.title`)} />
+        <p className='Note' {...text(`${at}.body`)} />
         <Button mod='go' href='#say' data-cta='walk' {...text(`${at}.go`)} />
       </div>
-      <div class='Walk_Shown'>
-        <div class='Walk_Talk' data-walk-talk={`${app}/${step}`} />
+      <div className='Walk_Shown'>
+        <div className='Walk_Talk' data-walk-talk={`${app}/${step}`} />
         <a
-          class='Walk_Shot'
+          className='Walk_Shot'
           href={`${DEMO_AT}${app}/`}
           tabindex={-1}
           aria-hidden='true'
         >
-          <span class='Walk_Picture' data-walk-shot={`${app}/${step}`} />
+          <span className='Walk_Picture' data-walk-shot={`${app}/${step}`} />
         </a>
-        <form class='Walk_Ask' method='post' action={START}>
+        <form className='Walk_Ask' method='post' action={START}>
           <Form.Hidden name='demo' value={app} />
           <Form.Hidden name='step' value={step} />
           <label
-            class='Walk_Label'
+            className='Walk_Label'
             for={`ask-${app}-${step}`}
             {...text('home.walk.ask.label')}
           />
           <Field
-            class='Walk_Field'
+            className='Walk_Field'
             id={`ask-${app}-${step}`}
             name='say'
             required
@@ -218,7 +218,7 @@ let Step = ({ app, step }: { app: string; step: string }) => {
 
 // The link after an app's last step to the next app's first.
 let Next = ({ app }: { app: string }) => (
-  <p class='Walk_Next' data-walk-next={app}>
+  <p className='Walk_Next' data-walk-next={app}>
     <a
       href={`#walk-${app}`}
       {...text('home.walk.next', {
@@ -235,10 +235,14 @@ let Next = ({ app }: { app: string }) => (
  * page drops an app whose conversation is not recorded yet, and the whole
  * section while none is (walkthrough.ts `walkedInto`). */
 export let Walkthrough = () => (
-  <section class='Walk' aria-labelledby='walk' data-walks=''>
-    <h2 class='Title' id='walk' {...text('home.walk.title')} />
-    <p class='Note' {...text('home.walk.note')} />
-    <nav class='Walk_Names' hidden {...attr('aria-label', 'home.walk.names')}>
+  <section className='Walk' aria-labelledby='walk' data-walks=''>
+    <h2 className='Title' id='walk' {...text('home.walk.title')} />
+    <p className='Note' {...text('home.walk.note')} />
+    <nav
+      className='Walk_Names'
+      hidden
+      {...attr('aria-label', 'home.walk.names')}
+    >
       {WALKS.map((app) => (
         <Button
           mod='quiet'
@@ -249,9 +253,9 @@ export let Walkthrough = () => (
       ))}
     </nav>
     {WALKS.map((app, i) => (
-      <article class='Walk_App' id={`walk-${app}`} data-walk={app}>
-        <h3 class='Walk_Name' {...text(`home.walk.apps.${app}.name`)} />
-        <ol class='Walk_Steps'>
+      <article className='Walk_App' id={`walk-${app}`} data-walk={app}>
+        <h3 className='Walk_Name' {...text(`home.walk.apps.${app}.name`)} />
+        <ol className='Walk_Steps'>
           {stepsOf(app).map((step) => (
             <Step
               key={step}
@@ -260,7 +264,7 @@ export let Walkthrough = () => (
             />
           ))}
         </ol>
-        <p class='Note Note-small'>
+        <p className='Note Note-small'>
           <a
             href={`${DEMO_AT}${app}/`}
             {...text('home.walk.open', {
@@ -276,9 +280,9 @@ export let Walkthrough = () => (
 )
 
 /** The space and what a subscription pays for, above the plan cards. */
-export let CostNote = ({ class: classes = 'Note' }: { class?: string }) => (
+export let CostNote = ({ className = 'Note' }: { className?: string }) => (
   <p
-    class={classes}
+    className={className}
     {...text('home.cost.note', {
       yours: <Yours />,
       space: <strong {...text('home.cost.space')} />,
@@ -290,7 +294,7 @@ export let CostNote = ({ class: classes = 'Note' }: { class?: string }) => (
  * mail. Every page that sells a plan says it in these words. */
 export let SupportContract = () => (
   <p
-    class='Note Note-small'
+    className='Note Note-small'
     {...text('pricing.plans.support', {
       mail: <a href='mailto:hello@yaks.app'>hello@yaks.app</a>,
     })}
@@ -300,14 +304,14 @@ export let SupportContract = () => (
 /** What a space costs: what one is, a card for each plan, and where the
  * limits are. */
 export let Cost = ({ story }: { story?: boolean } = {}) => (
-  <section class='Cost' aria-labelledby='cost'>
+  <section className='Cost' aria-labelledby='cost'>
     <h2
-      class='Title'
+      className='Title'
       id='cost'
       {...text(story ? 'home.story.pricing.heading' : 'home.cost.title')}
     />
     <CostNote />
-    <div class='Plans'>
+    <div className='Plans'>
       <Plan
         copy={{ attr, text }}
         plan='free'
@@ -329,10 +333,10 @@ export let Cost = ({ story }: { story?: boolean } = {}) => (
         slots={{ domain: <b {...text('home.cost.pro.example')} /> }}
       />
     </div>
-    <p class='Note Note-small' {...text('pricing.plans.renewal')} />
-    <p class='Note Note-small' {...text('home.cost.ai')} />
+    <p className='Note Note-small' {...text('pricing.plans.renewal')} />
+    <p className='Note Note-small' {...text('home.cost.ai')} />
     <p
-      class='Note Note-small'
+      className='Note Note-small'
       {...text('home.cost.limits', {
         plans: <a href='/pricing' {...text('home.cost.plans')} />,
       })}
@@ -373,8 +377,8 @@ let WORK = ['signup', 'hold', 'friday', 'minutes']
 let MADE = ['us', 'fixed', 'yours']
 
 let yak = () => (
-  <div class='Hello_Yak' data-wander=''>
-    <Idle class='Wander_Image' base='.' />
+  <div className='Hello_Yak' data-wander=''>
+    <Idle className='Wander_Image' base='.' />
   </div>
 )
 
@@ -391,7 +395,7 @@ export let Told = (
     path: string
     landing: Landing
     robots?: string
-    head?: ComponentChildren
+    head?: ReactNode
   },
 ) => {
   let words = voiced(copy)
@@ -419,7 +423,7 @@ export let Told = (
         <StoryFooter
           copy={words}
           action={START}
-          yak={<Idle class='Yak Yak-small' base='.' />}
+          yak={<Idle className='Yak Yak-small' base='.' />}
         />
       }
     >
@@ -461,19 +465,19 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
       }
       before={<Sky />}
     >
-      <section class='Hello' aria-labelledby='hello'>
-        <div class='Hello_Copy'>
+      <section className='Hello' aria-labelledby='hello'>
+        <div className='Hello_Copy'>
           {yak()}
-          <p class='Hello_Kicker' {...own.text('home.hello.kicker')} />
-          <h1 class='Title Title-hero' id='hello'>
+          <p className='Hello_Kicker' {...own.text('home.hello.kicker')} />
+          <h1 className='Title Title-hero' id='hello'>
             <label for='say' {...own.text('home.hello.title')} />
           </h1>
           {read(COPY, own.key('home.hello.lead')) != null && (
-            <p class='Note' {...own.text('home.hello.lead')} />
+            <p className='Note' {...own.text('home.hello.lead')} />
           )}
-          <form class='Hello_Ask' method='post' action={START}>
+          <form className='Hello_Ask' method='post' action={START}>
             <Field
-              class='Hello_Field'
+              className='Hello_Field'
               lines
               id='say'
               name='say'
@@ -489,7 +493,7 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
             />
           </form>
           <p
-            class='Note Note-small'
+            className='Note Note-small'
             {...own.text('home.hello.note', {
               price: <a href='#cost' {...own.text('home.hello.price')} />,
               examples: (
@@ -512,58 +516,70 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
           }}
         />
       </section>
-      <section class='Yours' aria-labelledby='does'>
-        <h2 class='Title' id='does' {...own.text('home.does.title')} />
-        <dl class='Yours_List'>
+      <section className='Yours' aria-labelledby='does'>
+        <h2 className='Title' id='does' {...own.text('home.does.title')} />
+        <dl className='Yours_List'>
           {pitch.does.map((item) => (
             <div>
-              <dt class='Yours_Term' {...own.text(`home.does.${item}.term`)} />
+              <dt
+                className='Yours_Term'
+                {...own.text(`home.does.${item}.term`)}
+              />
               <dd
-                class='Yours_Detail'
+                className='Yours_Detail'
                 {...own.text(`home.does.${item}.detail`, yours)}
               />
             </div>
           ))}
         </dl>
       </section>
-      <section class='Work' aria-labelledby='work'>
-        <h2 class='Title' id='work' {...text('home.work.title')} />
-        <p class='Note' {...text('home.work.note')} />
-        <dl class='Yours_List Yours_List-pairs'>
+      <section className='Work' aria-labelledby='work'>
+        <h2 className='Title' id='work' {...text('home.work.title')} />
+        <p className='Note' {...text('home.work.note')} />
+        <dl className='Yours_List Yours_List-pairs'>
           {WORK.map((item) => (
             <div>
-              <dt class='Yours_Term' {...text(`home.work.${item}.term`)} />
-              <dd class='Yours_Detail' {...text(`home.work.${item}.detail`)} />
+              <dt className='Yours_Term' {...text(`home.work.${item}.term`)} />
+              <dd
+                className='Yours_Detail'
+                {...text(`home.work.${item}.detail`)}
+              />
             </div>
           ))}
         </dl>
       </section>
-      <section class='How' aria-labelledby='how'>
-        <h2 class='Title' id='how' {...own.text('home.how.title')} />
-        <ol class='Steps'>
+      <section className='How' aria-labelledby='how'>
+        <h2 className='Title' id='how' {...own.text('home.how.title')} />
+        <ol className='Steps'>
           {pitch.steps.map((step) => (
-            <li class='Steps_Item'>
-              <h3 class='Step_Name' {...own.text(`home.how.${step}.name`)} />
-              <p class='Note' {...own.text(`home.how.${step}.detail`, yours)} />
+            <li className='Steps_Item'>
+              <h3
+                className='Step_Name'
+                {...own.text(`home.how.${step}.name`)}
+              />
+              <p
+                className='Note'
+                {...own.text(`home.how.${step}.detail`, yours)}
+              />
             </li>
           ))}
         </ol>
         <p
-          class='Note Note-small'
+          className='Note Note-small'
           {...own.text('home.how.agent', {
             agent: <a href='/agent' {...own.text('home.how.address')} />,
           })}
         />
       </section>
       <Cost />
-      <section class='Yours' aria-labelledby='made'>
-        <h2 class='Title' id='made' {...text('home.made.title')} />
-        <dl class='Yours_List'>
+      <section className='Yours' aria-labelledby='made'>
+        <h2 className='Title' id='made' {...text('home.made.title')} />
+        <dl className='Yours_List'>
           {MADE.map((item) => (
             <div>
-              <dt class='Yours_Term' {...text(`home.made.${item}.term`)} />
+              <dt className='Yours_Term' {...text(`home.made.${item}.term`)} />
               <dd
-                class='Yours_Detail'
+                className='Yours_Detail'
                 {...text(
                   `home.made.${item}.detail`,
                   item == 'us'
@@ -577,9 +593,9 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
           ))}
         </dl>
       </section>
-      <Card class='Join' aria-labelledby='join'>
-        <h2 class='Title' id='join' {...own.text('home.join.title')} />
-        <p class='Join_Doors'>
+      <Card className='Join' aria-labelledby='join'>
+        <h2 className='Title' id='join' {...own.text('home.join.title')} />
+        <p className='Join_Doors'>
           <Button
             mod='go'
             href='#say'
@@ -587,7 +603,7 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
             {...own.text('home.join.go')}
           />
         </p>
-        <p class='Note Note-small' {...own.text('home.join.note')} />
+        <p className='Note Note-small' {...own.text('home.join.note')} />
       </Card>
     </Page>
   )

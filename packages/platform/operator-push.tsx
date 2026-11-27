@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // What the Operator tells or asks a person, drawn as a notification
 // (@yaks/push/notice): the `Push` view of the row it is about, chosen the way
 // every view is (@yaks/render), the most specific match winning. Its title
@@ -6,7 +6,7 @@
 // row, so a newer notification about it replaces the older one, and once the
 // row is read or answered the notification is taken away by that tag.
 import type { Bundle, Comp } from '@yaks/graph'
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 import { blocks, parse as markdown } from '@yaks/markdown/structural'
 import { Action, Notification } from '@yaks/push/notice'
 import { parse } from '@yaks/query'

@@ -342,7 +342,8 @@ let load = async (
   }
   let left = false
   let timers = new Map<number, ReturnType<typeof setTimeout>>()
-  // The waits the tab's page graph set, which outlive the page.
+  // The tab's graph timers and the renderer's after-paint callbacks can
+  // outlive an individual page.
   let tabTimers = new Set<number>()
   // The page's waits on the held clock: each runs once `pass` reaches its
   // moment, `now`, which the page reads as `performance.now()`.
@@ -352,7 +353,9 @@ let load = async (
   let after = (fn: () => void, ms: number) => {
     if (left) return 0
     let id = ++n
-    if (fromTab()) tabTimers.add(id)
+    if (fromTab() || /\/preact\/hooks\//.test(new Error().stack ?? '')) {
+      tabTimers.add(id)
+    }
     if (held) waits.set(id, { at: now + ms, fn })
     else {
       timers.set(

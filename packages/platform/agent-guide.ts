@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import { Card } from '@yaks/ui/Card'
 import { More } from '@yaks/ui/More'
 import { TabSet } from '@yaks/ui/Tabs'
@@ -30,14 +30,14 @@ export let CONNECTOR = {
 let field = (label: string, value: Kids, what?: string) =>
   h(
     'div',
-    { class: 'Fields_Row' },
-    h('dt', { class: 'Fields_Label' }, label),
+    { className: 'Fields_Row' },
+    h('dt', { className: 'Fields_Label' }, label),
     what == null
       ? value
-      : h('dd', { class: 'Fields_Value' }, copyable(value, what)),
+      : h('dd', { className: 'Fields_Value' }, copyable(value, what)),
   )
 
-let fields = (...rows: Kids[]) => h('dl', { class: 'Fields' }, rows)
+let fields = (...rows: Kids[]) => h('dl', { className: 'Fields' }, rows)
 
 let b = (words: string) => h('b', null, words)
 
@@ -54,7 +54,7 @@ export let chatgptFields = (env: Host) =>
       'Icon',
       h(
         'dd',
-        { class: 'Connect_Icon Fields_Value' },
+        { className: 'Connect_Icon Fields_Value' },
         h(
           'a',
           {
@@ -63,7 +63,7 @@ export let chatgptFields = (env: Host) =>
             'aria-label': 'Download the yaks.app icon',
           },
           h('img', {
-            class: 'Connect_Image',
+            className: 'Connect_Image',
             src: url(env, '/yaks-app.png'),
             width: 56,
             height: 56,
@@ -389,8 +389,8 @@ export let clients = (env: Host): Client[] => [
 let steps = (items: Kids[]) =>
   h(
     'ol',
-    { class: 'Card_List' },
-    items.map((s) => h('li', { class: 'Card_Item' }, s)),
+    { className: 'Card_List' },
+    items.map((s) => h('li', { className: 'Card_Item' }, s)),
   )
 
 // Native radio tabs share their layout with the working style-guide example.
@@ -418,29 +418,29 @@ export let doors = (env: Host) =>
           a.intro ? h('p', null, a.intro) : null,
           a.paths
             ? a.paths.map((p) => [
-              h('h3', { class: 'Connect_Path' }, p.title),
+              h('h3', { className: 'Connect_Path' }, p.title),
               steps(p.steps),
             ])
             : steps(a.steps!),
-          a.note ? h('p', { class: 'Note' }, a.note) : null,
+          a.note ? h('p', { className: 'Note' }, a.note) : null,
           a.details
             ? h(
               More,
               null,
               h(More.Summary, null, a.details.summary),
-              h(More.Body, { class: 'Note' }, a.details.text),
+              h(More.Body, { className: 'Note' }, a.details.text),
             )
             : null,
           h(
             'div',
-            { class: 'Connect_Next' },
-            h('p', { class: 'Connect_Lead' }, 'Make your first app'),
+            { className: 'Connect_Next' },
+            h('p', { className: 'Connect_Lead' }, 'Make your first app'),
             a.finish,
             ', then ask:',
             firstAsk(),
             h(
               'span',
-              { class: 'Note' },
+              { className: 'Note' },
               'Pick one to build, then ask for changes in the same chat. Keep shaping it as you use it.',
             ),
           ),

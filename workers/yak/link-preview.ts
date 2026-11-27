@@ -1,6 +1,6 @@
 // A route describes its preview as data. The same tags serve the site's
 // files, drawn pages, sign-in cards and hosted apps.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { type Host, url } from '@yaks/platform/host'
 import { managed, onZone, route, spaced } from '@yaks/platform/routes'

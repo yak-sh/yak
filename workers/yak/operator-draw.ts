@@ -16,7 +16,7 @@
 // browser and for the shell alike.
 import type { Bundle, Comp } from '@yaks/graph/bundle'
 import { HUMAN } from '@yaks/id'
-import { type ComponentChildren as Node, Fragment, h } from 'preact'
+import { createElement as h, Fragment, type ReactNode as Node } from 'react'
 import {
   Annotated,
   Body,

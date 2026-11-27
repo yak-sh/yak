@@ -20,7 +20,7 @@
 // its owner.
 
 import { parse } from '@yaks/query'
-import { type ComponentRenderer, render } from '@yaks/preact'
+import { type ComponentRenderer, render } from '@yaks/react'
 import { define } from '@yaks/render'
 import { loadVocab } from '@yaks/vocab'
 import { once } from '@yaks/fp'
@@ -30,7 +30,7 @@ import { Menu } from '@yaks/ui/Menu'
 import { Rows } from '@yaks/ui/Rows'
 import { WARM } from '@yaks/ui/navigate'
 import { Time } from '@yaks/ui/Time'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { IconNode } from 'lucide'
 // @ts-types="@yaks/ui/lucide"
 import Ellipsis from 'lucide/dist/esm/icons/ellipsis.mjs'

@@ -1,4 +1,4 @@
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { shown } from '@yaks/phone'
 import { Unsent } from '@yaks/host/senders'
 import type { Directory, Space } from './directory.ts'

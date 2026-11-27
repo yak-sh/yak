@@ -7,7 +7,7 @@
 // The nav is the same places on every page of this site or it is not a
 // nav (site_test.ts), and the footer the same seven. A drawn page says them
 // exactly as the files say them.
-import type { VNode } from 'preact'
+import type { ReactElement } from 'react'
 import { esc, markup } from './html.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { asset, links } from './sheets.ts'
@@ -83,7 +83,7 @@ export let html = (body: string, status = 200) =>
  * is the body's own class, where the page has one. */
 export let drawn = <P>(
   heads: string,
-  main: VNode<P>,
+  main: ReactElement<P>,
   { status = 200, body = '' } = {},
 ) =>
   html(

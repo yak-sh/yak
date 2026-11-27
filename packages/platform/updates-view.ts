@@ -8,7 +8,12 @@
  *
  * @module
  */
-import { cloneElement, type ComponentChildren, Fragment, h } from 'preact'
+import {
+  cloneElement,
+  createElement as h,
+  Fragment,
+  type ReactNode,
+} from 'react'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Empty } from '@yaks/ui/Empty'
@@ -82,12 +87,12 @@ export type At = { space: Spot; apex: string; back?: string }
 let form = (
   { space, back }: At,
   fields: [string, string][],
-  ...inner: ComponentChildren[]
+  ...inner: ReactNode[]
 ) =>
   h(
     'form',
     {
-      class: 'Update_Form Page_Form',
+      className: 'Update_Form Page_Form',
       method: 'post',
       action: talkPath('updates', space.slug),
       ...actionKinds.some((kind) => kind == fields[0]?.[0])
@@ -107,26 +112,26 @@ let form = (
 
 // What an update says, in the Markdown the Operator writes it in.
 let words = (text: string) =>
-  h('div', { class: 'Update_Words' }, markdown(text))
+  h('div', { className: 'Update_Words' }, markdown(text))
 
 // When it happened, said the human way.
-let stamp = (u: Update) => h(Time, { at: u.at, class: 'Update_When' })
+let stamp = (u: Update) => h(Time, { at: u.at, className: 'Update_When' })
 
 let head = (
   u: Update,
-  title: ComponentChildren,
-  where: ComponentChildren,
-  ...actions: ComponentChildren[]
+  title: ReactNode,
+  where: ReactNode,
+  ...actions: ReactNode[]
 ) =>
   h(
     Card.Head,
-    { class: 'Update_Head' },
+    { className: 'Update_Head' },
     title,
-    h('div', { class: 'Update_Byline' }, where, stamp(u), ...actions),
+    h('div', { className: 'Update_Byline' }, where, stamp(u), ...actions),
   )
 
 let subject = (u: Update) =>
-  u.subject ? h(Card.Title, { class: 'Update_Subject' }, u.subject) : null
+  u.subject ? h(Card.Title, { className: 'Update_Subject' }, u.subject) : null
 
 // Where what a choice shows is read: a file kept in the space, through the
 // question that shows it, or an app's draft, at the reader's own preview
@@ -144,20 +149,20 @@ let showing = (space: Spot, u: Update, s: Shown) => {
   let at = shownAt(space, u, s)
   if (s.artifact) {
     return s.artifact.media_type.startsWith('image/')
-      ? h('img', { class: 'Update_Picture', src: at, alt: s.choice })
+      ? h('img', { className: 'Update_Picture', src: at, alt: s.choice })
       : h('a', { href: at, target: '_blank', rel: 'noopener' }, 'Open file')
   }
   if (s.doc) {
     return h(
       'div',
-      { class: 'Update_Prose' },
+      { className: 'Update_Prose' },
       s.doc.title ? h('b', null, s.doc.title) : null,
       s.doc.body ? markdown(s.doc.body) : null,
     )
   }
   return h(
     Preview,
-    { class: 'Update_Draft' },
+    { className: 'Update_Draft' },
     h(
       Preview.Address,
       { href: at, target: '_blank', rel: 'noopener' },
@@ -181,11 +186,11 @@ let shownChoices = (at: At, u: Update, choices: Choice[]) =>
     [['choose', u.eid]],
     h(
       'ul',
-      { class: 'Update_Choices Update_Choices-shown' },
+      { className: 'Update_Choices Update_Choices-shown' },
       choices.map((c, i) =>
         h(
           'li',
-          { class: 'Update_Choice' },
+          { className: 'Update_Choice' },
           (u.shown ?? []).filter((s) => s.choice == c.label)
             .map((s) => showing(at.space, u, s)),
           h('p', null, h('b', null, c.label), `: ${c.description}`),
@@ -203,7 +208,7 @@ let shownChoices = (at: At, u: Update, choices: Choice[]) =>
 // each (the one it recommends first and filled), "Other" for an answer in
 // their own words, and below them a way to ask
 // about it, opened in place. Choices that show something are drawn with it.
-let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
+let needsCard = (at: At, u: Update, where: ReactNode = null) => {
   let { space } = at
   let choices = [...u.choices ?? []].sort((a, b) =>
     +(b.label == u.recommended) - +(a.label == u.recommended)
@@ -211,17 +216,17 @@ let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
   let header = head(
     u,
     h(State, {
-      class: 'Update_Needs',
+      className: 'Update_Needs',
       mod: 'negative',
       'data-inbox-pending': '',
     }, 'Needs you'),
     where,
-    h('span', { class: 'Update_Meta' }, seeing(space, u)),
+    h('span', { className: 'Update_Meta' }, seeing(space, u)),
   )
   if (u.shown?.length) {
     return h(
       Card,
-      { class: 'Update Update-needs', id: updateAnchor(u.eid) },
+      { className: 'Update Update-needs', id: updateAnchor(u.eid) },
       header,
       words(u.words),
       shownChoices(at, u, choices),
@@ -231,7 +236,7 @@ let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
   }
   return h(
     Card,
-    { class: 'Update Update-needs', id: updateAnchor(u.eid) },
+    { className: 'Update Update-needs', id: updateAnchor(u.eid) },
     header,
     words(u.words),
     choices.length
@@ -240,7 +245,7 @@ let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
         null,
         h(
           'ul',
-          { class: 'Update_Choices' },
+          { className: 'Update_Choices' },
           choices.map((c) =>
             h('li', null, h('b', null, c.label), `: ${c.description}`)
           ),
@@ -276,7 +281,7 @@ let other = (at: At, u: Update) => {
     at,
     [['choose', u.eid]],
     h(Field, {
-      class: 'Update_Input',
+      className: 'Update_Input',
       lines: true,
       name: 'choice',
       required: true,
@@ -288,7 +293,7 @@ let other = (at: At, u: Update) => {
   return u.choices?.length
     ? h(
       More,
-      { class: 'Update_Other', 'data-inbox-pending': '' },
+      { className: 'Update_Other', 'data-inbox-pending': '' },
       h(More.Summary, {}, 'Other'),
       h(More.Body, {}, box),
     )
@@ -299,7 +304,7 @@ let other = (at: At, u: Update) => {
 let replying = (at: At, u: Update) =>
   h(
     More,
-    { mod: 'quiet', class: 'Update_Reply' },
+    { mod: 'quiet', className: 'Update_Reply' },
     h(More.Summary, {}, `Ask ${at.space.operator} about it`),
     h(
       More.Body,
@@ -308,7 +313,7 @@ let replying = (at: At, u: Update) =>
         at,
         [['reply', u.eid]],
         h(Field, {
-          class: 'Update_Input',
+          className: 'Update_Input',
           lines: true,
           name: 'say',
           required: true,
@@ -337,18 +342,18 @@ type Answer = [string, string]
 let offerCard = (
   at: At,
   u: Update,
-  where: ComponentChildren,
+  where: ReactNode,
   field: [string, string],
   answers: Answer[],
   prompt?: string,
 ) =>
   h(
     Card,
-    { class: 'Update', id: updateAnchor(u.eid) },
+    { className: 'Update', id: updateAnchor(u.eid) },
     head(u, subject(u), where),
     h(
       'p',
-      { class: 'Update_Words' },
+      { className: 'Update_Words' },
       u.words,
       prompt ? h('span', { 'data-inbox-pending': '' }, ` ${prompt}`) : null,
     ),
@@ -372,25 +377,25 @@ let offerCard = (
 let messageCard = (
   at: At,
   u: Update,
-  where: ComponentChildren,
+  where: ReactNode,
   { friend, name, invite }: NonNullable<Update['message']>,
 ) =>
   h(
     Card,
-    { class: 'Update', id: updateAnchor(u.eid) },
+    { className: 'Update', id: updateAnchor(u.eid) },
     head(
       u,
       subject(u),
       where,
       u.unread ? h(State, { mod: 'positive' }, 'New') : null,
     ),
-    h('p', { class: 'Update_Words' }, u.words),
+    h('p', { className: 'Update_Words' }, u.words),
     invite ? h('a', { href: invite, rel: 'noreferrer' }, 'Join game') : null,
     form(
       at,
       [['message', friend]],
       h(Field, {
-        class: 'Update_Input',
+        className: 'Update_Input',
         lines: true,
         name: 'say',
         required: true,
@@ -408,7 +413,7 @@ let drawCard = (
   at: At,
   u: Update,
   apps: Apps,
-  where: ComponentChildren = null,
+  where: ReactNode = null,
 ) => {
   if (u.transfer) {
     return offerCard(at, u, where, ['transfer', u.eid], [
@@ -437,14 +442,14 @@ let drawCard = (
   return h(
     Card,
     {
-      class: u.unread ? 'Update Update-new' : 'Update',
+      className: u.unread ? 'Update Update-new' : 'Update',
       id: updateAnchor(u.eid),
     },
     head(u, subject(u), where, away),
     words(u.words),
     h(
       'p',
-      { class: 'Update_Meta' },
+      { className: 'Update_Meta' },
       leads(at, u, apps),
       u.unread ? [' · ', h(State, { mod: 'positive' }, 'New')] : null,
     ),
@@ -460,7 +465,7 @@ export let card = (
   at: At,
   u: Update,
   apps: Apps,
-  where: ComponentChildren = null,
+  where: ReactNode = null,
 ) => {
   let drawn = drawCard(at, u, apps, where)
   return cloneElement(
@@ -472,7 +477,7 @@ export let card = (
     },
     drawn.props.children,
     h('output', {
-      class: 'Update_Status',
+      className: 'Update_Status',
       'data-inbox-status': '',
       tabindex: -1,
       hidden: true,
@@ -520,7 +525,7 @@ export let placedIn = (rows: Bundle[], spaces: Spot[]): Placed[] =>
 let whereFrom = (space: Spot) =>
   h(
     'a',
-    { class: 'Update_Where', href: talkPath('updates', space.slug) },
+    { className: 'Update_Where', href: talkPath('updates', space.slug) },
     `${space.title || space.slug} · ${space.operator}`,
   )
 
@@ -530,7 +535,7 @@ export let cardsView = (
   view: UpdatesView,
   updates: Placed[],
   apps: (space: Spot) => Apps,
-): ComponentChildren =>
+): ReactNode =>
   updates.length
     ? updates.map((u) =>
       card(
@@ -542,7 +547,7 @@ export let cardsView = (
     )
     : h(
       'div',
-      { class: 'Talk_Hello' },
+      { className: 'Talk_Hello' },
       h(Empty.Title, { mod: 'welcome' }, 'Nothing yet'),
       h(
         'p',

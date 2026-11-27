@@ -6,7 +6,7 @@ import { deskSide } from './desk-sidebar.ts'
 import { frame, FRAMED } from './frame.ts'
 import { AGENT } from './docs.ts'
 import { Button, Card, Field } from '@yaks/ui/parts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { LONGEST } from '@yaks/persona/name'
 import { FRAME, TITLE } from '@yaks/ui/navigate'
 import {
@@ -110,14 +110,14 @@ export let deskFrame = (
     sheet: true,
     content: h(
       'div',
-      { class: 'Desk_Body', 'data-contents-root': '' },
+      { className: 'Desk_Body', 'data-contents-root': '' },
       at.framed
         ? h(
           'template',
           { [FRAME]: at.framed },
           h(
             'header',
-            { class: 'Desk_Head' },
+            { className: 'Desk_Head' },
             h(
               'div',
               null,
@@ -126,14 +126,14 @@ export let deskFrame = (
             ),
           ),
           h(Shell.Content, {
-            class: ['Desk_Content', at.class].filter(Boolean).join(' '),
+            className: ['Desk_Content', at.class].filter(Boolean).join(' '),
           }),
         )
         : null,
-      h('header', { class: 'Desk_Head' }, at.head),
+      h('header', { className: 'Desk_Head' }, at.head),
       contents({ class: 'Desk_Contents', from: SECTIONS }),
       h(Shell.Content, {
-        class: ['Desk_Content', at.class].filter(Boolean).join(' '),
+        className: ['Desk_Content', at.class].filter(Boolean).join(' '),
         'data-save-person': at.person,
       }, at.content),
     ),

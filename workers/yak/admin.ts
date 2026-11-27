@@ -92,7 +92,12 @@ import {
   type Writers,
   writers,
 } from './stamps.ts'
-import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
+import {
+  createElement as h,
+  Fragment,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { Button, Card, Empty, Field, Group } from '@yaks/ui/parts'
 import { day, esc, markup, raw } from './html.ts'
 import { lost, shell } from './pages.ts'
@@ -783,12 +788,11 @@ let ordered = (d: Reading, rows: Row[]) =>
 let card = (drawings: string[]) =>
   h(
     Card,
-    { as: 'ul', class: 'Directory' },
-    drawings.map((html) => h('li', { class: 'Directory_Item' }, raw(html))),
+    { as: 'ul', className: 'Directory' },
+    drawings.map((html) => h('li', { className: 'Directory_Item' }, raw(html))),
   )
 // What a page says where it has nothing to show.
-let empty = (said: ComponentChildren) =>
-  h(Empty, null, h(Empty.Title, null, said))
+let empty = (said: ReactNode) => h(Empty, null, h(Empty.Title, null, said))
 
 let rows = (d: Reading, all: Row[]) =>
   all.length
@@ -860,13 +864,13 @@ let facts = (all: [string, string][]) =>
     { as: 'div' },
     h(
       'dl',
-      { class: 'Fields Directory_Facts' },
+      { className: 'Fields Directory_Facts' },
       all.map(([say, n]) =>
         h(
           'div',
-          { class: 'Fields_Row' },
-          h('dt', { class: 'Fields_Label' }, say),
-          h('dd', { class: 'Fields_Value' }, n),
+          { className: 'Fields_Row' },
+          h('dt', { className: 'Fields_Label' }, say),
+          h('dd', { className: 'Fields_Value' }, n),
         )
       ),
     ),
@@ -985,11 +989,11 @@ let lettersPage = (d: Reading, trials: Row[]) =>
       trials.length
         ? h(
           Card,
-          { as: 'ul', class: 'Directory' },
+          { as: 'ul', className: 'Directory' },
           trials.map((r) =>
             h(
               'li',
-              { class: 'Directory_Item' },
+              { className: 'Directory_Item' },
               h(
                 'a',
                 { href: `${PATH}/letters/${r.entity.eid}` },
@@ -1132,8 +1136,8 @@ let desk = (
     | 'builds'
     | 'letters'
     | null,
-  body: ComponentChildren,
-  kicker: ComponentChildren = null,
+  body: ReactNode,
+  kicker: ReactNode = null,
   status = 200,
 ) => {
   let link = (
@@ -1252,13 +1256,13 @@ export let listing = (
   }
   let toggle = d.tests
     ? h('a', {
-      class: 'Directory_Toggle',
+      className: 'Directory_Toggle',
       [NAMES]: LISTS[key].title,
       href: `${PATH}/${key}${q ? `?q=${encodeURIComponent(q)}` : ''}`,
     }, 'Leave out test accounts')
     : hidden
     ? h('a', {
-      class: 'Directory_Toggle',
+      className: 'Directory_Toggle',
       [NAMES]: LISTS[key].title,
       href: `${PATH}/${key}?tests=1${q ? `&q=${encodeURIComponent(q)}` : ''}`,
     }, `Show ${hidden} more from test accounts`)
@@ -1268,11 +1272,11 @@ export let listing = (
     null,
     h(
       'div',
-      { class: 'Directory_Bar' },
+      { className: 'Directory_Bar' },
       h(
         'form',
         {
-          class: 'Directory_Find Page_Form',
+          className: 'Directory_Find Page_Form',
           method: 'get',
           action: `${PATH}/${key}`,
           role: 'search',
@@ -1294,7 +1298,7 @@ export let listing = (
       : empty(q ? `Nothing here says “${q}”` : `No ${what} yet`),
     next &&
       h('a', {
-        class: 'Directory_Toggle',
+        className: 'Directory_Toggle',
         [NAMES]: LISTS[key].title,
         href: asked({ after: next }),
       }, `Next ${PAGE}`),
@@ -1379,7 +1383,7 @@ export let page = async (
   let byId = (eid: string) =>
     [...c.people, ...c.spaces, ...c.apps].find((x) => x.entity.eid == eid)
   let ctx: Record<string, unknown> = around(d, r)
-  let more: VNode | null = r.person ? possessions(d, r) : null
+  let more: ReactElement | null = r.person ? possessions(d, r) : null
   let key: List = r.person ? 'people' : r.space ? 'spaces' : 'apps'
   if (r.space) {
     let seats = c.seats.filter((s) => seatSpace(s) == r.entity.eid)
@@ -1452,7 +1456,7 @@ export let page = async (
     h(
       'a',
       {
-        class: 'Head_Address',
+        className: 'Head_Address',
         href: `${PATH}/${key}${tested(d)}`,
         [NAMES]: LISTS[key].title,
       },
@@ -1531,7 +1535,7 @@ let operatorPage = async (
   let home = `${PATH}/${r.entity.eid}/operator`
   let back = (to: string, said: string) =>
     h('a', {
-      class: 'Head_Address',
+      className: 'Head_Address',
       href: `${to}${tested(d)}`,
       [NAMES]: said,
     }, said)
@@ -1922,7 +1926,7 @@ let funnelPage = (
       null,
       h(
         'div',
-        { class: 'Directory_Bar' },
+        { className: 'Directory_Bar' },
         h('nav', { 'aria-label': 'Window' }, windows),
       ),
       body,

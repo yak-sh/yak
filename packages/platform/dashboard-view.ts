@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import { Badge } from '@yaks/ui/Badge'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
@@ -95,8 +95,8 @@ export let dashboardOf = (
 let head = (id: string, title: Kids, ...end: Kids[]) =>
   h(
     'div',
-    { class: 'Dash_PanelHead' },
-    h('h2', { id, class: 'Dash_Head' }, title),
+    { className: 'Dash_PanelHead' },
+    h('h2', { id, className: 'Dash_Head' }, title),
     ...end,
   )
 
@@ -113,37 +113,41 @@ let tile = (at: string, a: Broken) => {
   let mark = appMarkImage(`${at}/${a.slug}`, a)
   return h(
     'a',
-    { class: 'Dash_App', href: `${at}/${a.home ? '' : `${a.slug}/`}` },
-    h(Icon, { of: ArrowUpRight, class: 'Dash_Opens' }),
+    { className: 'Dash_App', href: `${at}/${a.home ? '' : `${a.slug}/`}` },
+    h(Icon, { of: ArrowUpRight, className: 'Dash_Opens' }),
     h(
       'span',
-      { class: 'Dash_Icon', ...mark.backdrop },
+      { className: 'Dash_Icon', ...mark.backdrop },
       h('img', { ...mark.image, width: 56, height: 56 }),
     ),
-    h('span', { class: 'Dash_AppName' }, a.title || a.slug),
-    h('span', { class: 'Dash_AppSub' }, opens(a)),
+    h('span', { className: 'Dash_AppName' }, a.title || a.slug),
+    h('span', { className: 'Dash_AppSub' }, opens(a)),
   )
 }
 
 let appsPart = (view: DashboardView, { apps, pending }: Dashboard) =>
   h(
     'section',
-    { class: 'Dash_Apps', 'aria-labelledby': 'dash-apps' },
+    { className: 'Dash_Apps', 'aria-labelledby': 'dash-apps' },
     h(
       'div',
-      { class: 'Dash_AppsHead' },
-      h('h2', { id: 'dash-apps', class: 'Dash_Head' }, 'Open an app'),
+      { className: 'Dash_AppsHead' },
+      h('h2', { id: 'dash-apps', className: 'Dash_Head' }, 'Open an app'),
       h(
         'a',
-        { class: 'Dash_EditAll', href: view.chat },
+        { className: 'Dash_EditAll', href: view.chat },
         `${
           apps.length ? 'Change one' : 'Make one'
         } with ${view.space.operator}`,
       ),
     ),
     apps.length || pending
-      ? h('div', { class: 'Dash_AppGrid' }, apps.map((a) => tile(view.at, a)))
-      : h('p', { class: 'Dash_None' }, 'No apps here yet.'),
+      ? h(
+        'div',
+        { className: 'Dash_AppGrid' },
+        apps.map((a) => tile(view.at, a)),
+      )
+      : h('p', { className: 'Dash_None' }, 'No apps here yet.'),
   )
 
 // A suggestion: its short line, which a press turns into its longer request
@@ -152,7 +156,7 @@ let appsPart = (view: DashboardView, { apps, pending }: Dashboard) =>
 let suggestion = (view: DashboardView, s: Suggestion) =>
   h(
     'span',
-    { class: 'Dash_Suggest', key: s.name },
+    { className: 'Dash_Suggest', key: s.name },
     h('a', {
       href: `${view.chat}?${new URLSearchParams({ say: s.ask })}`,
       'data-ask': s.ask,
@@ -173,7 +177,7 @@ let askPart = (view: DashboardView, all: Suggestion[]) => {
     Card,
     {
       as: 'section',
-      class: 'Dash_Panel Dash_Ask',
+      className: 'Dash_Panel Dash_Ask',
       'aria-labelledby': 'dash-ask',
     },
     head(
@@ -184,7 +188,7 @@ let askPart = (view: DashboardView, all: Suggestion[]) => {
     h(
       'form',
       {
-        class: 'Dash_AskForm',
+        className: 'Dash_AskForm',
         method: 'post',
         action: managePath('operator', slug),
         enctype: 'multipart/form-data',
@@ -194,7 +198,7 @@ let askPart = (view: DashboardView, all: Suggestion[]) => {
         name: 'say',
         rows: 2,
         required: true,
-        class: 'Dash_AskBox',
+        className: 'Dash_AskBox',
         placeholder: `What should ${operator} do next?`,
         'aria-label': `Ask ${operator}`,
       }),
@@ -203,8 +207,8 @@ let askPart = (view: DashboardView, all: Suggestion[]) => {
     all.length
       ? h(
         'div',
-        { class: 'Dash_Suggests' },
-        h('span', { class: 'Dash_SuggestLead' }, 'Try'),
+        { className: 'Dash_Suggests' },
+        h('span', { className: 'Dash_SuggestLead' }, 'Try'),
         all.map((s) => suggestion(view, s)),
       )
       : null,
@@ -227,10 +231,10 @@ let opening = (
 let didLine = (d: Did, href?: string) =>
   h(
     'li',
-    { class: 'Dash_Did' },
+    { className: 'Dash_Did' },
     h(
       href ? 'a' : 'span',
-      { class: 'Dash_DidTitle', href },
+      { className: 'Dash_DidTitle', href },
       `${d.who} ${d.does} ${d.app}`,
       d.times > 1
         ? [
@@ -245,11 +249,11 @@ let didLine = (d: Did, href?: string) =>
     d.said
       ? h(
         'span',
-        { class: 'Dash_DidMeta' },
+        { className: 'Dash_DidMeta' },
         h(MarkdownInline, { source: d.said, flat: true }),
       )
       : null,
-    h(Time, { at: d.at, class: 'Dash_When' }),
+    h(Time, { at: d.at, className: 'Dash_When' }),
   )
 
 let workPart = (view: DashboardView, read: Dashboard) => {
@@ -258,27 +262,27 @@ let workPart = (view: DashboardView, read: Dashboard) => {
     Card,
     {
       as: 'section',
-      class: 'Dash_Panel Dash_Work',
+      className: 'Dash_Panel Dash_Work',
       'aria-labelledby': 'dash-work',
     },
     head('dash-work', 'Recent work'),
     read.working
       ? h(
         'p',
-        { class: 'Dash_Now' },
-        h('span', { class: 'Dash_Pip' }),
+        { className: 'Dash_Now' },
+        h('span', { className: 'Dash_Pip' }),
         `Working now: ${read.working}`,
       )
       : null,
     read.did.length || read.pending
       ? h(
         'ul',
-        { class: 'Dash_List' },
+        { className: 'Dash_List' },
         read.did.map((d) => didLine(d, opening(view, slugs, d.opens))),
       )
       : h(
         'p',
-        { class: 'Dash_None' },
+        { className: 'Dash_None' },
         `What ${view.space.operator} and your other agents do here shows up here.`,
       ),
   )
@@ -302,7 +306,7 @@ let act = (view: DashboardView, u: Update) => {
   return h(
     'form',
     {
-      class: 'Page_Form',
+      className: 'Page_Form',
       method: 'post',
       action: view.updates,
       'data-inbox-action': 'choose',
@@ -327,17 +331,17 @@ let updateLine = (
   return h(
     'li',
     {
-      class: 'Dash_Update',
+      className: 'Dash_Update',
       'data-inbox-card': u.eid,
       'data-inbox-waits': u.needs ? view.space.slug : undefined,
     },
-    u.needs ? h('span', { class: 'Dash_Needs', title: 'Needs you' }) : null,
+    u.needs ? h('span', { className: 'Dash_Needs', title: 'Needs you' }) : null,
     h(
       'span',
-      { class: 'Dash_UpdateText' },
+      { className: 'Dash_UpdateText' },
       h(
         'a',
-        { class: 'Dash_UpdateTitle', href: `${view.updates}#u-${u.eid}` },
+        { className: 'Dash_UpdateTitle', href: `${view.updates}#u-${u.eid}` },
         h(MarkdownInline, {
           source: u.subject || summary(u.words, 90),
           flat: true,
@@ -345,14 +349,14 @@ let updateLine = (
       ),
       h(
         'span',
-        { class: 'Dash_DidMeta' },
+        { className: 'Dash_DidMeta' },
         app ? [h('b', null, app), ' · '] : null,
         h(Time, { at: u.at }),
       ),
     ),
     h(
       'span',
-      { class: 'Dash_UpdateActs', 'data-inbox-pending': '' },
+      { className: 'Dash_UpdateActs', 'data-inbox-pending': '' },
       act(view, u),
     ),
     h('output', { 'data-inbox-status': '', hidden: true }),
@@ -366,7 +370,7 @@ let updatesPart = (view: DashboardView, read: Dashboard) => {
     Card,
     {
       as: 'section',
-      class: 'Dash_Panel Dash_Updates',
+      className: 'Dash_Panel Dash_Updates',
       'aria-labelledby': 'dash-updates',
       'data-inbox-actions': '',
       'data-inbox-scope': view.person,
@@ -380,10 +384,10 @@ let updatesPart = (view: DashboardView, read: Dashboard) => {
     read.updates.length || read.pending
       ? h(
         'ul',
-        { class: 'Dash_List' },
+        { className: 'Dash_List' },
         read.updates.slice(0, SHOWN).map((u) => updateLine(view, u, titles)),
       )
-      : h('p', { class: 'Dash_None' }, 'Nothing new.'),
+      : h('p', { className: 'Dash_None' }, 'Nothing new.'),
   )
 }
 

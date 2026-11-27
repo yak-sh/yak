@@ -1,4 +1,4 @@
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { Card, Notice } from '@yaks/ui/parts'
 import { bodyOf, holding } from '@yaks/blob'
 import { type Bundle, type Comp, mint } from '@yaks/graph'
@@ -34,7 +34,7 @@ type Giving = {
   mode: 'test' | 'live' | undefined
   connected: (test: boolean) => Promise<boolean>
   rates: Rates
-  page: (page: Page, ...parts: ComponentChildren[]) => Response
+  page: (page: Page, ...parts: ReactNode[]) => Response
 }
 
 let form = async (request: Request) => {
@@ -95,7 +95,7 @@ export let givingPage = async (
   urlFor.searchParams.set('fund', eid)
   let test = fund.test || mode == 'test'
   let available = await at.connected(test)
-  let draw = (part: ComponentChildren, status = 200) =>
+  let draw = (part: ReactNode, status = 200) =>
     at.page({
       title: fund.title,
       lead: test ? 'Test giving page. No money will move.' : 'Make a donation',

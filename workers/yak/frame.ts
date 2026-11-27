@@ -21,7 +21,7 @@
 // A signed-in person's page holds their friends one press away over it
 // (@yaks/platform/friends-dock-view): the dock at the window's corner, and on
 // a phone its launcher in the bar, both drawn from the tab's page graph.
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import { Button, Form, Icon, Layer, Shell, Skip, Toolbar } from '@yaks/ui/parts'
 import { managePath } from '@yaks/platform/routes'
 import { TITLE } from '@yaks/ui/navigate'
@@ -62,9 +62,9 @@ export let FRAMED = 'Framed'
 let menu = (waiting?: number) =>
   h(
     Button,
-    { class: 'Frame_Menu', href: '#menu', 'data-pane': '' },
+    { className: 'Frame_Menu', href: '#menu', 'data-pane': '' },
     h(Icon, { of: icons.menu }),
-    h('span', { class: 'Frame_MenuWord' }, 'Menu'),
+    h('span', { className: 'Frame_MenuWord' }, 'Menu'),
     waiting != null ? waitingBadge(waiting) : null,
   )
 
@@ -76,7 +76,7 @@ let toggle = (at: Aside) => {
   return h(
     'form',
     {
-      class: 'Frame_AsideFold',
+      className: 'Frame_AsideFold',
       method: 'post',
       action: managePath('profile'),
       'data-side': '',
@@ -92,16 +92,16 @@ let toggle = (at: Aside) => {
       Button,
       {
         type: 'submit',
-        class: 'Frame_AsideFolder',
+        className: 'Frame_AsideFolder',
         title: said,
         'aria-label': said,
         'aria-controls': ASIDE,
         'aria-expanded': String(!at.shut),
       },
-      h(Icon, { of: icons['panel-right-close'], class: 'Frame_AsideShut' }),
+      h(Icon, { of: icons['panel-right-close'], className: 'Frame_AsideShut' }),
       h(
         'span',
-        { class: 'Frame_AsideUnshut' },
+        { className: 'Frame_AsideUnshut' },
         at.mark ?? h(Icon, { of: icons['panel-right-open'] }),
       ),
     ),
@@ -112,12 +112,12 @@ let toggle = (at: Aside) => {
 let asideTools = (at: Aside) =>
   h(
     'div',
-    { class: 'Frame_AsideTools', hidden: at.hidden || undefined },
+    { className: 'Frame_AsideTools', hidden: at.hidden || undefined },
     h(
       Button,
       {
         href: `#${ASIDE}`,
-        class: 'Frame_AsideOpen',
+        className: 'Frame_AsideOpen',
         'data-pane': '',
         'data-aside-open': '',
         title: at.description ?? `Open the ${at.label}`,
@@ -132,7 +132,7 @@ let asideTools = (at: Aside) =>
       Button,
       {
         href: '#',
-        class: 'Frame_AsideClose',
+        className: 'Frame_AsideClose',
         'data-pane': '',
         'aria-controls': ASIDE,
         'aria-expanded': 'true',
@@ -178,13 +178,13 @@ export let frame = (at: {
       Shell,
       {
         mod: [at.sheet && 'sheet', at.aside?.shut && 'shut'],
-        class: ['Frame', at.headed && !at.aside && 'Frame-headed', at.class]
+        className: ['Frame', at.headed && !at.aside && 'Frame-headed', at.class]
           .filter(Boolean).join(' '),
       },
       at.side,
       h(
         Shell.Main,
-        { as: Layer.Cover, class: 'Frame_Column' },
+        { as: Layer.Cover, className: 'Frame_Column' },
         // On a phone the column slides aside to show the side under it, and
         // a press on what still shows of it closes the side.
         h(Layer.Shut, {
@@ -195,12 +195,12 @@ export let frame = (at: {
         }),
         h(
           Toolbar,
-          { class: 'Frame_Bar' },
+          { className: 'Frame_Bar' },
           menu(at.waiting),
           at.back,
           h(
             Toolbar.Text,
-            { class: 'Frame_Heading' },
+            { className: 'Frame_Heading' },
             h(
               Toolbar.Title,
               {
@@ -211,7 +211,7 @@ export let frame = (at: {
               at.title,
             ),
             at.sub
-              ? h(Toolbar.Sub, { class: 'Frame_Sub', [OWN]: '' }, at.sub)
+              ? h(Toolbar.Sub, { className: 'Frame_Sub', [OWN]: '' }, at.sub)
               : null,
           ),
           at.tools,
@@ -221,7 +221,7 @@ export let frame = (at: {
         h(
           Shell.Body,
           {
-            class: 'Frame_Body',
+            className: 'Frame_Body',
             id: 'content',
             tabindex: '-1',
             [SCROLL]: at.contentScroll ?? '0',
@@ -235,12 +235,16 @@ export let frame = (at: {
           Shell.Aside,
           {
             id: ASIDE,
-            class: 'Frame_Aside',
+            className: 'Frame_Aside',
             'aria-label': at.aside.label,
             'data-swipe': '',
             hidden: at.aside.hidden || undefined,
           },
-          h('div', { class: 'Frame_AsideBody', [OWN]: '' }, at.aside.content),
+          h(
+            'div',
+            { className: 'Frame_AsideBody', [OWN]: '' },
+            at.aside.content,
+          ),
         )
         : null,
       at.beside,

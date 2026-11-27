@@ -13,7 +13,7 @@
 // conversation still opens it. A helper's row (`Work`) is the one every
 // place on the page draws it with: the Helpers box, the step that started
 // it, the aside on its own page, and the admin's list of the Operator's work.
-import { type ComponentChildren as Node, h } from 'preact'
+import { createElement as h, type ReactNode as Node } from 'react'
 import { Card, Dot, More, Popover, Rows, State } from '@yaks/ui/parts'
 import type { Doing } from './mascot.ts'
 
@@ -287,7 +287,7 @@ export let Glance = ({ aside }: { aside: Aside }) => {
   return h(
     'span',
     {
-      class: 'Talk_Glance',
+      className: 'Talk_Glance',
       'data-glance': '',
       'data-label': label,
     },
@@ -308,7 +308,7 @@ export let Aside = (
   h(
     'div',
     {
-      class: 'Talk_Aside',
+      className: 'Talk_Aside',
       id: 'aside-now',
       'data-aside': '',
       'aria-label': 'What is happening now',

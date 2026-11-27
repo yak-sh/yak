@@ -13,7 +13,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { TabSet } from '@yaks/ui/Tabs'
@@ -68,24 +68,24 @@ export let inviteView = (
   return [
     h(
       'p',
-      { class: 'Invite_Head' },
+      { className: 'Invite_Head' },
       `Send a friend your link, or show them your code. They get their own space, free, with $${STARTER} of building credit.`,
     ),
     h(
       Card,
-      { class: 'Invite_Link' },
+      { className: 'Invite_Link' },
       heading('Your link'),
       copyable(invite.link, 'your invite link'),
       h(Button, {
         type: 'button',
-        class: 'Invite_Share',
+        className: 'Invite_Share',
         hidden: true,
         'data-share': invite.link,
       }, 'Share'),
     ),
     h(
       TabSet,
-      { class: 'Invite' },
+      { className: 'Invite' },
       h(TabSet.Legend, null, 'Sign up by'),
       ways.map((w, i) =>
         h(
@@ -101,15 +101,19 @@ export let inviteView = (
           h(TabSet.Tab, { for: `way-${w.key}` }, w.tab),
           h(
             TabSet.Panel,
-            { as: Card, class: 'Invite_Way' },
-            h('p', { class: 'Invite_Lead' }, 'Scan to sign up for yaks.app'),
+            { as: Card, className: 'Invite_Way' },
+            h(
+              'p',
+              { className: 'Invite_Lead' },
+              'Scan to sign up for yaks.app',
+            ),
             h('a', {
-              class: 'Invite_Code',
+              className: 'Invite_Code',
               href: w.link,
               dangerouslySetInnerHTML: { __html: qr(w.link, w.label) },
             }),
-            h('p', { class: 'Invite_Words' }, invite.said),
-            h('p', { class: 'Note' }, `${w.agree} `, terms),
+            h('p', { className: 'Invite_Words' }, invite.said),
+            h('p', { className: 'Note' }, `${w.agree} `, terms),
           ),
         )
       ),

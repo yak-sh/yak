@@ -26,7 +26,7 @@ import {
 import { closing, noticeOf, quietly, refreshed, said } from '@yaks/push/notice'
 import { pushAddress } from '@yaks/platform/open-script'
 import { resolve } from '@yaks/render'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { pushViews, type Telling } from '@yaks/platform/operator-push'
 import type { Tool } from '@yaks/session'
 import { CallError } from '@yaks/tools/errors'

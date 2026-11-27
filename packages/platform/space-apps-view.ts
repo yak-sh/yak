@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, Fragment, h } from 'preact'
+import { createElement as h, Fragment, type ReactNode as Kids } from 'react'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Field } from '@yaks/ui/Field'
@@ -176,7 +176,7 @@ export let fixing = (a: Broken, space: string) => {
     }),
     h(
       Modal.Body,
-      { class: 'Fix' },
+      { className: 'Fix' },
       heading(title, {
         status: status(n == 1 ? '1 error' : `${n} errors`, 'negative'),
         actions: h(
@@ -201,7 +201,7 @@ export let fixing = (a: Broken, space: string) => {
             h(
               Rows.Main,
               null,
-              h('span', { class: 'Fix_Said' }, e.said || 'No message'),
+              h('span', { className: 'Fix_Said' }, e.said || 'No message'),
               h(
                 Rows.Meta,
                 null,

@@ -2,7 +2,7 @@
 // page's left as on the settings pages, and folded to its icons by the same
 // press (talk-beside.ts holds what is beside the conversation). Sidebar owns
 // their drawing.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Sidebar } from './sidebar.ts'
 import { icons } from './icons.ts'
 import { aboutPath, sideParts, type SideView } from '@yaks/platform/side-parts'

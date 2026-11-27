@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import { Card } from '@yaks/ui/Card'
 import { Field } from '@yaks/ui/Field'
 import { Form } from '@yaks/ui/Form'

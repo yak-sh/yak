@@ -1,6 +1,6 @@
 import { Annotated } from '@yaks/ui/parts'
 import type { Bundle, Comp } from '@yaks/graph/bundle'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { type Kind, kind, MARGIN } from '@yaks/session/conversation'
 
 let comp = (b: Bundle | undefined, name: string) =>

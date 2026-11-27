@@ -3,7 +3,7 @@
 // space never compiles the gallery's pages and letters (T-148886). Where its
 // own page is, is @yaks/platform/routes `pageAt`.
 import type { Rated, Shared, Uptake } from './directory.ts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 
 /** How many other spaces installed a copy of something shared, said as a
  * line: what its maker is credited with (T-131912). */
@@ -70,12 +70,12 @@ export let reputed = (r: Reputation): string[] => [
 export let reputationOf = (r: Reputation, first: string[] = []) =>
   h(
     'ul',
-    { class: 'Reputation', 'aria-label': 'What yaks.app says of it' },
+    { className: 'Reputation', 'aria-label': 'What yaks.app says of it' },
     [...first, ...reputed(r)].map((said, i) =>
       h(
         'li',
         {
-          class: i == first.length && r.featured
+          className: i == first.length && r.featured
             ? 'Reputation_Item Reputation_Item-featured'
             : 'Reputation_Item',
         },

@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { Page } from './frame.tsx'
 import { type Slots, text } from './copy.ts'
 import { link, mail, Postal, Section, Top } from './prose.tsx'
@@ -24,7 +24,7 @@ export let Privacy = () => (
       <Postal at='privacy.about.address' />
     </Section>
     <Section at='privacy.collect'>
-      <ul class='Prose_List'>
+      <ul className='Prose_List'>
         {Object.entries<Slots>({
           email: {},
           called: {},
@@ -41,7 +41,7 @@ export let Privacy = () => (
           feedback: { mail },
         }).map(([item, slots]) => (
           <li
-            class='Prose_Item'
+            className='Prose_Item'
             {...text(`privacy.collect.${item}.item`, {
               lead: lead(item),
               ...slots,

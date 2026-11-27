@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Field } from '@yaks/ui/Field'

@@ -20,7 +20,7 @@ import { caught } from './defects.ts'
 import { openable, pictureOf, reputing, type Shown, shown } from './gallery.ts'
 import { PAGE, pageAt, publisherAt } from '@yaks/platform/routes'
 import { reputationOf } from './gallery-row.ts'
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { Button, Card } from '@yaks/ui/parts'
 import { type Host, spaceHost } from '@yaks/platform/host'
 import { at as installAt } from './install.ts'
@@ -32,8 +32,8 @@ export let page = (a: Shown, env: Host = {}) => {
   let opened = openable(a, env)
   let listed = !!a.app.gallery?.listedAt
   let shot = a.shot && (a.app.access != 'private' || listed) ? a.shot : ''
-  let small = (...said: ComponentChildren[]) =>
-    h('p', { class: 'Note Note-small' }, ...said)
+  let small = (...said: ReactNode[]) =>
+    h('p', { className: 'Note Note-small' }, ...said)
   return drawn(
     head(
       env,
@@ -45,15 +45,15 @@ export let page = (a: Shown, env: Host = {}) => {
     ),
     h(
       'main',
-      { class: 'Page' },
+      { className: 'Page' },
       h(
         Card,
-        { as: 'article', class: 'Listing', 'aria-labelledby': 'app' },
+        { as: 'article', className: 'Listing', 'aria-labelledby': 'app' },
         h(
           'header',
-          { class: 'Listing_Head' },
-          h('h1', { id: 'app', class: 'Title' }, a.title),
-          a.about ? h('p', { class: 'Note Note-lead' }, a.about) : null,
+          { className: 'Listing_Head' },
+          h('h1', { id: 'app', className: 'Title' }, a.title),
+          a.about ? h('p', { className: 'Note Note-lead' }, a.about) : null,
           // A listed app's space shares it in public, so it has a page
           // (publisher-page.ts); an unlisted one's may not.
           small(
@@ -72,13 +72,13 @@ export let page = (a: Shown, env: Host = {}) => {
           ? h(
             'a',
             {
-              class: 'Make_Shot Listing_Shot',
+              className: 'Make_Shot Listing_Shot',
               href: a.at,
               tabindex: -1,
               'aria-hidden': 'true',
             },
             h('img', {
-              class: 'Make_Image',
+              className: 'Make_Image',
               src: shot,
               alt: '',
               width: 1200,
@@ -88,12 +88,12 @@ export let page = (a: Shown, env: Host = {}) => {
           : null,
         h(
           'div',
-          { class: 'Listing_Doors' },
+          { className: 'Listing_Doors' },
           opened ? h(Button, { mod: 'go', href: a.at }, 'Open the app') : null,
           h(
             'form',
             {
-              class: 'Listing_Form',
+              className: 'Listing_Form',
               method: 'post',
               action: installAt(a.name),
             },
@@ -106,7 +106,7 @@ export let page = (a: Shown, env: Host = {}) => {
       ),
       h(
         'p',
-        { class: 'Note Listing_Made' },
+        { className: 'Note Listing_Made' },
         'Made with yaks.app, where you build, host and share web apps. ',
         h('a', { href: '/' }, 'See how it works'),
       ),

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { flushSync } from 'react-dom'
-import { createRoot } from 'react-dom/client'
+import { createRoot, hydrateRoot } from 'react-dom/client'
 
 type Surface = { draw: (node: ReactNode) => void; close: () => void }
 
@@ -38,25 +38,32 @@ let attach = (doc: Document) => {
 export let surface = (
   into: Element,
   fell?: (error: unknown) => void,
+  initial?: ReactNode,
 ): Surface => {
   let release = attach(into.ownerDocument)
   let root
   let committing = false
   let failure: { error: unknown } | undefined
-  let open: (
-    into: Element,
-    options?: { onUncaughtError: (error: unknown) => void },
-  ) => ReturnType<typeof createRoot> = createRoot
+  type Root = ReturnType<typeof createRoot>
+  type Options = { onUncaughtError: (error: unknown) => void }
+  let open: (into: Element, options?: Options) => Root = createRoot
+  let resume: (into: Element, view: ReactNode, options?: Options) => Root =
+    hydrateRoot
+  let options: Options = {
+    onUncaughtError(error) {
+      if (committing) failure = { error }
+      else if (fell) fell(error)
+      else {
+        queueMicrotask(() => {
+          throw error
+        })
+      }
+    },
+  }
   try {
-    root = open(into, {
-      onUncaughtError(error) {
-        if (committing) failure = { error }
-        else if (fell) fell(error)
-        else {queueMicrotask(() => {
-            throw error
-          })}
-      },
-    })
+    root = initial === undefined
+      ? open(into, options)
+      : resume(into, initial, options)
   } catch (error) {
     release()
     throw error
@@ -83,6 +90,26 @@ export let surface = (
       }
     },
   }
+}
+
+let roots = new WeakMap<Element, Surface>()
+
+/** Draw a page island into its retained root. Null takes the island down. */
+export let render = (view: ReactNode, into: Element): void => {
+  let held = roots.get(into)
+  if (view === null) {
+    held?.close()
+    roots.delete(into)
+    return
+  }
+  if (!held) roots.set(into, held = surface(into))
+  held.draw(view)
+}
+
+/** Attach a page island to existing HTML, retaining its root for updates. */
+export let hydrate = (view: ReactNode, into: Element): void => {
+  if (roots.has(into)) return render(view, into)
+  roots.set(into, surface(into, undefined, view))
 }
 
 /** Draw a view into a tree and return what takes it down. */

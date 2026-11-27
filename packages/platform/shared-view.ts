@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import { Card } from '@yaks/ui/Card'
 import { Rows } from '@yaks/ui/Rows'
 import type { Shared } from './account-rows.ts'

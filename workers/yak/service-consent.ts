@@ -1,5 +1,5 @@
 // A page requests service access; only the platform's consent form grants it.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { CallError, refused } from '@yaks/tools/errors'
 import { spaceHost, url } from '@yaks/platform/host'
 import { signInAt } from '@yaks/platform/routes'
@@ -168,7 +168,7 @@ export let serviceConsent = async (req: Request, env: Env) => {
       ),
       h(
         'form',
-        { class: 'Page_Form', method: 'post', action: DOOR },
+        { className: 'Page_Form', method: 'post', action: DOOR },
         held('request', request),
         held('consent', consent),
         send('Allow'),

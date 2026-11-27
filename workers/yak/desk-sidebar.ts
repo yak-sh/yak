@@ -1,5 +1,5 @@
 // The dashboard's sidebar choices; Sidebar owns their drawing.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { type Item, Sidebar } from './sidebar.ts'
 import { icons as glyphs } from './icons.ts'
 import { sideParts, type SideView } from '@yaks/platform/side-parts'

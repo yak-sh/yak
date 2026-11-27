@@ -1,7 +1,12 @@
 // What server-rendered pages say: text escaped for HTML and quoted
 // attributes, a day the way a person reads it, and the parts more than one
 // page draws.
-import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
+import {
+  createElement as h,
+  Fragment,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { jsxTemplate } from 'preact/jsx-runtime'
 import { renderToString } from 'preact-render-to-string'
 export { esc } from '@yaks/platform/escape'
@@ -9,7 +14,7 @@ export { esc } from '@yaks/platform/escape'
 /** A page's tree, or a run of them, as the HTML it sends, rendered once at
  * the page's edge: every string in it is text, escaped by Preact. */
 /// markup(['a', null, '<b>']) -> 'a&lt;b>'
-export let markup = (nodes: ComponentChildren): string =>
+export let markup = (nodes: ReactNode): string =>
   renderToString(h(Fragment, null, nodes))
 
 /** Markup we made ourselves (an entity renderer's row, a guide drawn from
@@ -17,7 +22,7 @@ export let markup = (nodes: ComponentChildren): string =>
  * a person typed: that is a string child, which Preact escapes. */
 /// import { h } from 'preact'
 /// markup(h('p', null, raw('<b>a</b>'), ' & ', '<b>')) -> '<p><b>a</b> &amp; &lt;b></p>'
-export let raw = (html: string): VNode => jsxTemplate([html])
+export let raw = (html: string): ReactElement => jsxTemplate([html])
 
 // Plain dates in prose use the kit formatter, with server text in UTC.
 import { day as date, pretty } from '@yaks/ui/relative'

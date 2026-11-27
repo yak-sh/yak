@@ -3,7 +3,7 @@
 // called and texted at, each selectable with a copy button beside it, then
 // one row of buttons that open the person's mail app, phone or chat app
 // there, each chat place's wearing its platform's logo.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button, Card, Form, Icon, Logo, Toolbar } from '@yaks/ui/parts'
 import { copyable, copying } from './pages.ts'
 import { type IconName, icons } from './icons.ts'
@@ -140,7 +140,7 @@ let lines = (space: Space, ways: Ways, here: string) => {
   ]
   return h(
     'div',
-    { class: 'Talk_Way' },
+    { className: 'Talk_Way' },
     copyable(ways.email, 'the address'),
     numbers.filter((n): n is string => !!n).map((n) =>
       copyable(shown(n), 'the number')

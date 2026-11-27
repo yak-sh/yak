@@ -27,7 +27,7 @@
 import type { Token } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
 import { Body, contents, SideNav } from '@yaks/ui/parts'
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import type { H } from '@yaks/render'
 import type { Env } from './env.ts'
 import { type Page, PAGES } from './guide.ts'
@@ -145,10 +145,10 @@ let PARTS: Record<string, string> = {
   blockquote: 'Docs_Quote',
 }
 
-let prose: H<ComponentChildren> = (tag, props, ...children) =>
+let prose: H<ReactNode> = (tag, props, ...children) =>
   h(tag, {
     ...props,
-    class: [PARTS[tag], props?.class].filter(Boolean).join(' '),
+    className: [PARTS[tag], props?.class].filter(Boolean).join(' '),
   }, ...children)
 
 // A guide is on the platform's site, so a link to another opens in a new tab.
@@ -163,16 +163,16 @@ let said = (md: Md, env: Host, tokens: Token[]) =>
 let map = () =>
   h(
     'nav',
-    { class: 'Docs_Pages', 'aria-label': 'Contents' },
-    h('h2', { class: 'Prose_Heading' }, 'The pages'),
+    { className: 'Docs_Pages', 'aria-label': 'Contents' },
+    h('h2', { className: 'Prose_Heading' }, 'The pages'),
     h(
       'ul',
-      { class: 'Docs_PagesList' },
+      { className: 'Docs_PagesList' },
       CONTENTS.map((p) =>
         h(
           'li',
-          { key: p.slug, class: 'Prose_Item Docs_PagesItem' },
-          h('a', { class: 'Prose_Link', href: pathOf(p.slug) }, p.title),
+          { key: p.slug, className: 'Prose_Item Docs_PagesItem' },
+          h('a', { className: 'Prose_Link', href: pathOf(p.slug) }, p.title),
           ' — ',
           p.brief,
         )
@@ -180,19 +180,19 @@ let map = () =>
     ),
     h(
       'p',
-      { class: 'Prose_Text Note Note-small' },
+      { className: 'Prose_Text Note Note-small' },
       'Add ',
-      h('code', { class: 'Prose_Code' }, '.md'),
+      h('code', { className: 'Prose_Code' }, '.md'),
       " to any page's address for the markdown an assistant reads: ",
-      h('a', { class: 'Prose_Link', href: `${PATH}.md` }, `${PATH}.md`),
+      h('a', { className: 'Prose_Link', href: `${PATH}.md` }, `${PATH}.md`),
       '.',
     ),
   )
 
 let back = h(
   'p',
-  { class: 'Prose_Text Docs_Back' },
-  h('a', { class: 'Prose_Link', href: PATH }, '← Documentation'),
+  { className: 'Prose_Text Docs_Back' },
+  h('a', { className: 'Prose_Link', href: PATH }, '← Documentation'),
 )
 
 // The sidebar every page of the documentation wears: the whole list, in the
@@ -211,7 +211,7 @@ let side = (slug: string) => {
     }, face)
   return h(
     SideNav,
-    { class: 'Page_Side Docs_Nav', 'aria-label': 'Documentation' },
+    { className: 'Page_Side Docs_Nav', 'aria-label': 'Documentation' },
     link(PATH, 'Overview', slug == ''),
     h(SideNav.Rule, {}),
     CONTENTS.map((p) => link(pathOf(p.slug), p.title, p.slug == slug)),
@@ -246,7 +246,7 @@ let page = (
   title: string,
   description: string,
   tokens: Token[],
-  under: ComponentChildren = null,
+  under: ReactNode = null,
   slug?: string,
 ) => {
   let lead = tokens.findIndex((t) => t.type == 'heading' && t.depth == 1)
@@ -255,12 +255,12 @@ let page = (
     head(env, title, description, at) + (listed ? lights(env) : ''),
     h(
       'main',
-      { class: 'Page' },
+      { className: 'Page' },
       slug == null ? null : side(slug),
       listed,
       h(
         'article',
-        { class: 'Page_Body Prose' },
+        { className: 'Page_Body Prose' },
         said(md, env, tokens.slice(0, lead + 1)),
         under,
         said(md, env, tokens.slice(lead + 1)),

@@ -1,6 +1,6 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { Card, Icon } from '@yaks/ui'
-import type { ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import { LOGOS } from '../routes.ts'
 import type { Demo, Scene as Pictured } from './demos.ts'
 import { BRANDS } from './parts.ts'
@@ -29,7 +29,7 @@ export let ServiceLogo = (
   { slug, title }: { slug: string; title?: string },
 ) => (
   <img
-    class='Home_Logo'
+    className='Home_Logo'
     src={BRANDS.some((name) => name == slug)
       ? `/home-brands/${slug}.svg`
       : LOGOS + slug}
@@ -41,12 +41,15 @@ export let ServiceLogo = (
 )
 
 export let Services = ({ short = false }: { short?: boolean }) => (
-  <ul class={short ? 'Home_Services Home_Services-short' : 'Home_Services'}>
+  <ul className={short ? 'Home_Services Home_Services-short' : 'Home_Services'}>
     {SERVICES.slice(0, short ? 7 : undefined).map(([slug, name], i) => (
-      <li class={short ? 'Home_Service' : 'Home_Service Home_In'} {...In(i)}>
+      <li
+        className={short ? 'Home_Service' : 'Home_Service Home_In'}
+        {...In(i)}
+      >
         <button
           type='button'
-          class='Home_ServicePick'
+          className='Home_ServicePick'
           data-service-idea={name}
           aria-label={short ? name : undefined}
         >
@@ -70,17 +73,17 @@ let CHANNELS = [
 ] as const
 
 export let Change = ({ copy }: { copy: Copy }) => (
-  <Card class='Home_Illustration'>
-    <ul class='Home_IllustrationRows'>
+  <Card className='Home_Illustration'>
+    <ul className='Home_IllustrationRows'>
       {CHANNELS.map(([channel, mark], i) => (
-        <li class='Home_IllustrationRow Home_In' {...In(i)}>
+        <li className='Home_IllustrationRow Home_In' {...In(i)}>
           {typeof mark == 'string'
             ? <ServiceLogo slug={mark} />
             : <Icon of={mark} />}
-          <div class='Home_IllustrationCopy'>
+          <div className='Home_IllustrationCopy'>
             <b {...copy.text(`home.story.change.${channel}.name`)} />
             <p
-              class='Note Note-small'
+              className='Note Note-small'
               {...copy.text(`home.story.change.${channel}.note`)}
             />
           </div>
@@ -91,16 +94,16 @@ export let Change = ({ copy }: { copy: Copy }) => (
 )
 
 export let People = ({ copy }: { copy: Copy }) => (
-  <Card class='Home_Illustration'>
+  <Card className='Home_Illustration'>
     <b {...copy.text('home.story.people.roles')} />
-    <ul class='Home_IllustrationRows'>
+    <ul className='Home_IllustrationRows'>
       {['owner', 'editor', 'viewer'].map((role, i) => (
-        <li class='Home_IllustrationRow Home_In' {...In(i)}>
+        <li className='Home_IllustrationRow Home_In' {...In(i)}>
           <Icon of={ICONS.team} />
-          <div class='Home_IllustrationCopy'>
+          <div className='Home_IllustrationCopy'>
             <b {...copy.text(`home.story.people.${role}.name`)} />
             <p
-              class='Note Note-small'
+              className='Note Note-small'
               {...copy.text(`home.story.people.${role}.note`)}
             />
           </div>
@@ -115,11 +118,11 @@ let Message = ({ head, address, at, children }: {
   head: 'From' | 'To'
   address: string
   at: number
-  children: ComponentChildren
+  children: ReactNode
 }) => (
-  <div class='Home_MailBody Home_In' {...In(at)}>
-    <p class='Home_MailFrom'>
-      <b>{head}</b> <span class='Home_MailAddress'>{address}</span>
+  <div className='Home_MailBody Home_In' {...In(at)}>
+    <p className='Home_MailFrom'>
+      <b>{head}</b> <span className='Home_MailAddress'>{address}</span>
     </p>
     {children}
   </div>
@@ -128,38 +131,38 @@ let Message = ({ head, address, at, children }: {
 let Scenes = {
   email: ({ letter, mail }: Pictured, slug: string) =>
     letter && mail && (
-      <figure class='Home_Mail'>
-        <figcaption class='Home_WindowBar'>Mail</figcaption>
+      <figure className='Home_Mail'>
+        <figcaption className='Home_WindowBar'>Mail</figcaption>
         <Message head='To' address={`yourname.${slug}@yaks.app`} at={0}>
           <b>Fwd: {mail[0]}</b>
-          <span class='Home_Attachment'>{mail[1]}</span>
+          <span className='Home_Attachment'>{mail[1]}</span>
         </Message>
         <Message head='From' address={`yourname.${slug}@yaks.app`} at={1}>
           <b>{letter[0]}</b>
           <p>{letter[1]}</p>
-          <span class='Home_MailFrom'>Unsubscribe</span>
+          <span className='Home_MailFrom'>Unsubscribe</span>
         </Message>
       </figure>
     ),
   sell: ({ sale }: Pictured) =>
     sale && (
-      <div class='Home_Checkout'>
-        <figure class='Home_Payment Home_In' {...In(0)}>
-          <figcaption class='Home_WindowBar'>
+      <div className='Home_Checkout'>
+        <figure className='Home_Payment Home_In' {...In(0)}>
+          <figcaption className='Home_WindowBar'>
             <ServiceLogo slug='stripe' /> Checkout by Stripe
           </figcaption>
-          <div class='Home_MailBody'>
+          <div className='Home_MailBody'>
             <p>{sale[0]}</p>
             <b>${sale[1]}.00</b>
-            <span class='Home_PaymentAction'>Pay ${sale[1]}.00</span>
+            <span className='Home_PaymentAction'>Pay ${sale[1]}.00</span>
           </div>
         </figure>
-        <div class='Home_Pipe' aria-hidden='true' />
-        <figure class='Home_Payment'>
-          <figcaption class='Home_WindowBar'>Orders</figcaption>
-          <ul class='Home_MailBody'>
+        <div className='Home_Pipe' aria-hidden='true' />
+        <figure className='Home_Payment'>
+          <figcaption className='Home_WindowBar'>Orders</figcaption>
+          <ul className='Home_MailBody'>
             {['Ana P.', 'Tom R.', 'Mae L.'].map((name, i) => (
-              <li class='Home_Order Home_In' {...In(i + 3)}>
+              <li className='Home_Order Home_In' {...In(i + 3)}>
                 <span>{name}</span> <b>${sale[1]}.00</b> <span>Paid</span>
               </li>
             ))}
@@ -169,16 +172,18 @@ let Scenes = {
     ),
   helper: ({ ask }: Pictured) =>
     ask && (
-      <Card class='Home_Helper'>
-        <p class='Chat_Bubble Chat_Bubble-you Home_In' {...In(0)}>{ask[0]}</p>
-        <p class='Chat_Bubble Chat_Bubble-them Home_In' {...In(1.5)}>
+      <Card className='Home_Helper'>
+        <p className='Chat_Bubble Chat_Bubble-you Home_In' {...In(0)}>
+          {ask[0]}
+        </p>
+        <p className='Chat_Bubble Chat_Bubble-them Home_In' {...In(1.5)}>
           {ask[1]}
         </p>
       </Card>
     ),
   domain: ({ domain }: Pictured, slug: string) =>
     domain && (
-      <Card class='Home_Address'>
+      <Card className='Home_Address'>
         <span>yourname.yaks.app/{slug}</span> <span aria-hidden='true'>→</span>
         {' '}
         <b>{domain}</b>
@@ -197,7 +202,7 @@ export let Scene = (
     scenes: Record<string, Pictured>
   },
 ) => (
-  <div class={`Home_Scene Home_Scene-${id}`}>
+  <div className={`Home_Scene Home_Scene-${id}`}>
     {demos.map(({ slug }, i) => (
       <div data-demo-scene={slug} hidden={i != 0}>
         {Scenes[id](scenes[slug] ?? {}, slug)}

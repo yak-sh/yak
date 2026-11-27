@@ -1,4 +1,4 @@
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button, Check, Field, Form } from '@yaks/ui/parts'
 import { CONSENT } from '@yaks/platform/consent'
 

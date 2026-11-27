@@ -14,7 +14,7 @@
  *
  * @module
  */
-import { type ComponentChildren, Fragment, h } from 'preact'
+import { createElement as h, Fragment, type ReactNode } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import type { Bundle } from '@yaks/graph'
 import type { Client, Watch } from '@yaks/client'
@@ -30,7 +30,7 @@ let OPEN = { keeps: (_: Element, name: string) => name == 'open' }
 export let SIDE = '[data-side-view]'
 
 // The element `node` draws, in `doc`.
-let made = (doc: Document, node: ComponentChildren) => {
+let made = (doc: Document, node: ReactNode) => {
   let t = doc.createElement('template')
   t.innerHTML = renderToString(h(Fragment, null, node))
   return t.content.firstElementChild!
@@ -70,7 +70,7 @@ export let drawSide = (
   if (whose) {
     morph(
       whose,
-      made(doc, h('div', { class: 'Sidebar_Whose' }, parts.picker)),
+      made(doc, h('div', { className: 'Sidebar_Whose' }, parts.picker)),
       OPEN,
     )
   }

@@ -3,7 +3,8 @@
 // (operator-rows.ts). Only page code imports it: the Workers program checks
 // what the server draws with the runtime's globals, which have no DOM, so the
 // DOM half of a module lives in its `-browser` file.
-import { h, hydrate, render } from 'preact'
+import { createElement as h } from 'react'
+import { hydrate, render } from '@yaks/react/draw'
 import { Host } from '@yaks/markdown'
 import { pageGraph } from '@yaks/platform/page-graph'
 import type { Bundle } from '@yaks/graph'

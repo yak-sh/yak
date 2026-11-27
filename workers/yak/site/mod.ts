@@ -12,7 +12,7 @@
 // whenever it can't, and while the app's is another drawing (site.ts
 // `sitePage`, drawing.ts). Those are made, not kept, as `_ui.css` is:
 // public/*.html is gitignored.
-import { type FunctionComponent, h } from 'preact'
+import { createElement as h, type FunctionComponent } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { createHash } from 'node:crypto'
 import { DRAWING } from '@yaks/platform/drawing'

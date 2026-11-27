@@ -15,7 +15,7 @@
  *
  * @module
  */
-import { Fragment, h } from 'preact'
+import { createElement as h, Fragment } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph/identity'

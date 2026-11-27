@@ -1,5 +1,5 @@
 // yaks.app's sidebar: one frame and navigation tree, specialized by data.
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { Button, Form, Icon, layer, SideNav } from '@yaks/ui/parts'
 import { HOLD } from '@yaks/ui/navigate'
 import { type IconName, icons } from './icons.ts'
@@ -26,13 +26,13 @@ export type Sidebar = {
   /** A side drawn again in the browser as the person's spaces and apps
    * change (@yaks/platform/side-browser), and what it needs to. */
   view?: SideView
-  space?: { picker: ComponentChildren; sections: Section[] }
+  space?: { picker: ReactNode; sections: Section[] }
   sections?: Section[]
   footer?: Section[]
   fold?: { collapsed: boolean; back: string }
 }
 
-let worded = (words: string) => h('span', { class: 'Sidebar_Label' }, words)
+let worded = (words: string) => h('span', { className: 'Sidebar_Label' }, words)
 let glyph = (name: IconName) => h(Icon, { of: icons[name] })
 
 let fold = (at: NonNullable<Sidebar['fold']>) => {
@@ -40,7 +40,7 @@ let fold = (at: NonNullable<Sidebar['fold']>) => {
   return h(
     'form',
     {
-      class: 'Sidebar_Fold Page_Form',
+      className: 'Sidebar_Fold Page_Form',
       method: 'post',
       action: managePath('profile'),
       'data-side': '',
@@ -54,14 +54,14 @@ let fold = (at: NonNullable<Sidebar['fold']>) => {
       Button,
       {
         type: 'submit',
-        class: 'Sidebar_Folder',
+        className: 'Sidebar_Folder',
         title: said,
         'aria-label': said,
         'aria-controls': 'menu',
         'aria-expanded': String(!at.collapsed),
       },
-      h(Icon, { of: icons['panel-left-close'], class: 'Sidebar_Shut' }),
-      h(Icon, { of: icons['panel-left-open'], class: 'Sidebar_Unshut' }),
+      h(Icon, { of: icons['panel-left-close'], className: 'Sidebar_Shut' }),
+      h(Icon, { of: icons['panel-left-open'], className: 'Sidebar_Unshut' }),
     ),
   )
 }
@@ -76,7 +76,7 @@ export let Sidebar = (at: Sidebar) => {
     SideNav.Edge,
     {
       as: Slides,
-      class: at.fold?.collapsed ? 'Sidebar Sidebar-rail' : 'Sidebar',
+      className: at.fold?.collapsed ? 'Sidebar Sidebar-rail' : 'Sidebar',
       id: 'menu',
       'data-swipe': '',
       'aria-label': at.label,
@@ -84,20 +84,20 @@ export let Sidebar = (at: Sidebar) => {
     },
     h(
       'div',
-      { class: 'Sidebar_Scroll', 'data-fit-scroll': '' },
+      { className: 'Sidebar_Scroll', 'data-fit-scroll': '' },
       h(
         'div',
-        { class: 'Sidebar_Top' },
+        { className: 'Sidebar_Top' },
         h(
           'a',
-          { class: 'Sidebar_Brand', href: at.home, [HOLD]: '' },
+          { className: 'Sidebar_Brand', href: at.home, [HOLD]: '' },
           h(Idle, { base: at.base, size: 36 }),
           worded('yaks.app'),
         ),
         at.fold ? fold(at.fold) : null,
         h(
           Button,
-          { class: 'Sidebar_Close', href: '#', 'data-pane': '' },
+          { className: 'Sidebar_Close', href: '#', 'data-pane': '' },
           glyph('x'),
           'Close',
         ),
@@ -107,7 +107,7 @@ export let Sidebar = (at: Sidebar) => {
           Button,
           {
             mod: 'go',
-            class: 'Sidebar_Back',
+            className: 'Sidebar_Back',
             href: at.back.href,
             [HOLD]: '',
             title: `Back to ${at.back.name}`,
@@ -116,19 +116,19 @@ export let Sidebar = (at: Sidebar) => {
           glyph('chevron-left'),
           h(
             'span',
-            { class: 'Sidebar_Label Sidebar_Way' },
-            h('span', { class: 'Sidebar_To' }, at.back.name),
-            h('span', { class: 'Sidebar_Before' }, 'Back to'),
+            { className: 'Sidebar_Label Sidebar_Way' },
+            h('span', { className: 'Sidebar_To' }, at.back.name),
+            h('span', { className: 'Sidebar_Before' }, 'Back to'),
           ),
         )
         : null,
-      at.title ? h('h2', { class: 'Sidebar_Title' }, at.title) : null,
+      at.title ? h('h2', { className: 'Sidebar_Title' }, at.title) : null,
       at.personal ? draw(at.personal) : null,
       at.space
         ? h(
           'div',
-          { class: 'Sidebar_Space' },
-          h('div', { class: 'Sidebar_Whose' }, at.space.picker),
+          { className: 'Sidebar_Space' },
+          h('div', { className: 'Sidebar_Whose' }, at.space.picker),
           at.space.sections.map(draw),
         )
         : null,
@@ -136,8 +136,8 @@ export let Sidebar = (at: Sidebar) => {
       at.footer?.length
         ? h(
           'div',
-          { class: 'Sidebar_Foot' },
-          h(SideNav.Rule, { class: 'Sidebar_Rule' }),
+          { className: 'Sidebar_Foot' },
+          h(SideNav.Rule, { className: 'Sidebar_Rule' }),
           at.footer.map(draw),
         )
         : null,

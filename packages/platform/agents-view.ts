@@ -11,7 +11,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, h } from 'preact'
+import { createElement as h, type ReactNode as Kids } from 'react'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Field } from '@yaks/ui/Field'
@@ -52,7 +52,7 @@ let open = (agent: Agent) => {
     ? h(
       'a',
       {
-        class: 'Agents_Open',
+        className: 'Agents_Open',
         href: to.href,
         target: '_blank',
         rel: 'noopener noreferrer',
@@ -74,7 +74,7 @@ let listed = (agents: Agent[], pressed: Pressed) =>
       Rows,
       {
         as: 'ul',
-        class: 'Agents',
+        className: 'Agents',
         'aria-label': 'Connected agents',
         hidden: !agents.length,
       },
@@ -132,7 +132,7 @@ export let agentsPage = (
     ),
     h(
       'section',
-      { class: 'Connect_Setup' },
+      { className: 'Connect_Setup' },
       h(Group, state(true, n), 'Connect another agent'),
       pasteLink(view.agent),
       h('p', null, 'Or connect it yourself, with the steps for your app:'),
@@ -159,7 +159,7 @@ let asking = (space: string) =>
     h(
       'form',
       {
-        class: 'Desk_Ask Page_Form',
+        className: 'Desk_Ask Page_Form',
         method: 'post',
         action: managePath('operator', space),
         enctype: 'multipart/form-data',
@@ -170,7 +170,7 @@ let asking = (space: string) =>
         'p',
         null,
         h(Field, {
-          class: 'Desk_Words',
+          className: 'Desk_Words',
           placeholder: 'Describe the app you need…',
           lines: true,
           name: 'say',
@@ -193,12 +193,12 @@ export let newAppPage = (view: AgentsView, agents?: Agent[]): Kids => {
   return [
     h(
       Card,
-      { class: 'Desk_Start', ...state(true, n) },
+      { className: 'Desk_Start', ...state(true, n) },
       heading('Ask your agent for a new yaks app'),
       h(
         'ul',
         {
-          class: 'Agents Agents-links',
+          className: 'Agents Agents-links',
           'aria-label': 'Connected agents',
           hidden: !links.length,
         },
@@ -209,7 +209,7 @@ export let newAppPage = (view: AgentsView, agents?: Agent[]): Kids => {
     connectCard(n, view.agent),
     h(
       'div',
-      { class: 'Desk_Options' },
+      { className: 'Desk_Options' },
       asking(space),
       h(
         Card,

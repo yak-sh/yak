@@ -31,7 +31,7 @@ import {
 } from './gallery-row.ts'
 import { builderOf, SPACE } from './build-door.ts'
 import { RESULTS } from './operator-skills.ts'
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { Card } from '@yaks/ui/parts'
 import { type Host, spaceHost, url as siteUrl } from '@yaks/platform/host'
 import { lost } from './pages.ts'
@@ -69,9 +69,9 @@ export let measuredOf = async (
   return await answer.json() as Measured[]
 }
 
-let note = (...said: ComponentChildren[]) => h('p', { class: 'Note' }, ...said)
-let small = (...said: ComponentChildren[]) =>
-  h('p', { class: 'Note Note-small' }, ...said)
+let note = (...said: ReactNode[]) => h('p', { className: 'Note' }, ...said)
+let small = (...said: ReactNode[]) =>
+  h('p', { className: 'Note Note-small' }, ...said)
 let times = (n: number, one: string) => `${n} ${one}${n == 1 ? '' : 's'}`
 
 // A variant as a line: its title and what it believes, and where it came
@@ -85,7 +85,7 @@ let variant = (r: Measured, v: Measured['variants'][number]) =>
     v.theory ? ` — ${v.theory}` : '',
     h(
       'span',
-      { class: 'Note-small' },
+      { className: 'Note-small' },
       ` Chosen in ${v.preferred} of ${times(v.shown, 'comparison')}.`,
       v.source ? ` From ${v.source}` : '',
       v.licence ? ` (${v.licence})` : '',
@@ -98,18 +98,18 @@ let kase = (r: Measured, c: Measured['cases'][number]) => {
   let outputs = r.outputs.filter((o) => o.case == c.eid)
   return h(
     'details',
-    { class: 'Measured_Case' },
+    { className: 'Measured_Case' },
     h(
       'summary',
       null,
       c.title || 'Something its maker published',
       ` (${times(outputs.length, 'output')})`,
     ),
-    c.body ? h('pre', { class: 'Measured_Text' }, c.body) : null,
+    c.body ? h('pre', { className: 'Measured_Text' }, c.body) : null,
     ...outputs.map((o) =>
       h(
         'section',
-        { class: 'Measured_Output' },
+        { className: 'Measured_Output' },
         h(
           'h4',
           null,
@@ -126,7 +126,7 @@ let kase = (r: Measured, c: Measured['cases'][number]) => {
 let round = (r: Measured) =>
   h(
     'section',
-    { class: 'Measured', 'aria-label': r.title },
+    { className: 'Measured', 'aria-label': r.title },
     h('h3', null, r.title),
     note(
       `${times(r.picks, 'pick')} by ${times(r.people, 'person')}`,
@@ -172,11 +172,11 @@ let instructions = (skill: SkillOffer) =>
       '.',
     )
     : [
-      h('pre', { class: 'Measured_Text' }, skill.body),
+      h('pre', { className: 'Measured_Text' }, skill.body),
       skill.upstream
         ? [
           h('h2', null, 'Its licence notice'),
-          h('pre', { class: 'Measured_Text' }, skill.upstream.notice),
+          h('pre', { className: 'Measured_Text' }, skill.upstream.notice),
         ]
         : null,
     ]
@@ -199,17 +199,17 @@ export let page = (
     ),
     h(
       'main',
-      { class: 'Page' },
+      { className: 'Page' },
       h(
         Card,
-        { as: 'article', class: 'Listing', 'aria-labelledby': 'skill' },
+        { as: 'article', className: 'Listing', 'aria-labelledby': 'skill' },
         h(
           'header',
-          { class: 'Listing_Head' },
-          h('h1', { id: 'skill', class: 'Title' }, skill.title),
+          { className: 'Listing_Head' },
+          h('h1', { id: 'skill', className: 'Title' }, skill.title),
           h(
             'p',
-            { class: 'Note Note-lead' },
+            { className: 'Note Note-lead' },
             skill.published.about || skill.description,
           ),
           skill.upstream ? written(skill) : null,
@@ -264,7 +264,7 @@ export let page = (
       ),
       h(
         'p',
-        { class: 'Note Listing_Made' },
+        { className: 'Note Listing_Made' },
         'Shared on yaks.app, where you build, host and share web apps. ',
         h('a', { href: '/' }, 'See how it works'),
       ),

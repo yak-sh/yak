@@ -3,13 +3,13 @@ import { Loading, Notice, Transcript } from '@yaks/ui/parts'
 import { wordsPage } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import {
+  Children,
   cloneElement,
-  type ComponentChildren as Node,
+  createElement as h,
   Fragment,
-  h,
   isValidElement,
-  toChildArray,
-} from 'preact'
+  type ReactNode as Node,
+} from 'react'
 import { renderToString } from 'preact-render-to-string'
 import type { Stage } from '@yaks/web/stage'
 import { Button, Card, Empty, Field, Form, Icon } from '@yaks/ui/parts'
@@ -217,7 +217,7 @@ let WORDS = 1024 * 1024
 export let keepCard = (back: string) =>
   h(
     Form,
-    { class: 'Talk_Keep Page_Form', method: 'post', action: '/login' },
+    { className: 'Talk_Keep Page_Form', method: 'post', action: '/login' },
     h(
       Card,
       null,
@@ -285,7 +285,7 @@ export let alertsOffer = (
   return h(
     'div',
     {
-      class: 'Talk_Alerts',
+      className: 'Talk_Alerts',
       'data-alerts-offer': '',
       'data-push': key,
       'data-at': at,
@@ -430,7 +430,7 @@ export let notePage = (
       h(
         'form',
         {
-          class: 'Page_Form',
+          className: 'Page_Form',
           method: 'post',
           action: managePath('operator', space.slug),
           enctype: 'multipart/form-data',
@@ -1444,7 +1444,7 @@ let talkPage = (
     h(
       'section',
       {
-        class: 'Talk_View',
+        className: 'Talk_View',
         ...viewAttrs(
           v == page ? shown : viewOf(space, v, v == aside),
           v == page,
@@ -1542,7 +1542,7 @@ let viewOf = (space: Space, page: TalkPage, aside: boolean): TalkView => {
 // `kids` as parts of the frame that stand only while the view at `here`
 // shows (@yaks/platform/talk-views `PART`).
 let partOf = (here: string, kids: Node) =>
-  toChildArray(kids).map((kid) =>
+  Children.toArray(kids).map((kid) =>
     isValidElement(kid) ? cloneElement(kid, { [PART]: here }) : kid
   )
 
@@ -1613,7 +1613,7 @@ let backOut = (parent: HelperPage['parent']) =>
     Button,
     {
       href: parent.href,
-      class: 'Talk_Out',
+      className: 'Talk_Out',
       mod: 'quiet',
       'aria-label': `Back to ${parentName(parent)}`,
       title: `Back to ${parentName(parent)}`,
@@ -1640,7 +1640,7 @@ let parentName = (parent: HelperPage['parent']) =>
  * Builder object's drawing (`conversationOf`), or `empty` in its place. */
 export let column = (html: string, empty: Node = null) =>
   h('div', {
-    class: 'Talk_Column',
+    className: 'Talk_Column',
     'data-conversation': '',
     'aria-live': 'polite',
     ...html ? { dangerouslySetInnerHTML: { __html: html } } : {},
@@ -1650,7 +1650,7 @@ let hello = (heading: string, said: string, plain?: string[]) =>
   h(
     Empty,
     {
-      class: 'Talk_Hello',
+      className: 'Talk_Hello',
       mod: 'welcome',
       'data-canvas-greeting': plain && JSON.stringify(plain),
     },
@@ -1796,7 +1796,7 @@ let askBox = (
   let scope = `${space.eid}:${who.person}:${conversation}`
   return [
     h('div', {
-      class: 'Talk_Ask',
+      className: 'Talk_Ask',
       'data-key': scope,
       'data-ask': '',
       'data-early-draft': scope,
@@ -1947,7 +1947,7 @@ let chatParts = async (
     : hello(...welcome, welcome)
   let waysToStart = fresh && h(
     'div',
-    { class: 'Talk_Starts', role: 'group', 'aria-label': 'Ways to start' },
+    { className: 'Talk_Starts', role: 'group', 'aria-label': 'Ways to start' },
     starts(operator, beside.apps),
   )
   // The box, where the page has one (operator-box.ts): on a helper's page
@@ -2275,7 +2275,7 @@ export let allUpdatesPage = async (
     caught(error, { request: 'all updates cards', space: space.slug })
     return html(h(
       'p',
-      { class: 'Note', role: 'status', 'data-updates-unavailable': '' },
+      { className: 'Note', role: 'status', 'data-updates-unavailable': '' },
       'Updates could not be read. Open this page again to try.',
     ))
   })
@@ -2335,7 +2335,7 @@ let dashboardOn = (
   main: h(
     'div',
     {
-      class: 'Dash',
+      className: 'Dash',
       'data-view': 'dashboard',
       [DASHBOARD]: JSON.stringify(view),
     },
@@ -2452,7 +2452,7 @@ export let matchesPage = async (
     skip: ['#content', 'Skip to content'],
     main: h(
       'div',
-      { class: 'Talk_Column Updates' },
+      { className: 'Talk_Column Updates' },
       h(
         'div',
         {

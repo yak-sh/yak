@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Time } from '@yaks/ui/Time'
@@ -39,7 +39,7 @@ let nav = (v: VersionView) =>
   v.before || v.after
     ? h(
       'nav',
-      { class: 'Version_Nav', 'aria-label': 'Other versions' },
+      { className: 'Version_Nav', 'aria-label': 'Other versions' },
       v.before
         ? h('a', { href: v.before, rel: 'prev' }, `← Version ${v.version - 1}`)
         : h('span', null),
@@ -54,28 +54,32 @@ export let versionView = (v: VersionView) => {
   let live = v.live == v.version
   return h(
     'div',
-    { class: 'Talk_Column Version' },
+    { className: 'Talk_Column Version' },
     h(
       Card,
-      { as: 'article', class: 'Version_Card', 'aria-labelledby': 'version' },
-      h('h1', { id: 'version', class: 'Version_Title' }, versionTitle(v)),
+      {
+        as: 'article',
+        className: 'Version_Card',
+        'aria-labelledby': 'version',
+      },
+      h('h1', { id: 'version', className: 'Version_Title' }, versionTitle(v)),
       h(
         'p',
-        { class: 'Version_Meta' },
+        { className: 'Version_Meta' },
         `${v.by} · `,
         h(Time, { at: v.at }),
         live ? ' · Live now' : null,
       ),
       h(
         'div',
-        { class: 'Version_Notes' },
+        { className: 'Version_Notes' },
         v.message
           ? h(Markdown, { source: v.message })
-          : h('p', { class: 'Version_None' }, 'Its release left no notes.'),
+          : h('p', { className: 'Version_None' }, 'Its release left no notes.'),
       ),
       h(
         'div',
-        { class: 'Version_Acts' },
+        { className: 'Version_Acts' },
         v.shipped
           ? h(
             Button,

@@ -1,39 +1,39 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The help page: a section for each question a person asks, its heading the
 // question and its first paragraph, its lead, the answer an engine reads of
 // it (`data`), each snippet a key under `help` in the home app's copy.
-import type { ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import { Chip, Chips } from '@yaks/ui'
 import { Data, Page, Yours } from './frame.tsx'
 import { said, type Slots, text } from './copy.ts'
 
 // Where support mail goes: an address, not words.
 let MAIL = 'hello@yaks.app'
-let mail = <a class='Prose_Link' href={`mailto:${MAIL}`}>{MAIL}</a>
+let mail = <a className='Prose_Link' href={`mailto:${MAIL}`}>{MAIL}</a>
 
 let link = (href: string, key: string) => (
-  <a class='Prose_Link' href={href} {...text(key)} />
+  <a className='Prose_Link' href={href} {...text(key)} />
 )
 
 // What a person might say to their assistant, quoted.
-let says = (key: string) => <q class='Said' {...text(key)} />
+let says = (key: string) => <q className='Said' {...text(key)} />
 
 // A space's address, written as code.
 let at = (path?: string) => (
-  <code class='Prose_Code'>
+  <code className='Prose_Code'>
     <Yours path={path} />
   </code>
 )
 
 let para = (key: string, slots?: Slots) => (
-  <p class='Prose_Text' {...text(`help.${key}`, slots)} />
+  <p className='Prose_Text' {...text(`help.${key}`, slots)} />
 )
 
 let Section = (
-  { id, children }: { id: string; children: ComponentChildren },
+  { id, children }: { id: string; children: ReactNode },
 ) => (
-  <section class='Prose_Section' id={id}>
-    <h2 class='Prose_Heading' {...text(`help.${id}.title`)} />
+  <section className='Prose_Section' id={id}>
+    <h2 className='Prose_Heading' {...text(`help.${id}.title`)} />
     {children}
   </section>
 )
@@ -43,7 +43,7 @@ let OPTIONS = ['read', 'write', 'invited']
 
 let option = (name: string) => (
   <li
-    class='Prose_Item'
+    className='Prose_Item'
     {...text(`help.who.${name}.detail`, {
       option: <b {...text(`help.who.${name}.option`)} />,
     })}
@@ -118,14 +118,14 @@ export let Help = () => (
     path='/help'
     head={<Data of={data} />}
   >
-    <div class='Prose_Head'>
-      <h1 class='Title Title-page' {...text('help.head.title')} />
-      <p class='Prose_Text' {...text('help.head.intro', { email: mail })} />
+    <div className='Prose_Head'>
+      <h1 className='Title Title-page' {...text('help.head.title')} />
+      <p className='Prose_Text' {...text('help.head.intro', { email: mail })} />
       <Chips as='ul'>
         {JUMPS.map((id) => (
-          <li class='Prose_Item'>
+          <li className='Prose_Item'>
             <Chip
-              class='Prose_Link'
+              className='Prose_Link'
               href={`#${id}`}
               {...text(`help.jump.${id}`)}
             />
@@ -159,7 +159,7 @@ export let Help = () => (
     </Section>
     <Section id='who'>
       {para('who.lead')}
-      <ul class='Prose_List'>{OPTIONS.map(option)}</ul>
+      <ul className='Prose_List'>{OPTIONS.map(option)}</ul>
       {para('who.tell', {
         signup: says('help.who.says.signup'),
         private: says('help.who.says.private'),

@@ -15,7 +15,7 @@
 //
 // `Talk`, `heard` and `reread` are pure; operator-talk-browser.ts reads what
 // the server drew (`parsed`) and mounts it (`mountTalk`).
-import { type ComponentChildren as Node, h } from 'preact'
+import { createElement as h, type ReactNode as Node } from 'react'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import {

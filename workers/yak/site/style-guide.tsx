@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import {
   Button,
   Card,
@@ -11,7 +11,7 @@ import {
   pencil,
   Worn,
 } from '@yaks/ui'
-import type { ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import { WORN } from '../sheet-assets.ts'
 import { UI_GUIDE } from '../kept-page.ts'
 import { attr, said, type Slots, text } from './copy.ts'
@@ -19,7 +19,7 @@ import { Page, Yours } from './frame.tsx'
 
 // What a person copies or types, in the line.
 let Code = (
-  { children, ...rest }: { children: ComponentChildren; [x: string]: unknown },
+  { children, ...rest }: { children: ReactNode; [x: string]: unknown },
 ) => <Chip as='code' mod='code' {...rest}>{children}</Chip>
 
 // The kit as these pages wear it, and its parts but the document's defaults,
@@ -118,9 +118,9 @@ let PAINTS = ['--mine', '--theirs', '--preview', '--well']
 let GAPS = ['--quarter-gap', '--half-gap', '--gap', '--wide-gap']
 
 // One part of the page under its heading, the snippet at `<id>.title`.
-let Part = ({ id, children }: { id: string; children: ComponentChildren }) => (
-  <section class='Guide_Part' aria-labelledby={id}>
-    <h2 class='Title' id={id} {...say(`${id}.title`)} />
+let Part = ({ id, children }: { id: string; children: ReactNode }) => (
+  <section className='Guide_Part' aria-labelledby={id}>
+    <h2 className='Title' id={id} {...say(`${id}.title`)} />
     {children}
   </section>
 )
@@ -128,7 +128,7 @@ let Part = ({ id, children }: { id: string; children: ComponentChildren }) => (
 // Rules, each the snippet at `<at>.<rule>.rule` led by its name in bold, at
 // `<at>.<rule>.name`, with the slots it has besides.
 let Rules = ({ at, rules }: { at: string; rules: Record<string, Slots> }) => (
-  <ul class='Guide_Rules'>
+  <ul className='Guide_Rules'>
     {Object.entries(rules).map(([rule, slots]) => (
       <li
         key={rule}
@@ -143,26 +143,27 @@ let Rules = ({ at, rules }: { at: string; rules: Record<string, Slots> }) => (
 
 // A colour token: its paint, its name and its value as painted.
 let Swatch = ({ token }: { token: string }) => (
-  <li class='Guide_Swatch' data-token={token}>
-    <span class='Guide_Chip' style={`--swatch: var(${token})`} />{' '}
-    <code class='Guide_Name'>{token}</code> <span class='Guide_Value' />
+  <li className='Guide_Swatch' data-token={token}>
+    <span className='Guide_Chip' style={`--swatch: var(${token})`} />{' '}
+    <code className='Guide_Name'>{token}</code> <span className='Guide_Value' />
   </li>
 )
 
 // A spacing token: its name, its value and a bar as long.
 let Size = ({ token }: { token: string }) => (
-  <li class='Guide_Size' data-token={token}>
+  <li className='Guide_Size' data-token={token}>
     <span>
-      <code class='Guide_Name'>{token}</code> <span class='Guide_Value' />
+      <code className='Guide_Name'>{token}</code>{' '}
+      <span className='Guide_Value' />
     </span>{' '}
-    <span class='Guide_Bar' style={`--bar: var(${token})`} />
+    <span className='Guide_Bar' style={`--bar: var(${token})`} />
   </li>
 )
 
 // A token's name and its value, as slots of the sentence about it.
 let token = (name: string, Name: 'span' | 'code' = 'span') => ({
-  name: <Name class='Guide_Name'>{name}</Name>,
-  value: <span class='Guide_Value' />,
+  name: <Name className='Guide_Name'>{name}</Name>,
+  value: <span className='Guide_Value' />,
 })
 
 // What a person copies or types, each its own slot.
@@ -191,11 +192,11 @@ export let StyleGuide = () => (
       </>
     }
   >
-    <div class='Prose_Head'>
-      <h1 class='Title Title-page' {...say('head.title')} />
-      <p class='Note Note-lead' {...say('head.lead')} />
+    <div className='Prose_Head'>
+      <h1 className='Title Title-page' {...say('head.title')} />
+      <p className='Note Note-lead' {...say('head.lead')} />
       <p>
-        <label class='Note Note-small' for='theme' {...say('head.theme')} />
+        <label className='Note Note-small' for='theme' {...say('head.theme')} />
         {' '}
         <Field choose id='theme' name='theme'>
           {['system', 'light', 'dark'].map((theme) => (
@@ -219,7 +220,7 @@ export let StyleGuide = () => (
     </div>
     <Part id='how-to'>
       <p
-        class='Note'
+        className='Note'
         {...say(
           'how-to.note',
           code({
@@ -241,7 +242,7 @@ export let StyleGuide = () => (
           layers: {},
         }}
       />
-      <p class='Note Note-small' {...say('how-to.complete')} />
+      <p className='Note Note-small' {...say('how-to.complete')} />
     </Part>
     <Part id='voice'>
       <Rules
@@ -259,7 +260,7 @@ export let StyleGuide = () => (
       />
     </Part>
     <Part id='language'>
-      <p class='Note' {...say('language.note')} />
+      <p className='Note' {...say('language.note')} />
       <Rules
         at='language'
         rules={{
@@ -285,27 +286,32 @@ export let StyleGuide = () => (
       />
     </Part>
     <Part id='theme-roles'>
-      <p class='Note' {...say('theme-roles.note', code({ linen: 'linen' }))} />
-      <ul class='Guide_Swatches'>
+      <p
+        className='Note'
+        {...say('theme-roles.note', code({ linen: 'linen' }))}
+      />
+      <ul className='Guide_Swatches'>
         {ROLES.map((role) => <Swatch key={role} token={role} />)}
       </ul>
     </Part>
     <Part id='page-paints'>
       <p
-        class='Note'
+        className='Note'
         {...say('page-paints.note', code({ site: 'site.css' }))}
       />
-      <ul class='Guide_Swatches'>
+      <ul className='Guide_Swatches'>
         {PAINTS.map((paint) => <Swatch key={paint} token={paint} />)}
       </ul>
     </Part>
     <Part id='type'>
-      <Card as='div' class='Guide_Demo'>
+      <Card as='div' className='Guide_Demo'>
         <p data-token='--font'>
-          <span class='Guide_Name'>--font</span> <span class='Guide_Value' />
+          <span className='Guide_Name'>--font</span>{' '}
+          <span className='Guide_Value' />
         </p>
         <p data-token='--mono' style='font-family: var(--mono)'>
-          <span class='Guide_Name'>--mono</span> <span class='Guide_Value' />
+          <span className='Guide_Name'>--mono</span>{' '}
+          <span className='Guide_Value' />
         </p>
         {['size', 'lead', 'small', 'fine'].map((size) => (
           <p
@@ -318,195 +324,216 @@ export let StyleGuide = () => (
       </Card>
     </Part>
     <Part id='space'>
-      <p class='Note' {...say('space.note', code({ gap: '--gap' }))} />
-      <ul class='Guide_Sizes'>
+      <p className='Note' {...say('space.note', code({ gap: '--gap' }))} />
+      <ul className='Guide_Sizes'>
         {GAPS.map((gap) => <Size key={gap} token={gap} />)}
       </ul>
       {['measure', 'wide-measure'].map((measure) => (
         <p
           key={measure}
-          class='Note Note-small'
+          className='Note Note-small'
           data-token={`--${measure}`}
           {...say(`space.${measure}`, token(`--${measure}`, 'code'))}
         />
       ))}
       <p
-        class='Note Note-small'
+        className='Note Note-small'
         {...say('space.frame', {
-          side: <code class='Guide_Name'>--side</code>,
-          aside: <code class='Guide_Name'>--aside</code>,
-          rhythm: <code class='Guide_Name'>--rhythm</code>,
+          side: <code className='Guide_Name'>--side</code>,
+          aside: <code className='Guide_Name'>--aside</code>,
+          rhythm: <code className='Guide_Name'>--rhythm</code>,
           ...code({ body: 'body' }),
         })}
       />
-      <p class='Note Note-small' {...say('space.shape')} />
-      <ul class='Guide_Swatches'>
+      <p className='Note Note-small' {...say('space.shape')} />
+      <ul className='Guide_Swatches'>
         <Swatch token='--graphite' />
-        <li class='Guide_Swatch' data-token='--stroke'>
+        <li className='Guide_Swatch' data-token='--stroke'>
           <span
-            class='Guide_Chip'
+            className='Guide_Chip'
             style='--swatch: var(--card); border: var(--stroke) solid var(--graphite)'
           />{' '}
-          <code class='Guide_Name'>--stroke</code> <span class='Guide_Value' />
+          <code className='Guide_Name'>--stroke</code>{' '}
+          <span className='Guide_Value' />
         </li>
-        <li class='Guide_Swatch' data-token='--radius'>
+        <li className='Guide_Swatch' data-token='--radius'>
           <Card
             as='span'
-            class='Guide_Chip'
+            className='Guide_Chip'
             style='--swatch: var(--card); border-color: transparent'
           />{' '}
-          <code class='Guide_Name'>--radius</code> <span class='Guide_Value' />
+          <code className='Guide_Name'>--radius</code>{' '}
+          <span className='Guide_Value' />
         </li>
-        <li class='Guide_Swatch' data-token='--lift'>
+        <li className='Guide_Swatch' data-token='--lift'>
           <Button
             as='span'
             mod='go'
-            class='Guide_Chip'
+            className='Guide_Chip'
             style='--swatch: var(--accent); border-color: transparent'
           />{' '}
-          <code class='Guide_Name'>--lift</code> <span class='Guide_Value' />
+          <code className='Guide_Name'>--lift</code>{' '}
+          <span className='Guide_Value' />
         </li>
       </ul>
     </Part>
     <Part id='components'>
-      <p class='Note' {...say('components.about')} />
-      <Card as='div' class='Guide_Demo'>
-        <p class='Guide_Name'>.Title · .Title-hero · .Title-page</p>
-        <p class='Title Title-hero' {...say('components.titles.hero')} />
-        <p class='Title Title-page' {...say('components.titles.page')} />
-        <p class='Title' {...say('components.titles.section')} />
+      <p className='Note' {...say('components.about')} />
+      <Card as='div' className='Guide_Demo'>
+        <p className='Guide_Name'>.Title · .Title-hero · .Title-page</p>
+        <p className='Title Title-hero' {...say('components.titles.hero')} />
+        <p className='Title Title-page' {...say('components.titles.page')} />
+        <p className='Title' {...say('components.titles.section')} />
       </Card>
-      <Card as='div' class='Guide_Demo'>
-        <p class='Guide_Name'>.Note · .Note-lead · .Note-small</p>
-        <p class='Note Note-lead' {...say('components.notes.lead')} />
-        <p class='Note' {...say('components.notes.body')} />
-        <p class='Note Note-small' {...say('components.notes.small')} />
+      <Card as='div' className='Guide_Demo'>
+        <p className='Guide_Name'>.Note · .Note-lead · .Note-small</p>
+        <p className='Note Note-lead' {...say('components.notes.lead')} />
+        <p className='Note' {...say('components.notes.body')} />
+        <p className='Note Note-small' {...say('components.notes.small')} />
       </Card>
-      <Card as='div' class='Guide_Demo'>
-        <p class='Guide_Name'>
+      <Card as='div' className='Guide_Demo'>
+        <p className='Guide_Name'>
           .Chat · .Chat_Who · .Chat_Who-you · .Chat_Bubble · .Chat_Bubble-you ·
           .Chat_Bubble-them
         </p>
-        <Card as='div' class='Chat'>
-          <h3 class='Chat_Who Chat_Who-you' {...say('components.chat.you')} />
+        <Card as='div' className='Chat'>
+          <h3
+            className='Chat_Who Chat_Who-you'
+            {...say('components.chat.you')}
+          />
           <p
-            class='Chat_Bubble Chat_Bubble-you'
+            className='Chat_Bubble Chat_Bubble-you'
             {...say('components.chat.ask')}
           />
-          <h3 class='Chat_Who' {...say('components.chat.them')} />
+          <h3 className='Chat_Who' {...say('components.chat.them')} />
           <p
-            class='Chat_Bubble Chat_Bubble-them'
+            className='Chat_Bubble Chat_Bubble-them'
             {...say('components.chat.answer')}
           />
-          <p class='Note Note-small' {...say('components.chat.caption')} />
+          <p className='Note Note-small' {...say('components.chat.caption')} />
         </Card>
       </Card>
-      <Card as='div' class='Guide_Demo'>
-        <p class='Guide_Name'>.Said</p>
+      <Card as='div' className='Guide_Demo'>
+        <p className='Guide_Name'>.Said</p>
         <p
-          class='Note'
+          className='Note'
           {...say('components.said.long', {
             ...code({ q: '<q>' }),
-            said: <q class='Said' {...say('components.said.invite')} />,
+            said: <q className='Said' {...say('components.said.invite')} />,
           })}
         />
         <p
-          class='Note'
+          className='Note'
           {...say('components.said.short', {
-            said: <q class='Said' {...say('components.said.out')} />,
+            said: <q className='Said' {...say('components.said.out')} />,
           })}
         />
       </Card>
-      <Card as='div' class='Guide_Demo'>
-        <p class='Guide_Name'>
+      <Card as='div' className='Guide_Demo'>
+        <p className='Guide_Name'>
           .Window · .Window_Bar · .Window_Body · .Window_Heading · .Window_List
           · .Window_On · .Window_Body-frame · .Window_Frame
         </p>
-        <div class='Window'>
-          <div class='Window_Bar'>
+        <div className='Window'>
+          <div className='Window_Bar'>
             <Chip mod='quiet'>
               <Yours path='/recipes' />
             </Chip>
           </div>
-          <div class='Window_Body'>
-            <p class='Window_Heading' {...say('components.window.heading')} />
-            <ul class='Window_List'>
+          <div className='Window_Body'>
+            <p
+              className='Window_Heading'
+              {...say('components.window.heading')}
+            />
+            <ul className='Window_List'>
               {['cake', 'soup'].map((recipe) => (
                 <li
                   key={recipe}
-                  class='Window_Item'
+                  className='Window_Item'
                   {...say(`components.window.${recipe}`)}
                 />
               ))}
             </ul>
             <p
-              class='Note Note-small'
+              className='Note Note-small'
               {...say('components.window.note', {
                 on: (
-                  <span class='Window_On' {...say('components.window.soup')} />
+                  <span
+                    className='Window_On'
+                    {...say('components.window.soup')}
+                  />
                 ),
               })}
             />
           </div>
         </div>
-        <div class='Window'>
-          <div class='Window_Bar'>
+        <div className='Window'>
+          <div className='Window_Bar'>
             <Chip mod='quiet'>
               <Yours path='/preview' />
             </Chip>
           </div>
-          <div class='Window_Body Window_Body-frame'>
+          <div className='Window_Body Window_Body-frame'>
             <iframe
-              class='Window_Frame'
+              className='Window_Frame'
               {...attr('title', 'style-guide.components.window.title')}
               srcdoc={PREVIEW}
             />
           </div>
         </div>
       </Card>
-      <Card as='div' class='Guide_Demo'>
-        <p class='Guide_Name'>.Yak · .Yak-small · .Yak-big</p>
+      <Card as='div' className='Guide_Demo'>
+        <p className='Guide_Name'>.Yak · .Yak-small · .Yak-big</p>
         <p>
-          <img class='Yak Yak-small' src='yak.webp' alt='' />
+          <img className='Yak Yak-small' src='yak.webp' alt='' />
         </p>{' '}
         <img
-          class='Yak Yak-big'
+          className='Yak Yak-big'
           src='yak.webp'
           {...attr('alt', 'style-guide.components.yak.alt')}
         />{' '}
         <p
-          class='Note Note-small'
+          className='Note Note-small'
           {...say('components.yak.note', code({ file: 'yak.webp' }))}
         />
       </Card>
-      <Card as='div' class='Guide_Demo'>
-        <p class='Guide_Name'>.Prose · .Prose_Head · .Prose_When</p>
-        <div class='Prose'>
-          <div class='Prose_Head'>
-            <h3 class='Title Title-page' {...say('components.prose.title')} />
+      <Card as='div' className='Guide_Demo'>
+        <p className='Guide_Name'>.Prose · .Prose_Head · .Prose_When</p>
+        <div className='Prose'>
+          <div className='Prose_Head'>
+            <h3
+              className='Title Title-page'
+              {...say('components.prose.title')}
+            />
             <p
-              class='Prose_When Prose_Text'
+              className='Prose_When Prose_Text'
               {...say('components.prose.when')}
             />
           </div>
-          <section class='Prose_Section'>
-            <h2 class='Prose_Heading' {...say('components.prose.heading')} />
+          <section className='Prose_Section'>
+            <h2
+              className='Prose_Heading'
+              {...say('components.prose.heading')}
+            />
             <p
-              class='Prose_Text'
+              className='Prose_Text'
               {...say('components.prose.text', {
                 code: (
-                  <code class='Prose_Code' {...say('components.prose.code')} />
+                  <code
+                    className='Prose_Code'
+                    {...say('components.prose.code')}
+                  />
                 ),
               })}
             />
-            <ul class='Prose_List'>
-              <li class='Prose_Item' {...say('components.prose.quiet')} />
+            <ul className='Prose_List'>
+              <li className='Prose_Item' {...say('components.prose.quiet')} />
               <li
-                class='Prose_Item'
+                className='Prose_Item'
                 {...say('components.prose.accent', {
                   link: (
                     <a
-                      class='Prose_Link'
+                      className='Prose_Link'
                       href='#components'
                       {...say('components.prose.link')}
                     />
@@ -515,7 +542,7 @@ export let StyleGuide = () => (
               />
             </ul>
             <address
-              class='Prose_Address'
+              className='Prose_Address'
               {...say('components.prose.address')}
             />
           </section>
@@ -524,7 +551,7 @@ export let StyleGuide = () => (
     </Part>
     <Part id='kit'>
       <p
-        class='Note'
+        className='Note'
         {...say('kit.note', {
           all: <a href={UI_GUIDE} {...say('kit.all')} />,
         })}
@@ -532,8 +559,8 @@ export let StyleGuide = () => (
       <Worn parts={PARTS} composition={drawn} />
     </Part>
     <Part id='sections'>
-      <p class='Note' {...say('sections.note')} />
-      <ul class='Guide_Rules'>
+      <p className='Note' {...say('sections.note')} />
+      <ul className='Guide_Rules'>
         {Object.entries<Slots>({
           top: classes('Top', 'Top_Name', 'Page', 'Foot'),
           page: {

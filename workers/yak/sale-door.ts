@@ -1,7 +1,7 @@
 // The customer door returns one checked receipt or artifact. The seller's
 // graph remains behind its existing editor authority.
 import type { Bundle, Comp } from '@yaks/graph'
-import type { ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import { type Built, joined, type Line, line, sub } from '@yaks/query'
 import type { Answer, Asked } from './apps.ts'
 import { appStore, url as appUrl } from './directory.ts'
@@ -353,7 +353,7 @@ let pagesOf = async (at: Asked) => {
         status?: number
         controls?: boolean
       },
-      ...parts: ComponentChildren[]
+      ...parts: ReactNode[]
     ) =>
       page(env, {
         ...params,

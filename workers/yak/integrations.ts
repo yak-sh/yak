@@ -18,7 +18,7 @@
 // it ready to paste a key or sign in (connections.ts `connectionsOf`).
 import type { Listed } from '@yaks/connections'
 import { keyed } from '@yaks/connections'
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { Button, Card, More } from '@yaks/ui/parts'
 import { raw } from './html.ts'
 import { type Host, url } from '@yaks/platform/host'
@@ -85,8 +85,8 @@ let site = (i: Listed) =>
     )
     : null
 
-let small = (...said: ComponentChildren[]) =>
-  h('p', { class: 'Note Note-small' }, ...said)
+let small = (...said: ReactNode[]) =>
+  h('p', { className: 'Note Note-small' }, ...said)
 
 // Its hosts, each as code, a comma between.
 let hostsOf = (i: Listed) =>
@@ -150,40 +150,44 @@ export let page = async (all: Rated[], env: Host = {}) =>
     ),
     h(
       'main',
-      { class: 'Page' },
+      { className: 'Page' },
       h(
         'section',
-        { class: 'Services', 'aria-labelledby': 'integrations' },
+        { className: 'Services', 'aria-labelledby': 'integrations' },
         h(
           'div',
-          { class: 'Services_Intro' },
-          h('h1', { id: 'integrations', class: 'Title' }, 'Integrations'),
+          { className: 'Services_Intro' },
+          h('h1', { id: 'integrations', className: 'Title' }, 'Integrations'),
           h(
             'p',
-            { class: 'Note' },
+            { className: 'Note' },
             "Outside services a yaks app can call. Add one to your space and your apps there can use it. yaks.app keeps the key, sends it only to the service's own address, and never hands it to an app.",
           ),
         ),
         all.length
           ? h(
             'ul',
-            { class: 'Services_List' },
+            { className: 'Services_List' },
             await Promise.all(all.map((i) => card(i, env))),
           )
-          : h('p', { class: 'Note' }, 'Nothing is listed yet.'),
+          : h('p', { className: 'Note' }, 'Nothing is listed yet.'),
       ),
       h(
         Card,
-        { class: 'Join', 'aria-labelledby': 'yours' },
-        h('h2', { id: 'yours', class: 'Title' }, 'Share a service of your own'),
+        { className: 'Join', 'aria-labelledby': 'yours' },
+        h(
+          'h2',
+          { id: 'yours', className: 'Title' },
+          'Share a service of your own',
+        ),
         h(
           'p',
-          { class: 'Note' },
+          { className: 'Note' },
           "On your space's Connections page, add a key for any service, write how to get one, and list it here. Anyone can then add it to a space of theirs, with their own key.",
         ),
         h(
           'p',
-          { class: 'Join_Doors' },
+          { className: 'Join_Doors' },
           h(
             Button,
             { mod: 'go', href: url(env, managePath('connections')) },

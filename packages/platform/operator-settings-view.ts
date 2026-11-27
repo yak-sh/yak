@@ -11,7 +11,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Kids, Fragment, h } from 'preact'
+import { createElement as h, Fragment, type ReactNode as Kids } from 'react'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Check } from '@yaks/ui/Check'
@@ -94,7 +94,7 @@ let setting = (at: string, id: string, card: Kids, actions: Kids = null) =>
   h(
     Form,
     {
-      class: 'Page_Form',
+      className: 'Page_Form',
       id,
       method: 'post',
       action: `${at}?${id}=1`,

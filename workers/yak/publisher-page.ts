@@ -25,7 +25,7 @@ import { pageAt, PUBLISHER, publisherAt } from '@yaks/platform/routes'
 import { type Reputation, reputation, reputationOf } from './gallery-row.ts'
 import { type Rated, rating } from './integrations.ts'
 import { paged, skillAt } from './skill-page.ts'
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { Card } from '@yaks/ui/parts'
 import { type Host, spaceHost, url as siteUrl } from '@yaks/platform/host'
 import { logo, lost } from './pages.ts'
@@ -132,9 +132,9 @@ export let addresses = async (dir: Directory, env: Host = {}) => {
   ]
 }
 
-let note = (...said: ComponentChildren[]) => h('p', { class: 'Note' }, ...said)
-let small = (...said: ComponentChildren[]) =>
-  h('p', { class: 'Note Note-small' }, ...said)
+let note = (...said: ReactNode[]) => h('p', { className: 'Note' }, ...said)
+let small = (...said: ReactNode[]) =>
+  h('p', { className: 'Note Note-small' }, ...said)
 let times = (n: number, one: string, many = `${one}s`) =>
   `${n} ${n == 1 ? one : many}`
 
@@ -144,8 +144,8 @@ let item = (
   title: string,
   href: string,
   about: string,
-  said: ComponentChildren,
-  mark: ComponentChildren = null,
+  said: ReactNode,
+  mark: ReactNode = null,
 ) =>
   h(
     Card,
@@ -160,10 +160,10 @@ let item = (
     said,
   )
 
-let section = (id: string, title: string, list: ComponentChildren) =>
+let section = (id: string, title: string, list: ReactNode) =>
   h(
     'section',
-    { class: 'Publisher_Part', 'aria-labelledby': id },
+    { className: 'Publisher_Part', 'aria-labelledby': id },
     h('h2', { id }, title),
     list,
   )
@@ -187,33 +187,36 @@ export let page = (p: Published, env: Host = {}) => {
     ),
     h(
       'main',
-      { class: 'Page' },
+      { className: 'Page' },
       h(
         Card,
-        { as: 'article', class: 'Listing', 'aria-labelledby': 'publisher' },
+        { as: 'article', className: 'Listing', 'aria-labelledby': 'publisher' },
         h(
           'header',
-          { class: 'Listing_Head' },
-          h('h1', { id: 'publisher', class: 'Title' }, space.title),
-          h('p', { class: 'Note Note-lead' }, about),
+          { className: 'Listing_Head' },
+          h('h1', { id: 'publisher', className: 'Title' }, space.title),
+          h('p', { className: 'Note Note-lead' }, about),
           small(h('a', { href: `https://${at}/` }, at)),
           h(
             'ul',
-            { class: 'Reputation', 'aria-label': 'What yaks.app says of it' },
+            {
+              className: 'Reputation',
+              'aria-label': 'What yaks.app says of it',
+            },
             space.featured
               ? h(
                 'li',
-                { class: 'Reputation_Item Reputation_Item-featured' },
+                { className: 'Reputation_Item Reputation_Item-featured' },
                 'Featured by yaks.app',
               )
               : null,
             h(
               'li',
-              { class: 'Reputation_Item' },
+              { className: 'Reputation_Item' },
               `Installed ${times(installed(p), 'time')} by other spaces`,
             ),
             ratedAcross(p)
-              ? h('li', { class: 'Reputation_Item' }, ratedAcross(p))
+              ? h('li', { className: 'Reputation_Item' }, ratedAcross(p))
               : null,
           ),
         ),
@@ -221,7 +224,7 @@ export let page = (p: Published, env: Host = {}) => {
           ? section(
             'apps',
             'Apps',
-            h('ul', { class: 'Make_List' }, p.apps.map(card)),
+            h('ul', { className: 'Make_List' }, p.apps.map(card)),
           )
           : null,
         p.skills.length
@@ -230,7 +233,7 @@ export let page = (p: Published, env: Host = {}) => {
             'Skills',
             h(
               'ul',
-              { class: 'Publisher_List' },
+              { className: 'Publisher_List' },
               p.skills.map(({ skill, reputation }) =>
                 item(
                   skill.title,
@@ -248,7 +251,7 @@ export let page = (p: Published, env: Host = {}) => {
             'Integrations',
             h(
               'ul',
-              { class: 'Publisher_List' },
+              { className: 'Publisher_List' },
               p.integrations.map((i) =>
                 item(
                   i.title || i.name,

@@ -13,7 +13,7 @@
  *
  * @module
  */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { IconNode } from 'lucide'
 import { Badge } from '@yaks/ui/Badge'
 import { Button } from '@yaks/ui/Button'
@@ -85,7 +85,7 @@ let launcherParts = (friends: Befriended[], waiting: number, word: boolean) => {
   let dot = here.length
     ? h(Dot, {
       mod: tone[active ? 'active' : 'away'],
-      class: 'Dock_Here Dock_Presence',
+      className: 'Dock_Here Dock_Presence',
       'aria-hidden': 'true',
     })
     : null
@@ -169,12 +169,12 @@ let face = (f: Befriended) => {
   let activity = activityOf(f.seen)
   return h(
     Identity.Avatar,
-    { class: 'Friend_Avatar', person: f.person },
+    { className: 'Friend_Avatar', person: f.person },
     initial(f.name),
     activity
       ? h(Dot, {
         mod: tone[activity],
-        class: 'Friend_Dot Dock_Presence',
+        className: 'Friend_Dot Dock_Presence',
         role: 'img',
         'aria-label': status[activity],
       })
@@ -198,7 +198,7 @@ let friendRow = (f: Befriended, mine: Held[], me: string, now: number) => {
       {
         as: 'button',
         type: 'button',
-        class: 'Dock_Friend',
+        className: 'Dock_Friend',
         'data-dock-friend': f.person,
       },
       face(f),
@@ -218,11 +218,11 @@ let friendRow = (f: Befriended, mine: Held[], me: string, now: number) => {
 let asking = () =>
   h(
     Form,
-    { class: 'Dock_Ask', 'data-friend-ask': '' },
+    { className: 'Dock_Ask', 'data-friend-ask': '' },
     h(Form.Label, { for: 'dock-friend-email' }, 'Add a friend'),
     h(
       'div',
-      { class: 'Dock_Line' },
+      { className: 'Dock_Line' },
       h(Field, {
         id: 'dock-friend-email',
         name: 'email',
@@ -268,7 +268,7 @@ let list = (
       !friends ? h(Loading, null, 'Finding your friends…') : friends.length
         ? h(
           Rows,
-          { as: 'ul', class: 'Dock_Friends' },
+          { as: 'ul', className: 'Dock_Friends' },
           friends.map((f) =>
             friendRow(
               f,
@@ -355,7 +355,7 @@ let conversation = (
         null,
         h(
           Identity,
-          { as: 'div', class: 'Dock_Who' },
+          { as: 'div', className: 'Dock_Who' },
           face(f),
           h(
             Identity.Text,
@@ -373,7 +373,7 @@ let conversation = (
       f.shared.length
         ? h(
           'details',
-          { class: 'Dock_Shared' },
+          { className: 'Dock_Shared' },
           h(
             'summary',
             null,
@@ -402,7 +402,7 @@ let conversation = (
         )
         : h(
           Identity.Note,
-          { as: 'p', class: 'Dock_Quiet' },
+          { as: 'p', className: 'Dock_Quiet' },
           `Say hello to ${f.name}.`,
         ),
     ),
@@ -412,7 +412,7 @@ let conversation = (
       h(
         Form,
         {
-          class: 'Dock_Say',
+          className: 'Dock_Say',
           'data-friend-message': f.person,
           // Each friend's own box, so a draft never moves to another.
           'data-key': f.person,

@@ -6,13 +6,13 @@
 // side's one bell. The lists stand hidden until one has something in it
 // (operator-page.ts `lateScript`); on a phone, or beside an app, the pane is
 // one press away, from the bar's button.
-import { type ComponentChildren as Node, h } from 'preact'
+import { createElement as h, type ReactNode as Node } from 'react'
 
 /** The lists, each under its own title, shown once one has something in
  * it. */
 export let talkBeside = (lists: Node[], shown: boolean) =>
   h(
     'div',
-    { class: 'Talk_Lists', 'aria-label': 'Your lists', hidden: !shown },
+    { className: 'Talk_Lists', 'aria-label': 'Your lists', hidden: !shown },
     lists,
   )

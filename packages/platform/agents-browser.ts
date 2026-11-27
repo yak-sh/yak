@@ -14,7 +14,7 @@
  *
  * @module
  */
-import { type ComponentChildren, Fragment, h } from 'preact'
+import { createElement as h, Fragment, type ReactNode } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import type { Client } from '@yaks/client'
 import { mint } from '@yaks/graph'
@@ -29,7 +29,7 @@ import { nameFrom } from './page-parts.ts'
 /** The Agents and New app view. */
 export let VIEW = '[data-view="agents"]'
 
-let made = (doc: Document, node: ComponentChildren) => {
+let made = (doc: Document, node: ReactNode) => {
   let t = doc.createElement('template')
   t.innerHTML = renderToString(h(Fragment, null, node))
   return t.content

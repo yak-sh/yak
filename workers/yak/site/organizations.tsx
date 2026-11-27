@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The landing page for an organization's office (variant.ts `organization`):
 // a church, a club, a town office or a small business that has a website and
 // nobody on staff to look after it. It pitches the Pro plan as a web person
@@ -13,7 +13,7 @@
 // kept versions and the restores from docs/errors.md; support from
 // support.ts; the numbers its copy says from meter.ts, versions.ts, recover.ts
 // and directory.ts.
-import type { ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import { Button, Card, Field, Form } from '@yaks/ui'
 import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
@@ -55,19 +55,19 @@ let Letter = (
   { letter, back, children }: {
     letter: string
     back?: boolean
-    children: ComponentChildren
+    children: ReactNode
   },
 ) => (
-  <Card as='div' class={`Letter${back ? ' Letter-back' : ''}`}>
-    <p class='Letter_By' {...text(`${letter}.by`)} />
+  <Card as='div' className={`Letter${back ? ' Letter-back' : ''}`}>
+    <p className='Letter_By' {...text(`${letter}.by`)} />
     <p
-      class='Letter_Head'
+      className='Letter_Head'
       {...text(`${letter}.head`, {
         subject: <b {...text(`${letter}.subject`)} />,
         line: <br />,
       })}
     />
-    <div class='Letter_Body'>{children}</div>
+    <div className='Letter_Body'>{children}</div>
   </Card>
 )
 
@@ -83,15 +83,15 @@ export let Organizations = () => (
       </>
     }
   >
-    <section class='Hello' aria-labelledby='hello'>
-      <div class='Hello_Copy'>
-        <p class='Hello_Kicker' {...text('organizations.hello.kicker')} />
+    <section className='Hello' aria-labelledby='hello'>
+      <div className='Hello_Copy'>
+        <p className='Hello_Kicker' {...text('organizations.hello.kicker')} />
         <h1
-          class='Title Title-hero'
+          className='Title Title-hero'
           id='hello'
           {...text('organizations.hello.title')}
         />
-        <p class='Note' {...text('organizations.hello.note')} />
+        <p className='Note' {...text('organizations.hello.note')} />
         <Form method='post' action={START} id='start'>
           <Form.Hidden name='org' value='organization' />
           <Form.Field>
@@ -120,9 +120,9 @@ export let Organizations = () => (
           </Form.Field>
         </Form>
       </div>
-      <div class='Letters' role='group' aria-labelledby='asked'>
+      <div className='Letters' role='group' aria-labelledby='asked'>
         <p
-          class='Note Note-small'
+          className='Note Note-small'
           id='asked'
           {...text('organizations.letters.title')}
         />
@@ -144,9 +144,13 @@ export let Organizations = () => (
         </Letter>
       </div>
     </section>
-    <section class='Yours' aria-labelledby='missing'>
-      <h2 class='Title' id='missing' {...text('organizations.missing.title')} />
-      <dl class='Yours_List'>
+    <section className='Yours' aria-labelledby='missing'>
+      <h2
+        className='Title'
+        id='missing'
+        {...text('organizations.missing.title')}
+      />
+      <dl className='Yours_List'>
         {Object.entries<Slots>({
           forms: {
             sample: sample('potluck', 'organizations.missing.forms.sample'),
@@ -161,50 +165,54 @@ export let Organizations = () => (
         }).map(([item, slots]) => (
           <div>
             <dt
-              class='Yours_Term'
+              className='Yours_Term'
               {...text(`organizations.missing.${item}.term`)}
             />
             <dd
-              class='Yours_Detail'
+              className='Yours_Detail'
               {...text(`organizations.missing.${item}.detail`, slots)}
             />
           </div>
         ))}
       </dl>
-      <p class='Note Note-small' {...text('organizations.missing.note')} />
+      <p className='Note Note-small' {...text('organizations.missing.note')} />
     </section>
-    <section class='How' aria-labelledby='together'>
+    <section className='How' aria-labelledby='together'>
       <h2
-        class='Title'
+        className='Title'
         id='together'
         {...text('organizations.together.title')}
       />
-      <p class='Note' {...text('organizations.together.note')} />
+      <p className='Note' {...text('organizations.together.note')} />
       <ul
-        class='Plan_List'
+        className='Plan_List'
         {...list(
           'organizations.together.items',
-          (says) => <li class='Plan_Item'>{says}</li>,
+          (says) => <li className='Plan_Item'>{says}</li>,
         )}
       />
     </section>
-    <section class='Cost' aria-labelledby='saving'>
-      <h2 class='Title' id='saving' {...text('organizations.saving.title')} />
-      <p class='Note' {...text('organizations.saving.note')} />
+    <section className='Cost' aria-labelledby='saving'>
+      <h2
+        className='Title'
+        id='saving'
+        {...text('organizations.saving.title')}
+      />
+      <p className='Note' {...text('organizations.saving.note')} />
       <Form
         as='div'
-        class='Saving'
+        className='Saving'
         data-saving={PRICE.pro}
         {...attr('data-less', 'organizations.saving.less')}
         {...attr('data-same', 'organizations.saving.same')}
         hidden
       >
         <p
-          class='Form_Label'
+          className='Form_Label'
           id='paying'
           {...text('organizations.saving.paying')}
         />
-        <div class='Saving_Fields' role='group' aria-labelledby='paying'>
+        <div className='Saving_Fields' role='group' aria-labelledby='paying'>
           {PAID.map((name) => (
             <Form.Field>
               <Form.Label
@@ -222,32 +230,39 @@ export let Organizations = () => (
             </Form.Field>
           ))}
         </div>
-        <output class='Saving_Said' aria-live='polite' />
+        <output className='Saving_Said' aria-live='polite' />
         <Form.Hint {...text('organizations.saving.private')} />
       </Form>
     </section>
-    <section class='How' aria-labelledby='how'>
-      <h2 class='Title' id='how' {...text('organizations.how.title')} />
-      <ol class='Steps'>
+    <section className='How' aria-labelledby='how'>
+      <h2 className='Title' id='how' {...text('organizations.how.title')} />
+      <ol className='Steps'>
         {Object.entries<Slots>({
           start: {},
           ask: {},
           online: { domain },
         }).map(([step, slots]) => (
-          <li class='Steps_Item'>
-            <h3 class='Step_Name' {...text(`organizations.how.${step}.name`)} />
+          <li className='Steps_Item'>
+            <h3
+              className='Step_Name'
+              {...text(`organizations.how.${step}.name`)}
+            />
             <p
-              class='Note'
+              className='Note'
               {...text(`organizations.how.${step}.detail`, slots)}
             />
           </li>
         ))}
       </ol>
     </section>
-    <section class='Yours' aria-labelledby='behind'>
-      <h2 class='Title' id='behind' {...text('organizations.behind.title')} />
-      <p class='Note' {...text('organizations.behind.note')} />
-      <dl class='Yours_List Yours_List-pairs'>
+    <section className='Yours' aria-labelledby='behind'>
+      <h2
+        className='Title'
+        id='behind'
+        {...text('organizations.behind.title')}
+      />
+      <p className='Note' {...text('organizations.behind.note')} />
+      <dl className='Yours_List Yours_List-pairs'>
         {Object.entries<Slots>({
           broken: {},
           ours: {},
@@ -267,29 +282,29 @@ export let Organizations = () => (
         }).map(([item, slots]) => (
           <div>
             <dt
-              class='Yours_Term'
+              className='Yours_Term'
               {...text(`organizations.behind.${item}.term`)}
             />
             <dd
-              class='Yours_Detail'
+              className='Yours_Detail'
               {...text(`organizations.behind.${item}.detail`, slots)}
             />
           </div>
         ))}
       </dl>
     </section>
-    <section class='Cost' aria-labelledby='cost'>
-      <h2 class='Title' id='cost' {...text('organizations.cost.title')} />
-      <div class='Plans'>
-        <Card as='div' class='Plan Plan-pro'>
+    <section className='Cost' aria-labelledby='cost'>
+      <h2 className='Title' id='cost' {...text('organizations.cost.title')} />
+      <div className='Plans'>
+        <Card as='div' className='Plan Plan-pro'>
           <h3
-            class='Plan_Price'
+            className='Plan_Price'
             {...text('home.cost.pro.price', {
-              per: <span class='Plan_Per' {...text('home.cost.per')} />,
+              per: <span className='Plan_Per' {...text('home.cost.per')} />,
             })}
           />
-          <p class='Note Note-small' {...text('organizations.cost.note')} />
-          <ul class='Plan_List'>
+          <p className='Note Note-small' {...text('organizations.cost.note')} />
+          <ul className='Plan_List'>
             {Object.entries<Slots>({
               asks: {},
               people: {},
@@ -299,7 +314,7 @@ export let Organizations = () => (
               support: {},
             }).map(([item, slots]) => (
               <li
-                class='Plan_Item'
+                className='Plan_Item'
                 {...text(`organizations.cost.${item}`, slots)}
               />
             ))}
@@ -313,16 +328,16 @@ export let Organizations = () => (
         </Card>
       </div>
       <p
-        class='Note Note-small'
+        className='Note Note-small'
         {...text('organizations.cost.limits', {
           plans: <a href='/pricing' {...text('organizations.cost.plans')} />,
         })}
       />
       <SupportContract />
     </section>
-    <Card class='Join' aria-labelledby='join'>
-      <h2 class='Title' id='join' {...text('organizations.join.title')} />
-      <p class='Join_Doors'>
+    <Card className='Join' aria-labelledby='join'>
+      <h2 className='Title' id='join' {...text('organizations.join.title')} />
+      <p className='Join_Doors'>
         <Button
           mod='go'
           href='#say'
@@ -330,7 +345,7 @@ export let Organizations = () => (
           {...text('organizations.join.go')}
         />
       </p>
-      <p class='Note Note-small' {...text('organizations.join.note')} />
+      <p className='Note Note-small' {...text('organizations.join.note')} />
     </Card>
   </Page>
 )

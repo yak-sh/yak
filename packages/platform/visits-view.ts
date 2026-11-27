@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { h, type VNode } from 'preact'
+import { createElement as h, type ReactElement } from 'react'
 import { Card } from '@yaks/ui/Card'
 import { Form } from '@yaks/ui/Form'
 import { Report } from '@yaks/ui/Report'
@@ -80,7 +80,7 @@ export let chart = (days: Counted['daily']) =>
       from: days[0]?.day ?? '',
       values: days.map((d) => d.views),
       noun: 'visit',
-    }) as VNode,
+    }) as ReactElement,
     h(
       Report.Span,
       null,

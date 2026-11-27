@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { Page } from './frame.tsx'
 import { list, text } from './copy.ts'
 import { link, mail, Section, Top } from './prose.tsx'
@@ -7,12 +7,12 @@ export let AcceptableUse = () => (
   <Page copy='acceptable-use' path='/acceptable-use'>
     <Top at='acceptable-use.head' updated='2026-11-01T00:00:00Z' />
     <Section at='acceptable-use.prohibited'>
-      <p class='Prose_Text' {...text('acceptable-use.prohibited.lead')} />
+      <p className='Prose_Text' {...text('acceptable-use.prohibited.lead')} />
       <ul
-        class='Prose_List'
+        className='Prose_List'
         {...list(
           'acceptable-use.prohibited.items',
-          (says) => <li class='Prose_Item'>{says}</li>,
+          (says) => <li className='Prose_Item'>{says}</li>,
         )}
       />
     </Section>

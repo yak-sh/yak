@@ -15,7 +15,7 @@
  *
  * @module
  */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button } from '@yaks/ui/Button'
 import { Card } from '@yaks/ui/Card'
 import { Empty } from '@yaks/ui/Empty'
@@ -54,7 +54,7 @@ let side = (
   if (output) {
     return h(
       'div',
-      { class: 'Update_Prose' },
+      { className: 'Update_Prose' },
       parts.filter((p) => output[p]).map((p) => h('p', null, output[p])),
     )
   }
@@ -64,14 +64,14 @@ let side = (
       file.address ? bySha({ address: file.address }) : ''
     }`
     return String(file.media_type).startsWith('image/')
-      ? h('img', { class: 'Update_Picture', src: at, alt: '' })
+      ? h('img', { className: 'Update_Picture', src: at, alt: '' })
       : h('a', { href: at, target: '_blank', rel: 'noopener' }, 'Open file')
   }
   let doc = s.doc as { title?: string; body?: string } | undefined
   if (doc) {
     return h(
       'div',
-      { class: 'Update_Prose' },
+      { className: 'Update_Prose' },
       doc.title ? h('b', null, doc.title) : null,
       doc.body ? markdown(doc.body) : null,
     )
@@ -79,7 +79,7 @@ let side = (
   // Anything else is a draft of one of the space's apps.
   return h(
     Preview,
-    { class: 'Update_Draft' },
+    { className: 'Update_Draft' },
     h(
       Preview.Address,
       { href: draftAt(space, eid), target: '_blank', rel: 'noopener' },
@@ -100,26 +100,30 @@ let pairCard = (space: MatchesView['space'], t: Tapping) => {
   let c = t.card!
   return h(
     Card,
-    { class: 'Update Update-needs', id: 'pair' },
-    h('p', { class: 'Update_Words' }, c.question ?? 'Which would you choose?'),
+    { className: 'Update Update-needs', id: 'pair' },
+    h(
+      'p',
+      { className: 'Update_Words' },
+      c.question ?? 'Which would you choose?',
+    ),
     h(
       'form',
-      { class: 'Update_Form Page_Form', 'data-pick': '' },
+      { className: 'Update_Form Page_Form', 'data-pick': '' },
       h(Form.Hidden, { name: 'round', value: t.round }),
       h(Form.Hidden, { name: 'pair', value: String(c.n) }),
       h(Field, {
-        class: 'Update_Input',
+        className: 'Update_Input',
         name: 'why',
         'aria-label': 'Why, if you like',
         placeholder: 'Why, if you like',
       }),
       h(
         'ul',
-        { class: 'Update_Choices Update_Choices-shown' },
+        { className: 'Update_Choices Update_Choices-shown' },
         (['first', 'second'] as const).map((which) =>
           h(
             'li',
-            { class: 'Update_Choice' },
+            { className: 'Update_Choice' },
             side(space, t.round, c[which], t.parts),
             h(
               Button,
@@ -131,7 +135,7 @@ let pairCard = (space: MatchesView['space'], t: Tapping) => {
       ),
       h(Button, { name: 'chose', value: 'neither' }, 'Neither'),
       h('p', {
-        class: 'Form_Hint',
+        className: 'Form_Hint',
         role: 'status',
         'data-said': '',
         hidden: true,
@@ -145,11 +149,11 @@ let standing = (t: Tapping) =>
   t.places.some((p) => !p.measured.startsWith('Not picked'))
     ? h(
       Card,
-      { class: 'Update' },
-      h('p', { class: 'Update_Words' }, h('b', null, 'So far')),
+      { className: 'Update' },
+      h('p', { className: 'Update_Words' }, h('b', null, 'So far')),
       h(
         'ol',
-        { class: 'Update_Choices' },
+        { className: 'Update_Choices' },
         t.places.map((p) =>
           h('li', null, h('b', null, p.label), `: ${p.measured}`)
         ),
@@ -168,15 +172,15 @@ export let matchesView = (view: MatchesView, read: Matches) => {
       read.rounds.length
         ? h(
           Card,
-          { class: 'Update' },
+          { className: 'Update' },
           h(
             'p',
-            { class: 'Note Update_About' },
+            { className: 'Note Update_About' },
             `${space.operator} asks you to pick between drafts here before one is released.`,
           ),
           h(
             'ul',
-            { class: 'Update_Choices' },
+            { className: 'Update_Choices' },
             read.rounds.map((r) =>
               h(
                 'li',
@@ -193,7 +197,7 @@ export let matchesView = (view: MatchesView, read: Matches) => {
         )
         : h(
           'div',
-          { class: 'Talk_Hello' },
+          { className: 'Talk_Hello' },
           h(Empty.Title, { mod: 'welcome' }, 'Nothing to pick'),
           h(
             'p',
@@ -206,13 +210,13 @@ export let matchesView = (view: MatchesView, read: Matches) => {
   return h(
     'div',
     null,
-    h('p', { class: 'Note Update_About' }, read.title),
+    h('p', { className: 'Note Update_About' }, read.title),
     read.card ? pairCard(space, read) : h(
       Card,
-      { class: 'Update' },
+      { className: 'Update' },
       h(
         'p',
-        { class: 'Update_Words' },
+        { className: 'Update_Words' },
         read.picked == 1
           ? 'Nothing left to pick here: your pick settles the rest.'
           : `Nothing left to pick here: your ${read.picked} picks settle the rest.`,

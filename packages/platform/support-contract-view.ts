@@ -1,4 +1,4 @@
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { Button, Card, Field, Form, Group, Icon, Modal } from '@yaks/ui/parts'
 // @ts-types="@yaks/ui/lucide"
 import X from 'lucide/dist/esm/icons/x.mjs'
@@ -19,7 +19,7 @@ let hidden = (name: string, value: string) =>
 
 let form = (
   fields: Record<string, string>,
-  ...children: ComponentChildren[]
+  ...children: ReactNode[]
 ) =>
   h(Form, { method: 'post', action: CONTRACTS }, [
     hidden('browser', '1'),
@@ -112,7 +112,7 @@ let TERMS = 'support-contract-terms'
 // A dialog over the page holding the terms form, opened by its button with no
 // script: a popover, which the backdrop, the close button and Escape put
 // away. Put away, it still holds what was typed, for the next open.
-let dialog = (title: string, body: ComponentChildren) => {
+let dialog = (title: string, body: ReactNode) => {
   let shut = {
     popovertarget: TERMS,
     popovertargetaction: 'hide',

@@ -13,7 +13,7 @@
  *
  * @module
  */
-import { type ComponentChildren, Fragment, h } from 'preact'
+import { createElement as h, Fragment, type ReactNode } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import type { Client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
@@ -35,7 +35,7 @@ import './updates-day-browser.ts'
 /** The Updates cards view. */
 export let VIEW = '[data-view="updates"]'
 
-let made = (doc: Document, node: ComponentChildren) => {
+let made = (doc: Document, node: ReactNode) => {
   let t = doc.createElement('template')
   t.innerHTML = renderToString(h(Fragment, null, node))
   return t.content

@@ -4,7 +4,7 @@
 // filled again from the copy as released (page-copy.ts), so a word changed on
 // the page needs no commit and no deploy.
 import { type Copy, fill, items, names, parse, read } from '@yaks/copy'
-import { cloneElement, type VNode } from 'preact'
+import { cloneElement, type ReactElement } from 'react'
 import file from '../../../apps/home/copy.json' with { type: 'json' }
 
 /** The home app's copy, as committed. */
@@ -23,7 +23,7 @@ export let said = (key: string, slots: Record<string, string> = {}): string =>
   fill(snippet(key), slots).join('')
 
 /** The element filling each slot of a snippet, by the slot's name. */
-export type Slots = Record<string, VNode>
+export type Slots = Record<string, ReactElement>
 
 /**
  * The props of an element showing the snippet at `key`: its name, and its
@@ -54,7 +54,7 @@ export let text = (key: string, slots: Slots = {}) => {
  * <ul {...list('pricing.always.items', (says) => <li class='Plan_Item'>{says}</li>)} />
  * ```
  */
-export let list = (key: string, item: (says: string) => VNode) => {
+export let list = (key: string, item: (says: string) => ReactElement) => {
   let all = items(COPY, key)
   if (!all) throw new Error(`apps/home/copy.json has no list ${key}`)
   return {

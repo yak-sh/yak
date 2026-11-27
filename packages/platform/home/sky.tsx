@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The sky behind the home page's hero: dusk when the page is light, night
 // when it is dark, over the same three ranges of hills and the same wavy
 // line he sits on, with grass under the line that fades into the page.
@@ -12,7 +12,7 @@
 // is as the page scrolls (DEPTH), and answers a touch on the sun, the moon
 // and the stars. Both scenes are always drawn, so a touch on the sun or the
 // moon can turn the sky through the other one and back.
-import type { ComponentChildren, JSX } from 'preact'
+import type { JSX, ReactNode } from 'react'
 
 /** How far the line he sits on is above the bottom of his hooves, in his
  * units: far enough that the tip of his tail touches it. */
@@ -97,7 +97,7 @@ export let under = (f: Line, bottom: number) =>
 /** A long thin wisp of lit cloud. */
 let wisp = (x: number, y: number, w: number, h: number, far = false) => (
   <path
-    class={far ? 'Sky_Wisp Sky_Wisp-far' : 'Sky_Wisp'}
+    className={far ? 'Sky_Wisp Sky_Wisp-far' : 'Sky_Wisp'}
     d={`M${x - w / 2} ${y}Q${x - w / 6} ${y - h} ${x + w / 2} ${y - h * .2}Q${
       x + w / 8
     } ${y + h * .5} ${x - w / 2} ${y}Z`}
@@ -150,23 +150,28 @@ let LANDSCAPE = [
 ] as const
 
 let Sol = (
-  { overHero, children }: { overHero?: boolean; children?: ComponentChildren },
+  { overHero, children }: { overHero?: boolean; children?: ReactNode },
 ) => (
   <>
     <circle
-      class='Sky_Glow'
+      className='Sky_Glow'
       fill='url(#Sky-glow)'
       cx={SUN.x}
       cy={overHero ? SUN.y : 0}
       r={overHero ? 84 : 230}
     />
     {children}
-    <circle class='Sky_Sun' cx={SUN.x} cy={SUN.y} r={overHero ? 27 : SUN.r} />
+    <circle
+      className='Sky_Sun'
+      cx={SUN.x}
+      cy={SUN.y}
+      r={overHero ? 27 : SUN.r}
+    />
   </>
 )
 
 let Drift = () => (
-  <g class='Sky_Drift'>
+  <g className='Sky_Drift'>
     {wisp(-330, -214, 300, 11, true)}
     {wisp(250, -128, 330, 12)}
     {wisp(840, -186, 460, 15, true)}
@@ -199,9 +204,9 @@ let cloud = (r: () => number, x: number, y: number, w: number, h: number) => {
   let a = n1(left + w * .1), b = n1(right - w * .1)
   return (
     <>
-      <path class='Sky_Cloud' fill='url(#Sky-cloud)' d={d} />
+      <path className='Sky_Cloud' fill='url(#Sky-cloud)' d={d} />
       <path
-        class='Sky_CloudLight'
+        className='Sky_CloudLight'
         d={`M${a} ${y}Q${n1(x)} ${n1(y + h * .12)} ${b} ${y}Q${n1(x)} ${
           n1(y - h * .3)
         } ${a} ${y}Z`}
@@ -224,9 +229,9 @@ const CLOUDS: [number, number, number, number, string?][] = [
 let Clouds = () => {
   let r = rand(77)
   return (
-    <g class='Sky_Drift'>
+    <g className='Sky_Drift'>
       {CLOUDS.map(([x, y, w, h, only]) => (
-        <g class={only && `Sky_Cloud-${only}`}>{cloud(r, x, y, w, h)}</g>
+        <g className={only && `Sky_Cloud-${only}`}>{cloud(r, x, y, w, h)}</g>
       ))}
     </g>
   )
@@ -255,14 +260,14 @@ let fog = () => {
 let Luna = () => (
   <>
     <circle
-      class='Sky_Halo'
+      className='Sky_Halo'
       fill='url(#Sky-halo)'
       cx={MOON.x}
       cy={MOON.y}
       r='80'
     />
     <g transform={`translate(${MOON.x} ${MOON.y}) rotate(-150)`}>
-      <path class='Sky_Moon' d={moon(PHASE)} />
+      <path className='Sky_Moon' d={moon(PHASE)} />
     </g>
   </>
 )
@@ -271,8 +276,8 @@ let HillPaints = () => (
   <>
     {LANDSCAPE.map(([name]) => (
       <linearGradient id={`Sky-hill-${name}`} x2='0' y2='1'>
-        <stop class={`Sky_${name}Top`} />
-        <stop offset='1' class={`Sky_${name}Foot`} />
+        <stop className={`Sky_${name}Top`} />
+        <stop offset='1' className={`Sky_${name}Foot`} />
       </linearGradient>
     ))}
   </>
@@ -281,23 +286,23 @@ let HillPaints = () => (
 let CloudPaints = () => (
   <>
     <linearGradient id='Sky-cloud' x2='0' y2='1'>
-      <stop class='Sky_Cloud0' />
-      <stop offset='.55' class='Sky_Cloud1' />
-      <stop offset='1' class='Sky_Cloud2' />
+      <stop className='Sky_Cloud0' />
+      <stop offset='.55' className='Sky_Cloud1' />
+      <stop offset='1' className='Sky_Cloud2' />
     </linearGradient>
     <radialGradient id='Sky-fog'>
-      <stop class='Sky_Fog0' />
-      <stop offset='1' class='Sky_Fog1' />
+      <stop className='Sky_Fog0' />
+      <stop offset='1' className='Sky_Fog1' />
     </radialGradient>
   </>
 )
 
 let Motes = () => (
-  <div class='Sky_Day Sky_Motes'>
+  <div className='Sky_Day Sky_Motes'>
     {[[2, -18], [15, 8], [32, -27], [51, 6], [62, -13], [83, 14], [96, -8]]
       .map(([x, y], i) => (
         <span
-          class='Sky_Mote'
+          className='Sky_Mote'
           style={{
             '--x-at': `${x}%`,
             '--y-at': y,
@@ -319,7 +324,7 @@ let night = () => {
     let blink = i % 9 == 0
     stars.push(
       <circle
-        class={blink ? 'Sky_Star Sky_Star-blink' : 'Sky_Star'}
+        className={blink ? 'Sky_Star Sky_Star-blink' : 'Sky_Star'}
         style={blink ? `animation-delay:-${n1(r() * 5)}s` : undefined}
         cx={n1(x)}
         cy={n1(y)}
@@ -332,7 +337,7 @@ let night = () => {
     let x = 90 + 1100 * r(), y = -46 + 50 * r()
     flies.push(
       <circle
-        class='Sky_Fly'
+        className='Sky_Fly'
         cx={n1(x)}
         cy={n1(y)}
         r='4.5'
@@ -367,7 +372,7 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
   let hills = landscape ? LANDSCAPE : HILLS
   return (
     <div
-      class='Sky'
+      className='Sky'
       data-landscape={landscape ? '' : undefined}
       aria-hidden='true'
       data-kept-moves=''
@@ -375,36 +380,36 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
       data-birds={BIRDS}
       data-shoot={SHOOT}
     >
-      <div class='Sky_Air' data-depth={DEPTH.dusk}>
-        <div class='Sky_Dark' />
-        <div class='Sky_Twilight' />
+      <div className='Sky_Air' data-depth={DEPTH.dusk}>
+        <div className='Sky_Dark' />
+        <div className='Sky_Twilight' />
       </div>
-      {landscape && <div class='Sky_SunSlot' data-sun-at='' />}
-      <canvas class='Sky_Trails' />
-      <svg class='Sky_Far' viewBox='-3000 -800 6000 860' focusable='false'>
+      {landscape && <div className='Sky_SunSlot' data-sun-at='' />}
+      <canvas className='Sky_Trails' />
+      <svg className='Sky_Far' viewBox='-3000 -800 6000 860' focusable='false'>
         <defs>
           {landscape && <HillPaints />}
           {landscape && <CloudPaints />}
           <radialGradient id='Sky-glow'>
-            <stop offset='0' class='Sky_Glow0' />
-            <stop offset='.35' class='Sky_Glow1' />
-            <stop offset='1' class='Sky_Glow2' />
+            <stop offset='0' className='Sky_Glow0' />
+            <stop offset='.35' className='Sky_Glow1' />
+            <stop offset='1' className='Sky_Glow2' />
           </radialGradient>
           <radialGradient id='Sky-halo'>
-            <stop offset='0' class='Sky_Halo0' />
-            <stop offset='1' class='Sky_Halo1' />
+            <stop offset='0' className='Sky_Halo0' />
+            <stop offset='1' className='Sky_Halo1' />
           </radialGradient>
           <linearGradient id='Sky-tail'>
-            <stop offset='0' class='Sky_Tail0' />
-            <stop offset='1' class='Sky_Tail1' />
+            <stop offset='0' className='Sky_Tail0' />
+            <stop offset='1' className='Sky_Tail1' />
           </linearGradient>
           <radialGradient id='Sky-fly'>
-            <stop offset='0' class='Sky_Fly0' />
-            <stop offset='.3' class='Sky_Fly1' />
-            <stop offset='1' class='Sky_Fly2' />
+            <stop offset='0' className='Sky_Fly0' />
+            <stop offset='.3' className='Sky_Fly1' />
+            <stop offset='1' className='Sky_Fly2' />
           </radialGradient>
         </defs>
-        <g class='Sky_Day' data-depth={DEPTH.dusk}>
+        <g className='Sky_Day' data-depth={DEPTH.dusk}>
           {landscape ? <Clouds /> : (
             <Sol>
               <Drift />
@@ -412,39 +417,43 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
           )}
         </g>
         {landscape && (
-          <g class='Sky_Day Sky_Sol'>
+          <g className='Sky_Day Sky_Sol'>
             <Sol overHero />
           </g>
         )}
-        <g class='Sky_Night Sky_Deep' data-depth={DEPTH.night}>
-          <g class='Sky_Stars'>{stars}</g>
+        <g className='Sky_Night Sky_Deep' data-depth={DEPTH.night}>
+          <g className='Sky_Stars'>{stars}</g>
           {!landscape && <Luna />}
         </g>
         {landscape && (
-          <g class='Sky_Night Sky_Fog' data-depth={DEPTH.fog}>
-            <g class='Sky_Drift'>{fog()}</g>
+          <g className='Sky_Night Sky_Fog' data-depth={DEPTH.fog}>
+            <g className='Sky_Drift'>{fog()}</g>
           </g>
         )}
         {landscape && (
-          <g class='Sky_Night Sky_Luna'>
+          <g className='Sky_Night Sky_Luna'>
             <Luna />
           </g>
         )}
-        <g class='Sky_Hills'>
+        <g className='Sky_Hills'>
           {hills.map(([name, f]) => (
             <path
-              class={`Sky_${name}`}
+              className={`Sky_${name}`}
               data-depth={DEPTH[name]}
               style={landscape ? { fill: `url(#Sky-hill-${name})` } : undefined}
               d={under(f, 60)}
             />
           ))}
         </g>
-        <g class='Sky_Night'>{flies}</g>
-        <g class='Sky_Day Sky_Birds' />
+        <g className='Sky_Night'>{flies}</g>
+        <g className='Sky_Day Sky_Birds' />
       </svg>
-      <div class='Sky_Grass'>
-        <svg class='Sky_Turf' viewBox='-3000 -60 6000 300' focusable='false'>
+      <div className='Sky_Grass'>
+        <svg
+          className='Sky_Turf'
+          viewBox='-3000 -60 6000 300'
+          focusable='false'
+        >
           <defs>
             <linearGradient
               id='Sky-turf'
@@ -454,13 +463,13 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
               x2='0'
               y2={landscape ? 80 : 190}
             >
-              <stop offset='0' class='Sky_Turf0' />
-              <stop offset='1' class='Sky_Turf1' />
+              <stop offset='0' className='Sky_Turf0' />
+              <stop offset='1' className='Sky_Turf1' />
             </linearGradient>
           </defs>
-          <path class='Sky_Base' d={ground} />
-          <path class='Sky_Ground' fill='url(#Sky-turf)' d={ground} />
-          <path class='Sky_Line' d={line(G)} />
+          <path className='Sky_Base' d={ground} />
+          <path className='Sky_Ground' fill='url(#Sky-turf)' d={ground} />
+          <path className='Sky_Line' d={line(G)} />
         </svg>
       </div>
       {landscape && <Motes />}

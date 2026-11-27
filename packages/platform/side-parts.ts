@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { IconNode } from 'lucide'
 // @ts-types="@yaks/ui/lucide"
 import Check from 'lucide/dist/esm/icons/check.mjs'
@@ -94,7 +94,11 @@ let glyph = (of: IconNode) => h(Icon, { of })
 /** How many wait on the person, `n`, on the red badge: hidden at none, and
  * saying the count it was drawn with for a page to add to. */
 export let waitingBadge = (n: number, cls?: string) =>
-  h(Badge, { class: cls, hidden: !n || undefined, 'data-waiting': n }, n || '')
+  h(
+    Badge,
+    { className: cls, hidden: !n || undefined, 'data-waiting': n },
+    n || '',
+  )
 
 /** How many of the person's Updates wait on them in the space `slug`, or in
  * all their spaces where it is empty: hidden until the tab's page graph has
@@ -102,7 +106,7 @@ export let waitingBadge = (n: number, cls?: string) =>
 export let acrossBadge = (slug: string, cls?: string, count?: number) =>
   h(
     Badge,
-    { class: cls, hidden: !count || undefined, 'data-across': slug },
+    { className: cls, hidden: !count || undefined, 'data-across': slug },
     count || '',
   )
 
@@ -129,7 +133,7 @@ export let link = (at: Item) => {
     at.image
       ? h(
         'span',
-        { class: 'Sidebar_Icon', ...at.image.backdrop },
+        { className: 'Sidebar_Icon', ...at.image.backdrop },
         h('img', { ...at.image.image, width: 24, height: 24 }),
       )
       : glyph(at.icon),
@@ -141,13 +145,13 @@ export let link = (at: Item) => {
       : at.waiting != null
       ? waitingBadge(at.waiting, 'Sidebar_Count')
       : at.count != null
-      ? h(Badge, { mod: 'quiet', class: 'Sidebar_Count' }, at.count)
+      ? h(Badge, { mod: 'quiet', className: 'Sidebar_Count' }, at.count)
       : null,
   )
   return at.submit
     ? h(
       'form',
-      { class: 'Sidebar_Form', method: 'post', action: at.href },
+      { className: 'Sidebar_Form', method: 'post', action: at.href },
       Object.entries(at.fields ?? {}).map(([name, value]) =>
         h(Form.Hidden, { name, value })
       ),
@@ -160,7 +164,7 @@ export let link = (at: Item) => {
 export let besideMark = () =>
   h(
     Badge,
-    { mod: 'quiet', class: 'Sidebar_Count', 'data-side-open': '' },
+    { mod: 'quiet', className: 'Sidebar_Count', 'data-side-open': '' },
     'Open',
   )
 
@@ -170,7 +174,7 @@ let more = () =>
     {
       as: 'button',
       type: 'button',
-      class: 'Sidebar_More',
+      className: 'Sidebar_More',
       title: 'More',
       'aria-expanded': 'false',
       'data-fit-more': '',
@@ -185,15 +189,15 @@ let more = () =>
 export let section = (at: Section, collapsed: boolean) =>
   h(
     'div',
-    { class: 'Sidebar_Section', 'data-side-part': at.id },
+    { className: 'Sidebar_Section', 'data-side-part': at.id },
     at.heading
-      ? h('h3', { class: 'Sidebar_Group', id: at.id }, at.label)
+      ? h('h3', { className: 'Sidebar_Group', id: at.id }, at.label)
       : null,
     at.items.length
       ? h(
         SideNav,
         {
-          class: 'Sidebar_Nav',
+          className: 'Sidebar_Nav',
           mod: collapsed && 'rail',
           'data-fit-list': at.fit ? '' : undefined,
           'aria-labelledby': at.heading ? at.id : undefined,
@@ -202,7 +206,7 @@ export let section = (at: Section, collapsed: boolean) =>
         at.items.map(link),
         at.fit ? more() : null,
       )
-      : h('p', { class: 'Sidebar_None' }, at.empty),
+      : h('p', { className: 'Sidebar_None' }, at.empty),
   )
 
 let named = (s: Picked) => s.title || s.slug
@@ -252,7 +256,7 @@ export let choice = (
       Identity.Add,
       { href: make.href, title: make.label },
       glyph(Plus),
-      h('span', { class: 'Sidebar_Label' }, make.label),
+      h('span', { className: 'Sidebar_Label' }, make.label),
     )
     : null
   let box = (s: Picked, line = '') => {

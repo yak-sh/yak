@@ -9,7 +9,7 @@ import { SAYS } from '@yaks/feedback/hosted'
 // the words with the letter TaskMaster is owed. A thread nobody here may read
 // answers exactly what a thread that does not exist answers, so an id says
 // nothing about anybody's thread, a thread said signed out included.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Button, Card, Field, Time } from '@yaks/ui/parts'
 import { bound, type Env } from './env.ts'
 import * as dirPart from './directory.ts'
@@ -71,15 +71,15 @@ let message = (
     null,
     h(
       'p',
-      { class: 'Support_Meta' },
+      { className: 'Support_Meta' },
       speaker(m, me),
       m.at ? [' · ', h(Time, { at: m.at })] : null,
     ),
-    h('div', { class: 'Support_Words' }, markdown(m.words)),
+    h('div', { className: 'Support_Words' }, markdown(m.words)),
     m.fixes.length
       ? h(
         'p',
-        { class: 'Support_Fix' },
+        { className: 'Support_Fix' },
         'Fix: ',
         m.fixes.map((f, i) => [i ? ', ' : '', fixed(f)]),
       )
@@ -91,7 +91,7 @@ let message = (
 export let view = (t: Thread, me: string, say?: string, no?: boolean) =>
   h(
     'div',
-    { class: 'Support' },
+    { className: 'Support' },
     message({
       from: 'person',
       person: t.person,
@@ -103,7 +103,7 @@ export let view = (t: Thread, me: string, say?: string, no?: boolean) =>
     t.completed
       ? h(
         'p',
-        { class: 'Support_Meta' },
+        { className: 'Support_Meta' },
         'Marked done',
         t.completed.at ? [' · ', h(Time, { at: t.completed.at })] : null,
       )
@@ -111,9 +111,9 @@ export let view = (t: Thread, me: string, say?: string, no?: boolean) =>
     notice(say, no),
     h(
       'form',
-      { class: 'Support_Form Page_Form', method: 'post' },
+      { className: 'Support_Form Page_Form', method: 'post' },
       h(Field, {
-        class: 'Support_Input',
+        className: 'Support_Input',
         lines: true,
         name: 'text',
         placeholder: 'Write a reply…',

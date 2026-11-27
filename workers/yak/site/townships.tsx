@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The landing page for a Michigan township (variant.ts `township`): what the
 // township app does for a clerk and the residents, and a calculator of the
 // dates the Open Meetings Act makes a meeting's notice and minutes due. Only
@@ -63,12 +63,15 @@ let cite = (law: keyof typeof LAW) => (
 let Terms = (
   { group, items }: { group: string; items: Record<string, Slots> },
 ) => (
-  <dl class='Yours_List'>
+  <dl className='Yours_List'>
     {Object.entries(items).map(([item, slots]) => (
       <div>
-        <dt class='Yours_Term' {...text(`townships.${group}.${item}.term`)} />
+        <dt
+          className='Yours_Term'
+          {...text(`townships.${group}.${item}.term`)}
+        />
         <dd
-          class='Yours_Detail'
+          className='Yours_Detail'
           {...text(`townships.${group}.${item}.detail`, slots)}
         />
       </div>
@@ -91,16 +94,16 @@ export let Townships = () => (
       </>
     }
   >
-    <section class='Hello' aria-labelledby='hello'>
-      <div class='Hello_Copy'>
-        <p class='Hello_Kicker' {...text('townships.hello.kicker')} />
+    <section className='Hello' aria-labelledby='hello'>
+      <div className='Hello_Copy'>
+        <p className='Hello_Kicker' {...text('townships.hello.kicker')} />
         <h1
-          class='Title Title-hero'
+          className='Title Title-hero'
           id='hello'
           {...text('townships.hello.title')}
         />
-        <p class='Note' {...text('townships.hello.lead')} />
-        <p class='Join_Doors'>
+        <p className='Note' {...text('townships.hello.lead')} />
+        <p className='Join_Doors'>
           <Button
             mod='go'
             href={installAt(APP)}
@@ -113,23 +116,27 @@ export let Townships = () => (
             {...sample('townships.hello.sample')}
           />
         </p>
-        <p class='Note Note-small' {...text('townships.hello.note')} />
+        <p className='Note Note-small' {...text('townships.hello.note')} />
       </div>
     </section>
     <section aria-labelledby='dues'>
-      <h2 class='Title' id='dues' {...text('townships.dues.title')} />
-      <p class='Note' {...text('townships.dues.note')} />
-      <ul class='Plan_List'>
+      <h2 className='Title' id='dues' {...text('townships.dues.title')} />
+      <p className='Note' {...text('townships.dues.note')} />
+      <ul className='Plan_List'>
         {Object.entries(RULES).map(([rule, law]) => (
           <li
-            class='Plan_Item'
+            className='Plan_Item'
             {...text(`townships.dues.law.${rule}`, { cite: cite(law) })}
           />
         ))}
       </ul>
-      <Form as='div' class='Dues' data-dues={DUES} hidden>
-        <p class='Form_Label' id='meeting' {...text('townships.dues.ask')} />
-        <div class='Dues_Fields' role='group' aria-labelledby='meeting'>
+      <Form as='div' className='Dues' data-dues={DUES} hidden>
+        <p
+          className='Form_Label'
+          id='meeting'
+          {...text('townships.dues.ask')}
+        />
+        <div className='Dues_Fields' role='group' aria-labelledby='meeting'>
           <Form.Field>
             <Form.Label for='dues-day' {...text('townships.dues.day')} />
             <Field id='dues-day' type='date' />
@@ -164,12 +171,12 @@ export let Townships = () => (
           <Check.Input type='checkbox' id='dues-special' />
           <span {...text('townships.dues.special')} />
         </Check>
-        <div class='Dues_Said' role='status' aria-live='polite' />
+        <div className='Dues_Said' role='status' aria-live='polite' />
         {
           /* The lines the script says a meeting's dates in, each with a place
             for its date (public/township-dues.js). */
         }
-        <template class='Dues_Lines'>
+        <template className='Dues_Lines'>
           {Object.entries<Slots>({
             proposed: { day: <span data-at='' /> },
             approved: { day: <span data-at='' /> },
@@ -177,7 +184,7 @@ export let Townships = () => (
             untimed: {},
           }).map(([due, slots]) => (
             <li
-              class='Plan_Item'
+              className='Plan_Item'
               data-due={due}
               {...text(`townships.dues.said.${due}`, slots)}
             />
@@ -186,8 +193,8 @@ export let Townships = () => (
         <Form.Hint {...text('townships.dues.hint')} />
       </Form>
     </section>
-    <section class='Yours' aria-labelledby='site'>
-      <h2 class='Title' id='site' {...text('townships.site.title')} />
+    <section className='Yours' aria-labelledby='site'>
+      <h2 className='Title' id='site' {...text('townships.site.title')} />
       <Terms
         group='site'
         items={{
@@ -205,34 +212,34 @@ export let Townships = () => (
         }}
       />
     </section>
-    <section class='How' aria-labelledby='how'>
-      <h2 class='Title' id='how' {...text('townships.how.title')} />
-      <ol class='Steps'>
+    <section className='How' aria-labelledby='how'>
+      <h2 className='Title' id='how' {...text('townships.how.title')} />
+      <ol className='Steps'>
         {['record', 'draft', 'post', 'keep'].map((step) => (
-          <li class='Steps_Item'>
-            <h3 class='Step_Name' {...text(`townships.how.${step}.name`)} />
-            <p class='Note' {...text(`townships.how.${step}.detail`)} />
+          <li className='Steps_Item'>
+            <h3 className='Step_Name' {...text(`townships.how.${step}.name`)} />
+            <p className='Note' {...text(`townships.how.${step}.detail`)} />
           </li>
         ))}
       </ol>
-      <p class='Note Note-small' {...text('townships.how.note')} />
+      <p className='Note Note-small' {...text('townships.how.note')} />
     </section>
-    <section class='Yours' aria-labelledby='clerk'>
-      <h2 class='Title' id='clerk' {...text('townships.clerk.title')} />
+    <section className='Yours' aria-labelledby='clerk'>
+      <h2 className='Title' id='clerk' {...text('townships.clerk.title')} />
       <Terms group='clerk' items={{ due: {}, reminder: {}, assistant: {} }} />
     </section>
-    <section class='Cost' aria-labelledby='cost'>
-      <h2 class='Title' id='cost' {...text('townships.cost.title')} />
+    <section className='Cost' aria-labelledby='cost'>
+      <h2 className='Title' id='cost' {...text('townships.cost.title')} />
       <p
-        class='Note'
+        className='Note'
         {...text('townships.cost.space', {
           yours: <Yours name='yourtownship' path='/township' />,
           domain: <b {...text('townships.cost.domain')} />,
         })}
       />
-      <p class='Note' {...text('townships.cost.meeting')} />
+      <p className='Note' {...text('townships.cost.meeting')} />
       <p
-        class='Note Note-small'
+        className='Note Note-small'
         {...text('townships.cost.links', {
           plans: <a href='/pricing' {...text('home.cost.plans')} />,
           behind: (
@@ -245,9 +252,9 @@ export let Townships = () => (
       />
       <SupportContract />
     </section>
-    <Card class='Join' aria-labelledby='join'>
-      <h2 class='Title' id='join' {...text('townships.join.title')} />
-      <p class='Join_Doors'>
+    <Card className='Join' aria-labelledby='join'>
+      <h2 className='Title' id='join' {...text('townships.join.title')} />
+      <p className='Join_Doors'>
         <Button
           mod='go'
           href={installAt(APP)}
@@ -255,7 +262,7 @@ export let Townships = () => (
           {...text('townships.hello.get')}
         />
       </p>
-      <p class='Note Note-small' {...text('townships.join.note')} />
+      <p className='Note Note-small' {...text('townships.join.note')} />
     </Card>
   </Page>
 )

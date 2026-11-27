@@ -2,7 +2,8 @@
 // server drew (operator-box.ts `Ask`), as part of `_talk.js`
 // (operator-rows.ts). Only page code imports it, as operator-talk-browser.ts
 // says why.
-import { h, hydrate, render } from 'preact'
+import { createElement as h } from 'react'
+import { hydrate, render } from '@yaks/react/draw'
 import type { CanvasChoice } from '@yaks/platform/app-canvas-view'
 import { type Filed, PICTURES } from '@yaks/session/conversation'
 import {

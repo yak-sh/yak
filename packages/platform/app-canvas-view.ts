@@ -16,7 +16,7 @@
  *
  * @module
  */
-import { type ComponentChildren as Node, h } from 'preact'
+import { createElement as h, type ReactNode as Node } from 'react'
 import {
   Button,
   Card,
@@ -260,11 +260,11 @@ export let appCanvas = (
         TabSet.Panel,
         {
           as: Card,
-          class: `Talk_Part Talk_Part-${id}`,
+          className: `Talk_Part Talk_Part-${id}`,
           'data-part': id,
           'data-compact': id == 'preview' ? '' : undefined,
         },
-        h('div', { class: 'Talk_Sheet' }, ...inside),
+        h('div', { className: 'Talk_Sheet' }, ...inside),
       ),
     )
   return h(
@@ -272,7 +272,7 @@ export let appCanvas = (
     {
       as: Slides,
       mod: 'pane',
-      class: 'Talk_App',
+      className: 'Talk_App',
       id: 'app',
       'aria-label': title,
       'data-app': app.slug,
@@ -284,7 +284,7 @@ export let appCanvas = (
       { mod: 'compact', 'data-part': 'head' },
       h(
         Button,
-        { href: '#', class: 'Talk_Back', 'data-pane': '' },
+        { href: '#', className: 'Talk_Back', 'data-pane': '' },
         h(Icon, { of: ArrowLeft }),
         'Chat',
       ),
@@ -311,10 +311,10 @@ export let appCanvas = (
     ),
     h(
       'div',
-      { class: 'Talk_Stage', 'aria-busy': making ? undefined : 'true' },
+      { className: 'Talk_Stage', 'aria-busy': making ? undefined : 'true' },
       opening ? null : h(
         TabSet,
-        { class: 'Talk_Made', 'aria-label': `What ${title} is made of` },
+        { className: 'Talk_Made', 'aria-label': `What ${title} is made of` },
         tab('keeps', 'Data', keeps(now.made, whose)),
         tab(
           'does',
@@ -355,6 +355,6 @@ export let appCanvas = (
 export let showing = (app: Pick<MarkedApp, 'slug' | 'title'>): Node =>
   h(
     Button,
-    { href: '#app', class: 'Talk_Show', 'data-pane': '' },
+    { href: '#app', className: 'Talk_Show', 'data-pane': '' },
     h(Toolbar.Label, {}, app.title || app.slug),
   )

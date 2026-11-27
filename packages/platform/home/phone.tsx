@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { Button, Card, Chip, Chips } from '@yaks/ui'
 import { type Feature, FEATURES } from './parts.ts'
 import { ServiceLogo } from './scenes.tsx'
@@ -24,26 +24,26 @@ let Message = (
   },
 ) => (
   <li
-    class={`Home_Message Home_Message-${line.who}`}
+    className={`Home_Message Home_Message-${line.who}`}
     data-turn={turn}
     data-line={at}
     data-count={count}
     hidden={turn != 0}
   >
-    <div class={`Chat_Bubble Chat_Bubble-${line.who}`}>
-      <a class='Home_MessageLink' href={`#${section}`}>
+    <div className={`Chat_Bubble Chat_Bubble-${line.who}`}>
+      <a className='Home_MessageLink' href={`#${section}`}>
         {logo && <ServiceLogo slug={logo} />}
         {line.text}
       </a>
       {line.app && (
         // Where the phone is too small for the picture, the words open the
         // demo instead.
-        <a class='Home_AppLink' href={line.app.href}>{line.text}</a>
+        <a className='Home_AppLink' href={line.app.href}>{line.text}</a>
       )}
       {line.app && (
-        <a class='Home_Shot' href={line.app.href}>
+        <a className='Home_Shot' href={line.app.href}>
           <img
-            class='Home_Image'
+            className='Home_Image'
             src={line.app.src}
             alt={`${name} demo`}
             width={line.app.width}
@@ -69,13 +69,13 @@ let Conversation = (
   { demo, first, told }: { demo: Demo; first: boolean; told: Told },
 ) => (
   <div
-    class='Home_Track'
+    className='Home_Track'
     data-conversation={demo.slug}
     hidden={!first}
     role='group'
     aria-label='Example messages'
   >
-    <ol class='Home_Messages'>
+    <ol className='Home_Messages'>
       {demo.turn.flatMap((lines, turn) => {
         let feature = told.features[turn]
         return lines.map((line, at) => (
@@ -98,7 +98,7 @@ let Conversation = (
 
 export let Picks = ({ demos }: { demos: readonly Demo[] }) => (
   <Chips
-    class='Home_Picks'
+    className='Home_Picks'
     role='group'
     aria-label='Example apps'
     data-picks=''
@@ -107,7 +107,7 @@ export let Picks = ({ demos }: { demos: readonly Demo[] }) => (
     {demos.map(({ slug, name }, i) => (
       <Chip
         as='button'
-        class='Home_Pick'
+        className='Home_Pick'
         type='button'
         data-pick={slug}
         aria-pressed={i == 0}
@@ -118,7 +118,7 @@ export let Picks = ({ demos }: { demos: readonly Demo[] }) => (
     <Button
       type='button'
       mod='quiet'
-      class='Home_Pause'
+      className='Home_Pause'
       aria-label='Pause example rotation'
       data-pause=''
       hidden
@@ -129,8 +129,8 @@ export let Picks = ({ demos }: { demos: readonly Demo[] }) => (
 )
 
 export let Phone = ({ told }: { told: Told }) => (
-  <Card class='Home_Phone'>
-    <div class='Home_Log' data-log=''>
+  <Card className='Home_Phone'>
+    <div className='Home_Log' data-log=''>
       {told.demos.map((demo, i) => (
         <Conversation key={demo.slug} demo={demo} first={i == 0} told={told} />
       ))}
