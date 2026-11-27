@@ -167,6 +167,16 @@ export let operatorMemory = (
   storage,
 })
 
+/** A kernel signal answered as a Builder whose Operator watches nothing
+ * answers it (build.ts): a commit heard is 410, a seat moving 204. None for
+ * any other request. */
+export let unwatched = (req: Request): Response | undefined => {
+  let path = new URL(req.url).pathname
+  if (req.headers.get('x-yak-kernel') != '1') return
+  if (path == HEARD) return new Response(null, { status: 410 })
+  if (path == SEATED) return new Response(null, { status: 204 })
+}
+
 /** The Operator's HTTP and page-frame handlers over a private RAM graph, or
  * over `store`, for what a RAM graph lacks (ranked text search). */
 export let operatorService = (
@@ -279,12 +289,19 @@ export let operatorService = (
       })
     }
   }
+  // Another space's Builder holds no Operator here: it answers the kernel's
+  // signals, and anything else asked of it is a test asking the wrong space.
+  let other = (name: unknown) => ({
+    fetch: (req: Request) => {
+      let signalled = unwatched(req)
+      if (signalled) return Promise.resolve(signalled)
+      assertEquals(name, held.space)
+      return fetch(req)
+    },
+  })
   let binding: Env['BUILDER'] = {
     idFromName: (name) => name,
-    get: (name) => {
-      assertEquals(name, held.space)
-      return { fetch }
-    },
+    get: (name) => name == held.space ? { fetch } : other(name),
   }
   return {
     binding,

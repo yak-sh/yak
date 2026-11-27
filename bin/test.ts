@@ -374,6 +374,29 @@ export let expected = (
       )
 }
 
+/// ahead(['a_test.ts'], () => 59_000, ['a']) -> undefined
+/// ahead(['a_test.ts', 'b_test.ts'], () => 240_000, ['w'])
+///   -> 'test: 2 files, about 8 min by what they took before. It prints when it ends. A change\'s own run is `deno task test` with no paths.'
+/// ahead(['a_test.ts'], () => 90_000, [])
+///   -> 'test: 1 file, about 2 min by what they took before. It prints when it ends.'
+/** What a run that will take a minute or more says as it starts, so its
+ * quiet is not taken for a hang; one naming paths is told of the change's
+ * own run. */
+export let ahead = (
+  run: string[],
+  cost: (file: string) => number,
+  paths: string[],
+): string | undefined => {
+  let ms = run.reduce((sum, f) => sum + cost(f), 0)
+  if (ms < 60_000) return
+  return [
+    `test: ${run.length} file${run.length == 1 ? '' : 's'}, about ${
+      Math.round(ms / 60_000)
+    } min by what they took before. It prints when it ends.`,
+    paths.length ? "A change's own run is `deno task test` with no paths." : '',
+  ].filter(Boolean).join(' ')
+}
+
 /** Relevant files, leaving out sources and observed dependencies already
  * passed, and those past what a change's own run has time for. */
 export let chosen = async (
@@ -751,6 +774,9 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     Deno.args,
     sqlite,
   )
+  let whole = !paths.length && !tags.length && flags.includes('--all')
+  let long = whole ? undefined : ahead(run, expected(b.tests, took()), paths)
+  if (long) console.error(long)
   let keyed = await Deno.makeTempFile({ prefix: 'test-keys-', suffix: '.json' })
   await Deno.writeTextFile(keyed, JSON.stringify(Object.fromEntries(keys)))
   let suite: Suite = async (more) => {
@@ -771,7 +797,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     }
     return await runTestCommands([bulk])
   }
-  let whole = !paths.length && !tags.length && flags.includes('--all')
   let left = files.length - run.length - beyond
   let measured = await measure(suite, whole)
   let code = await say(b, { ...measured, left, beyond }, Deno.args)

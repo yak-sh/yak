@@ -132,7 +132,7 @@ let checkout = (from: string) =>
   `{
   flock 9
   git -C "$repo" cat-file -e ${quote(from + '^{commit}')} 2>/dev/null ||
-    git -C "$repo" fetch -q origin
+    git -C "$repo" -c gc.auto=0 -c maintenance.auto=false fetch -q origin
   if test -f "$tree/.git"; then
     reuse=1
   else
@@ -183,14 +183,18 @@ touch "$run/prepared"
 ( ${cmd} )`
 
 /** The control script removing run `id` and its worktree, in the background:
- * a run's tree is hundreds of megabytes, and its caller need not wait. Deno
+ * a run's tree is hundreds of megabytes, and its caller need not wait. The
+ * clone's housekeeping runs here, under the lock a run's fetch and worktree
+ * take, never inside a fetch beside another run's checkout: a gc that saw a
+ * worktree half made failed, and git said so on every run after it. Deno
  * keys its caches by a module's path, and every run's path is new, so the
  * entries under it go too: its emitted files and its rows in the code and
  * analysis caches, whose freed pages the next runs reuse. */
 export let tidy = (id: string) =>
   `${place(id)}
 setsid bash -c '
-rm -rf -- "$1"; git -C "$2" worktree prune
+rm -rf -- "$1"
+flock "$2/runs.lock" sh -c '"'"'git -C "$1" worktree prune && git -C "$1" gc --auto --quiet'"'"' gc "$2"
 for dir in "$HOME"/.cache/deno*/; do
   rm -rf -- "$dir/gen/file$1"
   for db in v8_code_cache_v2:codecache dep_analysis_cache_v2:moduleinfocache; do

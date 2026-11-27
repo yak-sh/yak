@@ -236,22 +236,29 @@ export let heard = (env: Wiring, space: string) => signal(env, space, HEARD)
  * (directory-graph.ts `seatsHeard`), kernel only. */
 export let SEATED = '/seated'
 
+/** The Builder's failure answer to a seat moving. */
+class Unseated extends Error {
+  constructor(status: number) {
+    super(`the Builder answered ${SEATED} with ${status}`)
+  }
+}
+
 /** A seat in the space moved: its Operator's subscriptions look again, and
  * its pages' sockets hold their people's seats as they are now (build.ts
- * `SEATED`). Sent again while it fails, as when the Builder resets for a
- * deploy or cannot read a seat; one lost all the same costs a socket's held
+ * `SEATED`). Sent again while the Builder answers a failure, as when it
+ * cannot read a seat; a reset for a deploy is sent again by the door itself
+ * (door.ts `fetchOf`). Any other failure is a fault, reported at once rather
+ * than sent again for seconds. One lost all the same costs a socket's held
  * seat operator-api.ts `FRESH`. */
 export let reseated = (env: Wiring, space: string): Promise<void> =>
   retried(
     async () => {
       let answer = await signal(env, space, SEATED)
       await answer.body?.cancel()
-      if (!answer.ok) {
-        throw new Error(`the Builder answered ${SEATED} with ${answer.status}`)
-      }
+      if (!answer.ok) throw new Unseated(answer.status)
     },
     true,
-    () => true,
+    (e) => e instanceof Unseated,
     jittered(env.CLOCK),
   )
 

@@ -170,6 +170,9 @@ A scoped run can reuse one warm worktree under a lock held for the command's
 lifetime. A concurrent run gets its own worktree immediately. Full runs also
 reserve room for recent starts. Where the VM cannot be reached the run goes on
 here, having said why. `YAK_MACHINE= deno task test` runs here on purpose.
+A run here takes the box's one local check slot, and one waiting for it says
+which process holds it. While the run works on the VM your own process sits
+near 0% CPU; that is not a hang.
 
 While iterating, name a source file to run its tests and every test depending
 on it, selected as a no-path run selects from a change to it:
@@ -187,6 +190,10 @@ deno task test workers/yak/<file>_test.ts
 
 A test file, a directory or `--tag=<tag>` deliberately narrows coverage; it is
 useful for debugging, but does not establish that consumers elsewhere passed.
+A whole directory is not a quick check: `workers/yak` is over 600 files and
+about ten minutes in one runtime, and its output comes when it ends. A run
+expected to take a minute or more says so as it starts; stop it and run what
+your change reaches instead.
 Finish with the no-path
 command so dependency selection covers the change. There is no separate landing
 run or gate. When landing rebases onto new work, rerun it on that combination.

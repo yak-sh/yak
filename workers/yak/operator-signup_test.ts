@@ -5,7 +5,12 @@ import type { Arrival } from '@yaks/phone'
 import { platform } from './directory-rows-probe.ts'
 import { operating } from './operator.ts'
 import { handleChannels } from './operator-channels.ts'
-import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
+import {
+  callable,
+  operatorMemory,
+  operatorModel,
+  unwatched,
+} from './operator-testing.ts'
 import { operatorReply, operatorRequest } from './operator-host.ts'
 import {
   signupArrived,
@@ -71,6 +76,8 @@ env.BUILDER = {
   idFromName: (name) => name,
   get: () => ({
     fetch: async (req: Request) => {
+      let signalled = unwatched(req)
+      if (signalled) return signalled
       equal(req.headers.get('x-space-eid'), spaceId)
       let path = new URL(req.url).pathname
       let person = req.headers.get('x-yak-person')!

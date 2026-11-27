@@ -8,7 +8,7 @@ import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { platform } from './testing.ts'
 import { owned } from './directory-fixture.ts'
 import { directoryOf, META } from './directory.ts'
-import { operatorMemory } from './operator-testing.ts'
+import { operatorMemory, unwatched } from './operator-testing.ts'
 import { operatorRequest } from './operator-host.ts'
 import { RESULTS, results, skillText } from './operator-skills.ts'
 import * as skillPage from './skill-page.ts'
@@ -32,6 +32,8 @@ let { env, settled } = platform('shared-skill', {
     idFromName: (name: string) => name,
     get: (id: string) => ({
       fetch: async (request: Request) => {
+        let signalled = unwatched(request)
+        if (signalled) return signalled
         let space = request.headers.get(SPACE) ?? String(id)
         let store = storeOf(space)
         if (new URL(request.url).pathname == RESULTS) {
