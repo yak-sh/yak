@@ -216,6 +216,7 @@ import {
 import {
   branchOf,
   inspect as inspectStorage,
+  installed,
   moded,
   printed,
   requirements,
@@ -434,7 +435,9 @@ import { headed } from '@yaks/workerd/upgrade'
 import {
   batch,
   BATCHES,
+  born,
   type Moving,
+  owes,
   PAUSE,
   rehearse,
   type Rule,
@@ -1719,7 +1722,9 @@ export class Store extends Durable {
     // directory or Git store. `#learn` rebuilds when later metadata changes.
     let fitted = this.#fitted(shape)
     let stood = this.#stood(fitted)
+    let blank = !!name && installed(drive) == null
     this.#schema(fitted, defect)
+    if (blank && installed(drive) != null) this.#bornMoved()
     let app = this.#get('app')
     // Each incarnation binds declared effects to its host capabilities.
     // An effect writes back through the kernel's own door — a new batch
@@ -4380,6 +4385,28 @@ export class Store extends Durable {
     throw failed
   }
 
+  // A file this code raised holds no row an older release wrote, so each
+  // rule the code moves rows by is done before it has a row to move
+  // (mover.ts `born`): a new store reads nothing for them. The moves its
+  // app's own words ask for (`#lensMove`, `#privacyMoves`) follow its
+  // releases, and still run.
+  #bornMoved = () => {
+    let at = new Date(this.#now()).toISOString()
+    let code = [...this.#rules, sessionMove()]
+    let name = this.#get('name') ?? ''
+    for (let [mark, stamp] of born(code, name, this.#declares, at)) {
+      this.#put(mark, JSON.stringify(stamp))
+    }
+  }
+
+  // Whether the app's own words declare `comp`, read once a call.
+  get #declares() {
+    let defs: VocabDoc['$defs']
+    return (comp: string) =>
+      (defs ??= meant(this.#get('vocab')).$defs ?? {})[comp]?.component ===
+        true
+  }
+
   #stamp = (rule: Rule): Stamp | null => {
     let held = this.#get(rule.mark)
     return held ? JSON.parse(held) : null
@@ -4396,23 +4423,13 @@ export class Store extends Durable {
 
   #moves = (): Rule[] => {
     let name = this.#get('name') ?? ''
-    // The app's own words, read once a call and only for a rule that asks.
-    let defs: VocabDoc['$defs']
-    let declared = (comp: string) =>
-      (defs ??= meant(this.#get('vocab')).$defs ?? {})[comp]?.component ===
-        true
+    let declared = this.#declares
     return [
       ...this.#rules,
       sessionMove(),
       ...(this.#lensMove ? [this.#lensMove] : []),
       ...this.#privacyMoves,
-    ]
-      .filter((r) =>
-        (r.stores == 'apps'
-          ? !ownStore(name)
-          : !r.stores || r.stores.includes(name)) &&
-        !r.core?.some(declared)
-      )
+    ].filter((r) => owes(r, name, declared))
   }
 
   // The words a move's source still holds in this store, composed with the

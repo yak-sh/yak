@@ -72,6 +72,8 @@ import type { Load } from '@yaks/host'
 import { cleanup, type Clock as Virtual, tick } from '@yaks/testing'
 import type { Env } from './env.ts'
 import { Store } from './graph.ts'
+import { RULES } from './mover.ts'
+import { sessionMove } from './session-move.ts'
 import { inProcess } from '@yaks/durable-object/door'
 import { PLATFORM_OBJECT } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -226,6 +228,15 @@ let slotted = (k: string, v: string): Insert => ({
   rows: [[val(k), val(v)]],
   upsert: [{ on: [col('k')], set: { v: col('v', 'excluded') } }],
 })
+
+/** A store an older release wrote, which owes every rule the code moves rows
+ * by: none stands done, as each does in a store this code raised (mover.ts
+ * `born`). */
+export let older = (held: Held) => {
+  for (let { mark } of [...RULES, sessionMove()]) {
+    db(held).query({ t: 'delete', from: 'yak_kv', where: by({ k: mark }) })
+  }
+}
 
 /** Anything holding an object's storage: its state, as a test keeps it. */
 type Held = { storage: DurableStorage }

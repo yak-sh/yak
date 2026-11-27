@@ -7,6 +7,9 @@ import { GIT_STORE, PLATFORM_OBJECT } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { fitOf, KV, passed, shapeOf } from './store-schema.ts'
 import { schema as writeSchema } from '@yaks/api/log'
+import { born, RULES } from './mover.ts'
+import { sessionMove } from './session-move.ts'
+import { meant } from './vocab.ts'
 
 // A new test object's installed schema is what a store's first wake leaves:
 // the host's private tables, the write log, and the schema pass a wake runs
@@ -15,7 +18,8 @@ import { schema as writeSchema } from '@yaks/api/log'
 // table is raised by the write that first names it, as in production. Each
 // durable() restores private bytes. The platform's two fixed names and an
 // app's declaration are schema identity; no app name, actor, entity or
-// lineage is copied.
+// lineage is copied. The mover's rules stand done in it, as a first wake
+// leaves them (graph.ts `#bornMoved`).
 let schemas = new Map<string, Snapshot>()
 export let durable = (at = '', declaration: string | null = null) => {
   // The object the directory stands in holds the directory's words.
@@ -32,6 +36,16 @@ export let durable = (at = '', declaration: string | null = null) => {
     if (name == PLATFORM_STORE || name == GIT_STORE) {
       Object.assign(values, { name })
     }
+    let defs = meant(declaration).$defs ?? {}
+    let at = new Date().toISOString()
+    for (
+      let [mark, stamp] of born(
+        [...RULES, sessionMove()],
+        name,
+        (comp) => defs[comp]?.component === true,
+        at,
+      )
+    ) Object.assign(values, { [mark]: JSON.stringify(stamp) })
     from = imaged((d) => {
       for (let s of [KV, ...writeSchema()]) d.query(s)
       let { left } = passed(d, shape, null)

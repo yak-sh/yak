@@ -31,7 +31,7 @@ import { toolEid } from '@yaks/tools'
 import { deadMailInboxMove, deadMailInboxRule } from './migrate.ts'
 import { importedRule, importedSource } from './imported-move.ts'
 import { type Rule } from './mover.ts'
-import { seededState, state } from './testing.ts'
+import { older, seededState, state } from './testing.ts'
 import { driver } from '@yaks/durable-object'
 import { bounded, type Options } from '@yaks/durable-object/ceiling'
 
@@ -58,7 +58,8 @@ let rule = (o: Partial<Rule> = {}): Rule => ({
   ...o,
 })
 
-// One app store holding `n` rows in the old shape, and the doors onto it.
+// One app store an older release wrote, holding `n` rows in the old shape,
+// and the doors onto it.
 let store = async (n: number, ...rules: Rule[]) => {
   return await movingStore(n, {}, rules)
 }
@@ -106,6 +107,7 @@ let movingStore = async (
 ) => {
   // The ceiling case measures what the initial writes spend in its window.
   let ctx = ceiling ? state() : n ? await holding(n) : await deployed()
+  older(ctx)
   let work = Object.assign(ctx, {
     work: ceiling ? undefined : { moveRows: BATCH },
   })
@@ -287,6 +289,22 @@ test('a live rule moves every row from the alarm, and says it is done', async ()
   assertEquals(await count(s, '.now'), rows)
   let [moved] = await s.query(`.entity.eid=${first.entity.eid}&.now`)
   assertEquals(moved.now, first.was)
+})
+
+// A file raised by this code holds no row an older release wrote: the rule
+// stands done from the first wake, and a row in its old shape written since
+// is a writer's, left where it is.
+test('a store this code raises holds each rule done, and moves nothing', async () => {
+  let ctx = state('', false)
+  let o = new Store(ctx, {}, [rule()])
+  let door = doorOf((r) => o.fetch(r), NAME)
+  await deploy(door)
+  await fill(metaOf(door), BATCH)
+  await o.alarm()
+  let { rules } = await (await door('/move', { method: 'POST' }, KERNEL)).json()
+  let [said] = rules as Standing[]
+  assertEquals([said.mark, said.moved, !!said.done], [rule().mark, 0, true])
+  assertEquals((await metaOf(door).query(whole('.was'))).length, BATCH)
 })
 
 test('a rehearsal says what a rule would move, and moves nothing', async () => {
@@ -596,6 +614,7 @@ test('mover contraction waits for the last value and rehearsal restores the colu
   // A core word has already contracted its declaration. Its retired column
   // must contract through the mover without giving that column back to callers.
   let ctx = state(PLATFORM_STORE)
+  older(ctx)
   let own = new Store(ctx, {}, [commitRule])
   let door = doorOf((r) => own.fetch(r), PLATFORM_STORE)
   let meta = metaOf(door)
