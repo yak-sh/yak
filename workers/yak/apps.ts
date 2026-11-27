@@ -3581,9 +3581,14 @@ let served = async (
   // nothing of for a while. An app with a worker may declare the paths it is
   // asked about (its release's `assets`), and every other path is its files'.
   if (published) wakePage?.()
-  let assets = await declaredOf(env, app)
+  // Fixed assets and uploads have their own door, including any release
+  // settings it needs to check access. Site can classify them from the path.
+  let fixedBytes = fixed(path) || uploaded(path)
+  let assets = fixedBytes ? undefined : await declaredOf(env, app)
   if (edge && !keeps(app, path, assets)) return passed()
-  if (!edge && !keepable(app, undefined, assets)) unkept(req, env, bare, c)
+  if (!edge && !fixedBytes && !keepable(app, undefined, assets)) {
+    unkept(req, env, bare, c)
+  }
   let calendarToken = /^\/calendar\/([a-zA-Z0-9_-]+)\.ics$/.exec(path)?.[1]
   if (path == '/calendar.ics' || calendarToken) {
     if (edge) return passed()
