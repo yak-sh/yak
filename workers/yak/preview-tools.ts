@@ -5,6 +5,7 @@ import { type Row, worded } from './tool-words.ts'
 import { FIND, MOST, RENDER, STEP } from '@yaks/platform/browser-visit'
 
 let seconds = (ms: number) => String(ms / 1000)
+let word = (description: string) => ({ ...str(description), minLength: 1 })
 
 export let tools = [worded(
   {
@@ -25,20 +26,21 @@ export let tools = [worded(
           minimum: 240,
           maximum: 2560,
           description:
-            'viewport CSS pixels; 390 for a phone, 1280 for a desktop (default)',
+            'viewport CSS pixels, 240 to 2560; 390 for a phone, 1280 for a desktop (default)',
         },
         height: {
           type: 'integer',
           minimum: 240,
           maximum: 2560,
-          description: 'viewport CSS pixels; default 900',
+          description:
+            "viewport CSS pixels, 240 to 2560; default 900. The screenshot shows this window only: to see further down a taller page, add a step such as {press: 'PageDown'} or {press: 'End'}",
         },
         wait: {
           type: 'integer',
           minimum: 0,
           maximum: 3000,
           description:
-            'milliseconds to capture logs and render after DOMContentLoaded; default 1000',
+            'milliseconds to capture logs and render after DOMContentLoaded, 0 to 3000; default 1000',
         },
         screenshot: {
           type: 'boolean',
@@ -51,17 +53,17 @@ export let tools = [worded(
           items: {
             type: 'object',
             properties: {
-              tap: str('click the visible element matching this selector'),
+              tap: word('click the visible element matching this selector'),
               type: str('type this text'),
-              into: str(
+              into: word(
                 'with type, focus the visible element matching this selector',
               ),
-              press: str('press a key, such as Enter'),
+              press: word('press a key, such as Enter or PageDown'),
               wait: { type: 'integer', minimum: 0, maximum: 3000 },
             },
           },
           description:
-            'Interact in the browser in order before taking the screenshot. Each step is tap, type (optionally with into), press, or wait. Released actions run with your live permissions.',
+            "Up to six interactions in the browser, in order, before taking the screenshot. Each step is tap, type (optionally with into), press, or wait (0 to 3000 milliseconds); {press: 'PageDown'} or {press: 'End'} scrolls a tall page. Released actions run with your live permissions.",
         },
         draft: str(
           'Pass an open draft id when several drafts are open. Omit draft to ' +

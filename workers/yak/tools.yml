@@ -464,10 +464,17 @@ app_preview:
     sideways), and an axe-core WCAG 2.1 AA accessibility report (rule, element and one-line fix per problem,
     plus elements needing manual review). Fix the reported problems before
     deploying; findings are a report and never refuse a release. Automated
-    checks do not prove conformance. Choose path and
-    width (390 for a phone, 1280 for desktop), height, and wait in milliseconds.
-    Use steps to tap a control, type into a field, press a key or wait in
-    the same browser before capturing it. The browser gives the page
+    checks do not prove conformance. Choose path, width (390 for a phone,
+    1280 for desktop, default) and height (default 900), each 240 to 2560
+    CSS pixels, and wait, 0 to 3000 milliseconds (default 1000). The
+    screenshot shows the window only, never more than 2560 pixels of the
+    page, while the visible text is read from the whole page (its first
+    2000 and last 4000 characters when longer). To see further down a
+    taller page, scroll before the capture with a step such as {press:
+    'PageDown'} or {press: 'End'}, or call again with more of them. Use up
+    to six steps to tap a control, type into a field, press a key or wait
+    (0 to 3000 milliseconds) in the same browser before capturing it. The
+    browser gives the page
     {{render}} seconds to load and be captured and {{step}} more for each
     step, {{most}} seconds at most; wait and wait steps get time of their own
     besides. A step's element has {{find}} seconds to show. A released preview of a private
