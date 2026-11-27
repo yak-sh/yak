@@ -758,6 +758,46 @@ for (let [landed, lines] of landing) {
   }
 }
 
+// A store names an archetype's components by identity. A long transcript's
+// background call is found through the result that answers it, past the
+// rows a status reads; a later transcript whose page holds a call of the same
+// shape still reads it as a call.
+let late = (s: string, turns: number): Bundle[] => {
+  let n = 0
+  let at = (parts: Record<string, Comp>, eid = `${s}${++n}`): Bundle => ({
+    entity: { eid },
+    entry: { session: s, seq: n },
+    ...parts,
+  })
+  let out = [
+    { entity: { eid: s }, session: {} },
+    at({ content: { body: 'go' }, using: { model: M } }),
+    at({ ask: { to: M, through: `${s}1` }, attempt: { by: null } }),
+    at({ call: { to: T, id: `${s}c`, source: `${s}2` }, tool_async: {} }),
+  ]
+  for (let i = 0; i < turns; i++) {
+    out.push(at({ content: { body: 'go' }, using: { model: M } }))
+    out.push(at({ ask: { to: M, through: `${s}${n}` }, attempt: { by: null } }))
+    out.push(at({ content: { body: 'ok' }, output: { source: `${s}${n}` } }))
+  }
+  return [...out, at({ result: { call: `${s}3` }, content: { body: 'done' } })]
+}
+let shaping = unremembering()
+await shaping.apply([...late('far', 40), ...late('near', 0)], {
+  trusted: true,
+})
+let distant = await reach(shaping, 'far')
+let nearby = await reach(shaping, 'near', { turn: true })
+test('a call found through its result leaves its shape to later readings', () => {
+  assertEquals(distant.length < 100, true, `${distant.length} lines`)
+  assertEquals(distant.find((b) => b.entity.eid == 'far3')?.call != null, true)
+  assertEquals(nearby.find((b) => b.entity.eid == 'near3')?.call, {
+    to: T,
+    id: 'nearc',
+    source: 'near2',
+  })
+})
+
 // Whether someone else's words steer a privileged call is judged over the
 // whole turn since the person's newest words, however many calls it has run
 // since it heard them: 50 earlier exchanges, the person's words (after a

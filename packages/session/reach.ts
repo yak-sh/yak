@@ -156,6 +156,19 @@ let shapesOf = (g: Graph) => {
   return held
 }
 
+// Learn the components of each archetype among `keys` that `shapes` lacks, by
+// name: a descriptor names them by identity (@yaks/archetype `tablesOf`).
+let learn = async (g: Graph, shapes: Map<string, string[]>, keys: Eid[]) => {
+  let missing = keys.filter((key) => !shapes.has(key))
+  if (!missing.length) return
+  for (let b of await g.get(missing, ['archetype'])) {
+    let text = comp(b, 'archetype')?.tables
+    if (typeof text == 'string') {
+      shapes.set(b.entity.eid, tablesOf(text, g.vocab))
+    }
+  }
+}
+
 let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
   let names = o.bodies
     ? o.comps ? [...new Set([...o.comps, CONTENT])] : undefined
@@ -215,16 +228,7 @@ let gathered = async (
   if (names && r.g.vocab.comp('archetype')) {
     let keys = [...new Set(owners.map((b) => b['entity.archetype']))]
     if (!keys.includes(undefined)) {
-      let missing = keys.filter((key) => !r.shapes.has(String(key)))
-      let shapes = missing.length
-        ? await r.g.get(missing as Eid[], ['archetype'])
-        : []
-      for (let b of shapes) {
-        let text = comp(b, 'archetype')?.tables
-        if (typeof text == 'string') {
-          r.shapes.set(b.entity.eid, tablesOf(text, r.g.vocab))
-        }
-      }
+      await learn(r.g, r.shapes, keys.map(String))
       if (keys.every((key) => r.shapes.has(String(key)))) {
         let present = new Set(
           keys.flatMap((key) => r.shapes.get(String(key))!),
@@ -1071,16 +1075,11 @@ let unsent = (entries: Bundle[]): Eid[] => {
 let withContent = async (
   g: Graph,
   entries: Bundle[],
-  known = new Map<string, string[]>(),
+  known: Map<string, string[]>,
 ): Promise<Bundle[] | undefined> => {
   let shapes = [...new Set(entries.map((b) => b.entity.archetype))]
   if (shapes.includes(undefined)) return undefined
-  let missing = shapes.filter((id) => !known.has(id!))
-  let types = missing.length ? await g.get(missing as Eid[], ['archetype']) : []
-  for (let b of types) {
-    let text = comp(b, 'archetype')?.tables
-    if (typeof text == 'string') known.set(b.entity.eid, JSON.parse(text))
-  }
+  await learn(g, known, shapes as Eid[])
   for (let b of entries) {
     let tables = known.get(b.entity.archetype!)
     if (!tables) return undefined
