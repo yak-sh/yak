@@ -541,7 +541,7 @@ let buttons = async (
       let form = named ? document.getElementById(named)! : b.closest('form')!
       return [
         b.textContent,
-        value(b),
+        value(b) ?? value(form.querySelector('input[name="do"]')),
         value(form.querySelector('[name="app"]')),
         value(form.querySelector('[name="cap"]')),
       ]
@@ -625,7 +625,10 @@ test('connections: a borrowed connection says whose it is, and gives way to a ke
   }
   // Who may call out through it is the borrowing space's to say.
   let open = ['Open to anyone', 'open', 'copy', undefined]
-  assertEquals(await replaced(lent), [open])
+  assertEquals(await replaced(lent), [
+    open,
+    ['Save', 'own', 'copy', undefined],
+  ])
   assertEquals(await replaced({ ...lent, keyed: false }), [
     ['Connect your own', 'own', 'copy', undefined],
     open,
