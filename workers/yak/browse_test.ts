@@ -429,7 +429,10 @@ test('the admin bot visits the directory without giving the browser an account s
   match(cookie, { path: '/admin', secure: true, httpOnly: true })
   equal(cookie.domain, undefined)
   let visit = { cookie: `${cookie.name}=${cookie.value}` }
+  let from = k.reported.length
   equal((await k.at(k.host, page, { headers: visit })).status, 200)
+  await k.flushReports()
+  equal(k.reported.slice(from), [])
   let account = await k.at(k.host, '/manage', {
     headers: { cookie: `${HOST_COOKIE}=${cookie.value}` },
     redirect: 'manual',

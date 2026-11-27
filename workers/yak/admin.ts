@@ -206,9 +206,11 @@ let COUNTED: CensusFields = {
   referrals: ['referral', 'rewarded', 'created'],
 }
 // What a space a page never draws is read for: the figures its owners' and
-// apps' tiles sum or say of it.
+// apps' tiles sum or say of it, and its handle, without which a space is a
+// broken row (directory.ts `spaceOf`).
 let SUMMED = [
   'space.slug',
+  'space.store',
   'meter.bytes',
   'meter.files',
   'holds',
