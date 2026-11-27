@@ -224,7 +224,7 @@ app_files:
   description: >-
     Write, read and change an app's files. Every call requires app, usually
     the app slug shown by app_list. Set op for every operation except write,
-    which can be inferred from its file data. To see what an app holds, call
+    which can be inferred from its file data: a read needs op: read. To see what an app holds, call
     it with op: list first.
     op is one of:
     write (or op left out): requires path and either content (text) or
@@ -471,7 +471,10 @@ app_preview:
     checks do not prove conformance. Choose path and
     width (390 for a phone, 1280 for desktop), height, and wait in milliseconds.
     Use steps to tap a control, type into a field, press a key or wait in
-    the same browser before capturing it. A released preview of a private
+    the same browser before capturing it. The browser gives the page
+    {{render}} seconds to load and be captured and {{step}} more for each
+    step, {{most}} seconds at most; wait and wait steps get time of their own
+    besides. A step's element has {{find}} seconds to show. A released preview of a private
     app signs the browser in as you. Steps on a release can change live data.
     The browser runs on Cloudflare; no local files, CLI or computer is needed.
     A draft build or browser check still in progress returns a pending result.

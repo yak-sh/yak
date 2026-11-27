@@ -129,7 +129,6 @@ let screenshots = async (
 let waitFor = (asked: Browse) =>
   15_000 + BROWSE_REPLY + waitRoom({
     ...asked,
-    audit: false,
     view: { width: 390, height: 844, wait: 1000, ...asked.view },
   })
 

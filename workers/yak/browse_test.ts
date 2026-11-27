@@ -2,6 +2,7 @@
 // as its caller, for the platform's test accounts alone.
 import { cleanup, clock, equal, match, test } from '@yaks/testing'
 import {
+  allowed,
   answer,
   type BrowseFrame,
   type BrowseVisit,
@@ -484,6 +485,10 @@ test('a missing visible element is a refusal naming the step and selector', asyn
   equal(reports, [])
 })
 
+// How long a visit of two shots and a tap that never ends takes to time out.
+let stalledAfter =
+  allowed({ steps: [{ shot: '' }, { shot: '' }, { tap: '' }] }) / 1000
+
 test('a stalled action reports its page, caller and step without preview credentials', async () => {
   let url = `https://${k.host}/app/~preview-code/?slow=private-value#private`
   let { status, body, reports } = await reportedBrowse([
@@ -494,7 +499,7 @@ test('a stalled action reports its page, caller and step without preview credent
   equal(status, 504)
   equal(
     body.error.message,
-    'Browser visit while taking step 3 (tapping the element) timed out after 20 seconds',
+    `Browser visit while taking step 3 (tapping the element) timed out after ${stalledAfter} seconds`,
   )
   let error = reports.find((row) => row.error)?.error as Comp | undefined
   let tags = error?.tags
@@ -531,7 +536,7 @@ test('a slow browser visit streams the phase it is waiting on and its timeout re
   equal(progress.includes('taking step 3 (tapping the element)'), true)
   match(failed, {
     failed:
-      'Browser visit while taking step 3 (tapping the element) timed out after 20 seconds',
+      `Browser visit while taking step 3 (tapping the element) timed out after ${stalledAfter} seconds`,
     timeout: true,
   })
 })

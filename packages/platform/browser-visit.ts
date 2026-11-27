@@ -562,10 +562,15 @@ let isolated = async (page: Page) => {
 export let RENDER = 15_000
 export let CHECK = 10_000
 export let READ = 2_500
-export let MOST = 20_000
+// A step's time. Cloudflare's browser has no GPU, so a WebGL page draws each
+// frame in software, and every DevTools command a tap sends waits for one:
+// a tap on a 3D game took 2.6 to 4.4 s there.
+export let STEP = 4_000
+// The most a visit's work may take: the load and capture, and six steps (an
+// app_preview's most).
+export let MOST = RENDER + 6 * STEP
 // Allow time for the service binding and serialization outside the visit.
 export let BROWSE_REPLY = OPEN + MOST + READ + RELEASE + 2_500
-export let STEP = 2_000
 
 let stepWait = (step: Step) => 'wait' in step ? Math.max(0, step.wait) : 0
 
@@ -574,34 +579,36 @@ export let waiting = (
 ): number =>
   Math.max(0, view.wait) + steps.reduce((ms, step) => ms + stepWait(step), 0)
 
-/** How long a visit's load, steps and screenshots may take. */
-export let allowed = (
-  { steps = [] }: Pick<Visit, 'steps'>,
-  includeWaits = true,
-): number =>
+/** How long a visit's load, steps and screenshots may take, its planned
+ * waits aside. */
+export let allowed = ({ steps = [] }: Pick<Visit, 'steps'>): number =>
   Math.min(
     MOST,
     RENDER + steps.length * STEP +
-      steps.filter((s) => 'open' in s).length * LOAD +
-      (includeWaits ? steps.reduce((ms, s) => ms + stepWait(s), 0) : 0),
+      steps.filter((s) => 'open' in s).length * LOAD,
   )
 
+/** The time a visit's planned waits get of their own, after the page loads
+ * and between its steps, beside the time {@link allowed} its work. */
+export let waitRoom = (visit: Pick<Visit, 'view' | 'steps'>): number =>
+  Math.min(MOST, waiting(visit))
+
+/** How long a visit may take in the browser: its work and its waits. */
+export let visitTime = (visit: Pick<Visit, 'view' | 'steps'>): number =>
+  allowed(visit) + waitRoom(visit)
+
 /** Render time reserved for a preview, including its accessibility check. */
-export let previewTime = (visit: Visit) => allowed(visit) + CHECK
+export let previewTime = (visit: Visit) => visitTime(visit) + CHECK
 
 /** Allow time for the binding, opening a browser, and cleanup too. */
 export let previewReply = (visit: Visit) =>
   OPEN + previewTime(visit) + RELEASE + 2_500
 
-/** Planned waits get time of their own in an interactive browse visit. */
-export let waitRoom = (visit: Visit): number =>
-  visit.audit === false ? Math.min(MOST, waiting(visit)) : 0
-
 // How long a push waits for DevTools to name the site's service workers.
 let REGISTERED = 2_000
 
 // How long a step waits for the element it names to appear.
-let FIND = 5_000
+export let FIND = 5_000
 let LOAD = 10_000
 
 let waitExpired = (message: string) =>
@@ -1188,7 +1195,7 @@ export let capture = async (
 ): Promise<Rendered> => {
   let start = time.now()
   let opening = start + OPEN
-  let render = allowed(visit, visit.audit !== false) + waitRoom(visit)
+  let render = visitTime(visit)
   let end = opening + render
   let left = () => end - time.now()
   let attempt = (openBy: number) =>

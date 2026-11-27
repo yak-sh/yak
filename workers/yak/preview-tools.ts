@@ -2,6 +2,9 @@
 // the roster is needed while the app and preview routers are loading.
 import { APP, runOf, SPACE, str } from './tool.ts'
 import { type Row, worded } from './tool-words.ts'
+import { FIND, MOST, RENDER, STEP } from '@yaks/platform/browser-visit'
+
+let seconds = (ms: number) => String(ms / 1000)
 
 export let tools = [worded(
   {
@@ -80,5 +83,11 @@ export let tools = [worded(
       required: ['app'],
     },
     run: async (ctx, args) => (await import('./preview.ts')).preview(ctx, args),
+    slots: {
+      render: seconds(RENDER),
+      step: seconds(STEP),
+      most: seconds(MOST),
+      find: seconds(FIND),
+    },
   } satisfies Row,
 )]

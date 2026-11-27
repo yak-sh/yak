@@ -345,10 +345,12 @@ export let filed = (
   return rows.find((row) => row.error)
 }
 
-let aimedAt = (args: unknown): { space?: string; app?: string } => {
+/** A tool failure's tags: the tool, and the space and app its call names. */
+/// toolTags('app_preview', { app: 'rpg/lanternfall', steps: [] }) -> { tool: 'app_preview', space: undefined, app: 'rpg/lanternfall' }
+export let toolTags = (tool: string | undefined, args: unknown): Tags => {
   let said = (args ?? {}) as Record<string, unknown>
   let slug = (v: unknown) => typeof v == 'string' ? v : undefined
-  return { space: slug(said.space), app: slug(said.app) }
+  return { tool, space: slug(said.space), app: slug(said.app) }
 }
 
 let accountOf = async (ctx: Ctx): Promise<Hit | undefined> => {
@@ -365,7 +367,6 @@ export let reporter =
   (ctx: Ctx, client?: string) =>
   async (err: unknown, call?: Bundle, tool?: string) =>
     defect(err, {
-      tool,
-      ...aimedAt((call?.call as Comp | undefined)?.args),
+      ...toolTags(tool, (call?.call as Comp | undefined)?.args),
       client,
     }, { hit: await accountOf(ctx) })

@@ -6,7 +6,7 @@ import { CallError } from '@yaks/tools/errors'
 import { Durable, type State } from '@yaks/durable-object/object'
 import type { Clock } from '@yaks/fp'
 import { running } from './agent.ts'
-import { caught } from './defects.ts'
+import { caught, toolTags } from './defects.ts'
 import { copyOf } from './directory-copy.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
@@ -55,7 +55,7 @@ let ran = async (
         timing: c.header('tool_'),
       }
     }
-    caught(e, { tool: asked.tool })
+    caught(e, toolTags(asked.tool, asked.args))
     return {
       timing: c.header('tool_'),
       refused: {
