@@ -431,6 +431,29 @@ test('a cold app navigation goes to the gateway while Site fills its cache', asy
   assertEquals([f.asked.length, f.points.length, f.used.length], [1, 0, 0])
 })
 
+test('an app stylesheet reaches the gateway while a slow Site fill finishes', async () => {
+  let time = clock(), fill = Promise.withResolvers<Response>()
+  let f = front(() => fill.promise, () => new Response(null, { status: 403 }))
+  f.env.CLOCK = time
+  let url =
+    'https://menu.example/api/assets/fdcc9a38-0b6b-4f8c-bcbd-15bad97cee69/style.css'
+  let cookie = `yak_session=${body({ person: 'p', via: 'v', exp: days(80) })}`
+  let response = f.go(url, { headers: { cookie, 'sec-fetch-dest': 'style' } })
+  await time.advance(100)
+
+  let answered = await response
+  assertEquals(answered.status, 403)
+  assertStringIncludes(answered.headers.get('server-timing')!, 'site;dur=60')
+  assertEquals(f.forwarded[0].headers.get(SITE_CHECKED), '1')
+  assertEquals(f.forwarded[0].headers.get('cookie'), cookie)
+
+  let late = page({ 'content-type': 'text/css' })
+  fill.resolve(late)
+  await Promise.all(f.retained)
+  assertEquals(late.bodyUsed, true)
+  assertEquals([f.asked.length, f.forwarded.length, f.points.length], [1, 1, 0])
+})
+
 test('a broken Site is reported and answered by the kernel', async () => {
   let f = front(() => {
     throw new Error('site fell over')

@@ -27,6 +27,7 @@ import {
 } from '../kept-page.ts'
 import { page as documentPath } from '@yaks/platform/files'
 import {
+  fixed,
   opens,
   packageAt,
   packagePath,
@@ -403,7 +404,7 @@ let serving = async (
   let at = Date.now(), cold = served++ == 0, said: string[] = []
   let host = hostOf(req, env)
   let path = new URL(req.url).pathname
-  let appPage = host != apex(env) && documentPath(path) &&
+  let appLoad = host != apex(env) && (documentPath(path) || fixed(path)) &&
     shareable(req, path) && !spaceDoor(path)
   let refused: number | null = null
   try {
@@ -426,7 +427,7 @@ let serving = async (
       }
     }
     waiting('site_wait')
-    let page = appPage
+    let page = appLoad
       ? await glance(req, env, ctx, said)
       : await kept(req, env, ctx, said)
     if (page instanceof Response) return finished(page, env, at, cold, said)
@@ -440,10 +441,10 @@ let serving = async (
     path.startsWith('/home/')
   let retry = app ? workerWaits.page + 5_000 : undefined
   let forwarded = req
-  if (appPage || req.headers.has(SITE_CHECKED)) {
+  if (appLoad || req.headers.has(SITE_CHECKED)) {
     let headers = new Headers(req.headers)
     headers.delete(SITE_CHECKED)
-    if (appPage) headers.set(SITE_CHECKED, '1')
+    if (appLoad) headers.set(SITE_CHECKED, '1')
     forwarded = new Request(req, { headers })
   }
   let query: Response | undefined
@@ -480,13 +481,13 @@ let serving = async (
     )
   }
   let mount = res.headers.get(UNKEPT_AT)
-  if (res.status == 101 || !mount && !appPage) return res
+  if (res.status == 101 || !mount && !appLoad) return res
   // An app whose pages are never kept pays the hop to Site once in a while,
   // not on every view.
   if (mount) remember(env.SITE, scope(host, null, mount))
   let out = new Response(res.body, res)
   out.headers.delete(UNKEPT_AT)
-  if (appPage) {
+  if (appLoad) {
     let timing = [
       out.headers.get('server-timing'),
       ...said,
