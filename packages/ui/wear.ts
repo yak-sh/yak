@@ -60,7 +60,7 @@ let linkSheet = (
 export let wearIn = async (
   doc: Document,
   c: Composition,
-  moduleUrl = import.meta.url,
+  moduleUrl: string = import.meta.url,
 ): Promise<void> => {
   let linked = new Set(
     [...doc.querySelectorAll<HTMLLinkElement>('link[rel=stylesheet]')]

@@ -135,9 +135,15 @@ export let toolkits = (catalog: Catalog): Toolkits =>
     }]),
   )
 
+/** The compiler's own entry among the toolkit's digests, where a host keeps
+ * one: the source of this package, which makes what pages compile to, as a
+ * toolkit package's source makes what they import. */
+export let COMPILER: string = '@yaks/esbuild'
+
 /** The source digest of each toolkit package a package.json reaches, through
- * the toolkit's own dependencies, as a compile seeds them: what that compile
- * was made of. A package the toolkit does not have is left out.
+ * the toolkit's own dependencies, as a compile seeds them, and of the
+ * compiler: what that compile was made of. A package the toolkit does not
+ * have is left out.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -152,13 +158,19 @@ export let toolkits = (catalog: Catalog): Toolkits =>
  *   '@yaks/b': 'sha256:b',
  * })
  * assertEquals(toolkitOf(null, kit), {})
+ * assertEquals(
+ *   toolkitOf(null, { '@yaks/esbuild': { version: 'sha256:e', uses: [] } }),
+ *   { '@yaks/esbuild': 'sha256:e' },
+ * )
  * ```
  */
 export let toolkitOf = (
   pkg: string | null,
   kit: Toolkits,
 ): Record<string, string> => {
-  let out: Record<string, string> = {}
+  let out: Record<string, string> = kit[COMPILER]
+    ? { [COMPILER]: kit[COMPILER].version }
+    : {}
   let visit = (name: string) => {
     if (name in out || !kit[name]) return
     out[name] = kit[name].version

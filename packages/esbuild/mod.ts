@@ -26,6 +26,7 @@ export {
   type Answer,
   type App,
   type Ask,
+  COMPILER,
   dependencies,
   loaded,
   mapped,

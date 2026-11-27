@@ -192,7 +192,10 @@ let nodeOnly = (
 /// realms(['a', 'w'], undefined) -> [['a'], ['w']]
 /** The pages that share one pack: those an HTML page loads together, joined
  * through a page two HTML pages load. */
-export let realms = (pages: string[], together: string[][] = []) => {
+export let realms = (
+  pages: string[],
+  together: string[][] = [],
+): string[][] => {
   let of = new Map(pages.map((page) => [page, new Set([page])]))
   for (let group of together) {
     let joined = new Set(group.flatMap((page) => [...of.get(page) ?? []]))

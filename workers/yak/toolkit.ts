@@ -10,9 +10,11 @@
 // catalog (`_compiler/toolkit.json`, bin/compiler-packages.ts). A page served
 // from a release whose record differs from them, or that was compiled before
 // compiles kept one, has that release made again as itself, compiled by the
-// toolkit serving it now (tools.ts `recompileRelease`, apps.ts `refresh`):
+// toolkit serving it now. The compiler's own source is among the digests
+// (@yaks/esbuild `COMPILER`), so a change in what pages compile to reaches
+// every app the same way (tools.ts `recompileRelease`, apps.ts `refresh`):
 // the next page is the fixed one, and nobody recompiles anything by hand.
-import { toolkitOf, type Toolkits, toolkits } from '@yaks/esbuild'
+import { COMPILER, toolkitOf, type Toolkits, toolkits } from '@yaks/esbuild'
 import type { Env } from './env.ts'
 import { url } from '@yaks/platform/host'
 import { filesIn } from './release.ts'
@@ -57,14 +59,17 @@ export let used = async (
 /// behind({ '@yaks/a': 'sha256:a' }, { '@yaks/a': { version: 'sha256:a', uses: [] } }) -> false
 /// behind({ '@yaks/a': 'sha256:a' }, { '@yaks/a': { version: 'sha256:b', uses: [] } }) -> true
 /// behind({ '@yaks/a': 'sha256:a' }, {}) -> true
+/// behind({}, { '@yaks/esbuild': { version: 'sha256:e', uses: [] } }) -> true
 /** Whether a compile that recorded `record` (null: it kept none) was made of
  * a toolkit other than `kit`: a package it reached has other source now, or
- * is gone. */
+ * is gone, or another compiler made it, a record from before compiles kept
+ * the compiler's included. */
 export let behind = (
   record: Record<string, string> | null,
   kit: Toolkits,
 ): boolean =>
   record == null ||
+  !!kit[COMPILER] && record[COMPILER] != kit[COMPILER].version ||
   Object.entries(record).some(([name, version]) =>
     kit[name]?.version != version
   )

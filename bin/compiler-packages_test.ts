@@ -2,7 +2,7 @@
 // browser exports, and captured source bytes own the compiler's provenance.
 import { assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
-import { toolkits } from '../packages/esbuild/plan.ts'
+import { COMPILER, toolkits } from '../packages/esbuild/plan.ts'
 import { catalog, write } from './compiler-packages.ts'
 
 let scratch = async (
@@ -115,6 +115,17 @@ test('compiler catalog is stable, content-addressed and materialized atomically'
     assertEquals(JSON.parse(await Deno.readTextFile(to)), b)
     let beside = `${root}/.wrangler/toolkit.json`
     assertEquals(JSON.parse(await Deno.readTextFile(beside)), toolkits(b))
+    // Beside the toolkit's digests, the compiler's, which its source moves.
+    let kit = async (source: string) => {
+      await Deno.mkdir(`${root}/packages/esbuild`, { recursive: true })
+      await Deno.writeTextFile(`${root}/packages/esbuild/compile.ts`, source)
+      await write(root, to, memo)
+      return JSON.parse(await Deno.readTextFile(beside))
+    }
+    let one = await kit('export let v = 1'), two = await kit('export let v = 2')
+    assertEquals(one, { ...toolkits(b), [COMPILER]: one[COMPILER] })
+    assertEquals(one[COMPILER].version == two[COMPILER].version, false)
+    await Deno.remove(`${root}/packages/esbuild`, { recursive: true })
     // What write() materialized, and no temporary file left behind.
     assertEquals(
       [...Deno.readDirSync(`${root}/.wrangler`)].map((f) => f.name).sort(),

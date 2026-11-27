@@ -8,7 +8,7 @@ import { resolve as named } from 'resolve.exports'
 import type ts from 'typescript'
 import { glob, stat } from 'node:fs/promises'
 import type { Catalog } from '../packages/esbuild/platform.ts'
-import { toolkits } from '../packages/esbuild/plan.ts'
+import { COMPILER, toolkits } from '../packages/esbuild/plan.ts'
 import { members as workspace } from '@yaks/cli/dependencies'
 
 type Manifest = {
@@ -298,6 +298,27 @@ let kept = (path: string): Record<string, string> => {
   }
 }
 
+/** The digest of the compiler's source: every file of packages/esbuild its
+ * image runs, not its tests, docs or installed packages. Null for a
+ * workspace without it. */
+export let compiler = async (root = repo): Promise<string | null> => {
+  let at = join(resolve(root), 'packages/esbuild')
+  if (!await stat(at).then(() => true, () => false)) return null
+  let files: Record<string, string> = {}
+  let walk = (dir: string) => {
+    for (let entry of Deno.readDirSync(join(at, dir))) {
+      let path = dir ? `${dir}/${entry.name}` : entry.name
+      if (entry.name == 'node_modules' || excluded(path)) continue
+      if (entry.isDirectory) walk(path)
+      else if (/\.(?:ts|json)$/.test(path)) {
+        files[path] = Deno.readTextFileSync(join(at, path))
+      }
+    }
+  }
+  walk('')
+  return await digest(JSON.stringify(ordered(files)))
+}
+
 /** Materialize atomically before wrangler reads the kernel, with
  * reusable transpilation at `memo`, which can outlive the checkout. */
 export let write = async (
@@ -309,9 +330,14 @@ export let write = async (
   let made: Record<string, string> = {}
   let packages = await catalog(root, { kept: kept(memo), made }, generated)
   materialize(to, packages)
-  // Beside it, each package's digest alone: what a page's serving reads to
-  // tell a release compiled by an older toolkit (workers/yak/toolkit.ts).
-  materialize(join(dirname(to), 'toolkit.json'), toolkits(packages))
+  // Beside it, each package's digest alone, and the compiler's: what a
+  // page's serving reads to tell a release compiled by an older toolkit or
+  // compiler (workers/yak/toolkit.ts).
+  let own = await compiler(root)
+  materialize(join(dirname(to), 'toolkit.json'), {
+    ...toolkits(packages),
+    ...own ? { [COMPILER]: { version: own, uses: [] } } : {},
+  })
   materialize(memo, made)
   return packages
 }
