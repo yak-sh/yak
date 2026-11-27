@@ -335,3 +335,18 @@ test('declared platform toolkit imports plan compiled pages and module workers',
   assertEquals(got?.notes, [])
   assertEquals(got?.sent, ['main.js', 'package.json', 'tool.js'])
 })
+
+test('the compiled scripts an HTML page loads together are named together', async () => {
+  let p = await plan(app({
+    'index.html': PAGE('a.ts') + PAGE('b.ts') + PAGE('plain.js'),
+    'other.html': PAGE('b.ts'),
+    'lone.html': PAGE('c.ts'),
+    'a.ts': "new Worker(new URL('./w.ts', import.meta.url))",
+    'b.ts': 'let b: number = 1',
+    'c.ts': 'let c: number = 1',
+    'w.ts': 'let w: number = 1',
+    'plain.js': 'let p = 1',
+  }))
+  assertEquals(p!.ask.pages.sort(), ['a.ts', 'b.ts', 'c.ts', 'w.ts'])
+  assertEquals(p!.ask.together, [['a.ts', 'b.ts']])
+})

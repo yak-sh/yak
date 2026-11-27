@@ -245,6 +245,8 @@ let reuse = await (async () => {
   await s.write({
     'index.html': PAGE,
     'main.ts': 'let n: number = 1',
+    'other.html': '<script type="module" src="other.ts"></script>',
+    'other.ts': 'let m: number = 1',
     'worker.ts': 'export default { fetch: () => new Response("one") }',
     'style.css': 'body { color: blue }',
   })
@@ -318,14 +320,16 @@ test('a deploy reuses unchanged compiled entries', () => {
   assertEquals(unchanged.worker, worker)
   assertEquals(pageChanged.asks, 2)
   assertEquals(pageChanged.ask.worker, undefined)
-  assertEquals(pageChanged.ask.pages, ['main.ts'])
+  // The app's pages share one pack of shared modules, so they compile
+  // together when one of them changes.
+  assertEquals(pageChanged.ask.pages, ['main.ts', 'other.ts'])
   assertEquals(pageChanged.worker, worker)
   assertEquals(kit.body, '.Button {}')
   assertEquals(pageChanged.kit, kit)
   assertEquals(workerChanged.worker?.entry, 'worker.ts')
   assertEquals(workerChanged.pages, [])
   assertEquals(compilerChanged.worker?.entry, 'worker.ts')
-  assertEquals(compilerChanged.pages, ['main.ts'])
+  assertEquals(compilerChanged.pages, ['main.ts', 'other.ts'])
 })
 
 test('a changed lock or previously plain script replans a release', async () => {
@@ -347,7 +351,7 @@ test('a changed lock or previously plain script replans a release', async () => 
 
   await s.write({ 'plain.js': "import 'three'" })
   await s.tool('app_deploy')
-  assertEquals(s.asks.at(-1)?.pages, ['plain.js'])
+  assertEquals(s.asks.at(-1)?.pages, ['main.ts', 'plain.js'])
 })
 
 // A page served from a release whose toolkit has moved on has the release

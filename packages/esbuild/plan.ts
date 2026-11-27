@@ -60,6 +60,9 @@ export type Ask = {
   }
   /** The page scripts to compile, and the module workers they start. */
   pages: string[]
+  /** The pages one HTML page loads together, where it loads two or more:
+   * they share one pack of shared modules (./shared.ts `pack`). */
+  together?: string[][]
 }
 
 /** What the compiler answers. Any `errors` mean nothing it made may be used;
@@ -289,9 +292,12 @@ export let plan = async (app: App): Promise<Plan | null> => {
   let pagesOf = app.paths.filter((p) =>
     /\.html?$/i.test(p) && p.startsWith(served)
   )
+  let documents: string[][] = []
   for (let page of pagesOf) {
     let html = await text(page) ?? ''
-    for (let entry of loaded(page, html)) {
+    let entries = loaded(page, html)
+    documents.push(entries)
+    for (let entry of entries) {
       loads.set(entry, [...loads.get(entry) ?? [], mapped(html)])
     }
   }
@@ -347,8 +353,11 @@ export let plan = async (app: App): Promise<Plan | null> => {
   if (pkg != null) files['package.json'] = pkg
   let lock = await text('package-lock.json')
   if (lock != null) files['package-lock.json'] = lock
+  let together = documents
+    .map((entries) => [...new Set(entries.filter((e) => pages.includes(e)))])
+    .filter((entries) => entries.length > 1)
   return {
-    ask: { files, worker, pages },
+    ask: { files, worker, pages, ...together.length ? { together } : {} },
     notes,
     inputs,
     reads: [...reads.keys()],

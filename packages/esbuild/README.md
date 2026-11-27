@@ -239,11 +239,21 @@ public shared output.
   address. esbuild leaves `import.meta.url` as written, so in a compiled script
   the worker's path resolves against the entry, not the file that names it.
 
-A page script compiles to one minified file importing its shared modules with
-`process.env.NODE_ENV` set to `"production"`. It also imports, after its own
-imports, every shared module those reach (`flat`), so a browser asks for the
-whole graph once the page script arrives instead of one level per round trip;
-its own imports already reach each one, so nothing runs in another order. The
+A page script compiles to one minified file with `process.env.NODE_ENV` set to
+`"production"`, importing its **pack** (`pack`): every shared module the page
+scripts an HTML page loads together import, linked into one file under
+`__packages/<sha256>/`, named by its bytes like a group. A shared group is many
+small modules, and a cold page that imported them asked for each, 95 files for a
+form; the pack is one. Scripts loaded together import the same pack, so a module
+two of them import is one instance, and in the pack each module keeps its own
+`import.meta.url`, so its resources load from its group. Any other script, a
+module worker included, gets a pack of its own and evaluates only what it
+imports. A release that changes only the app's own code keeps the pack its
+browsers cached, and apps importing the same shared modules share it. Modules
+evaluate in the order the pages first import them, and one imported lazily
+evaluates when its import runs; its bytes come with the pack. A host compiles an
+app's pages together, never keeping one from an older compile beside a new one,
+and the plan's `together` names the scripts each HTML page loads together. The
 server source compiles to one module; files it reaches that esbuild does not
 load (text, WebAssembly) are named in `carry` for the host to upload beside it.
 A file imported `with { type: 'text' }` is compiled in as its text, whatever its

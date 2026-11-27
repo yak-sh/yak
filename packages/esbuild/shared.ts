@@ -12,7 +12,7 @@ import { type Common, common } from './common.ts'
 import { packageOf } from './graph.ts'
 import { homes } from './home.ts'
 import type { Files } from './npm.ts'
-import { type Catalog, located, type Seed } from './platform.ts'
+import { type Catalog, located, moved, type Seed } from './platform.ts'
 import { phase, type Report } from './timing.ts'
 import { used } from './used.ts'
 
@@ -475,25 +475,13 @@ export let external = (urls: Shared['urls']): Options['external'] => (spec) => {
   )
 }
 
-/// unexported('import{a,b as c}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'let a,x;export{a,x as b}' }, 'https://o') -> []
-/// unexported('import{show}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'export*from"./c.js"', '__packages/h/c.js': 'export let a,b' }, 'https://o', { '@yaks/cli/answer': 'https://o/__packages/h/e.js' }) -> ['imports show from @yaks/cli/answer, which does not export it; it exports a, b']
-/** The names a compiled page imports from shared modules that those modules
- * do not export, each as an error line naming what the module does export, so
- * the caller can pick the name it meant. esbuild leaves a shared import
- * external and never checks it, and a browser refuses to link a page naming
- * one, so the whole page's script stops; the compile refuses it instead, and
- * the last release keeps serving. A namespace or dynamic import names
- * nothing to check. */
-export let unexported = (
-  code: string,
-  files: Shared['files'],
-  origin: string,
-  urls: Shared['urls'] = {},
-): string[] => {
-  let specs = new Map(Object.entries(urls).map(([spec, url]) => [url, spec]))
-  let pathOf = (url: string) =>
-    url.startsWith(`${origin}/`) ? url.slice(origin.length + 1) : ''
-  // What a shared module exports, through its `export*from`s.
+// A shared module's path under `__packages/`, or '' for another URL.
+let pathIn = (origin: string) => (url: string) =>
+  url.startsWith(`${origin}/`) ? url.slice(origin.length + 1) : ''
+
+// What a shared module exports, through its `export*from`s.
+let exported = (files: Shared['files'], origin: string) => {
+  let pathOf = pathIn(origin)
   let exportsOf = (url: string, seen = new Set<string>()): Set<string> => {
     let text = files[pathOf(url)]
     let names = new Set<string>()
@@ -510,6 +498,27 @@ export let unexported = (
     }
     return names
   }
+  return exportsOf
+}
+
+/// unexported('import{a,b as c}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'let a,x;export{a,x as b}' }, 'https://o') -> []
+/// unexported('import{show}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'export*from"./c.js"', '__packages/h/c.js': 'export let a,b' }, 'https://o', { '@yaks/cli/answer': 'https://o/__packages/h/e.js' }) -> ['imports show from @yaks/cli/answer, which does not export it; it exports a, b']
+/** The names a compiled page imports from shared modules that those modules
+ * do not export, each as an error line naming what the module does export, so
+ * the caller can pick the name it meant. esbuild leaves a shared import
+ * external and never checks it, and a browser refuses to link a page naming
+ * one, so the whole page's script stops; the compile refuses it instead, and
+ * the last release keeps serving. A namespace or dynamic import names
+ * nothing to check. */
+export let unexported = (
+  code: string,
+  files: Shared['files'],
+  origin: string,
+  urls: Shared['urls'] = {},
+): string[] => {
+  let specs = new Map(Object.entries(urls).map(([spec, url]) => [url, spec]))
+  let pathOf = pathIn(origin)
+  let exportsOf = exported(files, origin)
   return parse(code)[0].flatMap((i) => {
     let url = i.n
     if (i.d != -1 || !url || files[pathOf(url)] == null) return []
@@ -534,12 +543,11 @@ export let unexported = (
 
 /// flat('import"https://o/__packages/a/e.js"', { '__packages/a/e.js': 'import"./c.js"', '__packages/a/c.js': '' }, 'https://o') -> 'import"https://o/__packages/a/e.js"\nimport"https://o/__packages/a/c.js";'
 /// flat('let n = 1', {}, 'https://o') -> 'let n = 1'
-/** A page entry that also imports every shared module its own imports reach.
- * A browser finds a module's imports only once the module arrives, so a graph
- * five levels deep is five round trips before the page runs; named in the
- * entry, all of it is asked for at once. The entry's own imports come first,
- * and they already reach everything it adds, so nothing runs in another
- * order. Dynamic imports stay lazy. */
+/** A page entry that also imports every shared module its own imports reach:
+ * the whole graph a browser links before the page runs, to judge it as one
+ * (./compile.ts `browserless`). The entry's own imports come first, and they
+ * already reach everything it adds, so nothing runs in another order.
+ * Dynamic imports stay lazy. */
 export let flat = (
   code: string,
   files: Shared['files'],
@@ -565,4 +573,135 @@ export let flat = (
   return added.length
     ? `${code}\n${added.map((url) => `import${JSON.stringify(url)};`).join('')}`
     : code
+}
+
+// A name as an import or export clause writes it: bare, or quoted.
+let written = (name: string) =>
+  /^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name)
+
+// The name the pack exports module `i`'s export `name` by. A name ends at its
+// last `$`, so two modules' names never meet.
+let aliasOf = (name: string, i: number) => written(`${name}$${i}`)
+
+// A name as a clause writes it, bare or quoted, as the name itself.
+let unquoted = (name: string) => /^["']/.test(name) ? JSON.parse(name) : name
+
+/// repointed('import"U"', 'P', 0, new Set()) -> 'import"P"'
+/// repointed('import d,{a as b,c}from"U"', 'P', 2, new Set()) -> 'import{default$2 as d,a$2 as b,c$2 as c}from"P"'
+/// repointed('import*as n from"U"', 'P', 1, new Set()) -> 'import{$1 as n}from"P"'
+/// repointed('export*from"U"', 'P', 3, new Set(['a', 'default'])) -> 'export{a$3 as a}from"P"'
+/// repointed('export*as n from"U"', 'P', 3, new Set()) -> 'export{$3 as n}from"P"'
+/** An import or export statement of shared module `i`, importing the same
+ * bindings from the pack at `url`. `names` are what the module exports, for
+ * an `export*from`. */
+export let repointed = (
+  statement: string,
+  url: string,
+  i: number,
+  names: Set<string>,
+): string => {
+  let to = JSON.stringify(url)
+  let [, verb, clause] =
+    /^(import|export)\s*([^]*?)\s*(?:from\s*)?["'][^"']*["']\s*;?$/
+      .exec(statement)!
+  if (!clause) return `import${to}`
+  if (clause == '*') {
+    let all = [...names].filter((n) => n != 'default')
+      .map((n) => `${aliasOf(n, i)} as ${written(n)}`)
+    return `export{${all.join(',')}}from${to}`
+  }
+  let picked: string[] = []
+  let first = /^([\w$]+)\s*(?:,\s*|$)/.exec(clause)
+  if (first) {
+    picked.push(`${aliasOf('default', i)} as ${first[1]}`)
+    clause = clause.slice(first[0].length)
+  }
+  let star = /^\*\s*as\s+([\w$]+)$/.exec(clause)
+  if (star) picked.push(`$${i} as ${star[1]}`)
+  let list = /^\{([^}]*)\}$/.exec(clause)?.[1] ?? ''
+  for (let part of list.split(',').map((p) => p.trim()).filter(Boolean)) {
+    let [name, local = name] = part.split(/\s+as\s+/)
+    picked.push(`${aliasOf(unquoted(name), i)} as ${local}`)
+  }
+  return `${verb}{${picked.join(',')}}from${to}`
+}
+
+/** The packed pages and the pack's files. */
+type Packed = { pages: Record<string, string>; files: Shared['files'] }
+
+/** Link every shared module the pages import into one pack, and point the
+ * pages at it. A shared group is a graph of small modules, the splitting
+ * build that keeps one instance of each, and a cold page asked for every one
+ * of them: 95 files for a form. The pack is one file. Each module keeps its
+ * identity: the pages import the one pack, in which each module is one
+ * module whose `import.meta.url` is still its own URL, so `new
+ * URL('./Button.css', import.meta.url)` loads what it did. The pack is named
+ * by its bytes, like a group, so a release that changes only the app's own
+ * code keeps it, and apps importing the same shared modules share it.
+ * Modules evaluate in the order the pages first import them, and one
+ * imported lazily, by a page or a shared module, evaluates when the import
+ * runs; its bytes come with the pack, since splitting them out split the
+ * pack into a chunk for each set of lazy imports reaching its code. */
+export let pack = async (
+  pages: Record<string, string>,
+  files: Shared['files'],
+  origin: string,
+): Promise<Packed> => {
+  let pathOf = pathIn(origin)
+  let exportsOf = exported(files, origin)
+  let shared = (i: { n?: string; d: number }) =>
+    i.d != -2 && !!i.n && files[pathOf(i.n)] != null
+  let order: string[] = [], eager = new Set<string>()
+  for (let code of Object.values(pages)) {
+    for (let i of parse(code)[0].filter(shared)) {
+      if (!order.includes(i.n!)) order.push(i.n!)
+      if (i.d == -1) eager.add(i.n!)
+    }
+  }
+  if (!order.length) return { pages, files: {} }
+  let entry = order.map((url, i) => {
+    let at = JSON.stringify(url)
+    if (!eager.has(url)) return `export let $${i}=()=>import(${at});`
+    let names = [...exportsOf(url)].map((n) =>
+      `${written(n)} as ${aliasOf(n, i)}`
+    )
+    return `export*as $${i} from${at};export{${names.join(',')}}from${at};`
+  }).join('\n')
+  let ENTRY = '__pack.js'
+  let built = await bundle(
+    {
+      read: (path) => {
+        if (path == ENTRY) return entry
+        let text = files[path]
+        if (text == null || !path.endsWith('.js')) return text ?? null
+        // A module keeps reading the URL it is served from in its group.
+        return moved(text, () => JSON.stringify(`${origin}/${path}`))
+      },
+    },
+    ENTRY,
+    {
+      minify: true,
+      alias: (spec) => files[pathOf(spec)] != null ? pathOf(spec) : undefined,
+    },
+  )
+  let prefix = `__packages/${await digest([['pack.js', built.code]])}/`
+  let url = `${origin}/${prefix}pack.js`
+  let repoint = (code: string) => {
+    for (let i of parse(code)[0].filter(shared).toReversed()) {
+      let n = order.indexOf(i.n!)
+      let to = i.d == -1
+        ? repointed(code.slice(i.ss, i.se), url, n, exportsOf(i.n!))
+        : `import(${JSON.stringify(url)}).then(m=>m.$${n}${
+          eager.has(i.n!) ? '' : '()'
+        })`
+      code = code.slice(0, i.ss) + to + code.slice(i.se)
+    }
+    return code
+  }
+  return {
+    pages: Object.fromEntries(
+      Object.entries(pages).map(([path, code]) => [path, repoint(code)]),
+    ),
+    files: { [`${prefix}pack.js`]: built.code },
+  }
 }

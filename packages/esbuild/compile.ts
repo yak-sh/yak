@@ -22,7 +22,7 @@ import { lockfile, type Pins, pins, reached, split, wanted } from './lock.ts'
 import * as npm from './npm.ts'
 import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
-import { external, flat, shared, unexported } from './shared.ts'
+import { external, flat, pack, shared, unexported } from './shared.ts'
 import { header, phase, type Report, type Timing } from './timing.ts'
 import { homes } from './home.ts'
 import { type Catalog, located, type Seed, seed } from './platform.ts'
@@ -188,6 +188,19 @@ let nodeOnly = (
   ]
 }
 
+/// realms(['a', 'b', 'c', 'w'], [['a', 'b'], ['b', 'c', 'x']]) -> [['a', 'b', 'c'], ['w']]
+/// realms(['a', 'w'], undefined) -> [['a'], ['w']]
+/** The pages that share one pack: those an HTML page loads together, joined
+ * through a page two HTML pages load. */
+export let realms = (pages: string[], together: string[][] = []) => {
+  let of = new Map(pages.map((page) => [page, new Set([page])]))
+  for (let group of together) {
+    let joined = new Set(group.flatMap((page) => [...of.get(page) ?? []]))
+    for (let page of joined) of.set(page, joined)
+  }
+  return [...new Set(of.values())].map((realm) => [...realm])
+}
+
 let checked = (
   entry: string,
   code: string,
@@ -334,6 +347,7 @@ export let compile = async (
   }
   // A page's npm package module is served from its package's home.
   let pages = phase(report, 'pages')
+  let codes: Record<string, string> = {}
   try {
     let home = homes((name) => fs.tarball(name), origin)
     for (let entry of ask.pages) {
@@ -350,9 +364,24 @@ export let compile = async (
       missing.push(...nodeOnly(entry, code, page, answer.shared, urls, origin))
       if (missing.length) {
         answer.errors.push(...missing.map((line) => `${entry}: ${line}`))
-      } else answer.pages[entry] = page
+      } else codes[entry] = code
     }
     Object.assign(tarballs, home.tarballs)
+    // Scripts an HTML page loads together import one pack, so a module two
+    // of them import is one instance; another script, a module worker
+    // included, gets its own, and evaluates only what it imports.
+    for (let realm of realms(Object.keys(codes), ask.together)) {
+      let packed = await pack(
+        Object.fromEntries(realm.map((entry) => [entry, codes[entry]])),
+        answer.shared ?? {},
+        origin,
+      )
+      if (answer.shared) Object.assign(answer.shared, packed.files)
+      Object.assign(answer.pages, packed.pages)
+    }
+  } catch (e) {
+    if (e instanceof Stopped) throw e
+    answer.errors.push(...said(e))
   } finally {
     pages()
   }

@@ -133,17 +133,20 @@ let samePlan = (
     )
 }
 
-// A bundle depends only on its own graph, the installed packages and the
-// compiler release. Other app files may change without changing its bytes.
+// A bundle depends only on its own graph, the installed packages, the
+// compiler release, and for a page, the pages that share its pack. Other app
+// files may change without changing its bytes.
 let fingerprint = (
   ask: Ask,
   paths: string[],
   compiler: string,
   flags: string[],
+  together?: string[][],
 ) =>
   digest(encode(JSON.stringify({
     compiler,
     flags,
+    ...together ? { together } : {},
     files: Object.fromEntries(
       [...new Set([...paths, 'package.json', LOCK])]
         .filter((path) => path in ask.files).sort()
@@ -162,7 +165,13 @@ let fingerprints = async (
   pages: Object.fromEntries(
     await Promise.all(ask.pages.map(async (entry) => [
       entry,
-      await fingerprint(ask, inputs.pages[entry], compiler, []),
+      await fingerprint(
+        ask,
+        inputs.pages[entry],
+        compiler,
+        [],
+        ask.together ?? [],
+      ),
     ])),
   ),
 })
@@ -400,13 +409,17 @@ export let compiled = async (
       old.worker?.hash == hashes.worker && old.worker?.main
     ? await read(MODULE)
     : null
+  let stale = (entry: string) =>
+    old?.compiler != compiler || old.pages?.[entry] != hashes.pages[entry] ||
+    !held.includes(BUILT + entry)
   let pending: Ask = {
     ...ask,
     worker: oldWorker ? undefined : ask.worker,
-    pages: ask.pages.filter((entry) =>
-      old?.compiler != compiler || old.pages?.[entry] != hashes.pages[entry] ||
-      !held.includes(BUILT + entry)
-    ),
+    // Pages an HTML page loads together import one pack of the shared
+    // modules they reach (@yaks/esbuild `pack`), so an app's pages compile
+    // together or not at all: a page kept from an older compile beside a new
+    // one would load a second copy of each.
+    pages: ask.pages.some(stale) ? ask.pages : [],
   }
   if (retained && (pending.worker || pending.pages.length)) {
     throw refuse(
