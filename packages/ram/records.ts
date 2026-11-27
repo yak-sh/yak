@@ -19,7 +19,7 @@ let named = (
       ]]
     ),
   )
-  return { ...cells, entity: b.entity }
+  return { entity: b.entity, ...cells }
 }
 
 export let records = (vocab: () => Vocab) => {
