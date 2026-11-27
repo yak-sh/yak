@@ -26,22 +26,35 @@ move only show how a turn travels. Before you build, design the whole game from
 the person's request with good game design principles, and write it in the app
 as `design.md`. Decide every part yourself; don't stop to ask.
 
-- **Premise and arc**: who the players are, what they want, what stands in the
-  way, and how the game opens, turns and ends.
+Work top down, so every part follows from the one above it:
+
+- **Story and arc**: the world's story first: who the players are, what they
+  want, what stands in the way, and how the game opens, turns and ends. Each
+  place's mood follows from the story, and what is in a place follows from its
+  mood.
+- **Characters**: each one has a backstory that fits the world's story and a
+  personality: what they are like, how they change, what they fear and hope for.
+  Write their dialogue and quests from that, and give it to any model that
+  speaks for them.
 - **Core loop**: what a player does from moment to moment, and why it is fun to
   do again.
 - **Challenge**: the contest at its heart (a fight, a race, a puzzle), what a
-  player can lose, such as health, and how they see it.
-- **Progression and balance**: what grows over a run, what it costs, and numbers
-  worked out so the game is neither trivial nor hopeless.
+  player can lose, such as health, and how they see it. Show the odds before a
+  roll.
+- **Progression and balance**: what grows over a run and what it costs. Danger
+  rises with distance from the start, gear and choices matter, and numbers stay
+  small enough to read. Work the numbers so the game is neither trivial nor
+  hopeless.
 - **Variety**: quests, levels or encounters that each ask something different of
-  the player.
+  the player, never the same errand again.
 - **Players**: what each one controls and, in a party, what everyone sees of the
-  others.
+  others. In a co-op game each player has a job only they do, and something
+  pushes the party on so it cannot wait safely.
 - **Feel**: controls that fit the genre on a phone and a keyboard (walk, drag or
   tap where to go, never a button per tile), and how moving, hitting and winning
   look and sound.
-- **Ending**: a win the players can reach, and what a loss does.
+- **Ending**: a win the players can reach in one sitting, unless the person
+  asked for a longer game, and what a loss does.
 
 Build from the design, and answer with its main points beside the game's
 address. When the person changes any part, change `design.md` first, then redo
