@@ -23,6 +23,15 @@ export type Friends =
 /** How the app's API is asked (default: the global `fetch`). */
 export type Get = (request: Request) => Promise<Response>
 
+/** A player's friends at one app: who they are, and inviting one to play. */
+export type FriendsAt = {
+  /** Read when the picker opens; the list is the player's, not the game's. */
+  list: () => Promise<Friends>
+  /** Invite a friend to `path`, relative to the app's root. It reaches them
+   * in their Friends conversation and Updates. A retry keeps its `eid`. */
+  invite: (to: string, path?: string, eid?: string) => Promise<void>
+}
+
 type Row = { entity: { eid: string } } & Record<string, unknown>
 
 let ORDER: Presence[] = ['online', 'building', 'away', 'unknown']
@@ -39,7 +48,7 @@ export let ranked = (friends: Friend[]): Friend[] =>
 export let friendsAt = (
   api: string | URL = new URL('./api/', document.baseURI),
   get: Get = fetch,
-) => {
+): FriendsAt => {
   let base = new URL(api)
   base.pathname = base.pathname.replace(/\/?$/, '/')
   let rows = async (line: string): Promise<Row[]> => {
@@ -50,7 +59,6 @@ export let friendsAt = (
     return await answer.json()
   }
   return {
-    /** Read when the picker opens; the list is the player's, not the game's. */
     list: async (): Promise<Friends> => {
       let status = (await rows('.app_friends'))[0]?.app_friends as
         | { signed_in?: boolean; allowed?: boolean }
@@ -67,8 +75,6 @@ export let friendsAt = (
         })),
       }
     },
-    /** Invite a friend to `path`, relative to the app's root. It reaches them
-     * in their Friends conversation and Updates. A retry keeps its `eid`. */
     invite: async (
       to: string,
       path?: string,
