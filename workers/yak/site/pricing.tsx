@@ -2,7 +2,7 @@
 import { Button, Card } from '@yaks/ui'
 import { Plan } from '@yaks/platform/home'
 import { Page } from './frame.tsx'
-import { CostNote } from './home.tsx'
+import { CostNote, SupportContract } from './home.tsx'
 import { attr, list, type Slots, text } from './copy.ts'
 
 let PLANS = ['free', 'plus', 'pro'] as const
@@ -64,7 +64,7 @@ export let Pricing = () => (
           />
         ))}
       </div>
-      <p class='Note Note-small' {...text('pricing.plans.support')} />
+      <SupportContract />
       <p class='Note Note-small' {...text('pricing.plans.renewal')} />
       <p class='Note Note-small' {...text('home.cost.ai')} />
     </section>

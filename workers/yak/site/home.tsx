@@ -286,6 +286,17 @@ export let CostNote = ({ class: classes = 'Note' }: { class?: string }) => (
   />
 )
 
+/** Support beyond the Pro plan's email support: a contract, asked for by
+ * mail. Every page that sells a plan says it in these words. */
+export let SupportContract = () => (
+  <p
+    class='Note Note-small'
+    {...text('pricing.plans.support', {
+      mail: <a href='mailto:hello@yaks.app'>hello@yaks.app</a>,
+    })}
+  />
+)
+
 /** What a space costs: what one is, a card for each plan, and where the
  * limits are. */
 export let Cost = ({ story }: { story?: boolean } = {}) => (

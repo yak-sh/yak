@@ -748,8 +748,7 @@
       "emails": "10,000 emails a month sent or received by your site, such as the list each Friday of who is coming to Saturday's food pantry shift",
       "support": "Support from us, by email",
       "limits": "Tax is included, and the bill never grows by itself. If a very busy month uses up the AI work the plan includes, the assistant waits until the 1st, unless you choose to buy more, $10 at a time and paid in advance. Your site stays online either way. There are two smaller plans, Free and $12 a month, for a site that needs less. %{plans}, where the assistant is called your Operator.",
-      "plans": "Compare the plans",
-      "contract": "If your organization wants more hands-on help than email support, such as a set number of hours of building each month, ask us about a support contract at %{mail}."
+      "plans": "Compare the plans"
     },
     "join": {
       "title": "Start with the website you have now",
@@ -940,7 +939,7 @@
     },
     "plans": {
       "title": "Each space is free or on a paid plan.",
-      "support": "Support contracts are available with the Pro plan. They include direct access to your support provider and an agreed number of build hours each month.",
+      "support": "The Pro plan includes support by email. For more hands-on help, such as a set number of hours of building each month, ask us about a support contract at %{mail}.",
       "renewal": "An included domain gets up to $12 a year toward renewal when registered through yaks.app. The first year and other domains’ renewals are at the registrar’s price, with no markup."
     },
     "always": {

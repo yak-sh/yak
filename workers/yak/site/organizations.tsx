@@ -20,6 +20,7 @@ import { START } from '../newcomer.ts'
 import { PRICE } from '@yaks/platform/plans'
 import { Page } from './frame.tsx'
 import { attr, list, type Slots, text } from './copy.ts'
+import { SupportContract } from './home.tsx'
 
 /** Where the page lives. */
 export let PATH = '/organizations'
@@ -317,12 +318,7 @@ export let Organizations = () => (
           plans: <a href='/pricing' {...text('organizations.cost.plans')} />,
         })}
       />
-      <p
-        class='Note Note-small'
-        {...text('organizations.cost.contract', {
-          mail: <a href='mailto:hello@yaks.app'>hello@yaks.app</a>,
-        })}
-      />
+      <SupportContract />
     </section>
     <Card class='Join' aria-labelledby='join'>
       <h2 class='Title' id='join' {...text('organizations.join.title')} />

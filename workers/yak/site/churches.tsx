@@ -19,6 +19,7 @@ import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
 import { Page, Yours } from './frame.tsx'
 import { attr, type Slots, text } from './copy.ts'
+import { SupportContract } from './home.tsx'
 
 /** Where the page lives. */
 export let PATH = '/churches'
@@ -180,7 +181,7 @@ export let Churches = () => (
           ),
         })}
       />
-      <p class='Note Note-small' {...text('pricing.plans.support')} />
+      <SupportContract />
     </section>
     <Card class='Join' aria-labelledby='join'>
       <h2 class='Title' id='join' {...text('churches.join.title')} />

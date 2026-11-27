@@ -18,7 +18,7 @@ import { Button, Card, Check, Field, Form } from '@yaks/ui'
 import { installAt } from '@yaks/platform/routes'
 import { type Slots, text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'
-import { arrow } from './home.tsx'
+import { arrow, SupportContract } from './home.tsx'
 
 /** Where the page lives. */
 export let PATH = '/townships'
@@ -243,7 +243,7 @@ export let Townships = () => (
           ),
         })}
       />
-      <p class='Note Note-small' {...text('pricing.plans.support')} />
+      <SupportContract />
     </section>
     <Card class='Join' aria-labelledby='join'>
       <h2 class='Title' id='join' {...text('townships.join.title')} />
