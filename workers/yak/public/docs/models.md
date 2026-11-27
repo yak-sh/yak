@@ -373,9 +373,19 @@ too large, `503` while speech is paused.
 
 ElevenLabs speaks in lifelike voices: its premade ones, and voices a person
 designs from a description or clones from recordings, kept on their own
-ElevenLabs account. The space connects its ElevenLabs key at its connections
-page (<https://yaks.app/manage/connections>), and the app uses that connection;
-its speech is then charged to that ElevenLabs account, not the space's budget.
+ElevenLabs account. The space connects ElevenLabs at its connections page
+(<https://yaks.app/manage/connections>) in one of two ways, and its speech is
+then charged to that ElevenLabs account, not the space's budget:
+
+- **Its key**, pasted as the space's connection, which the app uses.
+- **A sign-in to the person's own account**, through ElevenLabs' MCP server
+  (`https://api.elevenlabs.io/v1/mcp`). An app speaks with it when the person
+  connected it in the app's space for everyone there, or granted it to the app.
+  The account's own voices, cloned, designed or added from ElevenLabs' library,
+  are listed beside the premade ones, and the server's other tools reach the
+  person's Operator.
+
+An app lists the voices it may speak in, and speaks a line in one:
 
     let voices = await (await fetch('./api/speech/voices?provider=elevenlabs')).json()
     // {provider: 'elevenlabs', voices: [{id, name, about, sample}]}
@@ -415,9 +425,9 @@ audition, and the one picked is kept:
 `name`, an optional `description`, and the recordings as `files`. Clone only a
 voice the person has the right to. ElevenLabs allows cloning on some plans and
 says so when the account's plan doesn't. Designing, keeping and cloning need the
-app's own ElevenLabs connection, and are refused with `403` (`speech_own`)
-without one. ElevenLabs' own refusal of a request is `400` (`speech_refused`)
-with its reason. Recordings name the provider too:
+app's own ElevenLabs, a key or a sign-in, and are refused with `403`
+(`speech_own`) without one. ElevenLabs' own refusal of a request is `400`
+(`speech_refused`) with its reason. Recordings name the provider too:
 `./api/speech/hear?provider=elevenlabs` hears with Scribe and tells the speakers
 apart.
 

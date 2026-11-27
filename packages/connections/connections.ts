@@ -160,6 +160,10 @@ export type Ctx = {
   vault: Vault
   /** where the service sends the person back after they sign in */
   redirect?: string
+  /** where the host serves its OAuth client's metadata document, whose URL
+   * is the client's id at a service that takes one (@yaks/mcp-client/oauth
+   * `client`) */
+  document?: string
   fetch?: typeof fetch
   now?: () => number
   /** where a failure is reported that the verb answering is not stopped by:

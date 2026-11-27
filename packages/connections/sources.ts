@@ -91,17 +91,25 @@ let addresses = async (read: Read, held: Bundle[], app: Eid) => {
   )
 }
 
-/** Every source of `person`'s that `app` holds their grant to, by address:
- * the far end of each `uses` link from the app that the person holds. */
+/** Every source of `person`'s that `app` holds their grant to: the far end
+ * of each `uses` link from the app that the person holds, whole. */
+export let grantedTo = async (
+  read: Read,
+  a: { app: Eid; person: Eid },
+): Promise<Bundle[]> => {
+  let links = await read(line`.${EDGE}.from=${a.app}&.${USES}&*`)
+  if (!links.length) return []
+  return (await read(
+    line`.entity.eid=${links.map((l) => String(comp(l, EDGE).to))}&*`,
+  )).filter((b) => holder(b) == a.person)
+}
+
+/** Every source of `person`'s that `app` holds their grant to, by address. */
 export let grantsOf = async (
   read: Read,
   a: { app: Eid; person: Eid },
 ): Promise<string[]> => {
-  let links = await read(line`.${EDGE}.from=${a.app}&.${USES}&*`)
-  if (!links.length) return []
-  let held = (await read(
-    line`.entity.eid=${links.map((l) => String(comp(l, EDGE).to))}&*`,
-  )).filter((b) => holder(b) == a.person)
+  let held = await grantedTo(read, a)
   return (await addresses(read, held, a.app)).filter((at) => at != null)
 }
 

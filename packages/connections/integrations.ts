@@ -144,6 +144,9 @@ export type Integration = {
   /** what its one key looks like, shown in the box it is pasted in:
    * ElevenLabs' `sk_••••••••` */
   example?: string
+  /** its own hosted MCP server's address, which a person connects by signing
+   * in to their account there (./mcp.ts), as well as or instead of a key */
+  mcp?: string
   /** a call that answers 2xx once its credential works, `METHOD url` on one
    * of its hosts: Cloudflare's `GET …/user/tokens/verify` */
   check?: string
@@ -296,6 +299,7 @@ let CARRIED = {
   methods: 1,
   fields: 1,
   example: 1,
+  mcp: 1,
   check: 1,
   signature: 1,
   testing: 1,

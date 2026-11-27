@@ -281,6 +281,12 @@
           "type": "string",
           "description": "what its one key looks like, shown in the box it is pasted in: ElevenLabs' sk_••••••••, Stripe's rk_live_••••••••. None shows a row of dots"
         },
+        "mcp": {
+          "$id": "urn:uuid:9d4f1c66-edea-4d1f-ac3c-2e5485d12174",
+          "type": "string",
+          "format": "uri",
+          "description": "the address of the service's own hosted MCP server, which a person connects by signing in to their account there rather than pasting a key: ElevenLabs' https://api.elevenlabs.io/v1/mcp. Connecting it adds the server in the space (mcp_connect), and its tools reach the person's Operator and the apps they allow. None offers no sign-in"
+        },
         "check": {
           "$id": "urn:uuid:d354be3c-48d4-4400-8c1a-177bbb4800d7",
           "type": "string",

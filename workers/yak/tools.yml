@@ -37,8 +37,10 @@ mcp_connect:
     space's connections page, where they sign in; credentials never pass
     through this tool. Only url is needed: a new server is named what it calls
     itself, or by its host, and connecting it finds what it takes, a sign-in
-    through its OAuth metadata, a key, or nothing (the reply's needs). For a
-    server on your own
+    through its OAuth metadata, a key, or nothing (the reply's needs). A
+    service whose integration names its own MCP server (`mcp`, as ElevenLabs'
+    https://api.elevenlabs.io/v1/mcp) is connected by passing that address:
+    the person signs in to their own account there. For a server on your own
     machine, pass machine (a space you own whose tunnel goes to it) and the
     server's path there as url, such as /mcp: it is connected in that space,
     reached through the tunnel with no sign-in, and only for you. A server that

@@ -879,6 +879,31 @@ test('connections: a built integration is offered by its face, and a site is lin
   assertEquals(unsafe.textContent.includes('Service homepage'), false)
 })
 
+test('connections: a service with its own MCP server offers signing in there beside its key', async () => {
+  let face = { ...CAL, mcp: 'https://cal.test/mcp' }
+  let html = await desk({
+    ...page,
+    view: 'connections',
+    drawn: [pageRow('space', '', {
+      on: true,
+      list: [],
+      services: [],
+      borrowed: [],
+      built: [{ name: 'cal', keyed: true, face }],
+      asked: { name: 'cal', keyed: true, face },
+    })],
+  }, env).text()
+  let card = parseHTML(html).document.querySelector('#connect .Card')!
+  let signIn = card.querySelector('button[value="mcp-add"]')!
+  assertEquals(signIn.textContent, 'Sign in with your Cal account')
+  assertEquals(
+    signIn.closest('form')!.querySelector('input[name="url"]')!
+      .getAttribute('value'),
+    'https://cal.test/mcp',
+  )
+  assert(card.querySelector('button[value="add"]'), 'its key box stays')
+})
+
 test('a service detail URL is a server-open modal with its pitch, access, provider, space and Connect form', async () => {
   for (let keyed of [false, true]) {
     let face = {

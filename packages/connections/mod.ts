@@ -178,6 +178,7 @@ export {
   type Grantable,
   grantable,
   granted,
+  grantedTo,
   grantees,
   grantOf,
   grantsOf,

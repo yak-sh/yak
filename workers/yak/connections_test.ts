@@ -30,6 +30,7 @@ import {
   barred,
   CALLBACK,
   callback,
+  CLIENT,
   comp,
   connecting,
   connectionsOf,
@@ -1061,6 +1062,20 @@ let posted = (fields: Record<string, string> = {}) => {
 }
 
 let to = (r: Response) => [r.status, r.headers.get('location')]
+
+test('yaks.app’s OAuth client is named by its document, which returns to the callback', async () => {
+  let { env } = platform(SECRET)
+  let doc = await (await callback({
+    env,
+    req: new Request(`https://yaks.app${CLIENT}`),
+    path: CLIENT,
+    space: null,
+  }))!.json()
+  assertEquals([doc.client_id, doc.redirect_uris], [
+    `https://yaks.app${CLIENT}`,
+    [`https://yaks.app${CALLBACK}`],
+  ])
+})
 
 // The state a sign-in was sent to its service with.
 let stateOf = (went: Response) =>

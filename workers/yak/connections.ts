@@ -153,6 +153,9 @@ import { adopting, BROKER, instructionsOf, offersOf } from './catalog.ts'
 
 /** Where a service sends a person back after they sign in there. */
 export let CALLBACK = '/connections/callback'
+/** Where yaks.app's OAuth client says what it is: the URL that is its id at a
+ * service taking Client ID Metadata Documents, as ElevenLabs' MCP does. */
+export let CLIENT = '/connections/client.json'
 /** Where a service's webhooks for one app and connection arrive. */
 export let HOOKS = `${OURS}/hooks/`
 
@@ -211,6 +214,7 @@ let faceOf = async (
   instructions: await drawn(instructions),
   theirs: !!i?.owner,
   fields: fieldsOf(i),
+  ...i?.mcp ? { mcp: i.mcp } : {},
 })
 
 // A read of the directory. Every read the verbs make is a filter line.
@@ -230,6 +234,7 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
     },
     vault: vaultOf(env),
     redirect: url(env, CALLBACK),
+    document: url(env, CLIENT),
     report: (e) => caught(e, { request: 'connections' }),
     admit: (owner) => admitted(env as Env, owner),
   }
@@ -1716,6 +1721,12 @@ export let finishConnection = async (env: Env, saved: Bundle[], app?: {
 // (`confirming`). The beginner's own browser finishes at once.
 export let callback: Door<Env> = async ({ env, req, path, space }) => {
   if (space != null) return null
+  if (path == CLIENT) {
+    let { client } = await import('@yaks/mcp-client/oauth')
+    return Response.json(client(url(env, CLIENT), url(env, CALLBACK)), {
+      headers: { 'cache-control': 'public, max-age=3600' },
+    })
+  }
   if (path != CALLBACK && path != CONNECTION_INSTALL) return null
   if (path == CONNECTION_INSTALL) {
     return (await import('./connection-install.ts')).choose(req, env)

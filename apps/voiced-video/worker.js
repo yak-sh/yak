@@ -15,7 +15,8 @@ let CANDIDATES = 3
 // price (@yaks/speech's `perThousand`).
 let PER_THOUSAND = { elevenlabs: 0.08, deepgram: 0.03, openai: 0.015 }
 // The providers voices are auditioned from: a space's own ElevenLabs where
-// it is connected, else the platform's.
+// it is connected (a key, or a sign-in through its MCP server), its own
+// voices among them, else the platform's.
 let PROVIDERS = [['elevenlabs'], ['deepgram', 'openai']]
 
 /** The steps, over `api`: a fetch onto the app's own /api/ (env.APP). */

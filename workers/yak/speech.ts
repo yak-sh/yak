@@ -10,12 +10,15 @@
 // balance at the start less what the pilot may spend. OpenAI's says none; its
 // project holds it to $10 a month instead.
 //
-// A provider in OWN is spoken through with a space's own key instead: the
-// connection through the integration of the same name (@yaks/connections'
-// `elevenlabs`), whose account pays, so nothing is charged here. ElevenLabs
-// is reached only so: yaks.app holds no key of its own for it. Designing,
-// keeping and cloning voices go through such a key only, and a voice made is
-// kept on the account that made it.
+// A provider in OWN is spoken through with a space's own credential instead,
+// whose account pays, so nothing is charged here: the connection through the
+// integration of the same name (@yaks/connections' `elevenlabs`, a pasted
+// key), else the sign-in of the service's own MCP server the person
+// connected (@yaks/connections/mcp `hostKey`), sent to the provider's API as
+// a bearer token. ElevenLabs is reached only so: yaks.app holds no key of its
+// own for it. Designing, keeping and cloning voices go through such a
+// credential only, and a voice made is kept on the account that made it, as
+// the account's own voices are listed beside the premade ones.
 import type { Scheme } from '@yaks/hook'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
@@ -43,6 +46,8 @@ import {
   voices,
 } from '@yaks/speech'
 import type { Offer } from '@yaks/speech/ui'
+import type { Ctx as Connecting } from '@yaks/connections'
+import type { Bundle } from '@yaks/graph'
 import type { Answer } from './apps.ts'
 import { bound, caught } from './defects.ts'
 import type { Space } from './directory.ts'
@@ -360,19 +365,33 @@ export type Charging = Speaking & { STORE: Namespace }
  * (`own`), whose account pays, or the platform's, charged to the space. */
 export type Voicing = { provider: Provider; key: string; own: boolean }
 
-/** `provider` asked with `key`, a space's own, else with the platform's,
- * or null where neither is. */
+/** A space's own credential for a provider: a pasted key, sent as the
+ * provider sends one (no `header`), or what the service's MCP server took,
+ * sent in the header it names or as a bearer token (null). */
+export type Own = { key: string; header?: string | null }
+
+// `provider` asked with `own` the way it is sent.
+let sending = (provider: Provider, own: Own): Provider =>
+  own.header === undefined ? provider : own.header == null
+    ? {
+      ...provider,
+      header: 'authorization',
+      authorization: (key) => `Bearer ${key}`,
+    }
+    : { ...provider, header: own.header, authorization: (key) => key }
+
+/** `provider` asked with `own`, a space's own credential, else with the
+ * platform's key, or null where neither is. */
 export let voicing = (
   env: Speaking,
   provider: Provider = PROVIDER,
-  key?: string,
+  own?: Own,
 ): Voicing | null => {
-  if (key) {
+  if (own) {
+    let sent = sending(provider, own)
     return {
-      provider: env.SPEECH_API
-        ? { ...provider, api: env.SPEECH_API }
-        : provider,
-      key,
+      provider: env.SPEECH_API ? { ...sent, api: env.SPEECH_API } : sent,
+      key: own.key,
       own: true,
     }
   }
@@ -380,43 +399,96 @@ export let voicing = (
   return on && { ...on, own: false }
 }
 
-/** The key of the connection through `provider` that `app` uses
- * (@yaks/connections `used`), or undefined where it uses none. */
+// The host a provider's API is at, which a credential for it goes to.
+let hostOf = (provider: Provider) => new URL(provider.api).host
+
+/** The credential `app` speaks through `provider` with: the key of the
+ * connection through it that the app uses (@yaks/connections `used`), else
+ * the sign-in of the service's MCP server that `person` granted the app,
+ * else that of one connected in the app's `space` for everyone there by
+ * someone who owns it, as the space's Operator uses one; undefined where it
+ * has none. */
 export let appKey = async (
   env: Env,
   app: { eid: string },
   provider: Provider,
-): Promise<string | undefined> => {
+  person?: string | null,
+  space?: string,
+): Promise<Own | undefined> => {
   let { vaulted } = await import('./vault.ts')
   if (!vaulted(env)) return undefined
-  let { CONNECTION, credential, used } = await import('@yaks/connections')
+  let { CONNECTION, credential, grantedTo, used } = await import(
+    '@yaks/connections'
+  )
   let { comp, ctxOf } = await import('./connections.ts')
   let c = ctxOf(env)
   let r = (await used(c, app.eid)).find((r) =>
     comp(r.connection, CONNECTION).integration == provider.name
   )
-  return r && await credential(c, r.connection.entity.eid)
+  let key = r && await credential(c, r.connection.entity.eid)
+  if (key) return { key }
+  let { hostKey } = await import('@yaks/connections/mcp')
+  let granted = person
+    ? await grantedTo(c.graph.read, { app: app.eid, person })
+    : []
+  return await hostKey(c, granted, hostOf(provider)) ??
+    (space
+      ? await hostKey(c, await everyones(c, space), hostOf(provider))
+      : undefined)
 }
 
-/** The key of the connection through `provider` that `person` holds, or
- * their space's when they own it (connections.ts `ownConnection`): what the
- * Operator speaks through for them. */
+// The MCP servers connected in `space` for everyone there by someone who
+// owns it (@yaks/connections/mcp `sharing`).
+let everyones = async (c: Pick<Connecting, 'graph'>, space: string) => {
+  let { line } = await import('@yaks/query')
+  let { comp } = await import('./connections.ts')
+  let owner = (r: Bundle) => String(comp(r, 'mcp_server').owner)
+  let shared = await c.graph.read(
+    line`.mcp_server.space=${space}&.mcp_server.everyone=true&*`,
+  )
+  if (!shared.length) return []
+  let owning = new Set(
+    (await c.graph.read(
+      line`.member.space=${space}&.member.person=${[
+        ...new Set(shared.map(owner)),
+      ]}&.member.role=owner&*`,
+    )).map((m) => String(comp(m, 'member').person)),
+  )
+  return shared.filter((r) => owning.has(owner(r)))
+}
+
+/** The credential the Operator speaks through `provider` with for `person`:
+ * the key of the connection through it they hold, or their space's when
+ * they own it (connections.ts `ownConnection`), else the sign-in of the
+ * service's MCP server they connected in that space. */
 export let ownKey = async (
   env: Env,
   ctx: Pick<Ctx, 'person' | 'dir'>,
   space: Pick<Space, 'eid'>,
   provider: Provider,
-): Promise<string | undefined> => {
+): Promise<Own | undefined> => {
   let { vaulted } = await import('./vault.ts')
   if (!vaulted(env) || !ctx.person) return undefined
   let { credential } = await import('@yaks/connections')
+  let { hostKey, reachedIn } = await import('@yaks/connections/mcp')
   let { ctxOf, ownConnection } = await import('./connections.ts')
+  let c = ctxOf(env)
   let b = await ownConnection(env, ctx, space, provider.name)
-  return b && await credential(ctxOf(env), b.entity.eid)
+  let key = b && await credential(c, b.entity.eid)
+  if (key) return { key }
+  let { line } = await import('@yaks/query')
+  let servers = await c.graph.read(
+    line`.mcp_server.owner=${ctx.person}&*`,
+  )
+  return await hostKey(
+    c,
+    servers.filter((r) => reachedIn(r, space.eid)),
+    hostOf(provider),
+  )
 }
 
 let OWN_ONLY =
-  'Designing, keeping and cloning voices needs your own ElevenLabs account: connect it at your space’s connections, and the voices are kept there.'
+  'Designing, keeping and cloning voices needs your own ElevenLabs account: sign in to it, or paste its key, at your space’s connections, and the voices are kept there.'
 
 /** `on`, where it is a space's own key: refused otherwise, since a voice
  * made is kept on the account that made it. */
@@ -547,7 +619,8 @@ export let speaking = async (
   text: string,
   { provider, key, person, ...o }: {
     provider?: Provider
-    /** a space's own key for `provider`, whose account pays */
+    /** a space's own key for `provider`, whose account pays, sent as
+     * `provider` sends it (a `Voicing`'s) */
     key?: string
     /** the person whose work it is (model-spend.ts `Paying`) */
     person?: string
@@ -557,7 +630,7 @@ export let speaking = async (
     signal?: AbortSignal
   } = {},
 ) => {
-  let on = voicing(env, provider, key)
+  let on = voicing(env, provider, key ? { key } : undefined)
   if (!on) throw new ModelError('speech_off', 'Speech is not switched on here.')
   if (on.own) return await speak({ ...on, ...o, text })
   return await charged(
@@ -671,11 +744,14 @@ let refused = (json: Parameters<Answer>[0]['json'], why: string) =>
   why == OFF ? json(503, 'speech_off', why) : json(400, 'bad_request', why)
 
 /** The provider an app asks, named or else the one `voice` is of, else the
- * platform's, with the key it asks it with: the connection through it that
- * the app uses, else the platform's; or why there is none. */
+ * platform's, with the key it asks it with: the app's own credential for it
+ * (`appKey`, for `person` asking), else the platform's; or why there is
+ * none. */
 let appVoicing = async (
   env: Env,
   app: { eid: string },
+  space: string,
+  person: string | null,
   name?: string,
   voice?: string,
 ): Promise<Voicing | string> => {
@@ -687,13 +763,13 @@ let appVoicing = async (
       [...new Set([...SECRETS.keys()].map((p) => p.name))].join(', ')
     }`
   }
-  let key = OWN.has(provider.name)
-    ? await appKey(env, app, provider)
+  let own = OWN.has(provider.name)
+    ? await appKey(env, app, provider, person, space)
     : undefined
-  let on = voicing(env, provider, key)
+  let on = voicing(env, provider, own)
   if (on) return on
   return OWN.has(provider.name)
-    ? `connect ${provider.title} at the space's connections and have this app use it`
+    ? `connect ${provider.title} at the space's connections and have this app use it, or sign in with your ${provider.title} account there for everyone in the space`
     : OFF
 }
 // The most of a recording posted to the door it reads whole, which a
@@ -753,6 +829,8 @@ export let speechDoor: Answer = async (asked) => {
       let on = await appVoicing(
         env,
         app,
+        space.eid,
+        asked.who.person ?? null,
         typeof body?.provider == 'string' ? body.provider : undefined,
         voice,
       )
@@ -768,7 +846,13 @@ export let speechDoor: Answer = async (asked) => {
         headers: { 'content-type': spoke.type },
       })
     }
-    let on = await appVoicing(env, app, named)
+    let on = await appVoicing(
+      env,
+      app,
+      space.eid,
+      asked.who.person ?? null,
+      named,
+    )
     if (typeof on == 'string') return refused(json, on)
     own = on.own
     if (path == '/speech/voices') {

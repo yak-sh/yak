@@ -13,7 +13,7 @@ import { filesOf, keptOf } from './operator-files.ts'
 import { operatorMemory } from './operator-testing.ts'
 import { voiceTools } from './operator-voices.ts'
 import { platform } from './testing.ts'
-import { connect, need } from '@yaks/connections'
+import { connect, integrationEid, need } from '@yaks/connections'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import { ctxOf } from './connections.ts'
@@ -21,7 +21,8 @@ import { ctxOf } from './connections.ts'
 let asked: string[] = []
 let eleven = endpoints(globalThis).open((req) => {
   let url = new URL(req.url)
-  asked.push(`${url.pathname} ${req.headers.get('xi-api-key')}`)
+  let by = req.headers.get('xi-api-key') ?? req.headers.get('authorization')
+  asked.push(`${url.pathname} ${by}`)
   return Promise.resolve(
     url.pathname == '/v1/text-to-voice/design'
       ? Response.json({
@@ -118,4 +119,38 @@ test('voices are designed with their own key, each sample kept beside its call',
   ) as string
   assertEquals(asked.at(-1), '/v1/text-to-voice/design their-key')
   assertEquals(told.startsWith('Designed 1: design g1 (attachment '), true)
+})
+
+test('a line is voiced with the sign-in of the ElevenLabs MCP server they connected in the space', async () => {
+  let someone = mint(), server = mint(), name = `mcp:${server}`
+  let url = 'https://api.elevenlabs.io/v1/mcp'
+  let c = ctxOf(env, { person: someone, role: 'owner' })
+  await c.graph.apply([
+    {
+      entity: { eid: server },
+      mcp_server: { owner: someone, space: eid, name: 'ElevenLabs', url },
+    },
+    {
+      entity: { eid: integrationEid(name) },
+      integration: {
+        name,
+        owner: someone,
+        resource: url,
+        hosts: ['api.elevenlabs.io'],
+      },
+    },
+  ])
+  let made = await c.graph.apply(
+    await need(c.graph.read, { owner: someone, integration: name }),
+  )
+  await connect(c, made.find((b) => b.connection)!.entity.eid, {
+    key: 'their-token',
+  })
+  let theirs = Object.fromEntries(
+    voiceTools(env, { person: someone, dir }, space, store).map((
+      t,
+    ) => [t.name, t]),
+  )
+  await theirs.speech_new.run({ text: 'Ahoy.', voice: 'v1' }, ctx)
+  assertEquals(asked.at(-1), '/v1/text-to-speech/v1 Bearer their-token')
 })

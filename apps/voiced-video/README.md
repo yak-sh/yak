@@ -19,10 +19,12 @@ The app lives in `jeff/voiced-video`.
   reaches an existing copy only as an edit of its row.
 - `worker.js` answers the commands declared in `vocab.json`: the script and the
   storyboard from a model (`./api/ai/run`), auditions and voice lines from
-  `./api/speech` (the space's own ElevenLabs where connected, else the
-  platform's Deepgram and OpenAI voices), and the cut, timed from each line's
-  length (`model.js` `timeline`). Each writes what it makes through `env.APP`,
-  replacing what it made before for the same item.
+  `./api/speech` (the space's own ElevenLabs where connected, its key or a
+  sign-in through ElevenLabs' MCP server for everyone in the space, with the
+  account's own voices among those cast; else the platform's Deepgram and OpenAI
+  voices), and the cut, timed from each line's length (`model.js` `timeline`).
+  Each writes what it makes through `env.APP`, replacing what it made before for
+  the same item.
 - The person's choice of voice is a `decision` the auditions step writes, asked
   in their Updates. Answering it there or on the page writes `decided{choice}`,
   which the voice step's match reads.

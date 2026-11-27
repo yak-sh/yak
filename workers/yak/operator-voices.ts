@@ -1,8 +1,9 @@
 // The Operator's voices: ElevenLabs (@yaks/speech's `ELEVENLABS`) speaking a
 // line in any voice the account has, listing those voices, and designing or
 // cloning new ones, for voice auditions and voiced lines. It asks with the
-// person's own ElevenLabs connection (speech.ts `ownKey`), or their space's
-// when they own it, whose account pays: yaks.app holds no ElevenLabs key.
+// person's own ElevenLabs (speech.ts `ownKey`): a key they or their space
+// pasted, or the sign-in of ElevenLabs' MCP server they connected in the
+// space. That account pays: yaks.app holds no ElevenLabs key.
 //
 // What it makes is kept as Operator files in the space's files
 // (operator-channels.ts `keepFile`) and attached beside the call that made
@@ -31,7 +32,7 @@ import { type Ctx, refuse } from './tool.ts'
 let MAX_TEXT = 2000
 
 let CONNECT =
-  'Speaking through ElevenLabs needs its key: the person connects their own ElevenLabs account at their space’s connections.'
+  'Speaking through ElevenLabs needs the person’s own ElevenLabs account: they sign in to it, or paste its key, at their space’s connections.'
 
 /** The voice tools a member's Operator holds, asked for `ctx.person`. */
 export let voiceTools = (
@@ -129,9 +130,9 @@ export let voiceTools = (
           ? args.voice
           : undefined
         let file = await told(async () => {
-          let { key } = await on()
+          let { provider, key } = await on()
           let said = await speaking(env, space, text, {
-            provider: ELEVENLABS,
+            provider,
             key,
             voice,
             ...typeof args.speed == 'number' ? { speed: args.speed } : {},

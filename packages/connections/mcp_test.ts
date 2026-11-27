@@ -26,7 +26,7 @@ import { provenanceDoc } from '@yaks/provenance'
 import { edgeDoc } from '@yaks/edge'
 import { mcpDoc } from '@yaks/mcp-client/vocab'
 import { fixture } from '../../packages/mcp-client/testing.ts'
-import { remoteCommands, type Seat } from './mcp.ts'
+import { hostKey, remoteCommands, type Seat } from './mcp.ts'
 
 let setup = async () => {
   let vocab = loadVocab([
@@ -366,6 +366,11 @@ test('MCP OAuth asks for the current person to sign in once and revoked grants n
     callback: `${host.redirect}?state=${attempt!.state}&code=granted`,
   })
   assertEquals((await remote.list())[0].name, 'publish_mockup')
+  // Its sign-in is what the service's own API is asked with, as a bearer.
+  assertEquals(await hostKey(host, await remote.kept(), 'books.test'), {
+    key: 'persons-token',
+    header: null,
+  })
   rejectCalls = true
   let needed = await remote.call(name, 'publish_mockup', { html: 'book' })
   assert(needed.value?.authorization)
@@ -470,7 +475,14 @@ test('a server removed goes to the trash with its tools, and comes back with its
   })
   await remote.give(server, 'k-1')
   let at = `mcp:${server}`
+  let keyOf = async (to: string) => hostKey(host, await remote.kept(), to)
+  assertEquals(await keyOf('keys.test'), { key: 'k-1', header: null })
+  assertEquals(await keyOf('elsewhere.test'), undefined)
+  await remote.set(server, { header: 'X-API-Key' })
+  assertEquals((await keyOf('keys.test'))?.header, 'X-API-Key')
+  await remote.set(server, { header: null })
   await remote.remove(server)
+  assertEquals(await keyOf('keys.test'), undefined)
   assertEquals(await remote.list(), [])
   await assertRejects(
     () => remote.call(at, 'publish_mockup', {}),

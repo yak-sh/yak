@@ -66,6 +66,8 @@ export type Face = {
   /** what a person gives to connect it with a pasted key: its one key, or
    * the fields it names */
   fields: KeyField[]
+  /** its own hosted MCP server, which a person may sign in to instead */
+  mcp?: string
 }
 
 /** What a person reads about a service a space made, which its owner may

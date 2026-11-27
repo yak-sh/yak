@@ -1,7 +1,9 @@
 /** Where an MCP server signs in, found the way the MCP spec says: its
  * protected-resource metadata (RFC 9728) names the authorization server, whose
- * own metadata (RFC 8414) names the endpoints, and a public client registers
- * there (RFC 7591) when the host has none. What comes back is data, an
+ * own metadata (RFC 8414) names the endpoints, and a public client is named
+ * there by the host's own metadata document where the server takes one (a
+ * Client ID Metadata Document, its URL the client's id), else registers there
+ * (RFC 7591), when the host has none. What comes back is data, an
  * integration as @yaks/connections takes it; the sign-in, the tokens and their
  * refresh are @yaks/oauth's over that data. No UI, storage or session. */
 
@@ -29,9 +31,31 @@ export type Found = {
     issuer?: string
     hosts: string[]
   }
-  /** a public client for `redirect`, registered now: its id */
+  /** a public client for `redirect`: the host's metadata document where the
+   * server takes one, else one registered now; its id */
   register: (redirect: string) => Promise<string>
 }
+
+/** What the host's public client says of itself, returning to `redirect`:
+ * what it registers with (RFC 7591), and its metadata document, served at
+ * `id`, the URL that is its id where a server takes one.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let doc = client('https://h.test/oauth/client.json', 'https://h.test/cb')
+ * assertEquals([doc.client_id, doc.redirect_uris], [
+ *   'https://h.test/oauth/client.json', ['https://h.test/cb'],
+ * ])
+ * ```
+ */
+export const client = (id: string | undefined, redirect: string) => ({
+  ...id ? { client_id: safe(id) } : {},
+  client_name: 'yaks.app MCP client',
+  redirect_uris: [safe(redirect)],
+  grant_types: ['authorization_code', 'refresh_token'],
+  response_types: ['code'],
+  token_endpoint_auth_method: 'none',
+})
 
 export class AuthorizationError extends Error {}
 
@@ -49,11 +73,13 @@ const safe = (url: string | URL) => {
 
 /** Find where the server at `url` signs in. The integration is named for the
  * server, sends its tokens to the server's host alone, and asks for the grant
- * to be for the server (RFC 8707). */
+ * to be for the server (RFC 8707). `document` is the URL the host serves its
+ * client's metadata document at ({@link client}), where it serves one. */
 export const discover = async (
   url: string,
   challenge: AuthorizationChallenge = {},
   fetch: typeof globalThis.fetch = globalThis.fetch,
+  document?: string,
 ): Promise<Found> => {
   const fetchFn: typeof globalThis.fetch = (input, init) =>
     fetch(safe(input instanceof Request ? input.url : String(input)), {
@@ -89,16 +115,12 @@ export const discover = async (
       hosts: [new URL(url).hostname],
     },
     register: async (redirect) =>
-      (await registerClient(info.authorizationServerUrl, {
-        metadata: meta,
-        clientMetadata: {
-          client_name: 'yaks.app MCP client',
-          redirect_uris: [safe(redirect)],
-          grant_types: ['authorization_code', 'refresh_token'],
-          response_types: ['code'],
-          token_endpoint_auth_method: 'none',
-        },
-        fetchFn,
-      })).client_id,
+      document && meta.client_id_metadata_document_supported
+        ? safe(document)
+        : (await registerClient(info.authorizationServerUrl, {
+          metadata: meta,
+          clientMetadata: client(undefined, redirect),
+          fetchFn,
+        })).client_id,
   }
 }

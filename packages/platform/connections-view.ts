@@ -1306,6 +1306,25 @@ export let connectionsView = (
             )
             : h(Form.Actions, null, signingIn(i.face, 'Connect', 'add')),
         ),
+      // A service with its own MCP server is signed in to there, as a server
+      // this space connects (@yaks/connections/mcp), its tools the person's.
+      i.face.mcp && i.available !== false
+        ? h(
+          Form,
+          { class: 'Page_Form', method: 'post', action },
+          held('url', i.face.mcp),
+          h(
+            Form.Actions,
+            null,
+            signingIn(
+              i.face,
+              `Sign in with your ${i.face.title} account`,
+              'mcp-add',
+              i.keyed,
+            ),
+          ),
+        )
+        : null,
     ])
   let add = h(
     Card,

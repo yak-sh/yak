@@ -126,8 +126,12 @@ sent to `voip.ms` alone. A voip.ms key kept before it named fields, the two
 joined by a colon, is read as them the first time it is used and kept as them.
 `elevenlabs` is built in-house: a pasted API key, sent to `api.elevenlabs.io`
 alone in its own `xi-api-key` header. It takes the place of Nango's listing of
-the same name, so a key kept through that listing is the same connection. `lulu`
-is built: Lulu's print API, its fields the account's client `key` and `secret`,
+the same name, so a key kept through that listing is the same connection. Its
+`mcp` names ElevenLabs' own MCP server, which a connections page offers to sign
+in to instead: an integration's `mcp` is connected as any MCP server is
+(./mcp.ts), and `hostKey` finds the credential a server took for a host, which
+yaks.app's speech sends to `api.elevenlabs.io` as a bearer token. `lulu` is
+built: Lulu's print API, its fields the account's client `key` and `secret`,
 sent to `api.lulu.com` and `api.sandbox.lulu.com` alone. An app exchanges them
 for a token (Basic or form body, the egress swaps either) and every book it
 orders is charged to that Lulu account; PrintBound prints through it, and any

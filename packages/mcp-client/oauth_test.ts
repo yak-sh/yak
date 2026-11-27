@@ -97,3 +97,41 @@ test('discover: plain HTTP off this machine is refused', async () => {
     AuthorizationError,
   )
 })
+
+// A server that takes Client ID Metadata Documents and registers nobody.
+const named = (asked: string[] = []) => {
+  const base = mock(asked)
+  return edge((input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    if (url.pathname.includes('oauth-authorization-server')) {
+      return Promise.resolve(Response.json({
+        issuer: 'https://issuer.test',
+        authorization_endpoint: 'https://issuer.test/authorize',
+        token_endpoint: 'https://issuer.test/token',
+        response_types_supported: ['code'],
+        client_id_metadata_document_supported: true,
+      }))
+    }
+    return base(input, init)
+  })
+}
+
+test('discover: a server that takes metadata documents names the host’s client by its document', async () => {
+  const asked: string[] = []
+  const doc = 'https://host.test/oauth/client.json'
+  const found = await discover(
+    'https://service.test/mcp',
+    {},
+    named(asked),
+    doc,
+  )
+  assertEquals(await found.register('https://host.test/cb'), doc)
+  assertEquals(asked.filter((u) => u.includes('register')), [])
+})
+
+test('discover: a host with no document has no client where the server registers nobody', async () => {
+  await assertRejects(async () =>
+    await (await discover('https://service.test/mcp', {}, named()))
+      .register('https://host.test/cb')
+  )
+})

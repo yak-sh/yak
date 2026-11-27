@@ -121,9 +121,13 @@ const client = await register('http://127.0.0.1:8765/oauth/callback')
 `integration` is an integration as [@yaks/connections](../connections) takes it:
 the grant is for the server (RFC 8707 `resource`), the server's host is the only
 one its tokens go to, and a server that says it names its issuer on a return
-(RFC 9207) has every return checked for it. `register(redirect)` registers a
-public client there (RFC 7591) and answers its id. Signing in, keeping the
-tokens and refreshing them is @yaks/connections' and @yaks/oauth's.
+(RFC 9207) has every return checked for it. `register(redirect)` answers the id
+of a public client there: the URL of the host's own client metadata document
+where `discover` was given one (its fourth argument) and the server takes Client
+ID Metadata Documents, as ElevenLabs' does, else one registered now (RFC 7591).
+`client(id, redirect)` is that document, which the host serves at `id`; yaks.app
+serves it at `/connections/client.json`. Signing in, keeping the tokens and
+refreshing them is @yaks/connections' and @yaks/oauth's.
 
 Discovery and registration use bounded deadlines, refuse redirects, and require
 HTTPS except on loopback addresses. Configure only trusted MCP servers.

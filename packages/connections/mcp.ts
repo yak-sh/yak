@@ -350,6 +350,39 @@ export type Remote = {
 /** The names of the servers `person` connected in `space` for everyone in
  * it, those in the trash left out: what they stop sharing there when they
  * own it no longer. */
+/** A credential found for a host, and the header it goes in: null sends it
+ * as a bearer token, as a sign-in's token always is. */
+export type HostKey = { key: string; header: string | null }
+
+/** The credential of the first connected server among `servers`
+ * (`mcp_server` rows) whose sign-in or key goes to `host`: what a client of
+ * the same service's own API asks it with, as speech asks ElevenLabs with the
+ * sign-in its MCP server took. A server turned off, in the trash or on a
+ * machine gives none. */
+export let hostKey = async (
+  c: Ctx,
+  servers: Bundle[],
+  host: string,
+): Promise<HostKey | undefined> => {
+  for (let row of servers) {
+    let s = comp(row, 'mcp_server')
+    if (row.trashed || s.enabled === false || s.machine) continue
+    let name = integration(row.entity.eid)
+    let i = await known(c.graph.read, name)
+    if (!i?.hosts.includes(host)) continue
+    let held = await pick(c.graph.read, String(s.owner), name)
+    if (comp(held, 'connection').status != 'connected') continue
+    let key = await credential(c, held!.entity.eid)
+    if (key) {
+      return {
+        key,
+        header: keyed(i) && typeof s.header == 'string' ? s.header : null,
+      }
+    }
+  }
+  return undefined
+}
+
 export let sharing = (
   read: Ctx['graph']['read'],
   person: string,
@@ -495,6 +528,7 @@ export let remoteCommands = (
       s.server.url,
       challenge,
       options.fetch,
+      host.document,
     ).catch((e) => {
       // A server that asks for a credential and names no sign-in takes a key.
       if (e instanceof AuthorizationError) return undefined

@@ -18,7 +18,7 @@ import {
   unread,
 } from './speech.ts'
 import type { Asked } from './apps.ts'
-import { connect, need } from '@yaks/connections'
+import { connect, grant, integrationEid, need } from '@yaks/connections'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import { ctxOf } from './connections.ts'
@@ -37,8 +37,10 @@ let deepgram = endpoints(globalThis).open(async (req) => {
     voices.push(url.searchParams.get('model')!)
     return new Response(new Uint8Array([1, 2, 3]))
   }
-  // ElevenLabs, which says who asked by its own header.
-  let eleven = req.headers.get('xi-api-key')
+  // ElevenLabs, which says who asked by its own header, or by the bearer
+  // token a sign-in to its MCP server took.
+  let eleven = req.headers.get('xi-api-key') ??
+    req.headers.get('authorization')
   if (url.pathname.startsWith('/v1/text-to-speech/')) {
     voices.push(`${url.pathname.split('/').at(-1)} ${eleven}`)
     return new Response(new Uint8Array([6]))
@@ -121,7 +123,50 @@ let fixture = async (dollars = 1, vars: Record<string, unknown> = {}) => {
     )
     await connect(c, made.find((b) => b.connection)!.entity.eid, { key })
   }
-  let ask = async (path: string, body: BodyInit | null, type = '') => {
+  // ElevenLabs' MCP server connected by the person in the space, holding
+  // `key`: granted to the app, or else for everyone in the space.
+  let signedIn = async (key: string, shared?: boolean) => {
+    let c = ctxOf(p.env, { person, role: 'owner' })
+    let server = crypto.randomUUID(), name = `mcp:${server}`
+    let url = 'https://api.elevenlabs.io/v1/mcp'
+    await c.graph.apply([
+      {
+        entity: { eid: server },
+        mcp_server: {
+          owner: person,
+          space: eid,
+          name: 'ElevenLabs',
+          url,
+          ...shared != null ? { everyone: shared } : {},
+        },
+      },
+      {
+        entity: { eid: integrationEid(name) },
+        integration: {
+          name,
+          owner: person,
+          resource: url,
+          hosts: ['api.elevenlabs.io'],
+        },
+      },
+    ])
+    let made = await c.graph.apply(
+      await need(c.graph.read, { owner: person, integration: name }),
+    )
+    await connect(c, made.find((b) => b.connection)!.entity.eid, { key })
+    if (shared == null) {
+      await c.graph.apply(
+        await grant(c.graph.read, { app, person, at: `mcp:${server}` }),
+      )
+    }
+  }
+  // Asked by the person, or by the app's own worker as itself.
+  let ask = async (
+    path: string,
+    body: BodyInit | null,
+    type = '',
+    by = person,
+  ) => {
     let route = path.split('?')[0]
     let res = await speechDoor({
       env: p.env,
@@ -133,14 +178,14 @@ let fixture = async (dollars = 1, vars: Record<string, unknown> = {}) => {
       path: route,
       space: await space(),
       app: { eid: app, access: 'private' },
-      who: { person, role: 'owner' },
+      who: { person: by, role: 'owner' },
       refuse: () => Promise.resolve(new Response(null, { status: 401 })),
       json: (status: number, code: string, says?: string) =>
         Response.json({ error: { code, message: says } }, { status }),
     } as unknown as Asked)
     return res!
   }
-  return { p, eid, space, ask, connected }
+  return { p, eid, app, space, ask, connected, signedIn }
 }
 
 test('a member’s text is spoken and a recording heard, each charged to the space', async () => {
@@ -424,6 +469,45 @@ test('an app speaks, lists and makes ElevenLabs voices with the key of the conne
   )
   equal(await kept.json(), { voice: 'g-captain-Cap' })
   equal(budget(await space()).spent, 0)
+})
+
+test('an app granted the person’s ElevenLabs sign-in speaks and lists their voices with it, charged to their account', async () => {
+  unread()
+  voices = []
+  let { space, ask, signedIn } = await fixture()
+  await signedIn('their-token')
+  let spoke = await ask(
+    '/speech/speak',
+    '{"text":"Hello choir","voice":"v1","provider":"elevenlabs"}',
+    'text/json',
+  )
+  equal([...new Uint8Array(await spoke.arrayBuffer())], [6])
+  equal(voices, ['v1 Bearer their-token'])
+  equal(
+    (await (await ask('/speech/voices?provider=elevenlabs', null)).json())
+      .voices,
+    [{ id: 'v1', name: 'Ada Bearer their-token', about: '' }],
+  )
+  equal(budget(await space()).spent, 0)
+})
+
+test('an app asking as itself speaks with an ElevenLabs sign-in its space’s owner connected for everyone there, and not one kept for them alone', async () => {
+  unread()
+  for (let shared of [false, true]) {
+    voices = []
+    let { app, ask, signedIn } = await fixture()
+    await signedIn('owners-token', shared)
+    let spoke = await ask(
+      '/speech/speak',
+      '{"text":"Hi","voice":"v1","provider":"elevenlabs"}',
+      'text/json',
+      app,
+    )
+    equal(
+      [spoke.status, voices],
+      shared ? [200, ['v1 Bearer owners-token']] : [400, []],
+    )
+  }
 })
 
 test('without a connection the app uses, ElevenLabs is refused, and the platform’s providers make no voices', async () => {
