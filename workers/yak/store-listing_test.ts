@@ -169,3 +169,22 @@ test('a fitted reader restores an earlier wake alongside an existing alarm', asy
   await ctx.settled()
   equal(await ctx.storage.getAlarm(), at)
 })
+
+test('a fitted listing resolves model names like the full Store', async () => {
+  let { ctx, open, owner, request } = await cookbook()
+  using _db = ctx.storage
+  let full = open()
+  equal(
+    (await full.fetch(request('/apply', owner, [{
+      entity: { eid: '$model' },
+      model: { name: 'test-model' },
+      doc: { title: 'Test model' },
+    }]))).status,
+    200,
+  )
+  let query = request('/query?listing=1&q=.entity.eid=test-model%26%3Fdoc')
+  let expected = await (await full.fetch(query)).text()
+  equal(JSON.parse(expected)[0].doc.title, 'Test model')
+  equal(await read(await open().fetch(query)), [200, false, expected])
+  await ctx.settled()
+})

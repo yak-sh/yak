@@ -9,7 +9,9 @@ import { type Bundle, type Graph, graph, type ReadOpts } from '@yaks/graph'
 import { ids } from '@yaks/id/graph'
 import { keys } from '@yaks/key'
 import { personal, policy } from '@yaks/member'
+import { addressed as modelAddress } from '@yaks/model'
 import { type Clause, parse } from '@yaks/query'
+import { runners } from '@yaks/session/who'
 import type { Derived, Driver } from '@yaks/sql'
 import { storage } from '@yaks/sqlite'
 import type { Vocab, VocabDoc } from '@yaks/vocab'
@@ -86,7 +88,13 @@ export let storeListing = (
       aliases(),
       docs(),
       personal(vocab, {}, THROUGH),
+      {
+        name: '@yaks/session',
+        address: (tx, ids, kind) =>
+          kind == 'session' ? runners(tx, ids) : new Map(),
+      },
       blobs(vocab, sqliteBlobs(rows.statements)),
+      { name: '@yaks/model', address: modelAddress },
     ],
   })
   let authenticate = authenticating(
