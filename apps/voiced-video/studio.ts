@@ -127,8 +127,10 @@ let takes = async () => {
   let open = (await query('.take&*')).filter((t) => !(t.take as Comp).film)
     .toSorted((a, b) => Number(a.take.n) - Number(b.take.n))
   let last = 0
+  let panel = async (take: Row) =>
+    (await query(`.eid=${ref(take.take.panel)}&*`))[0]
   for (let take of open) {
-    let [shot] = await query(`.eid=${ref(take.take.panel)}&*`)
+    let shot = await panel(take)
     if (!shot) continue
     // Time for what an earlier shot started (an Operator's work) to finish.
     let after = Number((shot.panel as Comp).after ?? 0) * 1000
@@ -136,6 +138,11 @@ let takes = async () => {
     if (wait > 0) {
       console.log(`shot ${take.take.n}: waiting ${Math.round(wait / 1000)} s`)
       await new Promise((r) => setTimeout(r, wait))
+      // Filmed as it stands now: the panel may have changed while it waited,
+      // and a changed panel has a take of its own.
+      let still = await query(`.eid=${take.entity.eid}`)
+      shot = await panel(take)
+      if (!still.length || !shot) continue
     }
     console.log(`shot ${take.take.n}: filming ${(shot.panel as Comp).page}`)
     let made = await film(take, shot)
