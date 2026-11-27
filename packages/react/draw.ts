@@ -41,8 +41,14 @@ let controls = (doc: Document): () => void => {
         Object.defineProperty(element, property, {
           get: () => element.hasAttribute('selected'),
           set: (on: boolean) => {
-            if (on) element.setAttribute('selected', '')
-            else element.removeAttribute('selected')
+            if (!on) return element.removeAttribute('selected')
+            let select = element.closest<HTMLSelectElement>('select')
+            if (select && !select.multiple) {
+              for (let option of select.querySelectorAll('option[selected]')) {
+                option.removeAttribute('selected')
+              }
+            }
+            element.setAttribute('selected', '')
           },
         })
       }
