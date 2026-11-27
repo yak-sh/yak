@@ -22,6 +22,7 @@ import {
   fn,
   gt,
   le,
+  queryPhysical,
   select,
   table,
   val,
@@ -32,10 +33,11 @@ import { fromBase64, toBase64 } from '@yaks/fp'
 
 /** A value on its way between objects: a blob travels as base64. */
 export type Cell = string | number | null | { bytes: string }
+export type Cursor = number | string | null
 
 /** Everything a far end must make before rows reach it, and after. */
 export type Plan = {
-  tables: { name: string; sql: string; cols: string[] }[]
+  tables: { name: string; sql: string; cols: string[]; key?: string }[]
   /** views, made once the rows are in: a full-text index may read one */
   views: string[]
   /** indexes and triggers, made last */
@@ -50,6 +52,10 @@ export type Plan = {
 export type Copied = { rows: number; digest: number }
 
 const ROWID = '_rowid_'
+type Table = Plan['tables'][number]
+
+/** The cursor before a table's first copy page. */
+export let first = (t: Table): Cursor => t.key ? null : 0
 
 let schema = (driver: Driver) =>
   driver.query(select({
@@ -59,9 +65,8 @@ let schema = (driver: Driver) =>
 
 let virtual = (sql: unknown) => /^create\s+virtual\b/i.test(String(sql))
 
-/** What this object's file is made of. A table it can't rebuild, one without a
- * rowid or a virtual one other than full text, is refused rather than copied
- * wrong. */
+/** What this object's file is made of. A table without a rowid uses its
+ * primary key to page through rows. */
 export let plan = (driver: Driver): Plan => {
   let objects = schema(driver)
   let fts = ftsOf(objects)
@@ -118,12 +123,31 @@ let rowed = (o: Listed, fts: Plan['fts']) =>
 
 let tableOf = (driver: Driver, o: Listed) => {
   let [name, sql] = [String(o.name), String(o.sql)]
+  let columns = queryPhysical(driver, {
+    t: 'pragma',
+    name: 'table_xinfo',
+    arg: name,
+  })
+    .filter((c) => Number(c.hidden) == 0)
+  let cols = columns.map((c) => String(c.name))
   if (/\bwithout\s+rowid\s*$/i.test(sql)) {
-    throw new Error(`${name} cannot be copied row by row: ${sql}`)
+    let keys = columns.filter((c) => Number(c.pk) > 0)
+    if (keys.length != 1 || !/^(text|integer)$/i.test(String(keys[0].type))) {
+      throw new Error(
+        `${name} needs one text or integer primary key to copy its rows`,
+      )
+    }
+    return { name, sql, cols, key: String(keys[0].name) }
   }
-  let cols = driver.query({ t: 'pragma', name: 'table_xinfo', arg: name })
-    .filter((c) => Number(c.hidden) == 0).map((c) => String(c.name))
   return { name, sql, cols }
+}
+
+let between = (t: Table, after: Cursor, last: Cursor) => {
+  let key = col(t.key ?? ROWID)
+  return and(
+    ...after == null ? [] : [gt(key, val(after))],
+    ...last == null ? [] : [le(key, val(last))],
+  )
 }
 
 let cell = (v: unknown): Cell =>
@@ -152,24 +176,15 @@ export let raised = (): Copied => ({ rows: 0, digest: 2166136261 })
 export let page = (
   driver: Driver,
   t: Plan['tables'][number],
-  after: number,
+  after: Cursor,
   held: Copied,
   limit = 200,
   bytes = 256 * 1024,
-  until?: number,
-): { rows: Cell[][]; last: number | null; held: Copied; ended: boolean } => {
-  let read = driver.query(select({
-    cols: [as(col(ROWID), ROWID), ...t.cols.map((c) => col(c))],
-    from: table(t.name),
-    where: until == null
-      ? gt(col(ROWID), val(after))
-      : and(gt(col(ROWID), val(after)), le(col(ROWID), val(until))),
-    order: [col(ROWID)],
-    limit: val(limit),
-  }))
+  until?: Cursor,
+): { rows: Cell[][]; last: Cursor; held: Copied; ended: boolean } => {
+  let read = ranged(driver, t, after, until ?? null, limit)
   let rows: Cell[][] = [], size = 0, { rows: n, digest } = held
-  for (let r of read) {
-    let row = [r[ROWID] as number, ...t.cols.map((c) => cell(r[c]))]
+  for (let row of read) {
     rows.push(row)
     n++
     digest = mixed(digest, row)
@@ -178,7 +193,7 @@ export let page = (
   }
   return {
     rows,
-    last: rows.length ? rows[rows.length - 1][0] as number : null,
+    last: rows.length ? rows[rows.length - 1][0] as Cursor : null,
     held: { rows: n, digest },
     ended: rows.length == read.length &&
       (read.length < limit || (until != null && rows.at(-1)?.[0] == until)),
@@ -188,41 +203,50 @@ export let page = (
 /** Each table's last rowid as it stands, 0 for an empty one, so a reader
  * can ask a long table in ranges at once. */
 export let tips = (driver: Driver, p: Plan): Record<string, number> =>
-  Object.fromEntries(p.tables.map((t) => [
-    t.name,
-    Number(
-      driver.query(select({
-        cols: [as(fn('max', col(ROWID)), 'tip')],
-        from: table(t.name),
-      }))[0]?.tip ?? 0,
-    ),
-  ]))
+  Object.fromEntries(
+    p.tables.filter((t) => !t.key).map((t) => [
+      t.name,
+      Number(
+        queryPhysical(
+          driver,
+          select({
+            cols: [as(fn('max', col(ROWID)), 'tip')],
+            from: table(t.name),
+          }),
+        )[0]?.tip ?? 0,
+      ),
+    ]),
+  )
 
 /** One run of a table's rows, its digest and where it ends. */
 export type Chunk = {
   table: string
-  after: number
+  after: Cursor
   /** the last rowid in the run; null runs past every rowid the far end holds */
-  last: number | null
+  last: Cursor
   held: Copied
 }
 
 let ranged = (
   driver: Driver,
   t: Plan['tables'][number],
-  after: number,
-  last: number | null,
+  after: Cursor,
+  last: Cursor,
   limit?: number,
 ) =>
-  driver.query(select({
-    cols: [as(col(ROWID), ROWID), ...t.cols.map((c) => col(c))],
-    from: table(t.name),
-    where: last == null
-      ? gt(col(ROWID), val(after))
-      : and(gt(col(ROWID), val(after)), le(col(ROWID), val(last))),
-    order: [col(ROWID)],
-    ...limit ? { limit: val(limit) } : {},
-  })).map((r) => [r[ROWID] as number, ...t.cols.map((c) => cell(r[c]))])
+  queryPhysical(
+    driver,
+    select({
+      cols: [
+        ...t.key ? [] : [as(col(ROWID), ROWID)],
+        ...t.cols.map((c) => col(c)),
+      ],
+      from: table(t.name),
+      where: between(t, after, last),
+      order: [col(t.key ?? ROWID)],
+      ...limit ? { limit: val(limit) } : {},
+    }),
+  ).map((r) => [r[t.key ?? ROWID] as Cursor, ...t.cols.map((c) => cell(r[c]))])
 
 let digestOf = (rows: Cell[][]): Copied => {
   let held = raised()
@@ -237,14 +261,14 @@ let digestOf = (rows: Cell[][]): Copied => {
  * this end no longer does read as a difference too. */
 export let chunks = (driver: Driver, p: Plan, size = 500): Chunk[] =>
   p.tables.flatMap((t) => {
-    let found: Chunk[] = [], after = 0
+    let found: Chunk[] = [], after = first(t)
     while (true) {
       let rows = ranged(driver, t, after, null, size)
       if (rows.length < size) {
         found.push({ table: t.name, after, last: null, held: digestOf(rows) })
         return found
       }
-      let last = rows[rows.length - 1][0] as number
+      let last = rows[rows.length - 1][0] as Cursor
       found.push({ table: t.name, after, last, held: digestOf(rows) })
       after = last
     }
@@ -273,12 +297,10 @@ export let overwritten = (
   let t = p.tables.find((t) => t.name == c.table)!
   driver.query({ t: 'pragma', name: 'foreign_keys', value: 'off' })
   unit(driver, () => {
-    driver.query({
+    queryPhysical(driver, {
       t: 'delete',
       from: t.name,
-      where: c.last == null
-        ? gt(col(ROWID), val(c.after))
-        : and(gt(col(ROWID), val(c.after)), le(col(ROWID), val(c.last))),
+      where: between(t, c.after, c.last),
     })
   })
   arrived(driver, t, rows)
@@ -286,7 +308,7 @@ export let overwritten = (
 
 /** What a whole table holds, read as `page` reads it. */
 export let tallied = (driver: Driver, t: Plan['tables'][number]): Copied => {
-  let held = raised(), after = 0
+  let held = raised(), after = first(t)
   while (true) {
     let next = page(driver, t, after, held)
     if (next.last == null) return next.held
@@ -329,7 +351,7 @@ export let align = (driver: Driver, p: Plan): boolean => {
   driver.query({ t: 'pragma', name: 'foreign_keys', value: 'off' })
   unit(driver, () => {
     for (let o of [...others, ...virtuals, ...changed]) {
-      driver.query({
+      queryPhysical(driver, {
         t: 'drop',
         kind: o.type as Drop['kind'],
         name: String(o.name),
@@ -355,8 +377,8 @@ export let arrived = (
         t: 'insert',
         or: 'replace',
         into: t.name,
-        cols: [ROWID, ...t.cols],
-        rows: [row.map((c) => val(bound(c)))],
+        cols: t.key ? t.cols : [ROWID, ...t.cols],
+        rows: [(t.key ? row.slice(1) : row).map((c) => val(bound(c)))],
       })
     }
   })

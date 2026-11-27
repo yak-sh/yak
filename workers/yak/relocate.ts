@@ -49,6 +49,7 @@ import {
   type driver,
   type DurableStorage,
   ending,
+  first,
   freely,
   overwritten,
   page,
@@ -179,7 +180,7 @@ let snapshot = (sql: ReturnType<typeof driver>) => {
   let size = 0
   let tallies: Record<string, Copied> = {}
   for (let t of made.tables) {
-    let held = raised(), after = 0
+    let held = raised(), after = first(t)
     while (true) {
       let next = page(sql, t, after, held)
       held = next.held
@@ -216,7 +217,7 @@ export let relocation = (o: {
     to: string,
     t: Plan['tables'][number],
   ) => {
-    let held = raised(), after = 0
+    let held = raised(), after = first(t)
     while (true) {
       let next = page(sql, t, after, held)
       held = next.held

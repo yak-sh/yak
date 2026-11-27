@@ -105,6 +105,7 @@ export {
 export {
   type Driver,
   effect,
+  queryPhysical,
   type Row,
   scan,
   type Settled,

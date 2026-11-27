@@ -27,6 +27,7 @@ export {
   type Arrival,
   Blocked,
   consentEid,
+  consentRemoved,
   Denied,
   echo,
   type Keyword,

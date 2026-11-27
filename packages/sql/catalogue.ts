@@ -98,7 +98,9 @@ let labels = (v?: Vocab) => {
  * Rows of any other statement are as they came.
  */
 export let asWritten = (s: Stmt, rows: Row[], v?: Vocab): Row[] => {
-  if (s.t == 'raw') return s.origin ? asWritten(s.origin, rows, v) : rows
+  if (s.t == 'raw') {
+    return s.origin && !s.physical ? asWritten(s.origin, rows, v) : rows
+  }
   if (!v || s.t != 'pragma' || typeof s.arg != 'string') return rows
   let key = COLUMN[s.name]
   if (!key) return rows

@@ -40,6 +40,7 @@ const RAW: unique symbol = Symbol('raw')
  * statement, or a fragment the compiler lowered. */
 export type Raw = {
   t: 'raw'
+  physical?: boolean
   sql: string
   params: Param[]
   /** Structural origin retained by rendering, for observers that must never

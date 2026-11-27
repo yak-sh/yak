@@ -17,7 +17,9 @@ import {
   arrived,
   type Cell,
   copied,
+  type Cursor,
   ending,
+  first,
   type Plan,
 } from '@yaks/durable-object'
 import type { Driver } from '@yaks/sql'
@@ -29,11 +31,11 @@ import { Interrupted } from '@yaks/tools/errors'
  * to an empty page. */
 export type Copying =
   | { plan: Plan; tips?: Record<string, number> }
-  | { rows: Cell[][]; cols?: string[]; last: number | null; ended?: boolean }
+  | { rows: Cell[][]; cols?: string[]; last: Cursor; ended?: boolean }
 
 /** What a copy asks: a store's plan, or a table's rows past a rowid, up to
  * another when `until` names one. */
-export type Asked = { table?: string; after?: number; until?: number }
+export type Asked = { table?: string; after?: Cursor; until?: Cursor }
 
 type Tips = Record<string, number>
 
@@ -174,7 +176,7 @@ export let copy = async (o: {
     // first page.
     let read = async (
       t: Plan['tables'][number],
-      after: number,
+      after: Cursor,
       until?: number,
     ): Promise<void> => {
       for (;;) {
@@ -193,7 +195,8 @@ export let copy = async (o: {
         rows += next.rows.length
         if (next.ended) return
         let end = until ?? tips?.[t.name] ?? 0
-        let parts = end > next.last
+        let parts = !t.key && typeof after == 'number' &&
+            typeof next.last == 'number' && end > next.last
           ? ranges(after, next.last, end, o.ranges ?? RANGES, until)
           : []
         if (parts.length > 1) {
@@ -213,7 +216,7 @@ export let copy = async (o: {
     }
     try {
       copied(sql, plan)
-      await all(plan.tables.map((t) => read(t, 0)))
+      await all(plan.tables.map((t) => read(t, first(t))))
       ending(sql, plan)
       complete = true
     } finally {

@@ -2,7 +2,7 @@ import { cleanup, equal, test } from '@yaks/testing'
 import { open } from '@yaks/sqlite/db'
 import { page, plan, raised } from '@yaks/durable-object'
 import { insert, scan } from '@yaks/sql'
-import { copy, type Copying } from './copy.ts'
+import { type Asked, copy, type Copying } from './copy.ts'
 import { copyFile } from './copy_file.ts'
 import { assertRejects } from '@std/assert'
 import { CallError } from '@yaks/tools/errors'
@@ -14,7 +14,7 @@ cleanup(source.close)
 source.query({ t: 'create table', name: 'note', cols: [{ name: 'body' }] })
 source.query(insert('note', { body: 'kept' }))
 let p = plan(source)
-let asking = (_: string, asked: { table?: string; after?: number }) => {
+let asking = (_: string, asked: Asked) => {
   if (!asked.table) return Promise.resolve({ plan: p })
   let { rows, last } = page(source, p.tables[0], asked.after ?? 0, raised())
   return Promise.resolve({ rows, last })

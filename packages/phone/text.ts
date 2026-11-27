@@ -3,11 +3,28 @@
 // Providers translate their wire formats at the boundary.
 
 import type { Texter } from '@yaks/host/senders'
-import { identityEid } from '@yaks/graph/identity'
+import type { Bundle, ReadTx } from '@yaks/graph'
+import { eidOf, identityEid } from '@yaks/graph/identity'
+import { phoneDoc } from './vocab.ts'
 
 /** The eid of a person's `sms_consent`, derived from them. */
 export let consentEid = (person: string): string =>
   identityEid('sms_consent', [person])
+
+let currentConsent = eidOf(phoneDoc, 'sms_consent')
+let consentEids = (
+  person: string,
+): string[] => [...new Set([consentEid(person), currentConsent(person)])]
+
+/** Read consent at either address used by a store. */
+export let consented = async (tx: Pick<ReadTx, 'get'>, person: string) =>
+  (await tx.get(consentEids(person), ['sms_consent'])).find((row) =>
+    row.sms_consent != null
+  )
+
+/** Remove any consent the person gave, including a row written before UUID derivation. */
+export let consentRemoved = (person: string): Bundle[] =>
+  consentEids(person).map((eid) => ({ entity: { eid }, sms_consent: null }))
 
 // A text and its receipt are the host's portable texter capability, so a
 // host can lend one (`texters`) without knowing this package.

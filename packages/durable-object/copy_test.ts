@@ -6,6 +6,7 @@ import {
   chunks,
   copied,
   ending,
+  first,
   overwritten,
   page,
   plan,
@@ -93,7 +94,7 @@ let copyOf = (from: ReturnType<typeof driver>) => {
   copied(to, p)
   let here: Record<string, unknown> = {}
   for (let t of p.tables) {
-    let held = raised(), after = 0
+    let held = raised(), after = first(t)
     while (true) {
       let next = page(from, t, after, held, 2)
       held = next.held

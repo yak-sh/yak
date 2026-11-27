@@ -5,7 +5,13 @@
 
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { type Arrival, consentEid, keyword, type Outcome } from './text.ts'
+import {
+  type Arrival,
+  consentEid,
+  consentRemoved,
+  keyword,
+  type Outcome,
+} from './text.ts'
 
 /** The eid of a text that arrived, derived from the provider's id for it and
  * the transport it came by, so a webhook posted twice keeps one. */
@@ -49,9 +55,7 @@ export let kept = (
       },
     },
     ...people.flatMap((person): Bundle[] =>
-      word == 'stop'
-        ? [{ entity: { eid: consentEid(person) }, sms_consent: null }]
-        : word == 'start'
+      word == 'stop' ? consentRemoved(person) : word == 'start'
         ? [{
           entity: { eid: consentEid(person) },
           sms_consent: { person, consent: arrival.text.trim(), at: arrival.at },

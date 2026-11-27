@@ -8,7 +8,7 @@ import { argsOf, referenced } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools/errors'
 import { line } from '@yaks/query'
-import { consentEid } from './mod.ts'
+import { consented } from './text.ts'
 import { mobile } from './mobile.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
@@ -35,9 +35,7 @@ export let runs = (): Runs => ({
     if (!body) throw new CallError('body', 'a text needs words — say --body')
     let person = to ? await reached(graph, to) : undefined
     let [row] = person ? await graph.get([person], ['phone']) : []
-    let [consent] = person
-      ? await graph.get([consentEid(person)], ['sms_consent'])
-      : []
+    let consent = person ? await consented(graph, person) : undefined
     if (!(row?.phone as Comp | undefined)?.number) {
       throw new CallError('to', `nobody here has a phone number at ${to}`)
     }

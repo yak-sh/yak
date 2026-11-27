@@ -8,6 +8,8 @@
 import type { Driver } from '@yaks/sql'
 import {
   type Cell,
+  type Cursor,
+  first,
   page,
   type Plan,
   plan,
@@ -21,7 +23,7 @@ export let COPY = '/copy'
 
 /** What a copy asks: the file's plan, or a table's rows past a rowid, up to
  * another when `until` names one. */
-export type Asked = { table?: string; after?: number; until?: number }
+export type Asked = { table?: string; after?: Cursor; until?: Cursor }
 
 /** What it is answered: the plan and each table's last rowid, or a page, the
  * columns its rows hold after their rowids, the rowid it ends at (null once
@@ -30,7 +32,7 @@ export type Asked = { table?: string; after?: number; until?: number }
  * not name. */
 export type Copying =
   | { plan: Plan; tips: Record<string, number> }
-  | { rows: Cell[][]; cols: string[]; last: number | null; ended: boolean }
+  | { rows: Cell[][]; cols: string[]; last: Cursor; ended: boolean }
 
 // A page holds up to this many rows, or about this many bytes: each page is
 // one request through the kernel, whose gate asks the directory, so a copy
@@ -55,7 +57,7 @@ export let copying = (sql: Driver, asked: Asked): Response => {
   let { rows, last, ended } = page(
     sql,
     t,
-    asked.after ?? 0,
+    asked.after ?? first(t),
     raised(),
     ROWS,
     BYTES,

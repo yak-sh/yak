@@ -166,6 +166,13 @@ export let effect = (driver: Driver, s: Stmt): void => {
   driver.query(s)
 }
 
+/** Run a file's own schema names through an already-bound driver. */
+export let queryPhysical = (driver: Driver, stmt: Stmt): Row[] => {
+  if (!driver.stored?.v) return driver.query(stmt)
+  let written = driver.render?.(stmt) ?? render(stmt)
+  return driver.query({ ...written, physical: true })
+}
+
 /** How many rows a table holds, or how many of them a condition keeps. */
 export let tally = (driver: Driver, name: string, where?: Expr): number =>
   Number(

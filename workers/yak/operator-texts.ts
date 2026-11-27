@@ -9,6 +9,7 @@ import {
   type Arrival,
   Blocked,
   consentEid,
+  consentRemoved,
   echo,
   keyword,
   type Text,
@@ -112,9 +113,7 @@ export let texts = (
 }
 
 /** The directory row that stops texts to `person`, who keeps their number. */
-export let stopping = (person: string): Bundle[] => [
-  { entity: { eid: consentEid(person) }, sms_consent: null },
-]
+export let stopping = consentRemoved
 
 import { phoneNamed, phoneOf } from './phones.ts'
 

@@ -29,7 +29,7 @@ import {
   join,
   type Query,
   select,
-  table,
+  type Source,
   walk,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
@@ -39,11 +39,11 @@ import { EDGE, linkable } from './relations.ts'
 // against the relation's own table is the filter, so there is no union and
 // nothing for the planner to prefer over the endpoint seek.
 let l = at('l')
-let linked = (tag: string): Query =>
+let linked = (tag: string, from: (comp: string, as: string) => Source): Query =>
   select({
     cols: [as(l('from'), 'from'), as(l('to'), 'to')],
-    from: table(EDGE, 'l'),
-    joins: [join(table(tag, 't'), eq(at('t')('entity'), l('entity')))],
+    from: from(EDGE, 'l'),
+    joins: [join(from(tag, 't'), eq(at('t')('entity'), l('entity')))],
   })
 
 /**
@@ -61,7 +61,7 @@ export let traverse = (vocab: Vocab): Extension => {
       walk: (clause, site) => {
         if (clause.kind != 'walk' || clause.path.length != 1) return null
         let t = rels[clause.path[0]]
-        return t ? walk(site.owner, clause, linked(t)) : null
+        return t ? walk(site.owner, clause, linked(t, site.from)) : null
       },
     },
   }
