@@ -98,6 +98,7 @@ import {
   isRaw,
   type Join,
   lit,
+  lt,
   not,
   notNull,
   or,
@@ -4860,6 +4861,32 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   let backlink = filters.find((c): c is Refs =>
     c.kind == 'refs' && c.op == '=' && !!c.value
   )
+  // A component's population cannot tell how far down another component's
+  // order its owners occur. When the owners are few, try a bounded index
+  // prefix and sort the owners if it cannot fill the page. The directory's
+  // newest app was behind enough unrelated use marks to cost 464,173 reads
+  // (bug 1a79ec0453).
+  if (
+    driven && driven != comp && !backlink && (desc || order.last) &&
+    ctx.crowded?.(driven, PREFIX) === false &&
+    column &&
+    resolveField({ ...ctx, tables: new Set() }, path.join('.')).expr ==
+      column
+  ) {
+    let prefix = orderPrefix(ctx, comp, index, column, desc, limit.n)
+    if (prefix) {
+      return sparse(ahead(
+        ctx,
+        page(
+          { bounded: true, candidates: { ...prefix, test: TRUE } },
+          [],
+          limit.n,
+        ),
+        page({ walk: null }, [], limit.n),
+        limit.n,
+      ))
+    }
+  }
   let held = backlink && referrers(ctx, [backlink.value!])
   let few = held && raw(
     `not exists (${held.sql} limit 1 offset ${MANY})`,
@@ -4879,6 +4906,44 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     }),
     ctx.v,
   ))
+}
+
+// Only rows strictly ahead of the prefix's last value can make a page.
+// The index can cut through a tie whose entity numbers sort differently.
+let orderPrefix = (
+  ctx: Ctx,
+  comp: string,
+  index: string,
+  column: string,
+  desc: boolean,
+  n: number,
+): Frag | undefined => {
+  let src = ctx.d.indexed?.(comp, index)
+  let cap = Math.min(PREFIX, Math.max(64, n * FEW))
+  if (!src || src == ctx.d.table(comp) || n >= cap) return
+  let value = col('value')
+  let prefix = share(
+    ctx,
+    select({
+      cols: [as(raw(ctx.d.ownerKey(comp)), 'id'), as(raw(column), 'value')],
+      from: raw(src),
+      where: notNull(raw(column)),
+      order: [raw(column + (desc ? ' desc' : ''))],
+      limit: lit(cap),
+    }),
+    true,
+  )
+  return render(
+    select({
+      cols: [col('id')],
+      from: prefix,
+      where: (desc ? gt : lt)(
+        value,
+        sub(select({ cols: [fn(desc ? 'min' : 'max', value)], from: prefix })),
+      ),
+    }),
+    ctx.v,
+  )
 }
 
 // A reference can be far sparser than the component holding it. Probe its

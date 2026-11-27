@@ -31,6 +31,10 @@ let vocab = loadVocab({
       component: true,
       properties: { kind: { type: 'string' } },
     },
+    listing: {
+      component: true,
+      properties: { slug: { type: 'string' } },
+    },
     created: {
       component: true,
       properties: {
@@ -52,6 +56,7 @@ let tables: Record<string, string[]> = {
   entity: ['eid', 'num'],
   entry: ['link'],
   comment: ['kind'],
+  listing: ['slug'],
   created: ['at'],
   content: ['body'],
   link: ['to'],
@@ -113,6 +118,9 @@ for (let id = 1; id <= 4096; id++) {
     sql.query(
       insert('comment', { entity: id, kind: id == 50 ? 'note' : 'ask' }),
     )
+  }
+  if (id <= 128 || [1000, 3001, 4032, 4033].includes(id)) {
+    sql.query(insert('listing', { entity: id, slug: `listing-${id}` }))
   }
   // Three entities, one with no moment, point at the first.
   if ([20, 1000, 2001].includes(id)) {
@@ -295,6 +303,20 @@ test('an ordered reference presence page seeks its non-null range', () => {
 // is the walk's.
 let few = (held: Record<string, number>): BindOpts => ({
   census: { held: (c) => held[c], largest: () => 4096 },
+})
+
+test('a page of listings reads owners when recent moments lack matches', () => {
+  let query = '.listing .order=-created.at .limit=3 .fields=listing.slug'
+  let { eids, steps } = read(query, { ...few({ listing: 132 }), stable: true })
+  assertEquals(eids, ['row-4032', 'row-4033', 'row-128'])
+  assert(steps < 10_000, `${steps} VM instructions for the listing page`)
+})
+
+test('a page of listings breaks an index boundary tie by entity number', () => {
+  // The 64th index row ties with an owner just outside the prefix. The
+  // number breaks the tie in favor of that owner.
+  let query = '.listing .order=-created.at .limit=1 .fields=listing.slug'
+  assertEquals(read(query, few({ listing: 132 })).eids, ['row-4032'])
 })
 let counted: [string, string, BindOpts][] = [
   [
