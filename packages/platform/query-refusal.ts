@@ -37,7 +37,7 @@ export let queryRefusal = async (
       (await import('./operator-vocab.ts')).operatorDoc.$defs
         ?.[operator]?.component
   ) {
-    let here = at == PLATFORM_STORE ? '<space>' : space ?? '<space>'
+    let here = space ?? '<space>'
     let hint = `.${operator} is a component in the space's Operator store. ` +
       `In that space’s Operator, add self: true to graph_query with q: '.${operator}'. ` +
       `Platform admins can use yak admin query ${here} '.${operator}' --operator.`
