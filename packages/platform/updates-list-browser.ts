@@ -16,11 +16,18 @@
 import { type ComponentChildren, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import type { Client } from '@yaks/client'
+import type { Bundle } from '@yaks/graph'
 import { leaving, morph, PAGE } from '@yaks/ui/navigate'
 import { updateCards, updateOffers, updateWords } from './update-rows.ts'
 import { appsOf, sideApps, sideWords } from './side-rows.ts'
-import { cardsView, placedIn, type UpdatesView } from './updates-view.ts'
-import { pageGraph } from './page-graph.ts'
+import {
+  type Apps,
+  cardsView,
+  type Placed,
+  placedIn,
+  type UpdatesView,
+} from './updates-view.ts'
+import { drawn, pageGraph } from './page-graph.ts'
 import { REDRAWN } from '@yaks/inbox/actions-browser'
 // The day's lines beside the cards, where Updates show in place.
 import './updates-day-browser.ts'
@@ -58,6 +65,13 @@ let keepIds = (root: HTMLElement, next: HTMLElement) => {
   }
 }
 
+// Only app titles and addresses are used by the cards.
+let links = (rows: Bundle[], space: string): Apps =>
+  appsOf(rows, space).map(({ eid, slug, title }) => ({ eid, slug, title }))
+
+let reading = (updates: Placed[], apps: Apps[]) =>
+  JSON.stringify([updates, apps])
+
 /** Keep the cards view `root` drawn from `graph`; the answer lets go. */
 export let bindUpdates = (
   root: HTMLElement,
@@ -72,22 +86,25 @@ export let bindUpdates = (
   let watched = lines.flatMap((l) => [...l.news, l.apps])
   let held = () =>
     placedIn(lines.flatMap((l) => l.news.flatMap((w) => w.value)), view.spaces)
+  let was = drawn(view.person, root)
+  let opening = was ? placedIn(was.rows, view.spaces) : held()
   // New when the page opened, which opening it read.
-  let fresh = new Set(held().filter((u) => u.unread).map((u) => u.eid))
-  // What the cards were last drawn from: a write that moves none of it
-  // (another line's, or what is already drawn) draws nothing.
-  let drawn = ''
+  let fresh = new Set(opening.filter((u) => u.unread).map((u) => u.eid))
+  let last = was
+    ? reading(opening, lines.map((l) => links(was.rows, l.eid)))
+    : ''
   let draw = () => {
-    // Each line answered, or refused: a space whose Operator is away
-    // keeps what it last said.
-    if (!lines.every((l) => l.news.every((w) => w.ready || w.refused))) return
+    // The cards and their links are drawn together. A refused read keeps
+    // what it last said.
+    if (!watched.every((w) => w.ready || w.refused)) return
     let updates = held().map((u) =>
       fresh.has(u.eid) ? { ...u, unread: true } : u
     )
-    let said = JSON.stringify([updates, lines.map((l) => l.apps.value)])
-    if (said == drawn) return
-    drawn = said
-    let apps = new Map(lines.map((l) => [l.eid, l.apps]))
+    let shelves = lines.map((l) => links(l.apps.value, l.eid))
+    let said = reading(updates, shelves)
+    if (said == last) return
+    last = said
+    let apps = new Map(lines.map((l, i) => [l.eid, shelves[i]]))
     let next = root.cloneNode(false) as HTMLElement
     next.append(
       made(
@@ -95,7 +112,7 @@ export let bindUpdates = (
         cardsView(
           view,
           updates,
-          (space) => appsOf(apps.get(space.eid)?.value ?? [], space.eid),
+          (space) => apps.get(space.eid) ?? [],
         ),
       ),
     )

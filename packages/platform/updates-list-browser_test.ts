@@ -12,6 +12,7 @@ import {
   updateRows,
 } from './update-rows.ts'
 import { graph } from './page-graph_fixture_test.ts'
+import { drawnRows } from './page-graph.ts'
 
 let ADA = 'person-ada'
 let SPACE = 'space-home'
@@ -36,6 +37,13 @@ let page = (updates: Update[], at = view) => {
       'div',
       { 'data-view': 'updates', 'data-updates-view': JSON.stringify(at) },
       cardsView(at, updates.map((u) => ({ ...u, space: home })), () => []),
+      h('script', {
+        type: 'application/json',
+        'data-page-graph': '',
+        dangerouslySetInnerHTML: {
+          __html: drawnRows(at.person, updateRows(at.person, SPACE, updates)),
+        },
+      }),
     ),
   )
   let { document } = parseHTML(`<html><body>${html}</body></html>`)
@@ -88,8 +96,14 @@ test('a card drawn again keeps its actions’ id, and what was new when the page
     updateCards(SPACE),
     updateRows(ADA, SPACE, [{ ...fresh, unread: false }]),
   )
+  equal(redrawn, 0)
+  g.set(
+    updateCards(SPACE),
+    updateRows(ADA, SPACE, [{ ...fresh, unread: false, words: 'Changed' }]),
+  )
   let card = root.querySelector<HTMLElement>('[data-key=fresh]')!
   equal([shown(root), card.dataset.inboxCard, redrawn], [['fresh*'], id, 1])
+  equal(card.querySelector('.Update_Words')?.textContent, 'Changed')
 })
 
 test('until every line has answered, the cards stay as the server drew them', () => {

@@ -54,9 +54,12 @@ export let drawnRows = (person: string, rows: Bundle[]): string =>
   JSON.stringify({ person, epoch: PAGE_EPOCH, rows } as Drawn)
     .replaceAll('<', '\\u003c')
 
-// What the page in `doc` carries for `person`, if anything.
-let drawn = (person: string, doc = globalThis.document): Drawn | undefined => {
-  let said = doc?.querySelector(DRAWN)?.textContent
+/** The rows a document or one of its views carries for `person`. */
+export let drawn = (
+  person: string,
+  scope: Pick<Document, 'querySelector'> = globalThis.document,
+): Drawn | undefined => {
+  let said = scope?.querySelector(DRAWN)?.textContent
   let page = said ? JSON.parse(said) as Drawn : undefined
   return page?.person == person ? page : undefined
 }
