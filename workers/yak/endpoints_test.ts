@@ -61,3 +61,11 @@ test('two endpoints over one host never route through each other', async () => {
   equal(sent, ['https://external.invalid/'])
   equal(host.fetch, transport)
 })
+
+test('a request the router cannot make is refused as fetch refuses it, never thrown', async () => {
+  let host = { fetch: (() => Promise.resolve(reply)) as typeof fetch }
+  let route = endpoints(host).open(() => reply)
+  let refused = host.fetch('/not/a/url')
+  await route.stop()
+  equal(await refused.then(() => 'answered', (e) => e.name), 'TypeError')
+})

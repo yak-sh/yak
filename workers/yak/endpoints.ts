@@ -20,10 +20,12 @@ let router = (host: Host): Router => {
   let made: Router = {
     routes,
     outside: host.fetch,
-    routed: (input, init) => {
+    // A request that cannot be made is refused as fetch refuses it, with a
+    // rejected promise: callers falling back on a failed fetch catch that.
+    routed: async (input, init) => {
       let request = new Request(input, init)
       let route = routes.get(new URL(request.url).origin)
-      return route ? Promise.resolve(route(request)) : made.outside(request)
+      return await (route ? route(request) : made.outside(request))
     },
   }
   Object.defineProperty(host, ROUTER, { value: made })
