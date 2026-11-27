@@ -4,8 +4,12 @@
 // of apply() as the band above draws its letter, and its effect, the one on
 // the page that leaves the tab, asks yaks.app's sign-in door for the
 // Operator's letter (signin.ts). Then the section says what happens next.
-import { type FunctionComponent, h } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import {
+  createElement as h,
+  type FunctionComponent,
+  useEffect,
+  useState,
+} from 'react'
 import { type Phase, PHASES } from '@yaks/graph/plugin'
 import type { Bundle } from '@yaks/graph'
 import { Prose, words } from './prose.ts'
@@ -46,31 +50,31 @@ let Told = ({ address, row, upto }: {
   upto < EFFECT
     ? null
     : row?.signin_sent
-    ? h('div', { class: 'Setup_Told is-sent', role: 'status' }, [
-      h('b', { class: 'Setup_Status' }, 'Sent. Check your email.'),
+    ? h('div', { className: 'Setup_Told is-sent', role: 'status' }, [
+      h('b', { className: 'Setup_Status' }, 'Sent. Check your email.'),
       h(Prose, {
         source:
           `A letter from yaks.app's Operator is on its way to **${address}**, with a code and a link that signs you in. Or just reply to it, and the Operator sets you up from there.`,
       }),
       h(
         'p',
-        { class: 'Body_Paragraph' },
+        { className: 'Body_Paragraph' },
         'Nothing in a few minutes? Look in spam, or send it again.',
       ),
     ])
     : row?.signin_refused
-    ? h('div', { class: 'Setup_Told is-refused', role: 'status' }, [
-      h('b', { class: 'Setup_Status' }, "That isn't an email address."),
+    ? h('div', { className: 'Setup_Told is-refused', role: 'status' }, [
+      h('b', { className: 'Setup_Status' }, "That isn't an email address."),
       h(
         'p',
-        { class: 'Body_Paragraph' },
+        { className: 'Body_Paragraph' },
         "It's back in the box: check it, and send it again.",
       ),
     ])
-    : h('div', { class: 'Setup_Told', role: 'status' }, [
+    : h('div', { className: 'Setup_Told', role: 'status' }, [
       h(
         'b',
-        { class: 'Setup_Status' },
+        { className: 'Setup_Status' },
         words("Asking yaks.app's sign-in door…"),
       ),
     ])
@@ -125,25 +129,25 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
     if (address) void yak.drafts.spend(PLACE, [asked(address)])
   }
   return h('section', {
-    class: 'Part Setup',
+    className: 'Part Setup',
     id: ANCHORS[eid],
     'data-eid': eid,
   }, [
-    h('div', { class: 'Part_Head' }, [
-      h('span', { class: 'Bubble' }, String(numbered(yak, eid))),
+    h('div', { className: 'Part_Head' }, [
+      h('span', { className: 'Bubble' }, String(numbered(yak, eid))),
       h('h2', null, words(text(e, 'doc', 'title'))),
       h(Prose, { source: head }),
     ]),
-    h('div', { class: 'Part_Body' }, [
-      h('form', { class: 'Setup_Form', onSubmit: send }, [
+    h('div', { className: 'Part_Body' }, [
+      h('form', { className: 'Setup_Form', onSubmit: send }, [
         h(
           'label',
-          { class: 'Setup_Label', for: 'setup-address' },
+          { className: 'Setup_Label', htmlFor: 'setup-address' },
           'Your email address',
         ),
-        h('div', { class: 'Setup_Field' }, [
+        h('div', { className: 'Setup_Field' }, [
           h('input', {
-            class: 'Setup_Input',
+            className: 'Setup_Input',
             id: 'setup-address',
             type: 'email',
             name: 'address',
@@ -157,14 +161,18 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
                 (ev.currentTarget as HTMLInputElement).value,
               ),
           }),
-          h('button', { class: 'Setup_Button', type: 'submit' }, 'Email me'),
+          h(
+            'button',
+            { className: 'Setup_Button', type: 'submit' },
+            'Email me',
+          ),
         ]),
       ]),
       ...pieces.map((p) =>
         p.kind == 'md' ? h(Prose, { source: p.text }) : null
       ),
       h(Told, { address, row, upto }),
-      h('div', { class: 'Setup_Write' }, [
+      h('div', { className: 'Setup_Write' }, [
         h(Phases, {
           state,
           call: {
@@ -173,10 +181,10 @@ export let Setup: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
           },
           made: !!ask,
         }),
-        h('figure', { class: 'Stack_Figure' }, [
+        h('figure', { className: 'Stack_Figure' }, [
           rows.length ? h(Source, { rows, changed, state }) : null,
-          h('figcaption', { class: 'Stack_Caption' }, [
-            h('span', { class: 'No' }, 'Fig. 3'),
+          h('figcaption', { className: 'Stack_Caption' }, [
+            h('span', { className: 'No' }, 'Fig. 3'),
             ask
               ? 'Your ask, as the bundle that wrote it: each phase changes it as apply() did, and its effect records what the door said.'
               : 'Send your address, and the bundle it becomes is drawn here.',

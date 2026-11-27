@@ -1,9 +1,8 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { Decision } from '../Decision.tsx'
 import { Keys } from '../Keys.tsx'
 import { useReference, useRepoUrl, useRows } from '../subscriptions.ts'
-import { useEffect, useRef, useState } from 'preact/hooks'
-import { type ComponentChildren } from 'preact'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { type Ent, statusOf, vocab } from '../../types.ts'
 import { statusChanges } from '../../client.ts'
 import { FLOOR, textOf } from '../../twin.ts'
@@ -126,7 +125,7 @@ export let Pip = ({ e }: { e: Ent }) => {
         status={status}
         gated={gated(e)}
         live={crewed(e)}
-        class='Show_Pip'
+        className='Show_Pip'
         onClick={() => edit.open ? edit.end() : edit.begin()}
       />
       <Edit.Control
@@ -156,7 +155,7 @@ let Rank = ({ e }: { e: Ent }) => (
     prop='priority'
     editable
     name='priority'
-    show={(_, v) => <Prio p={v} class='Show_Chip' />}
+    show={(_, v) => <Prio p={v} className='Show_Chip' />}
   />
 )
 
@@ -227,7 +226,7 @@ let Home = ({ e }: { e: Ent }) => (
 )
 
 let MailField = (
-  { name, children }: { name: string; children: ComponentChildren },
+  { name, children }: { name: string; children: ReactNode },
 ) => (
   <>
     <MailKey>{name}</MailKey>
@@ -306,7 +305,7 @@ export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
       <Markdown
         as={BodyEl}
         mod={mod}
-        onDblClick={edit.begin}
+        onDoubleClick={edit.begin}
         text={e.doc?.body ?? ''}
         repo={repo}
       />
@@ -334,7 +333,7 @@ export let Acceptance = ({ e }: { e: Ent }) => {
         : (
           <Markdown
             as={AcceptanceBody}
-            onDblClick={edit.begin}
+            onDoubleClick={edit.begin}
             text={e.accept.body ?? ''}
             repo={repo}
           />
@@ -583,8 +582,8 @@ export let Meta = (
   { e, id, before, children }: {
     e: Ent
     id?: boolean
-    before?: ComponentChildren
-    children?: ComponentChildren
+    before?: ReactNode
+    children?: ReactNode
   },
 ) => {
   let claimant = useReference(e.claim?.session)

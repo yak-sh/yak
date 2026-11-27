@@ -17,10 +17,10 @@ import {
   type Renderer as PortableRenderer,
   resolve as select,
 } from '@yaks/render'
-import { type ComponentRenderer, type Events, render } from '@yaks/preact'
+import { type ComponentRenderer, type Events, render } from '@yaks/react'
 import type { Host } from '@yaks/ux'
 import { Float } from '@yaks/ui'
-import { type ComponentChild, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { type Signal, signal } from '@preact/signals'
 import { short } from '@yaks/id'
 import { called } from '@yaks/inspect'
@@ -199,7 +199,7 @@ export let renderView = (
   e: Ent,
   view?: string,
   ctx: Context & Events = {},
-): ComponentChild => {
+): ReactNode => {
   let entry = select(registry, bundle(e), view, vocab)
   return entry && !('Render' in entry)
     ? h(Portable, { e, view, ctx, entry })

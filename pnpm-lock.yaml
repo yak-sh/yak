@@ -780,15 +780,15 @@ importers:
       '@yaks/native':
         specifier: 0.2.24
         version: link:../native
-      '@yaks/preact':
-        specifier: 0.2.24
-        version: link:../preact
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -931,6 +931,9 @@ importers:
       '@yaks/wake':
         specifier: 0.2.24
         version: link:../wake
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/builders:
     dependencies:

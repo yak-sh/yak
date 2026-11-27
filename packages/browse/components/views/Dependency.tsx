@@ -1,5 +1,5 @@
-/** @jsxImportSource preact */
-import { type ComponentChildren } from 'preact'
+/** @jsxImportSource react */
+import type { ReactNode } from 'react'
 import { reversed } from '@yaks/edge/vocab'
 import { type Ent, vocab } from '../../types.ts'
 import { block } from '@yaks/ui'
@@ -34,7 +34,7 @@ export let Dependency = (
     e: Ent
     type?: unknown
     label?: unknown
-    note?: ComponentChildren
+    note?: ReactNode
   },
 ) => (
   <Sentence>

@@ -7,7 +7,8 @@
 // shared linkedom document, mounts into its own <main>, and returns that root
 // plus a free() that unmounts and restores the document global. Pair every
 // mount() with free() — a try/finally, or the end of the test.
-import { type ComponentChild, h, render } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
+import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { Ux } from '@yaks/ux'
 import { ux } from './registry.ts'
@@ -54,7 +55,7 @@ element.blur = function (this: HTMLElement) {
   this.dispatchEvent(new window.Event('blur'))
   this.dispatchEvent(new window.Event('focusout', { bubbles: true }))
 }
-export let mount = (node: ComponentChild) => {
+export let mount = (node: ReactNode) => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', {
     value: document,

@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A board's Tile and Meta faces: one ordinary linked tile whose second row
 // carries the same status counts as the board's columns.
 //
@@ -7,7 +7,7 @@
 // numbers. Streaming membership for them put ~4.4k task rows on the wire for
 // every canvas that showed the Everything tile; only a FULLSCREEN board
 // (Board.tsx, List.tsx) opens the member sub.
-import { type ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import { type Ent } from '../../types.ts'
 import { boardTally, statuses } from '../../live.ts'
 import { Entity } from '../Entity.tsx'
@@ -27,7 +27,7 @@ import { Meta } from './Show.tsx'
 let Stat = el('span', 'BoardStat')
 
 export let BoardMeta = (
-  { e, id, children }: { e: Ent; id?: boolean; children?: ComponentChildren },
+  { e, id, children }: { e: Ent; id?: boolean; children?: ReactNode },
 ) => {
   useBoardTally(e)
   // No tally yet — the sub hasn't answered, or the query doesn't parse — paints

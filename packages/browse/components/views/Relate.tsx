@@ -1,5 +1,5 @@
-/** @jsxImportSource preact */
-import { useEffect, useRef, useState } from 'preact/hooks'
+/** @jsxImportSource react */
+import { useEffect, useRef, useState } from 'react'
 import { relations, reversed } from '@yaks/edge/vocab'
 import { type Ent, uuid, vocab } from '../../types.ts'
 import { link } from '../../edge.ts'
@@ -161,7 +161,7 @@ export let Relate = ({ e }: { e: Ent }) => {
       </Verb>
       <Anchor>
         <Field
-          class='Relate_Find'
+          className='Relate_Find'
           elRef={find}
           placeholder={verb ? 'entity…' : 'relation…'}
           onInput={(ev: InputEvent) => {

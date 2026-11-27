@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import '../domain-host.tsx'
 import { views as commentViews } from '@yaks/kernel/component-views'
 import { domainBundle } from '../domain-host.tsx'
@@ -17,6 +17,7 @@ import { type Ent, idOf, statusOf, vocab } from '../types.ts'
 import { navigate } from './nav.tsx'
 import { type Action, define, defineActions, renderView } from './registry.ts'
 import { memo } from './memo.ts'
+import { useDerived } from './read.ts'
 import {
   Acceptance,
   Boards,
@@ -559,8 +560,11 @@ type FaceProps = { eid: string; view?: string; [x: string]: unknown }
 let EntityBody = (
   { eid, view, ...rest }: FaceProps,
 ) => {
-  let e = ent(eid)
-  if (!shown(eid)) {
+  let { e, visible } = useDerived(
+    () => ({ e: ent(eid), visible: shown(eid) }),
+    [eid],
+  )
+  if (!visible) {
     return (
       <Veil>
         Quarantined content

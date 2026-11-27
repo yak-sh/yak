@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { type Ent } from '../../types.ts'
 import { base } from '../../live.ts'
 import { door } from '../../hosting.ts'

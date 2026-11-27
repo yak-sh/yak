@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The Peek: what a pressed link to an entity opens where a fine pointer reads
 // (nav.tsx openAt). The entity floats over the page it was pressed on, whole,
 // in the Full view its own page draws, with its title and body typed into
@@ -9,7 +9,7 @@
 // (role dialog) to vim's keys (App.tsx, @yaks/ux/keys): Enter on a link opens
 // it, the cursor walks inside it while it is up, and Esc or q sends it
 // `cancel`, which puts it away and hands the cursor back to the link.
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { useLayoutEffect, useRef } from 'react'
 import { Loading, Peek as Frame, place, Tabs } from '@yaks/ui'
 import { Ux } from '@yaks/ux'
 import { ent, type Peeked, peeked, row, useHold } from '../live.ts'
@@ -153,7 +153,7 @@ let Card = ({ p }: { p: Peeked }) => {
       </Body>
       <Grip
         onPointerDown={size}
-        onDblClick={() => patch(p, { w: undefined, h: undefined })}
+        onDoubleClick={() => patch(p, { w: undefined, h: undefined })}
       />
     </Frame>
   )

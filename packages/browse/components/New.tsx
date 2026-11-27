@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // New: Debug on an empty entity. A person adds components by searching the
 // vocabulary, types or picks each property, and may outline more entities
 // like it, one a line, nested by indent. The batch they become shows as it is
@@ -7,8 +7,7 @@
 // is typed is the person's draft (../new.ts), kept and seen in every
 // interface. Every control is a kit field or button, so a terminal draws and
 // drives the same page.
-import type { ComponentChildren } from 'preact'
-import { useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import * as ui from '@yaks/ui'
 import { label, pickLine, reading, useHits } from '@yaks/ux'
 import { drafts } from '@yaks/draft/input'
@@ -235,7 +234,7 @@ let Input = (
     ? <Ref place={place} kind={type.eid} text={text} set={set} />
     : (
       <ui.Field
-        class={type == 'body' ? 'New_Body New_Text' : undefined}
+        className={type == 'body' ? 'New_Body New_Text' : undefined}
         lines={type == 'body'}
         value={text}
         placeholder={typeName(type)}
@@ -270,7 +269,7 @@ let Fields = (
           ×
         </ui.Button>
       )
-      let row = (key: string, value: ComponentChildren, first: boolean) => [
+      let row = (key: string, value: ReactNode, first: boolean) => [
         <ui.Pairs.Key key={`${key}:k`}>{key}{first && drop}</ui.Pairs.Key>,
         <ui.Pairs.Value key={`${key}:v`}>{value}</ui.Pairs.Value>,
       ]
@@ -337,7 +336,7 @@ let Outline = (
   { s, put }: { s: Sketch; put: (s: Sketch) => void },
 ) => (
   <ui.Field
-    class='New_Body'
+    className='New_Body'
     lines
     value={s.outline}
     placeholder='Outline: one entity a line, like this one; indent a line to put it in the one above'

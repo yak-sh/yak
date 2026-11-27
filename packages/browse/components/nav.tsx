@@ -1,8 +1,8 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { localPath } from '../hosting.ts'
 import { addressId, entityPath } from '../url.ts'
 import { signal } from '@preact/signals'
-import { useRef } from 'preact/hooks'
+import { useRef } from 'react'
 import * as ui from '@yaks/ui'
 import { copy } from '../clipboard.ts'
 import { usePlaceAt } from '@yaks/ui'
@@ -401,7 +401,7 @@ export let Menu = () => {
   let acts = m.acts ?? actionsFor(ent(m.eid))
   return (
     <ui.Menu
-      class='Overlay'
+      className='Overlay'
       role='menu'
       elRef={root}
       onCancel={close}

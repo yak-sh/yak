@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The document-side conversation: one actor's selected Session. The binding is graph data on the session, so a
 // reload or another browser finds the same transcript. On a persona the
 // conversation is with it: a message to it begins a native session wearing it
@@ -7,7 +7,7 @@
 // (D-131941), as `yak session new --topic` does. On any other document the
 // chat plan picks a provider. The conversation alone is `Conversation`, the
 // part a topic's page asks its host for.
-import { useRef, useState } from 'preact/hooks'
+import { useRef, useState } from 'react'
 import { ORACLE } from '@yaks/topic'
 import { sessionFrames } from '../client.ts'
 import { mutate, myActor, uuid } from '../live.ts'
@@ -156,7 +156,7 @@ export let Conversation = (
   let [fresh, setFresh] = useState(false)
   return actor
     ? (
-      <section class='Chat_Conversation'>
+      <section className='Chat_Conversation'>
         <Head>
           <Label>chat</Label>
           {selected && (

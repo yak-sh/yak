@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import './domain-host.tsx'
 import './browser-links.ts'
 // Mount the browsing app with the configured plugins’ shared views and home

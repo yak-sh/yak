@@ -1,6 +1,6 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { type Signal, useComputed, useSignal } from '@preact/signals'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'react'
 import { camera, ent, mutate, pinZ, toFront } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import * as ui from '@yaks/ui'
@@ -261,7 +261,7 @@ export let Card = (
             }
             {!collection || near
               ? <Entity eid={p.target} view={`Card.${p.view}`} />
-              : <div class={p.view} />}
+              : <div className={p.view} />}
           </Scroll>
         </Frame>
       </Ux>
@@ -272,7 +272,7 @@ export let Card = (
           onPointerDown={(
             e: PointerEvent & { currentTarget: HTMLDivElement },
           ) => resize(e, d)}
-          onDblClick={() => reset(d)}
+          onDoubleClick={() => reset(d)}
         />
       ))}
     </Pin>

@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { type Ent, idOf, settled, statusOf } from '../../types.ts'
 import { crewed, gated } from '../../live.ts'
 import * as ui from '@yaks/ui'

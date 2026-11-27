@@ -10,7 +10,8 @@
 import type { Bundle } from '@yaks/graph'
 import { matcher, type MatchOpts } from '@yaks/match'
 import type { Frame, Socket } from '@yaks/sync'
-import { type ComponentChild, h, render } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
+import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { cache, type Hold, useHold, useSocket } from './live.ts'
 import { tick } from './testing.ts'
@@ -29,7 +30,7 @@ export let held = (...holds: Hold[]): () => void => {
     useHold(...holds)
     return null
   }
-  let mounted = (vnode: ComponentChild) => {
+  let mounted = (vnode: ReactNode) => {
     let g = globalThis as { document?: unknown }
     if (g.document) return render(vnode, root)
     g.document = document

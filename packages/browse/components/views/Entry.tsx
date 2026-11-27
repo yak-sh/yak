@@ -1,8 +1,8 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { useRepoUrl } from '../subscriptions.ts'
 // Session entries as a small renderer vocabulary. Summary and Full faces
 // share this kit; component-specific registrations choose what each face says.
-import { useState } from 'preact/hooks'
+import { useState } from 'react'
 import { type Ent, friendly, kilo, type LogRow } from '../../types.ts'
 import { backlinks, ent } from '../../live.ts'
 import * as ui from '@yaks/ui'

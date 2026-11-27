@@ -1,9 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // ANSI output rendered as inert Preact nodes. SGR presentation has a faithful
 // HTML equivalent; terminal commands and control bytes have none, so they
 // disappear rather than reaching the page or becoming visible garbage.
 
-import { Fragment } from 'preact'
+import { Fragment } from 'react'
 
 type Face = {
   bold?: boolean
@@ -150,7 +150,7 @@ export let Ansi = ({ text }: { text: string }) => (
       }
       return className || style.color || style.backgroundColor
         ? (
-          <span key={i} class={className || undefined} style={style}>
+          <span key={i} className={className || undefined} style={style}>
             {run.text}
           </span>
         )

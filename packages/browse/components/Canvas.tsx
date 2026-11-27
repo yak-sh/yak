@@ -1,5 +1,5 @@
-/** @jsxImportSource preact */
-import { useLayoutEffect, useRef } from 'preact/hooks'
+/** @jsxImportSource react */
+import { useLayoutEffect, useRef } from 'react'
 import { effect, useSignal } from '@preact/signals'
 import {
   cache,
@@ -609,7 +609,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
       // Double-click a board row: the task leaps out as its own card at
       // the mouse — the click-shaped twin of dragging the row out. Links
       // and buttons inside the row keep their own double-clicks.
-      onDblClick={(e: MouseEvent) => {
+      onDoubleClick={(e: MouseEvent) => {
         if (!(e.target instanceof Element)) return
         if (e.target.closest('a, button, input, [contenteditable]')) return
         let row = e.target.closest('.Board_Item') as HTMLElement | null

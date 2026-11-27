@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Search is a renderer context, not a second entity drawing in the screen.
 // Delegate the entity shape to Tile, with what was sought in the context
 // (`words`) and its matches in the same slots all tiles share: a title marked

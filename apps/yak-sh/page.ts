@@ -1,7 +1,7 @@
 // The page: start the graph in this tab, put the site and its files in it,
 // and draw the page from it with the views module beside this one.
-import { h } from 'preact'
-import { host } from '@yaks/preact/host'
+import { createElement as h } from 'react'
+import { host } from '@yaks/react/host'
 import { yak } from './yak.ts'
 import { term } from './term.ts'
 import { fileList, files, seed, SITE } from './site.ts'

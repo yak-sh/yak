@@ -1,9 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // An age, said the human way. An entity says when it was created and, when
 // present, edited; `at` names any other graph moment. The ages come off a
 // minute tick, so an open card never fossilizes at the age it rendered, and
 // the full stamps ride the tooltips.
-import type { ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import * as ui from '@yaks/ui'
 import { relative } from '@yaks/ui'
 
@@ -18,7 +18,7 @@ export let Stamp = (
     }
     at?: string | null
     label?: string
-    by?: (comp: 'created' | 'updated') => ComponentChildren
+    by?: (comp: 'created' | 'updated') => ReactNode
   },
 ) => {
   let born = at ?? e?.created?.at

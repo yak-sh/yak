@@ -1,7 +1,7 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { vocab } from '../../types.ts'
 import { type Ent } from '../../types.ts'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { unmime } from '../../rfc2047.ts'
 import {
   boardPost,
@@ -18,6 +18,7 @@ import { filteredQuery, usePassOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { usePinned, usePinTargets } from '../subscriptions.ts'
 import { usePage } from '../useQuery.ts'
+import { useDerived } from '../read.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
@@ -154,6 +155,16 @@ export let QueryList = (
     return () => node.removeEventListener('scroll', scroll)
   }, [more, size, limit, page.ready])
   let failed = boardRead?.state.status == 'failed' ? boardRead : undefined
+  let rows = useDerived(() => {
+    try {
+      let listed = boardPost({ eid }, false, page.eids).map(ent)
+      return orderOf(parseQuery(saved)) == 'hot'
+        ? listed.toSorted(byWarmth(Date.now()))
+        : listed
+    } catch {
+      return undefined
+    }
+  }, [eid, saved, page.eids])
   if (failed) {
     return (
       <Rows elRef={root} mod='ruled'>
@@ -161,15 +172,7 @@ export let QueryList = (
       </Rows>
     )
   }
-  let rows: Ent[]
-  let hot = false
-  try {
-    hot = orderOf(parseQuery(saved)) == 'hot'
-    rows = boardPost({ eid }, false, page.eids).map(ent)
-    if (hot) rows = rows.toSorted(byWarmth(Date.now()))
-  } catch {
-    return <Rows elRef={root} /> // a bad query already shows itself on the Board face
-  }
+  if (!rows) return <Rows elRef={root} />
   // The member sub is a WINDOW now (live.ts boardLine), so `rows` is a page of
   // the board and not the board. "+N more" counts against the total the server
   // STATED, or the feed would say "+300 more" while four thousand match — the

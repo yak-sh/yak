@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { type Ent } from '../../types.ts'
 import { Time } from '@yaks/ui'
 import { title } from '../title.tsx'

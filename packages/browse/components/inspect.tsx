@@ -1,11 +1,10 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Browse supplies the inspector's views with the same held queries, page
 // graph and navigation as every other app view. The readings stay in inspect;
 // this is only the app's host adapter, not a second inspector or registry.
-import { type ComponentChild, h } from 'preact'
+import { createElement as h, type ReactNode, useMemo } from 'react'
 import { define, prepared, resolve } from '@yaks/render'
 import { signal } from '@preact/signals'
-import { useMemo } from 'preact/hooks'
 import { parse } from '@yaks/query'
 import { all, Past, schemaPages } from '@yaks/inspect'
 import { inspectViews as memoryViews } from '@yaks/memory/views'
@@ -216,10 +215,11 @@ let PageBody = (
     : null
 }
 
-export let PagePart = (props: Parameters<typeof PageBody>[0]) =>
+export let PagePart = (props: Parameters<typeof PageBody>[0]) => (
   <Fault key={props.eid ?? props.view} place={props.view}>
     <PageBody {...props} />
   </Fault>
+)
 
 /** An entity as it was just after a transaction (`at`), or, without one, a
  * deleted entity as it was last: @yaks/inspect's `Past`, through the app's
@@ -311,7 +311,7 @@ export let Waiting = (
   { offer, eid, children }: {
     offer: Offer
     eid: string
-    children: (n: number) => ComponentChild
+    children: (n: number) => ReactNode
   },
 ) => {
   let n = offer.waiting?.(bundle(ent(eid)), inspectIo)

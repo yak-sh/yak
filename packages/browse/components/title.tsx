@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The written face of a doc title: inline markdown while reading, its source
 // while editing. Most title faces are already links, so the title's own links,
 // images and ids flatten to their words rather than nesting interactive

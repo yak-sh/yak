@@ -4,6 +4,7 @@ import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
+import { act } from 'preact/test-utils'
 import { useState } from 'preact/hooks'
 import { parse } from '@yaks/query'
 import { commentHost, configureComments } from '@yaks/kernel/comment-host'
@@ -42,13 +43,13 @@ let drop = extend([{
     )
   },
 }])
-let { root, free } = mount(h(Entity, {
-  eid: 'doc',
-  view: 'Test.State',
-  suffix: '!',
-}))
-let button = root.querySelector('button')!
 test('Entity mounts hooks with the original Ent and extra props', async () => {
+  let mounted!: ReturnType<typeof mount>
+  await act(() => {
+    mounted = mount(h(Entity, { eid: 'doc', view: 'Test.State', suffix: '!' }))
+  })
+  let { root, free } = mounted
+  let button = root.querySelector('button')!
   try {
     assertEquals(root.textContent, 'doc Page! 0')
     button.click()

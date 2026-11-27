@@ -10,7 +10,7 @@
 // The signal's backing is the store-agnostic seam (live.ts queryEids): today an
 // in-memory index, tomorrow an IDB indexed cursor — the call site never
 // changes (T-17046).
-import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import {
   type Backlink,
   ent,
@@ -25,6 +25,8 @@ import {
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { type Ent, vocab } from '../types.ts'
+
+import { useDerived } from './read.ts'
 
 // A query that does not parse fails where it was asked, never in the render
 // around it: the hook reports it once and answers a failed read, so the view
@@ -82,14 +84,16 @@ export let useQueryResult = (
   let preds = usePreds(enabled ? query : '')
   let source = direct ? query : undefined
   useHold(enabled && !(preds instanceof Error) && { query: preds, source })
-  if (preds instanceof Error) return refused(query, preds)
-  let subscription = enabled ? querySubscription(preds, source) : undefined
-  return {
-    eids: enabled ? queryEids(preds).value : [],
-    subscription,
-    ready: !subscription || subscription.state.status == 'ready',
-    loaded,
-  }
+  return useDerived(() => {
+    if (preds instanceof Error) return refused(query, preds)
+    let subscription = enabled ? querySubscription(preds, source) : undefined
+    return {
+      eids: enabled ? queryEids(preds).value : [],
+      subscription,
+      ready: !subscription || subscription.state.status == 'ready',
+      loaded,
+    }
+  }, [query, preds, source, enabled])
 }
 
 // A window the reader grows by scrolling, a page at a time: a board's list, a

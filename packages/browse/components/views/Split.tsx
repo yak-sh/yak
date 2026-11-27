@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The two-pane view: a list on the LEFT, the opened entity on the RIGHT
 // (T-17321). A view of ANY entity with a list face — a project/board shows
 // its Board, a canvas its List — so "the left can be a board, a List, a
@@ -9,7 +9,7 @@
 // through Board, no global selection, and the URL still names one root.
 // Selection is view-local on purpose (transient, not shareable); a ?sel=
 // URL param is the noted follow-up when sharing is wanted.
-import { useState } from 'preact/hooks'
+import { useState } from 'react'
 import { type Ent } from '../../types.ts'
 import { block } from '@yaks/ui'
 import { eidOf } from '../nav.tsx'

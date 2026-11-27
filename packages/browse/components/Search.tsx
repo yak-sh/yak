@@ -1,13 +1,7 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { pagePath } from '../hosting.ts'
 import { entityPath, searchPath } from '../url.ts'
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'preact/hooks'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Hit, idOf, kindOrder, plural } from '../types.ts'
 import { searchOpen } from '../live.ts'
 import { follow, navigate } from './nav.tsx'

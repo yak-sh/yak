@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { type Ent, friendly } from '../../types.ts'
 import { block } from '@yaks/ui'
 import { title, TitleEdit } from '../title.tsx'

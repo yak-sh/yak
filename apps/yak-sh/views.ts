@@ -2,8 +2,15 @@
 // panes, and each pane shows a section doc in the view it names. Every view
 // reads the rows the graph last committed, so a write from the prompt redraws
 // what it changed.
-import { type ComponentChild, type FunctionComponent, h } from 'preact'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import {
+  createElement as h,
+  type FunctionComponent,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { parse } from '@yaks/query/core'
 import { define } from '@yaks/render'
 import { Prose, words } from './prose.ts'
@@ -17,7 +24,7 @@ import {
   zoomed,
 } from '@yaks/diagram'
 import type { Bundle } from '@yaks/graph'
-import type { EntityProps } from '@yaks/preact'
+import type { EntityProps } from '@yaks/react'
 import type { Yak } from './yak.ts'
 import type { Line, Term } from './term.ts'
 import { type Figure, SHEET, WIDER } from './figure.ts'
@@ -70,7 +77,7 @@ let Page: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
     )
   // The hero and the steps after it share one story: the words on the left,
   // and the drawing and the prompt beside them.
-  let parts: ComponentChild[] = [h(Nav, { key: 'nav' })]
+  let parts: ReactNode[] = [h(Nav, { key: 'nav' })]
   let story: { hero?: string; steps: string[] } | undefined
   let flush = () => {
     if (story) {
@@ -97,49 +104,53 @@ let Page: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
   }
   flush()
   parts.push(h(Editor, { ...ctx, key: 'editor' }))
-  return h('div', { class: 'Site' }, parts)
+  return h('div', { className: 'Site' }, parts)
 }
 
 let Nav = () =>
-  h('nav', { class: 'Nav' }, [
-    h('a', { class: 'Nav_Mark Nav_Link', href: './' }, [
+  h('nav', { className: 'Nav' }, [
+    h('a', { className: 'Nav_Mark Nav_Link', href: './' }, [
       h(Logo, {
-        class: 'Nav_Logo',
+        className: 'Nav_Logo',
         sizes: '(max-width: 480px) 72px, 15vw',
         width: 200,
         height: 200,
       }),
       'yak.sh',
     ]),
-    h('span', { class: 'Nav_Links' }, [
-      h('a', { class: 'Nav_Link', href: '#install' }, 'Install'),
-      h('a', { class: 'Nav_Link', href: '#yaks-app' }, 'Hosting'),
+    h('span', { className: 'Nav_Links' }, [
+      h('a', { className: 'Nav_Link', href: '#install' }, 'Install'),
+      h('a', { className: 'Nav_Link', href: '#yaks-app' }, 'Hosting'),
       ...words('yaks.app', 'Nav_Link'),
-      h('a', { class: 'Nav_Link', href: 'https://jsr.io/@yaks' }, 'Packages'),
       h(
         'a',
-        { class: 'Nav_Link', href: 'https://github.com/yak-sh/yak' },
+        { className: 'Nav_Link', href: 'https://jsr.io/@yaks' },
+        'Packages',
+      ),
+      h(
+        'a',
+        { className: 'Nav_Link', href: 'https://github.com/yak-sh/yak' },
         'GitHub',
       ),
     ]),
   ])
 
 let Hero: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) =>
-  h('header', { class: 'Hero', 'data-eid': e.entity.eid }, [
-    h('p', { class: 'Kicker' }, [
-      h('span', { class: 'Kicker_Dot' }),
+  h('header', { className: 'Hero', 'data-eid': e.entity.eid }, [
+    h('p', { className: 'Kicker' }, [
+      h('span', { className: 'Kicker_Dot' }),
       'yak and the @yaks packages · open source',
     ]),
     h('h1', null, words(text(e, 'doc', 'title'))),
     h(
       'div',
-      { class: 'Lead' },
+      { className: 'Lead' },
       h(Prose, { source: proseOf(text(e, 'doc', 'body')) }),
     ),
     h(Copy, { line: INSTALL }),
     h(
       'p',
-      { class: 'Hint' },
+      { className: 'Hint' },
       'Scroll to run each step in this tab and see what it adds to the graph.',
     ),
   ])
@@ -204,12 +215,12 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
       cancelAnimationFrame(frame)
     }
   }, [steps.join()])
-  return h('section', { class: 'Plot' }, [
-    h('div', { class: 'Plot_Words' }, [
+  return h('section', { className: 'Plot' }, [
+    h('div', { className: 'Plot_Words' }, [
       hero ? h(Entity, { ...ctx, eid: hero, view: 'Hero', key: hero }) : null,
       h(
         'ol',
-        { class: 'Steps' },
+        { className: 'Steps' },
         steps.map((eid, i) =>
           h(Entity, {
             ...ctx,
@@ -223,16 +234,16 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
       ),
     ]),
     h('div', {
-      class: 'Plot_Side',
+      className: 'Plot_Side',
       'data-panel': panel,
       ref: (el: HTMLElement | null) => void (pen.side = el),
     }, [
       h(
         'div',
-        { class: 'Plot_Panels', role: 'group', 'aria-label': 'Live demo' },
+        { className: 'Plot_Panels', role: 'group', 'aria-label': 'Live demo' },
         panels.map((name) =>
           h('button', {
-            class: 'Plot_Panel',
+            className: 'Plot_Panel',
             type: 'button',
             'data-panel': name,
             'aria-pressed': panel == name,
@@ -269,21 +280,22 @@ let Step: FunctionComponent<
   Ctx & { e: Bundle; n: number; at: (el: HTMLElement | null) => void }
 > = ({ e, n, at }) => {
   let body = text(e, 'doc', 'body')
-  return h('li', { class: 'Step', ref: at, 'data-eid': e.entity.eid }, [
-    h('span', { class: 'Step_No' }, String(n)),
-    h('h2', { class: 'Step_Title' }, words(text(e, 'doc', 'title'))),
+  return h('li', { className: 'Step', ref: at, 'data-eid': e.entity.eid }, [
+    h('span', { className: 'Step_No' }, String(n)),
+    h('h2', { className: 'Step_Title' }, words(text(e, 'doc', 'title'))),
     h(Prose, { source: proseOf(body) }),
     h(
       'ul',
-      { class: 'Step_Lines' },
+      { className: 'Step_Lines' },
       scriptOf(body).map((c) =>
         h('li', {
-          class: [c.kind == 'mcp' ? 'is-agent' : undefined, 'Step_Line'].filter(
-            Boolean,
-          ).join(' '),
+          className: [c.kind == 'mcp' ? 'is-agent' : undefined, 'Step_Line']
+            .filter(
+              Boolean,
+            ).join(' '),
         }, [
-          c.note ? h('span', { class: 'Step_Note' }, `# ${c.note}`) : null,
-          h('code', { class: 'Step_Command' }, shown(c)),
+          c.note ? h('span', { className: 'Step_Note' }, `# ${c.note}`) : null,
+          h('code', { className: 'Step_Command' }, shown(c)),
         ])
       ),
     ),
@@ -310,7 +322,7 @@ let linked = (
     return eid
       ? h('button', {
         type: 'button',
-        class: 'Prompt_Id',
+        className: 'Prompt_Id',
         onClick: () => open(eid),
       }, part)
       : part
@@ -352,15 +364,15 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
     back.current = Math.max(0, Math.min(past.length, back.current + by))
     set(past[back.current] ?? '')
   }
-  return h('div', { class: 'Prompt' }, [
-    h('div', { class: 'Prompt_Bar' }, [
-      h('i', { class: 'Prompt_Dot' }),
-      h('i', { class: 'Prompt_Dot' }),
-      h('i', { class: 'Prompt_Dot' }),
-      h('span', { class: 'Prompt_Title' }, 'yak, in this tab'),
+  return h('div', { className: 'Prompt' }, [
+    h('div', { className: 'Prompt_Bar' }, [
+      h('i', { className: 'Prompt_Dot' }),
+      h('i', { className: 'Prompt_Dot' }),
+      h('i', { className: 'Prompt_Dot' }),
+      h('span', { className: 'Prompt_Title' }, 'yak, in this tab'),
     ]),
     h('div', {
-      class: 'Prompt_Screen',
+      className: 'Prompt_Screen',
       ref: screen,
       onScroll: (ev: Event) => {
         let el = ev.currentTarget as HTMLDivElement
@@ -368,21 +380,21 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
       },
     }, [
       ...lines.map((l) =>
-        h('div', { class: `Prompt_Line is-${l.kind}` }, [
-          h('span', { class: 'Prompt_Sign' }, sign[l.kind]),
+        h('div', { className: `Prompt_Line is-${l.kind}` }, [
+          h('span', { className: 'Prompt_Sign' }, sign[l.kind]),
           ...(l.kind == 'in' ? [l.text] : linked(l.text, ids, open)),
         ])
       ),
       typing
-        ? h('div', { class: 'Prompt_Line is-in' }, [
-          h('span', { class: 'Prompt_Sign' }, '$ '),
+        ? h('div', { className: 'Prompt_Line is-in' }, [
+          h('span', { className: 'Prompt_Sign' }, '$ '),
           typing,
-          h('b', { class: 'Caret' }),
+          h('b', { className: 'Caret' }),
         ])
         : null,
     ]),
     h('form', {
-      class: 'Prompt_Form',
+      className: 'Prompt_Form',
       onSubmit: (ev: Event) => {
         ev.preventDefault()
         if (!line.trim()) return
@@ -392,16 +404,16 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
         set('')
       },
     }, [
-      h('span', { class: 'Prompt_Sign' }, '$ yak '),
+      h('span', { className: 'Prompt_Sign' }, '$ yak '),
       h('input', {
-        class: 'Prompt_Input',
+        className: 'Prompt_Input',
         value: line,
         'aria-label': 'Type a yak command',
         placeholder: 'Type a command',
         autocomplete: 'off',
         autocapitalize: 'none',
         enterKeyHint: 'go',
-        spellcheck: false,
+        spellCheck: false,
         onInput: (ev: Event) =>
           set((ev.currentTarget as HTMLInputElement).value),
         onKeyDown: (ev: KeyboardEvent) => {
@@ -410,7 +422,7 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
           walk(ev.key == 'ArrowUp' ? -1 : 1)
         },
       }),
-      h('button', { class: 'Prompt_Run', type: 'submit' }, 'Run'),
+      h('button', { className: 'Prompt_Run', type: 'submit' }, 'Run'),
     ]),
   ])
 }
@@ -545,32 +557,32 @@ let Figure: FunctionComponent<Ctx & { pen: Pen; shown: () => void }> = (
     if (!m?.layout || !m.view) return
     m.show(zoom(m.layout, m.view, by, [.5, .5]))
   }
-  return h('figure', { class: 'Figure' }, [
-    h('div', { class: 'Figure_Bar' }, [
-      h('span', { class: 'Figure_Head' }, [
-        h('b', { class: 'Figure_Label' }, 'fig. 1'),
+  return h('figure', { className: 'Figure' }, [
+    h('div', { className: 'Figure_Bar' }, [
+      h('span', { className: 'Figure_Head' }, [
+        h('b', { className: 'Figure_Label' }, 'fig. 1'),
         ' · the graph in this tab',
       ]),
-      h('span', { class: 'Figure_State' }, `${yak.rows().length} entities`),
-      h('div', { class: 'Figure_Zoom' }, [
+      h('span', { className: 'Figure_State' }, `${yak.rows().length} entities`),
+      h('div', { className: 'Figure_Zoom' }, [
         h('button', {
           type: 'button',
-          class: 'Figure_Scale',
+          className: 'Figure_Scale',
           'aria-label': 'Zoom out',
           disabled: !closer,
           onClick: () => scale(1 / 1.7),
         }, '−'),
         h('button', {
           type: 'button',
-          class: 'Figure_Scale',
+          className: 'Figure_Scale',
           'aria-label': 'Zoom in',
           onClick: () => scale(1.7),
         }, '+'),
       ]),
     ]),
-    h('div', { class: 'Figure_Sheet', ref: sheet }),
+    h('div', { className: 'Figure_Sheet', ref: sheet }),
     h('form', {
-      class: 'Figure_Query',
+      className: 'Figure_Query',
       onSubmit: (ev: Event) => {
         ev.preventDefault()
         ask(asked)
@@ -578,34 +590,36 @@ let Figure: FunctionComponent<Ctx & { pen: Pen; shown: () => void }> = (
     }, [
       h('label', null, 'Showing'),
       h('input', {
-        class: 'Figure_Input',
+        className: 'Figure_Input',
         value: asked,
         autocapitalize: 'none',
         autocomplete: 'off',
         enterKeyHint: 'go',
         'aria-label': 'The query the drawing shows',
-        spellcheck: false,
+        spellCheck: false,
         onInput: (ev: Event) =>
           setAsked((ev.currentTarget as HTMLInputElement).value),
       }),
-      h('button', { class: 'Figure_Show', type: 'submit' }, 'Show'),
+      h('button', { className: 'Figure_Show', type: 'submit' }, 'Show'),
     ]),
     h(
       'p',
-      { class: 'Figure_Wider' },
+      { className: 'Figure_Wider' },
       WIDER.map(([name, q]) =>
         h('button', {
           type: 'button',
-          class: [q == asked ? 'is-on' : '', 'Figure_Choice'].filter(Boolean)
+          className: [q == asked ? 'is-on' : '', 'Figure_Choice'].filter(
+            Boolean,
+          )
             .join(' '),
           onClick: () => ask(q),
         }, name)
       ),
     ),
-    fault ? h('p', { class: 'Figure_Fault' }, fault) : null,
-    h('svg', { class: 'Leader', ref: leader, 'aria-hidden': 'true' }, [
-      h('path', { class: 'Leader_Line' }),
-      h('circle', { class: 'Leader_Dot', r: 3 }),
+    fault ? h('p', { className: 'Figure_Fault' }, fault) : null,
+    h('svg', { className: 'Leader', ref: leader, 'aria-hidden': 'true' }, [
+      h('path', { className: 'Leader_Line' }),
+      h('circle', { className: 'Leader_Dot', r: 3 }),
     ]),
   ])
 }

@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A wake's two faces: a title derived from its recipient and clock, and a
 // quiet summary that makes the scheduled moment and people visible.
 import { type Ent } from '../../types.ts'

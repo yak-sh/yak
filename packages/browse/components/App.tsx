@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { InspectPage, PagePart, PastPage } from './inspect.tsx'
 import { hosting } from '../hosting.ts'
 import { back, forward, left, scrolledTo } from '../history.ts'
@@ -10,7 +10,7 @@ import {
   schemaAt,
 } from '../navigation.ts'
 import { addressId, entityPath, searchAt } from '../url.ts'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef } from 'react'
 import { walk } from '@yaks/ux/keys'
 import { idOf } from '../types.ts'
 import { config, ent, entityRead, mode, myClient, useHold } from '../live.ts'
@@ -176,7 +176,7 @@ export let Page = ({ at }: { at: string }) => {
             ? (
               <>
                 <Shell.Icon>
-                  <Icon class='Shell_Glyph' name='search' size={16} />
+                  <Icon className='Shell_Glyph' name='search' size={16} />
                 </Shell.Icon>
                 Search
               </>
@@ -185,7 +185,7 @@ export let Page = ({ at }: { at: string }) => {
             ? (
               <>
                 <Shell.Icon>
-                  <Icon class='Shell_Glyph' name='plus' size={16} />
+                  <Icon className='Shell_Glyph' name='plus' size={16} />
                 </Shell.Icon>
                 New
               </>
@@ -193,7 +193,7 @@ export let Page = ({ at }: { at: string }) => {
             : named && (
               <>
                 <Shell.Icon>
-                  <Icon class='Shell_Glyph' name={named.icon} size={16} />
+                  <Icon className='Shell_Glyph' name={named.icon} size={16} />
                 </Shell.Icon>
                 {named.name}
               </>
@@ -250,7 +250,7 @@ export let Page = ({ at }: { at: string }) => {
       </Shell.Bar>
       <Viewport
         id={`browse:${at}`}
-        class='Shell_Body'
+        className='Shell_Body'
         start={left.value}
         onScroll={scrolledTo}
       >

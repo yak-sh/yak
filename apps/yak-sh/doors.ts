@@ -7,8 +7,14 @@
 // each interface one change; the rules band shows what rules and effects make
 // of a write, the declarations that did it beside each beat, and the outbox
 // an effect handed a letter to.
-import { type FunctionComponent, h } from 'preact'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import {
+  createElement as h,
+  type FunctionComponent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { Prose, words } from './prose.ts'
 import {
   type Layout,
@@ -85,17 +91,17 @@ let Declared = (
         i < all.length - 1 ? ',' : ''
       }`
     )
-  return h('div', { class: 'Declared', 'data-declared': name }, [
-    h('div', { class: 'Declared_Bar' }, [
-      h('b', { class: 'Declared_Kind' }, def.rule ? 'rule' : 'effect'),
+  return h('div', { className: 'Declared', 'data-declared': name }, [
+    h('div', { className: 'Declared_Bar' }, [
+      h('b', { className: 'Declared_Kind' }, def.rule ? 'rule' : 'effect'),
       ` ${from == 'shop' ? "this app's" : `${from}'s`} vocab.json`,
     ]),
     h(
       'pre',
-      { class: 'Declared_Code' },
+      { className: 'Declared_Code' },
       [`  ${JSON.stringify(name)}: {`, ...said, '  }'].join('\n'),
     ),
-    h('p', { class: 'Declared_Text' }, String(def.description ?? '')),
+    h('p', { className: 'Declared_Text' }, String(def.description ?? '')),
   ])
 }
 
@@ -244,61 +250,65 @@ let band = (
     let d = yak.declared(name)
     return d?.def ? [{ name, from: d.from, def: d.def }] : []
   })
-  return h('section', { class: 'Band Doors', 'data-eid': key }, [
-    h('div', { class: 'Doors_Text' }, [
-      h('div', { class: 'Band_Text' }, [
+  return h('section', { className: 'Band Doors', 'data-eid': key }, [
+    h('div', { className: 'Doors_Text' }, [
+      h('div', { className: 'Band_Text' }, [
         h('h2', null, words(text(e, 'doc', 'title'))),
         h(Prose, { source: head }),
       ]),
       h(
         'ol',
-        { class: 'Beats', ref: list, 'aria-label': 'Each turn, in order' },
+        { className: 'Beats', ref: list, 'aria-label': 'Each turn, in order' },
         beats.map((b, i) =>
           h('li', {
-            class: [turns.done(key, i) && i <= upto ? 'on' : undefined, 'Beat']
+            className: [
+              turns.done(key, i) && i <= upto ? 'on' : undefined,
+              'Beat',
+            ]
               .filter(Boolean).join(' '),
             'data-door': b.kind,
             key: i,
           }, [
-            h('span', { class: 'Dot' }),
-            h('b', { class: 'Beat_Title' }, words(b.title)),
+            h('span', { className: 'Dot' }),
+            h('b', { className: 'Beat_Title' }, words(b.title)),
             h(Prose, { source: b.prose }),
             b.kind == 'outbox' ? null : h(
               'code',
-              { class: 'Beat_Code' },
+              { className: 'Beat_Code' },
               (SIGNS[b.kind] ?? '') + b.line.split('\n').at(-1),
             ),
           ])
         ),
       ),
     ]),
-    h('figure', { class: 'Doors_Figure', ref: figure }, [
+    h('figure', { className: 'Doors_Figure', ref: figure }, [
       h('div', {
-        class: 'Doors_Desk',
+        className: 'Doors_Desk',
         style: desk
-          ? `--desk: ${desk.width} / ${desk.height}; --drawing: ${
-            layout!.width
-          } / ${layout!.height}; --column: ${
-            DESK.column / desk.width * 100
-          }%; --sheet: ${
-            layout!.width / desk.width * 100
-          }%; --slots: ${slots}; --gap: ${DESK.gap / desk.height * 100}%`
+          ? {
+            '--desk': `${desk.width} / ${desk.height}`,
+            '--drawing': `${layout!.width} / ${layout!.height}`,
+            '--column': `${DESK.column / desk.width * 100}%`,
+            '--sheet': `${layout!.width / desk.width * 100}%`,
+            '--slots': slots,
+            '--gap': `${DESK.gap / desk.height * 100}%`,
+          }
           : undefined,
       }, [
-        h('div', { class: 'Doors_Sheet' }, [
-          h('div', { class: 'Doors_Drawing', ref: sheet }),
+        h('div', { className: 'Doors_Sheet' }, [
+          h('div', { className: 'Doors_Drawing', ref: sheet }),
         ]),
         path
           ? h(
             'svg',
             {
-              class: 'Doors_Wire',
-              style: held ? '--p: 1' : undefined,
+              className: 'Doors_Wire',
+              style: held ? { '--p': 1 } : undefined,
               viewBox: `0 0 ${desk!.width} ${desk!.height}`,
               'aria-hidden': 'true',
             },
             h('path', {
-              class: 'Doors_Path',
+              className: 'Doors_Path',
               d: path,
               key: path,
               pathLength: 1,
@@ -307,7 +317,7 @@ let band = (
           : null,
         h(
           'div',
-          { class: 'Windows' },
+          { className: 'Windows' },
           windows.map(({ b, d, i, out, row }) =>
             h(Look, {
               kind: b.kind,
@@ -317,20 +327,25 @@ let band = (
               row,
               find,
               id: short,
-              class: i == last?.i ? 'is-last' : undefined,
-              style: `--slot: ${place[i] + 1}${
-                i == last?.i && held ? '; --p: 1' : ''
-              }`,
+              className: i == last?.i ? 'is-last' : undefined,
+              style: {
+                '--slot': place[i] + 1,
+                ...(i == last?.i && held ? { '--p': 1 } : {}),
+              },
               key: i,
             })
           ),
         ),
       ]),
       declared.length
-        ? h('div', { class: 'Declares' }, declared.map((d) => h(Declared, d)))
+        ? h(
+          'div',
+          { className: 'Declares' },
+          declared.map((d) => h(Declared, d)),
+        )
         : null,
-      h('figcaption', { class: 'Doors_Caption' }, [
-        h('span', { class: 'No' }, no),
+      h('figcaption', { className: 'Doors_Caption' }, [
+        h('span', { className: 'No' }, no),
         ...words(caption),
       ]),
     ]),

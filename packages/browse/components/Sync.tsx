@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The standing sync indicator (T-21441). An optimistic cache shows every local
 // edit as landed the instant it is typed; when the server is unreachable the
 // write sits undelivered in the outbox (live.ts) with nothing on screen to say
@@ -11,7 +11,7 @@
 // waited LATE, so a save that settles in a few frames never flashes the badge.
 // While the server is away it says, calmly, that the page is reconnecting,
 // until the socket opens again.
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useState } from 'react'
 import { away, clearRefusal, outboxWrites, refused } from '../live.ts'
 import { block } from '@yaks/ui'
 

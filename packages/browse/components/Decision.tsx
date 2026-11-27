@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { DecisionForm } from '@yaks/task/form'
 import { showing, shown } from '@yaks/task'
 import type { Bundle } from '@yaks/graph'

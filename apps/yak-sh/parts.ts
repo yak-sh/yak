@@ -3,8 +3,7 @@
 // right. A part's body is markdown: the heading's words, a rule, then what it
 // holds, where an `sh` block is commands to copy, a `ts` block is a file, and a
 // `###` heading starts a numbered item. The title block signs the page off.
-import { type FunctionComponent, h } from 'preact'
-import { useState } from 'preact/hooks'
+import { createElement as h, type FunctionComponent, useState } from 'react'
 import { Prose, words } from './prose.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Ctx } from './views.ts'
@@ -15,13 +14,13 @@ import { Logo } from './idle.ts'
 /** A command with a button that copies it. */
 export let Copy = ({ line }: { line: string }) => {
   let [done, set] = useState(false)
-  return h('div', { class: 'Copy' }, [
-    h('code', { class: 'Copy_Code' }, [
-      h('span', { class: 'Copy_Sign' }, '$ '),
+  return h('div', { className: 'Copy' }, [
+    h('code', { className: 'Copy_Code' }, [
+      h('span', { className: 'Copy_Sign' }, '$ '),
       line,
     ]),
     h('button', {
-      class: 'Copy_Button',
+      className: 'Copy_Button',
       type: 'button',
       onClick: () =>
         navigator.clipboard?.writeText(line).then(() => {
@@ -71,13 +70,13 @@ let piece = (p: Piece) =>
   p.kind == 'md' ? h(Prose, { source: p.text }) : p.kind == 'sh'
     ? h(
       'div',
-      { class: 'Part_Lines' },
+      { className: 'Part_Lines' },
       p.lines.map((line) => h(Copy, { line })),
     )
     : p.kind == 'file'
-    ? h('div', { class: 'File' }, [
-      h('div', { class: 'File_Bar' }, p.name),
-      h('pre', { class: 'File_Source' }, h('code', null, p.text)),
+    ? h('div', { className: 'File' }, [
+      h('div', { className: 'File_Bar' }, p.name),
+      h('pre', { className: 'File_Source' }, h('code', null, p.text)),
     ])
     : null
 
@@ -96,10 +95,10 @@ let held = (pieces: Piece[]) => {
     items.length
       ? h(
         'ol',
-        { class: 'Part_List' },
+        { className: 'Part_List' },
         items.map((it) =>
-          h('li', { class: 'Part_Item' }, [
-            h('h3', { class: 'Part_Title' }, words(it.title)),
+          h('li', { className: 'Part_Item' }, [
+            h('h3', { className: 'Part_Title' }, words(it.title)),
             ...it.pieces.map(piece),
           ])
         ),
@@ -122,14 +121,18 @@ export let numbered = (yak: Ctx['yak'], eid: string) =>
 let Part: FunctionComponent<Ctx & { e: Bundle }> = ({ e, yak }) => {
   let eid = e.entity.eid
   let { head, pieces } = partOf(text(e, 'doc', 'body'))
-  return h('section', { class: 'Part', id: ANCHORS[eid], 'data-eid': eid }, [
-    h('div', { class: 'Part_Head' }, [
-      h('span', { class: 'Bubble' }, String(numbered(yak, eid))),
-      h('h2', null, words(text(e, 'doc', 'title'))),
-      h(Prose, { source: head }),
-    ]),
-    h('div', { class: 'Part_Body' }, held(pieces)),
-  ])
+  return h(
+    'section',
+    { className: 'Part', id: ANCHORS[eid], 'data-eid': eid },
+    [
+      h('div', { className: 'Part_Head' }, [
+        h('span', { className: 'Bubble' }, String(numbered(yak, eid))),
+        h('h2', null, words(text(e, 'doc', 'title'))),
+        h(Prose, { source: head }),
+      ]),
+      h('div', { className: 'Part_Body' }, held(pieces)),
+    ],
+  )
 }
 
 /** The title block: the site's name and line, then `- term: value` lines. */
@@ -139,25 +142,25 @@ let Block: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) => {
     let m = l.match(/^- ([^:]+): (.*)$/)
     return m ? [[m[1], m[2]]] : []
   })
-  return h('footer', { class: 'Block', 'data-eid': e.entity.eid }, [
-    h('div', { class: 'Block_Sign' }, [
+  return h('footer', { className: 'Block', 'data-eid': e.entity.eid }, [
+    h('div', { className: 'Block_Sign' }, [
       h(Logo, {
-        class: 'Block_Logo',
+        className: 'Block_Logo',
         sizes: '(max-width: 760px) 60vw, 30vw',
         width: 440,
         height: 440,
         loading: 'lazy',
       }),
-      h('strong', { class: 'Block_Name' }, words(text(e, 'doc', 'title'))),
-      h('span', { class: 'Block_Line' }, words(line)),
+      h('strong', { className: 'Block_Name' }, words(text(e, 'doc', 'title'))),
+      h('span', { className: 'Block_Line' }, words(line)),
     ]),
     h(
       'div',
-      { class: 'Block_Facts' },
+      { className: 'Block_Facts' },
       facts.map(([term, value]) =>
         h('dl', null, [
-          h('dt', { class: 'Block_Key' }, term),
-          h('dd', { class: 'Block_Value' }, h(Prose, { source: value })),
+          h('dt', { className: 'Block_Key' }, term),
+          h('dd', { className: 'Block_Value' }, h(Prose, { source: value })),
         ])
       ),
     ),

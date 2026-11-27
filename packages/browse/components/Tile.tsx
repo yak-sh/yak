@@ -1,18 +1,18 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The Tile composition contract. A caller may adorn any tile before or
 // after its own face, and hear its ordinary activation, without knowing which
 // entity-specific renderer the registry chose.
-import { type ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 import { type Ent } from '../types.ts'
 import { clickProps } from './nav.tsx'
 import { title } from './title.tsx'
 import { block, el } from '@yaks/ui'
 
 export type TileSlots = {
-  before?: ComponentChildren
-  title?: ComponentChildren
-  body?: ComponentChildren
-  after?: ComponentChildren
+  before?: ReactNode
+  title?: ReactNode
+  body?: ReactNode
+  after?: ReactNode
 }
 
 export type TileProps = {
@@ -27,7 +27,7 @@ export let TileFrame = block('div', 'Row', { Head: 'span', Title: 'span' })
 
 let Part = el('span', 'TileSlot')
 export let TileSlot = (
-  { name, children }: { name: keyof TileSlots; children: ComponentChildren },
+  { name, children }: { name: keyof TileSlots; children: ReactNode },
 ) => <Part mod={name}>{children}</Part>
 
 export let slot = (slots: TileSlots | undefined, name: keyof TileSlots) =>

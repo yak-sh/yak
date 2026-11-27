@@ -1,5 +1,5 @@
 // A Preact render boundary: shallow-equal props sleep, owned signals wake it.
-import { createElement, type FunctionComponent } from 'preact'
+import { createElement, type FunctionComponent } from 'react'
 
 let differs = (a: object, b: object) => {
   for (let k in a) {

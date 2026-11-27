@@ -4,9 +4,12 @@
 // as they scroll back (#12, drawn as bundle mockup 8). Reached, the band makes
 // its own write, a letter from your agent, and what its effect did after the
 // commit is shown: the outbox it was handed to, and a toast once it was sent.
-import { type FunctionComponent, h } from 'preact'
-import { useRef } from 'preact/hooks'
-import type { RefObject } from 'preact'
+import {
+  createElement as h,
+  type FunctionComponent,
+  type RefObject,
+  useRef,
+} from 'react'
 import { Prose, words } from './prose.ts'
 import { human } from '@yaks/id'
 import { INSIDE, type Phase, PHASES } from '@yaks/graph/plugin'
@@ -22,7 +25,7 @@ import { proseOf, scriptOf, shown } from './site.ts'
 type Band = FunctionComponent<Ctx & { e: Bundle }>
 
 let Head = ({ e }: { e: Bundle }) =>
-  h('div', { class: 'Band_Text' }, [
+  h('div', { className: 'Band_Text' }, [
     h('h2', null, words(text(e, 'doc', 'title'))),
     h(Prose, { source: proseOf(text(e, 'doc', 'body')) }),
   ])
@@ -171,11 +174,11 @@ let valued = (v: unknown) =>
   typeof v == 'string'
     ? h(
       'span',
-      { class: 's' },
+      { className: 's' },
       JSON.stringify(shortly(v, EID.test(v) ? 8 : 34)),
     )
     : typeof v == 'number'
-    ? h('span', { class: 'num' }, String(v))
+    ? h('span', { className: 'num' }, String(v))
     : h('span', null, shortly(JSON.stringify(v) ?? '', 34))
 
 /** The bundle as its source, mockup 8's: each key a component's name and
@@ -198,9 +201,9 @@ export let Source = (
     let was = changed.get(key)
     if (phase == 'effect') return ['an effect wrote this after the commit']
     return was === undefined
-      ? [h('b', { class: 'Source_Change' }, phase), ' wrote this']
+      ? [h('b', { className: 'Source_Change' }, phase), ' wrote this']
       : [
-        h('b', { class: 'Source_Change' }, phase),
+        h('b', { className: 'Source_Change' }, phase),
         ' turned ',
         valued(was),
         ' into this',
@@ -209,18 +212,18 @@ export let Source = (
   // A line of the source; the first of a component's lines names it.
   let line = (cls: string, code: unknown[], note: unknown[] = [], key = '') =>
     h('div', {
-      class: `R ${cls}`.trim(),
+      className: `R ${cls}`.trim(),
       key,
       'data-row': key && !key.includes('.') ? key : undefined,
     }, [
-      h('div', { class: 'c Source_Cell' }, code as never),
-      h('div', { class: 'n Source_Cell' }, note as never),
+      h('div', { className: 'c Source_Cell' }, code as never),
+      h('div', { className: 'n Source_Cell' }, note as never),
     ])
-  let ok = h('span', { class: 'ok' }, ' ✓')
+  let ok = h('span', { className: 'ok' }, ' ✓')
   let lines = rows.flatMap((r, ri) => {
     let pad = ' '.repeat(wide - r.key.length)
     let props = r.props.map(([p, v], i) => [
-      h('span', { class: 'pn' }, p),
+      h('span', { className: 'pn' }, p),
       ': ',
       valued(v),
       i < r.props.length - 1 ? ',' : '',
@@ -233,7 +236,7 @@ export let Source = (
     ].join(' ')
     let alias = r.key == 'entity' && String(r.props[0]?.[1]).startsWith('$')
     let note = [
-      h('code', { class: 'Source_Label' }, r.name),
+      h('code', { className: 'Source_Label' }, r.name),
       r.stamped
         ? ': written by apply() at stamp, not by you'
         : r.key == 'entity'
@@ -254,7 +257,7 @@ export let Source = (
       let said = !changed.has(r.key)
         ? now ?? (i == 0 ? note : [])
         : i == 0
-        ? [h('code', { class: 'Source_Label' }, r.name), ': ', ...now!]
+        ? [h('code', { className: 'Source_Label' }, r.name), ': ', ...now!]
         : []
       return line(`${cls}${now ? ' is-now' : ''}`, code, said, key)
     }
@@ -274,9 +277,9 @@ export let Source = (
       )
     )
   })
-  let brace = (c: string) => h('span', { class: 'brace' }, c)
+  let brace = (c: string) => h('span', { className: 'brace' }, c)
   return h('div', {
-    class: [
+    className: [
       'Source',
       ...state.passed.map((p) => `p-${p}`),
       phase ? `now-${phase}` : '',
@@ -299,25 +302,27 @@ export let Source = (
 
 /** The notice that a letter was sent, in the corner of the window. */
 export let Toast = ({ to, title }: { to: string; title: string }) =>
-  h('div', { class: 'Toast', role: 'status' }, [
-    h('b', { class: 'Toast_Title' }, `Email sent to ${to}`),
-    h('span', { class: 'Toast_Subject' }, title),
+  h('div', { className: 'Toast', role: 'status' }, [
+    h('b', { className: 'Toast_Title' }, `Email sent to ${to}`),
+    h('span', { className: 'Toast_Subject' }, title),
   ])
 
 /** What the mail service the letter's effect hands it to did with it, in
  * plain words: each time the effect handed it over, and what it answered. */
 let Outbox = ({ tries }: { tries: Try[] }) =>
-  h('div', { class: 'Outbox' }, [
-    h('div', { class: 'Outbox_Bar' }, [
-      h('b', { class: 'Outbox_Title' }, 'outbox'),
+  h('div', { className: 'Outbox' }, [
+    h('div', { className: 'Outbox_Bar' }, [
+      h('b', { className: 'Outbox_Title' }, 'outbox'),
       ' the mail service in this tab, which sends nothing on',
     ]),
     h(
       'ol',
-      { class: 'Outbox_Events' },
+      { className: 'Outbox_Events' },
       happened(tries).map((ev) =>
         h('li', {
-          class: [`is-${ev.kind}`, 'Outbox_Event'].filter(Boolean).join(' '),
+          className: [`is-${ev.kind}`, 'Outbox_Event'].filter(Boolean).join(
+            ' ',
+          ),
         }, ev.line)
       ),
     ),
@@ -338,9 +343,10 @@ export let Phases = (
 ) => {
   let phase = (p: Phase) =>
     h('li', {
-      class: [state.phase(p, PHASES.indexOf(p)) || undefined, 'Phase'].filter(
-        Boolean,
-      ).join(' '),
+      className: [state.phase(p, PHASES.indexOf(p)) || undefined, 'Phase']
+        .filter(
+          Boolean,
+        ).join(' '),
       // A phase clicked comes to the reading line, so the write runs to it.
       onClick: (ev: Event) =>
         (ev.currentTarget as Element).scrollIntoView?.({
@@ -350,12 +356,12 @@ export let Phases = (
       'data-phase': p,
       key: p,
     }, [
-      h('span', { class: 'Dot' }),
-      h('b', { class: 'Phase_Name' }, p),
+      h('span', { className: 'Dot' }),
+      h('b', { className: 'Phase_Name' }, p),
       h(Prose, { source: DOES[p] }),
       h(
         'span',
-        { class: 'Skip' },
+        { className: 'Skip' },
         p == 'audit'
           ? "This write committed, so audit didn't run."
           : "This write didn't run this phase.",
@@ -365,26 +371,26 @@ export let Phases = (
   let open = PHASES.indexOf(INSIDE[0])
   let shut = open + INSIDE.length
   return h('ol', {
-    class: 'Phases',
+    className: 'Phases',
     ref: list,
     'aria-label': 'The write, and the phases of apply() it ran',
   }, [
     h('li', {
-      class: [made ? 'Call on' : 'Call', 'Phase'].filter(Boolean).join(' '),
+      className: [made ? 'Call on' : 'Call', 'Phase'].filter(Boolean).join(' '),
       key: 'call',
     }, [
-      h('span', { class: 'Dot' }),
-      h('b', { class: 'Phase_Name' }, 'the write'),
-      h('code', { class: 'Call_Code' }, [
+      h('span', { className: 'Dot' }),
+      h('b', { className: 'Phase_Name' }, 'the write'),
+      h('code', { className: 'Call_Code' }, [
         call.kind == 'agent' ? SIGNS.mcp : SIGNS[call.kind] ?? SIGNS.sh,
         call.text,
       ]),
     ]),
     ...PHASES.slice(0, open).map(phase),
-    h('li', { class: 'Tx Phase', key: 'tx' }, [
-      h('span', { class: 'Tx_Name' }, 'one transaction'),
+    h('li', { className: 'Tx Phase', key: 'tx' }, [
+      h('span', { className: 'Tx_Name' }, 'one transaction'),
       h('ol', {
-        class: 'Tx_Phases',
+        className: 'Tx_Phases',
         'aria-label':
           'Inside one transaction: all of these are stored, or none',
       }, PHASES.slice(open, shut).map(phase)),
@@ -435,24 +441,24 @@ export let Stack: Band = (ctx) => {
   // The command the write came from: the band's own until a write is made.
   let own = scriptOf(body).find((c) => c.kind == 'mcp')
   let call = said ?? { kind: 'agent', text: own ? shown(own) : '' }
-  return h('section', { class: 'Band Stack', 'data-eid': e.entity.eid }, [
-    h('div', { class: 'Stack_Text' }, [
+  return h('section', { className: 'Band Stack', 'data-eid': e.entity.eid }, [
+    h('div', { className: 'Stack_Text' }, [
       h(Head, { e }),
       h(Phases, { state, call, made: !!eid && upto >= -1, list }),
     ]),
-    h('figure', { class: 'Stack_Figure', ref: drawing }, [
+    h('figure', { className: 'Stack_Figure', ref: drawing }, [
       rows.length ? h(Source, { rows, changed, state }) : null,
       tries.length ? h(Outbox, { tries }) : null,
       h(
         'figcaption',
-        { class: 'Stack_Caption' },
+        { className: 'Stack_Caption' },
         named
           ? [
-            h('span', { class: 'No' }, 'Fig. 2'),
+            h('span', { className: 'No' }, 'Fig. 2'),
             `${called}, the last entity written, as the bundle that wrote it: each phase you pass changes it as apply() did.`,
           ]
           : [
-            h('span', { class: 'No' }, 'Fig. 2'),
+            h('span', { className: 'No' }, 'Fig. 2'),
             'Type a command above, and the entity it writes is drawn here.',
           ],
       ),

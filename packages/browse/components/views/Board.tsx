@@ -1,7 +1,7 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { adopt, parse } from '@yaks/query'
 import { vocab } from '../../types.ts'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { type Change, type Ent, statusOf } from '../../types.ts'
 import {
   boardTally,
@@ -126,7 +126,7 @@ export let QuickAdd = (
         </Chips>
       )}
       <Field
-        class='Board_New'
+        className='Board_New'
         lines
         elRef={box}
         placeholder='P1 .filed.domain=Eng title…'
@@ -364,7 +364,10 @@ export let Board = ({ e }: { e: Ent }) => {
           : undefined
         let total = counts?.[s] ?? win?.total ?? list.length
         let bound = windowOf(parseQuery(query)).limit
-        let more = Math.max(0, Math.min(total, bound ?? Infinity) - list.length)
+        let more = Math.max(
+          0,
+          Math.min(total, bound ?? Infinity) - list.length,
+        )
         let grow = () => {
           if (!read.ready || !more) return
           setLimits((ls) => ({
@@ -382,7 +385,7 @@ export let Board = ({ e }: { e: Ent }) => {
             onDrop={(ev: DragEvent & { currentTarget: HTMLElement }) =>
               drop(ev, s)}
           >
-            <ColName onDblClick={() => fold(s)}>
+            <ColName onDoubleClick={() => fold(s)}>
               <Dot status={s} />
               {s}
               <Count>

@@ -1,8 +1,7 @@
 // The page's words: each mention of yaks.app in its prose, titles and
 // captions is a link to yaks.app that opens in a new tab. Code and terminal
 // lines keep theirs as typed, where a link would break the command.
-import { h } from 'preact'
-import { useMemo } from 'preact/hooks'
+import { createElement as h, useMemo } from 'react'
 import { parse, render, type Token } from '@yaks/markdown'
 import { AWAY } from '@yaks/markdown/away'
 import type { H } from '@yaks/render'
@@ -16,7 +15,9 @@ let MENTION = /(?<![\w.-])yaks\.app(?![\w/-]|\.\w)/
 /** A line of text with each mention of yaks.app a link to it. */
 export let words = (line: string, cls = 'Body_Link') =>
   line.split(MENTION).flatMap((part, i) => [
-    ...i ? [h('a', { class: cls, href: YAKS_APP, ...AWAY }, 'yaks.app')] : [],
+    ...i
+      ? [h('a', { className: cls, href: YAKS_APP, ...AWAY }, 'yaks.app')]
+      : [],
     ...part ? [part] : [],
   ])
 

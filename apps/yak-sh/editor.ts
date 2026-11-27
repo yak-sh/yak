@@ -3,8 +3,7 @@
 // properties that the reader can change. Opening it and changing it are typed
 // into the prompt, so a click and a command are the same act, and a change
 // redraws whatever on the page is drawn from that entity.
-import { type FunctionComponent, h } from 'preact'
-import { useState } from 'preact/hooks'
+import { createElement as h, type FunctionComponent, useState } from 'react'
 import { quoted } from '@yaks/cli/grammar'
 import { human } from '@yaks/id'
 import { stringify } from '@yaks/query'
@@ -67,10 +66,10 @@ let Field: FunctionComponent<
     if (v !== value && !(typeof v == 'number' && isNaN(v))) set(v)
   }
   return h(long ? 'textarea' : 'input', {
-    class: 'Editor_Field',
+    className: 'Editor_Field',
     'aria-label': name,
     value: shown,
-    spellcheck: false,
+    spellCheck: false,
     inputMode: typeof value == 'number' ? 'decimal' : undefined,
     onInput: (ev: Event) => write((ev.currentTarget as HTMLInputElement).value),
     onBlur: done,
@@ -97,14 +96,14 @@ export let Editor: FunctionComponent<Ctx> = (ctx) => {
   )
   let title = String((b.doc as { title?: string } | undefined)?.title ?? '')
   return h('aside', {
-    class: 'Editor',
+    className: 'Editor',
     'aria-label': `${human(yak.vocab)(b)} in the graph in this tab`,
   }, [
-    h('div', { class: 'Editor_Bar' }, [
+    h('div', { className: 'Editor_Bar' }, [
       h('b', null, human(yak.vocab)(b)),
-      h('span', { class: 'Editor_Title' }, title),
+      h('span', { className: 'Editor_Title' }, title),
       h('button', {
-        class: 'Editor_Close',
+        className: 'Editor_Close',
         type: 'button',
         'aria-label': 'Close',
         onClick: () => figure.pick(undefined),
@@ -112,18 +111,18 @@ export let Editor: FunctionComponent<Ctx> = (ctx) => {
     ]),
     h(
       'p',
-      { class: 'Editor_Hint' },
+      { className: 'Editor_Hint' },
       'Change a value and the prompt runs graph apply. It changes the graph in this tab only, and reloading starts over.',
     ),
     ...comps.map((comp) => {
       let value = b[comp] as Record<string, unknown>
       let props = yak.vocab.props(comp)
       let fixed = !!yak.vocab.comp(comp)?.mark
-      return h('section', { class: 'Editor_Comp', key: comp }, [
-        h('h3', { class: 'Editor_Name' }, `${comp}{${props.join(', ')}}`),
+      return h('section', { className: 'Editor_Comp', key: comp }, [
+        h('h3', { className: 'Editor_Name' }, `${comp}{${props.join(', ')}}`),
         h(
           'dl',
-          { class: 'Editor_Fields' },
+          { className: 'Editor_Fields' },
           Object.entries(value).map(([prop, v]) => {
             // A property the vocabulary declares, not one computed on read
             // such as a task's status, and not a stamped mark.
@@ -132,15 +131,15 @@ export let Editor: FunctionComponent<Ctx> = (ctx) => {
               !declared?.computed && !declared?.stamped &&
               (typeof v == 'string' || typeof v == 'number')
             let other = typeof v == 'string' && yak.row(v)
-            return h('div', { class: 'Editor_Prop', key: prop }, [
-              h('dt', { class: 'Editor_Key' }, prop),
+            return h('div', { className: 'Editor_Prop', key: prop }, [
+              h('dt', { className: 'Editor_Key' }, prop),
               h(
                 'dd',
-                { class: 'Editor_Value' },
+                { className: 'Editor_Value' },
                 other
                   ? h('button', {
                     type: 'button',
-                    class: 'Editor_Ref',
+                    className: 'Editor_Ref',
                     onClick: () => opener(ctx)(v as string),
                   }, human(yak.vocab)(other))
                   : open
@@ -149,7 +148,7 @@ export let Editor: FunctionComponent<Ctx> = (ctx) => {
                     name: `${comp}.${prop}`,
                     set: (next) => term.enter(patchLine(ref, comp, prop, next)),
                   })
-                  : h('code', { class: 'Editor_Code' }, JSON.stringify(v)),
+                  : h('code', { className: 'Editor_Code' }, JSON.stringify(v)),
               ),
             ])
           }),

@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { type Ent, idOf, statusOf } from '../../types.ts'
 import { ent, pending } from '../../live.ts'
 import { el } from '@yaks/ui'
@@ -35,7 +35,7 @@ export let Md = ({ e }: { e: Ent }) => {
   return (
     <Pre>
       <code
-        class='hljs language-markdown'
+        className='hljs language-markdown'
         dangerouslySetInnerHTML={{ __html: lit.html }}
       />
     </Pre>

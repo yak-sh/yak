@@ -1,8 +1,8 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The shared visible face of an addressed subscription refusal. The server
 // supplies the durable reason/reference; this component keeps retry on the same
 // stable subscription identity so success replaces the failure normally.
-import { useState } from 'preact/hooks'
+import { useState } from 'react'
 import { retrySubscription, type SubscriptionRead } from '../live.ts'
 import { block } from '@yaks/ui'
 

@@ -1,8 +1,13 @@
 // What the page's views share: a property of a bundle as text, drawing
 // again whenever something they watch tells them to, hearing what is clicked
 // inside a drawing, and how far down a list the reader has scrolled.
-import { type RefObject } from 'preact'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import {
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import type { Bundle } from '@yaks/graph'
 
 /** Draw again whenever `listen` tells. */

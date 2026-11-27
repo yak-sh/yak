@@ -1,6 +1,6 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { entityPath } from '../url.ts'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'react'
 import { signal } from '@preact/signals'
 import {
   camera,
@@ -450,7 +450,7 @@ export let Status = () => {
                   id={CMD}
                   lines
                   mod='bare'
-                  class='Status_Cmd'
+                  className='Status_Cmd'
                   initial={line}
                   elRef={input}
                   onKey={cmdKey}

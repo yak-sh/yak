@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // What a decision's choice shows, drawn by what it is: an image as itself
 // with its address under it (the address is what a terminal shows), prose as
 // its title over its Markdown, a page framed at desktop or phone width.

@@ -1,15 +1,15 @@
-import type { ComponentChildren } from 'preact'
-import { Time } from '@yaks/ui'
-/** @jsxImportSource preact */
-import { domainBundle } from '../../domain-host.tsx'
-import { useJob, useModel, useReference, useRepoUrl } from '../subscriptions.ts'
 import {
+  type ReactNode,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-} from 'preact/hooks'
+} from 'react'
+import { Time } from '@yaks/ui'
+/** @jsxImportSource react */
+import { domainBundle } from '../../domain-host.tsx'
+import { useJob, useModel, useReference, useRepoUrl } from '../subscriptions.ts'
 import { awake, EID, type Ent, idOf, kilo, type LogRow } from '../../types.ts'
 import { ent, findEid, mutate, retrySubscription, uuid } from '../../live.ts'
 import { graphLog } from '../../entry_log.ts'
@@ -319,7 +319,7 @@ export let doing = (r?: LogRow, turn?: string | null, starting = false) =>
     : 'working…'
 
 // A named fact, present only when there IS one — absence says enough.
-let Fact = ({ k, v }: { k: string; v?: ComponentChildren }) =>
+let Fact = ({ k, v }: { k: string; v?: ReactNode }) =>
   v
     ? (
       <>

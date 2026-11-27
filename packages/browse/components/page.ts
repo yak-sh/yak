@@ -2,7 +2,7 @@
 // subscriptions last only as long as the parts that read them.
 import { signal } from '@preact/signals'
 import { derivedEid } from '@yaks/graph/identity'
-import { useLayoutEffect, useMemo } from 'preact/hooks'
+import { useLayoutEffect, useMemo } from 'react'
 import { front } from './fields.tsx'
 
 export let usePage = <T extends Record<string, unknown>>(

@@ -8,8 +8,7 @@
 // browser chose for the painting, and decoded before it is shown, so nothing
 // flickers. A loop that cannot be fetched rejects, and is fetched again when
 // it next comes round.
-import { h } from 'preact'
-import { useEffect, useRef } from 'preact/hooks'
+import { createElement as h, useEffect, useRef } from 'react'
 import { IDLE, LOGO, painted } from './site.ts'
 
 /** `items` in a random order that does not begin with `last`. */
@@ -115,7 +114,7 @@ let idle = (img: HTMLImageElement, still: MediaQueryList) => {
 /** The painted yak, idling once it has loaded. */
 export let Logo = (
   props: {
-    class: string
+    className: string
     sizes: string
     width: number
     height: number
@@ -136,5 +135,5 @@ export let Logo = (
       stop?.()
     }
   }, [])
-  return h('img', { ref, src: painted(), srcset: LOGO, alt: '', ...props })
+  return h('img', { ref, src: painted(), srcSet: LOGO, alt: '', ...props })
 }

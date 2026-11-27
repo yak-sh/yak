@@ -1,9 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The web keybinding card and its global `?` door. While the card is open its
 // capture listener owns every key, so canvas and mode handlers beneath it
 // cannot act on a hidden surface.
 import { signal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef } from 'react'
 import { capable, mode } from '../live.ts'
 import { webKeys } from '../keybindings.ts'
 import { block } from '@yaks/ui'

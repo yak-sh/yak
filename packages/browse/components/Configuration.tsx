@@ -1,9 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Configuration restores the host's secrets and sign-ins using their existing
 // graph and authorization doors. Credential input stays private and is never
 // prefilled; each entity's public face is drawn by the shared renderer.
 import { signal } from '@preact/signals'
-import { useEffect, useMemo } from 'preact/hooks'
+import { useEffect, useMemo } from 'react'
 import { Button, Field, Rows, Section } from '@yaks/ui'
 import { saveSecret, signIn } from '../configuration.ts'
 import { type Ent, vocab } from '../types.ts'
@@ -12,7 +12,10 @@ import { usePage } from './page.ts'
 import { useQuery } from './useQuery.ts'
 
 let useProgress = (place: string) => {
-  let page = usePage<{ busy: boolean; message: string }>('Configuration', place)
+  let page = usePage<{ busy: boolean; message: string }>(
+    'Configuration',
+    place,
+  )
   return {
     busy: !!page.value?.busy,
     message: page.value?.message,
@@ -21,7 +24,9 @@ let useProgress = (place: string) => {
       try {
         page.set({ message: await work() })
       } catch (error) {
-        page.set({ message: error instanceof Error ? error.message : 'Failed' })
+        page.set({
+          message: error instanceof Error ? error.message : 'Failed',
+        })
       } finally {
         page.set({ busy: false })
       }

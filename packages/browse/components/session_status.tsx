@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // One Session status for every browser surface: the host's, from the session
 // row. Entry work is a lazy partition.
 import { ent, subscriptionState, useHold } from '../live.ts'
@@ -99,7 +99,9 @@ export let graphStanding = (e: Ent) =>
 // The dot reads the session row alone: no useEntryLog subscription, so a busy
 // agent's growing log costs the dot nothing (was 157ms/render).
 export let SessionDot = ({ e }: { e: Ent }) => (
-  <Dot status={graphStanding(e)} />
+  <Dot
+    status={graphStanding(e)}
+  />
 )
 
 // The Session view pages the transcript from its tail; its status still reads

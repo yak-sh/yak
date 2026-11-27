@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // @ts-types="@yaks/ui/lucide"
 import ArrowUpRight from 'lucide/dist/esm/icons/arrow-up-right.mjs'
 // The app's icon vocabulary. Lucide owns the SVGs; this small name map keeps
@@ -9,7 +9,7 @@ import ArrowUpRight from 'lucide/dist/esm/icons/arrow-up-right.mjs'
 // still loads every one: in each test process that renders a card, and in
 // every bundle of the app, where esbuild resolved ~3,500 modules for these
 // thirty-odd.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { IconNode } from 'lucide'
 // @ts-types="@yaks/ui/lucide"
 import AlarmClock from 'lucide/dist/esm/icons/alarm-clock.mjs'
@@ -148,12 +148,14 @@ export let learnGlyphs = (more: Record<string, IconNode>): void => {
 
 /** One glyph as Lucide draws it: a 24-unit stroked SVG, sized in pixels. */
 export let Icon = (
-  { name, size = 14, class: part }: {
+  { name, size = 14, class: part, className }: {
     name: string
     size?: number
     class?: string
+    className?: string
   },
 ) => {
+  let extra = [part, className].filter(Boolean).join(' ')
   let known = name in glyphs ? name : 'file-text'
   return (
     <svg
@@ -163,10 +165,10 @@ export let Icon = (
       viewBox='0 0 24 24'
       fill='none'
       stroke='currentColor'
-      stroke-width='2'
-      stroke-linecap='round'
-      stroke-linejoin='round'
-      class={`lucide lucide-${known} Icon${part ? ` ${part}` : ''}`}
+      strokeWidth='2'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+      className={`lucide lucide-${known} Icon${extra ? ` ${extra}` : ''}`}
       aria-hidden='true'
     >
       {glyphs[known].map(([tag, attrs]) => h(tag, attrs))}

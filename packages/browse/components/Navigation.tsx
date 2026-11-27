@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The sidebar: search at the top, then a line per place (home, each
 // destination, the schema), the one you are on lit. Every line is a plain
 // link; a phone folds the sidebar behind the bar's menu, and going anywhere
@@ -101,7 +101,7 @@ export let Navigation = () => {
       </Brand>
       <Find>
         <Shell.Icon>
-          <Icon class='Shell_Glyph' name='search' size={16} />
+          <Icon className='Shell_Glyph' name='search' size={16} />
         </Shell.Icon>
         <Button
           type='button'
@@ -124,7 +124,7 @@ export let Navigation = () => {
           onClick={go(p.path)}
         >
           <Shell.Icon>
-            <Icon class='Shell_Glyph' name={p.icon} size={16} />
+            <Icon className='Shell_Glyph' name={p.icon} size={16} />
           </Shell.Icon>
           <Label>{p.name}</Label>
           {p.path == '/' && home && actor && (

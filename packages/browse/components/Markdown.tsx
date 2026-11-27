@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Markdown in browse is @yaks/markdown, drawn as nodes in the face its caller
 // chooses, so it keeps that face's layout, gestures and CSS, in the browser
 // and the terminal alike. Markup a body wrote stays words; what browse adds is
@@ -10,11 +10,11 @@
 // quoted in code is a commit, linked to its project's repository when the
 // caller knows one; a whole SHA is the commit's own entity.
 import {
-  type ComponentChildren,
   type ComponentType,
-  h,
-  type VNode,
-} from 'preact'
+  createElement as h,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import type { H } from '@yaks/render'
 import {
   blocks,
@@ -72,13 +72,15 @@ export let markup = (
   text: string,
   repo?: string | null,
   inline = false,
-): ComponentChildren =>
-  inline
-    ? <MarkdownInline source={text} flat />
-    : blocks(parse(text, { breaks: false }), h as H<VNode>, hosted(repo))
+): ReactNode =>
+  inline ? <MarkdownInline source={text} flat /> : blocks(
+    parse(text, { breaks: false }),
+    h as H<ReactElement>,
+    hosted(repo),
+  )
 
 /** Browse's Markdown for everything beneath `children`. */
-export let MarkdownHost = ({ children }: { children: ComponentChildren }) => (
+export let MarkdownHost = ({ children }: { children: ReactNode }) => (
   <Host.Provider value={host}>{children}</Host.Provider>
 )
 

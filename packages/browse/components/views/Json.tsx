@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { type Ent } from '../../types.ts'
 import { highlight } from '../../highlight.ts'
 import { el } from '@yaks/ui'
@@ -11,7 +11,7 @@ export let Json = ({ e }: { e: Ent }) => {
   return (
     <Pre>
       <code
-        class='hljs language-json'
+        className='hljs language-json'
         dangerouslySetInnerHTML={{ __html: lit.html }}
       />
     </Pre>

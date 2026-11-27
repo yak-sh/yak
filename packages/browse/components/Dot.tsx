@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import * as ui from '@yaks/ui'
 
 // How each state wears the pip (@yaks/ui Dot): a shape saying where it is and a

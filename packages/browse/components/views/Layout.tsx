@@ -1,5 +1,5 @@
-/** @jsxImportSource preact */
-import { useState } from 'preact/hooks'
+/** @jsxImportSource react */
+import { useState } from 'react'
 import { type Ent, type Hit, uuid } from '../../types.ts'
 import { backlinks, ent, mutate } from '../../live.ts'
 import { useQueryEids } from '../useQuery.ts'
@@ -131,7 +131,7 @@ let Fill = ({ eid, layout }: { eid: string; layout: string }) => {
   return (
     <FillEl>
       <Field
-        class='Layout_Input'
+        className='Layout_Input'
         placeholder='fill this pane — search the graph…'
         onInput={(e: InputEvent) =>
           seek((e.currentTarget as HTMLInputElement).value)}

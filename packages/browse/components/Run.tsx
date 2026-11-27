@@ -1,6 +1,6 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { entityPath } from '../url.ts'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'react'
 import { signal } from '@preact/signals'
 import { base, capable, ent, mutate, toPlane, topZ, uuid } from '../live.ts'
 import {
@@ -55,7 +55,9 @@ export let providers = signal<Provider[]>([])
 let read = async (q: string) =>
   await (await fetch(`${base()}/query?q=${encodeURIComponent(q)}`)).json()
 export let load = async () => {
-  if (!['provider', 'model', 'serves'].every((name) => vocab.comp(name))) return
+  if (!['provider', 'model', 'serves'].every((name) => vocab.comp(name))) {
+    return
+  }
   try {
     let found = await Promise.all(
       ['.provider', '.model', '.serves&?edge'].map(read),

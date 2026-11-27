@@ -17,7 +17,7 @@ import {
 // Never restore whole-db sync or an unbounded cache.
 import { IdError } from './types.ts'
 import { answering, parse } from '@yaks/id'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { useLayoutEffect, useRef } from 'react'
 import {
   batch,
   computed,

@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { Loading } from '@yaks/ui'
 import { awake, type Ent } from '../../types.ts'
 import { ent, sessionDetail } from '../../live.ts'

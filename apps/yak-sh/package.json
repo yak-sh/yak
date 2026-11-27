@@ -19,7 +19,6 @@
     "@yaks/memory": "platform",
     "@yaks/names": "platform",
     "@yaks/persona": "platform",
-    "@yaks/preact": "platform",
     "@yaks/project": "platform",
     "@yaks/provenance": "platform",
     "@yaks/query": "platform",
@@ -29,6 +28,7 @@
     "@yaks/task": "platform",
     "@yaks/tools": "platform",
     "@yaks/vocab": "platform",
-    "preact": "^10.29.1"
+    "preact": "^10.29.1",
+    "@yaks/react": "platform"
   }
 }

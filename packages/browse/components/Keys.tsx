@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The box a key is pasted in, on a task that asks a person for one
 // (@yaks/connections `asks`): one for each connection it asks for that holds
 // no working key yet. Saving writes the key through the graph, never through

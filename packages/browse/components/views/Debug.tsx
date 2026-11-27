@@ -1,7 +1,6 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { searchPath } from '../../url.ts'
-import { type ComponentChildren, Fragment } from 'preact'
-import { useState } from 'preact/hooks'
+import { Fragment, type ReactNode, useState } from 'react'
 import { formatProp, isRef, propAt } from '../../props.ts'
 import {
   comps as vocab,
@@ -93,8 +92,8 @@ let { Tab } = ui.Tabs
 export let DebugTabs = (
   { e, head, children }: {
     e: Ent
-    head?: ComponentChildren
-    children?: ComponentChildren
+    head?: ReactNode
+    children?: ReactNode
   },
 ) => {
   let [view, setView] = useState('Debug')
@@ -162,7 +161,7 @@ let leaf = (v: unknown) => <Val mod={shape(v)}>{face(v)}</Val>
 
 // One key → value row of the kit's Pairs: a browser lines the values up in a
 // column, a terminal writes `key: value` a line each.
-let pair = (key: ComponentChildren, value: ComponentChildren) => (
+let pair = (key: ReactNode, value: ReactNode) => (
   <>
     <ui.Pairs.Key>
       <Key>{key}</Key>
@@ -254,7 +253,7 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
 }
 
 let AllProps = ({ e }: { e: Ent }) => (
-  <ui.Pairs class='Debug_Props'>
+  <ui.Pairs className='Debug_Props'>
     {pair('eid', leaf(e.eid))}
     {pair('num', leaf(e.num))}
     {comps(e).flatMap(([name, comp]) => cells(e, name, comp))}
