@@ -45,6 +45,10 @@ the rest are left unchanged; `prop: null` clears one property; `recipe: null`
 removes the whole component; `{entity: {eid}, tombstone: {}}` deletes the
 entity.
 
+Never mint or invent a UUID by hand. A `$alias` such as `$cake` creates a new
+entity, `alias{name}` names one you can find again, and any other eid is one an
+answer gave you.
+
     await apply({ entity: { eid }, recipe: { minutes: 45 } })   // one property
     await apply({ entity: { eid }, recipe: { source: null } })  // cleared
     await apply({ entity: { eid }, recipe: null })              // not a recipe

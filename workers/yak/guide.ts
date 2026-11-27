@@ -229,6 +229,8 @@ guessing.
 It is a tool here, so nothing has to be fetched off the web; the same text
 is at ${url(env, '/docs.md')} for a person. graph_apply, graph_query and
 search reach that same store from here, for seeding and fixing.
+Never mint or invent a UUID by hand: a '$alias' in place of the eid creates a
+row, and any other eid is one a tool answered.
 
 An app can come with data: a seed.json beside index.html — a list of the same
 bundles apply accepts, or a seed/ folder of *.json files when there is a lot of
@@ -510,6 +512,8 @@ export let INSTRUCTIONS = instructions()
  * description and not this guide.
  */
 export let AIM =
+  'Never mint or invent a UUID by hand: a $alias in place of the eid ' +
+  'creates a row, and any other eid is one a tool answered. ' +
   'Components go to the apps that declare them or already hold them. ' +
   'For a new row with only shared components, the only app in reach or ' +
   'in the selected space is used. When several apps could take the write, ' +

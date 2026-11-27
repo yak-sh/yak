@@ -13,20 +13,22 @@ bundle out of several stores.
 
 ## Shared entity ids (eids)
 
-An eid is a UUID the client mints, and it identifies the same entity in every
-store on the platform. No registry assigns eids, and no store has to agree to
-one. A reading list app saves the book; a lending app saves who has borrowed it,
-on the same eid. The result is one entity with two components, one in each
-store, with no copied data and nothing to synchronize.
+An eid is a UUID, and it identifies the same entity in every store on the
+platform. No registry assigns eids, and no store has to agree to one. A reading
+list app saves the book; a lending app saves who has borrowed it, on the same
+eid. The result is one entity with two components, one in each store, with no
+copied data and nothing to synchronize.
 
-    let piranesi = crypto.randomUUID()
+Never mint or invent a UUID by hand. A `$alias` creates the entity, and the
+answer names the eid it was given; the next write uses that eid.
 
     graph_apply { app: 'reading-list', entities: [
-      { entity: { eid: piranesi }, doc: { title: 'Piranesi' },
+      { entity: { eid: '$piranesi' }, doc: { title: 'Piranesi' },
         book: { pages: 245 } } ] }
+    → [ { $alias: '$piranesi', entity: { eid: '4f3c…' }, … } ]
 
     graph_apply { app: 'lending', entities: [
-      { entity: { eid: piranesi }, loan: { to: 'Maya' } } ] }
+      { entity: { eid: '4f3c…' }, loan: { to: 'Maya' } } ] }
 
 The eid is the entity's only identifier. An app's store mints no number beside
 it: a number comes from a store's own counter, and would be `#3` in one app and
@@ -63,7 +65,7 @@ in one leaves the others unwritten. A `$alias` is minted once, when the write
 arrives, so a bundle split across two stores is written under one eid.
 
     graph_apply { entities: [
-      { entity: { eid: piranesi },
+      { entity: { eid: '4f3c…' },
         doc: { title: 'Piranesi (2020)' },   → reading-list, which has its doc
         loan: { to: 'Bo' } } ] }             → lending, which declares loan
 

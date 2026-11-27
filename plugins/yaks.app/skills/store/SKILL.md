@@ -308,8 +308,9 @@ components it carries.
   `$row-7`.
 - A bundle with no `entity` key also mints an entity, but nothing in `aliases`
   points at it. Use an alias whenever you need the eid afterwards.
-- An eid you minted yourself (a `crypto.randomUUID()`, or a sha256 hex string)
-  that names no entity yet and carries components _defines_ that entity.
+- An eid your code minted (a `crypto.randomUUID()`, or a sha256 hex string) that
+  names no entity yet and carries components _defines_ that entity. Never mint
+  or invent one by hand: an agent writing a bundle uses a `$alias`.
 - A new entity needs at least one component, and a batch holds one bundle per
   entity: the same eid twice is refused, so merge them into one bundle.
 

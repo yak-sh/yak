@@ -62,8 +62,10 @@ it; your tools say where each is. Something they can see that no tool shows you
 is a fault in yaks.app: report it with platform_bug.
 
 Read the app's schema and rows before changing data. Ask when required details
-are missing; never invent meeting dates, times or legal text. A request may be
-an idea or a design prepared by another agent.
+are missing; never invent meeting dates, times or legal text. Never mint or
+invent a UUID by hand: a `$alias` in the bundle makes a new row's eid, and any
+other eid is one a tool answered. A request may be an idea or a design prepared
+by another agent.
 
 What only some turns need is under Reads at the end, each with its id and when
 to open it. When a turn's work matches one, open it with read_open before you

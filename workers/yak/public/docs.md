@@ -51,8 +51,10 @@ at `../api/client.js`.
     let recipes = await query('.doc')
 
 An entity is a bundle, `{entity: {eid}, ...components}`; a `$alias` in place of
-the eid creates one. Who may read and write is the app's `access`: `public`,
-`open` or `private`. Ask `me()` on load and shape the page before anyone types.
+the eid creates one. Never mint or invent a UUID by hand: use a `$alias`, or an
+eid a tool or `apply()` answered. Who may read and write is the app's `access`:
+`public`, `open` or `private`. Ask `me()` on load and shape the page before
+anyone types.
 
 Deeper: <https://yaks.app/docs/store.md> — every function of the client, the
 HTTP endpoints underneath, and who may read and write.
