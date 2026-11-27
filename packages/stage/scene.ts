@@ -14,6 +14,16 @@ export type FollowOptions = {
   sky?: number
 }
 
+/** What {@link followScene} answers. */
+export type FollowScene = {
+  scene: THREE.Scene
+  camera: THREE.PerspectiveCamera
+  /** `elapsed` is the frame's uncapped wall time, which paces quality. */
+  draw(pose: Pose, input: CameraIntent, dt: number, elapsed: number): void
+  pick(x: number, y: number): THREE.Vector3 | null
+  dispose(): void
+}
+
 /** A lit Three.js scene around the caller's `world`, with a camera that
  * follows `actor`. `draw` places the actor at a pose, steers the camera by a
  * camera intent, renders, and on slow frames sheds pixels and then shadows
@@ -25,7 +35,7 @@ export let followScene = (
   world: THREE.Object3D,
   actor: THREE.Object3D,
   { blocked = () => false, sky = 0xb6d8db }: FollowOptions = {},
-) => {
+): FollowScene => {
   let scene = new THREE.Scene()
   scene.background = new THREE.Color(sky)
   scene.fog = new THREE.Fog(sky, 24, 64)
@@ -100,6 +110,3 @@ export let followScene = (
     },
   }
 }
-
-/** What {@link followScene} answers. */
-export type FollowScene = ReturnType<typeof followScene>

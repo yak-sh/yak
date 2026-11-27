@@ -187,7 +187,9 @@ let installFiles = new Set([
  *
  * Every other request answers 404, so the platform serves the app's files.
  * Seats in a room share no more than `line` names and `relay` passes. */
-export let rooms = <A>(rules: RoomRules<A>) => {
+export let rooms = <A>(
+  rules: RoomRules<A>,
+): (req: Request, env: RoomEnv) => Promise<Response> => {
   let most = rules.seats ?? 4
   let roomAt = (store: Door, room: string) =>
     rows(store, `.entity.eid=${room}&.game_room`).then(([row]) =>
