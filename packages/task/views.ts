@@ -1,6 +1,6 @@
 // How a task's state reads, in every interface: one word, its status. A
 // portable @yaks/render renderer, so a terminal prints the word (@yaks/text)
-// and a browser styles it by its class (@yaks/preact).
+// and a browser styles it by its class (@yaks/react).
 //
 // The status is computed, never stored: it is read through the ladder the
 // vocabulary the view was chosen by declares (./words.ts `statusOf`). A read

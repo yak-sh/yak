@@ -1,8 +1,7 @@
-/** @jsxImportSource preact */
-import type { JSX } from 'preact'
+/** @jsxImportSource react */
+import { type JSX, useRef, useState } from 'react'
 // Comments and reply branches, rendered through the registry on every host.
 // The composer is a Say line with a Field; its words are durable drafts.
-import { useRef, useState } from 'preact/hooks'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Button, Choices, Field, Notes, Say, Time } from '@yaks/ui'
 import { drafts, useDraft } from '@yaks/draft/input'

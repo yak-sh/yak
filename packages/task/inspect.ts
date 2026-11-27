@@ -12,7 +12,7 @@
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { createElement as h, type JSX, type ReactNode } from 'react'
 import { Markdown } from '@yaks/markdown'
 import { parse } from '@yaks/query'
 import * as ui from '@yaks/ui'
@@ -43,7 +43,7 @@ let str = (b: Bundle | undefined, name: string, prop: string): string => {
 let rows = (a?: Answer): Bundle[] => a?.rows ?? []
 
 // Where a task stands, in a line.
-let standing = (io: Io, e: Bundle): ComponentChildren[] => {
+let standing = (io: Io, e: Bundle): ReactNode[] => {
   let status = statusOf(io.vocab, e) || str(e, TASK, 'status') || 'open'
   let filed = comp(e, 'filed')
   let priority = filed.priority

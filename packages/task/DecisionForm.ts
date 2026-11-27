@@ -7,7 +7,7 @@
  * edges, read with `showing` and grouped by `shown`) draws each over its
  * button through the host's `show`, which draws them by their components.
  */
-import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
+import { createElement as h, Fragment, type JSX, type ReactNode } from 'react'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Drafts } from '@yaks/draft'
 import { Markdown, MarkdownInline } from '@yaks/markdown'
@@ -23,9 +23,9 @@ export let DecisionForm = (
     e: Bundle
     drafts: Drafts
     apply: (bundles: Bundle[]) => unknown
-    name: (eid: string) => ComponentChildren
+    name: (eid: string) => ReactNode
     shown?: Shown
-    show?: (eid: string) => ComponentChildren
+    show?: (eid: string) => ReactNode
     blocking?: boolean
     caret?: number
   },

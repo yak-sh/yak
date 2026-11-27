@@ -3,7 +3,7 @@
 // wrote it, when, what it is on, and the words around what was sought. Its
 // component faces are loaded only by a browser or terminal painter.
 import type { Bundle } from '@yaks/graph'
-import type { ComponentRenderer } from '@yaks/preact'
+import type { ComponentRenderer } from '@yaks/react'
 import { parse } from '@yaks/query/core'
 import { define, type Registry } from '@yaks/render'
 import { passage } from '@yaks/render/views'

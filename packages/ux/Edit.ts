@@ -25,7 +25,7 @@ import {
   useRef,
 } from 'react'
 import { define, type Registry, resolve } from '@yaks/render'
-import type { ComponentRenderer } from '@yaks/preact'
+import type { ComponentRenderer } from '@yaks/react'
 import { parse } from '@yaks/query'
 import { Prop as Frame, Surround } from '@yaks/ui/parts'
 import { type Bundle, type Host, useHost } from './host.ts'

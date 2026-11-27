@@ -6,10 +6,10 @@
   "license": "Apache-2.0",
   "description": "Serializes registry-selected views to server-side HTML through Preact without a DOM.",
   "dependencies": {
-    "@yaks/preact": "0.2.24",
     "@yaks/render": "0.2.24",
     "@yaks/vocab": "0.2.32",
-    "preact-render-to-string": "6.7.0"
+    "preact-render-to-string": "6.7.0",
+    "@yaks/react": "0.2.33"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

@@ -2,7 +2,7 @@
 import type { Bundle } from '@yaks/graph'
 import { resolve } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab/runtime'
-import type { ComponentChild } from 'preact'
+import type { ReactNode } from 'react'
 import type { Sheet } from '@yaks/tui/theme'
 import { sheet } from '@yaks/render/views'
 import {
@@ -37,11 +37,11 @@ export let painted = async (
   answers?: ReadonlyMap<string, Bundle[]>,
 ): Promise<string> => {
   let [{ render: mount }, { print }, dress] = await Promise.all([
-    import('@yaks/preact'),
+    import('@yaks/react'),
     import('@yaks/tui/print'),
     dressed(),
   ])
-  let groups = drawn<ComponentChild>(
+  let groups = drawn<ReactNode>(
     vocab,
     answer,
     named,
@@ -71,17 +71,18 @@ export let hold = async (
   page?: Near,
   answers?: ReadonlyMap<string, Bundle[]>,
 ): Promise<void> => {
-  let [{ h }, { render: mount }, { run, Scroll }, dress] = await Promise.all([
-    import('preact'),
-    import('@yaks/preact'),
-    import('@yaks/tui'),
-    dressed(),
-  ])
+  let [{ createElement: h }, { render: mount }, { run, Scroll }, dress] =
+    await Promise.all([
+      import('react'),
+      import('@yaks/react'),
+      import('@yaks/tui'),
+      dressed(),
+    ])
   let [lone] = answer
   let app = answer.length == 1 && 'Render' in
       (resolve(views, lone, 'Page', vocab, { config }) ?? {})
   await run(() => {
-    let nodes = drawn<ComponentChild>(
+    let nodes = drawn<ReactNode>(
       vocab,
       answer,
       named,

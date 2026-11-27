@@ -1,7 +1,7 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Comment and commit faces contributed to the shared renderer registry.
 import { parse } from '@yaks/query'
-import type { ComponentRenderer } from '@yaks/preact'
+import type { ComponentRenderer } from '@yaks/react'
 import type { Bundle } from '@yaks/graph'
 import { commentHost } from './comment-host.ts'
 import { Note } from './Comments.tsx'

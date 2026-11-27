@@ -1161,9 +1161,6 @@ importers:
       '@yaks/machine':
         specifier: 0.2.24
         version: link:../machine
-      '@yaks/preact':
-        specifier: 0.2.24
-        version: link:../preact
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
@@ -1173,6 +1170,9 @@ importers:
       '@yaks/reach':
         specifier: 0.2.24
         version: link:../reach
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -1267,6 +1267,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
       smol-toml:
         specifier: ^1.9.1
         version: 1.9.1
@@ -2835,9 +2838,9 @@ importers:
 
   packages/html:
     dependencies:
-      '@yaks/preact':
-        specifier: 0.2.24
-        version: link:../preact
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -3131,12 +3134,12 @@ importers:
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
-      '@yaks/preact':
-        specifier: 0.2.24
-        version: link:../preact
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -3171,6 +3174,9 @@ importers:
       '@yaks/text':
         specifier: 0.2.24
         version: link:../text
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/key:
     dependencies:
@@ -5302,6 +5308,9 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=e8a0c548dd9171f254dbf2ddfade780370973a4fa7295ddabeb5d461d4e91fef)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/telnyx:
     dependencies:
@@ -5975,12 +5984,12 @@ importers:
       '@yaks/id':
         specifier: 0.2.23
         version: link:../id
-      '@yaks/preact':
-        specifier: 0.2.24
-        version: link:../preact
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/react':
+        specifier: 0.2.33
+        version: link:../react
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render

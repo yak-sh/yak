@@ -29,7 +29,7 @@ import {
   resolve,
   type Selection,
 } from '@yaks/render'
-import type { ComponentRenderer } from '@yaks/preact'
+import type { ComponentRenderer } from '@yaks/react'
 import { names, reversed } from '@yaks/edge/vocab'
 import { type Node, plain, safe, tree } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab/runtime'

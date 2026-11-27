@@ -36,6 +36,10 @@
     "@yaks/ram": "0.2.24",
     "@yaks/testing": "0.2.30",
     "@yaks/tools": "0.2.30",
-    "linkedom": "^0.18.12"
+    "linkedom": "^0.18.12",
+    "react": "npm:@preact/compat@18.3.2"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0"
   }
 }

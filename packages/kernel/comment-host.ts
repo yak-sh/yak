@@ -1,7 +1,7 @@
 // The doors comments need from whichever interface mounts them. The domain
 // owns comment bundles; a host owns subscriptions, navigation and rendering.
 import type { Bundle } from '@yaks/graph'
-import type { ComponentChildren } from 'preact'
+import type { ReactNode } from 'react'
 
 export type CommentHost = {
   get: (eid: string) => Bundle
@@ -13,9 +13,9 @@ export type CommentHost = {
     value?: Record<string, unknown>
     set: (value: Record<string, unknown>) => void
   }
-  render: (b: Bundle, view: string) => ComponentChildren
+  render: (b: Bundle, view: string) => ReactNode
   link: (b: Bundle) => Record<string, unknown>
-  markdown: (text: string, repo?: string) => ComponentChildren
+  markdown: (text: string, repo?: string) => ReactNode
   pending: (b: Bundle) => boolean
   has: (comp: string) => boolean
   modelName: (model?: string) => string | undefined

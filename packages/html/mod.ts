@@ -1,6 +1,6 @@
 /**
  * @yaks/html serializes portable registry views as server-side HTML. Selection
- * and tree construction go through @yaks/preact; Preact's server serializer
+ * and tree construction go through @yaks/react; Preact's server serializer
  * owns HTML escaping, attributes and void elements. No DOM is installed.
  *
  * ```ts
@@ -22,7 +22,7 @@
  * @module
  */
 
-import { render as preact } from '@yaks/preact'
+import { render as react } from '@yaks/react'
 import type { Bundle, Context, Registry } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab'
 import { renderToString } from 'preact-render-to-string'
@@ -35,6 +35,6 @@ export let render = (
   vocab: Vocab,
   ctx: Context = {},
 ): string => {
-  let node = preact(registry, bundle, view, vocab, ctx)
+  let node = react(registry, bundle, view, vocab, ctx)
   return node ? renderToString(node) : ''
 }
