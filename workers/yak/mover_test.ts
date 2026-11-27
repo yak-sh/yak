@@ -1065,6 +1065,42 @@ await proof(
 )
 
 await proof(
+  'a mover reads a retired word stored under its identity',
+  async (equal) => {
+    let source: VocabDoc = {
+      $defs: {
+        gone: {
+          $id: `urn:uuid:${crypto.randomUUID()}`,
+          component: true,
+          type: 'object',
+          properties: {
+            said: { $id: `urn:uuid:${crypto.randomUUID()}`, type: 'string' },
+          },
+        },
+      },
+    }
+    let moving = rule({
+      mark: 'yak/store/identified-source/1',
+      find: line`.gone.said&*`,
+      source,
+      move: (row) => [{
+        entity: row.entity,
+        gone: null,
+        now: { word: (row.gone as Comp).said },
+      }],
+    })
+    let s = await movingStore(0, {}, [])
+    await s.source([{ entity: { eid: 'old' }, gone: { said: 'kept' } }], source)
+    // Woken again, the store speaks its own words, never the source's.
+    s.wake(moving)
+    equal((await s.rehearse())[0].rows, 1)
+    await s.alarm()
+    let [moved] = await s.query('.entity.eid=old&*')
+    equal(moved.now, { word: 'kept' })
+  },
+)
+
+await proof(
   'mover source guards retain changes made while delivery is in flight',
   async (equal, ok) => {
     let s = await movingStore(1, {

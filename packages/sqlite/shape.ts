@@ -4,7 +4,15 @@
 // them by label, and is read that way until it migrates.
 
 import { labelStored, type Vocab } from '@yaks/vocab'
-import { type Driver, fullLayout, relating, storeAs } from '@yaks/sql/core'
+import {
+  columnAsWritten,
+  type Driver,
+  fullLayout,
+  queryPhysical,
+  relating,
+  storeAs,
+  stored,
+} from '@yaks/sql/core'
 import { storedTables } from './physical.ts'
 import { BESIDE, BRANCH, FROM, TO } from './history-shapes.ts'
 import { BUILDING } from './layout.ts'
@@ -17,6 +25,24 @@ export let layoutOf = (v: Vocab, tables: readonly string[]): Vocab =>
     )
     ? labelStored(v)
     : v
+
+/** The columns a word's table holds in this file, by label, or none where
+ * the file never raised it. `v` declares the word, though the connection may
+ * be bound to words that do not (a retired word a move still reads): its
+ * table is found by the word's identity, or by its label in a file laid out
+ * before identities. */
+export let wordColumns = (
+  driver: Driver,
+  v: Vocab,
+  comp: string,
+): string[] => {
+  let layout = layoutOf(v, storedTables(driver))
+  return queryPhysical(driver, {
+    t: 'pragma',
+    name: 'table_info',
+    arg: stored(layout, comp),
+  }).map((c) => columnAsWritten(layout, comp, String(c.name)))
+}
 
 /** Bind the vocabulary for all statements on this connection. */
 export let bindStorage = (driver: Driver, v: Vocab): Vocab => {

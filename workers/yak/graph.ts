@@ -222,6 +222,7 @@ import {
   seeding,
   storage as sqliteStorage,
   Unseeded,
+  wordColumns,
 } from '@yaks/sqlite'
 import {
   driver,
@@ -4334,43 +4335,65 @@ export class Store extends Durable {
       )
   }
 
-  // The store as a rule reaches it. The patch is the kernel's own write, and
-  // its effects wait in `held` for the caller: run once the batch commits,
-  // dropped when it is a rehearsal or the app remains dormant.
-  #mover = (held: (() => void | Promise<void>)[], rule?: Rule): Moving => {
-    let g = this.#graph
-    let words = this.#vocab
-    let retired = rule?.source && Object.fromEntries(
-      Object.entries(rule.source.$defs ?? {}).flatMap(([comp, schema]) => {
-        let columns = this.#sql.query({
-          t: 'pragma',
-          name: 'table_info',
-          arg: comp,
-        }).map((c) => c.name)
-        // A retired word this store never raised a table for holds
-        // nothing: left undeclared, the rule finds it unspoken here.
-        if (!columns.length) return []
+  // The words a move's source still holds in this store, composed with the
+  // store's own: each word the store does not speak, and each property it
+  // does not declare, whose table and column were raised here. Their tables
+  // are found by the source's identities (@yaks/sqlite `wordColumns`), as
+  // the store would have raised them. None where the source holds nothing.
+  #retired = (source: VocabDoc): Vocab | undefined => {
+    let composed = (defs: NonNullable<VocabDoc['$defs']>) =>
+      loadVocab([...this.#vocab.docs, { ...source, $defs: defs }], metaKeywords)
+    let unspoken = Object.fromEntries(
+      Object.entries(source.$defs ?? {}).flatMap(([comp, schema]) => {
         let properties = Object.fromEntries(
           Object.entries(schema.properties ?? {}).filter(([prop]) =>
-            !this.#vocab.prop(comp, prop) && columns.includes(prop)
+            !this.#vocab.prop(comp, prop)
           ),
         )
-        // A word the store still speaks, with no retired property left in
-        // its table, is read as the store reads it.
+        // A word the store still speaks, with no retired property, is read
+        // as the store reads it.
         if (this.#vocab.comp(comp) && !Object.keys(properties).length) {
           return []
         }
         return [[comp, { ...schema, properties }]]
       }),
     )
+    if (!Object.keys(unspoken).length) return
+    let asked = composed(unspoken), whole = true
+    let held = Object.fromEntries(
+      Object.entries(unspoken).flatMap(([comp, schema]) => {
+        let columns = wordColumns(this.#sql, asked, comp)
+        let properties = Object.fromEntries(
+          Object.entries(schema.properties).filter(([prop]) =>
+            columns.includes(prop)
+          ),
+        )
+        let kept = Object.keys(properties).length
+        whole &&= kept == Object.keys(schema.properties).length
+        // A retired word this store never raised a table for holds
+        // nothing: left undeclared, the rule finds it unspoken here.
+        if (!columns.length || this.#vocab.comp(comp) && !kept) {
+          whole = false
+          return []
+        }
+        return [[comp, { ...schema, properties }]]
+      }),
+    )
+    if (whole) return asked
+    return Object.keys(held).length ? composed(held) : undefined
+  }
+
+  // The store as a rule reaches it. The patch is the kernel's own write, and
+  // its effects wait in `held` for the caller: run once the batch commits,
+  // dropped when it is a rehearsal or the app remains dormant.
+  #mover = (held: (() => void | Promise<void>)[], rule?: Rule): Moving => {
+    let g = this.#graph
+    let words = this.#vocab
+    let retired = rule?.source && this.#retired(rule.source)
     // A source that adds nothing this store holds reads through the store's
     // own graph: composing the same words again would build a second one.
-    if (rule?.source && Object.keys(retired!).length) {
-      let source = { ...rule.source, $defs: retired }
-      let vocab = words = loadVocab(
-        [...this.#vocab.docs, source],
-        metaKeywords,
-      )
+    if (retired) {
+      let vocab = words = retired
       let derived = {
         ...blobRead(vocab),
         ...(!ownStore(this.#get('name') ?? '')
