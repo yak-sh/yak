@@ -278,6 +278,33 @@ await proof(
   },
 )
 
+// A receipt moves its app and space in the directory's listings, and marks
+// them test once a test account alone seats the space: the index's own words,
+// which no serving check reads.
+await proof(
+  "a receipt's listing marks leave serving checks standing",
+  async () => {
+    let f = await fixture()
+    await f.source({ $defs: {} }, [
+      { entity: { eid: 'probe' }, person: {}, test: {} },
+      {
+        entity: { eid: 'seat' },
+        member: { space: 'space', person: 'probe', role: 'owner' },
+      },
+    ])
+    let status = (await f.ask('/used', { eid: 'app' })).status
+    let rows = await (await f.graph()).get(['space', 'app'], ['test'])
+    let marks = Object.fromEntries(rows.map((r) => [r.entity.eid, r.test]))
+    let used = { fences: f.begins.length, current: f.core().valid(f.initial) }
+    return () =>
+      equal({ status, used, marks }, {
+        status: 200,
+        used: { fences: 0, current: true },
+        marks: { space: { inferred: true }, app: { inferred: true } },
+      })
+  },
+)
+
 // A page opened after a deploy asks for its release's remake (remake.ts
 // `ask`), a job row only the directory's alarm reads: asking and marking it
 // hold back no serving check, so the page's own directory reads never wait

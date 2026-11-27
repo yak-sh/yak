@@ -22,6 +22,7 @@ import { edgeKeywords } from '@yaks/edge'
 import { keyKeywords } from '@yaks/key'
 import { memberKeywords } from '@yaks/member'
 import { idKeywords, prefixes } from '@yaks/id'
+import { fenceKeywords } from '@yaks/platform/fence'
 import type { Series } from '@yaks/graph/storage'
 import { derived as builds } from '@yaks/builders/vocab'
 import { sessionDerived } from '@yaks/session/status'
@@ -65,7 +66,11 @@ export let appKeywords: Keywords[] = [
   keyKeywords,
   memberKeywords,
 ]
-export let metaKeywords: Keywords[] = [idKeywords, ...appKeywords]
+export let metaKeywords: Keywords[] = [
+  idKeywords,
+  fenceKeywords,
+  ...appKeywords,
+]
 let appOptions: WordsOpts = { implicit: false, keywords: appKeywords }
 let metaOptions: WordsOpts = { implicit: false, keywords: metaKeywords }
 export type StoreKind = keyof typeof worker.stores

@@ -41,6 +41,7 @@
     "release_remake": {
       "$id": "urn:uuid:3a91e9ab-9bb1-4be0-9aa1-964577388450",
       "component": true,
+      "fence": "own",
       "type": "object",
       "description": "a release to make again as itself, compiled by the toolkit serving it now (toolkit.ts), done once by the remake sweep its row wakes",
       "properties": {
@@ -64,6 +65,7 @@
     "sweep": {
       "$id": "urn:uuid:6f91d8f5-aab0-405e-ac1c-6d7e60b3105f",
       "component": true,
+      "fence": "own",
       "type": "object",
       "properties": {
         "kind": {

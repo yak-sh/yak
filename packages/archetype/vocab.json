@@ -1,11 +1,15 @@
 {
   "$id": "urn:uuid:9f7cce1e-bac5-4b89-bb06-b6b7bd4d84cf",
-  "$vocabulary": { "https://yak.sh/vocab/core": true },
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/fence": true
+  },
   "title": "archetype",
   "$defs": {
     "archetype": {
       "$id": "urn:uuid:19d2fcb1-c6a5-4fee-8ec7-7beeda9c9207",
       "component": true,
+      "fence": "none",
       "journal": false,
       "type": "object",
       "description": "Immutable component set; its eid is derivedEid('archetype|' + its descriptor, bytewise sorted, joined with ',').",

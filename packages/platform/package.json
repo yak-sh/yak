@@ -100,6 +100,7 @@
     "./domain-transfer": "./domain-transfer.ts",
     "./ladder": "./ladder.ts",
     "./serving-copy": "./serving-copy.ts",
+    "./fence": "./fence.ts",
     "./regional-serving-copy": "./regional-serving-copy.ts",
     "./regional-route": "./regional-route.ts",
     "./route-memory": "./route-memory.ts",

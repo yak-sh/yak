@@ -4,6 +4,7 @@
     "model_reservation": {
       "$id": "urn:uuid:ba7b5cb8-7262-4c9e-9d74-089104eb70b8",
       "component": true,
+      "fence": "hold",
       "wire": false,
       "type": "object",
       "properties": {
@@ -104,6 +105,7 @@
     "visitor_calls": {
       "$id": "urn:uuid:60bb02f1-2155-4709-ade7-d6a2bba1642b",
       "component": true,
+      "fence": "hold",
       "wire": false,
       "type": "object",
       "description": "The model calls one visitor has asked a space's apps for on `day`, counted against the calls a visitor may ask for in a day.",

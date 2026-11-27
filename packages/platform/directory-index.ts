@@ -80,8 +80,29 @@ let PARTS = [
   'directory_order',
 ]
 
-let readBy = (tx: Tx, eids: string[], comps: string[]) =>
-  eids.length ? tx.get(eids, comps) : []
+// Rows as they stand, with what this pass has `made` folded in: a pass reads
+// its own patches back no sooner than the write commits, so a space it marks
+// test, or moves in its listing, reads so to its apps, owners and invites
+// only through `made`.
+let readBy = (tx: Tx, eids: string[], comps: string[], made: Bundle[] = []) =>
+  eids.length
+    ? after(
+      tx.get(eids, comps),
+      (rows) =>
+        rows.map((r) =>
+          made.filter((m) => id(m) == id(r)).reduce((row, m) => {
+            let next = { ...row }
+            for (let name of comps) {
+              if (m[name] === null) delete next[name]
+              else if (m[name]) {
+                next[name] = { ...part(row, name), ...part(m, name) }
+              }
+            }
+            return next
+          }, r)
+        ),
+    )
+    : []
 
 let changed = (
   tx: Tx,
@@ -212,7 +233,7 @@ let indexSpaces = (tx: Tx, spaces: string[], made: Bundle[]) =>
 
 let indexPeople = (tx: Tx, people: string[], made: Bundle[]) =>
   after(
-    readBy(tx, people, PARTS),
+    readBy(tx, people, PARTS, made),
     (rows) =>
       each<Bundle, void>(rows.filter((r) => r.person), undefined, (_, r) =>
         after(
@@ -223,10 +244,12 @@ let indexPeople = (tx: Tx, people: string[], made: Bundle[]) =>
           ),
           (seats) =>
             after(
-              readBy(tx, unique(seats.map((s) => ref(s, 'member', 'space'))), [
-                'space',
-                'directory_order',
-              ]),
+              readBy(
+                tx,
+                unique(seats.map((s) => ref(s, 'member', 'space'))),
+                ['space', 'directory_order'],
+                made,
+              ),
               (spaces) => {
                 let test = testOf(r)
                 let at = latest(
@@ -252,13 +275,15 @@ let indexPeople = (tx: Tx, people: string[], made: Bundle[]) =>
 
 let indexApps = (tx: Tx, apps: string[], made: Bundle[]) =>
   after(
-    readBy(tx, apps, ['app', 'test', 'used', 'directory_order']),
+    readBy(tx, apps, ['app', 'test', 'used', 'directory_order'], made),
     (rows) =>
       after(
-        readBy(tx, unique(rows.map((r) => ref(r, 'app', 'space'))), [
-          'space',
-          'test',
-        ]),
+        readBy(
+          tx,
+          unique(rows.map((r) => ref(r, 'app', 'space'))),
+          ['space', 'test'],
+          made,
+        ),
         (spaces) => {
           let by = byId(spaces)
           return write(
@@ -293,7 +318,7 @@ let indexInvites = (tx: Tx, own: Bundle[], moved: string[], made: Bundle[]) =>
         ref(r, 'referral', 'inviter'),
       ]
       return after(
-        readBy(tx, unique(rows.flatMap(parties)), ['person', 'test']),
+        readBy(tx, unique(rows.flatMap(parties)), ['person', 'test'], made),
         (people) => {
           let by = byId(people)
           return write(

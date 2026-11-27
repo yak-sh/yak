@@ -298,10 +298,6 @@ export let recordUse = (
   shelf?: Shelf,
 ): Promise<string | null> => receipt(ns, used(eid), clock, shelf)
 
-/** What a receipt writes: when something was last used, and which retired
- * spellings an app still sends. No authorization reads either. */
-export let RECEIPTS = ['used', 'changed', 'errored', 'translated']
-
 /// isRetired('.drill!') -> true
 /// isRetired('.drill') -> false
 /// isRetired('.a! .b?') -> false

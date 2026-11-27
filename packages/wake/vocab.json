@@ -5,6 +5,7 @@
     "wake": {
       "$id": "urn:uuid:8552ecd4-e1d0-48e6-902f-ee9ffc096367",
       "component": true,
+      "fence": "own",
       "type": "object",
       "description": "a scheduled time to come back to something",
       "$comment": "A wake carries no patch to apply when it fires: a rule's produce already writes the entity it matched. Patching a wake's target declaratively would need a rule that names that target.",

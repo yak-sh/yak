@@ -58,6 +58,16 @@ space; deployment versions are unique within an app. `plan` and `signin`
 properties are stamped, so trusted application code supplies them rather than
 ordinary client writes.
 
+## Fencing directory writes
+
+A directory write commits once the serving copy has fenced its copied answers,
+unless nothing it writes is read by an authorization. Each word says which where
+it is declared, with the `fence` component keyword (`@yaks/platform/fence`):
+`"none"` raises no fence, `"own"` marks a row only the directory's own work
+reads (its stamps raise none either), and `"hold"` is what a hold on a space's
+budget commits. A word without it fences. `fences(vocab)` reads a write's class
+from a vocabulary loaded with `fenceKeywords`.
+
 ## What the platform and its clients share
 
 The kernel (`workers/yak`) and `yak admin` (@yaks/admin) both import these, so

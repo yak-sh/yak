@@ -1,7 +1,8 @@
 {
   "$id": "urn:uuid:c846ca45-fd27-4ffc-888b-ab548cf79da8",
   "$vocabulary": {
-    "https://yak.sh/vocab/core": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/fence": true
   },
   "title": "directory",
   "$defs": {
@@ -1814,6 +1815,7 @@
     "test": {
       "$id": "urn:uuid:18d41815-2927-48de-8549-23f11399e053",
       "component": true,
+      "fence": "none",
       "type": "object",
       "description": "A fleet test account, a space seated only by test accounts, an app in such a space, or an invite involving a test account.",
       "properties": {
@@ -1828,6 +1830,7 @@
     "directory_order": {
       "$id": "urn:uuid:7283bde0-d20e-4f21-aac6-3c2cbf4d9b78",
       "component": true,
+      "fence": "none",
       "type": "object",
       "wire": false,
       "journal": false,
@@ -1852,6 +1855,7 @@
     "holds": {
       "$id": "urn:uuid:9ea7a2de-4afd-4917-be36-771274f4cf88",
       "component": true,
+      "fence": "none",
       "type": "object",
       "wire": false,
       "journal": false,
@@ -1875,6 +1879,7 @@
     "work_spend": {
       "$id": "urn:uuid:bdbeb51a-3995-410a-b2bc-c6c19e1332b4",
       "component": true,
+      "fence": "hold",
       "type": "object",
       "wire": false,
       "journal": false,
@@ -2014,6 +2019,7 @@
     "spend": {
       "$id": "urn:uuid:6e6cde67-354e-44d2-9bfb-572d469ffa98",
       "component": true,
+      "fence": "hold",
       "type": "object",
       "description": "What a space just spent on its month: a letter, a model call, a voice's lease, an app's text, container seconds. It is added to the space's `meter` in the write's own transaction, so two spends at once both count, and is never kept. A `held` spend is a model call or a voice's lease holding its most before it starts, refused when it does not fit what is left of the month's budget. A `refunded` one is the platform owner's correction, `why` it was refunded. A `bought` one is a block of credit paid for, added to the space's `credit`. Only the platform writes it.",
       "properties": {
@@ -2114,6 +2120,7 @@
     "signed_in": {
       "$id": "urn:uuid:a9aa8bcd-5283-4153-a17f-2f0f32c64109",
       "component": true,
+      "fence": "none",
       "type": "object",
       "description": "When this person last got in (`at`), and how (`via`): one row, so it holds the last way in rather than a trail. `first` is when they first got in, written once, which is the funnel's sign-up.",
       "properties": {

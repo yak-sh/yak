@@ -1,7 +1,8 @@
 {
   "$id": "urn:uuid:3968b0a4-3bd4-43cf-aace-75efee622215",
   "$vocabulary": {
-    "https://yak.sh/vocab/core": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/fence": true
   },
   "title": "platform",
   "$defs": {
@@ -491,6 +492,7 @@
     "trend": {
       "$id": "urn:uuid:f1366e41-0bdc-4b94-9800-96da9669ae3b",
       "component": true,
+      "fence": "hold",
       "journal": false,
       "description": "What an app or a space counted, by day, for its charts: the last thirty days, a quiet day absent.",
       "type": "object",
@@ -543,6 +545,7 @@
     "meter": {
       "$id": "urn:uuid:7b383c6d-1b63-416a-a188-f43a628c7b6d",
       "component": true,
+      "fence": "hold",
       "journal": false,
       "type": "object",
       "properties": {
@@ -1105,6 +1108,7 @@
     "signin": {
       "$id": "urn:uuid:0b5f30a2-974e-4f53-8539-ac399ce0fc36",
       "component": true,
+      "fence": "own",
       "journal": false,
       "type": "object",
       "properties": {
@@ -1178,6 +1182,7 @@
     "signin_miss": {
       "$id": "urn:uuid:ecdbd9c5-94d8-40f4-9ea2-d3c767b29c5b",
       "component": true,
+      "fence": "own",
       "journal": false,
       "type": "object",
       "properties": {

@@ -303,7 +303,7 @@ import {
   identityEid,
   REQUESTS,
 } from '@yaks/graph'
-import { actorOf as writerOf, PROVENANCE } from '@yaks/graph/provenance'
+import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { misfit, Refused, status } from '@yaks/graph/errors'
 import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
@@ -466,10 +466,10 @@ import {
   presenceWatches,
 } from '@yaks/platform/person-lines'
 import { movedSpace } from '@yaks/platform/connections-page'
+import { type Fences, fences } from '@yaks/platform/fence'
 import { spaceLine } from '@yaks/platform/space-pages'
 import {
   isRetired,
-  RECEIPTS,
   returned,
   scheduleMark,
   scheduleRetired,
@@ -930,24 +930,20 @@ installContext({
 })
 
 // A directory write that changes nothing an authorization reads raises no
-// serving fence: use receipts (used.ts), a person's sign-in stamp
-// (`signed_in`, signin.ts `stamped`), which a returning person's guess
-// writes (T-149011) and only the admin's census and the idle sweep read, the
-// archetype descriptor a
-// receipt's new set of components mints (@yaks/sqlite archetype.ts), and the
-// delete of an entity holding nothing an authorization reads, such as an
-// effect's run, which deletes itself once it finishes (@yaks/effects
-// pool.ts). So the receipts each hour's first use writes, and the runs the
-// directory's effects leave, hold back no serving check (T-131212,
-// T-147454). A deleted entity's stamps and tombstone go with it.
+// serving fence. Each word says whether it does where it is declared, with
+// the `fence` keyword (@yaks/platform/fence): a use receipt (used.ts), a
+// listing's order and test mark, an archetype descriptor, and the rows only
+// the directory's own work reads, such as an effect's run or a sign-in code,
+// raise none; nor does the delete of an entity holding nothing else. So the
+// receipts each hour's first use writes, and the runs the directory's effects
+// leave, hold back no serving check (T-131212, T-147454). A word that says
+// nothing fences.
 //
-// Sign-in codes (`signin`) and wrong guesses (`signin_miss`) are read only
-// by the directory when it issues or checks a code. Writing or deleting
-// these rows changes no answer the serving copy can give (T-148651).
-// Effect rows and their stamps likewise belong only to the pool; recording,
-// claiming and completing an errand change no copied authorization.
-// A stamp on any other entity is as fenced as what it stamps. Any other
-// delete or component fences.
+// A write is tried under no fence when what it names raises none, and run
+// again under a fence when it commits what does (`Unraised`): a rule can
+// write more than its request names, such as the directory index's marks on
+// a receipt's app and space. A word declared with no `fence` then costs that
+// write a fence, never the write itself.
 //
 // A request a plugin decides inside the write carries none of the rows it
 // writes until it runs, so what it will decide is foreseen first, by a read
@@ -958,37 +954,9 @@ installContext({
 // it writes. Trying it under no fence instead would cost the fence a wait:
 // a transaction rolled back still holds the object's output until storage
 // confirms the commit it opened, the fence's `begin` included (workerd
-// `transactionSync` notes a write before its savepoint). The
-// foresight can miss what the write then decides, so one foreseen to raise
-// none is still tried under none, and run again under a fence when it turns
-// out to (`Unraised`). `$own` mints a person's space and seat
-// (facets/directory-graph.ts) whenever it is asked, so it fences from the
-// start.
-// A remake's job row (remake.ts `ask`): its wake, its sweep and the release
-// it names are read only by the directory's own alarm (wake.ts, jobs.ts), so
-// asking for one and each run's marks on it raise no fence. A page opened
-// after a deploy asks for its release's remake, and each such ask once waited
-// on the copy's fence and the regional leases, seconds in a deploy's first
-// minute. A wake moved alone, as a sweep brought forward (rewrap.ts
-// `forward`, wake.ts `again`), stamps only the wake, so its stamp raises none
-// either.
-let UNNAMED = new Set([
-  'signin',
-  'signin_miss',
-  'effect',
-  'sweep',
-  'release_remake',
-  'wake',
-])
-let STAMPS = new Set(PROVENANCE)
-let UNFENCED = new Set([
-  ...RECEIPTS,
-  'signed_in',
-  'directory_order',
-  'archetype',
-  ...UNNAMED,
-])
-let UNHELD = new Set([...UNFENCED, ...STAMPS])
+// `transactionSync` notes a write before its savepoint). `$own` mints a
+// person's space and seat (facets/directory-graph.ts) whenever it is asked,
+// so it fences from the start.
 let DECIDED = ['$own', '$appTransfer', '$domainTransfer', SEED_DIRECTORY]
 let CORE = new Set(REQUESTS)
 let deciding = (bundles: Bundle[]) =>
@@ -1011,57 +979,20 @@ let refenced = <T>(write: () => T | Promise<T>, fence: () => Promise<T>) => {
   }
 }
 let UNREAD = -2
-let unfenced = (bundles: Bundle[], words = UNFENCED): boolean => {
-  let unnamed = new Set(
-    bundles.filter((b) => comps(b).some(([name]) => UNNAMED.has(name)))
-      .map((b) => b.entity.eid),
-  )
-  return bundles.every((b) =>
-    !deleted(b) &&
-    !DECIDED.some((request) => request in b) &&
-    comps(b).every(([name]) =>
-      words.has(name) || STAMPS.has(name) && unnamed.has(b.entity.eid)
-    )
-  )
-}
-// The entities a batch deletes, and whether entities as they stand hold
-// anything an authorization reads.
+// Whether a write raises no fence (in a budget hold, with `held`), by what its
+// words declare. A request decided inside fences from the start.
+let unfenced = (f: Fences, bundles: Bundle[], held?: boolean): boolean =>
+  !bundles.some((b) => DECIDED.some((request) => request in b)) &&
+  f.unfenced(bundles, held)
+// The entities a batch deletes.
 let killed = (bundles: Bundle[]): Eid[] => [
   ...new Set(bundles.filter(deleted).map((b) => b.entity.eid)),
 ]
-let unheld = (rows: Bundle[]): boolean =>
-  rows.every((b) => comps(b).every(([name]) => UNHELD.has(name)))
 
-// A hold on a space's budget raises no fence either (T-141144): its receipt,
-// and a `held` spend the directory's own transaction refuses past the budget
-// (@yaks/platform/meter-graph `spend`), so no refusal to spend reads a copied
-// balance. It commits the `meter` and `trend` that rule writes, and the
-// receipt's own `created` and `updated`; a copy that has not heard of them
-// shows a slightly older balance, never a spend past the budget. A visitor's
-// hold counts their call of the day too (`visitor_calls`), guarded on its own
-// reading.
+// A hold on a space's budget raises no fence either (T-141144): a `held`
+// spend the directory's own transaction refuses past the budget
+// (@yaks/platform/meter-graph `spend`), and what that rule commits with it.
 let HOLD = -3
-let HOLDING = new Set([
-  ...UNFENCED,
-  'model_reservation',
-  'visitor_calls',
-  'spend',
-  'meter',
-  'trend',
-  'work_spend',
-  'created',
-  'updated',
-])
-let hold = (bundles: Bundle[]): boolean =>
-  bundles.some((b) => (b.spend as { held?: unknown } | undefined)?.held) &&
-  bundles.every((b) =>
-    !deleted(b) &&
-    comps(b).every(([name]) =>
-      UNFENCED.has(name) || name == 'model_reservation' ||
-      name == 'visitor_calls' ||
-      name == 'spend' && (b.spend as { held?: unknown }).held === true
-    )
-  )
 
 // A letter's envelope, and the eid a reference property names (a read hands
 // one back bare or as `{eid, name}`).
@@ -1682,6 +1613,7 @@ export class Store extends Durable {
     // sentence to say to a caller of either one.
     let shape = this.#shape()
     let { vocab, own, derived, searchable } = shape
+    let fencing = fences(vocab)
     let said = fieldsSaid(worded(searchable))
     this.#lexis = this.#bind.LEXICON && !own && storeKind(name) == 'app' &&
         !name.startsWith('preview/')
@@ -2057,7 +1989,7 @@ export class Store extends Durable {
                         doomed(tx, vocab, gone),
                         (all) =>
                           after(tx.get(all), (rows) => {
-                            if (unheld(rows)) {
+                            if (fencing.unheld(rows)) {
                               this.#unheld.set(at, new Set(all))
                             }
                             return bundles
@@ -2076,14 +2008,16 @@ export class Store extends Durable {
                     let revision = this.#copyBatch.getStore() ??
                       this.#copyWrite.getStore()
                     if (revision === -1) return bundles
-                    if (revision === HOLD && unfenced(bundles, HOLDING)) {
+                    if (
+                      revision === HOLD && unfenced(fencing, bundles, true)
+                    ) {
                       return bundles
                     }
                     if (revision === UNREAD || revision === HOLD) {
                       let read = context?.transaction &&
                         this.#unheld.get(context.transaction)
                       let rest = bundles.filter((b) => !read?.has(b.entity.eid))
-                      if (unfenced(rest)) return bundles
+                      if (unfenced(fencing, rest)) return bundles
                       let named = rest.flatMap((b) =>
                         deleted(b) ? ['$delete'] : comps(b).map(([n]) => n)
                       )
@@ -2162,25 +2096,26 @@ export class Store extends Durable {
           // fence. Only explicit synchronous mover batches reuse an epoch.
           let fence = () => this.#fenced(copy, under)
           // A write no authorization reads raises no fence (`unfenced`), and
-          // one decided inside raises it as foreseen, or once it turns out to
-          // (`deciding`).
+          // one decided inside raises it as foreseen (`deciding`). Either
+          // raises it once it turns out to.
+          let unraised = () => refenced(() => under(UNREAD), fence)
           let unread = () =>
             deciding(bundles)
               ? after(
                 foreseeing(bundles, opts?.trusted),
-                (raises) =>
-                  raises ? fence() : refenced(() => under(UNREAD), fence),
+                (raises) => raises ? fence() : unraised(),
               )
-              : under(UNREAD)
+              : unraised()
           // Whether what a batch's requests decide names what a copied line
           // does, as foreseen. A foresight that fails foresees nothing: the
           // write decides again, and says why.
           let foreseeing = (b: Bundle[], trusted?: boolean) => {
             let raises = (decided: Bundle[]) => {
-              if (!unfenced(decided.filter((d) => !deleted(d)))) return true
+              let kept = decided.filter((d) => !deleted(d))
+              if (!unfenced(fencing, kept)) return true
               let gone = killed(decided)
               return !!gone.length &&
-                after(g.get(gone), (rows) => !unheld(rows))
+                after(g.get(gone), (rows) => !fencing.unheld(rows))
             }
             try {
               let out = after(foreseen(g, b, trusted), raises)
@@ -2190,14 +2125,16 @@ export class Store extends Durable {
             }
           }
           let gone = killed(bundles)
-          if (unfenced(bundles.filter((b) => !deleted(b)))) {
+          if (unfenced(fencing, bundles.filter((b) => !deleted(b)))) {
             if (!gone.length) return unread()
             return after(
               g.get(gone),
-              (rows) => unheld(rows) ? unread() : fence(),
+              (rows) => fencing.unheld(rows) ? unread() : fence(),
             )
           }
-          if (hold(bundles)) return under(HOLD)
+          if (fencing.hold(bundles)) {
+            return refenced(() => under(HOLD), fence)
+          }
           return fence()
         }
         g.admit = (bundles, opts) =>

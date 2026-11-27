@@ -1,13 +1,15 @@
 {
   "$id": "urn:uuid:f144dc01-40ae-4520-a926-0211ac38d229",
   "$vocabulary": {
-    "https://yak.sh/vocab/core": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/fence": true
   },
   "title": "effect",
   "$defs": {
     "effect": {
       "$id": "urn:uuid:08192132-d4a8-4912-aa88-2222c18dbb4b",
       "component": true,
+      "fence": "own",
       "index": [
         ["handler", "state", "at"],
         [

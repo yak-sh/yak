@@ -126,6 +126,28 @@ test('the mover counts a space the index kept before it kept holds', async () =>
   equal(await old.g.read(directoryHoldsMove.find), [])
 })
 
+test("a use marks a space's apps and owners in the pass that marks the space", async () => {
+  let { g, store } = fixture()
+  let [lab, notes, probe, chair] = Array.from({ length: 4 }, mint)
+  let at = '2026-11-27T12:00:00Z'
+  seed(store, [
+    { entity: { eid: lab }, space: { slug: 'lab' } },
+    { entity: { eid: notes }, app: { space: lab, slug: 'notes' } },
+    { entity: { eid: probe }, person: {}, test: {} },
+    {
+      entity: { eid: chair },
+      member: { space: lab, person: probe, role: 'owner' },
+    },
+  ])
+  await g.apply([{ entity: { eid: notes }, used: { at } }], { trusted: true })
+  let rows = await g.get([lab, notes, probe], ['test', 'directory_order'])
+  equal(rows.map((r) => [r.test, r.directory_order]), [
+    [{ inferred: true }, { kind: 'space', at }],
+    [{ inferred: true }, { kind: 'app', at }],
+    [{}, { kind: 'person', at }],
+  ])
+})
+
 let users: Bundle[] = [
   ADMIN,
   DEMO,
