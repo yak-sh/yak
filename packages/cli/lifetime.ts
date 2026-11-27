@@ -35,8 +35,10 @@ export let lifetime = async (
   }
 }
 
-// `<dir>/<role>-<instance uuid>.ready` (./restart.ts `readyFile`).
-let INSTANCE = /^(.+)-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\.ready$/
+// `<dir>/<role>-<instance>.ready` (./restart.ts `readyFile`). The service
+// template's default instance is boot, and handovers mint UUIDs.
+let INSTANCE =
+  /^(.+)-(?:boot|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\.ready$/
 
 /**
  * Whether an instance of the same role became ready after this one: its

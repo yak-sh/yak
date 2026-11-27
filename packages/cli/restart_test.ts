@@ -2,6 +2,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import {
+  beforeStop,
   PATIENCE,
   queueRestart,
   restart,
@@ -59,6 +60,57 @@ let fixture = (extra: string[] = []) => {
 }
 
 type Fixture = ReturnType<typeof fixture>
+
+let drain = (peers: string[] = [], state = 'running') => {
+  let f = fixture()
+  let run = f.options.run!
+  f.options.run = (command, args) => {
+    if (args.includes('is-system-running')) {
+      return Promise.resolve({ code: 0, stdout: state, stderr: '' })
+    }
+    if (args.includes('list-units')) {
+      return Promise.resolve({
+        code: 0,
+        stdout: ['old', ...peers].map((id) =>
+          `yak-work@${id}.service loaded active running`
+        ).join('\n'),
+        stderr: '',
+      })
+    }
+    return run(command, args)
+  }
+  return f
+}
+
+test('a systemd stop of the only ready worker waits for another to be ready', async () => {
+  let f = drain(['starting'])
+  f.options.ready = (path) => {
+    if (path.endsWith('-old.ready')) return Promise.resolve(true)
+    if (path.endsWith('-starting.ready')) return Promise.resolve(false)
+    f.events.push('ready')
+    return Promise.resolve(f.elapsed() >= 100)
+  }
+  let said = await beforeStop('yak-work@old.service', f.options)
+  let [work] = started(f)
+  assertMatch(work, /^yak-work@[a-f0-9-]+\.service$/)
+  assertEquals(f.events, ['start', 'ready', 'ready'])
+  assertEquals(stopped(f), [])
+  assertEquals(said, `${work} ready in 0.1s; handing off yak-work@old.service`)
+})
+
+test('a systemd stop starts no worker if one is ready or the manager is stopping', async () => {
+  for (let f of [drain(['new']), drain([], 'stopping')]) {
+    assertEquals(await beforeStop('yak-work@old.service', f.options), undefined)
+    assertEquals(started(f), [])
+  }
+})
+
+test('a systemd stop of an unready worker never starts another', async () => {
+  let f = drain()
+  f.options.ready = () => Promise.resolve(false)
+  assertEquals(await beforeStop('yak-work@old.service', f.options), undefined)
+  assertEquals(started(f), [])
+})
 
 // The units started, in order.
 let started = (f: Fixture) =>

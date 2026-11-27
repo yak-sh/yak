@@ -13,7 +13,7 @@ import { command as launchCommand } from '@yaks/process/command'
 import type { Command } from './run.ts'
 import { names, read } from './config.ts'
 import { reporter } from './report.ts'
-import { ready, readyFile } from './restart.ts'
+import { instanceOf, others } from './restart.ts'
 
 export type UnitExit = {
   unit: string
@@ -49,50 +49,10 @@ export let unitFailure = (exit: UnitExit): Error | undefined => {
   )
 }
 
-/** The template and instance of a unit such as `yak-web@<id>.service`. */
-let instanceOf = (unit: string): [string, string] | undefined => {
-  let found = unit.match(/^(.+)@(.+)\.service$/)
-  return found ? [found[1], found[2]] : undefined
-}
-
 export type Run = (
   command: string,
   args: string[],
 ) => Promise<{ code: number; stdout: string }>
-
-/** How many other active instances of `unit`'s template are ready, by user
- * systemd and the ready files in `runtimeDir`. Undefined when that is no
- * question: a unit that is no template instance, or a manager that is
- * stopping, when every unit stops at once. */
-export let others = async (
-  unit: string,
-  runtimeDir: string,
-  run: Run = execute,
-  exists: (path: string) => Promise<boolean> = ready,
-): Promise<number | undefined> => {
-  let template = instanceOf(unit)?.[0]
-  if (!template) return
-  let state = await run('systemctl', ['--user', 'is-system-running'])
-  if (state.stdout.trim() == 'stopping') return
-  let listed = await run('systemctl', [
-    '--user',
-    'list-units',
-    '--state=active',
-    '--plain',
-    '--no-legend',
-    '--no-pager',
-    `${template}@*.service`,
-  ])
-  if (listed.code) throw new Error(`systemctl could not list ${template}@`)
-  let instances = listed.stdout.split('\n')
-    .map((line) => line.trim().split(/\s+/)[0])
-    .filter((peer) => peer != unit)
-    .flatMap((peer) => instanceOf(peer)?.slice(1) ?? [])
-  let found = await Promise.all(
-    instances.map((i) => exists(readyFile(runtimeDir, template, i))),
-  )
-  return found.filter(Boolean).length
-}
 
 let execute: Run = async (command, args) => {
   let output = await launchCommand(command, {

@@ -29,10 +29,7 @@ export type RestartOptions = {
   runtimeDir: string
   roles?: Role[]
   systemctl?: string
-  run?: (
-    command: string,
-    args: string[],
-  ) => Promise<{ code: number; stdout: string; stderr: string }>
+  run?: Run
   ready?: (path: string) => Promise<boolean>
   now?: () => number
   /** Wall-clock milliseconds, finer than one, shared by every caller on the
@@ -46,6 +43,11 @@ export type RestartOptions = {
    * way to restart one role on purpose. */
   replace?: string[]
 }
+
+type Run = (
+  command: string,
+  args: string[],
+) => Promise<{ code: number; stdout: string; stderr: string }>
 
 export type Held = {
   read: () => Promise<string>
@@ -75,7 +77,7 @@ export let PATIENCE = 120_000
  * a handover halfway, leaving its ready replacements beside the old units. */
 let CALL = 30_000
 
-let run: NonNullable<RestartOptions['run']> = async (command, args) => {
+let run: Run = async (command, args) => {
   let result = await launchCommand(command, {
     args,
     signal: AbortSignal.timeout(CALL),
@@ -96,7 +98,7 @@ let run: NonNullable<RestartOptions['run']> = async (command, args) => {
 export let queueRestart = async (
   launch: string[],
   { config, replace = [] }: { config?: string; replace?: string[] } = {},
-  execute: NonNullable<RestartOptions['run']> = run,
+  execute: Run = run,
 ): Promise<string> => {
   let aimed = config ? [...launch, '--config', config] : launch
   // systemd parses ExecStopPost as an argv, not a shell command. Literal
@@ -139,7 +141,7 @@ export let queueRestart = async (
 export let queue = async (
   runtimeDir: string,
   { config, replace }: { config?: string; replace?: string[] } = {},
-  execute: NonNullable<RestartOptions['run']> = run,
+  execute: Run = run,
 ): Promise<string> => {
   let source = (path: string) =>
     runtimeSource(new URL(path, import.meta.url).href)
@@ -187,13 +189,61 @@ export let stale = async (
 ): Promise<string | undefined> => {
   let tree = runtimeTree()
   if (!tree) return 'this restart runs from no pinned tree'
-  let [, template, instance] = /^(.+)@(.+)\.service$/.exec(unit) ?? []
-  if (!instance) return 'no instance'
+  let instanceUnit = instanceOf(unit)
+  if (!instanceUnit) return 'no instance'
+  let [template, instance] = instanceUnit
   let file = codeFile(readyFile(runtimeDir, template, instance))
   let code = await disk.readTextFile(file).then(JSON.parse).catch(() =>
     undefined
   )
   return code ? await codeStale(code, tree) : 'it keeps no code record'
+}
+
+let listedUnits = (listed: string): string[] =>
+  listed.split('\n').map((line) => line.trim().split(/\s+/)[0])
+    .filter((unit) => unit.endsWith('.service'))
+
+/** The template and instance of a unit such as `yak-web@<id>.service`. */
+export let instanceOf = (unit: string): [string, string] | undefined => {
+  let found = unit.match(/^(.+)@(.+)\.service$/)
+  return found ? [found[1], found[2]] : undefined
+}
+
+/** How many other active instances of `unit`'s template are ready, by user
+ * systemd and the ready files in `runtimeDir`. Undefined when that is no
+ * question: a unit that is no template instance, or a manager that is
+ * stopping, when every unit stops at once. */
+export let others = async (
+  unit: string,
+  runtimeDir: string,
+  execute: (
+    command: string,
+    args: string[],
+  ) => Promise<{ code: number; stdout: string }> = run,
+  exists: (path: string) => Promise<boolean> = ready,
+  command = 'systemctl',
+): Promise<number | undefined> => {
+  let template = instanceOf(unit)?.[0]
+  if (!template) return
+  let state = await execute(command, ['--user', 'is-system-running'])
+  if (state.stdout.trim() == 'stopping') return
+  let listed = await execute(command, [
+    '--user',
+    'list-units',
+    '--state=active',
+    '--plain',
+    '--no-legend',
+    '--no-pager',
+    `${template}@*.service`,
+  ])
+  if (listed.code) throw new Error(`systemctl could not list ${template}@`)
+  let instances = listedUnits(listed.stdout)
+    .filter((peer) => peer != unit)
+    .flatMap((peer) => instanceOf(peer)?.slice(1) ?? [])
+  let found = await Promise.all(
+    instances.map((i) => exists(readyFile(runtimeDir, template, i))),
+  )
+  return found.filter(Boolean).length
 }
 
 let matches = (pattern: string, unit: string) => {
@@ -221,6 +271,11 @@ let lock = async (path: string): Promise<Held> => {
   }
 }
 
+let holdRestart = (options: RestartOptions): Promise<Held> =>
+  (options.lock ?? lock)(
+    `${options.runtimeDir.replace(/\/$/, '')}/yak-restart.lock`,
+  )
+
 /** Serialize the snapshot and handover across CLI processes. A second caller
  * waits for the running handover; if one began after it was called, that one
  * already started its code, so it coalesces into it instead of rolling again. */
@@ -228,9 +283,7 @@ export let restart = async (options: RestartOptions): Promise<string> => {
   let clock = options.clock ??
     (() => performance.timeOrigin + performance.now())
   let asked = clock()
-  let held = await (options.lock ?? lock)(
-    `${options.runtimeDir.replace(/\/$/, '')}/yak-restart.lock`,
-  )
+  let held = await holdRestart(options)
   try {
     let text = await held.read()
     let last: { began: number; said: string } | undefined = text
@@ -251,20 +304,10 @@ export let restart = async (options: RestartOptions): Promise<string> => {
   }
 }
 
-/** Hand every role whose code changed over through user systemd, and say
- * what was done: each replacement, how long it took to be ready, the units it
- * replaces and why, and the units kept. A failure rejects; optional roles are
- * rolled only when active. */
-let handover = async (options: RestartOptions): Promise<string> => {
-  let execute = options.run ?? run
-  let exists = options.ready ?? ready
-  let now = options.now ?? (() => performance.now())
-  let sleep = options.sleep ??
-    ((milliseconds: number) =>
-      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)))
+let systemctl = (options: RestartOptions) => {
   let command = options.systemctl ?? 'systemctl'
-  let call = async (...args: string[]) => {
-    let result = await execute(command, ['--user', ...args])
+  return async (...args: string[]) => {
+    let result = await (options.run ?? run)(command, ['--user', ...args])
     if (result.code !== 0) {
       throw new Error(
         `${command} ${
@@ -274,6 +317,86 @@ let handover = async (options: RestartOptions): Promise<string> => {
     }
     return result.stdout
   }
+}
+
+let warm = async (
+  template: string,
+  options: RestartOptions,
+): Promise<{ unit: string; took: number }> => {
+  let call = systemctl(options)
+  let exists = options.ready ?? ready
+  let now = options.now ?? (() => performance.now())
+  let sleep = options.sleep ??
+    ((milliseconds: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)))
+  let instance = crypto.randomUUID()
+  let unit = `${template}@${instance}.service`
+  let file = readyFile(options.runtimeDir, template, instance)
+  let began = now()
+  let deadline = began + PATIENCE
+  try {
+    await call('--no-block', 'start', unit)
+    while (now() < deadline) {
+      if (await exists(file) && now() < deadline) {
+        return { unit, took: now() - began }
+      }
+      await sleep(Math.min(100, Math.max(0, deadline - now())))
+    }
+    // Read the unit state while systemd still has the instance.
+    let state = await call(
+      'show',
+      unit,
+      '--property=Id,ActiveState,SubState,Result,Job,InvocationID,MainPID,ExecMainStartTimestamp,ExecMainStatus',
+    ).catch(String)
+    throw new Error(
+      `Timed out after ${PATIENCE}ms waiting for ${file}\n${state.trim()}`,
+    )
+  } catch (error) {
+    try {
+      await call('--no-block', 'stop', unit)
+    } catch (cleanup) {
+      throw new AggregateError(
+        [error, cleanup],
+        'Handover and cleanup failed',
+      )
+    }
+    throw error
+  }
+}
+
+/** Keep a supervised role covered during a systemd stop. The stop job sends
+ * TERM after ExecStop returns. An in-place restart writes a newer ready file
+ * when it comes back, and the peer then drains (./lifetime.ts). */
+export let beforeStop = async (
+  unit: string,
+  options: RestartOptions,
+): Promise<string | undefined> => {
+  let target = instanceOf(unit)
+  if (!target) return
+  let [template, instance] = target
+  let { runtimeDir, run, ready: exists = ready, systemctl } = options
+  if (!await exists(readyFile(runtimeDir, template, instance))) return
+  let uncovered = async () =>
+    await others(unit, runtimeDir, run, exists, systemctl) === 0
+  if (!await uncovered()) return
+  let held = await holdRestart(options)
+  try {
+    if (!await uncovered()) return
+    let peer = await warm(template, options)
+    return `${peer.unit} ready in ${
+      (peer.took / 1000).toFixed(1)
+    }s; handing off ${unit}`
+  } finally {
+    held.close()
+  }
+}
+
+/** Hand every role whose code changed over through user systemd, and say
+ * what was done: each replacement, how long it took to be ready, the units it
+ * replaces and why, and the units kept. A failure rejects; optional roles are
+ * rolled only when active. */
+let handover = async (options: RestartOptions): Promise<string> => {
+  let call = systemctl(options)
   let roles = options.roles ?? options.processes?.map((p) => ({
     unit: p.unit,
     old: [`${p.unit}@*.service`],
@@ -297,8 +420,7 @@ let handover = async (options: RestartOptions): Promise<string> => {
     '--no-pager',
     ...roles.flatMap((r) => r.old),
   )
-  let active = listed.split('\n').map((line) => line.trim().split(/\s+/)[0])
-    .filter((unit) => unit.endsWith('.service'))
+  let active = listedUnits(listed)
   let running = roles.map((r) => ({
     ...r,
     old: active.filter((unit) => r.old.some((p) => matches(p, unit))),
@@ -327,54 +449,15 @@ let handover = async (options: RestartOptions): Promise<string> => {
     ),
   )
   let roll = async (role: Role): Promise<string> => {
-    let instance = crypto.randomUUID()
-    let unit = `${role.unit}@${instance}.service`
-    let file = readyFile(options.runtimeDir, role.unit, instance)
-    let began = now()
-    let deadline = began + PATIENCE
-    let ready = false
-    try {
-      await call('--no-block', 'start', unit)
-      while (now() < deadline) {
-        if (await exists(file) && now() < deadline) {
-          ready = true
-          break
-        }
-        await sleep(Math.min(100, Math.max(0, deadline - now())))
-      }
-      if (!ready) {
-        // Read the unit state while systemd still has the instance.
-        let state = await call(
-          'show',
-          unit,
-          '--property=Id,ActiveState,SubState,Result,Job,InvocationID,MainPID,ExecMainStartTimestamp,ExecMainStatus',
-        ).catch(String)
-        throw new Error(
-          `Timed out after ${PATIENCE}ms waiting for ${file}\n${state.trim()}`,
-        )
-      }
-      let took = now() - began
-      if (role.old.length) await call('--no-block', 'stop', ...role.old)
-      return `${unit} ready in ${(took / 1000).toFixed(1)}s` +
-        (role.old.length
-          ? `; stopping ${
-            role.old.map((u) => reasons.get(u) ? `${u} (${reasons.get(u)})` : u)
-              .join(', ')
-          }`
-          : '')
-    } catch (error) {
-      if (!ready) {
-        try {
-          await call('--no-block', 'stop', unit)
-        } catch (cleanup) {
-          throw new AggregateError(
-            [error, cleanup],
-            'Handover and cleanup failed',
-          )
-        }
-      }
-      throw error
-    }
+    let { unit, took } = await warm(role.unit, options)
+    if (role.old.length) await call('--no-block', 'stop', ...role.old)
+    return `${unit} ready in ${(took / 1000).toFixed(1)}s` +
+      (role.old.length
+        ? `; stopping ${
+          role.old.map((u) => reasons.get(u) ? `${u} (${reasons.get(u)})` : u)
+            .join(', ')
+        }`
+        : '')
   }
   let summaries: string[] = [], errors: unknown[] = []
   for (let role of replacing) {

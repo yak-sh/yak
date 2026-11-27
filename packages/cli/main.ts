@@ -292,6 +292,32 @@ let rename = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
  * from either list. */
 export let own: Command[] = [
   unitFailureCommand,
+  {
+    name: 'unit_handoff',
+    noun: 'unit',
+    verb: 'handoff',
+    description: 'Keep a systemd role served while its last ready unit drains',
+    offered: (c) => names(c.config, 'processes'),
+    positional: ['unit'],
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['unit'],
+      properties: {
+        unit: { type: 'string', description: 'the unit about to stop (%n)' },
+      },
+    },
+    run: async (args, c) => {
+      let runtimeDir = system.env.get('XDG_RUNTIME_DIR')
+      if (!runtimeDir) {
+        throw new Usage('yak unit handoff needs $XDG_RUNTIME_DIR')
+      }
+      let { beforeStop } = await import('./restart.ts')
+      let said = await beforeStop(String(args.unit), { runtimeDir })
+      if (said) c.out(said)
+      return 0
+    },
+  },
   startCommand,
   feedbackCommand,
   {

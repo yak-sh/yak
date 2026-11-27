@@ -61,3 +61,21 @@ test('a worker ends once a newer instance of its role is ready', async () => {
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+test('a handoff worker leaves after the boot instance comes back ready', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'yak-superseded-boot-' })
+  try {
+    let boot = `${dir}/yak-work-boot.ready`
+    let peer = `${dir}/yak-work-${crypto.randomUUID()}.ready`
+    for (let [path, at] of [[boot, 100], [peer, 200]] as const) {
+      await Deno.writeTextFile(path, '1\n')
+      await Deno.utime(path, at, at)
+    }
+    assertEquals(await superseded(boot)(), true)
+    assertEquals(await superseded(peer)(), false)
+    await Deno.utime(boot, 300, 300)
+    assertEquals(await superseded(peer)(), true)
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})

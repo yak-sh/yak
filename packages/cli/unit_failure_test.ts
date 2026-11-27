@@ -1,5 +1,6 @@
 import { equal, test } from '@yaks/testing'
-import { others, reportUnit, unitFailure } from './unit_failure.ts'
+import { others } from './restart.ts'
+import { reportUnit, unitFailure } from './unit_failure.ts'
 
 // What `yak-web@a.service` stopping cleanly leaves: user systemd lists the
 // `active` units, of which `ready` hold their ready file, while the manager

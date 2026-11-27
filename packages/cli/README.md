@@ -1011,6 +1011,12 @@ neither reports. `yak restart` keeps a role whose units already run its code;
 `yak restart --replace yak-work` hands that role over anyway, the ready-first
 way to restart one role.
 
+Install `yak-unit-handoff.conf` in `yak-work@.service.d` to cover direct systemd
+stops and in-place restarts of the worker. Its `ExecStop` hook starts a peer and
+waits for it to be ready before the last ready worker drains. After an in-place
+restart, the peer drains once the restarted worker is ready. The hook skips
+replacement when the user manager is shutting down.
+
 Install `yak-unit-failure.conf` as `tracker.conf` in each user unit template's
 drop-in directory (`yak-web@.service.d`, `yak-work@.service.d`,
 `yak-tracker@.service.d`, and `yak-tracker-web@.service.d`). The report runs
