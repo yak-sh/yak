@@ -1134,7 +1134,8 @@ export let SAMPLE = 400
  * without statistics. Existing complete statistics are adopted once by
  * installations predating receipts. A table holding at most one row is never
  * analyzed: it is remembered as empty and checked with a count of two rows at
- * most, as is each that statistics already say holds one ({@link few}).
+ * most. Each whose statistics say it holds fewer than {@link SMALL} rows is
+ * checked for twice as many ({@link small}).
  *
  * Optimize decides none of it: empty tables get no stat1 row, so it names
  * them on every run, and it names as often a table whose row count it guesses
@@ -1170,15 +1171,17 @@ let sample = (driver: Driver) => {
   }
 }
 
-// Those of `names` that hold more than `past` rows, asked in one statement: a
-// plain count bills every row of a table, and this `past + 1` rows at most of
-// each, as a probe of its own would, but one statement for all of them.
-let populated = (driver: Driver, names: string[], past = 0): string[] => {
+// Those of `probes` that hold more rows than each one's bound, asked in one
+// statement: a plain count bills every row of a table, and this the bound
+// plus one at most of each, as a probe of its own would, but one statement for
+// all of them.
+type Probe = readonly [name: string, past: number]
+let populated = (driver: Driver, probes: readonly Probe[]): string[] => {
   let filled: string[] = []
-  for (let i = 0; i < names.length; i += PROBES) {
-    let some = names.slice(i, i + PROBES)
+  for (let i = 0; i < probes.length; i += PROBES) {
+    let some = probes.slice(i, i + PROBES)
     let [row] = driver.query(select({
-      cols: some.map((name, j) =>
+      cols: some.map(([name, past], j) =>
         as(
           exists(select({
             cols: [lit(1)],
@@ -1190,10 +1193,14 @@ let populated = (driver: Driver, names: string[], past = 0): string[] => {
         )
       ),
     }))
-    filled.push(...some.filter((_, j) => Number(row[`t${j}`])))
+    filled.push(...some.filter((_, j) => Number(row[`t${j}`])).map(([n]) => n))
   }
   return filled
 }
+
+// Each of `names` probed for more than `past` rows.
+let past = (names: readonly string[], n = 1): Probe[] =>
+  names.map((name) => [name, n])
 
 // Below SQLite's column limit and a Durable Object's, for one statement's
 // probes.
@@ -1205,36 +1212,53 @@ let extant = (driver: Driver, name: string) =>
 
 // Whether a table expected to hold rows does: one billed row at most.
 let holds = (driver: Driver, name: string) =>
-  populated(driver, [name]).length > 0
+  populated(driver, past([name], 0)).length > 0
 
 // Whether a table holds a second row: two billed rows at most.
 let many = (driver: Driver, name: string) =>
-  populated(driver, [name], 1).length > 0
+  populated(driver, past([name])).length > 0
 
 /**
- * The tables whose statistics say they hold one row, read off
- * `sqlite_stat1`. SQLite plans a probe of such a table by its key as a scan of
- * it, which costs the same while it holds one row. Once it holds thousands,
- * every probe reads all of them: `cost`, analyzed at one row and grown to
- * 15,108 while the store as a whole grew less than tenfold, made a lookup of
- * 29 receipts read 476,675 rows (bug b5285b5d). A Durable Object may not write
- * `sqlite_stat1`, so no statement mends such a row; only an analysis of the
- * table once it holds more does. Analysis here never writes one ({@link
- * analyzing}), but a copy's far end, or an analysis from before, may have, and
- * no receipt knows of it, so each decision reads them here and owes an
- * analysis to each holding a second row. The engine's own tables are left out:
- * a Durable Object's statistics list `_cf_KV` and `_cf_METADATA`, which its
+ * The tables whose statistics say they hold fewer than {@link SMALL} rows,
+ * each with the rows they say, read off `sqlite_stat1`. SQLite may plan a
+ * probe of such a table by its key as a scan of it, which costs about the same
+ * while it holds that few. Once it holds thousands, every probe reads all of
+ * them: `cost`, analyzed at one row and grown to 15,108 while the store as a
+ * whole grew less than tenfold, made a lookup of 29 receipts read 476,675 rows
+ * (bug b5285b5d), and `last_deploy`, analyzed at two or three rows and grown
+ * to 232, made the admin's list of 399 apps read 100,189 (bug 16830a75). A
+ * Durable Object may not write `sqlite_stat1`, so no statement mends such a
+ * row; only an analysis of the table once it holds more does. Each decision
+ * reads them here and owes an analysis to each holding twice the rows its
+ * statistics say ({@link doubled}). Analysis never writes a one-row statistic
+ * ({@link analyzing}), but a copy's far end, or an analysis from before, may
+ * have, and no receipt knows of it. The engine's own tables are left out: a
+ * Durable Object's statistics list `_cf_KV` and `_cf_METADATA`, which its
  * authorizer refuses to any statement of the object's (bug c95c5a57).
  */
-export let few = (stats: readonly Row[]): string[] => {
+export let small = (stats: readonly Row[]): [string, number][] => {
   let most = new Map<string, number>()
   for (let r of stats) {
     let tbl = String(r.tbl), n = Number(String(r.stat ?? '').split(' ')[0])
     if (foreign(tbl) || !Number.isFinite(n)) continue
     most.set(tbl, Math.max(most.get(tbl) ?? 0, n))
   }
-  return [...most].filter(([, n]) => n <= 1).map(([tbl]) => tbl)
+  return [...most].filter(([, n]) => n < SMALL)
 }
+
+/**
+ * Below this many rows, a table's statistics may have SQLite scan it for each
+ * probe by key. Measured in workerd on the admin's list of apps: a LEFT JOIN of
+ * `last_deploy` after five others was planned as a scan with a statistic of
+ * one, two or three rows, and as a seek from four; alone or first among them,
+ * only one row scanned. The margin is for wider joins.
+ */
+export let SMALL = 16
+
+// The probes of {@link small}'s tables: each holding at least twice the rows
+// its statistics say, and a second row where they say one or none.
+let doubled = (tables: readonly [string, number][]): Probe[] =>
+  tables.map(([name, n]) => [name, Math.max(1, 2 * n - 1)])
 
 // The rows of `sqlite_stat1`: one for each table and index analyzed.
 let stat1 = (driver: Driver): Row[] =>
@@ -1289,18 +1313,18 @@ let owing = (
   if (previous && unchanged && bytes < previous.bytes * 10) {
     let stands = new Set(analyzable(driver))
     let empty = previous.empty.filter((name) => stands.has(name))
-    let ones = few(stat1(driver)).filter((name) =>
+    let few = small(stat1(driver)).filter(([name]) =>
       stands.has(name) && !owed.includes(name) && !empty.includes(name)
     )
-    let grown = populated(driver, [...empty, ...ones], 1)
+    let filled = populated(driver, [...past(empty), ...doubled(few)])
     if (
-      !grown.length && empty.length == previous.empty.length &&
+      !filled.length && empty.length == previous.empty.length &&
       !('few' in previous)
     ) return
     return {
       bytes: previous.bytes,
-      empty: empty.filter((name) => !grown.includes(name)),
-      owed: joined(owed, grown),
+      empty: empty.filter((name) => !filled.includes(name)),
+      owed: joined(owed, filled),
     }
   }
   let names = mainTables(driver).filter(kept)
@@ -1316,7 +1340,7 @@ let owing = (
   ) {
     let missing = names.map((r) => r.name)
       .filter((name) => !taken.has(name) && !owed.includes(name))
-    let filled = populated(driver, missing, 1)
+    let filled = populated(driver, past(missing))
     let partial = names.filter((r) =>
       taken.has(r.name) &&
       driver.query({ t: 'pragma', name: 'index_list', arg: r.name })
@@ -1326,14 +1350,14 @@ let owing = (
           )
         )
     ).map((r) => r.name)
-    let ones = few(stats).filter((name) =>
+    let few = small(stats).filter(([name]) =>
       names.some((r) => r.name == name) && !owed.includes(name)
     )
-    let grown = populated(driver, ones, 1)
+    let more = populated(driver, doubled(few))
     return {
       bytes: previous?.bytes ?? bytes,
       empty: missing.filter((name) => !filled.includes(name)),
-      owed: joined(owed, [...partial, ...filled, ...grown]),
+      owed: joined(owed, [...partial, ...filled, ...more]),
     }
   }
   if (!holds(driver, 'entity')) return
@@ -1341,7 +1365,7 @@ let owing = (
   // than a row afresh, found at two billed rows a table, and the bytes stored
   // now are what the next growth is measured from.
   let all = names.map((r) => r.name)
-  let filled = populated(driver, all, 1)
+  let filled = populated(driver, past(all))
   return {
     bytes,
     empty: all.filter((name) => !filled.includes(name)),
@@ -1354,7 +1378,7 @@ let owing = (
  * answer the receipt that follows: those tables no longer owed, and each
  * that holds at most one row remembered as empty and left unanalyzed, since
  * statistics saying it holds one would have SQLite scan it for every probe
- * once it holds more ({@link few}). A table dropped since it was owed is no
+ * once it holds more ({@link small}). A table dropped since it was owed is no
  * longer owed. Each statement reads that table's index rows, so a caller
  * bounds `n` to keep a window short.
  */

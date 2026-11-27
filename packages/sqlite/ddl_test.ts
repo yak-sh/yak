@@ -25,7 +25,7 @@ import {
   val,
 } from '@yaks/sql'
 import memberDoc from '../member/vocab.json' with { type: 'json' }
-import { analyzing, schema, tables } from './ddl.ts'
+import { analyzing, schema, SMALL, tables } from './ddl.ts'
 import { open } from './db.ts'
 import {
   analyzed,
@@ -1089,6 +1089,31 @@ test('statistics owe a table analyzed at one row once it holds more', () => {
   let kept = { ...previous, owed: ['grew', 'one'] }
   assertEquals(analyzed(d, kept, true), undefined)
   assertEquals(analyzed(d, { ...kept, few: [] } as typeof kept, true), kept)
+})
+
+// In a wide join SQLite scans a table whose statistics say it holds two or
+// three rows too (bug 16830a75), so each said to hold fewer than SMALL is owed
+// an analysis once it holds twice as many; a larger statistic is not probed.
+test('statistics owe a table analyzed at a few rows once it doubles', () => {
+  let d = Object.assign(mem(), { statistics: { bytes: () => 1 } })
+  // Each table's rows when analyzed, and now.
+  let rows = { short: [3, 5], doubled: [3, 6], big: [SMALL, 999] }
+  let fill = (name: string, from: number, to: number) => {
+    for (let id = from + 1; id <= to; id++) d.query(insert(name, { id }))
+  }
+  for (let [name, [at]] of Object.entries(rows)) {
+    d.query({
+      t: 'create table',
+      name,
+      cols: [{ name: 'id', type: 'integer', pk: true }],
+    })
+    fill(name, 0, at)
+  }
+  d.query({ t: 'analyze' })
+  for (let [name, [at, now]] of Object.entries(rows)) fill(name, at, now)
+  let previous = { bytes: 1, empty: [], owed: [] }
+  assertEquals(analyzed(d, previous, true), { ...previous, owed: ['doubled'] })
+  assertEquals(analyzed(d, previous), { ...previous, owed: ['doubled'] })
 })
 
 // So an analysis never writes one: a table of one row is left unanalyzed,
