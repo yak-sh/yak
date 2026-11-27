@@ -307,11 +307,12 @@ export let gather = async (dir: Directory, shown: Shown): Promise<Census> => {
       homes,
       (some) => line`.member.space=${some}&.fields=${TILES.seats}`,
     ),
+    // An app's latest move live is its `last_deploy`; one from before that was
+    // kept says it by its releases.
     keyed(
       dir,
-      eids(shown.apps),
-      (some) =>
-        line`.deploy.app=${some}&!deploy.app.last_deploy&.fields=${TILES.deploys}`,
+      eids((shown.apps ?? []).filter((r) => !r.last_deploy)),
+      (some) => line`.deploy.app=${some}&.fields=${TILES.deploys}`,
     ),
     dir.read(line`.space.slug=${META.space}&.fields=${TILES.spaces}`),
     // The spaces a shown person's work spent in, whoever's they are: what
@@ -320,13 +321,12 @@ export let gather = async (dir: Directory, shown: Shown): Promise<Census> => {
     // cannot look into, so this reads the spaces that kept anybody's work
     // these thirty days and keeps those naming a shown person.
     shown.people?.length
-      ? dir.read(line`.space&.trend.people&.fields=${TILES.spaces}`)
+      ? dir.read(line`.space&.trend.people&.fields=trend.people`)
       : [],
   ])
   let workers = new Set(eids(shown.people))
-  let spaces = byEid(
-    shown.spaces ?? [],
-    meta as Row[],
+  let spaces = byEid(shown.spaces ?? [], meta as Row[])
+  let worksIn = eids(
     (worked as Row[]).filter((r) =>
       Object.keys(r.trend?.people ?? {}).some((p) => workers.has(p))
     ),
@@ -340,7 +340,7 @@ export let gather = async (dir: Directory, shown: Shown): Promise<Census> => {
   let [more, who, apps] = await Promise.all([
     keyed(
       dir,
-      missing(spaces, [...sat, ...shown.named?.spaces ?? []]),
+      missing(spaces, [...sat, ...worksIn, ...shown.named?.spaces ?? []]),
       (some) => line`.entity.eid=${some}&.space&.fields=${TILES.spaces}`,
     ),
     keyed(
@@ -356,10 +356,12 @@ export let gather = async (dir: Directory, shown: Shown): Promise<Census> => {
           ...TILES.agents,
         ]}`,
     ),
+    // What each of their apps counts toward: a space's storage, apps and
+    // latest use. An app a page draws is a shown one, read whole.
     keyed(
       dir,
       sat,
-      (some) => line`.app.space=${some}&.fields=${TILES.apps}`,
+      (some) => line`.app.space=${some}&.fields=${COUNTED.apps!}`,
     ),
   ])
   return {
