@@ -116,7 +116,8 @@ test('a draft write names the compiled page entry importing it without compiling
   )
   equal(asks.length, 1)
   equal((await request('views.ts')).status, 200)
-  equal(asks.at(-1)!.pages, ['views.ts'])
+  // The app's pages share packs of shared modules, so they compile together.
+  equal(asks.at(-1)!.pages, ['views.ts', 'main.ts'])
 })
 
 let skipped = await fixture()
