@@ -174,7 +174,7 @@ export let coded = <T extends Options>(
       ...tool,
       run: async (asked, graph) => {
         let answer = await tool.run(asked, graph)
-        let value = valueIn(answer)?.value as Answer | undefined
+        let value = valueIn(answer) as Answer | undefined
         if (value) {
           await ran(repl.operator, repl.eid, String(args.script), value, {
             person: ctx.person!,
