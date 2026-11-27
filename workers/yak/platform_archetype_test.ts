@@ -6,6 +6,8 @@ import { GIT_STORE } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { Store } from './graph.ts'
 import { slot, unclassified } from './testing.ts'
+import { tablesOf } from '@yaks/archetype/sets'
+import { storeWords } from './vocab.ts'
 
 for (const name of [PLATFORM_STORE, GIT_STORE]) {
   test(`${name}: classification, legacy backfill, and immutable metadata`, async () => {
@@ -76,7 +78,11 @@ for (const name of [PLATFORM_STORE, GIT_STORE]) {
         .json())[
           0
         ]
-    assert(!JSON.parse(shape.archetype.tables).includes(component))
+    // A descriptor keeps each component by its identity (@yaks/archetype).
+    let vocab = storeWords(name == PLATFORM_STORE ? 'directory' : 'git').vocab
+    let held = tablesOf(shape.archetype.tables, vocab)
+    assert(held.includes(Object.keys(seed)[0]))
+    assert(!held.includes(component))
     storage[Symbol.dispose]()
   })
 }

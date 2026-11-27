@@ -33,6 +33,7 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import { grantEid, Store, type Time } from './graph.ts'
 import { visitEdge } from '@yaks/platform/visits'
 import { platformVocab, storeWords } from './vocab.ts'
+import { tablesOf } from '@yaks/archetype/sets'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { metaOf } from './meta.ts'
@@ -1909,6 +1910,11 @@ test('the store dates the trash mark, and signs it', async () => {
   assertEquals(row.trashed.at, mark.at)
 })
 
+// The components a descriptor says its set holds, as an app store names them:
+// a descriptor keeps each by its identity (@yaks/archetype).
+let held = (b: Bundle) =>
+  tablesOf((b.archetype as { tables: string }).tables, storeWords('app').vocab)
+
 test('app archetypes classify writes and migrate old rows only on schema changes', async () => {
   let { ctx, store } = await recipe()
   let added = await post(store, '/apply', [
@@ -1938,9 +1944,7 @@ test('app archetypes classify writes and migrate old rows only on schema changes
     .json() as Bundle[]
   let shape = shapes.find((b) => b.entity.eid == updated)
   assert(shape)
-  let tables = JSON.parse(
-    (shape.archetype as { tables: string }).tables,
-  ) as string[]
+  let tables = held(shape)
   assert(tables.includes('recipe'))
   assert(tables.includes('doc'))
   original = updated
@@ -1986,9 +1990,8 @@ test('app archetype descriptors are read-only and vocabulary extension tracks ne
     .json() as Bundle[]
   let descriptor = descriptors.find((b) => b.entity.eid == row.entity.archetype)
   assert(descriptor)
-  let tables = JSON.parse(
-    (descriptor.archetype as { tables: string }).tables,
-  ) as string[]
+  let tables = held(descriptor)
+  assert(tables.includes('recipe'))
   assert(!tables.includes('doc'))
   // Descriptor facets are non-wire: both echoes and edits are ignored.
   let echoed = await post(store, '/apply', [{
