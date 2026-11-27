@@ -20,6 +20,12 @@
 // `.session.status`); that orders the list and never decides what a word
 // means.
 //
+// A word is offered by the name the vocabulary lists it under: its bare label,
+// or its full label (`yourname/trip:cost`) where two namespaces share the
+// label. The word after the colon is typed like a bare label, so `.co` offers
+// both `cost`s by their full labels. A path typed with a full label or an
+// identity reads on from it like a bare label (`.yourname/trip:cost.`).
+//
 // What only a graph can answer — the entities a reference could name, the
 // values a property holds — comes from a source the caller supplies, so this
 // file stays pure. A source that answers with a promise makes the whole answer
@@ -30,6 +36,7 @@ import type { Hop, Vocab } from '@yaks/vocab'
 import type { Clause } from './ast.ts'
 import { DIRECTIVES, OPERATORS } from './teach.ts'
 import { parse, valued } from './parse.ts'
+import { NAME, WORD } from './name.ts'
 
 /** One thing that could be typed: the word as it reads once taken, and where
  * it comes from. */
@@ -67,6 +74,14 @@ let then = <A, B>(x: A | Promise<A>, f: (a: A) => B): B | Promise<B> =>
 
 let starts = (s: string, pre: string) =>
   s.toLowerCase().startsWith(pre.toLowerCase())
+
+// A full label's word, after its namespace; a bare label is its own word.
+let bare = (name: string): string => name.slice(name.indexOf(':') + 1)
+
+// Whether a name reads on from what was typed: from its start, or, for a full
+// label, from its word.
+let fit = (name: string, pre: string): boolean =>
+  starts(name, pre) || starts(bare(name), pre)
 
 // Candidates that read on from what was typed, the word itself among them.
 let fits = (words: Cand[], pre: string): Cand[] =>
@@ -159,7 +174,10 @@ type Ranked = Cand & { rank: number }
 let ranked =
   (at: At, pre: string, comp: string, name: string) => (c: Cand): Ranked => ({
     ...c,
-    rank: (name.toLowerCase() == pre.toLowerCase() ? 0 : 2) +
+    rank:
+      ([name, bare(name)].some((n) => n.toLowerCase() == pre.toLowerCase())
+        ? 0
+        : 2) +
       (at.line.has(comp) ? 0 : 1),
   })
 let sorted = (cs: Ranked[]): Cand[] =>
@@ -186,7 +204,7 @@ let names = (
     let comp = n.comp
     return {
       comps: [],
-      props: columns(v, comp).filter((p) => starts(p, pre)).toSorted()
+      props: columns(v, comp).filter((p) => fit(p, pre)).toSorted()
         .map((p) =>
           ranked(at, pre, comp, p)({ text: lead + p, kind: mark(v, comp, p) })
         ),
@@ -195,7 +213,7 @@ let names = (
   }
   let all = v.all.toSorted(inner)
   return {
-    comps: all.filter((c) => starts(c, pre)).map((c) =>
+    comps: all.filter((c) => fit(c, pre)).map((c) =>
       ranked(at, pre, c, c)({
         text: lead + c + (dot && columns(v, c).length ? '.' : ''),
         kind: 'comp',
@@ -203,7 +221,7 @@ let names = (
     ),
     props: all
       .flatMap((c) =>
-        columns(v, c).filter((p) => starts(p, pre)).map((p) => ({ c, p }))
+        columns(v, c).filter((p) => fit(p, pre)).map((p) => ({ c, p }))
       )
       .toSorted((a, b) => cmp(a.p, b.p) || inner(a.c, b.c))
       .map(({ c, p }) =>
@@ -380,15 +398,14 @@ let value = (
   )
 }
 
-let SEG = '[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z_][A-Za-z0-9_]*)*'
-let DOTTED = `${SEG}(?:\\.${SEG})*`
 // A bracket on the path (`.order[last]=`) stays as typed before the value.
 let VALUE = new RegExp(
-  `^\\.?(${DOTTED})(?:\\[[^\\]]*\\])?(!=|~=|<=|>=|<|>|=)(.*)$`,
+  `^\\.?(${WORD})(?:\\[[^\\]]*\\])?(!=|~=|<=|>=|<|>|=)(.*)$`,
   's',
 )
-let HALF = new RegExp(`^\\.${DOTTED}([!~])$`)
-let PATH = new RegExp(`^([.!?])((?:${SEG}\\.)*[A-Za-z_-]*)$`)
+let HALF = new RegExp(`^\\.${WORD}([!~])$`)
+// Settled names, then the one being typed, which may be part of a full label.
+let PATH = new RegExp(`^([.!?])((?:${NAME}\\.)*[A-Za-z0-9_@/:-]*)$`)
 
 // What the engine found for `word`, as answered: the word itself is not
 // offered but makes the answer whole, and a word two families name is

@@ -293,3 +293,53 @@ test('complete: a whole word says so, and reads on before it is rewritten', () =
   }
   assertEquals(texts('.effect')[0], '.effect.')
 })
+
+// A vocabulary that lists two namespaces' `cost` by their full labels, as a
+// vocabulary does where a label is shared, beside `costume`, whose label is
+// its own.
+let shared = loadVocab([{
+  $defs: {
+    'yourname/trip:cost': {
+      component: true,
+      properties: { euros: { type: 'number' } },
+    },
+    '@yaks/model:cost': {
+      component: true,
+      properties: { dollars: { type: 'number' } },
+    },
+    costume: { component: true, properties: {} },
+  },
+}])
+let sharing = (text: string) => complete(shared, text).cands.map((c) => c.text)
+
+test('complete: a full label only where a label is shared', () => {
+  assertEquals(sharing('.co').filter((t) => t != '.count'), [
+    '.@yaks/model:cost',
+    '.costume',
+    '.yourname/trip:cost',
+  ])
+  assertEquals(sharing('.cost').slice(0, 2), [
+    '.@yaks/model:cost',
+    '.yourname/trip:cost',
+  ])
+  assertEquals(sharing('!cos'), [
+    '!@yaks/model:cost',
+    '!costume',
+    '!yourname/trip:cost',
+  ])
+  assertEquals(texts('.task').includes('.@yaks/task:task'), false)
+})
+
+test('complete: a full label reads on like a bare one', () => {
+  assertEquals(sharing('.yourname/trip:co'), ['.yourname/trip:cost'])
+  assertEquals(sharing('.yourname/trip:cost.'), ['.yourname/trip:cost.euros'])
+  assertEquals(
+    sharing('.@yaks/model:cost.dollars').includes(
+      '.@yaks/model:cost.dollars>=',
+    ),
+    true,
+  )
+  assertEquals(sharing('.fields=@yaks/model:cost.d'), [
+    '.fields=@yaks/model:cost.dollars',
+  ])
+})

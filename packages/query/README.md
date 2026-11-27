@@ -48,6 +48,16 @@ with one property given one value, `.space{slug="chata"}`, is
 `.space.slug="chata"`. `kinded(vocab, query)` reads a kind's name tested for
 alone, where no component has it, as the components the kind is.
 
+A **name** in a path is a bare label (`cost`), a full label, which is a
+namespace's label, a colon and the word (`yourname/trip:cost`,
+`@yaks/model:cost`), or an identity, a canonical UUID. Any of them may head a
+clause under every prefix and in a directive's path:
+`.yourname/trip:cost.euros>10`, `!@yaks/model:cost`,
+`.fields=yourname/trip:cost.euros`, `.<comp uuid>.<prop uuid>>10`. The parser
+keeps each as written; the vocabulary says what it names. `complete` offers a
+word by the name its vocabulary lists it under, which is a full label only where
+two namespaces share the label.
+
 A **value** is the right-hand side of a predicate. A **scalar** keeps its raw
 text (`{ kind: 'scalar', raw: 'open' }`); a **list** holds alternative values
 (`open,done`); a **range** holds two ends (`1..5`, inclusive, or `1...5`,

@@ -595,3 +595,70 @@ test('a quoted sentence is the one value a rule writes', () => {
     }),
   )
 })
+
+// A clause head names a word by its bare label, its full label (a namespace's
+// label, a colon, the word) or its identity, under every prefix and in a
+// directive's path (D-338). The parser keeps each name as written; what it
+// means is the vocabulary's to say.
+let C = '0f8fad5b-d9cb-469f-a165-70867728950e'
+let P = 'abcdef12-abcd-4bcd-abcd-abcdefabcdef'
+for (
+  let [q, tree] of [
+    ['.yourname/trip:cost.euros>10', and(gt('yourname/trip:cost.euros', '10'))],
+    ['.@yaks/model:cost', and(present('@yaks/model:cost'))],
+    ['!@yaks/model:cost', and(absent('@yaks/model:cost'))],
+    ['?@yaks/model:cost', and(want('@yaks/model:cost'))],
+    ['+yourname/trip:cost', and(ensure('yourname/trip:cost'))],
+    ['-yourname/trip:cost', and(gone('yourname/trip:cost'))],
+    ['+!@yaks/model:cost', and(gate('@yaks/model:cost'))],
+    [
+      '+yourname/trip:cost.euros=5',
+      and(ensure('yourname/trip:cost', 'euros', '5')),
+    ],
+    ['.doc.yourname/a:rating>=4', and(ge('doc.yourname/a:rating', '4'))],
+    ['.yourname/trip-2:my-cost', and(present('yourname/trip-2:my-cost'))],
+    [`.${C}.${P}>10`, and(gt(`${C}.${P}`, '10'))],
+    [`!${C}`, and(absent(C))],
+    [`?${C}.${P}`, and(want(`${C}.${P}`))],
+    [`+${C}`, and(ensure(C))],
+    [`.${C}[<=2]->T-1`, and(walk(C, '->', 'T-1', 2))],
+    [
+      '.yourname/trip:cost.euros=1,2 .@yaks/model:cost.dollars~=x',
+      and(
+        eq('yourname/trip:cost.euros', list('1', '2')),
+        contains('@yaks/model:cost.dollars', 'x'),
+      ),
+    ],
+    [
+      '.fields=yourname/trip:cost.euros,@yaks/model:cost',
+      and(fields('yourname/trip:cost.euros', '@yaks/model:cost')),
+    ],
+    [`.order=-${C}.${P}`, and(order(`-${C}.${P}`))],
+    ['.tally=@yaks/model:cost.dollars', and(tally('@yaks/model:cost.dollars'))],
+    [
+      '.yourname/trip:comment!.doc.title=x',
+      and({
+        kind: 'pred',
+        path: ['yourname/trip:comment', 'doc', 'title'],
+        op: '=',
+        value: scalar('x'),
+        not: true,
+      }),
+    ],
+    // What is not a name stays what it was: a word, or a UUID run on into
+    // more of one, is searched for.
+    [C, and(text(C))],
+    [`.${C}x`, and(text(`.${C}x`))],
+    ['trip:cost', and(text('trip:cost'))],
+    ['yourname/trip:cost', and(text('yourname/trip:cost'))],
+  ] as const
+) {
+  test(`a head may be a full label or an identity: ${q}`, () =>
+    assertEquals(parse(q), tree))
+}
+
+refused([
+  ['!.@yaks/model:cost', 'is written !@yaks/model:cost'],
+  ['?@yaks/model:cost[x]', 'not a clause'],
+  ['.meeting?@yaks/model:doc', 'is written .meeting&?@yaks/model:doc'],
+])

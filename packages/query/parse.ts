@@ -42,6 +42,7 @@ import {
 import { OPERATORS } from './teach.ts'
 import { frozen } from '@yaks/fp'
 import { parse as parseId } from '@yaks/id'
+import { NAME, SEG, WORD } from './name.ts'
 
 // ---- values ----
 
@@ -143,12 +144,9 @@ let value = (raw: string): Value => {
 
 // ---- component names ----
 
-// The shape of a path in a component clause: dotted segments, each a letter or
-// underscore and then letters, digits or underscores (the names vocab.json
-// allows, `sol62_book`), with a hyphen only before a letter — so `.requires->x` ends its path before the
-// arrow. A token not of this shape is a value or a text term, never a path.
-let SEG = '[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z_][A-Za-z0-9_]*)*'
-let WORD = `${SEG}(?:\\.${SEG})*`
+// The shape of a path in a component clause: dotted names, each a bare label,
+// a full label or an identity (./name.ts). A token not of this shape is a
+// value or a text term, never a path.
 // A bare path so far — where a `[` opens a bracket rather than joining a value.
 let PATH = new RegExp(`^\\.?${WORD}$`)
 // A prefix character and the component name it marks, with nothing between
@@ -159,7 +157,7 @@ let PATH = new RegExp(`^\\.?${WORD}$`)
 // bare `-word` is no longer a text term.
 let SIGIL = new RegExp(`^(\\+!|[-!+*#$?])(${WORD})$`)
 // A prefix with a dot after it: the one spelling it had beside the one it has.
-let DOTTED = /^(\+!|[-!+*#$?])\.([A-Za-z_].*)$/s
+let DOTTED = new RegExp(`^(\\+!|[-!+*#$?])\\.(?=${NAME})(.*)$`, 's')
 // A component name alone, with the leading dot: present. The dot is what tells
 // `.env` (this entity has the component `env`) from `env` (a word to search
 // for).
@@ -348,6 +346,16 @@ let pres = (word: string): Clause => ({
   value: null,
 })
 
+// A reverse filter's head and the child predicate after its `!`
+// (`.comments!.doc.title=x`); a prefix character written before a path with a
+// value (`+doc.title=$x`); a prefix character before a bracket, which no
+// prefixed name takes (`?doc[x]`); a second clause run onto the first with no
+// `&` (`.meeting?doc`).
+let REVERSE = new RegExp(`^\\.?(${WORD})!\\.(.+)$`, 's')
+let WRITTEN = new RegExp(`^([+*])((?=${NAME}).*)$`, 's')
+let BRACKETED = new RegExp(`^(\\+!|[!+*#$?])(?=${NAME})[^\\s]*\\[`)
+let WANTED = new RegExp(`^\\?(?=${NAME})`)
+
 // The `.edges` rider in each of its spellings (`.edges`, `.edges[cites,via]`,
 // `.edges.peers=doc.title`, `.edges.limit=200`) asked a server to carry each
 // row's edges back, and no server has fetched them since the subscription
@@ -361,7 +369,7 @@ let RIDER = /^(?:\.edges!?|\.?edges(?:\[.*\]!?|\.(?:peers|limit)=.*))$/s
 export let parseDot = (token: string): Clause[] | null => {
   // A `!` before a child path negates the reverse existential, not its leaf.
   // Whether the leading name is an association is still for the binder to say.
-  let reverse = token.match(/^\.?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)!\.(.+)$/s)
+  let reverse = token.match(REVERSE)
   if (reverse) {
     let inner = parseDot(`.${reverse[2]}`)
     if (inner?.length == 1 && inner[0].kind == 'pred') {
@@ -398,7 +406,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // PATH carrying an operator just the same (`+doc.title=$x`): the prefix means
   // the component is written, and the property beside it names which part of
   // it. The gate is left out — an absence has no value to write.
-  let written = token.match(/^([+*])([A-Za-z_].*)$/s)
+  let written = token.match(WRITTEN)
   if (written) {
     let [, mark, rest] = written
     let inner = parseDot(`.${rest}`)
@@ -430,7 +438,7 @@ export let parseDot = (token: string): Clause[] | null => {
   }
   // A bracket belongs to a path, and a prefix character marks a whole component
   // name: `?doc[x]` is a broken clause, never a search term.
-  if (/^(\+!|[!+*#$?])[A-Za-z_][^\s]*\[/.test(token)) {
+  if (BRACKETED.test(token)) {
     throw new SyntaxError(`not a clause: ${token}`)
   }
   // The `.` prefix is accepted everywhere and required nowhere: it keeps a URL
@@ -471,7 +479,7 @@ export let parseDot = (token: string): Clause[] | null => {
       return parseDot(said)
     }
     // `.meeting?doc`: a second clause, `?doc`, with no `&` before it.
-    if (/^\?[A-Za-z_]/.test(rest)) {
+    if (WANTED.test(rest)) {
       throw spelled(token, `${head}&${rest}`)
     }
     // `.web.url~cloudflare`: a match on part of a value, short of its `=`.
@@ -589,18 +597,21 @@ export let parseDot = (token: string): Clause[] | null => {
 
 // ---- tokenizing a whole query ----
 
+let QUERY_STRING = new RegExp(`^\\?(?!${NAME})`)
+
 /** A line without the `?` a query string opens with, and any `&` after it. A
  * `?` before a word is the grammar's own (`?doc` asks for a component), so it
- * stays.
+ * stays, whichever way the name is written (`?@yaks/model:cost`).
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(bareLine('?&.doc'), '.doc')
  * assertEquals(bareLine('?doc'), '?doc')
+ * assertEquals(bareLine('?@yaks/model:cost'), '?@yaks/model:cost')
  * ```
  */
 export let bareLine = (line: string): string =>
-  line.replace(/^\?(?![A-Za-z_])/, '').replace(/^&+/, '')
+  line.replace(QUERY_STRING, '').replace(/^&+/, '')
 
 // Keep the quoted value of a misspelled contains predicate together so the
 // parser can show the corrected clause.
