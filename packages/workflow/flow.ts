@@ -104,7 +104,7 @@ let layer = (ids: Eid[], into: Map<Eid, Eid[]>): Eid[][] => {
  *     step('pack', '$o .order', [{ entity: { eid: '$t' }, task: {} }]),
  *     step('ship', '$t .task .completed', [{ entity: { eid: '$s' }, shipped: {} }]),
  *   ],
- *   cases: [{ entity: { eid: 'c1' }, case: { workflow: 'w', for: 'o1' } }],
+ *   cases: [{ entity: { eid: 'c1' }, workflow_case: { workflow: 'w', for: 'o1' } }],
  *   made: [{ entity: { eid: 't1' }, task: {}, made: { case: 'c1', step: 'pack' } }],
  * })
  * equal(read.stages.map((s) => s.map((p) => p.eid)), [['pack'], ['ship']])
@@ -181,7 +181,7 @@ export let flow = (rows: Rows, vocab?: Vocab): Flow => {
     if (!done) { for (let s of at) counts[s].at++ }
     let old = (byCase.get(eid) ?? []).map((r) => r.entity.eid)
       .filter((r) => stale.has(r))
-    let item = str(comp(b, 'case').for)
+    let item = str(comp(b, 'workflow_case').for)
     return { eid, item, made, outdated: old, at, held, done }
   })
   return { stages, feeds: fed, cases, counts }

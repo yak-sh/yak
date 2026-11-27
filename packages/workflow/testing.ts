@@ -100,7 +100,7 @@ export let ask = {
 export let ship = {
   eid: 'ship',
   match:
-    '$r .result, result.call=$c; $c .call, made.case=$k; $k .case, case.for=$o',
+    '$r .result, result.call=$c; $c .call, made.case=$k; $k .workflow_case, workflow_case.for=$o',
   write: [{ entity: { eid: '$s' }, shipment: { order: '$o' } }],
   when: 'write',
 }

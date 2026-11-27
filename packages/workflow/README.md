@@ -4,8 +4,10 @@ A **step** is a rule stored as a row: `step{match, write, when}`. For each
 binding of its `match` (a [query](../query/README.md#multi-entity-matches)), it
 writes `write`, a list of bundles with its variables filled in. A **workflow**
 (`workflow{}` with a `doc{title, body}`) `contains` its steps. A **case**
-(`case{workflow, for}`) is one item moving through a workflow, and every row a
-step creates for a case carries `made{case, step}`.
+(`workflow_case{workflow, for}`) is one item moving through a workflow, and
+every row a step creates for a case carries `made{case, step}`. The component is
+`workflow_case` because @yaks/trial declares `case`; it becomes `case` once two
+packages may declare one label.
 
 ```sh
 deno add jsr:@yaks/workflow

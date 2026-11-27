@@ -45,7 +45,7 @@ let answer = async (o: string) => {
 for (let o of ['o1', 'o2', 'o3']) await order(o)
 await answer('o1')
 await answer('o3')
-let [o3] = await read('.case.for=o3')
+let [o3] = await read('.workflow_case.for=o3')
 let [done] = await read(`.task&.made.case=${o3.entity.eid}`)
 await apply([{
   entity: done.entity,

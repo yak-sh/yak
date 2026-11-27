@@ -6,7 +6,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './package.json' with { type: 'json' }
 
-/** `step`, `workflow`, `case` and `made`, in the form `loadVocab` accepts. */
+/** `step`, `workflow`, `workflow_case` and `made`, in the form `loadVocab` accepts. */
 export let workflowDoc: VocabDoc = doc as VocabDoc
 
 /** What this package is: its manifest's description, the one place it is

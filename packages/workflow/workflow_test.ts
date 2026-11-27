@@ -26,8 +26,8 @@ test('a step calls out, and the next matches its answer', async () => {
   )
   let [tx] = await g.get([(change._change as Comp).tx as string])
   equal((tx._tx as Comp).by, 'bea')
-  let [kase] = await read('.case')
-  equal(kase.case, { workflow: 'orders', for: 'o1' })
+  let [kase] = await read('.workflow_case')
+  equal(kase.workflow_case, { workflow: 'orders', for: 'o1' })
   equal(call.made, { case: kase.entity.eid, step: 'ask' })
   equal(await read('.shipment'), [])
 
@@ -41,7 +41,7 @@ test('a step calls out, and the next matches its answer', async () => {
   // Touching the order again starts nothing: the case has its call.
   await apply([{ entity: { eid: 'o1' }, order: { item: 'teapot' } }])
   equal((await read('.call')).length, 1)
-  equal((await read('.case')).length, 1)
+  equal((await read('.workflow_case')).length, 1)
 })
 
 test('a person’s step is a task, and the next step matches its completion', async () => {
@@ -58,7 +58,8 @@ test('a person’s step is a task, and the next step matches its completion', as
     when: 'write',
   }, {
     eid: 'send',
-    match: '$t .task, .completed, made.case=$k; $k .case, case.for=$o',
+    match:
+      '$t .task, .completed, made.case=$k; $k .workflow_case, workflow_case.for=$o',
     write: [{ entity: { eid: '$s' }, shipment: { order: '$o' } }],
   })
   await apply([{ entity: { eid: 'o1' }, order: {} }])
@@ -86,7 +87,7 @@ test('a bare step writes no case and no made', async () => {
   }])
   await apply([{ entity: { eid: 'o1' }, order: {} }])
   equal((await read('.order'))[0].order, { item: 'unnamed' })
-  equal(await read('.case'), [])
+  equal(await read('.workflow_case'), [])
   equal(await read('.made'), [])
 })
 

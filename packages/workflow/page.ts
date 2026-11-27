@@ -63,9 +63,10 @@ export let asks = (e: Bundle, io: Io): Asks => {
   let newest = io.vocab.comp('created') ? '&.order=-created.at' : ''
   return {
     steps: `.contains[<=1]<-${w}&.step&*`,
-    cases: `.case.workflow=${w}&*${newest}&.limit=${CASES}`,
-    made: `.made.case.case.workflow=${w}&*&.limit=${MADE}`,
-    results: `.result.call.made.case.case.workflow=${w}&?result&.limit=${MADE}`,
+    cases: `.workflow_case.workflow=${w}&*${newest}&.limit=${CASES}`,
+    made: `.made.case.workflow_case.workflow=${w}&*&.limit=${MADE}`,
+    results:
+      `.result.call.made.case.workflow_case.workflow=${w}&?result&.limit=${MADE}`,
   }
 }
 

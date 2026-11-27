@@ -134,11 +134,17 @@ let caseOf = (
     let cases = ids.map((id) => comp(marks, id, 'made', 'case'))
       .filter((c): c is Eid => !!c)
     let item = ids[0]
-    let derived = identityEid('case', [w, item])
-    return after(tx.get([...cases, derived], ['case']), (rows) => {
-      let found = cases.find((c) => comp(rows, c, 'case', 'workflow') == w)
+    let derived = identityEid('workflow_case', [w, item])
+    return after(tx.get([...cases, derived], ['workflow_case']), (rows) => {
+      let found = cases.find((c) =>
+        comp(rows, c, 'workflow_case', 'workflow') == w
+      )
       let eid = found ?? derived
-      return { eid, item, known: !!comp(rows, eid, 'case', 'workflow') }
+      return {
+        eid,
+        item,
+        known: !!comp(rows, eid, 'workflow_case', 'workflow'),
+      }
     })
   })
 }
@@ -171,7 +177,10 @@ let wrote = (
           : b
       )
       return kase.known ? stamped : [
-        { entity: { eid: kase.eid }, case: { workflow: w, for: kase.item } },
+        {
+          entity: { eid: kase.eid },
+          workflow_case: { workflow: w, for: kase.item },
+        },
         ...stamped,
       ]
     })

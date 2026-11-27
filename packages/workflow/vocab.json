@@ -33,11 +33,11 @@
       "description": "a structure of steps: it `contains` them, and which feeds which is computed from their matches and writes",
       "properties": {}
     },
-    "case": {
+    "workflow_case": {
       "component": true,
       "type": "object",
       "identity": ["workflow", "for"],
-      "description": "one item moving through a workflow, its eid derived from the workflow and the item so a rematch finds it",
+      "description": "a case: one item moving through a workflow, its eid derived from the workflow and the item so a rematch finds it. Named `case` once two packages may declare one label (@yaks/trial declares `case`)",
       "properties": {
         "workflow": {
           "type": "string",
@@ -61,7 +61,7 @@
       "properties": {
         "case": {
           "type": "string",
-          "ref": "case",
+          "ref": "workflow_case",
           "death": "release",
           "description": "the case it was written for"
         },
