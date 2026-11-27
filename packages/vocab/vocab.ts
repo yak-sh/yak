@@ -1090,11 +1090,12 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   let adding: [string, PropSchema][] = []
   for (let doc of docs) {
     for (let [name, said] of Object.entries(doc.$defs ?? {})) {
-      let schema = unnoted(said)
+      // A tool, rule or effect is no word, and is read where it is offered or
+      // run: copying it here would read every tool's input at load.
       if (
-        schema?.tool === true || schema?.rule === true ||
-        schema?.effect === true
+        said?.tool === true || said?.rule === true || said?.effect === true
       ) continue
+      let schema = unnoted(said)
       if (schema?.component !== true) {
         if (schema?.properties || schema?.type == 'object') {
           throw new Error(
