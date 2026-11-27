@@ -25,7 +25,10 @@ export let sealed = (name: string, value: string): Bundle => ({
 })
 
 /** The bundle that forgets one, value and all. */
-export let unsealed = (name: string, eid = secretEid(name)): Bundle => ({
+export let unsealed = (
+  name: string,
+  eid: string = secretEid(name),
+): Bundle => ({
   entity: { eid },
   tombstone: {},
 })
