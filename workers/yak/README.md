@@ -532,11 +532,18 @@ secret:
 
 The zone needs proxied `AAAA @ → 100::` and `AAAA * → 100::` records. Onboard
 `yaks.fyi` for Email Sending and Email Routing with Cloudflare’s issued mail DNS
-records; route its catch-all to `yak-staging`. Custom domains attach through the
-`origin.saas.yaks.fyi` fallback origin and the `*/*` route on that zone with
-staging's `CF_HOSTNAMES_TOKEN`: the account token `yak-staging hostnames`, SSL
-and Certificates Edit on `yaks.fyi` alone, kept in 1Password under the same
-title. Observability is on; staging has no tail consumer.
+records; route its catch-all to `yak-staging`. Until `yaks.fyi` is onboarded for
+Email Sending, the `MAIL` binding refuses every letter from a space’s address
+there with `E_SENDER_DOMAIN_NOT_CONFIGURED`; sign-in codes still arrive, because
+they leave from `bot.yak.sh`. The API onboards it with
+`POST /zones/<CF_ZONE>/email/sending/subdomains` and `{"name": "yaks.fyi"}`,
+which adds the issued DNS records itself. That call needs a token with Email
+Sending Write on the account and DNS Write on the zone. Custom domains attach
+through the `origin.saas.yaks.fyi` fallback origin and the `*/*` route on that
+zone with staging's `CF_HOSTNAMES_TOKEN`: the account token
+`yak-staging hostnames`, SSL and Certificates Edit on `yaks.fyi` alone, kept in
+1Password under the same title. Observability is on; staging has no tail
+consumer.
 
 ## Migration passes: expand, then contract
 
