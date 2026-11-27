@@ -7,7 +7,8 @@
  * visit, and each app's views by the kind of visit. No store is read.
  *
  * Here those answers are told apart, as an app's Who visited tells them
- * (@yaks/platform/visitor `split`): people, likely bots and verified bots;
+ * (@yaks/platform/visitor `split`): people, likely bots, verified bots and
+ * the visits from before they were told apart;
  * and the platform's own test spaces (their every member a test account) from
  * everyone's.
  *
@@ -38,9 +39,10 @@
  * equal(v.people.map((d) => d.views), [0, 3])
  * equal(v.bots.map((d) => d.views), [0, 2])
  * equal(v.verified.map((d) => d.views), [0, 1])
- * equal(v.tests.split.people, 9)
+ * equal(v.tests.split.unknown, 9)
  * equal(v.apps[0], {
- *   eid: 'a1', space: 's1', name: 'ada/notes', people: 3, bots: 2, verified: 0,
+ *   eid: 'a1', space: 's1', name: 'ada/notes',
+ *   people: 3, bots: 2, verified: 0, unknown: 0,
  * })
  * ```
  *
@@ -92,6 +94,8 @@ export type PlatformVisits = {
   bots: Day[]
   /** Verified bots' views a day. */
   verified: Day[]
+  /** The views a day from before people and bots were told apart. */
+  unknown: Day[]
   /** The spaces and apps people opened most, or that had the most visits
    * where bots are counted too. */
   spaces: Place[]
@@ -182,6 +186,7 @@ export let platformVisits = (
     people: perDay((s) => s.people),
     bots: perDay((s) => s.bots),
     verified: perDay((s) => s.verified),
+    unknown: perDay((s) => s.unknown),
     spaces: busiest(inSpace, by).filter((p) => !test(p)).slice(0, TOP),
     apps: busiest(apps, by).filter((p) => !test(p)).slice(0, TOP),
     tests: {

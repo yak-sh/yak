@@ -258,7 +258,7 @@ let KIND = as(kindOf(CLIENT_COL, TIMESTAMP), 'kind')
 /** The data points a list counts: every visit where bots are shown, else
  * people's alone. */
 let counting = (bots: boolean) =>
-  bots ? requests(CLIENT_COL) : people(CLIENT_COL, TIMESTAMP)
+  bots ? requests(CLIENT_COL) : people(CLIENT_COL)
 
 /**
  * Views per app per day by kind of visit, oldest first: the bars, and how
@@ -661,12 +661,16 @@ export let HIT = 60
 /** Where Site keeps one app's answer. */
 export let COUNTED = '/stats/'
 
+// Which shape a kept answer has: a key names it, so Site never answers one
+// kept before its split or its kinds changed (T-4019 added `unknown`).
+let SHAPE = '?shape=2'
+
 /** The key Site keeps an app's answer over `days` under, people's or every
  * visit (`bots`). */
 export let statsAt = (app: string, days = DAYS, bots = false) =>
   `https://site.invalid${COUNTED}${eid(app)}/${whole(days, KEPT_DAYS)}${
     bots ? '/bots' : ''
-  }`
+  }${SHAPE}`
 
 /** How long Site keeps an answer fresh, and then stale while it counts. */
 export let KEEP = `public, max-age=${FRESH / 1000}, ` +
@@ -678,7 +682,7 @@ export let PLATFORM = 'platform'
 
 /** The key Site keeps the platform's answer over `days` under. */
 export let platformAt = (days = DAYS) =>
-  `https://site.invalid${COUNTED}${PLATFORM}/${whole(days, KEPT_DAYS)}`
+  `https://site.invalid${COUNTED}${PLATFORM}/${whole(days, KEPT_DAYS)}${SHAPE}`
 
 /** Site's half: the answer at a {@link statsAt} key, kept with its app's tag
  * so the app's erasure purges it, or at {@link platformAt}. A failure is never

@@ -24,7 +24,7 @@ export let NINE: Counted = {
   days: 3,
   bots: false,
   total: 9,
-  split: { people: 9, bots: 40, verified: 2 },
+  split: { people: 9, bots: 40, verified: 2, unknown: 0 },
   daily: [
     { day: '2026-09-04', views: 2 },
     { day: '2026-09-05', views: 0 },
@@ -39,7 +39,7 @@ export let NONE: Counted = {
   days: 3,
   bots: false,
   total: 0,
-  split: { people: 0, bots: 0, verified: 0 },
+  split: { people: 0, bots: 0, verified: 0, unknown: 0 },
   daily: [],
   pages: [],
   from: [],

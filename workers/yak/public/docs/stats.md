@@ -74,16 +74,19 @@ Counts are kept for about three months and then deleted.
 
 ## People and bots
 
-Every count is split three ways:
+Every count is split three ways, and a fourth for older visits:
 
 - **people**: pages that ran in a browser
 - **likely bots**: every other request for a page, including a browser's whose
   page never ran, a crawler's and an AI assistant's
 - **verified bots**: requests Cloudflare verified as a known bot's
+- **unknown**: a browser's requests from before 12:00 UTC on 2026-11-27, when
+  pages began saying they ran, whose page never said so. Nothing recorded then
+  tells a person from a scraper, so they are neither. They leave a 30-day count
+  by the end of December.
 
 The counts and lists are people's by default. Asked for **with bots**, they
-count every request for a page instead. Visits recorded before 2026-11-27, when
-pages began saying they ran, count a browser's request as a person's.
+count every request for a page instead, unknown ones included.
 
 ## Reading visits with `app_stats`
 
@@ -93,8 +96,8 @@ pages began saying they ran, count a browser's request as a person's.
 
 It returns, for the window of days:
 
-- **total** visits, people's or with bots, and the split of people, likely bots
-  and verified bots
+- **total** visits, people's or with bots, and the split of people, likely bots,
+  verified bots and unknown
 - **daily**: one entry per day, oldest first, including days with no visits
 - **pages**: the most-opened paths
 - **from**: the sites that linked to the app, most visits first

@@ -33,13 +33,16 @@ export type VisitsView = {
 }
 
 /** How many of a window's visits were people's, likely bots' and verified
- * bots' (@yaks/platform/visitor), in a line. */
-/// says({ people: 1, bots: 1200, verified: 3 }) -> '1 person, 1,200 likely bots, 3 verified bots'
+ * bots' (@yaks/platform/visitor), in a line, and how many from before they
+ * were told apart are unknown, where any are. */
+/// says({ people: 1, bots: 1200, verified: 3, unknown: 0 }) -> '1 person, 1,200 likely bots, 3 verified bots'
+/// says({ people: 3, bots: 39, verified: 0, unknown: 120 }) -> '3 people, 39 likely bots, 0 verified bots, 120 unknown'
 export let says = (s: Split) =>
   [
     `${count(s.people)} ${s.people == 1 ? 'person' : 'people'}`,
     `${count(s.bots)} likely bot${s.bots == 1 ? '' : 's'}`,
     `${count(s.verified)} verified bot${s.verified == 1 ? '' : 's'}`,
+    ...s.unknown ? [`${count(s.unknown)} unknown`] : [],
   ].join(', ')
 
 /** The two ways visits are counted, each a link (`href`): people alone, the

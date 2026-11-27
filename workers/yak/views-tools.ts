@@ -5,6 +5,7 @@ import { type Row, worded } from './tool-words.ts'
 import { url as appUrl } from './directory.ts'
 import { ago, NOT_ON, statsFor, statsOf } from './views.ts'
 import { installedBy, ratedAs } from './gallery-row.ts'
+import { says } from '@yaks/platform/visits-view'
 
 // The rows, said as rows: the words each says about itself are in
 // tools.yml under its name (tool-words.ts `worded`).
@@ -65,9 +66,7 @@ let STATS: Row[] = [
           `days${ago(seen)} (${appUrl(space, app, ctx.env)})`,
           ...seen.split
             ? [
-              `Of every page load: ${seen.split.people} people, ` +
-              `${seen.split.bots} likely bots, ` +
-              `${seen.split.verified} verified bots`,
+              `Of every page load: ${says(seen.split)}`,
             ]
             : [],
           ...list('Pages', seen.pages),

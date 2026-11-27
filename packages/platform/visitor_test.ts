@@ -120,13 +120,25 @@ test('split: people ran their page; every other request is a bot', () => {
       people: 3,
       bots: 13,
       verified: 2,
+      unknown: 0,
     }],
-    // Before pages said they ran, a browser's request was a person's, and a
-    // page that ran then counts nothing more.
-    [{ early: 5, none: 2, bot: 1 }, { people: 5, bots: 1, verified: 0 }],
+    // Before pages all said they ran, a browser's request no page answers
+    // for is unknown; the words judged then are still bots.
+    [{ early: 5, ran: 2, bot: 1 }, {
+      people: 2,
+      bots: 1,
+      verified: 0,
+      unknown: 3,
+    }],
     // A page its app's worker kept ran with no request counted.
-    [{ person: 4, browser: 3 }, { people: 4, bots: 0, verified: 0 }],
-    [{}, { people: 0, bots: 0, verified: 0 }],
+    [{ person: 4, browser: 3 }, {
+      people: 4,
+      bots: 0,
+      verified: 0,
+      unknown: 0,
+    }],
+    [{ ran: 4, early: 3 }, { people: 4, bots: 0, verified: 0, unknown: 0 }],
+    [{}, { people: 0, bots: 0, verified: 0, unknown: 0 }],
   ]
   for (let [views, said] of cases) assertEquals(split(views), said)
 })

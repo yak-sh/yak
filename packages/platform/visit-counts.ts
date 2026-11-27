@@ -7,8 +7,9 @@
  * apps move, as `visitCount{space, app, bots, days, total, split, daily,
  * pages, from, countries}` an app, or one `visitCount{space, bots, off}` where
  * the platform cannot say. People's visits alone, or every visit with bots'
- * too (`bots`), as the line asks; the split of people, likely bots and
- * verified bots either way (@yaks/platform/visitor).
+ * too (`bots`), as the line asks; the split of people, likely bots,
+ * verified bots and visits from before any were told apart either way
+ * (@yaks/platform/visitor).
  *
  * The visits of the last day alone, which a space's Updates say at their head
  * (./updates-day.ts), are the line `dayVisits(space)`, answered the same way
@@ -97,6 +98,7 @@ export let visitWords: VocabDoc = {
             people: { type: 'integer' },
             bots: { type: 'integer' },
             verified: { type: 'integer' },
+            unknown: { type: 'integer' },
           },
         },
         daily: {

@@ -1,6 +1,7 @@
 /**
- * `@yaks/platform/visitor` — who asked for a page: a person, a likely bot or
- * a bot Cloudflare verified (T-4012). One classification for every count of
+ * `@yaks/platform/visitor` — who asked for a page: a person, a likely bot, a
+ * bot Cloudflare verified, or, before visits were told apart, unknown
+ * (T-4012, T-4019). One classification for every count of
  * visits: an app's Who visited, the admin's pages and yaks.app's own funnel.
  *
  * A visit is marked twice, as two data points with nothing joining them:
@@ -15,8 +16,12 @@
  *
  * So a count is read from both ({@link split}): people are the pages whose
  * script ran, the verified bots are the requests Cloudflare named, and every
- * other request is a likely bot's. Before {@link SINCE}, when no page said it
- * ran, a `browser` request stands for a person, as it always had.
+ * other request is a likely bot's. Before {@link SINCE}, when pages had not
+ * all begun to say they ran, a `browser` request no page answers for is
+ * unknown: a person's or a scraper's, and nothing kept tells which. The
+ * other words were judged then too, by the hand-written list `isbot` later
+ * replaced, and still count as bots; the user agent and Cloudflare's verdict
+ * were never kept, so nothing more can be judged.
  *
  * Signals there are and are not (T-4012):
  *
@@ -47,14 +52,17 @@
  * equal(asked('Mozilla/5.0 (compatible; AhrefsBot/7.0)'), 'bot')
  * equal(asked('curl/8.5.0'), 'bot')
  * equal(split({ person: 3, browser: 10, bot: 4, verified: 1 }), {
- *   people: 3, bots: 11, verified: 1,
+ *   people: 3, bots: 11, verified: 1, unknown: 0,
+ * })
+ * equal(split({ ran: 2, early: 120 }), {
+ *   people: 2, bots: 0, verified: 0, unknown: 118,
  * })
  * ```
  *
  * @module
  */
 import { isbot } from 'isbot'
-import { and, eq, type Expr, fn, lit, lt, ne, not, or } from '@yaks/sql/core'
+import { and, eq, type Expr, fn, lit, lt, ne } from '@yaks/sql/core'
 
 /** A request as the runtime hands it over, with Cloudflare's own facts on
  * it: the client's country, the network (autonomous system) it asked from,
@@ -136,8 +144,8 @@ export let classed = (req: Request): Kind => {
 /** Whether a person's browser may have asked. */
 export let isPerson = (req: Request) => classed(req) == 'browser'
 
-/** When pages began saying they ran. Before it a `browser` request stands
- * for a person; from it, only a page that ran is one. */
+/** When pages began saying they ran. Before it a `browser` request no page
+ * answers for is unknown; from it, a likely bot's. */
 export let SINCE = '2026-11-27 12:00:00'
 
 // Whether a data point was written before pages said they ran.
@@ -146,8 +154,8 @@ let before = (timestamp: Expr) => lt(timestamp, fn('toDateTime', lit(SINCE)))
 /**
  * A data point's kind for counting, from its word (`client`) and when it was
  * written (`timestamp`), as Analytics Engine SQL: `early` for a browser's
- * request before {@link SINCE}, `none` for a page that ran before it (its
- * request counted already), and otherwise the word itself.
+ * request before {@link SINCE}, `ran` for a page that ran before it, and
+ * otherwise the word itself.
  */
 export let kindOf = (client: Expr, timestamp: Expr): Expr =>
   fn(
@@ -157,24 +165,26 @@ export let kindOf = (client: Expr, timestamp: Expr): Expr =>
     fn(
       'if',
       and(eq(client, lit('person')), before(timestamp)),
-      lit('none'),
+      lit('ran'),
       client,
     ),
   )
 
-/** The data points that are people's visits, by the same rule. */
-export let people = (client: Expr, timestamp: Expr): Expr =>
-  or(
-    and(eq(client, lit('person')), not(before(timestamp))),
-    and(eq(client, lit('browser')), before(timestamp)),
-  )
+/** The data points that are people's visits: the pages that ran. */
+export let people = (client: Expr): Expr => eq(client, lit('person'))
 
 /** The data points that are requests: every visit, people's and bots'
  * alike. */
 export let requests = (client: Expr): Expr => ne(client, lit('person'))
 
-/** How many visits were people's, verified bots' and likely bots'. */
-export type Split = { people: number; bots: number; verified: number }
+/** How many visits were people's, likely bots' and verified bots', and how
+ * many from before {@link SINCE} nothing tells apart. */
+export type Split = {
+  people: number
+  bots: number
+  verified: number
+  unknown: number
+}
 
 // The kinds that are not a likely bot's request.
 let NOT_BOTS = new Set([
@@ -182,16 +192,16 @@ let NOT_BOTS = new Set([
   'early',
   'browser',
   'verified',
-  'none',
+  'ran',
   'test',
 ])
 
 /**
- * Views by {@link kindOf}, split: people are the pages that ran and the
- * browsers' requests before {@link SINCE}; verified bots the requests
- * Cloudflare named; likely bots every other request, and a browser's that no
- * page that ran answers for. A page can run with no request counted (a page
- * its app's own worker keeps), so those never go below none.
+ * Views by {@link kindOf}, split: people are the pages that ran; verified
+ * bots the requests Cloudflare named; likely bots every other request, and a
+ * browser's that no page that ran answers for; unknown a browser's before
+ * {@link SINCE} that none answers for. A page can run with no request counted
+ * (a page its app's own worker keeps), so those never go below none.
  */
 export let split = (views: Partial<Record<string, number>>): Split => {
   let n = (kind: string) => views[kind] ?? 0
@@ -199,11 +209,12 @@ export let split = (views: Partial<Record<string, number>>): Split => {
     .filter(([kind]) => !NOT_BOTS.has(kind))
     .reduce((sum, [, v]) => sum + (v ?? 0), 0)
   return {
-    people: n('person') + n('early'),
+    people: n('person') + n('ran'),
     bots: bots + Math.max(0, n('browser') - n('person')),
     verified: n('verified'),
+    unknown: Math.max(0, n('early') - n('ran')),
   }
 }
 
 /** Every visit a split counts: what a list with bots shown sums. */
-export let all = (s: Split) => s.people + s.bots + s.verified
+export let all = (s: Split) => s.people + s.bots + s.verified + s.unknown

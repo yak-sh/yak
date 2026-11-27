@@ -119,7 +119,7 @@ let CHROME =
 // (@yaks/platform/visitor `kindOf`).
 let EARLY = `timestamp < toDateTime('${SINCE}')`
 let KIND = `if(blob6 = 'browser' AND ${EARLY}, 'early', ` +
-  `if(blob6 = 'person' AND ${EARLY}, 'none', blob6))`
+  `if(blob6 = 'person' AND ${EARLY}, 'ran', blob6))`
 let BOX = 'b0000000-0000-4000-8000-00000000000b'
 let ONE = [APP]
 
@@ -160,9 +160,7 @@ test('the four queries, in full', () => {
     'SELECT index1 AS app, blob3 AS path, sum(_sample_interval) AS views ' +
     `FROM yak_views WHERE index1 IN ('${APP}') ` +
     "AND timestamp >= NOW() - INTERVAL '30' DAY " +
-    (bots
-      ? "AND blob6 != 'person' "
-      : `AND (blob6 = 'person' AND NOT ${EARLY} OR blob6 = 'browser' AND ${EARLY}) `) +
+    (bots ? "AND blob6 != 'person' " : "AND blob6 = 'person' ") +
     'GROUP BY app, path ORDER BY views DESC LIMIT 3'
   assertEquals(analytics(topPages(ONE, 30, 3)), pages(false))
   assertEquals(analytics(topPages(ONE, 30, 3, 'yak_views', true)), pages(true))
@@ -228,13 +226,16 @@ test("daily: a dense series of people's visits, or every visit", () => {
     { day: '2026-09-06 00:00:00', kind: 'browser', views: 15 },
     { day: '2026-09-06 00:00:00', kind: 'bot', views: 40 },
     { day: '2026-09-04 00:00:00', kind: 'early', views: 3 },
+    { day: '2026-09-04 00:00:00', kind: 'ran', views: 1 },
     { day: '2026-09-04 00:00:00', kind: 'verified', views: 1 },
   ]
   let views = (bots: boolean) =>
     daily(rows, 4, now, bots).map((d) => [d.day, d.views])
+  // Before pages said they ran, only one that did is a person's; the other
+  // two a browser asked for are unknown.
   assertEquals(views(false), [
     ['2026-09-03', 0],
-    ['2026-09-04', 3],
+    ['2026-09-04', 1],
     ['2026-09-05', 0],
     ['2026-09-06', 12],
   ])
@@ -376,8 +377,14 @@ test('every app of a page is asked about in the same four queries', async () => 
     )
     assertEquals(all?.get(app)?.total, 3)
     assertEquals(all?.get(app)?.pages, [{ name: '/cookbook/', views: 3 }])
-    assertEquals(all?.get(box)?.total, 5)
-    assertEquals(all?.get(box)?.split, { people: 5, bots: 8, verified: 0 })
+    // A browser's requests from before pages said they ran are unknown.
+    assertEquals(all?.get(box)?.total, 0)
+    assertEquals(all?.get(box)?.split, {
+      people: 0,
+      bots: 8,
+      verified: 0,
+      unknown: 5,
+    })
     assertEquals(all?.get(box)?.pages, [{ name: '/box/', views: 5 }])
     // Held for a few minutes: asked again, nothing is asked.
     await statsOf(env(), box, 3, Date.parse('2026-09-06T12:01:00Z'))
@@ -405,7 +412,7 @@ test("with bots shown, an app's lists count every visit, held apart", async () =
     let all = (await statsFor(env(), [app], 3, now, true))!.get(app)!
     assertEquals([people.bots, people.total], [false, 2])
     assertEquals([all.bots, all.total], [true, 9])
-    assertEquals(all.split, { people: 2, bots: 7, verified: 0 })
+    assertEquals(all.split, { people: 2, bots: 7, verified: 0, unknown: 0 })
     assertEquals(api.asked.length, 8)
     let lists = api.asked.slice(4).filter((q) => asks(q) != 'day')
     assert(lists.every((q) => q.includes("blob6 != 'person'")), lists[0])

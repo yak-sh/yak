@@ -697,12 +697,14 @@ test("the Visits page counts every space's and app's visits, people first and te
       }),
   } as Directory
   // Seven pages a browser asked for, five of which ran; a crawler's two, a
-  // verified bot's one; and a test space's, from before pages said they ran.
+  // verified bot's one; three a browser asked for before pages said they
+  // ran; and a test space's, from then too.
   let kinds: [string, number][] = [
     ['person', 5],
     ['browser', 7],
     ['bot', 2],
     ['verified', 1],
+    ['early', 3],
   ]
   let sql = analytics((q) =>
     q.includes('GROUP BY day, space, kind')
@@ -749,16 +751,23 @@ test("the Visits page counts every space's and app's visits, people first and te
       'ann /admin/home',
       'ann/notes /admin/home',
     ]])
-    assertEquals([people.block('bots'), people.block('verified')], [null, null])
+    assertEquals(
+      ['bots', 'verified', 'unknown'].map(people.block),
+      [null, null, null],
+    )
     assertEquals(people.block('tests'), ['Test spaces', '9 visits', [
       'lab /admin/lab',
     ]])
     assertStringIncludes(people.text, 'counted just now')
-    // The two pages a browser asked for that never ran are a bot's.
-    assertStringIncludes(people.text, '5 people, 4 likely bots, 1 verified bot')
+    // The two pages a browser asked for that never ran are a bot's; those
+    // from before pages said they ran are unknown.
+    assertStringIncludes(
+      people.text,
+      '5 people, 4 likely bots, 1 verified bot, 3 unknown',
+    )
 
     let all = await read('/admin/visits?bots')
-    assertEquals(all.block('people'), ['Every visit', '10 visits', [
+    assertEquals(all.block('people'), ['Every visit', '13 visits', [
       'ann /admin/home',
       'ann/notes /admin/home',
     ]])
@@ -767,6 +776,7 @@ test("the Visits page counts every space's and app's visits, people first and te
       'Verified bots',
       '1 visit',
     ])
+    assertEquals(all.block('unknown')?.slice(0, 2), ['Unknown', '3 visits'])
   } finally {
     sql.done()
   }

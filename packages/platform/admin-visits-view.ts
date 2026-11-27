@@ -3,8 +3,9 @@
  * a space's Visits page draws an app's (./visits-view.ts `chart`, `column`),
  * under the same tabs (`botTabs`): people's visits alone by default, a bar a
  * day and the spaces and apps they opened most, each opening on its space's
- * admin page; or every visit, bots' too, and then the likely bots and the
- * verified bots, a bar a day each. The split of people and bots is said
+ * admin page; or every visit, bots' too, and then the likely bots, the
+ * verified bots and the visits from before they were told apart, a bar a day
+ * each. The split of people and bots is said
  * either way, and the platform's own test spaces are counted apart.
  *
  * @module
@@ -67,12 +68,14 @@ export let adminVisitsView = (
     people: sum(v.people),
     bots: sum(v.bots),
     verified: sum(v.verified),
+    unknown: sum(v.unknown),
   }
   let by = bots ? all : (p: Place) => p.people
   let shown = bots
     ? v.people.map((d, i) => ({
       day: d.day,
-      views: d.views + v.bots[i].views + v.verified[i].views,
+      views: d.views + v.bots[i].views + v.verified[i].views +
+        v.unknown[i].views,
     }))
     : v.people
   let bars = (id: string, title: string, days: Day[]) => {
@@ -102,6 +105,7 @@ export let adminVisitsView = (
     ),
     bots ? bars('bots', 'Likely bots', v.bots) : null,
     bots ? bars('verified', 'Verified bots', v.verified) : null,
+    bots && total.unknown ? bars('unknown', 'Unknown', v.unknown) : null,
     report(
       'tests',
       'Test spaces',

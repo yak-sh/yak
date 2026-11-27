@@ -1669,8 +1669,8 @@ app_stats:
     done: 'Checked how many people visit %{app}'
   description: >-
     Return page-view counts for an app: the total over the last 30 days by
-    default, how many were people's, likely bots' and verified bots', and
-    counts by page, referring site and country. Leave app out for every app
+    default, how many were people's, likely bots' and verified bots' (and
+    unknown, for older visits nothing tells apart), and counts by page, referring site and country. Leave app out for every app
     in the space, a total each, busiest first, as its Visits page shows them.
     These count page loads, not distinct people: by default only the pages
     that ran in a browser, or every page load with bots true. Pass days for a
