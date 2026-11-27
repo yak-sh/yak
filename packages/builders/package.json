@@ -6,6 +6,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./effects": "./effects.ts",
+    "./takes": "./takes.ts",
     "./model": "./model.ts",
     "./agent": "./agent.ts",
     "./tools": "./tools.ts",

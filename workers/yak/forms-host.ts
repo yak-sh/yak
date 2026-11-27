@@ -4,9 +4,8 @@
 // (recognized.ts).
 import { type Bundle, signed } from '@yaks/graph'
 import type { Options } from '@yaks/forms/graph'
-import { emailOf } from '@yaks/people'
+import { emailOf } from '@yaks/people/row'
 import type { Stored } from './graph.ts'
-import { recognized } from './recognized.ts'
 
 /** Where an app's pages are served, from the address its letters leave under:
  * `<space>.<app>@<apex>`, or `<space>@<apex>` for the app that is the
@@ -31,5 +30,8 @@ export let formsOptions = (
     at.app ? at.graph.apply(signed(rows, { by: at.app })) : [],
   site: () => siteOf(at.mail()),
   addressOf: emailOf,
-  known: (person) => recognized(at, person),
+  // Matching a number needs the phone metadata, loaded only by a form that
+  // asks who a signed-in person is.
+  known: async (person) =>
+    (await import('./recognized.ts')).recognized(at, person),
 })

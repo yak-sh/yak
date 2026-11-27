@@ -33,6 +33,10 @@ import { ctxOf } from './connections.ts'
 import { vaultOf } from './vault.ts'
 import type { Env } from './env.ts'
 import { background, invocationKey } from './defects.ts'
+import type { Bundle, Comp } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
+import { after } from '@yaks/fp'
+import type { Stored } from './graph.ts'
 
 let setting = (env: object, name: string): string | undefined => {
   let value = (env as Record<string, unknown>)[name]
@@ -264,5 +268,26 @@ export let granted = (
       value: setting(env, s)!,
       hosts,
     })),
+  )
+}
+
+// Only providers are installed. Model rows stay as history and are never retired
+// because a newer release or a code list stopped naming them. A store that
+// reads synchronously is answered synchronously, so a seed applied while a
+// release is selected can stand them up first (graph.ts `#providing`).
+export let planting = (
+  read: Stored['graph']['read'],
+  at: Pick<Stored, 'meta' | 'app' | 'env'>,
+): Bundle[] | Promise<Bundle[]> => {
+  if (at.meta || !at.app) return []
+  return after(
+    read('.provider&*'),
+    (held) =>
+      names(at.env, serving).flatMap((name): Bundle[] =>
+        held.some((b) => (b.provider as Comp).name == name) ? [] : [{
+          entity: { eid: identityEid('provider', [name]) },
+          provider: { name, transport: 'http', offered: true },
+        }]
+      ),
   )
 }

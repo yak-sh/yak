@@ -2,11 +2,25 @@
 // identifies one attempt; definition edits never invalidate an input fingerprint.
 // Nested collections change the key without changing the build's identity.
 
-import type { Binding, Bundle } from '@yaks/graph'
+import type { Binding, Bundle, Eid } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 import type { Wiring } from './answer.ts'
 
 export { content } from '@yaks/kernel'
+
+// The keys builds and their takes are found again by (@yaks/key), each
+// naming what a row is the build or output of.
+export let BUILD_OF = 'build_of'
+export let OUTPUT_OF = 'output_of'
+
+/** What a build's key says: whose build it is, of which variant, for which
+ * outer tuple (`match`, as JSON). Nested collections never enter it. */
+export let buildOf = (builder: Eid, match: string, variant = 'main'): string =>
+  `${builder}/${variant}/${match}`
+
+/** What one take's key says: build, slot and producing call. */
+export let outputOf = (build: Eid, slot: string, call: Eid): string =>
+  `${build}/${slot}/${call}`
 
 // Graph admission fills absent component properties with null. Those stored
 // blanks have the same meaning as omission in an authored definition.

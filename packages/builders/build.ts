@@ -10,7 +10,16 @@ import { token } from '@yaks/graph/sha256'
 import { held, keyed } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { next } from '@yaks/wake'
-import { definitionKey, inputKey, key, membersOf } from './key.ts'
+import {
+  BUILD_OF,
+  buildOf,
+  definitionKey,
+  inputKey,
+  key,
+  membersOf,
+  OUTPUT_OF,
+  outputOf,
+} from './key.ts'
 import { inputs, queried, sync } from './deps.ts'
 import type { Wiring } from './answer.ts'
 import { answered, type Code } from './code.ts'
@@ -77,19 +86,9 @@ export let due = (builder: Comp | undefined, at: string): boolean => {
 // A build and an output keep the eid they were minted with, which says nothing
 // about the builder that made them, and each is found again by a key
 // (@yaks/key): a row at an id derived from what it is the build or output of,
-// whose `key.of` names it. A new answer adds takes; replay finds the takes
-// of that same call without replacing earlier answers.
-export let BUILD_OF = 'build_of'
-export let OUTPUT_OF = 'output_of'
-
-/** What a build's key says: whose build it is, of which variant, for which
- * outer tuple (`match`, as JSON). Nested collections never enter it. */
-export let buildOf = (builder: Eid, match: string, variant = 'main'): string =>
-  `${builder}/${variant}/${match}`
-
-/** What one take's key says: build, slot and producing call. */
-export let outputOf = (build: Eid, slot: string, call: Eid): string =>
-  `${build}/${slot}/${call}`
+// whose `key.of` names it (key.ts `BUILD_OF`, `OUTPUT_OF`). A new answer adds
+// takes; replay finds the takes of that same call without replacing earlier
+// answers.
 
 /** The build a builder made for an outer tuple, found by its key. */
 export let buildFor = async (

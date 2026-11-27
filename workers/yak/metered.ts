@@ -7,7 +7,6 @@ import type { Namespace } from '@yaks/durable-object/door'
 import { type Directory, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { mailedTo, outgoing } from './post.ts'
-import { usedMail } from './space-mail.ts'
 import { defect } from './defects.ts'
 import { reserved, tabbed } from './model-spend.ts'
 import { counted } from './meter.ts'
@@ -34,6 +33,7 @@ export let charging = (
     let receipt = await sender.send(m)
     await counted({ STORE: bind.STORE }, space)
     // A Plus plan space's first letter sets its subdomain up for mail.
+    let { usedMail } = await import('./space-mail.ts')
     await usedMail(bind, space)
     return receipt
   },

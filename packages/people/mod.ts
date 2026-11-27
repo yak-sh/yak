@@ -9,12 +9,13 @@ import { e164 } from '@yaks/phone/mobile'
 import { type Built, line } from '@yaks/query'
 import { typesOf, type Vocab } from '@yaks/vocab'
 import { peopleDoc } from './vocab.ts'
+import { fields } from './row.ts'
+
+export { emailOf } from './row.ts'
 
 /** The words this package declares. */
 export type Word = 'individual' | 'household' | 'relation'
 
-let fields = (row: Bundle | undefined, name: string): Comp =>
-  row?.[name] as Comp ?? {}
 let empty = (v: unknown) => v == null || typeof v == 'string' && !v.trim()
 let folded = (v: unknown) => typeof v == 'string' ? v.trim().toLowerCase() : ''
 let number = (v: unknown) => typeof v == 'string' ? e164(v) : null
@@ -72,14 +73,6 @@ export let addresses = (value: unknown): string[] =>
 /// living({ entity: { eid: 'a' }, phone: { number: '+15555550100' } }) -> true
 export let living = (row: Bundle): boolean =>
   !dead(row) && fields(row, 'individual').deceased !== true
-
-/** The address a person's row lists, as it is typed. */
-/// emailOf({ entity: { eid: 'a' }, individual: { email: 'ann@x.org' } }) -> 'ann@x.org'
-/// emailOf(undefined) -> undefined
-export let emailOf = (row: Bundle | undefined): string | undefined => {
-  let email = fields(row, 'individual').email
-  return typeof email == 'string' ? email : undefined
-}
 
 /** `row` as it reads with `phone` typed as the person's number: what a
  * sign-up by text starts from, since the platform received the text from it. */

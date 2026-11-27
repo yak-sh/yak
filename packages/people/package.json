@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
+    "./row": "./row.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts"
   },

@@ -4,7 +4,8 @@ An app's own people: the members, guests and relatives a church directory keeps,
 as `individual`, `household` and `relation` rows. The pure functions read rows
 the caller already read: who a phone, an address and a name belong to, what a
 person's empty properties take from answers, and a typed postal address as a
-household's parts. `./graph` is the rule a sign-up's people settle by.
+household's parts. `./graph` is the rule a sign-up's people settle by, and
+`./row` reads a person's address without loading the phone metadata.
 
 ```ts
 import { address, matching, whose } from '@yaks/people'

@@ -4,8 +4,7 @@
 import type { Binding, Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { keyed, keyEid } from '@yaks/key'
-import { OUTPUT_OF, outputOf } from './build.ts'
-import { inputKey } from './key.ts'
+import { inputKey, OUTPUT_OF, outputOf } from './key.ts'
 
 let comp = (row: Bundle | undefined, name: string): Comp | undefined =>
   row?.[name] as Comp | undefined

@@ -92,9 +92,8 @@ import { sessionMove } from './session-move.ts'
 import { jobs } from './jobs.ts'
 import { statements } from '@yaks/sqlite'
 import type { Context as Reported } from '@yaks/tracker/report'
-import { planting, recovering } from './models.ts'
+import { planting } from './providers.ts'
 import { bookmarks, RESTORING } from './bookmarks.ts'
-import { hits as documentHits } from './document-search.ts'
 import { embeddings } from './metered.ts'
 import { attributed } from './attribution.ts'
 import { backed as journalBacked, type Choice, merge } from '@yaks/journal'
@@ -305,9 +304,7 @@ import { misfit, Refused, status } from '@yaks/graph/errors'
 import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
 import { door as formDoor, FORM } from '@yaks/forms/routes'
-import { signupIn } from './signup.ts'
 import { formsOptions } from './forms-host.ts'
-import { calendarIn } from './calendar.ts'
 import {
   Denied,
   type Mode,
@@ -365,7 +362,6 @@ import { appChatters } from './chat.ts'
 import { expireDirect, nextDirect } from '@yaks/chat'
 import { heldBy, mailTags, outgoing, platformPost } from './post.ts'
 import { realtimeOf } from './rtc.ts'
-import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
 import {
   pageWhereabouts,
@@ -477,9 +473,7 @@ import {
   useUntil,
   using,
 } from './used.ts'
-import * as funnel from './funnel.ts'
 import { instrumentActor, instrumentEid } from '@yaks/platform/instrument'
-import { commandAt } from './app-command.ts'
 import { commandReply } from '@yaks/platform/app-command'
 import { vaultOf } from './vault.ts'
 import { connectionAccess } from './connection-access.ts'
@@ -3186,7 +3180,7 @@ export class Store extends Durable {
           },
         }
         let answered = held
-          ? await commandAt(
+          ? await (await import('./app-command.ts')).commandAt(
             this.#bind as Env,
             held.space,
             held.app,
@@ -5596,9 +5590,11 @@ export class Store extends Durable {
       )
     }
     if (path == '/signup' && kernel) {
+      let { signupIn } = await import('./signup.ts')
       return signupIn(request, this.#stored(this.#graph))
     }
     if (path == '/calendar' && kernel) {
+      let { calendarIn } = await import('./calendar.ts')
       return calendarIn(request, this.#stored(this.#graph))
     }
     // An app's form, whoever asks (@yaks/forms/routes): the edge vouches the
@@ -5692,6 +5688,7 @@ export class Store extends Durable {
         })
         if (!mark && row.person && returned(previous, at)) {
           let who = (row.email as { address?: string } | undefined)?.address
+          let funnel = await import('./funnel.ts')
           funnel.step(this.#bind, 'returned', undefined, { who: who ?? null })
         }
       }
@@ -6117,6 +6114,7 @@ export class Store extends Durable {
         if (kind == 'directory' && !space) {
           throw new Refused('a directory call needs space')
         }
+        let { storedTools } = await import('./package-tools.ts')
         let tools = storedTools(
           this.#host,
           kind,
@@ -6174,6 +6172,7 @@ export class Store extends Durable {
       let reader = { person, level: level ?? null }
       let screen = (line: string) =>
         this.#texts.screen(line, this.#graph.scope(reader))
+      let { hits: documentHits } = await import('./document-search.ts')
       return Response.json(
         await documentHits(
           {
@@ -6202,6 +6201,7 @@ export class Store extends Durable {
           call?: unknown
         }
         if (typeof call != 'string') return json({ error: 'BadRequest' }, 400)
+        let { recovering } = await import('./models.ts')
         return Response.json(await recovering(this.#stored(this.#graph), call))
       } catch (e) {
         return refuse(e, request)

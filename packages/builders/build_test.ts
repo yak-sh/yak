@@ -16,18 +16,9 @@ import { edgeEid } from '@yaks/edge'
 import { CallError, type Runner, runner, toolEid } from '@yaks/tools'
 import { marksDoc } from '@yaks/kernel/vocab'
 import { ids, noon, shop } from './testing.ts'
-import {
-  BUILD_OF,
-  buildFor,
-  buildOf,
-  current,
-  OUTPUT_OF,
-  outputFor,
-  outputOf,
-  selected,
-} from './build.ts'
+import { buildFor, current, outputFor, selected } from './build.ts'
 import { answer as answerWrites } from './answer.ts'
-import { key } from './key.ts'
+import { BUILD_OF, buildOf, key, OUTPUT_OF, outputOf } from './key.ts'
 import { adapted, lengthened, modelTool, render, shortened } from './model.ts'
 import { build, runs } from './tools.ts'
 import { builderDoc } from './vocab.ts'
