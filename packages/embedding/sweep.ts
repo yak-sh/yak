@@ -202,7 +202,8 @@ export let sources = (
       ),
     })).flatMap((r) => {
       if (r.shape != null) {
-        let shape = JSON.parse(String(r.shape))
+        let text = String(r.shape)
+        let shape = db.named ? db.named(text) : JSON.parse(text)
         if (
           Array.isArray(shape) && shape.every((name) => typeof name == 'string')
         ) {

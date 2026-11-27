@@ -10,6 +10,7 @@ import {
   tableAsWritten,
 } from '@yaks/sql'
 import { exclusive, owned, unit } from './unit.ts'
+import { descriptor } from './catalog.ts'
 import { enter } from '@yaks/graph/enter'
 
 let held = new WeakMap<Driver, Statements>()
@@ -60,6 +61,7 @@ export let statements = (driver: Driver): Statements => {
         render(s, undefined, undefined, driver.stored?.v),
     tableName: (name) => tableAsWritten(driver.stored?.v, name),
     holds: (tables, comp) => descriptorHolds(tables, driver.stored?.v, comp),
+    named: (tables) => descriptor(driver, tables).tables,
     query: (s) => {
       if (
         ['begin', 'commit', 'rollback', 'savepoint', 'release'].includes(s.t)

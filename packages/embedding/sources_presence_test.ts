@@ -2,31 +2,39 @@
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
-import { graph } from '@yaks/graph'
+import { graph, mint } from '@yaks/graph'
 import { by, scan, type Statements, val } from '@yaks/sql'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { minted as mintedText } from '@yaks/vocab/minted'
 import { schema } from './ddl.ts'
 import type { Field } from './fields.ts'
 import { sources } from './sweep.ts'
 
-let vocab = loadVocab([archetypeDoc, {
-  $defs: {
-    doc: {
-      component: true,
-      type: 'object',
-      properties: { title: { type: 'string' }, body: { type: 'string' } },
+// Each word carries a minted identity, as shipped words do, so a descriptor
+// names them by it (@yaks/archetype).
+let minted = (doc: VocabDoc): VocabDoc =>
+  JSON.parse(mintedText(JSON.stringify(doc), mint))
+let vocab = loadVocab([
+  archetypeDoc,
+  minted({
+    $defs: {
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' }, body: { type: 'string' } },
+      },
+      content: {
+        component: true,
+        type: 'object',
+        properties: { body: { type: 'string' } },
+      },
+      entry: { component: true, type: 'object' },
+      draft: { component: true, type: 'object', embed: false },
     },
-    content: {
-      component: true,
-      type: 'object',
-      properties: { body: { type: 'string' } },
-    },
-    entry: { component: true, type: 'object' },
-    draft: { component: true, type: 'object', embed: false },
-  },
-}])
+  }),
+])
 let store = storage(open(':memory:'), vocab)
 store.install()
 let db = store.statements

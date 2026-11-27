@@ -15,6 +15,9 @@ export type Statements = {
    * `comp`, as this store's vocabulary writes descriptors (./archetype.ts
    * `descriptorHolds`). Absent, a descriptor holds a component by its name. */
   holds?: (tables: Expr, comp: string) => Expr
+  /** The components a stored descriptor (`archetype.tables`) names, as a
+   * statement writes them. Absent, its entries are those names. */
+  named?: (tables: string) => readonly string[]
   /** Whether other hosts can write this storage. */
   ownership: 'exclusive' | 'shared'
   /** Whether this async context owns the active transaction on this connection. */

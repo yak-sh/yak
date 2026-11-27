@@ -167,7 +167,7 @@ test('a page reports its own breaks, and the agent hears', async () => {
 test('a refusal the door meant is not a break', async () => {
   let k = await kernel()
   try {
-    let { cookie, eids } = await seed(k, [{ slug: club60, apps: ['runs'] }])
+    let { cookie } = await seed(k, [{ slug: club60, apps: ['runs'] }])
     let agent = connector(k, cookie)
     let app = { space: club60, app: 'runs' }
     let report = (body: unknown) =>
@@ -255,10 +255,11 @@ test('a refusal the door meant is not a break', async () => {
     let outside = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book=')
     assertEquals(outside.status, 400)
     assertStringIncludes(await outside.text(), '.book= is written !book')
-    await meta(k).apply([{
-      entity: { eid: eids[`${club60}/runs`] },
-      app: { access: 'private' },
-    }])
+    // Through app_set, as its owner closes it: a write past the kernel would
+    // leave the kernel's remembered route (route-memory.ts) open for its
+    // lifetime, and this no would then depend on whether the read above was
+    // remembered.
+    await agent.tool('app_set', { ...app, access: 'private' })
     let denied = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book')
     assertEquals(denied.status, 401)
     await denied.body?.cancel()
