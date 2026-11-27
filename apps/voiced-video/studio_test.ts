@@ -1,5 +1,5 @@
 import { equal, test } from '@yaks/testing'
-import { frameList, srt, waiting } from './studio.ts'
+import { captions, frameList, waiting } from './studio.ts'
 
 test('each frame shows until the next, the last until the recording ends', () => {
   equal(
@@ -19,11 +19,13 @@ test('each frame shows until the next, the last until the recording ends', () =>
   )
 })
 
-test('captions say each line while it is said', () => {
-  equal(
-    srt([{ at: 300, ms: 1500, text: 'Ask for an app.' }]),
-    '1\n00:00:00,300 --> 00:00:01,800\nAsk for an app.\n',
-  )
+test('captions say each line while it is said, laid out in the video’s pixels', () => {
+  let ass = captions([{ at: 300, ms: 61500, text: 'Ask for an app.' }])
+  equal(ass.split('\n').filter((l) => /^(PlayRes|Dialogue)/.test(l)), [
+    'PlayResX: 1280',
+    'PlayResY: 720',
+    'Dialogue: 0,0:00:00.30,0:01:01.80,Line,Ask for an app.',
+  ])
 })
 
 test('a take whose panel has a newer take is stale, not filmed', () => {

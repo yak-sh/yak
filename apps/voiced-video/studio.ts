@@ -189,17 +189,38 @@ let takes = async () => {
   }
 }
 
-/** Captions for the cut's clips, as SRT. */
-export let srt = (clips: Comp[]) => {
+/** Captions for the cut's clips, as an ASS script laid out on the video's
+ * own `width` × `height`, so its sizes are the video's pixels: each line on a
+ * translucent box near the bottom while it is said. */
+export let captions = (clips: Comp[], width = 1280, height = 720) => {
   let t = (ms: number) => {
-    let d = new Date(Math.max(0, ms)).toISOString()
-    return `${d.slice(11, 19)},${d.slice(20, 23)}`
+    let cs = Math.round(Math.max(0, ms) / 10)
+    let h = Math.floor(cs / 360000), m = Math.floor(cs / 6000) % 60
+    let sec = Math.floor(cs / 100) % 60
+    return `${h}:${String(m).padStart(2, '0')}:${
+      String(sec).padStart(2, '0')
+    }.${String(cs % 100).padStart(2, '0')}`
   }
-  return clips.map((c, i) =>
-    `${i + 1}\n${t(Number(c.at))} --> ${
-      t(Number(c.at) + Number(c.ms))
-    }\n${c.text}\n`
-  ).join('\n')
+  return [
+    '[Script Info]',
+    'ScriptType: v4.00+',
+    `PlayResX: ${width}`,
+    `PlayResY: ${height}`,
+    'WrapStyle: 0',
+    '',
+    '[V4+ Styles]',
+    'Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV',
+    'Style: Line,DejaVu Sans,32,&H00FFFFFF,&H38000000,&H38000000,0,3,12,0,2,160,160,40',
+    '',
+    '[Events]',
+    'Format: Layer, Start, End, Style, Text',
+    ...clips.map((c) =>
+      `Dialogue: 0,${t(Number(c.at))},${t(Number(c.at) + Number(c.ms))},Line,${
+        String(c.text).replace(/\n/g, ' ')
+      }`
+    ),
+    '',
+  ].join('\n')
 }
 
 // The cut rendered: shots held or trimmed to their time, lines laid at
@@ -209,7 +230,7 @@ let render = async (cut: Comp, out: string) => {
     clips = (cut.clips as Comp[])
       .filter((c) => c.audio)
   let dir = out.replace(/[^/]+$/, '')
-  await Deno.writeTextFile(`${dir}cut.srt`, srt(clips))
+  await Deno.writeTextFile(`${dir}cut.ass`, captions(clips))
   let inputs: string[] = [], graph: string[] = []
   for (let [i, s] of shots.entries()) {
     inputs.push('-i', await fetched(String(s.film)))
@@ -229,7 +250,7 @@ let render = async (cut: Comp, out: string) => {
   graph.push(
     `${
       shots.map((_, i) => `[v${i}]`).join('')
-    }concat=n=${shots.length}:v=1:a=0,subtitles=${dir}cut.srt:force_style='Fontsize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,BorderStyle=3,Outline=6,Shadow=0,MarginV=28'[v]`,
+    }concat=n=${shots.length}:v=1:a=0,subtitles=${dir}cut.ass[v]`,
     `${
       clips.map((_, j) => `[a${j}]`).join('')
     }amix=inputs=${clips.length}:normalize=0,apad,atrim=duration=${seconds}[a]`,
