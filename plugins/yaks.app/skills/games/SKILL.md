@@ -154,9 +154,25 @@ fullscreenButton(document.querySelector('#fullscreen'), console.error)
 
 Size a canvas renderer from the canvas's rendered bounds and update it on
 resize. For SVG, set the `viewBox` so the board remains visible as the aspect
-ratio changes. Lay out the HUD within `GameScreen_Hud` and put
-`GameScreen_Control` on interactive parts. Set `--game-gutter` on the HUD for
-additional spacing from the edges.
+ratio changes. Refit with `fitting(boxes, fit)` from `@yaks/game/screen`: it
+runs `fit` in the next frame after any of the HTML boxes you name resizes, the
+window resizes or fullscreen changes. Never resize or set a `viewBox` inside
+your own `ResizeObserver` callback; the browser reports that as a
+"ResizeObserver loop" error.
+
+```js ignore
+import { fitting } from '@yaks/game/screen'
+
+let board = document.querySelector('#board')
+fitting([document.querySelector('.GameScreen_Hud')], () => {
+  let { width, height } = board.getBoundingClientRect()
+  board.setAttribute('viewBox', `0 0 ${width} ${height}`)
+})
+```
+
+Lay out the HUD within `GameScreen_Hud` and put `GameScreen_Control` on
+interactive parts. Set `--game-gutter` on the HUD for additional spacing from
+the edges.
 
 Ship `manifest.webmanifest` with `"display": "fullscreen"`, an app-scoped
 `start_url` and `scope`, and install icons at 192×192 and 512×512. When a

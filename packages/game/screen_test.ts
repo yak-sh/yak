@@ -2,7 +2,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { fullscreen, fullscreenButton } from './screen.ts'
+import { fitting, fullscreen, fullscreenButton } from './screen.ts'
 
 test('full screen is offered only where supported', () => {
   let { document } = parseHTML('<html><body></body></html>')
@@ -74,4 +74,72 @@ test('the fullscreen button tracks the browser and detaches on disposal', () => 
   assertEquals(button.textContent, 'Exit fullscreen')
   dispose()
   assertEquals(button.hidden, true)
+})
+
+// A page whose frames and resize notifications the test delivers by hand.
+let framed = () => {
+  let { document, window } = parseHTML('<main></main><nav></nav>')
+  let frames = new Map<number, () => void>(), next = 0
+  let notify = () => {}
+  let observed: Element[] = []
+  let win = {
+    document,
+    addEventListener: window.addEventListener.bind(window),
+    removeEventListener: window.removeEventListener.bind(window),
+    requestAnimationFrame: (f: () => void) => (frames.set(++next, f), next),
+    cancelAnimationFrame: (id: number) => frames.delete(id),
+    ResizeObserver: class {
+      constructor(f: () => void) {
+        notify = f
+      }
+      observe(el: Element) {
+        observed.push(el)
+      }
+      disconnect() {
+        observed = []
+      }
+    },
+  } as unknown as Parameters<typeof fitting>[2]
+  let fits = 0
+  let boxes = [...document.querySelectorAll('main, nav')]
+  let stop = fitting(boxes, () => fits++, win)
+  let frame = () => {
+    let due = [...frames.values()]
+    frames.clear()
+    for (let f of due) f()
+    return fits
+  }
+  let fire = (target: EventTarget, type: string) =>
+    target.dispatchEvent(new window.Event(type))
+  return {
+    win: window,
+    document,
+    notify: () => notify(),
+    observed: () => observed,
+    frame,
+    fire,
+    stop,
+    fits: () => fits,
+  }
+}
+
+test('a screen fits once in the next frame, never inside a resize notice', () => {
+  let s = framed()
+  assertEquals([s.observed().length, s.fits()], [2, 0])
+  s.notify()
+  s.notify()
+  assertEquals(s.fits(), 0)
+  assertEquals(s.frame(), 1)
+  assertEquals(s.frame(), 1)
+  s.fire(s.win, 'resize')
+  s.fire(s.document, 'fullscreenchange')
+  assertEquals(s.frame(), 2)
+})
+
+test('a stopped screen fit hears nothing and drops its pending frame', () => {
+  let s = framed()
+  s.stop()
+  s.fire(s.win, 'resize')
+  s.fire(s.document, 'fullscreenchange')
+  assertEquals([s.frame(), s.observed().length], [0, 0])
 })

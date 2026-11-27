@@ -151,6 +151,13 @@ custom control, use `fullscreen(document, refused, changed)` and draw from the
 returned `on` and `busy` values. Give an installable game a web app manifest
 with `"display": "fullscreen"` to launch in that mode where supported.
 
+`fitting(boxes, fit)` runs `fit` in the next frame whenever one of `boxes`
+resizes, the window resizes or fullscreen changes, and once at the start, and
+returns a function that stops it. Observe the layout boxes the surface is fitted
+to, and size the canvas or set the SVG's `viewBox` in `fit`: a fit run inside a
+`ResizeObserver` callback that changes an observed box makes the browser raise
+"ResizeObserver loop completed with undelivered notifications".
+
 ## Browser controls
 
 `@yaks/game/controls` owns keyboard movement, two-button mouse walking,

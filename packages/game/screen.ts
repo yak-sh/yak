@@ -9,6 +9,49 @@ export let screenStyle = (doc: Document): HTMLLinkElement => {
   return sheet
 }
 
+type Frames = Pick<
+  typeof globalThis,
+  | 'ResizeObserver'
+  | 'requestAnimationFrame'
+  | 'cancelAnimationFrame'
+  | 'addEventListener'
+  | 'removeEventListener'
+  | 'document'
+>
+
+/** Run `fit` in the next frame whenever one of `boxes` resizes, the window
+ * resizes or fullscreen changes, and once now; several changes in a frame fit
+ * once. The fit runs in the frame, never inside the observer's callback: a fit
+ * that resizes an observed box there (a canvas's size, an SVG whose `viewBox`
+ * sets its height) leaves notifications undelivered, and the browser raises
+ * "ResizeObserver loop completed with undelivered notifications". Returns a
+ * function that stops it. */
+export let fitting = (
+  boxes: Element[],
+  fit: () => void,
+  win: Frames = globalThis,
+): () => void => {
+  let pending: number | null = null
+  let soon = () => {
+    pending ??= win.requestAnimationFrame(() => {
+      pending = null
+      fit()
+    })
+  }
+  let sizes = new win.ResizeObserver(soon)
+  for (let box of boxes) sizes.observe(box)
+  win.addEventListener('resize', soon)
+  win.document.addEventListener('fullscreenchange', soon)
+  soon()
+  return () => {
+    sizes.disconnect()
+    win.removeEventListener('resize', soon)
+    win.document.removeEventListener('fullscreenchange', soon)
+    if (pending != null) win.cancelAnimationFrame(pending)
+    pending = null
+  }
+}
+
 export type Fullscreen = {
   readonly on: boolean
   readonly busy: boolean
