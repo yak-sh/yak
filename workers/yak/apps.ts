@@ -660,10 +660,15 @@ let sharedFiles = (app: App) => reads(mode(app.access), null) && !sandboxed(app)
 
 // Icons named by their inputs can stay in the browser across page swaps.
 // Unversioned requests and addresses from an earlier release revalidate.
-let iconArt = async (env: Env, app: App) => {
+// The release file an icon is drawn from: its icon.png, or else its icon.svg,
+// which Files draws at icon.png (files.ts `icon`) and tags with the SVG's own
+// version.
+let iconFile = async (env: Env, app: App) => {
   let assets: Assets = await releaseAssets(env, app.source)
-  return (assets['icon.png'] ?? assets['icon.svg'])?.sha
+  return assets['icon.png'] ?? assets['icon.svg']
 }
+
+let iconArt = async (env: Env, app: App) => (await iconFile(env, app))?.sha
 
 export let iconAddress = async (
   env: Env,
@@ -703,13 +708,13 @@ let iconCaching = async (
 
 // What an image load of the icon names: whether its address names the
 // current version (or there is none to name yet), where it is named, and,
-// for a worker handing over the release's own icon.png, that file's tag and
-// how long it is kept.
+// for a worker handing over the release's own icon (its icon.png, or its
+// icon.svg drawn), that file's tag and how long it is kept.
 let iconAsked = async (req: Request, env: Env, space: Space, app: App) => {
   let q = new URL(req.url).searchParams
   let display = q.has('display')
   let version = await iconNamed(env, space, app, display)
-  let own = releaseAsset(await releaseAssets(env, app.source), '/icon.png')
+  let own = await iconFile(env, app)
   return {
     named: version == null || q.get('v') == version,
     at: (mount: string) =>

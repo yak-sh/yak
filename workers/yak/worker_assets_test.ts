@@ -73,7 +73,15 @@ let worker = 'data:text/javascript,' + encodeURIComponent(`export default {
 // A 1×1 picture, as an app's icon.png must decode.
 let PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
-let k = await workerKernel(new URL(worker))
+// yak-raster draws an app's icon.svg at icon.png: here, as that picture.
+let k = await workerKernel(new URL(worker), {
+  RASTER: {
+    fetch: () =>
+      Promise.resolve(
+        new Response(Uint8Array.from(atob(PNG), (c) => c.charCodeAt(0))),
+      ),
+  },
+})
 cleanup(() => k.stop())
 
 let space = unique('kept')
@@ -363,6 +371,18 @@ test("a private app's worker hands a stranger its icon at the address a browser 
   equal(
     icon.headers.get('cache-control'),
     'private, max-age=31536000, immutable',
+  )
+})
+
+test('a worker handing over its icon.svg drawn hands it at the address a browser keeps', async () => {
+  let image = { headers: { 'sec-fetch-dest': 'image' } }
+  let moved = await at('/made/icon.png', image)
+  equal(moved.status, 307)
+  let icon = await at(moved.headers.get('location')!, image)
+  equal(icon.headers.get('content-type'), 'image/png')
+  equal(
+    icon.headers.get('cache-control'),
+    'public, max-age=31536000, immutable',
   )
 })
 
