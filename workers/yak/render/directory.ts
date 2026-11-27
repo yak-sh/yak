@@ -443,7 +443,6 @@ let appPage: Renderer = {
     let deploys = ctx.deploys as number | undefined
     // The live release's message, as whoever released it wrote it.
     let message = ctx.message as string | undefined
-    let visits = ctx.visits as number | null | undefined
     return facts(h, [
       ['Address', h('a', { href: `https://${address}/` }, address)],
       ['Space', ctx.home ? link(h, ctx, ctx.home as Ref) : ''],
@@ -473,19 +472,6 @@ let appPage: Renderer = {
       ['Last active', when(h, u.active)],
       ['Data changed', when(h, u.changed)],
       ['Last error', when(h, u.errored)],
-      [
-        'Visits, 30 days',
-        visits === undefined
-          ? ''
-          : visits === null
-          ? 'not counted here'
-          : trended(
-            h,
-            count(visits),
-            ctx.visiting as Days | undefined,
-            'visit',
-          ),
-      ],
       [
         'Requests this month',
         trended(h, count(num(m.requests)), u.requesting, 'request'),

@@ -89,7 +89,8 @@ import { deskFrame } from './desk-pages.ts'
 import { FRAMED } from './frame.ts'
 import { type IconName, icons } from './icons.ts'
 import { type Host, spaceHost, url } from '@yaks/platform/host'
-import { DAYS, NOT_ON, statsOf } from './views.ts'
+import { DAYS, NOT_ON, statsFor, statsOf } from './views.ts'
+import { appVisits } from '@yaks/platform/visits-view'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
 import { arrivals } from './arrivals.ts'
 import { splitSays, stopped } from '@yaks/platform/funnel'
@@ -97,7 +98,7 @@ import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
 import { type Listed, listed, type Worked } from './operator-view.ts'
-import { ADMIN, managePath } from '@yaks/platform/routes'
+import { ADMIN, managePath, type MarkedApp } from '@yaks/platform/routes'
 import { NAMES } from '@yaks/ui/navigate'
 import { admin } from './tool.ts'
 import { adminWho } from './asking.ts'
@@ -970,6 +971,42 @@ export let possessions = (d: Reading, r: Row) => {
   )
 }
 
+// Who visited these apps of one space, each drawn as its owner's Visits page
+// draws it (@yaks/platform/visits-view), read as the admin.
+let visiting = async (env: Env, d: Reading, apps: Row[]) => {
+  if (!apps.length) return null
+  let eids = apps.map((a) => a.entity.eid)
+  let one = apps.length == 1 ? statsOf(env, eids[0]) : null
+  let read = one
+    ? one.then((s) => new Map([[eids[0], s]]))
+    : statsFor(env, eids)
+  let counts = read && await read.catch((e) => {
+    caught(e, { request: 'admin visits' })
+    return e instanceof Error ? e : new Error(String(e))
+  })
+  let site = `https://${spaceHost(d.env, slugOf(d, appSpace(apps[0])))}`
+  return h(
+    Fragment,
+    null,
+    h(Group, null, 'Visits'),
+    !counts
+      ? h(Form.Hint, null, NOT_ON)
+      : counts instanceof Error
+      ? h(Form.Hint, null, `Visits could not be counted: ${counts.message}`)
+      : apps.flatMap((a) => {
+        let n = counts.get(a.entity.eid)
+        return n ? [appVisits(marked(a), n, site)] : []
+      }),
+  )
+}
+
+// An app as the owner's pages name it.
+let marked = (r: Row): MarkedApp => ({
+  eid: r.entity.eid,
+  slug: r.app!.slug ?? r.former?.slug ?? '',
+  title: r.doc?.title ?? '',
+})
+
 // One row's page: its own facts, drawn by its renderer, then what it holds.
 export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
   let c = d.census
@@ -985,9 +1022,11 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
         .flatMap((s) => byId(seatPerson(s)) ?? [])
     ctx.owners = held('owner').map((p) => refOf(d, p))
     let space = spaceOf(r)
-    let [support, retry] = await Promise.all([
+    let apps = c.apps.filter((a) => appSpace(a) == r.entity.eid)
+    let [support, retry, visits] = await Promise.all([
       supportFor(env, space),
       setupWaiting(env, space),
+      visiting(env, d, apps),
     ])
     let subscription = space.plan?.status == 'canceled' ||
         space.plan?.status == 'incomplete_expired'
@@ -1018,7 +1057,8 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
       grouped(d, 'Owners', held('owner')),
       grouped(d, 'Editors', held('editor')),
       grouped(d, 'Viewers', held('viewer')),
-      grouped(d, 'Apps', c.apps.filter((a) => appSpace(a) == r.entity.eid)),
+      grouped(d, 'Apps', apps),
+      visits,
     )
   }
   if (r.app) {
@@ -1026,25 +1066,17 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
     let from = r.installed?.of ? d.apps.get(idOf(r.installed.of)) : undefined
     let [deploys, visits] = await Promise.all([
       dir.deploys(appAbout(r)),
-      (statsOf(env, r.entity.eid) ?? Promise.resolve(null))
-        .then((s) => s, (e) => {
-          caught(e, { request: 'admin visits' })
-          return null
-        }),
+      visiting(env, d, [r]),
     ])
     ctx.home = home ? refOf(d, home) : undefined
     ctx.from = from ? refOf(d, from) : undefined
     ctx.deploys = deploys.length
     ctx.message = deploys.find((v) => v.version == r.app!.version)?.message ??
       undefined
-    ctx.visits = visits?.total ?? null
-    ctx.visiting = visits?.daily.length
-      ? { from: visits.daily[0].day, values: visits.daily.map((d) => d.views) }
-      : undefined
     let copies = c.apps.filter((a) =>
       a.installed?.of && idOf(a.installed.of) == r.entity.eid
     )
-    more = grouped(d, 'Installed as', copies)
+    more = h(Fragment, null, visits, grouped(d, 'Installed as', copies))
   }
   return desk(
     d,

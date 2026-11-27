@@ -619,3 +619,62 @@ test('the Letters page lists each trial, and a trial its letters beside what eac
     assertStringIncludes(one, said)
   }
 })
+
+test("an app's page and its space's say who visited, as the owner's Visits page does", async () => {
+  // Its own app, so a module that ran before holds no answer.
+  let eid = crypto.randomUUID()
+  let today = new Date().toISOString().slice(0, 10)
+  let notes: Row = {
+    entity: { eid },
+    app: { slug: 'notes', space: 'jhome', version: 1, access: 'public' },
+    doc: { title: 'Notes' },
+  }
+  let rows = [...inviting.spaces, notes]
+  let visited = {
+    ...admin,
+    census: () => Promise.resolve({ ...inviting, apps: [notes] }),
+    read: (q: string) =>
+      Promise.resolve(
+        rows.filter((r) => q == line`.entity.eid=${r.entity.eid}`),
+      ),
+    deploys: () => Promise.resolve([]),
+  } as Directory
+  let sql = analytics(() => [
+    {
+      app: eid,
+      day: today,
+      views: 5,
+      path: '/recipes',
+      site: 'news.example',
+      country: 'NZ',
+    },
+  ])
+  try {
+    let on = { ...env, CF_ANALYTICS_TOKEN: 't', CF_ACCOUNT: 'a' } as Env
+    let report = async (at: string) => {
+      let [req, , path] = asking(at, 'root')
+      let { document } = parseHTML(
+        await (await answer(req, on, path, visited))!.text(),
+      )
+      let block = document.querySelector(`.Report[data-key="${eid}"]`)
+      return [
+        block?.querySelector('.Card_Link')?.getAttribute('href'),
+        block?.querySelector('.Report_Total')?.textContent,
+        [...block?.querySelectorAll('.Report_Heading') ?? []]
+          .map((h) => h.textContent),
+        [...block?.querySelectorAll('.Report_Label') ?? []]
+          .map((l) => l.textContent),
+      ]
+    }
+    let said = [
+      'https://jeff.yaks.app/notes/',
+      '5 visits',
+      ['Pages', 'Came from', 'Countries'],
+      ['/recipes', 'news.example', 'NZ'],
+    ]
+    assertEquals(await report(`/admin/${eid}`), said)
+    assertEquals(await report('/admin/jhome'), said)
+  } finally {
+    sql.done()
+  }
+})

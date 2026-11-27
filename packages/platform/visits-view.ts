@@ -65,7 +65,10 @@ let column = (head: string, rows: Line[]) =>
     )
     : null
 
-let report = (app: MarkedApp, c: Counted, site: string) =>
+/** One app's block of the Visits page: its total, a bar per day and the
+ * pages, sites and countries, served at `site`. The admin's page of the app
+ * draws the same block (yaks.app's admin.ts). */
+export let appVisits = (app: MarkedApp, c: Counted, site: string) =>
   h(
     Report,
     { 'aria-labelledby': `visits-${app.slug}`, 'data-key': app.eid },
@@ -119,5 +122,5 @@ export let visitsView = (
     ? h(Form.Hint, null, NOT_ON)
     : apps.flatMap((a) => {
       let c = counts.get(a.eid)
-      return c ? [report(a, c, view.site)] : []
+      return c ? [appVisits(a, c, view.site)] : []
     })
