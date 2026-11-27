@@ -665,11 +665,13 @@ name lookup.
 
 `derivedEid(text)` derives a version-8 UUID from SHA-256. The vocabulary's
 [identity keyword](../vocab/README.md#identity-and-indexes) selects the values
-`identityEid(component, values)` uses. Writing them under an alias derives the
-eid; writing them onto a different eid is refused. A plugin's `derive` overrides
-the vocabulary's derivation for its component. A bundle holding a deriving
-component may leave out `entity` altogether, as a link from
-[@yaks/edge](../edge/README.md) may: it is written under the eid its values
+`identityEid(componentId, values)` hashes after the component UUID from `$id`.
+Writing the values under an alias derives the eid. A vocabulary without a
+component UUID uses the component label. If a store already holds the eid
+derived from that label, a write of the same identity reaches that row. A
+plugin's `derive` overrides the vocabulary's derivation for its component. A
+bundle holding a deriving component may leave out `entity` altogether, as a link
+from [@yaks/edge](../edge/README.md) may: it is written under the eid its values
 make, and its answer carries no `$alias`. Any other bundle without an entity is
 refused, by its place in the batch.
 
@@ -679,9 +681,11 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { equal } from '@yaks/testing'
 
+const guide = mint()
 const vocab = loadVocab({
   $defs: {
     guide: {
+      $id: `urn:uuid:${guide}`,
       component: true,
       type: 'object',
       properties: { slug: { type: 'string', identity: true } },
@@ -697,7 +701,7 @@ const again = await g.apply([{
   entity: { eid: '$b' },
   guide: { slug: 'store' },
 }])
-equal(first[0].entity.eid, identityEid('guide', ['store']))
+equal(first[0].entity.eid, identityEid(guide, ['store']))
 equal(again[0].entity.eid, first[0].entity.eid)
 equal((await g.read('.guide')).length, 1)
 equal(minted(mint()), true)

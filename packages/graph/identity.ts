@@ -10,11 +10,17 @@
 //
 //   { entity: { eid: '$p' }, guide: { slug: 'store', brief: 'the store' } }
 //
-// The eid is `sha256("guide|store")` formatted as a UUID, so the same file
-// loaded tomorrow is the same entity, a rename produces a different entity
-// rather than a silent collision, and uniqueness is a property of the id
-// instead of a race somebody has to remember to guard against. Nobody has to
-// have stored an eid, and nobody has to invent a meaningful `$alias`.
+// The eid is `sha256("<guide's identity>|store")` formatted as a UUID, so the
+// same file loaded tomorrow is the same entity, and uniqueness is a property of
+// the id instead of a race somebody has to remember to guard against. Nobody
+// has to have stored an eid, and nobody has to invent a meaningful `$alias`.
+//
+// A derived eid hashes the word's identity, the UUID its `$id` gives, never its
+// label: renaming `guide` leaves every guide where it is, and two namespaces'
+// words that share a label derive different eids from equal values. A word
+// with no `$id` yet hashes its label, as every word did before identities, and
+// an entity derived that way is still read as its own until the contract task
+// (T-162475) re-derives the last of them.
 //
 // It uses the same derivation path the plugins use — `Derive` and the mint
 // phase's `resolve` (alias.ts) — not a second one beside it. The only new part
@@ -28,7 +34,7 @@
 // other id is refused rather than quietly written: renaming creates a new
 // entity, it never patches a property.
 
-import type { Vocab } from '@yaks/vocab'
+import { identity, type Vocab, type VocabDoc } from '@yaks/vocab/runtime'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps } from './bundle.ts'
 import type { Derive } from './alias.ts'
@@ -59,19 +65,57 @@ export let derivedEid = (sentence: string): Eid => {
 }
 
 /**
- * The eid a component's declared identity produces: the component name,
+ * The eid a component's declared identity produces: the component's identity,
  * followed by its identity values in the order the vocabulary declares them.
+ * `comp` is the word's identity, the UUID its `$id` gives ({@link identityIn},
+ * {@link eidOf}), or its label for a word that has none yet.
  *
  * ```ts
  * identityEid('guide', ['store']) // sha256('guide|store') as a uuid
  * ```
  *
- * The component name comes first, so two components holding the same value are
- * two different entities — a `guide` with slug `store` and a `page` with slug
+ * The component comes first, so two components holding the same value are two
+ * different entities: a `guide` with slug `store` and a `page` with slug
  * `store` are not the same thing.
  */
 export let identityEid = (comp: string, values: string[]): Eid =>
   derivedEid([comp, ...values].join('|'))
+
+/** What a loaded vocabulary hashes for the component it holds as `name`: its
+ * identity, or its label while it has none. */
+export let identityIn = (vocab: Pick<Vocab, 'comp'>, name: string): string =>
+  vocab.comp(name)?.id ?? name
+
+/** The label previously hashed for a word with an unambiguous bare label. */
+export let formerKey = (
+  vocab: Pick<Vocab, 'comp'>,
+  name: string,
+): string | undefined => {
+  let word = vocab.comp(name)
+  if (word?.id && vocab.comp(word.label)?.id == word.id) return word.label
+}
+
+/**
+ * The derivation one word of a vocabulary document gives, for code that names
+ * the word itself rather than reading it off a loaded vocabulary: its values
+ * in, the eid of the entity they identify out.
+ *
+ * ```ts
+ * import { eidOf, identityEid } from '@yaks/graph/identity'
+ * import { equal } from '@yaks/testing'
+ *
+ * let doc = { $defs: { guide: { component: true } } }
+ * let guideEid = eidOf(doc, 'guide')
+ * equal(guideEid('store'), identityEid('guide', ['store']))
+ * ```
+ */
+export let eidOf = (
+  doc: VocabDoc,
+  label: string,
+): (...values: string[]) => Eid => {
+  let id = identity(doc, label)
+  return (...values) => identityEid(id, values)
+}
 
 // The values a bundle supplies for one identity, or nothing when it supplies
 // only some of them. A partial identity is not an identity: the entity is
@@ -122,10 +166,13 @@ export let identities = (vocab: Vocab): Record<string, Derive> => {
   for (let name of vocab.all) {
     let props = vocab.identity(name)
     if (!props.length) continue
-    out[name] = (comp: Comp) => {
+    let id = identityIn(vocab, name)
+    let by = (id: string): Derive => (comp) => {
       let values = statedBy(comp, props)
-      return values ? identityEid(name, values) : ''
+      return values ? identityEid(id, values) : ''
     }
+    let former = formerKey(vocab, name)
+    out[name] = Object.assign(by(id), former ? { former: by(former) } : {})
   }
   derived.set(vocab, Object.freeze(out))
   return out
@@ -182,8 +229,13 @@ export let identified = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
           { eid: b.$alias, comp: name, prop: props[0] },
         )
       }
-      let eid = identityEid(name, values)
-      if (b.entity.eid != eid) {
+      let eid = identityEid(identityIn(vocab, name), values)
+      // An entity derived from the word's label before the word had an
+      // identity is still the one these values name, until the migration
+      // re-derives it (T-162475).
+      if (b.entity.eid == eid) continue
+      let former = formerKey(vocab, name)
+      if (!former || b.entity.eid != identityEid(former, values)) {
         throw new Refused(
           `${b.entity.eid} writes ${name}.${props.join('+')} = ${
             values.join('+')

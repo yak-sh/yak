@@ -28,6 +28,30 @@ let URN =
 export let idOf = ($id: unknown): string | undefined =>
   typeof $id == 'string' ? URN.exec($id)?.[1].toLowerCase() : undefined
 
+/** The identity a document gives one of its words, for what must not move
+ * when the word is renamed (a derived eid): the UUID its `$id` says, or its
+ * label while it has none. A label the document does not declare throws, so a
+ * caller naming the wrong document hears so rather than hashing a guess.
+ *
+ * ```ts
+ * import { identity } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let id = crypto.randomUUID()
+ * let doc = { $defs: {
+ *   note: { component: true, $id: `urn:uuid:${id}` },
+ *   tag: { component: true },
+ * } }
+ * equal(identity(doc, 'note'), id)
+ * equal(identity(doc, 'tag'), 'tag')
+ * ```
+ */
+export let identity = (doc: VocabDoc, label: string): string => {
+  let def = doc.$defs?.[label]
+  if (!def) throw new Error(`no word '${label}' is declared here`)
+  return idOf(def.$id) ?? label
+}
+
 /** The namespace a document declares its words in: its `$id`'s identity and
  * the label its host wrote, or `label` where an entry says its own (a
  * component reported out of several namespaces). Undefined where neither is

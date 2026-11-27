@@ -1645,7 +1645,19 @@ export let graph = (opts: Options): Graph => {
         phase(
           'mint',
           outside,
-          (b) => identified(resolve(b, vocab, derives(), mint), vocab),
+          (b) =>
+            after(
+              resolve(
+                b,
+                vocab,
+                derives(),
+                mint,
+                o.replica
+                  ? undefined
+                  : (eids, comps) => outside.get(eids, comps),
+              ),
+              (rows) => identified(rows, vocab),
+            ),
         ),
         phase('prepare', outside),
         inside,

@@ -22,7 +22,8 @@ relation make its eid, so a link's bundle need not name its entity:
 ## Create and remove links
 
 Load the component declaration and keywords, then register `edges(vocab)` on the
-graph. `link()` and `unlink()` take a component name.
+graph. Pass `relationIn(vocab, name)` to `link()` and `unlink()` for a relation
+with a component UUID. A string addresses a relation by its component label.
 
 ```ts
 import { equal } from '@yaks/testing'
@@ -88,11 +89,11 @@ equal(placed(loose, loose[2], 0).map((x) => x.edge), [
 equal(placed([a, b], link('p', 'cites', 'd'), 2), [link('p', 'cites', 'd', 3)])
 ```
 
-`edgeEid(from, relation, to)` hashes `from|relation|to` with SHA-256 and formats
-it as the graph's derived UUID. The same endpoints and component name identify
-one link. Direction matters. `link()` computes this eid; `unlink()` deletes the
-link entity, including its application metadata. The same eid creates the link
-again when it is linked later.
+`edgeEid(from, relation, to)` hashes the two endpoints with the relation
+component's UUID between them. Direction matters. A graph can also address an
+existing link by the eid derived from its component label. When the graph
+receives the full triple, it reuses that eid if the link is stored there.
+`unlink()` deletes the link entity along with its application metadata.
 
 Both endpoints are [references](../vocab/README.md#routing-and-references) with
 `death: cascade`. The graph enforces reference validity and deletion;
@@ -144,12 +145,12 @@ equal(reversed(vocab), { cites: 'cited by' })
 ## Eid derivation and validation
 
 `edges(vocab)` derives an eid for a link written using a graph
-[alias](../graph/README.md#ids-and-names). It leaves an explicit eid alone. In
-the graph's `mint` [phase](../graph/README.md#data-model), its `stated(vocab)`
-hook refuses writes that specify an endpoint without the other endpoint or a
-declared relation component. A patch specifying neither endpoint can update
-`ord` without restating the link. Bundles for the same entity in a batch are
-checked together.
+[alias](../graph/README.md#ids-and-names). When a complete link supplies either
+derived eid, the graph uses the existing link if it finds one. In the graph's
+`mint` [phase](../graph/README.md#data-model), its `stated(vocab)` hook refuses
+writes that specify an endpoint without the other endpoint or a declared
+relation component. A patch specifying neither endpoint can update `ord` without
+restating the link. Bundles for the same entity in a batch are checked together.
 
 ```ts
 import { equal, throws } from '@yaks/testing'

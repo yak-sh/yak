@@ -4,11 +4,15 @@
 import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, graph, mint } from '@yaks/graph'
+import { linked } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { edges } from './plugin.ts'
 import { isPromise } from '@yaks/fp'
-import { edgeEid } from './eid.ts'
+import { edgeEid, relationIn } from './eid.ts'
+import { edgeDoc } from './comp.ts'
+import { edgeKeywords } from './keywords.ts'
 import { link, unlink } from './say.ts'
 import { blog, blogGraph } from './testing.ts'
 
@@ -34,6 +38,80 @@ test('a link states itself and is stored', () => {
   sync(g.apply([link('p1', 'cites', 'p2')]))
   assertEquals(read(g, '.cites'), [edgeEid('p1', 'cites', 'p2')])
   assertEquals(read(g, '.edge.from=p1'), [edgeEid('p1', 'cites', 'p2')])
+})
+
+let CITES = mint()
+let relationDoc = (label: string, ns = '@test/blog', id = CITES): VocabDoc => ({
+  label: ns,
+  $defs: {
+    [label]: {
+      component: true,
+      type: 'object',
+      edge: true,
+      $id: `urn:uuid:${id}`,
+    },
+  },
+})
+let linking = (...docs: VocabDoc[]) => {
+  let post: VocabDoc = { $defs: { post: blog.def('post')! } }
+  let vocab = loadVocab([edgeDoc, post, ...docs], [edgeKeywords])
+  return posts(graph({ vocab, storage: ram(vocab), plugins: [edges(vocab)] }))
+}
+
+test('renaming a relation keeps its edge eid', async () => {
+  let id = edgeEid('p1', CITES, 'p2')
+  for (let name of ['cites', 'mentions']) {
+    let g = linking(relationDoc(name))
+    let [row] = await g.apply(
+      await linked(g, [{ from: 'p1', relation: name, to: 'p2' }]),
+    )
+    assertEquals(row.entity.eid, id)
+  }
+})
+
+test('equal triples for two namespaces with the same relation label derive distinct eids', async () => {
+  let other = mint()
+  let g = linking(
+    relationDoc('cites'),
+    relationDoc('cites', '@test/other', other),
+  )
+  let names = ['@test/blog:cites', '@test/other:cites']
+  let out = await g.apply(
+    await linked(
+      g,
+      names.map((relation) => ({ from: 'p1', relation, to: 'p2' })),
+    ),
+  )
+  assertEquals(
+    out.map((b) => b.entity.eid),
+    [CITES, other].map((id) => edgeEid('p1', id, 'p2')),
+  )
+})
+
+test('linking and unlinking find a legacy edge after the relation gains an identity', async () => {
+  let g = linking(relationDoc('cites'))
+  let legacy = link('p1', 'cites', 'p2')
+  let current = relationIn(g.vocab, 'cites')
+  let sentence = { from: 'p1', relation: 'cites', to: 'p2' }
+  await g.apply([legacy])
+  let [retry] = await g.apply(await linked(g, [{ ...sentence, ord: 3 }]))
+  assertEquals(retry.entity.eid, legacy.entity.eid)
+  let [placed] = await g.apply([link('p1', current, 'p2', 4)])
+  assertEquals(placed.entity.eid, legacy.entity.eid)
+  assertEquals(read(g, '.cites'), [legacy.entity.eid])
+  await g.apply(await linked(g, [{ ...sentence, drop: true }]))
+  assertEquals(read(g, '.cites'), [])
+  await g.apply([link('p1', current, 'p2')])
+  await g.apply([unlink('p1', current, 'p2')])
+  assertEquals(read(g, '.cites'), [])
+})
+
+test('a label-based unlink removes a link stored at its UUID-derived eid', async () => {
+  let g = linking(relationDoc('cites'))
+  await g.apply([link('p1', relationIn(g.vocab, 'cites'), 'p2')])
+  assertEquals(read(g, '.cites'), [edgeEid('p1', CITES, 'p2')])
+  await g.apply([unlink('p1', 'cites', 'p2')])
+  assertEquals(read(g, '.cites'), [])
 })
 
 test('the same link stated twice is one entity', () => {

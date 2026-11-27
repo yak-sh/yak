@@ -37,6 +37,6 @@ import { edgeDoc } from './comp.ts'
 export let edges = (vocab: Vocab): Plugin => ({
   name: '@yaks/edge',
   vocab: [edgeDoc],
-  derive: { [EDGE]: derive(names(vocab)) },
+  derive: { [EDGE]: derive(names(vocab), vocab) },
   hooks: { mint: hook([EDGE], stated(vocab)) },
 })

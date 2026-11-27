@@ -46,7 +46,7 @@
 //                entities in the meta vocabulary, and back
 
 export * from './types.ts'
-export { idOf, namespaceOf } from './namespace.ts'
+export { identity, idOf, namespaceOf } from './namespace.ts'
 export * from './order.ts'
 export * from './kinds.ts'
 export * from './pick.ts'

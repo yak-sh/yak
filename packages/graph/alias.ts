@@ -24,10 +24,10 @@
 // caller reading the returned batch learns which id each alias became,
 // without a second response channel.
 
-import { groupBy } from '@yaks/fp'
+import { after, groupBy } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
-import { comps } from './bundle.ts'
+import { composed, comps, dead } from './bundle.ts'
 import { Refused } from './errors.ts'
 
 /** Whether an id is an alias — a name for an entity whose id the graph picks. */
@@ -39,7 +39,64 @@ export let isAlias = (eid: Eid): boolean => eid.startsWith('$')
  * out. A blob hashes its bytes; an edge hashes its two endpoints and its
  * relation.
  */
-export type Derive = (comp: Comp, bundle: Bundle) => Eid
+export type Derive = ((comp: Comp, bundle: Bundle) => Eid) & {
+  /** Legacy address of the same fact while a store can hold either shape. */
+  former?: (comp: Comp, bundle: Bundle) => Eid
+}
+
+type Held = (eids: Eid[], components: string[]) => Bundle[] | Promise<Bundle[]>
+type Choice = { name: Eid; current: Eid; former: Eid; comp: string }
+
+let choice = (
+  b: Bundle,
+  derive: Record<string, Derive>,
+  alias: boolean,
+): Choice | undefined => {
+  let by = comps(b).find(([name, comp]) => comp && derive[name])
+  if (!by) return undefined
+  let deriving = derive[by[0]]
+  let current = deriving(by[1] as Comp, b)
+  let name = b.entity.eid
+  if (!current) return undefined
+  let former = deriving.former?.(by[1] as Comp, b) ?? ''
+  if (alias || name == current || name == former) {
+    return { name, current, former, comp: by[0] }
+  }
+}
+
+let choose = (
+  choices: Choice[],
+  at: Map<Eid, Eid>,
+  pending: Map<Eid, Eid>,
+  held?: Held,
+) => {
+  let pairs = held ? choices.filter(({ former }) => former) : []
+  let pick = (rows: Bundle[]) => {
+    let found = new Map(rows.map((b) => [b.entity.eid, b]))
+    for (let { name, current, former, comp } of choices) {
+      let a = found.get(current), b = found.get(former)
+      let eid = a?.[comp] != null
+        ? current
+        : b?.[comp] != null
+        ? former
+        : a && dead(a)
+        ? current
+        : b && dead(b)
+        ? former
+        : pending.get(current) ?? current
+      if (eid != name) at.set(name, eid)
+    }
+  }
+  return pairs.length
+    ? after(
+      held!(
+        [...new Set(pairs.flatMap((c) => [c.current, c.former]))],
+        [...new Set(pairs.map((c) => c.comp))],
+      ),
+      pick,
+    )
+    : pick([])
+}
 
 type References = Pick<Vocab, 'def'>
 
@@ -140,71 +197,101 @@ export let substitute = (
  * component with a `derive` supplies its own. The returned bundles carry the
  * alias they were written under as `$alias`.
  */
-export let resolve = (
+export function resolve(
   bundles: Bundle[],
   vocab: Vocab,
   derive: Record<string, Derive>,
   mint: () => Eid,
-): Bundle[] => {
+): Bundle[]
+export function resolve(
+  bundles: Bundle[],
+  vocab: Vocab,
+  derive: Record<string, Derive>,
+  mint: () => Eid,
+  held: Held | undefined,
+): Bundle[] | Promise<Bundle[]>
+export function resolve(
+  bundles: Bundle[],
+  vocab: Vocab,
+  derive: Record<string, Derive>,
+  mint: () => Eid,
+  held?: Held,
+): Bundle[] | Promise<Bundle[]> {
   // One alias may appear on several bundles (a doc in one, a book in
   // another); they are one entity, so they are resolved together.
   let groups = groupBy(
     bundles.filter((b) => isAlias(b.entity.eid)),
     (b) => b.entity.eid,
   )
-  // No aliases, and nothing referencing one: the common case, left exactly
-  // alone.
+  let at = new Map<Eid, Eid>()
+  let explicit = held
+    ? bundles.flatMap((b) => {
+      if (isAlias(b.entity.eid) || b.$prune) return []
+      if (!comps(b).some(([n, c]) => c && derive[n]?.former)) return []
+      let picked = choice(b, derive, false)
+      return picked?.former ? [picked] : []
+    })
+    : []
+  // No alias or transition between addresses applies to most writes.
   if (
-    !groups.size &&
+    !groups.size && !explicit.length &&
     !bundles.some((b) =>
       pointsAt(b, vocab).length || Object.values(b.$actor ?? {}).some(isAlias)
     )
   ) {
     return bundles
   }
-  let at = new Map<Eid, Eid>()
   let left = [...groups.keys()]
-  while (left.length) {
-    // Everything whose alias references are all resolved can be given an id
-    // now.
-    let ready = left.filter((alias) =>
-      groups.get(alias)!.every((b) =>
-        pointsAt(b, vocab).every((a) => at.has(a))
-      )
-    )
-    if (!ready.length) {
-      throw new Refused(
-        `aliases depend on each other and cannot be resolved: ${
-          left.join(', ')
-        }`,
-      )
-    }
-    for (let alias of ready) {
-      // A content-addressed component derives the entity's id; anything else
-      // gets a fresh one. The whole group is searched, so it does not matter
-      // which bundle in the batch carried the deriving component.
-      let named: Eid | undefined
-      for (let b of groups.get(alias)!) {
-        let full = rewrite(b, vocab, at, true, false)
-        let by = comps(full).find(([name, comp]) => comp && derive[name])
-        if (by) named = derive[by[0]](by[1] as Comp, full)
-        if (named) break
-      }
-      // `||`, not `??`: a component that could not derive an id returns the
-      // empty string (an edge missing an endpoint, a partly supplied
-      // identity), and the documented meaning of that is a freshly generated
-      // id — which the hook that owns the component then refuses by name. Used
-      // as the eid, an empty string would create an entity with no id at
-      // all.
-      at.set(alias, named || mint())
-    }
-    left = left.filter((alias) => !at.has(alias))
+  // An explicit eid also supplies an address for aliases of the same fact.
+  let pending = new Map<Eid, Eid>()
+  for (let { current, name } of explicit) {
+    if (name == current || !pending.has(current)) pending.set(current, name)
   }
-  return bundles.map((b) => {
-    let out = rewrite(b, vocab, at, true)
-    let eid = at.get(b.entity.eid)
-    return eid
-      ? { ...out, entity: { ...out.entity, eid }, $alias: b.entity.eid }
-      : out
-  })
+  let advance = (): Bundle[] | Promise<Bundle[]> => {
+    while (left.length) {
+      // Everything whose alias references are all resolved can be given an id
+      // now.
+      let ready = new Set(
+        left.filter((alias) =>
+          groups.get(alias)!.every((b) =>
+            pointsAt(b, vocab).every((a) => at.has(a))
+          )
+        ),
+      )
+      if (!ready.size) {
+        throw new Refused(
+          `aliases depend on each other and cannot be resolved: ${
+            left.join(', ')
+          }`,
+        )
+      }
+      let choices: Choice[] = []
+      for (let alias of ready) {
+        let facts = groups.get(alias)!.map((b) =>
+          rewrite(b, vocab, at, true, false)
+        )
+        let picked = facts.map((b) => choice(b, derive, true)).find(Boolean)
+        if (!picked && facts.length > 1) {
+          let together = composed(facts)[0]
+          if (together) picked = choice(together, derive, true)
+        }
+        if (picked) choices.push(picked)
+        else at.set(alias, mint())
+      }
+      let picked = choose(choices, at, pending, held)
+      left = left.filter((alias) => !ready.has(alias))
+      if (picked) return picked.then(advance)
+    }
+    return bundles.map((b) => {
+      let out = rewrite(b, vocab, at, true)
+      let name = b.entity.eid
+      let eid = at.get(name)
+      if (!eid) return out
+      let entity = { ...out.entity, eid }
+      return isAlias(name)
+        ? { ...out, entity, $alias: name }
+        : { ...out, entity }
+    })
+  }
+  return after(choose(explicit, at, pending, held), advance)
 }

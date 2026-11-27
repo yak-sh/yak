@@ -2,8 +2,11 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
-import { derive, edgeEid, tagOf } from './eid.ts'
+import { loadVocab } from '@yaks/vocab'
+import { derive, edgeEid, relation, tagOf } from './eid.ts'
 import { link } from './say.ts'
+import { edgeDoc } from './comp.ts'
+import { edgeKeywords } from './keywords.ts'
 
 let UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -36,6 +39,19 @@ test('the derivation is fixed — a stored id stays findable', () => {
 })
 
 let tags = { cites: 'cites', links: 'linked' }
+let CITES = crypto.randomUUID()
+let doc = {
+  $defs: {
+    cites: {
+      component: true,
+      type: 'object',
+      edge: true,
+      $id: `urn:uuid:${CITES}`,
+    },
+    links: { component: true, type: 'object', edge: 'linked' },
+  },
+}
+let vocab = loadVocab([edgeDoc, doc], [edgeKeywords])
 
 test('the tag is the relation the bundle wears, not a passing component', () => {
   let b = { ...link('p1', 'cites', 'p2'), pinned: {} }
@@ -44,14 +60,25 @@ test('the tag is the relation the bundle wears, not a passing component', () => 
 })
 
 test('an edge bundle derives its own id', () => {
-  let name = derive(tags)
+  let name = derive(tags, vocab)
   let b = link('p1', 'links', 'p2')
   assertEquals(name(b.edge as Record<string, unknown>, b), b.entity.eid)
   assertEquals(b.entity.eid, edgeEid('p1', 'links', 'p2'))
 })
 
+test('a relation with an identity hashes it, never its label', () => {
+  let b = link('p1', relation(doc, 'cites'), 'p2')
+  assertEquals(b.entity.eid, edgeEid('p1', CITES, 'p2'))
+  assertNotEquals(b.entity.eid, edgeEid('p1', 'cites', 'p2'))
+  assertEquals(
+    derive(tags, vocab)(b.edge as Record<string, unknown>, b),
+    b.entity.eid,
+  )
+  assert('cites' in b)
+})
+
 test('an incomplete sentence derives nothing', () => {
-  let name = derive(tags)
+  let name = derive(tags, vocab)
   // no relation
   assertEquals(name({ from: 'p1', to: 'p2' }, { entity: { eid: '$e' } }), '')
   // no far end

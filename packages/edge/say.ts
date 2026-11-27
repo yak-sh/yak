@@ -9,31 +9,33 @@
 // Saying the same link again recreates it at the same derived identity.
 
 import type { Bundle, Eid } from '@yaks/graph'
-import { edgeEid } from './eid.ts'
+import { edgeEid, type Relation } from './eid.ts'
 import { EDGE } from './relations.ts'
 
+let labelOf = (r: Relation): string => typeof r == 'string' ? r : r.label
+
 /**
- * The bundle that creates a link: `link('p1', 'cites', 'p2')`. `relation` is
- * the name of the component stored beside `edge`. `ord` is optional and behaves
- * as a patch — passing it sets the link's position in its list, leaving it out
- * leaves any stored position alone.
+ * The bundle that creates a link: `link('p1', CITES, 'p2')`. `rel` is the
+ * component stored beside `edge`, with its identity ({@link relation}). `ord`
+ * is optional and behaves as a patch — passing it sets the link's position in
+ * its list, leaving it out leaves any stored position alone.
  */
 export let link = (
   from: Eid,
-  relation: string,
+  rel: Relation,
   to: Eid,
   ord?: number,
 ): Bundle => ({
-  entity: { eid: edgeEid(from, relation, to) },
+  entity: { eid: edgeEid(from, rel, to) },
   [EDGE]: ord === undefined ? { from, to } : { from, to, ord },
-  [relation]: {},
+  [labelOf(rel)]: {},
 })
 
 /**
  * The bundle that deletes the link entity and its metadata. Linking the same
  * endpoints and relation later recreates its derived identity.
  */
-export let unlink = (from: Eid, relation: string, to: Eid): Bundle => ({
-  entity: { eid: edgeEid(from, relation, to) },
+export let unlink = (from: Eid, rel: Relation, to: Eid): Bundle => ({
+  ...link(from, rel, to),
   $delete: true,
 })

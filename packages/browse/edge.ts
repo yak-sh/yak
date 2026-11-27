@@ -1,17 +1,10 @@
-// An edge's identity, and the two changes that say one (D-23820). An edge
-// entity is content-addressed from its SENTENCE, the way a blob's eid is its
-// bytes' hash and a commit's is its sha: writing the same sentence twice finds
-// one entity, and an unlink names it with no lookup. This is THE derivation —
-// every door, client and reader computes it here and nowhere else.
+// Translate a browser relation into the edge bundle's component and eid.
 import { sha } from './sha.ts'
 import type { Change, Dep, Edge } from './types.ts'
-import { edges } from './types.ts'
+import { edges, vocab } from './types.ts'
+import { edgeEid as derived, relationIn } from '@yaks/edge'
 
-// eid = the leading 16 bytes of sha256(`${from}|${nature}|${to}`), worn as a
-// UUID: version nibble 8 (RFC 9562's custom-derivation version) and the
-// variant bits stamped, so it passes every uuid door and can never collide
-// with a minted v4. Direction is part of the sentence: `a requires b` and
-// `b requires a` are two edges.
+// The browser's camera and cursor rows use derived UUIDs of their own.
 let sentenceEid = (sentence: string): string => {
   let h = sha(sentence).slice(0, 32)
   let variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16)
@@ -22,7 +15,7 @@ let sentenceEid = (sentence: string): string => {
 }
 
 export let edgeEid = (from: string, nature: string, to: string): string =>
-  sentenceEid(`${from}|${nature}|${to}`)
+  derived(from, relationIn(vocab, nature), to)
 
 // Client singletons are sentences too. Their identity must not depend on a
 // cache warmed by an async subscription: a cold-cache mint patches the same

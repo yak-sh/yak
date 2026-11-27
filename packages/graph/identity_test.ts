@@ -9,7 +9,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import { Refused } from './admit.ts'
-import { identityEid } from './identity.ts'
+import { eidOf, identityEid, mint } from './identity.ts'
 import { comp, memory } from './testing.ts'
 
 let doc: VocabDoc = {
@@ -155,4 +155,66 @@ test('an identity is a unique index, said out loud', () => {
     props: ['app', 'version'],
     unique: true,
   }])
+})
+
+let GUIDE = mint()
+let named = (label: string, ns = '@test/guide', id = GUIDE): VocabDoc => ({
+  label: ns,
+  $defs: { [label]: { ...doc.$defs!.guide, $id: `urn:uuid:${id}` } },
+})
+let writing = (...words: VocabDoc[]) =>
+  graph({ storage: memory(), vocab: loadVocab(words) })
+let guide = (label: string, eid = '$page', brief = 'one'): Bundle => ({
+  entity: { eid },
+  [label]: { slug: 'store', brief },
+})
+
+test('renaming a component keeps its derived eid', () => {
+  let before = named('guide')
+  let [one] = sync(writing(before).apply([guide('guide')]))
+  let [two] = sync(writing(named('handbook')).apply([guide('handbook')]))
+  assertEquals(one.entity.eid, identityEid(GUIDE, ['store']))
+  assertEquals(one.entity.eid, eidOf(before, 'guide')('store'))
+  assertEquals(two.entity.eid, one.entity.eid)
+})
+
+test('equal values in two namespaces with the same label derive distinct eids', () => {
+  let other = mint()
+  let g = writing(named('guide'), named('guide', '@test/other', other))
+  let out = sync(g.apply([
+    guide('@test/guide:guide', '$one'),
+    guide('@test/other:guide', '$two'),
+  ]))
+  assertEquals(
+    out.map((b) => b.entity.eid),
+    [GUIDE, other].map((id) => identityEid(id, ['store'])),
+  )
+})
+
+test('retrying an identity patches the row at its legacy address', () => {
+  let legacy = identityEid('guide', ['store'])
+  let current = identityEid(GUIDE, ['store'])
+  let g = writing(named('guide'))
+  sync(g.apply([guide('guide', legacy)]))
+  let [retry] = sync(g.apply([guide('guide', '$retry', 'two')]))
+  assertEquals(retry.entity.eid, legacy)
+  let [patch] = sync(g.apply([guide('guide', current, 'three')]))
+  assertEquals(patch.entity.eid, legacy)
+  let held = g.get([legacy, current]) as Bundle[]
+  assertEquals(held.map((b) => b.entity.eid), [legacy])
+  assertEquals(comp(held[0], 'guide').brief, 'three')
+})
+
+test('a batch resolves explicit addresses and an alias for the same identity together', () => {
+  let legacy = identityEid('guide', ['store'])
+  let current = identityEid(GUIDE, ['store'])
+  let g = writing(named('guide'))
+  let out = sync(g.apply([
+    guide('guide', legacy),
+    guide('guide', '$guide'),
+    guide('guide', current),
+  ]))
+  assertEquals(out.map((b) => b.entity.eid), [current])
+  assertEquals(out[0].$alias, '$guide')
+  assertEquals((g.get([legacy, current]) as Bundle[]).length, 1)
 })
