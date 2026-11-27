@@ -2292,17 +2292,17 @@ let facetOf = (
   return { comp: hop.comp, present: op == '~' || op == EXISTS }
 }
 
-// The presence of the component whose stored property a `.distinct` or
-// `.tally` counts. A row without the component has no value to count, so the
-// aggregate reads that component's owners, never every entity:
-// `.order=hot&.tally=task.status` read the box's 6.3 million entities in 10 s
-// to count its 14 thousand tasks (bug 5871af2038).
+// The presence of the component whose property a `.distinct` or `.tally`
+// counts. Every read of a property is NULL on an entity without its component,
+// computed and derived reads included (`guarded`), so a row without it has no
+// value to count and the aggregate reads the component's owners, never every
+// entity: `.order=hot&.tally=task.status` read the box's 6.3 million entities
+// in 10 s to count its 14 thousand tasks (bug 5871af2038). The one read left
+// out returns a value without its component (`worn: false`).
 let heldBy = (ctx: Ctx, agg?: Distinct | Tally): Clause | undefined => {
   let [comp, prop] = agg?.path ?? []
-  if (prop == null) return
+  if (prop == null || ctx.derived[`${comp}.${prop}`]?.worn === false) return
   let has: Clause = { kind: 'pred', path: [comp], op: '!', value: null }
-  let p = ctx.v.prop(comp, prop)
-  if (!p || p.computed || ctx.derived[`${comp}.${prop}`]) return
   let facet = facetOf(ctx, has)
   return facet?.present && facet.comp == comp ? has : undefined
 }

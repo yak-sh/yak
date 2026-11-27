@@ -1,5 +1,5 @@
-// A tally or distinct of a sparse component's property reads that component's
-// owners, not every entity (bug 5871af2038).
+// A tally or distinct of a sparse component's property, stored or computed,
+// reads that component's owners, not every entity (bug 5871af2038).
 import '../sqlite/sqlitepath.ts'
 import { Database } from '@yaks/sqlite/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -14,6 +14,8 @@ let vocab = loadVocab({
   $defs: {
     entity: { component: true, properties: { num: { type: 'number' } } },
     task: { component: true, properties: { status: { type: 'string' } } },
+    job: { component: true, status: { failed: 'failed', default: 'pending' } },
+    failed: { component: true, properties: {} },
     note: { component: true, properties: {} },
     tombstone: { component: true, properties: {} },
   },
@@ -28,7 +30,7 @@ sql.query({
     { name: 'num', type: 'integer' },
   ],
 })
-for (let name of ['task', 'note', 'tombstone']) {
+for (let name of ['task', 'note', 'tombstone', 'job', 'failed']) {
   sql.query({
     t: 'create table',
     name,
@@ -47,6 +49,8 @@ for (let [i, status] of statuses.entries()) {
   sql.query(insert('task', { entity: 1000 + i, status }))
 }
 sql.query(insert('tombstone', { entity: 1001 }))
+for (let entity of [2000, 2001, 2002]) sql.query(insert('job', { entity }))
+for (let entity of [2001, 3000]) sql.query(insert('failed', { entity }))
 let status = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: {
     parameters: ['pointer', 'i32', 'i32'],
@@ -68,13 +72,17 @@ let cases: [string, typeof screen | undefined, unknown[]][] = [
     screen,
     ['done', 'open', 'wip'].map((value) => ({ value })),
   ],
+  ['.tally=job.status', screen, [
+    { value: 'failed', n: 1 },
+    { value: 'pending', n: 2 },
+  ]],
   ['.task.status!=open&.tally=task.status', undefined, [
     { value: 'done', n: 1 },
     { value: 'wip', n: 1 },
   ]],
 ]
 for (let [q, opts, want] of cases) {
-  test(`${q} reads only tasks${opts ? ', screened' : ''}`, () => {
+  test(`${q} reads only its component's owners${opts ? ', screened' : ''}`, () => {
     let query = compile(parse(q), vocab, opts)
     let plan = sql.query({ t: 'explain query plan', of: query })
       .map((r) => String(r.detail)).join('\n')
