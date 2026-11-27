@@ -22,7 +22,7 @@
 import { h, type JSX } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import * as ui from '@yaks/ui'
-import { drag, useHost } from '@yaks/ux'
+import { drag, useDraft, useHost } from '@yaks/ux'
 import {
   type Answer,
   type Bundle,
@@ -91,7 +91,7 @@ type Shelved = {
 /** Every persona and skill, found by what was typed: a hook. */
 let useDesk = (io: Io): Shelved => {
   let got = io.ask(asking(io))
-  let said = useHost().drafts.text(FINDING).trim()
+  let said = useDraft(FINDING).trim()
   let found = (a?: Answer) =>
     rows(a).filter((b) => fits(said, b)).toSorted(byTitle)
   return {

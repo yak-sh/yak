@@ -560,6 +560,8 @@ export let install = (): { root: TElement; free: () => void } => {
       }
       if (prior) Object.defineProperty(globalThis, 'document', prior)
       else delete (globalThis as { document?: unknown }).document
+      // The tree is gone, and with it whatever held the focus.
+      doc.activeElement = null
     },
   }
 }

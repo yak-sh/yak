@@ -17,9 +17,6 @@ import type { Stash } from '@yaks/draft'
 import { PLACE } from './signin.ts'
 
 let dir = new URL('./', import.meta.url)
-// A tab paints its next frame as soon as it can; preact's hooks wait 35 ms
-// for one where there is no requestAnimationFrame.
-options.requestAnimationFrame = (fn) => setTimeout(fn)
 let tick = () => new Promise((ok) => setTimeout(ok))
 let open = async (
   more: {
@@ -28,6 +25,11 @@ let open = async (
     stash?: Stash
   } = {},
 ) => {
+  // A tab paints its next frame as soon as it can; preact's hooks wait 35 ms
+  // for one where there is no requestAnimationFrame.
+  let raf = options.requestAnimationFrame
+  options.requestAnimationFrame = (fn) => setTimeout(fn)
+  cleanup(() => void (options.requestAnimationFrame = raf))
   let window = parseHTML(await Deno.readTextFile(new URL('index.html', dir)))
   let { document } = window
   Object.defineProperty(document, 'baseURI', { value: dir.href })
@@ -442,7 +444,7 @@ test('an entity clicked in the drawing opens in the editor, and a value changed 
   ) as unknown as HTMLInputElement
   title.value = 'Sign up for Ada\'s "payments"'
   fire(title as unknown as Element, 'input')
-  fire(title as unknown as Element, 'blur')
+  title.blur()
   await settle()
   equal(
     (page.yak.row(account.entity.eid)!.doc as { title: string }).title,
