@@ -31,6 +31,9 @@ export let OWN = 'data-kept-own'
 /** The attribute a shell's root wears beside `KEPT`. */
 export let SHELL = 'data-kept-shell'
 
+/** A document part that is read live and must never be kept in a picture. */
+export let LIVE = 'data-kept-live'
+
 /** A pane's starting scroll position in a picture, in pixels or at its end. */
 export let SCROLL = 'data-kept-scroll'
 
@@ -61,8 +64,14 @@ export let LATE = 6_000
 export let WRITTEN = 8_000
 
 /** What a picture's bootstrap says, beside the open timing (`opening`): the
- * door it reports a picture that fell back to (@yaks/tracker/report). */
-export type Boot = { opening?: string; door?: string }
+ * door it reports a picture that fell back to (@yaks/tracker/report).
+ * A `live` shell sends authorization redirects and refusals through the
+ * browser's network navigation. */
+export type Boot = {
+  opening?: string
+  door?: string
+  live?: boolean
+}
 
 // The bootstrap, written as the script it runs, since a bundler's helpers
 // would not come along with a function's own text. It asks for the page as
@@ -71,7 +80,7 @@ export type Boot = { opening?: string; door?: string }
 // be replaced (an answer that is no page, a throw, a shell offline) reports
 // why and loads the page from the network, once. While the original request
 // is still running, the person can keep waiting or ask to reload.
-let boot = ({ opening, door }: Boot = {}) =>
+let boot = ({ opening, door, live = false }: Boot = {}) =>
   `(() => {
   let opened = null
   try { opened = ${opening ?? 'null'} } catch {}
@@ -110,12 +119,13 @@ let boot = ({ opening, door }: Boot = {}) =>
     worker.postMessage({ '${NETWORK}': location.href }, [line.port2])
     setTimeout(again, 1000)
   }
-  let network = (why) => {
+  let network = (why, to) => {
     if (settled) return
     settled = true
     clearTimeout(late)
-    tell(why)
-    reload()
+    if (why) tell(why)
+    if (to) location.replace(to)
+    else reload()
   }
   let status = () => document.querySelector('[data-kept-status]')
   let late = setTimeout(() => {
@@ -151,11 +161,31 @@ let boot = ({ opening, door }: Boot = {}) =>
       opened?.waited(wait == null ? performance.now() - began : Number(wait),
         gateway ? Number(gateway[1]) : undefined)
     } catch {}
+    ${
+    live
+      ? `if ([401, 403, 404].includes(r.status)) {
+      void r.body?.cancel()
+      return network()
+    }`
+      : ''
+  }
     if (!r.ok || !(r.headers.get('content-type') || '').includes('text/html')) {
       return network('answered ' + r.status)
     }
+    let url = r.headers.get('${FRESH_URL}') || r.url
+    ${
+    live
+      ? `if (url) {
+      let next = new URL(url)
+      if (next.pathname != location.pathname || next.search != location.search ||
+        next.origin != location.origin) {
+        void r.body?.cancel()
+        return network(undefined, url)
+      }
+    }`
+      : ''
+  }
     return r.text().then(async (html) => {
-      let url = r.headers.get('${FRESH_URL}') || r.url
       if (!html.trim()) return network('answered with an empty page')
       // What the page waits on before it can paint, its sheets and the
       // scripts its head runs in order, asked for first, so the picture stays
@@ -179,9 +209,11 @@ let boot = ({ opening, door }: Boot = {}) =>
         await file.blob()
       }))
       if (settled) return
-      if (url && url != location.href) {
+      ${
+    live ? '' : `if (url && url != location.href) {
         history.replaceState(history.state, '', url)
-      }
+      }`
+  }
       step('parsed')
       if (document.readyState == 'loading') {
         await new Promise((ready) =>

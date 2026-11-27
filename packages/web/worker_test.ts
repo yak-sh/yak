@@ -421,6 +421,51 @@ test('a picture that could not be replaced opens next from the network, once', a
   assertEquals((await w.open('/checks'))!.includes(KEPT), true)
 })
 
+test('a live address draws a generic shell and never retains its contents', async () => {
+  let w = worker(2, { shellOnly: { '/admin': page('opening the site') } })
+  let old = '/admin/spending?year=2026'
+  let pages = await w.scope.caches.open(PAGES)
+  await pages.put(
+    'https://yaks.app' + old,
+    new Response(page('former admin details'), {
+      headers: { 'x-yak-picture': '1' },
+    }),
+  )
+  let fresh = Promise.withResolvers<Response>()
+  w.site.set('/admin/spending', () => fresh.promise)
+  let drawn = await w.open(old)
+  equal(drawn?.includes('opening the site'), true)
+  equal(drawn?.includes(SHELL), true)
+  equal(drawn?.includes('former admin details'), false)
+  fresh.resolve(new Response(page('fresh admin details')))
+  equal(await w.ask(old, { fresh: true }), page('fresh admin details'))
+  equal(w.asked, ['/admin/spending'])
+
+  let added: Route[] = []
+  await w.install((entries) => (added.push(...entries), Promise.resolve()))
+  equal(added.slice(1, 3), [
+    {
+      condition: { urlPattern: { pathname: '/admin' } },
+      source: 'fetch-event',
+    },
+    {
+      condition: { urlPattern: { pathname: '/admin/*' } },
+      source: 'fetch-event',
+    },
+  ])
+  await w.leave(
+    '/admin',
+    page('private people'),
+    Date.now(),
+    page('also private'),
+  )
+  await w.leave('/administer', page('ordinary kept page'))
+  await w.activate()
+  equal((await pages.keys()).map((entry) => new URL(entry.url).pathname), [
+    '/administer',
+  ])
+})
+
 test('a stopped worker routes its opens to the kept pictures, the paths that forget to itself, and installs where routing is refused or missing', async () => {
   let w = worker(2, { broke: '/api/report' })
   let added: Route[] = []

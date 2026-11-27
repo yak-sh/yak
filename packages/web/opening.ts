@@ -254,11 +254,9 @@ export let openingHead = (o: Opening): string =>
 
 let esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
 
-/** The whole page a service worker answers an open it could not get with,
- * saying why at once (`Failure`). */
-export let failurePage = (o: Opening, f: Failure): string =>
+let document = (o: Opening, attrs: string, head: string, body = ''): string =>
   `<!doctype html>
-<html lang="en" ${OPENING}="${f.state}" ${OPENING}-said="${esc(f.said)}">
+<html lang="en"${attrs}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -266,7 +264,27 @@ export let failurePage = (o: Opening, f: Failure): string =>
 <meta name="theme-color" content="${o.background}" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="${o.dark.background}" media="(prefers-color-scheme: dark)">
 <title>${esc(o.name)}</title>
-${openingHead(o)}
+${head}
 </head>
-<body></body>
+<body>${body}</body>
 </html>`
+
+/** A site's shell for a page whose data is fetched afresh on every open. */
+export let openingShell = (o: Opening): string =>
+  document(
+    o,
+    '',
+    style(o),
+    `<main class="YakOpening" style="z-index:auto;animation:none"><p>${
+      esc(o.name)
+    }</p></main>`,
+  )
+
+/** The whole page a service worker answers an open it could not get with,
+ * saying why at once (`Failure`). */
+export let failurePage = (o: Opening, f: Failure): string =>
+  document(
+    o,
+    ` ${OPENING}="${f.state}" ${OPENING}-said="${esc(f.said)}"`,
+    openingHead(o),
+  )

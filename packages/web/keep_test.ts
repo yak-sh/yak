@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { keep, type Window } from './keep.ts'
-import { KEPT, OWN, picture, SCROLL } from './picture.ts'
+import { KEPT, LIVE, OWN, picture, SCROLL } from './picture.ts'
 import { LEAVE, PAGE } from '@yaks/ui/navigate'
 
 // A page in a browser with a worker, and what it sent the worker.
@@ -93,6 +93,19 @@ let tab = (html: string, controlled = true, pending?: string) => {
     },
   }
 }
+
+test('a live view registers the worker and sends nothing as Back changes its address', () => {
+  let t = tab(`<html><body><p ${LIVE}="">Private details</p></body></html>`)
+  t.href = 'https://yaks.app/admin'
+  t.load()
+  assertEquals(t.registered, ['/worker.js'])
+  t.href = 'https://yaks.app/checks'
+  t.leave()
+  assertEquals(t.sent, [])
+  t.document.body.innerHTML = '<p>Ordinary page</p>'
+  t.arrive()
+  assertEquals(t.sent.map(({ html }) => html.includes('Ordinary page')), [true])
+})
 
 test('a page registers its worker once loaded, and sends it what it shows as it is hidden or left in place, without what it does not, and only once unchanged', () => {
   let t = tab(

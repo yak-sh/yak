@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { picture } from './picture.ts'
+import { FRESH_URL, picture } from './picture.ts'
 
 // The bootstrap of a picture (or a shell), run over a window that answers
 // its fetch with `answer`: what it wrote over the picture, what it told the
@@ -8,16 +8,18 @@ import { picture } from './picture.ts'
 // runs every timer it set.
 let opened = (
   answer: () => Promise<Response>,
-  o: { shell?: boolean; offline?: boolean; file?: Response } = {},
+  o: { shell?: boolean; live?: boolean; offline?: boolean; file?: Response } =
+    {},
 ) => {
   let html = picture(
     '<!doctype html><html><head></head><body><p>kept</p></body></html>',
     1,
-    { door: '/api/report', shell: o.shell },
+    { door: '/api/report', shell: o.shell, live: o.live },
   )
   let boot = /<script>([\s\S]*?)<\/script>/.exec(html)![1]
   let said = { written: '', told: [] as string[], network: [] as string[] }
   let reloads = 0
+  let redirects: string[] = []
   let timers: (() => void)[] = []
   let retry = { type: '', textContent: '', style: {}, onclick: () => {} }
   let status = {
@@ -55,7 +57,10 @@ let opened = (
   let location = {
     href: 'https://yaks.app/manage/chat',
     origin: 'https://yaks.app',
+    pathname: '/manage/chat',
+    search: '',
     reload: () => void reloads++,
+    replace: (to: string) => void redirects.push(to),
   }
   let fetch = (at: string) =>
     at == location.href ? answer() : Promise.resolve(o.file ?? new Response(''))
@@ -85,6 +90,7 @@ let opened = (
     status,
     retry,
     reloads: () => reloads,
+    redirects,
     settle,
     later: async () => {
       for (let f of timers.splice(0)) f()
@@ -121,6 +127,27 @@ test('a picture whose page answers as no page tells why and loads once from the 
     network: ['https://yaks.app/manage/chat'],
   })
   assertEquals(o.reloads(), 1)
+})
+
+test('a live shell sends an access refusal to the browser without reporting a failure', async () => {
+  let o = opened(html('gone', 404), { live: true, shell: true })
+  await o.settle()
+  assertEquals([o.said.written, o.said.told, o.reloads()], ['', [], 1])
+})
+
+test('a live shell follows a sign-in redirect as a browser navigation', async () => {
+  let login = 'https://yaks.app/login?return=%2Fmanage%2Fchat'
+  let o = opened(
+    () =>
+      Promise.resolve(
+        new Response('<p>Sign in</p>', {
+          headers: { 'content-type': 'text/html', [FRESH_URL]: login },
+        }),
+      ),
+    { live: true, shell: true },
+  )
+  await o.settle()
+  assertEquals([o.said.written, o.said.told, o.redirects], ['', [], [login]])
 })
 
 test('a missing fresh stylesheet keeps the picture until the fallback navigation', async () => {

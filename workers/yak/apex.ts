@@ -26,7 +26,7 @@ import { callback } from './connections.ts'
 import { logoDoor } from './catalog.ts'
 import { answer as seo } from './seo.ts'
 import {
-  ADMIN,
+  adminPath,
   aim,
   APPROVE,
   LOGOUT,
@@ -301,7 +301,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
     return (await import('./ui-guide.ts')).answer(req, env)
   }
   // The platform admin's directory, signed in and uncached like the review.
-  if (path == ADMIN || path.startsWith(ADMIN + '/')) {
+  if (adminPath(path)) {
     let c = clock()
     return c.counting(async () => {
       let admin = await c.time('page_modules', () => import('./admin.ts'))

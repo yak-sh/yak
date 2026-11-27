@@ -12,15 +12,16 @@
 import '@yaks/push/worker'
 import { opens } from '@yaks/push/notice'
 import { keeping, type Scope } from '@yaks/web/worker'
-import { failurePage, OPENING } from '@yaks/web/opening'
+import { failurePage, OPENING, openingShell } from '@yaks/web/opening'
 import { opening } from '@yaks/platform/opening'
 import { OPEN_PATH } from '@yaks/timing/interaction'
 import { openScript, plainAddress } from '@yaks/platform/open-script'
 import { keptDraftScript } from '@yaks/platform/operator-early-draft'
-import { framed, LOGOUT } from '@yaks/platform/routes'
+import { ADMIN, framed, LOGOUT } from '@yaks/platform/routes'
 
 // @yaks/platform's page report door (workers/yak/page-report.ts `PATH`).
 let BROKE = '/api/report'
+let look = opening('/apple-touch-icon.png', BROKE)
 
 keeping(globalThis as unknown as Scope, {
   forget: [LOGOUT, '/login'],
@@ -29,10 +30,11 @@ keeping(globalThis as unknown as Scope, {
   opens,
   address: plainAddress,
   shelled: (url) => framed(new URL(url).pathname),
+  shellOnly: { [ADMIN]: openingShell(look) },
   opening: (source) =>
     `(${keptDraftScript()}, ${openScript(OPEN_PATH, source)})`,
   report: OPEN_PATH,
   broke: BROKE,
-  failed: (why) => failurePage(opening('/apple-touch-icon.png', BROKE), why),
+  failed: (why) => failurePage(look, why),
   drew: (html) => html.includes(OPENING),
 })

@@ -89,6 +89,7 @@ import { day, esc, markup, raw } from './html.ts'
 import { lost, shell } from './pages.ts'
 import { deskFrame } from './desk-pages.ts'
 import { FRAMED } from './frame.ts'
+import { LIVE } from '@yaks/web/picture'
 import { type IconName, icons } from './icons.ts'
 import { type Host, spaceHost, url } from '@yaks/platform/host'
 import { DAYS, NOT_ON, platformOf, statsFor, statsOf } from './views.ts'
@@ -102,7 +103,12 @@ import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
 import { operatorDoor } from './build-door.ts'
 import { type Listed, listed, type Worked } from './operator-view.ts'
-import { ADMIN, managePath, type MarkedApp } from '@yaks/platform/routes'
+import {
+  ADMIN,
+  adminPath,
+  managePath,
+  type MarkedApp,
+} from '@yaks/platform/routes'
 import { NAMES } from '@yaks/ui/navigate'
 import { admin } from './tool.ts'
 import { adminWho } from './asking.ts'
@@ -890,7 +896,12 @@ let desk = (
       }),
       title,
       sub: 'Admin',
-      head: h('div', null, kicker, h(Head.Title, { mod: 'page' }, title)),
+      head: h(
+        'div',
+        { [LIVE]: '' },
+        kicker,
+        h(Head.Title, { mod: 'page' }, title),
+      ),
       content: body,
       class: 'Directory_Content',
       framed: PATH,
@@ -1574,7 +1585,7 @@ export let answer = async (
   dir: Directory,
   c: Clock = clock(),
 ): Promise<Response | null> => {
-  if (path != PATH && !path.startsWith(`${PATH}/`)) return null
+  if (!adminPath(path)) return null
   let asked = new URL(req.url)
   // Signed out: sent to sign in and handed back here. Signed in as anybody
   // but the platform's admin: nothing is here, the same as a wrong address.

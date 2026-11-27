@@ -52,7 +52,9 @@ export let FILES = 'yak-files'
  * also deletes the IndexedDB databases whose names start with `databases`:
  * what its pages kept of their own. `opens` reads the page a push's
  * notification opens from what was pushed. `shelled` says whether the
- * site's shell stands for a page at an address. `broke` is the door a
+ * site's shell stands for a page at an address. `shellOnly` names paths and
+ * their generic shells. Those pages and their descendants always read
+ * their content from the network. `broke` is the door a
  * picture reports at when it falls back to the network
  * (@yaks/tracker/report), and `pictures: false` draws none. `failed` is the
  * page that says why an open could not be had (./opening.ts `failurePage`),
@@ -66,6 +68,7 @@ export type Keeping = {
   databases?: string
   opens?: (pushed: unknown) => string | undefined
   shelled?: (url: string) => boolean
+  shellOnly?: Record<string, string>
   opening?: (source: 'picture' | 'shell' | 'push') => string
   address?: (url: string) => string
   report?: string
@@ -215,11 +218,12 @@ export type InstallLike = {
  * ])
  * ```
  */
-export let routes = (forget: string[]): Route[] => [
-  ...forget.map((pathname): Route => ({
-    condition: { urlPattern: { pathname } },
-    source: 'fetch-event',
-  })),
+export let routes = (forget: string[], shellOnly: string[] = []): Route[] => [
+  ...[...forget, ...shellOnly.flatMap((path) => [path, path + '/*'])]
+    .map((pathname): Route => ({
+      condition: { urlPattern: { pathname } },
+      source: 'fetch-event',
+    })),
   {
     condition: {
       requestMode: 'navigate',
@@ -247,6 +251,12 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   let pictures = opts.pictures ?? true
   let address = opts.address ?? ((url: string) => url)
   let keyOf = (url: string) => pageKey(address(url))
+  let shells = Object.entries(opts.shellOnly ?? {})
+  let shellAt = (url: string) => {
+    let path = new URL(url).pathname
+    return shells.find(([root]) => path == root || path.startsWith(root + '/'))
+      ?.[1]
+  }
   let most = { pages: opts.pages ?? 24, files: opts.files ?? 400 }
   // The page each kept page's picture asked for, until its bootstrap takes it.
   let asked = new Map<string, Promise<Response>>()
@@ -286,9 +296,9 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   scope.addEventListener('install', (e) => {
     if (!pictures || !e.addRoutes) return
     e.waitUntil(
-      e.addRoutes(routes(opts.forget)).catch((error) =>
-        tell(error, 'The worker could not route its kept pages')
-      ),
+      e.addRoutes(routes(opts.forget, shells.map(([path]) => path))).catch((
+        error,
+      ) => tell(error, 'The worker could not route its kept pages')),
     )
   })
   scope.addEventListener('activate', (e) => {
@@ -307,6 +317,19 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     if (!pictures) {
       e.waitUntil(
         caches.delete(PAGES).catch((error) =>
+          tell(error, 'The worker could not clear its old pictures')
+        ),
+      )
+    }
+    if (pictures && shells.length) {
+      e.waitUntil(
+        caches.open(PAGES).then(async (pages) => {
+          await Promise.all(
+            (await pages.keys()).filter((entry) => shellAt(entry.url)).map(
+              (entry) => pages.delete(entry),
+            ),
+          )
+        }).catch((error) =>
           tell(error, 'The worker could not clear its old pictures')
         ),
       )
@@ -340,7 +363,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     { keep: url, html, shell, at, since }: Snapshot,
     source: 'picture' | 'push' = 'picture',
   ) => {
-    if (!pictures) return
+    if (!pictures || shellAt(url) != null) return
     let atUrl = new URL(url)
     if (atUrl.origin != location.origin) return
     let sheets = new Map<string, Promise<string>>()
@@ -417,14 +440,25 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   // A page's own picture, else the shell where it stands for the page: never
   // in a frame, whose page is another's.
   let kept = async (req: Request, key: string) => {
+    let document = (req.destination || 'document') == 'document'
+    let shellOnly = shellAt(key)
+    if (shellOnly != null) {
+      return document
+        ? stored(picture(shellOnly, Date.now(), {
+          opening: opts.opening?.('shell'),
+          door: opts.broke,
+          shell: true,
+          live: true,
+        }))
+        : undefined
+    }
     let pages = await caches.open(PAGES)
     let draw = async (key: string) => {
       let res = await pages.match(key)
       if (res?.headers.has(DRAWN)) return res
       await res?.body?.cancel()
     }
-    let shell = (req.destination || 'document') == 'document' &&
-      opts.shelled?.(key)
+    let shell = document && opts.shelled?.(key)
     return await draw(key) ??
       (shell ? await draw(location.origin + SHELL) : undefined)
   }
@@ -491,7 +525,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   // that sends elsewhere (signed out) or fails is not kept.
   let refresh = async (url: string) => {
     let key = keyOf(new URL(url, location.origin).href)
-    if (new URL(key).origin != location.origin) return
+    if (new URL(key).origin != location.origin || shellAt(key) != null) return
     let since = Date.now()
     let now = await scope.fetch(key, {
       credentials: 'same-origin',

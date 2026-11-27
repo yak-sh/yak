@@ -11,7 +11,7 @@
  *
  * @module
  */
-import { KEPT, MOVES, OWN, SCROLL, TURNS } from './picture.ts'
+import { KEPT, LIVE, MOVES, OWN, SCROLL, TURNS } from './picture.ts'
 import { LEAVE, PAGE } from '@yaks/ui/navigate'
 import type { Snapshot } from './worker.ts'
 import { absolute } from './picture-sheets.ts'
@@ -363,7 +363,7 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
     if (changes.takeRecords().some(changing)) changed = true
     if (
       !changed || !workers.controller || root.hasAttribute(KEPT) ||
-      pending && root.querySelector(pending)
+      root.querySelector(`[${LIVE}]`) || pending && root.querySelector(pending)
     ) return
     workers.controller.postMessage(snapshot(win))
     seeded = true
