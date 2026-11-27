@@ -4,21 +4,22 @@
 // through it, and what each costs is charged to the space that asked, from
 // its budget shared with models (meter.ts `models`).
 //
-// Each provider's key is a Worker secret of its own (SECRETS); one unset is
-// off. While speech is a pilot, SPEECH_FLOOR is the credit left on an account
+// Each provider's key is yaks.app's own, read by the name in SECRETS: a
+// connection of the platform's (platform-keys.ts), else a Worker secret of
+// that name while it moves over; one with neither is off. While speech is a pilot, SPEECH_FLOOR is the credit left on an account
 // that says its balance below which every request to it is refused: its
 // balance at the start less what the pilot may spend. OpenAI's says none; its
 // project holds it to $10 a month instead.
 //
-// A provider in OWN is spoken through with a space's own credential instead,
+// A provider in OWN is also spoken through with a space's own credential,
 // whose account pays, so nothing is charged here: the connection through the
 // integration of the same name (@yaks/connections' `elevenlabs`, a pasted
 // key), else the sign-in of the service's own MCP server the person
 // connected (@yaks/connections/mcp `hostKey`), sent to the provider's API as
-// a bearer token. ElevenLabs is reached only so: yaks.app holds no key of its
-// own for it. Designing, keeping and cloning voices go through such a
-// credential only, and a voice made is kept on the account that made it, as
-// the account's own voices are listed beside the premade ones.
+// a bearer token. Designing, keeping and cloning voices go through such a
+// credential only: their price is not said before they are made, and a voice
+// made is kept on the account that made it, which is never the platform's,
+// as the account's own voices are listed beside the premade ones.
 import type { Scheme } from '@yaks/hook'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
@@ -57,16 +58,18 @@ import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
 import { size } from '@yaks/fp'
 import { modelAccess } from './models.ts'
+import { keyed } from './platform-keys.ts'
 
-/** The providers yaks.app hears and speaks through, and the secret each
- * one's key is in. */
+/** The providers yaks.app hears and speaks through, and the name its own
+ * key for each is read by (platform-keys.ts). */
 export let SECRETS = new Map<Provider, keyof Env>([
   [DEEPGRAM, 'DEEPGRAM_API_KEY'],
   [OPENAI, 'OPENAI_VOICE_KEY'],
+  [ELEVENLABS, 'ELEVENLABS_API_KEY'],
 ])
 
-/** The providers a space speaks through with a key of its own, by the name
- * of the integration its connection is through. */
+/** The providers a space may speak through with a key of its own, by the
+ * name of the integration its connection is through. */
 export let OWN = new Map<string, Provider>([[ELEVENLABS.name, ELEVENLABS]])
 
 /** The providers whose own line carries calls sent to them over SIP
@@ -490,8 +493,8 @@ export let ownKey = async (
 let OWN_ONLY =
   'Designing, keeping and cloning voices needs your own ElevenLabs account: sign in to it, or paste its key, at your space’s connections, and the voices are kept there.'
 
-/** `on`, where it is a space's own key: refused otherwise, since a voice
- * made is kept on the account that made it. */
+/** `on`, where it is a space's own key: refused otherwise, since making a
+ * voice is priced by nobody before it is made, and kept on the account. */
 export let making = (on: Voicing | null): Voicing => {
   if (!on?.own) throw new ModelError('speech_own', OWN_ONLY)
   return on
@@ -551,6 +554,7 @@ export let paused = async (
   provider: Provider = PROVIDER,
   now = Date.now(),
 ): Promise<string | null> => {
+  env = await keyed(env)
   let on = speechOf(env, provider)
   if (!on) return 'Speech is not switched on here.'
   let floor = Number(env.SPEECH_FLOOR)
@@ -630,6 +634,7 @@ export let speaking = async (
     signal?: AbortSignal
   } = {},
 ) => {
+  env = await keyed(env)
   let on = voicing(env, provider, key ? { key } : undefined)
   if (!on) throw new ModelError('speech_off', 'Speech is not switched on here.')
   if (on.own) return await speak({ ...on, ...o, text })
@@ -655,6 +660,7 @@ export let hearing = async (
   seconds = 10,
   person?: string,
 ) => {
+  env = await keyed(env)
   let on = speechOf(env)
   if (!on) throw new ModelError('speech_off', 'Speech is not switched on here.')
   return await charged(
@@ -793,13 +799,15 @@ let MAX_AUDIO = 25 * 1024 * 1024
  *   clones one from recordings posted as a form (`name`, `description`?,
  *   `files`), answering `{"voice"}`, its id.
  *
- * A provider is the platform's (Deepgram), charged to the space, unless
- * `provider` names another; design and voice are ElevenLabs'. A provider in
- * OWN is asked with the key of the connection through it that the app uses,
- * charged to that account.
+ * A provider is the platform's (Deepgram) unless `provider` names another;
+ * design and voice are ElevenLabs'. A provider in OWN is asked with the key
+ * of the connection through it that the app uses, charged to that account,
+ * else with the platform's, charged to the space; design and voice take the
+ * app's own key only.
  */
 export let speechDoor: Answer = async (asked) => {
-  let { env, req, path, space, app, json } = asked
+  let { req, path, space, app, json } = asked
+  let env = await keyed(asked.env)
   let route = DOORS.get(path)
   if (!route) return null
   if (req.method != route.method) return json(405, 'method_not_allowed')

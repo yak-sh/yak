@@ -985,10 +985,27 @@ let sentinelsOf = async (
 /** What an app's code is handed for each connected connection it uses, for a
  * person or for nobody in particular, by the name it reads it by: the sentinel
  * for its credential, or the credential itself where the link is direct. */
-export let envOf = async (
+export let envOf = (
   c: Ctx,
   app: Eid,
   person: Eid | null = null,
+): Promise<Record<string, string>> =>
+  bound(c, app, person, (u) => !!u.direct && u.lender == null)
+
+/** What the host's own code reads for each connected connection an app of the
+ * host's uses, by the name it reads it by: the credential itself, whatever the
+ * link says, since that code is the host's and the key goes nowhere else.
+ * yaks.app's own provider keys are its `platform` app's. */
+export let keysOf = (c: Ctx, app: Eid): Promise<Record<string, string>> =>
+  bound(c, app, null, () => true)
+
+// Each connected connection `app` uses, by the name it reads it by: the
+// credential where `direct` says so, else its sentinel.
+let bound = async (
+  c: Ctx,
+  app: Eid,
+  person: Eid | null,
+  direct: (u: Comp) => boolean,
 ): Promise<Record<string, string>> => {
   let out: Record<string, string> = {}
   for (let r of await used(c, app, person)) {
@@ -996,7 +1013,7 @@ export let envOf = async (
     if (typeof u.binding != 'string') continue
     let names = namesOf(u.binding, Object.keys(r.sentinels))
     for (let [f, name] of Object.entries(names)) {
-      let value = u.direct && u.lender == null
+      let value = direct(u)
         ? await credential(c, r.connection.entity.eid, f)
         : r.sentinels[f]
       if (value) out[name] = value

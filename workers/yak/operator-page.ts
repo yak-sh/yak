@@ -187,6 +187,7 @@ import {
 } from '@yaks/platform/dashboard-view'
 import { spaceApps } from '@yaks/platform/space-apps'
 import { offerRows, updateRows } from '@yaks/platform/update-rows'
+import { keyed } from './platform-keys.ts'
 
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
@@ -720,6 +721,7 @@ export let operatorAnswer = async (
   // the person said, heard, and the Operator's line, said in its own voice
   // and pace. Each is charged to the space's one budget (speech.ts).
   if ((q.has('hear') || q.has('speak')) && req.method == 'POST') {
+    env = await keyed(env)
     try {
       if (q.has('hear')) {
         let type = req.headers.get('content-type') ?? ''
@@ -1166,6 +1168,7 @@ export let operatorBody = async (
     texting,
     account,
     chats,
+    keys,
   ] = await Promise.all([
     settingsAt(env, seen, who),
     reachOf(dir, walkTo(seen.slug, seen.eid), person),
@@ -1186,6 +1189,7 @@ export let operatorBody = async (
         },
       )
       : Promise.resolve([]),
+    keyed(env),
   ])
   let rows = [
     settingsRow(space.eid, wearing(space)),
@@ -1209,7 +1213,7 @@ export let operatorBody = async (
     sub: subdomainMail(env, space),
     from: phone?.transport().number,
     call: platform?.caller ? platform.transport().number : undefined,
-    offer: offered(env, space),
+    offer: offered(keys, space),
     key: pushKey(env),
     chats: chats.map(({ platform, bot, user, kept, servers }) => ({
       platform: { title: platform.title },
@@ -1882,7 +1886,7 @@ let chatParts = async (
   // Their lists are read with every conversation, at once with it, and
   // never hold it back (`reading`).
   let lists = reading(env, space, who)
-  let [talked, newcomer, { mentions }, alerting, declined, beside] =
+  let [talked, newcomer, { mentions }, alerting, declined, beside, keys] =
     await Promise.all([
       lists.listing.then((l) =>
         conversationOf(env, space, who, at, open == 'new' ? '' : open, {
@@ -1896,6 +1900,7 @@ let chatParts = async (
       who.person ? directoryOf(env.STORE).alerts(who.person) : null,
       who.person ? directoryOf(env.STORE).alertsDeclined(who.person) : null,
       side,
+      keyed(env),
     ])
   let listed = await lists.drawn()
   let news = talked.updates!
@@ -2041,7 +2046,7 @@ let chatParts = async (
       boxed ? { asking, place } : null,
       follows,
       talked.standing,
-      !!speechOf(env),
+      !!speechOf(keys),
       asking.request,
       mentions,
       primary,

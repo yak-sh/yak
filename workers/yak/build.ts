@@ -42,6 +42,7 @@ import {
   SPACE,
   WALKTHROUGH,
 } from './build-door.ts'
+import { keyed, keysOn } from './platform-keys.ts'
 
 /**
  * The slice of a `DurableObjectState` this object needs: its SQLite, and its
@@ -122,7 +123,9 @@ export class Builder extends Durable {
     super(ctx)
     this.#ctx = ctx
     this.ceiling
-    this.#env = env
+    // yaks.app's own keys over its secrets (platform-keys.ts), refreshed as
+    // each request and alarm begins, so the Operator holding it sees them.
+    this.#env = keysOn(env)
     this.#lent = browsers(
       () => ctx.getWebSockets(),
       (held) => this.#writes(held),
@@ -175,6 +178,7 @@ export class Builder extends Durable {
     this.#asked++
     let answer
     try {
+      await keyed(this.#env)
       answer = await tallying(tally, () => this.#answer(request))
     } catch (e) {
       // An object past the rows it may read or write (@yaks/durable-object
@@ -955,6 +959,7 @@ export class Builder extends Durable {
 
   override async alarm(): Promise<void> {
     if (this.ceiling.stopped(true)) return await super.alarm()
+    await keyed(this.#env)
     let revivals = this.#revivals
     let space: dirPart.Space | null
     try {

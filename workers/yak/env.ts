@@ -274,15 +274,18 @@ export type Env = {
   // provider's credentials are the secrets its entry in config.ts
   // `phoneConfig` names, read from this environment by name.
   PHONE_SENDER?: { via: string; number?: string }
-  // Speech (speech.ts, T-140123): each provider's key is a secret of its own,
-  // DEEPGRAM_API_KEY for Deepgram and OPENAI_VOICE_KEY for OpenAI (its
-  // "yaks.app voice" project, held to $10 a month while it is a pilot,
-  // T-140668); a provider whose key is unset is off. SPEECH_FLOOR, a `[vars]`
+  // Speech (speech.ts, T-140123): each provider's key is yaks.app's own,
+  // read by name, DEEPGRAM_API_KEY for Deepgram, OPENAI_VOICE_KEY for OpenAI
+  // (its "yaks.app voice" project, held to $10 a month while it is a pilot,
+  // T-140668) and ELEVENLABS_API_KEY for ElevenLabs: a connection of the
+  // platform's by that name (platform-keys.ts), else a Worker secret of it
+  // while it moves over; a provider with neither is off. SPEECH_FLOOR, a `[vars]`
   // line, is the credit left on an account that says its balance (Deepgram's)
   // below which speech is refused while it is a pilot. SPEECH_API aims every
   // provider elsewhere, for a test.
   DEEPGRAM_API_KEY?: string
   OPENAI_VOICE_KEY?: string
+  ELEVENLABS_API_KEY?: string
   // The signing secret of the webhook a provider whose own line carries
   // calls rings when one comes in (speech.ts LINES, operator-carried.ts).
   OPENAI_CALLS_SECRET?: string

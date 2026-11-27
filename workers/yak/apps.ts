@@ -322,8 +322,15 @@ let DOORS = /* @__PURE__ */ new Map<string, () => Promise<Answer>>([
   ['documents', async () => (await import('./document-search.ts')).documents],
   ['pdf', async () => (await import('./pdf.ts')).pdfDoor],
   ['ai', async () => {
-    let { modelRun, recovery } = await import('./models.ts')
-    return async (asked) => await modelRun(asked) ?? await recovery(asked)
+    let [{ modelRun, recovery }, { keyed }] = await Promise.all([
+      import('./models.ts'),
+      import('./platform-keys.ts'),
+    ])
+    return async (asked) => {
+      // yaks.app's own model keys (platform-keys.ts).
+      asked = { ...asked, env: await keyed(asked.env) }
+      return await modelRun(asked) ?? await recovery(asked)
+    }
   }],
   ['speech', async () => {
     let [{ speechDoor }, { listenDoor }] = await Promise.all([

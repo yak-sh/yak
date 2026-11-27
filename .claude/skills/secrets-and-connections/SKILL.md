@@ -145,13 +145,31 @@ run this command not seen this error ... because it's always referenced before
 the agents have ever actually done the thing". Giving us a key should cost him
 one paste and nothing else to think about.
 
+- **A key yaks.app itself spends from goes on yaks.app, nowhere else.** The
+  owner, verbatim: "how come i have to put all these yaks.app keys in 1p.
+  can't they go straight on yaks.app via the vault? like any other
+  integration". A provider key the platform uses (ElevenLabs, Deepgram,
+  OpenAI, Anthropic) is a connection of the `yak` space that its `platform`
+  app uses under the name the Worker reads it by
+  (workers/yak/platform-keys.ts; workers/yak/README.md, "yaks.app's own
+  keys"). Ask for it on yaks.app with `yak command connection_need --space
+  yak --app platform --integration <name> --binding <NAME> --as admin`
+  (a custom integration also gives `--hosts`), and file his task with the
+  link `https://yaks.app/manage/connections?space=yak`, where he pastes it.
+  Never send him to 1Password for one, and never copy one into a Worker
+  secret: the connection serves within a minute, and the Worker secret of
+  the same name is deleted once it does. The rest of this section is for
+  keys the box uses.
 - **Look before you ask.** The key he gave weeks ago is probably already here.
+  A yaks.app key shows on the `yak` space's connections page, or with
+  `yak command connection_list --space yak --as admin`. For the box,
   `op item list` lists 1Password's items by title alone (the Telnyx key is
   "telnyx API"); a box secret shows with `graph_query` `.secret.name=NAME&*`,
-  and a connection with `connection_list`, his person as owner. A key found in 1Password is
-  imported the way "Writing one on the box" says, without asking him at all.
-- **Ask with `connection_need`, never with steps through 1Password.** A key
-  only he can get is a task assigned to him and a connection asked for it:
+  and a connection with `connection_list`, his person as owner. A box key
+  found in 1Password is imported the way "Writing one on the box" says,
+  without asking him at all.
+- **Ask with `connection_need`, never with steps through 1Password.** A box
+  key only he can get is a task assigned to him and a connection asked for it:
   file the task (its body says what the key is for and the steps to get it),
   then call `connection_need` with his person as `owner`, `task` its id, a
   custom integration's `hosts`, `instructions` and `check` (a call that
@@ -166,7 +184,9 @@ one paste and nothing else to think about.
   box's `yak` host and run as the service account whose token is
   `OP_SERVICE_ACCOUNT_TOKEN` in the box's vault; `worker` with
   `<script>/<NAME>`, a Worker secret put with `CLOUDFLARE_ADMIN_TOKEN`, lent by
-  @yaks/admin. Every connection is also in the box's vault, where
+  @yaks/admin; `worker` is never the place for a key yaks.app spends from,
+  which is a connection of the `yak` space (above). Every connection is also
+  in the box's vault, where
   `accountCredential` and `call` read it. A keeper that fails leaves the
   `connection_given` run failed (`effect_check`) and the task open.
 - **His own command is `yak auth --key <NAME>`, any name.** A name no integration
@@ -317,7 +337,9 @@ with the child it was handed to.
 - **The kernel Worker's own credentials** are Worker secrets, set with `npx
   wrangler secret put` and read off `env` (workers/yak/env.ts; the table in
   workers/yak/README.md, "Everything set by hand"). `VAULT_KEY` is among them
-  because it opens the vault and cannot live inside it.
+  because it opens the vault and cannot live inside it. A provider key the
+  platform spends from is not one of them: it is a connection of the `yak`
+  space (above), which `keyed` (platform-keys.ts) lays over `env`.
 - **What 1Password itself needs**: `op` runs with a cleared environment but for
   `PATH`, `HOME`, `XDG_CONFIG_HOME` and `OP_SERVICE_ACCOUNT_TOKEN`.
 - **A placeholder handed to a child**: the build sandbox's `YAKS_TOKEN` is a

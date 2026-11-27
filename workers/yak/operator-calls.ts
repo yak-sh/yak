@@ -74,6 +74,7 @@ import { NOTES, receive, requestId } from './operator-channels.ts'
 import { glanceOf, type Look, looks } from './operator-glance.ts'
 import { settingsAt, SPACE } from './build-door.ts'
 import { settled } from './operator-persona.ts'
+import { keyed } from './platform-keys.ts'
 
 /** The longest a call lasts, in minutes. */
 export let MINUTES = 10
@@ -151,6 +152,7 @@ export let reached = async (
   ring: Pick<Ring, 'from'>,
   provider?: Provider,
 ) => {
+  env = await keyed(env)
   let dir = directoryOf(env.STORE)
   let person = await dir.phoned(ring.from)
   if (!person) return null
@@ -1466,6 +1468,7 @@ export let answering = async (
   armed: () => Promise<void> | undefined,
 ): Promise<Response> => {
   let seen = space
+  env = await keyed(env)
   space = await settled(operator.store.g, seen)
   let held = await lineOf(env, ticket)
   let setup = setupOf(env, space)
@@ -1549,6 +1552,7 @@ export let saying = (
   person?: string,
 ) =>
 async (text: string) => {
+  env = await keyed(env)
   let now = setupOf(env, {
     ...await settled(g, space),
     voice_model: first.model,

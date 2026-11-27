@@ -27,6 +27,7 @@ import { unaffordable } from '@yaks/platform/standing'
 import { hearing, paused, speechOf } from './speech.ts'
 import { blobKey } from './uploads.ts'
 import { useOf } from '@yaks/blob/upload'
+import { keyed } from './platform-keys.ts'
 
 /// guessed(16_000 * 60) -> 60
 /** The seconds a recording of `bytes` is held as before it is heard: as long
@@ -47,7 +48,8 @@ export let turnId = (recording: string, n: number) =>
  * at, a file past what the provider hears, a budget that can't cover it.
  */
 export let asking = async (asked: Asked, address: unknown) => {
-  let { env, space, app, json } = asked
+  let { space, app, json } = asked
+  let env = await keyed(asked.env)
   let sha = shaOf(address)
   if (!sha) {
     return json(
@@ -153,6 +155,7 @@ export let hearWhole = async (
   if (!row?.hearing || row.heard || typeof sha != 'string') return
   let { STORE, BLOBS } = at.env
   if (!STORE || !BLOBS || !at.app) throw new Error('Hearing has no storage')
+  let env = await keyed(at.env as typeof at.env & { STORE: typeof STORE })
   let found = at.context ?? await directoryOf(STORE).appAt(at.app)
   if (!found) throw new Error('Hearing has no account')
   let fail = async (reason: string) =>
@@ -168,7 +171,7 @@ export let hearWhole = async (
   let got
   try {
     got = await hearing(
-      { ...at.env, STORE },
+      env,
       found.space,
       file.body,
       type,
@@ -184,7 +187,7 @@ export let hearWhole = async (
     throw e
   }
   let had = await at.graph.read(line`.heard_turn.recording=${recording}`)
-  let speakers = speechOf(at.env)!.provider.hear.speakers
+  let speakers = speechOf(env)!.provider.hear.speakers
   for (
     let batch of landed(
       recording,

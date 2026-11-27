@@ -37,6 +37,7 @@ import {
 } from './operator-calls.ts'
 import { SPACE } from './build-door.ts'
 import { settled } from './operator-persona.ts'
+import { keyed } from './platform-keys.ts'
 
 /** What a minute of a call on a provider's own line costs on the phone
  * provider's side: Telnyx's inbound toll-free minute on a SIP trunk, which
@@ -76,6 +77,7 @@ export let carriedDoor = async (
   provider: Provider,
 ): Promise<Response> => {
   if (req.method != 'POST') return new Response(null, { status: 405 })
+  env = await keyed(env)
   let line = LINES.get(provider)!
   let secret = env[line.secret]
   let speech = speechOf(env, provider)
@@ -144,6 +146,7 @@ export let carrying = async (
   ticket: Ticket,
   armed: () => Promise<void> | undefined,
 ): Promise<Response> => {
+  env = await keyed(env)
   let provider = carrierNamed(ticket.carried ?? '')
   let speech = provider && speechOf(env, provider)
   if (!provider || !speech) {

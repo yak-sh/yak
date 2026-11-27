@@ -31,6 +31,7 @@ import type { Env } from './env.ts'
 import { reserved } from './model-spend.ts'
 import { modelAccess } from './models.ts'
 import { paused, speechOf, tied, upgrading } from './speech.ts'
+import { keyed } from './platform-keys.ts'
 
 let LISTEN = { request: 'speech listen' }
 
@@ -171,7 +172,8 @@ export let listen = async (
     report?: (error: unknown) => void
   },
 ) => {
-  let { env, space, page } = o
+  let { space, page } = o
+  let env = await keyed(o.env)
   let time = o.time ?? system
   let report = o.report ?? ((error: unknown) => defect(error, LISTEN))
   let at = Number(o.query.get('at') ?? 0)

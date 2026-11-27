@@ -137,6 +137,7 @@ export {
   disconnect,
   envOf,
   type Given,
+  keysOf,
   lacking,
   lend,
   list,
