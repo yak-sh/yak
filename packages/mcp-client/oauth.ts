@@ -36,6 +36,17 @@ export type Found = {
   register: (redirect: string) => Promise<string>
 }
 
+/** A public client's metadata (RFC 7591), and its id where it is a
+ * document's URL. */
+export type ClientDocument = {
+  client_id?: string
+  client_name: string
+  redirect_uris: string[]
+  grant_types: string[]
+  response_types: string[]
+  token_endpoint_auth_method: string
+}
+
 /** What the host's public client says of itself, returning to `redirect`:
  * what it registers with (RFC 7591), and its metadata document, served at
  * `id`, the URL that is its id where a server takes one.
@@ -48,7 +59,10 @@ export type Found = {
  * ])
  * ```
  */
-export const client = (id: string | undefined, redirect: string) => ({
+export const client = (
+  id: string | undefined,
+  redirect: string,
+): ClientDocument => ({
   ...id ? { client_id: safe(id) } : {},
   client_name: 'yaks.app MCP client',
   redirect_uris: [safe(redirect)],
@@ -61,7 +75,7 @@ export class AuthorizationError extends Error {}
 
 // HTTPS, or HTTP on this machine: what a code, a token or a registration may
 // travel over.
-const safe = (url: string | URL) => {
+const safe = (url: string | URL): string => {
   const u = new URL(url)
   if (
     u.username || u.password || (u.protocol !== 'https:' &&
