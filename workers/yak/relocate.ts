@@ -63,10 +63,8 @@ import {
 } from '@yaks/durable-object'
 import { col, eq, select, table, val } from '@yaks/sql'
 
-export let LEAVE = '/relocate'
-export let ARRIVE = '/relocate/arrive'
-export let WHERE = '/relocate/where'
-export let COPY = '/relocate/copy'
+import { ARRIVE, COPY, LEAVE, WHERE } from './relocate-paths.ts'
+export { ARRIVE, COPY, LEAVE, WHERE }
 let TRIES = 2
 let ROUNDS = 3
 

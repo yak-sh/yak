@@ -35,7 +35,6 @@
 // reads and the sentence a door says no with — is meter.ts, which this half
 // reads and the Store object reads too.
 import { patient } from '@yaks/blob'
-import { ModelError } from '@yaks/model'
 import { type ByDay, series, summed } from '@yaks/ui/chart'
 import type { Bundle } from '@yaks/graph'
 import * as dirPart from './directory.ts'
@@ -642,5 +641,7 @@ export let fullFiles = async (
  * the person's to free, before the model is paid. */
 export let mediaRoom = (env: Env, space: Space) => async () => {
   let full = await fullFiles(env, space, [{ key: '', bytes: 1 }])
-  if (full) throw new ModelError('space_full', full)
+  if (full) {
+    throw new (await import('@yaks/model')).ModelError('space_full', full)
+  }
 }

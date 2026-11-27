@@ -26,7 +26,6 @@ import {
 import { bound, type Env } from './env.ts'
 import { sessionAt, vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
-import { told } from './stream.ts'
 import { divided, gauged, level } from '@yaks/platform/standing'
 import { holding } from './held.ts'
 import { caught } from './defects.ts'
@@ -341,11 +340,16 @@ export let noted = async (
       broke.version ? ` v${broke.version}` : ''
     }: ${broke.request} — ${broke.message}`
     for (let person of await dir.members(at.space)) {
-      await told(at.env, person, 'notifications/message', {
-        level: 'error',
-        logger: `${at.space.slug}/${at.app.slug}`,
-        data,
-      })
+      await (await import('./stream.ts')).told(
+        at.env,
+        person,
+        'notifications/message',
+        {
+          level: 'error',
+          logger: `${at.space.slug}/${at.app.slug}`,
+          data,
+        },
+      )
     }
   } catch (why) {
     caught(why, { request: 'push a break' })

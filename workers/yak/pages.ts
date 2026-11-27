@@ -61,6 +61,7 @@ import { type ComponentChildren, h } from 'preact'
 import type { Face } from '@yaks/platform/connections-page'
 
 import { esc, markup, raw } from './html.ts'
+import { unesc } from '@yaks/platform/escape'
 
 import type { Panes, Role } from './directory.ts'
 
@@ -82,7 +83,6 @@ import { versionOf } from './running.ts'
 import { asset, links } from './sheets.ts'
 import { FRAMED } from './frame.ts'
 import { type Preview, tags as previewTags } from './link-preview.ts'
-import { decodeHTML } from 'entities'
 
 import { FILED } from '@yaks/api/refuse'
 
@@ -177,7 +177,7 @@ ${importMap(file)}${
       : ''
   }
 <title>${preview ? esc(preview.title) : `${title} · yaks.app`}</title>
-${previewTags(env, preview ?? { title: `${decodeHTML(title)} · yaks.app` })}
+${previewTags(env, preview ?? { title: `${unesc(title)} · yaks.app` })}
 ${
     links(
       env,
