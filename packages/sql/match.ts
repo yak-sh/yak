@@ -54,7 +54,7 @@ import {
   sub,
   table,
 } from './ast.ts'
-import { inline, q } from './render.ts'
+import { inline, q, relationOf } from './render.ts'
 import { unionAllWithin } from './compound.ts'
 import { type BindOpts, boundReads } from './bind.ts'
 import type { Extension } from './extend.ts'
@@ -109,8 +109,11 @@ export type On = { at?: At; gone?: Gone; touched?: number[] }
 // of these bind two patterns into one statement without a single name in
 // common. The value lowerings are untouched — what a comparison means is not a
 // matter of what a table is called.
-let prefixed = (pre: string, at: At): Dialect => {
-  let from = (comp: string) => q(at(comp))
+let prefixed = (
+  pre: string,
+  at: At,
+  from: (comp: string) => string,
+): Dialect => {
   let own = (base: string) =>
     base == 'entity' ? `${q(pre + 'entity')}."id"` : `${q(pre + base)}."entity"`
   return {
@@ -192,6 +195,13 @@ export let rule = (
     throw new Error('a collection is evaluated by the storage adapter')
   }
   let at = on.at ?? ((comp: string) => comp)
+  // A component read from its committed table is read as the relation of its
+  // stored columns under their labels (`relationOf`), since the vocabulary
+  // may store it by its identity; an overlay's CTE already speaks labels.
+  let source = (comp: string) => {
+    let name = at(comp)
+    return name == comp ? relationOf(vocab, comp) : q(name)
+  }
   let touched = on.touched
   let extend = [...(opts.extend ?? []), removals(on.gone ?? (() => null))]
   let ctes: Cte[] = []
@@ -214,7 +224,7 @@ export let rule = (
     // per binding of the patterns that do match, so it contributes no table.
     if (p.makes) return
     let pre = `p${i}_`
-    let d = prefixed(pre, at)
+    let d = prefixed(pre, at, source)
     // A bind implies the component its path starts from is there, as the
     // in-memory matcher has it, so a presence clause is added and the binder
     // makes the join it always would. A component the filter already named is
@@ -270,7 +280,7 @@ export let rule = (
       let as = `${pre}gate_${comp}`
       conds.push(
         raw(
-          `not exists (select 1 from ${q(at(comp))} ${q(as)} where ${
+          `not exists (select 1 from ${source(comp)} ${q(as)} where ${
             q(as)
           }."entity" = ${q(pre + 'entity')}."id")`,
         ),

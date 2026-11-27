@@ -1,4 +1,4 @@
-import { mint } from '@yaks/graph'
+import { match, mint } from '@yaks/graph'
 import { col, indexName, select, table } from '@yaks/sql'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
@@ -7,6 +7,7 @@ import { minted } from '@yaks/vocab/minted'
 import { open } from './db.ts'
 import { storage } from './mod.ts'
 import { storage as reader } from './read-store.ts'
+import { bindings } from './rules.ts'
 
 let doc = JSON.parse(minted(
   JSON.stringify({
@@ -71,6 +72,28 @@ for (let legacy of [false, true]) {
       })),
       [{ [layout.stored('doc', 'title')]: 'Edited' }],
     )
+  })
+}
+
+// A rule's match asked of what is committed, as a builder or a step asks it
+// after the write, reads each table by the name its layout stores it under.
+for (let legacy of [false, true]) {
+  test(`a match over committed rows binds in a ${legacy ? 'label' : 'UUID'} store`, () => {
+    let d = open(':memory:')
+    using _close = { [Symbol.dispose]: () => d.close() }
+    let layout = legacy ? labelStored(v) : v
+    let s = storage(d, layout)
+    s.install()
+    s.tx((tx) =>
+      tx.patch([
+        { entity: { eid: 'a' }, doc: { title: 'A', flag: 'kept' } },
+        { entity: { eid: 'b' }, doc: { title: 'B', flag: 'moved' } },
+      ])
+    )
+    let bound = (q: string) =>
+      bindings(d, layout, [match(q)], [], [])[0].map((b) => b.vars)
+    assertEquals(bound('$d .doc.flag=kept, doc.title=$t'), [{ d: 'a', t: 'A' }])
+    assertEquals(bound('$d .doc.title=$t, !doc.flag'), [])
   })
 }
 
