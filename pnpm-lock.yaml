@@ -4030,6 +4030,9 @@ importers:
       '@types/ua-parser-js':
         specifier: 0.7.39
         version: 0.7.39
+      '@yaks/alias':
+        specifier: 0.2.24
+        version: link:../alias
       '@yaks/api':
         specifier: 0.2.29
         version: link:../api
@@ -4057,6 +4060,9 @@ importers:
       '@yaks/data-editor':
         specifier: 0.2.23
         version: link:../data-editor
+      '@yaks/doc':
+        specifier: 0.2.24
+        version: link:../doc
       '@yaks/draft':
         specifier: 0.2.24
         version: link:../draft
@@ -4087,9 +4093,15 @@ importers:
       '@yaks/host':
         specifier: 0.2.29
         version: link:../host
+      '@yaks/id':
+        specifier: 0.2.23
+        version: link:../id
       '@yaks/inbox':
         specifier: 0.2.30
         version: link:../inbox
+      '@yaks/key':
+        specifier: 0.2.24
+        version: link:../key
       '@yaks/lens':
         specifier: 0.2.24
         version: link:../lens
@@ -4138,6 +4150,9 @@ importers:
       '@yaks/sql':
         specifier: 0.2.30
         version: link:../sql
+      '@yaks/sqlite':
+        specifier: 0.2.30
+        version: link:../sqlite
       '@yaks/sync':
         specifier: 0.2.24
         version: link:../sync
@@ -4193,18 +4208,9 @@ importers:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
-      '@yaks/doc':
-        specifier: 0.2.24
-        version: link:../doc
-      '@yaks/key':
-        specifier: 0.2.24
-        version: link:../key
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
-      '@yaks/sqlite':
-        specifier: 0.2.30
-        version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing

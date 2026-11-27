@@ -282,5 +282,20 @@ export let servingAuthority = (host: Host) => {
     if (news.has('name') || news.has('app')) host.bind()
     told(news, host)
   }
-  return { learn, heard, recheck }
+  // A fitted listing can advance the same floor as learn(), provided the
+  // authority has no metadata to install or standing to refresh.
+  let unchanged = (req: Request): boolean => {
+    if (req.headers.has(ROUTE_MEMORY) || heard(req).length) return false
+    let raw = req.headers.get('x-yak-policy')
+    if (raw == null || !/^\d+$/.test(raw)) return false
+    let revision = Number(raw)
+    if (
+      !Number.isSafeInteger(revision) || revision < Number(host.read('policy'))
+    ) {
+      return false
+    }
+    remember(req)
+    return true
+  }
+  return { learn, heard, recheck, unchanged }
 }

@@ -5020,6 +5020,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@types/ua-parser-js@0.7.39",
+            "npm:@yaks/alias@0.2.24",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/blob@0.2.30",
@@ -5040,6 +5041,7 @@
             "npm:@yaks/git@0.2.30",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/host@0.2.29",
+            "npm:@yaks/id@0.2.23",
             "npm:@yaks/inbox@0.2.30",
             "npm:@yaks/key@0.2.24",
             "npm:@yaks/lens@0.2.24",

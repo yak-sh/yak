@@ -10,7 +10,7 @@ import { lensDocAt, sessionPackage, sessionRows } from './lenses.ts'
 
 export let plugins = (
   host: { vocab: Vocab } & Pick<Host, 'report'>,
-  { store }: Options,
+  { store }: { store: Pick<Options['store'], 'name' | 'manifest'> },
 ): Plugin[] => [
   lenses(
     (error) =>

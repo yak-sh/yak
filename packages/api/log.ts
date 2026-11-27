@@ -279,6 +279,7 @@ let RUNNING: Expr = eq(col('state'), lit('running'))
 let INTERRUPTED: Expr = eq(col('state'), lit('interrupted'))
 let UNREVIEWED: Expr = eq(col('state'), lit('unreviewed'))
 let AUDIT: Expr = eq(col('audit'), lit(1))
+let REVIVABLE: Expr = and(FAILED, not(AUDIT))
 // Case-sensitive, just like the browser's stable key prefix. Keep this in the
 // partial index too, so expiry never walks indefinitely retained receipts.
 let EXPIRABLE: Expr = and(
@@ -817,6 +818,15 @@ export let next = (db: Driver, seq = 0): Kept | null => {
 /** Whether any write is waiting. */
 export let waiting = (db: Driver): boolean => next(db) != null
 
+/** Whether a new incarnation must settle writes before serving a read. */
+export let recovering = (db: Driver): boolean =>
+  db.query(select({
+    cols: [lit(1)],
+    from: table(LOG),
+    where: or(PENDING, REVIVABLE),
+    limit: lit(1),
+  })).length > 0
+
 /** The write is answered: it leaves the log, unless it is kept as `applied`
  * for a resend (`landed`). */
 export let done = (db: Driver, seq: number): void =>
@@ -842,7 +852,7 @@ export let revived = (db: Driver): void => {
     t: 'update',
     table: LOG,
     set: { state: lit('pending') },
-    where: and(FAILED, not(AUDIT)),
+    where: REVIVABLE,
   })
 }
 

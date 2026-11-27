@@ -40,6 +40,7 @@ import {
 import { queryCache } from './query-cache.ts'
 import { answers, recalling } from './answered.ts'
 import { appListing, appRead } from '@yaks/platform/app-read'
+import { plainListing, storeListing } from '@yaks/platform/store-listing'
 import { type Lend, lends, type Lent } from '@yaks/platform/lent'
 import { eraseStore, weighing } from '@yaks/platform/app-storage'
 import { reviveStore, suspendStore } from './app-dormancy.ts'
@@ -223,6 +224,7 @@ import {
   Unseeded,
   wordColumns,
 } from '@yaks/sqlite'
+import { columns } from '@yaks/sqlite/physical'
 import {
   driver,
   type DurableSql,
@@ -482,6 +484,7 @@ import {
   kept,
   logged,
   raise,
+  recovering,
   rekey,
   replayed,
   retry,
@@ -545,6 +548,26 @@ let whole = async <T>(r: Response): Promise<T> => {
   if (!r.ok) throw await answered(r)
   return await r.json()
 }
+
+let countedAnswer = (answer: Response, tally: Tally): Response => {
+  let headers = new Headers(answer.headers)
+  for (let [name, value] of Object.entries(reported(tally))) {
+    headers.set(name, value)
+  }
+  return headed(answer, headers)
+}
+
+let listingDoor = (request: Request, url: URL, kernel: boolean): boolean =>
+  request.method == 'GET' &&
+  (kernel ? url.pathname == WAKE : plainListing(url) && ![
+    BRANCH,
+    'x-yak-base-release',
+    'x-yak-speaks',
+    HEED,
+    HEED_OPERATOR,
+    'x-yak-observe',
+    'x-yak-administrative',
+  ].some((h) => request.headers.has(h)))
 
 let storeKind = (name: string): keyof typeof worker.stores =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
@@ -1289,6 +1312,8 @@ export class Store extends Durable {
   }
 
   #started = once()
+  #listing?: ReturnType<typeof storeListing>
+  #listingExpiry?: Promise<Expiry | undefined>
   #startedDormant = false
   // Each kind's plan, once its facets are imported (`#prepare`), and an app
   // store's that keeps versions, under `versions`.
@@ -1429,7 +1454,10 @@ export class Store extends Durable {
   // The store's housekeeping before it serves: its storage brought to this
   // deploy's shape, its graph built, and a copy's runs forgiven.
   async #open(request?: Request) {
-    this.#expires = await this.#ctx.storage.get<Expiry>?.('expires')
+    this.#listing = undefined
+    this.#expires = await (this.#listingExpiry ??
+      this.#ctx.storage.get<Expiry>?.('expires'))
+    this.#listingExpiry = undefined
     this.#startedDormant = !!this.#dormant
     let ctx = this.#ctx
     this.#sql = driver(ctx.storage, undefined, this.#measure)
@@ -5013,13 +5041,8 @@ export class Store extends Durable {
     // and says how long beside its answer (`x-yak-wake`, timing.ts): the one
     // that woke it, and every one behind a start already under way, such as
     // an alarm's. The runtime's clock
-    // moves only across I/O, so that is the waiting, never the compute. The
-    // object's plugins load while its storage opens (`#awake`): an isolate
-    // that never ran them evaluates their modules then, and nothing in that
-    // touches storage, so a dormant object loses nothing but the CPU.
+    // moves only across I/O, so that is the waiting, never the compute.
     let waking = this.#started.holds, woke = this.#now()
-    let named = request.headers.get('x-store')
-    if (waking && named) this.#prepare(named).catch(() => {})
     // A newer caller is answered on the code this object has, never by a
     // restart, which would cut every call in flight here and come back on
     // the same code (running.ts). Its refusals retry through #unskewed while
@@ -5027,12 +5050,113 @@ export class Store extends Durable {
     return await this.#door(request, waking, woke)
   }
 
+  // An ordinary page wake can open the listing reader without starting the
+  // graph that writes. Anything requiring startup falls through to that graph.
+  async #plain(
+    request: Request,
+    wake: boolean,
+  ): Promise<Response | null> {
+    if (this.#started.ran) return null
+    let name = request.headers.get('x-store')
+    if (!name || ownStore(name)) return null
+    if (this.#ctx.getWebSockets().length) return null
+
+    if (!this.#sql) {
+      let sql = driver(this.#ctx.storage, undefined, this.#measure)
+      if (!columns(sql, KV.name).length) return null
+      this.#sql = sql
+    }
+    let app = this.#get('app')
+    if (!app || this.#get('name') != name || this.#get('copied')) return null
+    let shape = this.#shape()
+    if (
+      !this.#stood(shape) || shape.vocab.comp('_tx') ||
+      this.#slots.branches().length ||
+      requirements(this.#sql).includes(versions.use) || recovering(this.#sql) ||
+      Object.keys(JSON.parse(this.#get('uses') ?? '{}')).length
+    ) return null
+
+    this.#listingExpiry ??= this.#ctx.storage.get<Expiry>?.('expires')
+    if (await this.#listingExpiry || this.#started.ran || this.#dormant) {
+      return null
+    }
+
+    if (
+      !wake && (
+        request.headers.get('x-yak-app') != app ||
+        request.headers.get('x-yak-access') != this.#get('access') ||
+        (request.headers.has('x-yak-release') &&
+          request.headers.get('x-yak-release') != this.#get('release')) ||
+        !this.#serving.unchanged(request)
+      )
+    ) return null
+    let listing = this.#listing ??= storeListing({
+      vocab: shape.vocab,
+      derived: shape.derived,
+      searchable: shape.searchable,
+      driver: this.#sql,
+      name,
+      app,
+      manifest: () => meant(this.#get('vocab')),
+      clock: clockOf(this.#time),
+      read: (req) => this.#callerRead(req),
+      speak: (rows, g) => this.#speak(rows, g),
+      vouch: (v) => this.#vouch(v),
+      ignore: this.#staleGrant,
+      spoke: (line) => this.#spoke(line),
+      taught: (answer) => this.#taught(answer),
+      tags: () => this.#tags(),
+      report: (error, request) => defect(error, { request, store: name }),
+    })
+    this.#recoverListingAlarm(listing.graph, shape)
+    if (wake) return new Response(null, { status: 204 })
+    let answer = await this.#listed(request)
+    // A full request could have taken over while authorization or reading
+    // yielded. It may have selected different words or replayed a write.
+    if (this.#started.ran || this.#dormant) return null
+    if (
+      answer.ok && (request.headers.has('x-yak-person') ||
+        request.headers.has('x-yak-via'))
+    ) this.#used()
+    return answer
+  }
+
+  #listingAlarm = once()
+  #recoverListingAlarm(g: Graph, shape: Shape): void {
+    this.#ctx.waitUntil?.(
+      this.#listingAlarm.run(() =>
+        apart(async () => {
+          await yielded()
+          if (this.#started.ran || this.#dormant) return
+          let now = this.#now()
+          let next = await soonest(g, now)
+          let effect = g.vocab.comp('effect')
+            ? due(
+              await g.read(
+                '.effect.state=pending&.order=effect.next&.limit=1&.fields=effect.next',
+              ),
+              now,
+            )
+            : null
+          let unread = this.#bind.LEXICON &&
+            this.#get('lexicon') != fieldsSaid(worded(shape.searchable))
+          if (!this.#started.ran && !this.#dormant) {
+            await this.#arm(
+              earliest(next, effect, unread ? this.#soon() : null),
+              'listing recovery',
+            )
+          }
+        })
+      ).catch((e) => defect(e, { request: 'owed alarm', store: this.#name() })),
+    )
+  }
+
   async #door(
     request: Request,
     waking: boolean,
     woke: number,
   ): Promise<Response> {
-    let path = new URL(request.url).pathname
+    let url = new URL(request.url), path = url.pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     if (path == '/apply' && request.method == 'POST') {
       try {
@@ -5069,6 +5193,9 @@ export class Store extends Durable {
       })
     }
 
+    let listing = waking && listingDoor(request, url, kernel)
+    let name = request.headers.get('x-store')
+    if (waking && !listing && name) this.#prepare(name).catch(() => {})
     if (!await this.#awake()) {
       // The owner can inspect retained data without restoring the app or
       // booting its graph, replaying writes, or starting its effects.
@@ -5117,12 +5244,24 @@ export class Store extends Durable {
     // draft's test data (`#onBranch`), which the log would land on main.
     let writing = logged(request) && !request.headers.has(BRANCH)
     let stop = this.ceiling.refusal(writing)
-    if (stop && (!writing || !this.#sql)) return refuse(stop)
+    if (stop && (!writing || !this.#started.ran || !this.#sql)) {
+      return refuse(stop)
+    }
+    let probe: Tally = new Map()
+    if (listing && !stop) {
+      let plain = await tallying(
+        probe,
+        () => this.#plain(request, path == WAKE),
+      )
+      if (plain) return countedAnswer(plain, probe)
+      if (this.#dormant) return this.#missing(request)
+    }
     if (!stop) await this.#ensureStarted(request)
     let across = stop ? null : await this.#across(request)
     if (across) return across
     let tally = this.#pending
     this.#pending = new Map()
+    for (let [name, value] of probe) hop(name, value, tally)
     waited(tally, waking, woke, this.#now())
     let run = () =>
       tallying(tally, async () => {
@@ -5178,11 +5317,7 @@ export class Store extends Durable {
           (request.headers.has('x-yak-person') ||
             request.headers.has('x-yak-via'))
         ) this.#used()
-        let headers = new Headers(answer.headers)
-        for (let [name, value] of Object.entries(reported(tally))) {
-          headers.set(name, value)
-        }
-        return headed(answer, headers)
+        return countedAnswer(answer, tally)
       })
     try {
       return await (this.#profile
@@ -6316,7 +6451,15 @@ export class Store extends Durable {
     (request) => this.#directoryAsked(request),
   )
 
-  #directoryAsked = async (request: Request): Promise<Response> => {
+  #listed = served(
+    (request) => this.#directoryAsked(request, this.#listing!.read),
+    { route: () => '/query', tags: () => this.#tags() },
+  )
+
+  #directoryAsked = async (
+    request: Request,
+    reading = this.#reading,
+  ): Promise<Response> => {
     let url = new URL(request.url)
     let line = url.searchParams.get('q') ?? ''
     let text = formatted(line)
@@ -6328,7 +6471,7 @@ export class Store extends Durable {
     return await this.#recalled(
       [this.#get('vocab') ?? '', this.#get('uses') ?? ''],
       line,
-      () => this.#reading(request),
+      () => reading(request),
     )
   }
 
@@ -6372,8 +6515,8 @@ export class Store extends Durable {
   // (`refProps`), and who among the eids is a person is this store's own rows —
   // the writer it minted when they first wrote here, wearing what the kernel
   // said to call them.
-  #names = (rows: Bundle[]): Names | Promise<Names> => {
-    let at = new Set(this.#vocab.refProps().map(([c, p]) => `${c}.${p}`))
+  #names = (rows: Bundle[], graph = this.#graph): Names | Promise<Names> => {
+    let at = new Set(graph.vocab.refProps().map(([c, p]) => `${c}.${p}`))
     let { eids, refs } = mentions(
       rows as Row[],
       (comp, prop) => at.has(`${comp}.${prop}`),
@@ -6385,7 +6528,7 @@ export class Store extends Durable {
     // the graph would otherwise derive on an isolate's first answer to rule
     // the eids out (@yaks/code `describing`).
     let read = missing.length
-      ? this.#graph.read(and(
+      ? graph.read(and(
         equals('entity.eid', list(...missing)),
         present('person'),
         want('doc'),
@@ -6406,8 +6549,14 @@ export class Store extends Durable {
     })
   }
 
-  #speak = (rows: Bundle[]): Bundle[] | Promise<Bundle[]> =>
-    after(this.#names(rows), (said) => named(rows as Row[], said) as Bundle[])
+  #speak = (
+    rows: Bundle[],
+    graph = this.#graph,
+  ): Bundle[] | Promise<Bundle[]> =>
+    after(
+      this.#names(rows, graph),
+      (said) => named(rows as Row[], said) as Bundle[],
+    )
 
   // The read door's half of the graph's `teach`: `unknown prop: .recipe` is true and
   // useless on its own, so the store that holds the vocabulary adds where a
