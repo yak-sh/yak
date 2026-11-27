@@ -1,10 +1,10 @@
 // A provider or a model is named where its eid is expected: at every door that
 // resolves ids through Graph.address, a read, a write and a caller's lookup.
 
-import { whole } from '@yaks/query'
+import { line, whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
+import { type Bundle, type Comp, eidOf, graph, identityEid } from '@yaks/graph'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { nameKeywords } from '@yaks/names'
 import { ram } from '@yaks/ram'
@@ -54,9 +54,11 @@ submissionGraph.apply([{ entity: { eid: E } }])
 
 test('a provider or a model is addressed by its name', () => {
   let g = shelf()
+  let existing = eidOf(modelDoc, 'provider')('existing')
+  g.apply([{ entity: { eid: existing }, provider: { name: 'existing' } }])
   assertEquals(
-    g.address(['gpt-6-astra', 'codex', 'gpt-9', E]),
-    new Map([['gpt-6-astra', ASTRA], ['codex', CODEX]]),
+    g.address(['gpt-6-astra', 'codex', 'existing', 'gpt-9', E]),
+    new Map([['gpt-6-astra', ASTRA], ['codex', CODEX], ['existing', existing]]),
   )
 })
 
@@ -106,7 +108,7 @@ test('a model row written whole keeps what it says, and is priced and labelled',
 test('a model met for the first time is priced at its list price', () => {
   let g = shelf()
   let priceOf = (name: string) =>
-    (g.get([identityEid('model', [name])]) as Bundle[])[0]?.price
+    (g.read(line`.model.name=${name}&?price`) as Bundle[])[0]?.price
   g.apply([
     { entity: { eid: E }, using: { model: 'claude-opus-4-6[1m]' } },
     { entity: { eid: '$a' }, model: { name: 'claude-haiku-4-5-20251001' } },
@@ -146,7 +148,7 @@ test('a held model with no price takes its list price when next named', () => {
 test('a model takes its list label when met or next named; a label it has stands', () => {
   let g = shelf()
   let labelOf = (name: string) =>
-    ((g.get([identityEid('model', [name])]) as Bundle[])[0]?.model as {
+    ((g.read(line`.model.name=${name}`) as Bundle[])[0]?.model as {
       label?: string
     })?.label
   g.apply([

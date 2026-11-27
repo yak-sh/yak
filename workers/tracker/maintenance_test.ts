@@ -1,12 +1,13 @@
 import { equal, ok, test } from '@yaks/testing'
 import { insert } from '@yaks/sql'
+import { labelStored } from '@yaks/vocab'
 import { bounded, storage } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { options, platform, vocab } from './core.ts'
 import { type State, Tracker } from './object.ts'
 
 let file = durable()
-let initial = storage(file, vocab, options)
+let initial = storage(file, labelStored(vocab), options)
 initial.install()
 initial.raise(['doc'])
 for (let from = 1; from <= 1024; from += 256) {

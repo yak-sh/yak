@@ -1,12 +1,16 @@
 // The statement capability a storage adapter lends to indexes beside its
 // graph. It carries no connection, file, native-library path or schema cache.
 import type { Row, Settled } from './driver.ts'
-import type { Stmt } from './ast.ts'
+import type { Raw, Stmt } from './ast.ts'
 
 /** Synchronous statements over the same storage and transaction as the graph.
  * An adapter may omit this capability when its storage is not SQL-backed. */
 export type Statements = {
   query: (statement: Stmt) => Row[]
+  /** Render a definition for comparison with the schema this connection uses. */
+  render?: (statement: Stmt) => Raw
+  /** A table's physical name as a statement names it. */
+  tableName?: (stored: string) => string
   /** Whether other hosts can write this storage. */
   ownership: 'exclusive' | 'shared'
   /** Whether this async context owns the active transaction on this connection. */

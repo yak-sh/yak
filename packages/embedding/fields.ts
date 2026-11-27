@@ -128,7 +128,9 @@ export let tablesIn = (db: Statements): Set<string> => {
   if (k?.at !== at) {
     let names = new Set(
       db.query({ t: 'pragma', name: 'table_list' })
-        .filter((r) => r.type == 'table').map((r) => String(r.name)),
+        .filter((r) => r.type == 'table').map((r) =>
+          db.tableName?.(String(r.name)) ?? String(r.name)
+        ),
     )
     held.set(db, k = { at, names })
   }

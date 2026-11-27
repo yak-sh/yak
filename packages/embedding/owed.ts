@@ -214,7 +214,11 @@ let EVERY = new Set([TABLE, 'tombstone'])
  * equal(moves([], want).owed, true)
  * ```
  */
-export let moves = (have: Standing[], want: CreateTrigger[]): Moves => {
+export let moves = (
+  have: Standing[],
+  want: CreateTrigger[],
+  write: (s: CreateTrigger) => { sql: string } = (s) => render(s),
+): Moves => {
   let wanted = new Map(want.map((t) => [t.name, t]))
   let drop: string[] = []
   let owed: Set<string> | true = new Set()
@@ -225,7 +229,7 @@ export let moves = (have: Standing[], want: CreateTrigger[]): Moves => {
   }
   for (let r of have) {
     let now = wanted.get(r.name)
-    if (now && body(r.sql, r.name) == body(render(now).sql, r.name)) {
+    if (now && body(r.sql, r.name) == body(write(now).sql, r.name)) {
       wanted.delete(r.name)
       continue
     }
@@ -269,10 +273,10 @@ export let watch = (
         }),
       ).map((r) => ({
         name: String(r.name),
-        on: String(r.on),
+        on: db.tableName?.(String(r.on)) ?? String(r.on),
         sql: String(r.sql),
       }))
-      let { drop, make, owed } = moves(have, definitions)
+      let { drop, make, owed } = moves(have, definitions, db.render)
       if (!drop.length && !make.length) return false
       for (let name of drop) {
         db.query({ t: 'drop', kind: 'trigger', name, ifExists: true })

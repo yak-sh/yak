@@ -50,7 +50,8 @@ import { hook, type HookContext } from '@yaks/graph/plugin'
 import { doomed } from '@yaks/graph/read'
 import type { Vocab } from '@yaks/vocab'
 import { isOpRef } from './ref.ts'
-import { secretEid } from './sealed.ts'
+import { secretEids } from './sealed.ts'
+import { found as keptAt } from './reveal.ts'
 import { handle, isHandle } from './sentinel.ts'
 import type { Vault } from './vault.ts'
 import { concealedBundles, concealedRows } from './reads.ts'
@@ -78,11 +79,12 @@ let plain = (v: unknown): string | undefined => {
 // Which secret a bundle writes: the entity it names, or, for an alias not yet
 // minted, the one its name derives. A bundle with neither gets a handle of its
 // own.
-let whose = (o: Record<string, unknown>): Eid | undefined => {
+let whose = (o: Record<string, unknown>): Eid[] => {
   let eid = obj(o.entity)?.eid
-  if (typeof eid == 'string' && !eid.startsWith('$')) return eid
   let name = obj(o[SECRET])?.name
-  return typeof name == 'string' ? secretEid(name) : undefined
+  let named = typeof name == 'string' ? secretEids(name) : []
+  if (typeof eid != 'string' || eid.startsWith('$')) return named
+  return named.includes(eid) ? [eid, ...named.filter((x) => x != eid)] : [eid]
 }
 
 // Every written secret inside a JSON value — a tool call's arguments carry
@@ -90,7 +92,7 @@ let whose = (o: Record<string, unknown>): Eid | undefined => {
 // order, so one pass can find them and a second can swap them.
 let walk = (
   v: unknown,
-  to: (value: string, eid?: Eid) => string | undefined,
+  to: (value: string, eids: Eid[]) => string | undefined,
 ): unknown => {
   if (Array.isArray(v)) return v.map((x) => walk(x, to))
   let o = obj(v)
@@ -107,9 +109,11 @@ let walk = (
 let args = (b: Bundle): unknown => obj(b.call)?.args
 
 // The secrets inside a call's arguments, in the order `walk` visits them.
-let inside = (called: unknown): [string, Eid | undefined][] => {
-  let out: [string, Eid | undefined][] = []
-  if (called != null) walk(called, (value, eid) => void out.push([value, eid]))
+let inside = (called: unknown): [string, Eid[]][] => {
+  let out: [string, Eid[]][] = []
+  if (called != null) {
+    walk(called, (value, eids) => void out.push([value, eids]))
+  }
   return out
 }
 
@@ -127,7 +131,7 @@ export let carries = (bundles: unknown): boolean =>
 // takes them out of a write and puts them in the vault once it commits — and
 // a plugin built twice over one vault shares them.
 type Holding = {
-  waiting: Map<string, { value: string; eid?: Eid; until: number }>
+  waiting: Map<string, { value: string; eids: Eid[]; until: number }>
   minted: Map<Eid, { handle: string; until: number }>
 }
 let holdings = new WeakMap<Vault, Holding>()
@@ -193,16 +197,22 @@ export let secrets = (
   // one this process gave it moments ago, or a new one. The vault is asked
   // before anything commits, so a read it calls retryable is tried again
   // rather than refusing the write that carries the value.
-  let handleOf = (eid?: Eid): string | Promise<string> =>
-    !eid ? handle() : after(tried(() => vault.read(eid), clock), (kept) => {
-      let h = kept?.handle ?? minted.get(eid)?.handle ?? handle()
-      if (!kept) minted.set(eid, { handle: h, until: clock.now() + HOLD_MS })
-      return h
-    })
+  let handleOf = (eids: Eid[]): string | Promise<string> =>
+    !eids.length
+      ? handle()
+      : after(tried(() => keptAt(vault, eids), clock), (kept) => {
+        let h = kept?.handle ?? eids.map((eid) =>
+          minted.get(eid)?.handle
+        ).find(Boolean) ?? handle()
+        if (!kept) {
+          minted.set(eids[0], { handle: h, until: clock.now() + HOLD_MS })
+        }
+        return h
+      })
 
-  let hold = async (value: string, eid?: Eid): Promise<string> => {
-    let h = await handleOf(eid)
-    waiting.set(h, { value, eid, until: clock.now() + HOLD_MS })
+  let hold = async (value: string, eids: Eid[]): Promise<string> => {
+    let h = await handleOf(eids)
+    waiting.set(h, { value, eids, until: clock.now() + HOLD_MS })
     return h
   }
 
@@ -211,7 +221,8 @@ export let secrets = (
   let behind = (b: Bundle): boolean => {
     let h = obj(b[SECRET])?.value
     let held = typeof h == 'string' ? waiting.get(h) : undefined
-    return !!held && (!held.eid || held.eid == whose(b))
+    return !!held &&
+      (!held.eids.length || whose(b).some((eid) => held.eids.includes(eid)))
   }
 
   let hide = (b: Bundle): Bundle | Promise<Bundle> => {
@@ -380,9 +391,9 @@ let sealing = (
         })
       })
     }
-    if (held.eid && held.eid != eid) return
+    if (held.eids.length && !held.eids.includes(eid)) return
     waiting.delete(h as string)
-    minted.delete(eid)
+    for (let address of held.eids) minted.delete(address)
     let kept = isOpRef(held.value) ? { op: held.value } : { value: held.value }
     let name = comp.name
     let put = () =>

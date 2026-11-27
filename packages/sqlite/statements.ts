@@ -1,7 +1,13 @@
 import { build } from '@yaks/process/platform'
 // SQL-backed storage's statement capability. The connection and native
 // libraries stay here; indexes receive only statements and coherent units.
-import { type Driver, revision, type Statements } from '@yaks/sql'
+import {
+  type Driver,
+  render,
+  revision,
+  type Statements,
+  tableAsWritten,
+} from '@yaks/sql'
 import { exclusive, owned, unit } from './unit.ts'
 import { enter } from '@yaks/graph/enter'
 
@@ -48,6 +54,10 @@ export let statements = (driver: Driver): Statements => {
   revision(driver, 'schema')
   let vector = driver.extension && vectorPath()
   let made: Statements = {
+    render: (s) =>
+      driver.render?.(s, driver.stored?.v) ??
+        render(s, undefined, undefined, driver.stored?.v),
+    tableName: (name) => tableAsWritten(driver.stored?.v, name),
     query: (s) => {
       if (
         ['begin', 'commit', 'rollback', 'savepoint', 'release'].includes(s.t)

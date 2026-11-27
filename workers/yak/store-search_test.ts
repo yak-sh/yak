@@ -53,7 +53,8 @@ test('a new runtime restores missing search objects and indexes the rows already
   let { storage, send, wake, found } = fixture()
   await send('/apply', [{ entity: { eid: ONE }, doc: { title: 'curry' } }])
   let db = driver(storage), sql = statements(db)
-  db.query({ t: 'drop', kind: 'table', name: 'doc_fts' })
+  let doc = db.stored?.v?.stored('doc') ?? 'doc'
+  db.query({ t: 'drop', kind: 'table', name: `${doc}_fts` })
   for (let event of ['insert', 'update', 'delete']) {
     db.query({
       t: 'drop',

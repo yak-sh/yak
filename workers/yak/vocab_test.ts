@@ -383,13 +383,12 @@ test('internal controls leave app component names available and keep their decla
 let tablesOf = (stmts: Stmt[]) =>
   stmts.flatMap((s) => s.t == 'create table' ? [s.name] : []).sort()
 
-// Each index a schema declares, as `unique name table column…`.
+// Each index a schema declares, as `unique table column…`.
 let indexes = (stmts: Stmt[]) =>
   stmts.flatMap((s) =>
     s.t == 'create index'
       ? [[
         s.unique ? 'unique' : 'index',
-        s.name,
         s.on,
         ...s.cols.map((c) => c.t == 'col' ? c.name : c.t),
       ].join(' ')]
@@ -416,19 +415,19 @@ let platformIndexes = indexes(schema(platformVocab()))
 test('the platform declares the uniques its races are decided by', () => {
   for (
     let want of [
-      'space_slug space slug',
-      'app_space_slug app space slug',
-      'app_store app store',
-      'member_space_person member space person',
-      'hostname_name hostname name',
-      'deploy_app_version deploy app version',
-      'published_name published name',
+      'space slug',
+      'app space slug',
+      'app store',
+      'member space person',
+      'hostname name',
+      'deploy app version',
+      'published name',
     ]
   ) assert(platformIndexes.includes(`unique ${want}`), `no ${want}`)
   // And an address is no longer one of them (T-34657): `former` is history, so
   // two apps may hold one address a year apart. Which app answers at an address
   // now is the tools' word, not an index's.
-  assert(!platformIndexes.some((i) => i.split(' ')[2] == 'former'))
+  assert(!platformIndexes.some((i) => i.split(' ')[1] == 'former'))
 })
 
 test('none of the fleet vocabulary comes with it', () => {

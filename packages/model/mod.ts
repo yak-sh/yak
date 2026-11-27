@@ -45,9 +45,17 @@
  */
 
 import { after } from '@yaks/fp'
-import type { Bundle, Comp, Eid, Hook, Plugin, ReadTx } from '@yaks/graph'
+import type {
+  Bundle,
+  Comp,
+  Derive,
+  Eid,
+  Hook,
+  Plugin,
+  ReadTx,
+} from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
-import { identityEid, minted } from '@yaks/graph/identity'
+import { eidOf, identityEid, minted } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
 import type { VocabDoc } from '@yaks/vocab'
 import { edgeEid } from '@yaks/edge'
@@ -149,6 +157,17 @@ export let RESPONSE = 'response'
  * passes. */
 export let UNANCHORED = 'unanchored'
 
+let byName = {
+  [PROVIDER]: eidOf(modelDoc, PROVIDER),
+  [MODEL]: eidOf(modelDoc, MODEL),
+}
+let modelIds = (comp: string, name: string): Eid[] => [
+  byName[comp](name),
+  identityEid(comp, [name]),
+]
+let namedRow = (held: Map<Eid, Bundle>, comp: string, name: string) =>
+  modelIds(comp, name).map((eid) => held.get(eid)).find((row) => row?.[comp])
+
 /**
  * A provider or a model named where an eid is expected: `gpt-6-astra` in
  * `using.model`. Each one's eid is derived from its name (the `identity`
@@ -162,27 +181,41 @@ export let addressed = (
   let ask = [...new Set(ids)].filter((id) =>
     id && !id.startsWith('$') && !minted(id)
   )
-  let at = (id: string) => [PROVIDER, MODEL].map((c) => identityEid(c, [id]))
-  return after(tx.get(ask.flatMap(at)), (rows) => {
-    let live = new Set(rows.filter((b) => !dead(b)).map((b) => b.entity.eid))
+  let at = (id: string) => modelIds(PROVIDER, id).concat(modelIds(MODEL, id))
+  return after(tx.get(ask.flatMap(at), [PROVIDER, MODEL]), (rows) => {
+    let live = new Map(
+      rows.filter((b) => !dead(b)).map((b) => [b.entity.eid, b]),
+    )
     let found = new Map<string, Eid>()
     for (let id of ask) {
-      let hits = at(id).filter((eid) => live.has(eid))
-      if (hits.length > 1) {
+      let provider = namedRow(live, PROVIDER, id)
+      let model = namedRow(live, MODEL, id)
+      if (provider && model) {
         throw new Refused(`${id} names both a provider and a model`)
       }
-      if (hits.length) found.set(id, hits[0])
+      let row = provider ?? model
+      if (row) found.set(id, row.entity.eid)
     }
     return found
   })
 }
 
-/** The vocabulary as a plugin, for a graph that lists its plugins; a provider
- * and a model are addressed by name ({@link addressed}). */
+// Callers send catalogue eids in using{model, provider}. Keep their published
+// addresses during expansion, and recognize UUID-derived rows already held.
+let catalogueId = (comp: string): Derive => {
+  let by = (f: (name: string) => Eid): Derive => ({ name }) =>
+    typeof name == 'string' && name ? f(name) : ''
+  return Object.assign(by((name) => identityEid(comp, [name])), {
+    former: by(byName[comp]),
+  })
+}
+
+/** Model vocabulary and catalogue name resolution. */
 export let models = (): Plugin => ({
   name: '@yaks/model',
   vocab: [modelDoc],
   address: addressed,
+  derive: { [MODEL]: catalogueId(MODEL), [PROVIDER]: catalogueId(PROVIDER) },
   hooks: { normalize: requesting },
 })
 
@@ -539,13 +572,18 @@ export let requesting: Hook = (bundles, tx) => {
     return { ...b, using: named }
   })
   // a row the batch writes itself is priced, never stubbed over
-  let written = new Set<string>()
+  let written = new Map<Eid, Eid>()
+  let writingProvider = new Map<Eid, Eid>()
   for (let b of out) {
     let name = (b.model as Comp | undefined)?.name
+    let provider = (b.provider as Comp | undefined)?.name
     if (typeof name == 'string' && b.pending !== null) {
       let eid = identityEid(MODEL, [name])
       names.set(eid, name)
-      written.add(eid)
+      written.set(eid, b.entity.eid)
+    }
+    if (typeof provider == 'string') {
+      writingProvider.set(identityEid(PROVIDER, [provider]), b.entity.eid)
     }
   }
   // by name: a batch's new row is still an alias here, minted after
@@ -556,7 +594,10 @@ export let requesting: Hook = (bundles, tx) => {
     out.filter((b) => (b.model as Comp | undefined)?.label).map(rowOf),
   )
   return after(
-    tx.get([...names.keys(), ...providers.keys()], [
+    tx.get([
+      ...[...names.values()].flatMap((name) => modelIds(MODEL, name)),
+      ...[...providers.values()].flatMap((name) => modelIds(PROVIDER, name)),
+    ], [
       MODEL,
       PROVIDER,
       'pending',
@@ -564,36 +605,59 @@ export let requesting: Hook = (bundles, tx) => {
     ]),
     (rows) => {
       let held = new Map(rows.map((b) => [b.entity.eid, b]))
-      return [
-        ...out,
+      let at = new Map<Eid, Eid>()
+      let take = (comp: string, name: string, eid: Eid, said?: Eid) => {
+        let row = namedRow(held, comp, name)
+        let chosen = row?.entity.eid ?? said
+        if (chosen && chosen != eid) at.set(eid, chosen)
+        return row
+      }
+      let added = [
         ...[...providers].flatMap(([eid, name]): Bundle[] =>
-          held.get(eid)?.[PROVIDER] ||
-            out.some((b) => b.entity.eid == eid && b[PROVIDER])
+          take(PROVIDER, name, eid, writingProvider.get(eid)) ||
+            writingProvider.has(eid)
             ? []
             : [{ entity: { eid }, [PROVIDER]: { name } }]
         ),
         ...[...names].flatMap(([eid, name]): Bundle[] => {
-          let row = held.get(eid)
+          let row = take(MODEL, name, eid, written.get(eid))
+          let target = { eid: at.get(eid) ?? eid }
           let price = !priced.has(eid) && !row?.price && listPrice(name)
           let label = !labeled.has(eid) &&
             !(row?.[MODEL] as Comp | undefined)?.label && listLabel(name)
           if (row?.model || written.has(eid)) {
             return price || label
               ? [{
-                entity: { eid },
+                entity: target,
                 ...price ? { price } : {},
                 ...label ? { [MODEL]: { name, label } } : {},
               }]
               : []
           }
           return [{
-            entity: { eid },
+            entity: target,
             model: { name, offered: false, ...label ? { label } : {} },
             pending: {},
             ...price ? { price } : {},
           }]
         }),
       ]
+      let usingRow = (b: Bundle): Bundle => {
+        let using = b.using as Comp | undefined
+        let model = at.get(String(using?.model))
+        let provider = at.get(String(using?.provider))
+        return model || provider
+          ? {
+            ...b,
+            using: {
+              ...using,
+              ...model && { model },
+              ...provider && { provider },
+            },
+          }
+          : b
+      }
+      return [...out.map(usingRow), ...added]
     },
   )
 }

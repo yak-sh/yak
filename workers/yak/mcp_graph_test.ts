@@ -7,7 +7,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { handle, secretEid } from '@yaks/secrets'
+import { handle, secretEids } from '@yaks/secrets'
 import {
   client,
   connector,
@@ -319,7 +319,7 @@ test(
           secret: { name, value: handle() },
         }],
       })
-      assertEquals(minted(said, '$secret'), secretEid(name))
+      assertEquals(minted(said, '$secret'), secretEids(name)[0])
       assertEquals(
         await meta(k).query(`.secret.name="${name}"`),
         [],

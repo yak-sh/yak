@@ -8,7 +8,7 @@
 //
 // connections.ts holds a connection's sign-in this way, and sell.ts a seller
 // connecting the payment account they already have.
-import { reveal, sealed, secretEid, unsealed } from '@yaks/secrets'
+import { reveal, sealed, secretEid, secretEids, unsealed } from '@yaks/secrets'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import { vaultOf } from './vault.ts'
@@ -65,7 +65,10 @@ export let finish = async <T, R>(
     let value = await waiting<T>(env, kind, state)
     if (value == null) return null
     let out = await run(value)
-    await meta(env).apply([unsealed(name)], KERNEL)
+    await meta(env).apply(
+      secretEids(name).map((eid) => unsealed(name, eid)),
+      KERNEL,
+    )
     return out
   })
 }

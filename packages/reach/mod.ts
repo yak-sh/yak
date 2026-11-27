@@ -926,7 +926,15 @@ export let reach = (words: Words): Reach => {
       (!named || spaceOf(m) == spaceOf(named))
     )
     let { words, apart, vocab } = await spoken(members)
-    let { entities, eids, aliases } = minted(bundles, vocab, key)
+    let { entities, eids, aliases } = await minted(
+      bundles,
+      vocab,
+      key,
+      async (eids) => {
+        let held = await gathered(members, eids)
+        return [...held.values()].map((b) => ({ entity: b.entity, ...b.comps }))
+      },
+    )
     // Where the entity already lives, read only when the answer depends on
     // it: a death fans out to whoever holds the eid, and a shared word with no
     // member named goes to the one that already wears it.
@@ -1233,7 +1241,12 @@ let isComp = (k: string) => !NOT_A_COMP.includes(k) && !k.startsWith('$')
 // must land under one eid, so content-addressed ids are derived by the same
 // rules as a store, the rest are minted, and every member gets the one
 // answer. A bundle with no address at all is minted the same way.
-let minted = (bundles: Bundle[], vocab: Vocab, key?: string) => {
+let minted = async (
+  bundles: Bundle[],
+  vocab: Vocab,
+  key: string | undefined,
+  held: (eids: string[]) => Promise<Bundle[]>,
+) => {
   let ordinal = 0
   let mint = () =>
     key
@@ -1262,7 +1275,7 @@ let minted = (bundles: Bundle[], vocab: Vocab, key?: string) => {
   // discards it, so an unknown relation cannot mint a fresh id for a drop.
   let drops = stated.filter((b) => dead(b) && b.edge && isAlias(b.entity.eid))
   if (drops.length) statedEdges(vocab)(drops)
-  let resolved = resolve(stated, vocab, derive, mint)
+  let resolved = await resolve(stated, vocab, derive, mint, held)
   let aliases = Object.fromEntries(
     resolved.flatMap((e) =>
       typeof e.$alias == 'string' ? [[e.$alias, e.entity.eid]] : []
@@ -1273,7 +1286,7 @@ let minted = (bundles: Bundle[], vocab: Vocab, key?: string) => {
   // nested bundle's address), so the swap is the whole batch's, by value.
   let swap = (v: unknown): unknown =>
     typeof v == 'string'
-      ? aliases[v] ?? v
+      ? (Object.hasOwn(aliases, v) ? aliases[v] : v)
       : Array.isArray(v)
       ? v.map(swap)
       : v && typeof v == 'object'
@@ -1284,7 +1297,7 @@ let minted = (bundles: Bundle[], vocab: Vocab, key?: string) => {
       )
       : v
   let entities = stated.map((e, i) => {
-    let one = swap(e) as Bundle
+    let one = swap(resolved[i]) as Bundle
     if (!eids[i]) return one
     // The alias rides along. A store's own mint phase reads `$alias` to tell
     // an id the graph picked from one a caller wrote down, which decides

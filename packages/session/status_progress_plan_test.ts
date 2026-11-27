@@ -40,7 +40,7 @@ let fixture = (size: number, controls = false) => {
   store.install()
   store.raise()
   let write = (name: string, row: Record<string, string | number>) => {
-    let q = render(insert(name, row))
+    let q = render(insert(name, row), undefined, undefined, d.stored?.v)
     run(q.sql, q.params)
   }
   let shape = (id: number, names: string[]) => {

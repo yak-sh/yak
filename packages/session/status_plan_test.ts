@@ -28,7 +28,7 @@ let store = storage(d, vocab, { derived: sessionDerived(vocab) })
 store.install()
 store.raise()
 let write = (name: string, row: Record<string, string | number>) => {
-  let q = render(insert(name, row))
+  let q = render(insert(name, row), undefined, undefined, d.stored?.v)
   db.exec(q.sql, ...q.params)
 }
 write('entity', { id: 900001, eid: 'shape' })
@@ -49,16 +49,21 @@ for (let i = 10; i < 1010; i++) {
   write('ask', { entity: i, through: 2 })
   if (i == 10) db.exec('ANALYZE')
 }
-let query = render(select({
-  cols: [
-    as(
-      sessionDerived(vocab)['session.status'].expr(col('entity', 's')),
-      'status',
-    ),
-  ],
-  from: table('session', 's'),
-  where: eq(col('entity', 's'), val(1)),
-}))
+let query = render(
+  select({
+    cols: [
+      as(
+        sessionDerived(vocab)['session.status'].expr(col('entity', 's')),
+        'status',
+      ),
+    ],
+    from: table('session', 's'),
+    where: eq(col('entity', 's'), val(1)),
+  }),
+  undefined,
+  undefined,
+  d.stored?.v,
+)
 let stmt = db.prepare(query.sql)
 let counters = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: { parameters: ['pointer', 'i32', 'i32'], result: 'i32' },

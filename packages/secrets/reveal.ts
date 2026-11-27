@@ -5,7 +5,7 @@
 
 import { after } from '@yaks/fp'
 import { isOpRef } from './ref.ts'
-import { secretEid } from './sealed.ts'
+import { secretEids } from './sealed.ts'
 import { sentinel } from './sentinel.ts'
 import type { Local, Sealed, Vault } from './vault.ts'
 
@@ -22,13 +22,23 @@ let valueOf = (kept: Sealed | undefined, name: string, s: Sources) => {
   return value && isOpRef(value) ? undefined : value
 }
 
+export let found = (
+  vault: Pick<Vault, 'read'>,
+  eids: string[],
+): ReturnType<Vault['read']> => {
+  let [eid, ...rest] = eids
+  return eid
+    ? after(vault.read(eid), (kept) => kept ?? found(vault, rest))
+    : undefined
+}
+
 /** A secret's value, by name. */
 export let reveal = (
   vault: Vault,
   name: string,
   s: Sources = {},
 ): string | undefined | Promise<string | undefined> =>
-  after(vault.read(secretEid(name)), (kept) => valueOf(kept, name, s))
+  after(found(vault, secretEids(name)), (kept) => valueOf(kept, name, s))
 
 /** The sentinel for a secret, by name: its handle hashed under the vault's
  * salt (./sentinel.ts). A name nothing was written for has none. A secret
@@ -40,7 +50,7 @@ export let sentinelOf = (
   name: string,
   part?: string,
 ): Promise<string | undefined> =>
-  Promise.resolve(vault.read(secretEid(name))).then(async (kept) =>
+  Promise.resolve(found(vault, secretEids(name))).then(async (kept) =>
     kept
       ? sentinel(
         await vault.salt(),
@@ -54,4 +64,5 @@ export let peek = (
   vault: Local,
   name: string,
   s: Sources = {},
-): string | undefined => valueOf(vault.read(secretEid(name)), name, s)
+): string | undefined =>
+  valueOf(secretEids(name).map((eid) => vault.read(eid)).find(Boolean), name, s)

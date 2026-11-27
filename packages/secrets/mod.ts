@@ -79,5 +79,5 @@ export {
 } from './vault.ts'
 export { isOpRef } from './ref.ts'
 export { peek, reveal, sentinelOf, type Sources } from './reveal.ts'
-export { sealed, secretEid, unsealed } from './sealed.ts'
+export { sealed, secretEid, secretEids, unsealed } from './sealed.ts'
 export { type Records, records } from './records.ts'

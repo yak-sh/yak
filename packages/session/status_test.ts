@@ -6,7 +6,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
-import { col, eq, render, select, table, val } from '@yaks/sql'
+import { col, eq, indexName, render, select, table, val } from '@yaks/sql'
 import { and as all, eq as qeq, fields, line, list, whole } from '@yaks/query'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { Database } from '@yaks/sqlite/testing'
@@ -1321,12 +1321,18 @@ test('session status seeks its own turn without reading unrelated asks', () => {
           sessionDerived(vocab)['session.status'].expr(val(Number(owner.id))),
         ],
       })
-      let compiled = render(query)
+      let compiled = render(query, undefined, undefined, d.stored?.v)
       let plan = d.query({ t: 'explain query plan', of: query }).map((r) =>
         String(r.detail)
       ).join('\n')
-      assert(plan.includes('entry_session_seq'), plan)
-      assert(!/SCAN (?:entry|e)\b/.test(plan), plan)
+      assert(plan.includes(indexName(vocab, 'entry', ['session', 'seq'])), plan)
+      let entry = vocab.stored('entry')
+      assert(
+        !plan.split('\n').some((line) =>
+          line.startsWith(`SCAN ${entry} `) || /^SCAN e\b/.test(line)
+        ),
+        plan,
+      )
       let statement = db.prepare(compiled.sql)
       try {
         assertEquals(
