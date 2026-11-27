@@ -203,6 +203,11 @@ test("a REPL's object runs each cell as its one facet, carries what it kept, and
       },
       getDurableObjectClass: (name) => {
         equal(name, 'Cell')
+        // Cloudflare loads only modules named .js or .py.
+        equal(
+          Object.keys(code.modules).filter((m) => !/\.(js|py)$/.test(m)),
+          [],
+        )
         let user = code.modules['user.js']
         let script = code.modules['script.js']
           .replace(

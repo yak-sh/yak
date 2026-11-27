@@ -34,8 +34,8 @@ export let described = (
   return { ...modules, [CELL]: JSON.stringify(declared(code)) }
 }
 
-/** The cell's modules, declaring first what the REPL carries and the cell
- * does not declare again: each kept value by its name, then each earlier
+/** The cell's modules as its Worker loads them, declaring first what the
+ * REPL carries and the cell does not declare again: each kept value by its name, then each earlier
  * function and class. Its own names and the carried ones are read back when
  * it ends, whichever were bound. */
 export let carry = (
@@ -57,8 +57,10 @@ export let carry = (
     ...values.map((name) => `let ${name} = $carried.values[${id(name)}];`),
     ...declarations.map(([, source]) => source),
   ].join('\n')
+  // What the cell declares is the host's to read, not a module to load.
+  let { [CELL]: _, ...loaded } = modules
   return {
-    ...modules,
+    ...loaded,
     'user.js': modules['user.js'].replace(CARRIED, () => prelude),
   }
 }
