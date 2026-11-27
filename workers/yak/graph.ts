@@ -353,7 +353,7 @@ import {
 import { type Assembling, lent, planned } from '@yaks/durable-object/compose'
 import { type Host as PluginHost, type Load } from '@yaks/host'
 import type { Words } from '@yaks/host/words'
-import { meet } from '@yaks/host/config'
+import { meet, overlaid } from '@yaks/host/config'
 import { worker } from './config.ts'
 import { appVersionsConfig, versions } from '@yaks/platform/config'
 import { privacyRules } from './privacy-move.ts'
@@ -1737,14 +1737,12 @@ export class Store extends Durable {
     // Keep one env for the directory's key cache. The local door is ready
     // once the store can run its effects and jobs.
     let local = () => this.#meta
-    let env = meta
-      ? {
-        ...this.#bind,
-        get META() {
-          return local()
-        },
-      }
-      : this.#bind
+    let directory = {
+      get META() {
+        return local()
+      },
+    }
+    let env = meta ? overlaid(this.#bind, () => directory) : this.#bind
     let kernelGraph: Graph | undefined
     let kernel = () => kernelGraph ??= this.#kernelGraph(host.graph)
     let context = () => this.#expires?.context

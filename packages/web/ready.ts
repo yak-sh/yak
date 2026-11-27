@@ -155,16 +155,15 @@ export let ready = (
   }
   // A slow phase gets time to finish even when the phases before it were slow.
   let wait = <T>(pending: Promise<T>, phase: string): Promise<T> => {
-    let timer: ReturnType<typeof win.setTimeout> | undefined
+    let cancel = () => {}
     let overdue = new Promise<never>((_, reject) => {
-      timer = win.setTimeout(
+      let timer = win.setTimeout(
         () => reject(Error(`The signed-in view timed out ${phase}`)),
         WAIT,
       )
+      cancel = () => win.clearTimeout(timer)
     })
-    return Promise.race([pending, overdue]).finally(() =>
-      win.clearTimeout(timer)
-    )
+    return Promise.race([pending, overdue]).finally(cancel)
   }
 
   // The page and its sheets, in the view, and the scripts the document ran

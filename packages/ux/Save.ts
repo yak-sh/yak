@@ -16,7 +16,7 @@ export type SaveProps = {
 }
 
 /** The place beside a field where bindSave draws the form's actions. */
-let Slot = () =>
+let Slot = (): JSX.Element =>
   h(
     'div',
     { 'data-save-slot': '' },

@@ -203,6 +203,29 @@ export let holding = (held: object): Reveal => {
   return { secret: read, binding: read }
 }
 
+/** Live bindings with a second source taking precedence for its own keys. */
+export let overlaid = <Base extends object, Extra extends object>(
+  base: Base,
+  extra: () => Extra,
+): Base & Extra => {
+  let source = (key: PropertyKey) => {
+    let top = extra()
+    return Object.hasOwn(top, key) ? top : base
+  }
+  return new Proxy({} as Base & Extra, {
+    get: (_, key) => Reflect.get(source(key), key),
+    set: (_, key, value) => Reflect.set(base, key, value),
+    has: (_, key) => Reflect.has(source(key), key),
+    ownKeys: () => [
+      ...new Set([...Reflect.ownKeys(base), ...Reflect.ownKeys(extra())]),
+    ],
+    getOwnPropertyDescriptor: (_, key) => {
+      let own = Reflect.getOwnPropertyDescriptor(source(key), key)
+      return own && { ...own, configurable: true }
+    },
+  })
+}
+
 /** Each plugin a config names, with its options, each reference among them
  * read by `reveal` when accessed. */
 export let configured = (config: Config, reveal: Reveal = {}): Configured[] =>

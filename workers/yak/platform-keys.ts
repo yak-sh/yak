@@ -9,6 +9,7 @@
 // reads them again once a minute (`FRESH`), so a key given or replaced
 // reaches every isolate within about that.
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { overlaid } from '@yaks/host/config'
 import { line } from '@yaks/query'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
@@ -72,19 +73,7 @@ let overlay = (env: object): Held => {
   if (h) return h
   let base = env as Record<string, unknown>
   let made: Held = { base, keys: {}, env: base, at: -Infinity }
-  let mine = (k: string | symbol): k is string =>
-    typeof k == 'string' && Object.hasOwn(made.keys, k)
-  made.env = new Proxy(base, {
-    get: (t, k) => mine(k) ? made.keys[k] : Reflect.get(t, k),
-    has: (t, k) => mine(k) || Reflect.has(t, k),
-    ownKeys: (t) => [
-      ...new Set([...Reflect.ownKeys(t), ...Object.keys(made.keys)]),
-    ],
-    getOwnPropertyDescriptor: (t, k) =>
-      mine(k)
-        ? { value: made.keys[k], enumerable: true, configurable: true }
-        : Reflect.getOwnPropertyDescriptor(t, k),
-  })
+  made.env = overlaid(base, () => made.keys)
   held.set(env, made)
   held.set(made.env, made)
   return made
