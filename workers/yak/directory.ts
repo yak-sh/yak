@@ -106,7 +106,7 @@ import {
   ROOT,
   SLUG,
 } from '@yaks/platform/names'
-import { ADMIN, isTestAddress } from '@yaks/platform/bots'
+import { ADMIN, isTestAddress, isTestNumber } from '@yaks/platform/bots'
 import {
   ambient,
   apart,
@@ -937,6 +937,7 @@ export type Row = MeteredRow & {
   email?: { address: string }
   sender?: { via: string }
   phone?: { number: string }
+  test?: Record<string, never> | null
   phone_line?: {
     number: string
     via: string
@@ -1016,11 +1017,31 @@ export let newcomerIs = (r?: Pick<Row, 'newcomer' | 'email' | 'phone'>) =>
   !!r?.newcomer && !r.email && !r.phone
 
 /** Whether a person's row is nobody's: a test account (@yaks/platform/bots
- * `isTestAddress`), or a newcomer a browser did not open (`newcomer.client`),
- * such as an agent checking the home page's box. A newcomer from before the
- * box said its client is a person's: the safe direction to be wrong in. */
-export let testIs = (r?: Pick<Row, 'newcomer' | 'email'>) =>
+ * `isTestAddress`, `isTestNumber`), a guest one of the fleet's numbers made
+ * (`test`), or a newcomer a browser did not open (`newcomer.client`), such as
+ * an agent checking the home page's box. A newcomer from before the box said
+ * its client is a person's: the safe direction to be wrong in.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { testIs } from './directory.ts'
+ * equal([
+ *   { email: { address: 'probe-1@bot.yak.sh' } },
+ *   { phone: { number: '+18663141594' } },
+ *   { test: {} },
+ *   { newcomer: { client: 'agent' } },
+ *   { email: { address: 'ann@example.com' } },
+ *   { phone: { number: '+12695550142' } },
+ *   { newcomer: { client: 'browser' } },
+ *   {},
+ * ].map(testIs), [true, true, true, true, false, false, false, false])
+ * ```
+ */
+export let testIs = (
+  r?: Pick<Row, 'newcomer' | 'email' | 'phone' | 'test'>,
+) =>
   isTestAddress(r?.email?.address ?? '') ||
+  isTestNumber(r?.phone?.number ?? '') || !!r?.test ||
   ![undefined, null, 'browser'].includes(r?.newcomer?.client)
 
 // A person's address as a hostname label: the local part, lowercased, with

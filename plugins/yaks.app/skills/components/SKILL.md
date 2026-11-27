@@ -890,12 +890,13 @@ The complete list of reserved names:
     speech_hear spend staged standing_link started starter step step_due
     step_fire step_run stop stream_item submitted subscribed subscription
     supersedes supervises support support_contract support_contract_billing
-    support_contract_pending support_contract_time sweep switched task text
-    text_post theme told tool tool_refusal topic trashed tree_entry trend
-    tunnel tunnel_trashed typed unchecked untrashed updated upstream usage
-    uses using verified visit visitor_build visitor_calls visitor_share
-    volume waitlisted wake wake_run wants watch web whereabouts withdrawn
-    worked workflow workflow_case worktree written yaks_account
+    support_contract_pending support_contract_time sweep switched task test
+    text text_post theme told tool tool_refusal topic trashed tree_entry
+    trend tunnel tunnel_trashed typed unchecked untrashed updated upstream
+    usage uses using verified visit visitor_build visitor_calls
+    visitor_share volume waitlisted wake wake_run wants watch web
+    whereabouts withdrawn worked workflow workflow_case worktree written
+    yaks_account
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as

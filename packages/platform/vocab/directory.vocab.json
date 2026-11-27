@@ -1771,6 +1771,14 @@
       },
       "$comment": "newcomer.ts, directory.ts `newcomer`, erase.ts `vacated`, arrival.ts `campaign`, directory.ts `stepper`, @yaks/platform/visitor `classed`, @yaks/platform/bots `CHECK`, directory.ts `testIs`."
     },
+    "test": {
+      "$id": "urn:uuid:18d41815-2927-48de-8549-23f11399e053",
+      "component": true,
+      "type": "object",
+      "description": "A person one of the fleet's numbers made, whose row keeps no number of its own: a sender a fleet number (@yaks/platform/bots `NUMBERS`) texted a person's line as. A test account, which admin's people and the funnel count apart (directory.ts `testIs`). Written with the row, never moved after.",
+      "properties": {},
+      "$comment": "operator-line.ts `lineSender`, directory.ts `testIs`."
+    },
     "arrived": {
       "$id": "urn:uuid:9bd90cf9-8dc8-44f4-a12d-4bfdbeff0d2a",
       "description": "Where a person came from when they signed up: the door, and the page, campaign, app, assistant or inviter that brought them. Written once, by the kernel, the first time they come in by any door, and never moved after. Somebody invited by another's code is that `referral`'s to say.",

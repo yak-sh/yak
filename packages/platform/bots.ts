@@ -1,7 +1,8 @@
-// Which yaks.app accounts and visitors are nobody's. An account is an address,
-// and an address on the fleet's bot domain is a test account: its sign-in
-// codes land in the tasks graph, so only the fleet can hold one, and nothing
-// it makes is a person's work. Two addresses there are not throwaways:
+// Which yaks.app accounts and visitors are nobody's. An account is an address
+// or a number. An address on the fleet's bot domain is a test account: its
+// sign-in codes land in the tasks graph, so only the fleet can hold one, and
+// nothing it makes is a person's work. So is a number of the fleet's own
+// (`NUMBERS`). Two addresses there are not throwaways:
 // `admin@bot.yak.sh` is the platform's own admin person (D-35373), whom an
 // agent runs a platform act as, and whose acts are the platform's, and
 // `yourname@bot.yak.sh` holds the demo space (M-37804). An address on `.invalid`
@@ -24,6 +25,23 @@ export let DEMO = `yourname${BOT}`
 // direction to be wrong in.
 export let isTestAddress = (address: string): boolean =>
   isFleetAddress(address) && address != ADMIN && address != DEMO
+
+// The numbers the fleet texts and calls from, as the bot domain is the
+// addresses it signs in with: the platform's own sender (workers/yak
+// wrangler.toml `PHONE_SENDER`), the box's line (@yaks/voipms on the box),
+// the checks space's line and its bot's phone, and the number bought for
+// T-2541's live check. Whoever texts from one is one of our tools, so a
+// person the platform makes for it is a test account. A number our tools
+// come to text from is added here.
+export let NUMBERS: ReadonlySet<string> = new Set([
+  '+18663141594',
+  '+12692347774',
+  '+12692383446',
+  '+12694929622',
+  '+12692342784',
+])
+
+export let isTestNumber = (number: string): boolean => NUMBERS.has(number)
 
 // Whether an address is no person's: any the fleet holds, the admin's and the
 // demo's too, or one on `.invalid`. What either does is the fleet's, so a

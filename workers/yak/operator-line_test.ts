@@ -741,6 +741,17 @@ test("a text back is answered in its writer's own conversation, with only their 
   assertEquals(oldCallback.status, 403)
 })
 
+test("a text back from one of the fleet's numbers is a test account's, and a stranger's is a person's", async () => {
+  let fleet = await texted('79', '2692383446', 'checks: a live check')
+  assertEquals([fleet.status, await fleet.text()], [200, 'ok'])
+  let sender = (from: string) =>
+    dir.tested(lineSender(connection.entity.eid, '+12695550111', from))
+  assertEquals(
+    [await sender('+12692383446'), await sender('+12695550199')],
+    [true, false],
+  )
+})
+
 test('a voip.ms key kept as its email and password joined by a colon is read as its fields, and kept as them', async () => {
   let c = ctxOf(env)
   let [line] = await c.graph.read(

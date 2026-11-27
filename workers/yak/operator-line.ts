@@ -64,6 +64,7 @@ import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
 import { ctxOf, ownConnection, pageOf } from './connections.ts'
 import { apex } from '@yaks/platform/host'
+import { isTestNumber } from '@yaks/platform/bots'
 import { opened, seal } from './lib/token.ts'
 import { meta } from './meta.ts'
 import type { OperatorStore } from './operator-store.ts'
@@ -905,7 +906,14 @@ export let lineDoor = async (
     return new Response('not this line', { status: 403 })
   }
   let person = lineSender(held.connection, arrival.to, arrival.from)
-  await meta(env).apply([{ entity: { eid: person }, person: {} }])
+  // A sender on one of the fleet's numbers is a test account
+  // (@yaks/platform/bots `NUMBERS`). Its row keeps no number, so it is
+  // marked so as it is made.
+  await meta(env).apply([{
+    entity: { eid: person },
+    person: {},
+    ...isTestNumber(arrival.from) ? { test: {} } : {},
+  }])
   let { directoryOf } = await import('./directory.ts')
   let dir = directoryOf(env.STORE)
   // A connection is its own space's, or a person's, whose Operator may have
