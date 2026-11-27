@@ -89,7 +89,7 @@
       }
     },
     "audition": {
-      "description": "A candidate voice saying a role's first line.",
+      "description": "A candidate voice for a role, with audio when it has auditioned the first line.",
       "properties": {
         "role": {
           "type": "string",

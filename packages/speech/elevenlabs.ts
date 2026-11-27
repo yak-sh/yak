@@ -28,6 +28,7 @@ let output = (format: Format) =>
 type Listed = {
   voice_id: string
   name?: string
+  category?: string | null
   description?: string | null
   labels?: Record<string, string> | null
   preview_url?: string | null
@@ -45,6 +46,7 @@ type Listed = {
  *     voices: [{
  *       voice_id: 'v1',
  *       name: 'Ada',
+ *       category: 'cloned',
  *       labels: { accent: 'british', gender: 'female' },
  *       preview_url: 'https://x/ada.mp3',
  *     }],
@@ -57,6 +59,7 @@ type Listed = {
  *       name: 'Ada',
  *       about: 'british, female',
  *       sample: 'https://x/ada.mp3',
+ *       custom: true,
  *     }],
  *     next: 'p2',
  *   },
@@ -69,6 +72,7 @@ let voiceOf = (v: Listed): Voice => ({
   about: v.description?.trim() ||
     Object.values(v.labels ?? {}).join(', '),
   ...v.preview_url ? { sample: v.preview_url } : {},
+  ...v.category && v.category != 'premade' ? { custom: true } : {},
 })
 
 type Word = {

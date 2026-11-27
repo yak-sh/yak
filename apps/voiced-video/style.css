@@ -66,7 +66,7 @@ nav button[aria-current="true"] {
   flex-wrap: wrap;
   margin: .25rem 0;
 }
-.take audio {
+.take-audio {
   height: 2rem;
   max-width: 100%;
 }

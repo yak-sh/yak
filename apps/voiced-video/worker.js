@@ -71,15 +71,17 @@ export let steps = (api) => {
     }
   }
   let voices = async () => {
+    let all = []
     for (let names of PROVIDERS) {
       let found = await Promise.all(names.map(async (provider) => {
         let res = await api.fetch(`speech/voices?provider=${provider}`)
         if (!res.ok) return []
         return (await res.json()).voices.map((v) => ({ ...v, provider }))
       }))
-      if (found.flat().length) return found.flat()
+      all.push(...found.flat())
+      if (all.length >= 2 && all.some((v) => !v.custom)) break
     }
-    return []
+    return all
   }
   let ref = (v) => typeof v == 'string' ? v : v?.eid
 
@@ -157,7 +159,8 @@ export let steps = (api) => {
       let first = (await read(`.line.role=${role}&?line&?doc`))
         .toSorted((a, b) => a.line.n - b.line.n)[0]
       if (!first) return { auditions: 0 }
-      let picked = cast(r.role.about, await voices())
+      let ranked = cast(r.role.about, await voices(), Infinity)
+      let picked = finalists(ranked)
       if (picked.length < 2) {
         throw Object.assign(new Error('fewer than two voices to audition'), {
           status: 409,
@@ -167,19 +170,20 @@ export let steps = (api) => {
         ...v,
         ...await say(v.provider, v.id, first.doc.body),
       })))
+      let more = ranked.filter((v) => v.custom && !picked.includes(v))
       let name = r.doc?.title ?? 'this voice'
       let old = await read(`.audition.role=${role}`)
       let asked = await read(`.cast.role=${role}`)
       await write([
         ...gone([...old, ...asked]),
-        ...takes.map((v, i) => ({
+        ...[...takes, ...more].map((v, i) => ({
           entity: { eid: `$take${i}` },
           audition: {
             role,
             provider: v.provider,
             voice: v.id,
             name: v.name,
-            audio: v.audio,
+            ...v.audio ? { audio: v.audio } : {},
           },
         })),
         {
@@ -294,6 +298,17 @@ export let cast = (about, voices, count = CANDIDATES) => {
     .map(({ v }) => v)
     .filter((v) => !named.has(v.name) && named.add(v.name))
     .slice(0, count)
+}
+
+// Audition the closest matches, including a custom and a stock voice when
+// both are available. The page also offers every other custom voice.
+let finalists = (ranked) => {
+  let picked = ranked.slice(0, CANDIDATES)
+  if (picked.every((v) => !!v.custom == !!picked[0]?.custom)) {
+    let other = ranked.find((v) => !!v.custom != !!picked[0]?.custom)
+    if (other) picked[CANDIDATES - 1] = other
+  }
+  return picked
 }
 
 let ROUTES = {

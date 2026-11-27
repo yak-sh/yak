@@ -78,24 +78,42 @@ let page = (video) => {
     ${p.shots.map(shot).join('')}`
 }
 
-let role = (r) => `
-  <div class="role step">
-    <strong>${esc(r.name)}</strong> <span class="soft">${esc(r.about)}</span>
+let take = (r, a) => `
+  <div class="take">
     ${
-  r.auditions.map((a) => `
-      <div class="take">
-        <audio controls preload="none" src="${blob(a.audition.audio)}"></audio>
-        ${
-    r.chosen == a.audition.name
-      ? `<span class="chosen">${esc(a.audition.name)}, chosen</span>`
-      : `<button data-ask="${r.ask}" data-choice="${esc(a.audition.name)}" ${
-        r.ask ? '' : 'disabled'
-      }>Use ${esc(a.audition.name)}</button>`
-  }
-        <span class="soft">${esc(a.audition.provider)}</span>
-      </div>`).join('')
+  a.audio
+    ? `<audio class="take-audio" controls preload="none" src="${
+      blob(a.audio)
+    }"></audio>`
+    : ''
 }
+    ${
+  r.chosen == a.name
+    ? `<span class="chosen">${esc(a.name)}, chosen</span>`
+    : `<button data-ask="${r.ask}" data-choice="${esc(a.name)}" ${
+      r.ask ? '' : 'disabled'
+    }>Use ${esc(a.name)}</button>`
+}
+    <span class="soft">${esc(a.provider)}</span>
   </div>`
+
+let role = (r) => {
+  let voices = r.auditions.map((a) => a.audition)
+  let shown = (a) => a.audio || r.chosen == a.name
+  let more = voices.filter((a) => !shown(a))
+  return `
+    <div class="role step">
+      <strong>${esc(r.name)}</strong> <span class="soft">${esc(r.about)}</span>
+      ${voices.filter(shown).map((a) => take(r, a)).join('')}
+      ${
+    more.length
+      ? `<details><summary>More ElevenLabs voices</summary>${
+        more.map((a) => take(r, a)).join('')
+      }</details>`
+      : ''
+  }
+    </div>`
+}
 
 let shot = (s) => `
   <div class="step shot">

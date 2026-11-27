@@ -34,6 +34,12 @@ let VOICES = [
   { id: 'v-mabel', name: 'Mabel', about: 'old woman, kind, slow' },
 ]
 
+let CUSTOM = [
+  { id: 'clone', name: 'Clone', about: 'reader', custom: true },
+  { id: 'design', name: 'Design', about: 'announcer', custom: true },
+  { id: 'library', name: 'Saved from the library', about: '', custom: true },
+]
+
 // One MPEG-1 layer III frame header at 128 kbps, 44.1 kHz: 417 bytes, 1152
 // samples (26.1 ms).
 let frame = () => {
@@ -93,14 +99,12 @@ test('an idea is scripted, storyboarded, cast, voiced, filmed, cut and rendered'
       }
       if (path.startsWith('speech/voices')) {
         let provider = new URL(path, 'http://x').searchParams.get('provider')
-        return provider == 'deepgram'
-          ? Response.json({ provider, voices: VOICES })
-          : Response.json({ error: { message: 'not connected' } }, {
-            status: 409,
-          })
+        assertEquals(provider, 'elevenlabs')
+        return Response.json({ provider, voices: [...VOICES, ...CUSTOM] })
       }
       if (path == 'speech/speak') {
-        let { voice, text } = JSON.parse(String(init!.body))
+        let { provider, voice, text } = JSON.parse(String(init!.body))
+        assertEquals(provider, 'elevenlabs')
         spoken.push(`${voice}: ${text}`)
         return new Response(mp3(text.length))
       }
@@ -153,11 +157,20 @@ test('an idea is scripted, storyboarded, cast, voiced, filmed, cut and rendered'
   equal(lines.map((l) => (l.line as Comp).panel).sort(), [1, 2])
   assertEquals(await shown(), 'Choose a voice for Narrator.')
 
-  // Choosing the voice says both lines, and the studio's two takes wait.
+  let auditions = (await count('.audition', 5)).map((b) => b.audition as Comp)
+  equal(auditions.filter((a) => a.audio).map((a) => a.voice).sort(), [
+    'clone',
+    'v-brian',
+    'v-grace',
+  ])
+  // Choosing an account voice beyond the auditions says both lines in it.
   spoken = []
-  await send('/apply', [{ entity: asked.entity, decided: { choice: 'Grace' } }])
+  await send('/apply', [{
+    entity: asked.entity,
+    decided: { choice: 'Saved from the library' },
+  }])
   let voiced = await count('.voicing', 2)
-  equal(spoken.sort(), ['v-grace: Ask for an app.', 'v-grace: Share it.'])
+  equal(spoken.sort(), ['library: Ask for an app.', 'library: Share it.'])
   equal(
     voiced.map((v) => (v.voicing as Comp).ms as number).sort((a, b) => a - b),
     [235, 392],
@@ -197,7 +210,7 @@ test('an idea is scripted, storyboarded, cast, voiced, filmed, cut and rendered'
     let said = await rows('.voicing&*')
     return said.some((v) => (v.doc as Comp).body == 'Ask Cove for an app.')
   }, { label: 'the changed line said again' })
-  equal(spoken, ['v-grace: Ask Cove for an app.'])
+  equal(spoken, ['library: Ask Cove for an app.'])
   assertEquals((await rows('.take')).length, 2)
 })
 

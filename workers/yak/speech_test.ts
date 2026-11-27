@@ -47,7 +47,10 @@ let deepgram = endpoints(globalThis).open(async (req) => {
   }
   if (url.pathname == '/v2/voices') {
     return Response.json({
-      voices: [{ voice_id: 'v1', name: `Ada ${eleven}` }],
+      voices: [
+        { voice_id: 'v1', name: `Ada ${eleven}`, category: 'generated' },
+        { voice_id: 'v2', name: 'Stock', category: 'premade' },
+      ],
     })
   }
   if (url.pathname == '/v1/text-to-voice/design') {
@@ -447,7 +450,10 @@ test('an app speaks, lists and makes ElevenLabs voices with the key of the conne
   equal(voices, ['v1 their-key'])
   equal(await (await ask('/speech/voices?provider=elevenlabs', null)).json(), {
     provider: 'elevenlabs',
-    voices: [{ id: 'v1', name: 'Ada their-key', about: '' }],
+    voices: [
+      { id: 'v1', name: 'Ada their-key', about: '', custom: true },
+      { id: 'v2', name: 'Stock', about: '' },
+    ],
   })
   let designed = await (await ask(
     '/speech/design',
@@ -474,7 +480,9 @@ test('an app speaks, lists and makes ElevenLabs voices with the key of the conne
 test('an app granted the person’s ElevenLabs sign-in speaks and lists their voices with it, charged to their account', async () => {
   unread()
   voices = []
-  let { space, ask, signedIn } = await fixture()
+  let { space, ask, signedIn } = await fixture(1, {
+    ELEVENLABS_API_KEY: 'platform-key',
+  })
   await signedIn('their-token')
   let spoke = await ask(
     '/speech/speak',
@@ -486,7 +494,10 @@ test('an app granted the person’s ElevenLabs sign-in speaks and lists their vo
   equal(
     (await (await ask('/speech/voices?provider=elevenlabs', null)).json())
       .voices,
-    [{ id: 'v1', name: 'Ada Bearer their-token', about: '' }],
+    [
+      { id: 'v1', name: 'Ada Bearer their-token', about: '', custom: true },
+      { id: 'v2', name: 'Stock', about: '' },
+    ],
   )
   equal(budget(await space()).spent, 0)
 })
@@ -508,6 +519,23 @@ test('an app asking as itself speaks with an ElevenLabs sign-in its space’s ow
       shared ? [200, ['v1 Bearer owners-token']] : [400, []],
     )
   }
+})
+
+test('without an account connection a configured platform ElevenLabs key bills the space and lists stock voices', async () => {
+  voices = []
+  let { space, ask } = await fixture(1, { ELEVENLABS_API_KEY: 'platform-key' })
+  let spoke = await ask(
+    '/speech/speak',
+    '{"text":"Hello choir","voice":"v2","provider":"elevenlabs"}',
+    'application/json',
+  )
+  equal(spoke.status, 200)
+  equal(voices, ['v2 platform-key'])
+  equal(await (await ask('/speech/voices?provider=elevenlabs', null)).json(), {
+    provider: 'elevenlabs',
+    voices: [{ id: 'v2', name: 'Stock', about: '' }],
+  })
+  equal(budget(await space()).spent, 11 / 1000 * 0.08)
 })
 
 test('without a connection the app uses, ElevenLabs is refused, and the platform’s providers make no voices', async () => {

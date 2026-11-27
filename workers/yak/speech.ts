@@ -866,7 +866,7 @@ export let speechDoor: Answer = async (asked) => {
     if (path == '/speech/voices') {
       return Response.json({
         provider: on.provider.name,
-        voices: await voices(on),
+        voices: (await voices(on)).filter((v) => on.own || !v.custom),
       })
     }
     if (path == '/speech/design') {

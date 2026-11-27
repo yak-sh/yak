@@ -32,9 +32,15 @@ export type Format =
 export type Raw = Extract<Format, { rate: number }>
 
 /** A voice a provider speaks in: the `id` a request names, what a person
- * calls it, how it sounds, and where a sample of it plays, where the
- * provider has one. */
-export type Voice = { id: string; name: string; about: string; sample?: string }
+ * calls it, how it sounds, and where a sample of it plays. A provider marks
+ * a voice `custom` when it was made or added to the account's library. */
+export type Voice = {
+  id: string
+  name: string
+  about: string
+  sample?: string
+  custom?: true
+}
 
 /** A voice designed from a description, not yet kept: the id `keep` takes,
  * and a sample of it. */
