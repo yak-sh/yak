@@ -241,7 +241,7 @@ export let manage = async (
   if (!person) return signInReturn(req, env)
   if (url.searchParams.has('settings-draft')) {
     let { settingsDraft } = await import('./settings-draft.ts')
-    return settingsDraft(req, dir, { person, role: null, until })
+    return settingsDraft(req, dir, env, { person, role: null, until })
   }
   // A token narrowed to one space reaches that space alone.
   if (

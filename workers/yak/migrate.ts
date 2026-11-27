@@ -264,6 +264,7 @@ export let respelled = (text: string): string | null => {
  * names the first shape its rules can produce, even though only declaring apps
  * move. Code without the name is code from before it could read that shape. */
 export let BOUNDARIES = [
+  'yak/store/credential-drafts/1',
   'yak/store/directory-index/1',
   'yak/store/operator-memory-owners/1',
   'yak/store/operator-chat-words/1',

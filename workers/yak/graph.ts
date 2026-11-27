@@ -93,6 +93,12 @@ import {
 import { sessionMove } from './session-move.ts'
 import { jobs } from './jobs.ts'
 import { statements } from '@yaks/sqlite'
+import {
+  CREDENTIAL_DRAFT_MOVE,
+  type CredentialDraftMove,
+  moveCredentialDrafts,
+  prepareCredentialWrites,
+} from '@yaks/platform/credential-draft-move'
 import type { Context as Reported } from '@yaks/tracker/report'
 import { planting } from './provider-names.ts'
 import { bookmarks, RESTORING } from './bookmarks.ts'
@@ -480,7 +486,7 @@ import {
 } from './used.ts'
 import { instrumentActor, instrumentEid } from '@yaks/platform/instrument'
 import { commandReply } from '@yaks/platform/app-command'
-import { vaultOf } from './vault.ts'
+import { vaulted, vaultOf } from './vault.ts'
 import { connectionAccess } from './connection-access.ts'
 import {
   decoded,
@@ -806,6 +812,7 @@ type Word =
   | 'copied'
   // How far each rule of the mover got here (mover.ts), under its mark.
   | Mark
+  | typeof CREDENTIAL_DRAFT_MOVE
   // The bytes it last told the directory it holds (`#tell`).
   | 'weighed'
   // The embedding outage its drains are riding out (`#vectors`).
@@ -3351,7 +3358,33 @@ export class Store extends Durable {
       this.#get('name') == PLATFORM_STORE
         ? await nextDirect(this.#graph)
         : null,
+      this.#credentialDraftsOwed() ? now : null,
     )
+
+  #credentialDraftsOwed = () =>
+    this.#get('name') == PLATFORM_STORE && vaulted(this.#bind) &&
+    !this.#draftMove().done
+
+  #draftMove = (): CredentialDraftMove & { at?: string } =>
+    JSON.parse(this.#get(CREDENTIAL_DRAFT_MOVE) ?? '{}')
+
+  #migrateCredentialDrafts = async (): Promise<number | null> => {
+    if (!this.#credentialDraftsOwed()) return null
+    let moved = await moveCredentialDrafts(
+      this.#graph,
+      this.#sql,
+      vaultOf(this.#bind),
+      this.#draftMove(),
+    )
+    this.#put(
+      CREDENTIAL_DRAFT_MOVE,
+      JSON.stringify({
+        ...moved,
+        at: new Date(this.#now()).toISOString(),
+      }),
+    )
+    return moved.done ? null : this.#soon()
+  }
 
   // The pending runs this object has the code for.
   #pendingEffects = async (): Promise<Bundle[]> => {
@@ -3803,6 +3836,7 @@ export class Store extends Durable {
       return this.#vectors.retry()
     }),
     moves: this.#own(() => this.#moving(), () => true),
+    credentialDrafts: this.#own(this.#migrateCredentialDrafts),
     lexicon: this.#own(async () => {
       await this.#lexing()
       return null
@@ -3881,6 +3915,7 @@ export class Store extends Durable {
   #deployed = async (): Promise<void> => {
     await this.#maintenance(() => this.#installDeployment())
     if (this.#owing().length) await this.#arm(this.#soon(), 'mover')
+    if (this.#credentialDraftsOwed()) await this.#arm(this.#soon())
     if (this.#unread()) await this.#arm(this.#soon(), 'lexicon')
     if (this.#analyze(0)) await this.#arm(this.#soon(), 'statistics')
   }
@@ -5760,9 +5795,17 @@ export class Store extends Durable {
     }
   }
 
-  #spokenWrites(request: Request, rows: Bundle[]): Bundle[] {
+  #spokenWrites(
+    request: Request,
+    rows: Bundle[],
+  ): Bundle[] | Promise<Bundle[]> {
     let speaks = spoken(request).speaks
-    return speaks ? rows.map((b) => ({ ...b, $speaks: speaks })) : rows
+    let spokenRows = speaks
+      ? rows.map((b) => ({ ...b, $speaks: speaks }))
+      : rows
+    return this.#get('name') == PLATFORM_STORE
+      ? prepareCredentialWrites(this.#graph, vaultOf(this.#bind), spokenRows)
+      : spokenRows
   }
 
   /** Every door but the write log's, for an object that is ready. */
@@ -6280,7 +6323,7 @@ export class Store extends Durable {
         return Response.json({ store, rules })
       }
       this.#mourned()
-      if (this.#owing().length) {
+      if (this.#owing().length || this.#credentialDraftsOwed()) {
         if (this.#dormant) {
           this.#moveOnly = true
           await this.#ctx.storage.put?.('moving', true)
@@ -6292,6 +6335,16 @@ export class Store extends Durable {
         live: runs(r, store),
         ...this.#stamp(r),
       }))
+      if (store == PLATFORM_STORE) {
+        let { moved, at, done } = this.#draftMove()
+        rules.push({
+          mark: CREDENTIAL_DRAFT_MOVE,
+          live: vaulted(this.#bind),
+          moved,
+          at,
+          done: done ? at : undefined,
+        })
+      }
       // The alarm the object holds once woken, so a sweep sees one that is
       // due and never comes: the mover only moves from it.
       let held = await this.#ctx.storage.getAlarm()

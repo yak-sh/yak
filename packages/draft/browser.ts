@@ -23,6 +23,8 @@ export type BrowserOpts =
     recover?: string[]
     /** A recovery copy, not the source of truth. false disables it. */
     stash?: Stash | false
+    /** Places whose unacknowledged input may stay only in this tab. */
+    volatile?: (place: string) => boolean
   }
 
 /** Whose recovery copy a visitor nobody knows types into. */
@@ -135,6 +137,38 @@ let scoped = (
   }
 }
 
+let inTab = new Map<string, Map<string, string>>()
+
+let temporary = (
+  scope: string,
+  by: string,
+  disk: Stash | undefined,
+  volatile: (place: string) => boolean,
+): Stash => {
+  let id = prefix(scope, by)
+  let ram = inTab.get(id) ?? new Map<string, string>()
+  let privateKey = (key: string) =>
+    key.startsWith('draft:') && volatile(key.slice('draft:'.length))
+  let visible = () => [...new Set([...ram.keys(), ...disk ? keys(disk) : []])]
+  return {
+    get length() {
+      return visible().length
+    },
+    key: (i) => visible()[i] ?? null,
+    getItem: (key) => ram.get(key) ?? disk?.getItem(key) ?? null,
+    setItem: (key, value) => {
+      if (!privateKey(key)) return disk?.setItem(key, value)
+      inTab.set(id, ram)
+      ram.set(key, value)
+    },
+    removeItem: (key) => {
+      ram.delete(key)
+      if (!ram.size && inTab.get(id) === ram) inTab.delete(id)
+      disk?.removeItem(key)
+    },
+  }
+}
+
 /** A durable desk with plain DOM bindings. */
 export type BrowserDrafts = Desk & {
   bind: (
@@ -181,6 +215,9 @@ export let browserDrafts = (
       }
     } catch (error) {
       report(error)
+    }
+    if (opts.volatile) {
+      stash = temporary(scope, by ?? GUEST, stash, opts.volatile)
     }
     current.value = desk({
       mutate: async (bundles) => {

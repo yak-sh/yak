@@ -7,6 +7,7 @@ import {
   type BrowserOpts,
 } from '@yaks/draft/browser'
 import type { Bundle } from '@yaks/graph'
+import { credentialDraftPlace } from './credential-draft-place.ts'
 
 export let settingsDrafts = (
   opts: BrowserOpts & { scope: string },
@@ -50,7 +51,11 @@ export let settingsDrafts = (
         })
         if (response.status != 200) {
           throw new Error(
-            'Your settings draft could not sync. A recovery copy is kept on this device.',
+            bundles.some((b) =>
+                credentialDraftPlace((b.draft as { place?: unknown })?.place)
+              )
+              ? 'Your key draft could not sync. It is still here while this tab is open.'
+              : 'Your settings draft could not sync. A recovery copy is kept on this device.',
           )
         }
         return response.json()
@@ -64,7 +69,7 @@ export let settingsDrafts = (
       },
     },
     opts.scope,
-    { ...opts, report },
+    { ...opts, report, volatile: credentialDraftPlace },
   )
   let place = (key: string) => `settings:${opts.scope}:${key}`
   return {

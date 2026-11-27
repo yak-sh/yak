@@ -5096,6 +5096,7 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/react@0.2.33",
             "npm:@yaks/render@0.2.24",
+            "npm:@yaks/secrets@0.2.28",
             "npm:@yaks/session@0.2.33",
             "npm:@yaks/speech@0.2.33",
             "npm:@yaks/sql@0.2.30",

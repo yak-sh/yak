@@ -44,7 +44,10 @@ export let writeOptions = (
 
 /** Context the application gives each incoming write before authentication
  * signs it. Streaming imports call it once per chunk, including checks. */
-export type WriteContext = (request: Request, bundles: Bundle[]) => Bundle[]
+export type WriteContext = (
+  request: Request,
+  bundles: Bundle[],
+) => Bundle[] | Promise<Bundle[]>
 
 /**
  * How many bundles go into one transaction when an import arrives one bundle
@@ -190,7 +193,7 @@ export let pour = (
     // chunk is refused and one of its own lines is identified.
     let blame = 0
     let flush = async () => {
-      let batch = signed(context ? context(request, held) : held, who)
+      let batch = signed(context ? await context(request, held) : held, who)
       let applied: Bundle[]
       try {
         applied = await graph.apply(batch, {
@@ -401,7 +404,7 @@ export let applier = (o: Applying): Applier => {
         if (bound instanceof Response) return bound
         request = bound
       }
-      let batch = signed(o.write ? o.write(request, body) : body, who)
+      let batch = signed(o.write ? await o.write(request, body) : body, who)
       let options: ApplyOpts = {
         check,
         ...(trusted && new URL(request.url).searchParams.get('stamp') == '0'

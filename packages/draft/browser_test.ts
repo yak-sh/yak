@@ -128,6 +128,43 @@ test('reloaded empty edits are present drafts rather than absent fields', () => 
   }
 })
 
+test('private drafts move off disk after recovery and keep pending edits in the tab', async () => {
+  let disk = stash()
+  let place = 'private-input'
+  let opts = { by: 'person', stash: disk, volatile: (p: string) => p == place }
+  let legacy = 'yaks:drafts:private-test|person:draft:' + place
+  let original = JSON.stringify({ text: 'old input', over: '', rev: 0 })
+  disk.setItem(legacy, original)
+  let first = browserDrafts(offline, 'private-test', opts)
+  equal(first.text(place), 'old input')
+  first.type(place, 'continued input')
+  equal(disk.getItem(legacy), original)
+  first.close()
+  let restored = Promise.withResolvers<void>()
+  let reopened = browserDrafts(
+    {
+      ...offline,
+      apply: (bundles) => {
+        restored.resolve()
+        return Promise.resolve({
+          bundles: bundles.map((b) => ({
+            ...b,
+            draft: { ...(b.draft as object), rev: 1 },
+          })),
+        })
+      },
+    },
+    'private-test',
+    opts,
+  )
+  equal(reopened.text(place), 'continued input')
+  await restored.promise
+  // The send's receipt clears its recovery copy once the desk takes it.
+  await reopened.spend('unchanged')
+  equal(disk.getItem(legacy), null)
+  reopened.close()
+})
+
 test('failed target copy keeps Alice input private while fresh guest input can pass to Bob', () => {
   let storage = stash(), reports: unknown[] = []
   keep(storage, 'guest', 'Alice guest paragraph.')

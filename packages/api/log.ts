@@ -760,6 +760,75 @@ let chunks = (db: Driver, seq: number, text: string) => {
   }
 }
 
+type RetainedWrite = {
+  seq: number
+  state: string
+  body: string
+  binary: boolean
+  answer: string | null
+  chunked: boolean
+}
+
+/** Walk the persisted input and outcome of writes without replaying them. */
+export let retainedWrites = (
+  db: Driver,
+  after: number,
+  limit: number,
+): RetainedWrite[] =>
+  db.query(select({
+    cols: [
+      col('seq'),
+      col('state'),
+      col('headers'),
+      col('body'),
+      col('answer'),
+    ],
+    from: table(LOG),
+    where: gt(col('seq'), val(after)),
+    order: [col('seq')],
+    limit: val(limit),
+  })).map((r) => {
+    let seq = Number(r.seq)
+    let chunked = r.answer == null && r.state == 'applied'
+    return {
+      seq,
+      state: String(r.state),
+      body: String(r.body),
+      binary: binaryHeaders(new Headers(JSON.parse(String(r.headers)))),
+      answer: chunked
+        ? outcome(db, seq)
+        : r.answer == null
+        ? null
+        : String(r.answer),
+      chunked,
+    }
+  })
+
+/** Rewrite an unchanged receipt inside the caller's transaction. */
+export let rewriteWrite = (
+  db: Driver,
+  was: RetainedWrite,
+  body: string,
+  answer: string | null,
+): boolean => {
+  let written = db.query({
+    t: 'update',
+    table: LOG,
+    set: { body: val(body), answer: val(was.chunked ? null : answer) },
+    where: and(
+      at(was.seq),
+      eq(col('state'), val(was.state)),
+      eq(col('body'), val(was.body)),
+    ),
+    returning: [col('seq')],
+  }).length > 0
+  if (written && was.chunked && answer != null && answer != was.answer) {
+    db.query({ t: 'delete', from: ANSWERS, where: at(was.seq) })
+    chunks(db, was.seq, answer)
+  }
+  return written
+}
+
 /** A committed write, in its batch's own transaction: out of the log, or,
  * sent with a key, kept as `applied` with its answer for a resend to be told.
  * The hook receives phase patches; compose them here to keep exactly what

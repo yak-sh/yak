@@ -4,6 +4,7 @@ import {
   among,
   and,
   array,
+  as,
   col,
   type Delete,
   desc,
@@ -13,6 +14,7 @@ import {
   exists,
   fn,
   from,
+  gt,
   type Insert,
   join,
   lit,
@@ -31,6 +33,35 @@ import type { Vocab } from '@yaks/vocab'
 import { decode, stringify } from '@yaks/vocab/wire'
 
 export let TRASH = '_yaks_trash'
+
+type RetainedBody = { id: number; body: string }
+
+/** Walk before-images in bounded pages for an in-place security rewrite. */
+export let retainedBodies = (
+  driver: Driver,
+  after: number,
+  limit: number,
+): RetainedBody[] =>
+  driver.query(select({
+    cols: [as(col('rowid'), 'id'), col('body')],
+    from: table(TRASH),
+    where: gt(col('rowid'), val(after)),
+    order: [col('rowid')],
+    limit: val(limit),
+  })).map((r) => ({ id: Number(r.id), body: String(r.body) }))
+
+/** A replacement keeps the identity, batch and date of the before-image. */
+export let rewriteRetained = (
+  driver: Driver,
+  was: RetainedBody,
+  body: string,
+): void =>
+  void driver.query({
+    t: 'update',
+    table: TRASH,
+    set: { body: val(body) },
+    where: and(eq(col('rowid'), val(was.id)), eq(col('body'), val(was.body))),
+  })
 
 /** Save each row once per destructive transaction. */
 export let retainSql = (id: string, at: string, bundles: Bundle[]): Insert[] =>
