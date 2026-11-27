@@ -318,17 +318,19 @@ export let owes = (
   !rule.core?.some(declared)
 
 /** What a store this code raised holds for each of `rules` it owes and runs:
- * done, with nothing moved, since no older release wrote a row there. */
+ * done, with nothing moved, since no older release wrote a row there. A rule
+ * that writes a receipt as it finishes (`finish`) runs, to write it. */
 export let born = (
   rules: Rule[],
   store: string,
   declared: (comp: string) => boolean,
   at: string,
 ): [Mark, Stamp][] =>
-  rules.filter((r) => runs(r, store) && owes(r, store, declared)).map((r) => [
-    r.mark,
-    { moved: 0, ...r.forward ? { forwarded: 0 } : {}, at, done: at },
-  ])
+  rules.filter((r) => !r.finish && runs(r, store) && owes(r, store, declared))
+    .map((r) => [
+      r.mark,
+      { moved: 0, ...r.forward ? { forwarded: 0 } : {}, at, done: at },
+    ])
 
 let sync = <T>(v: T | Promise<T>): T => {
   if (isPromise(v)) throw new Error('a store moves synchronously')
