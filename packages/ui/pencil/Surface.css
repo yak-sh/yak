@@ -58,14 +58,15 @@
   --control-height: 2.25rem;
 }
 
-/* In a Shell the panes scroll apart, so the grain cannot lie over the page:
+/* In an active Shell the panes scroll apart, so the grain cannot lie over the page:
    each surface paints it, scrolling with what it holds (`local`). Panes beside
    each other then meet in two tiles that do not line up, which noise hides,
    but never in two tones, which it does not: a tab opening into a pane is
-   attached to itself, so it keeps the pane's fill however either scrolls. */
-:root:has(.Shell) {
+   attached to itself, so it keeps the pane's fill however either scrolls.
+   An inert view can warm its Shell while the page still wears the overlay. */
+:root:has(.Shell:not(:where([inert], [inert] *))) {
   --texture: var(--grain) 0 0 / 256px local;
 }
-:root:has(.Shell)::after {
+:root:has(.Shell:not(:where([inert], [inert] *)))::after {
   content: none;
 }
