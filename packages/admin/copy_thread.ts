@@ -1,7 +1,7 @@
 // Only pages and progress cross back to the serving thread. The copy's SQLite
 // connection, commits, index builds and close all belong to its worker.
 import { type Port, portLink } from '@yaks/sync/port'
-import type { copy } from './copy.ts'
+import type { Asked, copy } from './copy.ts'
 import { CallError, Interrupted } from '@yaks/tools/errors'
 
 // Refusals and deliberate interruptions remain expected invocation outcomes
@@ -38,7 +38,7 @@ export type CopyPlan = {
 
 export type CopyPage = {
   space: string
-  asked: { table?: string; after?: number; until?: number }
+  asked: Asked
 }
 
 type Thread = Port & { terminate: () => void }

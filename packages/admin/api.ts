@@ -742,7 +742,7 @@ export let operatorSpaces = (
 export let operatorPage = <T>(
   session: string,
   space: string,
-  asked: { table?: string; after?: number; until?: number },
+  asked: import('./copy.ts').Asked,
 ): Promise<T> =>
   said(sent(
     apex(`${OPERATOR_COPY}?${new URLSearchParams({ space })}`),
@@ -797,7 +797,7 @@ export let appStores = (
 export let storePage = <T>(
   session: string,
   store: string,
-  asked: { table?: string; after?: number; until?: number },
+  asked: import('./copy.ts').Asked,
 ): Promise<T> =>
   said(sent(
     apex(`${STORE_COPY}?${new URLSearchParams({ store })}`),
