@@ -1,0 +1,15 @@
+{
+  "entries": [
+    ".",
+    "./host",
+    "./draw"
+  ],
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "es2023"
+    ],
+    "strict": true
+  }
+}

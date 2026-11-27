@@ -34,11 +34,9 @@ import {
 } from 'preact'
 import { useContext, useLayoutEffect, useState } from 'preact/hooks'
 import {
-  type Action,
   type Bundle,
   type Context,
   type H,
-  type Patch,
   type Registration,
   type RenderContext,
   type Renderer,
@@ -46,17 +44,24 @@ import {
   resolve,
   type Selection,
 } from '@yaks/render'
+import {
+  committed,
+  type EntityProps,
+  type Events,
+  type Store,
+  type Subscribe,
+} from '@yaks/render/component'
+export type {
+  EntityProps,
+  Events,
+  Store,
+  Subscribe,
+} from '@yaks/render/component'
 import type { Vocab } from '@yaks/vocab'
 
 /** A native component; the host mounts it so Preact owns its hooks and identity. */
 export type ComponentRenderer<E = Bundle> = Registration & {
   Render: FunctionComponent<Context & Events & { e: E }>
-}
-
-/** The application applies a successful edit and may display rejected input. */
-export type Events = {
-  onPatch?: (patch: Patch, bundle: Bundle) => void
-  onError?: (error: unknown, bundle: Bundle) => void
 }
 
 /** Portable trees and native components share the same selection machinery. */
@@ -67,56 +72,12 @@ type Node<E = Bundle> =
   | VNode<Record<string, unknown>>
   | VNode<Context & { e: E }>
 
-/** A synchronous read; absence is allowed so a subscription can announce arrival. */
-export type Store = (eid: string) => Bundle | undefined
-
-/** Watch one entity and return the cleanup for that listener. */
-export type Subscribe = (eid: string, notify: () => void) => () => void
-
 /** The values bound once when an application creates its Entity component. */
 export type Options = {
   registry: HostRegistry
   vocab: Vocab
   store: Store
   subscribe?: Subscribe
-}
-
-/** An entity address and view; all remaining props are renderer context. */
-export type EntityProps = Context & Events & { eid: string; view?: string }
-
-let action = (value: unknown): value is Action =>
-  value != null && typeof value == 'object' && 'run' in value &&
-  typeof value.run == 'function'
-
-type Control = {
-  type?: string
-  checked?: boolean
-  value?: string
-  validity?: { badInput: boolean }
-  validationMessage?: string
-  setCustomValidity?: (message: string) => void
-  reportValidity?: () => boolean
-}
-
-let change = (act: Action, bundle: Bundle, ctx: Events) => (event: Event) => {
-  let control = event.currentTarget as Control | null
-  let input = control?.type == 'checkbox' ? control.checked : control?.value
-  let patch: Patch
-  try {
-    if (control?.validity?.badInput) {
-      throw new Error(control.validationMessage || 'Enter a valid value')
-    }
-    patch = act.run(bundle, input)
-  } catch (error) {
-    control?.setCustomValidity?.(
-      error instanceof Error ? error.message : String(error),
-    )
-    control?.reportValidity?.()
-    ctx.onError?.(error, bundle)
-    return
-  }
-  control?.setCustomValidity?.('')
-  ctx.onPatch?.(patch, bundle)
 }
 
 // The shared child contract admits readonly arrays; Preact reads the same
@@ -126,9 +87,7 @@ let hyperscript = <E>(
   ctx: Events,
 ): H<Node<E>> =>
 (tag, props, ...children) => {
-  if (action(props?.onChange)) {
-    props = { ...props, onChange: change(props.onChange, bundle, ctx) }
-  }
+  props = committed(props, bundle, ctx)
   return children.length
     ? h<Record<string, unknown>>(tag, props, children as ComponentChildren)
     : h<Record<string, unknown>>(tag, props)

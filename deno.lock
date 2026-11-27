@@ -5224,6 +5224,17 @@
           ]
         }
       },
+      "packages/react": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@preact/compat@18.3.2",
+            "npm:@yaks/dom@0.2.24",
+            "npm:@yaks/render@0.2.24",
+            "npm:@yaks/testing@0.2.30",
+            "npm:@yaks/vocab@0.2.32"
+          ]
+        }
+      },
       "packages/render": {
         "packageJson": {
           "dependencies": [

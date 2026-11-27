@@ -1,0 +1,26 @@
+{
+  "name": "@yaks/react",
+  "version": "0.2.33",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./host": "./host.ts",
+    "./draw": "./draw.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Renders registry-selected views with React and binds them to an entity store.",
+  "dependencies": {
+    "@yaks/render": "0.2.24",
+    "@yaks/vocab": "0.2.32"
+  },
+  "peerDependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "react": "npm:@preact/compat@18.3.2",
+    "react-dom": "npm:@preact/compat@18.3.2",
+    "@yaks/dom": "0.2.24",
+    "@yaks/testing": "0.2.30"
+  }
+}

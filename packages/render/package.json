@@ -4,7 +4,9 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
-    "./views": "./views.ts"
+    "./views": "./views.ts",
+    "./component": "./component.ts",
+    "./host": "./host.ts"
   },
   "license": "Apache-2.0",
   "description": "Selects views, editors, and actions for entity bundles through a query-matched registry independent of the rendering host.",

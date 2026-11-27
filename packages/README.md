@@ -178,9 +178,11 @@ grouped approximately by function, **not** by dependency order.
   an element-construction function so the caller chooses the output
   representation.
 
-- **[@yaks/preact](./preact)** — Connect the render registry to Preact. Its
-  `Entity` component reads a function-based store and subscribes while mounted,
-  using Preact's element-construction function for portable renderers.
+- **[@yaks/preact](./preact)** — Connect the render registry to Preact, with
+  mounted entity subscriptions and a preview host for Preact apps.
+
+- **[@yaks/react](./react)** — Connect the render registry to React, with
+  mounted entity subscriptions, preview updates and drawing into a DOM tree.
 
 - **[@yaks/html](./html)** — Render the same registry to server-side HTML using
   @yaks/preact and Preact's serializer, without a browser DOM.
