@@ -936,6 +936,48 @@
         "path"
       ]
     },
+    "admin_download": {
+      "tool": true,
+      "surfaces": [
+        "cli"
+      ],
+      "noun": "admin",
+      "verb": "download",
+      "title": "Download a file an app keeps",
+      "description": "Read the bytes an app keeps at ./api/blob/<blob> and write them to a local file. The app role must permit reads. Writes to the blob's eid in the working directory unless --to names a path.",
+      "input": {
+        "where": {
+          "type": "string",
+          "description": "space/app"
+        },
+        "blob": {
+          "type": "string",
+          "description": "the blob's eid"
+        },
+        "to": {
+          "type": "string",
+          "description": "the local file to write, read against cwd when relative"
+        },
+        "cwd": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "absolute working directory a relative to is read against; the CLI supplies its own, and an MCP caller names its checkout or gives an absolute to"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is the platform admin, admin@bot.yak.sh, so an agent's write is recorded as the agent; name the person's own account only for a write they asked for"
+        }
+      },
+      "required": [
+        "where",
+        "blob"
+      ],
+      "openWorld": true,
+      "positional": [
+        "where",
+        "blob"
+      ]
+    },
     "admin_push": {
       "tool": true,
       "surfaces": [

@@ -1280,6 +1280,25 @@ export let storeUpload = (
   )
 }
 
+/** The bytes an app keeps at ./api/blob/<eid>, read with the caller's
+ * authority, or undefined when the app keeps none by that eid. */
+export let storeBlob = async (
+  session: string,
+  at: string,
+  eid: string,
+): Promise<Uint8Array | undefined> => {
+  let r = await sent(storeUrl(at, `/blob/${encodeURIComponent(eid)}`), session)
+  if (r.status == 404) {
+    await r.body?.cancel()
+    return undefined
+  }
+  if (!r.ok) {
+    let refusal = refusedResponse(r, await bodyOf(r))
+    throw new CallError(refusal.code, refusal.message)
+  }
+  return new Uint8Array(await r.arrayBuffer())
+}
+
 /** The bytes of an app's customer-private artifact, read with the seller's
  * authority, or undefined when the app holds none at that address. */
 export let storeArtifact = async (

@@ -1,24 +1,40 @@
 # Voiced Video
 
-A short video made from a request, as a workflow of builders (D-467): the person
-gives a title and what it is about, a model writes the script, voices audition
-for each character, the person chooses each voice, every line is voiced in it,
-and the voiced lines are assembled in script order. The page plays the cut, each
-line shown as it is said.
+A short video made from an idea, as a [@yaks/workflow](../../packages/workflow)
+whose steps are rows: the idea, the script, the storyboard (shots: browser
+recordings of web pages, or stills), casting (voice auditions and the person's
+choice), voice lines, recording, assembly and the finished file. Every step's
+output is a row the page shows and lets the person change: the idea, a line, a
+shot's steps, the choice of voice. A step runs once for each set of values its
+match binds, so a change reruns only the steps that read what changed: editing a
+line says that line again and recuts, and leaves the other lines and every take
+as they were.
 
 The app lives in `jeff/voiced-video`.
 
-- `seed.json` writes the four steps, each an `immediate` builder, and a
-  `requires` edge from each step to every step it reads. The app's Workflow tab
-  shows these steps on yaks.app. A store is seeded once, so a change to a step
-  reaches an existing copy only as an edit of its builder row.
-- `worker.js` answers the three code steps (`/audition`, `/voice`, `/assemble`),
-  commands declared in `vocab.json`. Voices come from ElevenLabs through
-  `./api/speech`, so the space needs its own ElevenLabs connection; without one
-  each step fails with the platform's reason, shown on the page.
-- The person's choice of voice is a `decision` the auditions step answers,
-  assigned to whoever asked for the video and asked in their Updates. Answering
-  it there or on the page writes `decided{choice}`, which the line step's query
-  matches.
+- `seed.json` writes the workflow and its seven steps, each a
+  `step{match, write}` the workflow `contains`. Five steps write a `call` to a
+  command of the app's worker; Recording and Finished file write a `take` or
+  `film` task the studio answers. A store is seeded once, so a change to a step
+  reaches an existing copy only as an edit of its row.
+- `worker.js` answers the commands declared in `vocab.json`: the script and the
+  storyboard from a model (`./api/ai/run`), auditions and voice lines from
+  `./api/speech` (the space's own ElevenLabs where connected, else the
+  platform's Deepgram and OpenAI voices), and the cut, timed from each line's
+  length (`model.js` `timeline`). Each writes what it makes through `env.APP`,
+  replacing what it made before for the same item.
+- The person's choice of voice is a `decision` the auditions step writes, asked
+  in their Updates. Answering it there or on the page writes `decided{choice}`,
+  which the voice step's match reads.
+- `studio.ts` is the studio, run where the `yak` CLI holds the platform's admin
+  connection: it films each open take in Cloudflare's browser
+  (`yak admin browse --record`), encodes it with ffmpeg and keeps it at the
+  app's `./api/blob`, then renders each open film: the takes held or trimmed to
+  the cut, the voiced lines laid in, captions burned. A shot is opened as the
+  fleet account its `as` names (the demo space's is `yourname`), so only the
+  platform's own studio can film them.
+
+      deno run -A apps/voiced-video/studio.ts jeff/voiced-video [--once]
+
 - `workflow_test.ts` runs the whole workflow on the platform in memory, the
-  script step answered by a stand-in for the model.
+  model and speech answered by stand-ins and the studio's two tasks by the test.

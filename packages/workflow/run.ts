@@ -222,8 +222,21 @@ let wrote = (
   })
 }
 
+// A match widened by one of its brackets: the bracket's patterns joined to
+// the outer ones, so a member the batch touches anchors it. Its bindings'
+// first entities are the outer match's.
+let widened = (plan: Match): Match[] =>
+  plan.collections.filter((c) => !c.none && !c.empty).map((c) => ({
+    patterns: [...plan.patterns, ...c.patterns],
+    collections: c.collections,
+    vars: [...new Set([...plan.vars, ...c.vars])],
+  }))
+
 // Every binding of these steps, anchored to `batch` (or asked of the whole
-// graph when it is empty), as rows in the steps' order.
+// graph when it is empty), as rows in the steps' order. A row a step's
+// bracket reads anchors it too: the outer entities of each binding a member
+// in the batch makes are added to the anchor, so a step that waits for every
+// line to be voiced runs when the last one is.
 let bound = (
   tx: ReadTx,
   vocab: Vocab,
@@ -231,14 +244,37 @@ let bound = (
   batch: Bundle[],
 ): Row[] | Promise<Row[]> => {
   if (!list.length || !tx.bindings) return []
+  let ask = tx.bindings.bind(tx)
   let plans = list.map((s) => s.plan)
   let covers = [...new Set(plans.flatMap((p) => reads(p, vocab)))]
+  let wide = batch.length
+    ? list.flatMap((s) => widened(s.plan).map((plan) => ({ s, plan })))
+    : []
+  let anchor = (bindings: Binding[][]) => {
+    let held = new Set(batch.map((b) => b.entity.eid))
+    let more = new Set<Eid>()
+    wide.forEach(({ s }, i) => {
+      let outer = s.plan.patterns.length
+      for (let b of bindings[i] ?? []) {
+        for (let e of b.entities.slice(0, outer)) {
+          if (e && !held.has(e)) more.add(e)
+        }
+      }
+    })
+    return [...more].map((eid) => ({ entity: { eid } }))
+  }
   return after(
-    tx.bindings(plans, batch, covers),
-    (found) =>
-      list.flatMap((step, i) =>
-        (found[i] ?? []).map((binding) => ({ step, binding }))
-      ),
+    wide.length ? ask(wide.map((w) => w.plan), batch, covers) : [],
+    (members) => {
+      let extra = anchor(members)
+      return after(
+        ask(plans, [...batch, ...extra], covers),
+        (found) =>
+          list.flatMap((step, i) =>
+            (found[i] ?? []).map((binding) => ({ step, binding }))
+          ),
+      )
+    },
   )
 }
 

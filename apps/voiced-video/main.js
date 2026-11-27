@@ -1,7 +1,9 @@
-// The page: start a video, follow it through the workflow (seed.json), hear
-// each character's auditions and choose its voice, and play the cut.
-import { apply, query, subscribe } from './api/client.js'
-import { idOf, progress, stage } from './model.js'
+// The page: start a video from an idea, follow it through the workflow
+// (seed.json), change any step's output in place (the idea, a line, a
+// shot), choose each voice, and watch the finished file. A change reruns
+// only the steps that read it.
+import { apply, subscribe } from './api/client.js'
+import { progress, stage } from './model.js'
 
 let $ = (s) => document.querySelector(s)
 let esc = (s) =>
@@ -13,10 +15,13 @@ let esc = (s) =>
       ],
   )
 let blob = (eid) => `./api/blob/${encodeURIComponent(eid)}`
+let secs = (ms) => `${(ms / 1000).toFixed(1)} s`
 
-let state = { videos: [], rows: [], failed: [], steps: new Map(), open: null }
+let state = { videos: [], rows: [], refused: [], open: null }
 
 let draw = () => {
+  // A field being typed in keeps its words until it is left.
+  if (document.activeElement?.matches('[data-edit]')) return
   let { videos, open } = state
   $('#videos').innerHTML = videos.map((v) =>
     `<button data-open="${v.entity.eid}" aria-current="${
@@ -27,29 +32,47 @@ let draw = () => {
   $('#video').innerHTML = video ? page(video) : ''
 }
 
+let edit = (eid, path, value, rows = 2) =>
+  `<textarea data-edit="${eid}" data-path="${path}" rows="${rows}">${
+    esc(value)
+  }</textarea>`
+
 let page = (video) => {
-  let p = progress(video.entity.eid, state.rows, state.failed)
-  let problems = p.failed.map((b) =>
-    `<p class="failed">${
-      esc(state.steps.get(idOf(b.build.builder)) ?? 'A step')
-    }: ${esc(b.failed.reason)}</p>`
+  let p = progress(video.entity.eid, state.rows)
+  let problems = state.refused.slice(-3).map((r) =>
+    `<p class="failed">${esc(r.content?.body)}</p>`
   ).join('')
   return `
     <h2>${esc(video.doc?.title)}</h2>
-    <p class="soft">${esc(video.doc?.body)}</p>
     <p><strong>${esc(stage(p))}</strong></p>
     ${problems}
-    ${p.cut ? player() : ''}
-    ${p.roles.length ? '<h2>Voices</h2>' : ''}
+    ${
+    p.film
+      ? `<video controls src="${blob(p.film.file)}"></video>
+         <p class="soft"><a href="${
+        blob(p.film.file)
+      }" download>Download the MP4</a>, ${secs(p.film.ms ?? 0)}</p>`
+      : ''
+  }
+    <h3>Idea</h3>
+    ${edit(video.entity.eid, 'doc.body', video.doc?.body, 4)}
+    ${p.roles.length ? '<h3>Casting</h3>' : ''}
     ${p.roles.map(role).join('')}
-    ${p.lines.length ? '<h2>Script</h2>' : ''}
-    <ol>${
+    ${p.lines.length ? '<h3>Script</h3>' : ''}
+    <ol class="lines">${
     p.lines.map((l) =>
-      `<li class="${l.audio ? 'voiced' : ''}"><strong>${esc(l.who)}:</strong> ${
-        esc(l.text)
+      `<li class="${l.audio ? 'voiced' : ''}"><strong>${esc(l.who)}</strong>
+        <span class="soft">shot ${l.shot ?? '?'}</span>
+        ${edit(l.eid, 'doc.body', l.text)}
+        ${
+        l.audio
+          ? `<audio controls preload="none" src="${blob(l.audio)}"></audio>`
+          : ''
       }</li>`
     ).join('')
-  }</ol>`
+  }</ol>
+    ${p.shots.length ? '<h3>Storyboard</h3>' : ''}
+    ${p.shots.map(shot).join('')}`
 }
 
 let role = (r) => `
@@ -66,37 +89,53 @@ let role = (r) => `
         r.ask ? '' : 'disabled'
       }>Use ${esc(a.audition.name)}</button>`
   }
+        <span class="soft">${esc(a.audition.provider)}</span>
       </div>`).join('')
 }
   </div>`
 
-let player = () => `
-  <div class="step">
-    <button data-play>Play</button>
-    <p class="caption" id="caption"></p>
+let shot = (s) => `
+  <div class="step shot">
+    <strong>${s.n}. ${esc(s.title)}</strong>
+    <span class="soft">${esc(s.page)} as ${esc(s.as)}</span>
+    ${
+  s.film
+    ? `<video controls preload="none" muted src="${blob(s.film)}"></video>`
+    : '<p class="soft">Waiting to be filmed.</p>'
+}
+    <details><summary>Steps</summary>
+      ${edit(s.eid, 'shot.steps', JSON.stringify(s.steps ?? [], null, 1), 6)}
+    </details>
   </div>`
 
-// The cut's lines one after another, each shown as it is said.
-let play = async () => {
-  let video = state.videos.find((v) => v.entity.eid == state.open)
-  let { cut } = progress(video.entity.eid, state.rows)
-  for (let clip of cut.clips) {
-    $('#caption').textContent = `${clip.who}: ${clip.text}`
-    let audio = new Audio(blob(clip.audio))
-    await new Promise((done) => {
-      audio.onended = audio.onerror = done
-      audio.play().catch(done)
-    })
-  }
-  $('#caption').textContent = ''
+// What a field's words write: the path's component and property.
+let patch = (path, text) => {
+  let [comp, prop] = path.split('.')
+  let value = prop == 'steps' ? JSON.parse(text) : text
+  return { [comp]: { [prop]: value } }
 }
+
+document.addEventListener('change', async (e) => {
+  let f = e.target.closest('[data-edit]')
+  if (!f) return
+  try {
+    await apply({
+      entity: { eid: f.dataset.edit },
+      ...patch(f.dataset.path, f.value),
+    })
+    f.classList.remove('bad')
+  } catch {
+    f.classList.add('bad')
+  }
+})
+document.addEventListener('focusout', () => setTimeout(draw))
 
 $('#start').addEventListener('submit', async (e) => {
   e.preventDefault()
   let form = new FormData(e.target)
   let { aliases } = await apply({
     entity: { eid: '$video' },
-    video: {},
+    video: { seconds: Number(form.get('seconds')) || 45 },
     doc: { title: form.get('title'), body: form.get('brief') },
   })
   e.target.reset()
@@ -116,24 +155,22 @@ document.addEventListener('click', async (e) => {
       entity: { eid: b.dataset.ask },
       decided: { choice: b.dataset.choice },
     })
-  } else if ('play' in b.dataset) {
-    await play()
   }
 })
 
-for (let s of await query('.builder&?doc')) {
-  state.steps.set(s.entity.eid, s.doc?.title)
-}
-subscribe('.video&?doc', (rows) => {
+subscribe('.video&?doc&?video', (rows) => {
   state.videos = rows.toReversed()
   state.open ??= state.videos[0]?.entity.eid ?? null
   draw()
 })
-subscribe('.built.current=true&*', (rows) => {
-  state.rows = rows
-  draw()
-})
-subscribe('.build&.failed&?build', (rows) => {
-  state.failed = rows
+subscribe(
+  '(.role|.line|.shot|.audition|.cast|.voicing|.take|.cut|.film)&*',
+  (rows) => {
+    state.rows = rows
+    draw()
+  },
+)
+subscribe('.refusal&?content', (rows) => {
+  state.refused = rows
   draw()
 })

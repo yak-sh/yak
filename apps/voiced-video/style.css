@@ -87,3 +87,28 @@ li.voiced::marker {
   min-height: 3rem;
   margin: .5rem 0;
 }
+h3 {
+  margin: 1.25rem 0 .4rem;
+  font-size: 1rem;
+}
+video {
+  width: 100%;
+  border-radius: .5rem;
+  background: #000;
+}
+textarea.bad {
+  outline: 2px solid crimson;
+}
+.lines li {
+  margin-bottom: .6rem;
+}
+.lines textarea {
+  width: 100%;
+}
+.shot video {
+  margin-top: .4rem;
+}
+.shot textarea {
+  width: 100%;
+  font: 12px/1.4 ui-monospace, monospace;
+}

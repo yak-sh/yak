@@ -63,6 +63,7 @@ import {
   setTunnel,
   standing,
   storeApply,
+  storeBlob,
   storePage,
   storeQuery,
   storeSchema,
@@ -982,6 +983,23 @@ export let runs = (
         customer,
       )
       return [said(call, `${file.url} — ${file.bytes} bytes, ${file.mime}`)]
+    }),
+
+    admin_download: verb(async (call) => {
+      let a = argsOf(call)
+      let where = String(a.where)
+      if (where.split('/').length != 2) {
+        throw new CallError('where', 'name an app as space/app')
+      }
+      let at = await acting(a)
+      let eid = String(a.blob)
+      let bytes = await storeBlob(at.bearer, where, eid)
+      if (!bytes) {
+        throw new CallError('not_found', `${where} keeps no blob ${eid}`)
+      }
+      let to = within(word(a, 'cwd'), word(a, 'to') ?? eid)
+      await fs.writeFile(to, bytes)
+      return [said(call, `${to} — ${bytes.length} bytes`)]
     }),
 
     admin_push: verb(async (call) => {

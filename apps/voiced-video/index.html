@@ -7,13 +7,19 @@
   <main>
     <header>
       <h1>Voiced Video</h1>
-      <p>Describe a short video. A script is written, voices audition for each
-        character, you choose the voices, and every line is voiced.</p>
+      <p>Describe a short video. A script is written, the shots are planned
+        as recordings of web pages, voices audition, you choose the voices,
+        every line is voiced, each shot is filmed, and the video is cut.
+        Change any line, shot or the idea, and only what depends on it is
+        made again.</p>
     </header>
     <form id="start">
       <label>Title <input name="title" required maxlength="120"></label>
       <label>What it is about
         <textarea name="brief" required rows="3" maxlength="2000"></textarea>
+      </label>
+      <label>About how long, in seconds
+        <input name="seconds" type="number" min="10" max="180" value="45">
       </label>
       <button>Make it</button>
     </form>

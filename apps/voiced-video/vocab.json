@@ -1,11 +1,16 @@
 {
   "$defs": {
     "video": {
-      "description": "A video to make: its title is doc.title and what it should be about is doc.body.",
-      "properties": {}
+      "description": "The idea for a video: its title is doc.title and what it should say and show is doc.body.",
+      "properties": {
+        "seconds": {
+          "type": "integer",
+          "description": "About how long the video should run, in seconds."
+        }
+      }
     },
     "role": {
-      "description": "A character the script gives lines to; its name is doc.title.",
+      "description": "A voice the script gives lines to; its name is doc.title.",
       "properties": {
         "video": {
           "type": "string",
@@ -15,12 +20,12 @@
         },
         "about": {
           "type": "string",
-          "description": "How the character sounds, in words a voice can be picked by."
+          "description": "How the voice sounds, in words a voice can be picked by."
         }
       }
     },
     "line": {
-      "description": "One line of the script, said by a character; its words are doc.body.",
+      "description": "One line of the script, said by a role; its words are doc.body.",
       "properties": {
         "video": {
           "type": "string",
@@ -37,11 +42,54 @@
         "n": {
           "type": "integer",
           "description": "Where the line comes in the script, from 1."
+        },
+        "shot": {
+          "type": "integer",
+          "description": "The shot shown while it is said, by its n."
+        }
+      }
+    },
+    "shot": {
+      "description": "One shot of the storyboard: a browser recording of a page, or a still of one. doc.title says what it shows.",
+      "properties": {
+        "video": {
+          "type": "string",
+          "ref": "video",
+          "death": "cascade",
+          "index": true
+        },
+        "n": {
+          "type": "integer",
+          "description": "Where the shot comes, from 1."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["browse", "still"],
+          "description": "browse films the steps; still shows the page as it is once they are taken."
+        },
+        "page": {
+          "type": "string",
+          "description": "The page filmed: a path on yaks.app or an https address on its zone."
+        },
+        "as": {
+          "type": "string",
+          "description": "Who the page is opened as: a fleet account such as yourname, or stranger."
+        },
+        "steps": {
+          "type": "array",
+          "description": "What happens on the page, as `yak admin browse` takes steps: tap, type, press, wait, swipe, open, eval.",
+          "items": { "type": "object" }
+        },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "after": {
+          "type": "integer",
+          "description": "Seconds to wait after the shot before it is filmed, for what an earlier shot started to finish."
         }
       }
     },
     "audition": {
-      "description": "A candidate voice saying a character's first line.",
+      "description": "A candidate voice saying a role's first line.",
       "properties": {
         "role": {
           "type": "string",
@@ -49,10 +97,11 @@
           "death": "cascade",
           "index": true
         },
-        "voice": {
+        "provider": {
           "type": "string",
-          "description": "The ElevenLabs voice's id."
+          "description": "The speech provider the voice is one of: elevenlabs, deepgram or openai."
         },
+        "voice": { "type": "string", "description": "The voice's id." },
         "name": {
           "type": "string",
           "description": "The voice's name, the label the person chooses it by."
@@ -64,7 +113,7 @@
       }
     },
     "cast": {
-      "description": "On a decision, the character whose voice it chooses.",
+      "description": "On a decision, the role whose voice it chooses.",
       "properties": {
         "role": {
           "type": "string",
@@ -75,7 +124,7 @@
       }
     },
     "voicing": {
-      "description": "A line said in its character's chosen voice; doc.title names the character and doc.body says the line.",
+      "description": "A line said in its role's chosen voice; doc.title names the role and doc.body says the line.",
       "properties": {
         "video": {
           "type": "string",
@@ -90,20 +139,68 @@
           "index": true
         },
         "n": { "type": "integer" },
+        "voice": { "type": "string" },
         "audio": {
           "type": "string",
           "description": "The kept MP3, played at ./api/blob/<audio>."
+        },
+        "ms": { "type": "integer", "description": "How long it runs." },
+        "dollars": {
+          "type": "number",
+          "description": "What saying it cost, at the provider's price."
         }
       }
     },
-    "cut": {
-      "description": "The assembled video: every voiced line in script order.",
+    "take": {
+      "description": "A shot filmed: a task for the studio, which films the shot in Cloudflare's browser and keeps it as an MP4.",
       "properties": {
         "video": {
           "type": "string",
           "ref": "video",
           "death": "cascade",
           "index": true
+        },
+        "shot": {
+          "type": "string",
+          "ref": "shot",
+          "death": "cascade",
+          "index": true
+        },
+        "n": { "type": "integer" },
+        "film": {
+          "type": "string",
+          "description": "The kept MP4, at ./api/blob/<film>."
+        },
+        "ms": { "type": "integer", "description": "How long it runs." },
+        "browser": {
+          "type": "number",
+          "description": "Seconds of Cloudflare's browser it took."
+        }
+      }
+    },
+    "cut": {
+      "description": "The edit: each shot with the lines said over it, and when each starts, in ms.",
+      "properties": {
+        "video": {
+          "type": "string",
+          "ref": "video",
+          "death": "cascade",
+          "index": true
+        },
+        "ms": { "type": "integer" },
+        "shots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "n": { "type": "integer" },
+              "title": { "type": "string" },
+              "film": { "type": "string" },
+              "at": { "type": "integer" },
+              "ms": { "type": "integer" },
+              "filmed": { "type": "integer" }
+            }
+          }
         },
         "clips": {
           "type": "array",
@@ -113,31 +210,76 @@
               "n": { "type": "integer" },
               "who": { "type": "string" },
               "text": { "type": "string" },
-              "audio": { "type": "string" }
+              "audio": { "type": "string" },
+              "at": { "type": "integer" },
+              "ms": { "type": "integer" }
             }
           }
         }
       }
     },
+    "film": {
+      "description": "The finished video file: a task for the studio, which renders the cut as an MP4 with its voices and captions.",
+      "properties": {
+        "video": {
+          "type": "string",
+          "ref": "video",
+          "death": "cascade",
+          "index": true
+        },
+        "cut": {
+          "type": "string",
+          "ref": "cut",
+          "death": "cascade",
+          "index": true
+        },
+        "file": {
+          "type": "string",
+          "description": "The kept MP4, at ./api/blob/<file>."
+        },
+        "ms": { "type": "integer" }
+      }
+    },
+    "write_script": {
+      "tool": true,
+      "description": "Write a video's script: its voices and their lines",
+      "worker": "/script",
+      "input": { "video": { "type": "string" } },
+      "discoverable": false
+    },
+    "write_storyboard": {
+      "tool": true,
+      "description": "Write a video's storyboard: the shots shown while its lines are said",
+      "worker": "/storyboard",
+      "input": { "video": { "type": "string" } },
+      "discoverable": false
+    },
     "audition_voices": {
       "tool": true,
-      "description": "Audition voices for one character: three candidate voices each say its first line, and the person is asked which to use",
+      "description": "Audition voices for one role: three candidate voices each say its first line, and the person is asked which to use",
       "worker": "/audition",
-      "input": { "binding": { "type": "object" } },
+      "input": {
+        "role": { "type": "string" },
+        "asker": { "type": "string" }
+      },
       "discoverable": false
     },
     "voice_line": {
       "tool": true,
-      "description": "Say one line of the script in its character's chosen voice",
+      "description": "Say one line of the script in its role's chosen voice",
       "worker": "/voice",
-      "input": { "binding": { "type": "object" } },
+      "input": {
+        "line": { "type": "string" },
+        "provider": { "type": "string" },
+        "voice": { "type": "string" }
+      },
       "discoverable": false
     },
     "assemble_cut": {
       "tool": true,
-      "description": "Put a video's voiced lines in script order, once every line is voiced",
+      "description": "Put a video's shots and voiced lines in order and time them, once every line is voiced and every shot filmed",
       "worker": "/assemble",
-      "input": { "binding": { "type": "object" } },
+      "input": { "video": { "type": "string" } },
       "discoverable": false
     }
   }

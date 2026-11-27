@@ -1,11 +1,11 @@
 // The app's workflow on the platform in memory, from its own vocab.json,
-// seed.json and worker.js: a video's script (here a stand-in for the model
-// step), auditions for each character, the person's choice of voice, each line
-// voiced once its character's voice is chosen, and the cut once all are.
+// seed.json and worker.js: the idea scripted and storyboarded (a stand-in
+// answers for the model), each role auditioned, its person choosing the
+// voice, each line voiced, each shot filmed (here the test answers for the
+// studio), the cut assembled, and the finished file. Changing one line says
+// that line again and nothing else.
 import { equal, test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { toolEid } from '@yaks/tools'
-import { modelToolEid } from '@yaks/builders/model'
 import { parseTools } from '@yaks/tools/declared'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Dispatch } from '../../workers/yak/door.ts'
@@ -16,8 +16,8 @@ import {
   platform,
   seeded,
 } from '../../workers/yak/serving-probe.ts'
-import worker, { cast } from './worker.js'
-import { progress, stage } from './model.js'
+import worker, { cast, json } from './worker.js'
+import { mp3ms, progress, stage, timeline } from './model.js'
 
 let read = (path: string) =>
   JSON.parse(Deno.readTextFileSync(new URL(`./${path}`, import.meta.url)))
@@ -26,88 +26,98 @@ let components = Object.fromEntries(
   Object.entries($defs).filter(([, d]) => !d.tool)
     .map(([name, d]) => [name, { ...d, component: true }]),
 )
-let tools = Object.fromEntries(
-  Object.entries($defs).filter(([, d]) => d.tool),
-)
-// The model step answered by a stand-in command, so the test spends nothing.
-tools.script = { ...tools.voice_line, worker: '/script' }
+let tools = Object.fromEntries(Object.entries($defs).filter(([, d]) => d.tool))
 
 let VOICES = [
   { id: 'v-brian', name: 'Brian', about: 'deep, calm, middle aged man' },
   { id: 'v-grace', name: 'Grace', about: 'young woman, bright, warm' },
-  { id: 'v-ollie', name: 'Ollie', about: 'old man, gravelly, warm' },
   { id: 'v-mabel', name: 'Mabel', about: 'old woman, kind, slow' },
 ]
 
-// What the script step's model answers for a video: two characters and
-// three lines, the second character's line in the middle.
-let script = (video: string) => {
-  let role = (slot: string, title: string, about: string) => ({
-    slot,
-    inputs: [video],
-    components: { role: { video, about }, doc: { title } },
-  })
-  let line = (n: number, who: string, body: string) => ({
-    slot: `line ${n}`,
-    inputs: [video],
-    components: { line: { video, role: `$${who}`, n }, doc: { body } },
-  })
-  return {
-    outputs: [
-      role('role 1', 'Captain', 'old man, gravelly, warm'),
-      role('role 2', 'Wren', 'young woman, bright'),
-      line(1, 'role 1', 'The tide waits for no one.'),
-      line(2, 'role 2', 'Then we sail tonight.'),
-      line(3, 'role 1', 'Aye, tonight it is.'),
-    ],
-  }
+// One MPEG-1 layer III frame header at 128 kbps, 44.1 kHz: 417 bytes, 1152
+// samples (26.1 ms).
+let frame = () => {
+  let f = new Uint8Array(417)
+  f.set([0xff, 0xfb, 0x90, 0x00])
+  return f
+}
+let mp3 = (frames: number) => {
+  let out = new Uint8Array(417 * frames)
+  for (let i = 0; i < frames; i++) out.set(frame(), i * 417)
+  return out
 }
 
-test('a video is scripted, auditioned, cast by its person, voiced and cut', async () => {
+let SCRIPT = {
+  roles: [{ name: 'Narrator', about: 'warm, calm, woman' }],
+  lines: [
+    { role: 'Narrator', text: 'Ask for an app.' },
+    { role: 'Narrator', text: 'Share it.' },
+  ],
+}
+let BOARD = {
+  shots: [
+    {
+      title: 'Asking',
+      page: '/yourname/operator',
+      as: 'yourname',
+      steps: [{ wait: 500 }],
+      lines: [1],
+    },
+    {
+      title: 'The app',
+      page: '/yourname',
+      as: 'yourname',
+      steps: [],
+      lines: [2],
+    },
+  ],
+}
+
+test('an idea is scripted, storyboarded, cast, voiced, filmed, cut and rendered', async () => {
   await using p = platform()
   let { env } = p
   let { space, app } = await seeded(env, 'private')
+  let store = appStore(env.STORE, space, app)
   let spoken: string[] = []
-  // The platform's /api/ as the app's worker reaches it through env.APP.
+  // The app's own /api/ as its worker reaches it through env.APP: the store
+  // itself, and stand-ins for the model, speech and blobs.
   let api = {
-    fetch: (path: string, init?: RequestInit) => {
+    fetch: async (path: string, init?: RequestInit) => {
+      if (path == 'ai/run') {
+        let { input } = JSON.parse(String(init!.body))
+        let asked = input.messages[0].content as string
+        let said = asked.startsWith('Plan the shots') ? BOARD : SCRIPT
+        return Response.json({
+          response: '```json\n' + JSON.stringify(said) + '\n```',
+        })
+      }
       if (path.startsWith('speech/voices')) {
-        return Response.json({ provider: 'elevenlabs', voices: VOICES })
+        let provider = new URL(path, 'http://x').searchParams.get('provider')
+        return provider == 'deepgram'
+          ? Response.json({ provider, voices: VOICES })
+          : Response.json({ error: { message: 'not connected' } }, {
+            status: 409,
+          })
       }
       if (path == 'speech/speak') {
         let { voice, text } = JSON.parse(String(init!.body))
         spoken.push(`${voice}: ${text}`)
-        return new Response(`${voice}: ${text}`)
+        return new Response(mp3(text.length))
       }
-      if (path == 'blob') {
-        let said = new TextDecoder().decode(init!.body as ArrayBuffer)
-        return Response.json({ eid: `blob ${said}` })
-      }
-      return new Response('no', { status: 404 })
+      if (path == 'blob') return Response.json({ eid: crypto.randomUUID() })
+      return await store(`/${path}`, init ?? {}, ADA_OWNS)
     },
   }
-  // How many times the cut's step ran: once, when the last line is voiced.
-  let cuts = 0
   env.DISPATCH = {
-    get: () => ({
-      fetch: async (req: Request) => {
-        if (new URL(req.url).pathname.endsWith('/assemble')) cuts++
-        if (!new URL(req.url).pathname.endsWith('/script')) {
-          return await worker.fetch(req, { APP: api })
-        }
-        let { binding } = await req.json()
-        return Response.json(script(binding.entities[0]))
-      },
-    }),
+    get: () => ({ fetch: (req: Request) => worker.fetch(req, { APP: api }) }),
   } as Dispatch
-  let store = appStore(env.STORE, space, app)
   let send = async (path: string, body: unknown) => {
-    let res = await store(path, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }, ADA_OWNS)
-    let said = await res.text()
-    assertEquals(res.status, 200, said)
+    let res = await store(
+      path,
+      { method: 'POST', body: JSON.stringify(body) },
+      ADA_OWNS,
+    )
+    assertEquals(res.status, 200, await res.text())
   }
   let rows = async (q: string): Promise<Bundle[]> => {
     await p.object(storeName(space, app)).alarm()
@@ -120,123 +130,140 @@ test('a video is scripted, auditioned, cast by its person, voiced and cut', asyn
   }
   let count = (q: string, n: number) =>
     until(async () => {
-      let found = await rows(`${q}&built.current=true&*`)
+      let found = await rows(`${q}&*`)
       return found.length == n ? found : null
     }, { label: `${n} of ${q}` })
+  let shown = async () => stage(progress(video, await rows('*')))
 
   await send('/vocab', { $defs: components })
   await send('/tools', parseTools({ $defs: tools }, ['doc']))
-  // The seed's steps as written, the script step pointed at the stand-in.
-  await send(
-    '/apply',
-    (read('seed.json') as Bundle[]).map((b) => {
-      let made = b.builder as Comp | undefined
-      if (made?.to != modelToolEid()) return b
-      let { content: _, using: __, ...rest } = b
-      return { ...rest, builder: { ...made, to: toolEid('script') } }
-    }),
-  )
-  let shown = async () =>
-    stage(progress(video, await rows('.built.current=true&*')))
+  await send('/apply', read('seed.json'))
   let video = crypto.randomUUID()
   await send('/apply', [{
     entity: { eid: video },
-    video: {},
-    doc: {
-      title: 'Night sail',
-      body: 'A captain and a deckhand decide to sail.',
-    },
+    video: { seconds: 30 },
+    doc: { title: 'yaks.app', body: 'Build, host and share web apps.' },
   }])
 
-  // Each character auditions three voices, saying its first line, and its
-  // person is asked which to use. Nothing is voiced before they answer.
-  let asked = await count('.decision', 2)
-  let auditioned = await count('.audition', 6)
-  let question = (who: string) =>
-    asked.find((d) => (d.doc as Comp).title == `Voice for ${who}`)!
-  equal(
-    (question('Captain').decision as Comp).choices,
-    ['Ollie', 'Brian', 'Grace'].map((label) => ({
-      label,
-      description: VOICES.find((v) => v.name == label)!.about,
-    })),
-  )
-  equal((question('Captain').decision as Comp).recommended, 'Ollie')
-  equal((question('Captain').filed as Comp).assignee, ADA)
-  assertEquals(auditioned.length, 6)
-  equal(
-    spoken.toSorted(),
-    [
-      'v-ollie: The tide waits for no one.',
-      'v-brian: The tide waits for no one.',
-      'v-grace: The tide waits for no one.',
-      'v-grace: Then we sail tonight.',
-      'v-mabel: Then we sail tonight.',
-      'v-brian: Then we sail tonight.',
-    ].toSorted(),
-  )
-  assertEquals((await rows('.voicing&*')).length, 0)
-  assertEquals(await shown(), 'Choose a voice for Captain, Wren.')
+  // The script and storyboard; the role auditioned and its person asked.
+  let [asked] = await count('.decision', 1)
+  equal((asked.filed as Comp).assignee, ADA)
+  await count('.shot', 2)
+  let lines = await count('.line', 2)
+  equal(lines.map((l) => (l.line as Comp).shot).sort(), [1, 2])
+  assertEquals(await shown(), 'Choose a voice for Narrator.')
 
-  // The Captain's lines are voiced once their voice is chosen; Wren's wait.
+  // Choosing the voice says both lines, and the studio's two takes wait.
   spoken = []
-  await send('/apply', [{
-    entity: question('Captain').entity,
-    decided: { choice: 'Ollie' },
-  }])
-  await count('.voicing', 2)
-  equal(spoken.toSorted(), [
-    'v-ollie: Aye, tonight it is.',
-    'v-ollie: The tide waits for no one.',
-  ])
-  assertEquals((await rows('.cut&built.current=true')).length, 0)
+  await send('/apply', [{ entity: asked.entity, decided: { choice: 'Grace' } }])
+  let voiced = await count('.voicing', 2)
+  equal(spoken.sort(), ['v-grace: Ask for an app.', 'v-grace: Share it.'])
+  equal(
+    voiced.map((v) => (v.voicing as Comp).ms as number).sort((a, b) => a - b),
+    [235, 392],
+  )
+  let takes = await count('.take', 2)
+  assertEquals(await shown(), 'Filming shots: 0 of 2.')
 
-  // Choosing the last voice voices the last line and cuts the video.
-  await send('/apply', [{
-    entity: question('Wren').entity,
-    decided: { choice: 'Grace' },
-  }])
-  let [made] = await count('.cut', 1)
-  equal((made.cut as Comp).clips, [
-    {
-      n: 1,
-      who: 'Captain',
-      text: 'The tide waits for no one.',
-      audio: 'blob v-ollie: The tide waits for no one.',
-    },
-    {
-      n: 2,
-      who: 'Wren',
-      text: 'Then we sail tonight.',
-      audio: 'blob v-grace: Then we sail tonight.',
-    },
-    {
-      n: 3,
-      who: 'Captain',
-      text: 'Aye, tonight it is.',
-      audio: 'blob v-ollie: Aye, tonight it is.',
-    },
+  // The studio films each shot; the last one filmed cuts the video.
+  for (let t of takes) {
+    await send('/apply', [{
+      entity: t.entity,
+      take: { film: `film ${(t.take as Comp).n}`, ms: 4000 },
+      completed: {},
+    }])
+  }
+  let [cut] = await count('.cut', 1)
+  equal(((cut.cut as Comp).shots as Comp[]).map((s) => s.film), [
+    'film 1',
+    'film 2',
   ])
-  equal([(made.doc as Comp).title, cuts], ['Night sail', 1])
-  assertEquals(await shown(), 'Ready to play.')
+  let [film] = await count('.film', 1)
+  assertEquals(await shown(), 'Rendering the video…')
+  await send('/apply', [{
+    entity: film.entity,
+    film: { file: 'the mp4', ms: 3000 },
+  }])
+  assertEquals(await shown(), 'Finished.')
+
+  // Changing a line says that line again, and only that line.
+  spoken = []
+  let first = lines.find((l) => (l.line as Comp).n == 1)!
+  await send('/apply', [{
+    entity: first.entity,
+    doc: { body: 'Ask Cove for an app.' },
+  }])
+  await until(async () => {
+    let said = await rows('.voicing&*')
+    return said.some((v) => (v.doc as Comp).body == 'Ask Cove for an app.')
+  }, { label: 'the changed line said again' })
+  equal(spoken, ['v-grace: Ask Cove for an app.'])
+  assertEquals((await rows('.take')).length, 2)
 })
 
-test('voices are auditioned by the words they share with the character', () => {
-  equal(
-    cast('old man, gravelly', VOICES).map((v: { name: string }) => v.name),
-    [
-      'Ollie',
-      'Brian',
-      'Mabel',
+test('an MP3 runs as long as its frames say', () => {
+  equal(mp3ms(mp3(100)), 2612)
+  let tagged = new Uint8Array([
+    0x49,
+    0x44,
+    0x33,
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    2,
+    0,
+    0,
+    ...mp3(10),
+  ])
+  equal(mp3ms(tagged), 261)
+})
+
+test('the cut gives each shot the time its lines need', () => {
+  let row = (eid: string, comp: string, props: Comp, doc?: Comp) => ({
+    entity: { eid },
+    [comp]: props,
+    ...doc ? { doc } : {},
+  })
+  let cut = timeline({
+    shots: [
+      row('s2', 'shot', { n: 2 }, { title: 'Two' }),
+      row('s1', 'shot', { n: 1 }, { title: 'One' }),
     ],
-  )
-  equal(
-    cast('', [...VOICES, VOICES[0]], 9).map((v: { name: string }) => v.name),
-    [
-      'Brian',
-      'Grace',
-      'Ollie',
-      'Mabel',
+    lines: [
+      row('l1', 'line', { n: 1, shot: 1 }, { body: 'a' }),
+      row('l2', 'line', { n: 2, shot: 1 }, { body: 'b' }),
     ],
-  )
+    voicings: [
+      row('v1', 'voicing', { line: 'l1', ms: 1000, audio: 'A' }, {
+        title: 'N',
+      }),
+      row('v2', 'voicing', { line: 'l2', ms: 500, audio: 'B' }, { title: 'N' }),
+    ],
+    takes: [row('t2', 'take', { shot: 's2', film: 'F2', ms: 9000 })],
+  })
+  equal(cut.clips.map((c) => [c.n, c.at, c.ms]), [[1, 300, 1000], [
+    2,
+    1650,
+    500,
+  ]])
+  equal(cut.shots.map((s) => [s.n, s.at, s.ms, s.film]), [
+    [1, 0, 2850, null],
+    [2, 2850, 2500, 'F2'],
+  ])
+  equal(cut.ms, 5350)
+})
+
+test('voices are auditioned by the words they share with the role', () => {
+  equal(cast('old woman, kind', VOICES).map((v: { name: string }) => v.name), [
+    'Mabel',
+    'Grace',
+    'Brian',
+  ])
+})
+
+test('a model’s JSON is read whether or not it is fenced', () => {
+  equal(json('Sure:\n```json\n{"a": 1}\n```'), { a: 1 })
 })

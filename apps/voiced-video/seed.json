@@ -1,115 +1,272 @@
 [
   {
     "entity": {
-      "eid": "066bd606-f5d4-45dd-9e2a-9fb158c4a175"
+      "eid": "41600a71-fc26-4dfd-b74c-36d4b3e837f4"
+    },
+    "workflow": {},
+    "doc": {
+      "title": "Voiced Video",
+      "body": "From an idea to a finished video: script, storyboard, casting, voice lines, recording, assembly and the finished file."
+    }
+  },
+  {
+    "entity": {
+      "eid": "e66186e7-261e-4655-8303-f8645ad73b2b"
     },
     "doc": {
       "title": "Script",
-      "body": "A model writes the characters and their lines from the video's title and what it is about."
+      "body": "A model writes the voices and their lines from the idea."
     },
-    "builder": {
-      "query": "$v .video, doc.title=$title, doc.body=$brief",
-      "to": "5663fa91-2d32-8dd0-82d1-95402b2e82c4",
-      "immediate": true
-    },
-    "content": {
-      "body": "Write the script for a short voiced video.\nTitle: $title\nWhat it is about: $brief\n\nGive it two to four characters and eight to sixteen lines, each line one or two sentences a voice actor can say.\nAnswer one output per character, slots \"role 1\", \"role 2\" and so on: components role {\"video\": the video's input id, \"about\": how the character sounds, in a few plain words such as \"old man, gravelly, warm\"} and doc {\"title\": the character's name}.\nAnswer one output per line, slots \"line 1\", \"line 2\" and so on in script order: components line {\"video\": the video's input id, \"role\": \"$role N\" naming the slot of the character who says it, \"n\": its number from 1} and doc {\"body\": the words said, with no stage directions}.\nEvery output lists the video's input id in its inputs."
-    },
-    "using": {
-      "provider": "workers-ai",
-      "model": "@cf/zai-org/glm-5.3"
+    "step": {
+      "match": "$v .video, doc.title=$title, doc.body=$brief",
+      "write": [
+        {
+          "entity": {
+            "eid": "$c"
+          },
+          "call": {
+            "to": "28abbf47-0b44-8cb9-a63c-7be44ff9c78b",
+            "args": {
+              "video": "$v"
+            }
+          }
+        }
+      ]
     }
   },
   {
     "entity": {
-      "eid": "f20c2eac-bff4-47a2-a5ab-c99f3d445f86"
+      "eid": "8c1cba95-5318-496e-9eb6-105ec6a3f03d"
     },
     "doc": {
-      "title": "Voice auditions",
-      "body": "Three candidate voices each say a character's first line, and the person who asked for the video is asked which voice to use."
+      "title": "Storyboard",
+      "body": "A model plans the shots, browser recordings of the pages the idea names, and places each line in one."
     },
-    "builder": {
-      "query": "$r .role, built.current=true, role.video=$v, role.about=$about, doc.title=$name; $v .video, created.by=$asker; [$l .line.role=$r, built.current=true, line.n=$n, doc.body=$said]",
-      "to": "d9293ae8-c59b-8ec4-87ef-470c95e2eb3a",
-      "immediate": true
+    "step": {
+      "match": "$v .video, doc.body=$brief, lines_video>=1; [$l .line.video=$v]",
+      "write": [
+        {
+          "entity": {
+            "eid": "$c"
+          },
+          "call": {
+            "to": "160c1507-e524-8c4c-95da-6575fc958e10",
+            "args": {
+              "video": "$v"
+            }
+          }
+        }
+      ]
     }
   },
   {
     "entity": {
-      "eid": "3d3c75ba-8309-4e7f-9e90-10c103e3c975"
+      "eid": "4f66129a-8c70-43e3-a97d-cc271ef48fb3"
+    },
+    "doc": {
+      "title": "Casting",
+      "body": "Three voices say each role's first line, and the person who asked for the video chooses one."
+    },
+    "step": {
+      "match": "$v .video, created.by=$asker; $r .role.video=$v, role.about=$about",
+      "write": [
+        {
+          "entity": {
+            "eid": "$c"
+          },
+          "call": {
+            "to": "d9293ae8-c59b-8ec4-87ef-470c95e2eb3a",
+            "args": {
+              "role": "$r",
+              "asker": "$asker"
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "7c56ab52-c01f-465b-9308-2ca766250091"
     },
     "doc": {
       "title": "Voice lines",
-      "body": "Each line is said in its character's chosen voice, as soon as that voice is chosen."
+      "body": "Each line is said in its role's chosen voice; changing a line or a voice says it again."
     },
-    "builder": {
-      "query": "$l .line, built.current=true, line.video=$video, line.role=$role, line.n=$n, doc.body=$text; $role .role, built.current=true, doc.title=$who; $d .decision, built.current=true, cast.role=$role, decided.choice=$name; $a .audition.role=$role, built.current=true, audition.name=$name, audition.voice=$voice",
-      "to": "4c028988-1e22-8904-adb4-3a9c7877b70e",
-      "immediate": true
+    "step": {
+      "match": "$v .video; $l .line.video=$v, line.role=$r, doc.body=$text; $d .decision, cast.role=$r, decided.choice=$name; $a .audition.role=$r, audition.name=$name, audition.voice=$voice, audition.provider=$provider",
+      "write": [
+        {
+          "entity": {
+            "eid": "$c"
+          },
+          "call": {
+            "to": "4c028988-1e22-8904-adb4-3a9c7877b70e",
+            "args": {
+              "line": "$l",
+              "provider": "$provider",
+              "voice": "$voice"
+            }
+          }
+        }
+      ]
     }
   },
   {
     "entity": {
-      "eid": "7a0025f5-6fa5-4394-b1c1-5bdc3f250080"
+      "eid": "ce2df58b-24ca-402c-8e32-d482da9de854"
     },
     "doc": {
-      "title": "Assemble",
-      "body": "Once every line is voiced, the lines are put in script order as the video's cut."
+      "title": "Recording",
+      "body": "The studio films each shot in Cloudflare's browser; changing a shot films it again."
     },
-    "builder": {
-      "query": "$v .video, doc.title=$title, lines_video>=1; [$x .voicing.video=$v, built.current=true, voicing.n=$n, voicing.audio=$audio, doc.title=$who, doc.body=$text]; ![$l .line.video=$v, built.current=true; ![$y .voicing.line=$l, built.current=true]]",
-      "to": "842b3768-998b-8265-83bf-6cf771624c20",
-      "immediate": true
+    "step": {
+      "match": "$v .video; $s .shot.video=$v, shot.n=$n, shot.page=$page, shot.as=$as, shot.steps=$steps, doc.title=$title",
+      "write": [
+        {
+          "entity": {
+            "eid": "$t"
+          },
+          "task": {},
+          "doc": {
+            "title": "$title"
+          },
+          "take": {
+            "video": "$v",
+            "shot": "$s",
+            "n": "$n"
+          }
+        }
+      ]
     }
   },
   {
     "entity": {
-      "eid": "c9951739-5d7e-41fe-bbed-465450a91916"
+      "eid": "c325d617-f708-465f-b54f-ae95a7575f8c"
     },
-    "edge": {
-      "from": "f20c2eac-bff4-47a2-a5ab-c99f3d445f86",
-      "to": "066bd606-f5d4-45dd-9e2a-9fb158c4a175"
+    "doc": {
+      "title": "Assembly",
+      "body": "Once every line is voiced and every shot filmed, the shots and lines are put in order and timed."
     },
-    "requires": {}
+    "step": {
+      "match": "$v .video, lines_video>=1, shots>=1; [$x .voicing.video=$v, voicing.audio=$audio, voicing.ms=$ms]; [$k .take.video=$v, take.film=$film]; ![$l .line.video=$v; ![$y .voicing.line=$l]]; ![$s .shot.video=$v; ![$f .take.shot=$s, .take.film]]",
+      "write": [
+        {
+          "entity": {
+            "eid": "$c"
+          },
+          "call": {
+            "to": "842b3768-998b-8265-83bf-6cf771624c20",
+            "args": {
+              "video": "$v"
+            }
+          }
+        }
+      ]
+    }
   },
   {
     "entity": {
-      "eid": "90b60f99-d05b-4d98-a63d-ad1957975fae"
+      "eid": "ba125854-a77a-4e2e-ab47-85e4bc15e031"
     },
-    "edge": {
-      "from": "3d3c75ba-8309-4e7f-9e90-10c103e3c975",
-      "to": "066bd606-f5d4-45dd-9e2a-9fb158c4a175"
+    "doc": {
+      "title": "Finished file",
+      "body": "The studio renders the cut as an MP4, with its voices and captions."
     },
-    "requires": {}
+    "step": {
+      "match": "$v .video, doc.title=$title; $c .cut.video=$v",
+      "write": [
+        {
+          "entity": {
+            "eid": "$t"
+          },
+          "task": {},
+          "doc": {
+            "title": "$title"
+          },
+          "film": {
+            "video": "$v",
+            "cut": "$c"
+          }
+        }
+      ]
+    }
   },
   {
     "entity": {
-      "eid": "507e6b41-3bb2-44a9-bf64-6bee9b20a47b"
+      "eid": "6c049c81-89c0-8611-98be-0cc10524363e"
     },
     "edge": {
-      "from": "3d3c75ba-8309-4e7f-9e90-10c103e3c975",
-      "to": "f20c2eac-bff4-47a2-a5ab-c99f3d445f86"
+      "from": "41600a71-fc26-4dfd-b74c-36d4b3e837f4",
+      "to": "e66186e7-261e-4655-8303-f8645ad73b2b",
+      "ord": 0
     },
-    "requires": {}
+    "contains": {}
   },
   {
     "entity": {
-      "eid": "460105f9-5a2f-43bb-ac7b-2b40b0519b40"
+      "eid": "a685045b-09f0-8c97-96d2-d38850865f56"
     },
     "edge": {
-      "from": "7a0025f5-6fa5-4394-b1c1-5bdc3f250080",
-      "to": "066bd606-f5d4-45dd-9e2a-9fb158c4a175"
+      "from": "41600a71-fc26-4dfd-b74c-36d4b3e837f4",
+      "to": "8c1cba95-5318-496e-9eb6-105ec6a3f03d",
+      "ord": 1
     },
-    "requires": {}
+    "contains": {}
   },
   {
     "entity": {
-      "eid": "c8a06b28-bf22-4bd3-813c-832821bfc66c"
+      "eid": "e0ad4916-29ca-8014-a88e-7c834284439e"
     },
     "edge": {
-      "from": "7a0025f5-6fa5-4394-b1c1-5bdc3f250080",
-      "to": "3d3c75ba-8309-4e7f-9e90-10c103e3c975"
+      "from": "41600a71-fc26-4dfd-b74c-36d4b3e837f4",
+      "to": "4f66129a-8c70-43e3-a97d-cc271ef48fb3",
+      "ord": 2
     },
-    "requires": {}
+    "contains": {}
+  },
+  {
+    "entity": {
+      "eid": "23931558-8242-8398-b024-ff9dffc22ac1"
+    },
+    "edge": {
+      "from": "41600a71-fc26-4dfd-b74c-36d4b3e837f4",
+      "to": "7c56ab52-c01f-465b-9308-2ca766250091",
+      "ord": 3
+    },
+    "contains": {}
+  },
+  {
+    "entity": {
+      "eid": "9aee7611-f0ae-86cd-83ce-a64d27154975"
+    },
+    "edge": {
+      "from": "41600a71-fc26-4dfd-b74c-36d4b3e837f4",
+      "to": "ce2df58b-24ca-402c-8e32-d482da9de854",
+      "ord": 4
+    },
+    "contains": {}
+  },
+  {
+    "entity": {
+      "eid": "93c461e2-f492-862b-b060-bd73d94a5a3a"
+    },
+    "edge": {
+      "from": "41600a71-fc26-4dfd-b74c-36d4b3e837f4",
+      "to": "c325d617-f708-465f-b54f-ae95a7575f8c",
+      "ord": 5
+    },
+    "contains": {}
+  },
+  {
+    "entity": {
+      "eid": "c1c7c6a1-69c4-87a6-9de4-bd7e314d97c0"
+    },
+    "edge": {
+      "from": "41600a71-fc26-4dfd-b74c-36d4b3e837f4",
+      "to": "ba125854-a77a-4e2e-ab47-85e4bc15e031",
+      "ord": 6
+    },
+    "contains": {}
   }
 ]

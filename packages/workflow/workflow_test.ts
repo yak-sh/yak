@@ -68,6 +68,18 @@ test('a step runs again for its case when a value it bound changes', async () =>
   equal((await read('.workflow_case')).length, 1)
 })
 
+test('a row in a step’s bracket anchors it: a new member runs it again', async () => {
+  let { apply, read, flow } = fixture()
+  await flow('orders', { ...ask, match: '$o .order; [$s .shipment.order=$o]' })
+  await apply([{ entity: { eid: 'o1' }, order: {} }])
+  equal((await read('.call')).length, 1)
+  // The shipment's write touches only the shipment, which the bracket reads.
+  await apply([{ entity: { eid: 's1' }, shipment: { order: 'o1' } }])
+  equal((await read('.call')).length, 2)
+  await apply([{ entity: { eid: 's1' }, shipment: { order: 'o1' } }])
+  equal((await read('.call')).length, 2)
+})
+
 test('a person’s step is a task, and the next step matches its completion', async () => {
   let { apply, read, flow } = fixture()
   await flow('orders', {
