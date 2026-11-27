@@ -3,14 +3,14 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import { entity } from '@yaks/preact'
 import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { mount } from '../preact/testing.ts'
-import { render } from './mod.ts'
+import { markup, raw, render } from './mod.ts'
 
 let vocab = loadVocab([{
   $defs: {
@@ -45,6 +45,19 @@ let signature = (root: Element): unknown => [
     n.nodeType == 1 ? signature(n as Element) : n.textContent
   ),
 ]
+
+test('trusted fragments splice into their parent while text remains escaped', () => {
+  let { document } = parseHTML(markup(h(
+    'p',
+    null,
+    raw('<b>one</b>'),
+    ' <b>two</b> ',
+    raw('<i>three</i>'),
+  )))
+  let p = document.querySelector('p')!
+  assertEquals([...p.children].map((el) => el.localName), ['b', 'i'])
+  assertEquals(p.textContent, 'one <b>two</b> three')
+})
 
 test('HTML escapes content and agrees with the mounted Preact view', () => {
   let html = render(registry, bundle, 'Library.Tile', vocab, ctx)

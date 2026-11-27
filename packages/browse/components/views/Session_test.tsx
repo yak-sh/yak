@@ -1,11 +1,12 @@
 import { pretty } from '@yaks/ui/relative'
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A session row names the work and shows its latest activity and model.
 import { test, tick, until } from '../../testing.ts'
 import { host, reader } from '../../host_testing.ts'
 import { test as preparedTest } from '@yaks/testing'
 import { identityEid } from '@yaks/graph/identity'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import {

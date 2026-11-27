@@ -26,7 +26,7 @@ import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import { block, Field, Loading } from '@yaks/ui'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
-import { filteredQuery } from '../Filter.tsx'
+import { useFilteredQuery } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
 import { usePage } from '../useQuery.ts'
@@ -161,7 +161,7 @@ export let Board = ({ e }: { e: Ent }) => {
   let [pageSize, setPageSize] = useState(0)
   let [limits, setLimits] = useState<Record<string, number>>({})
   let saved = String(e.board?.query ?? '')
-  let query = filteredQuery(e.eid, saved)
+  let query = useFilteredQuery(e.eid, saved)
   useLayoutEffect(() => {
     let node = root.current
     let measure = () =>

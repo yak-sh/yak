@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { noticeOf } from '@yaks/push/notice'
 import { resolve } from '@yaks/render'
 import { loadVocab } from '@yaks/vocab'

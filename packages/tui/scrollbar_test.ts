@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { scrollbar } from './scrollbar.ts'
 import { VirtualList, VirtualWindow } from './VirtualList.ts'
 import { Scroll } from './Scroll.ts'

@@ -1,11 +1,11 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // What a package offers the app's places from its `./views` facet: the
 // owner's home page, tabs on what its views draw, and what waits there. A
 // stand-in package (a desk) offers each; without it, `/` is the host's list.
 import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { act } from 'preact/test-utils'
 import { parse } from '@yaks/query'
 import type { View } from '@yaks/inspect'

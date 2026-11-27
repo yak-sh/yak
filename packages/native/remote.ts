@@ -100,16 +100,15 @@ export let nativeOf = async (
 
 type Module = { exports: Record<string, unknown> }
 
-let load = async (
+type Source = { code: string; names: string[] }
+
+let gather = async (
   url: string,
-  carried: Carried,
   go: typeof fetch,
-  seen: Map<string, Module>,
-): Promise<Module> => {
-  let had = seen.get(url)
-  if (had) return had
-  let module: Module = { exports: {} }
-  seen.set(url, module)
+  sources: Map<string, Source | undefined>,
+): Promise<void> => {
+  if (sources.has(url)) return
+  sources.set(url, undefined)
   let r = await go(url)
   if (!r.ok) {
     await r.body?.cancel()
@@ -119,18 +118,30 @@ let load = async (
     transforms: ['typescript', 'imports'],
     filePath: url,
   })
-  let named = [...code.matchAll(/require\(['"]([^'"]+)['"]\)/g)].map((m) =>
+  let names = [...code.matchAll(/require\(['"]([^'"]+)['"]\)/g)].map((m) =>
     m[1]
   )
-  for (let name of named) {
-    if (name.startsWith('.')) await load(against(url, name), carried, go, seen)
-    else if (!(name in carried)) {
-      throw new Unloadable(`it imports ${name}, which this host does not carry`)
-    }
+  sources.set(url, { code, names })
+  for (let name of names) {
+    if (name.startsWith('.')) await gather(against(url, name), go, sources)
   }
+}
+
+let execute = (
+  url: string,
+  carried: Carried,
+  sources: Map<string, Source | undefined>,
+  modules: Map<string, Module>,
+): Module => {
+  let had = modules.get(url)
+  if (had) return had
+  let module: Module = { exports: {} }
+  modules.set(url, module)
   let need = (name: string) =>
-    name.startsWith('.') ? seen.get(against(url, name))!.exports : carried[name]
-  new Function('require', 'module', 'exports', code)(
+    name.startsWith('.')
+      ? execute(against(url, name), carried, sources, modules).exports
+      : carried[name]
+  new Function('require', 'module', 'exports', sources.get(url)!.code)(
     need,
     module,
     module.exports,
@@ -138,19 +149,45 @@ let load = async (
   return module
 }
 
-/** Load a view module and what it imports, its platform packages the
- * host's. */
+/** Fetch a view's module graph so its host can select the renderer before it runs. */
+export let prepareView = async (
+  url: string,
+  go: typeof fetch = fetch,
+): Promise<{ imports: string[]; open: (carried: Carried) => NativeView }> => {
+  let sources = new Map<string, Source | undefined>()
+  await gather(url, go, sources)
+  let names = [
+    ...new Set(
+      [...sources.values()].flatMap((s) =>
+        s!.names.filter((name) => !name.startsWith('.'))
+      ),
+    ),
+  ]
+  return {
+    imports: names,
+    open(carried: Carried): NativeView {
+      for (let name of names) {
+        if (!(name in carried)) {
+          throw new Unloadable(
+            `it imports ${name}, which this host does not carry`,
+          )
+        }
+      }
+      let view = execute(url, carried, sources, new Map()).exports.default
+      if (typeof view != 'function') {
+        throw new Unloadable(`${url} exports no default view`)
+      }
+      return view as NativeView
+    },
+  }
+}
+
+/** Load a view module and what it imports, its platform packages the host's. */
 export let viewAt = async (
   url: string,
   carried: Carried,
   go: typeof fetch = fetch,
-): Promise<NativeView> => {
-  let view = (await load(url, carried, go, new Map())).exports.default
-  if (typeof view != 'function') {
-    throw new Unloadable(`${url} exports no default view`)
-  }
-  return view as NativeView
-}
+): Promise<NativeView> => (await prepareView(url, go)).open(carried)
 
 // What a refusal says: the store's own words, else its status.
 let said = async (r: Response, doing: string) => {

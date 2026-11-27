@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import { bindShared } from './shared-browser.ts'
 import { type SharedView, sharedView } from './shared-view.ts'

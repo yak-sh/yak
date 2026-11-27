@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Shared navigation runs in two hosts. The browser has a whole document; the
 // TUI installs a FAKE one (@yaks/dom) carrying only what preact reaches for
 // — createElement, createTextNode, activeElement. So navigation startup

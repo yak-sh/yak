@@ -1,6 +1,6 @@
 import type { Bundle } from '@yaks/graph'
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import type { Domain } from './domain-pages.ts'
 import { appRows, sideApps } from './side-rows.ts'

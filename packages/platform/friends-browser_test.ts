@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import { graph } from './page-graph_fixture_test.ts'
 import { bindFriends } from './friends-browser.ts'
@@ -31,7 +31,9 @@ test('the Friends page holds its setting as the account row moves, and opens fri
   let g = graph((b) => Promise.resolve(b))
   bindFriends(root, g)
   equal(chosen(root), 'Yes')
-  g.set(ACCOUNT, [accountRow(ADA, { name: 'Ada', email: 'a@x', hidden: true })])
+  g.set(ACCOUNT, [
+    accountRow(ADA, { name: 'Ada', email: 'a@x', hidden: true }),
+  ])
   equal(chosen(root), 'No')
   equal(
     root.querySelector(`[popovertarget="${PANEL}"]`)?.textContent,

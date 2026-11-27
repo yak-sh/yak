@@ -1,7 +1,7 @@
 // A session's Conversation view asks for its entries and draws each line as
 // every transcript does: a call and the result that answered it are one line.
 import { equal, test } from '@yaks/testing'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { resolve } from '@yaks/render'

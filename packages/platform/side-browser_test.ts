@@ -1,5 +1,5 @@
 import { clock, equal, test } from '@yaks/testing'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { client } from '@yaks/client'

@@ -1,9 +1,10 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Raw views keep their source inert while presenting it as highlighted code.
 import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import type { Ent } from '../../types.ts'
 import { Json } from './Json.tsx'

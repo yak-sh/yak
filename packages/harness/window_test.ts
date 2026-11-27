@@ -5,7 +5,7 @@ import { identityEid } from '@yaks/graph'
 
 import { transcriptUsage, transcriptWindow } from '@yaks/session'
 import { harness } from './testing.ts'
-import { h as element } from 'preact'
+import { createElement as element } from 'react'
 import { mount } from '@yaks/tui/testing'
 import { pressTo } from '../tui/screen.ts'
 import { App } from './app.ts'

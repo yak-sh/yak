@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The views read one exact summary, hold only the rows they draw, and read a
 // thread's history only while it is open.
 import { whole } from '@yaks/query'

@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { decode } from './input.ts'
 import {
   edit,
@@ -163,7 +163,10 @@ let wrapping = await (async () => {
   }
 })()
 test('soft input wraps and resizes without changing submitted text', () => {
-  assertEquals(wrapping.initial.split('\n').slice(0, 2), ['> hello', '  world'])
+  assertEquals(wrapping.initial.split('\n').slice(0, 2), [
+    '> hello',
+    '  world',
+  ])
   assertEquals(wrapping.wide.split('\n')[0], '> hello world')
   assertEquals(wrapping.narrow.split('\n').slice(0, 4), [
     '> hel',

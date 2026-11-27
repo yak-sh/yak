@@ -17,7 +17,8 @@ import { print } from '@yaks/tui/print'
 import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
-import { type ComponentChild, h, render } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { Float } from '@yaks/ui'
 import { Ux } from '@yaks/ux'
@@ -176,14 +177,14 @@ let host = (answers: Answers = {}, edits = true) => {
     fields,
     ...door,
     door,
-    draw: (node: ComponentChild) => h(Ux, { host: ux }, node),
+    draw: (node: ReactNode) => h(Ux, { host: ux }, node),
     [Symbol.dispose]: () => {},
   }
 }
 
 // A page mounted in a document: its root, and a way to fire an event. It has
 // a body and a viewport, for what floats above it.
-let mount = (node: ComponentChild) => {
+let mount = (node: ReactNode) => {
   let { document, window } = parseHTML(
     '<html><body><main></main></body></html>',
   )

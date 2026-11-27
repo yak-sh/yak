@@ -22,6 +22,7 @@ import {
 } from '../Tile.tsx'
 import { el } from '@yaks/ui'
 import { Dot } from '../Dot.tsx'
+import { useDerived } from '../read.ts'
 import { Meta } from './Show.tsx'
 
 let Stat = el('span', 'BoardStat')
@@ -32,7 +33,7 @@ export let BoardMeta = (
   useBoardTally(e)
   // No tally yet — the sub hasn't answered, or the query doesn't parse — paints
   // no stats at all. Four zeros would be a claim, and a wrong one.
-  let counts = boardTally(e)
+  let counts = useDerived(() => boardTally(e), [e])
   let stats = counts && (
     <>
       {statuses.map((status) => (

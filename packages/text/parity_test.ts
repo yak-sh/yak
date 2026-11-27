@@ -4,7 +4,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import { marked } from 'marked'
 import { entity } from '@yaks/preact'

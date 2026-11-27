@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Time } from '@yaks/ui/parts'
 import { markup } from './html.ts'
 import { dates } from './dates.ts'

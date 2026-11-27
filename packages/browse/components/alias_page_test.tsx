@@ -1,8 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { assertEquals } from '@std/assert'
 import { test, tick } from '../testing.ts'
 import { frames } from '../../preact/draw.ts'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { cache, config } from '../live.ts'
 import { host } from '../host_testing.ts'
 import { Page } from './App.tsx'

@@ -1,9 +1,10 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The Debug inspector exposes every component and gives its editing controls
 // the same component vocabulary as its stored rows.
 import { test } from '../../testing.ts'
 import { assertEquals } from '@std/assert'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { compTone } from '../comp.ts'

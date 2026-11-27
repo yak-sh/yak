@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'
 import { WriteRefused, WriteUnknown } from '@yaks/client'
@@ -158,7 +158,9 @@ test('the Save bar writes the whole account through the page graph', async () =>
   let { root } = page()
   let g = held()
   bindProfile(root, g)
-  await saveOf(root)(body({ name: 'Ada L', presence: 'hidden', first: 'shop' }))
+  await saveOf(root)(
+    body({ name: 'Ada L', presence: 'hidden', first: 'shop' }),
+  )
   equal(g.wrote.map((b) => b[0].account), [
     { name: 'Ada L', email: 'a@x', hidden: true, first: 'shop' },
   ])

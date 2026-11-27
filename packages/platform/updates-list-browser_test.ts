@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import { bindUpdates } from './updates-list-browser.ts'
 import { cardsView, type UpdatesView } from './updates-view.ts'

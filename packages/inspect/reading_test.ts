@@ -1,7 +1,8 @@
 // Code written for a storage, run in a view: it reads on as each of its
 // reads is answered, says when it has read everything, and reads again when a
 // write moves what it read.
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { signal } from '@preact/signals'
 import { parseHTML } from 'linkedom'
 import { equal, lend, test } from '@yaks/testing'

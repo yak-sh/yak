@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A board's list is a window the reader grows by scrolling: the next page
 // lands below the rows already shown, and those rows stay while it loads.
 import { test } from '@yaks/testing'

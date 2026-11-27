@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, mint } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
-import { Fragment, h } from 'preact'
+import { createElement as h, Fragment } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { mcpConnect } from './connected-mcp.ts'
 import { machineOf } from './machine-testing.ts'
@@ -211,7 +211,11 @@ test('another space’s Operator page lists nothing of the machine', async () =>
 
 test('lists are read in their order, and only those that wait are counted, where an alert can open', async () => {
   let wip = { query: '.task.status=open&.order=-doc.title&.limit=2' }
-  await connect([needs, { title: 'Working now', tool: 'task_list', args: wip }])
+  await connect([needs, {
+    title: 'Working now',
+    tool: 'task_list',
+    args: wip,
+  }])
   let [first, second] = await listed()
   assertEquals([first.title, first.waits, second.title, second.waits], [
     'What needs you',

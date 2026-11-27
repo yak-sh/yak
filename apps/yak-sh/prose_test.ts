@@ -1,7 +1,8 @@
 // The page's words, with each mention of yaks.app a link to it.
 import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { type ComponentChild, h, render } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
+import { render } from 'preact'
 import { Prose, words } from './prose.ts'
 
 let { document } = parseHTML('<main></main>')
@@ -18,7 +19,7 @@ let read = (n: Node): string => {
   )
   return `[${inner}](${href} ${target} ${rel})`
 }
-let drawn = (node: ComponentChild) => {
+let drawn = (node: ReactNode) => {
   Object.assign(globalThis, { document })
   let root = document.querySelector('main')!
   render(node, root as unknown as Element)

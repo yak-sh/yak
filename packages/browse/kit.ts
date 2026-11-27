@@ -6,6 +6,12 @@
  * page; `q` outside a field quits. */
 import * as preact from 'preact'
 import * as hooks from 'preact/hooks'
+import * as compat from 'preact/compat'
+import * as compatJsx from 'preact/jsx-runtime'
+import * as compatClient from 'preact/compat/client'
+import { draw as drawPreact } from '@yaks/preact/draw'
+import { bundle } from '@yaks/cli/page'
+import { aliases } from '@yaks/preact/renderer'
 import * as react from 'react'
 import * as jsx from 'react/jsx-runtime'
 import * as ui from '@yaks/ui'
@@ -17,9 +23,9 @@ import {
   type Carried,
   nativeOf,
   type NativeView,
+  prepareView,
   type Store,
   store,
-  viewAt,
 } from '@yaks/native/remote'
 
 /** What a view loaded into this process imports its platform packages as:
@@ -30,6 +36,63 @@ export let carried: Carried = {
   react,
   'react/jsx-runtime': jsx,
   '@yaks/ui': ui,
+}
+
+let legacy = async (): Promise<Carried> => {
+  let kits = {
+    preact,
+    'preact/hooks': hooks,
+    'preact/compat': compat,
+    'preact/compat/client': compatClient,
+    'preact/jsx-runtime': compatJsx,
+  }
+  let code = await bundle(new URL(import.meta.resolve('@yaks/ui')), undefined, {
+    alias: aliases,
+    external: Object.keys(kits),
+    format: 'cjs',
+  })
+  let module = { exports: {} }
+  new Function('require', 'module', 'exports', code)(
+    (name: keyof typeof kits) => kits[name],
+    module,
+    module.exports,
+  )
+  return {
+    ...kits,
+    react: compat,
+    'react/jsx-runtime': compatJsx,
+    '@yaks/ui': module.exports,
+  }
+}
+
+let legacyKits: Promise<Carried> | undefined
+export let appAt = async (
+  at: string,
+  go: typeof fetch,
+): Promise<NativeView> => {
+  let app = await prepareView(at, go)
+  if (
+    !app.imports.some((name) => name == 'preact' || name.startsWith('preact/'))
+  ) {
+    return app.open(carried)
+  }
+  let View = app.open(
+    await (legacyKits ??= legacy().catch((error) => {
+      legacyKits = undefined
+      throw error
+    })),
+  )
+  return ({ store }) => {
+    let root = useRef<HTMLDivElement>(null)
+    useLayoutEffect(() =>
+      drawPreact(
+        preact.h(View as unknown as preact.ComponentType<{ store: Store }>, {
+          store,
+        }),
+        root.current!,
+      ), [store])
+    return h('div', { ref: root })
+  }
 }
 
 /** The app's view over its store, its controls walked by the keyboard, the
@@ -71,7 +134,7 @@ export let open = async (
       `${page} is not built on the kits: its page names no native view`,
     )
   }
-  let view = await viewAt(at, carried, go)
+  let view = await appAt(at, go)
   await run(() => h(Kit, { view, store: store(api, go) }), {
     sheet: sheet(composition),
   })

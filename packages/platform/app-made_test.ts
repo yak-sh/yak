@@ -2,7 +2,7 @@
 // each kind it keeps and what it keeps of one, each thing it can do, and the
 // line that says when they can ask for those.
 import { equal, test } from '@yaks/testing'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { does, keeps, madeOf, pagesOf } from './app-made.ts'

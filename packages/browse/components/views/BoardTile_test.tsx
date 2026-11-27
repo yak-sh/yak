@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A board tile summarizes the same task statuses as its board columns — and it
 // gets them from an AGGREGATE subscription, never from the board's members
 // (T-22509). So these drive the tile the way the wire does: mount it, land the
@@ -8,6 +8,7 @@
 import { test } from '@yaks/testing'
 import { tick } from '../../testing.ts'
 import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { boardTallyName, cache, ent, landSub } from '../../live.ts'
@@ -33,7 +34,7 @@ let onTile = async (query: string, run: (root: Element) => Promise<void>) => {
   cache.value = data(query)
   let root = document.querySelector('main')!
   try {
-    render(<BoardTile e={ent('board')} />, root)
+    act(() => render(<BoardTile e={ent('board')} />, root))
     await run(root)
   } finally {
     render(null, root)

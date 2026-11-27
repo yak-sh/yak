@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { cache, ent } from '../live.ts'
 import { mount } from './mount.ts'
 import { ORACLE } from '@yaks/topic'

@@ -1,9 +1,10 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The memory's list face: registry specificity and the three facts a row
 // promises.
 import { test } from '@yaks/testing'
 import '../../testing.ts'
-import { render, type VNode } from 'preact'
+import type { ReactElement } from 'react'
+import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { type Ent } from '../../types.ts'
@@ -26,13 +27,13 @@ let memory: Ent = {
   feedback: { eid: 'memory' },
 }
 
-let children = (v: VNode) =>
+let children = (v: ReactElement) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
-    .filter((x) => x !== undefined && x !== false) as VNode[]
+    .filter((x) => x !== undefined && x !== false) as ReactElement[]
 
 // The words a node reads as, drawn into a document of its own, so its
 // components run as they do on a page, hooks included.
-let text = (v: VNode): string => {
+let text = (v: ReactElement): string => {
   let { document } = parseHTML('<main></main>')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', {

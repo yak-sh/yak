@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { type ComponentChild, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import type { Bundle } from '@yaks/graph'
 import { print } from '@yaks/tui/print'
 import { dress } from './sheet.ts'
@@ -26,11 +26,13 @@ let context = (
   sessions: [],
 })
 // What a tree shows, painted once in the harness's dress, colors aside.
-let shown = (node: ComponentChild) =>
+let shown = (node: ReactNode) =>
   // deno-lint-ignore no-control-regex -- the painter's words, not its colors
   print(node, 70, dress).replace(/\x1b\[[0-9;]*m/g, '')
 let text = (rows: Bundle[]) =>
-  shown(h(panel.Render, { ...context(() => Promise.resolve(rows), 's'), rows }))
+  shown(
+    h(panel.Render, { ...context(() => Promise.resolve(rows), 's'), rows }),
+  )
 
 test('context panel reads only the selected transcript, including its inherited prefix', async () => {
   let calls: string[] = []

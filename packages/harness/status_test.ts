@@ -3,7 +3,7 @@ import { assertEquals } from '@std/assert'
 import { resolve } from '@yaks/render'
 import type { Bundle } from '@yaks/graph'
 import { statusBundle, statusViews, statusVocab } from './status.ts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { mount } from '@yaks/tui/testing'
 import { panels } from './panels.ts'
 

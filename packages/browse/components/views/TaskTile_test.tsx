@@ -1,16 +1,16 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A task tile owns the frame; its facts come through the shared Meta view.
 import { test } from '@yaks/testing'
 import '../../testing.ts'
-import { type VNode } from 'preact'
+import type { ReactElement } from 'react'
 import { assertEquals } from '@std/assert'
 import { type Ent } from '../../types.ts'
 import { TileSlot } from '../Tile.tsx'
 import { TaskTile } from './TaskTile.tsx'
 
-let children = (v: VNode) =>
+let children = (v: ReactElement) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
-    .flat().filter(Boolean) as VNode[]
+    .flat().filter(Boolean) as ReactElement[]
 
 test('task tile delegates its dense meta row to the registry', () => {
   let e: Ent = {
@@ -44,7 +44,7 @@ test('task tile delegates its dense meta row to the registry', () => {
   assertEquals(props.eid, 'task')
   assertEquals(props.view, 'Meta')
   assertEquals(props.id, true)
-  let tail = props.children as VNode
+  let tail = props.children as ReactElement
   assertEquals(tail.type === TileSlot, true)
   assertEquals(tail.props.children, after)
   assertEquals(parts[4].type === TileSlot, true)

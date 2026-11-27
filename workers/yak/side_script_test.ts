@@ -5,7 +5,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { desk } from './desk-pages.ts'
 import { frame } from './frame.ts'

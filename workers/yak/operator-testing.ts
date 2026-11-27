@@ -39,7 +39,7 @@ import {
 import { drain } from './operator-store.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { markup as renderToString } from '@yaks/html'
 import { Host } from '@yaks/markdown'
 import { Folds } from '@yaks/ux/conversation'
 import { opening } from '@yaks/session/conversation'

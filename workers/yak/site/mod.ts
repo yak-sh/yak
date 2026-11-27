@@ -13,7 +13,7 @@
 // `sitePage`, drawing.ts). Those are made, not kept, as `_ui.css` is:
 // public/*.html is gitignored.
 import { createElement as h, type FunctionComponent } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { markup as renderToString } from '@yaks/html'
 import { createHash } from 'node:crypto'
 import { DRAWING } from '@yaks/platform/drawing'
 import { AcceptableUse } from './acceptable-use.tsx'

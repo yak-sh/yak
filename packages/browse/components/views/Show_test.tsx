@@ -1,11 +1,12 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The full document face's section renderers — especially the meta line,
 // where an absent field must paint nothing. A renderer is a component: every
 // case mounts it through Preact (mount.ts) and asserts on the resulting DOM,
 // never on a bare call's vnode tree.
 import { test, tick, until } from '../../testing.ts'
 import { test as preparedTest } from '@yaks/testing'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { assert, assertEquals, assertExists } from '@std/assert'
@@ -858,7 +859,10 @@ test('claim chip loads its referenced session instead of painting a blank', asyn
       claim: { eid: 'claimed', session: 'cold-claimant' },
     },
   }
-  let sub = routeName('cold-claimant', 'doc.title,client.user_agent,session.id')
+  let sub = routeName(
+    'cold-claimant',
+    'doc.title,client.user_agent,session.id',
+  )
   let e = ent('claimed')
   let mounted = mount(h(resolve(e, 'Meta').Render, { e }))
   try {

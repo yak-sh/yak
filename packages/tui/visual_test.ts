@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { mount } from './testing.ts'
 import { Textarea } from './Textarea.ts'
 import { VirtualList } from './VirtualList.ts'

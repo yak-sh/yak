@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A project's inbox line names and opens the thing that asked for attention,
 // in the policy's order, with the whole count above a bounded list.
 import { whole } from '@yaks/query'

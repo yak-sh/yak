@@ -10,7 +10,7 @@ import {
   isValidElement,
   type ReactNode as Node,
 } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { markup as renderToString } from '@yaks/html'
 import type { Stage } from '@yaks/web/stage'
 import { Button, Card, Empty, Field, Form, Icon } from '@yaks/ui/parts'
 import type { Env } from './env.ts'

@@ -1,4 +1,4 @@
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import type { Connections, Face, Offered, Shown } from './connections-page.ts'

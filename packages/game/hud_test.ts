@@ -3,7 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { everforest, sheet } from '@yaks/ui'
 import { print } from '@yaks/tui/print'
-import { h, type VNode } from 'preact'
+import { createElement as h, type ReactElement } from 'react'
 import { render } from 'preact-render-to-string'
 import { Grid, kit, Party, Stats, Stick } from './hud.ts'
 
@@ -72,8 +72,8 @@ test('HUD touch stick displays supplied pixels and recenters when resting', () =
 
 // Specimens are fixture values; serialization and painting remain measured.
 let hosts = {
-  browser: (node: VNode) => render(node),
-  terminal: (node: VNode) => plain(print(node, 80, dress)),
+  browser: (node: ReactElement) => render(node),
+  terminal: (node: ReactElement) => plain(print(node, 80, dress)),
 }
 // Each specimen, by its title, and the words it shows.
 let words: Record<string, Record<string, string[]>> = {

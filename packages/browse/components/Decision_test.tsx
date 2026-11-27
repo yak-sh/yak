@@ -1,10 +1,11 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A decision's choices draw what they show, each by what it is: one tree,
 // read as the browser's elements and as the terminal paints it.
 import '../tui/doc.ts'
 import { test, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { TElement } from '@yaks/tui'
 import { cache, ent } from '../live.ts'

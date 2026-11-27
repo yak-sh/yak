@@ -30,14 +30,14 @@ export let filterable = new Set(['Board', 'List'])
 // at all: a count the server computed over the saved query is the truth only
 // while nothing narrows it here. Before the bar has mounted, a host's
 // `initial` line is the one it will show. Reading it subscribes the caller.
-export let filterLine = (eid: string, initial = ''): string =>
-  fields.row(filterField(eid))?.text ?? initial
+export let useFilterLine = (eid: string, initial = ''): string =>
+  fields.useRow(filterField(eid))?.text ?? initial
 
 // Windowed faces filter BEFORE taking a page. A half-typed expression stays
 // inert, just as it does for the local faces, but a valid one rides the saved
 // query instead of filtering an already-truncated page of cached rows.
-export let filteredQuery = (eid: string, query: string): string => {
-  let line = filterLine(eid).trim()
+export let useFilteredQuery = (eid: string, query: string): string => {
+  let line = useFilterLine(eid).trim()
   try {
     parseQuery(line)
     return line ? query + '&' + line : query
@@ -56,7 +56,7 @@ export let usePassOf = (
   eid: string,
   initial = '',
 ): Pass => {
-  let line = filterLine(eid, initial)
+  let line = useFilterLine(eid, initial)
   let valid = true
   try {
     parseQuery(line)

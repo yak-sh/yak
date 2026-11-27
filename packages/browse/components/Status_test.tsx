@@ -1,9 +1,11 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The statusbar's command door and graph-backed spawn answer: its left side
 // enters command mode; session messages follow server-minted ids and lifecycle.
 import { test } from '@yaks/testing'
 import '../testing.ts'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { applyLocal, cache, mode } from '../live.ts'
@@ -56,7 +58,7 @@ test('fix status links minted ids and follows the session lifecycle', async () =
         session: { eid: 'session', id: 'provider-id' },
       },
     }
-    render(h(FixMessage, { task: 'task', session: 'session' }), root)
+    act(() => render(h(FixMessage, { task: 'task', session: 'session' }), root))
     assertEquals(root.textContent, 'T-26 → agent starting')
     assertEquals(root.querySelectorAll('a').length, 1)
 

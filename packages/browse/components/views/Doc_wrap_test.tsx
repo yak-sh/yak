@@ -1,10 +1,10 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Render the configured doc Body and the raw Markdown tab with their shipped
 // stylesheet. The source-tab declarations must not match the reading view.
 import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { views } from '@yaks/doc/views'
 import { contributedViews } from '../inspect.tsx'
 import { cache, ent } from '../../live.ts'

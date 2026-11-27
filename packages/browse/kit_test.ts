@@ -1,12 +1,12 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { act } from 'preact/test-utils'
 import { mount } from '@yaks/tui/testing'
 import { composition, sheet } from '@yaks/ui'
 import { mount as native, type Node } from '@yaks/native'
 import { type Store, viewAt } from '@yaks/native/remote'
-import { carried, Kit } from './kit.ts'
+import { appAt, carried, Kit } from './kit.ts'
 
 // The packing list's own view, as its app serves it.
 let packing = await Deno.readTextFile(
@@ -51,7 +51,7 @@ let terminal = async (
 
 test('a kit-built app opens in the terminal over its own rows', async () => {
   let go = (() => Promise.resolve(new Response(packing))) as typeof fetch
-  let view = await viewAt(VIEW, carried, go)
+  let view = await appAt(VIEW, go)
   let { store, wrote } = kept()
   let screen = await terminal(view, store)
   try {

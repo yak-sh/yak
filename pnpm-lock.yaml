@@ -780,6 +780,9 @@ importers:
       '@yaks/native':
         specifier: 0.2.24
         version: link:../native
+      '@yaks/preact':
+        specifier: 0.2.24
+        version: link:../preact
       '@yaks/process':
         specifier: 0.2.28
         version: link:../process
@@ -2911,6 +2914,9 @@ importers:
       preact:
         specifier: 10.29.7
         version: 10.29.7(preact-render-to-string@6.7.0)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(patch_hash=20b0d89c95eb008cbbed13a0adc11aa408462da321b704dfe5be12e26fd86902)(preact@10.29.7)'
 
   packages/id:
     dependencies:

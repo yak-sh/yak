@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The hero yak's run (yak.js) clicked through on the home story, its words
 // the keys they are read from.
 import { lend, test } from '@yaks/testing'

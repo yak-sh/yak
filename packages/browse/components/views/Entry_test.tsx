@@ -1,8 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Entry renderer tests hold specialization, truncation, and the expanded
 // view picker without a server or session transcript.
 import { test } from '../../testing.ts'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { type Ent } from '../../types.ts'
@@ -125,7 +126,10 @@ test('open summaries grow their own content in place, no second card', () =>
     let result = ent(answer)
     render(h(ResultSummary, { e: result, open: true }), root)
     assertEquals(root.querySelector('.Entry_Output')?.textContent, 'one\ntwo')
-    assertEquals(root.querySelector('.Entry_Err')?.textContent, 'warning\nmore')
+    assertEquals(
+      root.querySelector('.Entry_Err')?.textContent,
+      'warning\nmore',
+    )
   }))
 
 test('generic entry summaries are metadata variants', () =>
@@ -273,7 +277,10 @@ test('normalized tools and shell calls share compact entry rows', () =>
       root,
     )
     assertEquals(root.querySelector('.Entry_Name')?.textContent, 'Reading…')
-    assertEquals(root.querySelector('.Entry_Line')?.textContent, 'src/query.ts')
+    assertEquals(
+      root.querySelector('.Entry_Line')?.textContent,
+      'src/query.ts',
+    )
     assertEquals(root.querySelector('.Entry-pending') != null, true)
 
     render(
@@ -338,7 +345,10 @@ test('refused and legacy failed results settle and render as failures', () =>
         assertEquals(root.querySelector('.Entry-fail') != null, true)
       }
       render(h(CommandSummary, { e: ent(call) }), root)
-      assertEquals(root.querySelector('.Entry_Status')?.textContent, '✗ failed')
+      assertEquals(
+        root.querySelector('.Entry_Status')?.textContent,
+        '✗ failed',
+      )
       for (
         let row of [
           { kind: 'tool', name: 'shell' },

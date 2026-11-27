@@ -57,7 +57,8 @@
     "linkedom": "^0.18.12",
     "lucide": "1.31.0",
     "preact": "10.29.7",
-    "@yaks/react": "0.2.33"
+    "@yaks/react": "0.2.33",
+    "@yaks/preact": "0.2.24"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

@@ -27,7 +27,8 @@ export let bundle = async (
       entryPoints: [from.href],
       bundle: true,
       external: opts.external,
-      format: 'esm',
+      alias: opts.alias,
+      format: opts.format ?? 'esm',
       platform: 'browser',
       target: 'esnext',
       // esbuild reads no deno.json: said here, or JSX compiles to `React`.

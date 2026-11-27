@@ -1,5 +1,5 @@
 // Sidebar draws the supplied navigation and selection, including form actions.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { assert, assertEquals } from '@std/assert'

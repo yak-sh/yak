@@ -6,7 +6,7 @@
 // ours. It is the kit's Body. The renderer loads when a page first draws some
 // (docs.ts `marked`).
 import { createElement as h, type ReactNode } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { markup as renderToString } from '@yaks/html'
 
 // The page's elements, with each link said to be the writer's.
 let theirs = ((

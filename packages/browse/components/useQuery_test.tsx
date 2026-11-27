@@ -1,10 +1,11 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Query ownership lives at view roots. Exercise the real hooks and transport,
 // including overlapping mounts, retargeting, and reads between cleanup/mount.
 import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import {

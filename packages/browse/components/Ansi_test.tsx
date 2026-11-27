@@ -1,9 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // ANSI rendering keeps terminal presentation while refusing terminal control.
 
 import { test } from '@yaks/testing'
 import '../testing.ts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { assertEquals } from '@std/assert'
 import { mount } from './mount.ts'
 import { Ansi, ansiRuns } from './Ansi.tsx'

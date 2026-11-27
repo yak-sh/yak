@@ -1,6 +1,7 @@
 import { test, tick, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { signal } from '@preact/signals'
 import { parseHTML } from 'linkedom'
 import { type Bundle, type Comp, graph, signed } from '@yaks/graph'

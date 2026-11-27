@@ -65,6 +65,8 @@ export let bundle = async (
     plugins: [FILE_URLS],
     external: opts.external,
     ...BROWSER,
+    alias: opts.alias,
+    format: opts.format ?? BROWSER.format,
   })
   return compiled(build, signal, watched(dir))
 }

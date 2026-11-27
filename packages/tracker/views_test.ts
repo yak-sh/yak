@@ -3,7 +3,7 @@ import { type Bundle } from '@yaks/render'
 // Domain faces and queries are checked with graph bundles, not a fleet boot.
 import { equal, ok, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { render as preact } from '@yaks/preact'
 import { render as text } from '@yaks/text'
 import type { Answer, Io } from '@yaks/inspect'

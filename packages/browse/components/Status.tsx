@@ -1,5 +1,6 @@
 /** @jsxImportSource react */
 import { drafts } from '@yaks/draft/input'
+import { useDerived } from './read.ts'
 import { entityPath } from '../url.ts'
 import { useEffect, useRef, useState } from 'react'
 import { signal } from '@preact/signals-core'
@@ -92,8 +93,8 @@ let last = signal('') // what ↑ recalls
 export let FixMessage = (
   { task, session }: { task: string; session: string },
 ) => {
-  let t = ent(task)
-  let s = ent(session)
+  let t = useDerived(() => ent(task), [task])
+  let s = useDerived(() => ent(session), [session])
   return (
     <>
       <Id e={t} /> → {s.num

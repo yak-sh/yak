@@ -1,9 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { registry } from '../registry.ts'
 import { parse } from '@yaks/query'
 import { test } from '@yaks/testing'
 import '../../testing.ts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { assertEquals } from '@std/assert'
 import { applyLocal, cache, ent } from '../../live.ts'
 import { mount } from '../mount.ts'

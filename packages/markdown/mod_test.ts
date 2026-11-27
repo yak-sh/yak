@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { mount } from '../preact/testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import { Marked } from 'marked'

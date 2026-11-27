@@ -1,10 +1,11 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Markdown in browse: @yaks/markdown drawn in the face its caller chooses,
 // its ids leading to their pages and its commits to their repository.
 import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { type ComponentChildren, render } from 'preact'
+import type { ReactNode } from 'react'
+import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { Markdown, MarkdownHost } from './Markdown.tsx'
 import { Markdown as Shared } from '@yaks/markdown'
@@ -14,7 +15,7 @@ let Face = el('article', 'Prose')
 let REPO = 'https://github.com/acme/widget'
 
 // Draws `node` into a document of its own, and hands back its root.
-let drawn = (node: ComponentChildren) => {
+let drawn = (node: ReactNode) => {
   let { document } = parseHTML('<main></main>')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', {
@@ -75,7 +76,10 @@ test('ids lead to their pages and commits to their repository', () => {
 test('fenced code is coloured, and markup a body wrote stays words', () => {
   let text = '```ts\nlet x = 1\n```\n\n<script>bad()</script>'
   let root = drawn(<Markdown text={text} />)
-  assertEquals(root.querySelector('pre code .hljs-keyword')?.textContent, 'let')
+  assertEquals(
+    root.querySelector('pre code .hljs-keyword')?.textContent,
+    'let',
+  )
   assertEquals(root.querySelector('script'), null)
   assertEquals(root.textContent!.includes('<script>bad()</script>'), true)
 })

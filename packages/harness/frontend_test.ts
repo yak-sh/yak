@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { frontend } from './frontend.ts'
 import { App } from './app.ts'
 import type { UIAgent } from './panels.ts'
@@ -134,7 +134,13 @@ let visualA = frontend(), visualB = frontend()
 test('VISUAL state and local yank belong only to their frontend graph', async () => {
   let a = visualA, b = visualB
   try {
-    a.select({ surface: 'input', text: 'draft', anchor: 0, at: 2, yank: 'dra' })
+    a.select({
+      surface: 'input',
+      text: 'draft',
+      anchor: 0,
+      at: 2,
+      yank: 'dra',
+    })
     assertEquals(
       (a.visual.value[0].visual as Record<string, unknown>).yank,
       'dra',
@@ -143,7 +149,10 @@ test('VISUAL state and local yank belong only to their frontend graph', async ()
       (b.visual.value[0].visual as Record<string, unknown>).surface,
       '',
     )
-    assertEquals((b.visual.value[0].visual as Record<string, unknown>).yank, '')
+    assertEquals(
+      (b.visual.value[0].visual as Record<string, unknown>).yank,
+      '',
+    )
   } finally {
     await a.close()
     b.close()

@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { App, changes } from './app.ts'
 import { frontend } from './frontend.ts'
 import { local } from './local.ts'

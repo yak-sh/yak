@@ -108,6 +108,8 @@ export type Controller = {
   dispose: () => void
   /** a field's row */
   row: (id: string) => Row | undefined
+  /** a field's row, read by a mounted view */
+  useRow: (id: string) => Row | undefined
   /** what is typed in a field */
   text: (id: string) => string
   /** the person typed: the text, the caret, and what can come next there */
@@ -402,6 +404,7 @@ export let completion = (front: Front, opts: Opts): Controller => {
     bind,
     dispose,
     row: live,
+    useRow: useLive,
     text: (id) => live(id)?.text ?? '',
     type,
     set,

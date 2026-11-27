@@ -1,10 +1,9 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { VirtualList, VirtualWindow } from './VirtualList.ts'
-import { h } from 'preact'
+import { createElement as h, useState } from 'react'
 import { mount } from './testing.ts'
 import { Textarea } from './Textarea.ts'
-import { useState } from 'preact/hooks'
 import { useKeys } from './screen.ts'
 import { signal } from '@preact/signals'
 

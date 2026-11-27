@@ -218,7 +218,11 @@ export let compiled = async (
 /** How one browser module is bundled: the bare specifiers it leaves to the
  * page to resolve (its import map), so every module on the page that imports
  * one shares the one copy the page loads. */
-export type Bundling = { external?: string[] }
+export type Bundling = {
+  external?: string[]
+  alias?: Record<string, string>
+  format?: 'esm' | 'cjs'
+}
 
 // Deno fetches every import it can read in a module's source with the module
 // graph, a dynamic one that never runs included, so the bundlers are imported

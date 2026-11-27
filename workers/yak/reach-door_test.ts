@@ -19,7 +19,7 @@ import {
   sideApps,
   sideWords,
 } from '@yaks/platform/side-rows'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { friendSide } from '@yaks/platform/friends'
 import {
@@ -188,7 +188,9 @@ test('a tab reads its person’s account and friends, and a friend who says yes 
       friendSide(cy.person, ada.person, yes),
     ],
   })
-  equal(friendsOf(await rowsOf(ada, FRIENDS)).map((f) => f.person), [cy.person])
+  equal(friendsOf(await rowsOf(ada, FRIENDS)).map((f) => f.person), [
+    cy.person,
+  ])
   await k.dir.stamp({
     entities: [{
       entity: { eid: friendSide(cy.person, ada.person).entity.eid },
@@ -532,7 +534,10 @@ test('a tab opens first only a space its person owns, and signs out only their b
   let theirs = (await browsers(bea))[0]
   let mine = await browsers(ada)
   let out = (session: string) =>
-    wrote(ada, [{ entity: { eid: crypto.randomUUID() }, signOut: { session } }])
+    wrote(ada, [{
+      entity: { eid: crypto.randomUUID() },
+      signOut: { session },
+    }])
   equal((await out(theirs)).status, 200)
   equal(await browsers(bea), [theirs])
   equal(mine.length, 2)

@@ -9,6 +9,7 @@
 // mount() with free() — a try/finally, or the end of the test.
 import { createElement as h, type ReactNode } from 'react'
 import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { Ux } from '@yaks/ux'
 import { ux } from './registry.ts'
@@ -63,7 +64,7 @@ export let mount = (node: ReactNode) => {
   })
   let root = document.createElement('main')
   document.body.append(root)
-  render(h(Ux, { host: ux }, node), root)
+  act(() => render(h(Ux, { host: ux }, node), root))
   return {
     root,
     free() {

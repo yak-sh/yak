@@ -25,7 +25,7 @@ import { views } from './views.ts'
 import { render as preact } from '@yaks/preact'
 import { render as text } from '@yaks/text'
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { Answer, Bundle, Io } from '@yaks/inspect'
 let vocab = loadVocab([kernelDoc, toolsDoc, docDoc, trackerDoc, timingDoc], [
   kernelKeywords,

@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { parseHTML } from 'linkedom'
 import { entity } from '@yaks/preact'
 import { resolve } from '@yaks/render'
@@ -15,7 +15,7 @@ import { registry, tile, vocab } from './mod.ts'
 import { listedRows } from '@yaks/platform/space-apps'
 
 type Listed = Parameters<typeof tile>[0]
-let row = (node: ComponentChildren) => {
+let row = (node: ReactNode) => {
   let { document } = parseHTML(typeof node == 'string' ? node : markup(node))
   return document.querySelector('#apps > .Rows_Item') ??
     document.querySelector('.Rows_Item')!
@@ -164,7 +164,10 @@ test('app Tile says when it last changed, by whom where that was not the viewer,
 })
 
 test('app Tile opens its errors from a badge and from its menu', () => {
-  assertEquals(one({}, { editor: true }).querySelector('[popovertarget]'), null)
+  assertEquals(
+    one({}, { editor: true }).querySelector('[popovertarget]'),
+    null,
+  )
   for (let [n, words] of [[1, '1 error'], [3, '3 errors']] as const) {
     let root = one({}, { errors: n, editor: true })
     let opens = [

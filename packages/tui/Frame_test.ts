@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Frame } from './Frame.ts'
 import { Scroll } from './Scroll.ts'
 import { mount } from './testing.ts'

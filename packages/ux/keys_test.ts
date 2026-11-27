@@ -1,7 +1,8 @@
 /** Vim's keys walk a page: where a move lands, read from boxes, and the walk
  * over a document, here the terminal's, painted and measured. */
 import { equal, ok, test } from '@yaks/testing'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import {
   doc,
   install,
@@ -135,7 +136,12 @@ test('h and k move the cursor left and up, and never the focus', () => {
 
 test('gg and G go to the first and the last item; a hidden one never counts', () => {
   point('a')
-  equal(walked('G', 'g', 'g', 'G'), ['textarea', 'textarea', 'One', 'textarea'])
+  equal(walked('G', 'g', 'g', 'G'), [
+    'textarea',
+    'textarea',
+    'One',
+    'textarea',
+  ])
 })
 
 test('the cursor stands on a field and walks past it, typing nothing', () => {

@@ -1,5 +1,5 @@
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import { type Agent, agentsOf, agentsRow } from './agents.ts'
 import { type AgentsView, agentsView } from './agents-view.ts'

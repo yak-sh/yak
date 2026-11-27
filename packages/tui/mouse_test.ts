@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { VirtualList } from './VirtualList.ts'
 import { assert, assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { TElement, TText } from '@yaks/dom'
 import { decode, feed, type Mouse } from './input.ts'
 import { hit, routeMouse } from './mouse.ts'

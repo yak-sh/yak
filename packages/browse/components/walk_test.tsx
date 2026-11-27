@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // Vim's keys on the web page (@yaks/ux/keys). A linkedom document lays
 // nothing out, so the walk here keeps to reading order; where each item sits
 // is the terminal's test (../tui/walk_test.ts) and @yaks/ux's. j puts the
@@ -11,7 +11,8 @@ import { equal } from '@yaks/testing'
 import '../domain-host.tsx'
 import './mount.ts'
 import { frames } from '../../preact/draw.ts'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { terminalHistory } from '@yaks/tui/history'

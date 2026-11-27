@@ -1,10 +1,11 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The graph palette lets a word settle before asking the single server loop
 // to search it.
 import { clock, test } from '@yaks/testing'
 import { until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { group, Search, searchOpen, SearchPage } from './Search.tsx'
@@ -89,7 +90,10 @@ test('search sends only the settled query while typing', async () => {
     assertEquals(asked, [])
     await act(() => time.advance(1))
     assertEquals(asked, ['type'])
-    assertEquals(root.querySelector('[role=status]')?.textContent, 'Searching…')
+    assertEquals(
+      root.querySelector('[role=status]')?.textContent,
+      'Searching…',
+    )
     assertEquals(root.textContent?.includes('No results.'), false)
     await act(async () => {
       finish(Response.json([]))

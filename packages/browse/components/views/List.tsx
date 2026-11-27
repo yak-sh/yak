@@ -14,7 +14,7 @@ import {
 import { orderOf, parseQuery, windowOf } from '../../query.ts'
 import { block, Button, Loading, Rows } from '@yaks/ui'
 import { menuAt } from '../nav.tsx'
-import { filteredQuery, usePassOf } from '../Filter.tsx'
+import { useFilteredQuery, usePassOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
 import { usePinned, usePinTargets } from '../subscriptions.ts'
 import { usePage } from '../useQuery.ts'
@@ -78,7 +78,7 @@ export let QueryList = (
   let root = useRef<HTMLDivElement>(null)
   let [size, setSize] = useState(0)
   let [limit, setLimit] = useState(0)
-  let query = filteredQuery(eid, saved)
+  let query = useFilteredQuery(eid, saved)
   useLayoutEffect(() => {
     let node = root.current?.parentElement
     let measure = () =>

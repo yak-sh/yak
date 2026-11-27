@@ -1,7 +1,7 @@
 import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import type { Comp } from '@yaks/graph'
 import { mount } from './testing.ts'
 import { until } from '../process/testing.ts'

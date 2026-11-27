@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A person's inbox: lanes of policy threads, a search, each thread opened in
 // place, a new conversation, and page state and words that outlive a remount.
 import { test } from '@yaks/testing'

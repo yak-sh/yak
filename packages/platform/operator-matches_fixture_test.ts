@@ -1,5 +1,5 @@
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { parseHTML } from 'linkedom'
 import type { Matches, Tapping } from './operator-matches.ts'
 import { type MatchesView, matchesView } from './operator-matches-view.ts'

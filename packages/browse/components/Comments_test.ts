@@ -10,7 +10,7 @@ import { assertEquals } from '@std/assert'
 import { cache, ent, useRoute } from '../live.ts'
 import { act } from 'preact/test-utils'
 import { drafts } from '@yaks/draft/input'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { derivedEid } from '@yaks/graph'
 import { mount } from './mount.ts'
 import { front } from './fields.tsx'
@@ -201,10 +201,15 @@ test('a note names its writer and instrument on one line of plain links', () => 
       created: { eid: 'said', by: 'jeff', via: 'run' },
     },
   }
-  let { root, free } = mount(h(Branches, { rows: [domainBundle(ent('said'))] }))
+  let { root, free } = mount(
+    h(Branches, { rows: [domainBundle(ent('said'))] }),
+  )
   try {
     let who = [...root.querySelectorAll('.Notes_Who')]
-    assertEquals(who.map((w) => w.textContent!.includes('Jeff')), [true, false])
+    assertEquals(who.map((w) => w.textContent!.includes('Jeff')), [
+      true,
+      false,
+    ])
     assertEquals(who[1].textContent!.startsWith('· via '), true)
     assertEquals(
       root.querySelector('a a, a div, .Notes_Who [role=textbox]'),

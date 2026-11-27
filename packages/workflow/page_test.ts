@@ -2,7 +2,8 @@
 // per order, a shipment once it is answered, then a check filed to bea.
 // Drawn through the inspector contract browse uses, in a browser document and
 // in a terminal.
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { equal, lend, ok, test } from '@yaks/testing'
 import { parse } from '@yaks/query'

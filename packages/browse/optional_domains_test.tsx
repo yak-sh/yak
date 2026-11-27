@@ -1,9 +1,9 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { QueryList } from './components/views/List.tsx'
 import { clock, test } from '@yaks/testing'
 import { tick, until } from './testing.ts'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { learn, vocab } from './types.ts'
 import { cache, config, ent, problem } from './live.ts'
 import { hostCommands } from './host_commands.ts'
@@ -61,7 +61,10 @@ test('a document-only vocabulary browses without task, session or box-only reads
     let free = held({ entity: 'document' })
     await tick()
     free()
-    assertEquals(wire.asked().some((a) => a.subscribe.includes('.edge')), false)
+    assertEquals(
+      wire.asked().some((a) => a.subscribe.includes('.edge')),
+      false,
+    )
     assertEquals(problem.value, '')
     assertEquals(seen.root.textContent?.includes('ReferenceError'), false)
     let offered = hostCommands(vocab)

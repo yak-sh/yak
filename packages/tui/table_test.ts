@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { Markdown } from '@yaks/markdown'
 import { TElement, TText } from '@yaks/dom'
 import { VirtualWindow } from './VirtualList.ts'

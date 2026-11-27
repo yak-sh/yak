@@ -3,7 +3,7 @@
 // one, and which entries make a line (./lines.ts `joined`).
 import { equal, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
-import { Fragment, h } from 'preact'
+import { createElement as h, Fragment } from 'react'
 import { define } from '@yaks/render'
 import type { Bundle } from '@yaks/graph'
 import {
@@ -243,7 +243,10 @@ test('the files with a line: a picture as itself, any other file as its kind, na
   let text = held.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
   equal(text, 'PDF notes.pdf 2.4 MB ✕')
   equal(held.includes('aria-label="Remove notes.pdf"'), true)
-  equal(drawn({ name: 'a.svg', mime: 'image/svg+xml' }).includes('<img'), false)
+  equal(
+    drawn({ name: 'a.svg', mime: 'image/svg+xml' }).includes('<img'),
+    false,
+  )
   equal(files([]), null)
 })
 

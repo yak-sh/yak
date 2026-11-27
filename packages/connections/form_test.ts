@@ -3,7 +3,8 @@
 // what was typed goes to `save`, and the box is emptied.
 import { test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { KeyForm, type Pasted } from './form.ts'
 

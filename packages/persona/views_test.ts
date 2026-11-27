@@ -5,7 +5,8 @@ import { querySearch } from '@yaks/query'
 // Full page in the middle; every document it contains and reads, typed into
 // where it shows on a click, with nothing on it to drag; a new document
 // written into a list; and a skill's instructions.
-import { h, render } from 'preact'
+import { createElement as h } from 'react'
+import { render } from 'preact'
 import { act as flush } from 'preact/test-utils'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'

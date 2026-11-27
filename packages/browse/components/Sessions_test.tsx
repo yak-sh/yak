@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { faked, until } from '../testing.ts'

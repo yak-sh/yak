@@ -1,6 +1,6 @@
 // A space's People page as the server draws it, and the rows it is drawn
 // from, for the view's and the browser's tests.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'

@@ -1,5 +1,5 @@
 import { querySearch } from '@yaks/query'
-import { type ComponentChildren, h } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { equal, ok, test } from '@yaks/testing'
@@ -48,15 +48,14 @@ let io = (answers: Record<string, Partial<Answer>> = {}): Io => ({
   name: (eid) => eid,
   when: (at) => at,
 })
-let page = (node: ComponentChildren) =>
+let page = (node: ReactNode) =>
   parseHTML(renderToString(h('main', {}, node))).document.querySelector(
     'main',
   )!
-let section = (node: ComponentChildren, name: string) =>
+let section = (node: ReactNode, name: string) =>
   page(node).querySelector(`[data-section="${name}"]`)!
 let props = (host: Io, e: Bundle = item) => ({ io: host, e, got: {}, ctx: {} })
-let loading = (node: ComponentChildren) =>
-  !!page(node).querySelector('[role="status"]')
+let loading = (node: ReactNode) => !!page(node).querySelector('[role="status"]')
 
 // Render fixtures before the case: the assertions check the visible states,
 // without spending their budgets constructing the vocabulary or the page.

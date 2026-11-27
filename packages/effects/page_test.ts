@@ -3,7 +3,7 @@ import { querySearch } from '@yaks/query'
 // two workers, one silent and one long gone, and the runs owed by handler:
 // the numbers up top, a row for each worker, what is running, and what each
 // handler is owed.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { equal, test } from '@yaks/testing'

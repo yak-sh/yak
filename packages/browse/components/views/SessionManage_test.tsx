@@ -1,4 +1,4 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // A line said to a session asks it for a turn by carrying a using
 // (@yaks/session `session_run`), so one sent with no model chosen carries the
 // using in force, as `yak session send` does.
@@ -8,7 +8,7 @@ import { test } from '@yaks/testing'
 import { tick } from '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { act } from 'preact/test-utils'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { identityEid } from '@yaks/graph/identity'
 import { bundlesOf } from '../../wire.ts'
 import { cache, ent, useRoute } from '../../live.ts'

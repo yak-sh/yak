@@ -1,7 +1,7 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 import { test, until } from '@yaks/testing'
 import '../testing.ts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { type Bundle, Disclosure, disclosureAt } from '@yaks/ux'
 import { parse } from '@yaks/query'
 import { cache, clearResolved, type Comps, ent } from '../live.ts'

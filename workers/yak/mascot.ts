@@ -20,7 +20,7 @@
 // (operator-aside.ts `showing`).
 
 import { createElement as h } from 'react'
-import { renderToString } from 'preact-render-to-string'
+import { markup as renderToString } from '@yaks/html'
 import { Loading } from '@yaks/ui/parts'
 
 /** What the yak can be seen doing. */

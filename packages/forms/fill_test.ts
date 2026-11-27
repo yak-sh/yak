@@ -8,7 +8,8 @@ import { desk, draftDoc, type Drafts, drafts, type Stash } from '@yaks/draft'
 import { loadVocab } from '@yaks/vocab'
 import { type Host, Ux } from '@yaks/ux'
 import { type Answers, type Question, SIGNS, type Signs } from '@yaks/forms'
-import { type ComponentChildren, h, render } from 'preact'
+import { createElement as h, type ReactNode } from 'react'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { mount } from '../tui/testing.ts'
@@ -82,7 +83,7 @@ let { document, Event } = parseHTML('<html><body><main></main></body></html>')
 // A page holding one Submit: its state kept as the page graph would keep it,
 // its door answered by the given rows, and every send remembered.
 let vocab = loadVocab([draftDoc])
-let hosted = (typed: Drafts, child: ComponentChildren) => {
+let hosted = (typed: Drafts, child: ReactNode) => {
   let host: Host = {
     drafts: typed,
     vocab,
@@ -330,7 +331,10 @@ test('Kids Club asks for each child, shows a question only for its answer, and s
   equal(p.$('[name="children.0.born"]').getAttribute('type'), 'date')
   equal(p.$('[name=parent]').hasAttribute('required'), true)
   equal(p.text().includes('Pickup person (optional)'), true)
-  equal(p.text().includes('Anyone else who may take your children home.'), true)
+  equal(
+    p.text().includes('Anyone else who may take your children home.'),
+    true,
+  )
 
   await p.submit()
   equal(p.sent, [], 'nothing is sent while a required answer is owed')

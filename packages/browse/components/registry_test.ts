@@ -2,7 +2,7 @@
 // registration order, platform overrides beat the shared list on ties.
 import { test } from '@yaks/testing'
 import '../testing.ts'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { and, type Query } from '@yaks/query'
 import {
   actionsFor,

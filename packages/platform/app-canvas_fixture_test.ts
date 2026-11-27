@@ -1,5 +1,5 @@
 import type { Bundle } from '@yaks/graph'
-import { Fragment, h } from 'preact'
+import { createElement as h, Fragment } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { appRows, sideApps } from './side-rows.ts'

@@ -1,10 +1,10 @@
-/** @jsxImportSource preact */
+/** @jsxImportSource react */
 // The media view serves an artifact at its own address, including when an
 // attachment points to it.
 import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { cache, ent } from '../../live.ts'
 import { mount } from '../mount.ts'
 

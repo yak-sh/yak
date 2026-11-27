@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { toolEid } from '@yaks/tools/result'
 import { type Shown, stepsOf, walkedInto } from './walkthrough.ts'
 

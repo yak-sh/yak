@@ -15,7 +15,7 @@ import { operators } from './operator-service-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { digest } from '@yaks/graph/sha256'
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { client } from '@yaks/client'
 import { store } from '@yaks/platform/client'
 import { stub } from '@std/testing/mock'
@@ -99,7 +99,9 @@ test('preview forwards immutable WebSocket upgrades with their socket and privat
   let upgrade = Object.assign(new Response(null, { status: 101 }), {
     webSocket: socket,
   })
-  Object.defineProperty(upgrade, 'headers', { value: Response.error().headers })
+  Object.defineProperty(upgrade, 'headers', {
+    value: Response.error().headers,
+  })
   let bindings = {
     ...env,
     STORE: {

@@ -1,7 +1,7 @@
 // The voice card as a browser reads it: what its host offers, in the order
 // offered, the one picked now checked in each field, each voice with the ways
 // that speak in it and where its sample plays from.
-import { h } from 'preact'
+import { createElement as h } from 'react'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import { equal, test } from '@yaks/testing'
