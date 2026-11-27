@@ -68,28 +68,38 @@ let controls = (doc: Document): () => void => {
 }
 
 let attach = (doc: Document) => {
-  if (doc.defaultView) return () => {}
-  let held = documents.get(doc)
-  if (!held) documents.set(doc, held = { refs: 0, close: controls(doc) })
-  held.refs++
+  let current = globalThis.window
+  if (
+    doc.defaultView && typeof current?.HTMLIFrameElement == 'function' &&
+    surfaces == 0
+  ) {
+    return () => {}
+  }
+  let held = doc.defaultView ? undefined : documents.get(doc)
+  if (!doc.defaultView) {
+    if (!held) documents.set(doc, held = { refs: 0, close: controls(doc) })
+    held.refs++
+  }
   if (surfaces++ == 0) {
-    let names: string[] = []
-    for (
-      let [name, value] of [
-        ['window', globalThis],
-        ['HTMLIFrameElement', class {}],
-      ] as const
-    ) {
-      if (name in globalThis) continue
-      Object.defineProperty(globalThis, name, { value, configurable: true })
-      names.push(name)
+    let frame = current ?? doc.defaultView ?? globalThis
+    let undo: (() => void)[] = []
+    let supply = (target: object, name: string, value: unknown) => {
+      if (Reflect.get(target, name) != null) return
+      let prior = Object.getOwnPropertyDescriptor(target, name)
+      Object.defineProperty(target, name, { value, configurable: true })
+      undo.push(() => {
+        if (prior) Object.defineProperty(target, name, prior)
+        else Reflect.deleteProperty(target, name)
+      })
     }
+    supply(globalThis, 'window', frame)
+    supply(frame, 'HTMLIFrameElement', class {})
     restore = () => {
-      for (let name of names) Reflect.deleteProperty(globalThis, name)
+      for (let reset of undo.reverse()) reset()
     }
   }
   return () => {
-    if (--held.refs == 0) {
+    if (held && --held.refs == 0) {
       held.close()
       documents.delete(doc)
     }
