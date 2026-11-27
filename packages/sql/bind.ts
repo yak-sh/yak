@@ -255,7 +255,7 @@ let headcount = (ctx: Ctx, comp: string, stored: string): Select => {
  * entities hold a component (`undefined` when the store keeps no count), the
  * entity table's largest id, and, for a store that keeps no count, whether a
  * component's table holds more than so many rows, which reads at most one
- * more than that; and whether any entity holding a component has a number
+ * more than that; and whether any live entity holding a component has a number
  * (`undefined` when the store cannot tell). */
 export type Census = {
   held: (comp: string) => number | undefined
@@ -4352,10 +4352,14 @@ export let prepared = (
       opts.absent?.includes(comp)
         ? false
         : (heard.crowded ?? ((c, n) => crowded(opts.census, c, n)))(comp, n),
-    // nor any holder to have a number
+    // nor any holder to have a number. The census knows only the living
+    // (@yaks/sqlite's counts keep the archetypes they wear), so a read that
+    // keeps the deleted asks it nothing.
     numbered: (comp) =>
       opts.absent?.includes(comp)
         ? false
+        : opts.graves
+        ? undefined
         : (heard.numbered ?? opts.census?.numbered)?.(comp),
     rarest: heard.rarest ??
       (opts.census && ((comps) => rarest(opts.census, comps))),

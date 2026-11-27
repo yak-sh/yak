@@ -1056,9 +1056,11 @@ try {
 
 A **population** is the number of live entities wearing one archetype. The
 adapter keeps populations in `_yaks_population`, with `_yaks_membership` mapping
-component names to archetypes. Entity archetype and tombstone triggers update
-populations in the same transaction as the owner. Updating an ordinary property
-without changing its archetype does not write either metadata table.
+component names to the archetypes a live entity wears. Entity archetype and
+tombstone triggers update populations in the same transaction as the owner; an
+archetype's membership rows come with its first wearer and go with its last.
+Updating an ordinary property without changing its archetype does not write
+either metadata table.
 
 The first unscoped global aggregate seeds populations by reading existing
 entities once, inside a transaction with its triggers. A rollback leaves neither
@@ -1072,10 +1074,11 @@ migrating on a read.
 
 Unfiltered `.count`, `.component&.count` and `.tally=entity.archetype` read
 these metadata tables rather than scanning component or entity tables. Component
-counts seek only the archetypes containing that component; tally work scales
-with the number of archetypes, not the number of entities. The contracts in
-`population_test.ts` check the live counts, rollback and reopen behavior with
-private fixtures; this example includes opening and installing the whole store.
+counts seek only the worn archetypes containing that component, however many an
+entity wore before; tally work scales with the number of archetypes, not the
+number of entities. The contracts in `population_test.ts` check the live counts,
+rollback and reopen behavior with private fixtures; this example includes
+opening and installing the whole store.
 
 ```ts ignore
 import { equal } from '@yaks/testing'

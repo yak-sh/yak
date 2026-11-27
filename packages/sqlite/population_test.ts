@@ -2,12 +2,12 @@
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
-import { by, col, insert, select, table } from '@yaks/sql'
+import { by, catalogue, col, insert, select, table } from '@yaks/sql'
 import { storage } from './mod.ts'
 import { open } from './db.ts'
-import { mem } from './testing.ts'
+import { mem, stepping } from './testing.ts'
 import { census, POPULATION, population, populations } from './population.ts'
 import { unit } from './unit.ts'
 
@@ -82,19 +82,13 @@ let disk = open(file), diskStore = storage(disk, vocab, { counts: 'eager' })
 diskStore.install()
 let diskGraph = graph({ storage: diskStore, vocab, plugins: [archetypes()] })
 diskGraph.apply([{ entity: { eid: 'old' }, note: { text: 'kept' } }])
-for (let event of ['insert', 'delete', 'update']) {
-  disk.query({ t: 'drop', kind: 'trigger', name: `${POPULATION}_${event}` })
+for (let kind of ['trigger', 'table'] as const) {
+  for (let o of catalogue(disk)) {
+    if (o.type == kind && /^_yaks_(population|membership)/.test(o.name)) {
+      disk.query({ t: 'drop', kind, name: o.name })
+    }
+  }
 }
-for (let event of ['insert', 'delete']) {
-  disk.query({
-    t: 'drop',
-    kind: 'trigger',
-    name: `${POPULATION}_grave_${event}`,
-  })
-  disk.query({ t: 'drop', kind: 'trigger', name: `_yaks_membership_${event}` })
-}
-disk.query({ t: 'drop', kind: 'table', name: POPULATION })
-disk.query({ t: 'drop', kind: 'table', name: '_yaks_membership' })
 unit(disk, () => population(disk))
 unit(disk, () => population(disk))
 disk.close()
@@ -300,4 +294,83 @@ test('a census looks at a table once while its rows stand', () => {
   assertEquals(firstAsks.answers, [true, false])
   assertEquals(againAsks.statements, firstAsks.statements)
   assertEquals(afterWrite.answers, [true, true])
+})
+
+// An entity that gains and loses components wears a new archetype each time,
+// and the old ones are kept. A count reads the archetypes worn now: the
+// directory's 404 apps had worn 674, and a count of them read every one
+// (T-4230).
+let tags = ['t0', 't1', 't2', 't3', 't4', 't5', 't6']
+let worn = loadVocab([archetypeDoc, {
+  $defs: Object.fromEntries(
+    ['entity', 'app', 'test', ...tags].map((c) => [c, {
+      component: true,
+      type: 'object',
+    }]),
+  ),
+}])
+let churned = (moves: number) => {
+  let meter = stepping(), store = storage(meter.driver, worn)
+  store.install()
+  let g = graph({ storage: store, vocab: worn, plugins: [archetypes()] })
+  g.apply(Array.from({ length: 8 }, (_, i) => ({
+    entity: { eid: `app${i}` },
+    app: {},
+    ...i == 0 ? { test: {} } : {},
+  })))
+  let count = (line: string) => Number(store.rows(line)[0].n)
+  count('.app&.count')
+  for (let m = 1; m <= moves; m++) {
+    g.apply([{
+      entity: { eid: `app${m % 8}` },
+      ...Object.fromEntries(tags.map((t, i) => [t, m >> i & 1 ? {} : null])),
+    }])
+  }
+  // Every app ends where it began, wearing `app` alone, or `app` and `test`.
+  g.apply(Array.from({ length: 8 }, (_, i) => ({
+    entity: { eid: `app${i}` },
+    ...Object.fromEntries(tags.map((t) => [t, null])),
+  })))
+  let cost = (line: string) => {
+    let before = meter.steps(), n = count(line)
+    return { n, steps: meter.steps() - before }
+  }
+  return {
+    apps: cost('.app&.count'),
+    real: cost('.app&!test&.count'),
+    tests: cost('.app&.test&.count'),
+  }
+}
+let still = churned(0), moved = churned(120)
+test('a count reads the archetypes worn now, not every one worn before', () => {
+  for (let k of ['apps', 'real', 'tests'] as const) {
+    assertEquals(moved[k].n, still[k].n)
+    // A page of the b-tree more or less, never a bucket per archetype worn.
+    assert(moved[k].steps < still[k].steps + 10, `${k}: ${moved[k].steps}`)
+  }
+  assertEquals([still.apps.n, still.real.n, still.tests.n], [8, 7, 1])
+})
+
+// A membership that lost a part is made again from the counts that stand,
+// and holds the archetypes worn now.
+let torn = fixture()
+torn.g.apply([
+  { entity: { eid: 'kept' }, note: {} },
+  { entity: { eid: 'moved' }, note: {} },
+])
+Number(torn.store.rows('.note&.count')[0].n)
+torn.g.apply([{ entity: { eid: 'moved' }, mark: {} }])
+torn.d.query({ t: 'drop', kind: 'table', name: '_yaks_membership' })
+let remade = ['.note&.count', '.mark&.count'].map((line) =>
+  Number(torn.store.rows(line)[0].n)
+)
+let held = torn.d.query(
+  select({ cols: [col('archetype')], from: table('_yaks_membership') }),
+)
+test('a membership is made again from the counts, of the archetypes worn', () => {
+  assertEquals(remade, [2, 1])
+  assertEquals(
+    new Set(held.map((r) => r.archetype)).size,
+    populations(torn.d)!.length,
+  )
 })

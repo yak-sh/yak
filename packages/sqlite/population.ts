@@ -15,20 +15,25 @@ import {
   count,
   type CreateTable,
   type CreateTrigger,
+  type Delete,
   derivedOf,
   type Driver,
   entryIs,
   eq,
   exists,
+  type Expr,
   fn,
   gt,
+  type Insert,
   isNull,
+  le,
   lit,
   not,
   notNull,
   op,
   revision,
   select,
+  type Source,
   type Stmt,
   table,
 } from '@yaks/sql'
@@ -77,38 +82,110 @@ export let tallying: CreateTrigger[] = (['insert', 'delete', 'update'] as const)
     ] as Extract<Stmt, { t: 'insert' }>[],
   }))
 
-// The membership of each archetype: which component tables it holds, kept as
-// descriptors come and go.
+// Which component tables each populated archetype holds: an archetype's
+// rows stand while a live entity wears it, and go when its last one leaves.
+// An archetype is never forgotten, so a store whose entities gain and lose
+// components keeps every set they ever wore: the directory held 674 for its
+// 404 apps, and a count of apps read each of them and its empty population
+// (T-4230). A count reads only the archetypes worn now.
+//
+// Archetype `id`'s rows, one for each of the tables a descriptor names,
+// read from `from`.
+let enter = (
+  id: Expr,
+  tables: Expr,
+  where: Expr,
+  ...from: Source[]
+): Insert => {
+  let [first, ...rest] = [...from, call('json_each', [tables], 'j')]
+  return {
+    t: 'insert',
+    or: 'ignore',
+    into: MEMBERSHIP,
+    cols: ['component', 'archetype'],
+    q: select({
+      cols: [col('value', 'j'), id],
+      from: first,
+      joins: rest.map((src) => ({ how: 'cross' as const, src })),
+      where,
+    }),
+  }
+}
+let leave = (id: Expr): Delete => ({
+  t: 'delete',
+  from: MEMBERSHIP,
+  where: eq(col('archetype'), id),
+})
+// The rows of the archetype a population row counts, from its descriptor.
+let wearing = (id: Expr) =>
+  enter(
+    id,
+    col('tables', 'a'),
+    eq(col('entity', 'a'), id),
+    table('archetype', 'a'),
+  )
 let membership: CreateTrigger[] = [
+  // A descriptor written after the first entity to wear it.
   {
     t: 'create trigger',
-    name: `${MEMBERSHIP}_insert`,
+    name: `${MEMBERSHIP}_described`,
     timing: 'after',
     event: 'insert',
     on: 'archetype',
-    body: [{
-      t: 'insert',
-      into: MEMBERSHIP,
-      cols: ['component', 'archetype'],
-      q: select({
-        cols: [col('value'), col('entity', 'new')],
-        from: call('json_each', [col('tables', 'new')]),
-      }),
-    }],
+    body: [enter(
+      col('entity', 'new'),
+      col('tables', 'new'),
+      exists(select({
+        cols: [lit(1)],
+        from: table(POPULATION),
+        where: and(
+          eq(col('archetype'), col('entity', 'new')),
+          gt(col('n'), lit(0)),
+        ),
+      })),
+    )],
   },
   {
     t: 'create trigger',
-    name: `${MEMBERSHIP}_delete`,
+    name: `${MEMBERSHIP}_undescribed`,
     timing: 'after',
     event: 'delete',
     on: 'archetype',
-    body: [{
-      t: 'delete',
-      from: MEMBERSHIP,
-      where: eq(col('archetype'), col('entity', 'old')),
-    }],
+    body: [leave(col('entity', 'old'))],
+  },
+  {
+    t: 'create trigger',
+    name: `${MEMBERSHIP}_worn`,
+    timing: 'after',
+    event: 'insert',
+    on: POPULATION,
+    when: gt(col('n', 'new'), lit(0)),
+    body: [wearing(col('archetype', 'new'))],
+  },
+  {
+    t: 'create trigger',
+    name: `${MEMBERSHIP}_reworn`,
+    timing: 'after',
+    event: 'update',
+    of: ['n'],
+    on: POPULATION,
+    when: and(le(col('n', 'old'), lit(0)), gt(col('n', 'new'), lit(0))),
+    body: [wearing(col('archetype', 'new'))],
+  },
+  {
+    t: 'create trigger',
+    name: `${MEMBERSHIP}_shed`,
+    timing: 'after',
+    event: 'update',
+    of: ['n'],
+    on: POPULATION,
+    when: and(gt(col('n', 'old'), lit(0)), le(col('n', 'new'), lit(0))),
+    body: [leave(col('archetype', 'new'))],
   },
 ]
+// What membership was before it followed populations: every archetype ever
+// described, kept by these two.
+let LEGACY = [`${MEMBERSHIP}_insert`, `${MEMBERSHIP}_delete`]
 
 // Graves can be written before classification (or by SQL extensions).
 // Their physical presence, not the eventual descriptor, decides liveness.
@@ -140,40 +217,42 @@ let burying: CreateTrigger[] = (['insert', 'delete'] as const).map((event) => {
   }
 })
 
-let TABLES: CreateTable[] = [
-  {
-    t: 'create table',
-    name: POPULATION,
-    cols: [{ name: 'archetype', type: 'integer', pk: true }, {
-      name: 'n',
-      type: 'integer',
-      notNull: true,
-    }],
-  },
-  {
-    t: 'create table',
-    name: MEMBERSHIP,
-    cols: [{ name: 'component', type: 'text' }, {
-      name: 'archetype',
-      type: 'integer',
-    }],
-    keys: [{ pk: ['component', 'archetype'] }],
-  },
-]
+let COUNTS: CreateTable = {
+  t: 'create table',
+  name: POPULATION,
+  cols: [{ name: 'archetype', type: 'integer', pk: true }, {
+    name: 'n',
+    type: 'integer',
+    notNull: true,
+  }],
+}
+let MEMBERS: CreateTable = {
+  t: 'create table',
+  name: MEMBERSHIP,
+  cols: [{ name: 'component', type: 'text' }, {
+    name: 'archetype',
+    type: 'integer',
+  }],
+  keys: [{ pk: ['component', 'archetype'] }],
+}
 
 // Everything the counts are made of. Each trigger moves them with the rows,
 // and the counts are only true while every one stands: a table made again
 // drops the triggers on it (./ddl.ts `refit`), and a spine respun before
 // T-164366 dropped `tallying`, so the platform's directory went on counting
-// each deploy deleted and none created.
-let PARTS = [...TABLES, ...tallying, ...membership, ...burying]
+// each deploy deleted and none created. The membership is made again from
+// the counts alone, without reading an entity.
+let COUNTING: Stmt[] = [COUNTS, ...tallying, ...burying]
+let MEMBERSHIPS: Stmt[] = [MEMBERS, ...membership]
+let PARTS = [...COUNTING, ...MEMBERSHIPS]
 
 /** Whether the file keeps counts, and every trigger that keeps them true:
  * what an answer read from them asks. It reads the file's whole schema, once
  * per schema revision (@yaks/sql `catalogue`). */
-export let installed = (driver: Driver): boolean => {
+export let installed = (driver: Driver): boolean => standing(driver, PARTS)
+let standing = (driver: Driver, parts: Stmt[]) => {
   let held = new Set(catalogue(driver).map((o) => o.name))
-  return PARTS.every((s) => held.has(s.name))
+  return parts.every((s) => held.has((s as { name: string }).name))
 }
 
 // Whether the file keeps counts at all, one look at their table, once while
@@ -195,56 +274,69 @@ let kept = (driver: Driver): boolean => {
   return held.kept
 }
 
+// Drop `parts`, and the names before them: the triggers first, since a
+// table dropped takes the triggers on it along.
+let clear = (driver: Driver, parts: Stmt[], legacy: string[] = []) => {
+  let named = (s: Stmt) => (s as { name: string }).name
+  let triggers = parts.filter((s) => s.t == 'create trigger').map(named)
+  let tables = parts.filter((s) => s.t == 'create table').map(named)
+  for (let name of [...legacy, ...triggers]) {
+    driver.query({ t: 'drop', kind: 'trigger', name, ifExists: true })
+  }
+  for (let name of tables) {
+    driver.query({ t: 'drop', kind: 'table', name, ifExists: true })
+  }
+}
+
 /** Install once, after the entity schema and its archetype backfill stand.
  * Seeding and the triggers commit together; another opener sees both or none.
  * Counts missing any part are not trusted: what is left of them goes, and they
- * are seeded anew from the rows. */
+ * are seeded anew from the rows. A membership missing a part is made again
+ * from the counts that stand. */
 export let population = (driver: Driver): void => {
   if (installed(driver)) return
-  let held = new Map(catalogue(driver).map((o) => [o.name, o.type]))
-  for (let s of PARTS.toReversed()) {
-    let kind = held.get(s.name)
-    if (kind == 'table' || kind == 'trigger') {
-      driver.query({ t: 'drop', kind, name: s.name })
-    }
-  }
-  for (let s of TABLES) driver.query(s)
-  driver.query({
-    t: 'insert',
-    into: POPULATION,
-    cols: ['archetype', 'n'],
-    q: select({
-      cols: [col('archetype'), count()],
-      from: table('entity'),
-      where: and(
-        notNull(col('archetype')),
-        not(
-          exists(
-            select({
-              cols: [lit(1)],
-              from: table('tombstone'),
-              where: eq(col('entity'), col('id', 'entity')),
-            }),
+  if (!standing(driver, COUNTING)) {
+    clear(driver, PARTS, LEGACY)
+    driver.query(COUNTS)
+    driver.query({
+      t: 'insert',
+      into: POPULATION,
+      cols: ['archetype', 'n'],
+      q: select({
+        cols: [col('archetype'), count()],
+        from: table('entity'),
+        where: and(
+          notNull(col('archetype')),
+          not(
+            exists(
+              select({
+                cols: [lit(1)],
+                from: table('tombstone'),
+                where: eq(col('entity'), col('id', 'entity')),
+              }),
+            ),
           ),
         ),
+        group: [col('archetype')],
+      }),
+    })
+    for (let t of [...tallying, ...burying]) driver.query(t)
+  }
+  clear(driver, MEMBERSHIPS, LEGACY)
+  driver.query(MEMBERS)
+  driver.query(
+    enter(
+      col('archetype', 'p'),
+      col('tables', 'a'),
+      and(
+        gt(col('n', 'p'), lit(0)),
+        eq(col('entity', 'a'), col('archetype', 'p')),
       ),
-      group: [col('archetype')],
-    }),
-  })
-  driver.query({
-    t: 'insert',
-    into: MEMBERSHIP,
-    cols: ['component', 'archetype'],
-    q: select({
-      cols: [col('value', 'j'), col('entity', 'a')],
-      from: table('archetype', 'a'),
-      joins: [{
-        how: 'cross',
-        src: call('json_each', [col('tables', 'a')], 'j'),
-      }],
-    }),
-  })
-  for (let t of [...tallying, ...membership, ...burying]) driver.query(t)
+      table(POPULATION, 'p'),
+      table('archetype', 'a'),
+    ),
+  )
+  for (let t of membership) driver.query(t)
 }
 
 export type Population = { value: string; n: number; tables: string[] }
@@ -347,9 +439,10 @@ let counted = (driver: Driver): Counted => {
   return held
 }
 
-// Whether any entity holding `comp` has a number: a seek of the number index
-// (`entity(archetype, num)`) for each archetype that holds it, and one for
-// the entities no archetype describes yet, which may hold it too.
+// Whether any live entity holding `comp` has a number: a seek of the number
+// index (`entity(archetype, num)`) for each archetype a live entity wears that
+// holds it, and one for the entities no archetype describes yet, which may
+// hold it too.
 let numbering = (driver: Driver, comp: string): boolean =>
   driver.query(select({
       cols: [lit(1)],
