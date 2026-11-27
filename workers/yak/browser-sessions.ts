@@ -1,6 +1,6 @@
 import { identityEid } from '@yaks/graph/identity'
 import { instrumentEid } from '@yaks/platform/instrument'
-import { placeOf, type Whereabouts } from '@yaks/platform/signed-in'
+import { placeOf, type Whereabouts } from '@yaks/platform/place'
 import { type Directory, directory } from './directory.ts'
 import { copyOf } from './directory-copy.ts'
 import * as dirPart from './directory.ts'

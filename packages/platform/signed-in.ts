@@ -1,7 +1,7 @@
 /**
  * A signed-in browser in words a person knows it by: its user-agent read
  * (ua-parser-js) as the browser and the device it runs on, and the place its
- * network says it was.
+ * network says it was (./place.ts).
  *
  * @module
  */
@@ -42,25 +42,4 @@ export let browserName = (agent: string): string => {
   return name || on || agent.split(/[\s/]/)[0] || 'A browser'
 }
 
-/** Where a request came from, as Cloudflare's network reads it. */
-export type Whereabouts = { city?: string; region?: string; country?: string }
-
-let countries = new Intl.DisplayNames(['en'], { type: 'region' })
-
-/**
- * A city and its region at home, or its country abroad: `Portland, Oregon`,
- * `Berlin, Germany`. Empty where the network says nothing.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * import { placeOf } from '@yaks/platform/signed-in'
- * assertEquals(placeOf({ city: 'Berlin', country: 'DE' }), 'Berlin, Germany')
- * assertEquals(placeOf({}), '')
- * ```
- */
-export let placeOf = ({ city, region, country }: Whereabouts): string => {
-  let wide = country == 'US'
-    ? region
-    : country && (countries.of(country) ?? country)
-  return [city, wide].filter(Boolean).join(', ')
-}
+export { placeOf, type Whereabouts } from './place.ts'

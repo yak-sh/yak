@@ -30,14 +30,9 @@ import {
 } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
+import { REACH, TAB_PERSON } from './names.ts'
 
-/** The page graph's door: `/query`, `/apply` and `/ws` under it. No space
- * can be named `account` (./names.ts), so it is no space's page. */
-export let REACH = '/manage/account/reach'
-
-/** The header on writes and the query parameter on socket upgrades identifying
- * the person the tab was drawn for. The door compares it with the session. */
-export let TAB_PERSON = 'x-yak-tab-person'
+export { REACH, TAB_PERSON }
 
 /** The rows a page was drawn from, as the page carries them. */
 export type Drawn = { person: string; epoch: string; rows: Bundle[] }

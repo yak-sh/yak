@@ -2,7 +2,7 @@
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
 import { asking } from '../models.ts'
-import { planting } from '../providers.ts'
+import { planting } from '../provider-names.ts'
 import { maintenance } from '@yaks/platform/lent'
 
 export let effects = (_host: unknown, options: Options): Handlers => {

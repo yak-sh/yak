@@ -112,6 +112,7 @@
     "./browser-wire": "./browser-wire.ts",
     "./still": "./still.ts",
     "./signed-in": "./signed-in.ts",
+    "./place": "./place.ts",
     "./located": "./located.ts",
     "./named": "./named.ts",
     "./preview-audit": "./preview-audit.ts",

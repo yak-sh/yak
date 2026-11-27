@@ -10,12 +10,10 @@
 import {
   type Config,
   given,
-  holding,
   type Options,
   type Plug,
   type Reveal,
   revealed,
-  used,
 } from '@yaks/host/config'
 import { KEY, known, resolve } from '@yaks/connections'
 import type { Grant } from '@yaks/egress'
@@ -28,20 +26,11 @@ import {
 } from '@yaks/model'
 import { sentinel } from '@yaks/secrets'
 import { answering, providing, serving } from './config.ts'
-import { providerFacets } from './load.ts'
+import { plugged, setting } from './provider-names.ts'
 import { ctxOf } from './connections.ts'
 import { vaultOf } from './vault.ts'
 import type { Env } from './env.ts'
 import { background, invocationKey } from './defects.ts'
-import type { Bundle, Comp } from '@yaks/graph'
-import { identityEid } from '@yaks/graph/identity'
-import { after } from '@yaks/fp'
-import type { Stored } from './graph.ts'
-
-let setting = (env: object, name: string): string | undefined => {
-  let value = (env as Record<string, unknown>)[name]
-  return typeof value == 'string' && value ? value : undefined
-}
 
 /** What the platform lends a provider for its own agents (the Operator, the
  * builder): the transport it holds as it lends and its settings. Nobody is
@@ -74,35 +63,6 @@ let lending = (env: Env, send: typeof fetch): Lent => {
     scope: invocationKey,
   }
 }
-
-// A Lent for asking a plugin which names it serves: making a model calls
-// nothing it lends.
-let idle: Lent = {
-  fetch: () => Promise.reject(new Error('idle')),
-  key: () => Promise.resolve(undefined),
-  refresh: () => Promise.resolve(undefined),
-  store: () => Promise.reject(new Error('idle')),
-  env: () => undefined,
-}
-
-// Each plugin `config` names, with its options read from `env` and the
-// provider names it serves.
-let plugged = (env: object, config: Config) =>
-  (config.plugins ?? []).map((plug) => {
-    let options = revealed(given(plug), holding(env)) as Options
-    let facet = providerFacets[used(plug)]
-    return {
-      plug,
-      options,
-      facet,
-      names: Object.keys(facet?.providers?.(idle, options) ?? {}),
-    }
-  })
-
-/** The provider names `config`'s plugins serve, in its order: the first is
- * the one a model no row names a provider for is asked of. */
-export let names = (env: object, config: Config): string[] =>
-  plugged(env, config).flatMap((p) => p.names)
 
 /** Whether the Worker holds every credential of the platform's that the
  * plugin serving `provider` in `config` names. */
@@ -268,26 +228,5 @@ export let granted = (
       value: setting(env, s)!,
       hosts,
     })),
-  )
-}
-
-// Only providers are installed. Model rows stay as history and are never retired
-// because a newer release or a code list stopped naming them. A store that
-// reads synchronously is answered synchronously, so a seed applied while a
-// release is selected can stand them up first (graph.ts `#providing`).
-export let planting = (
-  read: Stored['graph']['read'],
-  at: Pick<Stored, 'meta' | 'app' | 'env'>,
-): Bundle[] | Promise<Bundle[]> => {
-  if (at.meta || !at.app) return []
-  return after(
-    read('.provider&*'),
-    (held) =>
-      names(at.env, serving).flatMap((name): Bundle[] =>
-        held.some((b) => (b.provider as Comp).name == name) ? [] : [{
-          entity: { eid: identityEid('provider', [name]) },
-          provider: { name, transport: 'http', offered: true },
-        }]
-      ),
   )
 }

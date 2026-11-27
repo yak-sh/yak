@@ -16,8 +16,9 @@ deciding does not:
 
 And `./strip`, sucrase reading TypeScript and JSX as JavaScript for the walk,
 which a host whose upload cannot carry sucrase reaches elsewhere (yaks.app's
-kernel asks its compiler Worker); and `./unpack`, the host's when it fills an
-npm package's home (below).
+kernel asks its compiler Worker); `./unpack`, the host's when it fills an npm
+package's home (below); and `./dependencies`, `dependencies` and `Unplanned`
+alone, for a host that reads an app's package.json without walking its modules.
 
 An **ask** (`Ask`) is what a compile is handed: the text of every file it reads,
 and the entries to build. An **answer** (`Answer`) is what it returns: one
@@ -47,7 +48,8 @@ module per entry, the lock, and any errors, each a line an agent can act on.
   or a string names nothing, and `import type` is gone with the types.
 - `loaded(page, html)` is the module scripts a page loads, and `mapped(html)`
   what its import maps name.
-- `dependencies(text)` reads `package.json`'s `dependencies`.
+- `dependencies(text)` reads `package.json`'s `dependencies` (also
+  `./dependencies`).
 - `compile(ask, catalog, origin)`, from `./compile`, builds what an ask names
   and answers. It never throws for the app's own mistakes, which are the
   answer's `errors`.

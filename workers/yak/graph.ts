@@ -92,7 +92,7 @@ import { sessionMove } from './session-move.ts'
 import { jobs } from './jobs.ts'
 import { statements } from '@yaks/sqlite'
 import type { Context as Reported } from '@yaks/tracker/report'
-import { planting } from './providers.ts'
+import { planting } from './provider-names.ts'
 import { bookmarks, RESTORING } from './bookmarks.ts'
 import { embeddings } from './metered.ts'
 import { attributed } from './attribution.ts'
@@ -417,7 +417,6 @@ import { answered, KERNEL, type Meta, metaOf } from './meta.ts'
 import { BINARY } from '@yaks/vocab/wire'
 import { minted } from '@yaks/platform/page-wire'
 import { caught, defect, refusing, stopped } from './defects.ts'
-import { noted } from './unseen.ts'
 import {
   apart,
   elapsed,
@@ -4883,6 +4882,7 @@ export class Store extends Durable {
     let filed = (async () => {
       let at = await this.#directory().appAt(app)
       if (!at) return
+      let { noted } = await import('./unseen.ts')
       await noted({
         request: `subscribe ${query}`,
         version: at.app.version ?? null,

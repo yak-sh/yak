@@ -39,7 +39,7 @@ import {
   type WordsOpts,
 } from '@yaks/host/words'
 import { selected } from '@yaks/host/documents'
-import { dependencies, Unplanned } from '@yaks/esbuild'
+import { dependencies, Unplanned } from '@yaks/esbuild/dependencies'
 import { vocabFacets } from './load.ts'
 import { once } from '@yaks/fp'
 import {

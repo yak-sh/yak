@@ -1177,3 +1177,43 @@ remaining cost. `Uses` calls in a new isolate show their own load now: 16 of
 1,116 in 13:30–13:44 spent 50 ms of CPU or more (median 54.5 CPU, 68.5 wall),
 where under the legacy registry none did and the task measured 160–726 ms before
 such calls began.
+
+## What a Store's first read runs, and what it only compiles (T-149696)
+
+November 27, 2026, over `admin copy` stores of yourname, on a loaded box (load
+average 7), so read these figures as comparisons with each other.
+
+- **Vocabularies.** The 851 KB of JSON in graph.ts's closure (load.ts's
+  vocabularies among it) costs 25 ms in Node to compile and evaluate as object
+  literals, 16 ms as `JSON.parse` strings and 5 ms as strings never parsed,
+  against about 218 ms for the closure's 2.2 MB of code. Making the vocabulary
+  facets lazy is worth at most about 10 ms.
+- **The privacy readiness check** (personal.ts `stored`) is 43 ms of the first
+  read's profile. Skipping it leaves the first read just as slow: the compile it
+  pays is shared with the read that follows.
+- **Boot and read in process** (Deno, facets loaded beforehand): about 230 ms of
+  CPU, then 15–20 ms for the next read. Most of the difference is V8 compiling
+  functions the first time they run: the SQL binder and renderer, the plugins'
+  binding, and the app's words.
+- **Code a read never runs.** 1.2 MB of the closure's 2.2 MB of code had no
+  sample during boot and read: yaml (103 KB), @yaks/ui (79), connections (73),
+  openai and workers-ai (54), the browser client and sync (47), es-module-lexer
+  (28), croner (28) and others.
+
+The cuts made here take 274 KB of code out of graph.ts's static closure, 3.06 →
+2.79 MB (esbuild input bytes), without changing what a read runs:
+
+| Edge cut                              | Brought                       | KB |
+| ------------------------------------- | ----------------------------- | -: |
+| graph.ts → providers.ts               | connections, lending, secrets | 99 |
+| app-canvas.ts → page-graph.ts (REACH) | @yaks/client, @yaks/sync      | 49 |
+| vocab.ts → @yaks/esbuild              | the module graph, lexer       | 34 |
+| declaration.ts → files.ts, objects.ts | Files' door, release, lexer   | 54 |
+| browser-sessions.ts → signed-in.ts    | ua-parser-js                  | 20 |
+| graph.ts → unseen.ts                  | the tracker's reads           | 19 |
+
+Importing the graph.ts chunk in a fresh Node process, 12 alternating rounds: 466
+→ 405 ms of CPU (median), faster in 10 of 12, median paired difference 45 ms.
+Left in the closure: yaml through @yaks/platform/manifest (103 KB; a manifest is
+read synchronously), the provider facets that `planting` asks for their names
+(104 KB), chat.ts (43 KB, lent synchronously at bind) and croner (28 KB).

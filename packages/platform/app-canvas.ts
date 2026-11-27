@@ -23,7 +23,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Step } from '@yaks/builders/workflow'
 import type { Made, Page } from './app-made.ts'
-import { REACH } from './page-graph.ts'
+import { REACH } from './names.ts'
 import {
   type AppDraft,
   crossedPaths,

@@ -7,14 +7,17 @@ import type { VocabDoc } from '@yaks/vocab'
 import type { Tools } from '@yaks/tools/declared'
 import { type App, releaseOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { r2RawObjects } from './lib/objects.ts'
-import { keptBytes } from './files.ts'
 import { background, caught } from './defects.ts'
 import { sharing } from './lib/shared.ts'
 
 export type Declaration = { vocab: VocabDoc; tools: Tools }
 // Where an app's declarations are kept, and each one's name there.
 let prefix = declarationsPrefix
+// Files' door (files.ts) and the bucket's (lib/objects.ts) load when a
+// declaration is first read or kept: a store that does neither compiles
+// neither.
+let keptBytes: typeof import('./files.ts').keptBytes = (...args) =>
+  import('./files.ts').then((files) => files.keptBytes(...args))
 let name = (app: App, release: string) =>
   `${app.source?.split('/').pop() ?? 'legacy'}/${release}.json`
 
@@ -48,6 +51,7 @@ export let keepDeclaration = async (
 ) => {
   let at = prefix(space, app) + name(app, release)
   let text = JSON.stringify(value)
+  let { r2RawObjects } = await import('./lib/objects.ts')
   await r2RawObjects(env.BLOBS).put(at, new TextEncoder().encode(text))
   hold(at, text)
   // Read once through Files, behind the write, so the first isolate to want

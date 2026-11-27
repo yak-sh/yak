@@ -35,6 +35,14 @@ export let INVITE = '/invite'
  * link can be said aloud (`yaks.app/i/k7q2m`). */
 export let INVITED = '/i/'
 
+/** The page graph's door: `/query`, `/apply` and `/ws` under it. No space
+ * can be named `account` ({@link RESERVED}), so it is no space's page. */
+export let REACH = '/manage/account/reach'
+
+/** The header on writes and the query parameter on socket upgrades identifying
+ * the person the tab was drawn for. The door compares it with the session. */
+export let TAB_PERSON = 'x-yak-tab-person'
+
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` they would read as the platform speaking (T-37886): a
 // sign-in page at `login.yaks.app`, a letter from `security@yaks.app`. The

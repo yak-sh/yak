@@ -26,11 +26,9 @@ import {
   type Strip,
   typed,
 } from './graph.ts'
+import { dependencies, Unplanned } from './dependencies.ts'
 
-/** A plan that cannot be made, in a sentence the agent can act on. */
-export class Unplanned extends Error {
-  override name = 'Unplanned'
-}
+export { dependencies, Unplanned }
 
 /** An app's files, as the host holds them. */
 export type App = {
@@ -102,38 +100,6 @@ export type Plan = {
 let COMPILED = /\.(?:js|mjs|cjs|ts|tsx|jsx|mts|cts|json|css)$/
 
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
-
-/** The packages package.json declares, name to version range; none without
- * one.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * assertEquals(dependencies('{"dependencies": {"three": "^0.180.0"}}'), {
- *   three: '^0.180.0',
- * })
- * assertEquals(dependencies(null), {})
- * ```
- */
-export let dependencies = (text: string | null): Record<string, string> => {
-  if (text == null) return {}
-  let pkg: { dependencies?: unknown }
-  try {
-    pkg = JSON.parse(text)
-  } catch (e) {
-    throw new Unplanned(`package.json is not JSON: ${(e as Error).message}`)
-  }
-  let deps = pkg?.dependencies ?? {}
-  if (
-    typeof deps != 'object' || deps == null || Array.isArray(deps) ||
-    Object.values(deps).some((v) => typeof v != 'string')
-  ) {
-    throw new Unplanned(
-      'package.json: dependencies is an object of package name to version, ' +
-        'e.g. {"dependencies": {"three": "^0.180.0"}}',
-    )
-  }
-  return deps as Record<string, string>
-}
 
 /** Each toolkit package of a catalog: its source digest, and the toolkit
  * packages it depends on. A host keeps this beside the catalog, small enough
