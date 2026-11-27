@@ -7,7 +7,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { graph, identityEid, mint } from '@yaks/graph'
+import { eidOf, graph, identityEid, mint } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { loadTools } from '@yaks/graph/tools'
 import { loadVocab } from '@yaks/vocab'
@@ -340,7 +340,7 @@ test('a spawn refuses what is not a provider, and work that is not there', async
     await refused({
       task: 'the-task',
       provider: P,
-      model: identityEid('model', ['other']),
+      model: eidOf(modelDoc, 'model')('other'),
     }),
     'does not serve',
   )

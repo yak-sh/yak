@@ -65,6 +65,8 @@ import {
   durable as raw,
 } from '../../packages/durable-object/testing.ts'
 import { dropDdl } from '@yaks/journal'
+import { docDoc } from '@yaks/doc'
+import { identity } from '@yaks/vocab/runtime'
 import { builders } from './builder-probe.ts'
 import type { Load } from '@yaks/host'
 import { cleanup, type Clock as Virtual, tick } from '@yaks/testing'
@@ -235,11 +237,18 @@ export let db = ({ storage }: Held) => driver(storage)
 export let named = (held: Held, fields: Record<string, Param>) =>
   objects(db(held), fields).map((r) => String(r.name))
 
+// The doc table's insert, under either name a store gives the table: its
+// identity, or its label in a store laid out before identities.
+let DOC_INSERT = new RegExp(
+  `^insert into "(doc|${identity(docDoc, 'doc')})"`,
+  'i',
+)
+
 /** Whether a statement the object's SQLite runs writes a doc row titled
  * `title`, its title bound alone or inside a part of rows (@yaks/sql `parts`):
  * where a test makes storage fail on one write. */
 export let titling = (sql: string, bindings: unknown[], title: string) =>
-  /^insert into "doc"/i.test(sql) &&
+  DOC_INSERT.test(sql) &&
   bindings.some((b) =>
     b === title ||
     typeof b == 'string' && b.startsWith('[') &&

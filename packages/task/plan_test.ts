@@ -11,7 +11,8 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph'
-import { edgeEid } from '@yaks/edge'
+import { edgeEid, relation } from '@yaks/edge'
+import { taskDoc } from './comp.ts'
 import { teamGraph } from './testing.ts'
 
 // The project the tree hangs from, and a graph holding it.
@@ -76,11 +77,11 @@ test('a dry run of a plan answers its ids and writes none of it', async () => {
   // — and each link is named by the sentence it states, not by its alias.
   assertEquals(
     by(said, '$link~goal').entity.eid,
-    edgeEid('p19', 'contains', goal),
+    edgeEid('p19', relation(taskDoc, 'contains'), goal),
   )
   assertEquals(
     by(said, '$link~gate').entity.eid,
-    edgeEid(goal, 'requires', gate),
+    edgeEid(goal, relation(taskDoc, 'requires'), gate),
   )
   // Nothing landed.
   assertEquals((await g.read('.task')).length, 0)
