@@ -1,20 +1,32 @@
 # @yaks/archetype
 
-Tracks which component tables contain each entity, so presence queries and
-component additions/removals can reuse cached sets. An entity is a record
-identified by `entity.eid`; each named component is stored in a corresponding
-table by SQL adapters. An **archetype** is the record describing one distinct
-set of those table names, shared by all entities with that set.
+Tracks which components each entity holds, so presence queries and component
+additions/removals can reuse cached sets. An entity is a record identified by
+`entity.eid`; each component is stored in a corresponding table by SQL adapters.
+An **archetype** is the record describing one distinct set of components, shared
+by all entities with that set.
 
 ## Stored data
 
-An archetype's eid is `derivedEid('archetype|' + canonicalNames.join(','))`: the
-shared graph derivation (a SHA-256 encoded as a version-8 UUID), with names
-sorted bytewise by UTF-8. This is disjoint from blobs' full SHA-256 hex
-addresses; `archetype.tables` stores the sorted list as a JSON string, the
+An archetype's **descriptor** is the set of its components' identities: the UUID
+each one's `$id` gives (@yaks/vocab `identityIn`), or its label for a word that
+has none yet. Its eid is `derivedEid('archetype|' + descriptor.join(','))`: the
+shared graph derivation (a SHA-256 encoded as a version-8 UUID), with the
+entries sorted bytewise by UTF-8. This is disjoint from blobs' full SHA-256 hex
+addresses; `archetype.tables` stores the sorted descriptor as a JSON string, the
 vocabulary's scalar JSON representation. Empty sets are valid. Duplicates
-collapse. Names containing `,`, `|` or NUL are rejected rather than producing
-ambiguous hashes.
+collapse. Entries containing `,`, `|` or NUL are rejected rather than producing
+ambiguous hashes. Renaming a component changes no descriptor and moves no
+entity.
+
+In memory a set is held by the names its vocabulary holds its components under,
+what bundles and presence tests write: `Archetypes`, given a vocabulary's
+`namingOf`, writes descriptors by identity and reads them back to names, and
+`tablesOf(value, vocab)` reads one stored descriptor. A descriptor written
+before its words had identities holds their labels; it is read the same way,
+keeps its own eid, and a presence test matches it, until the migration rewrites
+it (T-162475). An entity pointed at one moves to the identity form when its set
+changes.
 
 ```ts
 import { archetypeDoc, archetypes } from '@yaks/archetype'
@@ -32,8 +44,9 @@ console.log(await g.read('.doc'))
 
 The example uses RAM; use [@yaks/sqlite](../sqlite) for persistent storage. The
 root module exports `archetypeDoc`, `archetypes()`, `Archetypes`, `canonical`,
-`eidOf`, `tablesOf`, `satisfies`, and the `Archetype` type. `./vocab` and
-`./graph` provide the declarations and plugin factory for loaders.
+`eidOf`, `descriptorOf`, `tablesOf`, `namingOf`, `satisfies`, and the
+`Archetype` and `Naming` types. `./vocab` and `./graph` provide the declarations
+and plugin factory for loaders.
 
 Both the vocabulary and the plugin are opt-in. A bundle is one entity's
 components as a JSON object. `entity.archetype` appears in bundles as an eid;

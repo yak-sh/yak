@@ -139,7 +139,7 @@ let PackageTree = ({ io, census, packages, declared, effects }: Schema) => {
   let reach = new Map<string, number>()
   for (let s of sets) {
     let own = new Set(
-      tables(s).map((t) => vocab.comp(t)?.namespace?.label ?? ''),
+      tables(s, vocab).map((t) => vocab.comp(t)?.namespace?.label ?? ''),
     )
     for (let p of own) {
       reach.set(p, (reach.get(p) ?? 0) + (tally[s.entity.eid] ?? 0))
@@ -288,7 +288,9 @@ let KindList = ({ io, census: { sets, tally, ready } }: Schema) => {
   let { kinds } = io.ask({ kinds: KINDS })
   let are = new Map<string, number>()
   for (let s of sets) {
-    let k = io.vocab.kindOf(Object.fromEntries(tables(s).map((t) => [t, {}])))
+    let k = io.vocab.kindOf(
+      Object.fromEntries(tables(s, io.vocab).map((t) => [t, {}])),
+    )
     if (k) are.set(k, (are.get(k) ?? 0) + (tally[s.entity.eid] ?? 0))
   }
   let name = (b: Bundle) => str(b, '_kind', 'name')
@@ -381,8 +383,8 @@ let ArchetypeList = ({ io, census }: Schema) =>
         {
           name: 'components',
           cell: (b) =>
-            tables(b).length
-              ? chips(io, tables(b))
+            tables(b, io.vocab).length
+              ? chips(io, tables(b, io.vocab))
               : h(Value, { mod: 'nil' }, 'no components'),
         },
         {

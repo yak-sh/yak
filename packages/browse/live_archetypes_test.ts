@@ -1,9 +1,10 @@
 // Local inference must prove a complete physical set. Unknown projected sets
 // use batched, addressed one-shots, never the graph-wide descriptor catalogue.
 import { test } from './testing.ts'
-import { assertEquals, assertStrictEquals } from '@std/assert'
-import { eidOf } from '@yaks/archetype'
+import { assertEquals, assertNotEquals, assertStrictEquals } from '@std/assert'
+import { eidOf, namingOf } from '@yaks/archetype'
 import { archetypeTables, rememberArchetype } from './live_archetypes.ts'
+import { vocab } from './types.ts'
 import { applyLocal, type Comps, config } from './live.ts'
 import { host } from './host_testing.ts'
 import { tick } from './testing.ts'
@@ -34,6 +35,17 @@ test('local table names prove the spine without reading component bodies', () =>
     local_plugin: body,
   })
   assertEquals(archetypeTables(next), undefined)
+})
+
+test('a set the page names by identity is learned from the names it holds', () => {
+  let tables = ['doc', 'task'], id = eidOf(tables.map(namingOf(vocab).id))
+  assertNotEquals(id, eidOf(tables))
+  rememberArchetype({
+    entity: { eid: 'named-owner', num: 0, archetype: id },
+    doc: {},
+    task: {},
+  } as Comps)
+  assertEquals(archetypeTables(id), tables)
 })
 
 test('a later physical set is learned, not the prior set of the same owner', () => {

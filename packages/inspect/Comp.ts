@@ -120,7 +120,7 @@ let Properties = ({ e, io, notes, props }: Part_ & { props: Answer }) =>
 // The sets of components it is found with, most entities first.
 let Found = ({ e, io, notes, census }: Part_ & { census: Census }) => {
   let name = nameOf(e)
-  let sets = within(census.sets, name)
+  let sets = within(census.sets, name, io.vocab)
   return h(
     Part,
     {
@@ -141,7 +141,7 @@ let Found = ({ e, io, notes, census }: Part_ & { census: Census }) => {
           {
             name: 'with',
             cell: (b) => {
-              let others = tables(b).filter((t) => t != name)
+              let others = tables(b, io.vocab).filter((t) => t != name)
               return others.length
                 ? chips(io, others)
                 : h(Value, { mod: 'nil' }, 'nothing else')
@@ -175,7 +175,9 @@ type Tie = {
 
 // Each set's kind, by the set's eid: what an entity made of it shows as.
 let kinds = (io: Io, census: Census, eids: string[]) => {
-  let of = new Map(census.sets.map((s) => [s.entity.eid, tables(s)]))
+  let of = new Map(
+    census.sets.map((s) => [s.entity.eid, tables(s, io.vocab)]),
+  )
   return eids.map((eid) =>
     io.vocab.kindOf(
       Object.fromEntries((of.get(eid) ?? []).map((t) => [t, {}])),
@@ -232,7 +234,7 @@ let Refers = (
 ) => {
   let name = nameOf(e)
   let eid = e.entity.eid
-  let archs = within(census.sets, name).map((s) => s.entity.eid)
+  let archs = within(census.sets, name, io.vocab).map((s) => s.entity.eid)
   let ends = (way: 'from' | 'to') =>
     `.edge&.edge.${way}.entity.archetype=${archs.join(',')}` +
     `&.tally=entity.archetype`
@@ -249,7 +251,9 @@ let Refers = (
   // Edges by relation, off a tally of the edges' own sets.
   let byRelation = (tally: Record<string, number> = {}) => {
     let by = new Map<string, number>()
-    let of = new Map(census.sets.map((s) => [s.entity.eid, tables(s)]))
+    let of = new Map(
+      census.sets.map((s) => [s.entity.eid, tables(s, io.vocab)]),
+    )
     for (let [set, n] of Object.entries(tally)) {
       let rel = (of.get(set) ?? []).find((t) => rels.includes(t))
       if (rel) by.set(rel, (by.get(rel) ?? 0) + n)

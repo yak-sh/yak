@@ -18,6 +18,7 @@ import {
   as,
   at,
   col,
+  descriptorHolds,
   each,
   eq,
   exists,
@@ -105,7 +106,10 @@ export let sources = (
       and(
         not(isNull(a('entity'))),
         ...excluded.map((name) =>
-          eq(fn('instr', a('tables'), val(JSON.stringify(name))), lit(0))
+          not(
+            db.holds?.(a('tables'), name) ??
+              descriptorHolds(a('tables'), undefined, name),
+          )
         ),
       ),
       and(

@@ -13,6 +13,7 @@ import { fileDoc } from '@yaks/file/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { effectDoc } from '@yaks/effects'
 import { archetypeDoc } from '@yaks/archetype/vocab'
+import { Archetypes, namingOf } from '@yaks/archetype/sets'
 
 let vocab = loadVocab([
   sessionDoc,
@@ -28,11 +29,14 @@ for (let size of [100, 1000]) {
   let s = storage(d, vocab, { derived: sessionDerived(vocab) })
   s.install()
   s.raise()
+  // Each set's descriptor as the store writes it: its components' identities.
+  let sets = new Archetypes(namingOf(vocab))
   let shape = (id: number, names: string[]) => {
-    d.query(insert('entity', { id, eid: `shape-${id}` }))
+    let set = sets.intern(names)
+    d.query(insert('entity', { id, eid: set.eid }))
     d.query(insert('archetype', {
       entity: id,
-      tables: JSON.stringify(names.sort()),
+      tables: JSON.stringify(set.descriptor),
     }))
   }
   shape(10001, ['session'])
@@ -100,6 +104,10 @@ for (let size of [100, 1000]) {
   test(`status aggregates ordinary imported output within its row budget (${size})`, () => {
     match(rows, [{ session: { status: 'settled' } }])
     match(masked, [{ session: { status: 'running' } }])
-    ok(vm < size * 200 + 10000, `${vm} VM steps for ${size} outputs`)
+    // TODO(T-162475, contract): back to `size * 200`. While descriptors
+    // written before identities stand, the rule seeks each component an entry
+    // lacks under its identity and under its label (@yaks/sql
+    // `descriptorHolds`), about 90 more steps an output.
+    ok(vm < size * 300 + 10000, `${vm} VM steps for ${size} outputs`)
   })
 }

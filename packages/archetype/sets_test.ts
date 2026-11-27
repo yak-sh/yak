@@ -6,7 +6,15 @@ import {
   assertStrictEquals,
   assertThrows,
 } from '@std/assert'
-import { Archetypes, canonical, eidOf, satisfies, tablesOf } from './mod.ts'
+import { loadVocab } from '@yaks/vocab'
+import {
+  Archetypes,
+  canonical,
+  eidOf,
+  namingOf,
+  satisfies,
+  tablesOf,
+} from './mod.ts'
 
 test('archetype identity is namespaced, bytewise, duplicate/order independent', () => {
   let names = ['\u{10000}', 'z', 'a', '\ue000', 'a']
@@ -61,4 +69,51 @@ test('archetype decoding caches scalar content and reads mutable inputs anew', (
     assertThrows(() => cache.decode(value))
   }
   assertStrictEquals(cache.decode('["note"]'), note)
+})
+
+// A vocabulary whose `note` has an identity and whose `tag` has none yet.
+let noteId = crypto.randomUUID()
+let named = new Archetypes(namingOf(loadVocab({
+  $defs: {
+    note: { component: true, $id: `urn:uuid:${noteId}` },
+    tag: { component: true },
+  },
+})))
+
+test('a descriptor holds component identities, and a word without one its label', () => {
+  let set = named.intern(['tag', 'note'])
+  assertEquals(set.tables, ['note', 'tag'])
+  assertEquals(set.descriptor, canonical([noteId, 'tag']))
+  assertEquals(set.eid, eidOf([noteId, 'tag']))
+  assertStrictEquals(named.decode(JSON.stringify(set.descriptor)), set)
+  assertEquals(new Archetypes().intern(['tag']).eid, named.intern(['tag']).eid)
+})
+
+test('a descriptor of labels keeps its own eid, matches, and moves to identities', () => {
+  let labels = named.decode('["note","tag"]')
+  let set = named.intern(['note', 'tag'])
+  assertEquals(labels.eid, eidOf(['note', 'tag']))
+  assertNotEquals(labels.eid, set.eid)
+  assertEquals(labels.tables, set.tables)
+  assertStrictEquals(named.get(labels.eid), labels)
+  assertEquals(
+    named.matching({ all: ['note'] }).toSorted(),
+    [
+      labels.eid,
+      set.eid,
+    ].toSorted(),
+  )
+  assertStrictEquals(named.move(labels, 'tag', true), labels)
+  assertStrictEquals(
+    named.move(labels, 'tag', false),
+    named.intern(['note']),
+  )
+})
+
+test('tablesOf names a descriptor as a vocabulary holds its components', () => {
+  let v = loadVocab({
+    $defs: { note: { component: true, $id: `urn:uuid:${noteId}` } },
+  })
+  assertEquals(tablesOf(JSON.stringify([noteId, 'tag']), v), ['note', 'tag'])
+  assertEquals(tablesOf(JSON.stringify([noteId])), [noteId])
 })

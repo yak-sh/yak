@@ -43,6 +43,7 @@ import {
   col,
   cross,
   desc,
+  descriptorHolds,
   eq,
   exists,
   type Expr,
@@ -133,6 +134,19 @@ let within = (owner: Expr, entry: Expr): Expr => {
   return and(ge(entry, bound(false)), le(entry, bound(true)))
 }
 
+/** What the rule asks of a store's words: whether one is declared, and how
+ * an archetype's stored descriptor, `tables`, says it holds one (@yaks/sql
+ * `descriptorHolds`). */
+export type Words = {
+  declared: (name: string) => boolean
+  holds: (tables: Expr, comp: string) => Expr
+}
+
+let anyWords: Words = {
+  declared: () => true,
+  holds: (tables, comp) => descriptorHolds(tables, undefined, comp),
+}
+
 /**
  * The same rule as SQL, for @yaks/sqlite's derived-property registry
  * (`storage(driver, vocab, { derived: sessionDerived(vocab) })`), so
@@ -158,10 +172,11 @@ export let sessionStatus = {
   select: (
     values: Expr[],
     dispatch = dispatchStatus,
-    declared: (name: string) => boolean = () => true,
+    words: Words = anyWords,
     text: (stored: Expr) => Expr = (stored) => stored,
     one?: Expr,
   ): Select | undefined => {
+    let { declared, holds } = words
     if (
       !values.every((v) =>
         (v.t == 'val' || v.t == 'lit') && typeof v.v == 'string'
@@ -373,12 +388,7 @@ export let sessionStatus = {
       : []
     let walks = (name: string, entry: Expr) =>
       typed
-        ? declared(name)
-          ? gt(
-            fn('instr', col('tables', 'shape'), lit(JSON.stringify(name))),
-            lit(0),
-          )
-          : lit(false)
+        ? declared(name) ? holds(col('tables', 'shape'), name) : lit(false)
         : wears(name, entry)
     let resting = (inputs: boolean) => {
       let e = col('entity', 'e')
@@ -572,7 +582,7 @@ export let sessionStatus = {
             [isNull(col('latest', 'chosen')), lit('empty')],
             [wears('stop', col('latest', 'chosen')), lit('stopped')],
           ],
-          sessionStatus.expr(col('entity', 'chosen'), dispatch, declared, text),
+          sessionStatus.expr(col('entity', 'chosen'), dispatch, words, text),
         ),
         values,
       ),
@@ -581,10 +591,11 @@ export let sessionStatus = {
   expr: (
     owner: Expr,
     dispatch = dispatchStatus,
-    declared: (name: string) => boolean = () => true,
+    words: Words = anyWords,
     text: (stored: Expr) => Expr = (stored) => stored,
     terminal = false,
   ): Expr => {
+    let { declared, holds } = words
     // Each fact about an entry is said once (`marks`), and each fact about
     // the transcript is said once, as a common table expression the next
     // reads: its newest entry (LATEST) and the anchors of its turn (ANCHOR).
@@ -660,8 +671,7 @@ export let sessionStatus = {
         on: eq(col('entity', 'shape'), col('archetype', 'owner')),
       },
     ]
-    let shaped = (comp: string) =>
-      gt(fn('instr', col('tables', 'shape'), lit(JSON.stringify(comp))), lit(0))
+    let shaped = (comp: string) => holds(col('tables', 'shape'), comp)
     let probed = (alias: string) => (comp: string) =>
       exists(select({
         cols: [lit(1)],
@@ -955,11 +965,7 @@ export let sessionStatus = {
       where: or(isNull(anchor('newest_seq')), notNull(col('entity', 'i'))),
     })
     let wears = typed
-      ? (comp: string) =>
-        gt(
-          fn('instr', col('tables', 'span'), lit(JSON.stringify(comp))),
-          lit(0),
-        )
+      ? (comp: string) => holds(col('tables', 'span'), comp)
       : (comp: string) => notNull(col('entity', comp))
     // Each component the rule reads, where the entry wears it: its id.
     let comps = [
@@ -1465,8 +1471,11 @@ export let sessionDerived = (vocab: Vocab, reading: Derived = {}): Derived => {
   }
   let states = { ...attemptDerived(vocab), ...executionDerived(vocab) }
   let text = reading['content.body']?.text
-  let declared = (scope?: DerivedScope) => (name: string) =>
-    !!vocab.comp(name) && (name != 'archetype' || !scope?.masked.length)
+  let declared = (scope?: DerivedScope): Words => ({
+    declared: (name) =>
+      !!vocab.comp(name) && (name != 'archetype' || !scope?.masked.length),
+    holds: (tables, comp) => descriptorHolds(tables, vocab, comp),
+  })
   return {
     ...states,
     'session.status': {

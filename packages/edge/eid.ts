@@ -18,8 +18,13 @@ import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { comps } from '@yaks/graph/bundle'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Derive } from '@yaks/graph'
-import { formerKey, identityIn } from '@yaks/graph/identity'
-import { identity, type Vocab, type VocabDoc } from '@yaks/vocab/runtime'
+import { formerKey } from '@yaks/graph/identity'
+import {
+  identity,
+  identityIn,
+  type Vocab,
+  type VocabDoc,
+} from '@yaks/vocab/runtime'
 
 /**
  * A relation as a link names it: its label, the component the link carries,

@@ -302,7 +302,7 @@ export let storage = <S extends Prepared<S>>(
     parts.forEach((rows, i) => {
       for (let r of rows) owners.get(Number(r.entity))?.tables.push(names[i])
     })
-    await send(pointSql([...owners.values()]))
+    await send(pointSql([...owners.values()], vocab))
   }
 
   let rows = async (query: Query, opts: BindOpts = {}): Promise<Row[]> => {
@@ -415,7 +415,7 @@ export let storage = <S extends Prepared<S>>(
     // Send the gathered writes, then read each mint's own RETURNING back out of
     // the batch and fill in the number it handed out.
     let flush = async (): Promise<void> => {
-      pending.push(...pointSql(shapes([...dirty.values()])))
+      pending.push(...pointSql(shapes([...dirty.values()]), vocab))
       let out = await send(pending)
       for (let b of births) {
         let e = minted(out[b.at] ?? [])
@@ -592,7 +592,10 @@ export let storage = <S extends Prepared<S>>(
         if (!eids.length) return
         moved = true
         pending.push(
-          ...pointSql(shapes(eids.flatMap((eid) => dirty.get(eid) ?? []))),
+          ...pointSql(
+            shapes(eids.flatMap((eid) => dirty.get(eid) ?? [])),
+            vocab,
+          ),
         )
         pending.push(...pruneSql(vocab, eids))
         for (let eid of eids) {

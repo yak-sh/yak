@@ -1,7 +1,11 @@
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 import { TOMBSTONE } from '@yaks/graph/bundle'
-import { Archetypes, tablesOf } from '@yaks/archetype/sets'
+import {
+  type Archetype,
+  type Archetypes,
+  descriptorOf,
+} from '@yaks/archetype/sets'
 import {
   and,
   as,
@@ -25,7 +29,7 @@ import {
   val,
 } from '@yaks/sql'
 import { componentTables } from './physical.ts'
-import { descriptor } from './catalog.ts'
+import { descriptor, setsFor } from './catalog.ts'
 import { pointerIndex } from './ddl.ts'
 import { catalogue } from '@yaks/sql'
 import { mintSql } from './write.ts'
@@ -174,7 +178,7 @@ let minter = (
       )[0]
         .id,
     )
-    let list = JSON.stringify(cache.get(eid)!.tables)
+    let list = JSON.stringify(cache.get(eid)!.descriptor)
     run({
       t: 'insert',
       into: 'archetype',
@@ -226,7 +230,7 @@ let minter = (
  * entity holds nothing (./branches.ts). */
 export let described = (driver: Driver, tables: string[]): number =>
   unit(driver, () => {
-    let cache = new Archetypes()
+    let cache = setsFor(driver)
     let counts = { entities: 0, archetypes: 0, retired: 0 }
     let { ids } = descriptors(driver)
     let { mint } = minter((s) => driver.query(s), driver, cache, ids, counts)
@@ -266,7 +270,7 @@ export function backfill(
     // The catalog's missing-pointer lookup must seek even while a new store
     // is being classified. This index is part of classification's repair.
     if (assignments && !pointable(driver)) driver.query(pointerIndex)
-    let cache = new Archetypes()
+    let cache = setsFor(driver)
     // What the file holds is read once, and only when something is asked of
     // it: a fresh file reads nothing, and a file with descriptors reads which
     // of its tables are component tables, once, to know none names another.
@@ -300,13 +304,13 @@ export function backfill(
         where: eq(col('id', 'e'), col('entity', 'a')),
       }))
     ) {
-      let a = cache.intern(tablesOf(row.tables))
+      let a = cache.decode(row.tables)
       if (a.eid != row.eid) {
         // The original contract used a bare SHA, sharing blobs' address space.
         // Rename only verified legacy descriptors, never arbitrary occupants.
         // Keeping the spine id preserves every integer ref (including owners
         // and retirement); the enclosing savepoint makes this all-or-nothing.
-        if (row.eid != sha256(a.tables.join('|'))) {
+        if (row.eid != sha256(descriptorOf(row.tables).join('|'))) {
           throw new Error(`Invalid archetype identity: ${row.eid}`)
         }
         // A legacy blob could have been added after this descriptor was born.
@@ -424,6 +428,14 @@ let owned = (which: Expr) =>
     where: and(isNull(col('entity', 'a')), which),
   })
 
+// Whether an owner's pointer ({@link owned}) describes `set`: the very
+// descriptor, or one written in another form (labels, before its words had
+// identities) of the same set, which stands until the migration rewrites it.
+let describes = (driver: Driver, set: Archetype, r: Row): boolean =>
+  set.eid == r.assigned || r.pointed != null &&
+    descriptor(driver, String(r.pointed)).tables.join('|') ==
+      set.tables.join('|')
+
 /** Whether the file holds the pointer index, through which the owners of a
  * pointer are found without reading the spine. */
 export let pointable = (driver: Driver): boolean =>
@@ -443,7 +455,9 @@ export let strays = (driver: Driver, limit: number): Row[] => {
   let gone = driver.query(select({
     cols: [col('entity'), col('tables')],
     from: table('archetype'),
-  })).filter((r) => tablesOf(r.tables).some((t) => !present.has(t)))
+  })).filter((r) =>
+    descriptor(driver, String(r.tables)).tables.some((t) => !present.has(t))
+  )
     .map((r) => Number(r.entity))
   let some = (which: Expr, n: number) =>
     driver.query({ ...owned(which), limit: lit(n) })
@@ -479,11 +493,11 @@ let WINDOW = 20_000
 export function drift(driver: Driver, sample = 12): Drift {
   let run: Run = (s) => driver.query(s)
   let tables = facets(driver)
-  let cache = new Archetypes()
-  // Presence set (as the joined table names) → the descriptor it interns to.
-  // The whole file holds a few hundred distinct sets, so hashing one per
-  // window's worth of owners would be the audit's dominant cost.
-  let known = new Map<string, string>()
+  let cache = setsFor(driver)
+  // Presence set (as the joined table names) → the set it interns to. The
+  // whole file holds a few hundred distinct sets, so hashing one per window's
+  // worth of owners would be the audit's dominant cost.
+  let known = new Map<string, Archetype>()
   let out: Drift = { checked: 0, drifted: 0, sample: [] }
   let top = Number(
     run(
@@ -517,10 +531,10 @@ export function drift(driver: Driver, sample = 12): Drift {
     for (let r of rows) {
       let names = owners.get(Number(r.id))!
       let key = names.join('|')
-      let eid = known.get(key) ?? cache.intern(names).eid
-      known.set(key, eid)
+      let set = known.get(key) ?? cache.intern(names)
+      known.set(key, set)
       out.checked++
-      if (eid == r.assigned) continue
+      if (describes(driver, set, r)) continue
       out.drifted++
       if (out.sample.length < sample) out.sample.push(String(r.eid))
     }
@@ -618,7 +632,7 @@ export function entomb(
   if (!eids.length) return false
   let run: Run = (s) => driver.query(s)
   return unit(driver, () => {
-    let cache = new Archetypes()
+    let cache = setsFor(driver)
     let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
     let found = descriptors(driver)
     let { mint } = minter(
@@ -700,7 +714,7 @@ let sorted = (
   let none = { born: [], put: [] }
   if (!eids.length) return none
   let run: Run = (s) => driver.query(s)
-  let cache = new Archetypes()
+  let cache = setsFor(driver)
   let tables = once(() => facets(driver))
   let rows = run(owned(oneOf(col('eid', 'e'), [...new Set(eids)])))
   if (!rows.length) return none
@@ -720,7 +734,7 @@ let sorted = (
   let moved = new Map<number, string>()
   for (let r of rows) {
     let names = owners.get(Number(r.id))!
-    if (cache.intern(names).eid == r.assigned) {
+    if (describes(driver, cache.intern(names), r)) {
       learned?.(String(r.eid), names, Number(r.archetype))
       owners.delete(Number(r.id))
     } else moved.set(Number(r.id), String(r.eid))

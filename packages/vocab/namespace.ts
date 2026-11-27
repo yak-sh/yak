@@ -9,6 +9,7 @@
 // with none is held by its label alone, as every word was before identities.
 
 import type { Namespace, VocabDoc } from './types.ts'
+import type { Vocab } from './vocab.ts'
 
 let URN =
   /^urn:uuid:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
@@ -50,6 +51,48 @@ export let identity = (doc: VocabDoc, label: string): string => {
   let def = doc.$defs?.[label]
   if (!def) throw new Error(`no word '${label}' is declared here`)
   return idOf(def.$id) ?? label
+}
+
+/** The identity a loaded vocabulary gives the component it holds as `name`,
+ * for what must not move when the word is renamed (a derived eid, an
+ * archetype's descriptor): the UUID its `$id` says, or the name itself while
+ * it has none.
+ *
+ * ```ts
+ * import { identityIn, loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let id = crypto.randomUUID()
+ * let v = loadVocab({ $defs: {
+ *   note: { component: true, $id: `urn:uuid:${id}` },
+ *   tag: { component: true },
+ * } })
+ * equal(identityIn(v, 'note'), id)
+ * equal(identityIn(v, 'tag'), 'tag')
+ * ```
+ */
+export let identityIn = (vocab: Pick<Vocab, 'comp'>, name: string): string =>
+  vocab.comp(name)?.id ?? name
+
+/** The name a loaded vocabulary holds a component under, from what
+ * {@link identityIn} gives: its identity, or a name, which is answered as it
+ * is, as is an identity no component here carries.
+ *
+ * ```ts
+ * import { identityIn, loadVocab, nameIn } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let id = crypto.randomUUID()
+ * let v = loadVocab({ $defs: {
+ *   note: { component: true, $id: `urn:uuid:${id}` },
+ * } })
+ * equal(nameIn(v, identityIn(v, 'note')), 'note')
+ * equal(nameIn(v, 'tag'), 'tag')
+ * ```
+ */
+export let nameIn = (vocab: Pick<Vocab, 'word'>, id: string): string => {
+  let word = vocab.word(id)
+  return word && 'comp' in word && word.prop == null ? word.comp : id
 }
 
 /** The namespace a document declares its words in: its `$id`'s identity and

@@ -17,6 +17,7 @@ import {
   type CreateTrigger,
   derivedOf,
   type Driver,
+  entryIs,
   eq,
   exists,
   fn,
@@ -31,6 +32,7 @@ import {
   type Stmt,
   table,
 } from '@yaks/sql'
+import { descriptor } from './catalog.ts'
 
 export const POPULATION = '_yaks_population'
 export const POPULATION_VERSION = 1
@@ -268,7 +270,7 @@ export let populations = (driver: Driver): Population[] | undefined => {
   })).map((r) => ({
     value: String(r.value),
     n: Number(r.n),
-    tables: JSON.parse(String(r.tables)) as string[],
+    tables: [...descriptor(driver, String(r.tables)).tables],
   }))
 }
 
@@ -301,7 +303,7 @@ let counting = (driver: Driver, component?: string): number => {
         ? {
           joins: [{ how: 'cross' as const, src: p }],
           where: and(
-            eq(col('component', 'm'), lit(component)),
+            entryIs(col('component', 'm'), driver.stored?.v, component),
             eq(col('archetype', 'p'), col('archetype', 'm')),
           ),
         }
@@ -342,7 +344,7 @@ let numbering = (driver: Driver, comp: string): boolean =>
       from: table(MEMBERSHIP, 'm'),
       joins: [{ how: 'cross', src: table('entity', 'e') }],
       where: and(
-        eq(col('component', 'm'), lit(comp)),
+        entryIs(col('component', 'm'), driver.stored?.v, comp),
         eq(col('archetype', 'e'), col('archetype', 'm')),
         notNull(col('num', 'e')),
       ),

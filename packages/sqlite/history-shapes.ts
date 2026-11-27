@@ -244,7 +244,7 @@ export let pastShapes = (
       where: oneOf(col('id', 'e'), ids),
     }))
   ) {
-    for (let name of tablesOf(row.tables ?? '[]')) {
+    for (let name of tablesOf(row.tables ?? '[]', vocab)) {
       if (vocab.comp(name)?.journal === false) {
         found.get(Number(row.id))!.add(name)
       }

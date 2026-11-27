@@ -34,7 +34,12 @@
 // other id is refused rather than quietly written: renaming creates a new
 // entity, it never patches a property.
 
-import { identity, type Vocab, type VocabDoc } from '@yaks/vocab/runtime'
+import {
+  identity,
+  identityIn,
+  type Vocab,
+  type VocabDoc,
+} from '@yaks/vocab/runtime'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps } from './bundle.ts'
 import type { Derive } from './alias.ts'
@@ -80,11 +85,6 @@ export let derivedEid = (sentence: string): Eid => {
  */
 export let identityEid = (comp: string, values: string[]): Eid =>
   derivedEid([comp, ...values].join('|'))
-
-/** What a loaded vocabulary hashes for the component it holds as `name`: its
- * identity, or its label while it has none. */
-export let identityIn = (vocab: Pick<Vocab, 'comp'>, name: string): string =>
-  vocab.comp(name)?.id ?? name
 
 /** The label previously hashed for a word with an unambiguous bare label. */
 export let formerKey = (

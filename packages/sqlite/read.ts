@@ -1255,7 +1255,10 @@ export let get = (
         pointed.filter((c) => names.includes(c)),
         2048,
       )
-      grouped(String(row['@tables']), pointed, Number(row.id))
+      // Grouped by the set's names, as an entity nothing points for is: a
+      // set described in two forms (identities, and labels from before) is
+      // read once.
+      grouped(JSON.stringify(pointed), pointed, Number(row.id))
     }
     if (open.length) {
       // The one that knows better says (`unsettled`). A read of named

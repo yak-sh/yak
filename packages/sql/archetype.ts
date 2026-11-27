@@ -1,4 +1,55 @@
-import type { Presence } from '@yaks/vocab'
+import { identityIn, type Presence, type Vocab } from '@yaks/vocab/runtime'
+import { eq, type Expr, fn, gt, lit, or } from './ast.ts'
+
+/** What a stored descriptor (@yaks/archetype) may hold for a component, as a
+ * statement over its entries asks for it (a store's `membership`): the
+ * component's identity, and its name too while a descriptor written before
+ * its word had an identity stands, until the migration rewrites those
+ * (T-162475).
+ *
+ * ```ts
+ * import { entriesFor } from '@yaks/sql'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let id = crypto.randomUUID()
+ * let v = loadVocab({ $defs: {
+ *   note: { component: true, $id: `urn:uuid:${id}` },
+ *   tag: { component: true },
+ * } })
+ * equal(entriesFor(v, 'note'), [id, 'note'])
+ * equal(entriesFor(v, 'tag'), ['tag'])
+ * ```
+ */
+export let entriesFor = (
+  v: Pick<Vocab, 'comp'> | undefined,
+  comp: string,
+): string[] => {
+  let id = v ? identityIn(v, comp) : comp
+  return id == comp ? [comp] : [id, comp]
+}
+
+/** That a descriptor's stored text, `tables` (`archetype.tables`), holds the
+ * component `comp`: a search of its text for each entry it may name `comp` by
+ * ({@link entriesFor}). */
+export let descriptorHolds = (
+  tables: Expr,
+  v: Pick<Vocab, 'comp'> | undefined,
+  comp: string,
+): Expr =>
+  or(
+    ...entriesFor(v, comp).map((e) =>
+      gt(fn('instr', tables, lit(JSON.stringify(e))), lit(0))
+    ),
+  )
+
+/** That a descriptor entry, `entry`, names the component `comp`
+ * ({@link entriesFor}), each form written into the statement. */
+export let entryIs = (
+  entry: Expr,
+  v: Pick<Vocab, 'comp'> | undefined,
+  comp: string,
+): Expr => or(...entriesFor(v, comp).map((e) => eq(entry, lit(e))))
 
 /**
  * A snapshot of this database file's archetypes, mapped to the integer ids

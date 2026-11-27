@@ -10,6 +10,7 @@
  * @module
  */
 
+import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Io } from './host.ts'
 import { census as carrying, tables } from './read.ts'
 
@@ -47,7 +48,7 @@ export let useCensus = (io: Io): Census => {
   return {
     sets,
     tally,
-    carried: carrying(sets, tally),
+    carried: carrying(sets, tally, io.vocab),
     ready,
     error: got.sets?.error ?? got.tally?.error,
   }
@@ -64,8 +65,11 @@ export let useCensus = (io: Io): Census => {
  *   .map((b) => b.entity.eid) // ['a']
  * ```
  */
-export let within = (sets: Bundle[], name: string): Bundle[] =>
-  sets.filter((s) => tables(s).includes(name))
+export let within = (
+  sets: Bundle[],
+  name: string,
+  vocab?: Pick<Vocab, 'word'>,
+): Bundle[] => sets.filter((s) => tables(s, vocab).includes(name))
 
 /** How many entities are made of the sets `of`. */
 export let counted = (c: Census, of: Bundle[]): number =>

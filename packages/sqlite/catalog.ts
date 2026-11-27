@@ -1,8 +1,13 @@
-import { satisfies } from '@yaks/archetype/sets'
 import { Unpointed } from './error.ts'
 // Immutable table sets and a connection-revision snapshot: planning reads no
 // persistent rows until a catalog mutation or rollback invalidates that snapshot.
-import { type Archetype, Archetypes, tablesOf } from '@yaks/archetype/sets'
+import {
+  type Archetype,
+  Archetypes,
+  type Naming,
+  namingOf,
+  satisfies,
+} from '@yaks/archetype/sets'
 import {
   and,
   type ArchetypeSet,
@@ -19,6 +24,7 @@ import { revision } from '@yaks/sql/core'
 import { tableVersion } from './versions.ts'
 
 let caches = new WeakMap<Driver, {
+  naming: Naming
   sets: Archetypes
   text: Map<string, Archetype>
   // The last snapshot and the catalog version it was read at (below).
@@ -31,20 +37,35 @@ let caches = new WeakMap<Driver, {
   set?: ArchetypeSet
 }>()
 let cacheFor = (driver: Driver) => {
-  let cache = caches.get(driver)
-  if (!cache) {
-    cache = { sets: new Archetypes(), text: new Map() }
+  let cache = caches.get(driver), naming = namingFor(driver)
+  if (cache?.naming != naming) {
+    cache = { naming, sets: new Archetypes(naming), text: new Map() }
     caches.set(driver, cache)
   }
   return cache
 }
 
-/** Decode a descriptor once, independent of its transaction-local row id. */
+/** How this connection's descriptors name components: by the identities of
+ * the vocabulary its statements are written with (@yaks/archetype
+ * `namingOf`). */
+export let namingFor = (driver: Driver): Naming => namingOf(driver.stored?.v)
+
+/** A cache of sets named as this connection's descriptors name them. */
+export let setsFor = (driver: Driver): Archetypes =>
+  new Archetypes(namingFor(driver))
+
+/** The set of the components `tables` names, as this connection's
+ * descriptors describe it: its eid and descriptor. */
+export let setOf = (driver: Driver, tables: Iterable<string>): Archetype =>
+  cacheFor(driver).sets.intern(tables)
+
+/** Decode a descriptor once, independent of its transaction-local row id:
+ * the set it describes, under the names this connection's statements write. */
 export function descriptor(driver: Driver, text: string): Archetype {
   let cache = cacheFor(driver)
   let a = cache.text.get(text)
   if (!a) {
-    a = cache.sets.intern(tablesOf(text))
+    a = cache.sets.decode(text)
     cache.text.set(text, a)
   }
   return a
@@ -159,7 +180,7 @@ export function catalog(
             ids: [...pending.keys()],
             matching: (predicate: Parameters<ArchetypeSet>[0]) =>
               [...pending].filter(([, tables]) =>
-                satisfies(predicate, { eid: '', tables })
+                satisfies(predicate, { tables })
               ).map(([id]) => id),
           }
           : undefined

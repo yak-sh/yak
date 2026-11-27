@@ -114,8 +114,7 @@ import type { Branches } from '@yaks/graph/storage'
 import { branching, unborn } from './branches.ts'
 import { busy } from './error.ts'
 import { options } from './reader.ts'
-import { catalog } from './catalog.ts'
-import { eidOf as shapeEid } from '@yaks/archetype/sets'
+import { catalog, setOf } from './catalog.ts'
 import {
   backfill,
   classify,
@@ -1282,7 +1281,7 @@ let bound = (driver: Driver, vocab: Vocab, base: Opts): Store => {
       let owed = l.owed().filter((eid) => {
         let held = l.held(eid, null)
         if (!held || !remembered.settled(eid, held)) return true
-        if (classified) memo.pointed(eid, shapeEid(held))
+        if (classified) memo.pointed(eid, setOf(driver, held).eid)
         l.pointed(eid)
         return false
       })

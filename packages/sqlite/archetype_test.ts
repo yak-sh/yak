@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { archetypeDoc, archetypes, eidOf } from '@yaks/archetype'
+import { archetypeDoc, Archetypes, archetypes, namingOf } from '@yaks/archetype'
 import { after } from '@yaks/fp'
 import { type Bundle, detached, graph, type Plugin, token } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -85,6 +85,10 @@ let domain = {
   },
 }
 let vocab = loadVocab([archetypeDoc, domain])
+// A set's eid as the store describes it: by its components' identities, where
+// a word has one (`archetype` and `retired` do; this domain's words do not).
+let named = new Archetypes(namingOf(vocab))
+let eidOf = (tables: string[]) => named.intern(tables).eid
 let setup = (extra: Plugin[] = []) => {
   let driver = mem()
   let store = storage(driver, vocab)

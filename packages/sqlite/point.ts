@@ -1,23 +1,31 @@
-import { canonical, eidOf } from '@yaks/archetype/sets'
+import { Archetypes, namingOf } from '@yaks/archetype/sets'
 import { col, eq, oneOf, select, sub, table, val, type Write } from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
 import { mintSql } from './write.ts'
 
-/** Classification for a deferred adapter that already knows each whole shape.
- * These statements belong in the same batch as the rows they describe. */
+/** Classification for a deferred adapter that already knows each whole shape,
+ * each descriptor written by the identities of `vocab`, the one the adapter's
+ * statements are written with. These statements belong in the same batch as
+ * the rows they describe. */
 export let pointSql = (
   shapes: { eid: string; tables: string[] }[],
+  vocab?: Vocab,
 ): Write[] => {
   if (!shapes.length) return []
-  let sets = new Map<string, { tables: string[]; owners: string[] }>()
+  let cache = new Archetypes(namingOf(vocab))
+  let sets = new Map<string, { descriptor: string; owners: string[] }>()
   let own = (names: string[], eid: string) => {
-    let tables = canonical(names), key = eidOf(tables)
-    let set = sets.get(key)
-    if (!set) sets.set(key, set = { tables, owners: [] })
-    set.owners.push(eid)
+    let set = cache.intern(names), held = sets.get(set.eid)
+    if (!held) {
+      let descriptor = JSON.stringify(set.descriptor)
+      sets.set(set.eid, held = { descriptor, owners: [] })
+    }
+    held.owners.push(eid)
   }
   for (let { eid, tables } of shapes) own(tables, eid)
   let descriptors = [...sets.keys()]
-  own(['archetype'], eidOf(['archetype']))
+  let meta = cache.intern(['archetype']).eid
+  own(['archetype'], meta)
   for (let eid of descriptors) own(['archetype'], eid)
   let id = (eid: string) =>
     sub(select({
@@ -27,11 +35,11 @@ export let pointSql = (
     }))
   return [
     ...[...sets.keys()].map((eid) => mintSql(eid)),
-    ...[...sets].map(([eid, { tables }]): Write => ({
+    ...[...sets].map(([eid, { descriptor }]): Write => ({
       t: 'insert',
       into: 'archetype',
       cols: ['entity', 'tables'],
-      rows: [[id(eid), val(JSON.stringify(tables))]],
+      rows: [[id(eid), val(descriptor)]],
       upsert: [{ on: [col('entity')] }],
     })),
     ...[...sets].map(([eid, { owners }]): Write => ({

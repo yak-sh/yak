@@ -2,6 +2,7 @@ import { build } from '@yaks/process/platform'
 // SQL-backed storage's statement capability. The connection and native
 // libraries stay here; indexes receive only statements and coherent units.
 import {
+  descriptorHolds,
   type Driver,
   render,
   revision,
@@ -58,6 +59,7 @@ export let statements = (driver: Driver): Statements => {
       driver.render?.(s, driver.stored?.v) ??
         render(s, undefined, undefined, driver.stored?.v),
     tableName: (name) => tableAsWritten(driver.stored?.v, name),
+    holds: (tables, comp) => descriptorHolds(tables, driver.stored?.v, comp),
     query: (s) => {
       if (
         ['begin', 'commit', 'rollback', 'savepoint', 'release'].includes(s.t)

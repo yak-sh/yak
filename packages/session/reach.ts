@@ -66,6 +66,7 @@
 // all of it too. Entries without a `seq` belong to the oldest end and are reached when
 // the reading is.
 
+import { tablesOf } from '@yaks/archetype/sets'
 import type { Bundle, Comp, Eid, Graph, Row } from '@yaks/graph'
 import { type Built, line, sub } from '@yaks/query'
 import { given } from './answer.ts'
@@ -144,9 +145,10 @@ type Known = Line & { found: Eid[] }
 const KEPT = 1024
 let memories = new WeakMap<Graph, Map<string, Known>>()
 
-// The tables each archetype holds, by its eid. An archetype is named by the
-// tables it holds (@yaks/archetype), so what one says never changes, and every
-// reading of a graph shares what any has read.
+// The components each archetype holds, by its eid, as the graph names them.
+// An archetype is named by the components it holds (@yaks/archetype), so what
+// one says never changes, and every reading of a graph shares what any has
+// read.
 let shaped = new WeakMap<Graph, Map<string, string[]>>()
 let shapesOf = (g: Graph) => {
   let held = shaped.get(g)
@@ -220,7 +222,7 @@ let gathered = async (
       for (let b of shapes) {
         let text = comp(b, 'archetype')?.tables
         if (typeof text == 'string') {
-          r.shapes.set(b.entity.eid, JSON.parse(text))
+          r.shapes.set(b.entity.eid, tablesOf(text, r.g.vocab))
         }
       }
       if (keys.every((key) => r.shapes.has(String(key)))) {

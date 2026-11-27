@@ -17,7 +17,7 @@ import { type Search, type Thread, threadOf, threads } from './threads.ts'
 
 // Graph.read honors .fields before hydration; raw storage Tx.read does not.
 type ReadTx = Pick<Graph, 'read' | 'get'>
-type Vocabulary = Pick<Vocab, 'comp' | 'props'>
+type Vocabulary = Pick<Vocab, 'comp' | 'props' | 'word'>
 type Mode = 'metadata' | 'search' | 'detail'
 
 // Presence is a policy fact, even when a component has no selected properties.
@@ -162,7 +162,7 @@ let membership = (query: Built): Query => {
   }
 }
 
-let reads = (tx: ReadTx, has: Words, mode: Mode) => {
+let reads = (tx: ReadTx, has: Words, mode: Mode, vocab: Vocabulary) => {
   let comps = components.filter(has)
   let worded = comps.filter((c) => has(`${c}.body`))
   let bodiless = comps.filter((c) => !worded.includes(c))
@@ -206,7 +206,7 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
       ) {
         descriptors.set(
           b.entity.eid,
-          new Set(tablesOf((b.archetype as Comp)?.tables)),
+          new Set(tablesOf((b.archetype as Comp)?.tables, vocab)),
         )
       }
       let classified = new Set<string>()
@@ -421,6 +421,7 @@ export let readInbox = async (
     tx,
     has,
     search.text?.trim() || search.direction ? 'search' : 'metadata',
+    vocab,
   )
   let first = await read([candidates(who, has, search.within)])
   let all = await conversation(first, who, has, read, search)
@@ -451,14 +452,14 @@ export let readThread = async (
   }
   let has = words(vocab)
   let who = await reader(tx, has, actor, scope)
-  let { read, hydrate } = reads(tx, has, 'detail')
+  let { read, hydrate } = reads(tx, has, 'detail', vocab)
   let seed = await hydrate([{ eid: root, comps: {} }])
   if (!seed.length) return undefined
   // Direction forces discussion() to include internal transcript words too;
   // it is not passed to the policy, which still computes ordinary attention.
   let all = await conversation(seed, who, has, read, { direction: 'received' })
   let eid = threadOf(seed[0], who, index(all))
-  let metadata = reads(tx, has, 'metadata').read
+  let metadata = reads(tx, has, 'metadata', vocab).read
   let edges = await metadata([requirements([{ eid, comps: {} }], has)])
   let tasks = await metadata(
     whole(edges, (part) => dependents(part, has)),

@@ -1,7 +1,7 @@
 // The statement capability a storage adapter lends to indexes beside its
 // graph. It carries no connection, file, native-library path or schema cache.
 import type { Row, Settled } from './driver.ts'
-import type { Raw, Stmt } from './ast.ts'
+import type { Expr, Raw, Stmt } from './ast.ts'
 
 /** Synchronous statements over the same storage and transaction as the graph.
  * An adapter may omit this capability when its storage is not SQL-backed. */
@@ -11,6 +11,10 @@ export type Statements = {
   render?: (statement: Stmt) => Raw
   /** A table's physical name as a statement names it. */
   tableName?: (stored: string) => string
+  /** That an archetype's stored descriptor, `tables`, holds the component
+   * `comp`, as this store's vocabulary writes descriptors (./archetype.ts
+   * `descriptorHolds`). Absent, a descriptor holds a component by its name. */
+  holds?: (tables: Expr, comp: string) => Expr
   /** Whether other hosts can write this storage. */
   ownership: 'exclusive' | 'shared'
   /** Whether this async context owns the active transaction on this connection. */

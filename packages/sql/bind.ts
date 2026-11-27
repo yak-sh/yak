@@ -176,7 +176,7 @@ import { walk as walked } from './walk.ts'
 import { Unsupported, whole } from './unsupported.ts'
 import { backedDialect, backingOf, computed, hasComputed } from './spine.ts'
 import { absentDerived, absentDialect } from './absent.ts'
-import type { ArchetypeSet } from './archetype.ts'
+import { type ArchetypeSet, entryIs } from './archetype.ts'
 
 export type BindOpts = {
   /** Declared indices absent from this physical schema snapshot. */
@@ -243,7 +243,7 @@ let headcount = (ctx: Ctx, comp: string, stored: string): Select => {
       from: table(kept.membership, 'm'),
       joins: [{ how: 'cross', src: table(kept.population, 'p') }],
       where: and(
-        eq(col('component', 'm'), lit(comp)),
+        entryIs(col('component', 'm'), ctx.v, comp),
         eq(col('archetype', 'p'), col('archetype', 'm')),
       ),
     })

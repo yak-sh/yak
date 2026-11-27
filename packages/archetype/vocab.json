@@ -8,13 +8,13 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "Immutable component-table set; its eid is derivedEid('archetype|' + bytewise-sorted table names joined with ',').",
+      "description": "Immutable component set; its eid is derivedEid('archetype|' + its descriptor, bytewise sorted, joined with ',').",
       "properties": {
         "tables": {
           "$id": "urn:uuid:4df74b5d-5f78-4010-bc15-75c2a655202b",
           "type": "string",
           "format": "json",
-          "description": "The canonical table-name list, encoded as a JSON array."
+          "description": "The descriptor: each component's identity, or its label while it has none, bytewise sorted and encoded as a JSON array."
         }
       }
     },
@@ -29,7 +29,7 @@
   "kinds": {
     "archetype": {
       "$id": "urn:uuid:19d2fcb1-c6a5-4fee-8ec7-7beeda9c9207",
-      "description": "Immutable component-table set; its eid is derivedEid('archetype|' + bytewise-sorted table names joined with ',')."
+      "description": "Immutable component set; its eid is derivedEid('archetype|' + its descriptor, bytewise sorted, joined with ',')."
     }
   }
 }

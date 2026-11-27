@@ -1,8 +1,23 @@
 import { after } from '@yaks/fp'
-import type { Bundle, Plugin, Tracker, Tx } from '@yaks/graph'
+import type {
+  Bundle,
+  Graph,
+  HookContext,
+  Plugin,
+  Tracker,
+  Tx,
+} from '@yaks/graph'
 import { comps, dead } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
-import { type Archetype, archetypeDoc, Archetypes, tablesOf } from './sets.ts'
+import type { Vocab } from '@yaks/vocab'
+import {
+  type Archetype,
+  archetypeDoc,
+  Archetypes,
+  descriptorOf,
+  eidOf,
+  namingOf,
+} from './sets.ts'
 
 type Held = { set: Archetype; assigned?: string; dead: boolean }
 
@@ -10,11 +25,64 @@ type Held = { set: Archetype; assigned?: string; dead: boolean }
  * Assign archetypes on create/add/remove using the graph's gathered pre-image.
  * Load archetypeDoc into both graph and storage. All state about pending writes
  * is transaction-local; the supplied cache contains only immutable table sets.
+ * Without one, each vocabulary the graph writes with has its own, which writes
+ * descriptors by that vocabulary's identities (`namingOf`).
  * Stamps, cascades, journal writes and other trackers' derived writes use the
  * same tracker as ordinary patches: it classifies, so the graph places it
  * beneath them whatever the plugin order.
  */
-export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
+export function archetypes(cache?: Archetypes): Plugin {
+  let held = new WeakMap<Vocab, Sets>()
+  let only = cache && sets(cache)
+  let unnamed: Sets | undefined
+  let at = (context?: HookContext): Sets => {
+    if (only) return only
+    let v = (context?.graph as Graph | undefined)?.vocab
+    if (!v) return unnamed ??= sets(new Archetypes())
+    let found = held.get(v)
+    if (!found) held.set(v, found = sets(new Archetypes(namingOf(v))))
+    return found
+  }
+  return {
+    name: '@yaks/archetype',
+    admission: () => true,
+    vocab: [archetypeDoc],
+    derive: { archetype: (comp) => eidOf(descriptorOf(comp.tables)) },
+    wants: (bundles, context) => at(context).wants(bundles),
+    hooks: {
+      // A returned bundle may be sent back as a patch. The pointer is derived,
+      // never something a caller can use to misclassify an entity.
+      normalize: (bundles) =>
+        bundles.map((b) => {
+          let { archetype: _, ...entity } = b.entity
+          return {
+            ...b,
+            entity,
+            ...(b.archetype == null ? {} : {
+              archetype: {
+                tables: JSON.stringify(
+                  descriptorOf((b.archetype as { tables: unknown }).tables),
+                ),
+              },
+            }),
+          }
+        }),
+    },
+    classifies: true,
+    track: (tx, found, context) => at(context).track(tx, found),
+  }
+}
+
+type Sets = {
+  wants: (bundles: Bundle[]) => { eids: string[]; hint: true }[]
+  track: (
+    tx: Tx,
+    found: (eid: string) => Bundle | null | undefined,
+  ) => Tracker
+}
+
+// One cache's sets, and the descriptors each recent write asked for.
+function sets(cache: Archetypes): Sets {
   let empty = cache.intern([])
   let meta = cache.intern(['archetype'])
   // A previous write tells us which descriptors the next one may need, not
@@ -38,10 +106,6 @@ export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
     reads.add(set.eid)
   }
   return {
-    name: '@yaks/archetype',
-    admission: () => true,
-    vocab: [archetypeDoc],
-    derive: { archetype: (comp) => cache.decode(comp.tables).eid },
     wants: (bundles) => {
       let eids = new Set<string>()
       let moved = new Map<string, Archetype>()
@@ -64,26 +128,6 @@ export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
       if (!eids.size) return []
       return [{ eids: [...eids], hint: true }]
     },
-    hooks: {
-      // A returned bundle may be sent back as a patch. The pointer is derived,
-      // never something a caller can use to misclassify an entity.
-      normalize: (bundles) =>
-        bundles.map((b) => {
-          let { archetype: _, ...entity } = b.entity
-          return {
-            ...b,
-            entity,
-            ...(b.archetype == null ? {} : {
-              archetype: {
-                tables: JSON.stringify(
-                  tablesOf((b.archetype as { tables: unknown }).tables),
-                ),
-              },
-            }),
-          }
-        }),
-    },
-    classifies: true,
     track: (tx, found) =>
       tracking(tx, found, cache, empty, meta, initial, needed),
   }
@@ -273,7 +317,7 @@ function tracking(
           !existing.has(a.eid)
         ).map((a) => ({
           entity: { eid: a.eid, archetype: meta.eid },
-          archetype: { tables: JSON.stringify(a.tables) },
+          archetype: { tables: JSON.stringify(a.descriptor) },
           $quiet: true,
         }))
         // A reference may have minted a bare spine with this content address.

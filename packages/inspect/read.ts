@@ -7,6 +7,7 @@
  * @module
  */
 
+import { nameIn, type Vocab } from '@yaks/vocab'
 import type { Bundle, Io } from './host.ts'
 
 /** One component, as a bundle carries it. */
@@ -154,8 +155,9 @@ export let str = (
 }
 
 /**
- * The component tables an archetype names (@yaks/archetype), from the JSON
- * text it stores them as.
+ * The components an archetype holds (@yaks/archetype), as `vocab` names them,
+ * from the descriptor it stores: their identities, or their labels for words
+ * that have none.
  *
  * ```ts
  * import { tables } from './read.ts'
@@ -163,10 +165,14 @@ export let str = (
  * // ['doc', 'task']
  * ```
  */
-export let tables = (b: Bundle): string[] => {
+export let tables = (
+  b: Bundle,
+  vocab?: Pick<Vocab, 'word'>,
+): string[] => {
   try {
     let t = JSON.parse(str(b, 'archetype', 'tables') || '[]')
-    return Array.isArray(t) ? t.map(String) : []
+    if (!Array.isArray(t)) return []
+    return t.map((id) => vocab ? nameIn(vocab, String(id)) : String(id))
   } catch {
     return []
   }
@@ -188,11 +194,12 @@ export let tables = (b: Bundle): string[] => {
 export let census = (
   sets: Bundle[],
   tally: Record<string, number>,
+  vocab?: Pick<Vocab, 'word'>,
 ): Record<string, number> => {
   let out: Record<string, number> = {}
   for (let s of sets) {
     let n = tally[s.entity.eid] ?? 0
-    for (let t of tables(s)) out[t] = (out[t] ?? 0) + n
+    for (let t of tables(s, vocab)) out[t] = (out[t] ?? 0) + n
   }
   return out
 }
