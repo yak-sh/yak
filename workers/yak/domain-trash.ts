@@ -36,10 +36,7 @@ export let trashedDomain: Kind<Host> = {
   press: (h) => `Release ${h.name} forever`,
   act: async (env, dir, space, h, who) => {
     await release(env, h.name)
-    let failed = await unmail(env, h.mail)
-    if (failed) {
-      throw new Error(`could not remove ${h.name}'s mail domain: ${failed}`)
-    }
+    await unmail(env, h.mail)
     let senders = (await dir.hosts(space)).filter((s) => s.to == h.name)
     await dir.apply({
       entities: [

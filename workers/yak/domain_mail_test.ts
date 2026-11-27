@@ -1,7 +1,9 @@
 // A space's own domain takes mail (D-415): domain_attach puts the mail domain
 // at the domain, or at mail.<domain> beside mail it already takes or below its
 // apex, and answers its records in the list with the web's; domain_status
-// reads each record's arrival from the provider; domain_detach retains it in the trash.
+// reads each record's arrival from the provider; domain_detach retains it in the trash,
+// and the person's release removes it, or finds nothing to remove where the
+// provider has no key.
 // Resend's Domains API is stood in for (probe.ts `mailDomains`).
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
@@ -10,6 +12,8 @@ import {
   connector,
   dnsMx,
   domainState,
+  fresh,
+  type Kernel,
   kernel,
   meta,
   onPlus,
@@ -122,16 +126,7 @@ test('a domain takes mail at itself, or at mail.<domain> when it already takes m
       200,
     )
     assert(held().includes(bare))
-    let press = (confirm: string) =>
-      k.at('yaks.app', path, {
-        method: 'POST',
-        headers: {
-          cookie,
-          origin: 'https://yaks.app',
-          'content-type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({ confirm }),
-      })
+    let press = purging(k, cookie, ada, host.eid)
     assertEquals((await press('wrong')).status, 400)
     assert(held().includes(bare))
     let purged = await press(bare)
@@ -143,3 +138,39 @@ test('a domain takes mail at itself, or at mail.<domain> when it already takes m
     await k.stop()
   }
 })
+
+test('a domain is released for good where the mail provider has no key', async () => {
+  let k = await fresh({}, (env) => delete env.RESEND_DOMAINS_TOKEN)
+  try {
+    let ada = unique('ada')
+    let { cookie, eids } = await seed(k, [{ slug: ada, apps: ['recipes'] }])
+    await onPlus(k, eids[ada])
+    let agent = connector(k, cookie)
+    let name = unique('keyless') + '.org'
+    await agent.tool('domain_attach', { space: ada, hostname: name })
+    await agent.tool('domain_detach', { space: ada, hostname: name })
+    let host = (await k.dir.hosts((await k.dir.space(ada))!)).find((h) =>
+      h.name == name
+    )!
+    let purged = await purging(k, cookie, ada, host.eid)(name)
+    assertEquals(purged.status, 200)
+    assertStringIncludes(await purged.text(), 'permanently released')
+    assertEquals(await k.dir.trash([host.eid]), [])
+  } finally {
+    await k.stop()
+  }
+})
+
+// The person's press on a trashed domain's release page, typing `confirm`.
+let purging =
+  (k: Kernel, cookie: string, space: string, host: string) =>
+  (confirm: string) =>
+    k.at('yaks.app', `/space/${space}/confirm/domainerase/${host}`, {
+      method: 'POST',
+      headers: {
+        cookie,
+        origin: 'https://yaks.app',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ confirm }),
+    })

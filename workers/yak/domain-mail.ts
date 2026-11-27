@@ -67,15 +67,14 @@ export let readMail = (env: Env, mail: MailDomain) =>
   })
 
 /** Remove the mail domain at its provider. Rejects when the provider
- * refuses, so the hostname row stays for the next detach to finish; answers
- * why when the provider cannot be reached at all. */
+ * refuses, so the hostname row stays for the next detach to finish. A
+ * provider still waiting for its key set nothing up on this deploy (`setUp`
+ * waits the same way), so there is nothing to remove. */
 export let unmail = async (env: Env, mail: MailDomain | null) => {
-  if (!mail) return undefined
+  if (!mail) return
   let provider = await mailDomains(env, mail.via)
-  let waiting = provider.waiting?.()
-  if (waiting) return waiting
+  if (provider.waiting?.()) return
   await provider.remove(mail.name)
-  return undefined
 }
 
 /** Whether every record has arrived, so mail flows both ways. */
