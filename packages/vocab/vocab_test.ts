@@ -1091,15 +1091,18 @@ test('each component and property carries the identity its $id gives', () => {
   assertEquals(plain.prop('note', 'text')?.id, undefined)
 })
 
-test('two namespaces may declare one label, each held under its identity', () => {
+test('two namespaces may declare one label, each held under its full label', () => {
   let v = loadVocab([model, trip])
-  assertEquals(v.all, [COST, TRIP_COST].sort())
+  assertEquals(v.all, ['@yaks/model:cost', 'yourname/trip:cost'])
   assertEquals(v.comp('cost'), undefined)
-  assertEquals(v.word(TRIP_COST), { comp: TRIP_COST })
+  assertEquals(v.word(TRIP_COST), { comp: 'yourname/trip:cost' })
   assertEquals(v.comp(TRIP_COST)?.namespace?.label, 'yourname/trip')
   assertEquals(v.comp(TRIP_COST)?.label, 'cost')
   assertEquals(v.props(COST), ['dollars'])
   assertEquals(v.prop(TRIP_COST, 'euros')?.id, EUROS)
+  // A namespace with no label to write is held under the identity.
+  let nameless = loadVocab([model, { ...trip, label: undefined }])
+  assertEquals(nameless.all, ['@yaks/model:cost', TRIP_COST].sort())
   // A label one namespace says twice is still refused, as is one said by
   // words with no identity to tell them apart.
   assertThrows(
@@ -1145,7 +1148,7 @@ test('two properties of one label on one component are still refused', () => {
   // shared, and the property it adds carries its own.
   let v = loadVocab([model, trip, tip])
   assertEquals(v.props(COST), ['dollars', 'tip'])
-  assertEquals(v.word(TIP), { comp: COST, prop: 'tip' })
+  assertEquals(v.word(TIP), { comp: '@yaks/model:cost', prop: 'tip' })
   assertThrows(
     () =>
       loadVocab([model, trip, {

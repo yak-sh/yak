@@ -18,6 +18,10 @@
 //                them
 //   namespace.ts a word's identity, from its `$id`, and the namespace (an
 //                identity and a label) a document declares its words in
+//   reading.ts   reading in a namespace: the word a bare label, a full label
+//                or an identity means to one reader (`Vocab.in`)
+//   names.ts     the refusals for a name: `Unknown`, and `Ambiguous` for a
+//                bare label that means several words
 //   vocab.ts     loadVocab(docs) → Vocab: the query and routing API a storage
 //                binder (@yaks/sql) calls — property types, path routing,
 //                kindOrder/kindOf, delete worklists, instance checks
@@ -48,6 +52,7 @@ export * from './kinds.ts'
 export * from './pick.ts'
 export * from './lifetime.ts'
 export * from './vocab.ts'
+export type { Reader } from './reading.ts'
 export * from './validate.ts'
 export * from './meta.ts'
 export * from './keywords.ts'

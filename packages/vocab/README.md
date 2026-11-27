@@ -456,10 +456,61 @@ equal(v.word(id), { comp: 'book' })
 ```
 
 Two namespaces may declare one label. Each is then a word of its own, held under
-its identity (`comp(id)`), and nothing is read by the shared label alone. A
-label one namespace declares twice, or that words with no identity share, is
+its full label, the namespace's label, a colon and the word
+(`yourname/trip:cost`), or under its identity where its namespace has no label.
+A label one namespace declares twice, or that words with no identity share, is
 refused, as are two properties of one label on one component. A word with no
 `$id` is held under its label.
+
+### Reading in a namespace
+
+Every name a vocabulary takes (`comp`, `prop`, `aim`, `kind`, `held`) may be a
+bare label, a full label or an identity. A full label means its word to every
+reader, and an identity always does. A bare label is read in its reader's
+namespace, and `in(ns, { uses, former })` is the vocabulary as that reader reads
+it. Read in namespace N, a bare label means, in order:
+
+1. the word N declares by that label, else one of N's words that `former` says
+   was called it before a rename, until another of N's words takes it;
+2. a word of a namespace N `uses`, such as another app of its space;
+3. the one other word by that label.
+
+Read in no namespace (the vocabulary itself, or `in()`), a bare label means the
+one word by that label. A tier that holds several refuses the label with
+`Ambiguous`, an `Unknown` that names the full labels; `comp()` finds nothing for
+it. Each name a reading gives back (`all`, `comp(name).name`, `word(id)`,
+`aim`'s hops) is the bare label where it reads back to that word, and the full
+label otherwise. A reader that reads every name as the vocabulary does gets the
+vocabulary itself.
+
+```ts
+import { Ambiguous, loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+import { assertThrows } from '@std/assert'
+
+let word = () => ({
+  $id: `urn:uuid:${crypto.randomUUID()}`,
+  component: true,
+  type: 'object',
+})
+let v = loadVocab([
+  { label: '@yaks/model', $defs: { cost: word() } },
+  { label: 'yourname/trip', $defs: { cost: word() } },
+])
+assertThrows(
+  () => v.aim('cost'),
+  Ambiguous,
+  '.cost is ambiguous (@yaks/model:cost, yourname/trip:cost) — use ' +
+    '.yourname/trip:cost',
+)
+let trip = v.in({ label: 'yourname/trip' })
+equal(trip.aim('cost'), [{ comp: 'cost', prop: '' }])
+equal(trip.all, ['@yaks/model:cost', 'cost'])
+equal(v.in() === v, true)
+```
+
+A query the graph keeps is written with identities and read back in each
+reader's labels: @yaks/query's `identified` and `labeled`.
 
 ## Composition
 

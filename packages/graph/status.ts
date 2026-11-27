@@ -17,6 +17,9 @@ export let STATUS: Record<string, number> = {
   // not define, or a property named without its component. The query named
   // it, so the fault is the request's.
   Unknown: 400,
+  // @yaks/vocab's `Ambiguous`: a bare label that means several words where it
+  // was read, refused with the full labels to write instead.
+  Ambiguous: 400,
   Unauthorized: 401,
   // @yaks/embedding's: a provider that will not embed for this host until a
   // ceiling it set lifts, such as a space's spent model budget. The space's

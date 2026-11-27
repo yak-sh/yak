@@ -50,10 +50,20 @@ let same = (a?: Namespace, b?: Namespace): boolean =>
 // One declaration of a label: the entry, and the namespace that said it.
 export type Declared = { schema: { $id?: string }; ns?: Namespace }
 
+/** A word's full label: its namespace's label, a colon and its own label
+ * (`yourname/trip:cost`), or its identity where its namespace has no label to
+ * write. */
+export let fullLabel = (
+  label: string,
+  ns?: Namespace,
+  id?: string,
+): string | undefined => ns?.label ? `${ns.label}:${label}` : id
+
 // The names the declarations of one label are held under. One declaration is
 // held under its label. Several are several words when each has an identity of
 // its own and comes from a namespace of its own, and each is held under its
-// identity; anything else is the label said twice, which throws. Which two
+// full label, the name a reader in no namespace writes it by; anything else is
+// the label said twice, which throws. Which two
 // said it is named where both say whose they are: one namespace saying it
 // twice was loaded twice, as a config naming a package twice.
 export let apart = <T extends Declared>(
@@ -75,7 +85,7 @@ export let apart = <T extends Declared>(
       throw new Error(`${what} '${label}' is declared twice${by}`)
     }
   }
-  return all.map((d) => [idOf(d.schema.$id)!, d])
+  return all.map((d) => [fullLabel(label, d.ns, idOf(d.schema.$id))!, d])
 }
 
 // The namespaces that declare a label, for a message: `@yaks/model and

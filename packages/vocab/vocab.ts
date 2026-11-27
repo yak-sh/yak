@@ -37,22 +37,10 @@ import {
   namespaceOf,
   namespaces,
 } from './namespace.ts'
+import { Ambiguous, Unknown } from './names.ts'
+import { type Named, type Reader, reading } from './reading.ts'
 
-/** A name this vocabulary does not know. One error for every caller, raised
- * here because the vocabulary is what decides: `aim()` raises it for a name no
- * component declares (naming the closest that are, {@link unknownName}), for a property named without its component (saying
- * which components declare it, {@link unqualified}), and for a component named
- * with a property it does not declare (saying which ones it does); the storage
- * binder (@yaks/sql) raises it when a presence test names a component it has
- * no table for. `prop` is the name, unadorned. */
-export class Unknown extends Error {
-  prop: string
-  constructor(prop: string, message = `unknown prop: .${prop}`) {
-    super(message)
-    this.prop = prop
-    this.name = 'Unknown'
-  }
-}
+export { Ambiguous, Unknown } from './names.ts'
 
 /**
  * The refusal for a property named alone. A name alone is a component; a
@@ -499,7 +487,20 @@ export type Vocab = {
   kinds: string[]
   /** One kind's declaration, loaded; undefined for a name no kind has. */
   kind: (name: string) => Kind | undefined
+  /** A component, named as its reader writes it: by the name it is held
+   * under, a bare label, a full label (`yourname/trip:cost`) or an identity.
+   * Undefined for a name that means no component, or several. */
   comp: (name: string) => CompInfo | undefined
+  /** The name a component is held under here, from any name its reader may
+   * write; undefined for one that means no component, and {@link Ambiguous}
+   * for a bare label that means several. */
+  held: (name: string) => string | undefined
+  /** This vocabulary as a reader in namespace `ns` reads it (none: a reader
+   * outside every vocabulary). Every name it takes and gives is a label as
+   * that reader writes it: a bare label where the reader reads it as that
+   * word, a full label otherwise (./reading.ts says the order a bare label is
+   * read in). Where it reads every name as this one does, it is this one. */
+  in: (ns?: Namespace, reader?: Reader) => Vocab
   /** What an identity names here: a component, by the name it is held under,
    * one of its properties, or a kind; undefined for an identity no word
    * loaded here carries. */
@@ -509,6 +510,7 @@ export type Vocab = {
    * schema rather than the facts this load read out of it. */
   def: (name: string) => PropSchema | undefined
   props: (comp: string) => string[] // readable properties (writable ∪ stamped)
+  /** One property, by its label or its identity. */
   prop: (comp: string, prop: string) => Prop | undefined
   /** Declared indexes plus automatic reference indexes — see
    * {@link Index}. A storage adapter renders them; nothing else reads them. */
@@ -1325,52 +1327,52 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   }
   let shapes = kinds.map((k) => kindsBy.get(k)!.is)
 
-  // Where a path leads, what a component indexes and what identifies its
-  // entities are facts of the vocabulary, asked of it for every clause a query
-  // compiles and every bundle a write carries: each is worked out once, and
-  // handed out frozen, since every caller shares it.
-  let aimed = new Map<string, Hop[]>()
-  let refusals = new Map<string, { prop: string; message: string }>()
-  let frozen = <T>(x: T): T => {
-    if (x && typeof x == 'object') {
-      for (let v of Object.values(x)) frozen(v)
-      Object.freeze(x)
-    }
-    return x
+  // Every word a reader may name, components and kinds apart, and how this
+  // vocabulary reads them: in no namespace, where every name it holds reads
+  // back as itself.
+  let compsNamed = names.map((n): Named => ({
+    held: n,
+    label: labels[n] ?? n,
+    ...(from[n] ? { ns: from[n] } : {}),
+    ...(idOf(defs[n].$id) ? { id: idOf(defs[n].$id) } : {}),
+  }))
+  let kindsNamed = [...kindsBy.values()].map((k): Named => ({
+    held: k.name,
+    label: k.label,
+    ...(k.namespace ? { ns: k.namespace } : {}),
+    ...(k.id ? { id: k.id } : {}),
+  }))
+  let plain = reading(compsNamed, undefined)
+  let plainKinds = reading(kindsNamed, undefined)
+
+  // A property of a held component, by its label, its identity, or a label
+  // it was called before a rename (`was`, by component) that no property of
+  // it holds now.
+  let propOf = (
+    comp: string,
+    name: string,
+    was?: Map<string, Map<string, string>>,
+  ): string | undefined => {
+    let own = read.get(comp)?.read
+    if (!own || own.has(name)) return own && name
+    let w = words.get(name)
+    if (w && 'prop' in w && w.comp == comp) return w.prop
+    return was?.get(comp)?.get(name)
   }
 
-  let v: Vocab = {
-    docs,
-    keywords,
-    comps: compNames,
-    all: names,
-    kinds,
-    comp: infoOf,
-    word: (id) => words.get(id),
-    def: (name) => defs[name],
-    props: (comp) => routes.get(comp) ?? [],
-    prop: propFor,
-    indexes: (comp) => {
-      let held = read.get(comp)
-      if (!held) return frozen([])
-      return held.indexes ??= frozen(
-        indexesOf(defs[comp], (p) => propFor(comp, p)),
-      )
-    },
-    identity: (comp) => {
-      let held = read.get(comp)
-      if (!held) return frozen([])
-      return held.identity ??= frozen(identityOf(defs[comp]))
-    },
-    // A dotted path → the hops it names, two segments at a time: a component
-    // and one of its properties, or a component alone at the end. A name no
-    // component declares is refused, teaching the qualified forms where
-    // properties of that name exist; only a presence test reads an undeclared
-    // name as a component, since bundles can carry plugin components before
-    // their schemas are loaded, and a store still decides whether it has a
-    // table for it. Every non-final hop must be a reference for the
-    // dereference to stand.
-    aim: (path, facet) => {
+  // A dotted path → the hops it names, read with `comp` and `prop` turning
+  // each segment into the name it is held under, and `out` giving each hop's
+  // component the name its reader writes. `self` is the vocabulary a refusal
+  // teaches from.
+  let aimer = (
+    self: () => Vocab,
+    comp: (seg: string) => string | undefined,
+    prop: (comp: string, seg: string) => string | undefined,
+    out: (held: string) => string,
+  ) => {
+    let aimed = new Map<string, Hop[]>()
+    let refusals = new Map<string, { prop: string; message: string }>()
+    return (path: string, facet?: boolean): Hop[] => {
       // A bare unknown name answers differently with `facet`; nothing else
       // does. A refusal is thrown afresh each time it is asked.
       let key = facet ? `?${path}` : path
@@ -1382,13 +1384,16 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       let no = refusals.get(key)
       if (no) throw new Unknown(no.prop, no.message)
       let segs = path.split('.')
-      let local = segs.length <= 2 ? read.get(segs[0]) : undefined
+      let local = segs.length <= 2 && out === same
+        ? read.get(segs[0])
+        : undefined
       let known = local?.paths?.get(path)
       if (known) {
         aimed.set(key, known)
         return known
       }
-      let out: Hop[] = []
+      let v = self()
+      let hops: Hop[] = []
       let refuse = (prop: string, message: string): never => {
         refusals.set(key, { prop, message })
         throw new Unknown(prop, message)
@@ -1399,11 +1404,11 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
         // ordered by can mean only that one; tested for alone, it asks
         // nothing.
         if (a == SPINE && b == EID || i == 0 && a == EID && !b && !facet) {
-          out.push({ comp: SPINE, prop: EID })
+          hops.push({ comp: SPINE, prop: EID })
           continue
         }
-        let own = routes.get(a)
-        if (!own) {
+        let c = comp(a)
+        if (!c) {
           let at = homes(a)
           if (at.length) {
             refuse(a, unqualified(a, at, (c) => v.comp(c)?.description))
@@ -1414,22 +1419,93 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
               unknownWord(v, a, segs.slice(0, i).join('.') || undefined),
             )
           }
-          out.push({ comp: a, prop: '' })
+          hops.push({ comp: a, prop: '' })
           continue
         }
         if (b == null) {
-          out.push({ comp: a, prop: '' })
+          hops.push({ comp: out(c), prop: '' })
           continue
         }
-        if (!own.includes(b)) {
-          refuse(`${a}.${b}`, unknownProps(v, a, [b]))
-        }
-        out.push({ comp: a, prop: b })
+        let p = prop(c, b)
+        if (!p) refuse(`${a}.${b}`, unknownProps(v, out(c), [b]))
+        hops.push({ comp: out(c), prop: p! })
       }
-      aimed.set(key, frozen(out))
-      if (local) (local.paths ??= new Map()).set(path, out)
-      return out
+      aimed.set(key, frozen(hops))
+      if (local) (local.paths ??= new Map()).set(path, hops)
+      return hops
+    }
+  }
+  let same = (name: string) => name
+  // A name the reader writes → the name it is held under, quietly: a name
+  // that means several words is no one component to look up.
+  let quiet = (f: () => string | undefined): string | undefined => {
+    try {
+      return f()
+    } catch (e) {
+      if (e instanceof Ambiguous) return undefined
+      throw e
+    }
+  }
+  let look = (name: string): string | undefined =>
+    Object.hasOwn(defs, name) ? name : quiet(() => plain.meant(name)?.held)
+
+  // Where a path leads, what a component indexes and what identifies its
+  // entities are facts of the vocabulary, asked of it for every clause a query
+  // compiles and every bundle a write carries: each is worked out once, and
+  // handed out frozen, since every caller shares it.
+  let v: Vocab = {
+    docs,
+    keywords,
+    comps: compNames,
+    all: names,
+    kinds,
+    comp: (name) => {
+      let held = infoOf(name)
+      if (held) return held
+      let c = look(name)
+      return c ? infoOf(c) : undefined
     },
+    held: (name) => Object.hasOwn(defs, name) ? name : plain.meant(name)?.held,
+    in: (ns, reader) => viewOf(ns, reader),
+    word: (id) => words.get(id),
+    def: (name) => defs[name] ?? defs[look(name) ?? ''],
+    props: (comp) => routes.get(comp) ?? routes.get(look(comp) ?? '') ?? [],
+    prop: (comp, prop) => {
+      let got = propFor(comp, prop)
+      if (got) return got
+      let c = look(comp), p = c && propOf(c, prop)
+      return p ? propFor(c!, p) : undefined
+    },
+    indexes: (name) => {
+      let comp = look(name) ?? name
+      let held = read.get(comp)
+      if (!held) return frozen([])
+      return held.indexes ??= frozen(
+        indexesOf(defs[comp], (p) => propFor(comp, p)),
+      )
+    },
+    identity: (name) => {
+      let comp = look(name) ?? name
+      let held = read.get(comp)
+      if (!held) return frozen([])
+      return held.identity ??= frozen(identityOf(defs[comp]))
+    },
+    // A dotted path → the hops it names, two segments at a time: a component
+    // and one of its properties, or a component alone at the end, each named
+    // by the name it is held under, a full label or an identity. A name no
+    // component declares is refused, teaching the qualified forms where
+    // properties of that name exist; only a presence test reads an undeclared
+    // name as a component, since bundles can carry plugin components before
+    // their schemas are loaded, and a store still decides whether it has a
+    // table for it. A bare label several words share is refused with their
+    // full labels. Every non-final hop must be a reference for the
+    // dereference to stand.
+    aim: aimer(
+      () => v,
+      (seg) => routes.has(seg) ? seg : plain.meant(seg)?.held,
+      (comp, seg) => propOf(comp, seg),
+      same,
+    ),
     // A plural name → the reverse association it names, or undefined when the
     // name is no association (a caller then reads the name its own way).
     assoc: (name) => assocs.get(name),
@@ -1440,7 +1516,9 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       return -1
     },
     assocs: () => [...assocs],
-    kind: (name) => kindsBy.get(name),
+    kind: (name) =>
+      kindsBy.get(name) ??
+        kindsBy.get(quiet(() => plainKinds.meant(name)?.held) ?? ''),
     // The most specific kind an entity is names it: the first in order whose
     // components it all carries, else the bare spine component.
     kindOf: (has) => {
@@ -1481,6 +1559,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
     // object or array (`properties`, `items`) is not validated yet.
     check: (comp, value, opts) => {
       let errs: string[] = []
+      comp = look(comp) ?? comp
       let info = infoOf(comp)
       if (!info) return [unknownComps([comp])]
       if (value == null || typeof value != 'object' || Array.isArray(value)) {
@@ -1538,5 +1617,185 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       return errs
     },
   }
+
+  // The vocabulary as each reader reads it, by who the reader is: this one
+  // where it reads every name alike.
+  let viewed = new Map<string, Vocab>()
+  let viewOf = (ns?: Namespace, reader: Reader = {}): Vocab => {
+    let key = JSON.stringify([
+      ns?.id,
+      ns?.label,
+      reader.uses?.map((u) => [u.id, u.label]),
+      reader.former,
+    ])
+    let got = viewed.get(key)
+    if (!got) viewed.set(key, got = view(ns, reader))
+    return got
+  }
+  let view = (ns: Namespace | undefined, reader: Reader): Vocab => {
+    let comps = reading(compsNamed, ns, reader)
+    let kinds_ = reading(kindsNamed, ns, reader)
+    let compOut = new Map(compsNamed.map((w) => [w.held, comps.written(w)]))
+    let kindOut = new Map(kindsNamed.map((w) => [w.held, kinds_.written(w)]))
+    // The labels the reader's words were called before a rename that no
+    // property of their component holds now, by component.
+    let was = new Map<string, Map<string, string>>()
+    for (let [id, labels] of Object.entries(reader.former ?? {})) {
+      let w = words.get(id)
+      if (!w || !('prop' in w) || !w.prop) continue
+      let at = was.get(w.comp) ?? new Map<string, string>()
+      for (let l of labels) {
+        if (!routes.get(w.comp)!.includes(l)) at.set(l, w.prop)
+      }
+      was.set(w.comp, at)
+    }
+    let renamed = Object.keys(reader.former ?? {}).some((id) => words.has(id))
+    let alike = (m: Map<string, string>) => [...m].every(([h, w]) => h == w)
+    if (!renamed && alike(compOut) && alike(kindOut)) return v
+    return relabeled(v, {
+      comp: (h) => compOut.get(h) ?? h,
+      kind: (h) => kindOut.get(h) ?? h,
+      held: (name) => comps.meant(name)?.held,
+      kindHeld: (name) => kinds_.meant(name)?.held,
+      prop: (c, p) => propOf(c, p, was),
+      aim: (self) =>
+        aimer(
+          self,
+          (seg) => comps.meant(seg)?.held,
+          (c, p) => propOf(c, p, was),
+          (h) => compOut.get(h) ?? h,
+        ),
+    })
+  }
   return v
+}
+
+// How a reader's names turn into a vocabulary's and back: `comp` and `kind`
+// give the name the reader writes a held component or kind by, `held` and
+// `kindHeld` the held name a reader's name means (throwing `Ambiguous`), and
+// `prop` a held component's property by any name the reader writes.
+type Turn = {
+  comp: (held: string) => string
+  kind: (held: string) => string
+  held: (name: string) => string | undefined
+  kindHeld: (name: string) => string | undefined
+  prop: (comp: string, name: string) => string | undefined
+  aim: (self: () => Vocab) => Vocab['aim']
+}
+
+// A vocabulary in a reader's names: every name it takes is turned into the
+// held one before `v` is asked, and every name it gives is turned back.
+let relabeled = (v: Vocab, t: Turn): Vocab => {
+  let memo = <T>(f: (name: string) => T) => {
+    let held = new Map<string, T>()
+    return (name: string): T => {
+      if (!held.has(name)) held.set(name, f(name))
+      return held.get(name)!
+    }
+  }
+  let quiet = (f: (name: string) => string | undefined) => (name: string) => {
+    try {
+      return f(name)
+    } catch (e) {
+      if (e instanceof Ambiguous) return undefined
+      throw e
+    }
+  }
+  let comp = memo(quiet(t.held))
+  let kind = memo(quiet(t.kindHeld))
+  let ref = (r?: string) => r && (v.kind(r) ? t.kind(r) : t.comp(r))
+  let pair = ([c, p]: [string, string]): [string, string] => [t.comp(c), p]
+  let info = memo((name): CompInfo | undefined => {
+    let c = comp(name), got = c ? v.comp(c) : undefined
+    return got && frozen({
+      ...got,
+      name: t.comp(got.name),
+      before: got.before.map(t.kind),
+      search: got.search.map((s) => {
+        let [c, ...rest] = s.split('.')
+        return [t.comp(c), ...rest].join('.')
+      }),
+      ...got.ladder
+        ? {
+          ladder: {
+            ...got.ladder,
+            rungs: got.ladder.rungs.map((r) => ({
+              ...r,
+              comp: t.comp(r.comp),
+            })),
+          },
+        }
+        : {},
+    })
+  })
+  let kindInfo = memo((name): Kind | undefined => {
+    let k = kind(name), got = k ? v.kind(k) : undefined
+    return got && frozen({
+      ...got,
+      name: t.kind(got.name),
+      is: got.is.map(t.comp),
+      with: Object.fromEntries(
+        Object.entries(got.with).map(([c, w]) => [t.comp(c), w]),
+      ),
+      before: got.before.map(t.kind),
+    })
+  })
+  let props = new Map<string, Prop | undefined>()
+  let self: Vocab = {
+    ...v,
+    comps: v.comps.map(t.comp).sort(),
+    all: v.all.map(t.comp).sort(),
+    kinds: v.kinds.map(t.kind),
+    kind: kindInfo,
+    comp: info,
+    held: (name) => {
+      let h = t.held(name)
+      return h && t.comp(h)
+    },
+    word: (id) => {
+      let w = v.word(id)
+      return !w ? w : 'kind' in w ? { kind: t.kind(w.kind) } : {
+        ...w,
+        comp: t.comp(w.comp),
+      }
+    },
+    def: (name) => v.def(comp(name) ?? ''),
+    props: (name) => v.props(comp(name) ?? ''),
+    prop: (name, p) => {
+      let key = `${name}.${p}`
+      if (props.has(key)) return props.get(key)
+      let c = comp(name), q = c && t.prop(c, p)
+      let got = q ? v.prop(c!, q) : undefined
+      let out = got &&
+        frozen({ ...got, comp: t.comp(got.comp), ref: ref(got.ref) })
+      props.set(key, out)
+      return out
+    },
+    indexes: (name) => v.indexes(comp(name) ?? ''),
+    identity: (name) => v.identity(comp(name) ?? ''),
+    aim: t.aim(() => self),
+    assoc: (name) => {
+      let a = v.assoc(name)
+      return a && { ...a, comp: t.comp(a.comp) }
+    },
+    assocs: () =>
+      v.assocs().map(([n, a]) => [n, { ...a, comp: t.comp(a.comp) }]),
+    kindOf: (has) => {
+      let held: Record<string, unknown> = {}
+      for (let k in has) held[comp(k) ?? k] = has[k]
+      return t.kind(v.kindOf(held))
+    },
+    deaths: (word) => v.deaths(word).map(pair),
+    refProps: () => v.refProps().map(pair),
+    check: (name, value, opts) => v.check(comp(name) ?? name, value, opts),
+  }
+  return self
+}
+
+let frozen = <T>(x: T): T => {
+  if (x && typeof x == 'object') {
+    for (let v of Object.values(x)) frozen(v)
+    Object.freeze(x)
+  }
+  return x
 }

@@ -58,6 +58,13 @@ keeps each as written; the vocabulary says what it names. `complete` offers a
 word by the name its vocabulary lists it under, which is a full label only where
 two namespaces share the label.
 
+A query the graph keeps (a board's, a builder's) is stored with identities:
+`identified(q, v)` writes each component, property and kind it names as its
+identity, read as `v`'s reader reads it
+([@yaks/vocab](../vocab/README.md#reading-in-a-namespace) `in`), and refuses a
+bare label that means several words. `labeled(q, v)` writes a kept query back in
+`v`'s reader's labels, so it reads the same after any of its words is renamed.
+
 A **value** is the right-hand side of a predicate. A **scalar** keeps its raw
 text (`{ kind: 'scalar', raw: 'open' }`); a **list** holds alternative values
 (`open,done`); a **range** holds two ends (`1..5`, inclusive, or `1...5`,
@@ -130,6 +137,7 @@ All exports are available from `@yaks/query`.
 | Multi-entity matches      | `parseMatch`, `MatchPart`                                                                                      |
 | Time literals             | `isTimeLiteral`, `timeSpan`, `timeInstant`, `timeEdges`, `unitMs`, `Span`, `Edge`                              |
 | Completion                | `complete`, `Completion`, `Cand`, `Source`                                                                     |
+| Kept queries              | `identified`, `labeled`                                                                                        |
 | Format help               | `OPERATORS`, `DIRECTIVES`, `FORMAT`, `Taught`                                                                  |
 | AST types                 | `Query`, `Clause`, `Op`, `Value`, `Input`, and the node types in [ast.ts](./ast.ts)                            |
 
