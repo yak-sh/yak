@@ -68,6 +68,8 @@ let tab = (html: string, controlled = true, pending?: string) => {
   let load = () => window.dispatchEvent(new window.Event('load'))
   let unload = () => window.dispatchEvent(new window.Event('pagehide'))
   let arrive = () => document.dispatchEvent(new window.Event(PAGE))
+  let scroll = (at: Element) =>
+    at.dispatchEvent(new window.Event('scroll', { bubbles: true }))
   // The page stands unchanged as long as it waits for.
   let wait = async () => {
     await Promise.resolve()
@@ -87,6 +89,7 @@ let tab = (html: string, controlled = true, pending?: string) => {
     unload,
     claim,
     arrive,
+    scroll,
     wait,
     set href(at: string) {
       location.href = at
@@ -184,6 +187,35 @@ test('of two parts taking turns, the inert one is no part of the picture and its
   assertEquals(t.sent.length, 2)
   assertEquals(t.sent[1].html.includes('title="updated"'), true)
   assertEquals(t.sent[1].html.includes('Home'), false)
+})
+
+test('hiding or scrolling inside an inactive view leaves the kept page current', () => {
+  let t = tab(
+    `<html><body><p>Home</p><section data-kept-turns inert ${SCROLL}="end" data-at="0 100"><div><p>Workspace</p></div></section></body></html>`,
+  )
+  let workspace = t.document.querySelector('section')!
+  let pane = workspace.querySelector('div')!
+  let reads = 0
+  Object.defineProperty(workspace, 'scrollTop', { get: () => (reads++, 0) })
+  t.load()
+  assertEquals(reads, 0)
+  pane.toggleAttribute('hidden', true)
+  t.leave()
+  assertEquals(t.sent.length, 1)
+  t.scroll(workspace)
+  t.leave()
+  assertEquals(t.sent.length, 1)
+  workspace.toggleAttribute('inert', false)
+  t.leave()
+  assertEquals(t.sent.length, 2)
+  assertEquals(t.sent[1].html.includes('Workspace'), false)
+  pane.toggleAttribute('hidden', false)
+  t.leave()
+  assertEquals(t.sent.length, 3)
+  assertEquals(t.sent[2].html.includes('Workspace'), true)
+  t.scroll(workspace)
+  t.leave()
+  assertEquals(t.sent.length, 4)
 })
 
 test('a page going away is taken once as it is unloaded and hidden', () => {

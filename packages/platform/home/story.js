@@ -265,7 +265,7 @@ let mount = (root) => {
     contents.toggleAttribute('data-cover', bounds[1].top <= y + tabHeight)
     reveal(lines[i], at, calm.matches)
     mark(illustrated, at)
-    demo.inert = narrow.matches && at.step == 0
+    demo.toggleAttribute('inert', narrow.matches && at.step == 0)
     if (active == at.step) return
     active = at.step
     demo.dataset.turn = active
@@ -306,12 +306,6 @@ let mount = (root) => {
   let wait = () => {
     clearTimeout(timer)
     if (!demo.isConnected) return
-    pause.hidden = calm.matches
-    pause.setAttribute(
-      'aria-label',
-      `${playing ? 'Pause' : 'Play'} example rotation`,
-    )
-    pause.firstElementChild.textContent = playing ? 'Ⅱ' : '▶'
     if (
       playing && !document.hidden && !hovered &&
       !demo.contains(document.activeElement)
@@ -326,7 +320,17 @@ let mount = (root) => {
       )
     }
   }
-  let hold = () => (playing = false, wait())
+  let play = (on) => {
+    playing = on
+    pause.toggleAttribute('hidden', calm.matches)
+    let label = `${playing ? 'Pause' : 'Play'} example rotation`
+    if (pause.getAttribute('aria-label') != label) {
+      pause.setAttribute('aria-label', label)
+      pause.firstElementChild.textContent = playing ? 'Ⅱ' : '▶'
+    }
+    wait()
+  }
+  let hold = () => play(false)
 
   // The published home app sets a base URL for shared assets. Keep jumps
   // in this document even when the visitor arrived with a query string.
@@ -346,7 +350,7 @@ let mount = (root) => {
   for (let [at, button] of buttons.entries()) {
     button.addEventListener('click', () => (hold(), pick(at)))
   }
-  pause.addEventListener('click', () => (playing = !playing, wait()))
+  pause.addEventListener('click', () => play(!playing))
   let hover = (e) => {
     if (e.pointerType != 'mouse') return
     hovered = e.type == 'pointerenter'
@@ -374,7 +378,7 @@ let mount = (root) => {
   run(root)
   measure()
   draw(false)
-  wait()
+  play(playing)
 }
 
 if (typeof document != 'undefined') {

@@ -47,7 +47,7 @@ export type Window = {
   MutationObserver: typeof MutationObserver
   addEventListener(
     type: string,
-    hear: () => void,
+    hear: (event: Event) => void,
     options?: AddEventListenerOptions,
   ): void
   reportError?: (error: unknown) => void
@@ -62,8 +62,12 @@ let UNSEEN = `script, template, [hidden], dialog:not([open]), [${TURNS}][inert]`
 let SHOWING = new Set(['hidden', 'inert', 'open'])
 let STILL = `${UNSEEN}, [${MOVES}]`
 let changing = (r: MutationRecord) => {
-  if (r.type == 'attributes' && SHOWING.has(r.attributeName!)) return true
   let at = r.target.nodeType == 1 ? r.target as Element : r.target.parentElement
+  // A part that is becoming hidden still changes the picture, unless it
+  // was already inside a part the picture leaves out.
+  if (at && r.type == 'attributes' && SHOWING.has(r.attributeName!)) {
+    return !at.parentElement?.closest(STILL)
+  }
   return !at?.closest(STILL)
 }
 
@@ -119,7 +123,7 @@ let beyond = (
   let flow = stacked(style)
   let removed = Infinity, kept = Infinity
   for (let e of live.children) {
-    if (e.namespaceURI != HTML) continue
+    if (t.omitted.has(e) || e.namespaceURI != HTML) continue
     let s = t.win.getComputedStyle(e)
     if (s.display == 'none') continue
     if (s.display == 'contents') {
@@ -314,6 +318,7 @@ export let snapshot = (win: Window): Snapshot => {
   let panes = root.querySelectorAll(`[${SCROLL}]`)
   let holds = new Set<Element>()
   for (let pane of panes) {
+    if (pane.closest(UNSEEN)) continue
     positions.set(pane, scroll(pane))
     for (
       let e: Element | null = pane;
@@ -390,7 +395,10 @@ export let keep = (win: Window, worker: string, pending?: string): void => {
     attributes: true,
     characterData: true,
   })
-  win.addEventListener('scroll', change, { capture: true, passive: true })
+  win.addEventListener('scroll', (event: Event) => {
+    let at = event.target as Element | null
+    if (!at?.closest?.(STILL)) change()
+  }, { capture: true, passive: true })
   win.addEventListener('resize', change)
   let send = () => {
     let root = win.document.documentElement
